@@ -36,6 +36,7 @@ export type SettingsView = { readonly element: HTMLElement; shown(): void; hidde
 export function createSettingsView(context: PanelContext, close: () => void): SettingsView {
   const { store } = context;
   let dirty = false;
+  let editRevision = 0;
 
   const back = createElement("button", { className: "icon-button settings-back", text: "←", attrs: { type: "button", "aria-label": "Close settings", title: "Close settings" } });
   back.addEventListener("click", close);
@@ -74,6 +75,7 @@ export function createSettingsView(context: PanelContext, close: () => void): Se
   ]);
 
   form.onEdit(() => {
+    editRevision += 1;
     dirty = true;
     draftLine.hidden = false;
     message.hidden = true;
@@ -113,15 +115,18 @@ export function createSettingsView(context: PanelContext, close: () => void): Se
       return;
     }
     form.markInvalid(undefined);
+    const submittedRevision = editRevision;
     setSaving(true);
     const saved = await store.request({ type: RUNTIME_MESSAGES.panelSaveSettings, settings: plan.settings });
     setSaving(false);
     if (failed(saved)) return;
-    dirty = false;
-    draftLine.hidden = true;
-    writeConnectionDraft(undefined);
-    form.fill(plan.settings);
-    showSuccess("Saved.");
+    if (submittedRevision === editRevision) {
+      dirty = false;
+      draftLine.hidden = true;
+      writeConnectionDraft(undefined);
+      form.fill(plan.settings);
+      showSuccess("Saved.");
+    } else showSuccess("Saved the earlier settings. Your newer changes aren't saved yet.");
     // The open socket still points at the old address; `connect` dials the stored one.
     if (plan.reconnect) failed(await store.request({ type: RUNTIME_MESSAGES.connect }));
   }
@@ -164,6 +169,7 @@ export function createSettingsView(context: PanelContext, close: () => void): Se
   store.subscribe(render);
   void readConnectionDraft().then((draft) => {
     if (draft === undefined || dirty) return;
+    editRevision += 1;
     dirty = true;
     draftLine.hidden = false;
     form.fill(draft);

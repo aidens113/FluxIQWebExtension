@@ -12,7 +12,7 @@ import { AutoConnect, handlePanelControl, panelControlDeps, sessionDisconnectMem
 import { callCoreProgram } from "./connection/index";
 import { handleReportProblem, localProblemLogStore, ProblemLog, ProblemNoticer, type ReportProblemDeps } from "./diagnostics";
 import { browserReconnectAlarms, RECONNECT_ALARM_NAME, ReconnectWatchdog } from "./reconnect-watchdog";
-import { handleSimplePanelControl, type SimplePanelDeps } from "./simple-panel";
+import { handleAutomationRelay, type AutomationRelayDeps } from "./automation-relay";
 
 let connection: FluxIQConnection | undefined;
 // One connection is built at a time. Without this, two events that wake the
@@ -156,8 +156,8 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
   const report = await handleReportProblem(typed, sender, reportProblemDeps(manager));
   if (report.handled) return report.response;
 
-  const simple = await handleSimplePanelControl(typed, sender, simplePanelDeps(manager));
-  if (simple.handled) return simple.response;
+  const automationRelay = await handleAutomationRelay(typed, sender, automationRelayDeps(manager));
+  if (automationRelay.handled) return automationRelay.response;
 
   const panel = await handlePanelControl(typed, sender, panelControlDeps(manager, () => statusWithQueue(manager)));
   if (panel.handled) return panel.response;
@@ -291,7 +291,7 @@ function noteMessageFailure(error: unknown): void {
   void problemLog.note({ source: "message", message: error instanceof Error ? error.message : "Unknown extension error." });
 }
 
-function simplePanelDeps(manager: FluxIQConnection): SimplePanelDeps {
+function automationRelayDeps(manager: FluxIQConnection): AutomationRelayDeps {
   return {
     isControlPage,
     // Credentials are read per call, so a token FluxIQ rotated on reconnect is the one sent.

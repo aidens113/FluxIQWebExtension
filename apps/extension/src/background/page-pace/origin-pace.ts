@@ -26,6 +26,7 @@
 // read here -- a status and an origin are all a booking is given.
 
 import { PAGE_LOAD_PACE_SETTINGS, type PageLoadPaceSettings } from "./pace-settings";
+import { PAGE_REFUSAL_STATUSES } from "./refusal-statuses";
 
 /** What the pace holds for one origin. */
 type OriginState = {
@@ -34,9 +35,6 @@ type OriginState = {
   spacingMs: number;
   refusals: number;
 };
-
-/** The statuses that say the site refused a load for coming too fast or while it cannot serve one. */
-const REFUSAL_STATUSES: ReadonlySet<number> = new Set([429, 503]);
 
 export class OriginPace {
   private readonly origins = new Map<string, OriginState>();
@@ -65,12 +63,23 @@ export class OriginPace {
    * and slow it for good (see the header). Anything else changes nothing.
    */
   noteRefusal(origin: string, status: number): boolean {
-    if (!REFUSAL_STATUSES.has(status)) return false;
+    if (!PAGE_REFUSAL_STATUSES.has(status)) return false;
     const state = this.stateOf(origin);
     state.refusals += 1;
     state.spacingMs = Math.min(this.settings.cooledSpacingCapMs, Math.max(state.spacingMs, state.spacingMs * 2));
     state.nextAt = Math.max(state.nextAt, this.now() + this.settings.refusalWaitMs);
     return true;
+  }
+
+  /**
+   * How long the next load on `origin` would wait if it were booked now: 0 for
+   * an origin with nothing booked, or whose hold is already over. Reading it
+   * books nothing. A navigation the site refused reports it as the wait before
+   * the same load may be made again (`runtime/action-runner.ts`).
+   */
+  waitBeforeNextLoad(origin: string): number {
+    const state = this.origins.get(origin);
+    return state === undefined ? 0 : Math.max(0, state.nextAt - this.now());
   }
 
   /** The spacing `origin` is paced at now. */

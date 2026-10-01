@@ -262,10 +262,10 @@ export type PanelRelayResponse<TPayload = unknown> =
   | { ok: false; error: string; code: PanelRelayFailureCode; httpStatus?: number | undefined };
 
 /**
- * Simple Mode's panel requests, by their short names; the strings live in
- * `RUNTIME_MESSAGES` (`shared/constants.ts`), which `panel/simple/relay/messages.ts`
- * re-exports under the same short names. Each is relayed by the background worker
- * (`background/simple-panel/`) to the Core endpoint named beside it, with the
+ * Automation panel requests, by their short names; the strings live in
+ * `RUNTIME_MESSAGES` (`shared/constants.ts`), and this module
+ * exports them under the same short names. Each is relayed by the background worker
+ * (`background/automation-relay/`) to the Core endpoint named beside it, with the
  * pairing token, and answers the `PanelRelayResponse` envelope carrying Core's
  * payload as Core returned it. Accepted only from the side panel or the popup.
  * A `projectId` left out means the project this browser's session belongs to.
@@ -276,7 +276,7 @@ export type PanelRelayResponse<TPayload = unknown> =
  * side effects; a proposal is generated directly, never LLM-assisted; the
  * AI-key snapshot answers each key's kind, provider and enabled flag only.
  */
-export const SIMPLE_PANEL_MESSAGES = {
+export const AUTOMATION_PANEL_MESSAGES = {
   /** `list-flow-summaries`, then `list-flow-runs` (`sort: "updated"`, `direction: "desc"`). Answers `{ flows, runs }`. */
   listAutomations: RUNTIME_MESSAGES.panelListAutomations,
   /** `run-runtime-session` with `{ projectId, flowId }` and nothing else. */
@@ -301,10 +301,10 @@ export const SIMPLE_PANEL_MESSAGES = {
   removeRecordingStep: RUNTIME_MESSAGES.panelRemoveRecordingStep
 } as const;
 
-export type SimplePanelMessageType = (typeof SIMPLE_PANEL_MESSAGES)[keyof typeof SIMPLE_PANEL_MESSAGES];
+export type AutomationPanelMessageType = (typeof AUTOMATION_PANEL_MESSAGES)[keyof typeof AUTOMATION_PANEL_MESSAGES];
 
-/** The fields Simple Mode's requests carry beside `type`. Every field is optional on the wire and checked by the relay. */
-export type SimplePanelRequest = {
+/** The fields automation panel requests carry beside `type`. Every field is optional on the wire and checked by the relay. */
+export type AutomationPanelRequest = {
   projectId?: string | undefined;
   flowId?: string | undefined;
   runId?: string | undefined;

@@ -19,7 +19,7 @@
 // next successful read. A run, a run's detail and an export each fail into
 // their own row, never into the list.
 
-import { SIMPLE_PANEL_MESSAGES as MESSAGES, type ExtensionStatus } from "../../shared/protocol";
+import { AUTOMATION_PANEL_MESSAGES as MESSAGES, type ExtensionStatus } from "../../shared/protocol";
 import type { PanelStore } from "../state";
 import { automationRows } from "./rows";
 import type { AutomationRow, RunDataset, RunDetail, RunReply, RunSummary } from "./types";

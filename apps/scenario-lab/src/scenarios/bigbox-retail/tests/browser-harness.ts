@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { Browser, BrowserContext, FrameLocator, Locator, Page } from "@playwright/test";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
+import { closeLabSession } from "../../tests/close-lab-session.js";
 import type { BigboxState } from "../types.js";
 
 export type ExtractedRecord = Record<string, string>;
@@ -27,30 +28,38 @@ const DEFAULT_WAIT_MS = 10_000;
 export async function openHarness(browser: Browser, seed = 239): Promise<Harness> {
   const runToken = randomBytes(24).toString("base64url");
   const lab = await startScenarioLab({ runToken, seed });
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-US", timezoneId: "UTC" });
-  const offLoopback: string[] = [];
-  await context.route(/.*/u, (route) => {
-    const url = new URL(route.request().url());
-    if (url.protocol === "data:" || LOOPBACK.has(url.hostname)) return route.continue();
-    offLoopback.push(url.href);
-    return route.abort();
-  });
-  const page = await context.newPage();
-  const consoleErrors: string[] = [];
-  // The lab server answers /favicon.ico with a 404 for every scenario, and Chrome logs that once per context; it is not the site's.
-  page.on("console", (message) => { if (message.type() === "error" && !message.location().url.endsWith("/favicon.ico")) consoleErrors.push(message.text()); });
-  page.on("pageerror", (error) => consoleErrors.push(error.message));
-  const control = (path: string, init: RequestInit = {}) => fetch(`${lab.origin}${path}`, { ...init, headers: { authorization: `Bearer ${runToken}`, "content-type": "application/json" } });
-  return {
-    lab, context, page, consoleErrors, offLoopback,
-    state: async () => ((await (await control("/__control/final-state?scenario=bigbox-retail")).json()) as { state: BigboxState }).state,
-    arm: async (operation, payload) => {
-      const response = await control(`/api/bigbox-retail/${operation}`, { method: "POST", body: JSON.stringify(payload ?? {}) });
-      if (!response.ok) throw new Error(`arming ${operation} answered ${response.status}`);
-    },
-    open: async (path = "") => { await page.goto(`${lab.origin}/scenarios/bigbox-retail/${path}`); },
-    close: async () => { await context.close(); await lab.close(); },
-  };
+  let context: BrowserContext | undefined;
+  try {
+    context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-US", timezoneId: "UTC" });
+    const offLoopback: string[] = [];
+    await context.route(/.*/u, (route) => {
+      const url = new URL(route.request().url());
+      if (url.protocol === "data:" || LOOPBACK.has(url.hostname)) return route.continue();
+      offLoopback.push(url.href);
+      return route.abort();
+    });
+    const page = await context.newPage();
+    const consoleErrors: string[] = [];
+    // The lab server answers /favicon.ico with a 404 for every scenario, and Chrome logs that once per context; it is not the site's.
+    page.on("console", (message) => { if (message.type() === "error" && !message.location().url.endsWith("/favicon.ico")) consoleErrors.push(message.text()); });
+    page.on("pageerror", (error) => consoleErrors.push(error.message));
+    const control = (path: string, init: RequestInit = {}) => fetch(`${lab.origin}${path}`, { ...init, headers: { authorization: `Bearer ${runToken}`, "content-type": "application/json" } });
+    const opened = context;
+    return {
+      lab, context: opened, page, consoleErrors, offLoopback,
+      state: async () => ((await (await control("/__control/final-state?scenario=bigbox-retail")).json()) as { state: BigboxState }).state,
+      arm: async (operation, payload) => {
+        const response = await control(`/api/bigbox-retail/${operation}`, { method: "POST", body: JSON.stringify(payload ?? {}) });
+        if (!response.ok) throw new Error(`arming ${operation} answered ${response.status}`);
+      },
+      open: async (path = "") => { await page.goto(`${lab.origin}/scenarios/bigbox-retail/${path}`); },
+      close: () => closeLabSession(lab, opened),
+    };
+  } catch (error) {
+    // The opening failure is the one to report; the lab is closed either way, or the file never exits.
+    await closeLabSession(lab, context).catch(() => undefined);
+    throw error;
+  }
 }
 
 /** A manifest target, resolved exactly as the Lab's step runner resolves one. */

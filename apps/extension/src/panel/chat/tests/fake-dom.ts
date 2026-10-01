@@ -74,6 +74,10 @@ export class FakeElement {
   append(...nodes: Array<FakeNode | string>): void {
     for (const node of nodes) this.insertBefore(typeof node === "string" ? new FakeText(node) : node, null);
   }
+  replaceChildren(...nodes: Array<FakeNode | string>): void {
+    this.textContent = "";
+    this.append(...nodes);
+  }
   insertBefore<T extends FakeNode>(node: T, reference: FakeNode | null): T {
     node.parentNode?.removeChild(node);
     const index = reference === null ? -1 : this.childNodes.indexOf(reference);

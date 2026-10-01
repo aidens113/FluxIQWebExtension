@@ -49,6 +49,7 @@ export type { WebLlmEvidenceBlocker, WebLlmEvidenceDialog, WebLlmEvidenceFrame, 
 // What stands in front of the page, marked on the element it is about rather
 // than by moving it (t200, `./layers.ts`).
 export type { WebLlmLayerMarks } from "./layer-marks";
+export { screenWebBuildRefusalDiagnostic, type WebBuildRefusalDiagnostic } from "./refusal-diagnostic";
 export {
   sanitizeWebLlmSnapshot,
   WEB_LLM_EVIDENCE_SCHEMA_VERSION,

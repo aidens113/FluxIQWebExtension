@@ -1,5 +1,34 @@
 # t210 report: remove the caps that remain on what the model sees
 
+## State at stop (2026-09-30, rounds 3 and 3b done, uncommitted)
+
+**Rounds 3 and 3b are complete and validated, not committed.** Every change is
+an unstaged working-tree change in the Core tree (`fxwork/t210/!FluxIQ`, branch
+`task/t210-remove-remaining-caps`, HEAD `c070c94b`). Downstream, only this report
+changed.
+
+Checks run after the last source edit:
+
+- `npx tsc --noEmit -p .`: exit 0.
+- `node scripts/structure-audit.mjs`: `passed (203 warning(s), 353 baselined)`.
+- `pnpm docs:check`: `passed` and `Deterministic framework reference is current.`
+- Full vitest over
+  `runtime/{conversations,llm,recovery,result-verification,flow-bootstrap,service}`:
+  `Tests 3 failed | 2648 passed | 1 skipped (2652)`. All three are 15 s
+  timeouts under load.
+- The two files with those timeouts, alone: `Tests 30 passed (30)` at the
+  default timeout, and again with `--testTimeout=120000`.
+
+**Ready to commit:** everything listed under "Round 3: files" and
+"Files (round 3b)".
+
+**Exact next step:** the supervisor verifies and commits on the Core task
+branch. Open choices:
+
+- the run-summary window, still 100 runs, at `resolve-context.ts:40`. It feeds
+  the training budget and stability, not a model;
+- passing `offset` through the person-facing reusable-context list endpoint.
+
 Task t210, branch `task/t210-remove-remaining-caps` in both trees:
 `C:/Users/osrs_/FluxStuff/fxwork/t210/!FluxIQWebExtension` (downstream) and
 `C:/Users/osrs_/FluxStuff/fxwork/t210/!FluxIQ` (Core). No commit was made and no
@@ -656,3 +685,397 @@ report. That is round 1's files plus:
   `llm-evidence/sanitize.ts`, with `tests/shown-addresses.test.ts` and
   `tests/whole-page.test.ts`;
 - `domain/src/tests/domain.test.ts`.
+
+## Round 3 (2026-09-30)
+
+### Outcome
+
+Done. Every count cap, cut, ranking and byte budget found on what reaches a
+model, in the five owned directories, is removed. The caps left in place are
+listed below with file:line and the reason. Secret screening and the $0.25
+spend ceiling are untouched. A request over the window still fails with its
+size (`llm/harness/run.ts:98-101`).
+
+### 1. The `whole-thread.test.ts` type error
+
+`exactOptionalPropertyTypes` refused passing the reader's input to the fake
+page reader. The fix is the one the earlier stop note gave:
+`page({ limit: input.limit ?? 200, ...(input.sinceTurnId === undefined ? {} : { sinceTurnId: input.sinceTurnId }) })`.
+The structure audit then refused the test's deep import
+`../../recovery/refuted-result/conversation.ts`, so it now imports from
+`../../recovery/index.ts`.
+
+### 2. The seven recovery failures: a stale build, not the product or the tests
+
+The two arrays, printed by the failing assertion in
+`runtime-exploration-permission.test.ts:249`:
+
+```text
+expected: [["waiting_permission", <id>, "Asked a question (permission)", "started", undefined],
+           ["repairing",          <id>, "Asked a question (permission)", "succeeded", "allowed"]]
+received: [... same ...,
+           ["repairing",          <id>, "Asked a question (permission)", "succeeded", undefined]]
+```
+
+Only the ask row's `resolution` was missing. The conversation reads that round 3
+changed play no part in it.
+
+- `activity/bounded.ts:21` keeps a `resolution` only when
+  `CLIENT_GATEWAY_ACTIVITY_RESOLUTIONS` (from `@fluxiq/contracts/client-gateway`)
+  names it.
+- `packages/contracts/dist/client-gateway.js` was built at 17:03, before the dev
+  merge brought that constant into `packages/contracts/src/client-gateway.ts`
+  (20:44). The dist file had no `RESOLUTIONS` at all (`grep -c` gave 0).
+- At runtime the set was therefore empty, and every resolution was dropped.
+
+Both product and test were right. The fix was to regenerate the build output
+with the package's own script: `pnpm --filter @fluxiq/contracts build`. That is
+generated output, not a source edit. Afterwards the dist had the constant
+(`grep -c RESOLUTIONS` gave 1), and both files passed: `Test Files 2 passed (2)`,
+`Tests 25 passed (25)`. Any other worktree whose contracts dist predates the
+merge will show the same seven failures until it rebuilds.
+
+### 3. Sweep: caps removed
+
+All paths are under `packages/fluxiq/src/programs/automation-studio/runtime/`.
+
+- `conversations/instructions/prompt.ts`: the chat model was told the first 60
+  Flows and a count of the rest. It is now told every Flow.
+- `llm/draft-amendment-feedback.ts`: an amendment refusal listed 16 refusals and
+  the newest 32 draft positions. It now lists all of both.
+- `llm/harness-options/bootstrap-completion.ts`: a refused completion showed the
+  first 16 issues, and quoted the refused script back only when it was under
+  6,000 characters. It now shows every issue and the whole script.
+- `flow-bootstrap/plan/issue-feedback.ts`: the issue feedback had 16 issues,
+  300-character paths, 400-character authored messages and a 3,000-byte budget
+  on accepted shapes. Now every issue, every path (still stripped of control
+  characters), every message and every shape is shown, each shape once per
+  parameter.
+- `flow-bootstrap/plan/profile-limits.ts`: at most 12 exceeded limits were
+  reported. Now all are.
+- `flow-bootstrap/plan/validation.ts`: a parameter contract's first 8 codes were
+  kept. Now every well-formed one is. A malformed or `bootstrap.`-prefixed code
+  still becomes the generic violation.
+- `llm/unusable-decision.ts`: an unusable decision's feedback carried 8 issue
+  codes. It now carries every one.
+- `flow-bootstrap/authoring/plan-shapes.ts`: a refused plan's keys were cut to
+  12, each at 40 characters, with "+N more". Every key is now shown whole.
+- `flow-bootstrap/authoring/matching.ts`: a step that matched several nodes was
+  answered with the 5 sharing the most words. That was ranking. It now names
+  every near match, in id order.
+- `llm/harness/provider-result.ts`: past 200 provider-output findings, the rest
+  were suppressed under `llm_output.finding_limit`. All are now kept.
+- `llm/harness/context-packet.ts`: a runtime diagnosis's
+  `expected`/`observed`/`changed` were cut at 500 characters when packed into
+  the follow-up request. They are now carried whole. The reply contract still
+  limits what the model may write (see below).
+- `llm/node-tools/run-node.ts`: past 400 node ids, `core.run_node`'s schema
+  stopped enumerating them. It now always enumerates every id.
+- `llm/harness-options/builtin.ts` and `host.ts`: `core.prior_adaptations` had
+  a maximum `limit` of 20 and a default of 5. It has neither now; with no limit
+  the host is asked for every adaptation, so `listPriorAdaptations` gets `limit`
+  only when the model gave one. No host in Core or downstream implements it.
+- `result-verification/repair-directive.ts`: removed
+  `AUTOMATION_STUDIO_RESULT_REPAIR_DIRECTIVE_LIMITS`. The repair directive held
+  itself to 8 findings, 8 fix lines of 300 characters, 240-character details, 8
+  columns a finding and a 500-character judgement. It now carries all of it.
+  Secret screening and locator rewriting of the judgement stay.
+- Round 3 from the previous session, now validated: the context packet's 12
+  actions, 25 runs, 25 adaptations, 100 Subflows and 100 actions; the
+  conversation slot's 20 turns, 4,000 bytes and 1,500-character cut; the chat
+  transcript's 20 turns; the recovery's 40 turns; and `getFlowInstructionSet`'s
+  first 100.
+
+### Round 3: caps left in place
+
+**Outside this brief's paths (the supervisor's decision):**
+
+The first two items below were removed in round 3b (see "Round 3b").
+
+- `service/runtime-adaptation/resolve-context.ts:41-48`. A run loads the newest
+  100 adaptation summaries and only the first 25 records
+  (`AUTOMATION_STUDIO_KNOWN_ADAPTATION_LOAD_LIMIT`, `recovery/llm-invocation.ts:110`).
+  Those records reach the model through the recovery context's adaptations
+  section (`recovery/annotation/annotate.ts:373`). The constant is in an owned
+  file, but its only use is in `resolve-context.ts`, which this brief does not
+  own. Removing it means paging both reads there. **This still hides records
+  from a model.**
+- `storage/project/reusable-llm-context-store.ts:191` clamps `limit` to 1..100
+  and has no offset or cursor. `service.ts:1390` asks for 100, so reusable
+  context offers the newest 100 records. `docs/architecture/automation-studio/persistence.md:213`
+  already says so. Removing it needs a store paging change. **This still hides
+  records from a model.**
+- `result-verification/core-observation.ts:141-142`. Core's observation is cut
+  to `AUTOMATION_STUDIO_FAILURE_RECORD_LIMITS.textMaxLength`, a
+  `@fluxiq/contracts` failure-record limit that a longer text would fail to
+  validate. Changing it is a contracts change.
+- `service.ts:1475`. An extend build picks its Subflow from the first 50
+  summaries. That chooses which Subflow is extended and is not what the model is
+  shown, but a Flow with more than 50 Subflows could have the right one missed.
+
+**Not a limit on what the model is shown (kept on purpose):**
+
+- These bound the model's own reply:
+  - `llm/harness/structured-response.ts:99-179` (500-character diagnosis text,
+    16 handles, 8 patch steps, serialized lengths) and its schemas in
+    `deepseek/output-schema.ts` and `harness/runtime-patch-schema.ts`;
+  - `provider-result.ts:81-302` (100 patches, 16 amendments and the like);
+  - `evidence-loop-decision.ts:55` (16 amendments a decision);
+  - `plan-parameter-resolution.ts:57-58`, `plan-step-consequences.ts:68` and
+    `flow-bootstrap/plan/evidence-schema.ts:35`;
+  - `flow-bootstrap/authoring/*` name, key and tag lengths, which become a
+    Flow's identifiers;
+  - `conversations/instructions/parse.ts:26`.
+
+  They limit what the model writes, not what it reads, and they refuse rather
+  than trim input.
+- These are registration bounds that throw: `llm/harness-options/option.ts:23`
+  (32 harness options) and `llm/stages/registry.ts:30` (40 stage instructions).
+  A host registering more fails loudly at registration. Both are public exports.
+- These are shape checks that refuse loudly rather than trim:
+  - `context-packet.ts:206` (a recent action's ids of at most 200 characters);
+  - `json-bounds.ts` (20,000-character strings, depth 64);
+  - `explored-evidence-label.ts:25` (ordinal 999);
+  - the depth guards.
+- These are written for a person or a record, never to the model:
+  - `conversations/instructions/invocation.ts:41,231-236` (8 Flows named in a
+    question to the person);
+  - `flow-bootstrap/unfinished-build/*`, `generation-failure/build-ending.ts:64-68`
+    and `answerability/instruction-ask.ts:41-46`;
+  - `generation-failure/diagnostic.ts:161` (a stored diagnostic's 16 codes);
+  - `llm/run-call-record.ts:99`, `evidence-progress/progress-trace.ts:91`,
+    `recovery/exploration-state/recorder.ts:128` and
+    `result-verification/check-activity.ts:14`;
+  - `llm/unreadable-reply.ts:123` (the build-ending summary's 4 cases).
+- `flow-bootstrap/evidence-loop-steps.ts:196,375-391` reads a stored trace row
+  back with bounds that match the decision contract's own 16 amendments.
+- `recovery/structured-diagnosis.ts:281,288` quotes 64 characters of the model's
+  own invalid value back. It is the model's writing, not new information.
+- `flow-bootstrap/authoring/matching.ts` still takes an inexact match when one
+  definition shares strictly more words than any other. That resolves which
+  node the model meant; it does not filter what the model sees.
+
+### Round 3: tests changed
+
+These pinned the removed caps and now pin "whole":
+
+- `llm/tests/draft-amendment-feedback.test.ts`: all 40 positions; 20 refusals.
+- `flow-bootstrap/plan/tests/issue-feedback.test.ts`: 42 issues; a 405-character
+  path; 40 accepted shapes.
+- `flow-bootstrap/plan/tests/validation.test.ts`: 21 codes.
+- `llm/harness/tests/patch-request-diagnosis.test.ts`: 900-character `expected`.
+- `result-verification/tests/verdict.test.ts`: the 919-character advice, whole.
+- `result-verification/tests/repair-directive.test.ts`: more than 8 findings and
+  fix lines, 12 columns, and an 800-character advice.
+- `llm/harness-options/tests/builtin.test.ts` and `registry.test.ts`: no limit
+  is `null` (every adaptation); `limit: 99` is accepted; `limit: 0` is refused.
+
+### 4. Docs
+
+`docs/architecture/package-boundaries.md`: round 3's removals are added to the
+existing "Next minor (unreleased): the model sees the whole page" migration
+note, under **Removed.** Both `framework-reference.md` copies were regenerated
+with `pnpm docs:reference`, the owning script: `Wrote ... (2852 public
+declarations).` They drop the removed constants and add
+`automationStudioConversationWholeThread` and
+`AutomationStudioConversationThreadPage`. They are outside the brief's listed
+paths, but `docs:check` cannot pass without them.
+
+### Round 3: commands run and observed results
+
+All Core commands ran in `fxwork/t210/!FluxIQ`, through `heavy.sh`.
+
+- `pnpm --filter @fluxiq/contracts build`: `build-cache ... restored from the
+  shared store (inputs changed: packages/contracts; 4 file(s) copied)`.
+- `npx vitest run .../runtime-exploration-permission.test.ts .../runtime-exploration-person-needed.test.ts`:
+  - before the rebuild, permission alone: `Tests 3 failed | 11 passed (14)`;
+  - after: `Test Files 2 passed (2)`, `Tests 25 passed (25)`.
+- `npx tsc --noEmit -p .`: two errors in the harness-option tests, then exit 0
+  after they were updated, and exit 0 again at the end.
+- `npx vitest run runtime/{conversations,llm,recovery,result-verification,flow-bootstrap}`:
+  `Test Files 6 failed | 192 passed (198)`, `Tests 7 failed | 2306 passed (2313)`,
+  in 206 s. The failures are listed under "Round 3: tests changed", plus the
+  `execute.test.ts` timeout.
+- Rerun of the 6 failing files plus `execute.test.ts`: `Test Files 6 passed (6)`,
+  `Tests 69 passed (69)`.
+- `npx vitest run conversations/tests/whole-thread.test.ts llm/harness/tests/whole-context.test.ts`
+  (after the barrel import): `Test Files 2 passed (2)`, `Tests 8 passed (8)`.
+- `npx vitest run result-verification/tests/repair-directive.test.ts`:
+  `Tests 18 passed (18)`.
+- `npx vitest run runtime/tests/service-flows/tests/scale-pages.test.ts`, which
+  calls `getFlowInstructionSet`: `Tests 3 passed (3)`.
+- `node scripts/structure-audit.mjs`:
+  - first `1 violation(s)`, the deep import above;
+  - then `structure-audit: passed (203 warning(s), 353 baselined)`.
+- `pnpm docs:check`: `structure-audit: passed (0 warning(s), 0 baselined)` and
+  `Deterministic framework reference is current.`
+- Downstream grep over `domain/src`, `apps`, `packages` and `scripts` found none
+  of: every removed constant, `finding_limit`, `listPriorAdaptations`,
+  `RecoveryConversationReader`, `packAutomationStudioLlmConversation`, the issue
+  feedback, the repair directive, `matchAuthoringDefinition` and
+  `withheldTurns`. So the downstream domain test was not required and was not
+  run.
+
+### Round 3: not verified
+
+- The whole vitest set was not rerun after the six test updates. Only the
+  failing files and the two new ones were.
+- The `runtime/tests` heavy service suites were not run, apart from
+  `scale-pages.test.ts`.
+- No downstream check, extension build or Lab run.
+- How large real requests now get. With no counts, a thread of thousands of
+  turns or a Flow with thousands of instructions is bounded only by the window
+  refusal, which is the user's rule.
+
+### Round 3: files
+
+All Core files are under `packages/fluxiq/src/programs/automation-studio/runtime/`
+unless a path says otherwise.
+
+- **New:**
+  - `conversations/whole-thread.ts`;
+  - `conversations/tests/whole-thread.test.ts`;
+  - `llm/harness/tests/whole-context.test.ts`.
+- **Changed, conversations:** `conversations.ts`, `index.ts`,
+  `instructions/prompt.ts` and `instructions/request.ts`.
+- **Changed, flow-bootstrap:**
+  - `authoring/matching.ts` and `authoring/plan-shapes.ts`;
+  - `plan/issue-feedback.ts`, `plan/profile-limits.ts` and `plan/validation.ts`;
+  - `plan/tests/issue-feedback.test.ts` and `plan/tests/validation.test.ts`.
+- **Changed, llm:**
+  - `deepseek/preflight.ts`, `draft-amendment-feedback.ts`,
+    `unusable-decision.ts` and `node-tools/run-node.ts`;
+  - `harness-options/{bootstrap-completion,builtin,host}.ts` and
+    `harness-options/tests/{builtin,registry}.test.ts`;
+  - `harness/{context-packet,conversation,index,provider-result}.ts` and
+    `harness/tests/patch-request-diagnosis.test.ts`;
+  - `tests/draft-amendment-feedback.test.ts`.
+- **Changed, recovery and result-verification:**
+  - `recovery/refuted-result/conversation.ts`;
+  - `result-verification/repair-directive.ts` and
+    `result-verification/tests/{repair-directive,verdict}.test.ts`.
+- **Changed, service:** `service.ts`.
+- **Changed, docs:** `docs/architecture/package-boundaries.md` and both
+  `framework-reference.md` copies.
+- **Regenerated (ignored build output):** `packages/contracts/dist/`.
+
+## Round 3b (2026-09-30, the coordinator's follow-up)
+
+### Outcome
+
+Done. The two caps round 3 left outside its paths, which still hid records from
+a model, are removed. The coordinator widened the owned paths to cover these two
+files, their direct callers and their tests.
+
+### 1. Adaptation context (`runtime/service/runtime-adaptation/resolve-context.ts`)
+
+- Before, a run read the newest 100 adaptation summaries and loaded the full
+  records of only the first 25 (`AUTOMATION_STUDIO_KNOWN_ADAPTATION_LOAD_LIMIT`).
+  Those records are what the recovery context shows the model
+  (`recovery/annotation/annotate.ts:373`).
+- It now reads every summary, page after page, 100 at a time. That is the
+  summary store's own maximum (`service/summaries/store.ts`,
+  `clampInteger(limit, 1, 100, 25)`). Paging stops at a short page, or at
+  `total` when the port gives one; the service's port returns the store's
+  `total`. Every record is loaded.
+- `AUTOMATION_STUDIO_KNOWN_ADAPTATION_LOAD_LIMIT` is removed from
+  `recovery/llm-invocation.ts` and from the import in `service.ts`.
+- Side effect: `computeAutomationStudioStabilityMetrics` now sees every
+  adaptation summary, not the newest 100.
+- Left as is: the run summaries on line 40, still the newest 100. They feed the
+  training budget, stability and run counts, not a model request. The
+  coordinator named lines 41-48 only, so this is the supervisor's call.
+
+### 2. Reusable-context store (`storage/project/reusable-llm-context-store.ts`)
+
+- `AutomationStudioReusableLlmContextList` gains `offset`, and `list` pages with
+  `limit ? offset ?`. The 1..100 page size stays; a negative or non-integer
+  offset throws.
+- New `listEvery(input)` reads every page in the list's order: created time,
+  newest first, then record id.
+- Callers:
+  - `service.ts:1390` (`packReusableLlmContexts`, what a model is offered) now
+    calls `listEvery`. It read one page of 100.
+  - `clearScope` already looped until the scope was empty.
+  - `listReusableLlmContexts`, the person-facing API listing, keeps its caller's
+    page. Its handler (`api/handlers/caches.ts`) does not pass `offset` through
+    yet. I did not touch it: it is not a model path, and it is a caller of the
+    service, not of the store.
+
+### Tests added
+
+- New `runtime/service/runtime-adaptation/tests/resolve-context.test.ts`:
+  - 260 summaries are read at offsets `[0, 100, 200]`, and all 260 records are
+    loaded in order;
+  - with no `total`, paging stops on a short page (150 summaries, 2 calls).
+- `storage/project/tests/reusable-llm-context-store.test.ts` gains "pages by
+  offset, and listEvery reads every page in the list's order": 120 records,
+  page 2 at offset 100, `listEvery` returns all 120 newest first, and offset -1
+  throws.
+  - Its first version wrote 230 records and timed out at 15 s under load. It
+    now writes 120 and has a 60 s timeout, because it makes 120 encrypted,
+    audited writes. It passes in 4.6 s.
+
+### Docs
+
+- `docs/architecture/package-boundaries.md`: two more **Removed** bullets in
+  the same migration note.
+- `docs/architecture/automation-studio/persistence.md:213` said "The store's own
+  page of candidates is still at most 100 records". It now says packing reads
+  every page through `listEvery`.
+- Both framework references regenerated: `Wrote ... (2851 public
+  declarations).` They drop `AUTOMATION_STUDIO_KNOWN_ADAPTATION_LOAD_LIMIT`.
+
+### Commands run and observed results (after the last source edit)
+
+- `npx tsc --noEmit -p .` in `packages/fluxiq`: exit 0, no output.
+- `node scripts/structure-audit.mjs`: `structure-audit: passed (203 warning(s), 353 baselined)`.
+- `pnpm docs:check`: `structure-audit: passed (0 warning(s), 0 baselined)` and
+  `Deterministic framework reference is current.`
+- The full set,
+  `npx vitest run runtime/{conversations,llm,recovery,result-verification,flow-bootstrap,service}`:
+  `Test Files 2 failed | 241 passed (243)`, `Tests 3 failed | 2648 passed | 1 skipped (2652)`,
+  in 287 s. All three failures were `Test timed out in 15000ms`:
+  - `service/summaries/tests/run-detail-preservation.test.ts`: "keeps a repaired
+    run's recovery annotation ..." (16.3 s) and "refuses to rebuild run details
+    when the run index is present but unreadable" (15.5 s);
+  - `service/recordings/tests/proposal-candidates.test.ts`: "is dropped, and the
+    action still proposed, when it is not a plain object" (16.2 s).
+- Those two files alone:
+  - at the default timeout: `Test Files 2 passed (2)`, `Tests 30 passed (30)`
+    (9.9 s and 36.1 s for the files);
+  - with `--testTimeout=120000`: `Test Files 2 passed (2)`, `Tests 30 passed (30)`
+    (12.2 s and 42.4 s).
+- `npx vitest run runtime/service/runtime-adaptation/tests/resolve-context.test.ts storage/project/tests/reusable-llm-context-store.test.ts`:
+  - first `Tests 1 failed | 7 passed (8)`: the 230-record test timed out at
+    15 s, then hit `EBUSY` on cleanup;
+  - after the change above, the store file alone: `Tests 6 passed (6)`. The
+    resolve-context file passed both times (2 tests).
+- `storage/project` is outside the coordinator's six directories. Only the
+  store's test file was run from it.
+- Downstream grep for `KNOWN_ADAPTATION_LOAD_LIMIT`, `ReusableLlmContextStore`,
+  `AutomationStudioReusableLlmContextList` and
+  `AutomationStudioRuntimeAdaptationContextPorts` found nothing, so no
+  downstream test was required.
+
+### Not verified
+
+- The whole full set was not rerun after the timeout reruns. No source changed
+  between them.
+- The rest of `storage/project/tests`, the `runtime/tests` heavy suites,
+  downstream checks and any Lab run.
+- How long a run's start now takes for a Flow with thousands of adaptations: it
+  loads every record.
+
+### Files (round 3b)
+
+- **Changed:**
+  - `runtime/service/runtime-adaptation/resolve-context.ts`;
+  - `runtime/recovery/llm-invocation.ts`;
+  - `runtime/service.ts`;
+  - `storage/project/reusable-llm-context-store.ts` and
+    `storage/project/tests/reusable-llm-context-store.test.ts`;
+  - `docs/architecture/package-boundaries.md` and
+    `docs/architecture/automation-studio/persistence.md`;
+  - both `framework-reference.md` copies.
+- **New:** `runtime/service/runtime-adaptation/tests/resolve-context.test.ts`.

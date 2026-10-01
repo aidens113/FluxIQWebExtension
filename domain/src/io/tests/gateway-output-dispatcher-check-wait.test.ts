@@ -11,7 +11,7 @@ import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { dispatchWebAutomationOutput } from "../gateway-output-dispatcher";
 
-async function dispatchWith(payload: JsonObject | undefined): Promise<OutputDispatchResult<JsonObject>> {
+async function dispatchWith(payload: JsonObject | undefined, status = "succeeded"): Promise<OutputDispatchResult<JsonObject>> {
   const fluxiq = {
     programs: {
       clientGateway: {
@@ -23,7 +23,7 @@ async function dispatchWith(payload: JsonObject | undefined): Promise<OutputDisp
         })
       },
       automationStudioClientGateway: {
-        executeAction: async () => ({ commandId: "client.command.click", status: "succeeded", ...(payload ? { payload } : {}) })
+        executeAction: async () => ({ commandId: "client.command.click", status, ...(payload ? { payload } : {}) })
       }
     }
   } as unknown as FluxIQ;
@@ -51,4 +51,10 @@ test("a malformed checkWait dispatches with no clearedWait key", async () => {
     const result = await dispatchWith({ status: "succeeded", checkWait });
     assert.equal("clearedWait" in result, false, String(JSON.stringify(checkWait)));
   }
+});
+
+test("a failed action keeps the check that cleared before its failure", async () => {
+  const result = await dispatchWith({ status: "failed", checkWait: { waitedMs: 7 } }, "failed");
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.clearedWait, { waitedMs: 7 });
 });

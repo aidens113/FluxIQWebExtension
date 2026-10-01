@@ -70,7 +70,18 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
     return { ok: true, status: await deps.status() };
   }
   if (message.type === RUNTIME_MESSAGES.panelOpenFluxIQ) {
-    const url = fluxIQWebAddress((await deps.readSettings()).coreApiUrl);
+    let automation: { projectId: string; flowId: string } | undefined;
+    if (message.flowId !== undefined) {
+      if (typeof message.flowId !== "string" || !message.flowId.trim() || message.flowId.length > 2048) {
+        return relayFailure("invalid_request", "That request is missing a valid flowId.");
+      }
+      const projectId = await deps.relay.projectId();
+      if (typeof projectId !== "string" || !projectId.trim()) {
+        return relayFailure("no_project", "FluxIQ has not said which project this browser belongs to yet. Connect, then try again.");
+      }
+      automation = { projectId: projectId.trim(), flowId: message.flowId.trim() };
+    }
+    const url = fluxIQWebAddress((await deps.readSettings()).coreApiUrl, automation);
     if (!url) return relayFailure("invalid_request", "The FluxIQ address in settings is not a web address.");
     await deps.openTab(url);
     return { ok: true, url };

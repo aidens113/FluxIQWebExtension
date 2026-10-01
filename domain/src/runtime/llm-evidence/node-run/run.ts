@@ -52,6 +52,7 @@ import {
 } from "../capture";
 import type { WebLlmNameAssumption } from "../name-assumption";
 import { present } from "../present";
+import { webBuildRefusalDiagnostic } from "../refusal-diagnostic";
 import { webActionPermission } from "../permission";
 import { resolveWebPlanNode } from "../plan-resolution";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
@@ -512,7 +513,7 @@ function refusal(
   // have moved something, and a state nobody read is not said. The page is
   // digested even when it is too large to go back with the refusal.
   const left = page ?? (record.acted ? undefined : record.found);
-  return withCallStates(toolExecution(value as unknown as JsonValue, false, webLlmToolRejectionResultCode(code), undefined, present<WebNodeDraftStatement>({
+  const result = withCallStates(toolExecution(value as unknown as JsonValue, false, webLlmToolRejectionResultCode(code), undefined, present<WebNodeDraftStatement>({
     actionId: record.actionId,
     effect: record.effect,
     // `input` is always given, even for a refusal, because the loop would
@@ -541,6 +542,9 @@ function refusal(
     // resolved, so nothing was guessed at.
     assumed: record.assumed
   }), record.found, left);
+  const diagnostic = webBuildRefusalDiagnostic({ page: record.found?.evidence, parameters: record.parameters ?? (isJsonRecord(record.call?.parameters) ? record.call.parameters : undefined), target: detail?.target, code, reason: detail?.reason });
+  if (diagnostic) result.diagnostic = diagnostic;
+  return result;
 }
 
 /**

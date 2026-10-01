@@ -4,6 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { chromium, type Browser, type BrowserContext, type FrameLocator, type Locator, type Page } from "@playwright/test";
 import { resolveScenarioWorkflow, type ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
+import { closeLabSession } from "../../tests/close-lab-session.js";
 import { APPLICATION_FRAME_TITLE } from "../ats/index.js";
 import { postingById } from "../catalog/index.js";
 import { APPLICATION_RECORD, EXPECTED_REFERENCE } from "../candidate.js";
@@ -35,17 +36,25 @@ type Session = { lab: RunningScenarioLab; context: BrowserContext; page: Page; e
 
 async function session(mode: JobBoardMode = "baseline"): Promise<Session> {
   const lab = await startScenarioLab({ runToken: RUN_TOKEN, seed: 42 });
-  if (mode !== "baseline") await post(lab, "set-mode", { mode });
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-GB", timezoneId: "Europe/London" });
-  const errors: string[] = [];
-  const watch = (page: Page) => {
-    page.on("pageerror", (error) => errors.push(`pageerror: ${error.message}`));
-    page.on("console", (message) => { if (message.type() === "error") errors.push(`console: ${message.text()}`); });
-  };
-  context.on("page", watch);
-  const page = await context.newPage();
-  await page.goto(`${lab.origin}${scenario.startPath}`);
-  return { lab, context, page, errors, close: async () => { await context.close(); await lab.close(); } };
+  let context: BrowserContext | undefined;
+  try {
+    if (mode !== "baseline") await post(lab, "set-mode", { mode });
+    context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-GB", timezoneId: "Europe/London" });
+    const errors: string[] = [];
+    const watch = (page: Page) => {
+      page.on("pageerror", (error) => errors.push(`pageerror: ${error.message}`));
+      page.on("console", (message) => { if (message.type() === "error") errors.push(`console: ${message.text()}`); });
+    };
+    context.on("page", watch);
+    const page = await context.newPage();
+    await page.goto(`${lab.origin}${scenario.startPath}`);
+    const opened = context;
+    return { lab, context: opened, page, errors, close: () => closeLabSession(lab, opened) };
+  } catch (error) {
+    // The opening failure is the one to report; the lab is closed either way, or the file never exits.
+    await closeLabSession(lab, context).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function post(lab: RunningScenarioLab, operation: string, payload: unknown): Promise<void> {

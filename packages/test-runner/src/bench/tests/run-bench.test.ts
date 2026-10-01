@@ -14,6 +14,7 @@ import { acquireCampaignLease, BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION,
 import { expandCorpus, VARIANT_NEEDS_FLOW_LANE } from "../expand-corpus.js";
 import type { BenchRunsFile } from "../report-store.js";
 import { createResumableBench, executePrecreatedBenchCampaign, publishPrecreatedBenchParentProjections, resumeBench, runBench, type AuthenticatedBenchCampaignEvaluation, type BenchCampaignCrashPoint, type PrecreatedBenchCampaignOptions, type ResumableRunBenchOptions, type RunBenchOptions } from "../run-bench.js";
+import { honestRunVerdict, permissionStopInvariant } from "../../run-evaluation/permission-stop/index.js";
 
 // Only the fields resolveScenarioWorkflow reads.
 const scenario = (id: string, extra: Partial<WebScenario> = {}): WebScenario => ({ id, recordingScript: [], expected: {}, ...extra }) as WebScenario;
@@ -244,6 +245,30 @@ test("a resumable campaign recovers all five persistence crash boundaries withou
       assert.equal(calls.length, 6);
     } finally { await rm(root, { recursive: true, force: true }); }
   });
+});
+
+test("a finalized permission stop survives reconciliation and another resume without rerunning or losing its label", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-permission-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const benchId = "bench-permission-0123abcd", calls: string[] = [];
+  const configured = { ...resumableOptions(root, benchId, calls), benchId, corpus: { ...oneCellCorpus, lanes: ["flow"] as const }, repeatCount: 1 };
+  const stop = permissionStopInvariant({ consequence: "move_money", control: "matched" }, [2]);
+  configured.runScenario = async (input) => {
+    const result = await campaignRunner(calls)(input);
+    const evaluation = { ...result.evaluation!, verdict: "failed" as const, failureCategory: "runtime.behavior" as const, flowCreated: false, oracleVerdict: null, reportedVerdict: null, actions: [], invariants: [stop] };
+    await writeFile(path.join(result.path, "evaluation.json"), JSON.stringify(evaluation));
+    await writeFile(path.join(result.path, "run.json"), JSON.stringify(runManifest(result.runId, input.scenarioId, "failed")));
+    await writeFile(path.join(result.path, "summary.json"), JSON.stringify({ verdict: "failed", metrics: { steps: 3 } }));
+    return { ...result, verdict: "failed", evaluation };
+  };
+  await assert.rejects(createResumableBench({ ...configured, crashHook: async (point) => { if (point === "after-bundle-finalized") throw new Error("crash after permission bundle"); } }), /crash after permission bundle/u);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const outcome = await resumeBench(configured);
+    const [record] = (await readRuns(outcome.directory)).runs;
+    const evaluation = parseRunEvaluationJson(await readFile(path.join(outcome.directory, record?.evaluation ?? "missing"), "utf8"));
+    assert.deepEqual([outcome.status, honestRunVerdict(evaluation), calls.length], ["failed", "stopped_for_permission", 1]);
+    assert.deepEqual(evaluation.invariants.find((invariant) => invariant.id === stop.id), stop);
+  }
 });
 
 test("a nested precreated shard child leases its own directory and resumes a finalized interruption exactly once", async () => {

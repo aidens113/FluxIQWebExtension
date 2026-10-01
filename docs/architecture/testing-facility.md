@@ -53,83 +53,64 @@ the request is the model's 1,000,000-token context window, which Core enforces
 by failing loudly rather than trimming. Page evidence is explicitly marked
 untrusted and must not be written to Lab artifacts or logs.
 
-Production composition uses the same ownership boundary. The web domain binds
-`domain/src/runtime/llm-evidence/` through `registerWebAutomationRuntime`,
-which is called by the web-panel host. Its authoring-time surface exposes
-`web.inspect_current_page`, `web.navigate_same_origin`, and `web.press_control`
-to Core's domain-neutral evidence loop. These tools use the
-existing Automation Studio client-gateway action bridge; they
-require exactly one ready, trusted, idle-recorder web extension and fail closed
-on ambiguity. This prevents evidence actions from entering recording storage.
-Navigation first inspects the current page, rejects credentials/non-HTTP(S)
-URLs, origin changes, and a destination whose sanitized location is already
-current, then captures the destination again. A same-location request returns
-the recoverable `no_progress` result without applying an effect. Interaction
-handles remain bound to the selector in the latest evidence returned for that
-session, project, and Flow. A fresh snapshot must still contain that selector
-uniquely at the same location before execution; fresh ordinal ranking cannot
-silently rebind the handle to a different element. Press presses the control
-the handle names and refuses nothing on FluxIQ's own judgement of what the
-control looks like: the user's instruction is the authority. Until 2026-09-18
-it accepted only semantic disclosures and view controls and refused any
-control whose label -- or selector -- carried a committing word, which left a
-plain "New post" button and every row control of an order-management site
-unpressable. A press, or a Flow step, whose consequence lasts is asked of
-Core's permission check first (`domain/src/runtime/llm-evidence/permission.ts`).
-The model declares what its own action does in Core's classes -- `move_money`,
-`delete`, `send_or_publish`, `modify_existing`, `create_new` -- on the press's
-`consequences` input or on the step's target handle, and Core answers from the
-consequences the person permitted (`permittedConsequences`) and from what his
-instruction asks for. A refusal ends the build
-with Core's permission request for the person; FluxIQ judges no control by how
-it looks. **An empty declaration is put to Core too.** Until 2026-09-22 this
-domain answered `no_consequence` for `[]` without calling the check, so a press
-that said it causes nothing lasting reached Core's gate at all -- and four
-measured live builds authored Flows containing presses with nobody able to say
-what any press had declared. Core now reads the empty answer, records it against
-the action and permits it, so the declaration a Flow step carries can be read on
-the proposal rather than deduced from the absence of a refusal. Core's reader
-bounds the control name and the verb this domain supplies, so a node whose label
-runs to three words costs a plainer sentence rather than the action. A checkbox press is pressed back once the page has been read,
-so exploration leaves the page as it found it. Form filling and option selection
-are deliberately absent from the authoring tool catalog. Parsed evidence
-already contains the control metadata and bounded options needed to propose
-those Flow nodes, while executing them would perform the workflow being
-authored instead of discovering structure. Those operations remain available
-as ordinary `web.dom.type` and `web.dom.select` actions in Testing Lab/manual
-runtime control and as generated Flow outputs. Every authoring interaction
-recaptures evidence and rejects an origin change. A press whose post-click
-parsed evidence is unchanged returns recoverable `no_progress` with
-`effectApplied: false`. Expected model-correctable policy/input rejections return only a
-`web-llm-tool-result.v1` object with `ok: false` and an allowlisted code, so
-Core can give the model another bounded decision turn without echoing the
-rejected selector, URL, or value. Disconnects, ambiguous clients,
-cancellation, malformed snapshots, and failed gateway/browser actions remain
-fatal. Tool declarations mark inspection as an observation with
-`repeatPolicy: "after_mutation"`; navigation and reveal are mutations.
-Core rejects repeated inspection until a successful state-changing tool
-creates new evidence to observe. Select evidence includes at most 20 bounded
-option label/value pairs so generation does not guess an option value. Every
-execution returns Core's explicit `llm_evidence_tool_execution` outcome:
-inspection and recoverable rejection set `effectApplied: false`, while a
-mutation sets it to `true` only after its browser action succeeds and evidence
-is recaptured. Outcomes also carry a bounded content-free `resultCode`, which
-Core may retain with the tool ID and effect flag for Testing Lab diagnosis.
-Interactive evidence assigns opaque handles (`t1`, `t2`, and so
-on); model-selected actions copy a handle rather than reconstructing CSS. The
-runtime resolves the handle to its last-returned selector and revalidates that
-selector against fresh sanitized evidence before sending it to the browser.
-Reveal guidance limits choices to observed controls that expose otherwise
-unavailable structure required to author the instruction. The
-`web-llm-evidence.v1` response is capped by Core's per-call allowance and a
-12 KB downstream hard ceiling (6 KB when Core provides no allowance), with at
-most 40 elements. It excludes
-input values, sensitive controls, selected text, unrestricted attributes, and
-URL queries/fragments. Ordinary non-sensitive input and textarea controls may
-expose only a `hasValue` boolean so later evidence can distinguish empty from
-completed fields without revealing entered text. A non-sensitive select may
-expose its current `selectedValue` only when that value exactly matches one of
-the same descriptor's already-sanitized bounded options.
+Production composition binds `domain/src/runtime/llm-evidence/` through
+`registerWebAutomationRuntime`, called by the web-panel host. The domain
+advertises its runnable web node library; Core offers `core.run_node` to run
+those registered nodes and `core.flow_draft` to author the Flow. The domain's
+additional `web.detect_repeating_structure` observation names an extraction structure
+without publishing selectors or values. A free initial observation gives the
+first decision the page already in front of it (`tools.ts`, `runsNodes.initial`).
+These operations use the production gateway bridge and require exactly one
+ready, trusted extension with an idle recorder, failing closed on ambiguity.
+The old inspect/navigate/press-only catalog is no longer the build's surface:
+typing, selecting and reading are available through the registered nodes too.
+
+The model receives `web-llm-evidence.v2`: every rendered element from the
+composed tree, every responding frame and open shadow root, in document order.
+The look merges all frames unless a frame is explicitly addressed. A frame
+that does not answer is named in `unansweredFrameIds`. No element count,
+text length, option count, attribute allowlist, byte budget or ranking hides
+page information. Non-sensitive values that were captured, full option lists,
+attributes as pairs, and screened locations/links arrive whole. Sensitive
+controls, secret-shaped strings, card numbers and secret-named URL parameter
+values remain screened. Covering-layer facts (`isDialog`, `inDialog`, `covers`,
+`coversCount`, `coveredBy`, `kind`, `frontLayer`, `statement`) tell the model
+what stands between it and a control without changing document order; see
+[page evidence](page-evidence.md#no-limits-on-the-way-to-a-model).
+
+Opaque `tN` handles (`t1`, `t2`, ...; the older `target.N` spelling is still accepted) bind to observed elements; the runtime resolves and
+revalidates a handle before acting. Consequences are declared to Core's
+permission gate, including an empty declaration. Money, deletion and
+send/publish always require permission when not already permitted; an
+instruction alone does not grant those classes. The Lab's person-answering
+policy is described [below](#who-answers-a-permission-question-in-a-campaign).
+Tool results carry effect state and closed result codes, while Core retains
+content-free trace/accounting for diagnosis. The model's own screened reason
+travels separately as chat activity rather than becoming an artifact trace.
+The complete screened evidence, catalog, draft and history must fit Core's
+1,000,000-token request window; an oversized request fails before sending,
+with its measured size, and nothing is trimmed to fit.
+
+The build has three phases: live exploration with a model-authored draft;
+testing and judgement from the instructed-act checklist; then live repair.
+A performed action is evidence until the model adds it to the Flow. No full
+replay runs during exploration or at the start of a continuation. An accepted
+completion is tested from the Flow's start; a partial non-empty draft whose
+round stalls is also tested and judged before repair. An empty draft explores
+again while budget remains. Core reports an explicit not-doable, budget or
+unreadable-replies ending with its reason, outstanding acts and accounting;
+see Core's `docs/architecture/automation-studio/llm-flow-bootstrap.md`.
+
+A refused node call also records a structural `diagnostic` on its evidence
+trace row, retained in `snapshots/flow-lane.json` under
+`build.evidenceLoop.steps`. It states the refusal code/reason, requested opaque
+target handle, whether that target was observed before the action, and its
+covering handles/kinds/count. `pageObserved: false` explicitly records a call
+that had no pre-call capture; no later page state is substituted. The domain
+producer and the bundle reader share a strict field/value allowlist. Labels,
+page text, selectors, URLs, input values and arbitrary refusal prose cannot
+travel on this account. Core transports the optional object generically and
+does not interpret browser handles or covering layers.
 
 Neither production nor Testing Lab web code resolves a provider or invokes a
 model itself. Generic provider selection, secret access, budgets,
@@ -1466,6 +1447,14 @@ never a pass. The Flow's playback needs no second answer: a saved Flow replays
 with no permission gate, and only a repair's exploration is gated, which parks
 on the run's thread and is answered by the same rule.
 
+Every realistic-site consequential task declares that permission point,
+including purchase, binding bid, post, quote request and offer submission.
+Variant rows sharing an instruction share its point. A task without one must
+appear in `ASKS_NOTHING` with a reason in
+`apps/scenario-lab/src/scenarios/tests/live-instructions.test.ts`; a new
+unclassified task fails the coverage check. The Lab plays the person at the
+declared consequential control, not a blanket grant before exploration.
+
 **A hand-off at a real check is correct.** The evaluation's
 `person-hand-off` invariant (`run-evaluation/person-hand-off-invariant.ts`),
 applied by both `lab run` and the bench from the same file, passes a run that
@@ -1533,9 +1522,15 @@ and nothing that judges a created Flow reads it. Failing the run for its absence
 threw away a complete product result: on `run-mudslg9p-c59266aa` a Flow was
 built, ran, failed, Core's repair made its two calls, no record arrived, and the
 run spent ten minutes waiting before being reported `performance.budget`. It
-now takes its own bound, `RECOVERY_RECORD_WAIT_MS`, five minutes measured from
-the first terminal read — half of the live run's deadline, and long
-enough for any recovery this facility has been observed to complete.
+For older details without a recovery-state marker, `RECOVERY_RECORD_WAIT_MS`
+keeps the five-minute fallback; a run with no failed execution attempt gets the
+shorter grace. When Core marks recovery `running`, the live-run deadline bounds
+the wait. A marker of `ended` or `threw` settles it immediately and names the
+missing record. A terminal `metadata.repairedRerun.status` also settles the
+failed repaired re-run immediately: no further recovery follows that re-run.
+An active `resultRepair.phase` of `reauthoring` or `rerunning` still keeps the
+run in flight. Fake-clock tests cover a failed repair settling on its first
+terminal read after one polling interval.
 
 ### The adversarial lane
 
@@ -1917,6 +1912,11 @@ bundle is preserved under that serial/child campaign's `interrupted/` directory
 and the cell gets a new deterministic attempt id. A lease refuses a concurrent
 live owner and archives/reclaims only an owner proven stale by machine-boot and
 process-start identities, so a reboot or PID reuse needs no lock-file edit.
+
+Reconstructing a finalized Flow evaluation preserves its failed
+`stopped-for-permission` invariant and evidence references. A permission stop
+therefore remains `stopped_for_permission` through reconciliation and repeated
+resumes, and can never become a passing benchmark row.
 
 After every child is terminal, the parent validates their exact partition and
 authenticated evaluations, then publishes parent-ordered `runs.json`,
@@ -2524,7 +2524,7 @@ recorded page data out of source control and user-facing logs.
 
 Live-provider testing is an explicit opt-in lane and is not part of ordinary deterministic runs or CI. The Testing Lab driver is the sole process allowed to read provider credential environment variables. A case-insensitive explicit provider-secret denylist is removed at the final managed-process boundary and from both direct Chromium launch paths, so Core, Scenario Lab, setup/build commands, the browser, and the loaded extension cannot inherit the source key. Repository-local schema 0.1 contracts describe the LLM task, a non-secret execution profile, sanitized invocation provenance, and review/replay evaluation.
 
-The default Lab allowance is the model's whole context window: 992,000 input tokens, 8,000 output tokens and 1,000,000 total tokens per request (`DEFAULT_LLM_LAB_BUDGET`), with a 30-second timeout and a $0.25 per-call estimated-cost ceiling that may only be lowered. Validation rejects any request total above 1,000,000 tokens (`LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST`, mirroring Core's DeepSeek model limits). That number is what the model can read, not a budget: on 2026-09-30 the user ordered that no limit hide page information from the model, and a request over the window fails loudly rather than being trimmed. The allowance used to be 8,000/2,000/10,000 under a 50,000-token ceiling, then 48,000/8,000/56,000 under Core's 64,000-token ceiling, and each made a real page impossible to describe. A live run permits no retries.
+The default Lab allowance is the model's whole context window: 992,000 input tokens, 8,000 output tokens and 1,000,000 total tokens per request (`DEFAULT_LLM_LAB_BUDGET`), with a 30-second timeout and a $0.25 per-build estimated-cost ceiling that may only be lowered (each call inherits that ceiling). Validation rejects any request total above 1,000,000 tokens (`LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST`, mirroring Core's DeepSeek model limits). That number is what the model can read, not a budget: on 2026-09-30 the user ordered that no limit hide page information from the model, and a request over the window fails loudly rather than being trimmed. The allowance used to be 8,000/2,000/10,000 under a 50,000-token ceiling, then 48,000/8,000/56,000 under Core's 64,000-token ceiling, and each made a real page impossible to describe. A live run permits no retries.
 
 Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core run intent `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The live campaign (`scripts/lab/live-campaign`) passes no `--llm-max-run-tokens`: with whole-page requests a build may use more than a million tokens across its calls, and a run budget it outgrew would fail the run as `performance.budget` only after the money was spent, so what bounds a campaign run is its per-build spend ceiling, its call count and Core's stall guard. The spend ceiling is $0.25 per build, whatever the build's call count, and it has one definition: Core's `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD`, which the Lab imports as `LIVE_LLM_BUILD_COST_CEILING_USD` (`packages/test-runner/src/live-llm/build-cost-ceiling.ts`). `--llm-max-cost-usd` is the whole build's ceiling, not a per-call figure: it may only lower Core's ceiling, is never multiplied by the call count, and the live campaign passes none. The ceiling is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings, so Core's loop budget holds the build, the run's recovery and each re-author build to it, each on its own. The Lab's post-run check holds each settled phase to it again, and every live run reports its spend per build against it: `snapshots/live-llm.json` `observed.perBuild`, the campaign row's `perBuildSpend` with the summary's `buildsOverCeiling`, and the spend ledger's `buildCeilingUsd`, `maxBuildCostUsd` and `buildsOverCeiling`. There is no spend budget across runs. The model is the Flow's `llmModel` setting.
 

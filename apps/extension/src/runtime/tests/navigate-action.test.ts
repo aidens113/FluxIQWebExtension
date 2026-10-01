@@ -13,6 +13,7 @@ import { test } from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import { runBrowserActionCommand } from "../action-runner";
 import { currentAutomationTabId, forgetAutomationTab, setAutomationTab } from "../automation-tab";
+import { OriginPace, PAGE_LOAD_PACE_SETTINGS } from "../../background/page-pace";
 
 /** One `chrome.tabs.sendMessage` the runner made: the tab, the body, and the frame it addressed. */
 type SentToTab = { tabId: number; message: Record<string, unknown>; frameId: number | undefined };
@@ -38,6 +39,13 @@ type BrowserTab = {
   document?: number;
   ignores?: boolean;
   page?: PageAnswer | "silent" | PageAnswer[];
+  /**
+   * The HTTP status the landed document says it was served with, read through
+   * `chrome.scripting.executeScript`: absent, the injection is refused, as it is
+   * when the stub has no scripting at all; `"none"`, the document answers
+   * nothing, as Firefox, which keeps no `responseStatus`, does.
+   */
+  served?: number | "none";
 };
 
 /**
@@ -50,8 +58,8 @@ type BrowserTab = {
  * already shows did any work. A tab marked `ignores` acts like a browser that
  * did not carry the request out: it accepts the call and changes nothing.
  */
-function installNavigationStub(tabs: Record<number, BrowserTab>): { updated: number[]; created: string[]; reloaded: number[]; asked: SentToTab[] } {
-  const calls = { updated: [] as number[], created: [] as string[], reloaded: [] as number[], asked: [] as SentToTab[] };
+function installNavigationStub(tabs: Record<number, BrowserTab>): { updated: number[]; created: string[]; reloaded: number[]; asked: SentToTab[]; injected: unknown[] } {
+  const calls = { updated: [] as number[], created: [] as string[], reloaded: [] as number[], asked: [] as SentToTab[], injected: [] as unknown[] };
   const loaded = (tabId: number) => {
     const tab = tabs[tabId]!;
     if (tab.ignores !== true) tab.document = (tab.document ?? 0) + 1;
@@ -92,6 +100,14 @@ function installNavigationStub(tabs: Record<number, BrowserTab>): { updated: num
         if (page !== "silent") callback(page);
       }
     },
+    scripting: {
+      executeScript: (injection: { target: { tabId: number } }) => {
+        calls.injected.push(injection.target);
+        const served = tabs[injection.target.tabId]?.served;
+        if (served === undefined) return Promise.reject(new Error("Cannot access contents of the page."));
+        return Promise.resolve([{ frameId: 0, result: served === "none" ? undefined : served }]);
+      }
+    },
     webNavigation: {
       getAllFrames: (details: { tabId: number }, callback: (found: unknown[]) => void) =>
         callback([{
@@ -104,12 +120,13 @@ function installNavigationStub(tabs: Record<number, BrowserTab>): { updated: num
   return calls;
 }
 
-async function navigate(url: string, activeTabId: number | undefined, ownOrigins?: readonly string[], timeoutMs?: number): Promise<Awaited<ReturnType<typeof runBrowserActionCommand>>> {
+async function navigate(url: string, activeTabId: number | undefined, ownOrigins?: readonly string[], timeoutMs?: number, pace?: OriginPace): Promise<Awaited<ReturnType<typeof runBrowserActionCommand>>> {
   try {
     return await runBrowserActionCommand({
       action: { commandId: "c-nav", actionType: "web.browser.navigate", url, ...(timeoutMs !== undefined ? { timeoutMs } : {}) },
       ...(activeTabId !== undefined ? { activeTabId } : {}),
       ...(ownOrigins ? { ownOrigins } : {}),
+      ...(pace ? { pace } : {}),
       attachTabForRecording: () => Promise.resolve()
     });
   } finally {
@@ -367,4 +384,145 @@ test("a frame from before the distinction, answering a robot check with no word 
   const run = await navigate(RESULTS, 41);
   assert.equal(run.result.failure?.code, "web.intervention.required");
   assert.equal(calls.asked.length, 1, "and nothing was waited for");
+});
+
+test("a self-clearing check followed by a navigation no-op still reports its cleared wait", async () => {
+  forgetAutomationTab();
+  installNavigationStub({ 41: { url: RESULTS, ignores: true, page: [ORDINARY_PAGE, SELF_CLEARING_CHECK, ORDINARY_PAGE] } });
+  const run = await navigate(RESULTS, 41);
+  assert.equal(run.result.status, "failed");
+  assert.equal(run.result.failure?.code, "web.navigation.unexpected");
+  assert.equal(typeof run.result.checkWait?.waitedMs, "number");
+});
+
+// A navigation the server refused. bigbox-retail answers an item address it does
+// not know with HTTP 404 and `{"error":"not_found"}`, at the address asked for,
+// and lane A run 23 reported that navigation `succeeded`: the build believed it
+// had reached the item. A click already read the landed document's status
+// (`click-landing.ts`); a navigation now reads it the same way (`served-status.ts`).
+
+const MISSING_ITEM = "http://127.0.0.1:64130/scenarios/bigbox-retail/ip/no-such-item/000?ref=search#reviews";
+
+test("a navigation the server answered with HTTP 404 fails as navigation_unexpected, naming the status and the path", async () => {
+  forgetAutomationTab();
+  const calls = installNavigationStub({ 41: { url: STORE, page: ORDINARY_PAGE, served: 404 } });
+  const run = await navigate(MISSING_ITEM, 41);
+
+  assert.equal(run.result.status, "failed");
+  assert.equal(run.result.failure?.category, "navigation_unexpected");
+  assert.equal(run.result.failure?.code, "web.navigation.unexpected");
+  assert.equal(run.result.failure?.actual, "the server answered HTTP 404 for /scenarios/bigbox-retail/ip/no-such-item/000");
+  assert.doesNotMatch(run.result.failure?.actual ?? "", /ref=|reviews/u, "the query and fragment are not quoted");
+  assert.match(run.result.message ?? "", /HTTP 404/u);
+  assert.equal(run.result.url, MISSING_ITEM, "the result still says where the tab is");
+  assert.deepEqual(calls.injected, [{ tabId: 41, documentIds: ["document.1"] }], "the status is read from the document the drive landed on");
+  assert.ok(parseAutomationStudioFailureRecord(run.result.failure), "Core's parser accepts the record");
+});
+
+test("a navigation the server answered with HTTP 200 still succeeds", async () => {
+  forgetAutomationTab();
+  const calls = installNavigationStub({ 41: { url: STORE, page: ORDINARY_PAGE, served: 200 } });
+  const run = await navigate(RESULTS, 41);
+  assert.equal(run.result.status, "succeeded");
+  assert.equal(calls.injected.length, 1, "the status was read");
+});
+
+test("a navigation whose served status cannot be read is left as it was: missing evidence is never a failure", async () => {
+  forgetAutomationTab();
+  installNavigationStub({ 41: { url: STORE, page: ORDINARY_PAGE } });
+  const refused = await navigate(RESULTS, 41);
+  assert.equal(refused.result.status, "succeeded", "an injection the browser refuses");
+
+  forgetAutomationTab();
+  installNavigationStub({ 41: { url: STORE, page: ORDINARY_PAGE, served: "none" } });
+  const silent = await navigate(RESULTS, 41);
+  assert.equal(silent.result.status, "succeeded", "a document that keeps no status, as in Firefox");
+});
+
+test("a robot check served HTTP 403 is still the person's, not a refused page", async () => {
+  forgetAutomationTab();
+  installNavigationStub({ 41: { url: STORE, page: TRAFFIC_SCREEN, served: 403 } });
+  const run = await navigate(RESULTS, 41);
+  assert.equal(run.result.failure?.code, "web.intervention.required");
+});
+
+test("a page the browser could not load is not asked for its status", async () => {
+  forgetAutomationTab();
+  const calls = installNavigationStub({ 41: { url: STORE, loadFailed: true, served: 404 } });
+  const run = await navigate(RESULTS, 41);
+  assert.deepEqual(calls.injected, []);
+  assert.equal(run.result.failure?.actual, `the browser could not load ${RESULTS}`);
+});
+
+// A navigation the site refused for coming too fast. job-board and the
+// everything store serve their rate-limit page as a document with HTTP 429, at
+// the address asked for. That is not a page the server refused for good: the
+// navigation did not happen, and the same request after the wait will. So it
+// fails RATE_LIMITED -- retryable, the act stated as not done -- and the
+// worker's page-load pace hears of the refusal, as it does from a paginated
+// read (`content/extraction/pagination.ts`).
+
+const STORE_ORIGIN = "http://127.0.0.1:64130";
+const LIMITED_RESULTS = "http://127.0.0.1:64130/scenarios/everything-store/s?k=wireless+earbuds#top";
+
+/** A pace on a clock that does not move, so the wait it imposes is exact. */
+function stillPace(refusalWaitMs = PAGE_LOAD_PACE_SETTINGS.refusalWaitMs): OriginPace {
+  return new OriginPace({ ...PAGE_LOAD_PACE_SETTINGS, refusalWaitMs }, () => 1_000_000);
+}
+
+test("a navigation the server answered with HTTP 429 fails as rate_limited, retryable after the wait the pace now imposes, and the pace hears of it", async () => {
+  forgetAutomationTab();
+  // A refusal wait unlike the default, so the wait on the record is shown to be the pace's own.
+  const pace = stillPace(20_000);
+  installNavigationStub({ 41: { url: STORE, page: ORDINARY_PAGE, served: 429 } });
+  const run = await navigate(LIMITED_RESULTS, 41, undefined, undefined, pace);
+
+  assert.equal(run.result.status, "failed");
+  assert.equal(run.result.failure?.code, "web.action.rate_limited");
+  assert.equal(run.result.failure?.retryable, true);
+  assert.equal(run.result.failure?.effect, "unacted", "the record states the navigation did not happen");
+  assert.equal(run.result.failure?.retryAfterMs, 20_000);
+  assert.match(run.result.failure?.actual ?? "", /HTTP 429/u);
+  assert.match(run.result.failure?.actual ?? "", /\/scenarios\/everything-store\/s(?![?#])/u);
+  assert.doesNotMatch(`${run.result.failure?.actual} ${run.result.message}`, /wireless|earbuds|top/u, "the query and fragment are not quoted");
+  assert.match(run.result.message ?? "", /HTTP 429/u);
+  assert.equal(pace.refusalsOf(STORE_ORIGIN), 1, "the origin's pace noted the refusal");
+  assert.ok(parseAutomationStudioFailureRecord(run.result.failure), "Core's parser accepts the record");
+});
+
+test("a navigation the server answered with HTTP 503 fails as rate_limited too, and with no pace it waits the pagination's first retry wait", async () => {
+  forgetAutomationTab();
+  const pace = stillPace();
+  installNavigationStub({ 41: { url: STORE, page: ORDINARY_PAGE, served: 503 } });
+  const paced = await navigate(LIMITED_RESULTS, 41, undefined, undefined, pace);
+  assert.equal(paced.result.failure?.code, "web.action.rate_limited");
+  assert.equal(paced.result.failure?.retryAfterMs, PAGE_LOAD_PACE_SETTINGS.refusalWaitMs);
+  assert.equal(pace.refusalsOf(STORE_ORIGIN), 1);
+
+  forgetAutomationTab();
+  installNavigationStub({ 41: { url: STORE, page: ORDINARY_PAGE, served: 503 } });
+  const unpaced = await navigate(LIMITED_RESULTS, 41);
+  assert.equal(unpaced.result.failure?.code, "web.action.rate_limited");
+  assert.equal(unpaced.result.failure?.retryable, true);
+  assert.equal(unpaced.result.failure?.retryAfterMs, 8_500, "pagination.ts FIRST_RETRY_WAIT_MS");
+  assert.ok(parseAutomationStudioFailureRecord(unpaced.result.failure));
+});
+
+test("a navigation the server answered with HTTP 404 is still navigation_unexpected, and the pace hears of no refusal", async () => {
+  forgetAutomationTab();
+  const pace = stillPace();
+  installNavigationStub({ 41: { url: STORE, page: ORDINARY_PAGE, served: 404 } });
+  const run = await navigate(MISSING_ITEM, 41, undefined, undefined, pace);
+  assert.equal(run.result.failure?.code, "web.navigation.unexpected");
+  assert.equal(run.result.failure?.retryAfterMs, undefined);
+  assert.equal(pace.refusalsOf("http://127.0.0.1:64130"), 0);
+});
+
+test("a robot check served HTTP 429 is still the person's, and is not told to the pace as a refusal", async () => {
+  forgetAutomationTab();
+  const pace = stillPace();
+  installNavigationStub({ 41: { url: STORE, page: TRAFFIC_SCREEN, served: 429 } });
+  const run = await navigate(RESULTS, 41, undefined, undefined, pace);
+  assert.equal(run.result.failure?.code, "web.intervention.required");
+  assert.equal(pace.refusalsOf(STORE_ORIGIN), 0);
 });

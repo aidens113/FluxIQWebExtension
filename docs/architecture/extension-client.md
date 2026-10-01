@@ -102,6 +102,17 @@ panel lists the steps of a run; what FluxIQ decides and does is the chat's to
 show, and internal page reads are never shown as steps. Flow editing, run logs
 and everything richer are in FluxIQ, one Open FluxIQ away.
 
+The selected automation's Open in FluxIQ button carries its Flow ID to the
+background. The background takes the project from the paired browser's
+session and opens `/programs/automation-studio?project=...&flow=...` on the
+configured HTTP(S) Core address, with both IDs encoded as query parameters.
+It ignores a panel-supplied project or token and refuses an automation link
+when the session has no project. Generic Open FluxIQ buttons still open the
+configured panel address. Only the side panel and popup may request either
+kind of link; content pages are refused before settings or session context
+are read. Opening a link makes no authenticated program call and places no
+pairing token in the URL.
+
 | Directory under `apps/extension/src/panel/` | Owns |
 | --- | --- |
 | `shell/` | `mountPanel`, the top bar, the one `PanelStore`, and which screen shows (`screen-state.ts`, pure). |
@@ -128,6 +139,12 @@ The names the Lab presses are kept: the gear's "Settings", the settings labels,
 the recording bar's "Stop recording" (`#stopRecordingButton`), and "Extract
 Data From This Page". The old way back from settings, the "Simple" radio, is
 gone with the modes.
+
+Pending chat sends and connection-settings saves preserve edits made after the
+request began. Completion clears or refills a draft only when its edit revision
+still matches the submitted revision. A successful earlier settings save reports
+that newer changes remain unsaved; reconnect uses the saved settings. Typing or
+filling an example while a chat send is pending never sends that newer draft.
 
 A failed request's sentence stays where it was sent until the person acts
 again; a status update never wipes it. Earlier, a refused command's error was
@@ -183,8 +200,8 @@ it copies the report and offers it as a file. What it holds and withholds is in
 
 ## Panel Relays
 
-The panel's automation and recording requests (`SIMPLE_PANEL_MESSAGES` in `shared/protocol.ts`, the
-strings in `RUNTIME_MESSAGES`) are relayed by `background/simple-panel/` with
+The panel's automation and recording requests (`AUTOMATION_PANEL_MESSAGES` in `shared/protocol.ts`, the
+strings in `RUNTIME_MESSAGES`) are relayed by `background/automation-relay/` with
 the pairing token, and each sends Core only the fields named here, never the
 panel's message:
 
@@ -473,8 +490,8 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     action of the moment, the newest card of the unit of work that is running
     or waiting on the person; "Waiting for you" shows on every card of that
     unit still waiting on the person. An action that never said it ended
-    shows no outcome once the work moved on, and neither does a wait Core
-    never settled once its unit of work is over.
+    shows no outcome once the work moved on. A wait Core never settled keeps
+    "Waiting for you", even after its unit of work ends.
   - **Questions to the person** (`stream/step/messages.ts`). A robot-check or
     permission card is over only when Core says so: the ask row that settles
     the wait carries the same ask id (`activityActionKey` from `fluxiq/ui`,
@@ -488,6 +505,10 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     card, whichever came first. An ask row with no ask id while another ask's
     card waits only restates that wait (a parked run's "Run is waiting for an
     answer") and adds nothing. These are the Core panel's rules.
+    Core's closed resolutions are `waited_out` (the check cleared itself),
+    `answered` (the person continued), `allowed` (permission granted),
+    `declined`, `timed_out` and `cancelled`. The first three settle successfully;
+    the last three settle as failed. A later action cannot imply any of them.
   - **Accessibility.** The card is a labelled group ("Click, Get a free
     quote: Done"), and its icon is `aria-hidden`.
   - **Styling.** The panel's tokens only, so light and dark follow them: the
@@ -1086,17 +1107,18 @@ under the `web` namespace, including page URL/title, viewport bounds, scroll
 position, focused target, selected text, and a capped set of interactive
 elements.
 
-Element state is intentionally filtered. The extension does not record every
-DOM element. An element is kept only when it is rendered and says something
-about itself — meaningful text, an accessible name, a value, media, or, for an
-interactable control, one of those or a stable public identifier such as
-`data-testid`, `aria-label`, `name`, or `id`. Controls the user has touched
-rank first, then primary controls, then other interactables, then semantic
-text. The generic sweep walks at most 50,000 nodes, a capture returns at most
-2,000 descriptors, and the state projection then keeps at most 1,500 of them. Each cap reports itself, and which flag names which is in
-[page evidence](page-evidence.md#the-four-caps). This gives FluxIQ enough
-factual target data for mining without bloating recordings with anonymous DOM
-structure.
+The browser capture lists every rendered element in composed document order,
+across open shadow roots and every responding frame, with no count cap,
+ranking, text cut or attribute allowlist (`content/rendered-elements.ts`,
+`dom-snapshot.ts`, `describe-element.ts`). Nameless, transparent, small and
+`aria-hidden` elements remain represented when rendered. Repetition,
+front-layer and lead-statement facts annotate elements rather than reorder
+them. Hidden/non-rendered subtrees and the extension's own UI are excluded.
+The separate stored-state projection still selects at most 1,500 useful
+elements for recording state paths; it does not bound the model's packet.
+Its omission flags are in [page evidence](page-evidence.md#the-four-caps).
+The model receives the complete screened packet, bounded only by Core's
+1,000,000-token request window; an oversized request is refused before sending.
 
 Beside the elements, a snapshot carries page-level evidence: the dialogs in
 front of the page, what is painted over its controls, whether it is still
@@ -1606,3 +1628,9 @@ The default development endpoints are:
 Gateway: ws://127.0.0.1:4777/client
 Core API: http://127.0.0.1:3000
 ```
+
+### Cleared checks and later action failures
+
+Navigation and click landing results retain a self-clearing check's elapsed milliseconds even when the destination or subsequent navigation verdict fails. The gateway payload keeps the domain's `checkWait`; the outer gateway result also carries the screened generic `clearedWait` for Core's transport runtime path. Direct domain dispatch and runtime adapters preserve the same fact independently of success. Core resolves the check card as `waited_out` while the action keeps its own failure.
+
+Core also settles durably parked run asks as `timed_out` at their deadline and as `cancelled` before project deletion. A service restart detects overdue sessions when they are read; indefinite waits keep waiting.

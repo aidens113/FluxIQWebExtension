@@ -488,3 +488,15 @@ test("a click that navigates nowhere never asks the page about a check", async (
   assert.equal(result, REPLY);
   assert.equal(page.asked, 0);
 });
+
+for (const lostReply of [false, true]) test(`a cleared check survives a refused HTTP landing (lost reply: ${lostReply})`, async (t) => {
+  const browser = installBrowser(t, { "doc-check": 403 });
+  const result = await sendClickCheckingLanding(CLICK, TAB_ID, async () => {
+    land(browser, `${ORIGIN}/refused`, "doc-check");
+    if (lostReply) throw new Error(CHANNEL_CLOSED_ERROR);
+    return REPLY;
+  }, landedPage([SELF_CLEARING_CHECK, { challenge: null }]));
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, "web.navigation.unexpected");
+  assert.equal(typeof result.checkWait?.waitedMs, "number");
+});

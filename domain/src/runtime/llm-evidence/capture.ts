@@ -74,6 +74,8 @@ export type WebLlmEvidenceToolExecution = {
    * page content it refused. A successful call has no reason and carries none.
    */
   resultReason?: WebLlmToolRejectionReason;
+  /** Domain-screened structural facts about a refusal, transported opaquely by Core. */
+  diagnostic?: JsonObject;
   /**
    * How many times in a row this call has now given the same refusal, when it
    * is two or more (`./repeated-refusal.ts`).
@@ -280,7 +282,7 @@ type WebLlmEvidenceToolCallFacts = {
  * never before. `tests/name-assumption.test.ts` holds the two together.
  */
 export const WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS: readonly string[] = [
-  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "repeatedAnswer", "personNeeded", "nodeId", "stateDigests", "routeState", "clearedWait", "draft"
+  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "diagnostic", "repeatedAnswer", "personNeeded", "nodeId", "stateDigests", "routeState", "clearedWait", "draft"
 ];
 
 export function toolExecution(
@@ -300,6 +302,8 @@ export function toolExecution(
     // Said by the caller where it holds the reason, and otherwise read back out
     // of the refusal this call is already returning (`refusedReason`).
     resultReason: said?.resultReason ?? refusedReason(evidence),
+    // Written by a refused node from the pre-call packet, after screening.
+    diagnostic: undefined,
     // Written afterwards, by `./repeated-refusal.ts`, onto the one call that
     // repeats; never known when the call is first built.
     repeatedAnswer: undefined,
