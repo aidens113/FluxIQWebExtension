@@ -175,6 +175,104 @@
       panel would be a browser run outside the ten scenarios while Labs are stopped.
     - Real Core events.
 
+- **Round 5: both chats settle a wait from one Core event (2026-09-30, lead).** Dev was merged by the supervisor
+  (downstream 5f665174, Core 9653b7dd), with nothing to resolve.
+  - **Core** (WR, `t191-r5-wr-resolved-asks.md`):
+    - `ClientGatewayActivity.detail` gains optional `resolution` (`CLIENT_GATEWAY_ACTIVITY_RESOLUTIONS`: waited_out,
+      answered, allowed, declined, timed_out, cancelled). It is re-exported by client-gateway-websocket, bounded to ask
+      rows in `activity/bounded.ts`, and restated in Core web's `activity/contracts.ts`.
+    - Every announced wait gets a waiting row and a resolved row with the same `ref` (the ask id) and title, emitted
+      from `runtime/activity/ask/` and at its call sites: `executor/graph-run.ts`, `executor/resume.ts`,
+      `flow-bootstrap/person-needed.ts`, `flow-bootstrap/action-permissions.ts`, `recovery/runtime-exploration.ts`.
+    - The lead asked for `cancelled`: when the work stops, fails, or loses its thread before an answer, the row is
+      failed, "The work stopped before this was answered." No card is left waiting after its wait ended.
+    - `fluxiq/ui`: `activityActionOf` takes an ask's outcome from `resolution` only, and the new `activityActionKey`
+      gives one key per ask.
+    - Core panel: the "work moved on, so it's Done" inference is removed, and a check's intervention tool event and
+      its ask fold into one card, whichever comes first.
+  - **Extension** (WX, `t191-r5-wx-extension-resolved.md`): ask cards are keyed by `activityActionKey` and updated in
+    place from the resolved row ("Done. You pressed Continue.", "Didn't work: you pressed Stop"). The forced
+    ask-to-waiting rule is removed, and one check is one card, with the same rule as the Core panel.
+  - **Lead edits, so the surfaces agree.**
+    - `stream/step/card-words.ts`: a waiting card says "Waiting for you" until Core's resolved row, even after its unit
+      ends. It previously went blank, which inferred the end from the work moving on. Two tests were updated to match.
+    - `stream/step/messages.ts`: an ask's card goes under the reasoning message before it, as tool cards do and as the
+      Core panel does; it is its own message only when no reasoning came first. A new test in
+      `stream/step/tests/messages.test.ts` also pins `cancelled` to failed, "the work stopped first".
+    - CRLF line endings in `chat-panel.ts` and `view/step-message-view.ts` normalised to LF.
+  - Ready to commit:
+    - downstream: every `git status` path under `apps/extension/src/panel/chat/**`,
+      `docs/architecture/extension-client.md` and this report folder;
+    - Core: every `git status` path under `packages/contracts/src/client-gateway.ts`, `packages/client-gateway-websocket/src`,
+      `packages/fluxiq/src/{ui, programs/automation-studio/runtime}`, `packages/fluxiq/docs/reference`,
+      `docs/reference` and `apps/web/src/features/automation-studio/conversation/**`.
+  - Validation (lead's runs):
+    - `heavy.sh "t191 r5 ext check+test+build"` -> `check=0 test=0 build=0`, `# tests 1633 # pass 1633 # fail 0`,
+      chrome, firefox and e2e-chromium each "verified 22 files" (a fresh build, "inputs changed");
+    - repository structure audit -> passed;
+    - `heavy.sh "t191 verify wr"`:
+      - fluxiq vitest over `src/ui` and runtime/{activity, executor, flow-bootstrap, recovery, parking} -> `126 passed
+        (126)`, `1856 passed (1856)`;
+      - `pnpm --filter fluxiq check` -> 0;
+      - `pnpm --filter @fluxiq/contracts test` -> 9 files, 55 passed;
+      - web `tsc` -> 0, and web conversation vitest -> `26 passed (26)`, `261 passed (261)`.
+  - Core structure audit FAIL, not this lane's: `runtime/llm/evidence-loop/` has 26 files against a limit of 25. This
+    tree has no edits there; HEAD's copy came from dev's t196 merge (957a0226). Current dev has regrouped the
+    directory to 20 files (t200, t208; dev is 11 commits ahead), so the next dev merge clears it.
+  - Not verified:
+    - Browser rendering and real Core events.
+    - `waited_out` is never emitted, because Core never sees a check clear by itself after announcing a wait.
+    - A durably parked run that is abandoned keeps its wait open.
+
+- **Round 6: `waited_out` emitted, and cancelled parked runs settled (2026-09-30, lead).**
+  - Dev merge into Core (started by the supervisor): only the two generated `framework-reference.md` copies
+    conflicted. They were regenerated with `pnpm docs:reference` (never hand-merged) and staged; `pnpm docs:check` ->
+    "Deterministic framework reference is current". The merge is left for the supervisor to commit. Downstream merged
+    clean (0b03eae3).
+  - **Cleared check, carried end to end** (WD and WD2 in `t191-r6-wd-cleared-wait.md`; WC and WC3 in
+    `t191-r6-wc-waits-settled.md`):
+    - the extension's `LandedCheckWait.waitedMs` was previously turned into prose only. It is now
+      `BrowserActionResult.checkWait`, for click and navigate, when the check cleared by itself, and travels in the
+      gateway payload;
+    - the domain puts it on the evidence-loop tool execution as `clearedWait: { waitedMs }` and adds it to
+      `WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS`;
+    - for Flow runs, the domain lifts it onto Core's generic `OutputDispatchResult.clearedWait` (`fluxiq`) and
+      `FluxIQRuntimeCommandResult.clearedWait` (`fluxiq/runtime`), in `io/gateway-output-dispatcher.ts` and
+      `runtime/adapter.ts`;
+    - Core reads it defensively and emits a person_check waiting row followed by a resolved `waited_out` row, "The
+      check cleared on its own after N s.". Builds emit it in `activity/observer.ts` and runs in
+      `executor/node-execution.ts`, inside the run's scope (`activity/ask/{waited-out, cleared-wait, cleared-text}.ts`).
+      Core never reads web shapes.
+  - **Cancelled parked run** (WC): `cancelRuntimeSession` (`service.ts`, through `service/runtime-session/parked-wait.ts`)
+    emits the parked ask's resolved row with `cancelled` and the same ref, inside a run activity scope. A negative
+    control (the call removed) fails its test.
+    - Other paths: nothing expires a parked run past `expiresAtMs`, and `resume.ts` already emits `timed_out`.
+    - No run discard or supersede exists; a parked run blocks a newer one rather than being replaced.
+    - `deleteProject` removes parked runs unsettled; the project's chat goes with them.
+  - Ready to commit:
+    - downstream: every `git status` path under `apps/extension/src/runtime/**`, `domain/src/{actions, client, io,
+      runtime}/**`, `docs/architecture/{extension-client, failure-taxonomy}.md` and this report folder;
+    - Core: every unstaged path under `packages/fluxiq/src/{io, runtime, programs/automation-studio}`, and both
+      `framework-reference.md` copies, which were regenerated again after the staged merge resolution and are current.
+  - Validation (lead's runs):
+    - `heavy.sh "t191 r6 downstream verify"` -> extension `check=0 test=0 build=0`, `# tests 1673 # pass 1673
+      # fail 0`, chrome, firefox and e2e-chromium each "verified 22 files" (a fresh build); domain `# tests 1057 # pass
+      1057 # fail 0`; repository structure audit passed;
+    - `heavy.sh "t191 r6 core verify"`:
+      - fluxiq vitest over `src/ui`, runtime/{activity, executor, service/runtime-session}, `cancel-parked-run` and
+        `io-policy` -> `51 passed (51)`, `593 passed (593)`;
+      - `tests/service-flows` with one worker and a 60 s timeout -> `14 passed (14)`, `63 passed (63)`. WC's wider run
+        had 11 of these time out at the 15 s default with more workers;
+      - `pnpm --filter fluxiq check` -> 0;
+      - `pnpm docs:check` -> current;
+    - Core structure audit -> `passed (203 warning(s), 354 baselined)`. The evidence-loop failure was cleared by the
+      dev merge.
+  - Not verified:
+    - Browser rendering and real Core or extension events end to end.
+    - A cleared check followed by a failed navigation or a refused click carries no `clearedWait`, so its card does
+      not close as cleared on its own.
+    - The transport-client runtime path does not read `clearedWait`.
+
 ## The user's verdict on t185, after watching live runs (2026-09-29)
 
 1. The extension's UI is "not at all like chatgpt styled chat area".

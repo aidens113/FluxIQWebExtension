@@ -21,7 +21,7 @@
 // The time is also held within the command's own `timeoutMs`, less a margin
 // for the reply to reach Core, so a wait never outlives the command it serves.
 
-import { WEB_AUTOMATION_CHECK_WAIT_MS } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_CHECK_WAIT_MS, type WebAutomationClearedCheckWait } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand } from "../shared/protocol";
 import { readLandedPage, type FrameSender, type LandedPageReading } from "./landed-challenge";
 
@@ -111,6 +111,15 @@ export function checkWaitBudgetMs(action: BrowserActionCommand, startedAt: numbe
   const timeoutMs = action.timeoutMs;
   if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return SELF_CLEARING_WAIT_MS;
   return Math.max(0, Math.min(SELF_CLEARING_WAIT_MS, timeoutMs - (now - startedAt) - REPLY_MARGIN_MS));
+}
+
+/**
+ * The wait as the action result reports it (`BrowserActionResult.checkWait`):
+ * how long the check stood, said only when it cleared by itself. A check that
+ * asked for a person or did not clear fails the action, and says so there.
+ */
+export function clearedCheckWait(checkWait: LandedCheckWait | undefined): WebAutomationClearedCheckWait | undefined {
+  return checkWait?.outcome === "cleared" ? { waitedMs: checkWait.waitedMs } : undefined;
 }
 
 /**

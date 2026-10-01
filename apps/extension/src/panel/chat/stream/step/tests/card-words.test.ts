@@ -10,7 +10,7 @@ import type { ActionCard } from "../action-card";
 import { cardWords } from "../card-words";
 
 function card(fields: Partial<ActionCard>): ActionCard {
-  return { kind: "click", target: "Get a free quote", outcome: "done", why: null, key: "action:b#1", said: undefined, check: false, ...fields };
+  return { kind: "click", target: "Get a free quote", outcome: "done", why: null, key: "action:b#1", said: undefined, answer: undefined, check: false, ...fields };
 }
 
 test("the name, the target and the outcome, on one accessible line", () => {
@@ -45,11 +45,21 @@ test("a failure says why in words: Core's reason first, else its sentence; a che
   assert.equal(cardWords(card({ said: "Clicked it." }), false).outcome, "Done", "a done action's sentence repeats the card");
 });
 
-test("working and waiting show only on the action of the moment; otherwise the card says nothing about how it went", () => {
+test("working shows only on the action of the moment; a wait says so until Core settles it", () => {
   assert.deepEqual([cardWords(card({ outcome: "working" }), true).state, cardWords(card({ outcome: "working" }), true).outcome], ["working", "Working on it"]);
   assert.deepEqual([cardWords(card({ kind: "person_check", target: null, outcome: "waiting" }), true).outcome, cardWords(card({ kind: "person_check", target: null, outcome: "waiting" }), true).label], ["Waiting for you", "Robot check: Waiting for you"]);
-  for (const outcome of ["working", "waiting"] as const) {
-    const words = cardWords(card({ outcome }), false);
-    assert.deepEqual([words.state, words.outcome, words.label], ["settled", null, "Click, Get a free quote"], outcome);
-  }
+  const old = cardWords(card({ outcome: "working" }), false);
+  assert.deepEqual([old.state, old.outcome, old.label], ["settled", null, "Click, Get a free quote"]);
+  // Only Core's resolved row (any `resolution`, `cancelled` included) ends a
+  // wait; the work moving on or ending does not, as in the Core panel.
+  const waiting = cardWords(card({ outcome: "waiting" }), false);
+  assert.deepEqual([waiting.state, waiting.outcome, waiting.label], ["waiting", "Waiting for you", "Click, Get a free quote: Waiting for you"]);
+});
+
+test("a wait on the person that Core settled says Core's sentence: done with it, or didn't work with why", () => {
+  const robot = { kind: "person_check", target: null } as const;
+  assert.equal(cardWords(card({ ...robot, answer: "You pressed Continue." }), false).outcome, "Done. You pressed Continue.");
+  assert.equal(cardWords(card({ ...robot, outcome: "failed", why: "you pressed Stop", answer: "You pressed Stop." }), false).outcome, "Didn't work: you pressed Stop");
+  assert.equal(cardWords(card({ ...robot, outcome: "failed", answer: "Something new happened." }), false).outcome, "Didn't work. Something new happened.", "a way to end Core has no why for yet");
+  assert.equal(cardWords(card({ ...robot, answer: "You pressed Continue." }), false).label, "Robot check: Done. You pressed Continue.");
 });

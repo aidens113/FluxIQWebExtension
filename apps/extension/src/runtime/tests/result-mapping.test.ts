@@ -52,6 +52,16 @@ test("a snapshot's structure detection reaches the gateway payload, copied witho
   assert.deepEqual(refused.payload?.structure, { ok: false, refused: "sensitive_region" });
 });
 
+test("a robot check that cleared by itself reaches the gateway payload as checkWait, and nothing is said when none did", () => {
+  const waited = gatewayActionResultFromBrowserResult(browserResult({ checkWait: { waitedMs: 8_412 } }));
+  assert.deepEqual(waited.payload?.checkWait, { waitedMs: 8_412 });
+  const navigated = gatewayActionResultFromBrowserResult(browserResult({ actionType: "web.browser.navigate", checkWait: { waitedMs: 5_020 } }));
+  assert.deepEqual(navigated.payload?.checkWait, { waitedMs: 5_020 });
+  assert.equal("checkWait" in (gatewayActionResultFromBrowserResult(browserResult()).payload ?? {}), false);
+  // Bounded on the way out: a wait past ten minutes is a malformed result, not a long wait.
+  assert.equal("checkWait" in (gatewayActionResultFromBrowserResult(browserResult({ checkWait: { waitedMs: 600_001 } })).payload ?? {}), false);
+});
+
 function statePathOf(value: unknown): unknown {
   return value && typeof value === "object" && "statePath" in value ? value.statePath : undefined;
 }

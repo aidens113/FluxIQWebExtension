@@ -31,11 +31,25 @@
 // place when it ends. A run step Core never ends is over once anything later
 // happens in its unit of work.
 //
+// A card waiting on the person (a robot check, a permission) is over only
+// when Core says so: the ask row that settles the wait carries the same ask
+// id (`activityActionKey`: `ask:<ref>`) and a `resolution`, and the card is
+// marked from it in place, the same element in the same place. Nothing later
+// in the work settles it, so a wait Core never settles stays waiting. One
+// check is one card: a tool whose result says the page needs a person (Core's
+// reading is a robot check, waiting) and the robot-check ask of the same unit
+// of work are joined, whichever came first, and the second updates the first
+// card in place. An ask row that names no ask id while another ask's card is
+// waiting only restates that wait (a parked run's "Run is waiting for an
+// answer") and adds nothing. The rules match the Core panel's
+// (`apps/web/.../conversation/activity/steps/messages.ts` in FluxIQ Core).
+//
 // Keys come from the event that opened a message (`step:activityId#sequence`)
 // or a card (`action:activityId#sequence`), so each keeps its element for as
 // long as it is on screen and never moves. Every word comes from `stepWords`
 // or Core's shared reading of the action, never a raw id.
 
+import { activityActionKey } from "fluxiq/ui";
 import { isInternalStep, type ClientGatewayActivity } from "../../../../shared/activity/index";
 import { actionCard, type ActionCard } from "./action-card";
 import { stepWords } from "./words";
@@ -76,7 +90,16 @@ type Unit = {
   open: Map<string, Place>;
   /** A run step Core started and will not end. */
   step: number | undefined;
+  /** Each ask's card, by its ask id (`activityActionKey`), so the row that settles it finds it. */
+  asks: Map<string, Place>;
+  /** A robot-check card still waiting for its other half: the ask, or the tool that met the check. */
+  check: { place: Place; from: "ask" | "tool" } | undefined;
 };
+
+/** A robot check still waiting on the person: the only card the other half of a check joins. */
+function waitsOnPerson(card: Pick<ActionCard, "kind" | "outcome">): boolean {
+  return card.kind === "person_check" && card.outcome === "waiting";
+}
 
 /** The messages for `events` (oldest first), at most `limit` of them, the newest. */
 export function stepMessages(events: readonly ClientGatewayActivity[], limit: number): StepMessage[] {
@@ -100,6 +123,19 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
     return drafts.length - 1;
   };
   const cardKey = (event: ClientGatewayActivity): string => `action:${event.activityId}#${event.sequence}`;
+  const cardAt = (place: Place): ActionCard => drafts[place.message]!.actions[place.card]!;
+  /** Marks the card at `place` from `next` in place: its key never changes, and a kind or a name it had is kept. */
+  const mark = (place: Place, next: ActionCard, sequence: number): void => {
+    const draft = drafts[place.message]!;
+    const before = cardAt(place);
+    draft.actions[place.card] = { ...next, key: before.key, kind: next.kind === "other" ? before.kind : next.kind, target: next.target ?? before.target };
+    draft.sequence = Math.max(draft.sequence, sequence);
+  };
+  /** The unit's robot-check card waiting for the other half named by `from`, while it still waits. */
+  const joinable = (unit: Unit, from: "ask" | "tool"): Place | undefined => {
+    const check = unit.check;
+    return check?.from === from && waitsOnPerson(cardAt(check.place)) ? check.place : undefined;
+  };
 
   for (const event of events) {
     const parsed = Date.parse(event.at);
@@ -107,7 +143,7 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
     lastAt = at;
     let unit = units.get(event.activityId);
     if (unit === undefined) {
-      unit = { decision: undefined, open: new Map(), step: undefined };
+      unit = { decision: undefined, open: new Map(), step: undefined, asks: new Map(), check: undefined };
       units.set(event.activityId, unit);
     }
     if (unit.step !== undefined) {
@@ -128,8 +164,20 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
     }
 
     if (detail.kind === "tool" || detail.kind === "check") {
-      const identity = `${detail.kind}|${detail.ref ?? detail.title}`;
+      const identity = activityActionKey(event) ?? `${detail.kind}:${detail.title}`;
       const owner = unit.open.get(identity);
+      const met = detail.kind === "tool" ? actionCard(event, cardKey(event)) : null;
+      const asked = met !== null && waitsOnPerson(met) ? joinable(unit, "ask") : undefined;
+      if (met !== null && asked !== undefined) {
+        // The check the ask already waits on: its card, not a second one. The
+        // ask says how it ends, so the card keeps what the ask said.
+        const ask = cardAt(asked);
+        mark(asked, { ...ask, target: ask.target ?? met.target }, event.sequence);
+        unit.check = undefined;
+        unit.open.delete(identity);
+        unit.decision = undefined;
+        continue;
+      }
       let placed: Place;
       if (owner !== undefined) {
         const draft: StepMessage = drafts[owner.message]!;
@@ -156,6 +204,48 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
       if (detail.kind === "check") unit.decision = undefined;
       if (status === "started") unit.open.set(identity, placed);
       else unit.open.delete(identity);
+      if (met !== null && waitsOnPerson(met)) unit.check = { place: placed, from: "tool" };
+      continue;
+    }
+
+    if (detail.kind === "ask") {
+      const card = actionCard(event, cardKey(event));
+      const key = activityActionKey(event);
+      const known = key === null ? undefined : unit.asks.get(key);
+      if (known !== undefined) {
+        // The row that settles the wait, or one that says it again: the same card.
+        if (card !== null) mark(known, card, event.sequence);
+        if (unit.check?.place === known && !waitsOnPerson(cardAt(known))) unit.check = undefined;
+        continue;
+      }
+      if (key === null && [...unit.asks.values()].some((place) => cardAt(place).outcome === "waiting")) continue;
+      const reasoning = unit.decision;
+      unit.decision = undefined;
+      if (card === null) {
+        add(event, detail, "ask", at, null);
+        continue;
+      }
+      const tool = card.kind === "person_check" ? joinable(unit, "tool") : undefined;
+      let placed: Place;
+      if (tool !== undefined) {
+        // The tool already met this check: the ask takes over its card.
+        mark(tool, card, event.sequence);
+        placed = tool;
+        unit.check = undefined;
+      } else if (reasoning !== undefined) {
+        // Like an action, the ask is a card under the reasoning that led to
+        // it, as the Core panel shows it; a message of its own only when no
+        // reasoning came before it in this unit.
+        const draft = drafts[reasoning]!;
+        draft.actions.push(card);
+        draft.sequence = event.sequence;
+        placed = { message: reasoning, card: draft.actions.length - 1 };
+        if (waitsOnPerson(card)) unit.check = { place: placed, from: "ask" };
+      } else {
+        placed = { message: add(event, detail, "ask", at, card), card: 0 };
+        if (waitsOnPerson(card)) unit.check = { place: placed, from: "ask" };
+      }
+      if (key !== null) unit.asks.set(key, placed);
       continue;
     }
 
@@ -168,7 +258,7 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
       if (!marker && status === "started") unit.step = placed;
       continue;
     }
-    add(event, detail, detail.kind, at, detail.kind === "ask" ? actionCard(event, cardKey(event)) : null);
+    add(event, detail, detail.kind, at, null);
   }
 
   const kept = limit > 0 ? drafts.slice(-limit) : [];

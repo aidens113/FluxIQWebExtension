@@ -177,3 +177,89 @@ test("an action that started keeps its card and its place when it ends; nothing 
   assert.equal(later[0]!.actions[0]!.said, undefined, "the observer's record is not words");
   assert.equal(later[0]!.actions.length, 1);
 });
+
+const CHECK = "Asked the person to complete a check";
+const PERMISSION = "Asked a question (permission)";
+const waitFor = (sequence: number, title: string, ref: string | undefined, phase: ClientGatewayActivity["phase"] = "waiting_permission") =>
+  activityEvent(sequence, { phase, detail: { kind: "ask", title, status: "started", ...(ref === undefined ? {} : { ref }), text: "FluxIQ needs you: complete the check on this page, then press Continue." } });
+const settle = (sequence: number, title: string, ref: string, resolution: string, status: Detail["status"], text: string, phase: ClientGatewayActivity["phase"] = "building") =>
+  activityEvent(sequence, { phase, label: text, detail: { kind: "ask", title, ref, status, text, resolution } as Detail });
+const intervention = (sequence: number) => tool(sequence, "Checking the page", "succeeded", { text: "Result: web.intervention.required · Node: web.output.dom-click" });
+const cardsOf = (messages: StepMessage[]) => messages.flatMap((message) => message.actions.map((card) => [card.key, card.kind, card.outcome, card.why, card.answer]));
+
+test("a wait on the person ends only on Core's row that settles it, on the same card in the same place", () => {
+  for (const [resolution, status, text, outcome, why] of [
+    ["answered", "succeeded", "You pressed Continue.", "done", null],
+    ["declined", "failed", "You pressed Stop.", "failed", "you pressed Stop"],
+    ["timed_out", "failed", "Nobody answered in time.", "failed", "nobody answered in time"]
+  ] as const) {
+    const events = [thought(1, QUOTE, "It opens the form."), waitFor(2, CHECK, "person-needed.1")];
+    const before = stepMessages(events, 100);
+    events.push(settle(3, CHECK, "person-needed.1", resolution, status, text));
+    const after = stepMessages(events, 100);
+    assert.deepEqual(after.map((message) => message.key), before.map((message) => message.key), `${resolution}: no message added or moved`);
+    assert.deepEqual(cardsOf(before), [["action:build-1#2", "person_check", "waiting", null, undefined]]);
+    assert.deepEqual(cardsOf(after), [["action:build-1#2", "person_check", outcome, why, text]], resolution);
+  }
+  const permission = [waitFor(1, PERMISSION, "request-7"), settle(2, PERMISSION, "request-7", "allowed", "succeeded", "You allowed it.", "repairing")];
+  assert.deepEqual(cardsOf(stepMessages(permission, 100)), [["action:build-1#1", "permission", "done", null, "You allowed it."]], "settled in the phase the work returned to");
+});
+
+test("a question is a card under the reasoning before it, as in the Core panel, and its own message only without one", () => {
+  const under = stepMessages([thought(1, QUOTE, "It opens the form."), waitFor(2, CHECK, "person-needed.1")], 100);
+  assert.deepEqual(under.map((message) => [message.kind, message.title, message.actions.map((card) => card.kind)]), [["decision", QUOTE, ["person_check"]]]);
+  const alone = stepMessages([waitFor(1, CHECK, "person-needed.1")], 100);
+  assert.deepEqual(alone.map((message) => [message.kind, message.actions.map((card) => card.kind)]), [["ask", ["person_check"]]]);
+  // The work stopped first: Core settles the wait with `cancelled`, read through
+  // the shared classifier with no value listed here.
+  const stopped = stepMessages([waitFor(1, CHECK, "person-needed.1"), settle(2, CHECK, "person-needed.1", "cancelled", "failed", "The work stopped before this was answered.", "failed")], 100);
+  assert.deepEqual(cardsOf(stopped).map(([, kind, outcome, why]) => [kind, outcome, why]), [["person_check", "failed", "the work stopped first"]]);
+});
+
+test("nothing after a question settles it: later tools, steps, notes and a failed end leave it waiting", () => {
+  const events = [
+    waitFor(1, CHECK, "person-needed.1"),
+    activityEvent(2, { phase: "building", detail: { kind: "note", title: "Still here", text: "The page changed." } }),
+    tool(3, QUOTE, "succeeded"),
+    activityEvent(4, { phase: "failed", label: "Build failed", detail: { kind: "step", title: "Build failed", status: "failed" } })
+  ];
+  const messages = stepMessages(events, 100);
+  assert.deepEqual(messages[0]!.actions.map((card) => [card.key, card.outcome, card.answer]), [["action:build-1#1", "waiting", undefined]]);
+});
+
+test("one check is one card: the tool that met it and the robot-check ask share it, whichever comes first", () => {
+  const askFirst = stepMessages([waitFor(1, CHECK, "person-needed.1"), intervention(2), settle(3, CHECK, "person-needed.1", "answered", "succeeded", "You pressed Continue.")], 100);
+  assert.deepEqual(cardsOf(askFirst), [["action:build-1#1", "person_check", "done", null, "You pressed Continue."]]);
+  assert.equal(askFirst.length, 1);
+
+  const toolFirst = [thought(1, QUOTE, "It opens the form."), intervention(2)];
+  const first = stepMessages(toolFirst, 100);
+  assert.deepEqual(cardsOf(first), [["action:build-1#2", "person_check", "waiting", null, undefined]]);
+  toolFirst.push(waitFor(3, CHECK, "person-needed.1"), settle(4, CHECK, "person-needed.1", "declined", "failed", "You pressed Stop."));
+  const later = stepMessages(toolFirst, 100);
+  assert.deepEqual(cardsOf(later), [["action:build-1#2", "person_check", "failed", "you pressed Stop", "You pressed Stop."]]);
+  assert.deepEqual(later.map((message) => message.key), first.map((message) => message.key));
+});
+
+test("separate asks keep separate cards, and an ask with no ask id while one waits only restates it", () => {
+  const events = [
+    waitFor(1, PERMISSION, "request-1"),
+    settle(2, PERMISSION, "request-1", "allowed", "succeeded", "You allowed it."),
+    waitFor(3, CHECK, "person-needed.2"),
+    activityEvent(4, { phase: "waiting_permission", detail: { kind: "ask", title: "Run is waiting for an answer" } })
+  ];
+  const messages = stepMessages(events, 100);
+  assert.deepEqual(cardsOf(messages), [
+    ["action:build-1#1", "permission", "done", null, "You allowed it."],
+    ["action:build-1#3", "person_check", "waiting", null, undefined]
+  ]);
+});
+
+test("a question's card and words never show a dotted id", () => {
+  const events = [waitFor(1, CHECK, "person-needed.1"), intervention(2), settle(3, CHECK, "person-needed.1", "answered", "succeeded", "You pressed Continue.")];
+  for (const message of stepMessages(events, 100)) {
+    for (const value of [message.title, message.text, ...message.actions.flatMap((card) => [card.target, card.said, card.answer, card.why])]) {
+      if (typeof value === "string") assert.doesNotMatch(value, /\b[a-z][\w-]*\.[a-z][\w-]*/u, value);
+    }
+  }
+});

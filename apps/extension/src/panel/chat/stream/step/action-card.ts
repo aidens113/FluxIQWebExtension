@@ -4,10 +4,14 @@
 // why it failed) plus what the chat needs to keep the card in place and say
 // it in words. No DOM.
 //
-// A question to the person (an `ask`) is a card waiting on them: a robot
-// check or a permission. Core's own sentence about the action (`said`) is
-// kept only when it is in words; a line that names an id or a result code
-// ("Result: web.click.succeeded · Node: web.output.dom-click") is not words.
+// Where a card stands comes from `activityActionOf` alone. A question to the
+// person (an `ask`: a robot check or a permission) waits on them until Core's
+// row that settles it says how it ended (`detail.resolution`); that row's
+// sentence ("You pressed Continue.") is the card's `answer`. Nothing here
+// reads the resolution's values, so a new one needs no change. Core's own
+// sentence about any other action (`said`) is kept only when it is in words;
+// a line that names an id or a result code ("Result: web.click.succeeded ·
+// Node: web.output.dom-click") is not words.
 
 import { activityActionOf, type ActivityAction } from "fluxiq/ui";
 import type { ClientGatewayActivity } from "../../../../shared/activity/index";
@@ -17,8 +21,10 @@ import { stepWords } from "./words";
 export type ActionCard = ActivityAction & {
   /** `action:<activityId>#<sequence>` of the event that opened it: stable for its life. */
   key: string;
-  /** Core's sentence about it, in words; undefined when there is none. */
+  /** Core's sentence about it, in words; undefined when there is none, and always for a question to the person. */
   said: string | undefined;
+  /** Core's sentence on how a wait on the person ended ("You pressed Continue."); undefined until the row that settles it. */
+  answer: string | undefined;
   /** True for a result check, which passes or does not rather than working or not. */
   check: boolean;
 };
@@ -32,14 +38,17 @@ export function actionCard(event: ClientGatewayActivity, key: string): ActionCar
   if (detail === undefined || detail.kind === "thought" || detail.kind === "note") return null;
   const action = activityActionOf(event);
   if (action === null) return null;
-  const said = stepWords(detail, event.step).text;
+  const words = stepWords(detail, event.step).text;
+  const sentence = words !== undefined && !DOTTED_ID.test(words) ? words : undefined;
+  const asked = detail.kind === "ask";
   return {
     kind: action.kind,
     target: action.target,
-    outcome: detail.kind === "ask" && action.outcome === "working" ? "waiting" : action.outcome,
+    outcome: action.outcome,
     why: action.why,
     key,
-    said: said !== undefined && !DOTTED_ID.test(said) ? said : undefined,
+    said: asked ? undefined : sentence,
+    answer: asked && detail.resolution !== undefined ? sentence : undefined,
     check: detail.kind === "check"
   };
 }

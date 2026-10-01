@@ -226,7 +226,8 @@ at all.
   can be chosen for a state capture.
 
 A robot check that clears by itself is waited out and produces no failure;
-[robot checks](extension-client.md#robot-checks) says how each is told apart.
+the result says how long it stood on `checkWait` instead.
+[Robot checks](extension-client.md#robot-checks) says how each is told apart.
 Every robot-check record leads `actual` with `captcha:`. For a press or a
 click, it also says the act itself was made, so the step stands once the
 person has answered. `PAGE_CHANGED` has one:

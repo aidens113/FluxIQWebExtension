@@ -62,6 +62,7 @@ import { RecoverableToolRejection, rejectionDetail, toolRejection, type WebLlmTo
 import { isJsonRecord } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE, WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION, type WebRunnableNode } from "./catalog";
+import { withClearedWait } from "./cleared-wait";
 import type { WebNodeRun } from "./context";
 import { webObservedControl } from "./observed-control";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
@@ -413,7 +414,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     });
     // The state the node found is the read before it acted, and the state it
     // left is the read after -- unsaid where the page could not be read in time.
-    return withCallStates(toolExecution(
+    return withClearedWait(result.payload, withCallStates(toolExecution(
       // No page, no packet: the outcome alone, which says why.
       after === undefined ? outcome as unknown as JsonValue : nodeEvidence(after.evidence, outcome),
       // The node ran and the command succeeded, so this step worked -- which is
@@ -465,7 +466,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // `actionId`. What the resolution had to assume is said, because this is
       // the call the Flow's step is made of and the guess is in it.
       { resultReason: undefined, nodeId: undefined, assumed }
-    ), current, after);
+    ), current, after));
   } catch (error) {
     if (error instanceof RecoverableToolRejection) {
       // Only a refusal the page caused carries the page, and only the page the
