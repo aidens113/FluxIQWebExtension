@@ -32,6 +32,11 @@
 // Nothing to compare -- a browser that would not say, or a drive that was
 // never made -- is reported as unknown and never as a no-op, because a check
 // that cannot see is not a check that failed.
+//
+// These two are not the whole post-condition. Whether the landed page is a
+// robot check, and whether the server refused it (an HTTP status of 400 or
+// above, `served-status.ts`), are judged around them in `action-runner.ts`'s
+// `navigationResult`.
 
 import type { TabDriveRecord } from "./automation-tab";
 

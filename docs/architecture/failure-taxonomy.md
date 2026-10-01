@@ -81,7 +81,13 @@ outlasts its five-second budget; Core's defensive executor reads `unacted` as
 licence to repeat even a mutating node and waits the hinted time first, bounded
 by its own 30-second per-wait cap. The notice's OK is pressed by the
 interference defence only on a layer whose text is such a notice; its "Try
-again" is never pressed.
+again" is never pressed. A navigation reports it too, when the page it landed on
+was served HTTP 429 or 503 and is not a robot check (job-board and the
+everything store serve their rate-limit page as a document): the worker tells
+the origin's page-load pace, and `retryAfterMs` is the wait that pace now
+imposes on the origin's next load (`apps/extension/src/runtime/action-runner.ts`,
+`runtime/served-status.ts`). A click that lands on such a page is still
+`NAVIGATION_UNEXPECTED` (`runtime/click-landing.ts`).
 
 ## Why The Binding Matters
 
@@ -180,7 +186,12 @@ identity across bundles, and is compiler-checked at the throw.
   (`TARGET_NOT_FOUND`, `ACTION_REJECTED`, `ACTION_FAILED`),
   `runtime/browser-download.ts` (`ACTION_REJECTED`, `TIMEOUT`),
   `runtime/action-runner.ts` (`ACTION_REJECTED` for an unsupported page,
-  `TARGET_NOT_FOUND` for a tab that is gone), `runtime/frame-address.ts`
+  `TARGET_NOT_FOUND` for a tab that is gone, `RATE_LIMITED` for a navigation
+  whose landed page the server answered with 429 or 503, with the wait the
+  worker's page-load pace now imposes on that origin as `retryAfterMs`, and
+  `NAVIGATION_UNEXPECTED` for one answered with any other status of 400 or
+  above, both read through `runtime/served-status.ts` after the robot check),
+  `runtime/frame-address.ts`
   (`TARGET_NOT_FOUND` for a command whose child-frame path matches no frame, and
   `TARGET_AMBIGUOUS` when several frames match and none has the recorded id),
   `runtime/command-router.ts`

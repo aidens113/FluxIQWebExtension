@@ -5,4 +5,5 @@ export { PaceTally } from "./pace-tally";
 export { withPagePace } from "./paced-page-loads";
 export { withPaceNote } from "./paced-result";
 export { originOf } from "./page-origin";
+export { PAGE_REFUSAL_STATUSES } from "./refusal-statuses";
 export { SESSION_PAGE_LOAD_PACE } from "./session-pace";

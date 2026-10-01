@@ -86,3 +86,16 @@ test("a refusal on one origin does not slow another", () => {
   assert.equal(pace.reserve(OTHER), spacingMs);
   assert.equal(pace.spacingOf(OTHER), spacingMs);
 });
+
+test("the wait before an origin's next load is read without booking it: none for an origin never seen, the refusal wait after a refusal", () => {
+  const { pace, clock } = paced();
+  assert.equal(pace.waitBeforeNextLoad(STORE), 0, "an origin with no load booked waits for nothing");
+  assert.equal(pace.reserve(STORE), 0);
+  assert.equal(pace.waitBeforeNextLoad(STORE), spacingMs, "one spacing after the load just booked");
+  assert.equal(pace.waitBeforeNextLoad(STORE), spacingMs, "and reading it books nothing");
+  pace.noteRefusal(STORE, 429);
+  assert.equal(pace.waitBeforeNextLoad(STORE), refusalWaitMs);
+  clock.now += refusalWaitMs + 1;
+  assert.equal(pace.waitBeforeNextLoad(STORE), 0, "a wait already over is no wait");
+  assert.equal(pace.waitBeforeNextLoad(OTHER), 0, "other origins are untouched");
+});
