@@ -251,3 +251,20 @@ test("Core's person-needed ask at a robot check shows at once, whole, as the wai
   assert.equal(shown?.at, 1_100, "inside the detail interval, and still shown at once");
   assert.deepEqual([shown?.display.headline, shown?.display.detail, shown?.display.outcome, shown?.display.working], ["Waiting for you: answer in the FluxIQ panel", ask, "waiting", false], "Continue and Stop are pressed in the panel");
 });
+
+// A model provider outage (live run `run-muq05kas-058193f0`): the live line said
+// "Thinking about the next step" for as long as anyone watched. Core now ends
+// the build after three unanswered requests; its final event stops the line.
+test("a build stopped by a provider outage stops working at once and says why", () => {
+  const h = harness();
+  h.pacer.accept(event({ phase: "thinking", label: "Deciding the next step" }));
+  h.clock.advance(45_000);
+  h.pacer.accept(event({ phase: "thinking", label: "The AI model provider did not answer" }));
+  h.clock.advance(45_000);
+  h.pacer.accept(event({ phase: "failed", label: "Build stopped: the AI model provider is not responding", final: true }));
+  const last = h.shown.at(-1)!;
+  assert.equal(last.at, 91_000);
+  assert.equal(last.display.detail, "Build stopped: the AI model provider is not responding");
+  assert.equal(last.display.outcome, "failed");
+  assert.equal(last.display.working, false);
+});

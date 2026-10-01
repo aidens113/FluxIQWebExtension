@@ -269,7 +269,9 @@ function refusalRecord(
  * happen, and it carries the wait the notice named as `retryAfterMs`, so Core
  * re-runs the node after that wait instead of refusing to repeat a press or
  * reading the refusal as done. The texts say what was concluded, never what the
- * notice wrote.
+ * notice wrote. A page that said it was busy (`notice.busy`) is the same
+ * refusal for the same reason -- the press was not carried out and may be made
+ * again -- and its texts say busy, not too fast.
  */
 export function actionRateLimited(
   action: BrowserActionCommand,
@@ -281,12 +283,13 @@ export function actionRateLimited(
   const wait = notice.retryAfterMs === undefined
     ? "it named no wait"
     : `it asked for a wait, so the press may be made again after ${notice.retryAfterMs} ms`;
-  const actual = `the page answered the press ${notice.afterMs} ms after it with a notice that it was refused for going too fast, and confirmed nothing; ${wait}`;
+  const why = notice.busy ? "a line that it was busy and could not carry the press out" : "a notice that it was refused for going too fast";
+  const actual = `the page answered the press ${notice.afterMs} ms after it with ${why}, and confirmed nothing; ${wait}`;
   const validation = boundValidation({ status: "failed", expected, actual });
   return buildResult(action, startedAt, {
     status: "failed",
     validation,
-    message: `Action refused by the page for going too fast; ${wait}.`,
+    message: notice.busy ? `Action refused by the page for now: it said it was busy; ${wait}.` : `Action refused by the page for going too fast; ${wait}.`,
     failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { expected, actual, retryAfterMs: notice.retryAfterMs })
   }, evidence);
 }

@@ -1,6 +1,6 @@
 # Floating overlay dismissal implementation
 
-Status: Active
+Status: Complete
 Owner: runtime_contracts
 Date: 2026-10-01
 
@@ -20,3 +20,23 @@ Read the prepared brief and completed plan. The five-path partition is sufficien
 After release, tests-first work will create the new actual-wrapper/subscriber suite and strengthen only the fifth fixture's original-target eligibility/delegation proof; reproduce policy/lifetime failures on unchanged product; then implement the approved local predicate/proxy and request-owned synchronous Surface refs. Existing entry priority/filter/visibility/retirement assertions, atomic deduplication/snapshot/retry and request-keyed store closures remain required. The helper's stack/focus eligibility remains independently tested by unchanged actual environment suites; an instrumented public seam cannot be reported as live/native environment validation.
 
 Source/test/check release remains HELD. No product/test/config edits or test/type/build/check commands occurred during this queued scope check. Frozen entry/Combobox/login/database and other-worker paths remain untouched. Root's current structure observation is only inherited protected4506/4505; current broad Core gates are not assumed complete.
+
+## Released tests-first progress
+
+Root explicitly released exact five paths after full80759/native0/344files2706tests, types14622/native0 and build69790/native0 closed; structure37927 remained only protected4506/4505. Created new24-case actual wrapper/keyed-store/subscriber/real-atomic suite and strengthened the existing entry owner-document fixture/proof plus one ineligible-return case. Product unchanged for initial run bd14b4/session48794 completing debe83/native1:51tests,21fail/30pass,429ms tests/18.93s Vitest (large actual subscriber import graph). Failures demonstrate outside/action/teardown return, pending cancellation, retired Surface/environment dispatch, disabled-option dispatch and original-target eligibility; first-phase entry assertions remain passing. The environment instrument is explicitly a synthetic public-boundary release, not the real helper; unchanged real helper compatibility remains required.
+
+## Implementation and focused validation progress
+
+Implemented optional authoritative return predicate with original-native-target eligibility delegation, outside/action/unknown-teardown suppression and local wrapper retirement. Both actual keyed Surfaces now own synchronous pending/cancel/action intent and mounted/request identity; retained handlers cannot dispatch after retirement, and accepted issued actions remain intact across same-request callback rerenders. Added three additional cases covering failed-pending cancellation recovery, callback-rerender acceptance and retired rejection isolation (new suite27, entry suite27).
+
+First implementation pair passed51/native0/16.98s. Seven actual owning/environment/architecture suites then passed139/native0/25.44s (df6de3, tests602ms); unchanged atomic/hardening/state/architecture/environment assertions included. Scoped actual-config five-root types reported four new-suite async-act callbacks returning controller.open's boolean; corrected those callbacks to void without changing assertions or product. Repeating affected suites and strict types before freeze. No broad or live validation claim.
+
+## Frozen worker completion claim
+
+Exact five Core files are now FROZEN for supervisor review: accessible-floating-overlay.tsx (194 lines), ViewAdderOverlaySubscriber.tsx (123), LayoutPickerOverlaySubscriber.tsx (89), NEW tests/floating-close-intent.test.tsx (213), and existing tests/floating-entry-focus.test.tsx (132), all under apps/web/src/features/automation-studio/workspace/overlays/. No other source, test, helper, public environment, contract, CSS, configuration, baseline or shared document was edited.
+
+Final corrected heavy command from Core/apps/web: `pnpm exec vitest run src/features/automation-studio/workspace/overlays/tests/floating-close-intent.test.tsx src/features/automation-studio/workspace/overlays/tests/floating-entry-focus.test.tsx src/features/automation-studio/workspace/overlays/tests/atomic-command.test.ts src/features/automation-studio/workspace/overlays/tests/overlay-hardening.test.ts src/features/automation-studio/workspace/overlays/tests/overlay-state-store.test.ts src/features/automation-studio/workspace/overlays/tests/overlay-architecture.test.ts src/features/programs/tests/overlay-environment-focus.test.ts`, wrapper label `codex floating close corrected owning`: de4446/native0,7files139pass,31.76s Vitest/533ms tests. Actual-config strict five roots plus two declared config globals, all dependency diagnostics, noEmit/incrementalfalse under heavy label `codex floating close corrected types`:990d18/native0,0diagnostics. Exact tracked-path `git diff --check`:3237c3/native0; existing entry fixture line-ending warning only. New fixture's four void callback corrections preserve the previously observed139 assertions.
+
+Behavior: explicit current Close/Escape cancellation can restore an eligible original trigger; outside dismissal, action acceptance, unknown teardown and retired callbacks/completions cannot reclaim focus or dispatch to a successor. Surface synchronous pending fencing covers the pre-React busy-render interval. Failures remain locally recoverable/retryable; previously issued accepted actions are preserved while obsolete UI completion is suppressed. Native owner-document visibility/focus and original target eligibility are checked at return time through the structural proxy; entry ordering remains unchanged. Same-request callback updates use latest close without rejecting an issued accepted action.
+
+Limits: synthetic React-test-renderer DOM/public environment release instrumentation proves wrapper/Surface intent, ownership and original-target delegation, not native browser timing. The unchanged actual environment focus65 tests are included in the139; no browser/Lab/provider/panel/actual-data exercise, broad gates, commits or push occurred. React-test-renderer emits its existing deprecation warning. Worker results are a completion claim awaiting supervisor independent review/integration; no broad-gate success is inferred.

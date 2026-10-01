@@ -13,8 +13,14 @@
 //   always marks it too -- the control disabled, a spinner -- and that is seen.
 // - **change**: any mutation -- a child added or removed, an attribute, text --
 //   inside the pressed control's scope (`press-scope.ts`), the control's own
-//   `disabled` and `aria-*` included. Mutations elsewhere on the page are its
-//   own motion and are not observed at all.
+//   `disabled` and `aria-*` included, and inside every open shadow root within
+//   that scope. A `MutationObserver` does not descend into a shadow root, so
+//   until 2026-10-01 a widget that answers a press only inside its own root was
+//   read as ignoring it and pressed twice: bigbox's store chip opens its
+//   chooser inside `vr-fulfillment-picker`'s root, and the second press shut it
+//   again, so no store could be picked (lane A, `t174-w33`); crossborder's
+//   coupon was claimed twice the same way (`t174-w32`). Mutations elsewhere on
+//   the page are its own motion and are not observed at all.
 // - **navigation**: the address differs from the one at the press, or the
 //   document began to leave (`beforeunload`, `pagehide`, the Navigation API's
 //   `navigate`, which a history-API move fires too).
@@ -24,7 +30,7 @@
 //
 // Nothing here presses anything, and nothing the page wrote is read.
 
-import { composedContains } from "../../shadow-dom";
+import { composedContains, openRootsWithin } from "../../shadow-dom";
 import { pressScope } from "./press-scope";
 import type { PressSignal } from "./press-again";
 
@@ -91,13 +97,24 @@ function listenForChange(pressed: Element, page: PressPage, note: (signal: Press
   const observer = new Observer((records) => {
     if (records.length > 0) note("change");
   });
-  observer.observe(pressScope(pressed), OBSERVED);
+  const scope = pressScope(pressed);
+  observer.observe(scope, OBSERVED);
+  for (const root of shadowRootsWithin(scope)) observer.observe(root, OBSERVED);
   return {
     flush() {
       if (observer.takeRecords().length > 0) note("change");
     },
     stop: () => observer.disconnect()
   };
+}
+
+/**
+ * The open shadow roots inside the scope, nested ones included, read once at the
+ * press. A root attached after the press is not followed: the widget answering
+ * the press already exists when it is pressed.
+ */
+function shadowRootsWithin(scope: Element): ShadowRoot[] {
+  return typeof scope.querySelectorAll === "function" ? openRootsWithin(scope) : [];
 }
 
 function listenForRequests(page: PressPage, note: (signal: PressSignal) => void): PressListener {

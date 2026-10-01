@@ -21,8 +21,41 @@ import {
   isConsentLayerText,
   isDismissalLabel,
   isRateLimitAcknowledgeLabel,
-  isRateLimitLayerText
+  isRateLimitLayerText,
+  isTransientRefusalText
 } from "../vocabulary";
+
+// What a page writes beside a press it was too busy to carry out
+// (`../../rate-limit-notice.ts`): crossborder's store coupon and checkout.
+const BUSY_REFUSALS = [
+  "Store coupon €3 off orders over €20 Get coupons Network busy, please try again",
+  "Network busy, please try again",
+  "Server busy. Please retry.",
+  "The service is temporarily unavailable.",
+  "System overloaded",
+  "We're too busy right now",
+  "Busy, try again"
+];
+
+// Never a busy refusal: a press is repeated on the page's word only when that
+// word says the press never went through.
+const NOT_BUSY_REFUSALS = [
+  "Your payment could not be processed. Try again.",
+  "Something went wrong. We could not save this item. Try again",
+  "Temporarily unavailable",
+  "Currently unavailable. We don't know when or if this item will be back in stock.",
+  "Your address book is being updated. Please try again later.",
+  "Business hours: 9-5",
+  "Get coupons"
+];
+
+test("a page saying it was too busy to carry the press out is a busy refusal", () => {
+  for (const text of BUSY_REFUSALS) assert.equal(isTransientRefusalText(text), true, text);
+});
+
+test("a failure, an item out of stock, or a bare try again is not a busy refusal", () => {
+  for (const text of NOT_BUSY_REFUSALS) assert.equal(isTransientRefusalText(text), false, text);
+});
 
 const DISMISSALS = [
   "Close",
@@ -44,10 +77,18 @@ const DISMISSALS = [
   "Continue without signing in",
   // The deal-wheel's own decline, which the fixture exists to produce.
   "No thanks, I would rather pay full price",
-  "Not now, thanks."
+  "Not now, thanks.",
+  // The support chats' only way out: crossborder's pill glyph (title) and the
+  // everything store's chat (aria-label) over the buy box (t174-w32, t174-w34).
+  "Minimize chat",
+  "Minimise",
+  "Minimize"
 ];
 
 const NEVER = [
+  // A minimise that would act on something is refused like any other dismissal.
+  "Minimize and delete chat",
+  "Minimise and cancel my subscription",
   // Plainly consequential, and refused by the anchored allow-list alone.
   "Delete",
   "Delete account",

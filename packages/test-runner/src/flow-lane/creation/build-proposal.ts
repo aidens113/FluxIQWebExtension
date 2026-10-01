@@ -74,7 +74,13 @@ export type CreatedFlowBuildLlm = { permittedConsequences: readonly LlmActionCon
 /** Clock and bounds for the build's wait. Production passes none. */
 export type CreatedFlowBuildWait = { now?: () => number; sleep?: (ms: number) => Promise<void>; requestTimeoutMs?: number; deadlineMs?: number; pollMs?: number };
 
-export type CreatedFlowBuildAccounting = Readonly<{ provider: string | null; model: string | null; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; estimatedCostUsd: number | null }>;
+/**
+ * What Core says the build spent. `budgetBreaches`: the calls Core says cost
+ * more than its purse held them at before sending them -- a breach of the
+ * build's ceiling, which the Lab's budget check fails the run on as it does a
+ * run's. Absent where Core published none, which a reader takes as none.
+ */
+export type CreatedFlowBuildAccounting = Readonly<{ provider: string | null; model: string | null; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; estimatedCostUsd: number | null; budgetBreaches?: number }>;
 /**
  * What one member of a decision row may hold: a count, a flag, a closed code
  * or identifier, a bounded list of those, or a bounded record of them (Core's
@@ -489,7 +495,7 @@ function failed(failure: NonNullable<CreatedFlowBuild["failure"]>, providerInvoc
   return Object.freeze({ outcome: "failed", adaptationId: null, providerCalls: null, loopProviderCalls: null, providerInvocation, accounting: null, evidenceLoop: null, failure, recoveredAfterTimeout: false, durationMs, instructedConsequences: null, declaredConsequences: null, consequenceCrossCheck: null, permissionRequest: null });
 }
 
-function accountingOf(value: { provider?: string; model?: string; inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCostUsd?: number }): CreatedFlowBuildAccounting {
+function accountingOf(value: { provider?: string; model?: string; inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCostUsd?: number; budgetBreaches?: number }): CreatedFlowBuildAccounting {
   return {
     provider: value.provider !== undefined && isVocabulary(value.provider) ? value.provider : null,
     model: value.model !== undefined && isVocabulary(value.model) ? value.model : null,
@@ -497,6 +503,7 @@ function accountingOf(value: { provider?: string; model?: string; inputTokens?: 
     outputTokens: value.outputTokens ?? null,
     totalTokens: value.totalTokens ?? null,
     estimatedCostUsd: value.estimatedCostUsd ?? null,
+    ...(Number.isSafeInteger(value.budgetBreaches) && (value.budgetBreaches as number) >= 0 ? { budgetBreaches: value.budgetBreaches as number } : {}),
   };
 }
 

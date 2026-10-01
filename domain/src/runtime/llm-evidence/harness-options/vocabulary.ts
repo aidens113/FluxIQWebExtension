@@ -13,7 +13,9 @@ export const WEB_RECOVERY_HARNESS_OPTION_IDS = [
   "web.recovery.enter_field",
   "web.recovery.wait_for_change",
   "web.recovery.navigate_in_scope",
-  "web.recovery.detect_repeating_structure"
+  "web.recovery.detect_repeating_structure",
+  "web.recovery.find_on_page",
+  "web.recovery.describe_element"
 ] as const;
 
 export type WebRecoveryHarnessOptionId = (typeof WEB_RECOVERY_HARNESS_OPTION_IDS)[number];
@@ -27,3 +29,7 @@ export const WEB_RECOVERY_ENTER_FIELD_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_ID
 export const WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
 export const WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
 export const WEB_RECOVERY_DETECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[5];
+/** The authoring search, for a recovery: the whole page, hidden elements included (t223). */
+export const WEB_RECOVERY_FIND_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[6];
+/** One element in full, named by a handle this exploration was shown (t223). */
+export const WEB_RECOVERY_DESCRIBE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[7];

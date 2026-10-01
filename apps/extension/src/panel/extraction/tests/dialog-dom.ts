@@ -13,7 +13,15 @@ class DialogElement extends FakeElement {
   selectionStart: number | null = 0;
   selectionEnd: number | null = 0;
   selectionDirection: "forward" | "backward" | "none" = "none";
-  constructor(tag: string, readonly ownerDocument: DialogDocument) { super(tag); }
+  // Its own document, through a getter: `FakeElement` reads its owner off the
+  // installed fake document through one (`cfecc984`), so a parameter property
+  // would assign to that getter and throw, and a property may not override it.
+  private readonly owner: DialogDocument;
+  constructor(tag: string, ownerDocument: DialogDocument) {
+    super(tag);
+    this.owner = ownerDocument;
+  }
+  get ownerDocument(): DialogDocument { return this.owner; }
   get parentElement(): DialogElement | null { return this.parentNode as DialogElement | null; }
   get nextSibling(): FakeNode | null {
     const nodes = this.parentNode?.childNodes ?? [];

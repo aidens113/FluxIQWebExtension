@@ -167,3 +167,17 @@ test("a build Core published no per-call record for says so, rather than reporti
   assert.equal(refused.calls, 0);
   assert.deepEqual(refused.gate, { invoked: false, reason: "Core's Flow build stopped at provider_resolution before a provider answered.", code: "flow_bootstrap.provider_resolution_failed" });
 });
+
+test("a build whose calls Core says cost more than its purse held them at fails the Lab's budget check, as a run's breaches do", () => {
+  const accounting = { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 1_200, totalTokens: 31_200, estimatedCostUsd: 0.02 };
+  const breached = liveLlmBuildUsage(buildWith(null, { accounting: { ...accounting, budgetBreaches: 2 } }));
+  assert.equal(breached.accounting?.budgetBreaches, 2);
+  assert.ok(liveLlmBudgetBreaches(plan, breached).includes("Core recorded 2 budget breach(es) of its own during the run"));
+
+  // A Core that publishes none, or counts none, is no breach.
+  for (const clean of [accounting, { ...accounting, budgetBreaches: 0 }]) {
+    const usage = liveLlmBuildUsage(buildWith(null, { accounting: clean }));
+    assert.equal(usage.accounting?.budgetBreaches, 0);
+    assert.deepEqual(liveLlmBudgetBreaches(plan, usage), []);
+  }
+});

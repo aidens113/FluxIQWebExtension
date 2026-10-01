@@ -1,7 +1,9 @@
 // What each runtime harness option actually does to the page.
 //
-// Six actions: inspect observes; detect observes the repeating structure a
-// scrape reads, exactly as the authoring detection does (`../structure/`);
+// Eight actions: inspect observes; find searches the whole page and describe
+// prints one element in full, as the authoring tools do (`../page-find/`);
+// detect observes the repeating structure a scrape reads, exactly as the
+// authoring detection does (`../structure/`);
 // wait observes again after a bounded pause; press presses one observed
 // control, through the same `../press.ts` the authoring tool uses; navigate
 // moves, but only where Core's scope policy says it may. Form entry and option
@@ -46,6 +48,7 @@ import {
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
 } from "../capture";
+import { webLlmDescribeElement, webLlmFindOnPage, webLlmFindQuery } from "../page-find";
 import { publishedWebLlmPage } from "../page-view";
 import { present } from "../present";
 import { evidenceLocation, safeEvidenceUrl } from "../location";
@@ -58,8 +61,10 @@ import { boundedIdentifier } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE } from "../vocabulary";
 import { webAutomationExplorationScope } from "./exploration-terms";
 import {
+  WEB_RECOVERY_DESCRIBE_OPTION_ID,
   WEB_RECOVERY_DETECT_OPTION_ID,
   WEB_RECOVERY_ENTER_FIELD_OPTION_ID,
+  WEB_RECOVERY_FIND_OPTION_ID,
   WEB_RECOVERY_INSPECT_OPTION_ID,
   WEB_RECOVERY_NAVIGATE_OPTION_ID,
   WEB_RECOVERY_PRESS_OPTION_ID,
@@ -81,7 +86,7 @@ export type WebRecoveryHarnessContext = {
    * that check looks. Required: a bundle that retained nothing would resolve
    * every explored repair without its hint, and nothing would say so.
    */
-  retainSelectors: (binding: WebLlmSnapshotBinding) => unknown;
+  retainSelectors: (binding: WebLlmSnapshotBinding, shownAs?: JsonObject) => unknown;
   /**
    * The runtime's extraction-handle store, shared with authoring, so a handle a
    * recovery's detection issued resolves through `resolveExtractionHandle` and
@@ -98,9 +103,11 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
   const sleep = context.sleep ?? defaultSleep;
   // Every packet an option hands the model: the one a later target is bound
   // through, and one the repair check can find the selectors of.
-  const shown = (input: Handled, binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding => {
+  // A search or a description is retained under the result the model read
+  // (`shownAs`), so a repair naming a handle from it finds the packet behind it.
+  const shown = (input: Handled, binding: WebLlmSnapshotBinding, shownAs?: JsonObject): WebLlmSnapshotBinding => {
     returned.set(input.scopeKey, binding);
-    context.retainSelectors(binding);
+    context.retainSelectors(binding, shownAs);
     return binding;
   };
   // The packet a target handle was copied from. Before this exploration has
@@ -198,6 +205,27 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       returned: Object.prototype.hasOwnProperty.call(input.request.value, "target") ? shownPacket(input) : undefined,
       handles: context.extractionHandles
     })),
+    // The whole page, hidden elements included. Its capture is the packet the
+    // next press binds through, as any page this exploration shows is; rendered
+    // elements are numbered before hidden ones, so a handle the last look
+    // printed still names the same element on an unchanged page.
+    [WEB_RECOVERY_FIND_OPTION_ID]: run(async (input) => {
+      const { query, after } = webLlmFindQuery(input.request.value);
+      const binding = await captureEvidence(context.gateway, input.sessionId, input.request, input.request.signal, undefined, { includeHidden: true });
+      const found = webLlmFindOnPage(binding.evidence, query, after);
+      shown(input, binding, found as unknown as JsonObject);
+      return toolExecution(found as unknown as JsonObject, false, WEB_LLM_INSPECT_RESULT_CODE);
+    }),
+    // One element of the last packet this exploration showed: a handle means
+    // something only against a packet the model was shown, and nothing moves.
+    [WEB_RECOVERY_DESCRIBE_OPTION_ID]: run(async (input) => {
+      exactKeys(input.request.value, ["target"]);
+      const target = handleIn(input.request.value);
+      const observed = shownPacket(input);
+      const described = webLlmDescribeElement(observed.evidence, target);
+      context.retainSelectors(observed, described as unknown as JsonObject);
+      return toolExecution(described as unknown as JsonObject, false, WEB_LLM_INSPECT_RESULT_CODE);
+    }),
     [WEB_RECOVERY_WAIT_OPTION_ID]: run(async (input) => {
       const waitMs = boundedWait(input.request.value);
       const before = await capture(context, input);

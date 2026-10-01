@@ -107,7 +107,7 @@ test("binds from the production host seam and selects the sole trusted web clien
   bindWebAutomationLlmEvidenceRuntime(fluxiq as never);
   // One tool of this domain's own. Everything else a build does is a node of
   // the library, which Core offers because Core is what enumerates the registry.
-  assert.deepEqual(bound?.tools.map(tool => tool.toolId), [WEB_LLM_DETECT_STRUCTURE_TOOL_ID, "web.find_on_page"]);
+  assert.deepEqual(bound?.tools.map(tool => tool.toolId), [WEB_LLM_DETECT_STRUCTURE_TOOL_ID, "web.find_on_page", "web.describe_element"]);
   // `runnable` names what this domain will actually run, and Core narrows the
   // library it offers the model to it. Without that the enum held Core's
   // built-ins too -- available in every scope -- and every call naming one
@@ -120,6 +120,7 @@ test("binds from the production host seam and selects the sole trusted web clien
     { toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, effect: "observe", repeatPolicy: undefined, initialObservation: undefined },
     // The search the page view points to (t223); a second query is a different request.
     { toolId: "web.find_on_page", effect: "observe", repeatPolicy: undefined, initialObservation: undefined },
+    { toolId: "web.describe_element", effect: "observe", repeatPolicy: undefined, initialObservation: undefined },
   ]);
   // The detection tool states the shape its handle is written in, because a
   // live build that was shown only a code invented a handle of its own and had
