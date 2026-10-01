@@ -38,6 +38,15 @@ running script does not stop it).
   (id, class, name, etc)". The model's default view is every visible element that carries text or is interactive, in
   document order, in the fewest bytes that identify it. A page-search tool reaches everything else by text or by any
   attribute. There are still no caps or ranking among qualifying elements. Owned by t223. Live runs are held until it lands.
+  **Format approved by the user** ("The format you sent me looks perfect. Its very small"). The format is the one in
+  `reports/t223-format-example.md` on t223's branch:
+  - a PAGE/URL/VIEW/COVERING header;
+  - `[region]` lines and `- i/n` item markers;
+  - one `<handle> <kind> "<words>" <state>` line per element, links on a `~` base;
+  - `find_on_page` over text and every attribute;
+  - `describe` for one element.
+
+  Measured with the prototype: 32.8 KB to 3.5 KB, 123.7 KB to 7.1 KB, and 340.5 KB to 22.3 KB on the three recorded pages.
 - **The model sees the whole page (user, 2026-09-30, after watching a run spend 53 s trying steps and fail with no repair):**
   "Remove ANY AND ALL LIMITS ON THE NUMBER OF ELEMENTS PASSED TO MODEL. DO NOT HIDE INFORMATION OR USE ANY RANKING
   ALGORITHM." No element caps, top-N, ranking, byte budgets that drop elements, or withheld summaries anywhere from the DOM
@@ -768,6 +777,29 @@ debug and partitioned so neither touches the other's files:
   watchdog log reads "watchdog start 22:22:13". Headless is off: the Lab launches `headless: false`, and
   `FLUXIQ_DEMO_HEADLESS` is unset in every lane's `.env.local` and the environment.
 - Outcome: Labs stopped until t223 is merged and its measured page size is sane. Pass streak 0.
+
+### 2026-09-30 night — t210 rounds 3-3b merged; a Windows build-lock race fixed; the compact format approved
+- Agent: supervisor; t210 by its `worker-high`.
+- Changed:
+  - t210 rounds 3 and 3b merged into dev (Core `6af7e6cd`, downstream `5df252a2`). The whole conversation, context packet,
+    instruction set and adaptation records now reach the model, read page by page.
+  - The build-cache step lock (`scripts/build-cache/lock/acquire-step-lock.mjs`, the same code in both repositories)
+    crashed with EPERM when it read a lock another process was deleting. Windows refuses to open a delete-pending file.
+    `readHolder` now retries EPERM, EACCES and EBUSY briefly.
+  - The user approved the compact format in t223's `reports/t223-format-example.md`.
+- Validation:
+  - At t210's `4b3fced7`: `npx tsc --noEmit -p .` EXIT=0; structure-audit passed; docs:check current.
+  - vitest over conversations, llm, recovery, result-verification, flow-bootstrap, service and storage/project:
+    `Tests 5 failed | 2815 passed`, all 5 "Test timed out in 15000ms". The 3 files re-run with `--testTimeout=120000`:
+    `Tests 40 passed (40)`.
+  - On merged dev: Core lib build EXIT=0; web check EXIT=0; domain `# pass 1061 # fail 0`; extension `# pass 1673 # fail 0`.
+  - Downstream `pnpm check` first failed `step-lock.test.mjs` ("a live, recent lock is waited on until it is released",
+    EPERM). It passed 5 of 5 alone.
+  - After the fix: downstream build-cache tests `# pass 53 # fail 0`; Core `pnpm build-cache:test` `# pass 61 # fail 0`;
+    the lock test 40 times, 8 at a time: 0 failures. The failure was never reproduced before the fix, so this shows no
+    regression, not the cure.
+  - Full downstream `pnpm check` EXIT=0 with `# pass 547 # fail 0`.
+- Outcome: pushed as below. Labs remain stopped for t223. Pass streak 0.
 
 ## Open Questions
 
