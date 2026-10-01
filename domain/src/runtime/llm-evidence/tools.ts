@@ -325,16 +325,28 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
     // **The description below is held to 2,000 characters by Core**, and a
     // longer one is refused outright rather than cut
     // (`harness_option.description_invalid`, `harness-options/option.ts`). It
-    // stands at 1,981, and the filtering vocabulary of 2026-09-24 was fitted by
+    // stands at 1,992, and the filtering vocabulary of 2026-09-24 was fitted by
     // cutting two illustrations rather than a rule. The paired bound is Core's
     // 700 characters for a node parameter description, which `extract-list/
-    // catalog-text.ts` sits three characters inside; between them these two
-    // bounds are what a model ever learns about `where`, so the next clause
-    // that earns its place has to displace one already there.
+    // catalog-text.ts` sits at; between them these two bounds are what a model
+    // ever learns about `where`, so the next clause that earns its place has to
+    // displace one already there.
+    //
+    // **A condition may name a column the plan does not keep, and the text says
+    // so** (t194 w36). Live run `run-muq4oaof-464f5bce` kept `plus` and `ad` in
+    // `fields` only to write `plus present` and `ad absent`; the stored answer
+    // had six columns where four were asked, and the judge paired no row though
+    // every asked value was right. The resolver had always taken a detected key
+    // the plan does not keep (`plan-resolution/extraction/conditions.ts`); the
+    // model was never told. Room came from wording, not rules: "Returns no
+    // values or selectors" (the next sentence says to run the node to see rows),
+    // "naming it", "when"/"opaque" before the target handle, "the comparison"
+    // after "no number fails", "really", and the closing "Name a column the
+    // detection showed", now said inside the condition clause itself.
     tools: [
       {
         toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
-        description: "Detect the repeating list or table an extraction would read: around an observed element when given its opaque target handle, else the page's largest list. Returns an opaque extraction handle naming it, each field's key, label, kind and coverage, the item count, and how the list continues. Returns no values or selectors. Observes only, and is never a step of the Flow. Write the list into the extraction node as extractList: {handle, fields?: {yourKey: \"fieldKey\" | \"fieldKey@attr\"}, where?: [{field: \"fieldKey\", is: \"absent\"}], paginate?: false, minItems?: 0}, then run that node to see the rows it really reads. Its count is the whole list: where the Flow returns only part of it, narrow the page first, minItems: 0 where the answer may be no rows. where is optional and says which items are rows at all: leave it out and every item is a row, which is the right first attempt when unsure -- too much is narrowed later, while nothing looks like a page that held nothing. Every condition must hold, and each names one column and compares it. Presence: {field, is: \"present\"} or {field, is: \"absent\"}, for a column only some items have. Its number: atLeast, atMost, lessThan, greaterThan or equals, off the first number in the column, so $49.00 is 49 and 3.7 out of 5 stars is 3.7 (no number fails the comparison). Its text: contains, startsWith, endsWith, equals, or matches for a regular expression, ignoring case, one value or a list meaning any. And not: true keeps the items the rest of that condition rejects, which is how an exclusion is written: {field: \"title\", contains: [\"ear tips\", \"charging case\"], not: true} drops the accessories. If conditions reject every item, the node returns what it read and says so in its report. A detected list mixes advertisements in with results, so a column with coverage below 1 is often the mark that tells them apart -- leave them out with is: \"absent\" on it. Name a column the detection showed, never a word you hope is somewhere in the item.",
+        description: "Detect the repeating list or table an extraction would read: around an observed element given its target handle, else the page's largest list. Returns an opaque extraction handle, each field's key, label, kind and coverage, the item count and how the list continues. Observes only, and is never a step of the Flow. Write the list into the extraction node as extractList: {handle, fields?: {yourKey: \"fieldKey\" | \"fieldKey@attr\"}, where?: [{field: \"fieldKey\", is: \"absent\"}], paginate?: false, minItems?: 0}, then run that node to see the rows it reads. Its count is the whole list: where the Flow returns only part of it, narrow the page first, minItems: 0 where the answer may be no rows. where is optional and says which items are rows at all: leave it out and every item is a row, which is the right first attempt when unsure -- too much is narrowed later, while nothing looks like a page that held nothing. Every condition must hold; each names one column the detection showed, never a word you hope is in the item, and compares it. It may name a column fields does not keep: keep only the columns asked for, never a mark used only to filter. Presence: {field, is: \"present\"} or {field, is: \"absent\"}, for a column only some items have. Its number: atLeast, atMost, lessThan, greaterThan or equals, off the first number in the column, so $49.00 is 49 and 3.7 out of 5 stars is 3.7 (no number fails). Its text: contains, startsWith, endsWith, equals, or matches for a regular expression, ignoring case, one value or a list meaning any. And not: true keeps the items the rest of that condition rejects, which is how an exclusion is written: {field: \"title\", contains: [\"ear tips\", \"charging case\"], not: true} drops the accessories. If conditions reject every item, the node returns what it read and says so in its report. A detected list mixes advertisements with results, so a column with coverage below 1 is often the mark that tells them apart -- leave them out with is: \"absent\" on it.",
         inputSchema: { type: "object", properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
         effect: "observe",
       },

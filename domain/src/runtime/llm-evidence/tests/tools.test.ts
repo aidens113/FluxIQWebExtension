@@ -143,6 +143,10 @@ test("binds from the production host seam and selects the sole trusted web clien
   assert.match(detectDescription, /where is optional/u);
   assert.match(detectDescription, /leave it out and every item is a row/u);
   assert.equal(detectDescription.indexOf("where is optional") < detectDescription.indexOf("atLeast"), true, "optional comes before the vocabulary that narrows");
+  // A condition may test a column the plan does not keep, and the text says so:
+  // live run `run-muq4oaof-464f5bce` kept `plus` and `ad` only to filter on them,
+  // stored six columns where four were asked, and the judge paired no row.
+  assert.match(detectDescription, /It may name a column fields does not keep: keep only the columns asked for, never a mark used only to filter\./u);
   // And it says what the node does when conditions reject everything, since a
   // model that read an empty answer as an empty page would repair nothing.
   assert.match(detectDescription, /returns what it read and says so in its report/u);

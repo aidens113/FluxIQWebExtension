@@ -137,6 +137,59 @@ tests/condition-match.test.ts}`, `runtime/llm-evidence/plan-resolution/extractio
 the supervisor; killed runs unaccounted in the spend ledger (run 10's debug); F21's Core publication of `budgetBreaches`
 (a wire change); the link-text column glued to a badge is still offered beside the clean title span (a model may pick it).
 
+## Session 6 (2026-10-01, from 22:45 UTC): live through the chat launcher
+
+The supervisor committed and pushed the merge, F23-F28 and G4 (dev `8fa5a944`); trees at current dev (Core `83a6cc3a`), with
+t223's stable handles, t227's chat launcher, lanes A/B/D's fixes. Live again on slot-3, headed, builds started by typing the
+instruction into the real extension chat (the Lab's default path; `live-run-c.sh` unchanged: `deepseek-flash` is the chat's
+default model). Lane B's general guard against repeated identical failing calls has not landed: a run that visibly loops
+on one action is stopped early. Decisions are watched live by `scratchpad/t194/watch-run.mjs` (tool, node, result code,
+repeat count from the decision dump; no page text).
+- Core libraries rebuilt rc 0 (`scratchpad/t194s5/core-libs-3.log`).
+- Run 11 (earbuds) launched 22:48:50 UTC; the reason: first chat-driven earbuds run on current dev, and t227's
+  `run-muq310ht-ab80eed0` (0 of 13 on an older tree) is to be re-tested. t194-d227 (background) reads that run's artifacts
+  for the cause of its 0 rows.
+- t194-d227 (`reports/t194-d227-zero-rows.md`): t227's Flow had no typing step (the build typed the search but the step
+  stayed `taken`, not added: Core `evidence-loop.ts:207-211`, draft authoring), so playback pressed Go on an empty box; its
+  read saw `never_appeared`, `minItems 0`, and passed; the dry run could not see it, because `node-run/replay.ts:92,243`
+  counts the longest array in the payload (`fieldNames`, `snapshot`) as the record count.
+- **Run 11 `run-muq4oaof-464f5bce`: failed, $0.1729, 39 calls (the Lab counts 20: the re-author's 19 are missing),
+  input tokens per call min 1,573 / median 30,104 / max 75,814** (debug `debugs/run-muq4oaof-464f5bce.md`, t194-d11). The
+  chat built and applied a Flow; it ran and stored 21 rows, 0 of 13 matched. Causes: (1) the build's five reruns of its read
+  all ran on page 5, where the first read left the tab (Next disabled: one page, 11 unfiltered rows each); a rerun does not
+  return to the step's `replay.from` (Core `llm/evidence-loop/rerun-request.ts:74`, **lane B**); (2) 16 re-author reruns
+  refused `invalid_input`/`consequences_unreadable` for a `consequences: null` nobody wrote (domain `node-run/run.ts:692`
+  writes it back, `permission.ts:91` refuses it): lane C, fixed F29; (3) the Flow got a second copy of the list read (s9,
+  page 5 again; `flow-draft/amendment.ts:209-224`, **t196**); (4) helper columns `plus` and `ad` stored beside the four asked
+  for, so the Lab paired no row although positions 0-6 were right: lane C, F30 (the model is told) and F31 (the Lab says
+  "extra columns"); (5) the dry run passed an unfiltered duplicate read and counts arrays, not records: F29; (6) the judge
+  advised aligning s8 and s9 rather than dropping s9; the "charging case" rule dropped 3 true pairs again (F19 showed it).
+  The repeat guard (t193 RG) landed after launch; by d11's count it would have refused 3 of the 5 build reruns and stalled
+  each re-author round 4 decisions sooner.
+- Supervisor, during the fixes: no new refusal of anything the model chose (user rule); prefer information. F29 removes a
+  refusal (`null` consequences on a read) and makes the existing dry-run comparison accurate; F30 is text; F31 is the Lab's
+  report. Note: F29's dry run now answers `changed` for a read that returns 0 rows where the build's had rows, and a
+  `changed` step still refuses completion (`llm_evidence_loop.dry_run_refused`, Core `flow-draft/dry-run.ts`) until t228
+  removes that gate.
+- Fixes, validated (narrow): domain `tsc -p tsconfig.json` rc 0; `-p tsconfig.test.json` 1 error, in
+  `node-run/tests/covered-press.test.ts:51` from dev's `46cf82c2` (not this lane's); domain `node-run` + `llm-evidence/tests`
+  44 files `# pass 297 # fail 0`; test-runner `check` rc 0, `run-expectations/extraction` tests `# pass 44 # fail 0`;
+  structure audit passed. Core libraries rebuilt after RG, rc 0.
+- **Run 12 `run-muq66ff9-cb3767a1` (launched 23:31:50 UTC; reason: F29-F31 and RG live): failed, $0.3239 over 80 calls
+  (build $0.0980 / 26, judge $0.0125 / 8, re-author $0.2134 / 46 incl. 3 malformed; the Lab counts 34), input tokens per call
+  min 1,575 / median 28,921 / max 46,820; 11 rows stored, 0 of 13 matched** (debug `debugs/run-muq66ff9-cb3767a1.md`,
+  t194-d12). F29 took effect (no `consequences_unreadable`); RG fired 17 times and stalled 2 rounds; F31 named the extra
+  columns `plus`, `ad`; F30 did not change behaviour (both still kept). Causes: (1) **lane B**: a rerun runs wherever the
+  last read left the tab (page 5), so every rerun read one page of 11 (`llm/evidence-loop/rerun-request.ts:74`); (2) **t228**:
+  a repair round's opening `initial.` call erases the arrival the stall test made, so 3 reads were refused
+  `not_at_start_location` (domain `node-run/run.ts:211,255`, `arrival.ts:69-71`); (3) lane C, judge: a false
+  `result.column_always_empty` on `ad` (empty because `where ad absent` requires it; Core `repair-directive.ts:216-222`) and
+  "raise maxPages" said of a list that ended (`read-account/sentence.ts:14-15`); (4) lane C, re-author: 14
+  `unexpected_input_keys` from the model alternating `{extractList}` and `{parameters: {extractList}}` patches
+  (`flow-draft/amendment.ts:140`, `rerun-input.ts:30-45`), and `where` replaced whole loses its selectors (`rerun-input.ts:42`);
+  (5) lane C: re-authors applied untested; the domain stores all six columns over the author's four-column schema
+  (`reconciled-record-output.ts:67-75`).
+
 ## Session 5c (2026-10-01, from ~22:45 UTC): the dev merge, and G4
 
 The supervisor committed F23-F28 (`32c764c3`) and merged dev (Core `83a6cc3a` clean; downstream stopped on 4 conflicts
@@ -199,6 +252,9 @@ Newest first. Status: validated (the named checks ran and passed), or in progres
 
 | Fix | Files | Exposed by | Validation | Status |
 | --- | --- | --- | --- | --- |
+| F31 The Lab's mismatch report says "extra columns": rows refused only for keys the expectation does not name are `extra-columns` with the key names (never values), and the step says how many rows would pair on the named columns alone; the judgement stays strict (t194-w37) | test-runner `src/run-expectations/extraction/{mismatches.ts, tests/mismatches.test.ts}` | run 11: 21 rows, `values-differ` with `fields: []` | w37: 2 tests fail on the old source; lead: `# pass 44` | validated |
+| F30 The exploring model is told, in the detect tool's description, that a `where` condition may name a column `fields` does not keep: keep only the columns asked for, never a mark used only to filter (t194-w36). Not done: a note on the read naming kept columns used only by conditions (needs `node-run/run.ts:414`); `output-nodes/extract-list/catalog-text.ts` (700 of 700 characters) still does not say it | domain `runtime/llm-evidence/{tools.ts, tests/tools.test.ts}` | run 11: `plus`, `ad` kept | lead: domain narrow 297/297 | validated |
+| F29 A rerun no longer carries a `consequences: null` nobody wrote: the domain never writes back consequences the call did not carry, and a read accepts `null` as none declared (an acting node still treats it as unreadable); the dry run reads a list read's own `extraction.recordCount`/`itemsSeen`, answering `changed` when the replayed read returns 0 where the build's had rows, or reads unfiltered where the build's applied conditions (t194-w35) | domain `runtime/llm-evidence/{permission.ts, node-run/run.ts, node-run/replay.ts, node-run/tests/{unwritten-consequences, replay-read-account}.test.ts (new), node-run/tests/rejected-rows.test.ts}` | run 11 (16 refused reruns); t227 run (0 rows passed the dry run) | w35: 9 tests fail on HEAD's sources; lead: 297/297 | validated |
 | F28 The probe specs after F23-F27: no `test.fail` left; the bikes read leaves adverts out by the column reading "Sponsored" (a title now reads on an advert too, F24), the kestrel read picks its title as a model would (the text column that names a Kestrel and tells cards apart whose words lie inside every other such column's: the new title span, not the badge-glued link) (t194-w33, which stalled before its report, and the lead); `job-board-listing.spec.ts:90` rewritten to F10's contract: "names nothing" stops `control_absent` on the board's last page, and on page one follows the board's own Next (t194-w34) | extension `e2e/content/tests/live-tasks/tests/*.spec.ts`, `e2e/content/tests/extraction/tests/job-board-listing.spec.ts`; `content/extraction/order-rows.ts` (comment: the continental number rule) | F22; `job-board-listing:90` had failed on dev since F10 | session-5b validation (below) | validated |
 | F27 A plan's own page bound is kept whatever mode it names (within the cap; only the detected control is ever pressed), so `{mode: numbered, maxPages: 5}` reads every page; a number written the continental way is read as written ("169,00" -> 169, "1.165,00" -> 1165) where it can only be continental, English forms unchanged, ambiguous lone groups as before (t194-w32) | domain `runtime/llm-evidence/plan-resolution/extraction/{slot.ts, tests/slot.test.ts}`, `actions/extraction/{condition-match.ts, tests/condition-match.test.ts}` | F22 probes: rotterdam G2, kestrel G3 | w32: new rows 3 fail on HEAD's sources; session-5b validation (below) | validated |
 | F26 The ignored-press watch also observes every shadow root the press's scope walk crossed and every open root beneath the scope, so a click that opens a panel inside a shadow root is not pressed a second time (Kerbfind's radius chip) (t194-w31) | extension `content/action-runtime/ignored-press/{scope-roots.ts (new), page-press-listener.ts, index.ts, tests/scope-roots.test.ts (new), tests/page-press-listener.test.ts}` | bikes GAP 1 | w31: the new listener row fails with the root observation removed; session-5b validation | validated |
@@ -308,6 +364,8 @@ Taken from other lanes, not fixed here: the dry run's `core.replay.unreproducibl
 | 8 | `run-muohgblr-ed6ddc49` (cost NO EVIDENCE: killed before the Lab's accounting; 24 decisions, roughly $0.04-0.05) | same | 2: build iteration 24, **stopped by the supervisor at the user's order** (19:19:57 UTC, 7 min in) | the first paged read took 13.7 s and the frame shows the page revealed to its last row (F13 acting); then 16 `amend_draft rerun`s of the extraction in 80 s with 3 malformed replies, the same rerun loop as runs 5-7 | none (Lab runs stopped) | debug `debugs/run-muohgblr-ed6ddc49.md` |
 | 9 | `run-mup2u8o3-6697c4be` (**$0.2969**, 9 calls, 1,624,763 input tokens; over the $0.25 ceiling) | same | 3: draft complete, completion check ok; the test from the start refused s3 (cookie Accept `unreproducible`, the reset kept the build's consent: t196/t174 D1) and the build ended `evidence_budget_exhausted` with no money left | **the build's read held 10 of 13, all true and in order**: F7 badge, F10 label Next, F13 lazy tail and F9 pace all worked live; the 3 missing were true "… with Wireless Charging Case" pairs dropped by `name not contains "charging case"` (cause #2). Cost: page view ~300-500 KB a page (t223), raw `read.snapshot` 471 KB in the extract result (t193 W1), prompt cache lost after an amend (t193 W2: 1,792 of 477,506 cached), ceiling enforced after the fact (F17); a working Go press refused `tool_result_invalid` (F18); facility mislabel (F20) | F17, F18, F19, F20 | debug `debugs/run-mup2u8o3-6697c4be.md` |
 | 10 | `run-muq0in9r-0793b448` ($0.00, 0 calls) | same | 0: killed 23 s after admission | the supervisor's blanket `taskkill` on `run-lab.mjs` during the DeepSeek outage (operator action); killed runs go unaccounted in the spend ledger (Lab gap, next) | none | debug `debugs/run-muq0in9r-0793b448.md` |
+| 11 | `run-muq4oaof-464f5bce` ($0.1729, 39 calls) | same, chat-driven | 6: built, ran (21 rows, 0 of 13), judged, re-authored (16 refused reruns), repair refused | reruns on page 5 (lane B), `consequences: null` refusals (F29), duplicate read s9 (t196), helper columns kept (F30, F31) | F29-F31 | debug `debugs/run-muq4oaof-464f5bce.md` |
+| 12 | `run-muq66ff9-cb3767a1` ($0.3239, 80 calls) | same, chat-driven | 6: built, ran (11 rows, 0 of 13), 3 re-author attempts, RG fired 17 times | reruns on page 5 (lane B); `not_at_start_location` after a stall test (t228); false `column_always_empty` and 'raise maxPages' in the judge's brief; patch-shape `unexpected_input_keys`; helper columns still kept | next | debug `debugs/run-muq66ff9-cb3767a1.md` |
 
 ## UI evidence for t191
 
