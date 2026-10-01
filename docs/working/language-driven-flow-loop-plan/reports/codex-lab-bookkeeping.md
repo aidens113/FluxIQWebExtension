@@ -1,6 +1,6 @@
 # Codex Lab bookkeeping
 
-Status: Implementation complete and worker validation complete in paired task t220; supervisor review/integration pending. Worker report; no commits, pushes, merges, browser/Lab runs or provider calls.
+Status: Implemented and supervisor verified in paired task t220; local commits delivered for Claude integration. The inherited Core full-audit failure remains documented below. No merge, push, browser/Lab run or provider call.
 
 ## Findings and decisions
 
