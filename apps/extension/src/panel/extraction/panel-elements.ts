@@ -19,6 +19,9 @@ export type ExtractionPanelElements = {
   panel: HTMLElement;
   status: HTMLElement;
   notice: HTMLElement;
+  entryRecovery: HTMLElement;
+  entryRecoveryText: HTMLElement;
+  sheetRecovery: HTMLElement;
   body: HTMLElement;
   label: HTMLInputElement;
   summary: HTMLElement;
@@ -54,6 +57,10 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
     attrs: { type: "button", title: "Close", "aria-label": "Close" }
   });
   const notice = createElement("p", { id: "extractionNotice", className: "notice warning", hidden: true, attrs: { role: "alert" } });
+
+  const entryRecoveryText = createElement("p", { className: "notice warning", attrs: { role: "alert" } });
+  const entryRecovery = createElement("div", { id: "extractionEntryRecovery", hidden: true }, [entryRecoveryText]);
+  const sheetRecovery = createElement("div", { id: "extractionSheetRecovery", hidden: true });
 
   const label = createElement("input", {
     id: "extractionLabel",
@@ -102,16 +109,20 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
       closeButton
     ]),
     notice,
+    sheetRecovery,
     body,
     createElement("footer", { className: "extraction-actions" }, [cancelButton, confirmButton])
   ]);
 
-  host.append(openButton, panel);
+  host.append(openButton, entryRecovery, panel);
   return {
     openButton,
     panel,
     status,
     notice,
+    entryRecovery,
+    entryRecoveryText,
+    sheetRecovery,
     body,
     label,
     summary,

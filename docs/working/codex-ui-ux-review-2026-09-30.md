@@ -518,6 +518,14 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 
 ## Work Ledger
 
+### 2026-10-01 - Extraction Retry independently verified; next ownership audit active
+- Agent: supervisor
+- Changed: extraction six-path recovery reviewed and authored architecture updated; next worker briefs and continued root verification.
+- Why: restore transient reads without restarting accepted picks, and prevent stale preview failures from stranding editing.
+- Validation: independent ten-suite102/native0/1607.1387ms; actual six-root strict typing0. Environment195/native0/2.54s; login50/native0/1.28s. Corrected Core typing50626/native0/95150ms; full61471/build45474 still running. Structure34789 adds two cleanup-rationale markers to reconcile after freeze; no baseline relaxation.
+- Outcome: Narrow extraction accepted and frozen. Core broad completion pending; shell worker active, ownership and native-controls audits keep maximum worker slots assigned.
+- Follow-up: root exact local checkpoints; read session-owner findings, verify shell and rerun whole extension after source freeze. Original Claude handoff/main/protected backend work stays untouched.
+
 ### 2026-10-01 - Turn Open FluxIQ dispatch lease supervisor brief
 - Agent: supervisor
 - Changed: release exact chat/chat-panel.ts, chat/tests/chat-owner-recovery.test.ts, open-fluxiq/open-fluxiq-button.ts and its existing tests/open-fluxiq-button.test.ts.

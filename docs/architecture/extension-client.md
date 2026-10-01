@@ -1730,6 +1730,16 @@ generation; detached rows cannot edit a replacement draft or captured receipt.
 Column groups and name/read-kind/remove controls identify their current column
 through text-only accessible names. Preview privacy narrowing stays unchanged.
 
+Session, preview and pick-start failures expose explicit current-stage recovery.
+A hidden initial restore failure offers recovery near the entry without opening
+a sheet automatically. Reading retries preserve the existing session and do not
+prepare or start another pick; uncertain start retries first inspect that session
+and retain a successful preparation milestone. Preview operations and Retry
+controls own their selection/generation, so obsolete failures cannot replace a
+newer preview or clear mutation feedback. Background refusal provenance retains
+authored refusal text; unexpected read errors use fixed local feedback. Picker
+polling remains600ms and stops on failure until explicit recovery.
+
 Confirmation freezes editing until acknowledgement. Cancellation immediately
 clears preview values from memory and rendered cells, retaining a visible pending
 or retryable failure sheet until the background acknowledges it. Per-operation
