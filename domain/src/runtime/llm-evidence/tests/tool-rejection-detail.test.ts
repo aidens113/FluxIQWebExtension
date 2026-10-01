@@ -208,7 +208,14 @@ test("a press the person already declined says so, rather than that somebody is 
   const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["send_or_publish"] } });
 
   assert.equal(codeOf(refused), "permission_required");
-  assert.deepEqual(detailOf(refused), { reason: "consequences_declined", missing: ["send_or_publish"], requestId: "permission-request:abc" });
+  // It also says what to do instead (F29): the same press declaring only what it
+  // does itself, so a wrongly declared "Continue to checkout" is not given up on.
+  assert.deepEqual(detailOf(refused), {
+    reason: "consequences_declined",
+    instead: ["declare only what this press itself does", "[] for a press that only opens a page or a form"],
+    missing: ["send_or_publish"],
+    requestId: "permission-request:abc"
+  });
   assert.deepEqual(clicks, []);
 });
 

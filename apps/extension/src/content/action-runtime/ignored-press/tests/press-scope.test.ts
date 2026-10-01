@@ -73,3 +73,24 @@ test("a control at the top of a shadow root is followed out through its host", (
   inner.parentNode = { nodeType: 11, host: page.host };
   assert.equal(nameOf(pressScope(inner as unknown as Element)), "article");
 });
+
+test("the main landmark is the page, not a section: bigbox's Add to cart is scoped to its own bar", () => {
+  const page = chain(
+    { name: "body", tag: "body" },
+    { name: "page", tag: "div" },
+    { name: "main", tag: "main" },
+    { name: "atcBar", tag: "div" },
+    { name: "button", tag: "button" }
+  );
+  assert.equal(nameOf(pressScope(page.button as unknown as Element)), "atcBar");
+});
+
+test("an element with role main is the page too", () => {
+  const page = chain({ name: "body", tag: "body" }, { name: "app", tag: "div", role: "main" }, { name: "bar", tag: "div" }, { name: "button", tag: "button" });
+  assert.equal(nameOf(pressScope(page.button as unknown as Element)), "bar");
+});
+
+test("a section inside main still bounds the scope", () => {
+  const page = chain({ name: "main", tag: "main" }, { name: "slots", tag: "section" }, { name: "row", tag: "div" }, { name: "button", tag: "button" });
+  assert.equal(nameOf(pressScope(page.button as unknown as Element)), "slots");
+});

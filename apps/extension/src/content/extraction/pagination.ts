@@ -35,7 +35,13 @@
 // - `loadMore`: press `control`, then wait until an item appears that the read
 //   has not taken, or the control detaches. A load that failed and offered a
 //   Retry beside the control has it pressed, at most twice (`load-retry.ts`).
-//   An absent, disabled or `aria-disabled="true"` control is the list ending.
+//   An absent, disabled or `aria-disabled="true"` control is the list ending,
+//   and so is one still in the page but not rendered -- the `hidden` attribute,
+//   or no box at all -- once it has stayed so for a second, for a page that
+//   hides it only while it settles. Guildline's Sent invitations keeps its
+//   "Show more" with `hidden` after the last page; until 2026-10-01 every read
+//   of it either stopped truncated at its page bound or pressed the hidden
+//   control and failed ten seconds later as a page that ignored it.
 //   A live control that yields nothing in ten seconds fails the read, as
 //   `next` does.
 // - `scroll`: scroll the nearest scrollable ancestor of the first item, or the
@@ -409,7 +415,8 @@ async function awaitNextControl(selector: string, progress: PaginationProgress):
 }
 
 async function pressLoadMore(paginate: LoadMorePagination, progress: PaginationProgress): Promise<PageAdvance> {
-  const found = document.querySelector(paginate.control);
+  const found = await renderedLoadMore(paginate.control, progress);
+  if (found === "timed_out") return TIMED_OUT;
   if (!found) return ended("control_absent");
   if (isDisabled(found)) return ended("control_disabled");
   if (progress.pagesRead >= paginationBound(paginate)) return TRUNCATED;
@@ -422,6 +429,39 @@ async function pressLoadMore(paginate: LoadMorePagination, progress: PaginationP
     throw new PaginationFault("list_unchanged", `No new item appeared within ${LIST_CHANGE_TIMEOUT_MS}ms of pressing ${JSON.stringify(paginate.control)} for page ${progress.pagesRead + 1}.`);
   }
   return outcome === "changed" ? ADVANCED : TIMED_OUT;
+}
+
+/**
+ * How long a load-more control that is in the page but not rendered is watched
+ * for coming back before the list counts as ended: a page may hide it while it
+ * settles a load, and one that has ended its list pays this once.
+ */
+const HIDDEN_CONTROL_GRACE_MS = 1_000;
+
+/**
+ * The load-more control, when the page has one and renders it; `undefined`
+ * when it is absent, or present and still not rendered after
+ * `HIDDEN_CONTROL_GRACE_MS` -- to a person, a hidden control is no control.
+ * `"timed_out"` when the command's deadline passed during that grace.
+ */
+async function renderedLoadMore(selector: string, progress: PaginationProgress): Promise<Element | "timed_out" | undefined> {
+  const seen: { control: Element | null } = { control: document.querySelector(selector) };
+  if (!seen.control || isRendered(seen.control)) return seen.control ?? undefined;
+  const outcome = await waitUntil(() => {
+    seen.control = document.querySelector(selector);
+    return seen.control !== null && isRendered(seen.control);
+  }, HIDDEN_CONTROL_GRACE_MS, PAGER_POLL_MS, progress.deadline);
+  if (outcome === "timed_out") return "timed_out";
+  return outcome === "changed" ? (seen.control ?? undefined) : undefined;
+}
+
+/**
+ * Whether the page draws `control`: no `hidden` attribute, and a box. An
+ * element that cannot say where it is (a test's stand-in) counts as drawn.
+ */
+function isRendered(control: Element): boolean {
+  if (control.getAttribute("hidden") !== null) return false;
+  return typeof control.getClientRects !== "function" || control.getClientRects().length > 0;
 }
 
 /**

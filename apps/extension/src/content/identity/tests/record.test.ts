@@ -16,19 +16,25 @@
 //
 // The DOM is a stub because the extension's unit runner is Node. It answers
 // exactly what `record.ts` asks: attributes and their names, the parent chain,
-// the child nodes, and `matches` for the two selectors the module carries. The
-// sensitivity rule reaches `instanceof HTMLInputElement`, so a stand-in class
-// stands on the global for the life of the file. The browser side of this
-// module is `e2e/content/tests/`.
+// the child nodes, an open shadow root's nodes, and `matches` for the two
+// selectors the module carries -- plus what the accessible-name rule asks when
+// a control in no record is matched against the controls alike to it:
+// `closest`, `hasAttribute`, `textContent` and `querySelectorAll("*")`. The
+// sensitivity and naming rules reach `instanceof` the HTML element classes, so
+// stand-in classes stand on the global for the life of the file. The browser
+// side of this module is `e2e/content/tests/`.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import { agreesWithRecordedRecord, recordIdentity } from "../record";
 
-// `isSensitiveFormControl` narrows with `instanceof HTMLInputElement`, which is
-// a ReferenceError under Node. No stub element is one, so the answer is always
+// `isSensitiveFormControl` narrows with `instanceof HTMLInputElement`, and the
+// accessible-name rule with the other element classes below, each a
+// ReferenceError under Node. No stub element is one, so the answer is always
 // false and only the lookup has to exist.
-(globalThis as Record<string, unknown>).HTMLInputElement ??= class {};
+for (const name of ["HTMLInputElement", "HTMLSelectElement", "HTMLTextAreaElement", "HTMLElement"]) {
+  (globalThis as Record<string, unknown>)[name] ??= class {};
+}
 
 const TEXT_NODE = 3;
 const ELEMENT_NODE = 1;
@@ -37,29 +43,52 @@ type Child = Element | string;
 
 /** A text node, as the walker reads one. */
 function textNode(value: string): Node {
-  return { nodeType: TEXT_NODE, nodeValue: value, childNodes: [] } as unknown as Node;
+  return { nodeType: TEXT_NODE, nodeValue: value, textContent: value, childNodes: [] } as unknown as Node;
+}
+
+/** Nodes as the stub holds them: text, or an element. */
+function nodesOf(children: readonly Child[] | undefined): Node[] {
+  return (children ?? []).map((child) => typeof child === "string" ? textNode(child) : child as unknown as Node);
 }
 
 /**
  * An element that answers what `record.ts` asks of one. `matches` understands
  * the two shapes the module's selectors are written in -- a tag name and an
- * attribute test -- because those are the only shapes it passes.
+ * attribute test -- because those are the only shapes it passes. `shadow` is
+ * an open shadow root's nodes; they have no parent element, as in a browser,
+ * and neither `textContent` nor `querySelectorAll` enters them.
  */
-function el(tag: string, options: { attributes?: Record<string, string>; children?: Child[] } = {}): Element {
+function el(tag: string, options: { attributes?: Record<string, string>; children?: Child[]; shadow?: Child[] } = {}): Element {
   const attributes = options.attributes ?? {};
-  const childNodes: Node[] = (options.children ?? []).map((child) =>
-    typeof child === "string" ? textNode(child) : child as unknown as Node);
+  const childNodes = nodesOf(options.children);
+  const shadowNodes = options.shadow ? nodesOf(options.shadow) : undefined;
+  const elementsOf = (nodes: Node[]) => nodes.filter((node) => node.nodeType === ELEMENT_NODE) as unknown as Element[];
   const element = {
     localName: tag,
     tagName: tag.toUpperCase(),
     nodeType: ELEMENT_NODE,
     parentElement: null as Element | null,
     childNodes,
-    children: childNodes.filter((node) => node.nodeType === ELEMENT_NODE),
+    children: elementsOf(childNodes),
+    firstChild: childNodes[0] ?? null,
+    shadowRoot: shadowNodes ? { childNodes: shadowNodes, children: elementsOf(shadowNodes) } : null,
     getAttribute: (name: string) => attributes[name] ?? null,
     getAttributeNames: () => Object.keys(attributes),
+    hasAttribute: (name: string) => name in attributes,
     matches: (selector: string) => selector.split(",").some((part) => matchesOne(part.trim())),
-    textContent: ""
+    closest(selector: string): Element | null {
+      for (let current: Element | null = element as unknown as Element; current; current = current.parentElement) {
+        if (current.matches(selector)) return current;
+      }
+      return null;
+    },
+    querySelectorAll(selector: string): Element[] {
+      if (selector !== "*") throw new Error(`stub querySelectorAll: ${selector}`);
+      return element.children.flatMap((child) => [child, ...child.querySelectorAll("*")]);
+    },
+    get textContent(): string {
+      return childNodes.map((node) => node.textContent ?? "").join("");
+    }
   };
   function matchesOne(part: string): boolean {
     if (!part.startsWith("[")) return part === tag;
@@ -238,4 +267,119 @@ test("a candidate in no record disagrees with a row's values: fail closed", () =
   const loose = el("button", { children: ["Add to cart"] });
   el("div", { children: ["Red Toaster", loose] });
   assert.equal(agreesWithRecordedRecord({ values: ["Red Toaster"] }, loose), false);
+});
+
+// t195-w20e: the gate reads the row the way the extraction read it. Guildline
+// draws each sent request's age in a `gl-time-ago` whose words exist only in
+// its open shadow root, and the loop hands the age to the row's Withdraw as one
+// of the pass's values (`t195-w19c-audit-withdraw-stale.md` B1).
+
+/** One sent connection request, as `professional-network/network/rows.ts` `sentRowMarkup` draws it. */
+function sentRequest(urn: string, name: string, headline: string, age: Child[] | undefined): { row: Element; withdraw: Element } {
+  const withdraw = el("button", { attributes: { class: "textBtn", type: "button" }, children: ["Withdraw"] });
+  const attributes = { class: "muted small", datetime: "2026-08-24T09:00:00.000Z", format: "sent" };
+  const time = age ? el("gl-time-ago", { attributes, shadow: age }) : el("gl-time-ago", { attributes });
+  const profile = el("a", {
+    attributes: { href: "https://guildline.test/in/x/" },
+    children: [el("span", { attributes: { "aria-hidden": "true" }, children: [name] }), el("span", { children: [`View ${name}'s profile`] })]
+  });
+  const row = el("li", {
+    attributes: { class: "inviteRow", "data-entity-urn": urn },
+    children: [
+      el("a", { attributes: { href: "https://guildline.test/in/x/", "aria-hidden": "true", tabindex: "-1" }, children: [el("div", { children: ["XX"] })] }),
+      el("div", { attributes: { class: "inviteText" }, children: [el("div", { children: [el("strong", { children: [profile] })] }), el("div", { children: [headline] }), time] }),
+      el("div", { attributes: { class: "inviteActions" }, children: [withdraw] })
+    ]
+  });
+  return { row, withdraw };
+}
+
+/** A component's own stylesheet, the first thing its shadow root holds. */
+const AGE_STYLE = ":host{display:inline-block;color:#666} time{font-variant-numeric:tabular-nums}";
+
+function sentInvitations(): { month: Element; weeks: Element } {
+  const month = sentRequest("urn:li:invitation:7101", "Marta Okafor", "Talent partner at Quillmark", [el("style", { children: [AGE_STYLE] }), el("time", { children: ["Sent 1 month ago"] })]);
+  const weeks = sentRequest("urn:li:invitation:7102", "Devon Reyes", "Engineer at Brightwell", [el("style", { children: [AGE_STYLE] }), el("time", { children: ["Sent 4 weeks ago"] })]);
+  el("ul", { children: [month.row, weeks.row] });
+  return { month: month.withdraw, weeks: weeks.withdraw };
+}
+
+test("a row's values are found in what its shadow roots draw: the age admits its own Withdraw and refuses the neighbour's", () => {
+  const { month, weeks } = sentInvitations();
+  assert.equal(agreesWithRecordedRecord({ values: ["Marta Okafor", "urn:li:invitation:7101", "Sent 1 month ago"] }, month), true);
+  assert.equal(agreesWithRecordedRecord({ values: ["Devon Reyes", "urn:li:invitation:7102", "Sent 4 weeks ago"] }, weeks), true);
+  // The neighbour holds this name and urn; only the age it draws says no.
+  assert.equal(agreesWithRecordedRecord({ values: ["Devon Reyes", "urn:li:invitation:7102", "Sent 1 month ago"] }, weeks), false);
+  assert.equal(agreesWithRecordedRecord({ values: ["Marta Okafor", "urn:li:invitation:7101", "Sent 1 month ago"] }, weeks), false);
+});
+
+test("a stylesheet in a shadow root is not what a value matches, and does not spend the row's text bound", () => {
+  const { month } = sentInvitations();
+  assert.equal(agreesWithRecordedRecord({ values: ["display:inline-block"] }, month), false);
+  assert.equal(agreesWithRecordedRecord({ values: ["Marta Okafor", "font-variant-numeric:tabular-nums"] }, month), false);
+  // A component stylesheet longer than the whole text bound, drawn before the age.
+  const long = sentRequest("urn:li:invitation:7103", "Ana Lima", "Recruiter", [el("style", { children: [".c{color:red}".repeat(700)] }), el("time", { children: ["Sent 1 month ago"] })]);
+  el("ul", { children: [long.row] });
+  assert.equal(agreesWithRecordedRecord({ values: ["Ana Lima", "Sent 1 month ago"] }, long.withdraw), true);
+});
+
+test("a row with no shadow root reads as it did: its light words and attributes, and no age it does not draw", () => {
+  const plain = sentRequest("urn:li:invitation:7104", "Ivo Brandt", "Designer", undefined);
+  const other = sentRequest("urn:li:invitation:7105", "Lea Varga", "Analyst", undefined);
+  el("ul", { children: [plain.row, other.row] });
+  assert.equal(agreesWithRecordedRecord({ values: ["Ivo Brandt", "Designer", "urn:li:invitation:7104", "2026-08-24T09:00:00.000Z"] }, plain.withdraw), true);
+  assert.equal(agreesWithRecordedRecord({ values: ["Ivo Brandt"] }, other.withdraw), false);
+  assert.equal(agreesWithRecordedRecord({ values: ["Ivo Brandt", "Sent 1 month ago"] }, plain.withdraw), false);
+});
+
+// t195-w20e: a control in no record is checked against the row its own kind
+// marks out. bigbox's cart lines are plain `<div>`s, so a pass over cart lines
+// was refused on every row (`t195-w19b-audit-pickup-order.md` #9).
+
+const SOAP = "ValueRidge Ultra Dish Soap, Lemon Scent, 24 fl oz";
+const TOWELS = "ValueRidge Essentials Select-A-Size Paper Towels, 6 Double Rolls";
+
+/** One cart line, as `bigbox-retail/pages/cart-page.ts` `lineMarkup` draws it, its hashed classes named plainly. */
+function cartLine(title: string, sku: string, each: string): { line: Element; save: Element; remove: Element } {
+  const remove = el("button", { attributes: { type: "button", class: "btnLink" }, children: ["Remove"] });
+  const save = el("button", { attributes: { type: "button", class: "btnLink" }, children: ["Save for later"] });
+  const options = [el("option", { attributes: { value: "1", selected: "" }, children: ["1"] }), el("option", { attributes: { value: "2" }, children: ["2"] })];
+  const qty = el("label", { children: ["Qty ", el("select", { attributes: { class: "qtySelect" }, children: options })] });
+  const main = el("div", {
+    attributes: { class: "cartLineMain" },
+    children: [
+      el("a", { attributes: { href: `https://bigbox.test/scenarios/bigbox-retail/ip/${sku}` }, children: [title] }),
+      el("span", { children: ["Sold and shipped by ValueRidge"] }),
+      el("span", { children: [`${each} each`] }),
+      el("div", { attributes: { class: "cartLineActions" }, children: [qty, remove, save] })
+    ]
+  });
+  return { line: el("div", { attributes: { class: "cartLine" }, children: [main, el("strong", { children: [each] })] }), save, remove };
+}
+
+/** The cart page's main column around the given lines, all in one pickup group, as `renderCartPage` draws the pickup scenario's cart. */
+function bigboxCart(lines: { line: Element }[]): void {
+  const head = el("div", { attributes: { class: "cartGroupHead" }, children: ["Pickup at Carden Falls Supercenter"] });
+  const group = el("section", { attributes: { class: "cartGroup" }, children: [head, ...lines.map((entry) => entry.line)] });
+  const summary = el("aside", { attributes: { class: "summaryCard" }, children: [el("span", { children: ["Estimated total"] })] });
+  el("main", { children: [el("h1", { children: ["Cart"] }), el("div", { attributes: { class: "cartLayout" }, children: [el("div", { children: [group] }), summary] })] });
+}
+
+test("a control in no record is checked against its own line: the soap's values admit the soap's Save for later and refuse the towels'", () => {
+  const soap = cartLine(SOAP, "418832007", "$3.47");
+  const towels = cartLine(TOWELS, "418830127", "$8.97");
+  bigboxCart([soap, towels]);
+  assert.equal(agreesWithRecordedRecord({ values: [SOAP] }, soap.save), true);
+  assert.equal(agreesWithRecordedRecord({ values: [SOAP] }, towels.save), false);
+  assert.equal(agreesWithRecordedRecord({ values: [TOWELS, "$8.97"] }, towels.save), true);
+  assert.equal(agreesWithRecordedRecord({ values: [SOAP, "$8.97"] }, soap.save), false, "every value, in the line, not in the cart");
+  assert.equal(agreesWithRecordedRecord({ values: [SOAP] }, soap.remove), true, "each kind of control marks out the same line");
+});
+
+test("a control alone of its kind marks out no row, so a pass over it still fails closed", () => {
+  const soap = cartLine(SOAP, "418832007", "$3.47");
+  bigboxCart([soap]);
+  // Nothing on the page holds a second Save for later, so there is no line to
+  // tell; the region around a lone control may hold any page's words.
+  assert.equal(agreesWithRecordedRecord({ values: [SOAP] }, soap.save), false);
 });
