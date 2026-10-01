@@ -97,6 +97,8 @@ receiver plans Complete. No Claude/main integration, private/live/browser work.
 [Eleventh verification](./codex-ui-ux-review-2026-09-30/reports/eleventh-supervisor-verification.md)
 preserves exact gates and original limitations. Next full gates require all new
 owning source to freeze, not worker claims alone.
+[Twelfth verification](./codex-ui-ux-review-2026-09-30/reports/twelfth-supervisor-verification.md)
+owns current worker review requirements and continuing results.
 
 Earlier batch evidence stays in the ledger, worker reports and first-four archive.
 [Superseded Current State](./codex-ui-ux-review-2026-09-30/archive/2026-10-01-pre-eighth-current-state.md)
