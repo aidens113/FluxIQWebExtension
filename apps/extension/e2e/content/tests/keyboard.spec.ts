@@ -48,7 +48,7 @@ test("type: every character is a keydown, beforeinput, input and keyup, and the 
   const harness = await openHarness("basic-form");
   const seen = await watchKeyboard(page, NAME);
   const reply = await harness.runAction({ commandId: "type-ab", actionType: "web.dom.type", selector: NAME, text: "Ab" });
-  expect(reply).toMatchObject({ status: "succeeded", validation: { status: "passed" }, message: "Text entered." });
+  expect(reply).toMatchObject({ status: "succeeded", validation: { status: "passed" }, message: expect.stringMatching(/^Text entered\. Typing pressed no other key/u) });
   expect(await seen()).toEqual([
     "keydown:A", "beforeinput:insertText", "input:insertText", "keyup:A",
     "keydown:b", "beforeinput:insertText", "input:insertText", "keyup:b",

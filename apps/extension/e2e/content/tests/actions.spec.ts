@@ -83,7 +83,8 @@ test("type: enters the text per character and validates that the field kept it",
   expect(reply).toMatchObject({
     status: "succeeded",
     validation: { status: "passed", expected: 'the field holds "Ada"', actual: 'the field holds "Ada"' },
-    message: "Text entered.",
+    // The field is in the form, and typing does not send it (t193 run 37): the result says so and names Submit.
+    message: `Text entered. Typing pressed no other key, so the field's form was not sent: if the page has not answered the text, press its "Submit" button (or Enter in the field) to send it.`,
     element: { selector: NAME }
   });
   await expect(page.locator(NAME)).toHaveValue("Ada");

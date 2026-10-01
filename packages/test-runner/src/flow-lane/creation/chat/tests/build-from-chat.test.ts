@@ -27,6 +27,8 @@ type FakeChatOptions = {
   /** How a started build ends. */
   ending?: "created" | "failed" | "awaiting_permission" | "never";
   replyWithoutModel?: boolean;
+  /** What Core kept of a failed build (`get-flow-bootstrap-failure`); absent, Core does not answer the read. */
+  kept?: unknown;
 };
 
 function fakeChat(options: FakeChatOptions) {
@@ -46,6 +48,10 @@ function fakeChat(options: FakeChatOptions) {
       if (endpoint === "list-flows") return { flows: [...flows.map((flowId) => ({ flow: { flowId, metadata: {} } })), ...(flows.length ? [{ flow: { flowId: "flow.made.subflow", metadata: { subflowGraph: true } } }] : [])] };
       if (endpoint === "list-conversations") return { conversations: [{ conversationId: "conversation.chat", subject: { kind: "project", id: PROJECT } }] };
       if (endpoint === "get-conversation") return { conversation: { turns, hasMore: false } };
+      if (endpoint === "get-flow-bootstrap-failure" && options.kept !== undefined) {
+        assert.equal(payload.flowId, FLOW);
+        return { failure: options.kept };
+      }
       throw new Error(`unexpected ${endpoint}`);
     },
     async listFlowAdaptations(projectId, flowId) {
@@ -157,4 +163,21 @@ test("a message the chat never carried to FluxIQ fails the stage with what the c
     assert.match(error.message, /did not carry the task's instruction to FluxIQ within 2 s of Send; the chat showed: "Couldn't send that\. Try again\."/u);
     return true;
   });
+});
+
+// Live run `run-muq3ubys-4b4dbf5b`: the chat's build spent $0.227, and the spend
+// ledger recorded $0, because a build that left no proposal left nothing to count.
+test("a failed build's spend is read from what Core kept of it, and the failure stays the chat's", async () => {
+  const kept = {
+    code: "flow_bootstrap.provider_output_padding_truncated", stage: "provider_output_validation", retryable: false, providerInvocation: "attempted", providerResponse: "received",
+    accounting: { requestId: "llm-request:one", estimatedInputTokens: 1996, provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 1_801_798, outputTokens: 5_840, totalTokens: 1_807_638, estimatedCostUsd: 0.2272 }
+  };
+  const { control, chat, wait } = fakeChat({ answer: "build", ending: "failed", kept });
+  const made = await buildCreatedFlowFromChat(control, chat, SCOPE, wait);
+  assert.equal(made.flowId, FLOW);
+  assert.equal(made.build.outcome, "failed");
+  assert.equal(made.build.accounting?.estimatedCostUsd, 0.2272, "what the failed build spent is counted");
+  assert.equal(made.build.accounting?.inputTokens, 1_801_798);
+  assert.deepEqual(made.build.failure, { code: "lab.chat_build_failed", stage: "chat", httpStatus: null, issueCodes: ["flow_bootstrap.provider_output_padding_truncated"] });
+  assert.equal(made.build.chat?.ending, "failed");
 });

@@ -17,7 +17,7 @@
 // point, as the person sitting at the panel would.
 
 import { RunnerFailure } from "../../../failure.js";
-import { failedCreatedFlowBuild, readCreatedFlowBuild, type CreatedFlowBuild, type CreatedFlowBuildControl } from "../build-proposal.js";
+import { createdFlowBuildFromDiagnostic, failedCreatedFlowBuild, readCreatedFlowBuild, type CreatedFlowBuild, type CreatedFlowBuildControl } from "../build-proposal.js";
 import type { CreatedFlowChatRecord } from "./chat-record.js";
 import { chatConversationIds, chatThreadTurns, projectFlowIds, type CreatedFlowChatScope, type CreatedFlowChatTurn } from "./chat-thread.js";
 
@@ -165,8 +165,10 @@ export async function buildCreatedFlowFromChat(
   if (proposals.length > 1) throw new RunnerFailure("runtime.behavior", `FluxIQ's chat left ${proposals.length} proposals on the Flow one instruction built`, { details: { stage: "chat.proposal", conversationId, flowId, proposals: proposals.length } });
   const proposal = proposals[0];
   if (!proposal) {
-    // The build ended without leaving a change behind: Core's refusal went into the thread's sentence, and nowhere a reader can count what it spent.
-    const build = failedCreatedFlowBuild({ code: "lab.chat_build_failed", stage: "chat", httpStatus: null }, "unknown", durationMs);
+    // The build ended without leaving a change behind. Core told the person in
+    // words, and keeps the build's diagnostic -- what it spent, how far it got --
+    // for a reader that started it this way (`get-flow-bootstrap-failure`).
+    const build = await failedBuildOf(control, scope, flowId, durationMs);
     return Object.freeze({ build: Object.freeze({ ...build, chat: ending({ ending: "failed" }) }), flowId, applied: null, said });
   }
   const read = await readCreatedFlowBuild(control, { projectId: input.projectId, flowId }, proposal.adaptationId, { recoveredAfterTimeout: false, durationMs, statuses: ["proposed", "validated", "applied"] });
@@ -179,6 +181,29 @@ export async function buildCreatedFlowFromChat(
   // A well-formed proposal the chat did not put into the Flow: its own apply failed, and the thread says why.
   const failure = read.build.failure ?? { code: "lab.chat_not_applied", stage: "review", httpStatus: null };
   return Object.freeze({ build: Object.freeze({ ...read.build, outcome: "failed" as const, failure, chat: ending({ ending: "failed" }) }), flowId, applied: null, said });
+}
+
+/**
+ * The chat's failed build of `flowId`, with what it spent when Core kept its
+ * diagnostic. The failure stays the chat's (`lab.chat_build_failed`), with
+ * Core's own code first among its causes. Live run `run-muq3ubys-4b4dbf5b`
+ * spent $0.227 and the spend ledger recorded $0, because this read nothing.
+ * A Core that keeps no diagnostic, or does not answer, leaves today's record:
+ * a failure whose spend is unknown.
+ */
+async function failedBuildOf(control: CreatedFlowChatControl, scope: CreatedFlowChatScope, flowId: string, durationMs: number): Promise<CreatedFlowBuild> {
+  const chatFailure = { code: "lab.chat_build_failed", stage: "chat" as const, httpStatus: null };
+  let kept: unknown;
+  try {
+    const answer = await control.automationStudioCall("get-flow-bootstrap-failure", { projectId: scope.projectId, flowId }, {}, scope.domainId);
+    kept = answer && typeof answer === "object" ? (answer as { failure?: unknown }).failure : undefined;
+  } catch {
+    kept = undefined;
+  }
+  const build = kept ? createdFlowBuildFromDiagnostic(kept, durationMs, null) : undefined;
+  if (!build) return failedCreatedFlowBuild(chatFailure, "unknown", durationMs);
+  const causes = [build.failure!.code, ...(build.failure!.issueCodes ?? [])];
+  return Object.freeze({ ...build, outcome: "failed" as const, failure: { ...chatFailure, issueCodes: [...new Set(causes)] } });
 }
 
 /** Every person turn in the project's threads whose words are `text`, with its thread. */

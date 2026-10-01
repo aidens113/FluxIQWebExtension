@@ -31,6 +31,12 @@
 // the phrasing above was written. The declaration is what buys it back, and it
 // is a statement about these two strings only: it says this verb built them
 // through `describeFieldValue`, never that the control is safe.
+//
+// Typing sends the characters and no other key, so a field that belongs to a
+// form leaves that form unsent, and the result says so (`unsentForm`). Live
+// runs 36 and 37 (t193, bigbox) typed a shorter product name into the results
+// page's search field, were told only "Text entered.", and then searched the
+// unchanged page for results eleven and twelve times.
 
 import { isSensitiveFormControl } from "../element-traits";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
@@ -61,7 +67,8 @@ export function typeAction(action: BrowserActionCommand, deps: ContentActionDepe
 
   const actual = enteredText(element);
   const held = actual === text;
-  return deps.success(action, startedAt, held ? "Text entered." : "The field did not keep the text.", {
+  const unsent = held ? unsentForm(element) : undefined;
+  return deps.success(action, startedAt, held ? `Text entered.${unsent ? ` ${unsent}` : ""}` : "The field did not keep the text.", {
     status: held ? "passed" : "failed",
     expected: `the field holds ${describeFieldValue(text, withheld)}`,
     actual: heldText(actual, text, withheld),
@@ -91,4 +98,27 @@ function holdsText(element: Element): boolean {
 function enteredText(element: Element): string {
   if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) return element.value;
   return element.textContent ?? "";
+}
+
+/** The longest control name quoted back. */
+const MAX_CONTROL_NAME = 40;
+
+/**
+ * What a field's unsent form means, when the field has one: no Enter was
+ * pressed and no button, so the page has seen the text but not been asked to
+ * act on it. Names the form's own submit control when it has one.
+ */
+function unsentForm(element: Element): string | undefined {
+  const form = element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement ? element.form : null;
+  if (!form) return undefined;
+  const submit = form.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
+  const name = submit ? controlName(submit) : "";
+  const press = name ? `press its "${name}" button (or Enter in the field)` : "press Enter in the field";
+  return `Typing pressed no other key, so the field's form was not sent: if the page has not answered the text, ${press} to send it.`;
+}
+
+/** A control's own name: its label, else its words, else an input's value. */
+function controlName(control: Element): string {
+  const named = control.getAttribute("aria-label") || control.textContent || (control instanceof HTMLInputElement ? control.value : "");
+  return named.replace(/\s+/gu, " ").trim().slice(0, MAX_CONTROL_NAME);
 }
