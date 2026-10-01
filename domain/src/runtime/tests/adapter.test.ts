@@ -28,6 +28,7 @@ import {
 import type { JsonObject } from "fluxiq/core";
 import type { FluxIQRuntimeCommand, FluxIQRuntimeCommandResult } from "fluxiq/runtime";
 import { createWebAutomationRuntimeAdapter } from "../adapter";
+import { shownPageLines } from "../llm-evidence/page-view/tests/shown-page-lines";
 
 type GatewayActionResult = {
   commandId: string;
@@ -282,7 +283,9 @@ test("a failed command carries the sanitized evidence packet, digest-bound to it
   const result = await runCommand({ commandId: "client.command.ten", status: "failed", message: "Click failed.", payload: failedPayload() });
   const metadata = result.metadata as JsonObject;
   const evidence = metadata.failureEvidence as JsonObject;
-  assert.equal(evidence.schemaVersion, "web-llm-evidence.v2");
+  // The page as the model reads every page (t223), never the structured packet.
+  assert.equal(evidence.schemaVersion, "web-llm-page.v3");
+  assert.equal(Object.hasOwn(evidence, "elements"), false);
   assert.equal(evidence.trust, "untrusted-page-evidence");
   assert.equal(evidence.location, "https://fixture.test/checkout/pay?session=(withheld)", "the packet's location keeps the query and withholds the session token's value");
   // Core's own gate, applied to the packet exactly as the diagnosis path will.
@@ -303,12 +306,12 @@ test("a failed command carries the sanitized evidence packet, digest-bound to it
 
 test("the evidence packet never carries a sensitive control", async () => {
   const result = await runCommand({ commandId: "client.command.eleven", status: "failed", message: "Click failed.", payload: failedPayload() });
-  const evidence = (result.metadata as JsonObject).failureEvidence as { elements: Array<{ target: string; tag: string; name?: string }> };
+  const evidence = (result.metadata as JsonObject).failureEvidence as JsonObject;
   // One element survives, and it is the pay button rather than the password
   // field: the sensitive control is dropped whole, not described without its
-  // value. It is named by its opaque handle, because the packet an LLM reads has
-  // carried no selector since `.v2`.
-  assert.deepEqual(evidence.elements.map((element) => [element.target, element.tag]), [["t1", "button"]], "the password control is dropped, not reported");
+  // value. It is named by its opaque handle, because the page an LLM reads has
+  // carried no selector since `.v2`, and is the compact view since t223.
+  assert.deepEqual(shownPageLines(evidence).map((line) => [line.target, line.kind]), [["t1", "button"]], "the password control is dropped, not reported");
   assert.doesNotMatch(JSON.stringify(evidence), /#pay|#password|selector/u);
 });
 
