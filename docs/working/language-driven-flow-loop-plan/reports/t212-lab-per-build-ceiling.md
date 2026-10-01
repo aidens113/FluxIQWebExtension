@@ -131,3 +131,60 @@ Files changed:
 1. **The test-contracts mirror.** `LLM_LAB_MAX_ESTIMATED_COST_USD = 0.25` remains, because `@fluxiq-web-extension/test-contracts` depends only on `@fluxiq/contracts`, which does not export the ceiling. A test now fails if it drifts from Core's value. Removing it fully needs either Core to export the ceiling from `@fluxiq/contracts`, or test-contracts to depend on `fluxiq`. That is a Core or dependency decision for the supervisor.
 2. **Stale doc.** `docs/architecture/testing-facility.md:2529` still says "held to the smaller of $2 and the per-call ceiling times the authorized calls" and "`--llm-max-cost-usd 0.25`". The docs were not in the brief, so they were not edited. Suggested wording: "`--llm-max-cost-usd` is the build's spend ceiling, held to Core's per-build $0.25 (`AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD`) and never multiplied by the call count; the campaign passes none."
 3. **Changed operator meaning.** `--llm-max-cost-usd X` with X below 0.25 now means $X per build, where before it meant $X per call. Any script or person relying on the per-call reading now gets a tighter build.
+
+## Follow-up (supervisor, round 2)
+
+### 1. The three flow-lane/creation failures: this is (a), now fixed
+
+**Reproduced on dev.** `dev` is `ab9a352b`, which is this tree's base. `git diff --stat ab9a352b HEAD -- packages/test-runner/src/flow-lane packages/test-contracts` is empty, so t212 touched none of the failing code. The first full `pnpm test` here showed exactly these three failures (326 and 328 in `authored-nodes.test.js`, 364 in `lane.test.js`), with Core's freshness gate reporting current.
+
+**Cause, with evidence.** `createdFlowAuthoredNodes` (`authored-nodes.ts`) used Core's `automationStudioScreenedNodeParameters` as its only screen. Core commit `711eab8c` ("The model sees the whole page"; Task t200; merged into Core dev as `c0e35235`, "Merge task t200 ... integration round 3") rewrote `repair-context/parameter-screen.ts` and deleted `parameter-vocabulary.ts`. Core HEAD contains that commit (`merge-base --is-ancestor` succeeded). The rewrite removed four things:
+- the reduction of a URL to its origin; the deleted comment said "the path and the query are where an order number, a search term and a session token live";
+- the rule that a string is carried only under one of Core's closed words;
+- the 80-character string bound;
+- the key, item, depth and withheld-path bounds.
+
+Those removals are right for the model. The run artifact inherited them, though: `snapshots/flow-lane.json` `authoredNodes` would now carry a navigation's full path and query, and any free text a Flow was authored with (typed text, for example). The artifact used to screen all of that.
+
+The repository's own contract for this record still promises "never page text, never a value a person or a page supplied" (`packages/test-contracts/src/authored-flow-node.ts`). Its validator (`authored-flow-node-validation.ts`) only bounds text to 80 characters or an origin. A short URL path, which the test fixture has, therefore passed the validator. The tests were not pinning an incidental detail. The artifact's own screening had gone, and only secret-shaped values and query parameters (Core's) still held. So this is (a).
+
+**Fix (only the artifact is screened).**
+- The new `packages/test-runner/src/flow-lane/creation/artifact-screen.ts` (`createdFlowArtifactScreen`) runs after Core's screen and keeps every decision Core made: secrets, secret-named keys, locators, denied keys and target keys. It then holds what survived to the artifact's envelope, which is the pre-t200 rule now owned by the Lab:
+  - an absolute URL is carried as its origin, and its path is named as withheld;
+  - a string travels only under a classifier key (`mode`, `kind`, ...) at any depth, or under a naming or comparand key at the first two levels, and only up to 80 characters;
+  - containers are limited to 3 levels and 12 keys an object (extra keys are named), 6 list items beside the list's `count`, and 16 withheld paths.
+- List items are aligned with the authored list, so a path the Lab names is the item's authored index, even where Core dropped an earlier item.
+- `authored-nodes.ts` now composes the two screens. What the model sees is unchanged, because Core's screen is untouched.
+- The three existing tests now pass as originally written.
+- The new `creation/tests/artifact-screen.test.ts` adds 4 tests:
+  - the model sees `https://shop.example/orders/48213?q=jane+doe&page=2` whole, while the artifact gets `https://shop.example` with `["url"]` withheld;
+  - typed free text is withheld from the artifact but still reaches the model; closed words and numbers travel;
+  - everything Core withholds stays withheld, and list-index paths stay aligned;
+  - the container bounds hold.
+
+### 2. Docs
+
+`docs/architecture/testing-facility.md:2529` no longer describes the $2 per-call model. It now says:
+- the ceiling is $0.25 per build, whatever the call count, and has one definition (Core's constant, imported as `LIVE_LLM_BUILD_COST_CEILING_USD`);
+- `--llm-max-cost-usd` is the whole build's ceiling: it can only lower it, is never multiplied by calls, and the campaign passes none;
+- each build, recovery and re-author is held to the ceiling on its own;
+- spend is reported per build in three places: `observed.perBuild`, the campaign's `perBuildSpend` and `buildsOverCeiling`, and the ledger's `buildCeilingUsd`, `maxBuildCostUsd` and `buildsOverCeiling`;
+- there is no spend budget across runs.
+
+### Validation (round 2)
+
+- `heavy.sh ... pnpm --filter @fluxiq-web-extension/test-runner build` -> exit 0.
+- `node --test dist/flow-lane/creation/tests/*.test.js` -> `# pass 86 # fail 0`.
+- `heavy.sh ... pnpm --filter @fluxiq-web-extension/test-runner test` -> exit 0. Output: `core-build: FluxIQ Core's build at ...\fxwork\!FluxIQ is current with its source.`, then `# tests 1725 # pass 1725 # fail 0`.
+- `node scripts/structure-audit.mjs` -> `structure-audit: passed (135 warning(s), 119 baselined)`.
+
+Not verified: no real run bundle was written; there was no Lab run. The fix is proven by unit tests over Core's live screen only.
+
+Ready to commit:
+- `packages/test-runner/src/flow-lane/creation/artifact-screen.ts` (new)
+- `packages/test-runner/src/flow-lane/creation/authored-nodes.ts`
+- `packages/test-runner/src/flow-lane/creation/tests/artifact-screen.test.ts` (new)
+- `docs/architecture/testing-facility.md`
+- this report
+
+Validation: `pnpm --filter @fluxiq-web-extension/test-runner test` -> `# tests 1725 # pass 1725 # fail 0`.

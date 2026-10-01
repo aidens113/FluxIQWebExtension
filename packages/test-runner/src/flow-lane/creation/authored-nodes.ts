@@ -21,7 +21,13 @@ import type { FlowNodeRecord } from "../flow-action-types.js";
 // restated 198 of its 200 lines for want of that one line. A copy cannot follow
 // Core when a new shape has to be withheld, and the two then disagree about
 // what is safe to say about a page.
+//
+// Core's screen is what the *model* is shown, and since 2026-09-30 that is the
+// whole of each parameter but its secrets and locators. A run artifact may
+// carry less, so `createdFlowArtifactScreen` then holds what Core's screen
+// carried to the artifact's own envelope (URL origins, closed words, bounds).
 import { automationStudioScreenedNodeParameters } from "fluxiq/automation-studio";
+import { createdFlowArtifactScreen } from "./artifact-screen.js";
 
 /** Whether a node id or definition id is shaped like one Core writes: no space, so it can carry no text. */
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
@@ -53,7 +59,8 @@ export function createdFlowAuthoredNodes(
   for (const node of nodes) {
     const outputId = actionTypes.get(node.id);
     if (outputId === undefined) continue;
-    const screened = automationStudioScreenedNodeParameters((node.parameterValues ?? {}) as Parameters<typeof automationStudioScreenedNodeParameters>[0], deniedKeys);
+    const parameters = (node.parameterValues ?? {}) as Parameters<typeof automationStudioScreenedNodeParameters>[0];
+    const screened = createdFlowArtifactScreen(parameters, automationStudioScreenedNodeParameters(parameters, deniedKeys));
     authored.push({
       nodeId: identifier(node.id) ?? `unrecognized.node.${authored.length}`,
       definitionId: identifier(node.definitionId) ?? null,
