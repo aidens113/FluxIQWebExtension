@@ -243,16 +243,17 @@ test.describe("modal-flows", () => {
     await expect(page.getByRole("button", { name: "Close" })).toBeVisible();
   });
 
-  test("a consent banner offering only a choice about the person's data is not answered for them", async ({ openHarness }) => {
-    // It is fixed over the action bar and owns the primary action, but its only
-    // controls are Accept and Reject, which are a decision about the person's
-    // data rather than a way out. The action stays refused.
+  test("a consent banner over the action is declined, never accepted, and the action then lands", async ({ openHarness }) => {
+    // It is fixed over the action bar and owns the primary action, and its only
+    // controls are Accept and Reject. Since 2026-09-30 declining optional
+    // cookies is a way out of a consent layer and accepting never is
+    // (`interference/vocabulary.ts`): declining consents to nothing, so the
+    // defence presses Reject, and the action under the banner then lands.
     const harness = await openHarness("modal-flows");
 
     const reply = await harness.runAction({ commandId: "click-under-banner", actionType: "web.dom.click", selector: '[data-testid="publish-draft"]', timeoutMs: 4_000 });
 
-    expect(reply.status).toBe("failed");
-    expect(reply.failure?.code).toBe("web.action.rejected");
-    expect((await harness.finalState()).state).toMatchObject({ publishCount: 0 });
+    expect(reply.status, reply.message).toBe("succeeded");
+    expect((await harness.finalState()).state).toMatchObject({ consent: "essential-only", publishCount: 1 });
   });
 });

@@ -34,11 +34,16 @@
 // if it can still be pressed, pressed again at the same point, once, and the
 // result says so. Any sign, above all a request, means it is never pressed
 // again: a second press on one that did something is a second order. The press
-// made once more is watched the same way, and one the page ignored too is not
-// a success: it fails as `output_not_observed`, saying neither press was
+// made once more is watched the same way, and on a command control -- a
+// button, a submit, button or image input, anything that says it is a button,
+// and not the one already current or selected -- one the page ignored too is
+// not a success: it fails as `output_not_observed`, saying neither press was
 // answered. The everything store's buy box only comes alive 1.2 s after its
 // page loads, so a press soon after the load is ignored twice, and until
 // 2026-10-01 it was reported done with nothing in the cart (lane A, `t174-w34`).
+// A press on anything else that changes nothing is what it always was: a text
+// box pressed to focus it, a line of text, the tab already selected are pressed
+// for no change, and are not failed for it.
 // A link is held to more than that, because a link states where it
 // goes: the click must visibly do what following it would. A navigation that
 // begins does, and so does the page's own script taking the click over and
@@ -169,7 +174,7 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
     const second = await press(element, report.point, action, deps, startedAt);
     if (second.refused) return deps.rateLimited(action, startedAt, second.refused, evidence());
     if (second.sighting && second.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, second.sighting, evidence());
-    if (!second.sighting && second.answer && second.answer.seen.length === 0) {
+    if (!second.sighting && second.answer && second.answer.seen.length === 0 && expectsAnswer(element)) {
       return deps.success(action, startedAt, "Element clicked.", ignoredTwiceValidation(report.detail, second.accepted), evidence());
     }
     return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, second.accepted, second.sighting, true), evidence());
@@ -323,10 +328,27 @@ function hitTestValidation(detail: string, accepted: boolean, cleared?: RobotChe
   };
 }
 
+/** The controls a press is made to have answered: a button, a submit, button or image input, or anything that says it is a button. */
+const COMMAND_CONTROL = 'button, input[type="submit"], input[type="button"], input[type="image"], [role="button"]';
+
+/**
+ * Whether the page was expected to answer a press on `element` at all: a
+ * command control (`COMMAND_CONTROL`, the element or the one it sits in) that
+ * is not already the current or the selected one. A text box, a line of text or
+ * a selected tab is pressed for no change, and its silence is no failure.
+ */
+function expectsAnswer(element: Element): boolean {
+  const control = element.closest?.(COMMAND_CONTROL);
+  if (!control) return false;
+  const current = control.getAttribute?.("aria-current");
+  if (current !== null && current !== undefined && current !== "false") return false;
+  return control.getAttribute?.("aria-selected") !== "true";
+}
+
 /**
  * A press the page ignored, and ignored again when it was made once more: the
  * click landed both times and nothing whatever answered it, so the act is not
- * observed. Failed, which the result builder reports as `output_not_observed`
+ * observed. Only on a command control (`expectsAnswer`). Failed, which the result builder reports as `output_not_observed`
  * (retryable), not as a success the next step would build on.
  */
 function ignoredTwiceValidation(detail: string, accepted: boolean): BrowserActionValidation {
