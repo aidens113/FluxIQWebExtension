@@ -15,11 +15,10 @@ import type { JsonObject } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../output-nodes";
 import {
   createWebAutomationHostRuntime,
-  WEB_STATE_DIFF_SCHEMA_VERSION,
-  webAutomationStateDiff,
   type WebAutomationHostRuntimeBoundary,
   type WebAutomationHostRuntimeGateway
 } from "../host-runtime";
+import { WEB_STATE_DIFF_SCHEMA_VERSION } from "../state-diff";
 
 const CLICK_NODE_ID = webAutomationOutputNodeId("web.dom.click");
 /** Core's node definition for a recorded action; its web output is `parameterValues.outputId`. */
@@ -72,7 +71,11 @@ test("a web attempt gets a sanitized state ref sourced from web.dom.capture_snap
   assert.equal(ref.stateSnapshotId, "web.state.1");
   assert.equal(ref.stateRef, "web.state.1@node.1.attempt.1:before_action");
   assert.equal(typeof ref.capturedAt, "number");
-  assert.equal(ref.summary?.schemaVersion, "web-llm-evidence.v2");
+  // The page as the model reads every page (t223): Core hands this summary to a
+  // recovery model as `core.state_snapshot`, so it carries no element objects.
+  assert.equal(ref.summary?.schemaVersion, "web-llm-page.v3");
+  assert.equal(typeof ref.summary?.page, "string");
+  assert.doesNotMatch(JSON.stringify(ref.summary), /"elements"|"box"|"attributes"|"selector"/u);
   assert.equal(ref.summary?.location, "https://shop.test/cart?token=(withheld)");
   // The sanitized packet's own rules apply, which is the point of reusing it:
   // a secret query value never travels and neither does a secret control's value.
@@ -90,7 +93,7 @@ test("a recorded action, Core's policy node naming web.dom.click, gets a state r
   assert.equal(calls[0]?.outputId, "web.dom.capture_snapshot");
   assert.equal(calls[0]?.timeoutMs, 5_000);
   assert.equal(ref.stateRef, "web.state.1@node.1.attempt.1:before_action");
-  assert.equal(ref.summary?.schemaVersion, "web-llm-evidence.v2");
+  assert.equal(ref.summary?.schemaVersion, "web-llm-page.v3");
   assert.equal(typeof ref.summary?.truncated, "boolean");
 });
 
@@ -130,7 +133,21 @@ test("a diff with a side missing is declined, so no diff claims every element ap
   }
   const both = await diff({ before, after });
   assert.equal(both.schemaVersion, WEB_STATE_DIFF_SCHEMA_VERSION);
-  assert.equal(both.removedElementCount, 0);
+  assert.equal(both.removedCount, 0);
+});
+
+test("two summaries the boundary captured diff into the lines that came and went", async () => {
+  const before = { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/cart", ["#pay", "#edit"]) } };
+  const after = { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/thanks", ["#edit", "#receipt"]) } };
+  const { gateway: seam } = gateway([{ ok: true, status: "succeeded", payload: before }, { ok: true, status: "succeeded", payload: after }]);
+  const boundary = createWebAutomationHostRuntime(seam);
+  const was = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID));
+  const now = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID, "after_action"));
+  const diff = await boundary.inspectStateDiff!({ before: was, after: now, node: { id: "node.1", definitionId: CLICK_NODE_ID }, attemptId: "a" });
+  assert.equal(diff.locationChanged, true);
+  assert.equal(diff.added, "button \"receipt\"");
+  assert.equal(diff.removed, "button \"pay\"");
+  assert.doesNotMatch(JSON.stringify(diff), /"addedElements"|"removedElements"|"tag"/u);
 });
 
 test("each capture gets its own id, so a retry does not reuse the previous attempt's ref", async () => {
@@ -159,40 +176,6 @@ test("a snapshot that never arrived produces no ref rather than a ref pointing a
 
   const emptyAnswer = createWebAutomationHostRuntime(gateway([{ ok: true, status: "succeeded", payload: { status: "succeeded" } }]).gateway);
   await assert.rejects(() => Promise.resolve(emptyAnswer.captureStateSnapshot!(captureInput(CLICK_NODE_ID))));
-});
-
-test("the diff reports the move, the counts, and which elements came and went, and stays inside the schema", () => {
-  // `.v2` identifies an element by what it is and what it is called. The packet
-  // stopped carrying selectors, and the opaque handle that replaced them is
-  // positional -- `t1` is the first element of whichever capture it came
-  // from -- so a diff over handles would report that nothing ever changes.
-  const before = { schemaVersion: "web-llm-evidence.v2", location: "https://shop.test/cart", title: "Cart", elements: [{ target: "t1", tag: "button", name: "Pay" }, { target: "t2", tag: "a", name: "Edit" }] };
-  const after = { schemaVersion: "web-llm-evidence.v2", location: "https://shop.test/thanks", title: "Thanks", elements: [{ target: "t1", tag: "a", name: "Edit" }, { target: "t2", tag: "a", name: "Receipt" }] };
-  const diff = webAutomationStateDiff(before, after, "web.state.1@a:before_action", "web.state.2@a:after_action");
-  assert.deepEqual(diff, {
-    schemaVersion: WEB_STATE_DIFF_SCHEMA_VERSION,
-    beforeStateRef: "web.state.1@a:before_action",
-    afterStateRef: "web.state.2@a:after_action",
-    beforeLocation: "https://shop.test/cart",
-    afterLocation: "https://shop.test/thanks",
-    locationChanged: true,
-    titleChanged: true,
-    beforeElementCount: 2,
-    afterElementCount: 2,
-    addedElementCount: 1,
-    removedElementCount: 1,
-    addedElements: [{ tag: "a", name: "Receipt" }],
-    removedElements: [{ tag: "button", name: "Pay" }]
-  });
-});
-
-test("the diff lists every element that appeared or left, and its counts stay exact", () => {
-  const many = { elements: Array.from({ length: 30 }, (_, index) => ({ target: `t${index + 1}`, tag: "li", name: `Item ${index}` })) };
-  const grown = webAutomationStateDiff({ elements: [] }, many);
-  assert.equal(grown.addedElementCount, 30);
-  assert.equal((grown.addedElements as unknown[]).length, 30);
-  assert.equal(grown.locationChanged, false);
-  assert.equal(grown.beforeElementCount, 0);
 });
 
 // `action-dispatch` is what Core asks of a host before a runtime repair that
