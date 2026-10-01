@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sanitizeWebLlmSnapshot, WEB_LLM_EVIDENCE_BOUNDS } from "..";
+import { sanitizeWebLlmSnapshot } from "..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
 
-test("sanitizes extension snapshots without values, sensitive controls, or URL secrets", () => {
+test("sanitizes extension snapshots: a secret control is dropped, a URL's secrets are withheld, the rest is carried whole", () => {
   const evidence = sanitizeWebLlmSnapshot({
     url: "https://example.test/form?token=private#secret",
     title: "Example",
@@ -15,20 +15,21 @@ test("sanitizes extension snapshots without values, sensitive controls, or URL s
     ],
   });
   assert.deepEqual(evidence, {
-    schemaVersion: "web-llm-evidence.v2", trust: "untrusted-page-evidence", location: "https://example.test/form", title: "Example",
-    // Four elements were captured and three are described: the packet says so
-    // rather than letting the model conclude the form has no password field.
-    elementTotal: 4, truncated: false,
+    schemaVersion: "web-llm-evidence.v2", trust: "untrusted-page-evidence", location: "https://example.test/form?token=(withheld)#secret", title: "Example",
+    truncated: false,
     elements: [
-      { target: "target.1", tag: "input", name: "Name" },
-      { target: "target.2", tag: "a", text: "Next", href: "https://example.test/next" },
-      { target: "target.3", tag: "a", text: "Away" },
+      // A text field's own value is carried when the capture read it; a
+      // password field is not described at all.
+      { target: "target.1", tag: "input", name: "Name", attributes: [["type", "text"]], value: "Ada" },
+      { target: "target.2", tag: "a", text: "Next", href: "https://example.test/next?ticket=(withheld)" },
+      // Another origin's link is the page's too.
+      { target: "target.3", tag: "a", text: "Away", href: "https://outside.test/" },
     ],
   });
-  assert.doesNotMatch(JSON.stringify(evidence), /Ada|private|token|ticket/u);
+  assert.doesNotMatch(JSON.stringify(evidence), /private|Password/u);
 });
 
-test("retains compact semantic labels, types, select options, and result text needed for instruction-only generation", () => {
+test("retains semantic labels, types, attributes, select options and result text needed for instruction-only generation", () => {
   const evidence = sanitizeWebLlmSnapshot({
     url: "https://example.test/scenarios/instruction-only-form/",
     title: "Instruction-only automation",
@@ -40,33 +41,33 @@ test("retains compact semantic labels, types, select options, and result text ne
     ],
   });
   assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "input", name: "Name", hasValue: true },
+    { target: "target.1", tag: "input", name: "Name", attributes: [["autocomplete", "off"]], hasValue: true, value: "Ada" },
     { target: "target.2", tag: "select", name: "Plan", selectedValue: "team", options: [{ value: "starter", label: "Starter" }, { value: "team", label: "Team" }, { value: "enterprise", label: "Enterprise" }] },
-    { target: "target.3", tag: "button", name: "Submit", controlType: "submit" },
-    { target: "target.4", tag: "p", text: "Not submitted" },
+    { target: "target.3", tag: "button", name: "Submit", attributes: [["type", "submit"]], controlType: "submit" },
+    { target: "target.4", tag: "p", text: "Not submitted", attributes: [["aria-live", "polite"]] },
   ]);
-  assert.doesNotMatch(JSON.stringify(evidence), /Ada/u);
 });
 
-test("exposes only bounded non-secret completion state", () => {
+test("exposes non-secret completion state and never a sensitive control's", () => {
   const evidence = sanitizeWebLlmSnapshot({
     url: "https://example.test/form",
     interactiveElements: [
-      { tagName: "textarea", selector: "#notes", hasValue: false, value: "private notes" },
+      { tagName: "textarea", selector: "#notes", hasValue: true, value: "my notes" },
       { tagName: "input", selector: "#hidden", inputType: "hidden", hasValue: true, value: "private hidden" },
       { tagName: "select", selector: "#plan", selectedValue: "unlisted", options: [{ value: "team", label: "Team" }] },
       { tagName: "select", selector: "#secret", selectedValue: "team", options: [{ value: "team", label: "Team" }], attributes: { "data-sensitive": "true" } },
     ],
   });
   assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "textarea", hasValue: false },
+    { target: "target.1", tag: "textarea", hasValue: true, value: "my notes" },
+    // Not a field anybody types into, so what it holds is not carried.
     { target: "target.2", tag: "input", inputType: "hidden" },
     { target: "target.3", tag: "select", options: [{ value: "team", label: "Team" }] },
   ]);
-  assert.doesNotMatch(JSON.stringify(evidence), /private|unlisted/u);
+  assert.doesNotMatch(JSON.stringify(evidence), /private|unlisted|data-sensitive/u);
 });
 
-test("carries the page selection and marks the focused element, but never announces a focused secret", () => {
+test("carries the page selection whole and marks the focused element, but never announces a focused secret", () => {
   const focusedField = sanitizeWebLlmSnapshot({
     url: "https://example.test/form",
     selectedText: "  order  reference   4471  ",
@@ -95,7 +96,7 @@ test("carries the page selection and marks the focused element, but never announ
     selectedText: "s".repeat(5_000),
     interactiveElements: [{ tagName: "button", selector: "#continue", visibleText: "Continue" }],
   });
-  assert.equal(longSelection.selectedText?.length, WEB_LLM_EVIDENCE_BOUNDS.text);
+  assert.equal(longSelection.selectedText?.length, 5_000);
 });
 
 test("carries where an element sits: its form, landmark, heading, list position and table cell", () => {
@@ -119,13 +120,13 @@ test("carries where an element sits: its form, landmark, heading, list position 
       form: "checkout", landmark: "main", heading: "Recommended for you", item: { index: 3, total: 24 },
     },
     { target: "target.2", tag: "td", text: "48.00", landmark: "main", heading: "Order summary", cell: { row: 2, column: 4, header: "Total" } },
-    // The heading only repeats the control's own name, so it is not paid for twice.
+    // The heading only repeats the control's own name, so it is not said twice.
     { target: "target.3", tag: "input", name: "Coupon", form: "discount" },
   ]);
 });
 
 test("reports child-frame elements with a selector that works inside the frame and the frame that owns it", () => {
-  const evidence = sanitizeWebLlmSnapshot({
+  const page = {
     url: "https://example.test/checkout",
     frame: { isTop: true },
     interactiveElements: [
@@ -133,20 +134,13 @@ test("reports child-frame elements with a selector that works inside the frame a
       { tagName: "input", selector: "frame[3] >> #card-name", name: "Name on card", attributes: { "data-fluxiq-frame-id": "3", "data-fluxiq-frame-url": "https://payments.example.test/f" } },
       { tagName: "input", selector: "#zip", name: "Postcode", attributes: { "data-fluxiq-frame-id": "7" } },
     ],
-  });
+  };
+  const evidence = sanitizeWebLlmSnapshot(page);
   assert.deepEqual(evidence.frame, { isTop: true, childFrameIds: [3, 7] });
   // The selector is the binding's, not the packet's: the packet names the
   // element `target.2` and says which frame it belongs to, and the selector that
   // works inside that frame is what the domain kept behind.
-  const bound = sanitizeWebLlmSnapshotWithBindings({
-    url: "https://example.test/checkout",
-    frame: { isTop: true },
-    interactiveElements: [
-      { tagName: "button", selector: "#place-order", visibleText: "Place order" },
-      { tagName: "input", selector: "frame[3] >> #card-name", name: "Name on card", attributes: { "data-fluxiq-frame-id": "3", "data-fluxiq-frame-url": "https://payments.example.test/f" } },
-      { tagName: "input", selector: "#zip", name: "Postcode", attributes: { "data-fluxiq-frame-id": "7" } },
-    ],
-  });
+  const bound = sanitizeWebLlmSnapshotWithBindings(page);
   assert.deepEqual(evidence.elements.map((element) => [element.target, element.frameId]), [
     ["target.1", undefined],
     ["target.2", 3],
@@ -154,6 +148,10 @@ test("reports child-frame elements with a selector that works inside the frame a
   ]);
   assert.deepEqual([...bound.selectors], [["target.1", "#place-order"], ["target.2", "#card-name"], ["target.3", "#zip"]]);
   assert.doesNotMatch(JSON.stringify(evidence), /frame\[3\]/u);
+  // The frame stamp is the extension's own, not the page's, so it is not
+  // published among the element's attributes; the frame's address is.
+  assert.deepEqual(evidence.elements[1]?.attributes, [["data-fluxiq-frame-url", "https://payments.example.test/f"]]);
+  assert.equal(evidence.elements[2]?.attributes, undefined);
 });
 
 test("says the capture came from inside a child frame rather than presenting it as the whole page", () => {
@@ -165,7 +163,7 @@ test("says the capture came from inside a child frame rather than presenting it 
   assert.deepEqual(evidence.frame, { isTop: false });
 });
 
-test("deduplicates representative 50-element semantic evidence without dropping what names each element", () => {
+test("carries all fifty of a fifty-element page, a text that repeats the name said once", () => {
   const interactiveElements = Array.from({ length: 50 }, (_, index) => ({
     tagName: "button",
     selector: `[data-component="global-navigation-item-${index}"][data-instance="${"x".repeat(72)}"]`,
@@ -173,18 +171,14 @@ test("deduplicates representative 50-element semantic evidence without dropping 
     visibleText: `Open workspace section ${index}`,
     attributes: { type: "button" },
   }));
-  const evidence = sanitizeWebLlmSnapshot({ url: "https://example.test/workspace", title: "Workspace", interactiveElements }, { maxEvidenceBytes: 12_000 });
+  const evidence = sanitizeWebLlmSnapshot({ url: "https://example.test/workspace", title: "Workspace", interactiveElements });
   const compactBytes = new TextEncoder().encode(JSON.stringify(evidence)).byteLength;
   const legacyBytes = new TextEncoder().encode(JSON.stringify({ ...evidence, elements: evidence.elements.map((element) => ({ ...element, text: element.name })) })).byteLength;
-  assert.equal(evidence.elements.length, 40);
-  assert.equal(evidence.elementTotal, 50);
-  assert.equal(evidence.truncated, true);
-  assert.equal(compactBytes <= 10_500, true, `compact evidence used ${compactBytes} bytes`);
+  assert.equal(evidence.elements.length, 50);
+  assert.equal(evidence.truncated, false);
   assert.equal(compactBytes < legacyBytes, true, `compact ${compactBytes} bytes versus duplicate-semantic ${legacyBytes} bytes`);
-  // Each element is still individually addressable -- by its opaque handle,
-  // which is what replaced the 100-character selector that used to be repeated
-  // fifty times and is most of why the packet got smaller.
-  assert.deepEqual(evidence.elements.map((element) => element.target).slice(0, 3), ["target.1", "target.2", "target.3"]);
+  // Each element is individually addressable by its opaque handle, in order.
+  assert.deepEqual(evidence.elements.map((element) => element.target), interactiveElements.map((_, index) => `target.${index + 1}`));
   assert.doesNotMatch(JSON.stringify(evidence), /selector|data-component/u);
 });
 
@@ -199,10 +193,10 @@ test("rejects a snapshot that is malformed or off the origin the caller expected
   );
 });
 
-// A failure packet's one statement about its own target. The model is shown up
-// to forty elements and asked to repair one action; without a mark it has to
-// guess which element the action was aiming at. The mark is an opaque handle,
-// so it names the element and addresses nothing.
+// A failure packet's one statement about its own target. The model is shown
+// every element and asked to repair one action; without a mark it has to guess
+// which element the action was aiming at. The mark is an opaque handle, so it
+// names the element and addresses nothing.
 test("a failure packet marks the failed action's element with its opaque handle, never with a selector", () => {
   const evidence = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { selector: "#pay" } });
   assert.equal(evidence.failedTarget, "target.2");
@@ -216,7 +210,6 @@ test("a failure packet whose target has left the page says so, rather than marki
   const evidence = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { selector: "#pay-now-v2" } });
   assert.equal(evidence.failedTarget, undefined);
   assert.equal(evidence.failedTargetMissing, true);
-  assert.equal(evidence.budgetTruncated, undefined, "nothing was trimmed, so the control is gone rather than cut");
 });
 
 test("a failure packet whose producer named no control says that, and it is not the same as the control being gone", () => {
@@ -231,14 +224,6 @@ test("a packet that is not describing a failure marks no target at all", () => {
   assert.equal(evidence.failedTarget, undefined);
   assert.equal(evidence.failedTargetMissing, undefined);
   assert.equal(evidence.failedTargetUnknown, undefined);
-});
-
-test("a handle the byte budget trimmed away becomes a missing target rather than pointing at nothing", () => {
-  const evidence = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { selector: "#pay" }, maxEvidenceBytes: 260 });
-  assert.equal(evidence.budgetTruncated, true);
-  assert.equal(evidence.failedTarget, undefined, "the element it named was popped");
-  assert.equal(evidence.failedTargetMissing, true);
-  assert.ok(!evidence.elements.some((element) => element.name === "Pay now"));
 });
 
 // A failure packet's other statement: which keys a target override fills. Core
@@ -267,27 +252,6 @@ test("an empty map says the failed action offers nothing to re-point, and no map
   assert.equal("repairParameters" in sanitizeWebLlmSnapshot(failurePage()), false);
 });
 
-test("the parameters are paid for inside the budget, and given up only after the page facts", () => {
-  const generous = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { repairParameters: ELEMENT_PARAMETER } });
-  const generousBytes = Buffer.byteLength(JSON.stringify(generous), "utf8");
-  assert.equal(generous.budgetTruncated, undefined);
-  // One byte short: an element goes, the parameters stay, and it fits.
-  const tight = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { repairParameters: ELEMENT_PARAMETER }, maxEvidenceBytes: generousBytes - 1 });
-  assert.ok(Buffer.byteLength(JSON.stringify(tight), "utf8") <= generousBytes - 1);
-  assert.equal(tight.budgetTruncated, true);
-  assert.equal(tight.elements.length, 1);
-  assert.deepEqual(tight.repairParameters, ELEMENT_PARAMETER);
-  // A budget the parameters cannot fit beside even one element: the page facts
-  // go first, then the parameters, and the one element is kept.
-  const oversized = { element: `the target handle ${"x".repeat(400)}` };
-  const starved = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { repairParameters: oversized }, maxEvidenceBytes: 300 });
-  assert.ok(Buffer.byteLength(JSON.stringify(starved), "utf8") <= 300);
-  assert.equal(starved.repairParameters, undefined);
-  assert.equal(starved.title, undefined);
-  assert.equal(starved.elements.length, 1);
-  assert.equal(starved.budgetTruncated, true);
-});
-
 function failurePage(): Record<string, unknown> {
   return {
     url: "https://fixture.test/checkout",
@@ -299,10 +263,9 @@ function failurePage(): Record<string, unknown> {
   };
 }
 
-// The binding's second handle-keyed map. A trimmed element must leave it as it
-// leaves the selectors, or `stable-handles.ts` would read a record for a handle
-// the packet no longer carries.
-test("the records an element's address carries are kept for exactly the handles the packet keeps", () => {
+// The binding's second handle-keyed map: every element that sits in a record
+// has its record, and one that does not has none.
+test("the records an element's address carries are kept for exactly the handles that sit in one", () => {
   const row = (index: number): Record<string, unknown> => ({
     tagName: "button",
     selector: `#rows > tr:nth-of-type(${index}) > td > button`,
@@ -311,15 +274,9 @@ test("the records an element's address carries are kept for exactly the handles 
   });
   const page = { url: "https://fixture.test/inbox", title: "Inbox", interactiveElements: [{ tagName: "button", selector: "#compose", name: "Compose" }, ...[1, 2, 3, 4, 5, 6].map(row)] };
 
-  const whole = sanitizeWebLlmSnapshotWithBindings(page, { maxEvidenceBytes: 12_000 });
+  const whole = sanitizeWebLlmSnapshotWithBindings(page);
   assert.equal(whole.records.has("target.1"), false, "the compose button sits in no record");
   assert.deepEqual([...whole.records.keys()], ["target.2", "target.3", "target.4", "target.5", "target.6", "target.7"]);
   assert.notEqual(whole.records.get("target.2"), whole.records.get("target.3"));
-
-  const trimmed = sanitizeWebLlmSnapshotWithBindings(page, { maxEvidenceBytes: 600 });
-  assert.equal(trimmed.evidence.budgetTruncated, true);
-  const kept = new Set(trimmed.evidence.elements.map((element) => element.target));
-  assert.ok(kept.size < 7, `the trim removed nothing (${kept.size} kept)`);
-  assert.deepEqual([...trimmed.records.keys()].filter((handle) => !kept.has(handle)), []);
-  assert.deepEqual([...trimmed.selectors.keys()].filter((handle) => !kept.has(handle)), []);
+  assert.equal(whole.evidence.elements.length, 7);
 });

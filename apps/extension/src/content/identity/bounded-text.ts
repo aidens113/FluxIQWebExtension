@@ -1,10 +1,12 @@
-// One text rule for every identity signal: collapse whitespace, trim, cap the
-// length, and treat empty text as no signal at all. Core's fingerprint
-// normalizes text the same way before comparing it, so a signal that differs
-// only in whitespace must not read as a different element.
+// A short quote of page text, for the readers that must keep it short: a
+// failure message naming the candidates it weighed (`reportable-text.ts`), and
+// a For Each row's values, cut where the domain cuts them before a replay
+// compares the two (`record.ts`). Every identity signal and every piece of page
+// evidence is whole and reads `normalized-text.ts` instead (t200).
+
+import { normalizedText } from "./normalized-text";
 
 /** Normalized, trimmed and capped text, or `undefined` when nothing is left. */
 export function boundedText(value: string | null | undefined, maxLength: number): string | undefined {
-  const text = (value ?? "").replace(/\s+/gu, " ").trim();
-  return text ? text.slice(0, maxLength) : undefined;
+  return normalizedText(value)?.slice(0, maxLength);
 }

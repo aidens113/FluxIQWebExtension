@@ -43,7 +43,8 @@ test("a navigation to an item address no evidence showed is refused, and nothing
   assert.match(refusal.detail.instead[0]!, /web\.output\.dom-click/u);
   // The page comes back, so the link that does go there can be pressed next.
   assert.equal(refusal.page?.location, START);
-  assert.equal(refusal.page?.elements.some((element) => element.href === SHOWN_ITEM), true);
+  // The link with its query, as the packet now shows it (t200).
+  assert.equal(refusal.page?.elements.some((element) => element.href === `${SHOWN_ITEM}?variant=1`), true);
   // Refused before the command went out, and never a step of the Flow.
   assert.equal(site.navigations().includes(MADE_UP_ITEM), false);
   assert.equal(went.draft?.ranWith, undefined);
@@ -62,6 +63,17 @@ test("a shown link's address, the start location and the page already open are a
   const again = await call(site, "call.again", { node: NAVIGATE, parameters: { url: `${SHOWN_ITEM}#reviews` } });
   assert.equal(again.resultCode, "web.action.succeeded");
   assert.deepEqual(site.navigations(), [START, SHOWN_ITEM, START.slice(0, -1), `${SHOWN_ITEM}#reviews`]);
+});
+
+test("a shown link's own query may be navigated to, since the packet shows it (t200)", async () => {
+  const site = bigbox();
+  await arrive(site);
+
+  const linked = await call(site, "call.linked-query", { node: NAVIGATE, parameters: { url: `${SHOWN_ITEM}?variant=1` } });
+  assert.equal(linked.resultCode, "web.action.succeeded");
+  const other = await call(site, "call.other-query", { node: NAVIGATE, parameters: { url: `${SHOWN_ITEM}?variant=2` } });
+  assert.equal(other.resultCode, "web.action.rejected.address_not_shown");
+  assert.deepEqual(site.navigations(), [START, `${SHOWN_ITEM}?variant=1`]);
 });
 
 test("a query the build never met is refused, even on a path it was shown", async () => {

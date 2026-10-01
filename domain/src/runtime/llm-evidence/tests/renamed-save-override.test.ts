@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { validateWebRuntimeTargetOverrideEvidence } from "..";
-import { WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "../limits";
 import { elementFillsRepairableParameter, webFailureRepairParameters } from "../repairable-parameters";
 import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
 
@@ -16,8 +15,8 @@ import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
 // Chromium on 2026-09-16 (`harness.capture()`), with the layout fields the
 // sanitizer never reads -- bounds, xpath, class lists, viewport visibility --
 // left out, and the lab's random port fixed. It is sanitized exactly as
-// `captureSanitizedFailureEvidence` does it for this recorded Flow: the failure
-// budget, no control named (Core's failed-action identity names none), and the
+// `captureSanitizedFailureEvidence` does it for this recorded Flow: the whole
+// page, no control named (Core's failed-action identity names none), and the
 // repairable parameters offered for a `builtin.policy.action`, whose verb Core's
 // capture request does not name.
 
@@ -106,7 +105,6 @@ const capturedRenamedRedesign = {
 };
 
 const failurePacket = () => sanitizeWebLlmSnapshotWithBindings(capturedRenamedRedesign, {
-  budget: "failure",
   failedAction: { repairParameters: webFailureRepairParameters({ definitionId: "builtin.policy.action" }) }
 });
 /**
@@ -126,22 +124,22 @@ const override = (handle: string) => ({ handles: { element: handle } });
 test("the failure packet shows the renamed Save as the page's one submit control, by its accessible name and never by selector", () => {
   const { evidence, selectors } = failurePacket();
   assert.equal(evidence.failedTargetUnknown, true);
-  // The key a repair fills is named, and the packet still fits Core's gate with it.
+  // The key a repair fills is named.
   assert.deepEqual(Object.keys(evidence.repairParameters ?? {}), ["element"]);
-  // Still inside Core's own gate for a failure packet, whatever that number is:
-  // it was 3,000 bytes and became the exploration figure on 2026-09-17, and
-  // what this row is about is that the packet fits it, not what it is.
-  assert.ok(Buffer.byteLength(JSON.stringify(evidence), "utf8") <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure);
   const submits = evidence.elements.filter((element) => element.controlType === "submit");
   // Named by its accessible name; the visible text is the same words, so it is not repeated.
-  assert.deepEqual(submits, [{ target: "target.2", tag: "button", name: "Apply changes", controlType: "submit", form: "settings-form", landmark: "region", heading: "General" }]);
+  // Every attribute the page gave it rides with it, as [name, value] pairs.
+  assert.deepEqual(submits, [{ target: "target.2", tag: "button", implicitRole: "button", name: "Apply changes", attributes: [["class", "ui-button ui-button--accent"], ["type", "submit"]], controlType: "submit", form: "settings-form", landmark: "region", heading: "General" }]);
   // Beside it, the one other button a click could land on is the reset.
   assert.deepEqual(evidence.elements.filter((element) => element.tag === "button").map((element) => [element.name, element.controlType]), [["Discard changes", "reset"], ["Apply changes", "submit"]]);
   // Nothing on the page is called what the recording called Save.
   assert.doesNotMatch(JSON.stringify(evidence), /Save changes/);
-  // The packet carries the handle, the binding keeps the selector, and no value leaves.
+  // The packet carries the handle and the binding keeps the selector. A plain
+  // text field's own value is the page's state and travels (t200); a secret
+  // one's never does.
   assert.equal(selectors.get("target.2"), RENAMED_SAVE_SELECTOR);
-  assert.doesNotMatch(JSON.stringify(evidence), /main > form|#display-name|Workspace 121/);
+  assert.doesNotMatch(JSON.stringify(evidence), /main > form|#display-name/);
+  assert.equal(evidence.elements.find((element) => element.name === "Workspace name" && element.tag === "input")?.value, "Workspace 121");
 });
 
 test("accepts an override naming the renamed Save, and resolves it fingerprint first", () => {
@@ -219,8 +217,7 @@ const capturedSaveAndExit = {
 
 test("refuses Save changes and exit, the different action standing in Save's slot", () => {
   const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings(capturedSaveAndExit, {
-    budget: "failure",
-    failedAction: { repairParameters: webFailureRepairParameters({ definitionId: "builtin.policy.action" }) }
+      failedAction: { repairParameters: webFailureRepairParameters({ definitionId: "builtin.policy.action" }) }
   });
   const saveAndExit = evidence.elements.filter((element) => element.name === "Save changes and exit");
   assert.equal(saveAndExit.length, 1, "the packet describes the one control in Save's slot");

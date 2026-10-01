@@ -97,8 +97,8 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const location = binding.evidence.location;
       const seen = targetsOf(binding);
       // A look that described every control says which have gone, as a shown
-      // packet does; one cut short -- forty controls, the capture, the bytes --
-      // cannot, so it only adds.
+      // packet does; one the browser's capture cut short (`captureTruncated`)
+      // cannot, so it only adds. Since t200 nothing else cuts a look.
       if (!binding.evidence.truncated) {
         keep(flow, location, seen);
         return;

@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node ../../scripts/build-cache/cli.mjs extension:build -- \"tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/build.tsbuildinfo && node scripts/build-extension.mjs\"",
     "check": "node ../../scripts/build-cache/cli.mjs extension:check -- \"node scripts/check-extension.mjs\"",
-    "test": "node scripts/smoke-test.mjs && node scripts/test-extension.mjs",
+    "test": "node ../../scripts/check/core-build.mjs && node scripts/smoke-test.mjs && node scripts/test-extension.mjs",
     "test:content": "node ../../scripts/build-cache/cli.mjs test-contracts:build && node scripts/test-content.mjs --",
     "test:e2e:build": "node ../../scripts/build-cache/cli.mjs extension:build -- \"tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/build.tsbuildinfo && node scripts/build-extension.mjs\"",
     "test:e2e": "node ../../scripts/build-cache/cli.mjs extension:build -- \"tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/build.tsbuildinfo && node scripts/build-extension.mjs\" && playwright test -c e2e/playwright.config.ts",

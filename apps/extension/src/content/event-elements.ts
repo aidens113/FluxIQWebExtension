@@ -1,8 +1,10 @@
 // The elements the user has actually touched, and how to find them from a raw
 // event. A page can style any element to behave like a control, so an event's
-// composed path is better evidence of what is interactive than the DOM alone;
-// remembered elements are ranked first in the next snapshot. The queue is
-// bounded so a long session cannot grow it without limit.
+// composed path is better evidence of what is interactive than the DOM alone.
+// The snapshot lists every rendered element whether or not it was touched
+// (t200); what it reads from here is which member of a repeated run carries
+// the run's `repeatCount`. The queue is bounded so a long session cannot grow
+// it without limit -- a bound on what is remembered, not on what is listed.
 
 import { hasClickHandler, isActionableElement } from "./element-traits";
 

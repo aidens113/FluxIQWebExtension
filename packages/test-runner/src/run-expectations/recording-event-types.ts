@@ -8,8 +8,7 @@
  * old shape.
  *
  * The runner *can* import the domain (`@fluxiq-web-extension/domain/node` is a
- * dependency, and `run-evaluation/evidence-budget-invariant.ts` derives from it
- * already), so this table is a hand-copy by habit rather than by necessity.
+ * dependency), so this table is a hand-copy by habit rather than by necessity.
  * Whether to delegate to the domain function instead is the supervisor's call.
  */
 export const recordingEventTypesByKind: Readonly<Record<string, string>> = Object.freeze({

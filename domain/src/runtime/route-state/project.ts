@@ -1,21 +1,23 @@
 // The route state for one sanitized evidence packet.
 //
 // The packet is already the only page data a model may see: origin-checked,
-// value-free, credential-shaped controls dropped, bounded. The route state is
-// a projection of it and adds nothing, so a Router can decide on nothing a
-// model could not be shown, and what the model is shown while it builds a
-// Flow is exactly what the Router will test when the Flow runs.
+// secret-screened, credential-shaped controls dropped. The route state is a
+// projection of it and adds nothing, so a Router can decide on nothing a model
+// could not be shown, and what the model is shown while it builds a Flow is
+// exactly what the Router will test when the Flow runs.
+//
+// Nothing in it is cut (t200). Until 2026-09-30 the controls list was cut to
+// 2,000 characters and only the first dialog was named; every dialog, every
+// blocker and every control's name are now there.
 //
 // Each field is written by name and left out when the packet says nothing
 // about it, because "absent" is itself a state a route tests: `state.page.dialog
 // is missing` must hold on a page with no dialog.
 
 import type { JsonObject } from "fluxiq/core";
-import type { WebLlmPageEvidence } from "../llm-evidence";
+import { actionableEvidenceElement, type WebLlmPageEvidence } from "../llm-evidence";
 
-/** How much of the controls list a route may read. The packet already bounds the elements. */
-const MAX_CONTROLS_LENGTH = 2_000;
-const CONTROL_SEPARATOR = " | ";
+const LIST_SEPARATOR = " | ";
 
 export function webAutomationRouteState(evidence: WebLlmPageEvidence): JsonObject {
   const page: JsonObject = {};
@@ -24,10 +26,11 @@ export function webAutomationRouteState(evidence: WebLlmPageEvidence): JsonObjec
   const path = pathOf(location);
   if (path !== undefined) page.path = path;
   if (evidence.title) page.title = evidence.title;
-  const dialog = evidence.dialogs?.[0];
-  if (dialog) page.dialog = dialog.name ?? dialog.role ?? "dialog";
-  if (evidence.blockedBy) page.blockedBy = evidence.blockedBy.name ?? evidence.blockedBy.role ?? "overlay";
-  const controls = controlNames(evidence);
+  const dialogs = joinedNames((evidence.dialogs ?? []).map((dialog) => dialog.name ?? dialog.role ?? "dialog"));
+  if (dialogs) page.dialog = dialogs;
+  const blockers = joinedNames((evidence.blockedBy ?? []).map((blocker) => blocker.name ?? blocker.role ?? "overlay"));
+  if (blockers) page.blockedBy = blockers;
+  const controls = joinedNames(evidence.elements.filter(actionableEvidenceElement).map((element) => element.name ?? element.text ?? ""));
   if (controls) page.controls = controls;
   return { page };
 }
@@ -36,19 +39,23 @@ function pathOf(location: string): string | undefined {
   try {
     return new URL(location).pathname;
   } catch (error) {
-    // The packet's location is origin and path by construction; a value that
-    // is not a URL leaves `state.page.path` absent rather than guessed.
+    // The packet's location is a URL by construction; a value that is not one
+    // leaves `state.page.path` absent rather than guessed.
     if (error instanceof TypeError) return undefined;
     throw error;
   }
 }
 
-function controlNames(evidence: WebLlmPageEvidence): string {
-  const names: string[] = [];
-  for (const element of evidence.elements) {
-    const name = (element.name ?? element.text ?? "").replace(/\s+/gu, " ").trim();
-    if (name && !names.includes(name)) names.push(name);
+/**
+ * Each distinct name once, in the packet's order, joined. A set rather than a
+ * list search, because a page is now every element it has and a list search
+ * over twelve thousand names took half a second.
+ */
+function joinedNames(values: readonly string[]): string {
+  const names = new Set<string>();
+  for (const value of values) {
+    const name = value.replace(/\s+/gu, " ").trim();
+    if (name) names.add(name);
   }
-  const joined = names.join(CONTROL_SEPARATOR);
-  return joined.length > MAX_CONTROLS_LENGTH ? joined.slice(0, MAX_CONTROLS_LENGTH) : joined;
+  return [...names].join(LIST_SEPARATOR);
 }

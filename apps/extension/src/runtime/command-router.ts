@@ -1,6 +1,7 @@
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import { SESSION_PAGE_LOAD_PACE } from "../background/page-pace";
 import { browserActionFailure, runBrowserActionCommand } from "./action-runner";
+import type { MergeFrameSnapshots } from "./look-across-frames";
 import { runSnapshotCapture } from "./snapshot-runner";
 
 export type ExtensionRuntimeCommandRouterOptions = {
@@ -11,6 +12,8 @@ export type ExtensionRuntimeCommandRouterOptions = {
   attachTabForRecording(tabId: number): Promise<void>;
   captureActiveSnapshot(label: string): Promise<void>;
   sendActionResult(result: BrowserActionResult, tabId?: number, frameId?: number): Promise<void>;
+  /** The background worker's frame merge, which a look that names no frame answers with. */
+  mergeFrameSnapshots?: MergeFrameSnapshots;
 };
 
 export class ExtensionRuntimeCommandRouter {
@@ -35,6 +38,7 @@ export class ExtensionRuntimeCommandRouter {
     if (unsupportedPageReason !== undefined) request.unsupportedPageReason = unsupportedPageReason;
     const ownOrigins = this.options.ownOrigins?.();
     if (ownOrigins?.length) request.ownOrigins = ownOrigins;
+    if (this.options.mergeFrameSnapshots) request.mergeFrameSnapshots = this.options.mergeFrameSnapshots;
     try {
       const { result, tabId, frameId } = await runBrowserActionCommand(request);
       await this.options.sendActionResult(result, tabId, frameId);

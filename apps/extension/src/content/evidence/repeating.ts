@@ -13,39 +13,41 @@
 // its shape (`pagination-page-1` becomes `pagination-page-#`), because a page
 // that numbers its rows is still rendering one template -- keying on the exact
 // id would split every numbered run into singletons.
+//
+// Nothing here stands in for the rows (t200). Every row is still in the
+// snapshot's element list, in document order; a run is a statement about them,
+// not a replacement for them. So every run is reported, in the order its first
+// item appears, with every field its first item names and that item's whole
+// text -- there was a scan of 2,000 items, the biggest six runs, eight fields
+// and 160 characters. The representative's text is read through
+// `textOutsideSensitiveControls` (`../sensitive-text.ts`), as every other page
+// string is: it was raw `textContent`, which quoted a sensitive control's
+// contents whenever a row held one.
 
 import { webAutomationIdentifierShape, webAutomationItemSignature } from "@fluxiq-web-extension/domain/client";
-import { boundedText } from "../identity";
+import { normalizedText } from "../identity";
 import { testIdFor } from "../describe-element";
 import { selectorFor } from "../selector";
+import { textOutsideSensitiveControls } from "../sensitive-text";
+import { queryComposedInOrder } from "../shadow-dom";
 import { present } from "../../shared/present";
 import type { RepeatingStructureEvidence } from "./types";
 
 const ITEM_SELECTOR = "li,tr,article,[data-testid],[role='listitem'],[role='row'],[role='option'],[role='article'],[role='treeitem']";
-const MAX_SCANNED_ITEMS = 2_000;
 const MIN_ITEMS_PER_RUN = 3;
-const MAX_STRUCTURES = 6;
-const MAX_FIELDS = 8;
-const MAX_REPRESENTATIVE_TEXT = 160;
 
-/** The page's repeating runs, biggest first, or `undefined` when nothing repeats. */
+/** Every repeating run on the page, in the order its first item appears, or `undefined` when nothing repeats. */
 export function repeatingEvidence(): RepeatingStructureEvidence[] | undefined {
   const runs = clusterSiblings();
-  if (!runs.length) return undefined;
-  return runs
-    .sort((left, right) => right.items.length - left.items.length)
-    .slice(0, MAX_STRUCTURES)
-    .map(describeRun);
+  return runs.length ? runs.map(describeRun) : undefined;
 }
 
 type SiblingRun = { container: Element; signature: string; items: Element[] };
 
 function clusterSiblings(): SiblingRun[] {
   const byContainer = new Map<Element, Map<string, Element[]>>();
-  let scanned = 0;
-  for (const element of document.querySelectorAll(ITEM_SELECTOR)) {
-    scanned += 1;
-    if (scanned > MAX_SCANNED_ITEMS) break;
+  const items = queryComposedInOrder(ITEM_SELECTOR);
+  for (const element of items) {
     const container = element.parentElement;
     if (!container) continue;
     const groups = byContainer.get(container) ?? new Map<string, Element[]>();
@@ -58,11 +60,15 @@ function clusterSiblings(): SiblingRun[] {
 
   const runs: SiblingRun[] = [];
   for (const [container, groups] of byContainer) {
-    for (const [signature, items] of groups) {
-      if (items.length >= MIN_ITEMS_PER_RUN) runs.push({ container, signature, items });
+    for (const [signature, members] of groups) {
+      if (members.length >= MIN_ITEMS_PER_RUN) runs.push({ container, signature, items: members });
     }
   }
-  return runs;
+  // Runs were grouped container by container, and a container's second kind
+  // of item can begin after another container's run has: order them by where
+  // each run's first item stands on the page.
+  const position = new Map(items.map((element, index) => [element, index] as const));
+  return runs.sort((left, right) => (position.get(left.items[0]!) ?? 0) - (position.get(right.items[0]!) ?? 0));
 }
 
 /**
@@ -85,7 +91,7 @@ function templateSignature(element: Element): string {
 function describeRun(run: SiblingRun): RepeatingStructureEvidence {
   const first = run.items[0];
   const testId = first ? testIdFor(first) : undefined;
-  const text = first ? boundedText(first.textContent, MAX_REPRESENTATIVE_TEXT) : undefined;
+  const text = first ? normalizedText(textOutsideSensitiveControls(first)) : undefined;
   const fields = first ? itemFields(first) : [];
   return present<RepeatingStructureEvidence>({
     containerSelector: selectorFor(run.container),
@@ -109,7 +115,6 @@ function itemFields(item: Element): string[] {
   for (const element of item.querySelectorAll("[data-testid],[data-test],[data-cy]")) {
     const id = testIdFor(element);
     if (id) fields.add(webAutomationIdentifierShape(id));
-    if (fields.size >= MAX_FIELDS) break;
   }
   return [...fields];
 }

@@ -1,6 +1,6 @@
 // The host runtime boundary: state refs on web attempts, and nothing else.
 //
-// The proofs are that a web node's attempt gets a bounded, sanitized snapshot
+// The proofs are that a web node's attempt gets a sanitized snapshot
 // in both shapes a web node reaches the boundary: a web output node, and a
 // recorded action, which Core runs as `builtin.policy.action` naming its web
 // output in `parameterValues.outputId`; that a node which never touches the
@@ -54,9 +54,12 @@ function captureInput(definitionId: string, point: "before_action" | "after_acti
   return { node: { id: "node.1", definitionId, parameterValues }, attemptId: "node.1.attempt.1", inputs: {}, point } as const;
 }
 
-test("a web attempt gets a bounded, sanitized state ref sourced from web.dom.capture_snapshot", async () => {
+test("a web attempt gets a sanitized state ref sourced from web.dom.capture_snapshot", async () => {
   const snapshot = pageSnapshot("https://shop.test/cart?token=leaked-token", ["#pay"]);
-  (snapshot.interactiveElements as JsonObject[]).push({ tagName: "input", selector: "#card", inputType: "text", value: "4111111111111111" });
+  // A card field, marked as one: the sensitivity rule drops it whole. A plain
+  // text field's own value is page state, and travels (t200).
+  (snapshot.interactiveElements as JsonObject[]).push({ tagName: "input", selector: "#card", inputType: "text", value: "4111111111111111", attributes: { autocomplete: "cc-number" } });
+  (snapshot.interactiveElements as JsonObject[]).push({ tagName: "input", selector: "#note", inputType: "text", value: "Leave at the door" });
   const { gateway: seam, calls } = gateway([{ ok: true, status: "succeeded", payload: { status: "succeeded", result: { snapshot } } }]);
   const boundary = createWebAutomationHostRuntime(seam);
   const ref = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID));
@@ -70,10 +73,11 @@ test("a web attempt gets a bounded, sanitized state ref sourced from web.dom.cap
   assert.equal(ref.stateRef, "web.state.1@node.1.attempt.1:before_action");
   assert.equal(typeof ref.capturedAt, "number");
   assert.equal(ref.summary?.schemaVersion, "web-llm-evidence.v2");
-  assert.equal(ref.summary?.location, "https://shop.test/cart");
+  assert.equal(ref.summary?.location, "https://shop.test/cart?token=(withheld)");
   // The sanitized packet's own rules apply, which is the point of reusing it:
-  // the URL query never travels and neither does a control's value.
-  assert.doesNotMatch(JSON.stringify(ref.summary), /leaked-token|4111111111111111/u);
+  // a secret query value never travels and neither does a secret control's value.
+  assert.doesNotMatch(JSON.stringify(ref.summary), /leaked-token|4111111111111111|cc-number/u);
+  assert.match(JSON.stringify(ref.summary), /Leave at the door/u);
 });
 
 test("a recorded action, Core's policy node naming web.dom.click, gets a state ref from web.dom.capture_snapshot", async () => {
@@ -182,11 +186,11 @@ test("the diff reports the move, the counts, and which elements came and went, a
   });
 });
 
-test("the diff never lists more than the bound, and its counts stay exact", () => {
+test("the diff lists every element that appeared or left, and its counts stay exact", () => {
   const many = { elements: Array.from({ length: 30 }, (_, index) => ({ target: `target.${index + 1}`, tag: "li", name: `Item ${index}` })) };
   const grown = webAutomationStateDiff({ elements: [] }, many);
   assert.equal(grown.addedElementCount, 30);
-  assert.equal((grown.addedElements as unknown[]).length, 10);
+  assert.equal((grown.addedElements as unknown[]).length, 30);
   assert.equal(grown.locationChanged, false);
   assert.equal(grown.beforeElementCount, 0);
 });
@@ -201,12 +205,15 @@ test("the boundary declares what it can answer, including action dispatch and th
   assert.equal(typeof boundary.inspectStateDiff, "function");
 });
 
-test("the route state a Router tests is the sanitized packet projected: location, dialog and control names, never a value or a query", async () => {
+test("the route state a Router tests is the sanitized packet projected: location, dialog and control names, never a value or a secret", async () => {
   const snapshot = pageSnapshot("https://shop.test/queue?token=leaked-token", ["#got-it"], {
     title: "Queue · Cadence",
     evidence: { dialogs: { open: [{ role: "dialog", label: "What's new in Cadence", modal: true }] } }
   });
-  (snapshot.interactiveElements as JsonObject[]).push({ tagName: "input", selector: "#card", inputType: "text", value: "4111111111111111" });
+  // A card field, marked as one: the sensitivity rule drops it whole. A plain
+  // text field's own value is page state, and travels (t200).
+  (snapshot.interactiveElements as JsonObject[]).push({ tagName: "input", selector: "#card", inputType: "text", value: "4111111111111111", attributes: { autocomplete: "cc-number" } });
+  (snapshot.interactiveElements as JsonObject[]).push({ tagName: "input", selector: "#note", inputType: "text", value: "Leave at the door" });
   const { gateway: seam, calls } = gateway([{ ok: true, status: "succeeded", payload: { status: "succeeded", result: { snapshot } } }]);
   const boundary = createWebAutomationHostRuntime(seam);
   const state = await boundary.observeRouteState!({ projectId: "project.one", flowId: "flow.one" });
@@ -214,7 +221,7 @@ test("the route state a Router tests is the sanitized packet projected: location
   assert.equal(calls[0]?.timeoutMs, 5_000);
   const page = (state as { page: Record<string, unknown> }).page;
   assert.equal(page.path, "/queue");
-  assert.equal(page.location, "https://shop.test/queue");
+  assert.equal(page.location, "https://shop.test/queue?token=(withheld)");
   assert.equal(page.dialog, "What's new in Cadence");
   assert.equal(typeof page.controls, "string");
   assert.doesNotMatch(JSON.stringify(state), /leaked-token|4111111111111111|#got-it|#card/u);

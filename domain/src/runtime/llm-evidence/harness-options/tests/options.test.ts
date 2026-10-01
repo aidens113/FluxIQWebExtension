@@ -42,6 +42,12 @@ test("hands the model the six tool fields and none of the gate metadata", () => 
     assert.deepEqual(Object.keys(tool).filter((key) => !["toolId", "description", "inputSchema", "effect", "repeatPolicy", "initialObservation"].includes(key)), [], tool.toolId);
   }
   assert.equal(tools.filter((tool) => tool.initialObservation !== undefined).length, 1);
+  // The packet no longer moves a modal's controls to the front (t200), so the
+  // inspect description names the marks that say what stands in front of the
+  // page, and stays within Core's 2,000-character description limit.
+  const inspect = tools.find((tool) => tool.toolId === "web.recovery.inspect")?.description ?? "";
+  for (const field of ["isDialog", "inDialog", "covers", "coveredBy", "coversCount", "kind", "frontLayer", "statement", "dialogs", "blockedBy"]) assert.match(inspect, new RegExp(`\\b${field}\\b`, "u"), field);
+  assert.equal(inspect.length <= 2_000, true, `${inspect.length} characters, over Core's 2,000`);
   assert.deepEqual(tools.filter((tool) => tool.effect === "mutate").map((tool) => tool.toolId), ["web.recovery.press", "web.recovery.enter_field", "web.recovery.navigate_in_scope"]);
 });
 
@@ -220,7 +226,7 @@ let callSequence = 0;
 async function run(registry: AutomationStudioHarnessOptionRegistry, optionId: string, value: JsonObject): Promise<unknown> {
   callSequence += 1;
   return await registry.execute(
-    { projectId: "project.one", flowId: "flow.one", callId: `call.${callSequence}`, optionId, value, maxEvidenceBytes: 64_000 },
+    { projectId: "project.one", flowId: "flow.one", callId: `call.${callSequence}`, optionId, value },
     resolution()
   );
 }

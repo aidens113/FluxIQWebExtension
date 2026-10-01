@@ -1,6 +1,6 @@
 # t206: tests that pass alone and fail under load
 
-Worker report. Trees: `fxwork/t206/!FluxIQWebExtension` and `fxwork/t206/!FluxIQ`, branch `task/t206-load-sensitive-tests` in both. Nothing is committed. No Lab or browser run.
+Worker report. Trees: `fxwork/t206/!FluxIQWebExtension` and `fxwork/t206/!FluxIQ`, branch `task/t206-load-sensitive-tests` in both. No Lab or browser run. Round 1 (sections 1-4) is merged; round 2 is at the end and is uncommitted.
 
 ## Outcome
 
@@ -189,18 +189,153 @@ I wrote a vitest setup file that records every libuv-level async resource. It du
 - The brief lists `run-detail-preservation` and `reauthor` as timing bugs. They are product slowness, with no wait involved, and they remain until one of the proposals in section 4 is chosen.
 - The first core-contract variant now pays the seed: up to 19 s of its 30 s budget under load.
 
-Ready to commit:
-- **Downstream:** `scripts/lab/build-lock.mjs`, `scripts/lab/tests/lab-instance.test.mjs`, `packages/test-runner/src/clone-cache.ts`, `packages/test-runner/src/run-scenario/tests/extension-control-page.test.ts`, and this report.
-- **Core:**
-  - `packages/fluxiq/src/programs/automation-studio/runtime/conversations/tests/store.test.ts`
-  - `apps/web/src/features/automation-studio/conversation/capabilities/tests/core-contract-world.ts` and `core-contract.test.ts`
-  - `packages/fluxiq/src/programs/automation-studio/runtime/service/projects/store.ts`, `runtime/service.ts`, and the `requireProject` call sites in `runtime/service/{bootstrap-adaptations,object-documents,ui-cache}.ts`, `runtime/service/flows/{graph-patch,store,writer}.ts`, `runtime/service/{indexes,legacy,summaries}/store.ts`, `runtime/service/problems/project-problem-listing.ts`, `runtime/service/projects/artifacts.ts` and `runtime/service/summaries/run-detail-writer.ts`
-  - The test doubles in `runtime/service/tests/{bootstrap-adaptations,incomplete-drafts}.test.ts` and `runtime/tests/service-bootstrap/tests/incomplete-draft.test.ts`
+Round 1 was verified and merged into dev by the supervisor: Core `9d9f1df8`, downstream `8d381586`.
 
-Validation:
-- `node --test tests/lab-instance.test.mjs` -> 10/10.
-- test-runner `node --test` -> 16/16 and 60/60, including beside 3 heavy suites.
-- Core `store.test` -> 15/15 alone, in twin runs and under load.
-- `core-contract` -> 60/60, tests 254 s -> 66 s alone and 107 s under load.
-- service-bootstrap, preservation and reauthor -> after 107/107 twice, before 1 timeout.
-- Both `tsc` runs -> clean; both audits -> passed.
+## Round 2 (2026-09-30): the proposals, made
+
+Brief from the supervisor:
+1. The operation-scoped lease, plus the single event read per save and the index stat-cache if each is a clear win.
+2. The sweep of the 37 fixed-root Core test files.
+3. A structure-audit rule, mirrored into this repository.
+
+Unit tests only. Both branches start from dev (the fast-forward to `9d9f1df8` / `8d381586`).
+
+### Outcome
+
+**Partial.**
+- **Done:** all three items. Each storage change is a measured win on its own.
+- **Much less load-sensitive:**
+  - reauthor, file time: -39% under deliberate load.
+  - run-detail-preservation, round trips: -14%.
+  - Timeouts under load went from 2 of 3 runs to 1 of 3.
+- **Still one timeout in 3 under deliberate load:** run-detail-preservation #1 (15.1 s against 15 s). The step that remains is named below. It is a change to the migration machinery, so I have proposed it and not made it.
+
+### What changed and why (Core)
+
+**1a. Operation-scoped project lease**
+- New file: `runtime/service/projects/database-hold.ts`, exported from the barrel.
+- `runRuntimeSession`, `reviewFlowAdaptation` and `generateFlowBootstrapAdaptation` now hold one lease on their project database for the whole operation. Inner acquires reuse the open database; they used to open and close it once per store call.
+- The pool still closes the database on the operation's own release. Nothing stays open while idle.
+- It holds only a project the index lists. Acquiring creates the database file, and an unknown project must still fail as before.
+- It never holds on a closing pool:
+  - `AutomationStudioProjectDatabasePool.isClosing` is new, in `storage/project/database.ts`.
+  - The closing check runs again right before `acquire`, with no await between the check and the call.
+  - So a run whose storage was closed under it still ends as a failed run with a record (t207's datasets test).
+
+**1b. Single event read per save**
+- `runtime-stream-store.ts`: `readRunForUpdate(runId)` returns the detail and the stream it was read from. `putRunDetail(detail, { existingEvents })` reuses that stream in place of reading it again.
+- `run-detail-writer.ts` uses both.
+- This is safe: `putRunDetail` has one caller, which runs under the per-run lock, and it is the only writer of the run's events.
+- `getRunDetail` is unchanged, including the spy t207's reader test puts on it.
+
+**1c. Index stat-cache**
+- `projects/store.ts` caches the parsed `index.json` under the file's identity: dev, ino, size and mtime in nanoseconds, read with a bigint `stat`.
+- A write replaces the file through a rename, which gives it a new ino. This store's own writes also drop the cached copy.
+- It is cached only when `ProgramJsonStore.isFileBacked()` (new, in `_shared/storage.ts`). An index kept in SQLite may leave a stale file behind, and that file's identity would never change.
+- Each hit hands out a `structuredClone`.
+- The stat names ENOENT as "no file" and rethrows anything else (the failure-as-empty rule).
+
+**2. The sweep**
+- All 37 files, plus `storage/project/tests/result-check-state.test.ts` (a fixed `os.tmpdir()` root that the new rule found), now create their root with `mkdtemp(path.join(os.tmpdir(), "<old-name>-"))`.
+  - In most files this happens in `beforeEach`. In the one test that declared its own root inline, it happens in that test.
+  - Both `client-gateway/tests/bridge*.test.ts` files gain a `beforeEach`.
+  - In `reusable-llm-context-service.test.ts`, `dataDir` and `automationRoot` are now derived inside the hook.
+- `apps/web/src/lib/tests/fluxiq.test.ts`: the "missing host module" path now sits inside a `mkdtempSync` directory.
+- A stale comment in `runtime-stream-store.test.ts` no longer says sibling tests use the working directory.
+
+**3. The audit rule**
+- New files: `scripts/structure-audit/rules/shared-temp-root.mjs` and `rules/tests/shared-temp-root.test.mjs` (8 tests), in Core. Copied byte-for-byte (LF) into this repository's `scripts/structure-audit/rules/`.
+- **What it fails** (`severity: "fail"`, `ratchet: false`, no baseline):
+  - In test files and under test roots, a `join`/`resolve` whose first argument is `os.tmpdir()`/`tmpdir()` and whose other arguments are all fixed strings.
+  - The same with `process.cwd()`, when the first segment is `tmp`/`.tmp`/`temp`/`.temp`.
+- **Exempt:** the same call as `mkdtemp`'s or `mkdtempSync`'s prefix, and any computed name.
+- **Downstream finding fixed:** `domain/scripts/tests/test-domain.test.mjs` used a fixed `tmpdir()` path. The test never writes there; the path now carries `process.pid`.
+
+### Measurements
+
+**Round trips per test.** These are sqlite plus fs completions, counted by the async_hooks probe. They do not depend on load. Base is the merged dev tree; each column adds one change.
+
+| Test | Base | + lease | + single read | + index cache | Change |
+| --- | --- | --- | --- | --- | --- |
+| run-detail-preservation #1 | 6,195 | 5,978 | 5,703 | 5,313 | -14% |
+| reauthor "uses the run's caller" | 6,447 | 6,030 | 5,460 | 5,077 | -21% |
+| adaptation "bridges…" | 6,145 | 5,631 | 5,516 | 5,021 | -18% |
+
+- Database closes per test, from the lease: reauthor 158 -> 52, preservation 148 -> 57 opens, bridges 215 -> 82.
+
+**Under deliberate load.**
+- Command: `vitest run run-detail-preservation reauthor-service --maxWorkers=2`, through heavy.sh, interleaved after/before three times.
+- Load: a loop of `vitest run src/programs/automation-studio/storage …/service-bootstrap --maxWorkers=2` through heavy.sh, running the whole time (4 iterations).
+- "Before" is the three storage changes reverse-applied.
+
+| Run | reauthor file sum (max case) | preservation file sum (max case, timeouts) |
+| --- | --- | --- |
+| after1 | 64.5 s (19.1 s) | 26.3 s (15.1 s, 1 timeout) |
+| before1 | 107.6 s (27.3 s) | 24.2 s (15.1 s, 1 timeout) |
+| after2 | 42.6 s (12.2 s) | 16.9 s (9.6 s, 0) |
+| before2 | 114.4 s (21.5 s) | 21.3 s (15.1 s, 1 timeout) |
+| after3 | 84.9 s (13.8 s) | 23.3 s (14.9 s, 0) |
+| before3 | 93.1 s (20.2 s) | 20.6 s (14.5 s, 0) |
+
+- reauthor: mean 105 s -> 64 s.
+- preservation: timeouts 2 of 3 -> 1 of 3.
+
+**The sweep, in twin runs.** Two copies of `catalog`, `content-store`, `commands/execute` and `graph-store` were started 2 s apart in one checkout.
+- Before: `3 failed | 25 passed` and `20 failed | 8 passed`.
+- After: `28 passed` twice.
+
+### What still makes preservation marginal, and the decision it needs
+
+- **The step.** The largest remaining step is the migration check each store open makes on the held connection. On every open it runs the lifecycle `CREATE`s (`exec`), the insert, the ledger select and the `markReady` update. That is 170 store opens in preservation #1, about 850 round trips, or 16%.
+- **The proposal.** Memoise "this migration set is applied and ready" on the open connection. The connection now lives exactly one operation.
+- **The cost.** A second process that starts migrating mid-operation would not be seen until the next operation. Today that makes every store open throw "lock was lost".
+- **Why I did not make it.** It is a change to the migration machinery, the same trade t193 raised with option A, so I left it for your decision.
+- **Next after that.** Caching prepared statements per connection: about 1,600 `Prepare` hops per test, each a thread-pool round trip.
+
+### Round 2 commands and results
+
+- `npx tsc -p packages/fluxiq/tsconfig.json --noEmit` (through heavy.sh) -> no output.
+- `apps/web: npx tsc --noEmit -p .` (through heavy.sh) -> no output.
+- Core `vitest run …/storage …/runtime/service …/runtime/conversations …/api …/client-gateway …/testing …/reusable-llm-context-service …/service-bootstrap --maxWorkers=2` -> `Tests 1 failed | 863 passed | 1 skipped (865)`. The one failure is the million-event case (60,127 ms), which is load-sensitive and was already known (report section 4.5). The new files are all green: `database-hold` 5/5, `store-index-cache` 3/3, `runtime-stream-store-update` 2/2. `bridge` 25/25, `bridge-restart` 4/4 and `reusable-llm-context-service` 4/4 also pass.
+- `apps/web: npx vitest run src/lib/tests/fluxiq.test.ts` -> `Tests 16 passed`.
+- After the final edits (inlining the review wrapper, the ENOENT naming, a tsc fix in the new test): `vitest run runtime/service/projects/tests storage/project/tests/runtime-stream-store-update service-bootstrap/tests/adaptation reauthor-service run-detail-preservation run-detail-read --maxWorkers=2` -> `37 passed | 1 failed`.
+  - The failure was the reader's first case at 16.3 s, while t200's `pnpm check` held a slot.
+  - Rerun three times with the stall probe: 4/4 each time.
+  - The first case measured 9.9 s, 15.5 s and 5.2 s, with no idle gap longer than 412 ms. That is busy work, not a wait. The first case in a file is consistently the slowest, which I read as cold start.
+  - That case holds no lease. It passes through `runRuntimeSession` inside `completedRun` and nothing more.
+- Rule tests: `node --test scripts/structure-audit/rules/tests/*.test.mjs scripts/structure-audit/tests/*.test.mjs` -> Core `# pass 200 # fail 0`, downstream `# pass 200 # fail 0`.
+- Audits:
+  - Downstream `node scripts/structure-audit.mjs` -> `passed (134 warning(s), 120 baselined)`.
+  - Core -> 1 violation, not from this change: `[directory-files] runtime/llm/evidence-loop/: 26 source files exceeds the 25-file limit`. It came in with dev's t196 merge `957a0226`, and I did not touch that directory.
+- `node --test domain/scripts/tests/test-domain.test.mjs` -> `# pass 19 # fail 0`.
+
+### Round 2: not verified
+
+- A full Core suite run.
+- An idle machine. Every timing shares the machine with other lanes.
+- Behaviour against an index kept in SQLite (storage layout v2). The cache is off in that mode by construction, but no test exercises it.
+
+### Round 2: open questions
+
+- **Core audit on dev.** It is red on dev (evidence-loop, 26 files), so Core `pnpm check` fails whatever this task does.
+- **Line endings of the mirrored rule.** Core files are CRLF in the working copy and the downstream copies are LF, like every other mirrored rule file.
+
+Ready to commit (round 2):
+- **Core:**
+  - `packages/fluxiq/src/programs/_shared/storage.ts`
+  - `packages/fluxiq/src/programs/automation-studio/`: `runtime/service.ts`, `runtime/service/projects/{database-hold.ts,index.ts,store.ts}`, `runtime/service/projects/tests/{database-hold,store-index-cache}.test.ts`, `runtime/service/summaries/run-detail-writer.ts`, `storage/project/{database.ts,runtime-stream-store.ts}`, `storage/project/tests/runtime-stream-store-update.test.ts`, and the 39 swept test files (`git status` in the Core tree lists them)
+  - `apps/web/src/lib/tests/fluxiq.test.ts`
+  - `scripts/structure-audit/rules/shared-temp-root.mjs` and `scripts/structure-audit/rules/tests/shared-temp-root.test.mjs`
+- **Downstream:**
+  - `scripts/structure-audit/rules/shared-temp-root.mjs` and `scripts/structure-audit/rules/tests/shared-temp-root.test.mjs`
+  - `domain/scripts/tests/test-domain.test.mjs`
+  - this report
+
+Validation (round 2):
+- Round trips: -14%, -21% and -18%.
+- Under load: reauthor 105 s -> 64 s mean; preservation timeouts 2/3 -> 1/3.
+- Sweep twin runs: 23 failures -> 0.
+- Suites: 863/865 (the one failure is the known million-event case); new tests 10/10.
+- Rule tests 200/200 in both repositories.
+- Both `tsc` runs clean.
+- Downstream audit passed. The Core audit's only failure is dev's evidence-loop.

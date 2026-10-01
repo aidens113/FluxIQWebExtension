@@ -54,7 +54,8 @@ test("an optional field given undefined is absent, not present and undefined", (
     modal: true,
     native: false,
     label: undefined,
-    bounds: undefined
+    bounds: undefined,
+    kind: undefined
   });
 
   assert.equal("label" in dialog, false, "an absent dialog label must not become an empty one");
@@ -69,7 +70,8 @@ test("an optional field given a value is kept, in the literal's own key order", 
     modal: true,
     native: false,
     label: "Invite a collaborator",
-    bounds: BOUNDS
+    bounds: BOUNDS,
+    kind: undefined
   });
 
   assert.equal(dialog.label, "Invite a collaborator");
@@ -122,7 +124,8 @@ test("dropping an empty string is the producer's decision, not the helper's", ()
     modal: true,
     native: false,
     label: label || undefined,
-    bounds: undefined
+    bounds: undefined,
+    kind: undefined
   });
   assert.equal("label" in dialog, false);
 });
@@ -151,7 +154,8 @@ function byPresent(label: string | undefined, bounds: EvidenceRect | undefined):
     modal: true,
     native: false,
     label: label || undefined,
-    bounds
+    bounds,
+    kind: undefined
   });
 }
 
@@ -183,28 +187,28 @@ function theCompilerMustRejectEachOfThese(): void {
   // hole was open: before `present`, this passed `check` and all 229 tests while
   // the field silently left the wire.
   // @ts-expect-error - 'title' is not a field of the contract
-  present<DialogEvidenceItem>({ selector: "#invite", role: "dialog", modal: true, native: false, title: "A label", bounds: undefined });
+  present<DialogEvidenceItem>({ selector: "#invite", role: "dialog", modal: true, native: false, title: "A label", bounds: undefined, kind: undefined });
 
   // DELETING AN OPTIONAL FIELD. The other way a field goes missing, and the one
   // a contract type cannot catch on its own, since absence is what optional
   // means. Caught here because the key must be MENTIONED even when its value is
   // `undefined`.
   // @ts-expect-error - 'label' is missing
-  present<DialogEvidenceItem>({ selector: "#invite", role: "dialog", modal: true, native: false, bounds: undefined });
+  present<DialogEvidenceItem>({ selector: "#invite", role: "dialog", modal: true, native: false, bounds: undefined, kind: undefined });
 
   // Renaming a required field. Caught before this change too, by the plain
   // properties of the literal; kept so a regression is attributed correctly.
   // @ts-expect-error - 'target' is not a field of the contract
-  present<DialogEvidenceItem>({ target: "#invite", role: "dialog", modal: true, native: false, label: undefined, bounds: undefined });
+  present<DialogEvidenceItem>({ target: "#invite", role: "dialog", modal: true, native: false, label: undefined, bounds: undefined, kind: undefined });
 
   // Dropping a required field.
   // @ts-expect-error - 'selector' is missing
-  present<DialogEvidenceItem>({ role: "dialog", modal: true, native: false, label: undefined, bounds: undefined });
+  present<DialogEvidenceItem>({ role: "dialog", modal: true, native: false, label: undefined, bounds: undefined, kind: undefined });
 
   // A required field given `undefined`. `present` strips undefined, so allowing
   // this would let the helper return an object that does not match its own type.
   // @ts-expect-error - 'undefined' is not assignable to 'string'
-  present<DialogEvidenceItem>({ selector: undefined, role: "dialog", modal: true, native: false, label: undefined, bounds: undefined });
+  present<DialogEvidenceItem>({ selector: undefined, role: "dialog", modal: true, native: false, label: undefined, bounds: undefined, kind: undefined });
 
   // Calling without naming the contract type. `T` would otherwise be inferred
   // from the argument, which checks the literal against itself and nothing else.
@@ -213,7 +217,7 @@ function theCompilerMustRejectEachOfThese(): void {
 
   // A wrong value type on an optional field.
   // @ts-expect-error - 'number' is not assignable to 'string'
-  present<DialogEvidenceItem>({ selector: "#invite", role: "dialog", modal: true, native: false, label: 7, bounds: undefined });
+  present<DialogEvidenceItem>({ selector: "#invite", role: "dialog", modal: true, native: false, label: 7, bounds: undefined, kind: undefined });
 
   // Naming a type the compiler cannot check a literal against. `present<{}>` and
   // `present<object>` are the un-named call wearing a type argument: excess
@@ -239,7 +243,8 @@ function theCompilerMustAcceptThis(): DialogEvidenceItem {
     modal: true,
     native: false,
     label: undefined,
-    bounds: undefined
+    bounds: undefined,
+    kind: undefined
   });
 }
 

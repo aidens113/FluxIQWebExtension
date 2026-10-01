@@ -1,26 +1,26 @@
-// The state snapshot: what the page looks like right now, as a bounded, ranked
-// list of elements. Candidates are gathered from the elements the user has
-// touched, then the standard controls, then text and media, then a capped sweep
-// of everything else; each is kept only if it is visible and carries some
-// identity. Ranking puts what the user acted on first, so truncation drops the
-// least useful elements rather than an arbitrary tail -- and keeps one example
-// of each control a page repeats row after row, ranking the rest of the run
-// after every distinct element (`repeat-exemplars.ts`), so a many-row page's
-// template cannot crowd its own buttons out of the head of the list. Every
+// The state snapshot: what the page looks like right now, as every element it
+// renders, in the order a person reads it (t200).
+//
+// `rendered-elements.ts` says what "renders" means and why the list stopped
+// being a selection: it used to be gathered from allow-lists, filtered by
+// name, size, opacity and `aria-hidden`, ranked, and cut at 2,000, and the
+// model failed on exactly the cookie walls, pop-ups and robot checks the cut
+// and the filters removed. Nothing is ranked here and nothing is cut. Each
+// element is described in full (`describe-element.ts`); a repeated control
+// still carries how many of its kind the page holds, as `repeatCount`
+// (`repeat-exemplars.ts`), and that annotation moves nothing. Two more facts
+// are marked on the element they hold for, and move nothing either:
+// `frontLayer`, for an element on a layer the page paints over itself
+// (`evidence/front-layer.ts`), and `leadStatement`, for one of the main
+// region's own short statements about what the page shows
+// (`evidence/lead-statements.ts`). Both used to rank; now they inform. Every
 // gathering pass enters open shadow roots (`shadow-dom/`), because a widget's
 // controls are on the page a person sees whichever tree they live in.
-//
-// After what was touched come the controls that change what this page shows --
-// its facets, its sort, its pager -- and the controls of whatever is painted
-// over it; then the page's own controls, its links, and last of all its
-// footer's. `evidence/controls.ts` holds those rules and the measurement that
-// forced them: a store's filter rail ranked 56th of 611 elements, behind twenty
-// footer links, and reached no packet a model was ever given.
 //
 // A list of elements is not a picture of a page, so the snapshot also carries
 // `evidence`: the dialogs in front of it, what is covering its controls,
 // whether it is still loading, its landmarks, what repeats on it, its forms,
-// how it was navigated to, and how much of the element list was dropped. Each
+// how it was navigated to, and how many elements the walk looked at. Each
 // item is gathered by the module in `evidence/` that owns it, and this file
 // only asks -- what a snapshot is stays readable here, and a rule for one item
 // is read and changed where it lives (Phase 1.4).
@@ -31,37 +31,15 @@
 // this file, using the same shared rule rather than a second one.
 
 import { compactObject } from "./compact-object";
-import { isDrawnControl, isFrontLayer, isPageStateControl, isSiteChrome, mainLeadStatements, pageEvidence, recentlyInteractedElements, repeatsTheDocumentAddress, type SnapshotElementCounts, type SnapshotElementEntry } from "./evidence";
+import { frontLayerTest, isLeadStatement, pageEvidence, recentlyInteractedElements, type SnapshotElementCounts, type SnapshotElementEntry } from "./evidence";
 import { currentFrameViewportOffset, isTopFrame } from "./frame-geometry";
-import { isEventBackedElement, observedEventElementQueue } from "./event-elements";
-import {
-  accessibleName,
-  describeElement,
-  directVisibleText,
-  linkHref,
-  readElementValue,
-  stableElementId,
-  visibleText
-} from "./describe-element";
-import {
-  hasVisualMedia,
-  isActionableElement,
-  isInteractableUiElement,
-  isPageControlElement,
-  isPrimaryControlElement,
-  isSemanticTextElement,
-  isSensitiveFormControl,
-  meaningfulText
-} from "./element-traits";
+import { observedEventElementQueue } from "./event-elements";
+import { describeElement } from "./describe-element";
+import { isSensitiveFormControl } from "./element-traits";
+import { renderedElements } from "./rendered-elements";
 import { repeatExemplars } from "./repeat-exemplars";
-import { isExtensionUiNode } from "./picker-host";
 import { withSelectorMemo } from "./selector";
-import { composedClosest, composedDocumentOrder, composedRoots, queryComposed, shadowHostsOf } from "./shadow-dom";
-import { visualDocumentBounds } from "./visual-bounds";
 import type { DomElementDescriptor, DomSnapshot } from "./types";
-
-const MAX_SNAPSHOT_CANDIDATES = 2_000;
-const MAX_SNAPSHOT_SCAN_ELEMENTS = 50_000;
 
 /**
  * The snapshot as the page is now. It only reads, so every selector it writes
@@ -104,17 +82,6 @@ function captureSnapshotNow(): DomSnapshot {
   return snapshot;
 }
 
-/** The longest selection the snapshot carries. */
-const MAX_SELECTED_TEXT = 2_000;
-
-/**
- * How many candidate controls the selection is tested against before the
- * snapshot gives up and withholds it. A page with more form controls than this
- * is not a page anyone is reading a selection off, and an unbounded scan on
- * every capture is worse than a lost diagnostic.
- */
-const MAX_SELECTION_SCAN = 2_000;
-
 /** Every element the shared sensitivity rule could mark. Narrows the scan; the rule still decides. */
 const SENSITIVE_CANDIDATE_SELECTOR = "input, textarea, select, [autocomplete], [data-sensitive]";
 
@@ -150,12 +117,16 @@ const SENSITIVE_CANDIDATE_SELECTOR = "input, textarea, select, [autocomplete], [
  * Shadow DOM is out of scope here, although the element list enters open
  * roots: the selection is the document's, and a selection inside a closed
  * shadow root is not reachable from here at all.
+ *
+ * The selection is carried whole, and every candidate control is asked (t200):
+ * it was cut at 2,000 characters, and withheld outright on a page with more
+ * than 2,000 form controls rather than asking them all.
  */
 function capturedSelectionText(): string | undefined {
   const selection = window.getSelection();
   const text = selection?.toString();
   if (!selection || !text) return undefined;
-  return selectionTouchesSensitiveControl(selection) ? undefined : text.slice(0, MAX_SELECTED_TEXT);
+  return selectionTouchesSensitiveControl(selection) ? undefined : text;
 }
 
 function selectionTouchesSensitiveControl(selection: Selection): boolean {
@@ -163,7 +134,6 @@ function selectionTouchesSensitiveControl(selection: Selection): boolean {
   if (withinSensitiveControl(selection.anchorNode) || withinSensitiveControl(selection.focusNode)) return true;
 
   const candidates = document.querySelectorAll(SENSITIVE_CANDIDATE_SELECTOR);
-  if (candidates.length > MAX_SELECTION_SCAN) return true;
   const ranges: Range[] = [];
   for (let index = 0; index < selection.rangeCount; index += 1) ranges.push(selection.getRangeAt(index));
   for (const candidate of candidates) {
@@ -184,52 +154,30 @@ function withinSensitiveControl(node: Node | null | undefined): boolean {
 }
 
 /**
- * The descriptors the snapshot carries, with the elements they were built from
- * and the counts taken on the way. The counts are what makes truncation
- * visible: without the pre-filter totals a reader cannot tell a page with forty
- * controls from one with four thousand whose tail was dropped.
+ * The descriptors the snapshot carries -- one for every rendered element, in
+ * composed document order -- with the elements they were built from and the
+ * counts taken on the way.
  *
- * A run's followers sort after everything else before any other rule is
- * asked, and each run's exemplar carries the run's size as `repeatCount`, so
- * a reader shown only the head still knows how many rows it stands for.
+ * A run of repeated controls is left where the page put it. Its first member
+ * carries the run's size as `repeatCount`, so a reader can say "one of 280
+ * rows" without counting; the other members are described like any element.
  */
 function snapshotElements(): { entries: SnapshotElementEntry[]; counts: SnapshotElementCounts } {
-  const seen = new Set<Element>();
-  const { candidates, scanned } = snapshotCandidateElements();
-  const included: Element[] = [];
-  for (const element of candidates) {
-    if (seen.has(element) || !shouldIncludeSnapshotElement(element)) continue;
-    seen.add(element);
-    included.push(element);
-  }
-  const repeats = repeatExemplars(included, touchedElements());
-  const leadStatements = mainLeadStatements(included, composedDocumentOrder);
-  // Each element is asked what it is once, before the sort rather than inside
-  // it. A comparator that asked would ask O(n log n) times, and every question
-  // here reads computed style or walks ancestors.
-  const ranked = included.map((element) => ({
+  const { elements, walked } = renderedElements();
+  const repeats = repeatExemplars(elements, touchedElements());
+  const inFrontLayer = frontLayerTest();
+  const entries = elements.map((element) => ({
     element,
-    follower: repeats.followers.has(element) ? 1 : 0,
-    bucket: snapshotElementBucket(element, leadStatements),
-    priority: elementPriority(element)
+    descriptor: snapshotDescriptor(element, repeats.counts.get(element), inFrontLayer(element))
   }));
-  const entries = ranked
-    .sort((left, right) =>
-      left.follower - right.follower ||
-      left.bucket - right.bucket ||
-      right.priority - left.priority ||
-      composedDocumentOrder(left.element, right.element)
-    )
-    .slice(0, MAX_SNAPSHOT_CANDIDATES)
-    .map(({ element }) => ({ element, descriptor: snapshotDescriptor(element, repeats.counts.get(element)) }));
-  return { entries, counts: { scanned, candidates: candidates.length, matched: included.length } };
+  return { entries, counts: { scanned: walked, candidates: walked, matched: elements.length } };
 }
 
 /**
  * What a person or an action has just touched: the recorder's event queue and
- * the runtime interaction ledger. A run never ranks one of these behind its
- * exemplar -- the element an action just acted on is what a reader looks for
- * next.
+ * the runtime interaction ledger. A run's exemplar is never chosen over one of
+ * these -- the element an action just acted on is what a reader looks for next
+ * -- which decides only which member carries the run's `repeatCount`.
  */
 function touchedElements(): ReadonlySet<Element> {
   const touched = new Set<Element>(recentlyInteractedElements());
@@ -237,176 +185,16 @@ function touchedElements(): ReadonlySet<Element> {
   return touched;
 }
 
-/** The element's descriptor, and, for a run's exemplar, how many elements the run holds. */
-function snapshotDescriptor(element: Element, repeatCount: number | undefined): DomElementDescriptor {
+/**
+ * The element's descriptor, with the facts only a snapshot knows: for a run's
+ * exemplar, how many elements the run holds; whether it is on a front layer;
+ * whether it is one of the main region's lead statements. The two flags are
+ * written only when true.
+ */
+function snapshotDescriptor(element: Element, repeatCount: number | undefined, frontLayer: boolean): DomElementDescriptor {
   const descriptor = describeElement(element);
   if (repeatCount !== undefined) descriptor.repeatCount = repeatCount;
-  if (repeatsTheDocumentAddress(element, descriptor)) delete descriptor.href;
+  if (frontLayer) descriptor.frontLayer = true;
+  if (isLeadStatement(element)) descriptor.leadStatement = true;
   return descriptor;
-}
-
-function snapshotCandidateElements(): { candidates: Element[]; scanned: number } {
-  const seen = new Set<Element>();
-  const candidates: Element[] = [];
-  const add = (element: Element | null | undefined) => {
-    if (!element || seen.has(element)) return;
-    seen.add(element);
-    candidates.push(element);
-  };
-
-  for (const element of observedEventElementQueue) {
-    if (element.isConnected) add(element);
-  }
-  // Open shadow roots are part of the page a person sees: a consent wall's
-  // buttons live in one (`shadow-dom/`). A closed root is described as its host.
-  const roots = composedRoots(document);
-  for (const element of queryComposed(roots, "a[href],button,input:not([type=hidden]),textarea,select,summary,label,[role=button],[role=link],[role=menuitem],[role=checkbox],[role=radio],[role=tab],[role=switch],[contenteditable=true]")) add(element);
-  for (const element of queryComposed(roots, "p,h1,h2,h3,h4,h5,h6,li,td,th,blockquote,dt,dd,figcaption")) add(element);
-  for (const element of queryComposed(roots, "img,svg,picture,canvas,video")) add(element);
-  let scanned = 0;
-  for (const element of queryComposed(roots, "*")) {
-    scanned += 1;
-    if (scanned > MAX_SNAPSHOT_SCAN_ELEMENTS) break;
-    if (!hasElementPresentation(element)) continue;
-    add(element);
-  }
-
-  return { candidates, scanned };
-}
-
-function shouldIncludeSnapshotElement(element: Element): boolean {
-  if (element === document.documentElement || element === document.body) return false;
-  // The extension's own overlays (`picker-host.ts`) are not the page.
-  if (isExtensionUiNode(element)) return false;
-  // Asked across shadow boundaries: a control inside a hidden widget's root is
-  // hidden with it, and `closest` alone stops at the root.
-  if (composedClosest(element, "script, style, noscript, template")) return false;
-  if (composedClosest(element, "[hidden], [aria-hidden='true']")) return false;
-  const bounds = visualDocumentBounds(element);
-  if (!bounds) return false;
-  const style = getComputedStyle(element);
-  if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return false;
-  return isEventBackedElement(element)
-    ? hasEventElementPresentation(element)
-    : isInteractableUiElement(element)
-      ? hasMeaningfulInteractableIdentity(element)
-      : hasElementPresentation(element);
-}
-
-/**
- * Coarse relevance, applied before the priority score. A bucket says what an
- * element is for; the score only orders within one.
- *
- * What changes the page comes first, ahead even of the page's own form controls
- * (`evidence/controls.ts` says why, and what it costs to get this wrong): a
- * facet, a price band, a sort order, a page of results. A bounded list has to
- * describe the controls nothing else describes, and a refinement the model is
- * never shown is a refinement it cannot apply.
- *
- * The page's own controls come next, before its links (`isPageControlElement`
- * says why). A button satisfies both tests and the first one wins, so it stays
- * with the fields it applies; what falls through to the primary-control bucket
- * is links, summaries, menu items and tabs.
- *
- * The site's footer comes after all of them. It is the same on every page of
- * the site and changes nothing about this one, so its twenty legal and
- * corporate links rank behind the page's own content instead of ahead of it --
- * and still ahead of the page's prose, because a footer link is at least
- * something to act on.
- *
- * The exception to "text last" is the main region's own account of what it is
- * showing: at most three short lines, "No results for ..." or "1-16 of 42
- * results" (`evidence/lead-statements.ts`). They rank with the page-state
- * controls, whose outcome they state, and after them on priority, since a
- * control scores higher than text. Ranked as prose they were in no packet:
- * live run 21 searched with a query the store matched nothing for, was never
- * told, and read that page as results for all 64 of its decisions.
- */
-function snapshotElementBucket(element: Element, leadStatements: ReadonlySet<Element>): number {
-  if (isEventBackedElement(element)) return 0;
-  if (isPageStateControl(element)) return 1;
-  if (leadStatements.has(element)) return 1;
-  const control = controlBucket(element);
-  if (control !== undefined) {
-    // A control of whatever is painted over the page joins them: the page
-    // behind a consent banner cannot be clicked until the banner is answered.
-    // Only a page control asks, so a sticky header's links stay links.
-    if (control === 2 && inFrontLayer(element)) return 1;
-    // Only a control is demoted for sitting in the footer. Footer prose is text
-    // like any other text and is ranked as text, which it would be anyway.
-    return isSiteChrome(element) ? 5 : control;
-  }
-  if (isSemanticTextElement(element)) return 6;
-  if (meaningfulText(directVisibleText(element))) return 7;
-  if (hasVisualMedia(element)) return 8;
-  if (meaningfulText(visibleText(element))) return 9;
-  return 10;
-}
-
-/**
- * Which of the three control bands the element is in, or `undefined` for
- * something that is not a control.
- *
- * The last band is where a control the page drew out of a `<div>` lands, behind
- * every link on the page. `isDrawnControl` lifts the ones the page dressed to
- * be pressed and nothing else claims into the page's own band: the browser
- * makes nothing of them, but the reader can still press them, and on a page
- * whose narrowing controls are all drawn that way the last band is the same as
- * not being described at all.
- */
-/**
- * Whether the element is part of something painted over the page. A control
- * inside a shadow root is asked through its hosts as well, because the fixed
- * layer is usually the custom element itself -- `rf-consent` is `position:
- * fixed` and its buttons are not -- and `isFrontLayer`'s walk stops at the root.
- */
-function inFrontLayer(element: Element): boolean {
-  return isFrontLayer(element) || shadowHostsOf(element).some(isFrontLayer);
-}
-
-function controlBucket(element: Element): number | undefined {
-  if (isPageControlElement(element)) return 2;
-  if (isPrimaryControlElement(element)) return 3;
-  if (!isInteractableUiElement(element)) return undefined;
-  return isDrawnControl(element) ? 2 : 4;
-}
-
-function hasMeaningfulInteractableIdentity(element: Element): boolean {
-  return Boolean(
-    stableElementId(element) ||
-    meaningfulText(accessibleName(element)) ||
-    meaningfulText(visibleText(element)) ||
-    meaningfulText(directVisibleText(element)) ||
-    meaningfulText(readElementValue(element)) ||
-    meaningfulText(element.getAttribute("title")) ||
-    meaningfulText(element.getAttribute("alt")) ||
-    meaningfulText(element.getAttribute("placeholder")) ||
-    meaningfulText(linkHref(element))
-  );
-}
-
-function hasEventElementPresentation(element: Element): boolean {
-  return hasMeaningfulInteractableIdentity(element) || hasElementPresentation(element);
-}
-
-function hasElementPresentation(element: Element): boolean {
-  return meaningfulText(visibleText(element)) ||
-    meaningfulText(accessibleName(element)) ||
-    meaningfulText(readElementValue(element)) ||
-    hasVisualMedia(element);
-}
-
-function elementPriority(element: Element): number {
-  let score = 0;
-  if (isInteractableUiElement(element)) score += 200;
-  if (isActionableElement(element)) score += 100;
-  if (stableElementId(element)) score += 60;
-  if (meaningfulText(accessibleName(element))) score += 45;
-  if (meaningfulText(visibleText(element))) score += 35;
-  if (meaningfulText(readElementValue(element))) score += 35;
-  if (meaningfulText(directVisibleText(element))) score += 25;
-  if (meaningfulText(linkHref(element))) score += 40;
-  const bounds = visualDocumentBounds(element);
-  if (bounds) score += Math.min(20, Math.sqrt(bounds.width * bounds.height) / 8);
-  return score;
 }

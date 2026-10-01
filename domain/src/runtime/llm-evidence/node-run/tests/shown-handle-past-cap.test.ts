@@ -13,12 +13,14 @@
 // showed it.
 //
 // The stub page below is that shape: forty controls down to the filter, more
-// below them, and a notice that appears after the first look.
+// below them, and a notice that appears after the first look. Since t200 the
+// packet is never cut at forty, so the model is shown the whole page and the
+// look before the press describes the filter too; the handle must still press.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
 
 const PROJECT = { projectId: "project.crossborder", flowId: "flow.crossborder" };
 const PAGE = "https://farbazaar.test/scenarios/crossborder-marketplace/search";
@@ -29,6 +31,11 @@ const VOLTBAY = "aside > div:nth-of-type(6) > label:nth-of-type(4) > div";
 type Packet = JsonObject & { elements?: Array<{ target: string; text?: string; name?: string }> };
 type Element = JsonObject & { selector: string };
 
+/** Where the live packet ended: at its forty elements, the old bound. */
+const LIVE_PACKET_LENGTH = 40;
+/** The page's controls without the notice: forty down to the filter, and five results. */
+const PAGE_LENGTH = LIVE_PACKET_LENGTH + 5;
+
 /**
  * A results page whose forty described controls end at the brand filter, and a
  * notice above the sidebar on the looks `noticeOn` names (the first look is 1).
@@ -36,7 +43,7 @@ type Element = JsonObject & { selector: string };
 function searchPage(noticeOn: (look: number) => boolean) {
   const clicked: string[] = [];
   let looks = 0;
-  const upper: Element[] = Array.from({ length: WEB_LLM_EVIDENCE_BOUNDS.elements - 2 }, (_, index) => ({ tagName: "button", selector: `#control-${index + 1}`, visibleText: `Control ${index + 1}` }));
+  const upper: Element[] = Array.from({ length: LIVE_PACKET_LENGTH - 2 }, (_, index) => ({ tagName: "button", selector: `#control-${index + 1}`, visibleText: `Control ${index + 1}` }));
   const filter: Element[] = [
     { tagName: "div", selector: VOLTBAY, visibleText: "Voltbay" },
     { tagName: "button", selector: "aside .brand-ok", visibleText: "OK" }
@@ -83,8 +90,8 @@ test("a handle from the packet just shown is pressed even when the look before t
   const page = searchPage((look) => look > 1);
   const runtime = createWebAutomationLlmEvidenceRuntime(page.gateway);
   const shown = await look(runtime);
-  // The packet the model read ends at the filter, as the live one did.
-  assert.equal(shown.elements!.length, WEB_LLM_EVIDENCE_BOUNDS.elements);
+  // The packet the model read is the whole page, results included (t200).
+  assert.equal(shown.elements!.length, PAGE_LENGTH);
   const voltbay = shown.elements!.find((element) => element.text === "Voltbay");
   assert.ok(voltbay, "the packet shows the Voltbay filter");
 

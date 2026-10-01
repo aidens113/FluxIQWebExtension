@@ -24,7 +24,7 @@ import { createWebAutomationLlmEvidenceRuntime } from "../tools";
 import { WEB_LLM_RUN_NODE_TOOL_ID,
   WEB_LLM_PRESS_TOOL_ID } from "../vocabulary";
 
-const BASE = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 16_000 } as const;
+const BASE = { projectId: "project.one", flowId: "flow.one" } as const;
 
 /** The page's own words, none of which may ever appear in a refusal. */
 const PAGE_WORDS = ["Schedule post", "Draft to the Northwind account", "queue-rows", "#schedule"] as const;

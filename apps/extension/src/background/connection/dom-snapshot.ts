@@ -2,8 +2,8 @@
 // worker collects one per frame and merges them into a single tab snapshot.
 //
 // Merging is per item, not per snapshot. The elements of every frame become one
-// list -- bounded like every collection beside it, which until 2026-09-12 it
-// was not -- and so does every page-level evidence item that is additive: a
+// list -- whole: there is no merged cap on it or on any collection beside it
+// (t200) -- and so does every page-level evidence item that is additive: a
 // dialog in a child frame is a dialog on the page, a covered control is covered
 // whichever document paints over it, and the element totals only mean anything
 // if they count the same frames the element list spans. The items that describe
@@ -28,6 +28,17 @@
 // and drops the undefined ones afterwards. That is what makes the merge
 // exhaustive: a ninth key on `WebAutomationPageEvidence` stops both functions
 // compiling until each says what it does with it.
+//
+// An element's own facts cross the merge with it: a child frame's descriptors
+// are carried whole, only their selector, bounds and frame attributes restated
+// (`frame-geometry.ts`), so `frontLayer`, `leadStatement` and `repeatCount`
+// arrive on the merged list as the frame wrote them. A dialog's or a blocker's
+// `kind` is restated key by key like the rest of its entry.
+//
+// A frame that does not answer is named, not dropped: its id goes on the
+// merged evidence as `unansweredFrameIds`. A robot check or a consent wall is
+// often a child frame, and "the page has no wall" and "the frame holding the
+// wall did not answer" must not read the same.
 
 import { createWebAutomationStateFromSnapshot } from "@fluxiq-web-extension/domain/client";
 import { present } from "../../shared/present";
@@ -53,28 +64,32 @@ import { translateFrameElements } from "./frame-geometry";
 
 export type DomSnapshotPayload = Parameters<typeof createWebAutomationStateFromSnapshot>[0];
 
-// A merged snapshot spans every frame, so each collection needs a budget of its
-// own: the per-frame modules in `content/evidence/` cap themselves, but ten
-// frames would otherwise contribute ten times the cap to one payload that is
-// built on every recorded event. Each is roughly twice its per-frame cap, which
-// is room for a handful of frames rather than for a frame bomb.
-const MAX_MERGED_DIALOGS = 10;
-const MAX_MERGED_BLOCKERS = 10;
-const MAX_MERGED_BUSY_REGIONS = 16;
-const MAX_MERGED_LOADING_INDICATORS = 16;
-const MAX_MERGED_REGIONS = 40;
-const MAX_MERGED_REPEATING = 12;
-const MAX_MERGED_FORMS = 16;
-// The element list is the largest of them and was the one taking `...elements`
-// from every frame with no budget at all. Invisible on the two-frame Lab
-// fixture, whose frames hold six elements each; a page of ad, chat and payment
-// frames can contribute `MAX_SNAPSHOT_CANDIDATES` (2,000,
-// `content/dom-snapshot.ts`) each. Twice the per-frame cap, as above.
-const MAX_MERGED_ELEMENTS = 4_000;
+/** The id the browser always gives a tab's main frame. */
+const TOP_FRAME_ID = 0;
 
-// A frame that never answers must not hold up an event: every per-frame call
-// falls back instead of waiting.
-const FRAME_SNAPSHOT_TIMEOUT_MS = 150;
+/**
+ * How long the merge waits for the frame list, and for each frame's snapshot;
+ * the frames are asked at once, so this is also about how long the whole merge
+ * waits for them.
+ *
+ * It was 150 ms, sized for a capture of at most 2,000 ranked elements, and a
+ * frame that answered after it was dropped without a word. A capture now
+ * describes every element of its frame (t200) -- a selector, a name, a label
+ * and a context for each -- so a large frame needs far longer than that; the
+ * time a capture takes on a real page is measured on the Lab's scenarios, not
+ * assumed here. Ten seconds is long enough for a large frame and still leaves
+ * the look inside Core's thirty-second default wait for a command sent without
+ * a timeout of its own, after the top frame's own capture. A frame with no
+ * listener at all is refused by the browser at once and does not wait. A
+ * caller with a deadline of its own passes a shorter wait (`waitMs`).
+ */
+const FRAME_SNAPSHOT_WAIT_MS = 10_000;
+
+/** What a caller may say about how the merge waits. */
+export type MergedSnapshotOptions = {
+  /** How long to wait for the frame list and each frame; `FRAME_SNAPSHOT_WAIT_MS` when absent. */
+  readonly waitMs?: number;
+};
 
 // The tab-messaging calls this module needs, supplied by the caller so the
 // module stays free of the background worker's chrome wiring.
@@ -121,71 +136,89 @@ export function hasSnapshotFrameViewportOffset(snapshot: DomSnapshotPayload): bo
 export async function captureSingleFrameSnapshot(
   transport: TabSnapshotTransport,
   tabId: number,
-  frameId: number
+  frameId: number,
+  waitMs: number = FRAME_SNAPSHOT_WAIT_MS
 ): Promise<DomSnapshotPayload | undefined> {
-  const snapshot = await withTimeout(transport.sendToTab(tabId, { type: "captureSnapshot" }, frameId), FRAME_SNAPSHOT_TIMEOUT_MS, undefined);
+  const snapshot = await withTimeout(transport.sendToTab(tabId, { type: "captureSnapshot" }, frameId), waitMs, undefined);
   return isDomSnapshotPayload(snapshot) ? snapshot : undefined;
 }
 
+/**
+ * Every frame of the tab, merged into one snapshot.
+ *
+ * `seedSnapshot` is a snapshot already in hand, from `seedFrameId`: the one a
+ * recorded event carried, or the top frame's own look. It is not asked for
+ * again, and it leads the element list, because the frame an interaction
+ * happened in is what a reader looks at first (`tests/recording-evidence.test.ts`
+ * pins it). The top frame follows, then every other frame in the order the
+ * browser lists them -- a fixed order, where it used to be whichever answered
+ * first.
+ *
+ * The top frame is read once, beside the frame list, and stands for frame 0
+ * whether or not the list names it. Every other listed frame is asked at the
+ * same time; one that has not answered when the wait ends is named in
+ * `evidence.unansweredFrameIds`.
+ */
 export async function captureMergedTabSnapshot(
   transport: TabSnapshotTransport,
   tabId: number,
   seedSnapshot?: DomSnapshotPayload,
-  seedFrameId?: number
+  seedFrameId?: number,
+  options: MergedSnapshotOptions = {}
 ): Promise<DomSnapshotPayload | undefined> {
-  const topFallback = await captureSingleFrameSnapshot(transport, tabId, 0);
-  const fallback = topFallback ?? seedSnapshot;
-  const frames = await withTimeout(transport.allTabFrames(tabId), FRAME_SNAPSHOT_TIMEOUT_MS, []);
-  const frameSnapshots: Array<{ frameId: number; snapshot: DomSnapshotPayload }> = [];
-  if (seedSnapshot && seedFrameId !== undefined) frameSnapshots.push({ frameId: seedFrameId, snapshot: seedSnapshot });
-  await withTimeout(Promise.allSettled(frames.map(async (frame) => {
-    if (seedFrameId !== undefined && frame.frameId === seedFrameId && seedSnapshot) return;
-    const snapshot = await captureSingleFrameSnapshot(transport, tabId, frame.frameId);
-    if (snapshot) frameSnapshots.push({ frameId: frame.frameId, snapshot });
-  })), FRAME_SNAPSHOT_TIMEOUT_MS, []);
-  if (!frameSnapshots.length) return fallback;
-  const listedTop = frameSnapshots.find((entry) => entry.frameId === 0 || entry.snapshot.frame?.isTop);
-  const topSnapshot = listedTop?.snapshot ?? topFallback;
+  const waitMs = options.waitMs ?? FRAME_SNAPSHOT_WAIT_MS;
+  const seed = seedSnapshot && seedFrameId !== undefined ? { frameId: seedFrameId, snapshot: seedSnapshot } : undefined;
+  const topRead = seed?.frameId === TOP_FRAME_ID
+    ? Promise.resolve(seed.snapshot)
+    : captureSingleFrameSnapshot(transport, tabId, TOP_FRAME_ID, waitMs);
+  const listed = await withTimeout(transport.allTabFrames(tabId), waitMs, []);
+  const childIds = [...new Set(listed.map((frame) => frame.frameId))]
+    .filter((frameId) => frameId !== TOP_FRAME_ID && frameId !== seed?.frameId);
+  const [topAnswer, ...childAnswers] = await Promise.all([
+    topRead,
+    ...childIds.map((frameId) => captureSingleFrameSnapshot(transport, tabId, frameId, waitMs))
+  ]);
+
+  const answered: Array<{ frameId: number; snapshot: DomSnapshotPayload }> = [];
+  if (seed) answered.push(seed);
+  if (topAnswer && seed?.frameId !== TOP_FRAME_ID) answered.push({ frameId: TOP_FRAME_ID, snapshot: topAnswer });
+  const unansweredFrameIds: number[] = [];
+  childIds.forEach((frameId, index) => {
+    const snapshot = childAnswers[index];
+    if (snapshot) answered.push({ frameId, snapshot });
+    else unansweredFrameIds.push(frameId);
+  });
+
+  const topSnapshot = topAnswer ?? answered.find((entry) => entry.snapshot.frame?.isTop === true)?.snapshot;
   if (!topSnapshot) return undefined;
-  // A top frame known only from `topFallback` -- the frame list omitted frame 0,
-  // or frame 0 missed its second read -- is still one of the page's documents.
-  // Left out of the loop below it lent the merge its URL and `readyState` and
-  // dropped its elements, element totals and additive evidence. It goes where it
-  // answered: after the seed, before the frames read in parallel.
-  if (!listedTop) frameSnapshots.splice(seedSnapshot && seedFrameId !== undefined ? 1 : 0, 0, { frameId: 0, snapshot: topSnapshot });
   const collectedElements: NonNullable<RecordingEventPayload["element"]>[] = [];
   // The top frame's evidence leads the merged collections: within one document
-  // the content script reports dialogs and blockers top-most first, and no
-  // stacking order exists across documents, so the page's own comes first and
-  // the frames follow in the order they answered.
-  //
-  // The *elements* keep the order the frames answered in, seed frame first,
-  // which `tests/recording-evidence.test.ts` pins deliberately: the frame the
-  // interaction happened in leads. That order decides more than it did, because
-  // the list below is capped and a cap drops a tail -- see the open question in
-  // `reports/x-scan-cap.md`.
+  // the content script reports dialogs top-most first, and no stacking order
+  // exists across documents, so the page's own comes first and the frames
+  // follow in the order above.
   let topEvidence: PageEvidence | undefined;
   const frameEvidence: PageEvidence[] = [];
-  for (const entry of frameSnapshots) {
+  for (const entry of answered) {
     const isTopEntry = entry.snapshot === topSnapshot || entry.snapshot.frame?.isTop === true;
     const elements = isTopEntry
       ? entry.snapshot.interactiveElements
       : translateFrameElements(entry.snapshot, topSnapshot, entry.frameId);
-    collectedElements.push(...elements);
+    // One at a time rather than `push(...elements)`: a spread passes every
+    // element as an argument, and a large frame has more than a call accepts.
+    for (const element of elements) collectedElements.push(element);
     const evidence = pageEvidenceOf(entry.snapshot);
     if (!evidence) continue;
     if (isTopEntry) topEvidence ??= evidence;
     else frameEvidence.push(frameEvidenceInTopFrameTerms(evidence, entry.snapshot, topSnapshot, entry.frameId));
   }
-  const mergedElements = collectedElements.slice(0, MAX_MERGED_ELEMENTS);
   const merged: DomSnapshotPayload = {
     ...topSnapshot,
-    interactiveElements: mergedElements
+    interactiveElements: collectedElements
   };
   const evidence = mergePageEvidence(
     topEvidence ? [topEvidence, ...frameEvidence] : frameEvidence,
     topEvidence ?? pageEvidenceOf(topSnapshot),
-    collectedElements.length - mergedElements.length
+    unansweredFrameIds
   );
   if (evidence) merged.evidence = evidence;
   return merged;
@@ -239,7 +272,7 @@ function frameEvidenceInTopFrameTerms(
     dialogs: dialogs && present<DialogEvidence>({
       open: dialogs.open.map((dialog) => present<DialogEvidenceItem>({
         selector: qualify(dialog.selector), role: dialog.role, modal: dialog.modal,
-        native: dialog.native, label: dialog.label, bounds: place(dialog.bounds)
+        native: dialog.native, label: dialog.label, bounds: place(dialog.bounds), kind: dialog.kind
       })),
       modal: dialogs.modal,
       armPending: dialogs.armPending,
@@ -250,7 +283,7 @@ function frameEvidenceInTopFrameTerms(
       blockedCount: overlays.blockedCount,
       blockers: overlays.blockers.map((blocker) => present<OverlayEvidenceItem>({
         selector: qualify(blocker.selector), role: blocker.role, label: blocker.label,
-        bounds: place(blocker.bounds), blocks: blocker.blocks, blocked: blocker.blocked.map(qualify)
+        bounds: place(blocker.bounds), blocks: blocker.blocks, blocked: blocker.blocked.map(qualify), kind: blocker.kind
       }))
     }),
     // Key order follows `content/evidence/regions.ts`, not the contract's declaration order, so the restated JSON stays byte-identical.
@@ -273,7 +306,10 @@ function frameEvidenceInTopFrameTerms(
         disabled: control.disabled, hasValue: control.hasValue, autocomplete: control.autocomplete, sensitive: control.sensitive
       })),
       submit: form.submit ? qualify(form.submit) : undefined
-    }))
+    })),
+    // Frame ids are the tab's, not the frame's, so a list a frame reported --
+    // none does today; only the merge writes one -- needs no restating.
+    unansweredFrameIds: evidence.unansweredFrameIds
   });
 }
 
@@ -306,19 +342,19 @@ function frameBoundsOnTopDocument(
  * describe one document and cannot be merged.
  *
  * - **Element totals** are summed, and `truncated` is true when any frame
- *   truncated. Merging the element lists without merging their counts is what
- *   made `elements.returned` read low against a merged snapshot.
- *   `droppedElements` is what `MAX_MERGED_ELEMENTS` cut, subtracted from
- *   `returned` and folded into `truncated` -- the same flag the per-frame
- *   element cap sets, because it is the same fact, and the one the truncation
- *   rule in `domain/src/recording/web-state/evidence/input.ts` assigns to a
- *   capture's element cap. `matched` stays the pre-cap total, so the size of
- *   the drop is still readable as `matched - returned`.
+ *   says it truncated -- which no capture does any more (t200); the merge
+ *   drops nothing either, so `returned` is every frame's sum. Merging the
+ *   element lists without merging their counts is what made
+ *   `elements.returned` read low against a merged snapshot.
  * - **Dialogs, overlays, regions, repeating structures and forms** are
- *   concatenated: each is a statement about a document, and every document on
- *   the page contributes. `modal` and the arming flag are true when any frame
- *   says so, because a modal in a child frame still blocks that frame, and
- *   `lastNative` is the most recent across frames.
+ *   concatenated, whole and in frame order: each is a statement about a
+ *   document, and every document on the page contributes. `modal` and the
+ *   arming flag are true when any frame says so, because a modal in a child
+ *   frame still blocks that frame, and `lastNative` is the most recent across
+ *   frames. Blockers keep each frame's document order; they are no longer
+ *   sorted by how much they block and cut to ten.
+ * - **Unanswered frames** are the child frames the merge asked and heard
+ *   nothing from, named so their absence is not read as an empty frame.
  * - **Loading** is split. `busy`, `pendingNavigation`, the busy regions and the
  *   indicators merge -- a page is still working if any of its documents is --
  *   but `documentState` is `document.readyState`, which belongs to one
@@ -329,13 +365,13 @@ function frameBoundsOnTopDocument(
  *   history length are not the page's, and reporting an ad iframe's origin as
  *   the page's origin would be worse than reporting nothing.
  */
-function mergePageEvidence(contributions: readonly PageEvidence[], base: PageEvidence | undefined, droppedElements = 0): PageEvidence | undefined {
+function mergePageEvidence(contributions: readonly PageEvidence[], base: PageEvidence | undefined, unansweredFrameIds: readonly number[]): PageEvidence | undefined {
   if (!contributions.length) return base;
   const anchor = base ?? contributions[0];
   if (!anchor) return undefined;
-  const regions = cappedList(contributions.flatMap((evidence) => evidence.regions ?? []), MAX_MERGED_REGIONS);
-  const repeating = cappedList(contributions.flatMap((evidence) => evidence.repeating ?? []), MAX_MERGED_REPEATING);
-  const forms = cappedList(contributions.flatMap((evidence) => evidence.forms ?? []), MAX_MERGED_FORMS);
+  const regions = nonEmpty(contributions.flatMap((evidence) => evidence.regions ?? []));
+  const repeating = nonEmpty(contributions.flatMap((evidence) => evidence.repeating ?? []));
+  const forms = nonEmpty(contributions.flatMap((evidence) => evidence.forms ?? []));
   const dialogs = mergeDialogEvidence(contributions);
   const overlays = mergeOverlayEvidence(contributions);
   // Every key of the contract, named. This is the totality the merge lives or
@@ -346,16 +382,16 @@ function mergePageEvidence(contributions: readonly PageEvidence[], base: PageEvi
       scanned: sumOf(contributions, (evidence) => evidence.elements.scanned),
       candidates: sumOf(contributions, (evidence) => evidence.elements.candidates),
       matched: sumOf(contributions, (evidence) => evidence.elements.matched),
-      returned: Math.max(0, sumOf(contributions, (evidence) => evidence.elements.returned) - droppedElements),
-      truncated: droppedElements > 0 || contributions.some((evidence) => evidence.elements.truncated),
+      returned: sumOf(contributions, (evidence) => evidence.elements.returned),
+      truncated: contributions.some((evidence) => evidence.elements.truncated),
       changed: sumOf(contributions, (evidence) => evidence.elements.changed),
       recentlyInteracted: sumOf(contributions, (evidence) => evidence.elements.recentlyInteracted)
     }),
     loading: present<LoadingEvidence>({
       documentState: anchor.loading.documentState,
       busy: contributions.some((evidence) => evidence.loading.busy),
-      busyRegions: contributions.flatMap((evidence) => evidence.loading.busyRegions).slice(0, MAX_MERGED_BUSY_REGIONS),
-      indicators: contributions.flatMap((evidence) => evidence.loading.indicators).slice(0, MAX_MERGED_LOADING_INDICATORS),
+      busyRegions: contributions.flatMap((evidence) => evidence.loading.busyRegions),
+      indicators: contributions.flatMap((evidence) => evidence.loading.indicators),
       pendingNavigation: contributions.some((evidence) => evidence.loading.pendingNavigation)
     }),
     navigation: anchor.navigation,
@@ -363,7 +399,8 @@ function mergePageEvidence(contributions: readonly PageEvidence[], base: PageEvi
     overlays,
     regions,
     repeating,
-    forms
+    forms,
+    unansweredFrameIds: nonEmpty([...unansweredFrameIds, ...contributions.flatMap((evidence) => evidence.unansweredFrameIds ?? [])])
   });
 }
 
@@ -374,7 +411,7 @@ function mergeDialogEvidence(contributions: readonly PageEvidence[]): DialogEvid
     .flatMap((dialogs) => (dialogs.lastNative ? [dialogs.lastNative] : []))
     .sort((left: NativeDialogEvidence, right: NativeDialogEvidence) => right.at - left.at)[0];
   return present<DialogEvidence>({
-    open: reported.flatMap((dialogs) => dialogs.open).slice(0, MAX_MERGED_DIALOGS),
+    open: reported.flatMap((dialogs) => dialogs.open),
     modal: reported.some((dialogs) => dialogs.modal),
     armPending: reported.some((dialogs) => dialogs.armPending) ? true : undefined,
     lastNative: native
@@ -387,9 +424,8 @@ function mergeOverlayEvidence(contributions: readonly PageEvidence[]): OverlayEv
   return present<OverlayEvidence>({
     tested: reported.reduce((total, overlays) => total + overlays.tested, 0),
     blockedCount: reported.reduce((total, overlays) => total + overlays.blockedCount, 0),
-    // Most-blocking first, as within one frame. Array sort is stable, so frames
-    // that block equally keep the order they answered in.
-    blockers: reported.flatMap((overlays) => overlays.blockers).sort((left, right) => right.blocks - left.blocks).slice(0, MAX_MERGED_BLOCKERS)
+    // Each frame's blockers in its own document order, the frames in merge order.
+    blockers: reported.flatMap((overlays) => overlays.blockers)
   });
 }
 
@@ -397,8 +433,9 @@ function sumOf(contributions: readonly PageEvidence[], read: (evidence: PageEvid
   return contributions.reduce((total, evidence) => total + read(evidence), 0);
 }
 
-function cappedList<T>(items: T[], cap: number): T[] | undefined {
-  return items.length ? items.slice(0, cap) : undefined;
+/** The list, or `undefined` for an empty one: an item nothing reported is absent, not present and empty. */
+function nonEmpty<T>(items: T[]): T[] | undefined {
+  return items.length ? items : undefined;
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {

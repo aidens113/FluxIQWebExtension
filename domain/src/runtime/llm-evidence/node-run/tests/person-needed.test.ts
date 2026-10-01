@@ -19,7 +19,7 @@ import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../../failure";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
 
-const PROJECT = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 8_000 };
+const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const HOME = "https://store.test/home";
 const NEXT = "https://store.test/next";
 const NAVIGATE = "web.output.browser-navigate";

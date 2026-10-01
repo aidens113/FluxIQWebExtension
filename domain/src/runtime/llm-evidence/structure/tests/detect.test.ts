@@ -42,7 +42,7 @@ const SCOPE: { projectId: string; flowId: string } = { projectId: "project.one",
 
 /** Every key the model-facing packet may carry, at any depth. Anything else is a leak. */
 const PACKET_KEYS = new Set([
-  "schemaVersion", "trust", "location", "extraction", "target", "itemCount", "fields", "pagination", "confidence", "fieldsTruncated",
+  "schemaVersion", "trust", "location", "extraction", "target", "itemCount", "fields", "pagination", "confidence",
   "key", "label", "kind", "coverage"
 ]);
 
@@ -110,13 +110,11 @@ let callCount = 0;
  * `../../tests/call-route-states.test.ts`; restating them for every fixture
  * here would test nothing about detection.
  */
-async function detect(runtime: WebAutomationLlmEvidenceRuntime, value: JsonObject = {}, options: { maxEvidenceBytes?: number; scope?: typeof SCOPE } = {}) {
+async function detect(runtime: WebAutomationLlmEvidenceRuntime, value: JsonObject = {}, options: { scope?: typeof SCOPE } = {}) {
   callCount += 1;
   const scope = options.scope ?? SCOPE;
   const callId = `call.detect.${callCount}`;
-  const result = await runtime.executeTool(options.maxEvidenceBytes === undefined
-    ? { projectId: scope.projectId, flowId: scope.flowId, callId, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value }
-    : { projectId: scope.projectId, flowId: scope.flowId, callId, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value, maxEvidenceBytes: options.maxEvidenceBytes });
+  const result = await runtime.executeTool({ projectId: scope.projectId, flowId: scope.flowId, callId, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value });
   delete result.stateDigests;
   delete result.routeState;
   return result;
@@ -226,7 +224,7 @@ test("every real detection becomes a selector-free packet and a handle that reso
     assert.equal(packet.confidence, detection.proposal.confidence, name);
     assert.deepEqual(packet.fields, detection.proposal.fields.map((field) => ({ key: field.key, label: field.label, kind: field.spec.kind, coverage: field.coverage })), name);
     assert.equal(packet.target, undefined);
-    assert.equal(packet.fieldsTruncated, undefined);
+    assert.equal("fieldsTruncated" in packet, false, "nothing is cut, so nothing says it was");
 
     const resolved = runtime.resolveExtractionHandle({ ...SCOPE, handle: packet.extraction });
     assert.equal(resolved.ok, true, name);
@@ -330,8 +328,12 @@ test("each way a page can have no readable list is its own refusal, with the cou
     ["repeats", refusing("no_repeating_run", { url: LISTING, elements: [control("Search"), control("Filter"), control("Sort"), control("Open", { repeatCount: 12 })] }),
       { reason: "repeating_groups_not_readable", instead: ["target.4"], groupsSeen: 0, rowsSeen: 12, controlsSeen: 4 }],
     // A working page with nothing on it that repeats: this is not where the list is.
-    ["nothing repeats", refusing("no_repeating_run", { url: LISTING, elements: [control("Search"), control("Filter"), control("Sort"), control("Help")], elementTotal: 9 }),
-      { reason: "nothing_repeats_on_page", groupsSeen: 0, rowsSeen: 0, controlsSeen: 9 }],
+    ["nothing repeats", refusing("no_repeating_run", { url: LISTING, elements: [control("Search"), control("Filter"), control("Sort"), control("Help")] }),
+      { reason: "nothing_repeats_on_page", groupsSeen: 0, rowsSeen: 0, controlsSeen: 4 }],
+    // The packet carries every rendered element, and a page of text is not a
+    // page of controls: one control among a page of words is still a check.
+    ["text is not controls", refusing("no_repeating_run", { url: LISTING, elements: [control("Verify you are human"), ...Array.from({ length: 12 }, (_, index) => ({ tagName: "p", selector: `#p${index}`, visibleText: `Paragraph ${index}` }))] }),
+      { reason: "page_is_not_the_content", groupsSeen: 0, rowsSeen: 0, controlsSeen: 1 }],
     // Almost nothing on it at all: the shape of a robot check.
     ["bare", refusing("no_repeating_run", { url: LISTING, elements: [control("Verify you are human")] }),
       { reason: "page_is_not_the_content", groupsSeen: 0, rowsSeen: 0, controlsSeen: 1 }],
@@ -470,7 +472,8 @@ test("sensitive fields are dropped from both halves, and a producer's stray text
   assert.deepEqual(packet.fields.map((field) => field.key), ["product", "category", "price", "stock"]);
   assert.equal(JSON.stringify(result).includes("Hostile"), false);
   assert.equal(JSON.stringify(result).includes("secret"), false);
-  assert.equal(packet.fields[1]!.label.length, 80);
+  // A label arrives whole: nothing on the packet is cut (t200).
+  assert.equal(packet.fields[1]!.label, `Category ${"x".repeat(300)}`);
   const resolved = runtime.resolveExtractionHandle({ ...SCOPE, handle: packet.extraction });
   assert.equal(resolved.ok, true);
   if (resolved.ok) assert.deepEqual(Object.keys(resolved.binding.extractList.fields), ["product", "category", "price", "stock"]);
@@ -483,19 +486,17 @@ test("sensitive fields are dropped from both halves, and a producer's stray text
   await assert.rejects(detect(faulty), /without a structure detection/u);
 });
 
-test("the byte budget cuts fields from both halves together, and a packet that cannot fit is refused", async () => {
-  const { gateway } = fakeGateway(() => captured("product-catalog-largest"));
+test("every readable field is listed, and the handle names exactly the fields listed", async () => {
+  const page = captured("product-catalog-largest");
+  const { gateway } = fakeGateway(() => page);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const result = await detect(runtime, {}, { maxEvidenceBytes: 600 });
+  const result = await detect(runtime, {});
   const packet = result.evidence as WebLlmRepeatingStructure;
-  assert.equal(packet.fieldsTruncated, true);
-  assert.ok(packet.fields.length >= 1 && packet.fields.length < 7, `${packet.fields.length} fields kept`);
-  assert.ok(new TextEncoder().encode(JSON.stringify(packet)).byteLength <= 600);
+  const readable = (page.structure as { proposal: { fields: Array<{ key: string; spec: { handling?: string } }> } }).proposal.fields.filter((field) => field.spec.handling !== "exclude");
+  assert.deepEqual(packet.fields.map((field) => field.key), readable.map((field) => field.key));
   const resolved = runtime.resolveExtractionHandle({ ...SCOPE, handle: packet.extraction });
   assert.equal(resolved.ok, true);
   if (resolved.ok) assert.deepEqual(Object.keys(resolved.binding.extractList.fields), packet.fields.map((field) => field.key));
-
-  assert.deepEqual(await detect(runtime, {}, { maxEvidenceBytes: 120 }), rejection("evidence_budget_exhausted"));
 });
 
 test("unknown, foreign and stale handles are refused, and a resolved binding cannot be changed from outside", async () => {

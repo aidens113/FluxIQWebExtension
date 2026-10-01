@@ -416,7 +416,10 @@ command. It asks the Lab's own questions (`scripts/lab/core/build/`). The
 extension check bundles against Core's compiled `dist`, so without this gate a
 stale Core hid a `node:crypto` import from it on 2026-09-30. It refuses rather
 than rebuilds because `pnpm check` is read-only and the Core beside a worktree
-is usually shared. The extension check also fails when its bundle enters Core
+is usually shared. The extension, domain and test-runner `test` scripts run the
+same gate first: on 2026-09-30 a Core `dist` built before a merge made one
+extension test file fail to import (`fluxiq/ui` had no `ACTIVITY_ACTION_NAMES`),
+and every test after it in that run never ran. The extension check also fails when its bundle enters Core
 through a module missing from Core's `browserBundles.entries`, or when this
 repository's entries stop matching the bundled entries
 (`apps/extension/scripts/browser-entries.mjs`). Those lists are what the

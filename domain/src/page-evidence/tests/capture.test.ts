@@ -130,7 +130,7 @@ const NOT_EXERCISED: (Row & { why: string })[] = [
  * needs a row in `EXERCISED` or `NOT_EXERCISED` by hand; nothing in TypeScript
  * can enumerate a nested optional key at run time.
  */
-const ITEMS: Record<keyof WebAutomationPageEvidence, "always" | "when the page has one"> = {
+const ITEMS: Record<keyof WebAutomationPageEvidence, "always" | "when the page has one" | "only on a merged capture a child frame did not answer"> = {
   elements: "always",
   loading: "always",
   navigation: "always",
@@ -138,7 +138,11 @@ const ITEMS: Record<keyof WebAutomationPageEvidence, "always" | "when the page h
   overlays: "when the page has one",
   regions: "when the page has one",
   repeating: "when the page has one",
-  forms: "when the page has one"
+  forms: "when the page has one",
+  // Written by the background frame merge, never by the content script these
+  // captures come from, and only when a child frame's answer did not arrive in
+  // time (t200). No single-frame capture can carry it.
+  unansweredFrameIds: "only on a merged capture a child frame did not answer"
 };
 
 function reachesInAnyCapture(reach: Reach): boolean {
@@ -147,6 +151,7 @@ function reachesInAnyCapture(reach: Reach): boolean {
 
 test("every item the contract declares is carried by a real capture, and the three unconditional ones by all of them", () => {
   for (const [item, when] of Object.entries(ITEMS) as [keyof WebAutomationPageEvidence, string][]) {
+    if (when === "only on a merged capture a child frame did not answer") continue;
     const carrying = CAPTURES.filter(([, evidence]) => evidence[item] !== undefined).map(([name]) => name);
     assert.notDeepEqual(carrying, [], `no capture carries \`${item}\`, so nothing proves the producer writes it`);
     if (when === "always") {

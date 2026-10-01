@@ -371,8 +371,8 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
   });
   const malformed: JsonObject[] = [
     { selector: { handle: "target.x" } },
-    // Past the widest number a Flow issues (`stable-handles.ts`).
-    { selector: { handle: "target.10000" } },
+    // Past the widest number a Flow issues (`stable-handles.ts`): six digits.
+    { selector: { handle: "target.1000000" } },
     { selector: { handle: "target.0" } },
     { selector: { handle: 5 } },
     { selector: { handle: "target.1", extra: true } },

@@ -1,63 +1,50 @@
-// A raw page snapshot becomes `web-llm-evidence.v2`: the bounded, value-free,
+// A raw page snapshot becomes `web-llm-evidence.v2`: the value-safe,
 // origin-checked packet that is the only page data an LLM ever sees.
 //
-// Two things make it safe to hand to a model. Nothing that could be a secret
-// survives -- no input values, no query strings, no cross-origin links, no
-// control whose signature says it holds a credential. And it is bounded, by a
-// budget that depends on which consumer asked: the exploration tools default
-// to 6,000 bytes, the failure path to Core's 3,000-byte gate, and neither may
-// exceed 12,000. Over budget, the packet is trimmed rather than refused --
-// lowest-value evidence first -- and says so in `truncated`.
+// It carries every element the capture sent, in the order the capture sent it
+// -- document order -- with its text and its attributes, and nothing in it is
+// capped, ranked, trimmed or budgeted (t200, the user's order of 2026-09-30:
+// "Remove ANY AND ALL LIMITS ON THE NUMBER OF ELEMENTS PASSED TO MODEL. DO NOT
+// HIDE INFORMATION OR USE ANY RANKING ALGORITHM."). Until then the packet held
+// forty elements, moved an open modal's controls to the front, cut every string
+// to a field bound and popped elements until it fit a byte budget.
+//
+// What it still refuses to carry is a secret. A control whose signature says
+// it holds one is not described (`elements.ts`), and every string it publishes
+// is screened (`withheld.ts`, `location.ts`), so a token-shaped attribute or a
+// secret query value reaches the model as a marker.
 //
 // A failure packet also says which of its opaque handles the failed action was
 // aiming at. That is the one page fact Core cannot supply -- Core knows the
-// attempt, the node and the definition, and nothing about the control -- and
-// without it the model is shown forty elements and left to guess which one it
-// was asked to repair. It is a handle and never a selector, so the mark is
-// readable by the model and addresses nothing. When the target cannot be
-// marked the packet says so rather than staying silent: `failedTargetMissing`
-// when the action's control is not among the elements described (it left the
-// page, or `budgetTruncated` says the trim cut it), `failedTargetUnknown` when
+// attempt, the node and the definition, and nothing about the control. It is a
+// handle and never a selector, so the mark is readable by the model and
+// addresses nothing. When the target cannot be marked the packet says so rather
+// than staying silent: `failedTargetMissing` when the action's control is not
+// among the elements described (it left the page), `failedTargetUnknown` when
 // the producer did not say which control the action addressed. Exactly one of
 // the three is present on a failure packet, and none of them on any other. A
 // failure packet also names the parameters a repair fills, `repairParameters`,
 // in the domain's own words rather than the page's.
 //
-// Three limits can set `truncated`, and they are three different problems with
-// three different answers: the browser's capture already dropped elements
-// before the packet saw them, the packet's own element bound cut the ranked
-// tail, or the byte budget forced removals. So `truncated` is only the
-// summary -- "is this less than the page" -- and each limit is named beside it
-// as `captureTruncated`, `elementsTruncated` and `budgetTruncated`, present
-// only when they fired. A reader that just needs to know something is missing
-// reads one field; a reader deciding what to do next reads which. The rule and
-// the full set of limits on the evidence path are tabulated once, in
-// `domain/src/recording/web-state/evidence/input.ts`.
+// Nothing is moved to the front, and what stands in front of the page is still
+// said: an open dialog, a wall and what it covers are marked on the elements
+// they are and cover (`layers.ts`), so a consent wall or a robot check reads as
+// one wherever the page put it.
 //
 // No two elements of a packet read alike. Where the page repeats a control, the
 // copies are given what a person would tell them apart by -- the dialog, the
-// row's words, which of them from the top (`look-alikes.ts`) -- and that is
-// recounted after every trim, so it describes the packet the model is given
-// rather than the capture.
-//
-// The budget is also measured as though every handle had the widest number a
-// Flow can issue. The authoring tools renumber a packet after it is built, so
-// each handle names one control for the whole Flow (`stable-handles.ts`), and
-// a number can be longer than the positional one it replaces: measured on the
-// positional ones, a packet at its budget could leave the tool over the room
-// Core gave the call, which ends the build `evidence_limit`.
+// row's words, which of them from the top (`look-alikes.ts`).
 
 import type { JsonObject } from "fluxiq/core";
 import { sanitizedEvidenceElement, type WebLlmEvidenceElement } from "./elements";
-import { frontLayerFirst, openDialogNameOf } from "./front-layer";
-import { evidenceByteLimit, serializedBytes, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
+import { openDialogNameOf } from "./front-layer";
+import { joinWebLlmLayers, type WebLlmLayerSubject } from "./layers";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import { tellWebLlmLookAlikesApart, type WebLlmLookAlikeCues } from "./look-alikes";
-import { capturedTruncated, evidenceElementTotal, webLlmPageContext, type WebLlmPageContext } from "./page-evidence";
+import { capturedTruncated, webLlmPageContext, type WebLlmPageContext } from "./page-evidence";
 import { present } from "./present";
-import { WEB_LLM_TARGET_HANDLE_MAX_NUMBER } from "./stable-handles";
-import { recoverable } from "./tool-rejection";
-import { boundedText, jsonRecord } from "./untrusted-json";
+import { jsonRecord } from "./untrusted-json";
+import { screenedPageText } from "./withheld";
 import type { WebRepairCandidateProjection } from "./target";
 
 /**
@@ -73,18 +60,18 @@ export type WebLlmPageEvidence = WebLlmPageContext & {
   trust: "untrusted-page-evidence";
   location: string;
   title?: string;
+  /** Every element the capture sent, in document order. */
   elements: WebLlmEvidenceElement[];
-  /** Any of the three limits below fired, so the packet is less than the page. */
+  /**
+   * The packet is less than the page. The packet itself leaves nothing out, so
+   * this is true only when the capture says it did (`captureTruncated`).
+   */
   truncated: boolean;
-  /** The browser's capture cut elements before the packet saw them. Narrow the capture; asking for a bigger packet will not recover them. */
+  /** The browser's capture left elements out before the packet saw them. */
   captureTruncated?: true;
-  /** The capture offered more elements than the packet's own bound carries, so the ranked tail was left out. */
-  elementsTruncated?: true;
-  /** The byte budget forced removals. A larger budget, or a narrower page, returns them. */
-  budgetTruncated?: true;
   /** The opaque handle of the element the failed action addressed. Only on a failure packet, and never a selector. */
   failedTarget?: string;
-  /** The failed action's control is not among the elements described: it left the page, or, with `budgetTruncated`, the trim cut it. */
+  /** The failed action's control is not among the elements described: it left the page. */
   failedTargetMissing?: true;
   /** The producer did not say which control the failed action addressed, so the packet marks none. Not the same as the control being gone. */
   failedTargetUnknown?: true;
@@ -97,7 +84,7 @@ export type WebLlmPageEvidence = WebLlmPageContext & {
    * nothing to re-point.
    */
   repairParameters?: Record<string, string>;
-  /** Bounded opaque repair handles ranked from these same elements; failure packets only. */
+  /** Every element that could fill the failed action's parameter, by opaque handle, in document order; failure packets only. */
   repairCandidates?: WebRepairCandidateProjection;
 };
 
@@ -129,25 +116,25 @@ export type WebLlmSnapshotBinding = {
   shadowHosts?: Map<string, readonly string[]>;
   /**
    * The page's state digest, taken from the capture this binding was sanitized
-   * from, at the bound `captureStateDigest` digests at rather than this
-   * packet's own (`state-digest/snapshot-states.ts`). It is how a call reports the
+   * from (`state-digest/snapshot-states.ts`). It is how a call reports the
    * state it found and left without another capture. Like the maps it never
    * leaves the domain inside a packet; it leaves only on the call's
-   * `stateDigests`. Absent on a binding no capture produced -- a failure packet,
-   * one built by hand -- and on a page too large to digest.
+   * `stateDigests`. Absent on a binding no capture produced -- a failure
+   * packet, one built by hand.
    */
   stateDigest?: string;
   /**
    * The page's route state, exactly as the host's `observeRouteState` would
-   * read it from the same capture (`state-digest/snapshot-states.ts`), taken at the same
-   * moment and bound as `stateDigest` and absent in the same cases. It leaves
+   * read it from the same capture (`state-digest/snapshot-states.ts`), taken at
+   * the same moment as `stateDigest` and absent in the same cases. It leaves
    * only on the call's `routeState`, and only for the page the call left.
    */
   routeState?: JsonObject;
   /**
-   * The captured page's own query, as key and value pairs, which the packet's
-   * `location` leaves out because a query is where secrets live
-   * (`./location.ts`). Like the selectors it never leaves the domain: it is kept
+   * The captured page's own query, as key and value pairs, unscreened. The
+   * packet's `location` carries the query too, but with a secret-named
+   * parameter's value withheld (`./location.ts`), so it is not what the page
+   * really had. Like the selectors this never leaves the domain: it is kept
    * only so a build may run a site search it performed again with other words
    * (`node-run/shown-addresses.ts`). Absent for a page with no query.
    */
@@ -159,9 +146,6 @@ const MAX_PAGE_QUERY_PAIRS = 16;
 
 export type WebLlmSanitizeOptions = {
   expectedOrigin?: string;
-  maxEvidenceBytes?: number;
-  /** Which consumer's budget applies. `failure` is both defaulted and capped at Core's gate. */
-  budget?: "exploration" | "failure";
   /**
    * Present when this packet describes a failed action, which is what makes it
    * a failure packet rather than an observation. `selector` is the control the
@@ -182,7 +166,6 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   const snapshot = jsonRecord(input, "web DOM snapshot");
   const url = safeEvidenceUrl(snapshot.url);
   if (options.expectedOrigin !== undefined && url.origin !== options.expectedOrigin) throw new Error("web DOM snapshot escaped the expected origin");
-  const maxEvidenceBytes = budgetFor(options);
   if (!Array.isArray(snapshot.interactiveElements)) throw new Error("web DOM snapshot elements are malformed");
 
   // The focused element is matched by selector rather than carried separately,
@@ -199,9 +182,10 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   // on an element that needs it.
   const cues = new Map<string, WebLlmLookAlikeCues>();
   const dialogOf = openDialogNameOf(snapshot);
-  // An open modal dialog's own controls first: nothing else can be pressed (`front-layer.ts`).
-  for (const raw of frontLayerFirst(snapshot, snapshot.interactiveElements)) {
-    if (elements.length >= WEB_LLM_EVIDENCE_BOUNDS.elements) break;
+  const layerSubjects: WebLlmLayerSubject[] = [];
+  // Every element, in the capture's order. Nothing is skipped but what cannot
+  // be addressed or must not be described (`elements.ts`).
+  for (const raw of snapshot.interactiveElements) {
     const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
     if (!described) continue;
     elements.push(described.element);
@@ -209,20 +193,19 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     selectors.set(described.element.target, described.selector);
     if (described.record !== undefined) records.set(described.element.target, described.record);
     if (described.shadowHosts !== undefined) shadowHosts.set(described.element.target, described.shadowHosts);
+    layerSubjects.push({ element: described.element, selector: described.selector, raw });
     cues.set(described.element.target, present<WebLlmLookAlikeCues>({ within: described.within, dialog: dialogOf(raw), position: described.position }));
   }
 
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id): id is number => id !== undefined))].sort((left, right) => left - right);
-  const elementTotal = evidenceElementTotal(snapshot, elements.length);
-  const title = boundedText(snapshot.title, WEB_LLM_EVIDENCE_BOUNDS.text);
   const captureTruncated = capturedTruncated(snapshot);
-  const elementsTruncated = snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements;
-  const context = webLlmPageContext(snapshot, childFrameIds);
+  const handleOf = joinWebLlmLayers(snapshot, layerSubjects);
+  const context = webLlmPageContext(snapshot, childFrameIds, handleOf);
   const evidence = present<WebLlmPageEvidence>({
     schemaVersion: WEB_LLM_EVIDENCE_SCHEMA_VERSION,
     trust: "untrusted-page-evidence",
     location: evidenceLocation(url),
-    title: title || undefined,
+    title: screenedPageText(snapshot.title),
     // The page context is carried field by field rather than spread, so a
     // packet field renamed or dropped in `page-evidence.ts` fails here instead
     // of quietly leaving the packet.
@@ -232,17 +215,13 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     dialogs: context.dialogs,
     blockedBy: context.blockedBy,
     selectedText: context.selectedText,
-    elementTotal,
     elements,
-    truncated: captureTruncated || elementsTruncated,
+    truncated: captureTruncated,
     captureTruncated: captureTruncated ? true : undefined,
-    elementsTruncated: elementsTruncated ? true : undefined,
-    // Not written here: `trimToBudget` below sets it if and only if a removal
-    // was needed. Mentioned so the packet's key set stays exhaustive.
-    budgetTruncated: undefined,
-    // Nor are these: `markFailedTarget` writes exactly one of the three marks,
-    // and the repair parameters where the producer gave them, and only for a
-    // packet that is describing a failure. Named for the same reason.
+    // Not written here: `markFailedTarget` writes exactly one of the three
+    // marks, and the repair parameters where the producer gave them, and only
+    // for a packet that is describing a failure. Named so the packet's key set
+    // stays exhaustive.
     failedTarget: undefined,
     failedTargetMissing: undefined,
     failedTargetUnknown: undefined,
@@ -250,32 +229,15 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     repairCandidates: undefined
   });
   markFailedTarget(evidence, selectors, options.failedAction);
-  trimToBudget(evidence, [selectors, records, shadowHosts], maxEvidenceBytes, () => tellWebLlmLookAlikesApart(evidence.elements, cues));
+  tellWebLlmLookAlikesApart(evidence.elements, cues);
   const pageQuery = [...url.searchParams].slice(0, MAX_PAGE_QUERY_PAIRS);
   return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
 }
 
-/** The widest handle a Flow can issue (`stable-handles.ts`). */
-const WIDEST_HANDLE_LENGTH = `target.${WEB_LLM_TARGET_HANDLE_MAX_NUMBER}`.length;
-
-/**
- * The packet's size once the authoring tools have renumbered it: its size now,
- * plus what each handle -- and the failed target's mark, which names one --
- * could grow by. A handle is ASCII, so its characters are its bytes.
- */
-function renumberedBytes(evidence: WebLlmPageEvidence): number {
-  const handles = evidence.elements.map((element) => element.target);
-  if (evidence.failedTarget !== undefined) handles.push(evidence.failedTarget);
-  const growth = handles.reduce((total, handle) => total + Math.max(0, WIDEST_HANDLE_LENGTH - handle.length), 0);
-  return serializedBytes(evidence) + growth;
-}
-
 /**
  * Writes the failure packet's statements about the failed action -- its one
- * mark on the target, and the parameters a repair fills -- before the trim
- * runs, so that the bytes they cost are inside the budget rather than pushing
- * the packet over it afterwards. Nothing is written for a packet that is not
- * describing a failure.
+ * mark on the target, and the parameters a repair fills. Nothing is written for
+ * a packet that is not describing a failure.
  */
 function markFailedTarget(evidence: WebLlmPageEvidence, selectors: Map<string, string>, failedAction: WebLlmSanitizeOptions["failedAction"]): void {
   if (!failedAction) return;
@@ -288,84 +250,4 @@ function markFailedTarget(evidence: WebLlmPageEvidence, selectors: Map<string, s
   const handle = [...selectors.entries()].find(([, selector]) => selector === failedAction.selector)?.[0];
   if (handle === undefined) evidence.failedTargetMissing = true;
   else evidence.failedTarget = handle;
-}
-
-function budgetFor(options: WebLlmSanitizeOptions): number {
-  return options.budget === "failure"
-    ? evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure)
-    : evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
-}
-
-/**
- * The fields a packet can lose and still be worth reading. Ordered least useful
- * first where they are dropped: the page facts, then the repair parameters,
- * which are worth more than any page fact to a repair but less than the last
- * element, since a packet describing nothing has nothing to repair to.
- */
-type DroppableEvidenceField = "selectedText" | "title" | "navigation" | "loading" | "elementTotal" | "dialogs" | "blockedBy" | "frame" | "repairParameters";
-
-/**
- * Trim until the packet fits, lowest value first: the ranked tail of elements
- * (the capture orders them so the tail is the least useful), then the page
- * facts a reader can live without, then the last element, and only then a
- * refusal. Every removal sets `truncated` and `budgetTruncated`, because a
- * packet that silently describes less than it appears to is worse than a large
- * one -- and because "the budget cut this" is the one of the three limits a
- * consumer can answer by asking again with more room.
- *
- * The two flags are written before the size is re-measured, so the bytes they
- * cost are inside the budget rather than pushing the packet over it after the
- * last check. Neither is droppable: they describe the trimming.
- *
- * `addresses` are the binding's handle-keyed maps -- the selectors and the
- * records -- and a popped element leaves every one of them, so no map names a
- * handle the packet no longer carries.
- *
- * `describe` writes what the packet says about its elements as a set -- which
- * look-alikes there are and how many -- so it runs before the first measure
- * and again after every element leaves, and what is measured is always what
- * is sent.
- */
-function trimToBudget(evidence: WebLlmPageEvidence, addresses: ReadonlyArray<Map<string, unknown>>, maxEvidenceBytes: number, describe: () => void): void {
-  const markBudgetTruncated = (): void => {
-    evidence.truncated = true;
-    evidence.budgetTruncated = true;
-  };
-  const popElement = (): void => {
-    const removed = evidence.elements.pop();
-    if (removed) for (const address of addresses) address.delete(removed.target);
-    // A handle that named a popped element would point at nothing, so the mark
-    // becomes the honest one. `budgetTruncated`, set on the same line, is what
-    // separates "the trim cut it" from "it left the page".
-    if (removed && evidence.failedTarget === removed.target) {
-      delete evidence.failedTarget;
-      evidence.failedTargetMissing = true;
-    }
-    markBudgetTruncated();
-    describe();
-  };
-  const droppable: DroppableEvidenceField[] = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame", "repairParameters"];
-  describe();
-  while (renumberedBytes(evidence) > maxEvidenceBytes) {
-    if (evidence.elements.length > 1) {
-      popElement();
-      continue;
-    }
-    const field = droppable.shift();
-    if (field !== undefined) {
-      if (evidence[field] !== undefined) {
-        delete evidence[field];
-        markBudgetTruncated();
-      }
-      continue;
-    }
-    if (evidence.elements.length) {
-      popElement();
-      continue;
-    }
-    // Not even an empty packet of this page fits: what is left of the
-    // exploration's evidence budget is spent. The model is told so, and can
-    // complete from what it already holds.
-    recoverable("evidence_budget_exhausted");
-  }
 }

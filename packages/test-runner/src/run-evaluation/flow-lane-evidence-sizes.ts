@@ -18,7 +18,7 @@ export type MeasuredEvidencePacket = { actionPosition: number; point: PersistedE
 /**
  * A Flow-lane run's evidence sizes, and the located packets they were read
  * from. `evaluateObservedRun` copies only the `RunEvidenceSizes` fields into the
- * evaluation; `packets` is what the budget check reads (`evidence-budget-invariant.ts`).
+ * evaluation; `packets` locates each measured packet by action and capture point.
  */
 export type FlowLaneEvidence = RunEvidenceSizes & { packets: MeasuredEvidencePacket[] };
 

@@ -22,7 +22,7 @@ import type { WebLlmEvidenceGateway } from "../capture";
 import { createWebAutomationLlmEvidenceRuntime } from "../tools";
 import { WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 
-const BASE = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 16_000 } as const;
+const BASE = { projectId: "project.one", flowId: "flow.one" } as const;
 const ROWS = `[data-testid="order-rows"]`;
 
 type PacketElement = { target: string; name?: string };

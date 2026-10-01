@@ -9,7 +9,7 @@
 // Now each result carries `stateDigests` and the binding says
 // `stateDigestsOnCalls`, which is what stops Core asking. These tests hold three
 // things: the digest a call reports is exactly the one `captureStateDigest`
-// would have answered for the same page, whatever the call's own evidence bound;
+// would have answered for the same page;
 // it is stable on an unchanged page and moves with a change; and what each kind
 // of decision costs the page, under the old protocol and the new one.
 
@@ -87,7 +87,7 @@ function smallPage(title = "Fixture"): FakePage {
   return { url: "https://example.test/start", title, elements: [button("#go", "Go"), button("#other", "Other")] };
 }
 
-/** A page too large for a tight evidence bound, so a bound call's packet holds fewer elements than the digest reads. */
+/** A page of forty-one elements, more than the packet once held. */
 function largePage(): FakePage {
   const elements = Array.from({ length: 40 }, (_, index) => ({
     tagName: "a",
@@ -98,18 +98,14 @@ function largePage(): FakePage {
   return { url: "https://example.test/list", title: "A long list", elements: [button("#go", "Go"), ...elements] };
 }
 
-async function look(runtime: WebAutomationLlmEvidenceRuntime, callId: string, maxEvidenceBytes?: number): Promise<WebLlmEvidenceToolExecution> {
+async function look(runtime: WebAutomationLlmEvidenceRuntime, callId: string): Promise<WebLlmEvidenceToolExecution> {
   const value = { node: SNAPSHOT, parameters: {}, consequences: [] };
-  return await runtime.executeTool(maxEvidenceBytes === undefined
-    ? { ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value }
-    : { ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value, maxEvidenceBytes });
+  return await runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value });
 }
 
-async function click(runtime: WebAutomationLlmEvidenceRuntime, callId: string, handle: string, maxEvidenceBytes?: number): Promise<WebLlmEvidenceToolExecution> {
+async function click(runtime: WebAutomationLlmEvidenceRuntime, callId: string, handle: string): Promise<WebLlmEvidenceToolExecution> {
   const value = { node: CLICK, parameters: { target: { handle } }, consequences: [] };
-  return await runtime.executeTool(maxEvidenceBytes === undefined
-    ? { ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value }
-    : { ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value, maxEvidenceBytes });
+  return await runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value });
 }
 
 async function asked(runtime: WebAutomationLlmEvidenceRuntime, callId: string): Promise<string | undefined> {
@@ -128,32 +124,27 @@ test("the binding says its calls report their own states", () => {
   assert.equal(runtime.stateDigestsOnCalls, true);
 });
 
-test("a look's digest is what captureStateDigest answers for the same page, whatever bound the look had", async () => {
-  for (const maxEvidenceBytes of [undefined, 2_500, 9_000]) {
-    const fake = fakeGateway(largePage());
-    const runtime = createWebAutomationLlmEvidenceRuntime(fake.gateway);
-    const looked = await look(runtime, "call.look", maxEvidenceBytes);
-    const answer = await asked(runtime, "call.asked");
+test("a look's digest is what captureStateDigest answers for the same page, and is the digest of the packet it returned", async () => {
+  const fake = fakeGateway(largePage());
+  const runtime = createWebAutomationLlmEvidenceRuntime(fake.gateway);
+  const looked = await look(runtime, "call.look");
+  const answer = await asked(runtime, "call.asked");
 
-    assert.ok(answer);
-    assert.deepEqual(looked.stateDigests, { before: answer, after: answer }, `bound ${maxEvidenceBytes}`);
-    if (maxEvidenceBytes === 2_500) {
-      // The bound mattered: the packet the look returned holds fewer elements
-      // than the digest reads, so a digest of that packet would disagree.
-      assert.equal((looked.evidence as JsonObject).budgetTruncated, true);
-      assert.notEqual(webLlmStateDigest(looked.evidence as unknown as WebLlmPageEvidence), answer);
-    }
-  }
+  assert.ok(answer);
+  assert.deepEqual(looked.stateDigests, { before: answer, after: answer });
+  // The packet is the whole page whatever the call (t200), so the digest of
+  // what the look returned and what the host reads are one value.
+  assert.equal(webLlmStateDigest(looked.evidence as unknown as WebLlmPageEvidence), answer);
 });
 
 test("an action's digests are the page it found and the page it left, as captureStateDigest reads them", async () => {
   const moved: FakePage = { url: "https://example.test/list", title: "Moved", elements: largePage().elements };
   const fake = fakeGateway(largePage(), { onClick: moved });
   const runtime = createWebAutomationLlmEvidenceRuntime(fake.gateway);
-  const looked = await look(runtime, "call.look", 2_500);
+  const looked = await look(runtime, "call.look");
   const found = await asked(runtime, "call.before");
 
-  const pressed = await click(runtime, "call.click", handleOf(looked, "Go"), 3_000);
+  const pressed = await click(runtime, "call.click", handleOf(looked, "Go"));
   const left = await asked(runtime, "call.after");
 
   assert.equal(pressed.effectApplied, true);
@@ -165,7 +156,7 @@ test("digests are stable across calls on an unchanged page and move when the pag
   const fake = fakeGateway(smallPage());
   const runtime = createWebAutomationLlmEvidenceRuntime(fake.gateway);
   const first = await look(runtime, "call.one");
-  const second = await look(runtime, "call.two", 4_000);
+  const second = await look(runtime, "call.two");
   assert.ok(first.stateDigests?.after);
   assert.equal(first.stateDigests?.after, second.stateDigests?.after);
 
@@ -244,7 +235,7 @@ test("a call that read no page reports no state", async () => {
   });
   assert.equal(went.effectApplied, true);
   assert.equal(went.stateDigests?.before, undefined);
-  assert.match(went.stateDigests?.after ?? "", /^web-state\.v1:/u);
+  assert.match(went.stateDigests?.after ?? "", /^web-state\.v2:/u);
 });
 
 /**
@@ -342,11 +333,11 @@ for (const decision of DECISIONS) {
 
       assert.equal(spent, protocol === "digests-around-calls" ? decision.captures.old : decision.captures.now, protocol);
       if (decision.digests === "both") {
-        assert.match(result.stateDigests?.before ?? "", /^web-state\.v1:/u, protocol);
-        assert.match(result.stateDigests?.after ?? "", /^web-state\.v1:/u, protocol);
+        assert.match(result.stateDigests?.before ?? "", /^web-state\.v2:/u, protocol);
+        assert.match(result.stateDigests?.after ?? "", /^web-state\.v2:/u, protocol);
       } else if (decision.digests === "after") {
         assert.equal(result.stateDigests?.before, undefined, protocol);
-        assert.match(result.stateDigests?.after ?? "", /^web-state\.v1:/u, protocol);
+        assert.match(result.stateDigests?.after ?? "", /^web-state\.v2:/u, protocol);
       } else {
         assert.equal(result.stateDigests, undefined, protocol);
       }

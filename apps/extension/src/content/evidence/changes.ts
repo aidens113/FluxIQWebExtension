@@ -27,9 +27,11 @@ export type SnapshotElementEntry = { element: Element; descriptor: DomElementDes
 const STATE_ATTRIBUTES = ["disabled", "aria-disabled", "aria-expanded", "aria-pressed", "aria-selected", "aria-current", "aria-busy", "aria-invalid"] as const;
 
 /**
- * Well below the descriptor's own 500-character text bound: a fingerprint for
- * every element on the page is held until the next capture, and a long document
- * should not cost a megabyte to remember.
+ * How much of an element's text its fingerprint remembers. This bounds only
+ * what is held between captures to tell whether an element changed -- a
+ * fingerprint for every element on the page is kept until the next one, and a
+ * long document should not cost a megabyte to remember -- never the text the
+ * descriptor carries, which is whole (t200).
  */
 const MAX_FINGERPRINT_TEXT = 120;
 

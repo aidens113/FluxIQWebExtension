@@ -31,7 +31,7 @@ import type { JsonObject } from "fluxiq/core";
 import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
 import { webAutomationActionFromGatewayCommand } from "../../../../client";
 import { outputTargetFromPayload, webAutomationOutputNodeId } from "../../../../output-nodes";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_RUN_NODE_TOOL_ID, type WebAutomationLlmEvidenceRuntime } from "../..";
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, WEB_LLM_WITHHELD_TEXT, type WebAutomationLlmEvidenceRuntime } from "../..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 
 const CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
@@ -137,13 +137,22 @@ test("the chooser's chip sits in no card and carries no record", async () => {
   assert.equal(((clicked.element as JsonObject).context as JsonObject).record, undefined);
 });
 
-test("card words the packet had to cut are not carried as the card", async () => {
+test("long card words arrive whole, and are carried as the card", async () => {
   const long = `${"Millbrook Crossing Supercenter ".repeat(4)}88 Ferris Rd`;
-  assert.ok(long.length >= WEB_LLM_EVIDENCE_BOUNDS.placement, "the words are longer than the packet keeps");
   const elements = [chip, setStore(2, CARD_WORDS.cardenNeighborhood), setStore(3, long)];
   const runtime = runtimeOver(elements);
   await inspect(runtime);
-  const handle = handleWithin(elements, long.slice(0, WEB_LLM_EVIDENCE_BOUNDS.placement).trim());
+  const handle = handleWithin(elements, long);
+  const clicked = await clickParameters(runtime, handle);
+  assert.deepEqual(((clicked.element as JsonObject).context as JsonObject).record, { text: long });
+});
+
+test("card words the packet withheld as a secret are not carried as the card", async () => {
+  const secret = "Millbrook Crossing sk-live0123456789abcdefghijKLMN";
+  const elements = [chip, setStore(2, CARD_WORDS.cardenNeighborhood), setStore(3, secret)];
+  const runtime = runtimeOver(elements);
+  await inspect(runtime);
+  const handle = handleWithin(elements, WEB_LLM_WITHHELD_TEXT);
   const clicked = await clickParameters(runtime, handle);
   assert.equal(((clicked.element as JsonObject).context as JsonObject).record, undefined);
 });

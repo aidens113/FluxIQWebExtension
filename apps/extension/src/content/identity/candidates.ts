@@ -28,7 +28,7 @@
 import type { ElementFingerprintCandidate } from "fluxiq/automation-studio";
 import type { LookupRoot } from "../selector";
 import { accessibleNameFor } from "./accessible-name";
-import { boundedText } from "./bounded-text";
+import { normalizedText } from "./normalized-text";
 import { implicitRole } from "./implicit-role";
 import { labelText } from "./label";
 import { reportableText } from "./reportable-text";
@@ -93,10 +93,9 @@ export type CandidateFamily = {
  * 300-row grid ahead of its content had spent the budget before reaching the
  * family, `collectTargetCandidates` returned nothing, and the failure said the
  * page held no control of that family. 5,000 is chosen against what the same
- * page already pays elsewhere on the same event: `dom-snapshot.ts` walks up to
- * `MAX_SNAPSHOT_SCAN_ELEMENTS = 50_000` elements and `evidence/repeating.ts`
- * up to 2,000 on every capture, so a resolution that looks at 5,000 is an order
- * of magnitude cheaper than the capture beside it. Measured cost in
+ * page already pays elsewhere on the same event: `dom-snapshot.ts` walks every
+ * element of the page on every capture (t200), so a resolution that looks at
+ * 5,000 is cheaper than the capture beside it. Measured cost in
  * `reports/x-scan-cap.md`.
  *
  * It stays a hard bound rather than becoming no bound: a page can hold a
@@ -107,7 +106,6 @@ export type CandidateFamily = {
 const MAX_SCANNED = 5_000;
 /** Candidates handed to the scorer. Beyond this the extra rows cannot change which one wins. */
 const MAX_CANDIDATES = 60;
-const MAX_SIGNAL_LENGTH = 200;
 /** Characters of a candidate's own label quoted in a failure message. */
 const MAX_LABEL_LENGTH = 40;
 
@@ -209,7 +207,7 @@ export function candidateFingerprint(element: Element, index: number): ElementFi
   const role = element.getAttribute("role")?.trim().toLowerCase() || implicitRole(element);
   const classNames = [...element.classList];
   const selector = candidateSelector(element, tagName, id, testId);
-  const visibleText = boundedText(element.textContent, MAX_SIGNAL_LENGTH);
+  const visibleText = normalizedText(element.textContent);
   const accessibleName = accessibleNameFor(element);
   const label = labelText(element);
   const rect = element.getBoundingClientRect();

@@ -125,14 +125,18 @@ async function recordOneEvent(harness: Harness, payload: RecordingEventPayload, 
   });
 }
 
+// The merge reads each frame once (t200): the top frame beside the frame list
+// rather than first on its own and then again among the frames, and not at all
+// when the event's own snapshot is the top frame's. So the counts below are
+// one lower per merge than they were, and a single-frame page costs none.
 test("one recorded event costs one cross-frame merge, not two", async () => {
   const single = harnessFor({ 0: topFrameSnapshot() });
   await recordOneEvent(single, clickPayload(topFrameSnapshot()), 0);
-  assert.equal(single.captureCount(), 1, "a single-frame page: one round trip, the same as before the event carried the merge");
+  assert.equal(single.captureCount(), 0, "a single-frame page: the event's own snapshot is the page, and nothing is asked again");
 
   const three = harnessFor({ 0: topFrameSnapshot(), [CHILD_FRAME_ID]: childFrameSnapshot(), 2: childFrameSnapshot() });
   await recordOneEvent(three, clickPayload(childFrameSnapshot()), CHILD_FRAME_ID);
-  assert.equal(three.captureCount(), 3, "three frames: one round trip per frame, and the seeded frame is not re-read");
+  assert.equal(three.captureCount(), 2, "three frames: one round trip per frame not already in hand, and the seeded frame is not re-read");
 });
 
 // The regression this guard exists to prevent, measured rather than described.
@@ -145,7 +149,7 @@ test("without the captured snapshot the reporter merges a second time", async ()
     await harness.reporter.captureEventSnapshot(payload, TAB_ID, CHILD_FRAME_ID);
     await harness.reporter.sendRecordingEvidence(payload, TAB_ID, CHILD_FRAME_ID);
   });
-  assert.equal(harness.captureCount(), 6, "two merges of a three-frame page: the cost the fourth argument avoids");
+  assert.equal(harness.captureCount(), 4, "two merges of a three-frame page: the cost the fourth argument avoids");
 });
 
 test("a capture that came back with nothing is not tried again", async () => {
@@ -157,7 +161,7 @@ test("a capture that came back with nothing is not tried again", async () => {
     return result;
   });
   assert.equal(captured.snapshot, undefined, "the tab answered with nothing a snapshot could be read from");
-  assert.equal(harness.captureCount(), 2, "the failed attempt was the top-frame read and the frame sweep, and neither happened twice");
+  assert.equal(harness.captureCount(), 1, "the failed attempt was one read of the only frame, and it did not happen twice");
   assert.deepEqual(harness.sent.map((message) => message.type), ["client.state_update"], "and the evidence still went out, without a snapshot");
 });
 

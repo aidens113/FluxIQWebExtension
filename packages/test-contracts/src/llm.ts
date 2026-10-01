@@ -18,20 +18,22 @@ export function isLlmModel(value: unknown): value is LlmModel {
   return typeof value === "string" && (llmModels as readonly string[]).includes(value);
 }
 /**
- * The most a single request may carry: FluxIQ Core's own per-request ceiling
- * (`AUTOMATION_STUDIO_LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST`), not the
- * model's context window. It was raised to 64,000 because that was the whole
- * context of `deepseek-chat`, the only model Core would then send to;
- * `deepseek-flash` carries a million tokens, so the two numbers are no longer
- * the same thing and this one is a budget decision Core owns.
+ * The most a single request may carry: the model's own context window, input
+ * and output together. FluxIQ Core holds it as `contextTokens` in
+ * `AUTOMATION_STUDIO_DEEPSEEK_MODEL_LIMITS`
+ * (`packages/fluxiq/src/programs/automation-studio/runtime/llm/deepseek/models.ts`),
+ * 1,000,000 tokens for both `deepseek-flash` and `deepseek-v4-pro`; it is
+ * mirrored here because this package depends only on Core's public contracts.
  *
- * It was 50,000, and that was the fifth and last of the ceilings that between
- * them made a real page impossible to describe on 2026-09-17 -- the others
- * being this file's default budget, the Lab plan's cap, a Core default since
- * removed and Core's provider-side rejection. Raising any one of them alone was
- * silently overridden by the next.
+ * It is not a budget. On 2026-09-30 the user ordered that no limit hide page
+ * information from the model: the only bound on a request's size is what the
+ * model can read, and a request over it fails loudly rather than being
+ * trimmed. It used to be Core's own 64,000-token ceiling (and 50,000 before
+ * that), which with the Lab's 48,000-token default made a real page impossible
+ * to describe. What bounds a run is cost, the per-run token budget, the call
+ * ceiling and the deadline.
  */
-export const LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST = 64_000 as const;
+export const LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST = 1_000_000 as const;
 /**
  * The most provider calls any Lab run may declare: the Lab's own backstop
  * against a runaway loop. Core enforces no call ceiling of its own.
@@ -117,27 +119,23 @@ export type LlmExecutionProfile = {
 };
 
 export const DEFAULT_LLM_LAB_BUDGET: Readonly<LlmTokenBudget> = Object.freeze({
-  // Sized to Core's per-request ceiling less room for the reply, not to a
-  // number someone picked. That ceiling was `deepseek-chat`'s whole context
-  // window while it was the only model Core sent to; `deepseek-flash` carries
-  // a million tokens, so raising these is now a cost decision rather than a
-  // limit the provider imposes -- see LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST.
+  // The model's whole context window less room for the reply: a request may
+  // carry as much of the page as the model can read, and nothing in the Lab
+  // trims it first -- see LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST.
   //
-  // They used to be 8k in, 2k out, 10k per request, and that was the single
-  // biggest blocker measured on 2026-09-17. Describing a real page costs
-  // tokens: across thirty-six live creation tasks, the input guard fired
-  // before the request was ever sent on the slice holding an infinite feed, a
-  // multi-tab order lookup, an auth gate and an admin console with a
-  // virtualised list -- that slice scored zero of six while the slice of small
-  // forms scored six of seven. The build ends on that error, so those runs
-  // produced no Flow at all and the page shapes went untested. An empty table
-  // tripped it too, which is how little headroom 8k left.
+  // They were 8k in, 2k out, 10k per request, then 48k/8k/56k under Core's
+  // 64k ceiling, and each was a blocker in turn. Describing a real page costs
+  // tokens: on 2026-09-17, across thirty-six live creation tasks, the input
+  // guard fired before the request was sent on every page holding an infinite
+  // feed, a multi-tab order lookup, an auth gate or a virtualised admin list,
+  // so those runs produced no Flow at all.
   //
-  // What bounds a run is cost, the per-run token budget and the deadline --
-  // never a per-request ceiling that makes a real page impossible to describe.
-  maxInputTokens: 48_000,
+  // What bounds a run is cost, the per-run token budget (absent, it is this
+  // request size times the call count) and the deadline -- never a
+  // per-request ceiling below what the model can read.
+  maxInputTokens: LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST - 8_000,
   maxOutputTokens: 8_000,
-  maxTotalTokensPerRequest: 56_000,
+  maxTotalTokensPerRequest: LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST,
   // What an iterating run declares when the operator names no call count:
   // a diagnosis, a patch, and the exploration's own default ceiling of 24
   // decisions. Tokens are bounded separately, by `maxTotalTokensPerRun`, so a

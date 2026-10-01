@@ -26,66 +26,30 @@
 // that page, or a Router built on one would test something the other never
 // produces.
 //
-// ## Why neither is simply read off the packet the call returns
+// ## Why both are read off the packet the call sanitized
 //
 // Both are compared for equality with values taken at other moments: a digest
 // with other digests and with `captureStateDigest`, a route state with what
 // `observeRouteState` reads when the Flow runs. So neither may depend on
-// anything but the page. The packet a call returns does depend on the call: it
-// is bounded to the call's own `maxEvidenceBytes` -- a look keeps room for its
-// envelope, a refusal for its own -- and a tighter bound drops elements both
-// read (the digest its elements, the route state `page.controls`). So both are
-// of the capture sanitized exactly as `captureStateDigest` and
-// `observeRouteState` sanitize it, which is one and the same sanitization: the
-// exploration budget's default bound, no expected origin (which only ever
-// refuses, never changes a packet), and no failed action. Where the call's own
-// bound was that default, the packet it already made is that sanitization and
-// is read as it is; otherwise the same capture is sanitized once more, which
-// costs this process a few milliseconds and the page nothing.
+// anything but the page. Until 2026-09-30 the packet a call returned depended
+// on the call -- it was bounded to the call's own `maxEvidenceBytes` -- so both
+// were taken from the capture sanitized once more at a fixed bound. The packet
+// is now the whole page whatever the call (t200), so the packet the call
+// sanitized is that sanitization and is read as it is.
 //
 // Both are taken the moment the capture is sanitized, before anything is
-// written on the packet -- renumbered handles, a node's outcome keys, a trim to
-// fit a refusal -- because they are of the page, not of what a call said about
-// it.
+// written on the packet -- renumbered handles, a node's outcome keys -- because
+// they are of the page, not of what a call said about it.
 
 import { webAutomationRouteState } from "../../route-state";
-import { present } from "../present";
-import { sanitizeWebLlmSnapshot, type WebLlmPageEvidence, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "../sanitize";
+import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webLlmStateDigest } from "./state-digest";
-import { RecoverableToolRejection } from "../tool-rejection";
 
 /**
- * The digest and the route state of the page `snapshot` is a capture of, equal
- * to what `captureStateDigest` and `observeRouteState` return for the same page
- * whatever `maxEvidenceBytes` the call's own packet was bounded to.
- *
- * `bounded` is the packet the call sanitized from the same snapshot, bounded to
- * `maxEvidenceBytes`, and must not have been written on since. Both are
- * `undefined` only where the page is too large for even an empty packet at the
- * default bound, which `captureStateDigest` and `observeRouteState` refuse as
- * well: the page is then simply not observed.
+ * The digest and the route state of the page `sanitized` was sanitized from,
+ * equal to what `captureStateDigest` and `observeRouteState` return for the
+ * same page. `sanitized` must not have been written on since.
  */
-export function webLlmSnapshotStates(
-  snapshot: unknown,
-  bounded: WebLlmSnapshotBinding,
-  maxEvidenceBytes: number | undefined
-): Pick<WebLlmSnapshotBinding, "stateDigest" | "routeState"> {
-  const page = maxEvidenceBytes === undefined ? bounded.evidence : atDefaultBound(snapshot);
-  if (page === undefined) return present<Pick<WebLlmSnapshotBinding, "stateDigest" | "routeState">>({ stateDigest: undefined, routeState: undefined });
-  return { stateDigest: webLlmStateDigest(page), routeState: webAutomationRouteState(page) };
-}
-
-/** The capture sanitized as the host sanitizes it, or `undefined` when it is too large for any packet. */
-function atDefaultBound(snapshot: unknown): WebLlmPageEvidence | undefined {
-  try {
-    return sanitizeWebLlmSnapshot(snapshot, present<WebLlmSanitizeOptions>({
-      budget: "exploration",
-      maxEvidenceBytes: undefined,
-      expectedOrigin: undefined,
-      failedAction: undefined
-    }));
-  } catch (error) {
-    if (error instanceof RecoverableToolRejection && error.code === "evidence_budget_exhausted") return undefined;
-    throw error;
-  }
+export function webLlmSnapshotStates(sanitized: WebLlmSnapshotBinding): Pick<WebLlmSnapshotBinding, "stateDigest" | "routeState"> {
+  return { stateDigest: webLlmStateDigest(sanitized.evidence), routeState: webAutomationRouteState(sanitized.evidence) };
 }

@@ -132,7 +132,7 @@ function exploration(runtime: WebAutomationLlmEvidenceRuntime): { explored: Expl
     explored,
     async call(toolId, value) {
       calls += 1;
-      const execution = await loop.executeTool({ callId: `call.${calls}`, toolId, value, maxEvidenceBytes: 6_000 });
+      const execution = await loop.executeTool({ callId: `call.${calls}`, toolId, value });
       const evidence = (execution as { evidence: JsonObject }).evidence;
       assert.notEqual(evidence.ok, false, `${toolId} was refused: ${JSON.stringify(evidence)}`);
       explored.push({ evidenceId: `explored.${explored.length + 1}`, toolId, packet: JSON.parse(JSON.stringify(evidence)) as JsonObject });
@@ -145,8 +145,7 @@ function exploration(runtime: WebAutomationLlmEvidenceRuntime): { explored: Expl
 async function failurePacket(runtime: WebAutomationLlmEvidenceRuntime): Promise<JsonObject> {
   const evidence = await runtime.captureSanitizedFailureEvidence({
     ...SCOPE,
-    failedAction: { attemptId: "attempt.1", nodeId: CLICK.nodeId, definitionId: CLICK.definitionId, status: "failed" },
-    maxEvidenceBytes: 6_000
+    failedAction: { attemptId: "attempt.1", nodeId: CLICK.nodeId, definitionId: CLICK.definitionId, status: "failed" }
   });
   return JSON.parse(JSON.stringify(evidence)) as JsonObject;
 }

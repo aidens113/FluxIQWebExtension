@@ -23,19 +23,13 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   webAutomationExtractionSummaryValue,
-  WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_ROWS,
   WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY,
   type WebAutomationExtractionRejectedRow
 } from "../../../actions/extraction";
-import { webLlmEvidenceKeyIsDenied } from "../denied-keys";
-import { serializedBytes } from "../limits";
 import { webNodeReadResult } from "./read-result";
 
 /** The only verb whose rows a condition decides. */
 const EXTRACT_LIST_ACTION = "web.dom.extract_list";
-
-/** The share of a read's budget the rejected rows may take; the kept rows keep the rest. */
-const REJECTED_SHARE = 3;
 
 /** What a read gives the model, and the payload as it may be recorded, without the samples. */
 export type WebNodeReadWithRejectedRows = { read: JsonValue | undefined; recorded: JsonValue | undefined };
@@ -51,14 +45,19 @@ export function webNodeDispatchParameters(node: { actionType: string; proposes: 
 }
 
 /**
- * The read the model is shown -- kept rows as `./read-result.ts` bounds them,
- * with `rejectedRows` beside them when a condition turned rows down -- held to
- * `maxBytes` in total, and the payload with the samples taken out.
+ * The read the model is shown -- the kept rows whole, as `./read-result.ts`
+ * returns them, with `rejectedRows` beside them when a condition turned rows
+ * down -- and the payload with the samples taken out.
+ *
+ * Nothing is fitted to a byte budget (t200): the samples are as many as the
+ * page's sampling returned (`actions/extraction/rejected-samples.ts`), and both
+ * halves pass the same screen, so a denied key or a credential-shaped string is
+ * withheld from the samples exactly as it is from the kept rows.
  */
-export function webNodeReadWithRejectedRows(payload: JsonValue | undefined, maxBytes: number): WebNodeReadWithRejectedRows {
+export function webNodeReadWithRejectedRows(payload: JsonValue | undefined): WebNodeReadWithRejectedRows {
   const recorded = withoutSamples(payload);
-  const shown = rejectedRows(payload, Math.floor(maxBytes / REJECTED_SHARE));
-  const read = webNodeReadResult(recorded, maxBytes - (shown === undefined ? 0 : serializedBytes(shown)));
+  const shown = rejectedRows(payload);
+  const read = webNodeReadResult(recorded);
   if (shown === undefined) return { read, recorded };
   if (read === undefined) return { read: { rejectedRows: shown }, recorded };
   if (typeof read !== "object" || read === null || Array.isArray(read)) return { read, recorded };
@@ -77,32 +76,27 @@ function withoutSamples(payload: JsonValue | undefined): JsonValue | undefined {
 
 /**
  * Each condition that turned rows down, by its position in `where`, with how
- * many it rejected and up to three of them -- fewer when that is what fits in
- * `maxBytes`, and nothing when not even one row per condition does.
+ * many it rejected and every row the page sampled for it.
  *
  * The samples are read through the summary's own copy, so only the read's
- * declared fields arrive and each value is already cut to its bound; a key
- * Core denies in evidence is dropped as it is from the kept rows.
+ * declared fields arrive, as many rows as the page's sampling contract gives
+ * (`WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_ROWS`); the same screen as the kept
+ * rows then drops a key Core denies in evidence and withholds a
+ * credential-shaped string (`./read-result.ts`).
  */
-function rejectedRows(payload: JsonValue | undefined, maxBytes: number): JsonValue | undefined {
+function rejectedRows(payload: JsonValue | undefined): JsonValue | undefined {
   const summary = webAutomationExtractionSummaryValue(objectValue(payload)?.extraction);
   const samples = summary?.rejectedSamples;
   const counts = summary?.conditions?.rejected;
   if (samples === undefined || counts === undefined) return undefined;
-  for (let rows = WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_ROWS; rows > 0; rows -= 1) {
-    const shown: JsonObject[] = samples.flatMap((sampled, index) => sampled.length === 0
-      ? []
-      : [{ where: index, rejected: counts[index] ?? sampled.length, rows: sampled.slice(0, rows).map(screened) }]);
-    if (shown.length === 0) return undefined;
-    if (serializedBytes(shown) <= maxBytes) return shown;
-  }
-  return undefined;
+  const shown: JsonObject[] = samples.flatMap((sampled, index) => sampled.length === 0
+    ? []
+    : [{ where: index, rejected: counts[index] ?? sampled.length, rows: sampled.map(row) }]);
+  return shown.length === 0 ? undefined : webNodeReadResult(shown);
 }
 
-function screened(row: WebAutomationExtractionRejectedRow): JsonObject {
-  const out: JsonObject = {};
-  for (const [key, value] of Object.entries(row)) if (!webLlmEvidenceKeyIsDenied(key)) out[key] = value;
-  return out;
+function row(sampled: WebAutomationExtractionRejectedRow): JsonObject {
+  return { ...sampled } as JsonObject;
 }
 
 function objectValue(value: JsonValue | undefined): JsonObject | undefined {

@@ -11,19 +11,20 @@
 // The URL is split as well as carried whole because a reader comparing an
 // expected destination to a real one almost always wants the path without the
 // query string, and splitting it here is one parse rather than one per reader.
+//
+// Both addresses are whole (t200); they were cut at 2,000 characters. What in
+// an address is secret-shaped is the domain's to withhold, parameter by
+// parameter, not a length's.
 
-import { boundedText } from "../identity";
 import { present } from "../../shared/present";
 import type { NavigationEvidence } from "./types";
-
-const MAX_URL_LENGTH = 2_000;
 
 export function navigationEvidence(): NavigationEvidence {
   const entry = navigationTiming();
   const url = new URL(location.href);
-  const referrer = boundedText(document.referrer, MAX_URL_LENGTH);
+  const referrer = document.referrer.trim();
   return present<NavigationEvidence>({
-    url: location.href.slice(0, MAX_URL_LENGTH),
+    url: location.href,
     origin: url.origin,
     path: url.pathname,
     referrer: referrer || undefined,

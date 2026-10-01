@@ -9,7 +9,6 @@ import {
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_ENTER_FIELD_TOOL_ID,
   WEB_LLM_INSPECT_TOOL_ID,
-  WEB_LLM_EVIDENCE_BYTE_BUDGETS,
   WEB_LLM_RUN_NODE_TOOL_ID,
   WEB_LLM_NAVIGATE_TOOL_ID,
   WEB_LLM_PRESS_TOOL_ID,
@@ -42,7 +41,8 @@ test("captures through the generic action bridge and keeps navigation on the ins
   const navigated = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.browser-navigate", parameters: { url: "https://example.test/next" }, consequences: [] } });
   assert.equal(navigated.effectApplied, true);
   assert.equal(navigated.resultCode, "web.action.succeeded");
-  assert.deepEqual((navigated.evidence as any).location, "https://example.test/next");
+  // The query is the page's own state and is kept; only a secret-named value is withheld.
+  assert.deepEqual((navigated.evidence as any).location, "https://example.test/next?private=yes");
   // A look is one capture. An action captures to bind what it acts on, acts,
   // and captures again to show what it produced.
   assert.deepEqual(commands.map(command => command.actionType), ["web.dom.capture_snapshot", "web.dom.capture_snapshot", "web.browser.navigate", "web.dom.capture_snapshot"]);
@@ -168,7 +168,7 @@ test("binds from the production host seam and selects the sole trusted web clien
   assert.throws(() => bindWebAutomationLlmEvidenceRuntime({ programs: { automationStudio: {} } } as never), TypeError);
 });
 
-test("captures bounded sanitized post-failure evidence without returning the raw snapshot", async () => {
+test("captures the whole sanitized post-failure page without returning the raw snapshot or its secrets", async () => {
   const commands: Array<{ actionType: string; parameters: unknown; metadata: any }> = [];
   const privateValue = "PRIVATE_PASSWORD_VALUE";
   const runtime = createWebAutomationLlmEvidenceRuntime({
@@ -192,18 +192,18 @@ test("captures bounded sanitized post-failure evidence without returning the raw
     flowId: "flow.one",
     runId: "run.failed",
     failedAction: { attemptId: "attempt.failed", nodeId: "node.click", definitionId: "web.output.dom-click", status: "failed", route: "failed" },
-    maxEvidenceBytes: 1_200,
   });
 
-  assert.equal(Buffer.byteLength(JSON.stringify(evidence), "utf8") <= 1_200, true);
   assert.equal(evidence.schemaVersion, "web-llm-evidence.v2");
-  assert.equal(evidence.location, "https://example.test/form");
-  assert.equal(evidence.truncated, true);
+  // The query is kept and its secret withheld; nothing is left out.
+  assert.equal(evidence.location, "https://example.test/form?token=(withheld)#secret");
+  assert.equal(evidence.truncated, false);
+  assert.equal(evidence.elements.length, 40, "every safe action, the password field alone not described");
   assert.equal(JSON.stringify(evidence).includes(privateValue), false);
-  assert.equal(JSON.stringify(evidence).includes("token"), false);
+  assert.equal(JSON.stringify(evidence).includes("private"), false);
   assert.equal(evidence.repairCandidates?.action, "known");
-  assert.ok((evidence.repairCandidates?.candidates.length ?? 0) <= 8);
-  assert.ok(evidence.repairCandidates?.candidates.every(candidate => /^target\.[1-9][0-9]?$/u.test(candidate.target)));
+  // Every clickable element is a candidate, in the page's order.
+  assert.deepEqual(evidence.repairCandidates?.candidates.map((candidate) => candidate.target), evidence.elements.map((element) => element.target));
   assert.deepEqual(commands, [{
     actionType: "web.dom.capture_snapshot",
     parameters: {},
@@ -220,7 +220,7 @@ test("captures bounded sanitized post-failure evidence without returning the raw
   }]);
 });
 
-test("keeps the whole failure packet within a tight budget after adding candidate envelope bytes", async () => {
+test("a failure packet lists every element and every repair candidate, however many", async () => {
   const runtime = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
     executeAction: async () => ({ status: "succeeded", payload: { snapshot: {
@@ -234,17 +234,16 @@ test("keeps the whole failure packet within a tight budget after adding candidat
       })),
     } } }),
   });
-  const maxEvidenceBytes = 900;
   const evidence = await runtime.captureSanitizedFailureEvidence({
     projectId: "project.one",
     flowId: "flow.one",
     runId: "run.failed",
     failedAction: { attemptId: "attempt.failed", nodeId: "node.click", definitionId: "web.output.dom-click", status: "failed" },
-    maxEvidenceBytes,
   });
 
-  assert.ok(evidence.repairCandidates);
-  assert.equal(Buffer.byteLength(JSON.stringify(evidence), "utf8") <= maxEvidenceBytes, true);
+  assert.equal(evidence.elements.length, 30);
+  assert.equal(evidence.repairCandidates?.candidates.length, 30);
+  assert.ok(evidence.elements.every((element) => element.text?.endsWith("x".repeat(80))), "no text is cut");
 });
 
 test("a repair on a packet this runtime issued gets its selector hint back, without the packet ever carrying one", async () => {
@@ -346,7 +345,7 @@ test("a packet this domain did not issue is refused as unrecognized, before the 
   assert.equal(runtime.validateTargetOverrideEvidence(issuedPacket, { handles: { element: "target.1" } }, clickAction).status, "resolved");
 });
 
-test("bounds post-failure evidence to Core's gate when the host names no budget", async () => {
+test("post-failure evidence is the whole page, with no byte gate of its own", async () => {
   const runtime = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
     executeAction: async () => ({ status: "succeeded", payload: { snapshot: {
@@ -356,10 +355,10 @@ test("bounds post-failure evidence to Core's gate when the host names no budget"
     } } }),
   });
   const failedAction = { attemptId: "attempt.failed", nodeId: "node.click", definitionId: "web.output.dom-click", status: "failed" };
-  const defaulted = await runtime.captureSanitizedFailureEvidence({ projectId: "project.one", flowId: "flow.one", runId: "run.failed", failedAction });
-  assert.equal(Buffer.byteLength(JSON.stringify(defaulted), "utf8") <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true);
-  const overreached = await runtime.captureSanitizedFailureEvidence({ projectId: "project.one", flowId: "flow.one", runId: "run.failed", failedAction, maxEvidenceBytes: 11_000 });
-  assert.equal(Buffer.byteLength(JSON.stringify(overreached), "utf8") <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true);
+  const whole = await runtime.captureSanitizedFailureEvidence({ projectId: "project.one", flowId: "flow.one", runId: "run.failed", failedAction });
+  assert.equal(whole.elements.length, 60);
+  assert.equal(whole.truncated, false);
+  assert.ok(Buffer.byteLength(JSON.stringify(whole), "utf8") > 6_000, "larger than the gate Core used to hold it to");
 });
 
 test("presses any observed control, refuses only a handle it never showed, and never exposes form execution tools", async () => {
@@ -388,7 +387,7 @@ test("presses any observed control, refuses only a handle it never showed, and n
     },
   };
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const base = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 8_000 } as const;
+  const base = { projectId: "project.one", flowId: "flow.one" } as const;
   const applied = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
   assert.deepEqual({ kind: applied.kind, effectApplied: applied.effectApplied, resultCode: applied.resultCode }, { kind: "llm_evidence_tool_execution", effectApplied: true, resultCode: "web.action.succeeded" });
   assert.deepEqual(actionTypes, [
@@ -445,9 +444,9 @@ test("keeps an opaque press target bound to the returned element when fresh snap
       return { status: "succeeded", payload: { snapshot: { url: "https://example.test/form", title: "Form", interactiveElements } } };
     },
   });
-  const base = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 8_000 } as const;
+  const base = { projectId: "project.one", flowId: "flow.one" } as const;
   const inspected = await runtime.executeTool({ ...base, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  assert.deepEqual((inspected.evidence as any).elements[0], { target: "target.1", tag: "button", text: "Details", controlType: "button", revealKind: "disclosure", expanded: false });
+  assert.deepEqual((inspected.evidence as any).elements[0], { target: "target.1", tag: "button", text: "Details", attributes: [["type", "button"], ["aria-expanded", "false"]], controlType: "button", revealKind: "disclosure", expanded: false });
   const revealed = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
   assert.equal(revealed.effectApplied, true);
   assert.deepEqual(parameters.map((entry) => (entry as { selector?: string }).selector), ["#details"]);
@@ -474,7 +473,7 @@ test("reports a successful press with unchanged parsed evidence as no progress",
 });
 
 test("refuses an action the page did not take, and keeps disconnect and malformed snapshot failures fatal", async () => {
-  const base = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 8_000 } as const;
+  const base = { projectId: "project.one", flowId: "flow.one" } as const;
   const failedAction = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => command.actionType === "web.dom.capture_snapshot"

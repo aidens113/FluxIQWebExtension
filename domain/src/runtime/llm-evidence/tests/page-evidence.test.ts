@@ -30,27 +30,29 @@ const page = (evidence: Record<string, unknown>, extra: Record<string, unknown> 
   return snapshot;
 };
 
-test("reports the open dialogs the producer lists, by the producer's own field names", () => {
+test("reports every open dialog the producer lists, by the producer's own field names", () => {
   const evidence = sanitizeWebLlmSnapshot(page({
     dialogs: {
       open: [
         { selector: "#confirm-dialog", role: "dialog", modal: true, native: false, label: "Confirm your order" },
         { selector: "#session", role: "alertdialog", modal: false, native: false, label: "Session expiring" },
         { selector: "", role: "", modal: false, native: false },
-        { selector: "#fourth", role: "dialog", modal: false, native: false, label: "Beyond the cap" }
+        { selector: "#fourth", role: "dialog", modal: false, native: false, label: "Once beyond the cap" }
       ],
       modal: true
     }
   }));
   // `label` is what the producer calls the dialog's accessible name; `name` is
-  // what the packet calls one, on a dialog as on an element.
+  // what the packet calls one, on a dialog as on an element. Every dialog that
+  // says anything is listed (t200); the packet used to stop at three.
   assert.deepEqual(evidence.dialogs, [
     { role: "dialog", name: "Confirm your order", modal: true },
-    { role: "alertdialog", name: "Session expiring" }
+    { role: "alertdialog", name: "Session expiring" },
+    { role: "dialog", name: "Once beyond the cap" }
   ]);
 });
 
-test("reports the top-most blocking overlay so a click that cannot land is explicable", () => {
+test("reports every blocking overlay, most-blocking first, so a click that cannot land is explicable", () => {
   const evidence = sanitizeWebLlmSnapshot(page({
     overlays: {
       tested: 24,
@@ -61,14 +63,13 @@ test("reports the top-most blocking overlay so a click that cannot land is expli
       ]
     }
   }));
-  // The producer orders its blockers most-blocking first, and the rest are
-  // usually the head's own ancestors and descendants, so only the head is what
-  // a click actually has to get past.
-  assert.deepEqual(evidence.blockedBy, { role: "dialog", name: "We use cookies", blocks: 2 });
+  // The producer orders its blockers most-blocking first. Every one is listed
+  // (t200): the packet used to name only the head.
+  assert.deepEqual(evidence.blockedBy, [{ role: "dialog", name: "We use cookies", blocks: 2 }, { role: "heading", name: "Cookies", blocks: 1 }]);
   // The blocker is described, never addressed: a model's answer to an overlay is
   // to say it is there, not to be handed a way to reach into it.
   assert.doesNotMatch(JSON.stringify(evidence.blockedBy), /cookie-wall/u);
-  assert.deepEqual(sanitizeWebLlmSnapshot(page({ overlays: { blockers: [{ label: "named only" }] } })).blockedBy, { name: "named only" });
+  assert.deepEqual(sanitizeWebLlmSnapshot(page({ overlays: { blockers: [{ label: "named only" }] } })).blockedBy, [{ name: "named only" }]);
   assert.equal(sanitizeWebLlmSnapshot(page({ overlays: { blockers: [{ selector: "#anonymous" }] } })).blockedBy, undefined);
   assert.equal(sanitizeWebLlmSnapshot(page({ overlays: { tested: 24, blockedCount: 0, blockers: [] } })).blockedBy, undefined);
 });
@@ -84,7 +85,7 @@ test("reports loading state only while the page is still settling", () => {
         pendingNavigation: true
       }
     })).loading,
-    { readyState: "interactive", busy: true, spinner: true, pendingNavigation: true }
+    { readyState: "interactive", busy: true, indicators: [{ kind: "spinner", label: "Loading more" }], pendingNavigation: true }
   );
   // A settled page with nothing pending says nothing, and costs nothing.
   assert.equal(
@@ -94,14 +95,15 @@ test("reports loading state only while the page is still settling", () => {
   assert.equal(sanitizeWebLlmSnapshot(page({ loading: { documentState: "wat" } })).loading, undefined);
   assert.deepEqual(sanitizeWebLlmSnapshot(page({ loading: { documentState: "loading" } })).loading, { readyState: "loading" });
   // A live region saying "Loading more posts" is a `status`, not a spinner:
-  // the producer distinguishes the kinds and the packet does not invent one.
+  // the producer distinguishes the kinds, and the packet carries the kind and
+  // what it says, never the selector.
   assert.deepEqual(
     sanitizeWebLlmSnapshot(page({ loading: { documentState: "complete", busy: true, indicators: [{ selector: "#more", kind: "status", label: "Loading more posts" }] } })).loading,
-    { busy: true }
+    { busy: true, indicators: [{ kind: "status", label: "Loading more posts" }] }
   );
 });
 
-test("reports how the document was reached, and nothing that only restates the location", () => {
+test("reports how the document was reached, with its URLs whole but for their secrets", () => {
   const evidence = sanitizeWebLlmSnapshot(page({
     navigation: {
       url: "https://example.test/checkout",
@@ -114,26 +116,21 @@ test("reports how the document was reached, and nothing that only restates the l
       visibility: "visible"
     }
   }));
-  assert.deepEqual(evidence.navigation, { type: "back_forward", redirects: 2, referrer: "https://example.test/cart" });
+  assert.deepEqual(evidence.navigation, { url: "https://example.test/checkout", type: "back_forward", redirects: 2, referrer: "https://example.test/cart?session=(withheld)" });
   assert.doesNotMatch(JSON.stringify(evidence), /session=private/u);
-  // An ordinary visit with no redirects and no referrer is the assumption a
-  // reader already holds, so it is not worth a byte.
-  assert.equal(
+  // An ordinary visit with no redirects and no referrer says only where it is.
+  assert.deepEqual(
     sanitizeWebLlmSnapshot(page({ navigation: { url: "https://example.test/checkout", origin: "https://example.test", path: "/checkout", type: "navigate", redirects: 0, historyLength: 1, visibility: "visible" } })).navigation,
-    undefined
+    { url: "https://example.test/checkout" }
   );
   assert.equal(sanitizeWebLlmSnapshot(page({ navigation: { referrer: "javascript:alert(1)" } })).navigation, undefined);
 });
 
-test("reports the pre-filter element total the capture declares, and that the capture itself truncated", () => {
+test("says when the capture itself left elements out, and the packet has no limit of its own to report", () => {
   const declared = sanitizeWebLlmSnapshot(page({}, { elementTotal: 812, truncated: true }));
-  assert.equal(declared.elementTotal, 812);
   assert.equal(declared.truncated, true);
-  assert.equal(declared.captureTruncated, true, "the capture cut, so narrowing the capture is the remedy");
-  assert.equal(declared.elementsTruncated, undefined, "the packet's own bound was nowhere near");
-  assert.equal(declared.budgetTruncated, undefined, "and the budget was not what cut");
-  // Nothing was withheld, so restating the count the model can already see is not worth the bytes.
-  assert.equal(sanitizeWebLlmSnapshot(page({})).elementTotal, undefined);
+  assert.equal(declared.captureTruncated, true, "the capture cut, so the capture is where the remedy is");
+  for (const retired of ["elementTotal", "elementsTruncated", "budgetTruncated"]) assert.equal(retired in declared, false, retired);
   assert.equal(sanitizeWebLlmSnapshot(page({})).truncated, false);
   assert.equal(sanitizeWebLlmSnapshot(page({})).captureTruncated, undefined);
 });
@@ -148,14 +145,12 @@ test("reads the capture's own funnel, not only a bare top-level flag", () => {
   }));
   assert.equal(nested.captureTruncated, true);
   assert.equal(nested.truncated, true);
-  assert.equal(nested.elementTotal, 812, "the funnel's matched count is the number half of the same fact");
 
   const settled = sanitizeWebLlmSnapshot(page({
     elements: { scanned: 90, candidates: 12, matched: 1, returned: 1, truncated: false, changed: 0, recentlyInteracted: 0 }
   }));
   assert.equal(settled.captureTruncated, undefined);
   assert.equal(settled.truncated, false);
-  assert.equal(settled.elementTotal, undefined, "one element carried out of one matched restates nothing");
 });
 
 test("carries element-level recency and change flags as fields, not as ordering alone", () => {
@@ -216,8 +211,8 @@ test("ignores a page item that arrives malformed rather than failing the whole p
     elements: "a funnel"
   }, { frame: { isTop: "yes" }, elementTotal: -3 }));
   assert.deepEqual(
-    { dialogs: evidence.dialogs, blockedBy: evidence.blockedBy, loading: evidence.loading, navigation: evidence.navigation, elementTotal: evidence.elementTotal, frame: evidence.frame },
-    { dialogs: undefined, blockedBy: undefined, loading: undefined, navigation: undefined, elementTotal: undefined, frame: undefined }
+    { dialogs: evidence.dialogs, blockedBy: evidence.blockedBy, loading: evidence.loading, navigation: evidence.navigation, frame: evidence.frame },
+    { dialogs: undefined, blockedBy: undefined, loading: undefined, navigation: undefined, frame: undefined }
   );
   assert.equal(evidence.elements.length, 1);
   assert.equal(sanitizeWebLlmSnapshot(page({}, { evidence: "not an object" })).dialogs, undefined);

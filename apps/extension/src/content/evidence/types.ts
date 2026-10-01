@@ -37,6 +37,7 @@ export type {
   WebAutomationEvidenceRect as EvidenceRect,
   WebAutomationFormControlEvidence as FormControlEvidence,
   WebAutomationFormEvidence as FormEvidence,
+  WebAutomationLayerKind as LayerKind,
   WebAutomationLoadingEvidence as LoadingEvidence,
   WebAutomationLoadingIndicator as LoadingIndicator,
   WebAutomationLoadingIndicatorKind as LoadingIndicatorKind,

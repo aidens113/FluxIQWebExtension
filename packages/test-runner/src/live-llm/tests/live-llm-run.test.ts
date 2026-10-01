@@ -116,11 +116,11 @@ test("an adapt run readies its Flow with its spend ceiling, carries its intent a
 
 test("a run's --llm-permit travels with its intent and is recorded, and a typed token budget is kept", async () => {
   const core = fakeCore();
-  const run = new LiveLlmRun(planLiveLlmExecution({ ...profile({ maxTotalTokensPerRun: 300_000 }), task: "repair", permittedConsequences: ["create_new", "send_or_publish"] }), CREDENTIAL);
+  const run = new LiveLlmRun(planLiveLlmExecution({ ...profile({ maxTotalTokensPerRun: PER_REQUEST * 3 }), task: "repair", permittedConsequences: ["create_new", "send_or_publish"] }), CREDENTIAL);
   const execution = await run.authorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   assert.deepEqual(execution, { intent: "explore_and_adapt", permittedConsequences: ["send_or_publish", "create_new"] });
   assert.deepEqual(run.describe().permittedConsequences, ["send_or_publish", "create_new"]);
-  assert.equal(run.describe().authorized.maxTotalTokensPerRun, 300_000);
+  assert.equal(run.describe().authorized.maxTotalTokensPerRun, PER_REQUEST * 3);
 });
 
 async function noKeyRepository(t: test.TestContext): Promise<string> {

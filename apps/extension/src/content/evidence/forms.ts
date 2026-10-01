@@ -1,8 +1,8 @@
 // The forms model: controls grouped by the form that owns them.
 //
-// A snapshot lists controls in rank order, so the three fields of a login form
-// and the two of a search box arrive interleaved with everything else, and
-// nothing says which submit button belongs to which. Grouping them restores the
+// A snapshot lists every element in document order, so the three fields of a
+// login form and the two of a search box arrive among everything else around
+// them, and nothing says which submit button belongs to which. Grouping them restores the
 // only structure that matters for filling one in: what has to be answered, what
 // is already answered, and what submits it.
 //
@@ -23,44 +23,38 @@
 // own. Until they did, a field marked `billing cc-number` was protected by this
 // one flag and nothing else -- and that exact token list has slipped past a
 // copy of the rule twice in this plan.
+//
+// Every form and every control it owns is reported (t200): there was a cap of
+// eight forms and thirty controls a form, and text cut to 200 characters.
 
 import { selectorFor } from "../selector";
 import { hasEnteredValue, isSensitiveFormControl } from "../element-traits";
-import { accessibleNameFor, boundedText } from "../identity";
+import { accessibleNameFor, normalizedText } from "../identity";
+import { queryComposedInOrder } from "../shadow-dom";
 import { present } from "../../shared/present";
 import type { FormControlEvidence, FormEvidence } from "./types";
 
-const MAX_FORMS = 8;
-const MAX_CONTROLS_PER_FORM = 30;
-const MAX_TEXT = 200;
-// `autocomplete` is bounded by whole tokens rather than by characters. A
-// character slice can cut `billing cc-number` into `billing cc-nu`, which
-// matches nothing -- truncating the input to a security predicate is a way past
-// it, and that is how one copy of the rule missed a card field already. A
-// legitimate value is at most a `section-*` name, a shipping/billing
-// qualifier, a contact kind, a field name and `webauthn`, so these bounds
-// cannot touch one; they exist only because a page controls this string and it
-// travels on a wire.
-const MAX_AUTOCOMPLETE_TOKENS = 16;
-const MAX_AUTOCOMPLETE_TOKEN_LENGTH = 64;
 const SUBMIT_SELECTOR = "button[type='submit'],button:not([type]),input[type='submit'],input[type='image']";
 
-/** Every form on the page with its controls, or `undefined` when the page has none. */
+/**
+ * Every form on the page with every control it owns, in composed document
+ * order, or `undefined` when the page has none. A form inside an open shadow
+ * root is one of the page's forms: `document.forms` never lists it, and a
+ * consent or sign-in widget is often exactly that.
+ */
 export function formEvidence(): FormEvidence[] | undefined {
-  const forms: FormEvidence[] = [];
-  for (const form of document.forms) {
-    forms.push(describeForm(form));
-    if (forms.length >= MAX_FORMS) break;
-  }
+  const forms = queryComposedInOrder("form")
+    .filter((form): form is HTMLFormElement => form instanceof HTMLFormElement)
+    .map(describeForm);
   return forms.length ? forms : undefined;
 }
 
 function describeForm(form: HTMLFormElement): FormEvidence {
   const owned = [...form.elements].filter(isReportableControl);
   const label = accessibleNameFor(form);
-  const name = boundedText(form.getAttribute("name"), MAX_TEXT);
-  const action = boundedText(form.getAttribute("action"), MAX_TEXT);
-  const method = boundedText(form.getAttribute("method"), MAX_TEXT)?.toLowerCase();
+  const name = normalizedText(form.getAttribute("name"));
+  const action = normalizedText(form.getAttribute("action"));
+  const method = normalizedText(form.getAttribute("method"))?.toLowerCase();
   const submit = owned.find((control) => control.matches(SUBMIT_SELECTOR));
   return present<FormEvidence>({
     selector: selectorFor(form),
@@ -69,7 +63,7 @@ function describeForm(form: HTMLFormElement): FormEvidence {
     action: action || undefined,
     method: method || undefined,
     controlCount: owned.length,
-    controls: owned.slice(0, MAX_CONTROLS_PER_FORM).map(describeControl),
+    controls: owned.map(describeControl),
     submit: submit ? selectorFor(submit) : undefined
   });
 }
@@ -81,7 +75,7 @@ function isReportableControl(element: Element): boolean {
 
 function describeControl(element: Element): FormControlEvidence {
   const label = accessibleNameFor(element);
-  const name = boundedText(element.getAttribute("name"), MAX_TEXT);
+  const name = normalizedText(element.getAttribute("name"));
   const valuePresent = hasEnteredValue(element);
   const autocomplete = autocompleteTokens(element);
   return present<FormControlEvidence>({
@@ -101,20 +95,14 @@ function describeControl(element: Element): FormControlEvidence {
  * The `autocomplete` attribute as whole tokens, for the consumer's own copy of
  * the sensitivity decision.
  *
- * Deliberately not `boundedText`: that collapses and slices to 200 characters,
- * and a slice through the middle of a token destroys the very signal the
- * consumer is being given. Every token is kept whole, so a value the rule would
- * call sensitive here is a value it will call sensitive at the other end.
+ * Every token, each whole: a slice through the middle of a token destroys the
+ * very signal the consumer is being given -- `billing cc-number` cut to
+ * `billing cc-nu` matches nothing -- so a value the rule would call sensitive
+ * here is a value it will call sensitive at the other end. There is no token
+ * count or token length bound either (t200).
  */
 function autocompleteTokens(element: Element): string | undefined {
-  const tokens = (element.getAttribute("autocomplete") ?? "")
-    .split(/\s+/u)
-    .filter(Boolean)
-    .slice(0, MAX_AUTOCOMPLETE_TOKENS)
-    // A token longer than this is not an autocomplete token; its leading
-    // characters are kept rather than dropped, so a prefix the rule matches on
-    // still arrives.
-    .map((token) => token.slice(0, MAX_AUTOCOMPLETE_TOKEN_LENGTH));
+  const tokens = (element.getAttribute("autocomplete") ?? "").split(/\s+/u).filter(Boolean);
   return tokens.length ? tokens.join(" ") : undefined;
 }
 

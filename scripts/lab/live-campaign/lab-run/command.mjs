@@ -5,13 +5,30 @@ import { DEFAULT_PROFILES } from "./profiles.mjs";
 
 /**
  * The per-call and per-run limits a repair run gets unless the same option is
- * given after `--`: the ones live adapt runs have worked with
- * (`run-mu4ovip2-b15551d3`). The Lab refuses an option given twice, so a
- * limit given after `--` replaces its default rather than joining it.
+ * given after `--`. The Lab refuses an option given twice, so a limit given
+ * after `--` replaces its default rather than joining it.
+ *
+ * A request may be as large as the model's context window, 1,000,000 tokens
+ * (`LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST`, mirroring Core's
+ * `AUTOMATION_STUDIO_DEEPSEEK_MODEL_LIMITS`): on 2026-09-30 the user ordered
+ * that no limit hide page information from the model, so the input limit is
+ * the window less the reply. They were 48000/8000/56000 under Core's former
+ * 64,000-token ceiling.
+ *
+ * No run token budget is passed. The campaign used to pass
+ * `--llm-max-run-tokens` (600000, then 1000000), but with whole-page requests
+ * a build may use more than a million tokens across its calls, and a run over
+ * that budget was failed as `performance.budget` only after the money was
+ * spent -- the 2026-09-23 pattern. Without the option the Lab's plan holds the
+ * run to every authorized call at the per-request limit (`runTokenBudget` in
+ * packages/test-runner/src/live-llm/live-llm-plan.ts; the contract checks the
+ * run budget only when one is given), so what bounds the run is its cost
+ * ceiling, `--llm-max-cost-usd 0.25`, the call count and Core's stall guard.
+ * An operator may still give `--llm-max-run-tokens` after `--`.
  */
 const REPAIR_LIMITS = Object.freeze([
-  ["--llm-max-input-tokens", "48000"], ["--llm-max-output-tokens", "8000"], ["--llm-max-total-tokens", "56000"],
-  ["--llm-max-run-tokens", "600000"], ["--llm-max-calls", "26"], ["--llm-max-cost-usd", "0.25"],
+  ["--llm-max-input-tokens", "992000"], ["--llm-max-output-tokens", "8000"], ["--llm-max-total-tokens", "1000000"],
+  ["--llm-max-calls", "26"], ["--llm-max-cost-usd", "0.25"],
 ]);
 
 /**
@@ -30,13 +47,13 @@ const REPAIR_LIMITS = Object.freeze([
  * of small forms scored six of seven.
  *
  * Describing a real page costs tokens, and 8000 is not enough to describe one.
- * The model's context is 64k, so this was a self-imposed ceiling rather than a
- * provider one. Cost stays bounded where it belongs: by the per-run token
- * budget and the cost ceiling below, not by a limit that makes a large page
- * undescribable.
+ * The request limits are now the model's whole context window, as above. Cost
+ * stays bounded where it belongs: by the cost ceiling below, not by a limit
+ * that makes a large page undescribable, and no run token budget is passed,
+ * for the reason given at `REPAIR_LIMITS`.
  */
 const CREATE_LIMITS = Object.freeze([
-  ["--llm-max-input-tokens", "48000"], ["--llm-max-output-tokens", "8000"], ["--llm-max-total-tokens", "56000"],
+  ["--llm-max-input-tokens", "992000"], ["--llm-max-output-tokens", "8000"], ["--llm-max-total-tokens", "1000000"],
   // The same story as the input tokens above, one limit along, and it has to be
   // stated here for the same reason. Leaving the call count unnamed inherited
   // `DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun: 26`: a diagnosis, a patch and 24
@@ -48,10 +65,10 @@ const CREATE_LIMITS = Object.freeze([
   // against an authorized 26, and $0.90 bought six runs that measured nothing.
   // 48 is above what a build of these pages has been observed to need and below
   // the contract ceiling of 64. What bounds the run stays what always bounded
-  // it -- the per-run token budget and the cost ceiling below, not a count set
+  // it -- the cost ceiling below, not a count set
   // for a different shape of loop.
   ["--llm-max-calls", "48"],
-  ["--llm-max-run-tokens", "600000"], ["--llm-max-cost-usd", "0.25"],
+  ["--llm-max-cost-usd", "0.25"],
 ]);
 
 /**

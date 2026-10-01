@@ -22,13 +22,17 @@ import { regionEvidence } from "./regions";
 import { repeatingEvidence } from "./repeating";
 import type { PageEvidence } from "./types";
 
-/** What the snapshot counted on its way to the descriptors it kept. */
+/**
+ * What the snapshot counted on its way to its descriptors. The walk has no cap
+ * (t200), so every element it keeps is returned and `truncated` is never set
+ * by a capture; the fields stay because the contract and its readers name them.
+ */
 export type SnapshotElementCounts = {
-  /** Elements the generic sweep walked, before any filter. */
+  /** Elements the walk visited, before the rendering rule. */
   scanned: number;
-  /** Distinct candidates gathered across every pass. */
+  /** The same count: every visited element was a candidate. */
   candidates: number;
-  /** Candidates that passed the inclusion filter, before the cap. */
+  /** Elements the rendering rule kept, which is every element returned. */
   matched: number;
 };
 
@@ -60,6 +64,9 @@ export function pageEvidence(entries: readonly SnapshotElementEntry[], counts: S
     overlays,
     regions,
     repeating,
-    forms
+    forms,
+    // One frame's capture asks no other frame; only the background worker's
+    // merge of every frame can name one that did not answer.
+    unansweredFrameIds: undefined
   });
 }

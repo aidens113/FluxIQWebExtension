@@ -12,8 +12,8 @@
 //
 // And a failed command carries the page it failed on: the sanitized
 // `web-llm-evidence.v2` packet is built here from the snapshot the content
-// script captured at the instant of failure, bounded to Core's own
-// failure-evidence gate, with the URL and the resolved target beside it. The
+// script captured at the instant of failure, whole (t200), with the URL and
+// the resolved target beside it. The
 // alternative -- Core's `captureSanitizedFailureEvidence`, which opens a fresh
 // snapshot when diagnosis runs -- describes a page that has since moved on.
 
@@ -21,7 +21,6 @@ import { createHash } from "node:crypto";
 import type { FluxIQRuntimeAdapter, FluxIQRuntimeCommand, FluxIQRuntimeCommandResult, FluxIQRuntimeCommandStatus } from "fluxiq/runtime";
 import type { FluxIQ } from "fluxiq";
 import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
-import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../actions/types";
@@ -38,7 +37,7 @@ import {
   type WebAutomationFailureCode,
   type WebAutomationFailureRecord
 } from "./failure";
-import { sanitizeWebLlmSnapshot, type WebLlmPageEvidence } from "./llm-evidence";
+import { sanitizeWebLlmSnapshot, screenedEvidenceUrl, screenedWebLlmText, type WebLlmPageEvidence } from "./llm-evidence";
 
 export type WebAutomationRuntimeAdapterOptions = {
   fluxiq: FluxIQ;
@@ -361,8 +360,9 @@ type FailureDiagnostics = {
  * the client resolved, and the sanitized evidence packet built from the
  * snapshot the client captured at that instant.
  *
- * URLs are reduced to origin and path, as the evidence packet's own `location`
- * is, so a session token in a query string cannot ride into the attempt trace.
+ * URLs are spelled as the evidence packet's own `location` is -- query kept,
+ * a secret-named parameter's value withheld -- so a session token in a query
+ * string cannot ride into the attempt trace.
  * Nothing here can throw into the dispatch path: an unusable snapshot costs the
  * packet, never the failure it was meant to explain.
  */
@@ -370,11 +370,11 @@ function failureDiagnostics(status: FluxIQRuntimeCommandStatus, payload: JsonObj
   if (status === "succeeded") return undefined;
   const actionResult = jsonObject(payload?.result);
   if (!actionResult) return undefined;
-  const evidence = sanitizedFailureEvidence(actionResult.snapshot, boundedSelector(jsonObject(actionResult.element)?.selector));
+  const evidence = sanitizedFailureEvidence(actionResult.snapshot, selectorOf(jsonObject(actionResult.element)?.selector));
   const evidenceDigest = evidence === undefined ? undefined : createHash("sha256").update(JSON.stringify(evidence)).digest("hex");
   const report = compact({
-    url: safeLocation(actionResult.url),
-    title: boundedTitle(actionResult.title),
+    url: screenedEvidenceUrl(actionResult.url),
+    title: screenedTitle(actionResult.title),
     // The handle the packet minted for the control, never the control's own
     // selector. This report rides into Core on the attempt's metadata, and a
     // selector is a browser concept Core does not carry (Phase T); the handle
@@ -388,8 +388,7 @@ function failureDiagnostics(status: FluxIQRuntimeCommandStatus, payload: JsonObj
 }
 
 /**
- * The packet, bounded by Core's failure-evidence gate rather than by the larger
- * exploration budget, and told which control the action addressed so it can
+ * The packet, whole, and told which control the action addressed so it can
  * mark that element with its own opaque handle. `failedAction` is passed even
  * when the client named no control, because `{}` is what makes the packet say
  * `failedTargetUnknown` rather than say nothing.
@@ -398,7 +397,6 @@ function sanitizedFailureEvidence(snapshot: unknown, failedSelector: string | un
   if (!jsonObject(snapshot)) return undefined;
   try {
     return sanitizeWebLlmSnapshot(snapshot, {
-      maxEvidenceBytes: AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES,
       failedAction: failedSelector === undefined ? {} : { selector: failedSelector }
     });
   } catch {
@@ -419,23 +417,13 @@ function dispatchPayloadMessage(payload: JsonObject | undefined): string | undef
   return typeof message === "string" && message.length > 0 ? message : undefined;
 }
 
-function safeLocation(value: unknown): string | undefined {
-  if (typeof value !== "string" || value.length === 0 || value.length > 2_000) return undefined;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
-    return url.username || url.password ? undefined : `${url.origin}${url.pathname}`;
-  } catch {
-    return undefined;
-  }
+function screenedTitle(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? screenedWebLlmText(value) : undefined;
 }
 
-function boundedTitle(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value.slice(0, 300) : undefined;
-}
-
-function boundedSelector(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value.slice(0, 500) : undefined;
+/** The selector the client resolved, whole; it only marks the packet's element and is never published. */
+function selectorOf(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function jsonObject(value: unknown): JsonObject | undefined {

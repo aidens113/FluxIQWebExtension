@@ -14,19 +14,20 @@
 // handed, or a page it stood on:
 // - the start location Core carried in for the build;
 // - every packet the build was shown (`../tools.ts`, `shown`): the page's
-//   location, and every link's href on it -- so a page reached by pressing is
-//   a page it has been on;
+//   location, and every link's href on it with the query the packet shows
+//   (`../location.ts`) -- so a page reached by pressing is a page it has been
+//   on;
 // - every address-shaped string in what a reading node read and returned to the
 //   model (an extraction's `url` column), with its query, because the model was
 //   shown the query.
 //
 // **How an address is compared.** By origin, by path with any trailing slash
-// dropped, and by the query's keys; the fragment is ignored. A packet never
-// carries a query (`../location.ts`), so a navigation that writes one is
-// writing something the model was not shown, and is allowed only when one of
-// two things holds:
-// - a read returned that address, or the page or the start location had it,
-//   with the same keys and the same values; or
+// dropped, and by the query's keys; the fragment is ignored. Since t200 a
+// packet carries a location's and a link's query, with a secret-named value
+// withheld (`../location.ts`). A navigation that writes a query is allowed
+// only when one of two things holds:
+// - a read returned that address, or the page, a link on it or the start
+//   location had it, with the same keys and the same values; or
 // - it is a site search this build ran itself, again with other words: a page
 //   the build stood on had the same path and the same keys, and each value
 //   that differs was, on that page, text this build typed. Every other value
@@ -102,8 +103,11 @@ export function createWebNodeShownAddresses(): WebNodeShownAddresses {
       const held = memory(build);
       // The page's own query rides with its location: the page is one the build stood on.
       remember(held, parsed(page.evidence.location, undefined), page.pageQuery ?? []);
+      // A link's query is shown with it, so it is remembered with it.
       for (const element of page.evidence.elements) {
-        if (element.href !== undefined) remember(held, parsed(element.href, undefined), []);
+        if (element.href === undefined) continue;
+        const link = parsed(element.href, undefined);
+        remember(held, link, link === undefined ? [] : [...link.searchParams]);
       }
     },
     ran(build, step) {

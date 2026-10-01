@@ -9,16 +9,16 @@
 //
 // Every value is read out of the sanitized evidence packet
 // (`./project.ts`), so a route can test nothing a model could not already be
-// shown, and nothing a packet drops -- an input's value, a query string, a
-// credential-shaped control -- ever reaches a condition.
+// shown, and nothing a packet withholds -- a sensitive control, a secret query
+// value, a credential-shaped string -- ever reaches a condition.
 
 export type WebAutomationRouteStatePath = { readonly path: string; readonly description: string };
 
 export const WEB_AUTOMATION_ROUTE_STATE_PATHS: readonly WebAutomationRouteStatePath[] = Object.freeze([
-  { path: "state.page.path", description: "The path of the address the tab is on, such as /orders/open; never its query." },
-  { path: "state.page.location", description: "The address the tab is on: origin and path, never its query." },
+  { path: "state.page.path", description: "The path of the address the tab is on, such as /orders/open, without its query." },
+  { path: "state.page.location", description: "The whole address the tab is on, query and fragment included; the value of a parameter named like a token, key, session or code reads (withheld)." },
   { path: "state.page.title", description: "The document's title." },
-  { path: "state.page.dialog", description: "The name of the dialog standing open in front of the page, such as an announcement or a confirmation. Absent when no dialog is open." },
-  { path: "state.page.blockedBy", description: "The name of whatever covers the page's controls and takes their clicks. Absent when nothing does." },
-  { path: "state.page.controls", description: "The names of the controls the page offers, joined with \" | \": buttons, links, fields and choices." }
+  { path: "state.page.dialog", description: "The names of every dialog standing open in front of the page, such as an announcement or a confirmation, top-most first, joined with \" | \". Absent when no dialog is open." },
+  { path: "state.page.blockedBy", description: "The names of everything that covers the page's controls and takes their clicks, joined with \" | \". Absent when nothing does." },
+  { path: "state.page.controls", description: "The names of every control the page offers, in document order, joined with \" | \": buttons, links, fields and choices." }
 ]);

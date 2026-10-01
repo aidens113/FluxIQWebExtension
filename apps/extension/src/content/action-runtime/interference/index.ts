@@ -13,12 +13,16 @@
 // `pressable-way-out.ts` is the one per-layer rule `clear.ts` presses by and
 // `presence.ts` asks by, so the recovery can clear a wall a missing target is
 // hidden behind.
+// `layer-kind.ts` names what a layer is -- a robot check, a consent prompt, a
+// rate-limit notice -- for the snapshot's dialog and blocker evidence
+// (`../../evidence/`).
 
 export { clearInterference } from "./clear";
 export { clearableLayerOverPage } from "./presence";
 export { coveringLayerSentence } from "./covering-layer";
 export { overlaysAt, overlaysOverPage } from "./overlays";
 export { boundedLayerText } from "./layer-text";
+export { layerKind } from "./layer-kind";
 export { dismissControlIn, hasDismissalControl } from "./way-out";
 export { isDismissalLabel, isRateLimitLayerText, DISMISS_LABEL_MAX } from "./vocabulary";
 

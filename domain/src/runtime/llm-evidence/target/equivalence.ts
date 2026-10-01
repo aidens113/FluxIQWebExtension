@@ -53,7 +53,7 @@ import type { JsonObject } from "fluxiq/core";
 import type { WebAutomationElementFingerprint } from "../../../actions/types";
 import { adaptedTargetSupersedesRecording, elementFingerprint, objectValue } from "../../../output-nodes/targets";
 import { type WebLlmEvidenceElement } from "../elements";
-import { WEB_LLM_EVIDENCE_BOUNDS } from "../limits";
+import { isWithheldText } from "../withheld";
 import { elementFillsRepairableParameter, type WebRepairableParameterRole } from "../repairable-parameters";
 import type { AutomationStudioRuntimeTargetOverrideFailedAction } from "fluxiq/automation-studio";
 
@@ -81,10 +81,10 @@ export function webRepairEquivalenceRefusal(input: {
   if (conflictingKinds(recordedControlKind(recorded), namedKind)) return "target_not_equivalent";
   const namedLabels = evidenceNames(input.named);
   const recordedLabels = recordedNames(recorded.fingerprint);
-  if (joinsAnotherActionToRecorded(namedLabels.all, recordedLabels)) return "target_not_equivalent";
-  if (namesAgree(namedLabels.whole, recordedLabels)) return undefined;
+  if (joinsAnotherActionToRecorded(namedLabels, recordedLabels)) return "target_not_equivalent";
+  if (namesAgree(namedLabels, recordedLabels)) return undefined;
   if (soleControlOfItsKindInRecordedForm(input.elements, input.named, namedKind, recorded.formId)) {
-    return joinsMoreActions(namedLabels.all, recordedLabels) ? "target_not_equivalent" : undefined;
+    return joinsMoreActions(namedLabels, recordedLabels) ? "target_not_equivalent" : undefined;
   }
   return "target_unanchored";
 }
@@ -237,13 +237,12 @@ function recordedNames(fingerprint: WebAutomationElementFingerprint): string[] {
 }
 
 /**
- * The names the packet gives an element. A string the packet cut at its bound
- * is not the element's whole name, so it is compared for the conjunctions it
- * does contain and never for agreement.
+ * The names the packet gives an element. The packet cuts no string (t200); a
+ * name it withheld as shaped like a secret (`../withheld.ts`) is not the
+ * element's name at all, so it is compared for nothing.
  */
-function evidenceNames(element: WebLlmEvidenceElement): { all: string[]; whole: string[] } {
-  const all = [element.name, element.text].flatMap((value) => text(value) === undefined ? [] : [value as string]);
-  return { all, whole: all.filter((value) => value.length < WEB_LLM_EVIDENCE_BOUNDS.text) };
+function evidenceNames(element: WebLlmEvidenceElement): string[] {
+  return [element.name, element.text].flatMap((value) => text(value) === undefined || isWithheldText(value) ? [] : [value as string]);
 }
 
 /** Words that join a second action to the first. */

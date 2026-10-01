@@ -31,11 +31,16 @@
 // those controls hold, so `visibleText` and `directVisibleText` read through
 // `textOutsideSensitiveControls` (`sensitive-text.ts`): a sensitive control,
 // and anything inside one, gives no `text` or `visibleText`, and a container's
-// text leaves those contents out. The snapshot ranks and admits elements by
-// the same two readers, so a control known only by its contents is not listed.
-// The `accessibleName`, `label` and `context` assembled here come from
-// `identity/`, which reads every page string through the same helper, so none
-// needs filtering again here.
+// text leaves those contents out. The `accessibleName`, `label` and `context`
+// assembled here come from `identity/`, which reads every page string through
+// the same helper, so none needs filtering again here.
+//
+// Nothing is cut (t200): not the text, not a value, not an option list or an
+// option's words, not an attribute. The descriptor carried 500 characters of
+// text, 2,000 of a value, the first twenty options at 200 characters each, and
+// 25 named attributes at 500 characters each; a reader was never told which of
+// them had been shortened. `attributes` is now every attribute the page wrote
+// (`descriptor-attributes.ts`), with what a sensitive control holds withheld.
 //
 // It does not cover the action verbs, which read `element.value` directly to
 // prove their own post-conditions and put it in a validation string
@@ -45,6 +50,7 @@
 import { xpathFor } from "./element-finder";
 import { visualDocumentBounds, visualViewportBounds } from "./visual-bounds";
 import { captureSettings } from "./capture-settings";
+import { elementAttributes } from "./descriptor-attributes";
 import {
   hasClickHandler,
   hasEnteredValue,
@@ -106,14 +112,8 @@ export function describeElement(element: Element): DomElementDescriptor {
     descriptor.options = select.options;
     if (select.selectedValue !== undefined) descriptor.selectedValue = select.selectedValue;
   }
-  const attributes: Record<string, string> = {};
-  // `value` is deliberately absent: value *presence* travels as `hasValue`, so
-  // an allowlisted attribute can never carry a sensitive field's content.
-  for (const attribute of ["id", "class", "name", "type", "autocomplete", "data-sensitive", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-labelledby", "aria-describedby", "for", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
-    const value = element.getAttribute(attribute);
-    if (value !== null) attributes[attribute] = value.slice(0, 500);
-  }
-  if (Object.keys(attributes).length) descriptor.attributes = attributes;
+  const attributes = elementAttributes(element);
+  if (attributes) descriptor.attributes = attributes;
   return descriptor;
 }
 
@@ -123,7 +123,7 @@ export function describeElement(element: Element): DomElementDescriptor {
  */
 export function visibleText(element: Element): string | undefined {
   const text = textOutsideSensitiveControls(element).replace(/\s+/g, " ").trim();
-  return text ? text.slice(0, 500) : undefined;
+  return text || undefined;
 }
 
 /**
@@ -132,7 +132,7 @@ export function visibleText(element: Element): string | undefined {
  */
 export function directVisibleText(element: Element): string | undefined {
   const text = textOutsideSensitiveControls(element, "own").replace(/\s+/g, " ").trim();
-  return text ? text.slice(0, 500) : undefined;
+  return text || undefined;
 }
 
 /**
@@ -145,7 +145,7 @@ export function directVisibleText(element: Element): string | undefined {
  *
  * The redaction lives here rather than at each emission point because every
  * capture path comes through here: the recorder's `dom.input`, the `dom.change`
- * listener, the element descriptor and the snapshot's ranking. One test closes
+ * listener and the element descriptor every snapshot is made of. One test closes
  * all of them and a new caller is safe by default. Presence still travels, as
  * `hasEnteredValue` in `element-traits.ts`.
  */
@@ -157,9 +157,9 @@ export function readElementValue(element: Element | null): string | undefined {
   // still travels as `hasValue`.
   if (element instanceof HTMLInputElement && element.type.toLowerCase() === "file") return undefined;
   if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
-    return element.value.slice(0, 2_000);
+    return element.value;
   }
-  if (element instanceof HTMLElement && element.isContentEditable) return element.innerText.slice(0, 2_000);
+  if (element instanceof HTMLElement && element.isContentEditable) return element.innerText;
   return undefined;
 }
 
@@ -181,7 +181,7 @@ export function checkedState(element: Element): boolean | undefined {
   return isWithinSensitiveControl(element) ? undefined : element.checked;
 }
 
-/** A select's option list and, when the selection is one of them, its value. */
+/** A select's whole option list and, when the selection is one of them, its value. */
 type SelectState = {
   options: NonNullable<DomElementDescriptor["options"]>;
   selectedValue?: string | undefined;
@@ -199,12 +199,12 @@ type SelectState = {
  */
 export function selectState(element: Element): SelectState | undefined {
   if (!(element instanceof HTMLSelectElement) || isWithinSensitiveControl(element)) return undefined;
-  const options = [...element.options].slice(0, 20).map((option) => ({
-    value: option.value.slice(0, 200),
-    label: (option.label || option.textContent || "").replace(/\s+/gu, " ").trim().slice(0, 200),
+  const options = [...element.options].map((option) => ({
+    value: option.value,
+    label: (option.label || option.textContent || "").replace(/\s+/gu, " ").trim(),
   }));
   const state: SelectState = { options };
-  if (options.some((option) => option.value === element.value)) state.selectedValue = element.value.slice(0, 200);
+  if (options.some((option) => option.value === element.value)) state.selectedValue = element.value;
   return state;
 }
 

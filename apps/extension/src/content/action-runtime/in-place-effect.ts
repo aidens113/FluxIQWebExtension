@@ -184,7 +184,7 @@ export function watchInPlaceEffect(link: Element): InPlaceEffectWatch {
   };
 }
 
-/** The open shadow roots beneath the document, nested ones included, within `composedRoots`' bounds. */
+/** The open shadow roots beneath the document, nested ones included. */
 function openRoots(document: Document): ShadowRoot[] {
   return composedRoots(document).filter((root): root is ShadowRoot => root !== document);
 }

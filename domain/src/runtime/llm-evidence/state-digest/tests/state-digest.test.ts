@@ -32,7 +32,7 @@ test("a page nobody touched digests to the same string twice", () => {
 
   assert.equal(first, second);
   // Opaque and short: nothing of the page can be read back out of it.
-  assert.match(first, /^web-state\.v1:\d+:[0-9a-f]+$/u);
+  assert.match(first, /^web-state\.v2:\d+:[0-9a-f]+$/u);
   assert.doesNotMatch(first, /example\.test|More options|First item/u);
 });
 

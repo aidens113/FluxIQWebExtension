@@ -55,7 +55,7 @@
 
 import { isSensitiveFormControl } from "../element-traits";
 import { accessibleNameFor } from "./accessible-name";
-import { boundedText } from "./bounded-text";
+import { normalizedText } from "./normalized-text";
 import { candidateFingerprint, type TargetCandidate } from "./candidates";
 import type { RecordedIdentity } from "./score";
 
@@ -67,8 +67,6 @@ export type StableNameReading = {
   stable: string;
 };
 
-/** Characters of a name, as `accessible-name.ts` bounds one. */
-const MAX_NAME_LENGTH = 200;
 /** Text runs a control's name may be read in. A chip holds two or three; a control holding more is a region. */
 const MAX_RUNS = 8;
 /** Nodes walked for them. A control is small; one that is not is not read. */
@@ -92,7 +90,7 @@ export function stableNameReading(target: RecordedIdentity, element: Element): S
   if (!runs || runs.length < 2) return undefined;
   // Named by its content and nothing else: an authored name is not built from
   // runs, so a run cannot be the part of it that changed.
-  if (accessibleNameFor(element) !== boundedText(runs.join(""), MAX_NAME_LENGTH)) return undefined;
+  if (accessibleNameFor(element) !== normalizedText(runs.join(""))) return undefined;
   const readings = new Set<string>();
   for (let index = 0; index < runs.length; index += 1) {
     const stable = keptAround(recorded, runs, index);
@@ -124,8 +122,8 @@ export function stableNameReading(target: RecordedIdentity, element: Element): S
  * disagree named two things, and there is no single part of one name to keep.
  */
 function recordedName(target: RecordedIdentity): string | undefined {
-  const name = boundedText(target.accessibleName, MAX_NAME_LENGTH);
-  const text = boundedText(target.visibleText, MAX_NAME_LENGTH);
+  const name = normalizedText(target.accessibleName);
+  const text = normalizedText(target.visibleText);
   if (name && text && name !== text) return undefined;
   return name ?? text;
 }
@@ -136,14 +134,14 @@ function recordedName(target: RecordedIdentity): string | undefined {
  * something other than what the run says now.
  */
 function keptAround(recorded: string, runs: readonly string[], index: number): string | undefined {
-  const before = boundedText(runs.slice(0, index).join(""), MAX_NAME_LENGTH) ?? "";
-  const after = boundedText(runs.slice(index + 1).join(""), MAX_NAME_LENGTH) ?? "";
-  const now = boundedText(runs[index], MAX_NAME_LENGTH);
+  const before = normalizedText(runs.slice(0, index).join("")) ?? "";
+  const after = normalizedText(runs.slice(index + 1).join("")) ?? "";
+  const now = normalizedText(runs[index]);
   if (before.length + after.length >= recorded.length) return undefined;
   if (!recorded.startsWith(before) || !recorded.endsWith(after)) return undefined;
   const then = recorded.slice(before.length, recorded.length - after.length).trim();
   if (!then || then === now) return undefined;
-  const stable = boundedText([before, after].filter(Boolean).join(" "), MAX_NAME_LENGTH);
+  const stable = normalizedText([before, after].filter(Boolean).join(" "));
   return stable && letters(stable) >= MIN_STABLE_LETTERS ? stable : undefined;
 }
 

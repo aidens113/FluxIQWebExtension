@@ -19,7 +19,6 @@ import {
   type WebLlmRepeatingStructure
 } from "../..";
 import { WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS } from "../../capture";
-import { serializedBytes } from "../../limits";
 import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 import { webNodeReadWithRejectedRows } from "../rejected-rows";
 
@@ -119,7 +118,7 @@ test("the samples are never in what the Flow keeps, and a playback of it asks fo
   assert.equal(Object.hasOwn(replayed.parameters, "rejectedSamples"), false);
 });
 
-test("the samples and the kept rows together stay within the read's budget, and shrink before they are dropped", () => {
+test("the samples and the kept rows come back whole, with no byte budget, and the recorded payload holds no samples", () => {
   const row = (index: number) => ({ name: `${"x".repeat(70)} ${index}`, price: "$1" });
   const payload: JsonObject = {
     extracted: Array.from({ length: 40 }, (_unused, index) => row(index)),
@@ -129,19 +128,18 @@ test("the samples and the kept rows together stay within the read's budget, and 
       rejectedSamples: Array.from({ length: 4 }, (_unused, condition) => [row(condition), row(condition + 10), row(condition + 20)])
     }
   };
-  for (const budget of [8000, 2000, 1200]) {
-    const { read, recorded } = webNodeReadWithRejectedRows(payload, budget);
-    assert.ok(serializedBytes(read) <= budget, `${serializedBytes(read)} bytes against ${budget}`);
-    assert.equal(JSON.stringify(recorded).includes("rejectedSamples"), false);
-  }
-  const roomy = webNodeReadWithRejectedRows(payload, 8000).read as { rejectedRows: Array<{ rows: unknown[] }> };
-  assert.deepEqual(roomy.rejectedRows.map((entry) => entry.rows.length), [3, 3, 3, 3]);
-  const tight = webNodeReadWithRejectedRows(payload, 2000).read as { rejectedRows?: Array<{ rows: unknown[] }> };
-  assert.ok((tight.rejectedRows?.[0]?.rows.length ?? 0) < 3, "fewer rows per condition when three do not fit");
-  // A page that sent more than three, or a value past 80 characters, is cut to the bound.
+  const { read, recorded } = webNodeReadWithRejectedRows(payload);
+  assert.equal(JSON.stringify(recorded).includes("rejectedSamples"), false);
+  const whole = read as { extracted: unknown[]; rejectedRows: Array<{ rows: unknown[] }> };
+  // Every kept row and every sampled row: nothing is dropped to fit (t200).
+  assert.equal(whole.extracted.length, 40);
+  assert.deepEqual(whole.rejectedRows.map((entry) => entry.rows.length), [3, 3, 3, 3]);
+  // The page's sampling contract still bounds what a page may send: a page that
+  // sent more than three, or a value past 80 characters, is read to that bound
+  // by the summary (`actions/extraction/rejected-samples.ts`).
   const flooded = structuredClone(payload) as { extraction: { rejectedSamples: unknown[][] } };
   flooded.extraction.rejectedSamples[0] = Array.from({ length: 9 }, () => ({ name: "y".repeat(500) }));
-  const cut = webNodeReadWithRejectedRows(flooded as unknown as JsonObject, 8000).read as { rejectedRows: Array<{ rows: Array<{ name: string }> }> };
+  const cut = webNodeReadWithRejectedRows(flooded as unknown as JsonObject).read as { rejectedRows: Array<{ rows: Array<{ name: string }> }> };
   assert.equal(cut.rejectedRows[0]?.rows.length, 3);
   assert.equal(cut.rejectedRows[0]?.rows[0]?.name.length, 80);
 });

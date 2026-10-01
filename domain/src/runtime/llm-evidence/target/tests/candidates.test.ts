@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { WebLlmEvidenceElement } from "../../elements";
-import { projectWebRepairCandidates, WEB_REPAIR_CANDIDATE_LIMIT } from "../candidates";
+import { projectWebRepairCandidates } from "../candidates";
 
 const elements: WebLlmEvidenceElement[] = [
   { target: "target.1", tag: "button", name: "Save", form: "settings" },
@@ -10,41 +10,43 @@ const elements: WebLlmEvidenceElement[] = [
   { target: "target.4", tag: "div", name: "Status" },
 ];
 
-test("known action ranks only compatible opaque handles", () => {
-  const projected = projectWebRepairCandidates(elements, { definitionId: "web.output.dom-click" }, 1_024);
+test("a known action lists every compatible opaque handle, in document order, scoring none of them", () => {
+  const projected = projectWebRepairCandidates(elements, { definitionId: "web.output.dom-click" });
   assert.deepEqual(projected, {
-    schemaVersion: "web-repair-candidates.v1",
-    status: "ranked",
+    schemaVersion: "web-repair-candidates.v2",
+    status: "listed",
     action: "known",
     parameter: "element",
     role: "clickable",
+    // Focus, change and recency once ranked these; the page's order is kept.
     candidates: [
-      { target: "target.3", match: "compatible" },
-      { target: "target.2", match: "compatible" },
       { target: "target.1", match: "compatible" },
+      { target: "target.2", match: "compatible" },
+      { target: "target.3", match: "compatible" },
     ],
     refusals: [{ category: "incompatible", count: 1 }],
   });
 });
-test("recorded action keeps semantic priority and names closed possible roles", () => {
-  const projected = projectWebRepairCandidates(elements, { definitionId: "builtin.policy.action" }, 1_024)!;
-  assert.deepEqual(projected.candidates.map(candidate => candidate.target), ["target.3", "target.2", "target.1"]);
-  assert.deepEqual(projected.candidates[0], { target: "target.3", match: "action_unknown", roles: ["selectable", "clickable", "keyable", "observable"] });
+
+test("a recorded action lists every candidate in document order and names the closed roles each could fill", () => {
+  const projected = projectWebRepairCandidates(elements, { definitionId: "builtin.policy.action" });
+  assert.deepEqual(projected.candidates.map((candidate) => candidate.target), ["target.1", "target.2", "target.3"]);
+  assert.deepEqual(projected.candidates[2], { target: "target.3", match: "action_unknown", roles: ["selectable", "clickable", "keyable", "observable"] });
   assert.deepEqual(projected.refusals, [{ category: "incompatible", count: 1 }]);
   assert.doesNotMatch(JSON.stringify(projected), /Save|Account|Plan|Status|selector|html/u);
 });
 
-test("projection is capped by count and serialized bytes", () => {
-  const many = Array.from({ length: 20 }, (_, index): WebLlmEvidenceElement => ({ target: `target.${index + 1}`, tag: "button", name: `Action ${index + 1}` }));
-  const projected = projectWebRepairCandidates(many, { definitionId: "builtin.policy.action" }, 520)!;
-  assert.ok(projected.candidates.length <= WEB_REPAIR_CANDIDATE_LIMIT);
-  assert.ok(Buffer.byteLength(JSON.stringify(projected), "utf8") <= 520);
-  assert.equal(projected.refusals.find(item => item.category === "limit")?.count, 20 - projected.candidates.length);
+test("every compatible element is a candidate: no count and no byte size cuts the list", () => {
+  const many = Array.from({ length: 500 }, (_, index): WebLlmEvidenceElement => ({ target: `target.${index + 1}`, tag: "button", name: `Action ${index + 1}` }));
+  const projected = projectWebRepairCandidates(many, { definitionId: "builtin.policy.action" });
+  assert.equal(projected.candidates.length, 500);
+  assert.deepEqual(projected.candidates.map((candidate) => candidate.target), many.map((element) => element.target));
+  assert.deepEqual(projected.refusals, []);
 });
 
 test("an action with no repair seam returns only a closed refusal", () => {
-  assert.deepEqual(projectWebRepairCandidates(elements, { definitionId: "web.output.browser-navigate" }, 1_024), {
-    schemaVersion: "web-repair-candidates.v1",
+  assert.deepEqual(projectWebRepairCandidates(elements, { definitionId: "web.output.browser-navigate" }), {
+    schemaVersion: "web-repair-candidates.v2",
     status: "action_not_repairable",
     action: "not_repairable",
     parameter: "element",
