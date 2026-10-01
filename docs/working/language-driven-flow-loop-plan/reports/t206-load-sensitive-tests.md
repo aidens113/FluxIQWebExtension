@@ -339,3 +339,89 @@ Validation (round 2):
 - Rule tests 200/200 in both repositories.
 - Both `tsc` runs clean.
 - Downstream audit passed. The Core audit's only failure is dev's evidence-loop.
+
+## Round 3 (2026-09-30): the failed-start timeouts, scale-pages and the million-event case
+
+Tree: Core at dev `fd2f7e6b`, which already contains round 2. Unit tests only.
+
+### Outcome
+
+**Done for failed-start and scale-pages. The million-event case is named, not fixed.**
+
+- **failed-start: no regression from the operation lease.**
+  - The lease is released on every exit path, including a start that throws before or after the session is marked running. A new test now pins that.
+  - The 15 s timeouts are the same storage cost as preservation: about 2,400 round trips per case, setup included. They were not a hang.
+- **scale-pages "10,000 Subflow summaries": 27-56 s -> 1.4 s.**
+  - The slow step was the test's own seeding, not the reads it tests.
+  - Its wall-clock budget is replaced by a budget on how many rows the reads return, which does not depend on load.
+- **The million-event case: the slow step is named, and the one fix I tried did not help.** Details below.
+
+### failed-start
+
+**Evidence that the lease is released**
+- A scratch probe read `pool.stats()` after a run whose start threw: `openProjects: 0`. After the next successful run it was also 0.
+- The stall probe found no idle gap over 130 ms in any case. The cases are busy for their whole run; they never wait.
+
+**Evidence that the lease does not slow these tests**
+- First comparison: the file run alternately with and without the hold, by a temporary env switch in `database-hold.ts`, since removed.
+  - Five pairs. With hold, file sums were 81, 56, 65, 62 and 45 s. Without, 48, 48, 44, 21 and 50 s.
+  - That looked like a slowdown. But the same configuration ranged from 21 s to 81 s, so I re-ran it so that both sides saw the same load.
+- Second comparison: hold and no-hold copies started at the same moment, three rounds.
+  - With hold: 87.6, 42.8 and 32.1 s.
+  - Without: 93.9, 43.5 and 34.7 s.
+  - With the hold, it is slightly faster every round. The no-hold copy also timed out once.
+- Round trips for case 1: 2,379 with the hold, 2,457 without.
+- So the earlier gap was load moving between sequential runs, not the lease.
+
+**Test added** to `runtime/tests/service-adaptation/tests/failed-start.test.ts`:
+- `releases every project database lease it took when it throws before it is marked running / after it was marked running`.
+- It wraps `AutomationStudioProjectDatabasePool.prototype.acquire` to count leases that are taken and not released.
+- It requires at least one lease taken, and none outstanding after the rejection.
+- With the release in `database-hold.ts` disabled, both cases fail (`2 failed`). With it restored, both pass.
+
+### scale-pages "pages and filters 10,000 Subflow summaries"
+
+**The slow step: the seed.** 10,000 single-row inserts made 20,000 SQLite round trips (a prepare and a run each): 22 s of prepares plus 28 s of runs, 56 s of wall time under the probe. The two reads under test took under a second.
+
+**Fix to the seed.** It now inserts 1,000 rows per statement: 648 round trips, 1.4 s.
+
+**Second timing dependency.** With the seed fixed, the test failed on its own `expect(pageElapsedMs).toBeLessThan(500)`, at 888 ms beside other suites; t193 had seen 853 ms.
+- The wall-clock budget is replaced by a work budget. Each read runs inside `withEndpointPerformanceScope`, and the rows it returned from SQLite must stay at or below 1,000, a tenth of the 10,000-row table.
+- Measured: 106 rows for the page and 57 for the search. That is the page and its count, plus the migration-ledger rows each store open reads, which grow by one with every migration. A read that loaded the table to cut a page from it would return 10,000 rows and fail.
+- I left out the `possibleFullScan` heuristic: it flags 4 parameterless ledger selects on every read.
+
+**The other two cases in the file:** 17.7 s and 13.2 s of their 60 s budgets. The first seeds 10,000 Subflows through `createFlowSubflow`, one service call each. That is not in this brief.
+
+### runtime-stream-store "…at a million events"
+
+**The slow step.** I timed the inner steps of each `appendRuntimeEvents` (10,000 action events), 15 appends:
+- per append: mean 1,299 ms;
+- `writeActionSummaries`: 983 ms (76%);
+- the chunk write: 246 ms, of which `putBytes` was 185 ms.
+
+So the cost is the upsert of 10,000 `runtime_action_summaries` rows per append: a primary key and two secondary indexes, and each row carries its detail JSON. That is about 100 µs a row on this machine, roughly 100 s for a million rows under load.
+
+**Tried and reverted.** The probe attributed 18 s to statement prepares, so I prepared the 200-row upsert once per write, through a new `runMany` on the executor.
+- Timed alternately: after 981 and 1,246 ms per append, before 865 and 1,183 ms. No gain.
+- The probe had counted the per-statement work as "prepare". Both files are back at HEAD.
+
+**Not fixed: it is a product decision.** The test exists to prove sequence tailing at a million events, and it also asserts `actionAttemptCount: 1_000_000`. The options:
+- (a) Write the action-summary projection lazily. `ensureActionSummaryProjection` can already rebuild it from the stream when a listing asks.
+- (b) Give the test events that project nothing, and assert the count elsewhere.
+
+### Round 3 commands and results
+
+- `vitest run service-adaptation/tests/failed-start service-flows/tests/scale-pages --maxWorkers=2 --minWorkers=1` -> `Test Files 2 passed (2)`, `Tests 13 passed (13)`.
+- `npx tsc -p packages/fluxiq/tsconfig.json --noEmit` (through heavy.sh) -> no output.
+- Core `node scripts/structure-audit.mjs` -> `passed (203 warning(s), 354 baselined)`. dev's evidence-loop failure is gone after the merge.
+
+### Round 3: not verified
+
+- An idle machine.
+- The million-event case after any fix, since none was made.
+
+Ready to commit (round 3), Core only:
+- `packages/fluxiq/src/programs/automation-studio/runtime/tests/service-adaptation/tests/failed-start.test.ts`
+- `packages/fluxiq/src/programs/automation-studio/runtime/tests/service-flows/tests/scale-pages.test.ts`
+
+Downstream: this report.
