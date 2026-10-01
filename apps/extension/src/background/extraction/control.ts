@@ -224,9 +224,11 @@ async function rearmPick(session: ExtractionSession, deps: ExtractionControlDeps
 async function readSession(message: ControlMessage, deps: ExtractionControlDeps): Promise<unknown> {
   const session = deps.sessions.get(sessionIdOf(message));
   if (session === undefined) return { ok: true };
-  if (session.state === "picked" && session.proposal !== undefined) {
-    await refreshPreview(session, session.proposal, columnsOf(message), deps);
-  }
+  const proposal = session.proposal;
+  const preview = session.state === "picked" && proposal ? extractionPreviewRequest(proposal, columnsOf(message)) : undefined;
+  const allowed = preview ? Object.keys(preview.request.fields) : [];
+  if (session.state === "picked" && proposal) await refreshPreview(session, preview, allowed, deps);
+  if (deps.sessions.get(session.sessionId) !== session || (session.state === "picked" && session.proposal !== proposal)) return { ok: true };
   const view: ExtractionSessionView = {
     sessionId: session.sessionId,
     tabId: session.tabId,
@@ -234,38 +236,27 @@ async function readSession(message: ControlMessage, deps: ExtractionControlDeps)
     form: session.form,
     ...(session.proposal !== undefined ? { proposal: session.proposal } : {}),
     ...(session.refused !== undefined ? { refused: session.refused } : {}),
-    preview: session.preview
+    preview: deps.sessions.previewRows(session, allowed)
   };
   return { ok: true, session: view };
 }
 
 async function refreshPreview(
   session: ExtractionSession,
-  proposal: WebAutomationExtractionProposal,
-  columns: readonly ExtractionPreviewColumn[] | undefined,
+  preview: ReturnType<typeof extractionPreviewRequest>,
+  allowed: readonly string[],
   deps: ExtractionControlDeps
 ): Promise<void> {
-  const preview = extractionPreviewRequest(proposal, columns);
-  if (preview === undefined || preview.columnsKey === session.previewKey) return;
-  try {
+  await deps.sessions.refreshPreview(session, preview?.columnsKey, allowed, async () => {
+    if (!preview) return [];
     const read: ExtractionContentMessage = {
-      type: EXTRACTION_CONTENT_MESSAGES.preview,
-      sessionId: session.sessionId,
-      request: preview.request,
-      limit: EXTRACTION_PREVIEW_MAX_ROWS
+      type: EXTRACTION_CONTENT_MESSAGES.preview, sessionId: session.sessionId,
+      request: preview.request, limit: EXTRACTION_PREVIEW_MAX_ROWS
     };
     const answer = await deps.sendToTab<ExtractionContentResponse | undefined>(session.tabId, read, 0);
-    if (answer?.ok === true) deps.sessions.setPreview(session.sessionId, preview.columnsKey, answer.rows ?? []);
-    else deps.sessions.clearPreview(session.sessionId);
-  } catch {
-    // A frame that will not read the new columns leaves the worker holding rows
-    // read under the old ones, and the commonest reason the columns changed is
-    // that the user just excluded one. Keeping those rows would be keeping that
-    // column's values, so they go and the panel shows no preview rather than a
-    // stale one (D12). The key goes with them, so the next `getSession` asks
-    // again instead of treating the failure as the answer.
-    deps.sessions.clearPreview(session.sessionId);
-  }
+    if (answer?.ok !== true) throw new Error("The page refused the preview.");
+    return answer.rows ?? [];
+  });
 }
 
 /** Takes the overlay down and forgets the session. Cancelling nothing is not an error. */

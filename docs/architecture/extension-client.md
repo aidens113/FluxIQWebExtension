@@ -1342,6 +1342,14 @@ a filter over rows already read:
   (`content/extraction/field-spec.ts`) answers `undefined` for an excluded field,
   so nothing on the page is read for it.
 
+The background store erases earlier rows as soon as a narrower or empty preview
+selection arrives. Empty selection sends no page read. Only the current session,
+proposal and preview operation may commit rows or clear a failed read; identical
+pending selections share one read. Replies copy at most twenty rows and retain
+only the proposal keys their caller requested. Deleted or replaced sessions do
+not publish captured replies. These are preview lifecycle safeguards; session
+binding and receiver mutation ownership are separate contracts.
+
 What *is* recorded is the exclusion itself: the field stays in the recorded
 request as `handling: "exclude"`, and Core's record schema declares it the same
 way. That is the record of a decision the user made — drop it, and the next field

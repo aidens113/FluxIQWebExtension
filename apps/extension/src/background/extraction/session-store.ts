@@ -62,6 +62,7 @@ export type ExtractionSession = {
 export class ExtractionSessions {
   private readonly sessions = new Map<string, ExtractionSession>();
   private latestId: string | undefined;
+  private readonly previewReads = new Map<string, { session: ExtractionSession; proposal: WebAutomationExtractionProposal | undefined; columnsKey: string; promise: Promise<void> }>();
 
   /** Begins a pick on `tabId`, replacing any session that tab already had. */
   start(sessionId: string, tabId: number, form: ExtractionSessionForm): ExtractionSession {
@@ -91,8 +92,7 @@ export class ExtractionSessions {
     session.proposal = proposal;
     session.state = "picked";
     session.refused = undefined;
-    session.preview = [];
-    session.previewKey = undefined;
+    this.clearPreview(sessionId);
     return session;
   }
 
@@ -127,12 +127,51 @@ export class ExtractionSessions {
     return this.clear(sessionId);
   }
 
-  /** Holds at most `EXTRACTION_PREVIEW_MAX_ROWS` rows, under the columns `previewKey` names. */
+  /** Copies only allowed proposal-key cells; missing fields remain absent. */
+  private projectRows(rows: readonly ExtractionPreviewRow[], allowed: readonly string[]): ExtractionPreviewRow[] {
+    return rows.slice(0, EXTRACTION_PREVIEW_MAX_ROWS).filter(row => row !== null && typeof row === "object" && !Array.isArray(row)).map(row =>
+      Object.fromEntries(allowed.filter(key => Object.hasOwn(row, key) && (typeof row[key] === "string" || row[key] === null)).map(key => [key, row[key] as string | null])));
+  }
+
+  /** A current reply snapshot, constrained to the columns this caller requested. */
+  previewRows(session: ExtractionSession, allowed: readonly string[]): ExtractionPreviewRow[] {
+    return this.sessions.get(session.sessionId) === session && session.state === "picked" ? this.projectRows(session.preview, allowed) : [];
+  }
+
+  /** Holds at most 20 rows under real proposal keys; direct writes retire pending reads. */
   setPreview(sessionId: string, previewKey: string, rows: readonly ExtractionPreviewRow[]): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
-    session.preview = rows.slice(0, EXTRACTION_PREVIEW_MAX_ROWS).map((row) => ({ ...row }));
+    this.clearPreview(sessionId);
+    session.preview = this.projectRows(rows, previewKey.split(","));
     session.previewKey = previewKey;
+  }
+
+  /** Selection changes erase old rows immediately; only this attempt may commit or clear. */
+  async refreshPreview(session: ExtractionSession, columnsKey: string | undefined, allowed: readonly string[], readRows: () => Promise<readonly ExtractionPreviewRow[]>): Promise<void> {
+    if (this.sessions.get(session.sessionId) !== session || session.state !== "picked") return;
+    if (columnsKey === undefined) { this.clearPreview(session.sessionId); return; }
+    if (session.previewKey === columnsKey) return;
+    const pending = this.previewReads.get(session.sessionId);
+    if (pending?.session === session && pending.proposal === session.proposal && pending.columnsKey === columnsKey) { await pending.promise; return; }
+    this.clearPreview(session.sessionId);
+    const keys = [...allowed];
+    const op = { session, proposal: session.proposal, columnsKey, promise: Promise.resolve() };
+    const current = () => this.sessions.get(session.sessionId) === session && session.state === "picked" && session.proposal === op.proposal && this.previewReads.get(session.sessionId) === op;
+    this.previewReads.set(session.sessionId, op);
+    op.promise = Promise.resolve().then(async () => {
+      try {
+        if (!current()) return;
+        const rows = await readRows();
+        if (!current()) return;
+        session.preview = this.projectRows(rows, keys);
+        session.previewKey = columnsKey;
+      } catch {
+        // A current refusal retains no values from the previous column selection (D12).
+        if (current()) { session.preview = []; session.previewKey = undefined; }
+      } finally { if (this.previewReads.get(session.sessionId) === op) this.previewReads.delete(session.sessionId); }
+    });
+    await op.promise;
   }
 
   /**
@@ -148,6 +187,7 @@ export class ExtractionSessions {
   clearPreview(sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
+    this.previewReads.delete(sessionId);
     session.preview = [];
     session.previewKey = undefined;
   }
@@ -157,13 +197,12 @@ export class ExtractionSessions {
     const session = this.sessions.get(sessionId);
     if (!session) return;
     session.state = "recorded";
-    session.preview = [];
-    session.previewKey = undefined;
+    this.clearPreview(sessionId);
   }
 
   clear(sessionId: string): ExtractionSession | undefined {
     const session = this.sessions.get(sessionId);
-    if (session) this.sessions.delete(sessionId);
+    if (session) { this.clearPreview(sessionId); this.sessions.delete(sessionId); }
     if (this.latestId === sessionId) this.latestId = undefined;
     return session;
   }
