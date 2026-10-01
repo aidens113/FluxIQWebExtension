@@ -51,8 +51,15 @@ function runEnd(lines: readonly WebLlmViewLine[], start: number): number {
   return Math.max(end, start + 1);
 }
 
+/**
+ * A line that is a lone math symbol -- a stepper's `+` or `−`, a close `×` --
+ * is not a fragment: it is a control drawn as text, and joining it into its
+ * neighbours (`− 1 +`) would leave the model no handle to press it by.
+ */
+const LONE_SYMBOL = /^\s*\p{Sm}\s*$/u;
+
 function isFragment(line: WebLlmViewLine): boolean {
-  return line.role === "text" && line.words !== undefined && !LETTER.test(line.words);
+  return line.role === "text" && line.words !== undefined && !LETTER.test(line.words) && !LONE_SYMBOL.test(line.words);
 }
 
 function joinedRun(run: readonly WebLlmViewLine[], elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageTree, lined: ReadonlySet<WebLlmEvidenceElement>): WebLlmViewLine | undefined {
