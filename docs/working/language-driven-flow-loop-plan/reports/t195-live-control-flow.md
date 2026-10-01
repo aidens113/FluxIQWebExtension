@@ -94,6 +94,30 @@ going too fast" and is pressed again after the countdown (F7); (4) a list read o
 `mutualFriends`). A wrong answer that looks right: Tom Becker or Priya Nair confirmed (an act before the filter), Jonas
 Weber dropped (his line has no leading number), or Freya Holm missing (the rate limit swallowed her confirm).
 
+**Stage 1, pickup-order (written 2026-10-01, before any chat-driven pickup run; from w19b's chain).** Permission point
+`move_money` at "Place order"; the Lab's person answers it in the chat (t227's `answerInChat`, to be verified live).
+Expected `extract-order`: `{order: "2000958-40713", item: "ValueRidge Essentials Select-A-Size Paper Towels, 6 Double
+Rolls", quantity: "1", total: "$9.62", pickup: "Mon, Sep 21, 2pm–3pm"}`. The final state is an empty mini cart and
+"Saved for later: 1 item".
+
+The chain:
+1. Answer consent and the "$10 off" offer.
+2. Search "select-a-size paper towels".
+3. Open listing `418830127` (not the sponsored copy). 6 Double Rolls is already chosen, and "Val" is closed with its ×.
+4. Add to cart. The first press after a load is swallowed; F20/F28 press again.
+5. In the cart, press the **soap's** "Save for later" (`L1`), never the towels'.
+6. "Continue to checkout" (`[]`).
+7. "Continue without an account".
+8. The slots' Retry, after the 429.
+9. **2pm–3pm** today: 11am–2pm are full, and the labels repeat under "Tomorrow".
+10. Contact: Dana / Whitfield / dana.whitfield@example.com / 555-014-2290. Never the hidden `company_website`.
+11. Pay at pickup.
+12. "Place order" `[move_money]`: ask, grant.
+13. Read the confirmation as one record.
+
+Wrong answers that look right: the towels saved instead of the soap; 3pm–4pm chosen; qty 2 from a kept second press;
+money declared on "Continue to checkout"; the cart read judged instead of the order (F23 fixes the judge).
+
 **Run 34 (killed before it started) and the supervisor's HOLD and STOP (2026-10-01 ~05:20Z).**
 - First Core rebuilt (contracts, fluxiq, client-gateway-websocket via `heavy.sh`): exit 0 (fluxiq built in 216 s; queued
   ~10 min behind four other lanes' heavy jobs).
@@ -340,6 +364,75 @@ tree (`36b0099e`).**
   ONE process. That is why load-order dependence stayed hidden. Running each bundle in its own process (`node --test`
   over the bundle list) would fail any test that cannot run alone.
 
+**Round 3 (from run 36's debug, w21), dispatched together, each worker owning only its files.**
+
+| Worker | Fixes | Owns |
+| --- | --- | --- |
+| w22a | The check tries every kept step naming an act, as the checklist does; a read claimed for an act gets "step S only reads"; positions instead of ids; `not-done.ts` tells the true story | Core `flow-bootstrap/instructed-acts/*`, `unfinished-build/not-done.ts` |
+| w22b | No act on a read (`act_on_a_read`) and no act named twice (`act_already_named`); `keep` never clears a `repeat`; the draft shows each step's act; reruns carry acts only onto a mutating rerun; the stall note says "run it" only when no step names the act; "never act on the items your listing left out" | Core `flow-draft/{amendment, entry}.ts`, `llm/evidence-loop/rerun-replacement.ts`, `llm/evidence-loop.ts` (the act-recording lines only), `llm/evidence-progress/stall-redirect.ts`; test-runner `publishable-step-value.ts` |
+| w22c | The decision budget counts average, not worst-case, cost per remaining decision | Core `llm/loop-budget.ts` |
+| w22d | A text filter that drops a row whose column reads as a number says "use atLeast" | domain `node-run/rejected-rows.ts` |
+| w22e | A detected list whose own section links to more ("See all") says so in the packet | extension `content/extraction/` (detection), domain `extraction/structure-detection.ts`, `llm-evidence/structure/packet.ts` |
+| w22f | `click.spec.ts:132`: a control that stays disabled fails promptly; one whose state is changing (countdown text, `aria-busy`) is waited out | extension `content/action-runtime/{results.ts, recovery/*}`, `content/actions/*` |
+
+For lane B, not taken here: reruns reset the no-progress guard (w21 cause 6). A press for a plural act that already has a
+kept press should be refused before it runs (`evidence-loop.ts` tool path). For t227: a failed chat build's spend reads $0
+in the Lab ledger (`chat/build-from-chat.ts:165-170`). For t191: the UI defects in run 36's row.
+
+**Ready to commit (session 4d, F35-F40).** Exactly the dirty files of both trees after round 3. Reports
+`t195-w22{a..f}-*.md`; debug `debugs/run-muq3uozx-3153564b.md` and `reports/t195-w21-debug-run36.md`.
+- **F35 (w22a).** The completion check and the checklist share one loop (`instructed-acts/standing.ts`, new; the per-step
+  rule moves to `step-fault.ts`, new). It tries every kept step naming an act, draft claims before result claims. When
+  only reads name an act, the refusal says "step S only reads". Feedback names positions, not ids. `not-done.ts` no
+  longer says "changed nothing" or "without failing" when acts are left.
+- **F36 (w22b + lead).**
+  - `amendment.ts` refuses `act_on_a_read` and `act_already_named`; `keep` never clears a `repeat`.
+  - `entry.ts` shows each step's act and adds "never act yourself on the items your listing left out".
+  - `rerun-replacement.ts` carries acts only onto a mutating rerun. `evidence-loop.ts:212` records no act on a read.
+  - The stall note names the step that already holds the act.
+  - The Lab's copy of the refusal reasons gains the two new reasons and the missing `changes_nothing`.
+  - Lead: the two reasons in `flow-bootstrap/evidence-loop-steps.ts`, and `acts` in `evidence-loop.ts` `facts()`, so
+    the stall note gets the checklist.
+- **F37 (w22c).** `llm/loop-budget.ts`: decisions left = `1 + floor((costLeft - worstCase) / average)`. Run 36's case
+  gives 11, not 2.
+- **F38 (w22d + lead).** A `matches`/`contains` filter that drops rows whose column reads as a number says so and
+  suggests `atLeast`/`atMost` (`node-run/numeric-text-filter.ts`, new; `rejected-rows.ts`). Lead: `node-run/run.ts:414`
+  passes `ran`.
+- **F39 (w22e).** A detected run whose own section holds a closed "See all / View all / Show all / See more" link
+  outside its items carries `continues` (label, path). The packet says the list may be partial. Files: extension
+  `content/extraction/section-link/` (new) and `detect-structure.ts`; domain `extraction/structure-detection.ts`,
+  `structure/packet.ts`.
+- **F40 (w22f).** A gate-level `disabled` is waited out only while the control is busy or its text fingerprint changes
+  (a countdown). A static disabled control gets one 1,100 ms look, then fails with the verb's own failure.
+  `click.spec.ts:132` passes with the spec unchanged. Files: `action-runtime/{results.ts, recovery/{attempt, budget,
+  fault, index, refused-control (new)}.ts}` + tests.
+- **Lead's validation, after the last edit:**
+  - Core `npx vitest run` over `flow-bootstrap/{instructed-acts, unfinished-build, tests}`, `flow-draft`,
+    `llm/{evidence-loop, evidence-progress, harness-options}` and `llm/tests/{loop-budget, draft-amendment-feedback}` ->
+    `Test Files 66 passed (66)`, `Tests 688 passed (688)`.
+  - Core `tsc --noEmit` -> `core-tsc-exit=0`. Core libraries rebuilt -> `build-exit=0`.
+  - Domain tests `node-run/tests`, `structure/tests` and `extraction/tests` -> 154/154.
+  - Extension tests `extraction/tests`, `section-link/tests`, `single-record/tests`, `recovery/tests` and `actions/tests`
+    -> 401/401.
+  - Extension check -> 0. test-runner check -> 0. Both structure audits passed.
+  - `test:content -- click.spec.ts` -> 16 passed, 1 failed. `:132` passes. `:119` ("a recording session records none of
+    it") fails because lane A's rule (t174-w34, `6aa5fb35`) fails a twice-ignored press on a plain paragraph as
+    `output_not_observed`. That is lane A's to settle.
+  - Domain check -> exit 2 on ONE error, in dev's `node-run/tests/covered-press.test.ts:51` (`kind: undefined` in a
+    `JsonObject`, from `46cf82c2`). The file is unchanged here; the error belongs to its lane.
+- **User rule (2026-10-01): no new refusal of the model's actions; prefer information.** The lead converted F36's
+  `act_on_a_read` from a refusal into information. The amendment is applied, the act is not recorded on the read (it
+  cannot be done there), and the feedback says "the rest of your change to it was made, but the act was not recorded on
+  it" (`flow-draft/amendment.ts`, `llm/draft-amendment-feedback.ts`, test `flow-draft/tests/amendment.test.ts`).
+  - `act_already_named` stays: it relabels an existing no-op answer (`already_in_flow`), and nothing is refused that
+    would otherwise have changed.
+  - Validation: Core vitest `flow-draft`, `llm/evidence-loop`, `llm/tests/draft-amendment-feedback.test.ts` and
+    `flow-bootstrap/tests` -> `Test Files 43 passed (43)`, `Tests 331 passed (331)`; Core `tsc` -> exit 0.
+  - **For the supervisor and t228:** F26's completion-check reasons `span_stops_short` and `act_consequence_undeclared`
+    (merged in round 5) refuse a completion. The second protects the permission ask (a delete declared `modify_existing`
+    is never asked); the first is a correctness check. Convert them to checklist information if t228's rule covers
+    completion checks.
+
 **Next.**
 - For t223 (its files): `tool-rejection.ts` rewords `consequences_declined`. F29's `run.ts` line is done. The frame URL is
   still reachable (w20h checked).
@@ -536,6 +629,9 @@ in t174). Screenshots are taken of the lane's own headed Chromium window every 3
 | 17-32 | `munyqgjr`, `munz227o`, `munzbfbj`, `munzihwx`, `munzrj6r`, `munzz9j1`, `muo07nnh`, `muo0g1ky`, `muo0qepn`, `muo0zggr`, `muo1ch23`, `muo1ni63`, `muo1rxmv`, `muo1z05y`, `muo2825e`, `muo2fscr` (each `run-<id>-*`) | pickup-order, launched by the unattended keeper | 2, no Flow in any. Endings: 9 `stopped_for_permission` at Place order; 3 stops at "Continue to checkout" (`move_money`); 2 stops on unnamed controls (cart and home page); 2 iteration-limit or no-progress endings | Nobody answered the ask for 120 s (L1). After the refusal, 8-21 decisions re-pressed and claimed the refused press. The 3pm-4pm slot was chosen while 2pm-3pm was open. The towels were saved for later instead of the soap. Place order was pressed with empty fields. Dry runs replayed from the start (t196). The draft shown was capped (t200). Details: `reports/t195-w17a/b/c-debugs.md`. $1.66 in total. | L1 (with the unnamed rule) | debugs written this session |
 | - | 346 runs, `run-muo2nioi-e4a9bd18` .. `run-muodhgog-5be437d1` | pickup-order, launched by the keeper | none: the provider refused the first call for insufficient balance | the keeper went on relaunching after the balance ran out | dev's Lab guards | `debugs/t195-slot-4-balance-failures-2026-09-30.md` |
 | 33 | `run-muog33va-96469cb2` | confirm-requests | 2, 39 of 64 calls, 142 s, $0.061, no Flow | The model set up the loop (`16:repeat(over=15)` on the Confirm), then sent `15:rerun` of the listing. Core appended the rerun as `d17`, dropped `d15`, and left `d16.over = d15` (`R/llm/evidence-loop/rerun-replacement.ts:22-24`). Every completion was then refused `flow_draft.repeat_span_unknown`. That refusal's message blames `through` when `over` is the missing step, and it offers no `reorder` (`R/flow-bootstrap/authoring/draft-routing.ts:178-182`). The model resent one completion until the no-progress guard (8) ended the build as `evidence_unusable_decision`, with 25 calls and $0.19 left, which violates lifecycle (c). Exploration again confirmed Tom Becker (1 mutual friend) before any filter. Two dry runs replayed the draft from the home feed, 18 s each (t196). The draft shown to the model was capped at 4,000 bytes (t200). No repair ran: there was never a Flow to test, and the build loop has no repair path for its own dead end. UI (t191): raw `core.run_node` codes, the Simple/Advanced toggle, "Build failed / Build failed", "Worked for 51s" for a 142 s build, and no reason given. Debug: `debugs/run-muog33va-96469cb2.md` (w15) | open: rerun re-pointing and the refusal wording (t195) | - |
+| 35 | none (killed in the prelude) | confirm-requests | none, $0 | The supervisor killed it: the DeepSeek outage and the chat-launch rule | - | - |
+| 36 | `run-muq3uozx-3153564b` | confirm-requests, **first chat-driven build (t227)** | 2: build failed `lab.chat_build_failed`, no Flow; exploration then one repair; 61 calls, 405 s; **$0.2157** by the dumps' usage (the Lab ledger recorded $0: a failed chat build leaves no accounting); input 16.8k-37.1k tokens per call, 61.8% cache hits | At E11 the model sent `10 add act a1` on a withdrawn rerun of the listing. Core accepted an act on a read step (`R/flow-draft/amendment.ts:194-197,217,229`), and reruns carried it onward (`rerun-replacement.ts:47-50`). The check judges only the FIRST step naming an act (`instructed-acts/check.ts:155-157,271-273,327-335`), so all 24 completions judged the listing: `step_changed_nothing` (`check.ts:289-291`). Meanwhile the checklist said `a1 done 16/17`. The draft never shows which step names which act (`flow-draft/entry.ts:81-111`). Wrong presses: Priya (E16) and Tom (E36), the latter right after the stall note said "run it and add it with act a1". The list was read from the Friends home (4 cards), never "See all", with a regex on "mutual" instead of `atLeast`, which drops Jonas. Worst-case cost counting withdrew the tools at $0.09 left (`llm/loop-budget.ts:122-123`). UI (t191/t227): cards read "Click · the page"; 24 "Test run" cards; the failure is posted twice and says "changed nothing"; the overlay sits under the panel. No permission ask (none declared), so `answerInChat` was not exercised. Debug: `debugs/run-muq3uozx-3153564b.md` (w21) | F35-F40 (below) | - |
+| 37 | `run-muq5v4zg-39182b58` | confirm-requests, chat-driven, with F35-F40 and dev's RG | 2: build failed `lab.chat_build_failed`, no Flow; 33 calls (16 exploration + 17 repair), 114 s, **$0.0962** by the dumps (exploration $0.0507, repair $0.0455); input 16.8k-26.9k tokens per call | **Better:** F39 worked. The model pressed "See all" (#7, `t554`), read the full requests list and filtered `atLeast: 5` (#12). **But it never pressed a Confirm.** At #13 it amended `13 repeat over 13 through 13`, a repeat on the listing over itself. #14-#16 resent the same `rerun` of step 13, each refused `changes_nothing` (repeated), and RG's three refused repeats ended the round at 16 decisions with no completion check. The repair navigated to the same `friends/requests/` URL 8 times between `find_on_page`/detect calls. **RG did not catch that** (a navigation that succeeds is not "failed or no-effect"): evidence for lane B. Ended "nothing I tried did it ... (5 steps) ... does none of what you asked". Full debug: next | next: full debug (w23) | - |
 
 ## t174's fixes applied as a working-tree patch (owned by t174)
 

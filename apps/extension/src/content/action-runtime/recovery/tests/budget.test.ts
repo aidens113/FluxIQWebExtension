@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RECOVERY_BLIP_BACKOFF_MS, RECOVERY_BUDGET_MS, RECOVERY_TARGET_BACKOFF_MS, recoveryBackoffLadder, recoveryBackoffMs } from "../budget";
+import { RECOVERY_BLIP_BACKOFF_MS, RECOVERY_BUDGET_MS, RECOVERY_DISABLED_BACKOFF_MS, RECOVERY_TARGET_BACKOFF_MS, recoveryBackoffLadder, recoveryBackoffMs } from "../budget";
 import type { BrowserActionCommand } from "../../../types";
 
 function command(timeoutMs?: number): BrowserActionCommand {
@@ -70,9 +70,15 @@ test("an unreadable timeout is treated as naming none, never as leaving no budge
 });
 
 // "I'm a person" reads "Please wait N" and is disabled for 3 s after Submit
-// (job-board's ATS). A gate refusal before dispatch waits on the page's ladder,
-// whose 3,750 ms outlasts it; the short ladder's 750 ms did not (t195-w20k).
-test("a control disabled for a moment before dispatch is waited on the page's ladder, long enough for a 3 s wait", () => {
-  assert.deepEqual([...recoveryBackoffLadder("disabled_target")], [...RECOVERY_TARGET_BACKOFF_MS]);
-  assert.ok(sum(recoveryBackoffLadder("disabled_target")) >= 3_000);
+// (job-board's ATS). A gate refusal before dispatch is waited at only while the
+// control changes between attempts, so attempts are a countdown tick apart: two
+// closer together would see "Please wait 2" twice and give up on it. The rungs
+// together outlast the 3 s, and the first -- all a static control costs -- stays
+// near a second (t195-w22f).
+test("a control disabled for a moment is waited a tick at a time, long enough for a 3 s countdown", () => {
+  const ladder = recoveryBackoffLadder("disabled_target");
+  assert.deepEqual([...ladder], [...RECOVERY_DISABLED_BACKOFF_MS]);
+  assert.ok(ladder.every((rung) => rung > 1_000 && rung <= 1_200), "every rung is one tick of a one-second countdown, with room for a late timer");
+  assert.ok(sum(ladder) >= 3_000);
+  assert.ok(sum(ladder) < RECOVERY_BUDGET_MS);
 });

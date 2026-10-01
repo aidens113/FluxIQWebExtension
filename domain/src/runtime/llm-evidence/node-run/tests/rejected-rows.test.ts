@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationExtractListDispatch } from "../../../../output-nodes/extract-list";
+import { webAutomationExtractConditionHolds, type WebAutomationExtractItemCondition } from "../../../../actions/extraction";
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
@@ -195,4 +196,67 @@ test("the model is shown, per condition, the rows it removed alone apart from th
   const plain = webNodeReadWithRejectedRows(unordered as unknown as JsonObject).read as { rejectedRows: JsonObject[]; rejectedRowsNote?: string };
   assert.deepEqual(plain.rejectedRows[1], { where: 1, rejected: 4, alone: 2, rows: [truePair, accessory, { name: "Premium ear tips", price: "$79" }, { name: "Deluxe charging case", price: "$89" }] });
   assert.equal(plain.rejectedRowsNote, undefined);
+});
+
+// Live run 36 (`run-muq3uozx-3153564b`, cause 10): told to confirm every
+// request with at least five mutual friends, the model wrote a regex rather
+// than `atLeast: 5`, and the regex dropped Jonas Weber, whose line says five
+// the way only a numeric condition reads it. The rejected rows here are the
+// ones the real condition matcher rejects off the scenario's four home cards.
+const HOME_CARDS = [
+  { name: "Tom Becker", mutual: "1 mutual friend" },
+  { name: "Amara Osei", mutual: "23 mutual friends" },
+  { name: "Priya Nair", mutual: "4 mutual friends" },
+  { name: "Jonas Weber", mutual: "Aisha Khan and 4 other mutual friends" }
+];
+
+function filteredRead(condition: JsonObject): { read: { rejectedRows?: JsonObject[]; rejectedRowsNote?: string }; parameters: JsonObject } {
+  const rejected = HOME_CARDS.filter((card) => !webAutomationExtractConditionHolds(condition as WebAutomationExtractItemCondition, card[condition.field as "name" | "mutual"]));
+  const kept = HOME_CARDS.filter((card) => !rejected.includes(card));
+  const payload: JsonObject = {
+    extracted: kept,
+    extraction: {
+      recordCount: kept.length, pagesRead: 1, truncated: false, missingFields: [], fieldNames: ["name", "mutual"],
+      conditions: { applied: HOME_CARDS.length, kept: kept.length, rejected: [rejected.length], unfiltered: false, alone: [rejected.length] },
+      rejectedSamples: [rejected],
+      rejectedSamplesAlone: [rejected.length]
+    }
+  };
+  const parameters: JsonObject = { extractList: { item: ".request-card", fields: { name: ".name", mutual: ".mutual" }, where: [condition] } };
+  return { read: webNodeReadWithRejectedRows(payload, parameters).read as { rejectedRows?: JsonObject[]; rejectedRowsNote?: string }, parameters };
+}
+
+test("a text condition that drops rows whose column reads as numbers says so, naming each row with the number a bound would read (run 36)", () => {
+  const { read } = filteredRead({ field: "mutual", matches: "/(?:[5-9]|[1-9][0-9]+) mutual/" });
+  const note = read.rejectedRowsNote ?? "";
+  assert.ok(note.startsWith(WEB_NODE_REJECTED_ROWS_NOTE), note);
+  assert.ok(note.includes("Jonas Weber: 5"), note);
+  assert.ok(note.includes("Tom Becker: 1") && note.includes("Priya Nair: 4"), note);
+  assert.ok(note.includes("where 0 tests the text of mutual") && note.includes("use atLeast or atMost"), note);
+  assert.ok(!note.includes("Amara Osei"), "a kept row is not named");
+});
+
+test("a text condition on a column that does not read as numbers adds no sentence", () => {
+  const { read } = filteredRead({ field: "name", contains: "a" });
+  assert.equal(read.rejectedRowsNote, WEB_NODE_REJECTED_ROWS_NOTE);
+});
+
+test("a numeric condition, and a read given no parameters, add no sentence", () => {
+  assert.equal(filteredRead({ field: "mutual", atLeast: 5 }).read.rejectedRowsNote, WEB_NODE_REJECTED_ROWS_NOTE);
+  const condition: JsonObject = { field: "mutual", matches: "/(?:[5-9]|[1-9][0-9]+) mutual/" };
+  const rejected = HOME_CARDS.filter((card) => !webAutomationExtractConditionHolds(condition as WebAutomationExtractItemCondition, card.mutual));
+  const payload: JsonObject = { extracted: [], extraction: { recordCount: 1, pagesRead: 1, truncated: false, missingFields: [], fieldNames: ["name", "mutual"], conditions: { applied: 4, kept: 1, rejected: [3], unfiltered: false }, rejectedSamples: [rejected], rejectedSamplesAlone: [3] } };
+  assert.equal((webNodeReadWithRejectedRows(payload).read as { rejectedRowsNote?: string }).rejectedRowsNote, WEB_NODE_REJECTED_ROWS_NOTE);
+});
+
+test("the sentence never quotes a value the screen withheld", () => {
+  const card = "4111 1111 1111 1111";
+  const payload: JsonObject = {
+    extracted: [],
+    extraction: { recordCount: 0, pagesRead: 1, truncated: false, missingFields: [], fieldNames: ["name", "mutual"], conditions: { applied: 1, kept: 0, rejected: [1], unfiltered: false }, rejectedSamples: [[{ name: card, mutual: "4 mutual friends" }]], rejectedSamplesAlone: [1] }
+  };
+  const parameters: JsonObject = { extractList: { item: ".card", fields: { name: ".name", mutual: ".mutual" }, where: [{ field: "mutual", contains: "5 mutual" }] } };
+  const note = (webNodeReadWithRejectedRows(payload, parameters).read as { rejectedRowsNote?: string }).rejectedRowsNote ?? "";
+  assert.ok(!note.includes("4111"), note);
+  assert.ok(note.includes("(4)"), note);
 });

@@ -9,7 +9,8 @@ import test, { type TestContext } from "node:test";
 import { WEB_AUTOMATION_FAILURE_CODES, type WebAutomationFailureCode } from "@fluxiq-web-extension/domain/client";
 import type { ActionResultEvidence } from "../../results";
 import { runWithRecovery } from "../attempt";
-import { RECOVERY_BLIP_BACKOFF_MS, RECOVERY_BUDGET_MS, RECOVERY_INTERFERENCE_BACKOFF_MS, RECOVERY_TARGET_BACKOFF_MS } from "../budget";
+import { RECOVERY_BLIP_BACKOFF_MS, RECOVERY_BUDGET_MS, RECOVERY_DISABLED_BACKOFF_MS, RECOVERY_INTERFERENCE_BACKOFF_MS, RECOVERY_TARGET_BACKOFF_MS } from "../budget";
+import { recordRecovery } from "../record";
 import type { BrowserActionCommand, BrowserActionResult, DomSnapshot } from "../../../types";
 
 function command(actionType: string, timeoutMs?: number): BrowserActionCommand {
@@ -449,9 +450,19 @@ function bare(actionType: string): BrowserActionCommand {
 /** The evidence every refusal here carries: a snapshot already taken, so none is captured from the stub page. */
 const TAKEN: ActionResultEvidence = { snapshot: {} as DomSnapshot };
 
-/** The click gate's refusal of a control the page has disabled, as `actions/click.ts` hands it over. */
-function gateDisabled(actionRejected: RejectAction): BrowserActionResult {
-  return actionRejected(bare("web.dom.click"), Date.now(), "disabled", "a target that can be clicked", "the element is disabled", { ...TAKEN, refusedBeforeDispatch: true });
+/** A disabled control as the gate hands it over: its label, and whether it (or what holds it) says it is busy. */
+function control(text: string, busy = false): Element {
+  return {
+    tagName: "BUTTON",
+    textContent: text,
+    getAttribute: (name: string) => (name === "aria-busy" && busy ? "true" : null),
+    closest: (selector: string) => (busy && selector === '[aria-busy="true"]' ? {} : null)
+  } as unknown as Element;
+}
+
+/** The click gate's refusal of a control the page has disabled, as `actions/click.ts` hands it over, the control included. */
+function gateDisabled(actionRejected: RejectAction, target: Element = control("Send")): BrowserActionResult {
+  return actionRejected(bare("web.dom.click"), Date.now(), "disabled", "a target that can be clicked", "the element is disabled", { ...TAKEN, target, refusedBeforeDispatch: true });
 }
 
 /** `check.ts`'s refusal after `setCheckedState` answered `disabled`: the same word, and no statement about the act. */
@@ -470,8 +481,76 @@ test("a click the gate refused because the control was disabled for a moment is 
   const { result, account } = await runWithRecovery(bare("web.dom.click"), Date.now(), shield.attempt, pause, Date.now, (fault) => { pressed.push(fault); return 1; }, () => true);
   assert.equal(result.status, "succeeded");
   assert.equal(shield.calls(), 2);
-  assert.deepEqual(account, { attempts: 2, absorbed: ["disabled_target"], waitedMs: RECOVERY_BLIP_BACKOFF_MS[0], dismissed: 0, outcome: "recovered" });
+  assert.deepEqual(account, { attempts: 2, absorbed: ["disabled_target"], waitedMs: RECOVERY_DISABLED_BACKOFF_MS[0], dismissed: 0, outcome: "recovered" });
   assert.deepEqual(pressed, [], "nothing stands over a disabled control, so nothing on the page is pressed");
+});
+
+test("a countdown control is waited out a tick at a time, and lands once it is enabled", async (t) => {
+  const actionRejected = await installRejectionPage(t);
+  const shield = page("web.dom.click", ["Please wait 3", "Please wait 2", "Please wait 1"].map((text) => gateDisabled(actionRejected, control(text))));
+  const { result, account } = await runWithRecovery(bare("web.dom.click"), Date.now(), shield.attempt, pause);
+  assert.equal(result.status, "succeeded");
+  assert.equal(shield.calls(), 4);
+  assert.deepEqual(paused, [...RECOVERY_DISABLED_BACKOFF_MS.slice(0, 3)]);
+  assert.deepEqual(account.absorbed, ["disabled_target", "disabled_target", "disabled_target"]);
+  assert.equal(account.outcome, "recovered");
+});
+
+test("a control that is simply disabled fails after one look, with the gate's refusal exactly as the verb wrote it", async (t) => {
+  const actionRejected = await installRejectionPage(t);
+  const refusals: BrowserActionResult[] = [];
+  const attempt = async (): Promise<BrowserActionResult> => {
+    const refusal = gateDisabled(actionRejected, control("Send"));
+    refusals.push(refusal);
+    return refusal;
+  };
+  const { result, account } = await runWithRecovery(bare("web.dom.click"), Date.now(), attempt, pause);
+  assert.equal(refusals.length, 2, "one look and no further retries");
+  assert.deepEqual(paused, [RECOVERY_DISABLED_BACKOFF_MS[0]]);
+  assert.ok((paused[0] ?? 0) <= 1_200, "the one look is about one countdown tick");
+  assert.equal(result, refusals.at(-1), "the reported result is the last attempt's own");
+  assert.deepEqual(account.absorbed, [], "the look found the refusal was not transient, so it absorbed nothing");
+
+  // What leaves the page: the account adds nothing to either text.
+  const reported = recordRecovery(result, account);
+  assert.equal(reported.message, "Action rejected: the element is disabled");
+  assert.deepEqual(reported.validation, { status: "failed", expected: "a target that can be clicked", actual: "the element is disabled" });
+  assert.equal(reported.failure?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED);
+  assert.equal(reported.failure?.retryable, false);
+  assert.equal(reported.failure?.actual, "disabled: the element is disabled");
+});
+
+test("a gate refusal that noted no control is treated as one that shows no change, and fails after the same one look", async (t) => {
+  const actionRejected = await installRejectionPage(t);
+  let calls = 0;
+  const attempt = async (): Promise<BrowserActionResult> => {
+    calls += 1;
+    return actionRejected(bare("web.dom.click"), Date.now(), "disabled", "a target that can be clicked", "the element is disabled", { ...TAKEN, refusedBeforeDispatch: true });
+  };
+  const { result, account } = await runWithRecovery(bare("web.dom.click"), Date.now(), attempt, pause);
+  assert.equal(calls, 2);
+  assert.equal(result.status, "failed");
+  assert.deepEqual(account.absorbed, []);
+});
+
+test("a busy control is waited out although its label never changes", async (t) => {
+  const actionRejected = await installRejectionPage(t);
+  const shield = page("web.dom.click", [1, 2, 3].map(() => gateDisabled(actionRejected, control("Submit", true))));
+  const { result, account } = await runWithRecovery(bare("web.dom.click"), Date.now(), shield.attempt, pause);
+  assert.equal(result.status, "succeeded");
+  assert.equal(shield.calls(), 4);
+  assert.deepEqual(account.absorbed, ["disabled_target", "disabled_target", "disabled_target"]);
+});
+
+test("a countdown that stops changing is refused at the attempt that shows it, and what was absorbed stays on the account", async (t) => {
+  const actionRejected = await installRejectionPage(t);
+  const shield = page("web.dom.click", ["Please wait 3", "Please wait 2", "Please wait 2"].map((text) => gateDisabled(actionRejected, control(text))));
+  const { result, account } = await runWithRecovery(bare("web.dom.click"), Date.now(), shield.attempt, pause);
+  assert.equal(result.status, "failed");
+  assert.equal(shield.calls(), 3);
+  assert.deepEqual(account.absorbed, ["disabled_target", "disabled_target", "disabled_target"], "the look saw a change, so the waits absorbed faults, and the last refusal is the defence's end");
+  assert.equal(account.outcome, "exhausted", "a failure is never reported as recovered");
+  assert.match(recordRecovery(result, account).failure?.actual ?? "", /^disabled: the element is disabled; the execution did not recover within its 3 attempts after absorbing disabled_target/u);
 });
 
 test("a disabled control check.ts found after setCheckedState is refused, not waited out", async (t) => {
@@ -489,7 +568,7 @@ test("a disabled control check.ts found after setCheckedState is refused, not wa
   assert.deepEqual(paused, []);
 });
 
-test("a control that stays disabled past the budget fails as it did before, with the page's own refusal", async (t) => {
+test("a control that stays busy past the budget fails with the page's own refusal, and no attempt starts after it", async (t) => {
   const actionRejected = await installRejectionPage(t);
   let clock = 0;
   const advancingPause = async (ms: number): Promise<void> => {
@@ -502,7 +581,7 @@ test("a control that stays disabled past the budget fails as it did before, with
     dispatchedAt = clock;
     // Each attempt itself takes most of a second, as a hit test on a busy page can.
     clock += 900;
-    const refusal = gateDisabled(actionRejected);
+    const refusal = gateDisabled(actionRejected, control("Submit", true));
     refusals.push(refusal);
     return refusal;
   };
