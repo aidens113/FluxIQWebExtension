@@ -425,3 +425,39 @@ Ready to commit (round 3), Core only:
 - `packages/fluxiq/src/programs/automation-studio/runtime/tests/service-flows/tests/scale-pages.test.ts`
 
 Downstream: this report.
+
+## Round 4 (2026-09-30): the million-event case, option (b)
+
+Tree: Core at dev `c5dbcf83`, which already contains round 3. Test change only; no product change.
+
+**What changed** (`storage/project/tests/runtime-stream-store.test.ts`):
+
+- **"…at a million events".** It now appends `subflow_execution` events, through a new `subflowEvent()` helper. These write no action summaries.
+  - What it proves is unchanged: tailing (`afterSequence: 999_990`) and reconnecting give sequences 999,991 to 1,000,000.
+  - The run's summary row is still found by search, now with `actionAttemptCount: 0`.
+  - Before, three quarters of each append was the projection's upsert of 10,000 action-summary rows, and the case timed that and not the stream.
+- **New case: "projects every appended action attempt into the run's count and action pages, and rebuilds a lost projection from the stream".**
+  - It appends 2,500 action attempts in three appends (1,000, 1,000 and 500). That size crosses every batch boundary the projection has: several chunks, the 200-row upsert, and the 500-event pages its rebuild reads.
+  - It asserts:
+    - the run's `actionAttemptCount` is 2,500;
+    - the last action page holds attempts 2,498 to 2,500, out of a total of 2,500.
+  - Then it deletes every summary row past sequence 1,200 and sets `definition_id = 'unknown'` on the first 10 rows. The next `listRunActions` runs `ensureActionSummaryProjection`. The case asserts:
+    - the last page is again 2,498 to 2,500, with a total of 2,500;
+    - the table holds 2,500 rows, none with an unknown definition.
+- **Why the case is not in a file of its own.** I first put it in a new file, but that made `storage/project/tests/` 26 files, and the `directory-files` rule fails above 25. It stays in this file, which is now 420 lines (an advisory warning, not a failure).
+
+**Wall time of the file** (`vitest run storage/project/tests/runtime-stream-store.test --reporter=verbose`, through heavy.sh, beside other lanes):
+
+| | Duration | Tests | Million case | Projection case |
+| --- | --- | --- | --- | --- |
+| Before (dev `c5dbcf83`) | 63.6 s | 56.1 s | 51.3 s (60 s budget; timed out at 60 s in earlier runs) | none |
+| After, four runs | 22.3 / 23.1 / 33.0 / 46.9 s | 12.8 / 12.6 / 21.5 / 36.2 s | 6.1 / 6.5 / 8.9 / 19.1 s | 1.3 / 1.4 / 1.3 / 2.4 s |
+
+**Checks**
+- All four runs: `Tests 11 passed (11)`.
+- `npx tsc -p packages/fluxiq/tsconfig.json --noEmit` (through heavy.sh) -> no output.
+- Core `node scripts/structure-audit.mjs` -> `passed (204 warning(s), 354 baselined)`. The one new warning is this file's 420 lines.
+
+**Not verified:** an idle machine.
+
+Ready to commit (round 4), Core: `packages/fluxiq/src/programs/automation-studio/storage/project/tests/runtime-stream-store.test.ts`. Downstream: this report.
