@@ -257,6 +257,21 @@ test("create-flow runs one instruction task without the recorded Flow lane, with
   assert.throws(() => parseLabCommand(["matrix", "--scenarios-json", '["product-catalog"]', ...live]), /create-flow builds one instruction task per run: use lab run/u);
 });
 
+test("create-flow starts its build from the extension's chat unless the test-only --direct-api-build is given, and the chat needs the panel on screen", () => {
+  const live = ["--live-llm", "--llm-profile", "lab-create-flow", "--llm-provider", "deepseek", "--llm-model", DEFAULT_LLM_MODEL, "--llm-task", "create-flow"];
+  const chat = parseLabCommand(["run", "everything-store", ...live]);
+  assert.equal(chat.command === "run" && "directApiBuild" in chat, false, "the chat is the default, and nothing has to be said to get it");
+  const direct = parseLabCommand(["run", "everything-store", "--direct-api-build", ...live]);
+  assert.equal(direct.command === "run" && direct.directApiBuild, true);
+  // The chat is typed into, so it has to be shown; the direct build never touches it.
+  assert.throws(() => parseLabCommand(["run", "everything-store", ...live, "--no-live-panel"]), /starts its build from the extension's chat window, which --no-live-panel hides/u);
+  const hidden = parseLabCommand(["run", "everything-store", ...live, "--no-live-panel", "--direct-api-build"]);
+  assert.equal(hidden.command === "run" && hidden.directApiBuild && hidden.livePanel === false, true);
+  assert.throws(() => parseLabCommand(["run", "everything-store", "--direct-api-build", "--direct-api-build", ...live]), /--direct-api-build may only be specified once/u);
+  const adapt = live.map((value) => (value === "create-flow" ? "adapt" : value));
+  assert.throws(() => parseLabCommand(["run", "everything-store", "--flow", ...adapt, "--direct-api-build"]), /require --live-llm --llm-task create-flow/u);
+});
+
 test("compare takes two bench reports, or one report with --halves", () => {
   assert.deepEqual(parseLabCommand(["compare", "bench-a", "bench-b"]), { command: "compare", baselineReport: "bench-a", candidateReport: "bench-b", sharedLoad: true });
   assert.deepEqual(parseLabCommand(["compare", "bench-a", "bench-b", "--sequential"]), { command: "compare", baselineReport: "bench-a", candidateReport: "bench-b", sharedLoad: false });

@@ -31,6 +31,10 @@ export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
   return {
     lane: "created-flow" as const,
     task: describeCreatedFlowRequest(evidence.request),
+    // How the build was started: typed into the extension's chat, as a person
+    // does, or by the Lab calling Core's build endpoint itself, which is
+    // test-only and never a pass. The chat's own record is on `build.chat`.
+    buildEntry: evidence.build.chat ? "chat" as const : "direct-api" as const,
     build: evidence.build,
     review: evidence.review,
     flowId: evidence.flowId,

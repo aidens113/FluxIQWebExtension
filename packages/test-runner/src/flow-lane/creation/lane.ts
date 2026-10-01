@@ -17,6 +17,7 @@ import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedF
 import { resetScenarioLab, type LabResetFetch } from "../reset-scenario-lab.js";
 import { assertFlowDidNotStopEarly, flowActionsSnapshot } from "../run-flow-lane.js";
 import { createBlankCreationFlow } from "./blank-flow.js";
+import { buildCreatedFlowFromChat, type CreatedFlowChat, type CreatedFlowChatWait } from "./chat/index.js";
 import { buildCreatedFlowProposal, type CreatedFlowBuild, type CreatedFlowBuildControl, type CreatedFlowBuildLlm, type CreatedFlowBuildWait, type CreatedFlowPermissionRequest } from "./build-proposal.js";
 import { createdFlowAuthoredNodes } from "./authored-nodes.js";
 import { createdFlowActionTypes, createdFlowShape, type CreatedFlowShape } from "./flow-shape.js";
@@ -30,6 +31,28 @@ import { createdFlowSecretInputs } from "./secrets.js";
 
 /** The Core calls the lane makes; `ExistingFluxIQControlClient` satisfies it. */
 export type CreatedFlowLaneControl = PersistedFlowRunControl & CreatedFlowBuildControl & CreatedFlowReviewControl;
+
+/**
+ * How a created Flow's build is started.
+ *
+ * - `chat`, the way a person starts one and the only way a run can pass: the
+ *   task's instruction is typed into the extension's chat window beside the
+ *   page (`chat/build-from-chat.ts`), and FluxIQ's chat creates, builds and
+ *   applies the Flow itself. `authorizeChat` installs the run's model key in
+ *   the person's Secret Keys before anything is typed; a chat build creates its
+ *   Flow inside one Core command, so there is no Flow to pin settings to first
+ *   and it runs on Core's own limits for a new Flow.
+ * - `direct-api`, test-only (`--direct-api-build`): the Lab creates a blank
+ *   Flow and calls Core's build endpoint itself, as the web panel's build
+ *   button does. It never touches the chat, and a run built this way is never
+ *   counted as a pass (`run-scenario.ts`).
+ */
+export type CreatedFlowLaneEntry =
+  | Readonly<{ kind: "chat"; chat: CreatedFlowChat; authorizeChat: () => Promise<void>; wait?: CreatedFlowChatWait }>
+  | Readonly<{ kind: "direct-api" }>;
+
+/** What starting the build left: the Flow, its build, the change put into it when the chat applied it, and FluxIQ's own words about it. */
+type StartedBuild = { flowId: string | null; build: CreatedFlowBuild; buildPermitted: readonly string[]; applied: CreatedFlowReview | null; said: string | null; settlement?: unknown };
 
 export type CreatedFlowLaneInput = {
   control: CreatedFlowLaneControl;
@@ -57,7 +80,9 @@ export type CreatedFlowLaneInput = {
   runToken: string;
   /** The declared secrets the task's workflow needs (`resolveCreatedFlowSecrets`); the runner also adds their values to the evidence redaction list. */
   secrets: readonly DeclaredSecret[];
-  /** Installs the key and saves the Flow's LLM settings and spend limit; answers with the consequences the operator permitted the build. */
+  /** How the build is started: from the extension's chat window, or, test-only, by the Lab calling Core's build endpoint itself (`CreatedFlowLaneEntry`). */
+  entry: CreatedFlowLaneEntry;
+  /** The direct build's hook: installs the key and saves the Flow's LLM settings and spend limit; answers with the consequences the operator permitted the build. A chat build calls `entry.authorizeChat` instead. */
   authorizeBuild: (flowId: string) => Promise<CreatedFlowBuildLlm>;
   /**
    * Publishes what the build spent and holds it to its caps, throwing on a
@@ -242,7 +267,9 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
     // that -- a workflow that is not the task's, a blank Flow Core did not leave
     // blank -- is stated in full by the failure itself, and an artifact of
     // nothing but nulls would say nothing by being present.
-    if (progress.flowId !== undefined && !progress.published && input.recordIncompleteEvidence) {
+    // A chat build that made no Flow still has its build record -- what the chat
+    // made of the instruction -- and that is the one artifact such a run needs.
+    if ((progress.flowId !== undefined || progress.build !== undefined) && !progress.published && input.recordIncompleteEvidence) {
       await input.recordIncompleteEvidence(incompleteCreatedFlowLaneEvidence(input, progress, error))
         .catch(/* best-effort: the lane failure rethrown below is this run's finding and must not be replaced by a failed artifact write */ () => undefined);
     }
@@ -256,22 +283,15 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   if (workflow.workflowId !== request.workflowId || workflow.variant?.id !== request.variantId) {
     throw new RunnerFailure("fixture.invalid", "The created-Flow lane was handed a workflow other than the one its task resolved to");
   }
-  const flowId = await createBlankCreationFlow(input.control, { projectId, name: `Lab created flow ${facilityRunId}`, authorizationPin }, bounds);
-  progress.flowId = flowId;
-  progress.stage = "build";
-  await input.prepareFlowPage("build");
-  // What the operator permitted the build (`--llm-permit`), kept so the verdict below knows whether the task's act needed a person at all.
-  let buildPermitted: readonly string[] = [];
-  const authorize = async (id: string) => {
-    const llm = await input.authorizeBuild(id);
-    buildPermitted = llm.permittedConsequences;
-    return llm;
-  };
-  const build = await buildCreatedFlowProposal(input.control, { projectId, flowId, instruction: request.task.instruction, startLocation: input.startLocation, authorize }, bounds, input.buildWait);
-  // Held before the settlement and before either refusal below, which are the
-  // two endings that used to leave a run with no artifact at all.
-  progress.build = build;
-  await input.settleBuild(build);
+  const started = input.entry.kind === "chat" ? await startChatBuild(input, input.entry, progress, bounds) : await startDirectBuild(input, progress, bounds);
+  const { build, buildPermitted, said } = started;
+  if (started.flowId === null) {
+    throw new RunnerFailure("runtime.behavior", `FluxIQ's chat did not build a Flow from the task's instruction (${build.failure?.code ?? "no Flow"})${said ? `; it said: ${JSON.stringify(said)}` : ""}`, {
+      details: { failure: build.failure, chat: build.chat ?? null },
+      ...(started.settlement === undefined ? {} : { cause: started.settlement }),
+    });
+  }
+  const flowId = started.flowId;
   if (build.outcome === "permission_required" && build.permissionRequest) {
     const stop = judgeCreatedFlowPermissionStop(request.task, build.permissionRequest);
     if (stop.verdict !== "at_declared_point") throw permissionRequired(build, build.permissionRequest, stop);
@@ -285,13 +305,14 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
     throw new RunnerFailure("runtime.behavior", "The task says to ask before its lasting act, and FluxIQ built a Flow without asking", { details: { permissionPoint: "not_asked", consequence: request.task.permissionPoint.consequence, adaptationId: build.adaptationId } });
   }
   if (build.outcome !== "proposed" || build.adaptationId === null) {
-    throw new RunnerFailure("runtime.behavior", `FluxIQ did not build a Flow from the task's instruction (${build.failure?.code ?? "no proposal"})`, {
-      details: { failure: build.failure, providerCalls: build.providerCalls, providerInvocation: build.providerInvocation },
+    throw new RunnerFailure("runtime.behavior", `FluxIQ did not build a Flow from the task's instruction (${build.failure?.code ?? "no proposal"})${said ? `; it said: ${JSON.stringify(said)}` : ""}`, {
+      details: { failure: build.failure, providerCalls: build.providerCalls, providerInvocation: build.providerInvocation, ...(build.chat ? { chat: build.chat } : {}) },
     });
   }
-  await assertGrantedAtPermissionPoint(input, { flowId, adaptationId: build.adaptationId, buildPermitted }, bounds);
+  await assertGrantedAtPermissionPoint(input, { flowId, adaptationId: build.adaptationId, buildPermitted, ...(build.chat ? { conversationId: build.chat.conversationId } : {}) }, bounds);
   progress.stage = "review";
-  const review = await applyCreatedFlowProposal(input.control, { projectId, flowId, adaptationId: build.adaptationId, authorizationPin });
+  // The chat approves and applies its own proposal on the Flow it made; only a direct build is reviewed by the Lab.
+  const review = started.applied ?? await applyCreatedFlowProposal(input.control, { projectId, flowId, adaptationId: build.adaptationId, authorizationPin });
   progress.review = review;
   progress.stage = "flow-read";
   const nodes = await readFlowNodes(input.control, { projectId, flowId }, bounds);
@@ -378,6 +399,67 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
 }
 
 /**
+ * The direct build, test-only: a blank Flow, the build endpoint called by the
+ * Lab with the start page and the operator's permit, and the proposal left for
+ * the Lab's own review below.
+ */
+async function startDirectBuild(input: CreatedFlowLaneInput, progress: CreatedFlowLaneProgress, bounds: FluxIQHttpOptions): Promise<StartedBuild> {
+  const { projectId, authorizationPin, facilityRunId, request } = input;
+  const flowId = await createBlankCreationFlow(input.control, { projectId, name: `Lab created flow ${facilityRunId}`, authorizationPin }, bounds);
+  progress.flowId = flowId;
+  progress.stage = "build";
+  await input.prepareFlowPage("build");
+  // What the operator permitted the build (`--llm-permit`), kept so the verdict knows whether the task's act needed a person at all.
+  let buildPermitted: readonly string[] = [];
+  const authorize = async (id: string) => {
+    const llm = await input.authorizeBuild(id);
+    buildPermitted = llm.permittedConsequences;
+    return llm;
+  };
+  const build = await buildCreatedFlowProposal(input.control, { projectId, flowId, instruction: request.task.instruction, startLocation: input.startLocation, authorize }, bounds, input.buildWait);
+  // Held before the settlement and before either refusal after it, which are the
+  // two endings that used to leave a run with no artifact at all.
+  progress.build = build;
+  await input.settleBuild(build);
+  return { flowId, build, buildPermitted, applied: null, said: null };
+}
+
+/**
+ * The chat build: the person's key installed, the run's project selected for
+ * the paired extension, and the task's instruction typed into the chat beside
+ * the page FluxIQ is to start from. FluxIQ's chat creates the Flow, builds it
+ * and applies its own proposal, so what comes back is a Flow already holding
+ * its steps -- or a build record saying why there is none.
+ *
+ * The chat carries no operator permit: a lasting act is asked about in the
+ * thread and answered there by the Lab's person, at the task's point.
+ */
+async function startChatBuild(input: CreatedFlowLaneInput, entry: Extract<CreatedFlowLaneEntry, { kind: "chat" }>, progress: CreatedFlowLaneProgress, bounds: FluxIQHttpOptions): Promise<StartedBuild> {
+  const { projectId } = input;
+  progress.stage = "build";
+  await input.prepareFlowPage("build");
+  await entry.authorizeChat();
+  // The chat's thread and the build it starts belong to the project the paired extension has selected.
+  await input.control.selectExistingContext(projectId, undefined, bounds);
+  const made = await buildCreatedFlowFromChat(input.control, entry.chat, { projectId, domainId: input.projectDomainId ?? LAB_PROJECT_DOMAIN_ID, instruction: input.request.task.instruction }, entry.wait);
+  if (made.flowId !== null) progress.flowId = made.flowId;
+  progress.build = made.build;
+  // A chat that built nothing spent nothing on a build, so the settlement's
+  // "reached no provider" is not what went wrong -- what the chat made of the
+  // instruction is, and it is raised below with this as its cause. An
+  // overspend still outranks everything.
+  let settlement: unknown;
+  await input.settleBuild(made.build).catch((error: unknown) => {
+    if (made.flowId !== null || (error instanceof RunnerFailure && error.category === "performance.budget")) throw error;
+    settlement = error;
+  });
+  if (made.applied && made.applied.appliedMutationCount < 1) {
+    throw new RunnerFailure("runtime.behavior", "FluxIQ's chat applied the build's proposal but Core reported no change to the Flow", { details: { adaptationId: made.applied.adaptationId, chat: made.build.chat ?? null } });
+  }
+  return { flowId: made.flowId, build: made.build, buildPermitted: [], applied: made.applied ? Object.freeze({ ...made.applied }) : null, said: made.said, settlement };
+}
+
+/**
  * A consequential task whose act the build was not permitted gets a Flow one
  * honest way: the build asked a person at the task's permission point and the
  * person allowed it there, so the build went on and the Flow does the act.
@@ -392,12 +474,13 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
  */
 async function assertGrantedAtPermissionPoint(
   input: CreatedFlowLaneInput,
-  build: { flowId: string; adaptationId: string; buildPermitted: readonly string[] },
+  build: { flowId: string; adaptationId: string; buildPermitted: readonly string[]; conversationId?: string },
   bounds: FluxIQHttpOptions,
 ): Promise<void> {
   const point = input.request.task.permissionPoint;
   if (!point || point.askFirst || build.buildPermitted.includes(point.consequence)) return;
-  const asked = await readCreatedFlowPermissionAsks(input.control, { projectId: input.projectId, domainId: input.projectDomainId ?? LAB_PROJECT_DOMAIN_ID, flowId: build.flowId }, input.request.task, bounds);
+  // A chat build asks in the chat it was started from, which is read as well as the Flow's own thread.
+  const asked = await readCreatedFlowPermissionAsks(input.control, { projectId: input.projectId, domainId: input.projectDomainId ?? LAB_PROJECT_DOMAIN_ID, flowId: build.flowId, ...(build.conversationId ? { conversationId: build.conversationId } : {}) }, input.request.task, bounds);
   // A grant on a control Core left unnamed is not the person allowing the task's act: nobody could tell it was that act.
   if (asked.some(({ answer, stop }) => answer === "grant" && stop.verdict === "at_declared_point" && stop.control === "matched")) return;
   throw new RunnerFailure("runtime.behavior", "The task's lasting act needs a person's permission, and FluxIQ built a Flow without a person allowing it at the task's permission point", {

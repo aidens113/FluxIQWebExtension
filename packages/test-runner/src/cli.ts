@@ -98,17 +98,19 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       // reported from inside a run that had already started a browser.
       const live = command.llm ? await beginLiveLlmRun({ profile: command.llm, repositoryRoot, environment: resolvedEnvironment, flowLane: command.flowLane === true, targetMode: target.mode }) : undefined;
       // After the live refusals, so a missing key is reported before a missing catalog: the task, its workflow and variant, and what judges it.
+      // A build typed into the extension's chat carries no permit and runs on Core's own default model; refused here, before anything starts, rather than inside the run.
+      if (live?.createsFlow && !command.directApiBuild) live.assertChatBuildable();
       const creation = live?.createsFlow ? await loadCreatedFlowRequest({ repositoryRoot, scenarioLabDist: labPaths.scenarioLabDist, scenarioId: command.scenarioId, ...(command.instructionTaskId ? { taskId: command.instructionTaskId } : {}), ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) }) : undefined;
       if (command.dryRun) {
         // Everything a live build would check before it starts, and nothing after: no topology, no browser, no provider call.
         // A target that owns its Core also reports the Core web build it would serve -- its key, and whether that build is
         // already published -- read without building, locking or creating anything; an existing target serves no build.
         const coreWeb = target.mode === "existing" ? null : await inspectCoreWebBuild(fluxiqRepositoryRoot, env);
-        process.stdout.write(`${JSON.stringify({ status: "ready", providerCallCount: 0, lane: "created-flow", target: target.mode, request: creation ? describeCreatedFlowRequest(creation) : null, live: live?.describe() ?? null, coreWeb })}\n`);
+        process.stdout.write(`${JSON.stringify({ status: "ready", providerCallCount: 0, lane: "created-flow", buildEntry: command.directApiBuild ? "direct-api" : "chat", target: target.mode, request: creation ? describeCreatedFlowRequest(creation) : null, live: live?.describe() ?? null, coreWeb })}\n`);
         return 0;
       }
       const selection = creation ? { ...(creation.workflowId ? { workflowId: creation.workflowId } : {}), ...(creation.variantId ? { variantId: creation.variantId } : {}), creation } : { ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) };
-      const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...selection, ...(command.flowLane ? { flow: true } : {}), ...(command.evidence ? { evidence: command.evidence } : {}), ...(live ? { live } : {}), ...(command.replays === undefined ? {} : { replays: command.replays }), ...(command.livePanel === false ? { livePanel: false } : {}), environment: resolvedEnvironment, target });
+      const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...selection, ...(command.flowLane ? { flow: true } : {}), ...(command.evidence ? { evidence: command.evidence } : {}), ...(live ? { live } : {}), ...(command.replays === undefined ? {} : { replays: command.replays }), ...(command.livePanel === false ? { livePanel: false } : {}), ...(command.directApiBuild ? { buildEntry: "direct-api" as const } : {}), environment: resolvedEnvironment, target });
       process.stdout.write(`${JSON.stringify(result)}\n`); return result.verdict === "passed" ? 0 : 1;
     }
     const target = resolveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.flowId ? { cliFlowId: command.flowId } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });

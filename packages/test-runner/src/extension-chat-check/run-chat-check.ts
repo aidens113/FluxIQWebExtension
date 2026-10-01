@@ -9,8 +9,7 @@ import { chatNetworkPolicy } from "./chat-network-policy.js";
 import { evidenceWriter } from "./evidence-writer.js";
 import { openChromeChatSession, type WorkerRequest } from "./open-chrome-session.js";
 import { openFirefoxChatSession } from "./open-firefox-session.js";
-import { proveAskAnswered, type AskAnswerObservation } from "./prove-ask-answered.js";
-import { proveChatRelay, type ChatRelayObservation } from "./prove-chat-relay.js";
+import { proveAskAnswered, proveChatBuild, proveChatRelay, type AskAnswerObservation, type ChatBuildObservation, type ChatRelayObservation } from "./prove/index.js";
 import { threadReader } from "./thread-reader.js";
 import type { Page } from "@playwright/test";
 import type { ChatBrowser, ChatBrowserSession, ChatCheckContext } from "./types.js";
@@ -27,6 +26,8 @@ export type ChatCheckOptions = {
   pagePath: string;
   /** Also run claim 3, which saves the approval Flow and asks the chat to run it. */
   ask: boolean;
+  /** Also run claim 4: the created-Flow lane's chat stage types a build request into the panel and follows the build (`prove/chat-build.ts`). */
+  build?: boolean;
   evidenceDirectory: string;
   log?: (line: string) => void;
 };
@@ -48,6 +49,7 @@ export type ChatCheckResult = {
   stage: string;
   relay: ChatRelayObservation | null;
   ask: AskAnswerObservation | null;
+  build: ChatBuildObservation | null;
   flow: ApprovalFlow | null;
   /** The chat-relevant program calls the extension made, as the proxy in front of Core received them. No headers. */
   coreCalls: unknown[];
@@ -75,7 +77,7 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
   const workerRequests: WorkerRequest[] = [];
   let topology: RunningTopology | undefined;
   let proxy: CoreRecordingProxy | undefined;
-  const result: ChatCheckResult = { browser: options.browser, browserVersion: null, scenarioId: scenario.id, pageUrl: null, panelMode: null, panelNote: null, panelInput: null, extensionProject: null, cookiePrompt: null, stage: "topology", relay: null, ask: null, flow: null, coreCalls: [], failure: null, evidenceDirectory: options.evidenceDirectory };
+  const result: ChatCheckResult = { browser: options.browser, browserVersion: null, scenarioId: scenario.id, pageUrl: null, panelMode: null, panelNote: null, panelInput: null, extensionProject: null, cookiePrompt: null, stage: "topology", relay: null, ask: null, build: null, flow: null, coreCalls: [], failure: null, evidenceDirectory: options.evidenceDirectory };
   const stage = (name: string) => { result.stage = name; log(`[chat-check] ${options.browser}: ${name}`); };
   try {
     topology = await startTopology({
@@ -147,6 +149,10 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
       stage("claim ask");
       result.ask = await proveAskAnswered(context, { flow: result.flow, screenshot: name => evidence.shot(name) });
       await evidence.shot("ask-settled");
+    }
+    if (options.build) {
+      stage("claim build");
+      result.build = await proveChatBuild(context, { control, screenshot: name => evidence.shot(name) });
     }
     stage("network guard");
     session.guard.assertNoViolations();

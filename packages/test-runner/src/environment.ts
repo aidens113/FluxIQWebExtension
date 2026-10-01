@@ -53,9 +53,20 @@ export function webPanelHostModulePath(repositoryRoot: string): string {
   return path.resolve(repositoryRoot, "domain", fluxiqHostModule);
 }
 
+/**
+ * The Core process of a Lab run. Its build trace is on unless the launcher
+ * says otherwise: `FLUXIQ_BUILD_PROGRESS_TRACE` makes every build -- started by
+ * the Lab's own call or typed into the extension's chat -- write its decisions,
+ * tools, result codes and endings into `logs/core.log`, content-free
+ * (`runtime/llm/evidence-progress/progress-trace.ts` in Core). It used to be on
+ * only when whoever launched the Lab exported it, so the first chat-driven live
+ * runs (t227, 2026-10-01) left a `core.log` of six lines and could not be
+ * debugged.
+ */
 export function buildFluxIQEnvironment(allocation: RunAllocation, paths: TopologyPaths, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const hostModulePath = paths.hostModulePath ?? webPanelHostModulePath(paths.repositoryRoot);
   return {
+    FLUXIQ_BUILD_PROGRESS_TRACE: "1",
     ...withoutProviderSecrets(base),
     PORT: String(allocation.webPort),
     FLUXIQ_ROOT: allocation.fluxiqRoot,

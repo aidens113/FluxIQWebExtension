@@ -407,7 +407,7 @@ test("the same workflow is not refused on the recording lane, which records it",
  */
 test("the runner leaves a Flow that must reach its own page on a blank tab, and proves any arming before it does", async () => {
   const source = await runnerSource();
-  assert.match(source, /const startPage = flowStartPage\(\{ task: creation\?\.task, moment, armedFacts: pageFacts\.afterArm \}\);/u, "the runner asks the rule rather than deciding again");
+  assert.match(source, /const startPage = flowStartPage\(\{ task: creation\?\.task, moment, armedFacts: pageFacts\.afterArm, startedFromChat: creation !== undefined && buildEntry === "chat" \}\);/u, "the runner asks the rule rather than deciding again, telling it when the build is typed into the chat");
   assert.equal(source.match(/flowStartPage\(/gu)?.length, 1, "one decision, taken in the one hook both Flow lanes and the repair lane prepare through");
   const at = {
     decide: source.indexOf("const startPage = flowStartPage({"),

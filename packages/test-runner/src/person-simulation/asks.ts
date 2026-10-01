@@ -41,6 +41,21 @@ export type PendingPersonAsk = Readonly<{
 /** How a person answers a permission ask: allow the act, or refuse it. */
 export type PermissionAskAnswer = "grant" | "deny";
 
+/** One answer to one ask, in Core's answer kinds: allow or refuse, or the id of the option pressed. */
+export type PersonAskAnswer = Readonly<{ kind: PermissionAskAnswer }> | Readonly<{ kind: "choice"; value: string }>;
+
+/** Where the person's answer was given: pressed in the extension's chat window, or sent through Core's `answer-ask` as FluxIQ's panel does. */
+export type PersonAnswerVia = "chat" | "core";
+
+/**
+ * Answers a question in the extension's chat window, as the person sitting at
+ * it would, when the question is on the chat's own thread, and resolves `true`
+ * once Core holds the answer. Resolves `false` for a question anywhere else --
+ * a run's thread, a Flow's -- which is then answered through Core's
+ * `answer-ask`, as it always was. Throws when the chat could not carry it.
+ */
+export type PersonChatAnswerer = (ask: PendingPersonAsk, answer: PersonAskAnswer) => Promise<boolean>;
+
 /** Where the asks are read: the project, and the domain it belongs to, which Core holds every call to. */
 export type PersonAskScope = { projectId: string; domainId: string };
 
@@ -108,10 +123,15 @@ async function turnsOf(control: PersonAskControl, scope: PersonAskScope, convers
   return turns;
 }
 
-/** The build asks on the Flow's thread (`flow`, or `build`), a run on its own (`run`). */
+/**
+ * The build asks on the Flow's thread (`flow`, or `build`), a run on its own
+ * (`run`). A build started from the extension's chat asks in the chat, which
+ * is the project's own thread (`project`): in a Lab run the chat starts the
+ * build and nothing else, since every run is started through Core.
+ */
 function stageOf(subject: PendingPersonAsk["subject"]): PersonHandOffStage {
   if (subject?.kind === "run") return "run";
-  if (subject?.kind === "flow" || subject?.kind === "build") return "build";
+  if (subject?.kind === "flow" || subject?.kind === "build" || subject?.kind === "project") return "build";
   return "unknown";
 }
 

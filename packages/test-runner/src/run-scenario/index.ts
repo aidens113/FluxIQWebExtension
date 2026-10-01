@@ -13,6 +13,7 @@
 // by four test files. Both are keyed to that path, so moving the spine would
 // silently drop the guarantees rather than carry them.
 export * from "./browser-session/index.js";
+export * from "./chat-build/index.js";
 export * from "./clone-target/index.js";
 export * from "./core-round-trip/index.js";
 export * from "./decision-trace/index.js";

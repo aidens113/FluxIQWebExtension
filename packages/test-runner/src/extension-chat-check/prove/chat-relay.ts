@@ -1,5 +1,5 @@
-import { sendChatMessage } from "./send-chat-message.js";
-import type { ChatCheckContext } from "./types.js";
+import { sendChatMessage } from "../send-chat-message.js";
+import type { ChatCheckContext } from "../types.js";
 
 /** The six capability ids `apps/extension/src/background/panel/chat-capabilities.ts` offers on every message. */
 export const EXPECTED_CAPABILITY_IDS = ["flow.createHere", "flow.describe", "flow.explore", "flow.improve", "run.execute", "ask.answer"] as const;

@@ -27,6 +27,9 @@ test("constructs isolated scenario and FluxIQ environments", () => {
   assert.equal(fluxiq.FLUXIQ_CLIENT_GATEWAY_HOST, "127.0.0.1");
   assert.equal(fluxiq.FLUXIQ_PUBLIC_CLIENT_WS_URL, "ws://127.0.0.1:31003/client");
   assert.equal(fluxiq.INHERITED, "yes");
+  // Every build writes its content-free trace into core.log, however it was started, unless the launcher turned it off.
+  assert.equal(fluxiq.FLUXIQ_BUILD_PROGRESS_TRACE, "1");
+  assert.equal(buildFluxIQEnvironment(allocation, { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core" }, { FLUXIQ_BUILD_PROGRESS_TRACE: "0" }).FLUXIQ_BUILD_PROGRESS_TRACE, "0");
 });
 
 test("removes provider credentials case-insensitively without mutating the driver environment", () => {

@@ -1,4 +1,4 @@
-// `node dist/extension-chat-check/cli.js [--browser chrome|firefox] [--scenario <id>] [--page <path>] [--no-ask] [--evidence <dir>]`
+// `node dist/extension-chat-check/cli.js [--browser chrome|firefox] [--scenario <id>] [--page <path>] [--no-ask] [--build] [--evidence <dir>]`
 // `node dist/extension-chat-check/cli.js --prepare-core-web-build`
 //
 // The headed, provider-free check of the extension chat's relay
@@ -42,13 +42,14 @@ if (args.includes("--prepare-core-web-build")) {
       scenarioId: option("--scenario", "social-network-feed"),
       pagePath: option("--page", "friends/requests/"),
       ask: !args.includes("--no-ask"),
+      build: args.includes("--build"),
       evidenceDirectory: path.join(evidenceRoot, `${stamp}-${browser}`),
       log: line => process.stderr.write(`${line}\n`),
     });
     results.push(result);
-    const checks = { ...(result.relay?.checks ?? {}), ...(result.ask?.checks ?? {}) };
+    const checks = { ...(result.relay?.checks ?? {}), ...(result.ask?.checks ?? {}), ...(result.build?.checks ?? {}) };
     process.stdout.write(`${JSON.stringify({ browser, stage: result.stage, panelMode: result.panelMode, failure: result.failure?.split("\n")[0] ?? null, checks, evidence: result.evidenceDirectory })}\n`);
   }
-  const held = results.every(result => result.failure === null && result.relay !== null && Object.values({ ...result.relay.checks, ...(result.ask?.checks ?? {}) }).every(Boolean));
+  const held = results.every(result => result.failure === null && result.relay !== null && (!args.includes("--build") || result.build !== null) && Object.values({ ...result.relay.checks, ...(result.ask?.checks ?? {}), ...(result.build?.checks ?? {}) }).every(Boolean));
   process.exitCode = held ? 0 : 2;
 }

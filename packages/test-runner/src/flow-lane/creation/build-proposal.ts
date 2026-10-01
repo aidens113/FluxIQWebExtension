@@ -14,6 +14,7 @@ import type { ExistingAdaptationConsequenceCrossCheck, ExistingAdaptationDeclare
 import { publishableStepFields, type PublishableStepValue } from "../../existing-fluxiq-control/index.js";
 import { RunnerFailure } from "../../failure.js";
 import { isBoundedHttpFailure, type FluxIQHttpOptions } from "../../http-control/index.js";
+import type { CreatedFlowChatRecord } from "./chat/index.js";
 
 /**
  * How long a build may still be running after it was dispatched: the wait the
@@ -249,6 +250,13 @@ export type CreatedFlowBuild = Readonly<{
   permissionRequest: CreatedFlowPermissionRequest | null;
   /** The evidence loop's own decisions, where `providerCalls` is every call the build made. */
   loopProviderCalls: number | null;
+  /**
+   * Present when the build was started the way a person starts one: the task's
+   * instruction typed into the extension's chat window (`chat/`). Absent for a
+   * build the Lab asked Core's build endpoint for itself, which is test-only
+   * and never counted as a pass (`--direct-api-build`).
+   */
+  chat?: CreatedFlowChatRecord;
 }>;
 
 /** One action the build declared to the gate, as the build record keeps it: codes, a verb, and the control as Core allowed it to be named. */
@@ -364,7 +372,27 @@ async function awaitProposal(control: CreatedFlowBuildControl, input: { projectI
  * either cannot be shown to be what was paid for.
  */
 async function proposed(control: CreatedFlowBuildControl, input: { projectId: string; flowId: string }, adaptationId: string, recoveredAfterTimeout: boolean, durationMs: number): Promise<CreatedFlowBuild> {
+  return (await readCreatedFlowBuild(control, input, adaptationId, { recoveredAfterTimeout, durationMs, statuses: ["proposed"] })).build;
+}
+
+/** A build read off the proposal it left: the record, and the status and applied change count Core reports for the proposal now. */
+export type CreatedFlowBuildRead = Readonly<{ build: CreatedFlowBuild; status: string; appliedMutationCount: number | null }>;
+
+/**
+ * Reads a build from the proposal it left, by the same rules whoever started
+ * it. `statuses` are the states the proposal may be in: `proposed` for a build
+ * the Lab asked for and has yet to review; `applied` as well for one the
+ * extension's chat started, which approves and applies its own proposal on a
+ * new Flow (`create-here.ts` in Core). Any other state is a refusal.
+ */
+export async function readCreatedFlowBuild(
+  control: Pick<CreatedFlowBuildControl, "getFlowAdaptation">,
+  input: { projectId: string; flowId: string },
+  adaptationId: string,
+  read: { recoveredAfterTimeout: boolean; durationMs: number; statuses: readonly string[] },
+): Promise<CreatedFlowBuildRead> {
   const detail = await control.getFlowAdaptation(input.projectId, input.flowId, adaptationId);
+  const { recoveredAfterTimeout, durationMs } = read;
   const loop = detail.evidenceLoop;
   const consequences = detail.consequences;
   const request = consequences?.permissionRequest;
@@ -383,18 +411,19 @@ async function proposed(control: CreatedFlowBuildControl, input: { projectId: st
     consequenceCrossCheck: consequences?.crossCheck ? crossCheckOf(consequences.crossCheck) : null,
     permissionRequest: request ? permissionRequestOf(request) : null,
   };
-  const problem = detail.status !== "proposed" || detail.adaptationKind !== "flow_bootstrap" ? "lab.proposal_not_pending_bootstrap"
+  const problem = !read.statuses.includes(detail.status) || detail.adaptationKind !== "flow_bootstrap" ? "lab.proposal_not_pending_bootstrap"
     : !loop ? "lab.proposal_without_evidence_audit"
       : loop.providerCallCount === undefined ? "lab.proposal_without_call_count"
         : loop.toolCallCount < 1 || loop.evidenceBytes < 1 ? "lab.proposal_without_page_evidence"
           : undefined;
-  if (problem) return Object.freeze({ ...base, outcome: "failed", failure: { code: problem, stage: null, httpStatus: null } });
+  const found = { status: detail.status, appliedMutationCount: detail.appliedMutationCount ?? null };
+  if (problem) return Object.freeze({ ...found, build: Object.freeze({ ...base, outcome: "failed" as const, failure: { code: problem, stage: null, httpStatus: null } }) });
   // The proposal exists and is well formed, and a person still has to answer
   // before anything may be done with it. Read here rather than discovered when
   // the review call is refused, so the ending is the product's own answer and
   // not an HTTP status.
-  if (request) return Object.freeze({ ...base, outcome: "permission_required", failure: { code: "flow_bootstrap.permission_required", stage: "review", httpStatus: null } });
-  return Object.freeze({ ...base, outcome: "proposed", failure: null });
+  if (request) return Object.freeze({ ...found, build: Object.freeze({ ...base, outcome: "permission_required" as const, failure: { code: "flow_bootstrap.permission_required", stage: "review", httpStatus: null } }) });
+  return Object.freeze({ ...found, build: Object.freeze({ ...base, outcome: "proposed" as const, failure: null }) });
 }
 
 /** One gate record as the build keeps it: Core's own strings, nothing interpreted. */
@@ -489,6 +518,11 @@ function providerThrowCodes(thrown: { errorClass?: string; errorCode?: string; c
     return typeof value === "string" && THROW_CODE.test(value) ? [[field, value]] : [];
   }));
   return Object.keys(codes).length === 0 ? {} : { providerThrow: Object.freeze(codes) };
+}
+
+/** A build that left no proposal to read: its refusal code, whether Core reached a provider, and how long it took. Nothing is known of what it spent. */
+export function failedCreatedFlowBuild(failure: NonNullable<CreatedFlowBuild["failure"]>, providerInvocation: CreatedFlowBuild["providerInvocation"], durationMs: number): CreatedFlowBuild {
+  return failed(failure, providerInvocation, durationMs);
 }
 
 function failed(failure: NonNullable<CreatedFlowBuild["failure"]>, providerInvocation: CreatedFlowBuild["providerInvocation"], durationMs: number): CreatedFlowBuild {
