@@ -228,6 +228,22 @@ after the round-2 workers): Core 20 modified + 6 new under `packages/fluxiq/src/
 - Downstream `node scripts/structure-audit.mjs` -> `passed (140 warning(s), 118 baselined)`.
 - Not re-run by the lead: the workers' revert checks (each reported its new cases failing with the source reverted).
 
+**After commit (F23-F29: Core `43d4ec30`, downstream `fb20c051`) and the supervisor's dev merge.**
+- Core merge conflicts resolved and staged (not committed), so both behaviours hold. Lane B's T2 (`sometimes-present.ts`)
+  makes a blocking `unreproducible` step optional; F24's `remembered` never blocks.
+  - `flow-draft/dry-run.ts`: the outcome keeps both `reanchored?` and `madeOptional?`. The instruction keeps F24's sentence
+    and lane B's, which now reads "An unreproducible step that does none of the acts ...".
+  - `flow-draft/index.ts`: both barrels are exported.
+  - `llm/node-tools/tests/dry-run-gate.test.ts`: both describe blocks are kept.
+  - Validation: `npx vitest run runtime/flow-draft runtime/llm/node-tools` -> `Test Files 14 passed (14)`, `Tests 125 passed
+    (125)`; Core `tsc --noEmit` -> `core-tsc-exit=0`; Core audit `passed (209 warning(s), 349 baselined)`.
+- **Ready to commit (downstream), F29's last part.** Now that t223 has landed, `domain/src/runtime/llm-evidence/node-run/run.ts`
+  imports `WEB_DECLINED_PRESS_INSTEAD` from `../press` and sets `instead: permission.declined ? WEB_DECLINED_PRESS_INSTEAD
+  : undefined` on the `run_node` permission refusal. `tests/tool-rejection-detail.test.ts`'s declined case now expects
+  the `instead`.
+  - Validation: domain check -> `domain-check-exit=0`; domain tests `tool-rejection-detail`, `press`, `node-run/tests` ->
+    116/116; downstream audit `passed (145 warning(s), 118 baselined)`.
+
 **Next (not started: the concurrent-agent limit refused them; briefs are in the round-2 table).**
 - w20h: C1 frame path on LLM-built nodes + a 5 s frame wait; C2 detection origin inside a cross-origin frame.
   apply-quillmark cannot pass without both.
