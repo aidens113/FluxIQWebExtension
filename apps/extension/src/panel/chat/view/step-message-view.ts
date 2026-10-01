@@ -10,6 +10,11 @@
 // check, a question to the person, a run's step) is only its card; a note,
 // or anything with no card, is only its words.
 //
+// While the unit of work is under way or waiting, its newest card says
+// "Working on it" or "Waiting for you", and so does any card still waiting on
+// the person: only Core's row that settles a wait ends it, so a note or a
+// step after the question does not quiet it.
+//
 // The element lives as long as the message, and each card's element as long
 // as its card: a render changes only the words and marks that changed, and
 // adds a new card after the others, so nothing remounts, reorders or flickers
@@ -57,7 +62,9 @@ export function createStepMessageView(): StepMessageView {
           view = createActionCardView();
           views.set(card.key, view);
         }
-        view.update(card, current && message.latest && index === last);
+        // A card waiting on the person waits until Core settles it, wherever it
+        // sits; any other card is the action of the moment only as the newest.
+        view.update(card, current && (card.outcome === "waiting" || (message.latest && index === last)));
         return view.element;
       });
       const keys = new Set(message.actions.map((card) => card.key));

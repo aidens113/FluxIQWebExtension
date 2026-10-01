@@ -467,11 +467,27 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     names no target.
   - **Outcome line** (`stream/step/card-words.ts`). "Done"; "Didn't work: it
     wasn't on the page" (Core's reason, else its sentence in words); a check
-    reads "Passed" or "Didn't pass" with its verdict. "Working on it" and
-    "Waiting for you" show only on the action of the moment, which is the
-    newest card of the unit of work that is running or waiting on the person.
-    An action that never said it ended shows no outcome once the work moved
-    on.
+    reads "Passed" or "Didn't pass" with its verdict. A wait on the person
+    that Core settled reads its sentence: "Done. You pressed Continue.",
+    "Didn't work: you pressed Stop". "Working on it" shows only on the
+    action of the moment, the newest card of the unit of work that is running
+    or waiting on the person; "Waiting for you" shows on every card of that
+    unit still waiting on the person. An action that never said it ended
+    shows no outcome once the work moved on, and neither does a wait Core
+    never settled once its unit of work is over.
+  - **Questions to the person** (`stream/step/messages.ts`). A robot-check or
+    permission card is over only when Core says so: the ask row that settles
+    the wait carries the same ask id (`activityActionKey` from `fluxiq/ui`,
+    `ask:<ref>`) and a `detail.resolution`, and the card is marked from it in
+    place, the same element in the same place. Its outcome comes only from
+    `activityActionOf`; the chat never enumerates resolutions, so a new one
+    needs no change here. Nothing later in the work (a note, another action,
+    the work moving on or failing) settles a wait. One check is one card: a
+    tool whose result says the page needs a person (Core reads it as a robot
+    check, waiting) and the robot-check ask of the same unit of work share a
+    card, whichever came first. An ask row with no ask id while another ask's
+    card waits only restates that wait (a parked run's "Run is waiting for an
+    answer") and adds nothing. These are the Core panel's rules.
   - **Accessibility.** The card is a labelled group ("Click, Get a free
     quote: Done"), and its icon is `aria-hidden`.
   - **Styling.** The panel's tokens only, so light and dark follow them: the

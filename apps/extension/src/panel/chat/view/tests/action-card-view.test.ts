@@ -73,8 +73,8 @@ test("a card for each kind: Core's icon in an aria-hidden mark, Core's name, the
     assert.deepEqual(read("read"), ["Listings", "Done", "done", "Read list, Listings: Done"]);
     assert.deepEqual(read("navigate"), [undefined, "Done", "done", "Open page: Done"]);
     assert.deepEqual(read("test"), [undefined, "Didn't work: it didn't work the same way again", "failed", "Test run: Didn't work: it didn't work the same way again"]);
-    assert.deepEqual(read("person_check"), [undefined, undefined, "settled", "Robot check"], "a wait that is not the action of the moment says nothing about it");
-    assert.deepEqual(read("permission"), [undefined, undefined, "settled", "Permission"]);
+    assert.deepEqual(read("person_check"), [undefined, "Waiting for you", "waiting", "Robot check: Waiting for you"], "a wait Core has not settled still waits while its work is under way");
+    assert.deepEqual(read("permission"), [undefined, "Waiting for you", "waiting", "Permission: Waiting for you"]);
     assert.deepEqual(read("repair"), ["Accept cookies", "Done", "done", "Repair, Accept cookies: Done"]);
     assert.deepEqual(read("other"), ["the page", "Done", "done", "Action, the page: Done"]);
     for (const message of fake(view.element).byClass("chat-step-msg")) {
@@ -147,5 +147,48 @@ test("no card, label or word in the chat shows a dotted id", async () => {
     const leaves = root.descendants().filter((element) => element.children.length === 0 && element.textContent !== "");
     assert.ok(leaves.length > 40, `${leaves.length} pieces of text`);
     for (const leaf of leaves) assert.doesNotMatch(leaf.textContent, DOTTED_ID, leaf.textContent);
+  });
+});
+
+test("a robot check's card is marked from Core's row that settles it, on the same element, and a later note does not quiet it", async () => {
+  const CHECK = "Asked the person to complete a check";
+  const settle = (sequence: number, resolution: string, status: Detail["status"], said: string) =>
+    event(sequence, "building", { kind: "ask", title: CHECK, ref: "person-needed.1", status, text: said, resolution } as Detail);
+  for (const [resolution, status, said, state, outcome] of [
+    ["answered", "succeeded", "You pressed Continue.", "done", "Done. You pressed Continue."],
+    ["declined", "failed", "You pressed Stop.", "failed", "Didn't work: you pressed Stop"]
+  ] as const) {
+    await withFakeDocument(() => {
+      const view = createThreadView();
+      const events: ClientGatewayActivity[] = [
+        event(1, "waiting_permission", { kind: "ask", title: CHECK, ref: "person-needed.1", status: "started", text: "FluxIQ needs you: complete the check on this page, then press Continue." }),
+        event(2, "waiting_permission", { kind: "note", title: "Still waiting", text: "The page is still showing the check." })
+      ];
+      view.render(buildChatStream([], events), null, controls, "build-1");
+      const root = fake(view.element);
+      const card = cards(root)[0]!;
+      const nodes = [card, ...card.descendants()];
+      assert.deepEqual([card.getAttribute("data-state"), text(card, "chat-card-outcome")], ["waiting", "Waiting for you"], "still waiting after the note");
+
+      events.push(settle(3, resolution, status, said), event(4, "building", { kind: "tool", title: "Clicking “Get a free quote”", ref: "core.run_node", status: "started" }));
+      view.render(buildChatStream([], events), null, controls, "build-1");
+      assert.equal(cards(root)[0], card, resolution);
+      assert.deepEqual([card, ...card.descendants()], nodes, "updated in place, nothing remounted");
+      assert.deepEqual([card.getAttribute("data-state"), text(card, "chat-card-outcome"), card.getAttribute("aria-label")], [state, outcome, `Robot check: ${outcome}`]);
+      assert.equal(cards(root).length, 2, "the settling row adds no card");
+      for (const node of [card, ...card.descendants()]) {
+        for (const value of [node.textContent, node.getAttribute("aria-label")]) if (value) assert.doesNotMatch(value, DOTTED_ID, value);
+      }
+    });
+  }
+});
+
+test("a wait Core has not settled still says so once its work is over: only Core's resolved row ends it", async () => {
+  await withFakeDocument(() => {
+    const view = createThreadView();
+    const [, robot] = ONE_OF_EACH.find(([kind]) => kind === "person_check")!;
+    view.render(buildChatStream([], [robot(1)]), null, controls, null);
+    const card = cards(fake(view.element))[0]!;
+    assert.deepEqual([card.getAttribute("data-state"), text(card, "chat-card-outcome"), card.getAttribute("aria-label")], ["waiting", "Waiting for you", "Robot check: Waiting for you"]);
   });
 });

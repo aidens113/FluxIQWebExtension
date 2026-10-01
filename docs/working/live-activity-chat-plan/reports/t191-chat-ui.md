@@ -175,6 +175,55 @@
       panel would be a browser run outside the ten scenarios while Labs are stopped.
     - Real Core events.
 
+- **Round 5: both chats settle a wait from one Core event (2026-09-30, lead).** Dev was merged by the supervisor
+  (downstream 5f665174, Core 9653b7dd), with nothing to resolve.
+  - **Core** (WR, `t191-r5-wr-resolved-asks.md`):
+    - `ClientGatewayActivity.detail` gains optional `resolution` (`CLIENT_GATEWAY_ACTIVITY_RESOLUTIONS`: waited_out,
+      answered, allowed, declined, timed_out, cancelled). It is re-exported by client-gateway-websocket, bounded to ask
+      rows in `activity/bounded.ts`, and restated in Core web's `activity/contracts.ts`.
+    - Every announced wait gets a waiting row and a resolved row with the same `ref` (the ask id) and title, emitted
+      from `runtime/activity/ask/` and at its call sites: `executor/graph-run.ts`, `executor/resume.ts`,
+      `flow-bootstrap/person-needed.ts`, `flow-bootstrap/action-permissions.ts`, `recovery/runtime-exploration.ts`.
+    - The lead asked for `cancelled`: when the work stops, fails, or loses its thread before an answer, the row is
+      failed, "The work stopped before this was answered." No card is left waiting after its wait ended.
+    - `fluxiq/ui`: `activityActionOf` takes an ask's outcome from `resolution` only, and the new `activityActionKey`
+      gives one key per ask.
+    - Core panel: the "work moved on, so it's Done" inference is removed, and a check's intervention tool event and
+      its ask fold into one card, whichever comes first.
+  - **Extension** (WX, `t191-r5-wx-extension-resolved.md`): ask cards are keyed by `activityActionKey` and updated in
+    place from the resolved row ("Done. You pressed Continue.", "Didn't work: you pressed Stop"). The forced
+    ask-to-waiting rule is removed, and one check is one card, with the same rule as the Core panel.
+  - **Lead edits, so the surfaces agree.**
+    - `stream/step/card-words.ts`: a waiting card says "Waiting for you" until Core's resolved row, even after its unit
+      ends. It previously went blank, which inferred the end from the work moving on. Two tests were updated to match.
+    - `stream/step/messages.ts`: an ask's card goes under the reasoning message before it, as tool cards do and as the
+      Core panel does; it is its own message only when no reasoning came first. A new test in
+      `stream/step/tests/messages.test.ts` also pins `cancelled` to failed, "the work stopped first".
+    - CRLF line endings in `chat-panel.ts` and `view/step-message-view.ts` normalised to LF.
+  - Ready to commit:
+    - downstream: every `git status` path under `apps/extension/src/panel/chat/**`,
+      `docs/architecture/extension-client.md` and this report folder;
+    - Core: every `git status` path under `packages/contracts/src/client-gateway.ts`, `packages/client-gateway-websocket/src`,
+      `packages/fluxiq/src/{ui, programs/automation-studio/runtime}`, `packages/fluxiq/docs/reference`,
+      `docs/reference` and `apps/web/src/features/automation-studio/conversation/**`.
+  - Validation (lead's runs):
+    - `heavy.sh "t191 r5 ext check+test+build"` -> `check=0 test=0 build=0`, `# tests 1633 # pass 1633 # fail 0`,
+      chrome, firefox and e2e-chromium each "verified 22 files" (a fresh build, "inputs changed");
+    - repository structure audit -> passed;
+    - `heavy.sh "t191 verify wr"`:
+      - fluxiq vitest over `src/ui` and runtime/{activity, executor, flow-bootstrap, recovery, parking} -> `126 passed
+        (126)`, `1856 passed (1856)`;
+      - `pnpm --filter fluxiq check` -> 0;
+      - `pnpm --filter @fluxiq/contracts test` -> 9 files, 55 passed;
+      - web `tsc` -> 0, and web conversation vitest -> `26 passed (26)`, `261 passed (261)`.
+  - Core structure audit FAIL, not this lane's: `runtime/llm/evidence-loop/` has 26 files against a limit of 25. This
+    tree has no edits there; HEAD's copy came from dev's t196 merge (957a0226). Current dev has regrouped the
+    directory to 20 files (t200, t208; dev is 11 commits ahead), so the next dev merge clears it.
+  - Not verified:
+    - Browser rendering and real Core events.
+    - `waited_out` is never emitted, because Core never sees a check clear by itself after announcing a wait.
+    - A durably parked run that is abandoned keeps its wait open.
+
 ## The user's verdict on t185, after watching live runs (2026-09-29)
 
 1. The extension's UI is "not at all like chatgpt styled chat area".
