@@ -2,8 +2,8 @@
 
 ## Outcome
 
-In progress: five requested tasks implemented in isolated worktrees; final
-verification and local commits are being completed. Claude owns integration.
+Complete: all five requested tasks are implemented, verified and locally
+committed in isolated worktrees. Claude owns revalidation and integration.
 No dev/main merge or push, Lab/live/provider/browser call or panel management.
 
 ## Task branches
@@ -13,12 +13,14 @@ No dev/main merge or push, Lab/live/provider/browser call or panel management.
 | 1 | `task/t221-codex-docs-round3` | downstream + Core | docs verified/committed; inherited Core size failure recorded |
 | 2 | `task/t220-codex-lab-bookkeeping` | downstream + Core | verified/committed; inherited Core size failure recorded |
 | 3 | `task/t219-codex-extension-cleanup` | downstream | verified and committed |
-| 4 | `task/t216-codex-cleared-wait-gaps` | downstream + Core | final gates pending |
+| 4 | `task/t216-codex-cleared-wait-gaps` | downstream + Core | verified and committed |
 | 5 | `task/t217-codex-trace-every-ending` | downstream + Core | verified and committed |
 
 Current commits: Task1 downstream `d9820ec2`, Core `44894331`; Task2 downstream
 `efc92b69` + report update `70f232f4`, Core `0fc121da`; Task3 downstream
-`9fee5fb2`; Task5 downstream `1310723d`, Core `403818f6`. Each task's downstream branch contains its
+`9fee5fb2`; Task4 downstream `3dc66aee`, Core `90dfd1db`; Task5 downstream
+`1310723d`, Core `403818f6`. Handoff checkpoint: downstream t221 `866a1601`.
+Each task's downstream branch contains its
 unique brief and detailed `codex-<slug>.md` report under this reports directory.
 Task3 also contains `codex-extension-cleanup-names.md`.
 
@@ -60,7 +62,7 @@ worker completion claims alone do not establish success. No live/browser or
 provider behavior is claimed. All commits remain local for Claude to recheck
 and integrate; nothing was pushed.
 
-Observed final checks so far:
+Observed final checks:
 
 - Task1: both repository doc-link audits independently pass; downstream full
   structure passes. Core full structure has only the inherited size failure.
@@ -72,9 +74,11 @@ Observed final checks so far:
   or skips, three browser-target builds and downstream structure pass.
 - Task5: full focused Core 137 tests, supervisor 26 focused tests, Core tsc,
   full Core build, reader build/tests, and both full structure audits pass.
-- Task4: corrected helper independently passes 43 expiry/transport/parser
-  tests; final current-source Core tsc, build and full audit pass. Corrected
-  navigation regressions pass 20/20; final downstream gates remain in progress. Partial-write
+- Task4: supervisor independently passes 43 expiry/transport/parser and65
+  navigation/click/result-mapping tests; final current-source Core tsc, fullbuild
+  and audit pass. Corrected full extension check/build/smoke and suite pass:
+  1677/1677, zero failures/skips; three browser-target bundles each verify22files.
+  Domain1063/1063, zero failures/skips; full downstream audit passes. Partial-write
   retry records are process-local; no durable journal or storage changes.
 
 ## New user focus and preservation of this workload
@@ -82,6 +86,7 @@ Observed final checks so far:
 The user requested Core/web-panel/extension UI/UX work while explicitly retaining
 the five-task Claude workload. That work is isolated separately in
 `task/t224-codex-ui-ux-review`, with its own paired worktree and written reports.
-It does not replace the remaining t216 checks, commit or this final handoff.
+All t216 checks and paired commits finished before this handoff was finalized.
+The UX work remains active under its separate checkpointed plan/reports.
 The shared Claude-owned task document remains untouched; this report is the
 Codex-owned durable status and integration record.
