@@ -80,7 +80,11 @@ async function recordSteps(t: TestContext): Promise<RecordedSteps> {
   const page = installStoreChooser(t, { chosen: CARDEN_FALLS, open: true });
   const millbrook = page.setButtons.get(MILLBROOK);
   assert.ok(millbrook);
-  const snapshot = [page.chip, ...page.setButtons.values()].map(described);
+  // Each card's name rides with its button, as a capture of the whole page
+  // lists it (t200): the model tells the four "Set as my store" buttons apart
+  // by the card each sits under in the page view (t223), never by a field.
+  const cards = [...page.setButtons.values()].flatMap((button) => [button.parentElement!.children[0]!, button]);
+  const snapshot = [page.chip, ...cards].map(described);
   const runtime = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => command.actionType === "web.dom.capture_snapshot"
@@ -88,10 +92,16 @@ async function recordSteps(t: TestContext): Promise<RecordedSteps> {
       : { status: "succeeded" }
   });
   const shown = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: webAutomationOutputNodeId("web.dom.capture_snapshot"), parameters: {}, consequences: [] } });
-  const elements = ((shown.evidence as JsonObject | undefined)?.elements ?? []) as JsonObject[];
-  const chipHandle = elements.find((element) => String(element.name ?? "").startsWith("Pickup or delivery?"))?.target;
-  const millbrookHandle = elements.find((element) => String(element.within ?? "").startsWith("Millbrook Crossing Supercenter"))?.target;
-  assert.ok(typeof chipHandle === "string" && typeof millbrookHandle === "string", `the packet shows the chip and Millbrook's button: ${JSON.stringify(elements)}`);
+  // The page as the model reads it: one line per element, in page order.
+  const view = String((shown.evidence as JsonObject | undefined)?.page ?? "");
+  const lines = view.split("\n").flatMap((line) => {
+    const parsed = /^(t[1-9][0-9]*) (?:(button) )?"((?:[^"\\]|\\.)*)"/u.exec(line);
+    return parsed ? [{ target: parsed[1]!, button: parsed[2] === "button", words: parsed[3]! }] : [];
+  });
+  const chipHandle = lines.find((line) => line.button && line.words.startsWith("Pickup or delivery?"))?.target;
+  const millbrookName = lines.findIndex((line) => line.words.startsWith("Millbrook Crossing Supercenter"));
+  const millbrookHandle = millbrookName < 0 ? undefined : lines.slice(millbrookName + 1).find((line) => line.button)?.target;
+  assert.ok(typeof chipHandle === "string" && typeof millbrookHandle === "string", `the page shows the chip and Millbrook's button: ${view}`);
   const step = async (handle: string, commandId: string): Promise<BrowserActionCommand> => {
     const resolution = await runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: webAutomationOutputNodeId("web.dom.click"), parameters: { selector: { handle } }, declaredConsequences: [] });
     assert.equal(resolution.status, "resolved", JSON.stringify(resolution));

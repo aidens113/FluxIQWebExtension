@@ -185,9 +185,44 @@ The supervisor then cut phase B to the shortest mergeable checkpoint, and set a 
 7. **Dead paths:** `runtime/reusable-evidence*.ts` (facts `{tag, role, name}`) and test-runner's `web-flow-exploration.ts` (element JSON with selectors). Neither has a production caller; delete them or convert them to lines.
 8. **Full sweep.** The supervisor's background run: the whole domain, extension and test-runner suites, plus root `pnpm check`. Only the changed directories were run here, by rule.
 
+## Phase C (2026-10-01, on `25e993d3`; dev not merged into the branch)
+
+**Urgent: the extension tests phase B broke.** Run in this tree: `heavy.sh pnpm --filter @fluxiq-web-extension/extension test` → `# tests 1733 # pass 1718 # fail 15`.
+- **All 15 are one file**, `apps/extension/src/content/action-runtime/tests/store-chooser-replay.test.ts`. Its `recordSteps` helper read `elements` off the look and found Millbrook's button by the packet's `within` field, so every test built on it failed.
+- **Class (a): a test reading the published shape.** None is (b), a product regression. The handles still resolve, and replay and dry run pass unchanged once the test reads the v3 page.
+- **What the fixture now does.**
+  - The fixture described only the chip and the four "Set as my store" buttons. It now also lists each card's name element, as a capture of the whole page does.
+  - The test finds Millbrook's button as the model does: the button line after the "Millbrook Crossing Supercenter" line.
+  - Every assertion is kept: the recorded selector `li:nth-of-type(3) > button`, the card `record`, and the replay outcomes.
+- **After the fix:** `# tests 1733 # pass 1733 # fail 0`.
+- **Dev has 2,117 extension tests; this branch has 1,733.**
+  - None of the 384 dev-only or dev-changed test files uses the evidence runtime or reads `elements`, `failureEvidence` or `stateDiff` (checked with `git show dev:<file>`).
+  - Dev's two changes in `llm-evidence/` are lane B's B1 `observed-state/` keys (`elements`, `dialogs`, `blockedBy`, `page`), which are compatible with v3.
+  - So the rest of dev's 126 failures could not be reproduced here. The supervisor should merge dev into the branch, or send the failing list.
+
+**Phase C, done:**
+- **The host-runtime `summary` is the v3 page**, so Core's `core.state_snapshot` returns the compact view. `runtime/host-runtime.ts` uses `publishedWebLlmPage(sanitizeWebLlmSnapshot(...))`.
+- **`state_diff` is now lines** (`web-state-diff.v3`) and lives in the new module `runtime/state-diff/`:
+  - `summary-lines.ts`: a summary's element lines, handle-free. Markers are dropped, the leading handle is removed, any other handle outside quoted words is written `t*`, and `~` is expanded from the URL header. A stored v2 summary is rendered with `webLlmPageText` first.
+  - `state-diff.ts`: the diff is a multiset comparison. It reports `added` and `removed` as text, plus counts, the location move and the title change.
+  - No element objects remain. `addedElements`, `removedElements` and `*ElementCount` are gone; no reader outside the domain was found.
+- **`runtime/adapter.ts`:** `metadata.failureEvidence` is the v3 page, and `evidenceDigest` is now the hash of that published page, so the record still names exactly what rides.
+- **Tests:**
+  - new `runtime/state-diff/tests/state-diff.test.ts` (5 tests);
+  - `runtime/tests/host-runtime.test.ts`: the summary is v3, and a new boundary-level diff test;
+  - `runtime/tests/adapter.test.ts`: v3, page lines.
+
+**Phase C, remaining:**
+- `web.describe_element`;
+- find, and describe, as recovery options;
+- the recovery `inspect` description (`harness-options/options.ts:70`);
+- docs (`page-evidence.md`, `testing-facility.md`);
+- the before and after bytes of one whole recovery request.
+
 ## Current state
 
-- **Phase B checkpoint is ready** for the supervisor to commit; see "Phase B" above. Phase C is listed there.
+- **Phase C in progress.** The extension suite is green in this tree, and the host summary, `state_diff` and adapter paths are v3. See "Phase C".
+- **Phase B is committed** (`25e993d3`).
 - **Phase A is done and checkpointed** for integration round 5. On the merged base, every suite the brief names passes, and so does the root `pnpm check`. W3's and W4's claims are confirmed.
 
 ## Baseline (W1, verified by re-running the script)
@@ -485,6 +520,14 @@ Core's own recovery context is metadata only: `targetResolutionSection` and `rec
     - The results page entry went from 340,596 B to 20,244 B, and the extraction step from 803,550 B to 62,609 B (44,653 B of that is the rows the node read).
     - The largest constant item is now Core's node catalog, 40,952 B (13,651 tokens).
     - The recorded packets lack `ownText` and `parent`, so this measures fallback mode; live captures fold further.
+- Phase C (this tree, `25e993d3` plus phase C edits), run by the lead:
+  - `heavy.sh pnpm --filter @fluxiq-web-extension/extension test`:
+    - before the fix: `# tests 1733 # pass 1718 # fail 15`, all in `store-chooser-replay.test.ts`;
+    - after: `# tests 1733 # pass 1733 # fail 0`.
+  - `node <scratch>/run-domain-tests.mjs <domain> t223-lead` over `runtime/tests` and `runtime/state-diff/tests` → `# tests 74 # pass 74 # fail 0`. With `llm-evidence/tests` and `state-digest/tests` added → `# tests 299 # pass 298 # fail 1`.
+    - The failure is `capture-after-action.test.ts` "the default wait is ended by cancellation", which asserts that the call ends within 240 ms. It is a timing assertion under load (four live Labs were running); the file is untouched, and it passed in three earlier runs.
+  - `heavy.sh pnpm --filter @fluxiq-web-extension/domain check` → exit 0.
+  - `node scripts/structure-audit.mjs` → `passed (138 warning(s), 118 baselined)`.
 
 ## Not verified
 
