@@ -6,7 +6,7 @@ Created: 2026-09-30
 Last updated: 2026-09-30
 Owner: Codex senior supervisor
 Scope: All Core web panels and the extension, focusing on user journeys, accessible controls, feedback and recovery.
-Paired document: none yet; Core discovery reports live alongside this plan.
+Paired document: codex-ui-ux-review-2026-09-30.md in the sibling FluxIQ Core worktree.
 Related: [working document index](./README.md)
 
 ## Current State
@@ -34,8 +34,13 @@ full structure passes135warnings/119baseline. Core web typecheck passes; full
 Core structure has only inherited unchanged service4506/4505. Focused recovery
 17/17, Core web production build (165872ms) and extension production build
 (42135ms; Chrome/Firefox/e2e22files each) pass. Supervisor full web suite88597
-is queued for a shared heavy slot; no Claude slot is changed to accelerate it.
-Next: observe that suite and commit the initial fixes with final reports.
+completed with1699pass/1fail: unchanged core-contract flow.build fixture rejects
+its pre-provider request budget. A fixture-only investigation is active. Core
+composer's matching draft-loss bug is being reproduced in session39465.
+Initial fix checkpoints: Coree6eb33f2, downstream21e915ee.
+Follow-up code checkpoint: Core95573296. Final web tests98054 and typecheck62339
+are queued; source frozen. Next: observe checks, build and finalize this batch.
+No Claude slot or source is changed to accelerate this work.
 The rest of the roadmap remains explicitly queued.
 
 Original Claude workload is complete: all five tasks locally committed and
@@ -65,7 +70,7 @@ These are source-based findings, not visual/browser certification.
 1. Mount a single authenticated Core reauthentication host at root. Remove the
    duplicate topbar composition. Check pending recovery on mount and settle it
    when the host unmounts; do not discard workspace state or repeat mutations.
-2. Preserve newer chat/settings drafts with revision-bound completion. Normal
+2. Preserve newer Core/extension chat and extension settings drafts with revision-bound completion. Normal
    unchanged success clears the submitted draft; failure preserves it.
 3. Run component regressions, web/extension type checks and affected full suites.
    Review final source independently before committing locally for Claude.
@@ -139,6 +144,15 @@ layout changes should answer measured problems in these journeys.
 - Browser behavior remains unverified until authorized live acceptance.
 
 ## Worker Briefs
+
+### Brief: codex-web-contract-budget-investigation
+- Repository: paired Core t224; report in downstream t224.
+- Task: diagnose sole broad-suite failure: core-contract flow.build rejects pre_provider_request_total_exceeded. Establish whether the unchanged test fixture has obsolete request budget after baseline t210 integration. No fix before reporting exact root cause/proposed path.
+- Required reads: this Current State; apps/web/src/features/automation-studio/conversation/capabilities/tests/{core-contract.test.ts,core-contract-world.ts,core-contract-arguments.ts}; follow fixture provider/profile configuration as needed. Read public budget contracts only as needed; excluded context-packet/runtime conversation/storage code must not be edited.
+- Owns (may edit): downstream reports/core-contract-budget.md; after supervisor diagnosis review, Core apps/web/src/features/automation-studio/conversation/capabilities/tests/core-contract-world.ts only. Use existing public AUTOMATION_STUDIO_SESSION_KEY_PROVIDER_DEFAULTS.tokenLimits in place of obsolete literal fixture limits.
+- Must not touch: all other product source/tests, shared docs/indexes, other reports/worktrees, protected Core runtime/storage/conversations/context-packet files; no commits/push/provider/browser calls. Keep scripted provider, call/cost/timeout and strict acceptance assertions unchanged.
+- Definition of done: exact mismatch and source evidence; proposed smallest fixture correction that preserves contract assertion (no skip/expected-refusal expansion/timeouts), or identify a real Core defect and integration owner. Do not blame load/machine. Narrow controlled tests only after scope clearance through heavy.sh.
+- Report to: docs/working/codex-ui-ux-review-2026-09-30/reports/core-contract-budget.md
 
 ### Brief: codex-core-auth-ux-fix
 - Repository: paired FluxIQ Core t224; report in downstream t224.
@@ -218,7 +232,31 @@ layout changes should answer measured problems in these journeys.
 - Outcome: Partial
 - Follow-up: allow shared slot scheduling; run full web suite without altering Claude jobs. Final local commits and generated indexes follow.
 
+### 2026-09-30 — Core composer counterpart found
+- Agent: supervisor
+- Changed: finding recorded only; current full-suite source remains frozen.
+- Why: Core ConversationComposer also clears text unconditionally after awaited successful send while leaving textarea editable.
+- Validation: direct current-source review; existing six tests omit edits during pending send.
+- Outcome: Partial
+- Follow-up: after suite88597 finishes, reproduce with deferred-send tests and fix this source/test pair; rerun affected Core UI checks. No runtime/conversation implementation changes.
+
+### 2026-09-30 — Broader web suite result
+- Agent: supervisor
+- Changed: no product changes during validation.
+- Why: verify root recovery composition across all web panels.
+- Validation: `pnpm --filter @fluxiq/web test` exit1;286files pass/1fail,1699tests pass/1fail. Sole failure: core-contract flow.build rejected flow_bootstrap.pre_provider_request_total_exceeded. Auth recovery cases pass.
+- Outcome: Partial
+- Follow-up: bounded fixture/configuration diagnosis; do not mask refusal or edit Claude's context-packet work. Core composer reproduction/fix proceeds independently on its source/test pair.
+
 ## Open Questions
 
 - Browser visual validation awaits authorization for panel/browser management.
 - Larger redesigns remain recommendations until user preference and observed defects justify scope.
+
+### 2026-09-30 - Scoped follow-ups verified; final checks running
+- Agent: supervisor and fixture worker
+- Changed: Core composer edit-revision guard and four owning regressions; contract fixture uses published provider token defaults. Runtime code, scripted responses, assertions and other budgets unchanged.
+- Why: preserve newer Core chat drafts and align the test fixture with the current public context window.
+- Validation: supervisor reproduced two composer failures (2fail/8pass), then observed corrected10/10 exit0. Inspected worker raw contract completion60/60 exit0 and exact fixture diff. git diff --check0.
+- Outcome: Partial
+- Follow-up: root full web tests session98054 and web typecheck62339; source frozen. Production build and final documentation checks follow. Initial checkpoints Coree6eb33f2/downstream21e915ee remain recoverable. Claude integration ownership unchanged.
