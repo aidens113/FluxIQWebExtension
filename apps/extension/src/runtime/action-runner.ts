@@ -29,6 +29,7 @@ import { sendExtractListAcrossDocuments } from "./extract-list-continuation";
 import { readLandedPage, type LandedPageReading } from "./landed-challenge";
 import {
   checkWaitBudgetMs,
+  clearedCheckWait,
   settleLandedReading,
   standingCheckWords,
   type LandedCheckWait,
@@ -296,12 +297,16 @@ function navigationResult(
   const waited = landing.checkWait?.outcome === "cleared"
     ? `; a robot check stood on the page and cleared by itself after ${landing.checkWait.waitedMs} ms, untouched`
     : "";
-  return workerActionResult(action, startedAt, {
+  const completed = workerActionResult(action, startedAt, {
     status: "succeeded",
     message: "Navigation completed.",
     validation: { status: "passed", expected: comparison.expected, actual: `${comparison.actual}: ${movement.detail}${waited}${unread}` },
     ...page
   });
+  // The same wait as a fact, for a reader that must not parse the prose above.
+  const checkWait = clearedCheckWait(landing.checkWait);
+  if (checkWait !== undefined) completed.checkWait = checkWait;
+  return completed;
 }
 
 /**

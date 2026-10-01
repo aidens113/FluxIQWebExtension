@@ -224,6 +224,55 @@
     - `waited_out` is never emitted, because Core never sees a check clear by itself after announcing a wait.
     - A durably parked run that is abandoned keeps its wait open.
 
+- **Round 6: `waited_out` emitted, and cancelled parked runs settled (2026-09-30, lead).**
+  - Dev merge into Core (started by the supervisor): only the two generated `framework-reference.md` copies
+    conflicted. They were regenerated with `pnpm docs:reference` (never hand-merged) and staged; `pnpm docs:check` ->
+    "Deterministic framework reference is current". The merge is left for the supervisor to commit. Downstream merged
+    clean (0b03eae3).
+  - **Cleared check, carried end to end** (WD and WD2 in `t191-r6-wd-cleared-wait.md`; WC and WC3 in
+    `t191-r6-wc-waits-settled.md`):
+    - the extension's `LandedCheckWait.waitedMs` was previously turned into prose only. It is now
+      `BrowserActionResult.checkWait`, for click and navigate, when the check cleared by itself, and travels in the
+      gateway payload;
+    - the domain puts it on the evidence-loop tool execution as `clearedWait: { waitedMs }` and adds it to
+      `WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS`;
+    - for Flow runs, the domain lifts it onto Core's generic `OutputDispatchResult.clearedWait` (`fluxiq`) and
+      `FluxIQRuntimeCommandResult.clearedWait` (`fluxiq/runtime`), in `io/gateway-output-dispatcher.ts` and
+      `runtime/adapter.ts`;
+    - Core reads it defensively and emits a person_check waiting row followed by a resolved `waited_out` row, "The
+      check cleared on its own after N s.". Builds emit it in `activity/observer.ts` and runs in
+      `executor/node-execution.ts`, inside the run's scope (`activity/ask/{waited-out, cleared-wait, cleared-text}.ts`).
+      Core never reads web shapes.
+  - **Cancelled parked run** (WC): `cancelRuntimeSession` (`service.ts`, through `service/runtime-session/parked-wait.ts`)
+    emits the parked ask's resolved row with `cancelled` and the same ref, inside a run activity scope. A negative
+    control (the call removed) fails its test.
+    - Other paths: nothing expires a parked run past `expiresAtMs`, and `resume.ts` already emits `timed_out`.
+    - No run discard or supersede exists; a parked run blocks a newer one rather than being replaced.
+    - `deleteProject` removes parked runs unsettled; the project's chat goes with them.
+  - Ready to commit:
+    - downstream: every `git status` path under `apps/extension/src/runtime/**`, `domain/src/{actions, client, io,
+      runtime}/**`, `docs/architecture/{extension-client, failure-taxonomy}.md` and this report folder;
+    - Core: every unstaged path under `packages/fluxiq/src/{io, runtime, programs/automation-studio}`, and both
+      `framework-reference.md` copies, which were regenerated again after the staged merge resolution and are current.
+  - Validation (lead's runs):
+    - `heavy.sh "t191 r6 downstream verify"` -> extension `check=0 test=0 build=0`, `# tests 1673 # pass 1673
+      # fail 0`, chrome, firefox and e2e-chromium each "verified 22 files" (a fresh build); domain `# tests 1057 # pass
+      1057 # fail 0`; repository structure audit passed;
+    - `heavy.sh "t191 r6 core verify"`:
+      - fluxiq vitest over `src/ui`, runtime/{activity, executor, service/runtime-session}, `cancel-parked-run` and
+        `io-policy` -> `51 passed (51)`, `593 passed (593)`;
+      - `tests/service-flows` with one worker and a 60 s timeout -> `14 passed (14)`, `63 passed (63)`. WC's wider run
+        had 11 of these time out at the 15 s default with more workers;
+      - `pnpm --filter fluxiq check` -> 0;
+      - `pnpm docs:check` -> current;
+    - Core structure audit -> `passed (203 warning(s), 354 baselined)`. The evidence-loop failure was cleared by the
+      dev merge.
+  - Not verified:
+    - Browser rendering and real Core or extension events end to end.
+    - A cleared check followed by a failed navigation or a refused click carries no `clearedWait`, so its card does
+      not close as cleared on its own.
+    - The transport-client runtime path does not read `clearedWait`.
+
 ## The user's verdict on t185, after watching live runs (2026-09-29)
 
 1. The extension's UI is "not at all like chatgpt styled chat area".

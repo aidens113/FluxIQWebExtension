@@ -9,7 +9,7 @@ import { test } from "node:test";
 import { webAutomationActionFromGatewayCommand, webAutomationCheckWaitParameters } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand } from "../../shared/protocol";
 import type { LandedPageReading } from "../landed-challenge";
-import { SELF_CLEARING_WAIT_MS, checkWaitBudgetMs, settleLandedReading, standingCheckWords, waitOutLandedCheck, type LandedCheckProbe } from "../landed-check-wait";
+import { SELF_CLEARING_WAIT_MS, checkWaitBudgetMs, clearedCheckWait, settleLandedReading, standingCheckWords, waitOutLandedCheck, type LandedCheckProbe } from "../landed-check-wait";
 
 const SELF_CLEARING: LandedPageReading = { kind: "robot_check", check: "self_clearing" };
 const PERSON_ONLY: LandedPageReading = { kind: "robot_check", check: "person_only" };
@@ -161,4 +161,11 @@ test("a built click still hands a check that does not clear to the person", asyn
   const personOnly = await waitOutLandedCheck(tab([SELF_CLEARING, PERSON_ONLY]), budget);
   assert.equal(personOnly.outcome, "person_only");
   assert.match(standingCheckWords("the page the browser landed on", personOnly), /only a person can answer/u);
+});
+
+test("only a check that cleared by itself is reported as a cleared wait, and as its time alone", () => {
+  assert.deepEqual(clearedCheckWait({ outcome: "cleared", waitedMs: 1_500 }), { waitedMs: 1_500 });
+  assert.equal(clearedCheckWait({ outcome: "person_only", waitedMs: 1_500 }), undefined);
+  assert.equal(clearedCheckWait({ outcome: "not_cleared", waitedMs: 15_000 }), undefined);
+  assert.equal(clearedCheckWait(undefined), undefined);
 });

@@ -111,6 +111,9 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
     ...(result.error ? { error: result.error } : {}),
     ...(message ? { message } : {}),
     ...(failure ? { failure } : {}),
+    // Lifted by `dispatchWebAutomationOutput` from the client's `checkWait`;
+    // copied so the runtime path, which a web Flow run takes, carries it too.
+    ...(result.clearedWait ? { clearedWait: { waitedMs: result.clearedWait.waitedMs } } : {}),
     metadata: compact({
       outputId,
       ...(result.metadata ?? {}),

@@ -727,6 +727,22 @@ Where checks are met:
   person-only. The failure (`actionNeedsPerson` in `results.ts`) says the
   press was made.
 
+A navigation or a click whose landed check cleared by itself says so twice:
+in its validation's prose, and as a fact, `checkWait: { waitedMs }` on the
+action result (`clearedCheckWait` in `runtime/landed-check-wait.ts`). Only that
+outcome carries it; a check that needed a person, or did not clear in time,
+fails the action instead. `webAutomationActionResultPayload` copies it onto the
+gateway payload through
+[`domain/src/actions/cleared-check-wait.ts`](../../domain/src/actions/cleared-check-wait.ts),
+which keeps `waitedMs` alone as whole milliseconds within ten minutes and drops
+anything else. Core reads it in two places. In a Flow run the client's payload
+reaches Core whole under the dispatch result's `payload.result`, so it is
+`payload.result.checkWait`. In a build's evidence loop the node run's tool
+execution carries it beside `resultCode` as `clearedWait: { waitedMs }`
+(`domain/src/runtime/llm-evidence/node-run/cleared-wait.ts`, and listed in
+`WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS`), on a node run that succeeded. The
+chat's robot-check card reads it to close as cleared on its own.
+
 Every failure record leads its `actual` with the closed word `captcha:` and
 never quotes the check.
 
