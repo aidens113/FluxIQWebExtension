@@ -4,7 +4,9 @@
 // (`click-landing.ts`) and a navigation's (`action-runner.ts`) both name a
 // refused page by it.
 
+import { parsedUrl } from "../shared/parsed-url";
+
 /** The landed address's path, without the query or fragment a record must not quote; `(unknown)` for an address that does not parse. */
 export function landedPath(url: string): string {
-  return URL.canParse(url) ? new URL(url).pathname : "(unknown)";
+  return parsedUrl(url)?.pathname ?? "(unknown)";
 }

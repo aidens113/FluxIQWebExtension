@@ -98,6 +98,7 @@ import { isWithinSensitiveControl } from "../sensitive-text";
 import type { DomElementContext } from "../types";
 import { boundedText } from "./bounded-text";
 import { normalizedText } from "./normalized-text";
+import { parsedUrl } from "../../shared/parsed-url";
 
 /**
  * The record a recorded element sat in, as it travels on the wire. Declared by
@@ -295,8 +296,8 @@ function resolvedHref(element: Element): string | undefined {
   const property = (element as { href?: unknown }).href;
   if (typeof property === "string") return property || undefined;
   const attribute = element.getAttribute("href");
-  if (!attribute || !URL.canParse(attribute, element.baseURI)) return undefined;
-  return new URL(attribute, element.baseURI).href;
+  if (!attribute) return undefined;
+  return parsedUrl(attribute, element.baseURI)?.href;
 }
 
 /**

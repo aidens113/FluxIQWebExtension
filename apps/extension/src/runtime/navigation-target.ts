@@ -27,6 +27,7 @@
 
 import { readTabUrl } from "./automation-tab";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
+import { parsedUrl } from "../shared/parsed-url";
 
 /**
  * The page in front, when a navigation that names no tab should drive it; or
@@ -48,7 +49,7 @@ export async function navigationTargetTab(
 
 /** The URL's origin, or undefined for one that does not parse or has no origin of its own (`about:`, `data:`). */
 function originOf(url: string): string | undefined {
-  if (!URL.canParse(url)) return undefined;
-  const origin = new URL(url).origin;
+  const origin = parsedUrl(url)?.origin;
+  if (origin === undefined) return undefined;
   return origin === "null" ? undefined : origin.toLowerCase();
 }
