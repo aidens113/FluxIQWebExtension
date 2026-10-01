@@ -82,6 +82,21 @@ test("a build of several rounds counts each round's opening look, and no more th
   assert.throws(() => adaptationEvidenceLoop(loop({ providerCallCount: 20, decisionCount: 20, iterationCount: 27, traceStepCount: 30 }), "detail"), /exceeded its bounded contract/u);
 });
 
+test("a cancelled build's full multi-round trace reads without losing or renumbering rows", () => {
+  const steps = [
+    { toolId: "web.recovery.inspect", iteration: 0 },
+    { toolId: "core.decision_complete", iteration: 1 },
+    { toolId: "core.decision_complete", iteration: 2 },
+    { toolId: "web.recovery.inspect", iteration: 0 },
+    { toolId: "core.decision_unusable", iteration: 3, resultCode: "llm_evidence_loop.cancelled" },
+  ];
+  const read = adaptationEvidenceLoop(loop({ providerCallCount: 3, decisionCount: 3, iterationCount: 5, traceStepCount: 5, toolCallCount: 2, steps }), "detail");
+
+  assert.deepEqual(read?.steps, steps);
+  assert.equal(read?.decisionCount, 3);
+  assert.equal(read?.iterationCount, 5);
+});
+
 test("a build publishes one step per trace row, so its steps are bounded by the rows", () => {
   const steps = (count: number) => Array.from({ length: count }, () => ({ toolId: "core.run_node" }));
 
