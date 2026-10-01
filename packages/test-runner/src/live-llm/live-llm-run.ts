@@ -8,11 +8,11 @@
 // done. A model call needs no grant; the only thing a run carries is its
 // intent and the consequences the operator permitted (`--llm-permit`).
 
-import type { LlmActionConsequence, LlmExecutionProfile, LlmUsage } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_MODEL, type LlmActionConsequence, type LlmExecutionProfile, type LlmUsage } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
 import type { CreatedFlowBuild, CreatedFlowBuildLlm, PersistedFlowLlmExecution } from "../flow-lane/index.js";
-import { authorizeFlowLiveLlmExecution, type LiveLlmAuthorizationControl } from "./authorize-flow.js";
+import { authorizeFlowLiveLlmExecution, installLiveLlmSessionKey, type LiveLlmAuthorizationControl } from "./authorize-flow.js";
 import { assertLiveLlmBudgetHeld } from "./budget.js";
 import { budgetOverProductFailure } from "./budget-over-product-failure.js";
 import { assertProviderCallsAsDeclared, type DeclaredProviderCalls } from "./declared-provider-calls.js";
@@ -148,6 +148,43 @@ export class LiveLlmRun {
   /** Whether this run builds its Flow from an instruction task rather than from a recording. */
   get createsFlow(): boolean {
     return this.plan.task === "create-flow";
+  }
+
+  /**
+   * Refuses, before anything starts, what a build typed into the extension's
+   * chat cannot honor. The chat sends no operator permit with the build -- a
+   * lasting act is asked about in the thread and answered there, by the Lab's
+   * person at the task's point -- and Core's chat builds a new Flow on its own
+   * default model. A run that permitted a consequence or chose another model
+   * would be measuring something it never asked for.
+   */
+  assertChatBuildable(): void {
+    if (!this.createsFlow) return;
+    const direct = "or pass --direct-api-build for a test-only run that is never counted as a pass";
+    if (this.plan.permittedConsequences.length > 0) {
+      throw new RunnerFailure("fixture.invalid", `--llm-permit ${this.plan.permittedConsequences.join(",")} cannot reach a build started from the extension's chat: the chat sends no permit, and the Lab's person answers FluxIQ's question at the task's permission point instead. Leave it out, ${direct}`);
+    }
+    if (this.plan.model !== DEFAULT_LLM_MODEL) {
+      throw new RunnerFailure("fixture.invalid", `A build started from the extension's chat runs on FluxIQ's own default model for a new Flow (${DEFAULT_LLM_MODEL}), not ${this.plan.model}. Leave --llm-model out, ${direct}`);
+    }
+  }
+
+  /**
+   * The created-Flow lane's chat build hook: puts the run's key in the
+   * person's Secret Keys, so the build the extension's chat starts -- on the
+   * person's own unlocked session -- can reach the provider. Nothing is pinned
+   * to a Flow: the chat creates and builds its Flow inside one Core command, on
+   * Core's own limits for a new Flow, and the build is held to this run's caps
+   * when it is settled.
+   */
+  chatBuildAuthorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): () => Promise<void> {
+    return async () => {
+      if (this.plan.purpose !== "build_and_adapt") throw new RunnerFailure("fixture.invalid", `A ${this.plan.purpose} run cannot build a Flow`);
+      this.assertChatBuildable();
+      if (!core.authorizationPassword) throw new RunnerFailure("environment.missing", "A live LLM run needs the account password its Core was bootstrapped with, and this topology published none");
+      await installLiveLlmSessionKey(control, { plan: this.plan, credentialValue: this.credential.value, authorizationPassword: core.authorizationPassword, ...(core.authorizationPin ? { authorizationPin: core.authorizationPin } : {}) });
+      this.prepared = true;
+    };
   }
 
   /**

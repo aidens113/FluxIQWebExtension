@@ -10,8 +10,9 @@ export type BenchTargetMode = Extract<TargetMode, "isolated" | "persistent-isola
 // `livePanel: false` is `--no-live-panel`: the headed browser does not show the extension panel beside the scenario page. Absent means it does.
 export type LabCommand =
   // `instructionTaskId` and `dryRun` exist only with `llm.task` `create-flow`: the live instruction task to build from, and a provider-free check that the run would start.
+  // `directApiBuild` (`--direct-api-build`) exists only with it too: the test-only build through Core's endpoint instead of the extension's chat, never counted as a pass.
   // `replays` exists only with `llm.task` `repair`, `adapt` or `create-flow`: present, the run approves and applies the repair it produced and replays the applied Flow that many times.
-  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true; replays?: number; livePanel?: false }
+  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true; directApiBuild?: true; replays?: number; livePanel?: false }
   | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence?: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; livePanel?: false }
   | { command: "bench"; resumeBenchId: string }
   | { command: "bench"; corpusId: string; repeat: number; evidence?: EvidenceMode; target?: BenchTargetMode; workspace?: string; shards?: number; jobs?: number }
@@ -39,16 +40,17 @@ export function parseLabCommand(argv: string[]): LabCommand {
     return { command, scenarioId, ...optionalSeed(args), ...(target.target ? { target: target.target } : {}), ...(target.workspace ? { workspace: target.workspace } : {}), ...(target.freshLogin ? { freshLogin: true } : {}), ...livePanel };
   }
   if (command === "run") {
-    rejectUnknownOptions(args, ["--seed", "--evidence", "--workflow", "--variant", "--target", "--workspace", "--flow", "--fresh-login", "--instruction-task", "--dry-run", "--replays", "--no-live-panel", ...llmOptionNames]);
+    rejectUnknownOptions(args, ["--seed", "--evidence", "--workflow", "--variant", "--target", "--workspace", "--flow", "--fresh-login", "--instruction-task", "--dry-run", "--direct-api-build", "--replays", "--no-live-panel", ...llmOptionNames]);
     const { livePanel, rest: withoutLivePanel } = livePanelOption(args);
-    const { flowLane, rest: withoutFlow } = flowLaneOption(withoutLivePanel);
+    const { directApiBuild, rest: withoutDirect } = directApiBuildOption(withoutLivePanel);
+    const { flowLane, rest: withoutFlow } = flowLaneOption(withoutDirect);
     const { dryRun, rest } = dryRunOption(withoutFlow);
     const scenarioId = positional(rest, 0, "scenario ID");
     const llm = llmOptions(rest);
     const target = targetOptions(rest);
     if (flowLane && (target.target === "existing" || target.target === "clone")) throw new Error("--flow builds a Flow from the run's own recording; existing and clone targets run a pre-existing Flow");
     const variant = optionalVariant(rest);
-    const creation = creationOptions(rest, llm, { flowLane, dryRun });
+    const creation = creationOptions(rest, llm, { flowLane, dryRun, directApiBuild, livePanel: livePanel.livePanel !== false });
     const replays = replaysOption(rest, llm, flowLane);
     // A created Flow is built for the task's variant and run on it, so the variant needs no recorded Flow lane.
     if (variant.variantId && !flowLane && !creation) throw new Error("--variant requires --flow: a variant is armed only before a Flow run");
@@ -131,7 +133,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (reports.length !== 2 || first === undefined || second === undefined) throw new Error(COMPARE_USAGE);
     return { command, baselineReport: first, candidateReport: second, sharedLoad: !args.includes("--sequential") };
   }
-  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] [--no-live-panel] | run <scenario> [--no-live-panel] [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task repair|adapt --flow, or --llm-task create-flow)] | matrix (--all|--scenarios-json JSON) [--no-live-panel] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--instruction-task ID] [--seed N] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves");
+  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] [--no-live-panel] | run <scenario> [--no-live-panel] [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task repair|adapt --flow, or --llm-task create-flow)] [--direct-api-build (test-only, with --llm-task create-flow; never a pass)] | matrix (--all|--scenarios-json JSON) [--no-live-panel] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--instruction-task ID] [--seed N] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves");
 }
 
 export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>, allScenarioIds: string[]): Array<{ scenarioId: string; repeatIndex: number }> {
@@ -245,15 +247,28 @@ function livePanelOption(args: string[]): { livePanel: { livePanel?: false }; re
  * an instruction task rather than from the run's recording, so the lane flag
  * is refused with it.
  */
-function creationOptions(args: string[], llm: LlmExecutionProfile | undefined, flags: { flowLane: boolean; dryRun: boolean }): { instructionTaskId?: string; dryRun?: true } | undefined {
+function creationOptions(args: string[], llm: LlmExecutionProfile | undefined, flags: { flowLane: boolean; dryRun: boolean; directApiBuild: boolean; livePanel: boolean }): { instructionTaskId?: string; dryRun?: true; directApiBuild?: true } | undefined {
   const taskId = option(args, "--instruction-task");
   if (llm?.task !== "create-flow") {
-    if (taskId !== undefined || flags.dryRun) throw new Error("--instruction-task and --dry-run require --live-llm --llm-task create-flow");
+    if (taskId !== undefined || flags.dryRun || flags.directApiBuild) throw new Error("--instruction-task, --dry-run and --direct-api-build require --live-llm --llm-task create-flow");
     return undefined;
   }
   if (flags.flowLane) throw new Error("--llm-task create-flow builds its Flow from an instruction task, not from the run's recording: drop --flow");
   if (taskId !== undefined && !KEBAB_ID.test(taskId)) throw new Error("--instruction-task must be a lowercase kebab-case task ID");
-  return { ...(taskId === undefined ? {} : { instructionTaskId: taskId }), ...(flags.dryRun ? { dryRun: true as const } : {}) };
+  // The build is started by typing the instruction into the extension's chat beside the page, so the chat has to be on screen.
+  if (!flags.directApiBuild && !flags.livePanel) throw new Error("--llm-task create-flow starts its build from the extension's chat window, which --no-live-panel hides: drop --no-live-panel, or pass --direct-api-build for a test-only run that is never counted as a pass");
+  return { ...(taskId === undefined ? {} : { instructionTaskId: taskId }), ...(flags.dryRun ? { dryRun: true as const } : {}), ...(flags.directApiBuild ? { directApiBuild: true as const } : {}) };
+}
+/**
+ * `--direct-api-build`, test-only: a created-Flow run whose Lab creates a blank
+ * Flow and calls Core's build endpoint itself, as before 2026-10-01, instead of
+ * typing the instruction into the extension's chat. It takes no value, and a
+ * run started with it is never counted as a pass.
+ */
+function directApiBuildOption(args: string[]): { directApiBuild: boolean; rest: string[] } {
+  const count = args.filter(value => value === "--direct-api-build").length;
+  if (count > 1) throw new Error("--direct-api-build may only be specified once");
+  return { directApiBuild: count === 1, rest: args.filter(value => value !== "--direct-api-build") };
 }
 /** The most replays one run may ask for. A repair that holds three times holds; a hundred replays is a benchmark, not a proof. */
 const MAX_REPLAYS = 10;

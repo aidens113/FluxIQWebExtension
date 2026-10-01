@@ -24,6 +24,6 @@ export { overlaysAt, overlaysOverPage } from "./overlays";
 export { boundedLayerText } from "./layer-text";
 export { layerKind } from "./layer-kind";
 export { dismissControlIn, hasDismissalControl } from "./way-out";
-export { isDismissalLabel, isRateLimitLayerText, DISMISS_LABEL_MAX } from "./vocabulary";
+export { isDismissalLabel, isRateLimitLayerText, isTransientRefusalText, DISMISS_LABEL_MAX } from "./vocabulary";
 
 export type { Point } from "./overlays";

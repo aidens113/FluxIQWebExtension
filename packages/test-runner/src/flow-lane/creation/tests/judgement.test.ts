@@ -24,8 +24,13 @@ const scenarioOrigin = "http://127.0.0.1:4731";
 const actionTypes = new Map([["node.extract", "web.dom.extract_list"]]);
 
 async function catalogTask(taskId: string) {
-  const request = await loadCreatedFlowRequest({ repositoryRoot, scenarioLabDist, scenarioId: "product-catalog", taskId });
-  const scenario = await loadScenarioManifest(repositoryRoot, "product-catalog", scenarioLabDist);
+  return scenarioTask("product-catalog", taskId);
+}
+
+/** A live task's workflow and the expected records of the step it is judged by, from the scenario's own manifest. */
+async function scenarioTask(scenarioId: string, taskId: string) {
+  const request = await loadCreatedFlowRequest({ repositoryRoot, scenarioLabDist, scenarioId, taskId });
+  const scenario = await loadScenarioManifest(repositoryRoot, scenarioId, scenarioLabDist);
   const workflow = resolveScenarioWorkflow(scenario, { ...(request.workflowId === undefined ? {} : { workflowId: request.workflowId }), ...(request.variantId === undefined ? {} : { variantId: request.variantId }) });
   assert.equal(request.judgement.judgeBy, "expected-dataset");
   const stepId = request.judgement.judgeBy === "expected-dataset" ? request.judgement.stepId : "";
@@ -143,4 +148,73 @@ test("product-catalog-first-page-absolute-links: an expected absolute URL is com
     assert.equal(judged.measurements[0]?.matchedRecords, 0);
     assert.equal(createdFlowDatasetHolds(judged), false);
   }
+});
+
+/**
+ * A run whose Flow ran one extraction node per entry, in the order given, each
+ * storing its entry's records; Core returns the datasets in reverse, so the
+ * judge cannot lean on Core's order either.
+ */
+function runReading(reads: readonly { nodeId: string; records: readonly ExtractionRecord[] }[]): PersistedFlowRunOutcome {
+  return {
+    ...runStoring([]),
+    actions: reads.map(({ nodeId }, index) => ({ actionType: "web.dom.extract_list", nodeId, status: "succeeded", startedAt: `2026-10-01T00:00:${String(index * 10).padStart(2, "0")}.000Z`, failure: null })) as PersistedFlowRunOutcome["actions"],
+    extracted: [...reads].reverse().map(({ nodeId, records }) => ({ datasetId: `dataset.${nodeId}`, nodeIds: [nodeId], records: [...records], recordCount: records.length, storeTruncated: false, invalidCount: 0, nonStringValues: 0, pages: 1 })),
+  };
+}
+
+const twoReads = new Map([["node.listing", "web.dom.extract_list"], ["node.answer", "web.dom.extract_list"]]);
+
+test("confirm-requests: a listing read before the Confirms no longer passes a loop that confirmed too few; the later read is judged", async () => {
+  // t195-w19a V1. The request listing already holds the four expected records,
+  // so judging the first read passed whatever the loop then did. Here the loop
+  // confirmed only three, which the accepted read, run last, shows.
+  const { workflow, stepId, expected } = await scenarioTask("social-network-feed", "social-network-feed-confirm-requests");
+  assert.equal(expected.length, 4);
+  const run = runReading([{ nodeId: "node.listing", records: expected }, { nodeId: "node.answer", records: expected.slice(0, 3) }]);
+  const judged = judgeCreatedFlowDataset({ workflow, stepId, run, actionTypes: twoReads, scenarioOrigin });
+  assert.equal(judged.steps[0]?.dataset?.datasetId, "dataset.node.answer");
+  assert.deepEqual([judged.measurements[0]?.observedRecords, judged.measurements[0]?.matchedRecords], [3, 3]);
+  assert.equal(createdFlowDatasetHolds(judged), false);
+});
+
+test("confirm-requests: a listing with an extra column read first does not fail the right answer read after it", async () => {
+  // t195-w19a V1, false fail: a record may carry no key the expectation does
+  // not name, so the listing's `status` column failed a Flow whose accepted
+  // read was exactly right.
+  const { workflow, stepId, expected } = await scenarioTask("social-network-feed", "social-network-feed-confirm-requests");
+  const listing = expected.map((record) => ({ ...record, status: "Pending" }));
+  const run = runReading([{ nodeId: "node.listing", records: listing }, { nodeId: "node.answer", records: expected }]);
+  const judged = judgeCreatedFlowDataset({ workflow, stepId, run, actionTypes: twoReads, scenarioOrigin });
+  assert.equal(judged.steps[0]?.dataset?.datasetId, "dataset.node.answer");
+  assert.equal(judged.measurements[0]?.matchedRecords, 4);
+  assert.equal(createdFlowDatasetHolds(judged), true);
+  assert.doesNotThrow(() => assertCreatedFlowDataset(judged));
+});
+
+test("pickup-order: a cart read before the order confirmation is passed over for the order record", async () => {
+  // t195-w19b #3. The cart lines carry `name` and none of the order's keys.
+  const { workflow, stepId, expected } = await scenarioTask("bigbox-retail", "bigbox-retail-pickup-order");
+  assert.equal(expected.length, 1);
+  const cart = [{ name: "ValueRidge Essentials Select-A-Size Paper Towels, 6 Double Rolls" }, { name: "Hand soap" }];
+  const run = runReading([{ nodeId: "node.listing", records: cart }, { nodeId: "node.answer", records: expected }]);
+  const judged = judgeCreatedFlowDataset({ workflow, stepId, run, actionTypes: twoReads, scenarioOrigin });
+  assert.equal(judged.steps[0]?.dataset?.datasetId, "dataset.node.answer");
+  assert.equal(judged.measurements[0]?.matchedRecords, 1);
+  assert.equal(createdFlowDatasetHolds(judged), true);
+
+  // The order record alone is judged as it always was.
+  const alone = judgeCreatedFlowDataset({ workflow, stepId, run: runReading([{ nodeId: "node.answer", records: expected }]), actionTypes: twoReads, scenarioOrigin });
+  assert.equal(createdFlowDatasetHolds(alone), true);
+});
+
+test("pickup-order: of two reads that both carry the order's keys, the later one is judged", async () => {
+  const { workflow, stepId, expected } = await scenarioTask("bigbox-retail", "bigbox-retail-pickup-order");
+  const stale = expected.map((record) => ({ ...record, total: "$0.00" }));
+  const laterRight = judgeCreatedFlowDataset({ workflow, stepId, run: runReading([{ nodeId: "node.listing", records: stale }, { nodeId: "node.answer", records: expected }]), actionTypes: twoReads, scenarioOrigin });
+  assert.equal(laterRight.steps[0]?.dataset?.datasetId, "dataset.node.answer");
+  assert.equal(createdFlowDatasetHolds(laterRight), true);
+  const laterWrong = judgeCreatedFlowDataset({ workflow, stepId, run: runReading([{ nodeId: "node.listing", records: expected }, { nodeId: "node.answer", records: stale }]), actionTypes: twoReads, scenarioOrigin });
+  assert.equal(laterWrong.steps[0]?.dataset?.datasetId, "dataset.node.answer");
+  assert.equal(createdFlowDatasetHolds(laterWrong), false);
 });

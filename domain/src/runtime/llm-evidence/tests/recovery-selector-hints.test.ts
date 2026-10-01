@@ -275,3 +275,20 @@ test("a recovery's structure detection is offered while exploring and kept where
   // repair that names it is not one this domain issued a target for.
   assert.deepEqual(runtime.validateTargetOverrideEvidence(recovery.explored[0]!.packet, { handles: { element: "t1" } }, CLICK), { status: "absent", reason: "evidence_unrecognized" });
 });
+
+test("a repair naming a handle a recovery search printed resolves with the selector behind it", async () => {
+  const { runtime } = site(UNCOVERED);
+  const recovery = exploration(runtime);
+  await recovery.call("web.recovery.inspect", {});
+  const found = await recovery.call("web.recovery.find_on_page", { query: "discard" });
+  assert.equal(found.schemaVersion, "web-llm-find.v1");
+  const handle = /^(t\d+) button "Discard changes"/mu.exec(String(found.found))?.[1];
+  assert.ok(handle, String(found.found));
+  const searched = recovery.explored.at(-1)!;
+  const recorded = { ...CLICK, recordedTarget: { element: { tagName: "button", role: "button", accessibleName: "Discard changes" } } };
+  const target = resolvedTarget(runtime.validateTargetOverrideEvidence(searched.packet, { handles: { element: handle } }, recorded));
+  assert.equal(target.selector, "#discard");
+  // An edited search result is not one this runtime kept.
+  const edited = { ...searched.packet, found: `${String(searched.packet.found)}\n(edited)` };
+  assert.deepEqual(runtime.validateTargetOverrideEvidence(edited, { handles: { element: handle } }, recorded), { status: "absent", reason: "evidence_unrecognized" });
+});

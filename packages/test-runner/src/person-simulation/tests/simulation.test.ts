@@ -49,7 +49,7 @@ test("the Lab answers a person-needed ask once, after clearing the check, and le
   assert.deepEqual(answers, [{ askId: "check-1", kind: "choice", value: "person_done" }], "answered once, and the permission never");
   assert.equal(snapshot.handOffs.length, 1);
   const [handOff] = snapshot.handOffs;
-  assert.deepEqual({ ...handOff, secondsWaited: undefined }, { askId: "check-1", stage: "build", subject: { kind: "flow", id: "flow-1" }, scenarioId: "everything-store", check: "type-the-characters", did: "cleared", cleared: true, answer: "person_done", secondsWaited: undefined, note: null });
+  assert.deepEqual({ ...handOff, secondsWaited: undefined }, { askId: "check-1", stage: "build", subject: { kind: "flow", id: "flow-1" }, scenarioId: "everything-store", check: "type-the-characters", did: "cleared", cleared: true, answer: "person_done", via: "core", secondsWaited: undefined, note: null }, "answered through Core: this thread is a Flow's, not the chat's");
   assert.ok(handOff!.secondsWaited >= 1.5, "waited from the ask being raised");
   assert.deepEqual(published, snapshot.handOffs);
   assert.deepEqual([snapshot.playable, snapshot.pollFailures, snapshot.expected?.required], [true, 0, true]);
@@ -122,8 +122,8 @@ test("given the task's point, the person allows the act there and refuses it any
   assert.deepEqual(answers.map(({ askId, kind, value }) => [askId, kind, value]).sort(), [["request-cookies", "deny", undefined], ["request-order", "grant", undefined], ["request-run", "grant", undefined], ["request-unnamed", "deny", undefined]], "each answered once, grant or deny with no value");
   assert.deepEqual(snapshot.handOffs, [], "a permission is no hand-off, so the hand-off invariant scores nothing new");
   const byAsk = Object.fromEntries(snapshot.permissionAnswers.map((entry) => [entry.askId, { ...entry, secondsWaited: undefined }]));
-  assert.deepEqual(byAsk["request-order"], { askId: "request-order", stage: "build", missing: ["move_money"], control: "  place ORDER ", verdict: "at_declared_point", reason: null, answer: "grant", secondsWaited: undefined, note: null });
-  assert.deepEqual(byAsk["request-cookies"], { askId: "request-cookies", stage: "build", missing: ["create_new"], control: "Accept all", verdict: "elsewhere", reason: "class_not_missing", answer: "deny", secondsWaited: undefined, note: "not the task's permission point (class_not_missing)" });
+  assert.deepEqual(byAsk["request-order"], { askId: "request-order", stage: "build", missing: ["move_money"], control: "  place ORDER ", verdict: "at_declared_point", reason: null, answer: "grant", via: "core", secondsWaited: undefined, note: null });
+  assert.deepEqual(byAsk["request-cookies"], { askId: "request-cookies", stage: "build", missing: ["create_new"], control: "Accept all", verdict: "elsewhere", reason: "class_not_missing", answer: "deny", via: "core", secondsWaited: undefined, note: "not the task's permission point (class_not_missing)" });
   assert.deepEqual([byAsk["request-run"]?.stage, byAsk["request-run"]?.verdict, byAsk["request-run"]?.answer], ["run", "at_declared_point", "grant"], "a repair's ask during the run is answered by the same rule");
   assert.deepEqual([byAsk["request-unnamed"]?.verdict, byAsk["request-unnamed"]?.answer, byAsk["request-unnamed"]?.note], ["at_declared_point", "deny", "Core named no control, so the person cannot tell it is the task's act and refuses it"]);
   assert.ok(snapshot.permissionAnswers.every(({ secondsWaited }) => secondsWaited >= 0.9), "waited from the ask being raised");
@@ -154,4 +154,47 @@ test("without the task's point the person leaves permission asks alone and recor
   const snapshot = await person.stop();
   assert.deepEqual(answers, []);
   assert.deepEqual(snapshot.permissionAnswers, []);
+});
+
+/**
+ * A build started from the extension's chat asks in the chat, which is the
+ * project's own thread, and the person at the panel answers it there. A run's
+ * question on its own thread is still answered through Core, as before.
+ */
+test("an ask on the extension's chat thread is answered in the chat, and any other through Core, each recorded with where", async () => {
+  const answers: Answer[] = [];
+  const raised = [
+    { askId: "request-chat", thread: "c-chat", subject: { kind: "project", id: "p" } },
+    { askId: "request-run", thread: "c-run", subject: { kind: "run", id: "run-1" } },
+  ];
+  const pending = (thread: string) => raised
+    .filter((ask) => ask.thread === thread && !answers.some((answer) => answer.askId === ask.askId))
+    .map(({ askId }) => ({ turnId: `t-${askId}`, ask: { askId, kind: "permission", status: "pending", missing: ["move_money"], control: { name: "Place order", kind: "button" }, createdAt: Date.now() - 1_000 } }));
+  const control: PersonAskControl = {
+    automationStudioCall: async (endpoint, payload) => {
+      if (endpoint === "list-conversations") return { conversations: raised.map(({ thread, subject }) => ({ conversationId: thread, pendingAskCount: pending(thread).length, subject })) };
+      if (endpoint === "get-conversation") return { conversation: { turns: pending(String(payload.conversationId)), hasMore: false } };
+      if (endpoint === "answer-ask") { answers.push({ askId: payload.askId, kind: payload.kind, value: payload.value }); return { ask: {} }; }
+      throw new Error(`unexpected ${endpoint}`);
+    },
+  };
+  const pressed: Array<{ askId: string; answer: unknown }> = [];
+  const person = startPersonSimulation({
+    control, scope: { projectId: "p", domainId: "web-automation" }, scenarioId: "bigbox-retail", module: null, expected: null, tabs: () => [], readState: async () => ({}),
+    permissions: { point: PLACE_ORDER },
+    answerInChat: async (ask, answer) => {
+      if (ask.subject?.kind !== "project") return false;
+      pressed.push({ askId: ask.askId, answer });
+      // What pressing Allow in the panel does: the extension's relay answers the ask in Core.
+      answers.push({ askId: ask.askId, kind: answer.kind, value: undefined });
+      return true;
+    },
+    pollMs: 5,
+  });
+  await until(() => answers.length >= 2);
+  const snapshot = await person.stop();
+  assert.deepEqual(pressed, [{ askId: "request-chat", answer: { kind: "grant" } }], "only the chat's own question is pressed in the chat");
+  const byAsk = Object.fromEntries(snapshot.permissionAnswers.map((entry) => [entry.askId, entry]));
+  assert.deepEqual([byAsk["request-chat"]?.stage, byAsk["request-chat"]?.answer, byAsk["request-chat"]?.via], ["build", "grant", "chat"]);
+  assert.deepEqual([byAsk["request-run"]?.stage, byAsk["request-run"]?.answer, byAsk["request-run"]?.via], ["run", "grant", "core"]);
 });

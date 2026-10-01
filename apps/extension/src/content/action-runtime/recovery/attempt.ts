@@ -76,8 +76,8 @@ export async function runWithRecovery(
   attempt: () => Promise<BrowserActionResult>,
   pause: RecoveryPause = sleep,
   now: () => number = Date.now,
-  intervene: RecoveryIntervention = clearInterference,
-  layerOverPage: RecoveryLayerProbe = clearableLayerOverPage
+  intervene: RecoveryIntervention = () => clearInterference(),
+  layerOverPage: RecoveryLayerProbe = () => clearableLayerOverPage()
 ): Promise<RecoveredExecution> {
   const absorbed: RecoveryFault[] = [];
   let waitedMs = 0;

@@ -13,13 +13,19 @@
 //            reachable from a gateway that can only run page actions, and the
 //            difference is the one thing a reader of a verdict has to know.
 //            A site that *remembers* a step -- a consent banner answered, a
-//            soft check passed -- is not put back by this, and the step that
-//            did it comes back `unreproducible` rather than `failed`.
+//            soft check passed -- is not put back by this. The step that did
+//            it finds its target gone from its own page and comes back
+//            `remembered`, which passes; a target gone while the page is
+//            somewhere else comes back `unreproducible` (`./missing-target.ts`).
+//            Core also sends this to put the page back where one step found
+//            it, when that step was looked for on another page first.
 //
 //   step  -- run one step again with the parameters the Flow keeps, which are
 //            the resolved ones. The command that goes out is the command
 //            `io/gateway-output-dispatcher.ts` sends, so what is being proved
-//            is the Flow and not a rehearsal of it.
+//            is the Flow and not a rehearsal of it. Core sends back where the
+//            step found the page (`from`), which is what tells `remembered`
+//            from `unreproducible`.
 //
 //   verify -- check a step whose effect lasts, and run nothing that acts: a
 //            dry run never repeats a lasting effect (`./verify.ts`).
@@ -48,11 +54,13 @@ import { resolveWebPlanNode } from "../plan-resolution";
 import { webLlmHandleRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
 import { webRunnableNode } from "./catalog";
+import { webNodeReplayMissingTarget } from "./missing-target";
 import {
   WEB_NODE_REPLAY_RESULT_CODES as REPLAY_RESULT_CODES,
   webNodeReplayAnswer as answer,
   webNodeReplayAnswerWithPage as answerWithPage,
-  webNodeReplayPermissionReason as permissionReason
+  webNodeReplayPermissionReason as permissionReason,
+  type WebNodeReplayFacts
 } from "./replay-answer";
 import type { WebNodeRun } from "./context";
 import { verifyWebOutputNode } from "./verify";
@@ -202,16 +210,6 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   if (result.status !== "succeeded") {
     const refused = webActionFailureRefusal(result);
     const failure = refused.code;
-    // The one failure a page-level reset explains. A control that is simply not
-    // there, on a page the step itself worked on, is what a site that remembers
-    // the step looks like -- a consent banner answered once stays answered --
-    // and refusing the whole draft for it would push the model to delete the
-    // dismissals that round 1 lost. Every other failure is a failure --
-    // including a target that is now ambiguous, which the refusal word folds
-    // into `target_not_found` (`../action-failure/refusal.ts`) but which is a
-    // control that is there and cannot be told apart, not one that is gone. So
-    // this reads the client's own code, not the merged word.
-    const unreproducible = result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND;
     // The reason, where this domain has one for what the page answered
     // (`../action-failure/refusal.ts`), and nothing where it does not: a page
     // failure with no closed reason behind it must not be dressed up as one.
@@ -219,11 +217,20 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // because its read came back empty was recorded identically to one that
     // failed because the browser would not script the page. The node's id still
     // says which step of the draft it was.
-    const answered = await answerWithPage(run, unreproducible ? REPLAY_RESULT_CODES.unreproducible : REPLAY_RESULT_CODES.failed, `the step did not run (${failure})`, true, {
-      resultReason: refused.detail?.reason,
-      nodeId: node.definitionId,
-      assumed
-    });
+    const about: WebNodeReplayFacts = { resultReason: refused.detail?.reason, nodeId: node.definitionId, assumed };
+    // The one failure a page-level reset explains. A control that is simply not
+    // there, on the very page the step worked on, is what a site that remembers
+    // the step looks like -- a consent banner answered once stays answered --
+    // and it answers `remembered`, which keeps the step: the Flow's playback
+    // runs on a site that has not seen it (t195-w20b). Not there anywhere else
+    // is `unreproducible` (`./missing-target.ts`). Every other failure is a
+    // failure -- including a target that is now ambiguous, which the refusal
+    // word folds into `target_not_found` (`../action-failure/refusal.ts`) but
+    // which is a control that is there and cannot be told apart, not one that
+    // is gone. So this reads the client's own code, not the merged word.
+    const answered = result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND
+      ? await webNodeReplayMissingTarget(run, "step", about, failure)
+      : await answerWithPage(run, REPLAY_RESULT_CODES.failed, `the step did not run (${failure})`, true, about);
     // A replayed step that landed on a robot check did not fail on its own
     // account: a person has to clear the check. Still `core.replay.failed`,
     // which is Core's closed vocabulary, and marked so Core can ask rather than

@@ -14,8 +14,17 @@
 // - **change**: any mutation -- a child added or removed, an attribute, text --
 //   inside the pressed control's scope (`press-scope.ts`), the control's own
 //   `disabled` and `aria-*` included, and inside every shadow root in that
-//   scope (`scope-roots.ts`), which a subtree observation does not reach.
-//   Mutations elsewhere on the page are its own motion and are not observed.
+//   scope (`scope-roots.ts`): the roots the scope's walk crossed on its way up
+//   from the control, closed ones too, and every open root beneath the scope,
+//   nested ones included. A `MutationObserver` does not descend into a shadow
+//   root, so until 2026-10-01 a widget that answers a press only inside its own
+//   root was read as ignoring it and pressed twice: bigbox's store chip opens
+//   its chooser inside `vr-fulfillment-picker`'s root, and the second press
+//   shut it again, so no store could be picked (lane A, `t174-w33`);
+//   crossborder's coupon was claimed twice the same way (`t174-w32`);
+//   local-classifieds' radius chip, itself inside the picker's root, shut its
+//   own panel (lane C, `t194-w24`). Mutations elsewhere on the page are its own
+//   motion and are not observed at all.
 // - **navigation**: the address differs from the one at the press, or the
 //   document began to leave (`beforeunload`, `pagehide`, the Navigation API's
 //   `navigate`, which a history-API move fires too).

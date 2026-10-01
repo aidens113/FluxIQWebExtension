@@ -14,7 +14,7 @@ function turn(turnId: string, author = "person"): CoreTurn {
 }
 
 const note = (sequence: number, title: string, at?: number) =>
-  activityEvent(sequence, { detail: { kind: "note", title }, ...(at === undefined ? {} : { at: new Date(at).toISOString() }) });
+  activityEvent(sequence, { detail: { kind: "note", title, text: `Noted ${title}.` }, ...(at === undefined ? {} : { at: new Date(at).toISOString() }) });
 
 function keys(items: ChatStreamItem[]): string[] {
   return items.map((item) => item.key);
@@ -58,4 +58,36 @@ test("at most the limit of step messages are kept, the newest; turns are never d
 
 test("an empty relay state is an empty stream", () => {
   assert.deepEqual(buildChatStream([], []).items, []);
+});
+
+// Live runs 34 and 35: the build's instruction never showed as the person's
+// message. A build says it on its activity (`request`); the chat shows it as a
+// turn of the person's, once, unless the thread already holds those words.
+const ASKED = ["Switch my store to Millbrook.", "Do not check out."].join("\n\n");
+
+test("what a build was asked is the person's message, once, where the build said it", () => {
+  const events = [
+    activityEvent(1, { detail: { kind: "step", title: "Build started", status: "started" } }),
+    activityEvent(2, { request: ASKED }),
+    activityEvent(3, { detail: { kind: "thought", title: "Opening the store", text: "The store chooser is in the header.", status: "succeeded" } }),
+    activityEvent(4, { request: ASKED })
+  ];
+  const { items } = buildChatStream([{ turn: turn("t0", "automation"), at: eventTime(0) }], events);
+  assert.deepEqual(keys(items), ["turn:t0", "turn:request:build-1", "step:build-1#3"]);
+  const asked = items[1]!;
+  assert.equal(asked.kind, "turn");
+  if (asked.kind === "turn") {
+    assert.equal(asked.turn.author, "person");
+    assert.equal(asked.turn.text, ASKED);
+    assert.equal(asked.at, eventTime(2));
+  }
+});
+
+test("a request the person typed into the thread is not shown twice", () => {
+  const typed: CoreTurn = { turnId: "p1", author: "person", text: "Switch my store to Millbrook.  Do not check out.", ask: null, attachment: false };
+  const events = [activityEvent(1, { request: ["Switch my store to Millbrook.", "Do not check out."].join("\n") })];
+  assert.deepEqual(keys(buildChatStream([{ turn: typed, at: eventTime(0) }], events).items), ["turn:p1"]);
+  // FluxIQ saying the same words is not the person saying them.
+  const echoed: CoreTurn = { ...typed, author: "automation" };
+  assert.deepEqual(keys(buildChatStream([{ turn: echoed, at: eventTime(0) }], events).items), ["turn:p1", "turn:request:build-1"]);
 });

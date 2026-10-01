@@ -52,7 +52,7 @@ import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePacka
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant } from "./lab-control/index.js";
-import { createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, withDeclaredFlowRepair, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type LiveRepairLaneInput, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
+import { LAB_PROJECT_DOMAIN_ID, createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, withDeclaredFlowRepair, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type LiveRepairLaneInput, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, chromiumExtensionStorageDirs, runRedactionScopes, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
 import { runProviderFailureLog, writeProviderFailureSidecar } from "./provider-failure/index.js";
@@ -66,7 +66,7 @@ import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioS
 import { cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
-import { ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, keepsRunState, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter } from "./run-scenario/index.js";
+import { createdFlowChatEntry, ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, keepsRunState, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter } from "./run-scenario/index.js";
 
 /**
  * The blank tab a browser opens on, and where a Flow that must reach its own
@@ -78,7 +78,9 @@ import { ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, 
 const BLANK_TAB_URL = "about:blank";
 
 /** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves, and a `creation` run passes its request's own. `livePanel: false` (`--no-live-panel`) keeps the extension panel from being shown beside a headed run's page. */
-export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; creation?: CreatedFlowRequest; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun; replays?: number; livePanel?: boolean };
+export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; creation?: CreatedFlowRequest; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun; replays?: number; livePanel?: boolean;
+  /** How a `creation` run starts its build: `chat`, the default and the only way it can pass, types the task's instruction into the extension's chat window; `direct-api` (`--direct-api-build`, test-only) has the Lab call Core's build endpoint itself, and is never counted as a pass. */
+  buildEntry?: "chat" | "direct-api" };
 /**
  * `observation` carries the `RunEvaluation` fields only the lane that ran can
  * know, and `evaluation` is the run's own `RunEvaluation` built from it — the
@@ -132,7 +134,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   const seed = options.seed ?? scenario.seed;
   const environment = options.environment ?? process.env;
   // A live provider run is planned and credentialed before this is reached (`beginLiveLlmRun`), so that an unexecutable profile or an absent key refuses at the command line rather than inside a run.
-  const live = options.live; const creation = options.creation; const flowLane = options.flow === true || creation !== undefined;
+  const live = options.live; const creation = options.creation; const flowLane = options.flow === true || creation !== undefined; const buildEntry = options.buildEntry ?? "chat";
   if (live) live.assertLane({ flowLane: options.flow === true, creation: creation !== undefined }); else if (creation) throw new RunnerFailure("fixture.invalid", "An instruction task is built only by a live run: pass --live-llm --llm-task create-flow");
   // What this run's scenario declares about provider calls, read from the same
   // resolved expectations the lane is judged by, so a variant's declaration
@@ -272,7 +274,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     await openScenarioStart(page, topology.scenarioOrigin, scenario);
     await page.bringToFront(); uiReview.attach({ context, scenarioPage: page, controlPage: extensionControl });
     // The extension panel beside the fixture, for whoever watches a headed run. It never fails the run; the mode that ran is kept in the bundle.
-    await bundle.writeStructured("snapshots/live-panel.json", await openLivePanel(extensionControl, { enabled: options.livePanel !== false, headless: launched.headless, scenarioOrigin: topology.scenarioOrigin, log: line => process.stderr.write(`${line}\n`) }));
+    const livePanel = await openLivePanel(extensionControl, { enabled: options.livePanel !== false, headless: launched.headless, scenarioOrigin: topology.scenarioOrigin, log: line => process.stderr.write(`${line}\n`) });
+    await bundle.writeStructured("snapshots/live-panel.json", livePanel);
     await assertExpectedFacts(pageFacts.atLoad, playwrightScenarioFactProbe(page));
     // What either Flow lane is handed: present the page, publish what the Flow did, and consult the fixture oracle.
     const flowRunHooks = <E extends { observation: RunLaneObservation; run: PersistedFlowRunOutcome }>(activeTopology: RunningTopology, publish: (evidence: E) => Promise<void>) => ({
@@ -285,7 +288,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         // Where this leaves the tab (`lane-rules/flow-start-page.ts`): the fixture's entry point, or, for a task whose
         // instruction is to go somewhere, the blank tab a browser opens on -- so reaching the page is the Flow's own
         // first step rather than the harness's, and a Flow that cannot reach it fails where a person would see it fail.
-        const startPage = flowStartPage({ task: creation?.task, moment, armedFacts: pageFacts.afterArm });
+        const startPage = flowStartPage({ task: creation?.task, moment, armedFacts: pageFacts.afterArm, startedFromChat: creation !== undefined && buildEntry === "chat" });
         // Runs before every Flow run and every exploration. The reset and any arm are server-side, and the tab still shows
         // wherever the recording or the exploration ended, so it is loaded again: unarmed, or the Flow starts on that last
         // page; armed, or a drift variant is judged against a page that never drifted. Load the entry point, not a reload.
@@ -370,13 +373,15 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       // No recording: FluxIQ explores the page the task's variant renders, which the lane presents, and builds the Flow from the instruction.
       if (!paired || !live || !topology.control || !topology.projectId || !topology.authorizationPin) throw new RunnerFailure("environment.missing", "The created-Flow lane needs a paired extension, a live run, and an authenticated isolated Core with an authorization PIN");
       const control = topology.control; const activeTopology = topology; const createdProjectId = topology.projectId;
-      await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the live instruction task and run it"), details: { taskId: creation.task.id, judgeBy: creation.judgement.judgeBy, variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } }); uiReview.phase("build");
-      labPerson = await startLabPerson({ control, projectId: createdProjectId, context: context!, scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, scenarioId: scenario.id, scenarioLabDist: labPaths.scenarioLabDist, workflowId: flowWorkflow.workflowId, variantId: flowWorkflow.variant?.id, task: creation.task.personCheck, permissions: { point: creation.task.permissionPoint }, write: snapshot => bundle.writeStructured(PERSON_HAND_OFFS_SNAPSHOT, snapshot), publish: handOff => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The Lab played the person at a check FluxIQ handed off"), details: { handOff } }), publishPermission: permissionAnswer => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The Lab answered FluxIQ's permission question as the person"), details: { permissionAnswer } }) });
+      await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the live instruction task and run it"), details: { taskId: creation.task.id, judgeBy: creation.judgement.judgeBy, variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id), buildEntry } }); uiReview.phase("build");
+      // The build starts the way a person starts it: the instruction typed into the chat beside the page (`run-scenario/chat-build/`), and FluxIQ's questions answered there.
+      const chat = buildEntry === "chat" ? createdFlowChatEntry({ extensionControl, livePanel, core: control, scope: { projectId: createdProjectId, domainId: LAB_PROJECT_DOMAIN_ID }, authorizeChat: live.chatBuildAuthorizer(control, activeTopology), picture: moment => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "checkpoint", `The extension's chat: instruction ${moment}`), details: { chat: moment } }).then(() => undefined, /* best-effort: a picture never decides the run */ () => undefined) }) : undefined;
+      labPerson = await startLabPerson({ control, projectId: createdProjectId, context: context!, scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, scenarioId: scenario.id, scenarioLabDist: labPaths.scenarioLabDist, workflowId: flowWorkflow.workflowId, variantId: flowWorkflow.variant?.id, task: creation.task.personCheck, permissions: { point: creation.task.permissionPoint }, ...(chat ? { answerInChat: chat.answerInChat } : {}), write: snapshot => bundle.writeStructured(PERSON_HAND_OFFS_SNAPSHOT, snapshot), publish: handOff => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The Lab played the person at a check FluxIQ handed off"), details: { handOff } }), publishPermission: permissionAnswer => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The Lab answered FluxIQ's permission question as the person"), details: { permissionAnswer } }) });
       const lane = await runCreatedFlowLane({
         control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, request: creation, workflow: flowWorkflow, facilityRunId: runId,
         scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
         // Where the built Flow starts: the page the harness would have opened, told to Core instead of loaded, so the build has to reach it itself (`lane-rules/flow-start-page.ts`).
-        startLocation: scenarioStartUrl(topology.scenarioOrigin, scenario),
+        startLocation: scenarioStartUrl(topology.scenarioOrigin, scenario), entry: chat ? chat.entry : { kind: "direct-api" },
         authorizeBuild: live.buildAuthorizer(control, activeTopology),
         settleBuild: build => live.settleBuild(build, bundle, details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The live Flow build finished"), details })),
         // The created Flow's playback runs with the model taking part, so a Flow that fails is repaired rather than refused for want of a model, and its result is judged.
@@ -497,6 +502,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, permissionStop });
     consoleWatch.assertOnlyAllowed(workflow.expected.allowedConsoleErrors);
     networkGuard.assertNoViolations();
+    // Whatever the Flow did: a Flow the Lab built by calling Core itself was never asked for in the chat, which is what the product is measured on.
+    if (creation && buildEntry === "direct-api") throw new RunnerFailure("fixture.invalid", "This run built its Flow by calling Core's build endpoint directly (--direct-api-build, test-only), not from the extension's chat window, so it is never counted as a pass");
     await capture.trigger(evidenceEvent(runId, scenario.id, undefined, "final", "Scenario completed")); await uiReview.finish("end");
     verdict = "passed";
   } catch (error) {

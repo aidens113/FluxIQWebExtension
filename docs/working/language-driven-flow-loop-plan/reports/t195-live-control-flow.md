@@ -7,6 +7,65 @@ production profile, 48k in / 8k out / 56k per call, $0.25 cap. Launcher: scratch
 (t174's `live-run.sh` with slot-4, the t195 instance and tree, and a full log per run). From run 5 it passes
 `--llm-max-calls 64`, as t174's L1 does, because Core ignores the configured call limit (t193's cause B).
 
+## Session 4 (2026-10-01): fixes that need no Lab, before live runs resume
+
+Brief (supervisor): trees fast-forwarded to local dev (downstream `a15a465e`, Core `f3778a8e`, round 5 with P1-P2).
+Every Lab is stopped until t223 lands. Tasks: confirm-requests and pickup-order first, then withdraw-stale-requests,
+apply-quillmark and moon-jar. Fix every cause provable without a Lab (unit and fixture-level tests from the scenarios'
+own markup and state, provider-free, no browser), so the first live run of each can pass. Not to be edited: t223's
+page serialization (`domain/src/runtime/llm-evidence/{elements, capture, page-evidence, present, attributes, tools,
+sanitize, stable-handles, page-view/, page-find/, node-run/run.ts, tool-rejection.ts}`) and lane B's
+`recovery/runtime-exploration.ts`.
+
+Plan: round 1, five read-only `worker-high` audits, one per task (w19a-e), each tracing the chain a correct build takes
+on its site through dev's code and ranking the causes that would fail the first live run, with a fix spec by file and a
+provider-free test. Round 2, fixes partitioned by file from those audits.
+
+**Round 1 findings (audits `reports/t195-w19{a..e}-audit-*.md`).** The Lab resets the site before the judged playback
+(`flow-lane/creation/lane.ts:318-320` -> `/__control/reset`), so exploration's lasting acts never reach the verdict.
+Causes that block a first pass, by task:
+- confirm-requests (w19a): B1 a kept consent/"Not now" press is `unreproducible` in every dry run (the site remembers
+  it); B2 a kept step between the listing and the act refuses the loop (`draft-routing.ts:199`); V1 the judge scores the
+  Flow's FIRST extraction (`creation/judgement.ts:50`), which here is the pre-act listing (false pass).
+- pickup-order (w19b): #1/#2 the dry run runs after the real order on remembered state (empty cart, guest checkout), and
+  first-visit steps (sign-in wall link, slot Retry) can never replay; #3 the same judge defect (a cart read first fails a
+  right Flow); #4 F20's press scope stops at `<main>`, so bigbox's load-time changes hide a swallowed Add to cart.
+  Risks: #5 `check out` read as a second act; #6 decline pin; #7 the gate stops recording shown names at 4 MB, so Place
+  order would be asked unnamed and denied; #9 cart lines are not records.
+- withdraw-stale-requests (w19c): B1 the For Each row gate cannot see the shadow-root age (`identity/record.ts`
+  `rowContents`), so pass 1 finds no Withdraw at playback; B2 a repeat that stops at the row press (run 3) is accepted
+  while the dialog's confirm runs once after the loop. Risks: R1 a hidden "Show more" is not the list's end (10 s per
+  read, "incomplete"); R2 a withdrawal declared `modify_existing` is never asked, so the lane refuses `not_asked`.
+- apply-quillmark (w19d): C1 steps built inside the ATS frame carry a frame id but no frame path; C2 detection inside a
+  cross-origin frame throws (origin check); C3 the `<dl>` receipt cannot be read as one record; C4 the dry run refuses
+  every step after the withheld Submit; C5 (likely) "I'm a person" is disabled 3 s and a gate `disabled` is not waited.
+- moon-jar (w19e): 1 no single-record read (the reply card has no siblings; detection answers the inbox's thread rows).
+
+**Round 2 partition (each worker owns only its files).** w20a-w20g ran and are Ready to commit (fix log F23-F29).
+w20h, w20i and w20k were refused at dispatch by the session's concurrent-agent limit and never started; with w20j they
+are the next step (see "Next" under Ready to commit).
+
+| Worker | Fixes | Owns |
+| --- | --- | --- |
+| w20a | V1/#3: the judge pairs the expected step with the latest dataset carrying its keys | test-runner `flow-lane/creation/judgement.ts` + tests |
+| w20b | B1, #1, #2, C4: the dry run answers `remembered` / `reanchored`, and excuses steps after a withheld gated step | Core `flow-draft/{dry-run,verify-only}.ts`, `llm/node-tools/{replay-draft,dry-run-gate,replay}.ts`; domain `node-run/{replay,replay-answer,verify}.ts` + tests |
+| w20c | B2 (w19a): a repeat with steps between the listing and the act; R3 the F7 graph-run test | Core `flow-bootstrap/authoring/draft-routing.ts` + tests |
+| w20d | B2 (w19c) `span_stops_short`; R2 `act_consequence_undeclared`; #5 check-out act | Core `flow-bootstrap/instructed-acts/*`, `unfinished-build/not-done.ts`, `llm/harness-options/repeat-suggestion.ts`, `flow-draft/amendment.ts` + tests |
+| w20e | B1 (w19c) shadow-root row values; #9 rows that are not records | extension `content/identity/record.ts` + tests |
+| w20f | R1 hidden Show more; #4 press scope at `main` | extension `content/extraction/pagination.ts`, `action-runtime/ignored-press/press-scope.ts` + tests |
+| w20g | #7 shown-names cap; #6 decline pin and `instead` | Core `action-permissions/gate.ts` + tests; domain `llm-evidence/press.ts` + tests |
+| w20h | C1 frame path on built nodes + frame wait; C2 frame origin | domain `plan-resolution/{target-packets,resolve-plan-node,extraction/slot}.ts`, `structure/{handles,detect}.ts`; extension `runtime/{frame-address,action-runner}.ts` + tests |
+| w20i | C3 + moon-jar 1, extension half: key-value and lone-record proposals | extension `content/extraction/{key-value-record,lone-record-level,lone-record (new), infer-list, detect-structure, index}.ts`; domain `extraction/structure-detection.ts` + tests |
+| w20k | C5: a gate-level `disabled` is waited out | extension `content/actions/{click,type,select,check}.ts`, `action-runtime/{results.ts, recovery/fault.ts}` + tests |
+| w20j (after w20h, w20i) | C3 + moon-jar 1, domain half: a `record` handle and packet | domain `structure/{detect,handles,packet}.ts` + tests |
+
+Decisions taken here (supervisor may override): the dry-run area is t196's (D1), but t196 is merged and idle, so lane D
+takes it (w20b). `instructed-acts/check.ts` was t174's claim; lane D takes B2, R2 and #5 there (w20d) because they block
+this lane's tasks. C4's Core-only rule (excuse every non-replayed step after a verified step that declared
+`move_money`, `delete` or `send_or_publish`) is taken, because the frame half needs t223's `node-run/run.ts`. Not
+taken: w19a R1 (`rerun_of_loop_source` would also refuse F15's advised rerun with a `where`); the browser e2e proof of
+the lone-record DOM walk (no browser runs).
+
 ## Session 3 (2026-10-01, from ~05:00Z): live after round 3 + t210
 
 Trees fast-forwarded to pushed dev (downstream `58fd0cd3`, Core `e5b8f015`); dev carries L1, F20, R1+R2, F21, F22
@@ -132,6 +191,14 @@ Protocol (supervisor, 2026-09-30): loop continuously, fix in this branch, valida
 | P2 | The `flow_draft.repeat_span_unknown` refusal names the reference that is wrong. `over` not in the Flow, `through` not in the Flow, and `through` before the step were one sentence that blamed `through`. Each case now gets its own message: it says the step was dropped or never added and which `amend_draft repeat` to resend, or that a `reorder` comes first. The code is unchanged, so no list of codes moves. This is the remainder of top cause 7; t196 fixed the rerun that orphaned `over`. | Core `runtime/flow-bootstrap/authoring/draft-routing.ts`, `authoring/tests/draft-routing.test.ts` (new case) | run 33 `run-muog33va` (nine refusals that blamed `through`) | Lead: draft-routing 16/16; dev's file restored -> `Tests 1 failed / 15 passed`; Core vitest over flow-bootstrap, flow-draft, llm/evidence-loop, llm/tests, action-permissions, parking, tests/service-bootstrap -> `Test Files 120 passed (120)`, `Tests 1466 passed (1466)`; `tsc-exit=0`; Core build `build-exit=0`; Core audit: only dev's `service.ts` violation | validated (unit); live pending |
 | T1 | Core's service-bootstrap permission test stated the pre-F10 rule (an instructed refund goes ahead unasked) and failed on dev. F10 changed that behaviour on purpose, so the test was wrong. It is now two cases: "still asks before moving money with nothing permitted, carrying what the instruction asked for on the request", and "keeps what the instruction asked for with the proposal and the Flow once the person permits the money". | Core `runtime/tests/service-bootstrap/tests/permission.test.ts` | supervisor, 2026-09-30 | w16 (`reports/t195-w16-permission-test.md`). Lead: `vitest run` over permission.test.ts and recovery/annotation, 10 files 122/122 | validated |
 
+| F23 | The created-Flow judge pairs each expected step with the latest-run dataset whose records carry every non-optional expected key, then the rest in first-run order (was: the first extraction that ran, so confirm-requests' pre-act listing passed falsely and pickup's cart read failed a right Flow). | test-runner `flow-lane/creation/judgement.ts`, `creation/tests/judgement.test.ts` | w19a V1, w19b #3 | w20a: new cases fail reverted (4 of 8). Lead: test-runner build 0, `judgement.test.js` 8/8 | validated (unit) |
+| F24 | The dry run and remembered site state: a pressed step whose target is gone on its own page answers `core.replay.remembered` (does not block, stays in the Flow); a step missing on another page right after a step that was not done again is re-anchored once to its own `replay.from` (`core.replay.reanchored`); after a verified `move_money`/`delete`/`send_or_publish` step, every later non-replayed step is excused; the dry-run instruction never advises dropping a remembered step. Not done: making a layer-pressed step `optional` (no host records the target's layer yet). | Core `flow-draft/{site-memory.ts (new), dry-run.ts, verify-only.ts, index.ts}`, `llm/node-tools/{replay.ts, replay-draft.ts}` + tests `flow-draft/tests/site-memory.test.ts` (new), `llm/node-tools/tests/{replay-draft.test.ts (new), dry-run-gate.test.ts}`; domain `node-run/{missing-target.ts (new), replay.ts, replay-answer.ts, verify.ts}`, `node-run/tests/replay-remembered.test.ts` (new) | w19a B1, w19b #1-#2, w19d C4, w19e risk 2 | w20b: 14/14 new Core cases fail reverted. Lead: see Ready to commit | validated (unit) |
+| F25 | A `repeat` builds when kept steps sit between the listing and the act (they run once, before the loop); the refusal no longer advises "repeat with no over". Graph-run test of F7's waited retry: pass 4 retried once on its own row after exactly 11,500 ms. | Core `flow-bootstrap/authoring/draft-routing.ts`, `authoring/tests/repeat-loop.test.ts` (new) | w19a B2, R3 | w20c: 5 of 6 fail reverted (F7 needs no change) | validated (unit) |
+| F26 | Instructed acts: `span_stops_short` (a repeat that ends before an unclaimed lasting confirmation; F15's suggestion repeats through it); `act_consequence_undeclared` (withdraw/delete/remove -> delete, order/buy/purchase/pay -> move_money, send/post/publish/submit/apply -> send_or_publish must be declared on the claimed span); a check-out after an order is not a second act. Sweep of the ten scenarios: 7 tasks changed, each matching its own `permissionPoint`. **Takes `check.ts` from t174's claim.** | Core `flow-bootstrap/instructed-acts/{check, checklist, contracts, index, instruction-acts}.ts`, `span.ts` + `act-consequence.ts` (new), tests `{check, instruction-acts}.test.ts`; `unfinished-build/not-done.ts`; `llm/harness-options/repeat-suggestion.ts` + test; `flow-draft/amendment.ts` (`through` wording) | w19c B2, R2; w19b #5 | w20d: 17 cases fail reverted | validated (unit) |
+| F27 | The row gate reads what a row draws: `rowContents` walks open shadow roots (Guildline's age); a candidate in no record is checked against its own row (the child of the first ancestor holding a second alike control), so the soap's "Save for later" is told from the towels'. | extension `content/identity/record.ts`, `identity/tests/record.test.ts` | w19c B1, w19b #9 | w20e: 3 new cases fail reverted | validated (unit) |
+| F28 | A hidden "Show more" (after a 1 s grace) ends the list as `control_absent`, never clicked and never "truncated"; F20's press scope treats `main` like `body`, so bigbox's load-time changes in `<main>` no longer hide a swallowed Add to cart. | extension `content/extraction/pagination.ts` + `tests/pagination.test.ts`; `action-runtime/ignored-press/press-scope.ts` + `tests/{press-scope.test.ts, swallowed-press.test.ts (new)}` | w19c R1, w19b #4 | w20f: 6 new cases fail at HEAD | validated (unit) |
+| F29 | The gate keeps the names it was shown: shown strings deduplicated, oldest evicted past 4,000,000 characters (Place order shown late is still named); a declined press's refusal carries `instead` ("declare only what this press itself does; [] for a press that only opens a page or a form") from `press.ts`. **Needs t223:** `node-run/run.ts` must pass it (`instead: permission.declined ? WEB_DECLINED_PRESS_INSTEAD : undefined`), and `tool-rejection.ts`'s `consequences_declined` line. | Core `action-permissions/gate.ts` + `tests/gate.test.ts`; domain `llm-evidence/press.ts` + `tests/press.test.ts` | w19b #6, #7 | w20g: new cases fail reverted | validated (unit); `run_node` path pending t223 |
+
 Owned elsewhere (recorded by another lane first, taken at the next round):
 - Core ignores the Flow's configured call limit: **t193** (its cause B).
 - The instructed-acts check accepts a Flow that lacks the act (t174 run 13 cause B): **t174**. This lane adds, for
@@ -142,6 +209,146 @@ Owned elsewhere (recorded by another lane first, taken at the next round):
   `required_values_missing` first (run 2): the judge lane, **t194**, to confirm ownership.
 - The panel's "Done" mid-build and "Add an AI model key: To do" during a live build, and no on-page overlay in
   any screenshot of runs 2-5: **t191** (UI evidence: scratchpad `t195-shots/*-r2-*.png` .. `*-r5-*.png`).
+
+**Ready to commit (session 4, F23-F29).** Exactly the dirty files of both trees (`git status` on each, 2026-10-01
+after the round-2 workers): Core 20 modified + 6 new under `packages/fluxiq/src/programs/automation-studio/runtime/`
+(F24-F26, F29); downstream 13 modified + 3 new source/test files (F23, F24, F27-F29), this report, and reports
+`t195-w19{a..e}-audit-*.md`, `t195-w20{a..g}-*.md`. Lead's own runs after the last edit:
+- Core `npx vitest run` over `runtime/{action-permissions, flow-draft, llm/node-tools, flow-bootstrap/authoring,
+  flow-bootstrap/instructed-acts, flow-bootstrap/unfinished-build, llm/harness-options}` -> `Test Files 42 passed (42)`,
+  `Tests 557 passed (557)`.
+- Core `npx tsc --noEmit -p tsconfig.json` (packages/fluxiq, heavy.sh) -> `core-tsc-exit=0`.
+- Core `node scripts/structure-audit.mjs` -> `passed (206 warning(s), 353 baselined)`.
+- Downstream `pnpm --filter ... domain check` -> exit 0; `... extension check` -> exit 0; `... test-runner check` (rebuilds
+  the stale domain dist; the TS2305 a worker saw on `screenWebBuildRefusalDiagnostic` was that dist) -> exit 0.
+- Domain tests `node-run/tests` + `llm-evidence/tests/press.test.ts` (scratchpad `run-dir-tests.mjs`) -> 103/103.
+- Extension tests `identity/tests`, `extraction/tests/{pagination,load-retry}.test.ts`, `ignored-press/tests`,
+  `action-runtime/tests` -> 240/240.
+- test-runner build -> exit 0; `node --test dist/flow-lane/creation/tests/judgement.test.js` -> `# tests 8 # pass 8`.
+- Downstream `node scripts/structure-audit.mjs` -> `passed (140 warning(s), 118 baselined)`.
+- Not re-run by the lead: the workers' revert checks (each reported its new cases failing with the source reverted).
+
+**After commit (F23-F29: Core `43d4ec30`, downstream `fb20c051`) and the supervisor's dev merge.**
+- Core merge conflicts resolved and staged (not committed), so both behaviours hold. Lane B's T2 (`sometimes-present.ts`)
+  makes a blocking `unreproducible` step optional; F24's `remembered` never blocks.
+  - `flow-draft/dry-run.ts`: the outcome keeps both `reanchored?` and `madeOptional?`. The instruction keeps F24's sentence
+    and lane B's, which now reads "An unreproducible step that does none of the acts ...".
+  - `flow-draft/index.ts`: both barrels are exported.
+  - `llm/node-tools/tests/dry-run-gate.test.ts`: both describe blocks are kept.
+  - Validation: `npx vitest run runtime/flow-draft runtime/llm/node-tools` -> `Test Files 14 passed (14)`, `Tests 125 passed
+    (125)`; Core `tsc --noEmit` -> `core-tsc-exit=0`; Core audit `passed (209 warning(s), 349 baselined)`.
+- **Ready to commit (downstream), F29's last part.** Now that t223 has landed, `domain/src/runtime/llm-evidence/node-run/run.ts`
+  imports `WEB_DECLINED_PRESS_INSTEAD` from `../press` and sets `instead: permission.declined ? WEB_DECLINED_PRESS_INSTEAD
+  : undefined` on the `run_node` permission refusal. `tests/tool-rejection-detail.test.ts`'s declined case now expects
+  the `instead`.
+  - Validation: domain check -> `domain-check-exit=0`; domain tests `tool-rejection-detail`, `press`, `node-run/tests` ->
+    116/116; downstream audit `passed (145 warning(s), 118 baselined)`.
+
+**Live, 2026-10-01 ~20:50Z (Lab stop lifted for lane D; trees at dev: downstream `97efda59`, Core `3a52a587`).**
+- Core libraries were rebuilt first (`heavy.sh`: contracts reused, fluxiq rebuilt in 54 s, client-gateway-websocket
+  reused) -> `build-exit=0`.
+- **Run 35 (killed in the prelude; no run id; $0).** confirm-requests was launched 20:52:39Z, reason "first run after
+  F23-F29, the t223 compact view and lane B's B1". The guard admitted it (`sha256:9307fb9c...`). The prelude rebuilt
+  scenario-lab, the domain host, the domain and the extension; then the process exited 1 with no failure line. Every
+  `run-lab.mjs` exit path writes one, and there was no ledger `start`, so the process was killed from outside. That
+  coincides with the user's new rule, relayed by the coordinator: a live test must start the build by typing the
+  instruction into the real extension chat, never through the direct `generate-flow-bootstrap-adaptation` request.
+  t227 is building that launcher. No new direct-API run is launched until it is merged. Log: scratchpad
+  `runs/20261001T205239Z-social-network-feed-confirm-requests.log`. The coordinator later confirmed the supervisor
+  killed it, because DeepSeek was in an outage (requests accepted, never answered; every decide timed out at 45 s).
+  Nothing was left to debug. No Lab until the supervisor says the provider answers again.
+
+**Ready to commit (session 4b, F30-F32, downstream only; Core is clean).** These fixes clear the blockers that stopped
+apply-quillmark and moon-jar.
+- **F30 (w20h), apply C1 + C2.**
+  - LLM-built target and extract nodes inside a frame carry `browserFrameUrlPath` (the pathname of the frame URL the
+    element was shown in).
+  - The extension waits up to 5 s for a frame at that path before `TARGET_NOT_FOUND`.
+  - Detection inside a frame expects the frame's origin, not the top page's.
+  - Files: domain `llm-evidence/plan-resolution/{target-packets, resolve-plan-node, extraction/slot}.ts` + new
+    `tests/frame-path.test.ts`; `llm-evidence/structure/{handles, detect}.ts` + `tests/detect.test.ts`; extension
+    `src/runtime/{frame-address, action-runner}.ts` + `tests/frame-address.test.ts`.
+- **F31 (w20i + w20j), apply C3 + moon-jar cause 1: a one-record read.**
+  - A `<dl>` of dt/dd pairs is a 1-item proposal labelled by its dt.
+  - A lone record (the reply card) is answered beside the run found outward (never instead of it), or alone when there
+    is none.
+  - The domain issues it a second extraction handle and a packet line `record: {handle, itemCount: 1, fields, note}`.
+  - The extract_list sentence says "a repeating list, table or one record".
+  - `docs/architecture/page-evidence.md` gains "Detecting A List, Or One Record" (also F30's frame path and wait).
+  - Files: extension `content/extraction/{infer-list, detect-structure}.ts` and new `content/extraction/single-record/`
+    (`key-value-record`, `lone-record-level`, `lone-record`, `index` + tests); domain
+    `extraction/structure-detection.ts` + test; `llm-evidence/structure/{packet.ts, tests/badge-column.test.ts}` and new
+    `structure/tests/{record-detections.ts, record.test.ts}`, `plan-resolution/tests/one-record.test.ts`;
+    `output-nodes/extract-list/catalog-text.ts` + test.
+  - Not decided: a one-item handle does not force `maxItems: 1` (a second reply card would read 2 rows).
+- **F32 (w20k + lead), apply C5: a gate-level `disabled` is waited out.**
+  - The four actionability gates (click, type, select, check's first) mark the refusal with Core's existing
+    `effect: "unacted"`; a new key would make Core drop the record.
+  - Recovery absorbs it as the new fault `disabled_target`. The lead put it on the page's ladder (`budget.ts`), 3,750 ms,
+    which outlasts the 3 s "Please wait".
+  - w20k measured the veto: the recorded "I'm a person" scores 0.104 against "Please wait N" and is refused as
+    `target_not_found`, which already waits. The new path covers a recording the veto cannot check.
+  - Files: extension `content/actions/{click, type, select, check}.ts` + new `tests/gate-refusal.test.ts`;
+    `content/action-runtime/{results.ts, recovery/fault.ts, recovery/budget.ts}` + `recovery/tests/{attempt,
+    budget}.test.ts`.
+- **Lead's validation, after the last edit:**
+  - Domain tests `structure/tests`, `plan-resolution/tests`, `output-nodes/extract-list/tests` and `extraction/tests` ->
+    129/129.
+  - Extension tests `content/extraction/tests`, `content/extraction/single-record/tests`, `runtime/tests`,
+    `action-runtime/recovery/tests` and `actions/tests/gate-refusal.test.ts` -> 478/478.
+  - Budget pin: fails with the line reverted (`pass 8, fail 1`), passes restored (9/9).
+  - Domain check -> `domain-check-exit=0`. Structure audit -> `passed (146 warning(s), 118 baselined)`.
+  - Extension check -> exit 1, only 3 TS2610 errors in `src/panel/**/tests`. Those files are unchanged here; the errors
+    come from dev's `cfecc984` (fake-dom `ownerDocument`), and dev has since edited those files.
+- **Dev state at this tree's merge point, not this lane's:**
+  - `action-runtime/tests/store-chooser-replay.test.ts` fails 15/15 on this tree but passes 15/15 on dev `8b323fb7`, which
+    changed that test after the merge.
+  - `click`, `execute` and `page-identity` tests cannot load in isolation (`window is not defined`); the same happens on
+    dev.
+  Both should clear with the next dev merge.
+
+**Ready to commit (session 4c, F33-F34, downstream only), after F30-F32 merged (`f163c374`) and dev merged into this
+tree (`36b0099e`).**
+- **F33. A one-record handle reads one row** (supervisor's decision on F31's open question).
+  - `WebLlmExtractionBinding` gains `oneRecord?: true` (`structure/handles.ts`, copied in `copyBinding`).
+  - `structure/packet.ts` sets it on the record beside a run, and on a primary proposal of one item with no pagination,
+    which by construction is only the `<dl>` receipt or a lone record.
+  - `plan-resolution/extraction/slot.ts` writes `maxItems: 1` after the plan's own bound, so it always wins.
+  - Tests:
+    - `plan-resolution/tests/one-record.test.ts`: the record handle resolves with `maxItems: 1` and no bound written; the
+      run beside it has none; a new case shows `{}`, `{maxItems: 5}` and `{maxItems: 1}` all resolve to 1.
+    - `structure/tests/record.test.ts` pins `oneRecord: true` on the record binding and its absence on the run.
+  - `docs/architecture/page-evidence.md` says so.
+  - Revert check: slot line removed -> `one-record.test` pass 1, fail 2; restored -> pass.
+- **F34. Every action test loads on its own.** `content/frame-geometry.ts` read `window` while it loaded, to seed the
+  top frame's offset. So `actions/tests/{click, execute, page-identity}.test.ts` passed only after another test file had
+  left a `window` on the global (lane A hit `click.test.ts` too).
+  - Fix: the cache starts `undefined`. The top frame's offset is already computed per call in
+    `currentFrameViewportOffset`, and a child frame's was already `undefined` until its parent answered, so behaviour is
+    unchanged.
+  - New `content/tests/frame-geometry.test.ts` loads the module with no `window` at all.
+  - Revert check: the old seed restored -> `frame-geometry`, `click`, `execute` and `page-identity` each `pass 0, fail 1`
+    alone. Restored -> click 30/30, execute 7/7, page-identity 6/6, each run alone.
+- **Validation, after the last edit:**
+  - Domain `structure/tests` + `plan-resolution/tests` -> 68/68.
+  - Extension `content/tests/frame-geometry.test.ts` + `content/actions/tests` + `content/action-runtime/tests` -> 195/195,
+    each file in its own process; this includes `store-chooser-replay`, now passing after the dev merge.
+  - Domain check -> `domain-check-exit=0`. Extension check -> `ext-check-exit=0` (the panel TS2610 errors are gone with
+    dev). Structure audit -> `passed (150 warning(s), 118 baselined)`.
+- **To make the rule mechanical (supervisor's call; shared runner, and needs one full sweep, which I am not allowed to
+  run):** `apps/extension/scripts/test-extension.mjs` and `domain/scripts/test-domain.mjs` import every test bundle into
+  ONE process. That is why load-order dependence stayed hidden. Running each bundle in its own process (`node --test`
+  over the bundle list) would fail any test that cannot run alone.
+
+**Next.**
+- For t223 (its files): `tool-rejection.ts` rewords `consequences_declined`. F29's `run.ts` line is done. The frame URL is
+  still reachable (w20h checked).
+- Follow-ups outside lane files: `llm/evidence-loop/progress-trace.ts:87`, `activity/wording/tool-call.ts` and
+  `activity/observer.ts:38` do not know F24's `dryrun.N.P.reanchor`/`.again` call ids or the `remembered` code (trace and
+  chat wording); F24's `madeOptional` needs a press-time layer flag from the extension (`click.ts`/`results.ts`);
+  F26's verb list lacks "place" and "book" (place-bid, book-service).
+- Live order once the tree has t223: confirm-requests, then pickup-order (both have every blocker above fixed at unit
+  level), then withdraw-stale-requests; apply-quillmark and moon-jar after w20h-w20k.
 
 **Ready to commit (session 3, P1).** Exactly the dirty files of both trees, minus this report's other edits. Lead's own runs,
 after the lead's gate adjustment:

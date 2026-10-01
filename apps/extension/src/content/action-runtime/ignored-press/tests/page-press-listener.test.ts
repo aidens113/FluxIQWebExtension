@@ -58,9 +58,12 @@ type ResourceEntry = { startTime: number; initiatorType: string };
 /**
  * A page: body > section > row > button > label, plus a widget appended to the
  * body, with fakes for every observer. With `shadow`, the row is a host and the
- * button sits at the top of its open root, as a picker's chip does.
+ * button sits at the top of its open root, as a picker's chip does. With
+ * `shadowWidget`, the section also holds a widget drawn in an open shadow root
+ * that holds a nested widget with a root of its own, as a store chip's picker
+ * does.
  */
-function fakePage(options: { performanceObserver?: boolean; shadow?: boolean } = {}) {
+function fakePage(options: { performanceObserver?: boolean; shadow?: boolean; shadowWidget?: boolean } = {}) {
   const view = eventTarget();
   const navigation = eventTarget();
   const document = { ...eventTarget(), location: { href: "http://127.0.0.1:4000/ip/1" }, defaultView: undefined as unknown };
@@ -88,11 +91,18 @@ function fakePage(options: { performanceObserver?: boolean; shadow?: boolean } =
   const widget = node("widget", "div", body);
   let root: FakeRoot | undefined;
   if (options.shadow) {
-    const shadowRoot: FakeRoot = { name: "root", nodeType: 11, host: row, children: [button], querySelectorAll: () => lightDescendants(shadowRoot) };
-    row.shadowRoot = shadowRoot;
-    button.parentNode = shadowRoot;
-    root = shadowRoot;
+    const chipRoot: FakeRoot = { name: "root", nodeType: 11, host: row, children: [button], querySelectorAll: () => lightDescendants(chipRoot) };
+    row.shadowRoot = chipRoot;
+    button.parentNode = chipRoot;
+    root = chipRoot;
   }
+  // The widget drawn in its own root: on the page only with `shadowWidget`,
+  // when the section's lookup reaches it.
+  const nestedRoot = { querySelectorAll: () => [] };
+  const nestedHost = Object.assign(node("nested-host", "span", null), { shadowRoot: nestedRoot });
+  const shadowRoot = { querySelectorAll: () => [nestedHost] };
+  const host = Object.assign(node("host", "fb-store-coupon", null), { shadowRoot, parentElement: section, parentNode: section });
+  if (options.shadowWidget) Object.assign(section, { querySelectorAll: () => [row, button, label, host] });
 
   const mutations = { observed: [] as Array<{ target: FakeNode; init: MutationObserverInit }>, pending: 0, notify: undefined as (() => void) | undefined, disconnected: 0 };
   class FakeMutationObserver {
@@ -146,6 +156,7 @@ function fakePage(options: { performanceObserver?: boolean; shadow?: boolean } =
     navigation,
     document,
     elements: { body, section, row, button, label, widget, root },
+    roots: { shadowRoot, nestedRoot },
     mutations,
     /** A request the page began `offsetMs` after (or, negative, before) the press, queued for the next flush. */
     request(initiatorType: string, offsetMs = 5) {
@@ -185,6 +196,22 @@ test("a press inside a shadow root: the root is observed beside the section, so 
   page.mutations.pending = 1;
   page.listener.flush();
   assert.deepEqual(page.seen, ["change"]);
+});
+
+test("every open shadow root inside the section is observed as well, nested ones included", () => {
+  // A MutationObserver does not see into a shadow root: bigbox's store chip
+  // answers its press only inside its picker's root, and was pressed twice.
+  const page = fakePage({ shadowWidget: true });
+  assert.deepEqual(
+    page.mutations.observed.map((observed) => observed.target),
+    [page.elements.section, page.roots.shadowRoot, page.roots.nestedRoot]
+  );
+  for (const observed of page.mutations.observed) {
+    assert.deepEqual(observed.init, { childList: true, subtree: true, attributes: true, characterData: true });
+  }
+  page.mutations.pending = 1;
+  page.listener.flush();
+  assert.deepEqual(page.seen, ["change"], "a change inside a root is reported as the press's answer");
 });
 
 test("a page that did nothing reports nothing", () => {

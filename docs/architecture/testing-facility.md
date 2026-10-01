@@ -58,25 +58,31 @@ Production composition binds `domain/src/runtime/llm-evidence/` through
 advertises its runnable web node library; Core offers `core.run_node` to run
 those registered nodes and `core.flow_draft` to author the Flow. The domain's
 additional `web.detect_repeating_structure` observation names an extraction structure
-without publishing selectors or values. A free initial observation gives the
-first decision the page already in front of it (`tools.ts`, `runsNodes.initial`).
+without publishing selectors or values; `web.find_on_page` searches the whole
+page, hidden elements and every attribute included, and `web.describe_element`
+prints one element in full (`page-find/`). All three observe only. A free
+initial observation gives the first decision the page already in front of it
+(`tools.ts`, `runsNodes.initial`).
 These operations use the production gateway bridge and require exactly one
 ready, trusted extension with an idle recorder, failing closed on ambiguity.
 The old inspect/navigate/press-only catalog is no longer the build's surface:
 typing, selecting and reading are available through the registered nodes too.
 
-The model receives `web-llm-evidence.v2`: every rendered element from the
-composed tree, every responding frame and open shadow root, in document order.
-The look merges all frames unless a frame is explicitly addressed. A frame
-that does not answer is named in `unansweredFrameIds`. No element count,
-text length, option count, attribute allowlist, byte budget or ranking hides
-page information. Non-sensitive values that were captured, full option lists,
-attributes as pairs, and screened locations/links arrive whole. Sensitive
-controls, secret-shaped strings, card numbers and secret-named URL parameter
-values remain screened. Covering-layer facts (`isDialog`, `inDialog`, `covers`,
-`coversCount`, `coveredBy`, `kind`, `frontLayer`, `statement`) tell the model
-what stands between it and a control without changing document order; see
-[page evidence](page-evidence.md#no-limits-on-the-way-to-a-model).
+The model receives every page as the compact view, `web-llm-page.v3` (t223):
+header lines (`PAGE`, `URL` on a `~` base, `VIEW`, and `COVERING`, `DIALOG`,
+`LOADING` for what stands in front of the page), then one line per element
+that has visible words or is a control, in document order, across every
+responding frame and open shadow root: `<handle> <kind> "<words>" <state>`,
+with `[landmark]`, `- i/n` item and `--- below the fold ---` markers. The
+look merges all frames unless a frame is explicitly addressed; a frame that
+does not answer is named in a `FRAMES` header line. No element that qualifies
+is capped, ranked or cut, and everything else on the page is reached through
+`web.find_on_page` and `web.describe_element`. The structured packet the view
+is written from (`web-llm-evidence.v2`) stays in the domain, where plan
+resolution, stable handles, the state digest and the repair check read it;
+the same screens apply to both: sensitive controls, secret-shaped strings,
+card numbers and secret-named URL parameter values. See
+[page evidence](page-evidence.md#what-a-model-reads-the-compact-page-view).
 
 Opaque `tN` handles (`t1`, `t2`, ...; the older `target.N` spelling is still accepted) bind to observed elements; the runtime resolves and
 revalidates a handle before acting. Consequences are declared to Core's
@@ -1233,6 +1239,97 @@ page, the runtime run and action evidence, extraction judgement, and any
 partial progress available when the lane stopped. A failed build or run does
 not erase the preceding stages by replacing the artifact with an all-or-nothing
 success record.
+
+#### The build is started from the extension's chat window
+
+User order, 2026-10-01: live runs prompt the model building the Flow through
+the real extension chat. So the created-Flow lane starts every build the way a
+person does. It types the task's instruction into the chat in the panel beside
+the page and presses Send (`flow-lane/creation/chat/`,
+`run-scenario/chat-build/`).
+
+The order of a chat build:
+
+1. **Present the page.** `prepareFlowPage("build")` leaves the fixture's entry
+   point on screen, even for a task whose playback starts blank
+   (`flowStartPage({ startedFromChat })`). The chat tells Core the page the
+   person has open, and that page is where the Flow starts.
+2. **Install the key.** `LiveLlmRun.chatBuildAuthorizer` puts the run's key
+   in the person's Secret Keys and re-signs the session. The paired
+   extension's chat runs on that unlocked session. Nothing is pinned to a
+   Flow, because there is no Flow yet.
+3. **Type and send.** The run selects its project for the paired client.
+   Then the panel's own composer, controller and background relay carry the
+   message to Core's `append-turn`. The panel is driven through
+   `extensionViewPanelDriver` from the control tab, which reaches Chrome's
+   real side panel or the docked popup.
+4. **Follow the build.** `buildCreatedFlowFromChat` reads Core as the person
+   would:
+   - the chat thread for the person's turn, FluxIQ's answer, and the
+     `panel-capability-result` turn of `flow.createHere`;
+   - the project's Flows for the one the chat made (Subflows, listed as Flows
+     of their own, are not counted);
+   - that Flow's proposal for what the build did and spent.
+
+   Core's `flow.createHere` creates the Flow, saves the instruction, explores
+   from the page, and approves and applies its own proposal. So the lane
+   neither builds nor reviews anything itself.
+5. **Answer questions in the chat.** Questions the build raises land in that
+   chat, which is the project's own thread (subject `project`). The Lab's
+   person answers them there by pressing the panel's Allow or Don't allow,
+   or the option's label (`answerInChat`). It decides by the same rule as
+   before, the task's `permissionPoint`. Each answer records
+   `via: "chat" | "core"`. A run's question on its own thread is still
+   answered through Core.
+6. **Hand on.** The Flow then goes through the unchanged stages: read, run,
+   judge, repair, replay, and the verdict.
+
+Every ending is a build record carrying `chat` (`CreatedFlowChatRecord`):
+places in the thread, `became` (`build`, `no_build` or `other_capability`),
+`ending` (`created`, `awaiting_permission`, `failed` or `no_result`), counts of
+asks, and `readWithoutModel`. `snapshots/flow-lane.json` names
+`buildEntry: "chat"`.
+
+A chat that built nothing fails as "FluxIQ's chat did not build a Flow ...; it
+said: ...", in FluxIQ's own words. The build settlement's "reached no
+provider" is kept as its cause and never replaces it.
+
+What the chat cannot carry is refused before anything starts
+(`LiveLlmRun.assertChatBuildable`, `commands.ts`):
+
+- `--llm-permit`. The chat sends no permit; the person answers at the point
+  instead.
+- A model other than Core's default for a new Flow.
+- `--no-live-panel`, or a panel that did not show (`environment.missing`).
+
+Two limits come with the chat path:
+
+- A chat build runs on Core's own limits for a new Flow (the $0.25 run
+  ceiling). The run's own caps are applied when it is settled.
+- A chat build that fails leaves no readable record of what it spent. Core's
+  diagnostic reaches the thread's sentence only, so such a build's accounting
+  is `null`.
+
+`--direct-api-build` is test-only. It is the old path: a blank Flow, the Lab
+calling `generate-flow-bootstrap-adaptation` itself, and the Lab's own
+review. A run started that way fails `fixture.invalid` at the end, whatever
+its Flow did, so it is never counted as a pass.
+
+The headed, provider-free proof is the extension chat check's build claim
+(`extension-chat-check/prove/chat-build.ts`). It runs the same stage against
+an isolated Core with no model key:
+
+```
+node packages/test-runner/dist/extension-chat-check/cli.js --browser chrome --scenario everything-store --page ./ --no-ask --build
+```
+
+The claim holds when:
+
+- Core reads the message without the model as `flow.createHere`, with the
+  message as its instruction;
+- Core creates the Flow and saves that instruction;
+- the build stops on the locked key, and the thread says so;
+- the stage records a failed build of that Flow.
 
 `authoredNodes` makes the created Flow diagnosable without persisting its raw
 document. There is one entry per action node, carrying `nodeId`, `definitionId`,
@@ -2528,7 +2625,7 @@ The default Lab allowance is the model's whole context window: 992,000 input tok
 
 Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core run intent `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The live campaign (`scripts/lab/live-campaign`) passes no `--llm-max-run-tokens`: with whole-page requests a build may use more than a million tokens across its calls, and a run budget it outgrew would fail the run as `performance.budget` only after the money was spent, so what bounds a campaign run is its per-build spend ceiling, its call count and Core's stall guard. The spend ceiling is $0.25 per build, whatever the build's call count, and it has one definition: Core's `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD`, which the Lab imports as `LIVE_LLM_BUILD_COST_CEILING_USD` (`packages/test-runner/src/live-llm/build-cost-ceiling.ts`). `--llm-max-cost-usd` is the whole build's ceiling, not a per-call figure: it may only lower Core's ceiling, is never multiplied by the call count, and the live campaign passes none. The ceiling is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings, so Core's loop budget holds the build, the run's recovery and each re-author build to it, each on its own. The Lab's post-run check holds each settled phase to it again, and every live run reports its spend per build against it: `snapshots/live-llm.json` `observed.perBuild`, the campaign row's `perBuildSpend` with the summary's `buildsOverCeiling`, and the spend ledger's `buildCeilingUsd`, `maxBuildCostUsd` and `buildsOverCeiling`. There is no spend budget across runs. The model is the Flow's `llmModel` setting.
 
-**Model calls need no grant.** Core resolves the provider from the caller's own unlocked Secret Keys session. The Lab installs the key, saves the Flow's LLM settings and spend ceiling, and then sends its build (`generate-flow-bootstrap-adaptation`) or run (`run-runtime-session` with a `runIntent`). The one thing the operator still allows is a consequence: `--llm-permit` names the classes (`move_money`, `delete`, `send_or_publish`, `modify_existing`, `create_new`) the run's actions may cause, and the Lab sends them as `permittedConsequences` on the build and the run only when it names any. Absent, a consequential act stops and asks a person (`permission_required`). `snapshots/live-llm.json` records the plan's `authorized` bounds and its `permittedConsequences`.
+**Model calls need no grant.** Core resolves the provider from the caller's own unlocked Secret Keys session. The Lab installs the key, saves the Flow's LLM settings and spend ceiling, and then sends its build (`generate-flow-bootstrap-adaptation`) or run (`run-runtime-session` with a `runIntent`). The one thing the operator still allows is a consequence: `--llm-permit` names the classes (`move_money`, `delete`, `send_or_publish`, `modify_existing`, `create_new`) the run's actions may cause, and the Lab sends them as `permittedConsequences` on the build and the run only when it names any. Absent, a consequential act stops and asks a person (`permission_required`). A created-Flow build started from the extension's chat carries no permit at all, so `--llm-permit` is refused for it, and the Lab's person answers the question in the chat instead ("The build is started from the extension's chat window" above). `snapshots/live-llm.json` records the plan's `authorized` bounds and its `permittedConsequences`.
 
 The panel-driven adaptation demos type no call count: the panel sends Core none for an adapting run, so Core applies its default. Those demos accept a source run that made at least one call per recorded intervention and no more than that default. `pnpm demo:llm:adapt` is narrower for now. Its certificate records exactly one diagnosis invocation and one patch invocation, so it refuses, with a message that says why, a run that spent calls between them.
 

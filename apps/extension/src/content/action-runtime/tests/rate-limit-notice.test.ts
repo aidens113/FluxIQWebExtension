@@ -136,3 +136,101 @@ test("the document starting to leave ends the watch at once, so a submit that na
   assert.ok(Date.now() - began < 1_000, "the watch ended when the document began to leave");
   assert.equal(listeners.size, 0, "every listener it added is removed");
 });
+
+// A page too busy to carry the press out, saying so beside the control rather
+// than over the page: crossborder's store coupon turns its button to "…", asks
+// the server, and on the first claim writes "Network busy, please try again"
+// under it and collects nothing (t174-w32).
+
+const COUPON = "Store coupon €3 off orders over €20 Get coupons";
+const COUPON_BUSY = `${COUPON} Network busy, please try again`;
+
+/**
+ * A page with no layers whose pressed control's region reads `region(call)` at
+ * each look (call 0 is the look at the press), and whose control reads
+ * `label(elapsed)` once the press is made.
+ */
+function regionPage(region: (call: number) => string, label: (elapsedMs: number) => string = () => "Get coupons"): RateLimitProbe {
+  let call = 0;
+  let pressedAt: number | undefined;
+  return {
+    layers: () => [],
+    textOf: () => "",
+    regionTexts: () => [region(call++)],
+    labelOf: () => {
+      if (pressedAt === undefined) {
+        pressedAt = Date.now();
+        return "Get coupons";
+      }
+      return label(Date.now() - pressedAt);
+    }
+  };
+}
+
+test("a busy line the press brought into the control's own region is a refusal that names no wait", async () => {
+  const watch = watchRateLimitNotice(pressedElement(), regionPage((call) => (call === 0 ? COUPON : COUPON_BUSY)));
+  const found = await watch.settle(200);
+  assert.equal(found?.busy, true);
+  assert.equal(found?.retryAfterMs, undefined, "Core's backoff decides when to press again");
+  assert.deepEqual(Object.keys(found ?? {}).sort(), ["afterMs", "busy"], "nothing the page wrote leaves the watch");
+});
+
+test("a busy line already beside the control at the press, and never cleared, is not this press's answer", async () => {
+  const watch = watchRateLimitNotice(pressedElement(), regionPage(() => COUPON_BUSY));
+  assert.equal(await watch.settle(150), undefined);
+});
+
+test("a busy line the press cleared and the page then wrote again is this press's answer", async () => {
+  // The coupon empties its error line on the press, then writes it again when the claim fails again.
+  const watch = watchRateLimitNotice(pressedElement(), regionPage((call) => (call === 1 ? COUPON : COUPON_BUSY)));
+  const found = await watch.settle(300);
+  assert.equal(found?.busy, true);
+});
+
+test("a failure that is not the page being busy is no refusal, so the press stands on its own post-condition", async () => {
+  const failed = "Something went wrong. We could not save this item. Try again";
+  const watch = watchRateLimitNotice(pressedElement(), regionPage((call) => (call === 0 ? "Save for later" : `Save for later ${failed}`)));
+  assert.equal(await watch.settle(150), undefined);
+});
+
+test("while the pressed control shows it is working, the watch reads past its window and finds the refusal painted when the work ends", async () => {
+  // The coupon shows "…" for its 800 ms wait and the request; the line comes with the button's own words.
+  const busyUntilMs = 450;
+  let working = true;
+  const watch = watchRateLimitNotice(
+    pressedElement(),
+    regionPage(
+      () => (working ? COUPON.replace("Get coupons", "…") : COUPON_BUSY),
+      (elapsed) => {
+        working = elapsed < busyUntilMs;
+        return working ? "…" : "Get coupons";
+      }
+    )
+  );
+  const began = Date.now();
+  const found = await watch.settle(100);
+  assert.equal(found?.busy, true, "the refusal after the window was found");
+  assert.ok(Date.now() - began >= busyUntilMs - 50, "the watch read on past its 100 ms window");
+});
+
+test("a control that stops working with no refusal ends the watch then, and one that never stops is followed for at most 3 s", async () => {
+  const done = watchRateLimitNotice(pressedElement(), regionPage(() => COUPON, (elapsed) => (elapsed < 200 ? "…" : "Collected")));
+  const doneBegan = Date.now();
+  assert.equal(await done.settle(100), undefined);
+  assert.ok(Date.now() - doneBegan < 1_000, "ended when the control stopped working");
+
+  const stuck = watchRateLimitNotice(pressedElement(), regionPage(() => COUPON, () => "…"));
+  const stuckBegan = Date.now();
+  assert.equal(await stuck.settle(100), undefined);
+  const waited = Date.now() - stuckBegan;
+  assert.ok(waited >= 2_700 && waited < 4_000, `followed to the busy limit, not past it (${waited} ms)`);
+});
+
+test("a control whose label never had words is not read as working", async () => {
+  // An icon-only button ("×", "♥") that stays wordless is not a press still in progress.
+  let first = true;
+  const probe: RateLimitProbe = { layers: () => [], textOf: () => "", regionTexts: () => [""], labelOf: () => (first ? ((first = false), "♥") : "♥") };
+  const began = Date.now();
+  assert.equal(await watchRateLimitNotice(pressedElement(), probe).settle(100), undefined);
+  assert.ok(Date.now() - began < 600);
+});

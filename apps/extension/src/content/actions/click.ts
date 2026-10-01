@@ -33,7 +33,12 @@
 // (`action-runtime/ignored-press/`) -- and only when none came is the control,
 // if it can still be pressed, pressed again at the same point, once, and the
 // result says so. Any sign, above all a request, means it is never pressed
-// again: a second press on one that did something is a second order.
+// again: a second press on one that did something is a second order. The press
+// made once more is watched the same way, and one the page ignored too is not
+// a success: it fails as `output_not_observed`, saying neither press was
+// answered. The everything store's buy box only comes alive 1.2 s after its
+// page loads, so a press soon after the load is ignored twice, and until
+// 2026-10-01 it was reported done with nothing in the cart (lane A, `t174-w34`).
 // A link is held to more than that, because a link states where it
 // goes: the click must visibly do what following it would. A navigation that
 // begins does, and so does the page's own script taking the click over and
@@ -118,6 +123,9 @@ const IGNORED_PRESS_WINDOW_MS = 800;
 /** What a press made twice says, in the result's `actual`. A closed phrase: nothing the page wrote is in it. */
 const PRESSED_ONCE_MORE = "the page ignored the first press, so it was pressed once more";
 
+/** What a press the page ignored twice says. A closed phrase, as above. */
+const IGNORED_TWICE = "the page ignored the first press, so it was pressed once more, and it ignored that press too";
+
 /** What one press on a control that is not a link was seen to bring. */
 type PressOutcome = {
   /** Whether the click's default action was allowed to run. */
@@ -126,7 +134,7 @@ type PressOutcome = {
   refused: RateLimitNotice | undefined;
   /** A robot check the press put up. */
   sighting: RobotCheckSighting | undefined;
-  /** What the page did at all; only read on a first press, which is the only one that may be followed by another. */
+  /** What the page did at all: on a first press, whether to press once more; on that second press, whether either was answered. */
   answer: IgnoredPressAnswer | undefined;
 };
 
@@ -140,12 +148,12 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
 
   const report = deps.checkActionability(element);
   if (!report.actionable) {
-    return deps.rejected(action, startedAt, report.code, "a target that can be clicked", report.detail, { ...evidence(), blockedAt: report.point });
+    return deps.rejected(action, startedAt, report.code, "a target that can be clicked", report.detail, { ...evidence(), blockedAt: report.point, target: element, refusedBeforeDispatch: true });
   }
 
   const link = navigatingLink(element);
   if (!link) {
-    const first = await press(element, report.point, action, deps, startedAt, true);
+    const first = await press(element, report.point, action, deps, startedAt);
     if (first.refused) return deps.rateLimited(action, startedAt, first.refused, evidence());
     if (first.sighting && first.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, first.sighting, evidence());
     // A robot check that came and went was an answer; so is any sign the watch saw.
@@ -158,9 +166,12 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
     if (!deps.checkActionability(element).actionable) {
       return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting), evidence());
     }
-    const second = await press(element, report.point, action, deps, startedAt, false);
+    const second = await press(element, report.point, action, deps, startedAt);
     if (second.refused) return deps.rateLimited(action, startedAt, second.refused, evidence());
     if (second.sighting && second.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, second.sighting, evidence());
+    if (!second.sighting && second.answer && second.answer.seen.length === 0) {
+      return deps.success(action, startedAt, "Element clicked.", ignoredTwiceValidation(report.detail, second.accepted), evidence());
+    }
     return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, second.accepted, second.sighting, true), evidence());
   }
 
@@ -199,16 +210,15 @@ function navigatingLink(element: Element): NavigatingLink | undefined {
  * the hover and the press so that nothing already on the page is taken for its
  * answer. They read the same window and end on their own signals, so an
  * ordinary press waits no longer than its answer takes; only a robot check the
- * press puts up is followed past it. `watchIgnored` is set for the first press
- * only: the second is never followed by a third.
+ * press puts up is followed past it. Both presses are watched for any answer;
+ * the second is never followed by a third.
  */
 async function press(
   element: Element,
   point: ClickPoint,
   action: BrowserActionCommand,
   deps: ContentActionDependencies,
-  startedAt: number,
-  watchIgnored: boolean
+  startedAt: number
 ): Promise<PressOutcome> {
   // Assigned inside the gesture's callback, which control flow cannot see.
   let notice = undefined as RateLimitWatch | undefined;
@@ -218,7 +228,7 @@ async function press(
     const accepted = dispatchClickGesture(element, point, () => {
       notice = deps.watchRateLimitNotice(element);
       check = deps.watchRobotCheck(element);
-      if (watchIgnored) ignored = deps.watchIgnoredPress(element);
+      ignored = deps.watchIgnoredPress(element);
     });
     const windowMs = rateLimitWindowMs(action);
     const [refused, sighting, answer] = await Promise.all([
@@ -310,6 +320,21 @@ function hitTestValidation(detail: string, accepted: boolean, cleared?: RobotChe
     status: "passed",
     expected: "the click lands on the target or something inside it",
     actual: `${detail}${again}${prevented}${waited}`
+  };
+}
+
+/**
+ * A press the page ignored, and ignored again when it was made once more: the
+ * click landed both times and nothing whatever answered it, so the act is not
+ * observed. Failed, which the result builder reports as `output_not_observed`
+ * (retryable), not as a success the next step would build on.
+ */
+function ignoredTwiceValidation(detail: string, accepted: boolean): BrowserActionValidation {
+  const prevented = accepted ? "" : "; the page prevented the click's default action";
+  return {
+    status: "failed",
+    expected: "the page answers the press",
+    actual: `${detail}; ${IGNORED_TWICE}: no request, no change inside the control or its section, no navigation and no focus move${prevented}`
   };
 }
 

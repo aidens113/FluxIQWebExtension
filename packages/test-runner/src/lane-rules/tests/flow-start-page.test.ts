@@ -102,3 +102,15 @@ test("an unnamed preparation is a run, not a build, and the recorded lane keeps 
   assert.equal(flowStartPage({ task: undefined, moment: undefined, armedFacts: [] }), "scenario-start-page");
   assert.equal(flowStartPage({ task: undefined, moment: "playback", armedFacts: [] }), "scenario-start-page");
 });
+
+/**
+ * A build started from the extension's chat starts where the person is: the
+ * chat tells Core the page they have open, and a blank tab is none. So the
+ * person is on the store when they type, and the Flow still plays back from
+ * a blank tab, where reaching the page is its own first step.
+ */
+test("a build typed into the chat starts on the fixture's entry point, and its playback still starts blank", () => {
+  assert.equal(flowStartPage({ task: task("navigate-and-extract"), moment: "build", armedFacts: [], startedFromChat: true }), "scenario-start-page");
+  assert.equal(flowStartPage({ task: task("navigate-and-extract"), moment: "playback", armedFacts: [], startedFromChat: true }), "blank-tab");
+  assert.equal(flowStartPage({ task: task("navigate-and-extract"), moment: "build", armedFacts: [] }), "blank-tab", "a direct build is still told where to go");
+});

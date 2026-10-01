@@ -97,6 +97,25 @@ export type ActionResultEvidence = {
    * never leaves the page: a point says nothing a snapshot would not.
    */
   blockedAt?: { x: number; y: number } | undefined;
+  /**
+   * Set by an actionability gate that refused the target before the verb
+   * dispatched anything: no gesture, value, key or file reached the page. Read
+   * by `actionRejected` alone, which states it on the record as Core's own
+   * closed `effect: "unacted"` -- the field Core's parser already admits, where
+   * a new key would make it drop the record whole -- so in-page recovery can
+   * wait out a control the page disables for a moment
+   * (`recovery/fault.ts`) without retrying a verb that had already acted.
+   * Never set after a verb acted: a `disabled` from `check.ts` after
+   * `setCheckedState`, or `upload.ts` after `setInputFiles`, leaves it out.
+   */
+  refusedBeforeDispatch?: true | undefined;
+  /**
+   * The refused element itself, for a target refused as `covered` or `hidden`:
+   * a dialog that holds it is the one the step is working in, never the one in
+   * its way (`blocking-dialog.ts`). It never leaves the page: `buildResult`
+   * copies only the fields above it by name.
+   */
+  target?: Element | undefined;
 };
 
 /**
@@ -210,7 +229,7 @@ export function actionRejected(
 ): BrowserActionResult {
   const validation = boundValidation({ status: "failed", expected, actual });
   const observed = validation.status === "failed" ? validation.actual : actual;
-  const dialog = blockingDialog(reason, evidence.blockedAt);
+  const dialog = blockingDialog(reason, evidence.blockedAt, evidence.target);
   if (dialog) {
     const code = dialog.kind === "person"
       ? WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED
@@ -219,15 +238,36 @@ export function actionRejected(
       status: "failed",
       validation,
       message: `Action blocked: ${observed}; ${dialog.sentence}`,
-      failure: webAutomationFailureRecord(code, { expected, actual: `${reason}: ${observed}; ${dialog.sentence}` })
+      failure: refusalRecord(code, { expected, actual: `${reason}: ${observed}; ${dialog.sentence}` }, evidence)
     }, evidence);
   }
   return buildResult(action, startedAt, {
     status: "failed",
     validation,
     message: `Action rejected: ${observed}`,
-    failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected, actual: `${reason}: ${observed}` })
+    failure: refusalRecord(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected, actual: `${reason}: ${observed}` }, evidence)
   }, evidence);
+}
+
+/**
+ * A refusal's record, stating `effect: "unacted"` when the gate refused before
+ * the verb dispatched anything.
+ *
+ * Core's vocabulary already has the word for it: "the producer states the act
+ * demonstrably did not happen". `webAutomationFailureRecord` takes the effect
+ * from the code's row, and a row cannot know where its refusal was decided --
+ * ACTION_REJECTED is written both before a verb acts and after -- so the call
+ * site's statement is added here, on the one path that knows. Core's
+ * disposition is unchanged by it, because the code stays not retryable and
+ * Core refuses on that first; what reads it is `recovery/fault.ts`.
+ */
+function refusalRecord(
+  code: WebAutomationFailureCode,
+  comparison: { expected: string; actual: string },
+  evidence: ActionResultEvidence
+): FailureRecord {
+  const record = webAutomationFailureRecord(code, comparison);
+  return evidence.refusedBeforeDispatch ? { ...record, effect: "unacted" } : record;
 }
 
 /**
@@ -236,7 +276,9 @@ export function actionRejected(
  * happen, and it carries the wait the notice named as `retryAfterMs`, so Core
  * re-runs the node after that wait instead of refusing to repeat a press or
  * reading the refusal as done. The texts say what was concluded, never what the
- * notice wrote.
+ * notice wrote. A page that said it was busy (`notice.busy`) is the same
+ * refusal for the same reason -- the press was not carried out and may be made
+ * again -- and its texts say busy, not too fast.
  */
 export function actionRateLimited(
   action: BrowserActionCommand,
@@ -248,12 +290,13 @@ export function actionRateLimited(
   const wait = notice.retryAfterMs === undefined
     ? "it named no wait"
     : `it asked for a wait, so the press may be made again after ${notice.retryAfterMs} ms`;
-  const actual = `the page answered the press ${notice.afterMs} ms after it with a notice that it was refused for going too fast, and confirmed nothing; ${wait}`;
+  const why = notice.busy ? "a line that it was busy and could not carry the press out" : "a notice that it was refused for going too fast";
+  const actual = `the page answered the press ${notice.afterMs} ms after it with ${why}, and confirmed nothing; ${wait}`;
   const validation = boundValidation({ status: "failed", expected, actual });
   return buildResult(action, startedAt, {
     status: "failed",
     validation,
-    message: `Action refused by the page for going too fast; ${wait}.`,
+    message: notice.busy ? `Action refused by the page for now: it said it was busy; ${wait}.` : `Action refused by the page for going too fast; ${wait}.`,
     failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { expected, actual, retryAfterMs: notice.retryAfterMs })
   }, evidence);
 }

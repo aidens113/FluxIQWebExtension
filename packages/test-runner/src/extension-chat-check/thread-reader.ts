@@ -1,4 +1,5 @@
 import type { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
+import { LAB_PROJECT_DOMAIN_ID } from "../flow-lane/index.js";
 
 /** A turn as `get-conversation` returns it, with only what the claims read. */
 export type ThreadTurn = {
@@ -22,9 +23,10 @@ export type ThreadReader = {
  * session rather than the extension's token, so what the extension did is
  * checked against Core's record and not against the extension's own account.
  */
-export function threadReader(control: Pick<ExistingFluxIQControlClient, "automationStudioCall">, projectId: string): ThreadReader {
+export function threadReader(control: Pick<ExistingFluxIQControlClient, "automationStudioCall">, projectId: string, domainId: string = LAB_PROJECT_DOMAIN_ID): ThreadReader {
   async function turns(conversationId: string): Promise<ThreadTurn[]> {
-    const payload = await control.automationStudioCall("get-conversation", { projectId, conversationId, limit: 200 }) as { conversation?: { turns?: unknown } };
+    // Core holds a conversation read to the project's domain, and refuses one made without it ("project is unavailable in this domain scope").
+    const payload = await control.automationStudioCall("get-conversation", { projectId, conversationId, limit: 200 }, {}, domainId) as { conversation?: { turns?: unknown } };
     const list = payload?.conversation?.turns;
     return Array.isArray(list) ? list as ThreadTurn[] : [];
   }

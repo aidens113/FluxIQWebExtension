@@ -13,7 +13,8 @@ function modelDocument(): void {
   const doc = document as unknown as { createElement(tag: string): unknown; hasFocus(): boolean };
   const create = doc.createElement;
   doc.hasFocus = () => false;
-  doc.createElement = (tag) => Object.assign(create(tag) as object, { ownerDocument: doc });
+  // Defined, not assigned: the fake element reads its owner through a getter (`cfecc984`).
+  doc.createElement = (tag) => Object.defineProperty(create(tag) as object, "ownerDocument", { value: doc, enumerable: true });
 }
 
 for (const action of ["disconnect", "save", "forget"] as const) {

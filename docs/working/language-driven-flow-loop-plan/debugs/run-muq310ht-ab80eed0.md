@@ -1,0 +1,29 @@
+# run-muq310ht-ab80eed0: the first chat-driven live run that built a Flow (2026-10-01, t227)
+
+- **Run:** `everything-store` / `everything-store-plus-earbuds-under-50`, headed, `buildEntry: chat`, launched 22:04Z from `fxwork/t227`.
+  - This tree branched from dev `58ec93dd` and has neither t223's stable handles (`edc61d22`) nor lane A's F16-F22.
+  - Cost: **$0.2769** by the spend ledger. The build was $0.1359 for 38 calls, the reauthor $0.1391, and the result check $0.0019 for 2 calls. Verdict `failed`.
+- **Chat path (what t227 changed):** it worked.
+  - The model read the typed instruction as `flow.createHere` (`readWithoutModel: false`).
+  - The chat created the Flow, built it, and applied its own proposal in 153 s (`chat.ending: created`, `review.appliedMutationCount: 2`).
+  - The lane then read the Flow (5 action nodes: 3 navigate, 1 click, 1 extract_list), ran it, judged it, and repaired it.
+- **Why it failed (product):** the Flow's read returned no rows. The run judged `expectedRecords 13, observedRecords 0`, and Core's result check ended `core.result.does_not_answer_request` (`output_not_observed`).
+- **Why the cookie banner's X was "not on the page":**
+  - The build's decision rows (`snapshots/flow-lane.json` `build.evidenceLoop.steps`) show 20 `web.output.dom-click` refusals before the build typed its search. All are `web.action.rejected.target_unobserved`.
+  - Reasons: `handle_not_in_packet` (5), `target_not_a_handle` (4), and `answered_the_same_again` (11). That is: the handle the model named was not in the packet it was shown; it then named a target that is not a handle; and the domain refused each repeat of a refused request.
+  - Code paths: `domain/src/runtime/llm-evidence/plan-resolution/target-packets.ts` (`handle_not_in_packet`, `target_not_a_handle`) and `domain/src/runtime/llm-evidence/repeated-refusal.ts` (`answered_the_same_again`).
+  - This fits the renumbered-handle defect that t223's stable handles fix on dev. Each `browser-navigate` restart (iterations 1, 10, 19) re-observed the page, and the click that followed named a handle the new packet did not hold.
+- **Why the list read repeated after the build reached the results:**
+  - The model chose it. Iterations 29 to 36 are eight `core.decision_amend_draft` decisions. Each targeted the same draft step `d14`, applied one amendment, and re-ran it (`llm_evidence_loop.draft_rerun` → `web.output.dom-extract_list` → `web.inspect.succeeded`).
+  - It was not the Lab replaying, and not a pagination loop: every re-run reports `pageState: unchanged`, so no page was turned between them.
+  - The rows carry evidence bytes (27,204 then 19,103), not row counts, so how many rows each read returned is NO EVIDENCE.
+  - Code path: Core `runtime/llm/evidence-loop` draft amendment and re-run.
+  - The playback's own reads are the lane's run. Its reauthor's two `Read list` attempts were refused "it wasn't on the page" (the UI review's `14-flow-run-panel.png`), the same handle class as above.
+- **Why `core.log` had no build trace:**
+  - It was six lines of Next.js start-up, because nothing turned the trace on. `FLUXIQ_BUILD_PROGRESS_TRACE` was set only when the launcher exported it, and neither dev nor this tree set it.
+  - The chat path and the direct path share the evidence loop's trace wrapper (`runtime/llm/evidence-progress/progress-trace.ts`), so the cause is the environment, not the chat.
+  - Fix (t227): `packages/test-runner/src/environment.ts` `buildFluxIQEnvironment` turns it on for every Lab-started Core unless the launcher sets it.
+- **UI review:**
+  - The chat showed the person's message, then "Doing ...", then each step with its reasoning and a card per action, and the completion check's test runs. That is chat-first, as intended.
+  - Defect: the build's refused clicks are shown as plain "Didn't work: it wasn't on the page" cards, ten in a row, with no sign that FluxIQ is repeating itself.
+- **Next:** re-run on a tree with dev merged (stable handles, F16-F22). The launcher itself needs no further change for that.

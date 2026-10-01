@@ -57,6 +57,24 @@
 // **contradicts** it stands aside for the guess. Standing aside is not
 // excluding: with nothing else left, the contradicting column is still the
 // answer, because a guess beats a refusal.
+//
+// ## A name that means a kind of column, where no name answers
+//
+// A detection over a page styled with hashed class names labels its columns by
+// path -- `div > a.css-0y6s4m2 > span`, `p.css-10muxo3 > span (currency
+// amount)` -- and no name a model writes from the instruction ("item",
+// "quantity", "price") comes near one, so the everything store's cart read was
+// refused `column_not_in_detected_list` (lane A, cause #15, `t174-w34` F2). What
+// the detection does say is the shape: the page side completes a path label with
+// `(number)` or `(currency amount)` when every value it read has one
+// (`content/extraction/infer-fields.ts`), and the key is that label's
+// (`extraction/label-key.ts`). An item's own name is the text of its link.
+//
+// So when nothing clears Core's floor, a name that plainly means a quantity, a
+// price or the item's name resolves to the one column of that kind, and to none
+// when there are several or none. It is recorded as a guess (`nearest`, score 0:
+// no name similarity), never as a name match, and only where the caller allows a
+// guess.
 
 import { automationStudioMatchName, type AutomationStudioNameMatch, type AutomationStudioNameValueShape } from "fluxiq/automation-studio/nodes";
 import {
@@ -118,7 +136,7 @@ export function webExtractionMatchedColumn(
   const wanted = look.wanted;
   const options = wanted === undefined ? undefined : { valueShape: wanted };
   const named = automationStudioMatchName(written, aliases, options);
-  if (named === undefined) return undefined;
+  if (named === undefined) return look.headerOnly ? undefined : columnByMeaning(written, detected);
   // Only a guess stands a column aside. An exact or normalized hit is the name,
   // and Core's own `preferShape` already prefers the right shape among several.
   if (named.how !== "nearest" || wanted === undefined) return matchedAlias(named, aliases);
@@ -170,6 +188,44 @@ function columnAliases(detected: Record<string, WebAutomationExtractField>, head
  */
 function matchedAlias(named: AutomationStudioNameMatch, aliases: readonly ColumnAlias[]): WebExtractionColumnMatch {
   return { key: aliases.find((alias) => alias.id === named.id)!.key, how: named.how, score: named.score };
+}
+
+/** A detected key whose label the page side completed with a shape (`infer-fields.ts`), less any `_2` a repeated label was given. */
+const NUMBER_KEY = /(?:^|_)number(?:_\d+)?$/u;
+const CURRENCY_KEY = /(?:^|_)currency_amount(?:_\d+)?$/u;
+
+/** A selector whose path steps through a link element: the text a list item's link shows is the item's own name. */
+const THROUGH_LINK = /(?:^|[\s>+~])a(?=[.#\[:\s>+~]|$)/u;
+
+/** What a column must be for each meaning a written name can carry. */
+type Meaning = { words: ReadonlySet<string>; holds: (key: string, field: WebAutomationExtractField) => boolean };
+
+const MEANINGS: readonly Meaning[] = [
+  {
+    words: new Set(["quantity", "qty", "count", "units", "how many", "number of items"]),
+    holds: (key) => NUMBER_KEY.test(key)
+  },
+  {
+    words: new Set(["price", "cost", "unit price", "price each", "total", "line total", "subtotal", "amount"]),
+    holds: (key) => CURRENCY_KEY.test(key)
+  },
+  {
+    words: new Set(["item", "name", "title", "product", "item name", "product name", "item title", "product title"]),
+    holds: (_key, field) => typeof field !== "string" && field.kind === "text" && field.selector !== undefined && THROUGH_LINK.test(field.selector)
+  }
+];
+
+/**
+ * The one detected column a written name means by kind (see the file comment),
+ * or `undefined` when the name carries no such meaning or no single column has
+ * that kind.
+ */
+function columnByMeaning(written: string, detected: Record<string, WebAutomationExtractField>): WebExtractionColumnMatch | undefined {
+  const folded = written.trim().toLowerCase().replace(/[\s_-]+/gu, " ");
+  const meaning = MEANINGS.find((candidate) => candidate.words.has(folded));
+  if (meaning === undefined) return undefined;
+  const keys = Object.entries(detected).filter(([key, field]) => meaning.holds(key, field)).map(([key]) => key);
+  return keys.length === 1 ? { key: keys[0]!, how: "nearest", score: 0 } : undefined;
 }
 
 /** The attributes a page writes an address into, as `actions/extraction/field-match.ts` names them, which is what makes a value a URL rather than a quantity. */

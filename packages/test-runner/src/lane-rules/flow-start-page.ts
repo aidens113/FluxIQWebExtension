@@ -86,7 +86,16 @@ export function flowStartPage(input: {
   task: Pick<LiveInstructionTask, "kind"> | undefined;
   moment: "build" | "playback" | undefined;
   armedFacts: readonly ExpectedFact[];
+  /**
+   * The build is started from the extension's chat. The chat tells Core the
+   * page the person has open, and that page is where the Flow starts
+   * (`create-here.ts` in Core); a blank tab is no page at all. So the person
+   * is on the fixture's entry point when they type, as a shopper is on the
+   * store, and the Flow's playback still starts blank.
+   */
+  startedFromChat?: boolean;
 }): FlowStartPage {
+  if (input.moment === "build" && input.startedFromChat) return "scenario-start-page";
   if (!input.task || !createdFlowMustReachItsOwnPage(input.task)) return "scenario-start-page";
   return input.armedFacts.length > 0 ? "blank-tab-after-proving-the-arming" : "blank-tab";
 }

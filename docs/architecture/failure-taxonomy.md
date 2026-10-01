@@ -66,7 +66,11 @@ content loop does not see it in practice. When that failure reaches Core, the
 defensive executor treats its outcome as ambiguous and replays a mutating node
 only when the node positively says repetition is safe; read-only work may be
 repeated. `BLOCKED_BY_DIALOG` is a stable page state that needs a different
-action, not a retry. `BROWSER_PERMISSION_DENIED` is a browser capability/policy
+action, not a retry. A dialog that holds the refused target itself -- the
+open form drawer, the consent wall whose own button is pressed -- is the
+layer the step is working in, never the one blocking it: it neither makes a
+refusal `BLOCKED_BY_DIALOG` nor is cleared by the page-side defence
+(`content/action-runtime/interference/overlays.ts`, since 2026-10-01). `BROWSER_PERMISSION_DENIED` is a browser capability/policy
 refusal that must be resolved before dispatch, unlike `ACTION_REJECTED`, which
 is the actionability decision about a particular target on a drivable page.
 
@@ -74,8 +78,11 @@ is the actionability decision about a particular target on a drivable page.
 carries `effect: "unacted"`, a field Core's record gained for it. The click verb
 reports it when a press that is not a link opens a notice whose own words say
 the page refused it for going too fast
-(`apps/extension/src/content/action-runtime/rate-limit-notice.ts`), and the
-record also carries the wait the notice named, plus half a second and held to a
+(`apps/extension/src/content/action-runtime/rate-limit-notice.ts`), or brings a
+line into the pressed control's own region saying the page was busy and could
+not carry the press out (crossborder's store coupon: "Network busy, please try
+again"; a closed phrase list, reported with no wait, so Core's backoff
+decides), and the record also carries the wait the notice named, plus half a second and held to a
 minute, as `retryAfterMs`. The page-side loop never retries it, because the wait
 outlasts its five-second budget; Core's defensive executor reads `unacted` as
 licence to repeat even a mutating node and waits the hinted time first, bounded

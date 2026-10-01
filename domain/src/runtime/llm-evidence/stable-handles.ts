@@ -40,6 +40,21 @@
 // authored. A bare handle therefore names exactly one element, and a
 // `location` beside it only confirms what the handle already says.
 //
+// **Across a layer that comes and goes.** A selector is positional where a
+// tag repeats among siblings, so a popup, a dialog or a cookie banner that the
+// page puts beside its main column -- one more `div` under `body` -- turns
+// `body > div > header ...` into `body > div:nth-of-type(1) > header ...`, or
+// shifts every `nth-of-type` after it. Keyed on the selector alone, every
+// handle on the page changed each time such a layer opened or closed: the
+// store button was `target.7` with the privacy overlay up and `target.339`
+// without it, and a handle the model had just been shown was refused
+// `handle_not_in_packet` the moment a timed email popup opened
+// (`run-mup2i28c-6c7fc209`, C1). So an element whose exact address is new is
+// matched to the control it was before by what does not move: the same
+// selector with its positions taken out, its tag, its record, and its words
+// (`rebound` below). It is matched only where that is unambiguous; anything
+// else is a new control with a new number, as before.
+//
 // Handles were spelled `target.N` until t223, which is how the runs above
 // recorded them.
 //
@@ -91,15 +106,29 @@ export type WebLlmStableTargetHandles = {
  * One Flow's assignments: which control has which number, and the last
  * number spent. Addresses are kept as digests, so a Flow's memory is at most
  * one short key per number whatever the page's selectors are.
+ *
+ * `seen` is what each number's control last looked like where positions do
+ * not count -- its loose address and its words -- and `byLoose` the numbers
+ * given under each loose address, so a recapture whose positional selectors
+ * moved can find the control again (`rebound`).
  */
-type FlowHandles = { byAddress: Map<string, number>; spent: number };
+type FlowHandles = {
+  byAddress: Map<string, number>;
+  spent: number;
+  seen: Map<number, { loose: string; words: string }>;
+  byLoose: Map<string, number[]>;
+};
+
+function emptyFlow(): FlowHandles {
+  return { byAddress: new Map<string, number>(), spent: 0, seen: new Map(), byLoose: new Map() };
+}
 
 export function createWebLlmStableTargetHandles(): WebLlmStableTargetHandles {
   const flows = new Map<string, FlowHandles>();
   return {
     restamp(scope, binding) {
       const flowKey = `${scope.projectId}\0${scope.flowId}`;
-      let flow = flows.get(flowKey) ?? { byAddress: new Map<string, number>(), spent: 0 };
+      let flow = flows.get(flowKey) ?? emptyFlow();
       flows.delete(flowKey);
       flows.set(flowKey, flow);
       for (const oldest of flows.keys()) {
@@ -116,24 +145,30 @@ export function createWebLlmStableTargetHandles(): WebLlmStableTargetHandles {
       // two remembered pages disagree on, so the worst it can do is refuse.
       const unseen = new Set(addresses.filter((address) => !flow.byAddress.has(address))).size;
       if (flow.spent + unseen > WEB_LLM_TARGET_HANDLE_MAX_NUMBER) {
-        flow = { byAddress: new Map<string, number>(), spent: 0 };
+        flow = emptyFlow();
         flows.set(flowKey, flow);
       }
 
       // Rendered elements are numbered before hidden ones, so a capture that
       // includes hidden elements spends no number a rendered element of the
       // same page would have been given first (t223).
+      const order = renderedFirst(binding);
+      const loose = looseAddressesOf(binding);
+      const words = binding.evidence.elements.map(identityWords);
+      const numbers = rebound(flow, order, addresses, loose, words);
       const assigned: string[] = [];
-      for (const index of renderedFirst(binding)) {
-        const address = addresses[index] as string;
-        const known = flow.byAddress.get(address);
-        if (known !== undefined) {
-          assigned[index] = `t${known}`;
-          continue;
+      for (const index of order) {
+        let number = numbers[index];
+        if (number === undefined) {
+          flow.spent += 1;
+          number = flow.spent;
+          const given = flow.byLoose.get(loose[index] as string) ?? [];
+          given.push(number);
+          flow.byLoose.set(loose[index] as string, given);
         }
-        flow.spent += 1;
-        flow.byAddress.set(address, flow.spent);
-        assigned[index] = `t${flow.spent}`;
+        flow.byAddress.set(addresses[index] as string, number);
+        flow.seen.set(number, { loose: loose[index] as string, words: words[index] as string });
+        assigned[index] = `t${number}`;
       }
       return rewrite(binding, assigned);
     }
@@ -188,6 +223,98 @@ function addressesOf(binding: WebLlmSnapshotBinding): string[] {
     addresses[index] = createHash("sha256").update(`${base}\0${occurrence}`).digest("base64url");
   }
   return addresses;
+}
+
+/**
+ * The number each element already has in this Flow, where it has one, or
+ * `undefined` for a control the Flow has not seen. Four tiers, each over what
+ * the one before left unmatched, and no number is given to two elements:
+ *
+ * 1. Its exact address, where the control remembered under that address has
+ *    the same loose address and the same words. A popup's button that now
+ *    sits at the main column's old position is not the button that was there.
+ * 2. Its loose address and its words: the selector with every `nth-of-type`
+ *    and `nth-child` taken out, the tag, the record, the frame and the page.
+ *    A popup inserted before the main column moves every position after it,
+ *    and the controls behind it are found again here, in document order.
+ * 3. Its loose address alone, where one element is left and one number was
+ *    given under it: a button whose label changed after a press ("Add to
+ *    cart" to "Added") keeps its number. A list whose items changed is not
+ *    paired up by count -- sixteen new results are not the sixteen old ones.
+ * 4. Nothing: a control the page added, or one this cannot tell apart.
+ */
+function rebound(flow: FlowHandles, order: readonly number[], addresses: readonly string[], loose: readonly string[], words: readonly string[]): Array<number | undefined> {
+  const numbers: Array<number | undefined> = [];
+  const claimed = new Set<number>();
+  const take = (index: number, number: number): void => {
+    numbers[index] = number;
+    claimed.add(number);
+  };
+  for (const index of order) {
+    const known = flow.byAddress.get(addresses[index] as string);
+    const seen = known === undefined ? undefined : flow.seen.get(known);
+    if (known !== undefined && !claimed.has(known) && seen !== undefined && seen.loose === loose[index] && seen.words === words[index]) take(index, known);
+  }
+  // Tier 2, in document order within each group of one loose address and words.
+  pairInOrder(order.filter((index) => numbers[index] === undefined), (index) => `${loose[index]}\0${words[index]}`,
+    (key) => (flow.byLoose.get(key.slice(0, key.indexOf("\0"))) ?? []).filter((number) => !claimed.has(number) && `${flow.seen.get(number)?.loose}\0${flow.seen.get(number)?.words}` === key),
+    false, take);
+  // Tier 3, only where one element and one number leave nothing to choose.
+  pairInOrder(order.filter((index) => numbers[index] === undefined), (index) => loose[index] as string,
+    (key) => (flow.byLoose.get(key) ?? []).filter((number) => !claimed.has(number)),
+    true, take);
+  return numbers;
+}
+
+/** Pairs each group's elements with its candidate numbers, lowest first; with `single`, only a group of one element and one number. */
+function pairInOrder(
+  unmatched: readonly number[],
+  keyOf: (index: number) => string,
+  candidatesOf: (key: string) => number[],
+  single: boolean,
+  take: (index: number, number: number) => void
+): void {
+  const groups = new Map<string, number[]>();
+  for (const index of unmatched) {
+    const key = keyOf(index);
+    groups.set(key, [...(groups.get(key) ?? []), index]);
+  }
+  for (const [key, indexes] of groups) {
+    const candidates = candidatesOf(key).sort((left, right) => left - right);
+    if (candidates.length === 0 || (single && (candidates.length !== 1 || indexes.length !== 1))) continue;
+    indexes.forEach((index, position) => {
+      const number = candidates[position];
+      if (number !== undefined) take(index, number);
+    });
+  }
+}
+
+/**
+ * Each element's address with positions taken out: the page, the frame, the
+ * selector and shadow-host chain with every `:nth-of-type(n)` and
+ * `:nth-child(n)` removed, the record and the tag. Two controls that differ
+ * only by position share it; a layer inserted beside the page does not change
+ * it.
+ */
+function looseAddressesOf(binding: WebLlmSnapshotBinding): string[] {
+  const location = binding.evidence.location;
+  return binding.evidence.elements.map((element) => {
+    const selector = unpositioned(binding.selectors.get(element.target) ?? "");
+    const hosts = binding.shadowHosts?.get(element.target)?.map(unpositioned).join("\u001f") ?? "";
+    const record = binding.records.get(element.target) ?? "";
+    const base = [location, String(element.frameId ?? 0), selector, hosts, record, element.tag].join("\0");
+    return createHash("sha256").update(base).digest("base64url");
+  });
+}
+
+function unpositioned(selector: string): string {
+  return selector.replace(/:nth-(?:of-type|child)\(\d+\)/gu, "");
+}
+
+/** The words an element is known by: its name, else its text, label or link, whitespace collapsed. */
+function identityWords(element: WebLlmEvidenceElement): string {
+  const words = [element.name, element.text, element.label, element.href].find((value) => value !== undefined && value.trim() !== "");
+  return (words ?? "").replace(/\s+/gu, " ").trim();
 }
 
 /** The packet's element indexes: the rendered elements in document order, then the hidden ones in document order. */

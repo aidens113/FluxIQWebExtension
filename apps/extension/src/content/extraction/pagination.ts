@@ -35,7 +35,13 @@
 // - `loadMore`: press `control`, then wait until an item appears that the read
 //   has not taken, or the control detaches. A load that failed and offered a
 //   Retry beside the control has it pressed, at most twice (`load-retry.ts`).
-//   An absent, disabled or `aria-disabled="true"` control is the list ending.
+//   An absent, disabled or `aria-disabled="true"` control is the list ending,
+//   and so is one still in the page but not rendered -- the `hidden` attribute,
+//   or no box at all -- once it has stayed so for a second, for a page that
+//   hides it only while it settles. Guildline's Sent invitations keeps its
+//   "Show more" with `hidden` after the last page; until 2026-10-01 every read
+//   of it either stopped truncated at its page bound or pressed the hidden
+//   control and failed ten seconds later as a page that ignored it.
 //   A live control that yields nothing in ten seconds fails the read, as
 //   `next` does.
 // - `scroll`: scroll the nearest scrollable ancestor of the first item, or the
@@ -113,7 +119,7 @@ import { nextControlOnPage, type NextControlChoice } from "./detect-pagination";
 import { awaitArrivalOrRetry, waitUntil, type WaitOutcome } from "./list-wait";
 import { newRetryBudget, offeredLoadRetry, type RetryBudget } from "./load-retry";
 import { awaitPageRendered } from "./page-render";
-import { parsedUrl } from "../../shared/parsed-url";
+import { followingPageControl, isDisabled, leadsToThisPage, linkAddress, readPager, sameDocument } from "./pager-reading";
 
 /** Why a read that pages stopped paging: the domain's closed set of words. */
 export type PaginationStop = NonNullable<WebAutomationExtractionSummary["paginationStop"]>;
@@ -446,7 +452,8 @@ async function awaitNextControl(selector: string, progress: PaginationProgress):
 }
 
 async function pressLoadMore(paginate: LoadMorePagination, progress: PaginationProgress): Promise<PageAdvance> {
-  const found = document.querySelector(paginate.control);
+  const found = await renderedLoadMore(paginate.control, progress);
+  if (found === "timed_out") return TIMED_OUT;
   if (!found) return ended("control_absent");
   if (isDisabled(found)) return ended("control_disabled");
   if (progress.pagesRead >= paginationBound(paginate)) return TRUNCATED;
@@ -459,6 +466,39 @@ async function pressLoadMore(paginate: LoadMorePagination, progress: PaginationP
     throw new PaginationFault("list_unchanged", `No new item appeared within ${LIST_CHANGE_TIMEOUT_MS}ms of pressing ${JSON.stringify(paginate.control)} for page ${progress.pagesRead + 1}.`);
   }
   return outcome === "changed" ? ADVANCED : TIMED_OUT;
+}
+
+/**
+ * How long a load-more control that is in the page but not rendered is watched
+ * for coming back before the list counts as ended: a page may hide it while it
+ * settles a load, and one that has ended its list pays this once.
+ */
+const HIDDEN_CONTROL_GRACE_MS = 1_000;
+
+/**
+ * The load-more control, when the page has one and renders it; `undefined`
+ * when it is absent, or present and still not rendered after
+ * `HIDDEN_CONTROL_GRACE_MS` -- to a person, a hidden control is no control.
+ * `"timed_out"` when the command's deadline passed during that grace.
+ */
+async function renderedLoadMore(selector: string, progress: PaginationProgress): Promise<Element | "timed_out" | undefined> {
+  const seen: { control: Element | null } = { control: document.querySelector(selector) };
+  if (!seen.control || isRendered(seen.control)) return seen.control ?? undefined;
+  const outcome = await waitUntil(() => {
+    seen.control = document.querySelector(selector);
+    return seen.control !== null && isRendered(seen.control);
+  }, HIDDEN_CONTROL_GRACE_MS, PAGER_POLL_MS, progress.deadline);
+  if (outcome === "timed_out") return "timed_out";
+  return outcome === "changed" ? (seen.control ?? undefined) : undefined;
+}
+
+/**
+ * Whether the page draws `control`: no `hidden` attribute, and a box. An
+ * element that cannot say where it is (a test's stand-in) counts as drawn.
+ */
+function isRendered(control: Element): boolean {
+  if (control.getAttribute("hidden") !== null) return false;
+  return typeof control.getClientRects !== "function" || control.getClientRects().length > 0;
 }
 
 /**
@@ -513,126 +553,9 @@ async function visitNumberedPage(paginate: NumberedPagination, progress: Paginat
   return await afterListChange(paginate, progress, control, `choosing page ${progress.pagesRead + 1} from ${JSON.stringify(paginate.pages)}`);
 }
 
-/**
- * Whether the control is a link whose address is the document already showing:
- * the same page, with its query in any order, whatever its fragment. A link to
- * a fragment alone (`href="#"`) is not one, because that is how a page marks a
- * control its own script handles, and a script-driven Next is a working Next.
- */
-function leadsToThisPage(control: HTMLElement): boolean {
-  const address = linkAddress(control);
-  return address !== undefined && sameDocument(address, new URL(document.URL));
-}
-
-/** What the pager beside a `next` control says: the control for the page after the current one, and whether it shows any later page at all. */
-type PagerReading = { following: HTMLElement | undefined; later: boolean };
-
-/**
- * The pager beside a `next` control, read for the page after the current one:
- * `following` is its enabled control numbered one more than the current page,
- * and `later` whether it shows any page numbered higher -- a control or not, so
- * a pager that skips to its last page still says the list goes on.
- * `undefined` when the pager does not say which page is current.
- *
- * The current page is the number marked `aria-current`, or the one number the
- * pager shows as something other than a control -- which is how a pager draws
- * the page you are on (`<b>2</b>` among links). Only numbers are read, and only
- * to compare them, so no word of the page is carried anywhere.
- */
-function readPager(next: HTMLElement): PagerReading | undefined {
-  let pager: Element | null = next.parentElement;
-  for (let depth = 0; pager && depth < PAGER_LEVELS; depth += 1, pager = pager.parentElement) {
-    const numbered = Array.from(pager.querySelectorAll("*")).filter((element) => element.children.length === 0 && pageNumber(element) !== undefined);
-    const current = numbered.find((element) => isCurrentPage(element) || isCurrentPage(element.closest(PAGE_CONTROL) ?? element))
-      ?? onlyOne(numbered.filter((element) => !isControl(element)));
-    const number = current === undefined ? undefined : pageNumber(current);
-    if (number === undefined) continue;
-    const following = numbered.map((element) => element.closest(PAGE_CONTROL) ?? element).find((element) => isControl(element) && pageNumber(element) === number + 1);
-    return {
-      following: following instanceof HTMLElement && !isDisabled(following) ? following : undefined,
-      later: numbered.some((element) => (pageNumber(element) ?? 0) > number)
-    };
-  }
-  return undefined;
-}
-
-/** How far out from a `next` control its pager is looked for. */
-const PAGER_LEVELS = 3;
-
-/** What a pager's page controls are. */
-const PAGE_CONTROL = 'a[href],button,[role="link"],[role="button"]';
-
-function isControl(element: Element): boolean {
-  return element.matches(PAGE_CONTROL) || element.closest(PAGE_CONTROL) !== null;
-}
-
-function onlyOne<T>(items: readonly T[]): T | undefined {
-  return items.length === 1 ? items[0] : undefined;
-}
-
-/** The page control that follows the current page, or `undefined` when the list has no further page. */
-function followingPageControl(controls: readonly Element[], pagesRead: number): Element | undefined {
-  const current = controls.find(isCurrentPage) ?? controls.find(linksToThisPage);
-  if (!current) {
-    // Nothing says which page is current: count the numbers, not the controls (see the header).
-    const numbered = controls.filter((control) => pageNumber(control) !== undefined);
-    if (numbered.length === 0) return controls[pagesRead];
-    return numbered.find((control) => pageNumber(control) === pagesRead + 1) ?? numbered[pagesRead];
-  }
-  const number = pageNumber(current);
-  if (number === undefined) return controls[controls.indexOf(current) + 1];
-  return controls.find((control) => pageNumber(control) === number + 1);
-}
-
-/** A numbered page control that is a link to the document already showing: a pager's current page when nothing is marked. */
-function linksToThisPage(control: Element): boolean {
-  return pageNumber(control) !== undefined && control instanceof HTMLElement && leadsToThisPage(control);
-}
-
-function isCurrentPage(control: Element): boolean {
-  const current = control.getAttribute("aria-current");
-  return current !== null && current !== "false";
-}
-
-/** The page number a control shows as its whole text, or `undefined` when it shows something else. */
-function pageNumber(control: Element): number | undefined {
-  const text = (control.textContent ?? "").trim();
-  return /^\d+$/u.test(text) ? Number(text) : undefined;
-}
-
-function isDisabled(control: Element): boolean {
-  return control.matches(":disabled") || control.getAttribute("aria-disabled") === "true";
-}
-
 function clickable(element: Element, selector: string): HTMLElement {
   if (!(element instanceof HTMLElement)) throw new PaginationFault("control_not_clickable", `The pagination control ${JSON.stringify(selector)} is not a clickable element.`);
   return element;
-}
-
-/**
- * Where the control goes when it is a link to a page: its `href` resolved
- * against its base, when that is http or https. `undefined` for anything else,
- * and for a link to a fragment alone, which a page's own script handles.
- */
-function linkAddress(control: HTMLElement): URL | undefined {
-  const link = control.closest("a[href]");
-  const href = link?.getAttribute("href")?.trim();
-  // An address that does not parse is not a link to a page, which is what
-  // `undefined` means here.
-  if (!link || !href || href.startsWith("#")) return undefined;
-  const url = parsedUrl(href, link.baseURI);
-  if (!url) return undefined;
-  return url.protocol === "http:" || url.protocol === "https:" ? url : undefined;
-}
-
-/** Whether two addresses load the same document: origin, path and query alike, the query in any order, the fragment ignored. */
-function sameDocument(left: URL, right: URL): boolean {
-  return left.origin === right.origin && left.pathname === right.pathname && sortedQuery(left) === sortedQuery(right);
-}
-
-function sortedQuery(url: URL): string {
-  const params = [...url.searchParams.entries()].sort(([a, x], [b, y]) => (a === b ? (x < y ? -1 : x > y ? 1 : 0) : a < b ? -1 : 1));
-  return new URLSearchParams(params).toString();
 }
 
 /**

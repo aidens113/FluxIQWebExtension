@@ -7,10 +7,10 @@ import type { DeclaredSecret } from "../../declared-secrets.js";
 import type { PersistedFlowLlmExecution } from "../../persisted-flow-run.js";
 import type { LabResetFetch } from "../../reset-scenario-lab.js";
 import type { CreatedFlowBuild } from "../build-proposal.js";
-import { runCreatedFlowLane, type CreatedFlowLaneEvidence, type CreatedFlowLaneIncomplete } from "../lane.js";
+import { runCreatedFlowLane, type CreatedFlowLaneEntry, type CreatedFlowLaneEvidence, type CreatedFlowLaneIncomplete } from "../lane.js";
 import { resolveCreatedFlowRequest, type CreatedFlowRequest } from "../request.js";
 import { createdFlowLaneSnapshot } from "../snapshot.js";
-import { EXTRACTING_NODES, FLOW_ID, PROJECT_ID, fakeCreationCore, type FakeCreationCoreOptions } from "./fake-creation-core.js";
+import { ADAPTATION_ID, EXTRACTING_NODES, FLOW_ID, PROJECT_ID, fakeCreationCore, type FakeCreationCoreOptions } from "./fake-creation-core.js";
 import { permissionRequiredDiagnostic } from "./permission-required-diagnostic.js";
 import { catalogScenario, datasetTask, goalTask } from "./scenario-fixture.js";
 
@@ -31,6 +31,8 @@ type LaneOptions = {
   settleRun?: (runId: string | undefined) => Promise<void>;
   /** What the operator permitted the build (`--llm-permit`). */
   permitted?: readonly LlmActionConsequence[];
+  /** How the build starts; the direct build unless a test says otherwise. */
+  entry?: CreatedFlowLaneEntry;
 };
 
 async function runLane(core: ReturnType<typeof fakeCreationCore>, options: LaneOptions = {}) {
@@ -51,6 +53,7 @@ async function runLane(core: ReturnType<typeof fakeCreationCore>, options: LaneO
     startLocation: "http://127.0.0.1:4100/scenarios/catalog/",
     runToken: "run-token",
     secrets: options.secrets ?? [],
+    entry: options.entry ?? { kind: "direct-api" },
     authorizeBuild: async () => { core.calls.push("authorize"); return { permittedConsequences: options.permitted ?? [] }; },
     settleBuild: async (build) => { core.calls.push("settle"); settled.push(build); await options.settle?.(build); },
     ...(options.authorizeRun ? { authorizeRun: options.authorizeRun } : {}),
@@ -503,4 +506,59 @@ test("a task whose act the operator permitted had nothing to ask, so no grant is
   const outcome = await (await runLane(core, { request, permitted: ["delete"] })).run;
   assert.equal(outcome.observation.oracleVerdict, "passed");
   assert.equal(core.calls.includes("list-conversations"), false);
+});
+
+/**
+ * The chat entry, against the same fake Core with a chat in front of it: the
+ * instruction is typed, Core's chat makes the Flow, builds it and applies its
+ * own proposal, and the lane then reads, runs and judges that Flow exactly as
+ * it does any other. The lane itself creates no Flow, calls no build endpoint
+ * and approves nothing.
+ */
+test("a build started from the extension's chat runs and is judged like any other, and the lane builds and reviews nothing itself", async () => {
+  const core = fakeCreationCore({ adaptationStatus: "applied" });
+  const base = core.control;
+  const turns: Array<Record<string, unknown>> = [];
+  let made = false;
+  const typed: string[] = [];
+  core.control = {
+    ...base,
+    automationStudioCall: async (endpoint, payload, bounds, domainId) => {
+      if (endpoint === "list-flows") { core.calls.push(endpoint); return { flows: made ? [{ flow: { flowId: FLOW_ID, metadata: {} } }] : [] }; }
+      if (endpoint === "list-conversations") return { conversations: [{ conversationId: "conversation.chat", pendingAskCount: 0, subject: { kind: "project", id: PROJECT_ID } }] };
+      if (endpoint === "get-conversation") return { conversation: { turns, hasMore: false } };
+      return base.automationStudioCall(endpoint, payload, bounds, domainId);
+    },
+    listFlowAdaptations: async (projectId, flowId) => (made ? [{ adaptationId: ADAPTATION_ID, projectId, flowId, status: "applied" }] : []),
+    getFlowAdaptation: async (projectId, flowId, adaptationId) => ({ ...await base.getFlowAdaptation(projectId, flowId, adaptationId), appliedMutationCount: 2 }),
+  };
+  const entry: CreatedFlowLaneEntry = {
+    kind: "chat",
+    authorizeChat: async () => { core.calls.push("authorize-chat"); },
+    chat: {
+      panelInput: "view-dom",
+      type: async (text) => {
+        typed.push(text);
+        turns.push({ turnId: "t1", ordinal: 1, author: "person", text, ask: null, attachment: null });
+        turns.push({ turnId: "t2", ordinal: 2, author: "automation", text: 'Doing "Create an automation here".', ask: null, attachment: null });
+        // Core's own apply, made inside the chat's command, which the fake records as a call; it is not one the lane made.
+        await base.applyFlowAdaptation({ projectId: PROJECT_ID, flowId: FLOW_ID, adaptationId: ADAPTATION_ID, authorizationPin: "" });
+        core.calls.splice(core.calls.lastIndexOf("apply"), 1);
+        made = true;
+        turns.push({ turnId: "t3", ordinal: 3, author: "automation", text: 'Created the Flow "x".', ask: null, attachment: { kind: "panel-capability-result", ref: "flow.createHere" } });
+      },
+      shows: async () => "",
+    },
+    wait: { pollMs: 1 },
+  };
+  const { run, settled } = await runLane(core, { entry });
+  const outcome = await run;
+  assert.deepEqual(typed, [resolveCreatedFlowRequest(catalogScenario, datasetTask()).task.instruction], "the task's own instruction, typed once");
+  for (const call of ["create-flow", "save-flow-generation-instruction", "authorize", "generate", "approve", "apply"]) assert.equal(core.calls.includes(call), false, `the lane made no ${call} call of its own`);
+  assert.deepEqual(core.calls.slice(0, 3), ["prepare", "authorize-chat", "select-context"], "the page is presented and the key installed before anything is typed");
+  assert.equal(settled.length, 1);
+  assert.equal(settled[0]?.chat?.ending, "created");
+  assert.deepEqual(outcome.review, { adaptationId: ADAPTATION_ID, appliedMutationCount: 2 });
+  assert.equal(outcome.observation.reportedVerdict, "passed");
+  assert.equal(createdFlowLaneSnapshot(outcome).buildEntry, "chat");
 });

@@ -81,7 +81,14 @@ export type WebExtractionSlotResolution =
    * *parameter* name (`flow-bootstrap/plan/name-correction-assumption.ts`). An
    * assumption is not a fault, so nothing here turns it into a refusal.
    */
-  | { status: "resolved"; request: JsonObject; frameId: number | undefined; assumed: WebExtractionColumnAssumption[] }
+  | {
+    status: "resolved";
+    request: JsonObject;
+    frameId: number | undefined;
+    /** The path of the child frame's document the list was detected in, which finds that frame again after a reload; absent for the top frame. */
+    frameUrlPath: string | undefined;
+    assumed: WebExtractionColumnAssumption[];
+  }
   /** `path` is where inside the value it was refused. */
   | { status: "refused"; issue: WebExtractionSlotIssue; path: WebPlanValuePath };
 
@@ -136,6 +143,10 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   if (paginate !== undefined) request.paginate = paginate as unknown as JsonObject;
   if (value.minItems !== undefined) request.minItems = value.minItems as JsonValue;
   if (value.maxItems !== undefined) request.maxItems = value.maxItems as JsonValue;
+  // A handle that names one record reads one row, whatever the plan wrote: two
+  // rows from what the model chose as one record would be a wrong table
+  // (`../../structure/handles.ts`, `oneRecord`).
+  if (binding.oneRecord === true) request.maxItems = 1;
   // The request is held to the reader a dispatch is refused by, so a handle
   // never resolves into one the page would not run, clamp or read otherwise.
   const checked = webAutomationExtractListRequestValue(request);
@@ -145,7 +156,7 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   const order = keptOrder(value, request);
   if ("issue" in order) return order;
   const assumed = [...columns.assumed, ...(where !== undefined && where.ok ? where.assumed : [])];
-  return { status: "resolved", request, frameId: binding.frameId, assumed };
+  return { status: "resolved", request, frameId: binding.frameId, frameUrlPath: binding.frameUrlPath, assumed };
 }
 
 /**

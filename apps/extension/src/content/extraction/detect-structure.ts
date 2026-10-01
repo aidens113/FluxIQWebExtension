@@ -64,6 +64,21 @@
 // one, the outward search is tried first and a rich list enclosing it wins; the
 // page-wide search ranks every rich run above every thin one. A thin run is
 // still answered when it is all there is.
+//
+// **A target that is a record on its own is answered as one, beside the list
+// and never instead of it** (`single-record/lone-record.ts`). Some answers are
+// one record with nothing of its template around it -- the product card a shop
+// sends in a message thread, beside three message bubbles -- and the outward
+// search answered the inbox's thread rows past it, which hold no price
+// (`docs/working/language-driven-flow-loop-plan/reports/t195-w19e-audit-moon-jar.md`,
+// cause 1). When the target is not
+// inside an item of the answered run, the record around it is computed too and
+// sent as `record` beside the run. With no run at all it is the answer; but a
+// page may still be drawing its list, so a detection that waits keeps waiting
+// for a run and answers the lone record only when its window closes. A lone
+// record never displaces a run: on the everything store's cart, a model aimed
+// at the subtotal must still be answered the cart's lines
+// (`run-mulum3x7-18ceeb75`).
 
 import type {
   WebAutomationExtractionProposal,
@@ -77,9 +92,13 @@ import { inferListFromElement } from "./infer-list";
 import { largestRunsFirst } from "./largest-runs";
 import { waitUntil } from "./list-wait";
 import { largestPlaceholderRunApartFrom } from "./placeholder-run";
+import { loneRecordAround } from "./single-record";
 
 type Refusal = Extract<WebAutomationStructureDetection, { ok: false }>;
 type Detected = Extract<WebAutomationStructureDetection, { ok: true }>;
+
+/** An answer, and whether waiting for the page could still improve it; see the header. */
+type Attempt = { answer: WebAutomationStructureDetection; improvable: boolean };
 
 /**
  * How long a detection waits for a page to draw a list before answering that
@@ -99,37 +118,46 @@ const WORTH_WAITING_FOR: ReadonlySet<string> = new Set(["no_repeating_run", "tar
 
 /** Detect the structure the request names, or the page's largest readable one, as the page stands now. */
 export function detectStructure(request: WebAutomationStructureDetectionRequest): WebAutomationStructureDetection {
-  return request.selector === undefined ? detectLargest() : detectAround(request.selector);
+  return attempt(request).answer;
+}
+
+function attempt(request: WebAutomationStructureDetectionRequest): Attempt {
+  return request.selector === undefined ? attemptOf(detectLargest()) : detectAround(request.selector);
 }
 
 /**
  * The same detection, waiting for the page to draw a list first; see the
- * header. Answers the moment there is one, and answers the page's own refusal
- * when the window closes on it.
+ * header. Answers the moment there is one, and answers the page's own refusal,
+ * or the lone record around the target, when the window closes on it.
  */
 export async function detectStructureWhenPresent(
   request: WebAutomationStructureDetectionRequest,
   timeoutMs?: number
 ): Promise<WebAutomationStructureDetection> {
-  let answer = detectStructure(request);
-  if (settled(answer)) return answer;
+  let current = attempt(request);
+  if (!current.improvable) return current.answer;
   const deadline = typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0 ? Date.now() + timeoutMs : undefined;
   await waitUntil(
     () => {
-      answer = detectStructure(request);
-      return settled(answer);
+      current = attempt(request);
+      return !current.improvable;
     },
     STRUCTURE_WINDOW_MS,
     STRUCTURE_POLL_MS,
     deadline
   );
-  return answer;
+  return current.answer;
 }
 
-/** Whether this answer is one waiting could not improve on: a refusal of the kind that stays true, or a run no larger list is still being drawn beside (see the header). */
-function settled(answer: WebAutomationStructureDetection): boolean {
-  if (!answer.ok) return !WORTH_WAITING_FOR.has(answer.refused);
-  return document.body === null || answer.proposal.itemCount >= largestPlaceholderRunApartFrom(queryAll(answer.proposal.item), document.body);
+/**
+ * The answer, improvable when waiting could still change it: a refusal a moment
+ * later could stop being true, or a run beside which a larger list is still
+ * being drawn as placeholders (see the header).
+ */
+function attemptOf(answer: WebAutomationStructureDetection): Attempt {
+  if (!answer.ok) return { answer, improvable: WORTH_WAITING_FOR.has(answer.refused) };
+  const drawing = document.body === null ? 0 : largestPlaceholderRunApartFrom(queryAll(answer.proposal.item), document.body);
+  return { answer, improvable: answer.proposal.itemCount < drawing };
 }
 
 /**
@@ -142,20 +170,42 @@ function settled(answer: WebAutomationStructureDetection): boolean {
  * `ambiguous_target`.
  *
  * With no rich run around the target, the search goes outward (see the
- * header); only a page with no readable list anywhere is `no_repeating_run`.
+ * header). A target outside every item of the run answered is also given the
+ * one record around it, if it has one, as `record`; with no run anywhere that
+ * record is the answer, which waiting for a run may still improve on. Only a
+ * page with neither is `no_repeating_run`.
  */
-function detectAround(selector: string): WebAutomationStructureDetection {
+function detectAround(selector: string): Attempt {
   const elements = queryAll(selector);
   const first = elements[0];
-  if (!first) return refused("target_not_found");
-  if (elements.some(isWithinSensitiveControl)) return refused("sensitive_region");
+  if (!first) return attemptOf(refused("target_not_found"));
+  if (elements.some(isWithinSensitiveControl)) return attemptOf(refused("sensitive_region"));
+  const run = runAround(first, elements);
+  if (run && !run.ok) return attemptOf(run);
+  if (run && allInsideItems([first], queryAll(run.proposal.item))) return attemptOf(run);
+  const lone = loneRecordAround(first);
+  const record = lone && allInsideItems(elements, queryAll(lone.item)) ? detected(lone) : undefined;
+  const readable = record?.ok === true ? record.proposal : undefined;
+  if (run) return { answer: readable ? withRecord(run, readable) : run, improvable: false };
+  return readable ? { answer: { ok: true, proposal: readable }, improvable: true } : attemptOf(refused("no_repeating_run"));
+}
+
+/** The run the target belongs to or the nearest rich run past it, a refusal for a target that names no one run, or `undefined` when the page holds no readable run. */
+function runAround(first: Element, elements: readonly Element[]): WebAutomationStructureDetection | undefined {
   const proposal = inferListFromElement(first);
   if (proposal) {
     if (elements.length > 1 && !allInsideItems(elements, queryAll(proposal.item))) return refused("ambiguous_target");
     const answer = detected(proposal);
     if (!answer.ok || !isThin(proposal)) return answer;
   }
-  return nearestRichRun(first) ?? (proposal ? detected(proposal) : refused("no_repeating_run"));
+  return nearestRichRun(first) ?? (proposal ? detected(proposal) : undefined);
+}
+
+/** The run's answer with the target's own record beside it. */
+function withRecord(run: Detected, record: WebAutomationExtractionProposal): Detected {
+  return run.infiniteScroll === true
+    ? { ok: true, proposal: run.proposal, infiniteScroll: true, record }
+    : { ok: true, proposal: run.proposal, record };
 }
 
 /**

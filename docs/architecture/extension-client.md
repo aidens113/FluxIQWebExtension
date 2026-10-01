@@ -482,12 +482,22 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   full-width formatted text. A question's turn carries its choices as buttons
   (`conversation/ask-copy.ts`): the person-needed ask shows "Continue" and
   "Stop", which send `choice` with `person_done` or `person_stop`.
+- **What the person asked a build is their message** (`stream/stream-items.ts`),
+  however the build was started. A build says the person's own words on its
+  activity once it has read its instructions (`ClientGatewayActivity.request`,
+  Core's `activity/build.ts`), and the chat shows them as the person's bubble
+  where the build said them, unless the thread already holds those words from
+  the person (a request typed into this chat is not shown twice). Live runs 34
+  and 35 were built from an instruction no chat showed.
 - **Every step is its own FluxIQ message**, in order, with its reason
   (`stream/step/messages.ts`, `view/step-message-view.ts`): each explained
   decision reads "**Clicking “Get a free quote”** — The quote form is behind
   this button, so I'm opening it.", and each repair gives its diagnosis. A
-  note is words only. There are no folds, disclosures or step counts, and no
-  raw tool or node id is shown (`stream/step/words.ts`).
+  note is words only, and a note with no words is no message: Core's own look
+  before the first decision and a dry run's reset are said by the live line
+  while they run, never as a bare heading (live runs 34 and 35 showed "Looking
+  at the page" twice that way). There are no folds, disclosures or step counts,
+  and no raw tool or node id is shown (`stream/step/words.ts`).
 - **Every action is a card** (`stream/step/action-card.ts`,
   `view/action-card-view.ts`). The actions Core took for a decision (the
   `tool` events after its `thought`, until something else opens a message)
@@ -1791,6 +1801,16 @@ for an explicit failed-cancellation retry. Receipt Close cleans local UI.
 Older optional low-level callers retain omitted-ID compatibility and its risk.
 IDs provide correlation, not authorization or ordering of content commands.
 Receiver lifecycle and confirmation idempotence require separate validation.
+
+Chat question inputs submit on plain, unhandled Enter. Composing events,
+legacy IME key code229 and modified Enter leave the native event untouched;
+answer buttons retain their existing behavior. Conversation ownership and
+submission coordination remain in the existing Chat controller.
+
+List extraction observes queued page work once before declaring an unchanged
+growth window complete. It then rereads the item count and absolute command
+deadline. This observation grants no extra growth window; an elapsed deadline
+returns a timeout. Existing reveal limits and polling intervals remain intact.
 
 The default development endpoints are:
 

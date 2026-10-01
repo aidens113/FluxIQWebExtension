@@ -24,7 +24,7 @@ import { runBrowserDownloadAction } from "./browser-download";
 import { runBrowserTabAction } from "./browser-tab";
 import { sendClickCheckingLanding } from "./click-landing";
 import { frameIdForAction, frameUrlPathForAction, opensNewTab, tabIdForAction } from "./command-options";
-import { chooseFrame } from "./frame-address";
+import { waitForFrameChoice } from "./frame-address";
 import { sendExtractListAcrossDocuments } from "./extract-list-continuation";
 import { readLandedPage, type LandedPageReading } from "./landed-challenge";
 import {
@@ -414,8 +414,10 @@ function unsupportedPageFailure(action: BrowserActionCommand, startedAt: number,
  * Before either check, a child frame the action also names by its document's
  * path is found by that path (`frame-address.ts`), and the recorded id only
  * breaks a tie: Chrome renumbers a frame when it navigates, and a Flow reloads
- * its start page before it runs. The frame found is the one checked, addressed
- * and reported. An action with no path lists no frames here and runs as before.
+ * its start page before it runs. A path no child frame is at yet is waited for,
+ * within the command's timeout, since a reloaded page creates its frames after
+ * it settles. The frame found is the one checked, addressed and reported. An
+ * action with no path lists no frames here and runs as before.
  */
 async function runActionInFrame(
   action: BrowserActionCommand,
@@ -424,10 +426,10 @@ async function runActionInFrame(
   recordedFrameId: number | undefined,
   pace: OriginPace | undefined
 ): Promise<BrowserActionRunResult> {
-  const urlPath = frameUrlPathForAction(action);
-  const choice = urlPath === undefined
-    ? { frameId: recordedFrameId }
-    : chooseFrame(await allTabFrames(tabId), recordedFrameId, urlPath);
+  const choice = await waitForFrameChoice(
+    { listFrames: () => allTabFrames(tabId), now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
+    { recordedFrameId, urlPath: frameUrlPathForAction(action), timeoutMs: action.timeoutMs, startedAt }
+  );
   if ("refused" in choice) {
     return withTarget(workerActionResult(action, startedAt, choice.refused), tabId, recordedFrameId);
   }
@@ -445,7 +447,13 @@ async function runActionInFrame(
   }
   const message = { type: "executeAction", action, frameId: targetFrameId, topFrameOnly: frameId === undefined };
   const send = () => sendAction(action, tabId, message, targetFrameId, pace);
-  return withTarget(await sendClickCheckingLanding(action, tabId, send, LANDED_TAB_ACCESS, pace), tabId, targetFrameId);
+  const drivenBefore = currentAutomationTabId();
+  const result = await sendClickCheckingLanding(action, tabId, send, LANDED_TAB_ACCESS, pace);
+  // A click that opened its page in a tab of its own made that tab the one the
+  // run drives (`click-landing.ts`), and the result names it, top frame.
+  const drivenAfter = currentAutomationTabId();
+  if (drivenAfter !== undefined && drivenAfter !== drivenBefore && drivenAfter !== tabId) return withTarget(result, drivenAfter, undefined);
+  return withTarget(result, tabId, targetFrameId);
 }
 
 /**

@@ -1,10 +1,12 @@
 # CodeViewer download resource recovery
 
-Status: Complete (source-based executable plan; implementation HELD for Tooltip dependency freeze)
+Status: Complete (implementation independently verified and locally checkpointed Core1d4d2000)
 Owner: senior supervisor
 Date: 2026-10-01
 
 ## Confirmed finding
+
+Implementation completed: root reproduced three allocated-URL cleanup failures after correcting an unsupported fixture matcher, then verified new download5 plus unchanged CodeViewer4/Clipboard10 (19/native0) and strict two-root types0. Exact chronology and later combined55 tests are in twelfth-supervisor-verification.md. Native browser download completion remains unverified.
 
 Root read actual Core apps/web/src/features/programs/components/data/CodeViewer.tsx and existing owning tests/CodeViewer.test.tsx. downloadText allocates an object URL, then creates/configures/clicks an anchor, then revokes it only on success. Any thrown anchor creation/configuration/click error skips revocation while the caller catches and displays existing download failure feedback. This is a directly confirmed resource lifecycle path, not a measured browser leak or failed native-download claim. Successful-path URL release already exists and should remain exactly once.
 

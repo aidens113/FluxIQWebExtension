@@ -19,6 +19,10 @@
 //   control's answer can land in a component beside it, or in the control's
 //   own root when the control is a host. A closed root beneath the scope
 //   cannot be reached, and is not watched.
+//
+// Both are read once, at the press: a root attached after it is not followed,
+// since the widget answering a press already exists when it is pressed. A
+// scope that cannot be searched (a test's stand-in) has no roots beneath it.
 
 import { composedParent, openRootsWithin } from "../../shadow-dom";
 
@@ -35,6 +39,6 @@ export function scopeRoots(pressed: Element, scope: Element): Node[] {
     if (parent && !current.parentElement && current.parentNode) add(current.parentNode);
     current = parent;
   }
-  for (const root of openRootsWithin(scope)) add(root);
+  if (typeof scope.querySelectorAll === "function") for (const root of openRootsWithin(scope)) add(root);
   return roots;
 }

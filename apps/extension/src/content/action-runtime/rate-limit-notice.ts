@@ -35,15 +35,35 @@
 // Nothing here presses anything. "Try again" on the notice does the refused act
 // on the page's initiative; the node's own re-run, after the wait, does it on
 // the Flow's.
+//
+// **A page that was too busy to carry the press out says so beside the control,
+// not over the page.** crossborder's store coupon -- a widget in its own shadow
+// root -- turns its button to "…", waits, asks the server, and on the first
+// claim of every visit puts "Network busy, please try again" under the button
+// and collects nothing. Until 2026-10-01 that press was a success, and a Flow
+// that claimed the coupon once read it as collected (lane A, `t174-w32`). So the
+// watch also reads the pressed control's own region -- its composed ancestors,
+// `REGION_LEVELS` up, shadow roots included -- for a busy refusal
+// (`vocabulary.ts`, a closed phrase list) that was not there at the press, or
+// that went away after the press and came back. That is reported as a refusal
+// that named no wait (`busy`), so Core's backoff decides when the press is made
+// again. Such an answer comes after the server does, later than the window:
+// so while the pressed control shows it is still working -- its label has lost
+// every word it had (the coupon's "…", a spinner in place of "Add to cart"), or
+// it says `aria-busy` -- the watch keeps reading past the window, for at most
+// `BUSY_LIMIT_MS` from the press, and reads once more when it stops working.
 
-import { boundedLayerText, isRateLimitLayerText, overlaysOverPage } from "./interference";
+import { composedParent } from "../shadow-dom";
+import { boundedLayerText, isRateLimitLayerText, isTransientRefusalText, overlaysOverPage } from "./interference";
 
-/** A press the page refused for going too fast, as far as it may be reported. */
+/** A press the page refused for going too fast, or because it was busy, as far as it may be reported. */
 export type RateLimitNotice = {
   /** How long after the press the notice was seen. */
   afterMs: number;
   /** The wait the notice named, plus a margin, in milliseconds; absent when it named none. */
   retryAfterMs?: number;
+  /** The page said it was busy and could not carry the press out, rather than that the press went too fast. */
+  busy?: true;
 };
 
 export type RateLimitWatch = {
@@ -58,10 +78,18 @@ export type RateLimitWatch = {
   stop(): void;
 };
 
-/** Where the watch reads the page: the layers painted over it, and a layer's own words. Injected by tests. */
+/**
+ * Where the watch reads the page: the layers painted over it, and a layer's own
+ * words; and, when given, the words of the pressed control's own region and of
+ * the control itself. Injected by tests.
+ */
 export type RateLimitProbe = {
   layers(): readonly Element[];
   textOf(layer: Element): string;
+  /** The bounded words of each region around the pressed control, nearest first. */
+  regionTexts?(pressed: Element): readonly string[];
+  /** The pressed control's own bounded words. */
+  labelOf?(pressed: Element): string;
 };
 
 /** How often the page is looked at while the window is open. */
@@ -76,7 +104,31 @@ const RETRY_AFTER_MAX_MS = 60_000;
 /** "try again in 12 seconds", "retry in 2 minutes", "wait 30 s": the number and its unit. */
 const NAMED_WAIT = /\b(?:try again|retry|wait)(?: again)? (?:in |for )?(\d{1,6}) ?(s|secs?|seconds?|mins?|minutes?)\b/iu;
 
-const PAGE_PROBE: RateLimitProbe = { layers: overlaysOverPage, textOf: boundedLayerText };
+/** How many composed ancestors of the pressed control are its region: the widget and the row or card it sits in. */
+const REGION_LEVELS = 3;
+
+/** The longest a press is followed past its window while its control shows it is still working, counted from the press. */
+const BUSY_LIMIT_MS = 3_000;
+
+/** A letter or a digit: a label with none is one that has turned into "…" or a spinner. */
+const WORD = /[\p{L}\p{N}]/u;
+
+/** The page-wide elements a region never widens to. */
+const PAGE_TAGS = new Set(["body", "html"]);
+
+/** The bounded words of the pressed control's composed ancestors, nearest first, never the body or the document. */
+function pressedRegionTexts(pressed: Element): string[] {
+  const texts: string[] = [];
+  let current = composedParent(pressed);
+  for (let level = 0; current && level < REGION_LEVELS; level += 1) {
+    if (PAGE_TAGS.has(String(current.tagName ?? "").toLowerCase())) break;
+    texts.push(boundedLayerText(current));
+    current = composedParent(current);
+  }
+  return texts;
+}
+
+const PAGE_PROBE: RateLimitProbe = { layers: overlaysOverPage, textOf: boundedLayerText, regionTexts: pressedRegionTexts, labelOf: boundedLayerText };
 
 /**
  * Starts watching, from just before the press on `pressed`, for a rate-limit
@@ -101,16 +153,41 @@ export function watchRateLimitNotice(pressed: Element, probe: RateLimitProbe = P
     unlisten();
   };
 
+  /** Whether the pressed control's region says the page was busy. */
+  const regionRefuses = (): boolean => (probe.regionTexts?.(pressed) ?? []).some(isTransientRefusalText);
+  const refusedBefore = regionRefuses();
+  /** Whether the region has read free of a busy refusal since the press: a page that clears its old line on the press and writes it again refused again. */
+  let clearedSincePress = !refusedBefore;
+  const labelBefore = probe.labelOf?.(pressed) ?? "";
+
+  /** Whether the pressed control shows it is still working on the press: `aria-busy`, or a label that has lost every word it had. */
+  const stillWorking = (): boolean => {
+    if (probe.labelOf === undefined || !pressed.isConnected) return false;
+    if (pressed.getAttribute?.("aria-busy") === "true") return true;
+    return WORD.test(labelBefore) && !WORD.test(probe.labelOf(pressed));
+  };
+
+  /** A busy refusal the press brought into the pressed control's region. */
+  const busyRefusal = (): boolean => {
+    if (!regionRefuses()) {
+      clearedSincePress = true;
+      return false;
+    }
+    return clearedSincePress;
+  };
+
   /** The notice, `"answered"` when the press was plainly answered otherwise, or `undefined` to keep looking. */
   const check = (): RateLimitNotice | "answered" | undefined => {
     for (const layer of probe.layers()) {
       if (before.has(layer)) continue;
       const text = probe.textOf(layer);
+      if (isTransientRefusalText(text) && !isRateLimitLayerText(text)) return { afterMs: Date.now() - startedAt, busy: true };
       if (!isRateLimitLayerText(text)) continue;
       const retryAfterMs = namedWaitMs(text);
       return { afterMs: Date.now() - startedAt, ...(retryAfterMs === undefined ? {} : { retryAfterMs }) };
     }
-    return leaving || !pressed.isConnected ? "answered" : undefined;
+    if (leaving || !pressed.isConnected) return "answered";
+    return busyRefusal() ? { afterMs: Date.now() - startedAt, busy: true } : undefined;
   };
 
   /**
@@ -148,15 +225,28 @@ export function watchRateLimitNotice(pressed: Element, probe: RateLimitProbe = P
           stop();
           resolve(answer(found));
         };
+        /** Set once the window has closed on a control still working on the press. */
+        let overtime = false;
         const look = (): void => {
           const found = check();
-          if (settles(found)) finish(found);
+          if (settles(found)) return finish(found);
+          // Past the window, the watch ends when the control stops working --
+          // with one more look, since its answer and the end of its work are
+          // usually painted together -- or at the busy limit.
+          if (overtime && (!stillWorking() || Date.now() - startedAt >= BUSY_LIMIT_MS)) finish(check());
         };
         wake = look;
         const poll = setInterval(look, CHECK_INTERVAL_MS);
         // One last look at the deadline, so a notice painted inside the final
-        // interval is not reported as none.
-        const deadline = setTimeout(() => finish(check()), windowMs);
+        // interval is not reported as none; unless the control is still working
+        // on the press, when the watch reads on (see the file comment).
+        const deadline = setTimeout(() => {
+          if (stillWorking() && Date.now() - startedAt < BUSY_LIMIT_MS) {
+            overtime = true;
+            return;
+          }
+          finish(check());
+        }, windowMs);
       });
     }
   };
