@@ -320,7 +320,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     }
     if (permission.kind === "refused") {
       return refusal(undefined, "permission_required", rejectionDetail({
-        reason: permission.requestId === null ? "nobody_to_ask" : "consequences_not_granted",
+        reason: permission.requestId === null ? "nobody_to_ask" : permission.declined ? "consequences_declined" : "consequences_not_granted",
         target: undefined, instead: undefined, missing: permission.missing, requestId: permission.requestId ?? undefined
       }), record);
     }

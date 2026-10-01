@@ -195,6 +195,23 @@ test("a press the run is not permitted names the classes it lacks and the reques
   assert.deepEqual(clicks, [], "a press that was not permitted did not happen");
 });
 
+// Core says when the refusal is the person's own no to this question. Told
+// `consequences_not_granted` -- "the request now in front of the person" -- a
+// live model kept pressing a control the person had already declined, eight to
+// twenty-one decisions a build (t195-w18).
+test("a press the person already declined says so, rather than that somebody is being asked", async () => {
+  const { gateway, clicks } = labWith(standingPage(QUEUE));
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const permission: AutomationStudioActionPermissionCheck = async () => ({ permitted: false, missing: ["send_or_publish"], requestId: "permission-request:abc", declined: true });
+
+  await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+  const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["send_or_publish"] } });
+
+  assert.equal(codeOf(refused), "permission_required");
+  assert.deepEqual(detailOf(refused), { reason: "consequences_declined", missing: ["send_or_publish"], requestId: "permission-request:abc" });
+  assert.deepEqual(clicks, []);
+});
+
 test("a refusal with no run behind it to ask says nobody could be asked, and still names the classes", async () => {
   const { gateway, clicks } = labWith(standingPage(QUEUE));
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
