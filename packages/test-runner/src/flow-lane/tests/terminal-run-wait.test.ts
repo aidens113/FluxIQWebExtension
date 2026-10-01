@@ -269,3 +269,17 @@ test("a repaired re-run whose status is not terminal, or whose repair is still r
   assert.equal(rerunning.unsettled, "repair");
   assert.equal(clock, 100_000);
 });
+
+test("a repair that finishes failed settles on the first terminal read rather than waiting for recovery", async () => {
+  let clock = 0;
+  let reads = 0;
+  const settled = await awaitTerminalRunDetail(
+    async () => { reads += 1; return clock === 0 ? repairedRerun("running", "rerunning") : repairedRerun("failed"); },
+    new Error("unused"),
+    { now: () => clock, sleep: async (ms) => { clock += ms; }, timeoutMs: 400_000, awaitVerdict: true, awaitRecovery: true, recoveryWaitMs: 300_000 }
+  );
+  assert.equal(settled.detail.summaryStatus, "failed");
+  assert.equal(settled.unsettled, undefined);
+  assert.equal(reads, 2);
+  assert.equal(clock, TERMINAL_DETAIL_POLL_MS);
+});

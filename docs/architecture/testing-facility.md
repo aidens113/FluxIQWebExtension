@@ -101,6 +101,17 @@ again while budget remains. Core reports an explicit not-doable, budget or
 unreadable-replies ending with its reason, outstanding acts and accounting;
 see Core's `docs/architecture/automation-studio/llm-flow-bootstrap.md`.
 
+A refused node call also records a structural `diagnostic` on its evidence
+trace row, retained in `snapshots/flow-lane.json` under
+`build.evidenceLoop.steps`. It states the refusal code/reason, requested opaque
+target handle, whether that target was observed before the action, and its
+covering handles/kinds/count. `pageObserved: false` explicitly records a call
+that had no pre-call capture; no later page state is substituted. The domain
+producer and the bundle reader share a strict field/value allowlist. Labels,
+page text, selectors, URLs, input values and arbitrary refusal prose cannot
+travel on this account. Core transports the optional object generically and
+does not interpret browser handles or covering layers.
+
 Neither production nor Testing Lab web code resolves a provider or invokes a
 model itself. Generic provider selection, secret access, budgets,
 prompt/tool iteration, strict output parsing, and proposal persistence remain
@@ -1511,9 +1522,15 @@ and nothing that judges a created Flow reads it. Failing the run for its absence
 threw away a complete product result: on `run-mudslg9p-c59266aa` a Flow was
 built, ran, failed, Core's repair made its two calls, no record arrived, and the
 run spent ten minutes waiting before being reported `performance.budget`. It
-now takes its own bound, `RECOVERY_RECORD_WAIT_MS`, five minutes measured from
-the first terminal read — half of the live run's deadline, and long
-enough for any recovery this facility has been observed to complete.
+For older details without a recovery-state marker, `RECOVERY_RECORD_WAIT_MS`
+keeps the five-minute fallback; a run with no failed execution attempt gets the
+shorter grace. When Core marks recovery `running`, the live-run deadline bounds
+the wait. A marker of `ended` or `threw` settles it immediately and names the
+missing record. A terminal `metadata.repairedRerun.status` also settles the
+failed repaired re-run immediately: no further recovery follows that re-run.
+An active `resultRepair.phase` of `reauthoring` or `rerunning` still keeps the
+run in flight. Fake-clock tests cover a failed repair settling on its first
+terminal read after one polling interval.
 
 ### The adversarial lane
 
@@ -1895,6 +1912,11 @@ bundle is preserved under that serial/child campaign's `interrupted/` directory
 and the cell gets a new deterministic attempt id. A lease refuses a concurrent
 live owner and archives/reclaims only an owner proven stale by machine-boot and
 process-start identities, so a reboot or PID reuse needs no lock-file edit.
+
+Reconstructing a finalized Flow evaluation preserves its failed
+`stopped-for-permission` invariant and evidence references. A permission stop
+therefore remains `stopped_for_permission` through reconciliation and repeated
+resumes, and can never become a passing benchmark row.
 
 After every child is terminal, the parent validates their exact partition and
 authenticated evaluations, then publishes parent-ordered `runs.json`,
