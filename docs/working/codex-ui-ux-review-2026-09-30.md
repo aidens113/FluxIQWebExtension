@@ -28,10 +28,8 @@ Eighth Core Complete: source checkpoint fe0165c7. Identity, Secret and Docs tree
 independently reviewed; root16files182tests/native0/12.31s. Full36851 observed
 333files2342tests/native0/173.54s; types59270 native0/35422ms; production8087
 native0/190162ms. Structure56016 native1 solely inherited protected
-service4506/4505. No baseline/config relaxation. All three workers now implement
-released ninth units: Core operational payload and onboarding recovery, and
-extension automation-owner recovery. Root owns shared contracts, authored docs
-and verification; no cross-worker source overlap.
+service4506/4505. No baseline/config relaxation. Root owns shared contracts,
+authored docs and verification; later active units are recorded below.
 
 Extension utility Complete: Open/report/Activity four-suite41 pass/native0/
 604.5906ms. Full types5771 native0/51888ms; structure37957 native0,136warnings/
@@ -53,13 +51,16 @@ in t221. Main downstream checkout is untouched and read-only status clean at the
 latest check. Keep progress/report/checkpoint records as work happens and continue
 beyond batches; remaining UI/UX and other useful nonconflicting work is authorized.
 
-Ninth Core operational/onboarding source independently reviewed/frozen after
-root105 and91 tests/native0. Dialog primitive four-path keyboard/entry fix is
-active before coordinated Core gates. Extension automation root66 and scoped
-nine-root0 plus controller43/scoped0 are frozen for full extension gates.
-Three slots remain assigned: dialog implementation, extraction audit and mounted
-Chat design (six-path proposal held until extension gates finish). Root report
-ninth-supervisor-verification.md records exact original failures/refinements.
+Ninth Complete: Core9d2eb6fa operational/onboarding and e50a6882 dialogs; root
+105/91/88 tests independently passed. Full22516 native0,338files2506tests/
+182.57s; types74206 native0/103169ms; build84386 native0/201922ms. Structure
+55934 native1 only inherited protected service4506/4505. Downstream924903b8
+automation/controller; root66/scoped9roots0 and controller43/scoped0. Full3272
+native0,1878tests/113717.0744ms; types44714 native0/27723ms; build60493
+native0/22files each/27527ms; structure27824 native0/136warnings119baseline.
+Three next slots are released: Menu two paths, mounted Chat eight and extraction
+draft/control four. Root ninth-supervisor-verification.md preserves original
+failures, refinements and exact full gates; no browser certification.
 
 Earlier batch evidence stays in the ledger, worker reports and first-four archive.
 [Superseded Current State](./codex-ui-ux-review-2026-09-30/archive/2026-10-01-pre-eighth-current-state.md)
@@ -164,6 +165,63 @@ layout changes should answer measured problems in these journeys.
 Initial briefs and settled validation details moved to [the first-four-batch archive](./codex-ui-ux-review-2026-09-30/archive/2026-10-01-first-four-ui-batches.md).
 
 ## Active and next worker briefs
+
+### Menu keyboard and disabled activation implementation brief (released)
+- Worker: deployment_docs_audit; paired t224 Core. Ninth338files2506tests/types/build independently pass; structure only inherited protectedservice. Finish own environment read-only report first, then execute frozen Menu plan.
+- Exact two paths: features/programs/components/controls/Menu.tsx and NEW controls/tests/Menu-keyboard.test.tsx; own menu-keyboard-recovery-implementation.md. Environment/Modal/Link/router/helpers/styles/source assertions stay unchanged.
+- Disabled href options may render aria-disabled non-link menuitems; enabled Next Link/native routing stays unchanged. Eligibility excludes hidden/inert/effectively disabled controls; native composing/modified/defaultPrevented navigation keys remain untouched.
+- Implement explicit ArrowDown/Up entry, eligible Arrow/Home/End/roving state, option reconciliation and owner/lifetime/option-instance callbacks. Removed or disabled retained choices do not dispatch; current native Enter/Space acts once. Preserve normal mouse activation.
+- Tab closes without preventDefault; when current visible document focus is still owned by this key event, synchronously restore trigger as the native departure point, then suppress cleanup return focus. Never reclaim moved/hidden/unfocused/retired focus. Action/outside/teardown similarly suppress obsolete cleanup return; current Escape may return trigger when appropriate.
+- Caller keeps action error presentation; action-owned finally closes its own menu without closing a newly opened/replaced menu or swallowing private exception text. Preserve stack/isolation/scroll and all original assertions; environment focus-policy findings remain separate backlog.
+- Actual component tests first, unchanged component contracts/operation/environment/Modal owning gates, actual scoped two roots then freeze. No extra source/shared docs/protected/backend/private/broad/live/browser/provider/panel/commits. Root independently reviews/gates/docs.
+
+### Mounted Chat owner recovery implementation brief (released)
+- Worker: runtime_contracts; downstream t224. Read Current State, own frozen design/implementation plan; ninth extension full1878/types/build/structure independently passed.
+- Exact eight paths: panel/chat/chat-panel.ts; NEW chat/tests/chat-owner-recovery.test.ts; conversation/{composer.ts,draft-storage.ts}; NEW conversation/tests/{composer-owner.test.ts,draft-storage-owner.test.ts}; NEW chat/owner-context.ts and chat/tests/owner-context.test.ts. Own mounted-chat-owner-recovery-implementation.md.
+- Approved private owner/lease helper has one cohesive export; existing directory barrel stays intact. Keep responsibilities/budgets narrow; request exact additional file release if needed.
+- Implement written tuple/missing-settings/volatile-context/first-confirmation/A-B-A policy, current-instance request/control leases, coherent latest-target/history/activity reset, active-only subscription/poll/retry and lifetime unsupported capability. Preserve frozen controller/feed/shell/wire/Automations and same-owner names/scroll/caret/focus.
+- Explicit parked draft Use draft here/Clear draft, separate atomic versioned UI storage key/literal legacy fallback, matching-owner popup restore and accepted-send owner/edit revisions approved. Never auto-adopt on edit/fill, auto-send/replay, drop newer drafts, expose tokens or pretend issued commands cancelled. Standalone composer/storage behavior stays compatible.
+- Actual tests first, then unchanged controller43/composer/keys/feed/Chat/focus/shell tests. Existing assertions/mock harnesses not editable without precise release. Scoped checks during concurrent extraction work are provisional until both freeze; never fix the other worker's files.
+- No other source/shared docs/Core/background/protocol/styles/private/browser/provider/panel/broad/commits. Root owns independent review/gates/docs; update own report progressively.
+
+### Extraction draft/control recovery implementation brief (released)
+- Worker: recording_controls; downstream t224. Read Current State/frozen extraction draft plan; ninth extension full1878/types/build/structure independently passed.
+- Exact four paths: panel/extraction/{panel.ts,field-row.ts}, NEW tests/{field-row.test.ts,panel-draft-recovery.test.ts}; own extraction-draft-recovery-implementation.md. No helper/oldtest/shared-harness edit without precise release.
+- Implement E1/E2/E5 raw-name intent with no per-key trim/full redraw; explicit change/Confirm normalization against settled label. Preserve focus/caret through unrelated preview redraw and existing privacy-narrowed values.
+- Row/draft epoch+generation leases reject retired same-key callbacks across redraw/cancel/capture/new pick before mutation or requireDraft. Current controls work; failed Confirm preserves intent. Label groups/actions distinguish columns and update on rename; preserve native controls/Remove text/classes/Lab ids.
+- Existing dialog-focus/client/view-model/confirm-payload/D12/wire/prepare/start/Cancel semantics untouched. E3/E4 Retry/preview errors and actual session/host ownership remain serial follow-ups; no complete cross-owner extraction claim.
+- Actual tests first, unchanged panel/dialog-focus/preview/confirm/view-model tests, scoped four roots then freeze. Chat is another worker's source; dependency checks provisional until coordinated freeze, never edit other paths.
+- No shared docs/extra source/Core/background/protocol/styles/private page data/broad/live/browser/provider/panel/commits; update report progressively. Root owns review/full gates/docs.
+
+### Shared environment focus-policy follow-up audit (read-only released)
+- Worker: deployment_docs_audit; paired t224 Core source frozen for ninth gates. Menu plan complete/held.
+- Read Current State, shared-overlay-focus-audit F4/F5/F8 and features/programs/overlay-environment.ts plus direct helpers/owning tests and acquireOverlayEnvironment consumers as required to trace actual ordering.
+- Own downstream reports/overlay-environment-recovery-plan.md only. Propose exact source/test partition for hidden/disabled/fieldset candidates, Escape IME/defaultPrevented, current visible-document return focus, nested release and conditional new body siblings. Discover actual consumer before claiming F8 product defect.
+- Preserve stack/isolation/scroll/bookkeeping and frozen Modal/Menu. No blanket observer/global focus reclaim/auth changes; distinguish source/synthetic evidence from browser limits.
+- No source/tests/shared docs/heavy/broad/live/provider/panel/private/commits. Menu implementation waits for explicit release after Core full/types/build observed.
+
+### Mounted Chat owner implementation planning brief (product held)
+- Worker: runtime_contracts; downstream t224. Read Current State and frozen mounted-chat-owner-recovery-plan.md. Prepare own reports/mounted-chat-owner-recovery-implementation.md; product/tests held through ninth extension full gates.
+- Proposed six exact source/test paths from frozen plan: chat-panel.ts/new chat-owner-recovery.test.ts, conversation/composer.ts/new composer-owner.test.ts, conversation/draft-storage.ts/new draft-storage-owner.test.ts. Do not modify frozen controller/feed/shell/protocol/Automations or existing assertions.
+- Preserve source owner tuple/missing settings/volatile reconnect distinctions, current-instance request/UI leases, coherent latest-target reset before shell notifications, active-only reads and lifetime unsupported capability. Confirmed owner change parks existing draft for explicit Use draft here/Clear draft; edit/fill alone never adopts or sends it. Same-owner popup restore must avoid repeated review.
+- Atomically version a separate local UI draft key with non-secret owner metadata; legacy key is literal unowned text, including JSON-looking text. Accepted old sends remain accepted and cannot clear newer-owner/edit revisions or locks. Preserve original standalone composer/storage APIs; no durable project/history/policy/recording ownership, wire/auth changes or actual storage inspection.
+- Inspect module budget and define exactly whether focused chat/owner-context.ts +own test+barrel is needed before release. Do not improvise extra paths. Tests-first source cases/no tests written during hold; current draft/focus/scroll/native shortcuts and held work remain intact.
+- No shared docs/source/tests/heavy/broad/live/provider/panel/private data/commits while held. Supervisor releases concrete paths after gates and plan review.
+
+### Extraction draft/control implementation planning brief (product held)
+- Worker: recording_controls; downstream t224. Read Current State and frozen extraction-keyboard-recovery-audit E1/E2/E5.
+- Plan exact panel/extraction/{panel.ts,field-row.ts}, new owning tests/{field-row.test.ts,panel-draft-recovery.test.ts}; own reports/extraction-draft-recovery-implementation.md only during ninth extension gates. Existing test/harness edits need exact evidence/release; no helpers/wire/session schema/dialog-focus/privacy/client changes.
+- Commit raw column input intent without triggering full redraw/trim per keystroke; explicit commit normalizes as currently expected. Preview/redraw must preserve still-focused typed value/caret. Draft/row instance leases reject retired same-key callbacks across redraw/cancel/capture/new pick before requireDraft/current mutation.
+- Give column groups/actions distinguishable accessible names that update on rename; preserve classes/Lab ids/Remove visible text/native controls. All D12 preview narrowing and Confirm/Cancel/session compatibility remain intact.
+- Write tests-first actual delayed-redraw/retained handler/normalization/privacy/accessibility plan; source/tests HELD until extension gates complete. Stage-aware read/preview Retry and actual session/host lifetime are separate serial follow-ups, not covered by this unit.
+- No source/tests/shared docs/heavy/broad/live/provider/panel/private page values/commits while held. Root releases exact source after review.
+
+### Menu keyboard/disabled activation implementation planning brief (product held)
+- Worker: deployment_docs_audit; paired t224 Core. Dialog four paths frozen. Read Current State, shared-overlay-focus-audit F6/F7 and existing controls/Menu.tsx plus owning component/environment tests/helpers.
+- Proposed exact controls/Menu.tsx and NEW controls/tests/Menu-keyboard.test.tsx only. Own downstream reports/menu-keyboard-recovery-implementation.md during ninth Core gates; all Core source/tests HELD.
+- Plan disabled href/button consistency, eligible keyboard entry/Arrow/Home/End/native shortcuts/IME, explicit Tab exit without reclaiming moved focus, current removed/disabled option callbacks and action-owned close behavior. Preserve existing route/Link semantics and environment stack; do not change overlay-environment/Modal/source styles/helpers without exact separately reviewed evidence.
+- Trap/return/Escape/global newly mounted body-root findings remain separate backlog; no claim Menu-only fixes them. Test actual Menu and synthetic focused portal boundaries, original component contracts unchanged.
+- Write exact policy/tests-first plan while held; no source/tests/shared docs/heavy/broad/live/provider/panel/private/commits. Release follows independently observed Core gates.
 
 ### Extension extraction keyboard and recovery audit brief (read-only released)
 - Worker: recording_controls; downstream t224. Automation exact nine paths remain frozen for independent root review/gates.
@@ -442,6 +500,16 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Synthetic deferred tests first, original owning tests retained, narrow heavy/scoped then freeze. No shared helpers/callers/redaction/storage/protocol/Core/styles/docs edits, real activity/browser/provider/panel operations or commit/push.
 
 ## Work Ledger
+
+### 2026-10-01 - Ninth full gates complete and next three units released
+- Agent: supervisor
+- Changed: source checkpoints, paired Current State and root ninth report.
+- Why: verify whole owning packages before continuing disjoint UI work.
+- Validation: Core full338files2506tests/native0; types/build native0; structure1
+  solely protected inherited service4506/4505. Extension1878/types/build/structure0.
+- Outcome: Accepted. Core9d2eb6fa/e50a6882; downstream924903b8; no merge/push/live.
+- Follow-up: Menu, mounted Chat and extraction draft workers implement exact
+  released partitions; preserve Claude handoff and checkpoint reports as work proceeds.
 
 Earlier settled ledger entries are preserved in the [fifth-through-eighth archive](./codex-ui-ux-review-2026-09-30/archive/2026-10-01-fifth-through-eighth-ledger.md).
 

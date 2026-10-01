@@ -1,6 +1,6 @@
 # Ninth UI supervisor verification
 
-Status: Active
+Status: Complete
 Owner: Codex supervisor
 Date: 2026-10-01
 
@@ -50,3 +50,34 @@ scoped nine-root check native0,zero owning/global/dependency diagnostics.
 All nine automation paths and two root Chat paths frozen for full extension
 gates. Existing117 assertions remain unchanged by root refinement. No backend
 wire, data ownership or complete mounted Chat recovery claim.
+
+## Dialog primitives independently verified
+
+Root reviewed both product sources and actual wrapper/focus tests. Enter checks
+native control/form/portal/current focus/busy/visibility/composition eligibility;
+explicit autofocus tiers precede ordinary content/Close and preserve environment
+stack acquisition. Independent root five suites88pass/native0/2.16s, including
+unchanged component20/OperationGate1/Studio environment10. All Core source now
+frozen for full gates. Worker original35fail/14pass remains in own report;
+native browser/IME/focus/assistive-technology results are unverified.
+
+Local source checkpoints: Core9d2eb6fa operational/onboarding and downstream
+924903b8 automation/controller/reports. Ninth extension types44714 native0/
+27723ms, build60493 native0/22files each/27527ms, structure27824 native0/
+136warnings119baseline. Full3272 remains active; no full ninth success yet.
+All three workers now prepare held next implementation plans (mounted Chat,
+extraction drafts/controls, Menu keyboard); no source during respective gates.
+
+Extension full3272 completed native0,1878tests/113717.0744ms. Ninth extension
+unit Complete: full/types/build/structure independently observed, sources
+checkpoint924903b8. Core dialog checkpoint e50a6882; Core full22516/types74206/
+build84386 active. Structure55934 native1 only inherited protected
+service4506/4505, no new violations. Next Chat eight-path and extraction four-path
+implementation released after extension gates; Core Menu source remains held.
+
+Final Core independently observed: full22516 native0,338files2506tests/182.57s;
+types74206 native0/103169ms; production84386 native0/201922ms. Structure55934
+native1 only inherited protected service4506/4505; no baseline/config relaxation.
+Ninth coherent Core/extension units Complete. Menu two-path source released only
+after these results; current three worker units remain Active separately. Root
+checked main downstream checkout read-only/clean; Claude work/integration untouched.
