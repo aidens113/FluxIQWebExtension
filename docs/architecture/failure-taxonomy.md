@@ -86,8 +86,15 @@ was served HTTP 429 or 503 and is not a robot check (job-board and the
 everything store serve their rate-limit page as a document): the worker tells
 the origin's page-load pace, and `retryAfterMs` is the wait that pace now
 imposes on the origin's next load (`apps/extension/src/runtime/action-runner.ts`,
-`runtime/served-status.ts`). A click that lands on such a page is still
-`NAVIGATION_UNEXPECTED` (`runtime/click-landing.ts`).
+`runtime/rate-limited-landing.ts`, `runtime/served-status.ts`). So does a click
+whose own tab lands on such a page (`runtime/click-landing.ts`), through the
+same `rate-limited-landing.ts`; the worker then takes the tab back
+(`chrome.tabs.goBack`) to the page the click was pressed on, because Core's
+repeat re-sends the same command and the refusal page holds nothing it can
+press. The back landing is judged by its address against the one the tab showed
+before the click and by its served status, and `actual` says whether the tab
+was returned, and if not why, beside the status, the landed path without its
+query and the wait.
 
 ## Why The Binding Matters
 
@@ -188,7 +195,8 @@ identity across bundles, and is compiler-checked at the throw.
   `runtime/action-runner.ts` (`ACTION_REJECTED` for an unsupported page,
   `TARGET_NOT_FOUND` for a tab that is gone, `RATE_LIMITED` for a navigation
   whose landed page the server answered with 429 or 503, with the wait the
-  worker's page-load pace now imposes on that origin as `retryAfterMs`, and
+  worker's page-load pace now imposes on that origin as `retryAfterMs`
+  (`runtime/rate-limited-landing.ts`), and
   `NAVIGATION_UNEXPECTED` for one answered with any other status of 400 or
   above, both read through `runtime/served-status.ts` after the robot check),
   `runtime/frame-address.ts`
@@ -199,8 +207,11 @@ identity across bundles, and is compiler-checked at the throw.
   the page threw; a `web.dom.assert` whose first send met a navigating page is
   sent once more before that, so only its second refusal is reported),
   `runtime/click-landing.ts`
-  (`NAVIGATION_UNEXPECTED` for a replayed click whose own tab landed on a page
-  the server answered with 400 or above, and `USER_INTERVENTION_REQUIRED` for
+  (`RATE_LIMITED` for a replayed click whose own tab landed on a page the
+  server answered with 429 or 503, told to the pace as a navigation's is, the
+  tab then taken back to the page the click was pressed on;
+  `NAVIGATION_UNEXPECTED` for one that landed on a page the server answered
+  with any other status of 400 or above; and `USER_INTERVENTION_REQUIRED` for
   one that landed on a robot check that did not clear by itself), and
   `runtime/action-results.ts` (`NAVIGATION_UNEXPECTED`, the record every
   worker-side navigation check builds, and `USER_INTERVENTION_REQUIRED` for a

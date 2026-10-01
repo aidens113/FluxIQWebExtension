@@ -136,6 +136,21 @@ export function directVisibleText(element: Element): string | undefined {
 }
 
 /**
+ * The element's own words, beside a `text` that holds all of its descendants'
+ * (t223): `undefined` where `text` is already only the element's own -- every
+ * element `describeElement` reads by `directVisibleText` -- or where the two
+ * agree, and `""` where the element has no words of its own. A list item's
+ * `text` repeats its link's; its `ownText` says what only the item says. Read
+ * by `directVisibleText`, so the sensitive-text rule holds here as for `text`.
+ */
+export function ownTextBeside(element: Element, text: string | undefined): string | undefined {
+  // The cheap tag test first: `isInteractableUiElement` may ask the computed style.
+  if (!isSemanticTextElement(element) && !isInteractableUiElement(element)) return undefined;
+  const own = directVisibleText(element) ?? "";
+  return own === (text ?? "") ? undefined : own;
+}
+
+/**
  * What the control holds, or `undefined` when it holds nothing readable -- and
  * always `undefined` for a sensitive control, whose value must never leave the
  * page on any path, or for an element inside one. A span inside an editable

@@ -12,7 +12,7 @@
 
 export const COMMAND_OPTIONS = {
   start: { flags: ["worktree", "core", "allow-running", "dry-run"], values: ["base", "from"] },
-  finish: { flags: ["skip-checks", "allow-running", "dry-run"], values: [] },
+  finish: { flags: ["skip-checks", "full-check", "allow-running", "dry-run"], values: [] },
   abandon: { flags: ["force", "allow-running", "dry-run"], values: [] },
   list: { flags: [], values: [] },
   prune: { flags: ["allow-running", "dry-run"], values: ["base", "days"] },

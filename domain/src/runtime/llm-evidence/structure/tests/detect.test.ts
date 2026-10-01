@@ -37,6 +37,7 @@ import {
   type WebLlmStructurePaginationMode
 } from "../..";
 import { CAPTURED_DETECTIONS, type CapturedDetectionName } from "./captured-detections";
+import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const SCOPE: { projectId: string; flowId: string } = { projectId: "project.one", flowId: "flow.one" };
 
@@ -248,27 +249,39 @@ test("a target handle an inspect issued is bound through its selector, even one 
   const { gateway, commands } = fakeGateway(() => page);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const handles = (inspected.evidence as { elements: Array<{ target: string; tag: string }> }).elements;
-  assert.deepEqual(handles.map((element) => [element.target, element.tag]), [["target.1", "button"], ["target.2", "a"], ["target.3", "a"]]);
+  const handles = shownPageLines(inspected.evidence);
+  assert.deepEqual(handles.map((line) => [line.target, line.kind]), [["t1", "button"], ["t2", "link"], ["t3", "link"]]);
 
   commands.length = 0;
-  const around = await detect(runtime, { target: "target.2" });
+  const around = await detect(runtime, { target: "t2" });
   assert.equal(around.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
-  assert.equal((around.evidence as WebLlmRepeatingStructure).target, "target.2");
+  assert.equal((around.evidence as WebLlmRepeatingStructure).target, "t2");
   assert.deepEqual(commands, [
     { actionType: "web.dom.capture_snapshot", parameters: {} },
     { actionType: "web.dom.capture_snapshot", parameters: { detectStructure: { selector: '[data-testid="product-link"]' } } }
   ]);
   assertNothingAddressable(around.evidence, page.structure as WebAutomationStructureDetection);
 
+  // Written the old way, `target.2` is the same element as `t2`, and the packet
+  // says it back the one way every packet does (t223).
+  commands.length = 0;
+  const legacy = await detect(runtime, { target: "target.2" });
+  assert.equal(legacy.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
+  assert.equal((legacy.evidence as WebLlmRepeatingStructure).target, "t2");
+  assert.deepEqual(commands, [
+    { actionType: "web.dom.capture_snapshot", parameters: {} },
+    { actionType: "web.dom.capture_snapshot", parameters: { detectStructure: { selector: '[data-testid="product-link"]' } } }
+  ]);
+  assert.deepEqual(await detect(runtime, { target: "target.8" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "t8" }));
+
   // A handle the model was never shown.
-  assert.deepEqual(await detect(runtime, { target: "target.9" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "target.9" }));
+  assert.deepEqual(await detect(runtime, { target: "t9" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "t9" }));
   // The element has left the page.
   page = { ...page, elements: [next] };
-  assert.deepEqual(await detect(runtime, { target: "target.2" }), rejection("target_unobserved", { reason: "handle_no_longer_on_page", target: "target.2" }));
+  assert.deepEqual(await detect(runtime, { target: "t2" }), rejection("target_unobserved", { reason: "handle_no_longer_on_page", target: "t2" }));
   // The page itself has moved on.
   page = { ...page, url: "http://127.0.0.1:4173/scenarios/product-catalog/page/2", elements: [next, link(), link()] };
-  assert.deepEqual(await detect(runtime, { target: "target.2" }), rejection("target_unobserved", { reason: "page_moved_since_packet", target: "target.2" }));
+  assert.deepEqual(await detect(runtime, { target: "t2" }), rejection("target_unobserved", { reason: "page_moved_since_packet", target: "t2" }));
 
   // An element in a child frame is detected in that frame, and the handle remembers it.
   // The handle is read out of the packet rather than assumed: a page keeps a
@@ -277,7 +290,7 @@ test("a target handle an inspect issued is bound through its selector, even one 
   // not spent, whatever position it is in (see ../../stable-handles.ts).
   page = withElements(captured("product-catalog-largest"), [link(7)]);
   const framedPacket = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.frame", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const framedHandle = (framedPacket.evidence as { elements: Array<{ target: string }> }).elements[0]!.target;
+  const framedHandle = shownPageLines(framedPacket.evidence)[0]!.target;
   commands.length = 0;
   const framed = await detect(runtime, { target: framedHandle });
   assert.equal(framed.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
@@ -322,11 +335,11 @@ test("each way a page can have no readable list is its own refusal, with the cou
     // The page repeats -- its controls sit in two records -- and the detection
     // would read none of it. Naming one of those rows is the move.
     ["records", refusing("no_repeating_run", { url: LISTING, elements: [control("Search"), control("Filter"), inRecord("Open", "First listing"), inRecord("Open", "Second listing")] }),
-      { reason: "repeating_groups_not_readable", instead: ["target.3", "target.4"], groupsSeen: 2, rowsSeen: 0, controlsSeen: 4 }],
+      { reason: "repeating_groups_not_readable", instead: ["t3", "t4"], groupsSeen: 2, rowsSeen: 0, controlsSeen: 4 }],
     // The same answer from the other repetition signal: one control the page
     // says it drew twelve times.
     ["repeats", refusing("no_repeating_run", { url: LISTING, elements: [control("Search"), control("Filter"), control("Sort"), control("Open", { repeatCount: 12 })] }),
-      { reason: "repeating_groups_not_readable", instead: ["target.4"], groupsSeen: 0, rowsSeen: 12, controlsSeen: 4 }],
+      { reason: "repeating_groups_not_readable", instead: ["t4"], groupsSeen: 0, rowsSeen: 12, controlsSeen: 4 }],
     // A working page with nothing on it that repeats: this is not where the list is.
     ["nothing repeats", refusing("no_repeating_run", { url: LISTING, elements: [control("Search"), control("Filter"), control("Sort"), control("Help")] }),
       { reason: "nothing_repeats_on_page", groupsSeen: 0, rowsSeen: 0, controlsSeen: 4 }],
@@ -342,7 +355,7 @@ test("each way a page can have no readable list is its own refusal, with the cou
       url: LISTING,
       elements: [control("Search"), control("Filter"), control("Sort"), inRecord("Open", "First listing")],
       evidence: { dialogs: { open: [{ selector: "#consent", role: "dialog", modal: true, native: false, label: "Before you continue" }] } }
-    }), { reason: "page_is_not_the_content", instead: ["target.4"], groupsSeen: 1, rowsSeen: 0, controlsSeen: 4 }],
+    }), { reason: "page_is_not_the_content", instead: ["t4"], groupsSeen: 1, rowsSeen: 0, controlsSeen: 4 }],
     // Something is painted over the controls, which is the same answer for the
     // same reason: what was captured is not the content.
     ["overlay", refusing("no_repeating_run", {
@@ -369,7 +382,7 @@ test("a page refusal about the target says which way the handle stopped naming o
   const { gateway, commands } = fakeGateway(() => page);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.refusals", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const target = (inspected.evidence as { elements: Array<{ target: string; tag: string }> }).elements.find((element) => element.tag === "a")!.target;
+  const target = shownPageLines(inspected.evidence).find((line) => line.kind === "link")!.target;
 
   // The page looked where the call pointed and found no repeating children
   // there, so it was asked again as a whole, and found none there either. The
@@ -420,7 +433,7 @@ test("a target with no list around it gets the page's list, which names no targe
   const { gateway, commands } = fakeGateway(() => page);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.outward", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const target = (inspected.evidence as { elements: Array<{ target: string }> }).elements[0]!.target;
+  const target = shownPageLines(inspected.evidence)[0]!.target;
 
   commands.length = 0;
   const found = await detect(runtime, { target });
@@ -446,8 +459,9 @@ test("a malformed call reaches no page and is told which way it was malformed", 
   const malformed: ReadonlyArray<readonly [JsonObject, JsonObject]> = [
     [{ extra: 1 }, { reason: "unexpected_input_keys", instead: ["target"] }],
     [{ target: "nope" }, { reason: "malformed_handle", target: "nope" }],
+    [{ target: "target.0" }, { reason: "malformed_handle", target: "target.0" }],
     [{ target: 3 }, { reason: "malformed_handle" }],
-    [{ target: "target.1", extra: true }, { reason: "unexpected_input_keys", instead: ["target"] }]
+    [{ target: "t1", extra: true }, { reason: "unexpected_input_keys", instead: ["target"] }]
   ];
   for (const [value, detail] of malformed) {
     assert.deepEqual(await detect(runtime, value), rejection("invalid_input", detail), JSON.stringify(value));
@@ -510,7 +524,7 @@ test("unknown, foreign and stale handles are refused, and a resolved binding can
   const [oldest, ...kept] = issued;
   const newest = kept.at(-1)!;
 
-  for (const handle of ["", "target.1", "extraction.0", "extraction.01", "extraction.999", " extraction.1", 42, null]) {
+  for (const handle of ["", "t1", "extraction.0", "extraction.01", "extraction.999", " extraction.1", 42, null]) {
     assert.deepEqual(runtime.resolveExtractionHandle({ ...SCOPE, handle: handle as string }), { ok: false, code: "unknown_handle" }, String(handle));
   }
   assert.deepEqual(runtime.resolveExtractionHandle({ ...SCOPE, handle: oldest! }), { ok: false, code: "stale_handle" });

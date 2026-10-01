@@ -165,7 +165,7 @@ export function bindWebAutomationHostRuntime(fluxiq: FluxIQ): void {
  * `.v2` identifies an element by what it is and what it is called rather than
  * by a selector. The packet stopped carrying selectors when they stopped being
  * something a language model may read, and the opaque handle that replaced them
- * is positional -- `target.1` names the first element of whichever capture it
+ * is positional -- `t1` names the first element of whichever capture it
  * came from, so diffing handles would report that nothing ever changes. What is
  * listed is still element identity rather than page content, so the diff says
  * what moved without restating what the page says.

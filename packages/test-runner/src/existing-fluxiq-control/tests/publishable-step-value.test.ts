@@ -9,7 +9,7 @@ import test from "node:test";
 import { publishableStepFields, publishableStepValue } from "../publishable-step-value.js";
 
 test("refusal diagnostics retain only the domain's screened structural account", () => {
-  const diagnostic = { schemaVersion: "web-build-refusal.v1", phase: "before_action", code: "blocked_by_dialog", pageObserved: true, target: "target.1", targetObserved: true, coveringTargets: ["target.2"], coveringKinds: ["consent"], coveringCount: 1 };
+  const diagnostic = { schemaVersion: "web-build-refusal.v1", phase: "before_action", code: "blocked_by_dialog", pageObserved: true, target: "t1", targetObserved: true, coveringTargets: ["t2"], coveringKinds: ["consent"], coveringCount: 1 };
   assert.deepEqual(publishableStepFields({ diagnostic }).diagnostic, diagnostic);
   for (const malicious of [{ ...diagnostic, label: "Private customer" }, { ...diagnostic, code: "synthetic_secret" }, { ...diagnostic, reason: "synthetic_secret" }, { ...diagnostic, target: "https://private.test/account" }, { ...diagnostic, coveringKinds: ["synthetic_secret"] }]) {
     assert.equal(publishableStepFields({ diagnostic: malicious }).diagnostic, undefined);

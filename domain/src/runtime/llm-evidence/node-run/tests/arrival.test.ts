@@ -42,7 +42,7 @@ test("a press before the build has navigated is refused the same way, and never 
 
   const pressed = await runtime.executeTool({
     ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
-    value: { node: CLICK, parameters: { target: { handle: "target.1" } }, consequences: [] }
+    value: { node: CLICK, parameters: { target: { handle: "t1" } }, consequences: [] }
   });
 
   assert.equal(pressed.resultCode, "web.action.rejected.not_at_start_location");
@@ -88,7 +88,7 @@ test("once the build has navigated, a look and a press run as they always did", 
 
   const pressed = await runtime.executeTool({
     ...PROJECT, callId: "call.three", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
-    value: { node: CLICK, parameters: { target: { handle: "target.1" } }, consequences: [] }
+    value: { node: CLICK, parameters: { target: { handle: "t1" } }, consequences: [] }
   });
   assert.equal(pressed.resultCode, "web.action.succeeded");
   assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.click"), true);
@@ -114,7 +114,7 @@ test("a build told no start location is unchanged: the open page is read and pre
 
   const pressed = await runtime.executeTool({
     ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID,
-    value: { node: CLICK, parameters: { target: { handle: "target.1" } }, consequences: [] }
+    value: { node: CLICK, parameters: { target: { handle: "t1" } }, consequences: [] }
   });
   assert.equal(pressed.resultCode, "web.action.succeeded");
 });

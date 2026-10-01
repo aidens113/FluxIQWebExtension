@@ -32,6 +32,7 @@
 //
 // | Packet field                  | Snapshot path                                   | Note |
 // | ----------------------------- | ----------------------------------------------- | ---- |
+// | `viewport`                    | `viewport` (width, height, scrollX, scrollY)    | whole or absent |
 // | `frame.isTop`                 | `frame.isTop`                                   | |
 // | `frame.childFrameIds`         | `data-fluxiq-frame-id` on merged elements       | |
 // | `frame.unansweredFrameIds`    | `evidence.unansweredFrameIds`                   | child frames the merge got no snapshot from |
@@ -142,8 +143,18 @@ export type WebLlmEvidenceLoadingIndicator = {
   label?: string;
 };
 
+/**
+ * The captured window: its size and where it was scrolled to, in CSS pixels
+ * (t223). Read from the snapshot's own `viewport`, which the content script
+ * measures with the elements. It is what lets the page view say which lines
+ * are on screen and which are below the fold.
+ */
+export type WebLlmEvidenceViewport = { width: number; height: number; scrollX: number; scrollY: number };
+
 export type WebLlmPageContext = {
   frame?: WebLlmEvidenceFrame;
+  /** The window the capture was taken in, when the snapshot measured it. */
+  viewport?: WebLlmEvidenceViewport;
   loading?: { readyState?: string; busy?: true; indicators?: WebLlmEvidenceLoadingIndicator[]; pendingNavigation?: true };
   /** How this document was reached. */
   navigation?: { url?: string; type?: string; redirects?: number; referrer?: string };
@@ -163,6 +174,7 @@ export function webLlmPageContext(snapshot: Record<string, unknown>, childFrameI
   const evidence = pageEvidence(snapshot);
   return present<WebLlmPageContext>({
     frame: evidenceFrame(snapshot.frame, childFrameIds, evidence?.unansweredFrameIds),
+    viewport: evidenceViewport(snapshot.viewport),
     loading: evidenceLoading(pageEvidenceWire<WebAutomationLoadingEvidence>(evidence?.loading)),
     navigation: evidenceNavigation(pageEvidenceWire<WebAutomationNavigationEvidence>(evidence?.navigation)),
     dialogs: evidenceDialogs(pageEvidenceWire<WebAutomationDialogEvidence>(evidence?.dialogs), handleOf),
@@ -218,6 +230,20 @@ function evidenceFrame(input: unknown, childFrameIds: number[], unanswered: unkn
     childFrameIds: childFrameIds.length ? childFrameIds : undefined,
     unansweredFrameIds: unansweredFrameIds.length ? unansweredFrameIds : undefined
   });
+}
+
+/**
+ * The window size and scroll position, whole or not at all: a viewport missing
+ * its scroll would put every line on the wrong side of the fold. Sizes must be
+ * positive; a scroll may be zero. Fractions are rounded, as element boxes are.
+ */
+function evidenceViewport(input: unknown): WebLlmEvidenceViewport | undefined {
+  if (!isJsonRecord(input)) return undefined;
+  const { width, height, scrollX, scrollY } = input;
+  const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+  if (!finite(width) || !finite(height) || !finite(scrollX) || !finite(scrollY)) return undefined;
+  if (width <= 0 || height <= 0) return undefined;
+  return { width: Math.round(width), height: Math.round(height), scrollX: Math.round(scrollX), scrollY: Math.round(scrollY) };
 }
 
 function evidenceLoading(input: PageEvidenceWire<WebAutomationLoadingEvidence> | undefined): WebLlmPageContext["loading"] {

@@ -70,9 +70,12 @@ import {
   type WebPlanNodeResolution,
   type WebPlanNodeResolutionInput
 } from "./plan-resolution";
+import { runWebFindOnPage } from "./page-find";
+import { publishedWebLlmPage, webLlmPageRetentionKey, webLlmResultRetentionKey, type WebLlmPublishedPage } from "./page-view";
 import { present } from "./present";
 import { webFailureRepairParameters } from "./repairable-parameters";
 import { webLlmTargetsUnchanged } from "./target";
+import { canonicalWebLlmTargetHandle } from "./handle-spelling";
 import { createWebLlmStableTargetHandles, WEB_LLM_TARGET_HANDLE_PATTERN } from "./stable-handles";
 import {
   createWebLlmExtractionHandles,
@@ -94,12 +97,13 @@ import { boundedIdentifier, jsonRecord } from "./untrusted-json";
 import {
   webLlmToolRejectionResultCode,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
+  WEB_LLM_FIND_ON_PAGE_TOOL_ID,
   WEB_LLM_RUN_NODE_TOOL_ID
 } from "./vocabulary";
 
-// A handle the authoring tools issue: numbered for the whole Flow, so up to six digits (`./stable-handles.ts`).
+// A handle the authoring tools issue: numbered for the whole Flow, so up to six
+// digits (`./stable-handles.ts`), and read in either spelling, `tN` or `target.N`.
 const TARGET_HANDLE_PATTERN = WEB_LLM_TARGET_HANDLE_PATTERN;
-const TARGET_HANDLE = new RegExp(TARGET_HANDLE_PATTERN, "u");
 
 export type WebLlmFailureEvidenceRequest = {
   projectId: string;
@@ -189,7 +193,8 @@ export type WebAutomationLlmEvidenceRuntime = {
    * for a moment no call brackets.
    */
   stateDigestsOnCalls?: true;
-  captureSanitizedFailureEvidence(input: WebLlmFailureEvidenceRequest): Promise<WebLlmPageEvidence>;
+  /** The page at a failure, as the model reads every page (`web-llm-page.v3`); the structured packet is retained for the target check. */
+  captureSanitizedFailureEvidence(input: WebLlmFailureEvidenceRequest): Promise<WebLlmPublishedPage>;
   validateTargetOverrideEvidence(evidence: JsonObject, target: AutomationStudioRuntimeTargetOverrideTarget, failedAction: AutomationStudioRuntimeTargetOverrideFailedAction): AutomationStudioRuntimeTargetOverrideEvidenceValidation;
   /**
    * What an extraction handle the detection tool issued stands for: the
@@ -201,7 +206,7 @@ export type WebAutomationLlmEvidenceRuntime = {
   resolveExtractionHandle(input: WebLlmExtractionHandleScope & { handle: string }): WebLlmExtractionHandleResolution;
   /**
    * A plan node's parameters with the handles the model wrote in them made
-   * real: a `selector` written `{ handle: "target.N" }` becomes the selector
+   * real: a `selector` written `{ handle: "tN" }` becomes the selector
    * behind the handle this project and Flow's exploration was shown, and the
    * extraction node's `extractList` written `{ handle: "extraction.N" }`
    * becomes the request behind it (`plan-resolution/`). A node with no handle
@@ -217,15 +222,23 @@ export type WebAutomationLlmEvidenceRuntime = {
 };
 
 /**
- * How many packets' selector bindings are kept so a later repair can still put
- * the selector hint back. Small on purpose: this is a convenience for the
- * in-flight diagnosis, not a store, and a repair that finds no binding is
- * resolved fingerprint-only rather than refused. Failure packets get a window
- * of their own: the target check always needs the failure packet, while an
- * exploration returns any number of packets and Core carries only the newest
- * to the repair, so the oldest explored binding is the one to let go.
+ * How many shown pages' structured packets are kept so a later repair can check
+ * the handle it names against the elements the model was shown, and put the
+ * selector hint back. Small on purpose: this is a convenience for the
+ * in-flight diagnosis, not a store. Failure pages get a window of their own:
+ * the target check always needs the failure page, while an exploration returns
+ * any number of pages and Core carries only the newest to the repair, so the
+ * oldest explored one is the one to let go.
+ *
+ * Since t223 the model reads a page as the compact view, which has no element
+ * objects to check a handle against, so a page that was let go cannot be
+ * checked at all and is refused as unrecognized rather than guessed at. The
+ * window was 8 while a let-go packet still resolved on its own fingerprint; it
+ * is now Core's default exploration budget of 24 actions
+ * (`AS/runtime/recovery/exploration-budget.ts`), so a recovery of default
+ * length can name a handle from any page it was shown.
  */
-const RETAINED_SELECTOR_BINDINGS = 8;
+const RETAINED_SHOWN_PACKETS = 24;
 
 export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGateway): WebAutomationLlmEvidenceRuntime {
   // Every command a build sends goes out through this gateway, so a click or a
@@ -270,16 +283,18 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
     targetPackets.rememberLook({ projectId: input.projectId, flowId: input.flowId }, snapshot);
     addresses.saw({ projectId: input.projectId, flowId: input.flowId, sessionId }, snapshot);
   };
-  // Keyed by the packet itself, because Core hands the packet back to
-  // `validateTargetOverrideEvidence` without the project or flow it came from.
-  const failureSelectors = new Map<string, Map<string, string>>();
-  const toolSelectors = new Map<string, Map<string, string>>();
-  const retainIn = (window: Map<string, Map<string, string>>) => (binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding => {
-    keepNewest(window, packetKey(binding.evidence), binding.selectors);
+  // Keyed by the page as the model read it (`./page-view/retention-key.ts`),
+  // because Core hands that page back to `validateTargetOverrideEvidence`
+  // without the project or flow it came from, and the page has no elements of
+  // its own to check a handle against.
+  const failurePackets = new Map<string, WebLlmSnapshotBinding>();
+  const toolPackets = new Map<string, WebLlmSnapshotBinding>();
+  const retainIn = (window: Map<string, WebLlmSnapshotBinding>) => (binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding => {
+    keepNewest(window, webLlmPageRetentionKey(publishedWebLlmPage(binding.evidence)), binding);
     return binding;
   };
-  const retain = retainIn(toolSelectors);
-  const retainFailure = retainIn(failureSelectors);
+  const retain = retainIn(toolPackets);
+  const retainFailure = retainIn(failurePackets);
   return {
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     // Declared once, in `./denied-keys.ts`, because what a reading node read
@@ -314,6 +329,20 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
         toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
         description: "Detect the repeating list or table an extraction would read: around an observed element when given its opaque target handle, else the page's largest list. Returns an opaque extraction handle naming it, each field's key, label, kind and coverage, the item count, and how the list continues. Returns no values or selectors. Observes only, and is never a step of the Flow. Write the list into the extraction node as extractList: {handle, fields?: {yourKey: \"fieldKey\" | \"fieldKey@attr\"}, where?: [{field: \"fieldKey\", is: \"absent\"}], paginate?: false, minItems?: 0}, then run that node to see the rows it really reads. Its count is the whole list: where the Flow returns only part of it, narrow the page first, minItems: 0 where the answer may be no rows. where is optional and says which items are rows at all: leave it out and every item is a row, which is the right first attempt when unsure -- too much is narrowed later, while nothing looks like a page that held nothing. Every condition must hold, and each names one column and compares it. Presence: {field, is: \"present\"} or {field, is: \"absent\"}, for a column only some items have. Its number: atLeast, atMost, lessThan, greaterThan or equals, off the first number in the column, so $49.00 is 49 and 3.7 out of 5 stars is 3.7 (no number fails the comparison). Its text: contains, startsWith, endsWith, equals, or matches for a regular expression, ignoring case, one value or a list meaning any. And not: true keeps the items the rest of that condition rejects, which is how an exclusion is written: {field: \"title\", contains: [\"ear tips\", \"charging case\"], not: true} drops the accessories. If conditions reject every item, the node returns what it read and says so in its report. A detected list mixes advertisements in with results, so a column with coverage below 1 is often the mark that tells them apart -- leave them out with is: \"absent\" on it. Name a column the detection showed, never a word you hope is somewhere in the item.",
         inputSchema: { type: "object", properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
+        effect: "observe",
+      },
+      // The page view's other half (t223): the page is shown as one line per
+      // element with visible words or a control, and this finds the rest.
+      // Held to Core's 2,000 characters like the description above.
+      {
+        toolId: WEB_LLM_FIND_ON_PAGE_TOOL_ID,
+        description: "Search the page you are on for any words or attribute, and get every element that matches. The page you are shown is one line per element that has visible words or is a control, in page order: its handle (tN, copied exactly to act on it), its kind (link, button, field, select, checkbox, img, h2, ...), its words in quotes, and its state (=\"value\", checked, open, disabled, covered-by). A link's address follows it, ~ standing for the base the URL line names, and lines such as [main], - 3/16 (an item of a list) and --- below the fold --- say where things are. Everything else -- a closed menu's items, a collapsed panel, an icon with no words, text off screen, an id, class, name, test id, placeholder or any other attribute -- is found here: query is matched, ignoring case, against every element's words, label, value, options and address and every attribute's name and value, hidden elements included. Each match is one line: handle, kind, words, the attribute that matched when the words did not, and where it is (on screen, above, below, off-page, not rendered). Fifty matches to a page, in page order; the last line says how to ask for the next fifty with after. Observes only, and is never a step of the Flow.",
+        inputSchema: {
+          type: "object",
+          properties: { query: { type: "string", minLength: 1, maxLength: 200 }, after: { type: "integer", minimum: 0 } },
+          required: ["query"],
+          additionalProperties: false
+        },
         effect: "observe",
       },
     ],
@@ -376,6 +405,17 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
           });
           // It only observes, so the state it found is the state it left.
           return answered(withCallStates(detected, observed, observed));
+        }
+        if (input.toolId === WEB_LLM_FIND_ON_PAGE_TOOL_ID) {
+          // A search's capture is restamped and kept as a look, so a handle it
+          // prints is one a press binds (`./page-find/`).
+          return answered(await runWebFindOnPage({
+            gateway,
+            sessionId,
+            request: input,
+            restamp: (binding) => retain(stable(input, binding)),
+            looked: (binding) => looked(input, sessionId, binding)
+          }));
         }
         throw new Error("web evidence tool is not registered");
       } catch (error) {
@@ -468,7 +508,9 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
       if (result.status !== "succeeded") throw new Error("web failure evidence snapshot capture failed");
       const payload = jsonRecord(result.payload, "web failure evidence action payload");
       // The whole page, as every packet is: a failure packet is no longer held
-      // to a byte gate of its own (t200).
+      // to a byte gate of its own (t200). It leaves as the compact view every
+      // page leaves as (t223); the structured packet is retained under that
+      // view's key, so the repair's target check reads the elements behind it.
       const binding = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
         expectedOrigin: undefined,
         // Core's failed-action identity is an attempt, a node and a definition
@@ -481,19 +523,23 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
         failedAction: { repairParameters: webFailureRepairParameters({ definitionId: input.failedAction.definitionId }) },
       }));
       binding.evidence.repairCandidates = projectWebRepairCandidates(binding.evidence.elements, { definitionId: input.failedAction.definitionId });
-      return retainFailure(binding).evidence;
+      return publishedWebLlmPage(retainFailure(binding).evidence);
     },
     validateTargetOverrideEvidence(evidence, target, failedAction) {
-      // Judged before the target: a packet of another version, or not a packet
-      // at all, is not one this domain issued, whatever handles it holds.
-      if (evidence.schemaVersion !== WEB_LLM_EVIDENCE_SCHEMA_VERSION || !Array.isArray(evidence.elements)) return { status: "absent", reason: "evidence_unrecognized" };
-      return validateWebRuntimeTargetOverrideEvidence(
-        evidence as WebLlmPageEvidence,
-        target,
-        failedAction,
-        // Equal keys describe equal elements, so a binding from either window fits.
-        failureSelectors.get(packetKey(evidence as WebLlmPageEvidence)) ?? toolSelectors.get(packetKey(evidence as WebLlmPageEvidence))
-      );
+      // A structured packet, as this domain handed them out before t223: its
+      // own elements are what the handle is checked against, with no selector
+      // hint, since no packet of that shape is retained any more.
+      if (evidence.schemaVersion === WEB_LLM_EVIDENCE_SCHEMA_VERSION && Array.isArray(evidence.elements)) {
+        return validateWebRuntimeTargetOverrideEvidence(evidence as WebLlmPageEvidence, target, failedAction, undefined);
+      }
+      // A page, search or description as the model read it. Judged before the
+      // target: one this runtime did not retain is not one it can check,
+      // whatever handles its text prints. Equal keys describe equal pages, so
+      // a packet from either window fits.
+      const key = webLlmResultRetentionKey(evidence);
+      const retained = key === undefined ? undefined : failurePackets.get(key) ?? toolPackets.get(key);
+      if (retained === undefined) return { status: "absent", reason: "evidence_unrecognized" };
+      return validateWebRuntimeTargetOverrideEvidence(retained.evidence, target, failedAction, retained.selectors);
     },
     resolveExtractionHandle(input) {
       return extractionHandles.resolve({ projectId: input.projectId, flowId: input.flowId }, input.handle);
@@ -537,29 +583,19 @@ function eligibleWebSessionIds(fluxiq: FluxIQ, alsoDeclaring?: string): string[]
   ).map((session) => session.sessionId);
 }
 
-/** Keep `selectors` as the newest entry, re-inserted when shown again, and let the oldest go past the bound. */
-function keepNewest(window: Map<string, Map<string, string>>, key: string, selectors: Map<string, string>): void {
+/**
+ * Keep `binding` as the newest entry, re-inserted when shown again, and let the
+ * oldest go past the bound. The key is the page as the model read it, so two
+ * captures that read the same are one entry, the newer one; a page that was
+ * recaptured differently is another key.
+ */
+function keepNewest(window: Map<string, WebLlmSnapshotBinding>, key: string, binding: WebLlmSnapshotBinding): void {
   window.delete(key);
-  window.set(key, selectors);
+  window.set(key, binding);
   for (const oldest of window.keys()) {
-    if (window.size <= RETAINED_SELECTOR_BINDINGS) break;
+    if (window.size <= RETAINED_SHOWN_PACKETS) break;
     window.delete(oldest);
   }
-}
-
-/**
- * A packet's identity for the binding lookup: its location and every element
- * it describes, whole. A failure packet numbers its handles from 1 -- only the
- * authoring tools number them for the whole Flow (`./stable-handles.ts`) -- so
- * keyed on handles alone two captures of one page with one element count collided, and
- * a repair got the hint of a different control. Keyed on the elements, equal
- * keys mean equal fingerprints at every handle. Core round-trips the packet
- * through JSON, which reproduces this serialization, so it is matched on what
- * the packet says rather than on object identity, and a packet that was
- * trimmed, recaptured, re-ranked or edited no longer matches.
- */
-function packetKey(evidence: WebLlmPageEvidence): string {
-  return `${evidence.location} ${JSON.stringify(evidence.elements)}`;
 }
 
 function evidenceScope(input: WebLlmEvidenceToolRequest, sessionId: string): string {
@@ -593,11 +629,13 @@ function requestedUrl(input: unknown): URL {
   }
 }
 
+/** A target handle the model wrote, in the packets' spelling: `target.N` is read as `tN`. */
 function boundedTargetHandle(input: unknown): string {
-  if (typeof input !== "string" || !TARGET_HANDLE.test(input)) {
-    recoverable("invalid_input", rejectionDetail({ reason: "malformed_handle", target: typeof input === "string" ? input : undefined, instead: undefined, missing: undefined, requestId: undefined }));
+  const handle = canonicalWebLlmTargetHandle(input);
+  if (handle === undefined) {
+    return recoverable("invalid_input", rejectionDetail({ reason: "malformed_handle", target: typeof input === "string" ? input : undefined, instead: undefined, missing: undefined, requestId: undefined }));
   }
-  return input;
+  return handle;
 }
 
 function exactToolKeys(input: JsonObject, allowed: string[]): void {

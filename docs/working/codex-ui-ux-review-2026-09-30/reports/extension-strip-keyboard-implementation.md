@@ -1,0 +1,39 @@
+# Extension stable strip and keyboard implementation
+
+Status: Complete — early-unshown ordering correction frozen; pending supervisor full validation
+Owner: worker wait_gaps
+
+Read Current State, exact four-path brief and navigation audit. Owns automation-strip.ts/top-bar.ts and their two new owning tests only. Shell/Chat/extraction/shared fake remain untouched. Added local focus/event regressions before product edits; preparing narrow reproduction. No broad/live/provider/panel/commit commands.
+
+Original-source reproduction: eight tests, 2pass/6fail, native exit1,352.4228ms. Strip identity/reorder/removal/notice failures and modified-key interception reproduced; plain/native tab cases pass. Exact TEMP codex-t224-strip-keyboard-before.log. First invocation incorrectly assumed flat esbuild output paths and ran no tests; corrected paths preserve automations/tests and shell/tests directories.
+
+Implementing keyed flow/run/dataset export wrappers with stable format controls/current text/disabled state; keyed notice opener keeps its own pending/error state. Reordering reconciles children; focus restoration/fallback requires owned visible focus and visible document. Tab handler ignores modifiers/composition/229. Test-local query/parent/focus modeling only; no shared harness changes.
+
+## Final change
+
+- Export wrappers reconcile by the JSON tuple flow/run/dataset; fixed CSV/JSON controls capture immutable tuple values and format. Label/count/accessible name/export pending state update on existing controls. A new run/flow/dataset receives new handlers; duplicate tuple entries do not create duplicated controls. Unchanged controls are never detached; moved controls are restored only when they previously owned focus.
+- Notice text updates separately from the Open FluxIQ instance, keyed by flow/run, preserving that button's own pending/error state across strip refreshes. Its observe/status behavior is retained. Removed controls choose a next surviving old neighbor, then previous, then new available export/notice control, then enabled Run/main Open. Disabled controls and hidden/disconnected surfaces are excluded; document-hidden/external focus is untouched.
+- Top-bar handler ignores alt/ctrl/meta/shift, composing and keyCode229 events. Plain arrows/Home/End and native Enter/Space activation remain unchanged.
+- Only the four assigned product/test paths and this report changed. No shared harness, shell mounting, chat, extraction, controller, background/Core, styles/contracts or shared docs edits.
+
+## Final validation
+
+- Final heavy label `codex t224 strip keyboard final`, native exit0. Ten tests: seven strip and three tab;10pass/0fail/0skip/0cancelled,131.6647ms. Scoped TypeScript native exit0 (empty types log). Production `git diff --check` exit0.
+- Exact logs: `C:/Users/osrs_/AppData/Local/Temp/codex-t224-strip-keyboard-{before,build,final,types}.log`.
+- An intermediate8-test run passed7/8: the notice-removal assertion expected Run while previous surviving export controls existed. Corrected the assertion to the nearest previous surviving control, matching the written fallback contract; added flow-change/current-handler and disabled/hidden-ancestor cases before the final10-test run. No timeout increases/skips.
+- Command, package cwd `apps/extension`, explicit Git Bash through heavy.sh: `pnpm exec esbuild src/panel/automations/tests/automation-strip.test.ts src/panel/shell/tests/top-bar.test.ts --bundle --platform=node --target=node22 --format=esm --external:fluxiq --external:fluxiq/* --external:@fluxiq/client-gateway-websocket --external:@fluxiq/client-gateway-websocket/* --loader:.css=empty --out-extension:.js=.mjs --outdir=.test-build-scratch/codex-strip-keyboard`; then `node --test .test-build-scratch/codex-strip-keyboard/automations/tests/automation-strip.test.mjs .test-build-scratch/codex-strip-keyboard/shell/tests/top-bar.test.mjs`; then `pnpm exec tsc -p .test-build-scratch/codex-strip-keyboard/tsconfig.json --noEmit`. Ignored config extends extension tsconfig.test.json, four assigned roots only, empty include/exclude.
+- Generated bundles at those two exact paths are available for independent execution without rebuilding. No broad suite/check/build/audit or live browser/provider/panel operation run. Local DOM/event simulation is not live browser certification. Source and report frozen for supervisor review.
+
+Supervisor review found that a visible panel can remember an active strip button while the browser page owns focus. Added owning-document hasFocus() guard and local regression for reordering/removal with remembered activeElement and hasFocus false. Earlier10-test source validation is superseded for this changed revision; rerunning focused/types before refreeze. Extraction untouched.
+
+Final document-focus revision: heavy label `codex t224 strip keyboard document focus final`, session55492 nativeexit0.11tests/11pass/0fail/0skip/0cancelled,377.5551ms (strip8/tab3); four-root scoped TypeScript exit0; production diff-check0. The same build/final/types TEMP log paths and independent bundle paths now contain this revision. Source/report refrozen; no broad/live/other ownership changes.
+
+## Actual-runner regression diagnosis
+
+Supervisor full suite31774 failed1727total/1719pass/8fail despite focused11 passing. Worker captured actual `EXTENSION_TEST_BUILD_LABEL=codex-strip-diagnose node scripts/test-extension.mjs`, heavy session59985, TEMP `codex-t224-strip-keyboard-runner-diagnose.log`. Cases1150–1157 are exactly the eight existing automations-tab tests; every failure starts at `exports.querySelectorAll is not a function or its return value is not iterable`, through hidden strip.draw, not the later ownerDocument read. Isolated actual-runner automations-tab bundle reproduced0pass/8fail, nativeexit1, TEMP `codex-t224-strip-keyboard-tab-before.log`.
+
+Cause: automations-tab.draw always calls its strip.draw, even when no automation is selected. The new control/focus snapshot preceded the existing shown-undefined return, adding unnecessary hidden-strip work and new DOM requirements to unrelated row tests. This is not an all-bundle concurrency race. Approved correction restores the production early-unshown return before control/focus inspection; shown strips retain full hasFocus/visibility guards. No fake-only source fallback, shared helper or extra owning-test edits required. Existing eight row regressions directly cover the unshown consumer seam. Product remains frozen until the current diagnostic runner finishes; then narrow correction and combined row/strip/top-bar checks.
+
+Actual runner59985 finished nativeexit1:1727total/1719pass/8fail/0skip/0cancelled,108706.3ms; exact eight contexts captured in diagnosis log. The isolated eight-test reproduction nativeexit1 took248.2559ms. After it finished, applied only the authorized strip draw ordering change: unshown return now precedes controls/ownerDocument work; shown strips keep hasFocus guard. No test or shared helper changes needed.
+
+Final related check: heavy label `codex t224 strip related runner final`, nativeexit0. Bundled strip, existing automations-tab, existing row-element and top-bar tests; ignored related-runner.mjs imports all four sequentially in one Node process like actual runner. All21tests passed (strip8/rows8/row-element2/tab3), no skips/cancellations. Scoped TypeScript including the two existing owning test roots passed; production diff-check0. Exact TEMP `codex-t224-strip-keyboard-related-{build,final,types}.log`; types log empty. Independent execution: `node apps/extension/.test-build-scratch/codex-strip-keyboard/related-runner.mjs` from repository cwd. Source/report frozen again. Earlier11-test bundles/logs represent the previous revision; the rebuilt bundles and related logs represent this final correction. Supervisor full suite/check/build/audit remain to verify final revision.

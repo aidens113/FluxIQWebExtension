@@ -180,7 +180,7 @@ test("a failure packet, marked and naming its repair parameters, still carries n
     failedAction: { selector: "#place-order", repairParameters: webFailureRepairParameters({ definitionId: "builtin.policy.action" }) },
   });
   const serialized = JSON.stringify(evidence);
-  assert.equal(evidence.failedTarget, "target.1");
+  assert.equal(evidence.failedTarget, "t1");
   assert.deepEqual(Object.keys(evidence.repairParameters ?? {}), ["element"]);
   for (const selector of SELECTORS) {
     assert.doesNotMatch(serialized, new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"), selector);
@@ -207,7 +207,7 @@ test("every element is named by an opaque handle, and by nothing else that could
   const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings(realisticSnapshot());
 
   for (const element of evidence.elements) {
-    assert.match(element.target, /^target\.[1-9][0-9]?$/u, element.target);
+    assert.match(element.target, /^t[1-9][0-9]?$/u, element.target);
     // The exhaustive check: a future field is caught here whatever it is called.
     const unexpected = Object.keys(element).filter((key) => !ALLOWED_ELEMENT_KEYS.has(key));
     assert.deepEqual(unexpected, [], `the packet element gained ${unexpected.join(", ")}`);
@@ -216,7 +216,7 @@ test("every element is named by an opaque handle, and by nothing else that could
   // The selectors still exist -- the domain kept every one of them -- they are
   // simply on the other side of the boundary, keyed by the handle.
   assert.deepEqual([...selectors.keys()], evidence.elements.map((element) => element.target));
-  assert.equal(selectors.get("target.1"), "#place-order");
+  assert.equal(selectors.get("t1"), "#place-order");
   // A child frame's selector is the one that works inside that frame, and the
   // frame rides on the packet because the selector alone is ambiguous without it.
   assert.equal([...selectors.values()].includes("#card-name"), true);

@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
+import { shownHandle, shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const CLICK = "web.output.dom-click";
@@ -25,7 +26,12 @@ const SET_STORE = "#store-millbrook .set-store";
 /** Chrome's words for a document that went while a message was in it. */
 const PORT_CLOSED = "The message port closed before a response was received.";
 
-type Packet = JsonObject & { elements?: Array<{ target: string; text?: string; name?: string }>; pageChanged?: boolean; pageUnreadable?: boolean };
+type Packet = JsonObject & { page?: string; pageChanged?: boolean; pageUnreadable?: boolean };
+
+/** The words of every line of the page a result carries (t223). */
+function wordsOn(evidence: Packet): Array<string | undefined> {
+  return shownPageLines(evidence).map((line) => line.words);
+}
 
 /**
  * The store page, before and after the switch. `unreadableLooks` is how many
@@ -86,8 +92,8 @@ function reloaded(): JsonObject {
 async function pickStore(gateway: WebLlmEvidenceGateway, signal?: AbortSignal) {
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const looked = await runtime.executeTool({ ...PROJECT, callId: "look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
-  const button = (looked.evidence as Packet).elements!.find((element) => element.text === "Set as my store")!;
-  const request = { ...PROJECT, callId: "pick-millbrook", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: button.target } }, consequences: [] } };
+  const button = shownHandle(looked.evidence, "Set as my store");
+  const request = { ...PROJECT, callId: "pick-millbrook", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: button } }, consequences: [] } };
   return signal ? await runtime.executeTool({ ...request, signal }) : await runtime.executeTool(request);
 }
 
@@ -108,7 +114,7 @@ test("a click whose page reloads under the look after it is applied, with the pa
   assert.equal(evidence.pageChanged, true);
   assert.equal(evidence.pageUnreadable, undefined);
   // The chip of the new document says the switch took; the flyout of the old one is gone.
-  const texts = evidence.elements!.map((element) => element.text);
+  const texts = wordsOn(evidence);
   assert.equal(texts.includes(NEW_STORE), true);
   assert.equal(texts.includes(OLD_STORE), false);
   assert.equal(texts.includes("Set as my store"), false);
@@ -125,7 +131,7 @@ test("a click whose reload is over before the look after it is applied, with the
   assertAppliedStep(picked);
   const evidence = picked.evidence as Packet;
   assert.equal(evidence.pageChanged, true);
-  assert.equal(evidence.elements!.some((element) => element.text === NEW_STORE), true);
+  assert.equal(wordsOn(evidence).includes(NEW_STORE), true);
 });
 
 // Audit A2, cause 1: the extension now answers a click whose page navigated
@@ -158,8 +164,8 @@ test("a click answered only by the note that it navigated its page before answer
   const evidence = picked.evidence as Packet;
   assert.equal(evidence.pageChanged, true);
   assert.equal(evidence.pageUnreadable, undefined);
-  assert.equal(evidence.elements!.some((element) => element.text === NEW_STORE), true);
-  assert.equal(evidence.elements!.some((element) => element.text === "Set as my store"), false);
+  assert.equal(wordsOn(evidence).includes(NEW_STORE), true);
+  assert.equal(wordsOn(evidence).includes("Set as my store"), false);
 });
 
 test("a click whose page never comes back is still applied, and says the page could not be read", async () => {
@@ -172,7 +178,7 @@ test("a click whose page never comes back is still applied, and says the page co
   assert.equal(evidence.pageUnreadable, true);
   // Not compared, so not said; and no packet of a page nobody could read.
   assert.equal(evidence.pageChanged, undefined);
-  assert.equal(evidence.elements, undefined);
+  assert.equal(evidence.page, undefined);
   assert.equal(evidence.ok, true);
   // Bounded: about five seconds of looks a quarter of a second apart, not a hang.
   assert.ok(elapsed < 7_000, `waited ${elapsed} ms`);

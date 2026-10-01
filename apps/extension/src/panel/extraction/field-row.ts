@@ -20,6 +20,8 @@ import { extractionFieldKindOptions, type ExtractionFieldHandling, type Extracti
 
 /** What the panel does with an edit the user makes to one column. */
 export type ExtractionFieldEdits = {
+  /** Raw typing intent; the owner commits/normalizes on change or Confirm. */
+  inputName?(sourceKey: string, raw: string): void;
   rename(sourceKey: string, label: string): void;
   changeKind(sourceKey: string, kind: WebAutomationExtractFieldKind): void;
   changeHandling(sourceKey: string, handling: ExtractionFieldHandling): void;
@@ -39,7 +41,17 @@ export function extractionFieldRowElement(field: ExtractionFieldRow, edits: Extr
   const row = document.createElement("div");
   row.className = "extraction-field";
   row.dataset.field = field.sourceKey;
-  row.append(nameRow(field, edits), metaRow(field, edits), handlingRow(field, edits));
+  row.setAttribute("role", "group");
+  const announce = (label: string) => {
+    const name = label.trim() || "Unnamed column";
+    row.setAttribute("aria-label", `Column ${name}`);
+    row.querySelector(".extraction-field-label")?.setAttribute("aria-label", `Column name for ${name}`);
+    row.querySelector(".extraction-field-kind")?.setAttribute("aria-label", `What ${name} reads`);
+    row.querySelector(".extraction-field-remove")?.setAttribute("aria-label", `Remove ${name}`);
+    row.querySelector(".extraction-field-handling")?.setAttribute("aria-label", `How to handle ${name}`);
+  };
+  row.append(nameRow(field, edits, announce), metaRow(field, edits), handlingRow(field, edits));
+  announce(field.label);
   if (field.sensitive) {
     const reason = document.createElement("p");
     reason.className = "extraction-field-reason";
@@ -49,7 +61,7 @@ export function extractionFieldRowElement(field: ExtractionFieldRow, edits: Extr
   return row;
 }
 
-function nameRow(field: ExtractionFieldRow, edits: ExtractionFieldEdits): HTMLElement {
+function nameRow(field: ExtractionFieldRow, edits: ExtractionFieldEdits, announce: (label: string) => void): HTMLElement {
   const wrap = document.createElement("div");
   wrap.className = "extraction-field-name";
 
@@ -60,7 +72,11 @@ function nameRow(field: ExtractionFieldRow, edits: ExtractionFieldEdits): HTMLEl
   name.autocomplete = "off";
   name.value = field.label;
   name.setAttribute("aria-label", "Column name");
-  name.addEventListener("change", () => edits.rename(field.sourceKey, name.value.trim() || field.label));
+  name.addEventListener("input", () => { announce(name.value); edits.inputName?.(field.sourceKey, name.value); });
+  name.addEventListener("change", () => {
+    const label = name.value.trim() || field.label;
+    name.value = label; announce(label); edits.rename(field.sourceKey, label);
+  });
 
   const remove = document.createElement("button");
   remove.type = "button";

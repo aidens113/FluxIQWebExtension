@@ -30,7 +30,8 @@ test("an optional field given undefined is absent, not present-and-undefined", (
 
 test("false, 0 and the empty string are values and survive", () => {
   const element = present<WebLlmEvidenceElement>({
-    target: "target.1", tag: "input", frameId: 0, role: "", implicitRole: undefined, name: undefined, label: undefined, text: undefined,
+    target: "t1", tag: "input", frameId: 0, role: "", implicitRole: undefined, name: undefined, label: undefined, text: undefined,
+    ownText: undefined, parent: undefined, hidden: undefined,
     attributes: undefined, inputType: undefined, controlType: undefined, hasValue: false, value: undefined, checked: false,
     selectedValue: "", href: undefined, hasClickHandler: undefined, box: undefined, onViewport: false,
     options: undefined, revealKind: undefined, expanded: false, focused: undefined, recent: undefined,
@@ -39,7 +40,7 @@ test("false, 0 and the empty string are values and survive", () => {
     isDialog: undefined, inDialog: undefined, covers: undefined, coversCount: undefined, kind: undefined, coveredBy: undefined,
     frontLayer: undefined, statement: undefined
   });
-  assert.deepEqual(element, { target: "target.1", tag: "input", frameId: 0, role: "", hasValue: false, checked: false, selectedValue: "", onViewport: false, expanded: false });
+  assert.deepEqual(element, { target: "t1", tag: "input", frameId: 0, role: "", hasValue: false, checked: false, selectedValue: "", onViewport: false, expanded: false });
 });
 
 test("key order is the literal's, so the serialized bytes are the writer's own", () => {

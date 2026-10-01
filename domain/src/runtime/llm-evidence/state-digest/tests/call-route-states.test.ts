@@ -17,17 +17,17 @@ import test from "node:test";
 import type { OutputDispatchResult } from "fluxiq";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { createWebAutomationHostRuntime } from "../../../host-runtime";
-import { webAutomationRouteState } from "../../../route-state";
+
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_RUN_NODE_TOOL_ID,
   type WebAutomationLlmEvidenceRuntime,
   type WebLlmEvidenceGateway,
-  type WebLlmEvidenceToolExecution,
-  type WebLlmPageEvidence
+  type WebLlmEvidenceToolExecution
 } from "../..";
 import { WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS } from "../../capture";
+import { shownHandle } from "../../page-view/tests/shown-page-lines";
 import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
@@ -139,26 +139,23 @@ async function click(runtime: WebAutomationLlmEvidenceRuntime, callId: string, h
 }
 
 function handleOf(result: WebLlmEvidenceToolExecution, text: string): string {
-  const elements = (result.evidence as JsonObject & { elements: Array<{ target: string; text?: string }> }).elements;
-  const found = elements.find((element) => element.text === text);
-  assert.ok(found, `no element reading "${text}"`);
-  return found.target;
+  return shownHandle(result.evidence, text);
 }
 
 test("Core's reader has learned routeState, so a result carrying it is not refused", () => {
   assert.equal(WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS.includes("routeState"), true);
 });
 
-test("a look's route state is what observeRouteState answers for the same page, and is the route state of the packet it returned", async () => {
+test("a look's route state is what observeRouteState answers for the same page", async () => {
   const fake = fakePage(largePage());
   const runtime = createWebAutomationLlmEvidenceRuntime(fake.gateway);
   const looked = await look(runtime, "call.look");
   const answer = await fake.observed();
 
   assert.deepEqual(looked.routeState, answer);
-  // The packet is the whole page whatever the call (t200), so the route state
-  // of what the look returned and what the host reads are one value.
-  assert.deepEqual(webAutomationRouteState(looked.evidence as unknown as WebLlmPageEvidence), answer);
+  // What the look returned is the compact view of that page (t223); the route
+  // state is of the structured packet behind it, the one the host reads.
+  assert.equal((looked.evidence as JsonObject).schemaVersion, "web-llm-page.v3");
 });
 
 test("a page with a dialog open and an overlay in front says both, as observeRouteState does", async () => {
@@ -172,7 +169,7 @@ test("a page with a dialog open and an overlay in front says both, as observeRou
   assert.deepEqual(looked.routeState, answer);
 
   // Refused before acting, on the same page: it reports that page.
-  const refused = await click(runtime, "call.refused", "target.999");
+  const refused = await click(runtime, "call.refused", "t999");
   assert.equal(refused.resultCode, "web.action.rejected.target_unobserved");
   assert.deepEqual(refused.routeState, answer);
 });
@@ -201,7 +198,7 @@ test("a refusal before acting reports the page it refused on, read by that call"
   // The page changed after the look; the refusal read the page again before
   // refusing, and that page is the one it reports.
   fake.setPage(smallPage("Changed"));
-  const refused = await click(runtime, "call.unobserved", "target.999");
+  const refused = await click(runtime, "call.unobserved", "t999");
   const refusedOn = await fake.observed();
   assert.equal(refused.resultCode, "web.action.rejected.target_unobserved");
   assert.deepEqual(refused.routeState, refusedOn);
@@ -228,7 +225,7 @@ test("a detection reports the page it read, on a refusal thrown after the read a
   assert.equal(detected.resultCode, "web.structure.detected");
   assert.deepEqual(detected.routeState, answer);
 
-  const refused = await runtime.executeTool({ ...PROJECT, callId: "call.refused", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: { target: "target.999" } });
+  const refused = await runtime.executeTool({ ...PROJECT, callId: "call.refused", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: { target: "t999" } });
   assert.equal(refused.resultCode, "web.action.rejected.target_unobserved");
   assert.deepEqual(refused.routeState, answer);
 
@@ -283,7 +280,7 @@ const DECISIONS: Decision[] = [
   {
     name: "action refused before acting",
     setUp: lookFirst,
-    request: () => ({ ...PROJECT, callId: "call.n", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: "target.999" } }, consequences: [] } }),
+    request: () => ({ ...PROJECT, callId: "call.n", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: "t999" } }, consequences: [] } }),
     captures: 1, routeState: true
   },
   { name: "detect, page-wide", page: catalogPage, request: () => ({ ...PROJECT, callId: "call.n", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} }), captures: 1, routeState: true },

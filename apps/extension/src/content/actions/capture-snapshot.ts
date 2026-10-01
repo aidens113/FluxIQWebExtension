@@ -11,6 +11,7 @@
 // It may wait for the page to draw that list, which is why the verb is async;
 // a snapshot that was not asked to detect waits for nothing and is unchanged.
 
+import { snapshotCaptureOptionsFor } from "../../shared/snapshot-capture-options";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
 
@@ -18,6 +19,7 @@ export async function captureSnapshotAction(action: BrowserActionCommand, deps: 
   // The detection first, because it may wait for the page to draw its list,
   // and the snapshot beside it has to be the page the detection answered for.
   const structure = action.detectStructure === undefined ? undefined : await deps.detectStructure(action.detectStructure, action.timeoutMs);
-  const snapshot = deps.captureSnapshot();
+  // A search asks for the hidden elements too (`includeHidden`); a look asks for nothing.
+  const snapshot = deps.captureSnapshot(snapshotCaptureOptionsFor(action));
   return deps.success(action, startedAt, "Snapshot captured.", { status: "none", reason: "evidence-only" }, { snapshot, structure });
 }

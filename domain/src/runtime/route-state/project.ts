@@ -30,7 +30,9 @@ export function webAutomationRouteState(evidence: WebLlmPageEvidence): JsonObjec
   if (dialogs) page.dialog = dialogs;
   const blockers = joinedNames((evidence.blockedBy ?? []).map((blocker) => blocker.name ?? blocker.role ?? "overlay"));
   if (blockers) page.blockedBy = blockers;
-  const controls = joinedNames(evidence.elements.filter(actionableEvidenceElement).map((element) => element.name ?? element.text ?? ""));
+  // Rendered controls only: a hidden one is captured only by a search, and a
+  // search of a page must test as the same route state as a look at it (t223).
+  const controls = joinedNames(evidence.elements.filter((element) => element.hidden !== true && actionableEvidenceElement(element)).map((element) => element.name ?? element.text ?? ""));
   if (controls) page.controls = controls;
   return { page };
 }

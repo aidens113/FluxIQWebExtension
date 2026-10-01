@@ -1,12 +1,15 @@
 import type { JsonObject } from "fluxiq/core";
+import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { webLlmLayerKind } from "../layer-marks";
 import type { WebLlmPageEvidence } from "../sanitize";
 import { screenWebBuildRefusalDiagnostic } from "./screen";
 import type { WebBuildRefusalDiagnostic } from "./types";
 
-const HANDLE = /^target\.[1-9][0-9]{0,15}$/u;
-
-/** Project only the actual pre-call packet's target and coverage, never text, selectors, URLs or input values. */
+/**
+ * Project only the actual pre-call packet's target and coverage, never text,
+ * selectors, URLs or input values. A handle the model wrote either way
+ * (`t1` or the pre-t223 `target.1`) is recorded as the canonical `tN`.
+ */
 export function webBuildRefusalDiagnostic(input: {
   page?: WebLlmPageEvidence | undefined;
   parameters?: JsonObject | undefined;
@@ -16,7 +19,10 @@ export function webBuildRefusalDiagnostic(input: {
 }): WebBuildRefusalDiagnostic | undefined {
   const target = handle(input.target) ?? ["target", "selector", "element"].map((key) => handle(input.parameters?.[key])).find((item) => item !== undefined);
   const element = target === undefined ? undefined : input.page?.elements.find((item) => item.target === target);
-  const coveringTargets = element?.coveredBy?.filter((item) => HANDLE.test(item)) ?? [];
+  const coveringTargets = element?.coveredBy?.flatMap((item) => {
+    const cover = canonicalWebLlmTargetHandle(item);
+    return cover === undefined ? [] : [cover];
+  }) ?? [];
   const coveringKinds = [...new Set(coveringTargets.flatMap((cover) => {
     const layer = input.page?.elements.find((item) => item.target === cover);
     const kind = webLlmLayerKind(layer?.kind ?? layer?.isDialog?.kind);
@@ -36,5 +42,5 @@ export function webBuildRefusalDiagnostic(input: {
 
 function handle(value: unknown): string | undefined {
   const candidate = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>).handle : value;
-  return typeof candidate === "string" && HANDLE.test(candidate) ? candidate : undefined;
+  return canonicalWebLlmTargetHandle(candidate);
 }
