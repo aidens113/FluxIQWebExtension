@@ -43,6 +43,23 @@ test("a product failure after the Flow was built, and one on the recording lane,
   assert.deepEqual(productFailureOf(wrongRecords, { flowLane: false, flowCreated: undefined }), { code: "recording_lane.product_behavior" });
 });
 
+// `run-mup2u8o3-6697c4be`: the build ended without a Flow and over its $0.25
+// ceiling, and the budget failure thrown in the lane's place was stamped a
+// facility failure. It carries the build's failure as its cause, and is the product's.
+test("a budget breach over a build that ended without a Flow is the product's, and the category stays the budget's", () => {
+  const breach = new RunnerFailure("performance.budget", "Live LLM budget exceeded: the build's estimated cost 0.29693960399999997 exceeded its per-build cost ceiling of 0.25", {
+    cause: buildWithoutFlow("flow_bootstrap.evidence_budget_exhausted"),
+    details: { breaches: ["the build's estimated cost 0.29693960399999997 exceeded its per-build cost ceiling of 0.25"] },
+  });
+  assert.deepEqual(productFailureOf(breach, { flowLane: true, flowCreated: false }), {
+    code: "flow_lane.flow_not_built",
+    buildFailureCode: "flow_bootstrap.evidence_budget_exhausted",
+  });
+  // A bare breach, or one over a facility failure, is not the product's.
+  assert.equal(productFailureOf(new RunnerFailure("performance.budget", "Live LLM budget exceeded"), { flowLane: true, flowCreated: false }), undefined);
+  assert.equal(productFailureOf(new RunnerFailure("performance.budget", "Live LLM budget exceeded", { cause: new RunnerFailure("extension.worker", "stopped") }), { flowLane: true, flowCreated: false }), undefined);
+});
+
 test("real facility failures stay the facility's", () => {
   const crashed = new RunnerFailure("extension.worker", "The extension's service worker stopped");
   const unreachable = new RunnerFailure("process.startup", "FluxIQ did not answer", { details: { operationStage: "control.request", transportCode: "ECONNREFUSED" } });

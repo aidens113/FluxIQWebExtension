@@ -108,3 +108,19 @@ test("the rows each condition rejected cross the document boundary, and unreadab
     assert.equal(readExtractionCheckpoint({ ...CHECKPOINT, rejectedSamples }), undefined, JSON.stringify(rejectedSamples));
   }
 });
+
+test("the rows each condition removed alone cross the document boundary, as counts and as the lead of each list, and malformed ones refuse the checkpoint", () => {
+  const conditions = { applied: 4, kept: 1, rejected: [2, 2], alone: [1, 1] };
+  const carried = { ...CHECKPOINT, conditions, rejectedSamples: [[{ name: "Sponsored earbuds", price: null }], [{ name: "Pro Earbuds Wireless Charging Case", price: null }, { name: "Sponsored charging case", price: null }]], rejectedSamplesAlone: [1, 1] };
+  assert.deepEqual(readExtractionCheckpoint(carried), carried);
+  // Absent is a page build that did not count them.
+  assert.equal("alone" in (readExtractionCheckpoint({ ...CHECKPOINT, conditions: { applied: 4, kept: 1, rejected: [2, 2] } })?.conditions ?? {}), false);
+  for (const alone of [[1], [3, 1], [-1, 0], ["1", 0], "1"]) {
+    assert.equal(readExtractionCheckpoint({ ...CHECKPOINT, conditions: { ...conditions, alone } }), undefined, JSON.stringify(alone));
+  }
+  for (const rejectedSamplesAlone of [[1], [2, 1], [1, 3], "1"]) {
+    assert.equal(readExtractionCheckpoint({ ...carried, rejectedSamplesAlone }), undefined, JSON.stringify(rejectedSamplesAlone));
+  }
+  // Only beside the lists.
+  assert.equal(readExtractionCheckpoint({ ...CHECKPOINT, rejectedSamplesAlone: [0] }), undefined);
+});

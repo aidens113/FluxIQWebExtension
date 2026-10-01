@@ -3,6 +3,7 @@
 
 export { authorizeFlowLiveLlmExecution, type LiveLlmAuthorization, type LiveLlmAuthorizationControl } from "./authorize-flow.js";
 export { assertLiveLlmBudgetHeld, assertLiveLlmProviderWasReached, liveLlmBudgetBreaches } from "./budget.js";
+export { budgetOverProductFailure } from "./budget-over-product-failure.js";
 export { LIVE_LLM_BUILD_COST_CEILING_USD } from "./build-cost-ceiling.js";
 export { liveLlmBuildUsage } from "./build-usage.js";
 export { assertProviderCallsAsDeclared, declaredProviderCalls, type DeclaredProviderCalls } from "./declared-provider-calls.js";

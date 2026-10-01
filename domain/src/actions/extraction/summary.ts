@@ -14,7 +14,7 @@
 import { webAutomationExtractionConditionSeenValue, type WebAutomationExtractionConditionSeen } from "./seen-values";
 import { isWebAutomationExtractFieldKey } from "./field-key";
 import { webAutomationExtractionOrderReportValue, type WebAutomationExtractionOrderReport } from "./order-report";
-import { webAutomationExtractionRejectedSamplesValue, type WebAutomationExtractionRejectedRow } from "./rejected-samples";
+import { webAutomationExtractionRejectedSamplesAloneValue, webAutomationExtractionRejectedSamplesValue, type WebAutomationExtractionRejectedRow } from "./rejected-samples";
 
 export type WebAutomationExtractionSummary = {
   /** Records returned, across every page read. */
@@ -71,6 +71,8 @@ export type WebAutomationExtractionSummary = {
   conditions?: WebAutomationExtractionConditionReport | undefined;
   /** Every row each condition rejected, one list per condition; only when asked for (`./rejected-samples.ts`). */
   rejectedSamples?: WebAutomationExtractionRejectedRow[][] | undefined;
+  /** Per condition, how many leading rows of its `rejectedSamples` list it removed alone (`./rejected-samples.ts`); beside `rejectedSamples` only. */
+  rejectedSamplesAlone?: number[] | undefined;
   /** Why a read that pages stopped paging, in one closed word, or absent for a read that did not page. */
   paginationStop?: WebAutomationExtractionPaginationStop | undefined;
   /** What `dedupe` and `sort` did, or absent for a read whose request named neither. */
@@ -262,6 +264,16 @@ export type WebAutomationExtractionConditionReport = {
   unfiltered: boolean;
   /** One value each condition's own read found on an item it held of, cut to 60 characters (`./seen-values.ts`); absent from a page build that predates it. */
   seen?: WebAutomationExtractionConditionSeen | undefined;
+  /**
+   * Per condition, positionally, the items it rejected that every other
+   * condition held of: the rows it removed by itself. A row several conditions
+   * rejected says nothing about whether any one of them is right, so this is
+   * the count that does (`run-mup2u8o3-6697c4be`: the accessory rule rejected
+   * 20 rows and removed 5 alone, 3 of them true earbuds). Counts only, so a
+   * playback carries them too; never above the condition's `rejected`; absent
+   * from a page build that predates it.
+   */
+  alone?: number[] | undefined;
 };
 
 /**
@@ -285,6 +297,11 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
   // Only beside the counts, cut to their bounds whatever the page sent; malformed drops the summary.
   const rejectedSamples = summary.rejectedSamples === undefined ? undefined : webAutomationExtractionRejectedSamplesValue(summary.rejectedSamples, conditions?.rejected.length ?? -1, fieldNames);
   if (summary.rejectedSamples !== undefined && rejectedSamples === undefined) return undefined;
+  // How many of each list lead as rows its condition removed alone: only beside the lists, held to them.
+  const rejectedSamplesAlone = summary.rejectedSamplesAlone === undefined || rejectedSamples === undefined
+    ? undefined
+    : webAutomationExtractionRejectedSamplesAloneValue(summary.rejectedSamplesAlone, rejectedSamples);
+  if (summary.rejectedSamplesAlone !== undefined && rejectedSamplesAlone === undefined) return undefined;
   // Optional, so an extension build that predates it still sends a summary that
   // arrives whole; a word this side does not know drops the summary rather than
   // arriving as a half-understood fact.
@@ -331,6 +348,7 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
     ...(listWait !== undefined ? { listWait } : {}),
     ...(conditions !== undefined ? { conditions } : {}),
     ...(rejectedSamples !== undefined ? { rejectedSamples } : {}),
+    ...(rejectedSamplesAlone !== undefined ? { rejectedSamplesAlone } : {}),
     ...(paginationStop !== undefined ? { paginationStop } : {}),
     ...(order !== undefined ? { order } : {})
   };
@@ -388,7 +406,23 @@ function conditionReportValue(value: unknown): WebAutomationExtractionConditionR
   if (kept > applied) return undefined;
   const seen = report.seen === undefined ? undefined : webAutomationExtractionConditionSeenValue(report.seen, rejected.length);
   if (report.seen !== undefined && seen === undefined) return undefined;
-  return { applied, kept, rejected: [...rejected], unfiltered: report.unfiltered, ...(seen !== undefined ? { seen } : {}) };
+  // One count per condition, none above that condition's own rejections.
+  const alone = report.alone === undefined ? undefined : aloneCounts(report.alone, rejected);
+  if (report.alone !== undefined && alone === undefined) return undefined;
+  return {
+    applied,
+    kept,
+    rejected: [...rejected],
+    unfiltered: report.unfiltered,
+    ...(seen !== undefined ? { seen } : {}),
+    ...(alone !== undefined ? { alone } : {})
+  };
+}
+
+/** One count per condition, each at most that condition's rejections, or `undefined`. */
+function aloneCounts(value: unknown, rejected: readonly number[]): number[] | undefined {
+  if (!Array.isArray(value) || value.length !== rejected.length) return undefined;
+  return value.every((entry, index) => countValue(entry) !== undefined && entry <= (rejected[index] ?? 0)) ? [...value as number[]] : undefined;
 }
 
 function countValue(value: unknown): number | undefined {

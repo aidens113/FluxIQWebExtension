@@ -81,3 +81,42 @@ test("a command that does not ask -- every playback -- neither collects samples 
   // The same command, asking: the difference is the request alone.
   assert.notEqual((await run({ ...COMMAND, options: { extractList: {}, rejectedSamples: true } })).evidence?.extraction?.rejectedSamples, undefined);
 });
+
+test("the summary carries each condition's alone count on every read, and the alone lead of each list only beside the samples", async () => {
+  const counted = (given?: ListExtractionOptions): ListExtractionOutcome => ({
+    ...outcome(given?.sampleRejected === true),
+    conditions: { applied: 2, kept: 1, rejected: [1], unfiltered: false, alone: [1] },
+    ...(given?.sampleRejected === true ? { rejectedSamplesAlone: [1] } : {})
+  });
+  const summaries: Array<BrowserActionResult["extraction"]> = [];
+  for (const options of [undefined, { extractList: {}, rejectedSamples: true }]) {
+    let evidence: ActionResultEvidence | undefined;
+    const deps = {
+      extractList: async (_request: unknown, given?: ListExtractionOptions) => counted(given),
+      captureSnapshot: () => ({ url: "https://example.test/", title: "Example", viewport: { width: 1, height: 1, scrollX: 0, scrollY: 0 }, interactiveElements: [] }),
+      success: (_action: unknown, _startedAt: unknown, _message: unknown, _validation: unknown, built?: ActionResultEvidence) => {
+        evidence = built;
+        return { commandId: COMMAND.commandId, actionType: COMMAND.actionType, status: "succeeded", validation: { status: "none", reason: "evidence-only" }, startedAt: 1, finishedAt: 2 };
+      },
+      failure: (_action: unknown, error: unknown) => { throw error; }
+    } as unknown as ContentActionDependencies;
+    await extractListAction({ ...COMMAND, ...(options === undefined ? {} : { options }) }, deps, 1);
+    summaries.push(evidence?.extraction);
+  }
+  const [playback, asked] = summaries;
+  // A playback: the count, and no rows.
+  assert.deepEqual(playback?.conditions?.alone, [1]);
+  assert.equal(playback?.rejectedSamplesAlone, undefined);
+  // The exploring model's read: the count, and the lead of its list, through the wire copy.
+  const wire = webAutomationActionResultPayload({
+    commandId: COMMAND.commandId,
+    actionType: COMMAND.actionType,
+    status: "succeeded",
+    validation: { status: "none", reason: "evidence-only" },
+    ...(asked ? { extraction: asked } : {}),
+    startedAt: 1,
+    finishedAt: 2
+  }).extraction as { conditions?: { alone?: number[] }; rejectedSamplesAlone?: number[] } | undefined;
+  assert.deepEqual(wire?.conditions?.alone, [1]);
+  assert.deepEqual(wire?.rejectedSamplesAlone, [1]);
+});

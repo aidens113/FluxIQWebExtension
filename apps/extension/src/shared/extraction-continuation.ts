@@ -82,6 +82,13 @@ export type ExtractionCheckpoint = {
    */
   rejectedSamples?: ExtractionCheckpointRecord[][] | undefined;
   /**
+   * Per condition, how many leading rows of its `rejectedSamples` list that
+   * condition removed by itself (`content/extraction/rejected-samples.ts`).
+   * Beside `rejectedSamples` only; absent from a page build that did not order
+   * them, whose rows then go on as rows another condition also rejected.
+   */
+  rejectedSamplesAlone?: number[] | undefined;
+  /**
    * What the read has spent on pages the server refused: the reloads it made,
    * and the refusals as too fast (429) it met, an unexplained empty page
    * counted as one (`content/extraction/pagination.ts`).
@@ -112,6 +119,12 @@ export type ExtractionCheckpointConditions = {
    * page build that did not collect it.
    */
   seen?: (string | null)[] | undefined;
+  /**
+   * Per condition, the items it rejected that every other condition held of
+   * (`content/extraction/list-reader.ts`), so the count a read reports is the
+   * whole read's. Absent from a page build that did not count them.
+   */
+  alone?: number[] | undefined;
 };
 
 /**
@@ -140,7 +153,7 @@ export type ExtractionCheckpointMessage = {
  */
 export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint | undefined {
   if (typeof value !== "object" || value === null) return undefined;
-  const { records, pagesRead, scrolls, missingFields, filtered, itemsSeen, conditions, rejectedSamples, refusals } = value as Record<string, unknown>;
+  const { records, pagesRead, scrolls, missingFields, filtered, itemsSeen, conditions, rejectedSamples, rejectedSamplesAlone, refusals } = value as Record<string, unknown>;
   if (!Array.isArray(records) || !records.every(isRecord)) return undefined;
   if (!isCount(pagesRead) || !isCount(scrolls)) return undefined;
   if (!Array.isArray(missingFields) || !missingFields.every((name) => typeof name === "string")) return undefined;
@@ -160,6 +173,8 @@ export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint |
   if (refusals !== undefined && refusalCounts === undefined) return undefined;
   // And the samples: one list of records per condition, or the checkpoint is refused.
   if (rejectedSamples !== undefined && !(Array.isArray(rejectedSamples) && rejectedSamples.every((rows) => Array.isArray(rows) && rows.every(isRecord)))) return undefined;
+  // How many of each list lead as rows its condition removed alone: only beside the lists, one count per list, never more than the list holds.
+  if (rejectedSamplesAlone !== undefined && !aloneLeadsValid(rejectedSamplesAlone, rejectedSamples)) return undefined;
   return {
     records: records.map((record) => ({ ...record })),
     pagesRead,
@@ -169,6 +184,7 @@ export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint |
     ...(itemsSeen === undefined ? {} : { itemsSeen }),
     ...(conditionCounts === undefined ? {} : { conditions: conditionCounts }),
     ...(rejectedSamples === undefined ? {} : { rejectedSamples: (rejectedSamples as ExtractionCheckpointRecord[][]).map((rows) => rows.map((row) => ({ ...row }))) }),
+    ...(rejectedSamplesAlone === undefined ? {} : { rejectedSamplesAlone: [...rejectedSamplesAlone as number[]] }),
     ...(refusalCounts === undefined ? {} : { refusals: refusalCounts })
   };
 }
@@ -183,12 +199,26 @@ function refusalCountsValue(value: unknown): ExtractionCheckpointRefusals | unde
 /** A checkpoint's condition counts, copied, or `undefined` when any member is not a count. */
 function conditionCountsValue(value: unknown): ExtractionCheckpointConditions | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
-  const { applied, kept, rejected, seen } = value as Record<string, unknown>;
+  const { applied, kept, rejected, seen, alone } = value as Record<string, unknown>;
   if (!isCount(applied) || !isCount(kept) || kept > applied) return undefined;
   if (!Array.isArray(rejected) || !rejected.every(isCount)) return undefined;
   // One value or `null` per condition, or the checkpoint is refused.
   if (seen !== undefined && !(Array.isArray(seen) && seen.length === rejected.length && seen.every((entry) => entry === null || typeof entry === "string"))) return undefined;
-  return { applied, kept, rejected: [...rejected], ...(seen === undefined ? {} : { seen: [...seen as (string | null)[]] }) };
+  // One count per condition, none above that condition's own rejections, or the checkpoint is refused.
+  if (alone !== undefined && !(Array.isArray(alone) && alone.length === rejected.length && alone.every((entry, index) => isCount(entry) && entry <= (rejected[index] as number)))) return undefined;
+  return {
+    applied,
+    kept,
+    rejected: [...rejected],
+    ...(seen === undefined ? {} : { seen: [...seen as (string | null)[]] }),
+    ...(alone === undefined ? {} : { alone: [...alone as number[]] })
+  };
+}
+
+/** Whether `alone` is one count per list of `lists`, none above its list's length. */
+function aloneLeadsValid(alone: unknown, lists: unknown): boolean {
+  return Array.isArray(alone) && Array.isArray(lists) && alone.length === lists.length
+    && alone.every((entry, index) => isCount(entry) && entry <= (lists[index] as unknown[]).length);
 }
 
 function isRecord(value: unknown): value is ExtractionCheckpointRecord {

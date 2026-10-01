@@ -117,14 +117,28 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[]): ExtractionS
     ...(outcome.listPresence ? { listPresence: outcome.listPresence } : {}),
     ...(outcome.listWait ? { listWait: { stoppedOn: outcome.listWait.stoppedOn, waitedMs: outcome.listWait.waitedMs, waitedFor: outcome.listWait.waitedFor } } : {}),
     // `seen` is the one page value here, one per condition and cut to 60 characters (`extraction/item-filter.ts`).
-    ...(outcome.conditions ? { conditions: { ...outcome.conditions, rejected: [...outcome.conditions.rejected], ...(outcome.conditions.seen ? { seen: [...outcome.conditions.seen] } : {}) } } : {}),
-    // Only beside the counts they illustrate, and only for a read asked for them.
+    // `alone` is each condition's rejections that every other condition held of: counts, sent on every read, a playback's included.
+    ...(outcome.conditions ? { conditions: conditionsOf(outcome.conditions) } : {}),
+    // Only beside the counts they illustrate, and only for a read asked for them;
+    // each list leads with the rows its condition removed alone, and
+    // `rejectedSamplesAlone` says how many (`extraction/rejected-samples.ts`).
     ...(outcome.conditions && outcome.rejectedSamples ? { rejectedSamples: outcome.rejectedSamples.map((rows) => rows.map((row) => ({ ...row }))) } : {}),
+    ...(outcome.conditions && outcome.rejectedSamples && outcome.rejectedSamplesAlone ? { rejectedSamplesAlone: [...outcome.rejectedSamplesAlone] } : {}),
     ...(outcome.paginationStop ? { paginationStop: outcome.paginationStop } : {}),
     // What dedupe and sort took -- the repeats left out and the rows a sort key
     // could not read -- so a sort over a column the page states as prose is
     // visible to the verifier rather than looking like page order.
     ...(outcome.order ? { order: { duplicates: outcome.order.duplicates, unsortable: outcome.order.unsortable } } : {})
+  };
+}
+
+/** The condition report copied, each list its own array. */
+function conditionsOf(report: NonNullable<Outcome["conditions"]>): NonNullable<ExtractionSummary["conditions"]> {
+  return {
+    ...report,
+    rejected: [...report.rejected],
+    ...(report.seen ? { seen: [...report.seen] } : {}),
+    ...(report.alone ? { alone: [...report.alone] } : {})
   };
 }
 
