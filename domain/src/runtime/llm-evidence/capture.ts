@@ -425,11 +425,14 @@ export async function captureEvidence(
   sessionId: string,
   request: WebLlmEvidenceToolRequest,
   signal?: AbortSignal,
-  expectedOrigin?: string
+  expectedOrigin?: string,
+  // A search's look (`./page-find/`): the capture also lists what is not
+  // rendered, each element flagged `hidden`. Every other look is the default.
+  options?: { includeHidden: true }
 ): Promise<WebLlmSnapshotBinding> {
   const result = await gateway.executeAction(sessionId, {
     actionType: "web.dom.capture_snapshot",
-    parameters: {},
+    parameters: options?.includeHidden === true ? { includeHidden: true } : {},
     metadata: toolMetadata(request),
   });
   assertActive(signal);

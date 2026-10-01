@@ -293,8 +293,8 @@ test("a failed command carries the sanitized evidence packet, digest-bound to it
   // Phase T: what rides into Core is the handle the packet minted for the
   // control, never the control's own selector.
   assert.equal(diagnostics.selector, undefined, "no selector reaches Core on the attempt's metadata");
-  assert.equal(diagnostics.failedTarget, "target.1", "the target the client resolved rides with the failure, as a handle");
-  assert.equal((evidence as { failedTarget?: string }).failedTarget, "target.1", "and the packet the model reads marks the same element");
+  assert.equal(diagnostics.failedTarget, "t1", "the target the client resolved rides with the failure, as a handle");
+  assert.equal((evidence as { failedTarget?: string }).failedTarget, "t1", "and the packet the model reads marks the same element");
   assert.doesNotMatch(JSON.stringify(metadata.failureDiagnostics), /#pay|#card/u);
   assert.equal(diagnostics.evidenceDigest, createHash("sha256").update(JSON.stringify(evidence)).digest("hex"));
   assert.equal(result.failure?.evidenceDigest, diagnostics.evidenceDigest, "the record names the packet it was captured with");
@@ -308,7 +308,7 @@ test("the evidence packet never carries a sensitive control", async () => {
   // field: the sensitive control is dropped whole, not described without its
   // value. It is named by its opaque handle, because the packet an LLM reads has
   // carried no selector since `.v2`.
-  assert.deepEqual(evidence.elements.map((element) => [element.target, element.tag]), [["target.1", "button"]], "the password control is dropped, not reported");
+  assert.deepEqual(evidence.elements.map((element) => [element.target, element.tag]), [["t1", "button"]], "the password control is dropped, not reported");
   assert.doesNotMatch(JSON.stringify(evidence), /#pay|#password|selector/u);
 });
 

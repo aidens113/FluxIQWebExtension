@@ -16,6 +16,7 @@ import {
   WEB_LLM_ENTER_FIELD_TOOL_ID,
   WEB_LLM_EVIDENCE_RESULT_CODES,
   WEB_LLM_EVIDENCE_TOOL_IDS,
+  WEB_LLM_FIND_ON_PAGE_TOOL_ID,
   WEB_LLM_INSPECT_RESULT_CODE,
   WEB_LLM_RUN_NODE_TOOL_ID,
   WEB_LLM_INSPECT_TOOL_ID,
@@ -46,7 +47,7 @@ const gatewayFor = (url: string): WebLlmEvidenceGateway => ({
 test("the published tool ids cover what the runtime offers and what a recorded run may still name", () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFor("https://example.test/start"));
   const offered = runtime.tools.map((tool) => tool.toolId);
-  assert.deepEqual(offered, [WEB_LLM_DETECT_STRUCTURE_TOOL_ID]);
+  assert.deepEqual(offered, [WEB_LLM_DETECT_STRUCTURE_TOOL_ID, WEB_LLM_FIND_ON_PAGE_TOOL_ID]);
   // The library verb is Core's option, not one of this runtime's own tools, and
   // is published here because this domain is what carries out its calls.
   assert.equal(WEB_LLM_EVIDENCE_TOOL_IDS.includes(WEB_LLM_RUN_NODE_TOOL_ID), true);
@@ -80,7 +81,7 @@ test("every result code the runtime actually emits is one the published set cont
     (await runtime.executeTool({ ...base, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.browser-navigate", parameters: { url: "https://example.test/start" }, consequences: [] } })).resultCode,
     (await runtime.executeTool({ ...base, callId: "call.three", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.browser-navigate", parameters: { url: "https://outside.test/" }, consequences: [] } })).resultCode,
     (await runtime.executeTool({ ...base, callId: "call.four", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [], extra: 1 } })).resultCode,
-    (await runtime.executeTool({ ...base, callId: "call.five", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.9" } }, consequences: [] } })).resultCode,
+    (await runtime.executeTool({ ...base, callId: "call.five", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t9" } }, consequences: [] } })).resultCode,
     (await runtime.executeTool({ ...base, callId: "call.six", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} })).resultCode,
   ];
   assert.deepEqual(emitted, [

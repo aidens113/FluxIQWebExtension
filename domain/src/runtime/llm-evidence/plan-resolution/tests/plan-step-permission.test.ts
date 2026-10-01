@@ -92,7 +92,7 @@ function composerPlan(clickParameters: JsonObject, declared?: string[]) {
       name: "Main",
       role: "primary" as const,
       nodes: [
-        { key: "write", definitionId: TYPE_NODE, definitionVersion: "1.0.0", parameters: { target: { handle: "target.1" }, text: "Hello" } },
+        { key: "write", definitionId: TYPE_NODE, definitionVersion: "1.0.0", parameters: { target: { handle: "t1" }, text: "Hello" } },
         post
       ],
       edges: []
@@ -128,7 +128,7 @@ async function resolveUnder(gate: AutomationStudioActionPermissionGate, runtime:
   });
 }
 
-const PRESS_SCHEDULE: JsonObject = { target: { handle: "target.2" } };
+const PRESS_SCHEDULE: JsonObject = { target: { handle: "t2" } };
 
 test("a step that presses and says nothing about it never builds", async () => {
   const gate = gateHolding([]);

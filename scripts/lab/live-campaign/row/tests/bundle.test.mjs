@@ -9,7 +9,7 @@ test("the bundle reader retains a call's screened refusal account in its existin
   const directory = await mkdtemp(path.join(os.tmpdir(), "fluxiq-refusal-bundle-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await mkdir(path.join(directory, "snapshots"));
-  const diagnostic = { schemaVersion: "web-build-refusal.v1", phase: "before_action", code: "blocked_by_dialog", pageObserved: true, target: "target.1", targetObserved: true, coveringTargets: ["target.2"], coveringKinds: ["consent"], coveringCount: 1 };
+  const diagnostic = { schemaVersion: "web-build-refusal.v1", phase: "before_action", code: "blocked_by_dialog", pageObserved: true, target: "t1", targetObserved: true, coveringTargets: ["t2"], coveringKinds: ["consent"], coveringCount: 1 };
   const snapshot = { build: { outcome: "failed", evidenceLoop: { steps: [{ toolId: "core.run_node", resultCode: "web.action.rejected.blocked_by_dialog", diagnostic }] } } };
   await writeFile(path.join(directory, "snapshots", "flow-lane.json"), JSON.stringify(snapshot));
   const bundle = await readRunBundle(directory);

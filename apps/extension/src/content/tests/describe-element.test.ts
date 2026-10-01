@@ -180,3 +180,62 @@ test("a select lists every option, each value and label whole, and a selection p
     assert.equal(state?.selectedValue, chosen, "a selection past the twentieth option was dropped or cut");
   });
 });
+
+// `ownText` (t223): an element whose `text` is all its descendants' words also
+// says which of them are its own, so a list item that only wraps a link reads
+// as adding nothing to it. `isInteractableUiElement` asks the computed cursor
+// of an element that is neither a control nor a text element, so the test
+// answers it from a stand-in.
+
+/** Runs `body` with `getComputedStyle` answering an ordinary cursor, and puts the global back. */
+function withPlainCursor(body: () => void): void {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const previous = Object.getOwnPropertyDescriptor(globals, "getComputedStyle");
+  globals.getComputedStyle = () => ({ cursor: "auto" });
+  try {
+    body();
+  } finally {
+    if (previous) Object.defineProperty(globals, "getComputedStyle", previous);
+    else delete globals.getComputedStyle;
+  }
+}
+
+test("ownText is a list item's, a paragraph's and a button's own words beside a text that holds their children's, and \"\" when they have none", async () => {
+  await withStubPage(load, ({ ownTextBeside, visibleText }) => {
+    const item = element("li", {}, "Wireless earbuds ", element("a", { href: "/p/1" }, "Buy now"));
+    assert.equal(visibleText(item), "Wireless earbuds Buy now");
+    assert.equal(ownTextBeside(item, visibleText(item)), "Wireless earbuds");
+    const wrapper = element("li", {}, element("a", { href: "/" }, "Home"));
+    assert.equal(ownTextBeside(wrapper, visibleText(wrapper)), "", "an item that only wraps a link has no words of its own");
+    const paragraph = element("p", {}, "Ships in ", element("strong", {}, "2 days"));
+    assert.equal(ownTextBeside(paragraph, visibleText(paragraph)), "Ships in");
+    const button = element("button", {}, element("span", {}, "Add to cart"));
+    assert.equal(ownTextBeside(button, visibleText(button)), "");
+  });
+});
+
+test("ownText is absent where it would say what text says, and on an element whose text is already its own", async () => {
+  await withStubPage(load, ({ ownTextBeside, visibleText, directVisibleText }) => {
+    const plain = element("p", {}, "No results for kestrel");
+    assert.equal(ownTextBeside(plain, visibleText(plain)), undefined);
+    const button = element("button", {}, "Search");
+    assert.equal(ownTextBeside(button, visibleText(button)), undefined);
+    const empty = element("li", {});
+    assert.equal(ownTextBeside(empty, visibleText(empty)), undefined, "no words at all is not a difference");
+    withPlainCursor(() => {
+      const container = element("div", {}, "Results ", element("span", {}, "12"));
+      assert.equal(ownTextBeside(container, directVisibleText(container)), undefined, "a container's text is its own words already");
+    });
+  });
+});
+
+test("ownText follows the sensitive-text rule: nothing from inside a sensitive control", async () => {
+  await withStubPage(load, ({ ownTextBeside, visibleText }) => {
+    const inside = element("li", {}, "SYNTHETIC_SECRET_WORDS ", element("span", {}, "more"));
+    element("div", { "data-sensitive": "true" }, inside);
+    assert.equal(visibleText(inside), undefined);
+    assert.equal(ownTextBeside(inside, visibleText(inside)), undefined);
+    const beside = element("li", {}, "Recovery note ", element("textarea", { "data-sensitive": "true" }, "SYNTHETIC_RECOVERY_NOTE"));
+    assert.equal(ownTextBeside(beside, visibleText(beside)), undefined, "the item's words are its own once the control's contents are left out");
+  });
+});

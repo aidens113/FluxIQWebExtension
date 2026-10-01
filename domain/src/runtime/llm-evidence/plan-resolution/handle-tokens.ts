@@ -1,13 +1,14 @@
 // Which of this domain's handles a plan value names, and where.
 //
-// A model is shown two kinds of opaque handle: `target.N` for an element an
+// A model is shown two kinds of opaque handle: `tN` for an element an
 // evidence packet described, numbered for the whole Flow up to six digits since
 // a packet describes every element of the page (`../stable-handles.ts`, t200),
 // and `extraction.N` for a list the detection tool
 // found (`structure/handles.ts`). The plan resolver accepts each only in the
 // places it knows how to make real, and refuses one written anywhere else as
 // misplaced, saying where it was. Both need the same test for "is this one of
-// ours", so it is here once.
+// ours", so it is here once. A target handle written the old way, `target.N`,
+// is one of ours too, and names the same element (`../handle-spelling/`).
 
 import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { WEB_LLM_EXTRACTION_HANDLE_PATTERN } from "../structure";

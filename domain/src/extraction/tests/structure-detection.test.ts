@@ -89,7 +89,7 @@ test("a detection any part of which is malformed is refused whole", () => {
 test("the request is empty or names one selector, and nothing else", () => {
   assert.deepEqual(webAutomationStructureDetectionRequestValue({}), {});
   assert.deepEqual(webAutomationStructureDetectionRequestValue({ selector: "#list li" }), { selector: "#list li" });
-  for (const value of [undefined, null, [], "#list", { selector: "" }, { selector: "   " }, { selector: 3 }, { selector: "#a", frame: 1 }, { target: "target.1" }]) {
+  for (const value of [undefined, null, [], "#list", { selector: "" }, { selector: "   " }, { selector: 3 }, { selector: "#a", frame: 1 }, { target: "t1" }]) {
     assert.equal(webAutomationStructureDetectionRequestValue(value), undefined, JSON.stringify(value));
   }
 });

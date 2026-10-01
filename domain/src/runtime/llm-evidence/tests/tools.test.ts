@@ -15,6 +15,7 @@ import {
   type WebAutomationLlmEvidenceRuntime,
   type WebLlmEvidenceGateway
 } from "..";
+import { shownPageLines } from "../page-view/tests/shown-page-lines";
 
 test("captures through the generic action bridge and keeps navigation on the inspected origin", async () => {
   const commands: Array<{ sessionId: string; actionType: string; parameters: unknown; metadata: unknown }> = [];
@@ -106,7 +107,7 @@ test("binds from the production host seam and selects the sole trusted web clien
   bindWebAutomationLlmEvidenceRuntime(fluxiq as never);
   // One tool of this domain's own. Everything else a build does is a node of
   // the library, which Core offers because Core is what enumerates the registry.
-  assert.deepEqual(bound?.tools.map(tool => tool.toolId), [WEB_LLM_DETECT_STRUCTURE_TOOL_ID]);
+  assert.deepEqual(bound?.tools.map(tool => tool.toolId), [WEB_LLM_DETECT_STRUCTURE_TOOL_ID, "web.find_on_page"]);
   // `runnable` names what this domain will actually run, and Core narrows the
   // library it offers the model to it. Without that the enum held Core's
   // built-ins too -- available in every scope -- and every call naming one
@@ -117,6 +118,8 @@ test("binds from the production host seam and selects the sole trusted web clien
   assert.deepEqual(bound?.tools.map(tool => ({ toolId: tool.toolId, effect: tool.effect, repeatPolicy: tool.repeatPolicy, initialObservation: tool.initialObservation })), [
     // Observe-only, and deliberately without a repeat policy: a second target is a different request, and Core refuses an identical one.
     { toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, effect: "observe", repeatPolicy: undefined, initialObservation: undefined },
+    // The search the page view points to (t223); a second query is a different request.
+    { toolId: "web.find_on_page", effect: "observe", repeatPolicy: undefined, initialObservation: undefined },
   ]);
   // The detection tool states the shape its handle is written in, because a
   // live build that was shown only a code invented a handle of its own and had
@@ -152,14 +155,14 @@ test("binds from the production host seam and selects the sole trusted web clien
   // runtime, so the runtime holds no binding for it and the repair resolves
   // fingerprint-only. The retained-binding path is covered below.
   const resolution = { tagName: "button", visibleText: "Continue" };
-  assert.deepEqual(bound?.validateTargetOverrideEvidence(validationEvidence, { handles: { element: "target.1" } }, clickAction), {
+  assert.deepEqual(bound?.validateTargetOverrideEvidence(validationEvidence, { handles: { element: "t1" } }, clickAction), {
     status: "resolved",
-    target: { handles: { element: "target.1" }, handleResolution: "named", ...resolution },
+    target: { handles: { element: "t1" }, handleResolution: "named", ...resolution },
     // What the repair names, for a permission request (t059).
     control: { name: "Continue", kind: "button" },
   });
   // A handle nobody minted is refused: nothing is put in its place.
-  assert.deepEqual(bound?.validateTargetOverrideEvidence(validationEvidence, { handles: { element: "target.9" } }, clickAction), { status: "absent", reason: "handle_not_issued" });
+  assert.deepEqual(bound?.validateTargetOverrideEvidence(validationEvidence, { handles: { element: "t9" } }, clickAction), { status: "absent", reason: "handle_not_issued" });
   const result = await bound!.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   assert.equal(result.effectApplied, false);
   assert.equal(result.resultCode, "web.inspect.succeeded");
@@ -194,16 +197,18 @@ test("captures the whole sanitized post-failure page without returning the raw s
     failedAction: { attemptId: "attempt.failed", nodeId: "node.click", definitionId: "web.output.dom-click", status: "failed", route: "failed" },
   });
 
-  assert.equal(evidence.schemaVersion, "web-llm-evidence.v2");
+  // The page as the model reads every page (t223), with no element objects.
+  assert.equal(evidence.schemaVersion, "web-llm-page.v3");
+  assert.equal(Object.hasOwn(evidence, "elements"), false);
   // The query is kept and its secret withheld; nothing is left out.
   assert.equal(evidence.location, "https://example.test/form?token=(withheld)#secret");
   assert.equal(evidence.truncated, false);
-  assert.equal(evidence.elements.length, 40, "every safe action, the password field alone not described");
+  assert.equal(shownPageLines(evidence).length, 40, "every safe action, the password field alone not described");
   assert.equal(JSON.stringify(evidence).includes(privateValue), false);
   assert.equal(JSON.stringify(evidence).includes("private"), false);
   assert.equal(evidence.repairCandidates?.action, "known");
   // Every clickable element is a candidate, in the page's order.
-  assert.deepEqual(evidence.repairCandidates?.candidates.map((candidate) => candidate.target), evidence.elements.map((element) => element.target));
+  assert.deepEqual(evidence.repairCandidates?.candidates.map((candidate) => candidate.target), shownPageLines(evidence).map((line) => line.target));
   assert.deepEqual(commands, [{
     actionType: "web.dom.capture_snapshot",
     parameters: {},
@@ -241,9 +246,9 @@ test("a failure packet lists every element and every repair candidate, however m
     failedAction: { attemptId: "attempt.failed", nodeId: "node.click", definitionId: "web.output.dom-click", status: "failed" },
   });
 
-  assert.equal(evidence.elements.length, 30);
+  assert.equal(shownPageLines(evidence).length, 30);
   assert.equal(evidence.repairCandidates?.candidates.length, 30);
-  assert.ok(evidence.elements.every((element) => element.text?.endsWith("x".repeat(80))), "no text is cut");
+  assert.ok(shownPageLines(evidence).every((line) => line.words?.endsWith("x".repeat(80))), "no text is cut");
 });
 
 test("a repair on a packet this runtime issued gets its selector hint back, without the packet ever carrying one", async () => {
@@ -271,18 +276,24 @@ test("a repair on a packet this runtime issued gets its selector hint back, with
   assert.doesNotMatch(JSON.stringify(evidence), /selector|#place-order|#coupon/u);
 
   const clickAction = { nodeId: "node.click", definitionId: "web.output.dom-click", recordedTarget: { element: { tagName: "button", visibleText: "Place order" } } };
-  assert.deepEqual(runtime.validateTargetOverrideEvidence(evidence as unknown as JsonObject, { handles: { element: "target.1" } }, clickAction), {
+  assert.deepEqual(runtime.validateTargetOverrideEvidence(evidence as unknown as JsonObject, { handles: { element: "t1" } }, clickAction), {
     status: "resolved",
-    target: { handles: { element: "target.1" }, handleResolution: "named", tagName: "button", visibleText: "Place order", selector: "#place-order" },
+    target: { handles: { element: "t1" }, handleResolution: "named", tagName: "button", visibleText: "Place order", selector: "#place-order" },
     control: { name: "Place order", kind: "button" },
   });
 
-  // A packet this runtime never issued has no binding, so the repair is
-  // resolved fingerprint-only rather than refused or guessed at.
+  // A page this runtime never issued names no packet it kept, and the compact
+  // view holds no element to check a handle against (t223), so the repair is
+  // refused rather than guessed at.
   const foreign = { ...evidence, location: "https://example.test/other" };
-  assert.deepEqual(runtime.validateTargetOverrideEvidence(foreign as unknown as JsonObject, { handles: { element: "target.1" } }, clickAction), {
+  assert.deepEqual(runtime.validateTargetOverrideEvidence(foreign as unknown as JsonObject, { handles: { element: "t1" } }, clickAction), { status: "absent", reason: "evidence_unrecognized" });
+
+  // A structured packet of the shape this domain handed out before t223 is
+  // still checked against its own elements, fingerprint-only.
+  const legacy = { schemaVersion: "web-llm-evidence.v2", trust: "untrusted-page-evidence", location: "https://example.test/form", truncated: false, elements: [{ target: "t1", tag: "button", text: "Place order" }] };
+  assert.deepEqual(runtime.validateTargetOverrideEvidence(legacy as unknown as JsonObject, { handles: { element: "t1" } }, clickAction), {
     status: "resolved",
-    target: { handles: { element: "target.1" }, handleResolution: "named", tagName: "button", visibleText: "Place order" },
+    target: { handles: { element: "t1" }, handleResolution: "named", tagName: "button", visibleText: "Place order" },
     control: { name: "Place order", kind: "button" },
   });
 });
@@ -312,7 +323,7 @@ test("post-failure evidence names the parameter a repair fills, and nothing for 
   const recorded = await capture("builtin.policy.action");
   assert.deepEqual(recorded.repairParameters, created.repairParameters);
   assert.equal(recorded.repairCandidates?.action, "recorded_action_unknown");
-  assert.deepEqual(recorded.repairCandidates?.candidates, [{ target: "target.1", match: "action_unknown", roles: ["clickable", "keyable", "observable"] }]);
+  assert.deepEqual(recorded.repairCandidates?.candidates, [{ target: "t1", match: "action_unknown", roles: ["clickable", "keyable", "observable"] }]);
   // An action this domain knows offers nothing says so, rather than inviting a
   // repair the check will refuse.
   assert.deepEqual((await capture("web.output.dom-extract_list")).repairParameters, {});
@@ -334,15 +345,15 @@ test("a packet this domain did not issue is refused as unrecognized, before the 
   const issuedPacket = issued as unknown as JsonObject;
   const packets: JsonObject[] = [
     { ...issuedPacket, schemaVersion: "web-llm-evidence.v1" },
-    { ...issuedPacket, elements: "target.1" },
+    { ...issuedPacket, elements: "t1" },
     { schemaVersion: "web-llm-evidence.v2" },
     {},
   ];
   for (const packet of packets) {
-    assert.deepEqual(runtime.validateTargetOverrideEvidence(packet, { handles: { element: "target.1" } }, clickAction), unrecognized, JSON.stringify(packet));
+    assert.deepEqual(runtime.validateTargetOverrideEvidence(packet, { handles: { element: "t1" } }, clickAction), unrecognized, JSON.stringify(packet));
   }
   // The issued packet itself is recognized and resolved.
-  assert.equal(runtime.validateTargetOverrideEvidence(issuedPacket, { handles: { element: "target.1" } }, clickAction).status, "resolved");
+  assert.equal(runtime.validateTargetOverrideEvidence(issuedPacket, { handles: { element: "t1" } }, clickAction).status, "resolved");
 });
 
 test("post-failure evidence is the whole page, with no byte gate of its own", async () => {
@@ -356,7 +367,7 @@ test("post-failure evidence is the whole page, with no byte gate of its own", as
   });
   const failedAction = { attemptId: "attempt.failed", nodeId: "node.click", definitionId: "web.output.dom-click", status: "failed" };
   const whole = await runtime.captureSanitizedFailureEvidence({ projectId: "project.one", flowId: "flow.one", runId: "run.failed", failedAction });
-  assert.equal(whole.elements.length, 60);
+  assert.equal(shownPageLines(whole).length, 60);
   assert.equal(whole.truncated, false);
   assert.ok(Buffer.byteLength(JSON.stringify(whole), "utf8") > 6_000, "larger than the gate Core used to hold it to");
 });
@@ -388,7 +399,7 @@ test("presses any observed control, refuses only a handle it never showed, and n
   };
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const base = { projectId: "project.one", flowId: "flow.one" } as const;
-  const applied = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
+  const applied = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
   assert.deepEqual({ kind: applied.kind, effectApplied: applied.effectApplied, resultCode: applied.resultCode }, { kind: "llm_evidence_tool_execution", effectApplied: true, resultCode: "web.action.succeeded" });
   assert.deepEqual(actionTypes, [
     "web.dom.capture_snapshot", "web.dom.click", "web.dom.capture_snapshot",
@@ -397,9 +408,9 @@ test("presses any observed control, refuses only a handle it never showed, and n
   // derives the adapted target from it, as it does for a recorded node.
   assert.deepEqual(actionParameters.map((entry) => (entry as { selector?: string }).selector), ["#details"]);
   assert.deepEqual((actionParameters[0] as { element?: unknown }).element, { tagName: "button", visibleText: "Show details", selector: "#details" });
-  const submit = await runtime.executeTool({ ...base, callId: "call.submit", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.2" } }, consequences: [] } });
-  const genericAction = await runtime.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.3" } }, consequences: [] } });
-  const missing = await runtime.executeTool({ ...base, callId: "call.missing", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.40" } }, consequences: [] } });
+  const submit = await runtime.executeTool({ ...base, callId: "call.submit", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t2" } }, consequences: [] } });
+  const genericAction = await runtime.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t3" } }, consequences: [] } });
+  const missing = await runtime.executeTool({ ...base, callId: "call.missing", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t40" } }, consequences: [] } });
   // A submit and a generic action are pressed like anything else. This fake page
   // does not change under them, so each reports no progress -- but each was
   // pressed, which the old rule refused on its own judgement.
@@ -409,7 +420,7 @@ test("presses any observed control, refuses only a handle it never showed, and n
   // The one refusal left is a handle the model was never shown.
   assert.equal(missing.resultCode, "web.action.rejected.target_unobserved");
   assert.equal((missing.evidence as { code?: string }).code, "target_unobserved");
-  assert.equal((missing.evidence as { detail?: { target?: string } }).detail?.target, "target.40");
+  assert.equal((missing.evidence as { detail?: { target?: string } }).detail?.target, "t40");
   // A press no longer refuses a control on what it looks like, so the page's
   // own control names are in the packets as they always were. What must never
   // appear is an address, and the surface to hold to that is the evidence --
@@ -446,8 +457,8 @@ test("keeps an opaque press target bound to the returned element when fresh snap
   });
   const base = { projectId: "project.one", flowId: "flow.one" } as const;
   const inspected = await runtime.executeTool({ ...base, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  assert.deepEqual((inspected.evidence as any).elements[0], { target: "target.1", tag: "button", text: "Details", attributes: [["type", "button"], ["aria-expanded", "false"]], controlType: "button", revealKind: "disclosure", expanded: false });
-  const revealed = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
+  assert.equal(shownPageLines(inspected.evidence)[0]!.line, "t1 button \"Details\" closed");
+  const revealed = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
   assert.equal(revealed.effectApplied, true);
   assert.deepEqual(parameters.map((entry) => (entry as { selector?: string }).selector), ["#details"]);
 });
@@ -463,7 +474,7 @@ test("reports a successful press with unchanged parsed evidence as no progress",
         : { status: "succeeded" };
     },
   });
-  const result = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
+  const result = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
   // The press ran and the page looks the same, which is a fact about the page
   // rather than a refusal: the step stands and the Flow keeps it.
   assert.equal(result.resultCode, "web.action.succeeded");
@@ -482,7 +493,7 @@ test("refuses an action the page did not take, and keeps disconnect and malforme
   });
   // A failure that names no reason is `action_failed`, with the page as it now
   // is, and never the gateway's own words (`page-refusal.test.ts` has the rest).
-  const refused = await failedAction.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
+  const refused = await failedAction.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
   assert.equal(refused.resultCode, "web.action.rejected.action_failed");
   assert.equal(refused.effectApplied, false);
   const refusal = refused.evidence as { schemaVersion: string; ok: boolean; code: string };

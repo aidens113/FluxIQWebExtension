@@ -78,3 +78,15 @@ test("a look with a deadline of its own lends the merge what is left of it", asy
   await lookAcrossFrames({ ...LOOK, timeoutMs: 1_000 }, run(), false, 8_500, merge);
   assert.deepEqual(asked.map((call) => call.waitMs), [3_500, 0]);
 });
+
+test("a search's look (includeHidden) asks the merge to ask every frame for its hidden elements; a plain look asks for nothing", async () => {
+  const captures: unknown[] = [];
+  const merge: MergeFrameSnapshots = async (_tabId, _top, _waitMs, capture) => {
+    captures.push(capture);
+    return MERGED;
+  };
+  await lookAcrossFrames({ ...LOOK, options: { includeHidden: true } }, run(), false, Date.now(), merge);
+  await lookAcrossFrames(LOOK, run(), false, Date.now(), merge);
+  await lookAcrossFrames({ ...LOOK, options: { includeHidden: "yes" } }, run(), false, Date.now(), merge);
+  assert.deepEqual(captures, [{ includeHidden: true }, {}, {}]);
+});
