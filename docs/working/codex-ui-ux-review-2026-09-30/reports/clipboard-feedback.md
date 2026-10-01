@@ -46,3 +46,30 @@ Core checkpoint0738bc58 are saved. Corrected consumer4 rerun passed native0,
 gate1942pass/1source-only Compute request contract failure requires that owning
 test correction before whole batch completion. Web typing passed; production
 final result pending. No browser/system clipboard or real private state exercised.
+
+## Fifth-batch remaining consumers
+
+Root exact nine-file brief released after fourth full1943/types/build passed.
+Added real CodeViewer/InspectorPanel/StateRawPanel tests before migration.
+Initial run had circular React-child matching and incomplete browser stubs;
+these were test modeling errors, not product evidence. Corrected clean
+original-source reproduction:7fail/2pass, native1,2.43s. Missing raw clipboard
+throws; raw collapse restores old acknowledgement; source copy ignores missing
+API and duplicates pending writes; Inspector keeps obsolete feedback.
+
+The three consumers now use shared ClipboardButton with explicit accessible
+labels/icon-only presentation. Source label, selection kind+id and state
+source+phase own copy identity; collapse unmounts raw copy. Inspector reset timer
+removed. Raw remains lazily serialized; source search/wrap/download and Inspector
+actions remain separate. Existing raw source-contract follows shared status
+ownership, with actual component acknowledgement tests. No new private logs,
+global copy toasts or persisted values.
+
+First corrected6files/33tests native0,2.80s. Three additional same-value context
+regressions pass in final6files/36tests native0,2.60s. Initial scoped54888 native0;
+Final scoped15394 caught an invalid synthetic phase "output"; real public
+phase is "actual_output". Fixture corrected without assertion changes; raw4
+rerun native0,2.37s and corrected final scoped82345 native0. Supervisor combined
+60136 native0,10files/59tests,9.12s includes clipboard36, launcher14 and existing
+secret/identity9 before phase fixture correction, followed by corrected raw4.
+Whole Core gates await adapter review/freeze. No browser/private data exercised.

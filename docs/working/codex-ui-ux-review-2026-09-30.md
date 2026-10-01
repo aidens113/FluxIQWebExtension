@@ -23,8 +23,15 @@ contract failure is corrected, focused21pass; final full21515 passed308files/
 legacy launcher, Background/Production adapters and remaining clipboard
 consumer briefs now released in disjoint paths. Extension extraction checkpointc96f5f78 passed
 full1716/types/build/audit. Strip related21/full1727/types/build/structure pass,
-checkpoint5e162c36. Explicit navigation focus worker owns only its four
-downstream paths. Continue working beyond every batch.
+checkpoint5e162c36. Explicit navigation focus is Complete41f3df0b (full1738/
+types/build and corrected docs pass). Naming consistency worker owns six next
+downstream paths. Core fifth independently combined103/native0; clipboard
+95004f19 and launcher62a8532f saved, adapters frozen. Full77112 running,
+types53622 passed65366ms. Structure79891 reports protected service baseline,
+optional-history catch lacking required policy marker, and stale doc index.
+Index regenerated; documented optional-write marker correction awaits full
+suite completion. No configuration/baseline changes or UI navigation warning.
+Continue working beyond every batch.
 
 The user requested a primary focus on Core framework UI/UX across all web panels
 and the extension. Existing Core UX plans describe older implementations and lack
@@ -251,7 +258,64 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Trace automation rename/removal while its existing Chat conversation is open: title/context/strip consistency without resetting conversation generation, draft, scroll or history. Distinguish source-confirmed defects from visual assumptions.
 - Product source frozen during navigation full/types/build gates. Own reports/extension-automation-naming-audit.md only; propose exact next ownership/regressions, no source/shared docs/heavy/live/provider/panel/commits.
 
+### Extension automation naming implementation brief (released)
+- Worker: wait_gaps; downstream t224. Read Current State and extension-automation-naming-audit.md; navigation source checkpoint41f3df0b has completed gates.
+- Own automations/automation-strip.ts and existing tests/automation-strip.test.ts, chat/chat-panel.ts and existing tests/navigation-focus.test.ts, shell/mount-panel.ts and existing tests/mount-panel-navigation.test.ts only; own reports/extension-automation-naming-implementation.md.
+- Strip emits passive current matching-flow name changes after remembering new name/drawing; no duplicate/reentrant emissions. Shell forwards only same-flow metadata to a narrow Chat method. Passive method updates plain-text target/context/empty/placeholder/controller metadata without history/generation/read/draft/selection/scroll/focus changes; explicit open/follow remains unchanged.
+- On confirmed complete/empty list missing flow, keep conversation/target/name/draft and disabled Run, show truthful current-list unavailable feedback. Offline/loading/error are not deletion evidence. Returning row clears feedback and refreshes name; never auto-navigate.
+- Extend exact local owning models; prove no added requests/scroll/focus/draft loss, old-flow/name/no-op fencing, removal/restoration and keyed export/notice identity. Preserve all existing navigation/stream/strip cases.
+- No composer/context-line/controller/target/shared harness/Core/contracts/styles/shared docs edits. Focused/scoped heavy then freeze; no broad/live/provider/panel/commits.
+
+### Runtime log request recovery read-only worker brief
+- Worker: trace_endings; paired t224 Core. Read Current State; launcher frozen and supervisor independently14 included in combined59 passed.
+- Inspect automation-studio/runtime/RunActionLogView.tsx, run-queries.ts, runtime-host command seam and directly owning run-detail-feedback/runtime-refresh tests only. No protected backend runtime, storage or conversation implementation.
+- Trace action/event/list/compact-detail/export rejection and malformed response busy states, captured callbacks across project/run/commands changes, stale render masking and serialization/download cleanup. Existing selected action/event detail fixes must remain.
+- Own reports/runtime-log-recovery-audit.md only; propose exact bounded source/test ownership and meaningful regressions. No source/shared docs/heavy/live/provider/panel/commits while adapter source active.
+
+### Database request recovery read-only worker brief
+- Worker: lab_bookkeeping; paired t224 Core. Read Current State; adapter42 included in supervisor103 passed, source now frozen during fifth broad gates.
+- Inspect live-views/database-manager.tsx, directly referenced frontend owning helpers and existing tests/{database-manager.test.ts,database-manager-authorization.test.tsx} only. Existing authorization scope/expiry/dismissal fixes must remain intact.
+- Trace snapshot/metadata/list/get-record rejection, malformed pages, stale render/context/query callbacks and retry/loading feedback. Propose cohesive exact source/test ownership; preserve Core durable storage/security ownership.
+- Own reports/database-request-recovery-audit.md only. No backend/storage/auth contracts, source/shared docs/heavy/live/provider/panel/commits during source freeze.
+
+### Runtime log recovery implementation brief (held until fifth Core gates complete)
+- Worker: trace_endings; paired t224 Core. Read Current State and runtime-log-recovery-audit.md.
+- Own runtime/RunActionLogView.tsx, new runtime/audit-export/{runtimeAuditBlob.ts,index.ts,tests/runtimeAuditBlob.test.ts}, new runtime/tests/runtime-log-recovery.test.tsx only. Preserve compatibility runtimeAuditBlob export from existing view. No existing detail test edits without exact-path release.
+- Owner is project/run/commands identity; mask obsolete state during render and reject old captured select/retry/pager/close/export callbacks before requests, state writes or aborting current work. Abort/fence reads on replacement/unmount; old finally cannot release new busy state.
+- Action/event/compact detail requests catch rejection, validate minimal envelope/rows/pagination/run identity, release loading and offer usable separate Retry. Retain previous confirmed page truthfully; pager index/cursor history commits only on confirmed page success.
+- Keep selected detail8 fixes and runtime-refresh behavior. No private payload/error logs; fixed failure strings. Tests first reproduce meaningful busy/retry, malformed data, scope/render/captured-callback races and pager failure/retry.
+- Extract serializer as cohesive resource owner with optional AbortSignal, preserving one-argument callers/fallback. Terminate worker and revoke script/download URLs on success/error/messageerror/throwing construction/postMessage/invalid result/owner teardown. No worker/browser startup outside scoped unit fakes; no real audit payload.
+- Export has synchronous pending lock, owner fence, retry feedback and catch/finally cleanup for serializer/download errors. Cancellation never publishes/downloads obsolete audit or clears a new export's busy state.
+- Focused new tests + unchanged detail8/refresh tests, scoped types then freeze. Own reports/runtime-log-recovery-implementation.md; no backend/runtime/service/datasets/storage/conversations/shared docs/broad/live/provider/panel/commits.
+
+
+### Logout acknowledgement supervisor brief (held until fifth Core gates complete)
+- Read-only source review: AuthStatus awaits fetch but navigates home regardless of HTTP refusal; rejected transport has no caught feedback/pending lock. Menu supports disabled options and closes on selection.
+- Exact next Core ownership: app/AuthShell.tsx and new app/tests/AuthStatus.test.tsx only. Preserve login/setup/global topbar contracts; no auth API/backend/session library edits.
+- Add synchronous pending lock, acknowledged success navigation and fixed retryable local failure. Refused/rejected requests retain current workspace; component teardown/owner replacement fences obsolete feedback/navigation. Issued logout is not claimed cancellable.
+- Reproduce native response refusal/rejection, duplicate activation, retry success and unmount/captured callbacks with synthetic response data. Preserve account link and role display; no secret/error payload logging or unnecessary modal.
+- Source held during fifth full/type gates; focused existing AuthShell plus owning new tests, scoped types then coordinated broader verification. Root owns report/documentation/checkpoint.
+
 ## Work Ledger
+
+### 2026-10-01 - Fifth broad strict follow-up
+- Agent: supervisor
+- Validation: full structure79891 native1: inherited protected service4506/4505, ProgramLauncher optional empty catch needs documented best-effort marker, stale working-doc index. Read actual swallowed-failure rule: it explicitly permits optional failure with an in-block best-effort reason. Existing comment reason is valid product policy but lacks recognized prefix. Web types53622 native0,65366ms; full77112 still active.
+- Outcome: Partial pending final whole suite and precise comment/index correction. Regenerated index through owning generator; no baseline expansion or failure logging of local optional storage.
+- Follow-up: finish full before source-comment correction, rerun targeted rule/launcher tests, build latest frozen source. Runtime log/logout held; database read-only worker audits during gates.
+
+### 2026-10-01 - Fifth Core independently reviewed and frozen
+- Agent: supervisor
+- Validation: reviewed API-keyed workspace and render/lifecycle mutation guards, selected history/query reconciliation and target-keyed pending launch errors; worker reproduced2 pending-error failures then42focused/types pass. Supervisor27199 native0,17files/103tests,9.89s includes adapters42, cancellation2 and launcher/clipboard/existing59. Every worker claim included in independently observed run.
+- Outcome: Focused Complete; full Core source frozen. Launcher62a8532f and clipboard95004f19 saved; adapter/source contract checkpoint follows. Authored current-system updated with sampled refresh/history and action acceptance policy.
+- Follow-up: whole web tests/types/structure, then build after types. Next runtime log and logout briefs remain held; extension naming stays in separate downstream source tree.
+
+### 2026-10-01 - Fifth scoped clipboard and launcher verification
+- Agent: supervisor
+- Validation: clean original clipboard reproduction7fail/2pass native1 after correcting test browser/child modeling. Corrected6files/36tests native0,2.60s; final scoped82345 native0 after public phase fixture correction, corrected raw4 native0/2.37s. Independent combined60136 native0,10files/59tests,9.12s includes launcher14, clipboard36 and secret/identity9; exact launcher2-source diff independently reviewed.
+- Checkpoint: Core95004f19 clipboard9source/tests plus authored current-system. Launcher optional history/alias query contracts now authored; local source checkpoint follows. No full-Core claim during adapter edits.
+- Outcome: Clipboard and launcher focused Complete; fifth whole gates pending. Production pending-launch error scope reproduced next under worker review; root moved cancellation contract now covers all three hook-backed views.
+- Follow-up: independently verify adapter follow-up, coordinated Core freeze/full types/tests/build and structure; extension six-file naming work remains independent.
 
 ### 2026-10-01 - Extension focus broad verification complete
 - Agent: supervisor
