@@ -21,6 +21,7 @@ validated, and its measured page size is sane. Integration round 4 is on dev. Th
 produced a working Flow end to end.
 
 **Binding rules (user, all in force).**
+- **Live builds start from the real extension chat (user, 2026-10-01):** "the tests should be using the actual extension chat window to prompt the model building flow". A run started by a direct API request is never a pass. t227 builds the chat launcher; no new direct-API launch.
 - **The compact page view (user, 2026-09-30 night; supersedes t200's raw JSON).**
   - Quotes: "ITS NOT SUPPOSED TO FEED IN THE ENTIRE PAGE JUST RAW"; "theres literally no fucking reason it should be
     500kb"; "only giving model elements that have visible text/buttons/etc with the least possible data in terms of

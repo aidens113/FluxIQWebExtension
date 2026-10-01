@@ -14,6 +14,81 @@ it passes twice in a row. Task order: `everything-store-plus-earbuds-under-50`,
 `crossborder-marketplace-spain-hubs`, `professional-network-rotterdam-data-engineers`, then the other
 `judgeBy: "expected-dataset"` tasks.
 
+## Session 5 (2026-10-01, from 19:25 UTC): fixes that need no Lab
+
+Trees fast-forwarded by the supervisor to local dev (downstream `a15a465e`, Core `f3778a8e`: round 5, F17-F20 on dev),
+both on `task/t194-live-judge-answer`, clean at start. Labs stay stopped until t223 lands; t223's files (domain
+`llm-evidence` page serialization, and the extension files its branch changes: `content/{dom-snapshot,rendered-elements,
+describe-element,listed-parents,message-handler}.ts`, `content/actions/{capture-snapshot,types}.ts`, `shared/{protocol,
+dom-element,snapshot-capture-options}.ts`, `background/connection/*`) are off limits.
+- Core libraries rebuild started 19:29 UTC (Core dist was from 2026-09-30 23:27, older than `f3778a8e`); log
+  `scratchpad/t194s5/core-libs.log`.
+- Plan: task 1 (F17 leftovers: the closing message's spend and projected figures; `budgetBreaches` kept to the Lab) to
+  t194-w23. Task 2: one T2 content-harness probe per task (headless Chromium on the real scenario site, the content
+  script's own actions, `extract_list` and structure detection, no model, no Lab): t194-w24 bikes, w25 kestrel, w26 spain
+  hubs, w27 rotterdam; each names its gaps to file:line with a proposed diff; the lead then assigns the fixes by file.
+- **Supervisor, ~20:40 UTC: t223 is merged into dev (downstream `3851db67`, Core `28ceecf0`); return now with what is
+  Ready to commit, narrow checks only (typecheck of touched packages, tests in changed directories, structure audit; no
+  full suites).** So no fix round followed the probes: their gaps are listed below as next, each with its proving row.
+- w23 (F21 below): task 1 done; task 2 stops at Core `runtime/service.ts:1558-1560` (`loopAccounting` builds the published
+  accounting field by field and drops `budgetBreaches`; Must not touch). Publishing it also needs `flow-bootstrap/
+  review-projection.ts:18-41` (whitelist), `generation-failure/{diagnostic.ts:25-48, diagnostic-parse.ts:132-159}` (a **wire
+  change**: `hasExactFields` refuses the whole diagnostic on an unknown field), downstream `existing-fluxiq-control.ts:110,
+  470-477`. The Lab side reads it already (absent = 0).
+- Probes (T2, headless Chromium on the real sites, content-script actions, the domain evidence runtime with scripted
+  decisions; no Lab, no model). Each gap row asserts the correct answer and is marked `test.fail` with its cause:
+  - **bikes (w24)**: the chain works (cookie wall, category, notification, double Apply in the shadow root, price, condition,
+    sort, robot pause); with the failed batch's "Try again" pressed by hand the proposal read equals `bikeRecords()` (adverts
+    out, batch repeat once via `dedupe url`, outside results out, current price). GAP 1: a click on the shadow-root chip
+    opens and re-closes the picker (`content/action-runtime/ignored-press/page-press-listener.ts:94` observes the scope walked
+    out of the shadow root, `press-scope.ts:27-35`, so `click.ts:152-160` presses again). GAP 2: no read presses the failed
+    batch's bare-span "Try again", every read stops at 9 of 12 (`content/extraction/list-wait.ts:109-119`,
+    `pagination.ts:448-461`, `load-retry.ts:37` `PRESSABLE` lacks `[tabindex]`).
+  - **kestrel (w25)**: the filter route plus the manifest's selectors returns exactly the 10; every trap handled (overlays,
+    condition reset, bot check, round-arrow submit, sort first press, skeletons, `data-adid` ads, the "approx. £" estimate as
+    its own column, `where` expresses every condition). G1 (blocks): no detected column is the title alone; m9 reads "New
+    listingKestrel 35 …" (`content/extraction/infer-fields.ts:559` `pathStep`, `:649-659`). G2 (keyword route): numbered
+    pager not detected, read stops at page 1 with 6 rows, `truncated: false` (`detect-pagination.ts:98`, `item-selector.ts:70`,
+    `:123`). G3: `domain/src/actions/extraction/condition-match.ts:98,205` reads "EUR 169,00" as 16900 (not hit by the right
+    condition). G4 (decision): an all-empty read passes (`content/actions/extract-list.ts:164`).
+  - **spain hubs (w26)**: the walk, lazy tail, ads (`is: absent` on the Ad column), `atLeast 4.5` on the rating text, Best
+    Match order and #2/#5 kept apart all work. G1 (blocks): the price is four sibling spans, no detected column holds
+    "16,49 €" (`infer-fields.ts:385`). G2 (blocks the list-layout variant): field paths anchored by position through the card
+    body (`infer-fields.ts:486-566`). G3: a detect within 600 ms of load names the sidebar (`detect-structure.ts:118-120`).
+    G4/G5 (unfiltered route only): numbered pager not detected (`detect-pagination.ts:98,110-123`, `item-selector.ts:90`);
+    with no `aria-current` the page control is picked by position (`pagination.ts:525-527`). The spec's fix-proof row reads
+    all 13 on both layouts with the selectors the G1+G2 fixes would emit.
+  - **rotterdam (w27)**: the whole chain from the feed (overlays, search, See all, 2nd, the Rotterdam NL typeahead, reopen,
+    Show results) and the read return exactly the 23; the 429 check is waited out; the upsell variant passes. G1 (blocks a
+    proposal-built read): Guildline's script Next goes page 2 -> 2; the read stops `page_repeated` at 20 rows with
+    `truncated: false` (`content/extraction/pagination.ts:376` swaps to the page number only for a link back to its own
+    page; fix: also when Next has no address). G2: a plan's `maxPages` is dropped when its mode differs from the detected
+    one (`domain/src/runtime/llm-evidence/plan-resolution/extraction/slot.ts:216-217`; detection proposes `maxPages: 1`).
+
+**Session-5 validation (2026-10-01 20:35-21:00 UTC, narrow checks by the supervisor's rule; logs `scratchpad/t194s5/`):**
+Core `bash heavy.sh "t194 lead core check" pnpm check` (fluxiq `tsc --noEmit`) rc 0; Core `npx vitest run
+src/programs/automation-studio/runtime/flow-bootstrap/unfinished-build` `Test Files 4 passed (4)`, `Tests 29 passed (29)`;
+Core structure audit "passed (206 warning(s), 353 baselined)"; test-runner `heavy.sh pnpm build` (its `tsc -p tsconfig.json`)
+rc 0, then `node --test dist/live-llm/tests/{build-usage,budget}.test.js dist/flow-lane/creation/tests/*.test.js` `# tests
+108 # pass 108 # fail 0`; extension `heavy.sh npx tsc -p tsconfig.test.json --noEmit` (src, tests and e2e specs) rc 0;
+the four live-task specs `heavy.sh pnpm --filter @fluxiq-web-extension/extension test:content -- e2e/content/tests/live-tasks/tests --reporter=list --output=e2e/test-results/t194-lead` "32 passed (4.4m)", rc 0: 17 rows
+pass, 15 are the expected failures of the named gaps (none passed unexpectedly); downstream structure audit "passed (140 warning(s), 118 baselined)".
+
+**Ready to commit (fix set 5: F21, F22), exactly `git status` of both trees.** Core
+(`packages/fluxiq/src/programs/automation-studio/runtime/flow-bootstrap/unfinished-build/`): `budget-exhausted.ts`,
+`phases.ts`, `tests/budget-figures.test.ts` (new). Downstream: test-runner `src/flow-lane/creation/build-proposal.ts`,
+`src/live-llm/{build-usage.ts, tests/build-usage.test.ts}`; extension `e2e/content/tests/live-tasks/tests/*.spec.ts` (4 new);
+docs `reports/t194-w23..w27-*.md` (new), this report. Validation: the session-5 validation above.
+
+**Next (unfixed, each with its proving `test.fail` row):** bikes GAP 2 (Try again) and GAP 1 (shadow-root press); kestrel
+G1 (title column) and G2 (numbered pager); spain hubs G1 (price spans) and G2 (positional field paths), then G3-G5;
+rotterdam G1 (script Next 2 -> 2) and G2 (`maxPages` dropped); kestrel G3 (decimal comma) and G4 (an all-empty read
+passes, a policy call); F21's Core publication of `budgetBreaches` (a wire change). File partition for the fix round:
+`infer-fields.ts` (kestrel G1, spain G1+G2) one worker; `detect-pagination.ts` + `item-selector.ts` (kestrel G2, spain G4)
+one; `pagination.ts` + `list-wait.ts` + `load-retry.ts` (bikes GAP 2, rotterdam G1, spain G5) one;
+`ignored-press/page-press-listener.ts` + `press-scope.ts` (bikes GAP 1) one; domain `plan-resolution/extraction/slot.ts`
+(rotterdam G2) and `actions/extraction/condition-match.ts` (kestrel G3) one. Each worker report holds its proposed diff.
+
 ## Session 4 (2026-10-01, from 05:00 UTC), after round 3 and t210 rounds 1-2
 
 Trees fast-forwarded to pushed dev (downstream `58fd0cd3`, Core `e5b8f015`); every lane C fix set (F0-F16) is on dev.
@@ -50,6 +125,8 @@ Newest first. Status: validated (the named checks ran and passed), or in progres
 
 | Fix | Files | Exposed by | Validation | Status |
 | --- | --- | --- | --- | --- |
+| F22 Four T2 probe specs, one per live task (bikes, kestrel, spain hubs, rotterdam): the Stage 1 chain walked with the content script's own actions on the real scenario site, reads through `extract_list` and the domain evidence runtime with scripted decisions; every gap row asserts the correct answer, marked `test.fail` with its cause (t194-w24..w27; the bikes and spain-hubs markers added by the lead) | extension `e2e/content/tests/live-tasks/tests/{local-classifieds-bike-search, auction-marketplace-kestrel-auctions, crossborder-marketplace-spain-hubs, professional-network-rotterdam-data-engineers}.spec.ts` (new) | Stage 1 of the four tasks (w18); the Lab stop | session-5 validation (below) | validated; the gaps they prove are next |
+| F21 F17's leftovers: a purse refusal's closing message states the spend and the refused call's worst case ("…limit of $0.25 before the Flow was finished: it had spent $0.154, and its next call could have cost up to $0.146."; whole-build figures, repairs included; message only, no wire field); `budgetBreaches` is summed across rounds (`phases.ts`), and the Lab reads Core's count when published (`build-proposal.ts` `accountingOf`, `build-usage.ts:56`; absent = 0), so its budget check flags a build's breaches as a run's (t194-w23) | Core `runtime/flow-bootstrap/unfinished-build/{budget-exhausted.ts, phases.ts, tests/budget-figures.test.ts (new)}`; test-runner `src/flow-lane/creation/build-proposal.ts`, `src/live-llm/{build-usage.ts, tests/build-usage.test.ts}` | run 9 (F17 follow-ups) | w23: new Core test 5 of 7 fail on the old source; new downstream test `expected: 2, actual: 0` on the old line; session-5 validation (below) | validated. **Not done:** Core does not publish breaches (`service.ts:1558-1560`; then `review-projection.ts:18-41`, `diagnostic-parse.ts:132-159`, a wire change; downstream `existing-fluxiq-control.ts:110,470-477`) |
 | F20 A live run whose product failed (a build without a Flow) is never labelled a facility failure when the Lab's budget check also fails it: the `performance.budget` breach carries the lane's `runtime.behavior` failure as its `cause`, and `productFailureOf` reads through it; the category stays `performance.budget` (t194-w22) | test-runner `src/live-llm/{budget-over-product-failure.ts (new), live-llm-run.ts, lane-settlement.ts, index.ts}`, `src/run-scenario/product-failure.ts` + tests (`run-scenario/tests/product-failure.test.ts`, `live-llm/tests/{live-llm-run,lane-settlement}.test.ts`) | run 9: `facilityFailure: scenario.execute/unclassified` on a no-Flow, over-ceiling build | w22: new tests 3 fail on the old source, 32/32 after; test-runner check rc 0; session-4 combined validation (below) | validated (worker); see combined |
 | F19 The rows a `where` condition removed **by itself** are said apart: the exploring model's `read.rejectedRows` gives per condition `{where, rejected, alone, rowsAlone, rowsWithOthers}` and one sentence (`rejectedRowsNote`) to check the alone rows against the instruction; every read (playback too) counts `conditions.alone`, carried across pages, stored as counts only; the judge's read account says "rejected 20 rows, 5 of them by itself" and points at such a condition first (t194-w21 for the page, domain and summary; lead for the judge) | extension `content/extraction/{rejected-samples.ts, list-reader.ts, filtered-answer.ts}`, `content/actions/extract-list.ts`, `shared/extraction-continuation.ts`; domain `actions/extraction/{summary.ts, rejected-samples.ts}`, `runtime/llm-evidence/node-run/rejected-rows.ts` (extraction rows, not page serialization); Core `service/summaries/extraction-summary.ts`, `result-verification/{contracts.ts, read-account/accounts.ts, read-account/sentence.ts}`; tests beside each | run 9: the accessory rule `name not contains "charging case"` rejected 20 (17 also failed price, rating or Plus); the 5 it removed alone were 2 accessories and the 3 missing earbuds | w21: domain 1063/1063, extension 1678/1678 (run directly; Core dist was stale then), downstream audit passed; lead: Core read-account 15/15 (2 new); session-4 combined validation | validated in parts; see combined. **Decision for the supervisor:** giving the judge the alone rows themselves means playbacks ask for rejected rows and store page text in Core's run record; recommended: counts only until the user decides |
 | F18 A tool result that carries `clearedWait` (a click that waited out a robot check that cleared by itself) is no longer refused as `llm_evidence_loop.tool_result_invalid`: Core's exact key list lacked the member the domain had emitted since t203 (`domain/.../node-run/cleared-wait.ts:25`; the domain's own list at `capture.ts:283` had it). A refused result now names its check, `llm_evidence_loop.tool_result_invalid.<check>` (14 closed checks, no page content); the key list is exported as `AUTOMATION_STUDIO_LLM_EVIDENCE_TOOL_EXECUTION_KEYS` (t194-w20) | Core `runtime/llm/{evidence-loop-decision.ts, tool-failure.ts, evidence-loop.ts (two call sites)}`, `llm/tests/evidence-loop-tool-failure.test.ts` | run 9 decision 4: the Go press worked (results loaded after a 9.2 s cleared check) and the model was told it "failed and returned no evidence"; the draft kept a `did_not_work` step | w20: the run's dumped results through the parse: before `s2: false`, after `s2: true`; Core llm vitest 90 files / 805; tsc rc 0; session-4 combined validation | validated (worker); follow-up: a domain test holding its key list to Core's exported one (needs the dist) |

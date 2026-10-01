@@ -52,7 +52,8 @@ export function liveLlmBuildUsage(build: CreatedFlowBuild): LiveLlmObservedUsage
           outputTokens: totals.outputTokens ?? 0,
           totalTokens: totals.totalTokens ?? (totals.inputTokens ?? 0) + (totals.outputTokens ?? 0),
           estimatedCostUsd: totals.estimatedCostUsd ?? 0,
-          budgetBreaches: 0,
+          // Core's own count of calls that cost more than its purse held them at: the budget check fails a build on one, as it does a run.
+          budgetBreaches: totals.budgetBreaches ?? 0,
           pendingCalls: 0,
         }
       : null,

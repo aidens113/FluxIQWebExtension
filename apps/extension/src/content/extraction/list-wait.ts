@@ -113,7 +113,13 @@ export async function awaitListComplete(item: string, wanted: number, actionDead
     if (!revealListEnd(item)) return "complete";
     const grew = await waitUntil(() => matchCount(item) > before, LIST_GROWTH_WINDOW_MS, LIST_GROWTH_POLL_MS, actionDeadline);
     if (grew === "timed_out") return "timed_out";
-    if (grew === "unchanged") return "complete";
+    if (grew === "unchanged") {
+      if (actionDeadline !== undefined && Date.now() >= actionDeadline) return "timed_out";
+      // Observe already queued page work once; this is not another growth window.
+      await new Promise<void>((resolve) => { setTimeout(resolve, 0); });
+      if (actionDeadline !== undefined && Date.now() >= actionDeadline) return "timed_out";
+      if (matchCount(item) <= before) return "complete";
+    }
   }
   return "complete";
 }

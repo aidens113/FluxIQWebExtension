@@ -46,7 +46,9 @@
 // `data-id`, `data-member-id`, `data-row-key`. A `<div>` wrapper is not a
 // record, `data-testid` is not a per-instance identifier (a template writes the
 // same one on every instance), and `data-sort`, `data-action` and `data-grid`
-// do not match the attribute rule.
+// do not match the attribute rule. A row's values (below) are also looked for
+// in the words a row draws inside an open shadow root, because that is where
+// the list extraction read them.
 //
 // ## What identifies one, strongest first
 //
@@ -64,7 +66,9 @@
 // Both name the row the recording was made on. A step inside a For Each runs
 // on a different row each pass, so the domain replaces them with the pass's row
 // **values** -- what the list extraction read from that row -- and those win
-// over both (`holdsRowValues` below, t195).
+// over both (`holdsRowValues` below, t195). A control in no record is then
+// checked against the row its own kind marks out: the part of the page that
+// holds it and no other control alike to it (`rowOfOneControl`).
 //
 // The text leaves out two kinds of words. A sensitive control's contents, by
 // the one rule `sensitive-text.ts` owns (decision D2). And the words inside
@@ -96,7 +100,9 @@
 import { isSensitiveFormControl } from "../element-traits";
 import { isWithinSensitiveControl } from "../sensitive-text";
 import type { DomElementContext } from "../types";
+import { accessibleNameFor } from "./accessible-name";
 import { boundedText } from "./bounded-text";
+import { implicitRole } from "./implicit-role";
 import { normalizedText } from "./normalized-text";
 import { parsedUrl } from "../../shared/parsed-url";
 
@@ -167,7 +173,7 @@ export function recordIdentity(element: Element): RecordIdentity | undefined {
  */
 export function agreesWithRecordedRecord(recorded: RecordIdentity | undefined, element: Element): boolean {
   const values = rowValues(recorded?.values);
-  if (values.length) return holdsRowValues(enclosingRecord(element), values);
+  if (values.length) return holdsRowValues(enclosingRecord(element) ?? rowOfOneControl(element), values);
   if (!recorded || (!recorded.key && !recorded.text)) return true;
   const record = enclosingRecord(element);
   if (!record) return false;
@@ -198,6 +204,12 @@ const MAX_ROW_TEXT = 4_000;
 const MAX_ROW_NODES = 2_000;
 /** Characters of one row value, as the domain cut it (`output-nodes/targets` `webAutomationRecordValues`). */
 const MAX_ROW_VALUE = 200;
+/**
+ * Elements whose text a shadow root carries but never draws -- a component's
+ * own stylesheet above all -- which the field reader leaves out too
+ * (`content/extraction/field-reader.ts` `UNDRAWN_TAGS`).
+ */
+const UNDRAWN_TAGS: ReadonlySet<string> = new Set(["style", "script", "template", "noscript"]);
 
 /**
  * Whether a record is the row a For Each pass is on (t195).
@@ -217,9 +229,9 @@ const MAX_ROW_VALUE = 200;
  * or a form control's current value. Every value, not most: a row is told from
  * its neighbours by the values it does not share with them.
  *
- * Fail closed as the rest of this module does: a candidate in no record, a
- * record inside a sensitive control, and a value the bounded read did not reach
- * all disagree. A step refused on the right row reaches the automation loop; a
+ * Fail closed as the rest of this module does: a candidate in neither a record
+ * nor a row of its own, a record inside a sensitive control, and a value the
+ * bounded read did not reach all disagree. A step refused on the right row reaches the automation loop; a
  * press on the wrong one reports success.
  */
 function holdsRowValues(record: Element | undefined, values: readonly string[]): boolean {
@@ -248,28 +260,124 @@ function rowValue(value: string): string | undefined {
  * it or inside it, each cut as a row value is. One bounded walk reads both; a
  * sensitive control is skipped whole, its text, attributes and value alike
  * (decision D2), because a list extraction refuses to read one too.
+ *
+ * The walk enters every open shadow root it meets, after the host's light
+ * children so the stack visits it first, at the host's place in the text: the
+ * extraction reads what a component draws there (Guildline's `gl-time-ago`
+ * says "Sent 1 month ago" only in its shadow root), so a row whose value came
+ * from one is found by it. A stylesheet, script or template in a shadow root
+ * is not drawn and is skipped, so it neither matches a value nor spends the
+ * text bound. The light tree is read exactly as it was.
  */
 function rowContents(record: Element): { text: string; exact: Set<string> } {
   const exact = new Set<string>();
   let text = "";
   let budget = MAX_ROW_NODES;
-  const pending: Node[] = [record];
-  for (let node = pending.pop(); node && budget > 0; node = pending.pop()) {
+  const pending: RowNode[] = [{ node: record, shadow: false }];
+  for (let next = pending.pop(); next && budget > 0; next = pending.pop()) {
     budget -= 1;
+    const { node, shadow } = next;
     if (node.nodeType === TEXT_NODE) {
       if (text.length < MAX_ROW_TEXT * 2) text += node.nodeValue ?? "";
       continue;
     }
     if (node.nodeType !== ELEMENT_NODE) continue;
     const element = node as Element;
-    if (isSensitiveFormControl(element)) continue;
+    if (isSensitiveFormControl(element) || (shadow && UNDRAWN_TAGS.has(tagOf(element)))) continue;
     for (const found of elementValues(element)) {
       const value = rowValue(found);
       if (value) exact.add(value);
     }
-    for (const child of childrenInReverse(element)) pending.push(child);
+    for (const child of childrenInReverse(element)) pending.push({ node: child, shadow });
+    const root = element.shadowRoot;
+    if (root) for (const child of childrenInReverse(root)) pending.push({ node: child, shadow: true });
   }
   return { text: boundedText(text, MAX_ROW_TEXT) ?? "", exact };
+}
+
+/** A node waiting in `rowContents`'s walk, and whether it sits in a shadow tree. */
+type RowNode = { node: Node; shadow: boolean };
+
+/**
+ * The row a control sits in when no ancestor is a record by this module's
+ * rule, so that a For Each pass over rows the page draws as plain `<div>`s --
+ * bigbox's cart lines -- is checked rather than refused on every row
+ * (`t195-w19b-audit-pickup-order.md` #9).
+ *
+ * The row is the largest ancestor that holds this control and no other control
+ * alike to it -- same role, same accessible name -- found as the child, on the
+ * control's path, of the nearest ancestor that holds two. The cart's soap line
+ * holds one "Save for later"; the group around it holds the towels' too, so
+ * the soap's line is the soap's row. Not the *smallest* ancestor holding one:
+ * that is the button's own wrapper, which holds the actions and none of the
+ * values. And not a widened record rule (`div` siblings sharing a class):
+ * `isRecordElement` also decides what a recording identifies and what the
+ * snapshot calls one-per-row, and this question is asked only here, only with
+ * a pass's values in hand, where the answer it replaces was always "no".
+ *
+ * `undefined`, so the gate fails closed, when the control has no name to tell
+ * its kind by, when no ancestor within `MAX_RECORD_DEPTH` holds a second one
+ * (a lone control marks out no row, and the region around it may hold any
+ * page's words), when the row would be the control and nothing more, or when
+ * the bounded scan ran out before it could tell.
+ */
+function rowOfOneControl(control: Element): Element | undefined {
+  const alike = alikeTo(control);
+  if (!alike) return undefined;
+  const scan = { budget: MAX_ROW_NODES };
+  let row = control;
+  for (let depth = 0; depth < MAX_RECORD_DEPTH; depth += 1) {
+    const parent = row.parentElement;
+    if (!parent) return undefined;
+    const another = holdsAnother(parent, row, alike, scan);
+    if (another === undefined) return undefined;
+    if (another) return row !== control && holdsMoreThan(row, control) ? row : undefined;
+    row = parent;
+  }
+  return undefined;
+}
+
+/** A test for a control alike to this one -- same role, same accessible name -- or `undefined` for one with no name to tell it by. */
+function alikeTo(control: Element): ((element: Element) => boolean) | undefined {
+  const name = accessibleNameFor(control);
+  if (!name) return undefined;
+  const kind = controlKind(control);
+  return (element) => controlKind(element) === kind && accessibleNameFor(element) === name;
+}
+
+/** The element's role, written or implied, or its tag where it has neither. */
+function controlKind(element: Element): string {
+  const written = element.getAttribute("role")?.trim().toLowerCase().split(/\s+/u)[0];
+  return written || implicitRole(element) || tagOf(element);
+}
+
+/**
+ * Whether `parent` holds an alike control outside `path`, the child the walk
+ * came up through; `undefined` when the shared node budget ran out first.
+ */
+function holdsAnother(parent: Element, path: Element, alike: (element: Element) => boolean, scan: { budget: number }): boolean | undefined {
+  const pending: Element[] = [...parent.children].filter((child) => child !== path);
+  for (let element = pending.pop(); element; element = pending.pop()) {
+    if (scan.budget <= 0) return undefined;
+    scan.budget -= 1;
+    if (alike(element)) return true;
+    for (const child of element.children) pending.push(child);
+  }
+  return false;
+}
+
+/** Whether the row holds anything besides the control and the wrappers around it: an element or words off the control's path. */
+function holdsMoreThan(row: Element, control: Element): boolean {
+  for (let current = control; current !== row; ) {
+    const parent = current.parentElement;
+    if (!parent) return false;
+    for (const sibling of parent.childNodes) {
+      if (sibling === current) continue;
+      if (sibling.nodeType === ELEMENT_NODE || /\S/u.test(sibling.nodeValue ?? "")) return true;
+    }
+    current = parent;
+  }
+  return false;
 }
 
 /** An element's attribute values, its resolved link and its current control value: the non-text places a field reads. */
