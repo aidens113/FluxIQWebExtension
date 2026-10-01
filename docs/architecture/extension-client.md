@@ -1681,8 +1681,21 @@ the new thread's pending answer. Injected request throws/rejections use fixed
 recoverable feedback and retain ordinary fulfilled relay failure behavior.
 Accepted sends retain their original destination across thread changes. A late
 refusal cannot place the newly opened thread into fallback; disconnected state
-takes precedence over fallback. Core/project replacement across the entire
-mounted Chat remains a separately scoped ownership concern.
+takes precedence over fallback. Mounted Chat also observes gateway/Core address,
+client, project and pairing context. Owner replacement retires old thread/feed
+instances, history, subject callbacks and timers before announcing the latest
+target. Same-owner reconnect and passive names retain draft and reading state.
+After explicit inactivity, fresh reads wait for activation; the historical first
+initialization read remains supported. Unsupported relay capability stays tied
+to the mounted lifetime.
+
+The composer keeps a single versioned local UI draft with nonsecret owner
+metadata. Foreign or unowned legacy text remains visible and requires explicit
+Use draft here or Clear draft; typing and examples never silently adopt it.
+Matching owned text restores without repeated review. Writes install the atomic
+versioned record before removing the literal legacy key, and an empty record
+prevents legacy resurrection. Owner/edit leases prevent accepted old sends from
+clearing newer or adopted text. This convenience owns no durable project data.
 
 Automation metadata and controls use a local owner revision for confirmed
 gateway/Core address, client, project and pairing context. Missing optional

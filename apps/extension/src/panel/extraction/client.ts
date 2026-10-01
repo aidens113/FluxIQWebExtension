@@ -46,7 +46,7 @@ export async function startExtractionPick(): Promise<void> {
 export async function confirmExtraction(request: ExtractionConfirmRequest): Promise<ExtractionConfirmOutcome | undefined> {
   const response = await runtimeSendMessage<ExtractionConfirmResponse | undefined>({ type: EXTRACTION_RUNTIME_MESSAGES.confirm, request });
   if (!response) throw new Error(NO_LISTENER);
-  if (!response.ok) throw new Error(response.error);
+  if (!response.ok) throw refusalError(response.error);
   return capturedOutcome(response);
 }
 
@@ -55,6 +55,8 @@ function capturedOutcome(response: { ok: true } & Partial<ExtractionConfirmOutco
   const { datasetId, label, recordCount, pagesRead, truncated, durationMs } = response;
   if (typeof datasetId !== "string" || typeof label !== "string") return undefined;
   if (typeof recordCount !== "number" || typeof pagesRead !== "number" || typeof durationMs !== "number") return undefined;
+  if (!Number.isInteger(recordCount) || recordCount < 0 || !Number.isInteger(pagesRead) || pagesRead < 0) return undefined;
+  if (!Number.isFinite(durationMs) || durationMs < 0) return undefined;
   return { datasetId, label, recordCount, pagesRead, truncated: truncated === true, durationMs };
 }
 
@@ -80,12 +82,19 @@ export async function readExtractionSession(columns?: readonly ExtractionPreview
   const message = { type: EXTRACTION_RUNTIME_MESSAGES.getSession, ...(columns === undefined ? {} : { fields: columns }) };
   const response = await runtimeSendMessage<ExtractionSessionResponse | undefined>(message);
   if (!response) throw new Error(NO_LISTENER);
-  if (!response.ok) throw new Error(response.error);
+  if (!response.ok) throw refusalError(response.error);
   return response.session ?? undefined;
 }
 
 async function command(message: { type: string }): Promise<void> {
   const response = await runtimeSendMessage<ExtractionCommandResponse | undefined>(message);
   if (!response) throw new Error(NO_LISTENER);
-  if (!response.ok) throw new Error(response.error);
+  if (!response.ok) throw refusalError(response.error);
+}
+
+// Presentation provenance lets recovery preserve the background's authored
+// refusal while giving unexpected transport rejections fixed local feedback.
+// It grants no authority and does not change acknowledgement/error semantics.
+function refusalError(message: string): Error {
+  return Object.defineProperty(new Error(message), "extractionRefusal", { value: true });
 }

@@ -515,6 +515,22 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 
 ## Work Ledger
 
+### 2026-10-01 - Menu checkpoint and mounted Chat independent review
+- Agent: supervisor
+- Changed: Core local687ddc58; mounted Chat eight-path review and authored extension architecture; receipt validation/provenance.
+- Why: preserve completed narrow units and report real full-gate failure before continuing.
+- Validation: Menu130/native0/2.62s; Core types96912ms/build209084ms native0; full2547pass/1login-lock EPERM failure native1/196.07s; structure only protected4506/4505. Chat direct118/native0/397.1628ms and strict8roots0. Receipt boundary30/native0/386.3977ms.
+- Outcome: Narrow Menu/Chat/receipt accepted; full tenth still incomplete. Root identified retained turn Open FluxIQ activation gap for a separate bounded fix.
+- Follow-up: three workers implement extraction read recovery and environment focus, and investigate login lock; shell/full extension checks await panel freeze. No merge/push/browser/private data.
+
+### 2026-10-01 - Extraction receipt boundary supervisor brief released
+- Agent: supervisor
+- Changed: authorized exact client.ts and NEW extraction/tests/client.test.ts only; no panel/worker path overlap.
+- Why: numeric type checks accept NaN, infinity, negative and fractional counts, allowing impossible receipt text.
+- Validation: source inspected; tests-first synthetic malformed response matrix pending. Preserve legacy bare acknowledgement, zero counts, optional truncated normalization, structural request and existing error handling.
+- Outcome: Released small boundary fix: finite nonnegative integer counts and finite nonnegative duration; no wire/background change or repeated confirmation.
+- Follow-up: root focused owning tests/types; extension broad gates after all active source freeze.
+
 ### 2026-10-01 - Tenth extraction independently verified and slots reassigned
 - Agent: supervisor
 - Changed: extraction four-path source reviewed; database one-file semantics; new verification/planning records.
