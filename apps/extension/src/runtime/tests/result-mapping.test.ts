@@ -256,3 +256,12 @@ test("timed_out and cancelled keep their status and carry their message as the e
     assert.equal(result.error, "The wait ran out of time.", status);
   }
 });
+
+test("cleared waits reach the generic gateway field for success and failure, screened to milliseconds", () => {
+  for (const status of ["succeeded", "failed", "timed_out", "cancelled"] as const) {
+    const result = gatewayActionResultFromBrowserResult(browserResult({ status, checkWait: { waitedMs: 12 } }));
+    assert.deepEqual(result.clearedWait, { waitedMs: 12 });
+  }
+  assert.equal("clearedWait" in gatewayActionResultFromBrowserResult(browserResult()), false);
+  assert.equal("clearedWait" in gatewayActionResultFromBrowserResult(browserResult({ checkWait: { waitedMs: -1 } })), false);
+});

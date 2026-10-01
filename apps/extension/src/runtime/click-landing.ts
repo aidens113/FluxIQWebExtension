@@ -89,7 +89,7 @@ type RefusedLanding = { status: number; path: string };
  * check on it was waited out, or nothing against it.
  */
 type LandingVerdict =
-  | { kind: "failed"; outcome: WorkerActionOutcome }
+  | { kind: "failed"; outcome: WorkerActionOutcome; wait?: LandedCheckWait }
   | { kind: "check_cleared"; wait: LandedCheckWait }
   | { kind: "stood" };
 
@@ -128,7 +128,10 @@ export async function sendClickCheckingLanding(
     } catch (error) {
       const verdict = await judgeLanding(action, tabId, watch, access);
       if (verdict === undefined) throw error;
-      if (verdict.kind === "failed") return workerActionResult(action, watch.startedAt, verdict.outcome);
+      if (verdict.kind === "failed") {
+        const failed = workerActionResult(action, watch.startedAt, verdict.outcome);
+        return verdict.wait ? clickAfterClearedCheck(failed, verdict.wait) : failed;
+      }
       // Only a click delivered to a page that then unloaded under it was made. A
       // send that found no listener never reached the page, and any other
       // refusal is the click's own failure, whatever the tab then did.
@@ -139,7 +142,11 @@ export async function sendClickCheckingLanding(
     if (reply.status !== "succeeded") return reply;
     const verdict = await judgeLanding(action, tabId, watch, access);
     if (verdict === undefined || verdict.kind === "stood") return reply;
-    return verdict.kind === "failed" ? failedClick(reply, verdict.outcome) : clickAfterClearedCheck(reply, verdict.wait);
+    if (verdict.kind === "failed") {
+      const failed = failedClick(reply, verdict.outcome);
+      return verdict.wait ? clickAfterClearedCheck(failed, verdict.wait) : failed;
+    }
+    return clickAfterClearedCheck(reply, verdict.wait);
   } finally {
     watch.stop();
   }
@@ -162,7 +169,7 @@ async function judgeLanding(
   const settled = await settleLandedReading(first, tabId, access, checkWaitBudgetMs(action, watch.startedAt));
   if (settled.reading?.kind === "robot_check") return { kind: "failed", outcome: checkLandingOutcome(landedPath(commit.url), settled.checkWait) };
   const refused = await refusedLanding(tabId, commit);
-  if (refused !== undefined) return { kind: "failed", outcome: refusedLandingOutcome(refused) };
+  if (refused !== undefined) return { kind: "failed", outcome: refusedLandingOutcome(refused), ...(settled.checkWait?.outcome === "cleared" ? { wait: settled.checkWait } : {}) };
   return settled.checkWait?.outcome === "cleared" ? { kind: "check_cleared", wait: settled.checkWait } : { kind: "stood" };
 }
 

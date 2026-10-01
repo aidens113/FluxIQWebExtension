@@ -1606,3 +1606,9 @@ The default development endpoints are:
 Gateway: ws://127.0.0.1:4777/client
 Core API: http://127.0.0.1:3000
 ```
+
+### Cleared checks and later action failures
+
+Navigation and click landing results retain a self-clearing check's elapsed milliseconds even when the destination or subsequent navigation verdict fails. The gateway payload keeps the domain's `checkWait`; the outer gateway result also carries the screened generic `clearedWait` for Core's transport runtime path. Direct domain dispatch and runtime adapters preserve the same fact independently of success. Core resolves the check card as `waited_out` while the action keeps its own failure.
+
+Core also settles durably parked run asks as `timed_out` at their deadline and as `cancelled` before project deletion. A service restart detects overdue sessions when they are read; indefinite waits keep waiting.

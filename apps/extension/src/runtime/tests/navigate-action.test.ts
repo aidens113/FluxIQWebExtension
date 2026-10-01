@@ -368,3 +368,12 @@ test("a frame from before the distinction, answering a robot check with no word 
   assert.equal(run.result.failure?.code, "web.intervention.required");
   assert.equal(calls.asked.length, 1, "and nothing was waited for");
 });
+
+test("a self-clearing check followed by a navigation no-op still reports its cleared wait", async () => {
+  forgetAutomationTab();
+  installNavigationStub({ 41: { url: RESULTS, ignores: true, page: [ORDINARY_PAGE, SELF_CLEARING_CHECK, ORDINARY_PAGE] } });
+  const run = await navigate(RESULTS, 41);
+  assert.equal(run.result.status, "failed");
+  assert.equal(run.result.failure?.code, "web.navigation.unexpected");
+  assert.equal(typeof run.result.checkWait?.waitedMs, "number");
+});
