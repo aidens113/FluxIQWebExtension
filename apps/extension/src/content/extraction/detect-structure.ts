@@ -29,6 +29,17 @@
 // region and an ambiguous target are facts about the page as authored, so they
 // are answered at once.
 //
+// **Nor has a page that is still drawing its list as skeletons.** A run found
+// while a larger run of empty placeholders stands elsewhere on the page is
+// whatever else the page holds, not the list it is drawing
+// (`placeholder-run/`): on the Spain hubs' results the grid is nineteen
+// skeletons for 600 ms after load and the sidebar's five filter groups were
+// answered at once, as final (t194 G3). Such an answer is waited on within the
+// same window, and the run that fills in then outranks the sidebar. When the
+// window closes first, the last answer stands, as for a refusal. Placeholders
+// inside the detected items or beside them are that list filling in, and
+// settle nothing either way.
+//
 // Live, this ended a build rather than spoiling an answer: on `company-website`
 // the model detected one moment too early, was told `no_repeating_structure`,
 // asked again five times and was answered `already_answered` by the loop's
@@ -65,6 +76,7 @@ import { isDeclaredFeed } from "./feed-signal";
 import { inferListFromElement } from "./infer-list";
 import { largestRunsFirst } from "./largest-runs";
 import { waitUntil } from "./list-wait";
+import { largestPlaceholderRunApartFrom } from "./placeholder-run";
 
 type Refusal = Extract<WebAutomationStructureDetection, { ok: false }>;
 type Detected = Extract<WebAutomationStructureDetection, { ok: true }>;
@@ -114,9 +126,10 @@ export async function detectStructureWhenPresent(
   return answer;
 }
 
-/** Whether this answer is one waiting could not improve on. */
+/** Whether this answer is one waiting could not improve on: a refusal of the kind that stays true, or a run no larger list is still being drawn beside (see the header). */
 function settled(answer: WebAutomationStructureDetection): boolean {
-  return answer.ok || !WORTH_WAITING_FOR.has(answer.refused);
+  if (!answer.ok) return !WORTH_WAITING_FOR.has(answer.refused);
+  return document.body === null || answer.proposal.itemCount >= largestPlaceholderRunApartFrom(queryAll(answer.proposal.item), document.body);
 }
 
 /**

@@ -5,7 +5,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nextControlOnPage, PROPOSED_MAX_PAGES, paginationKindForLabel } from "../detect-pagination";
+import { detectPagination, nextControlOnPage, PROPOSED_MAX_PAGES, paginationKindForLabel } from "../detect-pagination";
+import { el as pageEl, asElements as pageElements, page, type PageElement } from "./selector-page";
 import { FakeElement } from "./store-pager";
 
 test("a control labelled Next follows the list, however the page cases or decorates it", () => {
@@ -103,3 +104,140 @@ test("an authored control that names another page, where the pager offers no way
   el("div", {}, "", [el("ul", {}, "", items), el("nav", {}, "", [previous, el("span", { "aria-current": "page" }, "5")])]);
   assert.equal(nextControlOnPage(previous as unknown as Element, asElements(items)), undefined);
 }));
+
+// And what detection proposes for a numbered pager, on small pages with a real
+// selector matcher (`selector-page.ts`). Both t194 fixtures drew pagers it
+// proposed as no pagination at all: the current page carries one class more
+// than the others, and the links sit in a pager element of their own beside the
+// list, below the level where the walk outward first meets them (G2, G4).
+
+/** Four result cards in a list, each with its own link, which is never a pager's. */
+function results(): { list: PageElement; cards: PageElement[] } {
+  const cards = [1, 2, 3, 4].map((index) => pageEl("li", { class: "card" }, [pageEl("a", { href: `/item/${index}` }, `Item ${index}`)]));
+  return { list: pageEl("ul", { class: "results" }, cards), cards };
+}
+
+/** What `selector` names on the page standing now. */
+function named(selector: string): unknown[] {
+  return (document.querySelectorAll(selector) as unknown as unknown[]).slice();
+}
+
+function proposedOn(cards: PageElement[], list: PageElement): ReturnType<typeof detectPagination> {
+  return detectPagination(pageElements(cards), list as unknown as Element);
+}
+
+test("a numbered pager in its own nav, its current page styled apart and Next an arrow labelled otherwise, is proposed as numbered pages naming every number", () => {
+  const { list, cards } = results();
+  const numbers = [
+    pageEl("a", { class: "pageLink pageCurrent", href: "?_pgn=1", "aria-current": "page" }, "1"),
+    pageEl("a", { class: "pageLink", href: "?_pgn=2" }, "2"),
+    pageEl("a", { class: "pageLink", href: "?_pgn=3" }, "3")
+  ];
+  const nav = pageEl("nav", { class: "pagination", "aria-label": "Results pagination" }, [
+    pageEl("span", { class: "pageArrow", "aria-disabled": "true" }, "‹"),
+    ...numbers,
+    pageEl("a", { class: "pageArrow", href: "?_pgn=2", "aria-label": "Go to next search page" }, "›"),
+    pageEl("label", {}, [pageEl("select", { "aria-label": "Items per page" })])
+  ]);
+  const body = pageEl("body", {}, [pageEl("main", {}, [pageEl("section", {}, [list]), nav])]);
+  const stood = page(body);
+  try {
+    const proposal = proposedOn(cards, list);
+    assert.equal(proposal?.mode, "numbered", JSON.stringify(proposal));
+    const pages = (proposal as { pages: string }).pages;
+    assert.equal(pages, "main > nav > a.pageLink");
+    assert.deepEqual(named(pages), numbers, "every number, the current page included, and neither arrow");
+    assert.equal(proposal?.maxPages, PROPOSED_MAX_PAGES);
+  } finally {
+    stood.restore();
+  }
+});
+
+test("a pager whose Next is a plain div and whose numbers carry no aria-current is named by the class the numbers share", () => {
+  const { list, cards } = results();
+  const numbers = [
+    pageEl("a", { class: "pagerItem pagerCurrent", href: "/search?page=1" }, "1"),
+    pageEl("a", { class: "pagerItem", href: "/search?page=2" }, "2"),
+    pageEl("a", { class: "pagerItem", href: "/search?page=3" }, "3")
+  ];
+  const pager = pageEl("div", { class: "pager" }, [
+    pageEl("div", { class: "pagerItem pagerDisabled" }, "‹ Previous"),
+    ...numbers,
+    pageEl("div", { class: "pagerItem" }, "Next ›"),
+    pageEl("span", { class: "pagerJump" }, [pageEl("input", { class: "priceInput" }), pageEl("span", { class: "btn" }, "Go")])
+  ]);
+  const sidebar = pageEl("aside", { class: "sidebar" }, [pageEl("a", { href: "/search?cat=hubs" }, "USB hubs")]);
+  const body = pageEl("body", {}, [pageEl("div", { class: "layout" }, [sidebar, pageEl("div", { class: "content" }, [pageEl("div", { class: "grid" }, [list]), pager])])]);
+  const stood = page(body);
+  try {
+    const proposal = proposedOn(cards, list);
+    assert.equal(proposal?.mode, "numbered", JSON.stringify(proposal));
+    assert.deepEqual(named((proposal as { pages: string }).pages), numbers);
+  } finally {
+    stood.restore();
+  }
+});
+
+test("numbers that each sit alone in a list item are named through the item", () => {
+  const { list, cards } = results();
+  const numbers = [
+    pageEl("a", { class: "page active", href: "?p=1", "aria-current": "page" }, "1"),
+    pageEl("a", { class: "page", href: "?p=2" }, "2"),
+    pageEl("a", { class: "page", href: "?p=3" }, "3")
+  ];
+  const pager = pageEl("ul", { class: "pagination" }, [...numbers.map((number) => pageEl("li", {}, [number])), pageEl("li", {}, [pageEl("span", {}, "…")])]);
+  const body = pageEl("body", {}, [pageEl("main", {}, [list, pageEl("div", { class: "footer" }, [pager])])]);
+  const stood = page(body);
+  try {
+    const proposal = proposedOn(cards, list);
+    assert.equal(proposal?.mode, "numbered", JSON.stringify(proposal));
+    const pages = (proposal as { pages: string }).pages;
+    assert.match(pages, / > li > a\.page$/u);
+    assert.deepEqual(named(pages), numbers);
+  } finally {
+    stood.restore();
+  }
+});
+
+test("a list with a pager above it and one below is named by the one above, never by both at once", () => {
+  const { list, cards } = results();
+  const pagerOf = () => pageEl("nav", {}, [
+    pageEl("a", { class: "num current", href: "?p=1", "aria-current": "page" }, "1"),
+    pageEl("a", { class: "num", href: "?p=2" }, "2"),
+    pageEl("a", { class: "num", href: "?p=3" }, "3")
+  ]);
+  const top = pagerOf();
+  const body = pageEl("body", {}, [pageEl("main", {}, [top, list, pagerOf()])]);
+  const stood = page(body);
+  try {
+    const proposal = proposedOn(cards, list);
+    assert.equal(proposal?.mode, "numbered", JSON.stringify(proposal));
+    assert.deepEqual(named((proposal as { pages: string }).pages), top.children);
+  } finally {
+    stood.restore();
+  }
+});
+
+// Where the page offers a Next as well as numbers, Next is what reads every
+// page: the numbers a pager draws are a window, and a Next leading back to its
+// own page is already read through the pager's following number
+// (`pagination.ts`). This guards the choice; it held before t194 too.
+test("a pager offering a labelled Next beside its numbers is proposed as Next", () => {
+  const { list, cards } = results();
+  const next = pageEl("a", { class: "pageLink", href: "?p=2", rel: "next" }, "Next");
+  const nav = pageEl("nav", {}, [
+    pageEl("a", { class: "pageLink current", href: "?p=1", "aria-current": "page" }, "1"),
+    pageEl("a", { class: "pageLink", href: "?p=2" }, "2"),
+    pageEl("a", { class: "pageLink", href: "?p=3" }, "3"),
+    next
+  ]);
+  const body = pageEl("body", {}, [pageEl("main", {}, [list, nav])]);
+  const stood = page(body);
+  try {
+    const proposal = proposedOn(cards, list);
+    assert.equal(proposal?.mode, "next", JSON.stringify(proposal));
+    assert.deepEqual(named((proposal as { next: string }).next), [next]);
+  } finally {
+    stood.restore();
+  }
+});

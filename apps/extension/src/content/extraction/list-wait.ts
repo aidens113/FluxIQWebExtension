@@ -53,6 +53,19 @@
 // `deadline` stop -- rather than reading the part of the page it saw as the
 // whole of it. An element that cannot scroll or say where it is (a test's
 // stand-in) is not revealed, which is a reveal that moved nothing.
+//
+// **A part of the list that failed to load is asked for again** (t194-w24).
+// A feed whose next batch failed shows no new item and a "Try again" under the
+// list, and a reveal that saw nothing arrive called that list complete: nine of
+// twelve rows. So while a reveal waits, and once more where it moved nothing,
+// the read looks for the Retry the list offers under itself
+// (`load-retry.ts`, `offeredListRetry`), presses it, and gives it
+// `RETRY_GROWTH_WINDOW_MS` to bring the part it reloads -- at most
+// `LIST_LOAD_RETRIES` presses in one read, shared with a scroll-paged read's
+// own (`pagination.ts`). A press that fails again is pressed again only while
+// that budget lasts; then the list is read as it stands.
+
+import { newRetryBudget, offeredListRetry, RETRY_GROWTH_WINDOW_MS, spendRetry, type RetryBudget } from "./load-retry";
 
 /** What a wait saw: its condition, nothing within its window, or the command's deadline. */
 export type WaitOutcome = "changed" | "unchanged" | "timed_out";
@@ -105,17 +118,52 @@ export async function waitUntil(condition: () => boolean, windowMs: number, poll
  * Running out is not a failure: the read goes on and reads the list as it
  * stands, so what it reports is still the page rather than an error invented
  * here, exactly as `awaitListPresent` does.
+ *
+ * `retries` is what the read has left of its Retry presses (see the header);
+ * a caller that passes none gives this call a budget of its own.
  */
-export async function awaitListComplete(item: string, wanted: number, actionDeadline: number | undefined): Promise<ListCompletion> {
+export async function awaitListComplete(item: string, wanted: number, actionDeadline: number | undefined, retries: RetryBudget = newRetryBudget()): Promise<ListCompletion> {
   for (let reveal = 0; reveal < LIST_REVEALS; reveal += 1) {
     const before = matchCount(item);
     if (before === 0 || before >= wanted) return "complete";
-    if (!revealListEnd(item)) return "complete";
-    const grew = await waitUntil(() => matchCount(item) > before, LIST_GROWTH_WINDOW_MS, LIST_GROWTH_POLL_MS, actionDeadline);
+    // A reveal that moved nothing waits for nothing, but a Retry already on
+    // screen is still pressed: the failed part may be what the list ends on.
+    const moved = revealListEnd(item);
+    const grew = await awaitArrivalOrRetry(() => matchCount(item) > before, () => matches(item), moved ? LIST_GROWTH_WINDOW_MS : 0, retries, actionDeadline);
     if (grew === "timed_out") return "timed_out";
     if (grew === "unchanged") return "complete";
   }
   return "complete";
+}
+
+/**
+ * Waits up to `windowMs` for `arrived` -- the list bringing what the read waits
+ * for -- and presses the Retry the list offers under itself when one appears
+ * while the read's budget lasts, each press with `RETRY_GROWTH_WINDOW_MS` to
+ * answer. `shown` is the run as the page draws it now, which is where the Retry
+ * is looked for. The Retry just pressed is not pressed again while it is still
+ * there: it is loading, or the page ignored it, and either way the window
+ * decides. A fresh Retry after the budget is spent is the part failing again,
+ * and the wait ends there as `"unchanged"` rather than waiting out a load that
+ * will not come. A scroll-paged read waits here too (`pagination.ts`).
+ */
+export async function awaitArrivalOrRetry(arrived: () => boolean, shown: () => readonly Element[], windowMs: number, retries: RetryBudget, actionDeadline: number | undefined): Promise<WaitOutcome> {
+  let pressed: HTMLElement | undefined;
+  let waitMs = windowMs;
+  for (;;) {
+    const offered: { retry: HTMLElement | undefined } = { retry: undefined };
+    const outcome = await waitUntil(() => {
+      if (arrived()) return true;
+      const retry = offeredListRetry(shown());
+      offered.retry = retry === pressed ? undefined : retry;
+      return offered.retry !== undefined;
+    }, waitMs, LIST_GROWTH_POLL_MS, actionDeadline);
+    if (outcome !== "changed" || offered.retry === undefined) return outcome;
+    if (!spendRetry(retries)) return "unchanged";
+    pressed = offered.retry;
+    pressed.click();
+    waitMs = RETRY_GROWTH_WINDOW_MS;
+  }
 }
 
 /** What one page of a page-by-page read can still use. */
@@ -135,9 +183,9 @@ export type PageWant = {
  * plus the items already read on a page that appended its next ones, since
  * those fill no place.
  */
-export async function awaitPageComplete(item: string, want: PageWant, actionDeadline: number | undefined): Promise<ListCompletion> {
+export async function awaitPageComplete(item: string, want: PageWant, actionDeadline: number | undefined, retries?: RetryBudget): Promise<ListCompletion> {
   const wanted = want.everything ? Number.MAX_SAFE_INTEGER : Math.max(1, want.records) + matches(item).filter((element) => want.taken(element)).length;
-  return await awaitListComplete(item, wanted, actionDeadline);
+  return await awaitListComplete(item, wanted, actionDeadline, retries);
 }
 
 /**

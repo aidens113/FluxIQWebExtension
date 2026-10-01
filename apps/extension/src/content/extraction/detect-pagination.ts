@@ -12,6 +12,29 @@
 // - a run of controls labelled with digits gives `numbered`, its `pages`
 //   selector naming exactly that run.
 //
+// **Where a page offers both a Next and numbered pages, Next is proposed,**
+// because it is the one that reads every page. A numbered read can go only as
+// far as the numbers the pager draws -- "1 2 3 … 40" shows no 4 from page 3 on
+// some pagers -- while a Next goes on until the list ends, whatever window of
+// numbers is shown; and a Next that leads back to its own page is already read
+// through the pager's following number (`pagination.ts`, `pagerSuccessor`).
+// Numbered pages are proposed where nothing is labelled Next: a pager whose
+// arrow says only "›" or "Go to next search page", or draws its Next as a
+// plain `div` (t194 G2, G4).
+//
+// **The numbered run is the pager's, current page included.** Digit-labelled
+// controls are grouped by the pager slot they sit in -- the element holding
+// them, through a wrapper when each sits alone in one (`ul > li > a`) -- rather
+// than by their whole template, because a pager draws its current page as the
+// same control with one class more (`a.pageLink.pageCurrent`), and a run that
+// left it out named no current page for the read to go on from. And the
+// selector is written under that holder, not under the level the walk reached:
+// a pager is its own element beside the list (`nav > a`), one step or more below
+// the level where the walk first meets it. Until 2026-10-01 both pagers of the
+// t194 fixtures -- Hammerline's `nav[aria-label="Results pagination"]` and the
+// Spain hubs' `div.pager` -- were proposed as no pagination at all, and a model
+// that wrote one was refused because none had been detected.
+//
 // **`scroll` is never detected.** An infinite feed looks like an ordinary list
 // that happens to end, so proposing a scroll would propose scrolling every list
 // the page shows. Only the user picks it (the proposal contract says so).
@@ -25,8 +48,7 @@
 // sensitive-text reader and used only to recognize the control. No label
 // reaches the proposal (decision D3): what travels is the selector.
 
-import { webAutomationItemSignature, type WebAutomationExtractListPagination } from "@fluxiq-web-extension/domain/client";
-import { testIdFor } from "../describe-element";
+import type { WebAutomationExtractListPagination } from "@fluxiq-web-extension/domain/client";
 import { selectorFor } from "../selector";
 import { textOutsideSensitiveControls } from "../sensitive-text";
 import { generalizedItemSelector } from "./item-selector";
@@ -90,12 +112,12 @@ export function detectPagination(run: readonly Element[], container: Element): W
     const controls = Array.from(level.querySelectorAll(CONTROL_SELECTOR))
       .filter((control) => !run.some((item) => item === control || item.contains(control)));
     if (controls.length === 0) continue;
-    const numbered = numberedControls(controls);
     const next = controls.find((control) => kindOf(control) === "next");
     if (next) return { mode: "next", next: selectorFor(next), maxPages: PROPOSED_MAX_PAGES };
     const loadMore = controls.find((control) => kindOf(control) === "loadMore");
     if (loadMore) return { mode: "loadMore", control: selectorFor(loadMore), maxPages: PROPOSED_MAX_PAGES };
-    const pages = numbered.length > 1 ? generalizedItemSelector(numbered, selectorFor(level)) : undefined;
+    const numbered = numberedControls(controls);
+    const pages = numbered && numbered.controls.length > 1 ? generalizedItemSelector(numbered.controls, `${selectorFor(numbered.holder)}${numbered.via}`) : undefined;
     if (pages) return { mode: "numbered", pages: pages.selector, maxPages: PROPOSED_MAX_PAGES };
   }
   return undefined;
@@ -107,22 +129,38 @@ function kindOf(control: Element): PaginationControlKind | undefined {
 }
 
 /**
- * The biggest run of same-template controls whose labels are all digits: the
- * page's own numbered controls, which also say how many pages it has.
+ * Digit-labelled controls in one pager slot: the element holding them, and the
+ * step from it to each control when every control sits alone in a wrapper of
+ * its own (` > li`), or nothing when they are its children.
  */
-function numberedControls(controls: readonly Element[]): Element[] {
-  const byTemplate = new Map<string, Element[]>();
+type NumberedRun = { controls: Element[]; holder: Element; via: string };
+
+/**
+ * The biggest run of digit-labelled controls of one tag and role in one pager
+ * slot: the page's own numbered controls, the current page among them however
+ * it is styled. See the header for why a slot rather than a template.
+ */
+function numberedControls(controls: readonly Element[]): NumberedRun | undefined {
+  const runs: Array<NumberedRun & { kind: string }> = [];
   for (const control of controls) {
     if (!isNumberLabelled(control)) continue;
-    const signature = webAutomationItemSignature({
-      tagName: control.tagName,
-      role: control.getAttribute("role"),
-      testId: testIdFor(control),
-      classes: control.classList
-    });
-    byTemplate.set(signature, [...byTemplate.get(signature) ?? [], control]);
+    const slot = pagerSlotOf(control);
+    if (!slot) continue;
+    const kind = `${control.tagName}|${control.getAttribute("role") ?? ""}|${slot.via}`;
+    const run = runs.find((candidate) => candidate.holder === slot.holder && candidate.kind === kind);
+    if (run) run.controls.push(control);
+    else runs.push({ controls: [control], ...slot, kind });
   }
-  return [...byTemplate.values()].sort((left, right) => right.length - left.length)[0] ?? [];
+  // The first of the largest: a list with a pager above and below it is named by the one above.
+  return runs.reduce<NumberedRun | undefined>((largest, run) => largest === undefined || run.controls.length > largest.controls.length ? run : largest, undefined);
+}
+
+/** Where a numbered control sits in its pager; see `NumberedRun`. */
+function pagerSlotOf(control: Element): { holder: Element; via: string } | undefined {
+  const parent = control.parentElement;
+  if (!parent) return undefined;
+  const wrapped = parent.children.length === 1 && parent.parentElement !== null;
+  return wrapped ? { holder: parent.parentElement!, via: ` > ${parent.tagName.toLowerCase()}` } : { holder: parent, via: "" };
 }
 
 function isNumberLabelled(control: Element): boolean {

@@ -44,13 +44,22 @@
 //   signal is item identity, not document height. Nothing new while at the
 //   bottom is the list ending; nothing new while no longer at the bottom (a
 //   loading indicator grew the page) scrolls again. Every scroll counts toward
-//   `maxScrolls`.
+//   `maxScrolls`. A batch that failed to load and put a Retry under the list
+//   has it pressed while the read's budget lasts (`load-retry.ts`,
+//   `offeredListRetry`; the classifieds feed's bare-span "Try again", t194-w24),
+//   and a press is not a scroll.
 // - `numbered`: re-query the `pages` controls after every change and click the
 //   one that follows the current page: the control numbered one more than the
-//   control marked `aria-current`, or that control's next sibling among them
-//   when it carries no number, or, when none is marked, the control after the
-//   ones already read, in document order. No following control is the list
-//   ending. The change and the wait for records are those of `next`.
+//   current page's, or the current control's next sibling among them when it
+//   carries no number. The current page is the control marked `aria-current`,
+//   or, where none is, the numbered control that links to the document showing
+//   it. When neither says, it is the control numbered one more than the pages
+//   already read, or failing that the numbered control after them, in document
+//   order -- counting numbers only, because from page two on a Previous may
+//   share the numbers' markup, and counting it re-read page two as page three
+//   (t194-w26 G5). Only a pager with no numbered control at all is counted by
+//   position alone. No following control is the list ending. The change and
+//   the wait for records are those of `next`.
 //
 // For `next`, `loadMore` and `numbered`, having read `maxPages` pages while a
 // way forward is still there is truncation; for `scroll`, having scrolled
@@ -84,14 +93,25 @@
 //   the current page's number and a control numbered one more, the read follows
 //   that instead; when it shows none, the read follows the Next anyway and stops
 //   on `page_repeated` when the page it reaches holds nothing new
-//   (`list-reader.ts`).
+//   (`list-reader.ts`). **A script's Next is treated the same way**, because it
+//   carries no address to be checked against this page: Guildline's people
+//   search draws Next as a `<button>` that loads the page after the one the
+//   document opened on, so from page two it loads page two, and a `next` read
+//   stopped there with 20 of 23 people (t194-w27 G1). Following the pager's
+//   following number is what a working Next does anyway.
+// - **A page that repeats while the pager showed a later one is a read that
+//   could not move on, not a list that ended.** Before each `next` or numbered
+//   follow the advance records whether the pager showed a page numbered after
+//   the current one (`PaginationProgress.laterPageShown`); a read that then
+//   stops on `page_repeated` says `truncated: true`, so it never answers as
+//   complete while the list visibly goes on.
 
 import { WEB_AUTOMATION_EXTRACT_MAX_PAGES, type WebAutomationExtractionSummary } from "@fluxiq-web-extension/domain/client";
 import type { PageLoadPaceAnswer, PageLoadPaceMessage } from "../../shared/protocol";
 import type { WebAutomationExtractListPagination } from "../types";
 import { nextControlOnPage, type NextControlChoice } from "./detect-pagination";
-import { waitUntil, type WaitOutcome } from "./list-wait";
-import { offeredLoadRetry } from "./load-retry";
+import { awaitArrivalOrRetry, waitUntil, type WaitOutcome } from "./list-wait";
+import { newRetryBudget, offeredLoadRetry, type RetryBudget } from "./load-retry";
 import { awaitPageRendered } from "./page-render";
 import { parsedUrl } from "../../shared/parsed-url";
 
@@ -140,6 +160,19 @@ export type PaginationProgress = {
   hasUnreadItem(): boolean;
   /** Called, and awaited, just before a control is followed: the last moment the read so far is certainly still here. */
   beforeFollow?: (() => Promise<void>) | undefined;
+  /**
+   * The Retry presses the read has made for its list (`load-retry.ts`), shared
+   * with the reveal of each page (`list-wait.ts`). `advancePage` starts one
+   * where the read gave none.
+   */
+  listRetries?: RetryBudget | undefined;
+  /**
+   * Whether, when `advancePage` last followed a `next` or numbered control, the
+   * pager beside it showed a page numbered after the current one. `advancePage`
+   * sets it; a page that then repeats an earlier one is the read failing to
+   * move on while the list goes on (see the header).
+   */
+  laterPageShown?: boolean | undefined;
 };
 
 type NextPagination = Extract<WebAutomationExtractListPagination, { next: string }>;
@@ -162,7 +195,6 @@ const LIST_CHANGE_POLL_MS = 25;
 const LOAD_RETRIES = 2;
 /** How long a scroll waits for an unread item: the window `actions/scroll.ts` gives a lazy feed to grow. */
 const SCROLL_GROWTH_WINDOW_MS = 900;
-const SCROLL_POLL_MS = 50;
 /** Subpixel layout and rounding differences do not keep a scroller from counting as at its bottom. */
 const BOTTOM_TOLERANCE_PX = 2;
 
@@ -361,9 +393,9 @@ export async function advancePage(paginate: WebAutomationExtractListPagination, 
  * Follows the `next` control: the authored selector's, or the pager's own Next
  * where that selector names nothing or another page's control
  * (`detect-pagination.ts`, `nextControlOnPage`). A disabled one is the list
- * ending, as it is for `loadMore`; one that leads back to this very page is
- * swapped for the pager's following page where the pager shows one (see the
- * header).
+ * ending, as it is for `loadMore`; one that leads back to this very page, or
+ * a script's that has no address to say where it leads, is swapped for the
+ * pager's following page where the pager shows one (see the header).
  */
 async function followNext(paginate: NextPagination, progress: PaginationProgress): Promise<PageAdvance> {
   const found = await awaitNextControl(paginate.next, progress);
@@ -373,7 +405,12 @@ async function followNext(paginate: NextPagination, progress: PaginationProgress
   if (isDisabled(next)) return ended("control_disabled");
   if (progress.pagesRead >= paginationBound(paginate)) return TRUNCATED;
   const named = clickable(next, paginate.next);
-  const control = leadsToThisPage(named) ? pagerSuccessor(named) ?? named : named;
+  const pager = readPager(named);
+  // A Next with an address is checked against this page before it is
+  // followed; a script's Next has none to check, so where the pager beside it
+  // shows the page after the current one, that is followed (see the header).
+  const control = leadsToThisPage(named) || linkAddress(named) === undefined ? pager?.following ?? named : named;
+  progress.laterPageShown = pager?.later === true;
   if (pastDeadline(progress.deadline)) return TIMED_OUT;
   await awaitPageLoadTurn(progress.deadline);
   if (pastDeadline(progress.deadline)) return TIMED_OUT;
@@ -448,12 +485,15 @@ async function waitForMoreItems(control: HTMLElement, progress: PaginationProgre
 async function scrollForMore(paginate: ScrollPagination, progress: PaginationProgress): Promise<PageAdvance> {
   const bound = paginationBound(paginate);
   const scroller = scrollerOf(progress.shown[0]);
+  const retries = progress.listRetries ?? (progress.listRetries = newRetryBudget());
+  const shown = (): Element[] => Array.from(document.querySelectorAll(progress.item));
   for (;;) {
     if (progress.scrolls >= bound) return TRUNCATED;
     if (pastDeadline(progress.deadline)) return TIMED_OUT;
     scrollToBottom(scroller);
     progress.scrolls += 1;
-    const outcome = await waitUntil(() => progress.hasUnreadItem(), SCROLL_GROWTH_WINDOW_MS, SCROLL_POLL_MS, progress.deadline);
+    // A batch the scroll asked for that failed and offered a Retry under the list has it pressed (see the header).
+    const outcome = await awaitArrivalOrRetry(() => progress.hasUnreadItem(), shown, SCROLL_GROWTH_WINDOW_MS, retries, progress.deadline);
     if (outcome === "changed") return ADVANCED;
     if (outcome === "timed_out") return TIMED_OUT;
     if (atBottom(scroller)) return ended("scrolled_to_end");
@@ -465,6 +505,7 @@ async function visitNumberedPage(paginate: NumberedPagination, progress: Paginat
   if (!following) return ended("no_following_page");
   if (progress.pagesRead >= paginationBound(paginate)) return TRUNCATED;
   const control = clickable(following, paginate.pages);
+  progress.laterPageShown = true;
   if (pastDeadline(progress.deadline)) return TIMED_OUT;
   await awaitPageLoadTurn(progress.deadline);
   if (pastDeadline(progress.deadline)) return TIMED_OUT;
@@ -483,17 +524,22 @@ function leadsToThisPage(control: HTMLElement): boolean {
   return address !== undefined && sameDocument(address, new URL(document.URL));
 }
 
+/** What the pager beside a `next` control says: the control for the page after the current one, and whether it shows any later page at all. */
+type PagerReading = { following: HTMLElement | undefined; later: boolean };
+
 /**
- * The control a pager shows for the page after the current one, found beside a
- * `next` control that leads back to its own page, or `undefined` when the pager
- * does not say which page is current or shows nothing after it.
+ * The pager beside a `next` control, read for the page after the current one:
+ * `following` is its enabled control numbered one more than the current page,
+ * and `later` whether it shows any page numbered higher -- a control or not, so
+ * a pager that skips to its last page still says the list goes on.
+ * `undefined` when the pager does not say which page is current.
  *
  * The current page is the number marked `aria-current`, or the one number the
  * pager shows as something other than a control -- which is how a pager draws
  * the page you are on (`<b>2</b>` among links). Only numbers are read, and only
  * to compare them, so no word of the page is carried anywhere.
  */
-function pagerSuccessor(next: HTMLElement): HTMLElement | undefined {
+function readPager(next: HTMLElement): PagerReading | undefined {
   let pager: Element | null = next.parentElement;
   for (let depth = 0; pager && depth < PAGER_LEVELS; depth += 1, pager = pager.parentElement) {
     const numbered = Array.from(pager.querySelectorAll("*")).filter((element) => element.children.length === 0 && pageNumber(element) !== undefined);
@@ -502,7 +548,10 @@ function pagerSuccessor(next: HTMLElement): HTMLElement | undefined {
     const number = current === undefined ? undefined : pageNumber(current);
     if (number === undefined) continue;
     const following = numbered.map((element) => element.closest(PAGE_CONTROL) ?? element).find((element) => isControl(element) && pageNumber(element) === number + 1);
-    return following instanceof HTMLElement && !isDisabled(following) ? following : undefined;
+    return {
+      following: following instanceof HTMLElement && !isDisabled(following) ? following : undefined,
+      later: numbered.some((element) => (pageNumber(element) ?? 0) > number)
+    };
   }
   return undefined;
 }
@@ -523,11 +572,21 @@ function onlyOne<T>(items: readonly T[]): T | undefined {
 
 /** The page control that follows the current page, or `undefined` when the list has no further page. */
 function followingPageControl(controls: readonly Element[], pagesRead: number): Element | undefined {
-  const current = controls.find(isCurrentPage);
-  if (!current) return controls[pagesRead];
+  const current = controls.find(isCurrentPage) ?? controls.find(linksToThisPage);
+  if (!current) {
+    // Nothing says which page is current: count the numbers, not the controls (see the header).
+    const numbered = controls.filter((control) => pageNumber(control) !== undefined);
+    if (numbered.length === 0) return controls[pagesRead];
+    return numbered.find((control) => pageNumber(control) === pagesRead + 1) ?? numbered[pagesRead];
+  }
   const number = pageNumber(current);
   if (number === undefined) return controls[controls.indexOf(current) + 1];
   return controls.find((control) => pageNumber(control) === number + 1);
+}
+
+/** A numbered page control that is a link to the document already showing: a pager's current page when nothing is marked. */
+function linksToThisPage(control: Element): boolean {
+  return pageNumber(control) !== undefined && control instanceof HTMLElement && leadsToThisPage(control);
 }
 
 function isCurrentPage(control: Element): boolean {

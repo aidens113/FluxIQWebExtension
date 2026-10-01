@@ -87,9 +87,17 @@ test("a card's title link proposes its words and its URL as two columns, and the
   }
 });
 
-test("a read whose next control names nothing stops on page one and says so", async ({ openHarness }) => {
+// A `next` selector that names nothing is where a read starts, not the last
+// word: the pager around the list is asked for its own way forward
+// (`detect-pagination.ts`, `nextControlOnPage`). So a selector that names
+// nothing ends the read only where the pager offers no way forward either --
+// the board's last page, which draws no Next and marks no page `aria-current`.
+test("a read whose next control names nothing, on a page whose pager offers no way forward, stops on its first page and says so", async ({ openHarness, page }) => {
   const harness = await openHarness("job-board");
-  await openResults(harness, "");
+  // Past the last page the board shows its last page.
+  await openResults(harness, "?page=999");
+  await expect(page.locator("nav a", { hasText: /^Next$/u }), "the last page draws no Next").toHaveCount(0);
+  await expect(page.locator("nav [aria-current]"), "and marks no current page to count on from").toHaveCount(0);
   const reply = await harness.runAction({
     commandId: "extract-no-next",
     actionType: "web.dom.extract_list",
@@ -98,6 +106,25 @@ test("a read whose next control names nothing stops on page one and says so", as
   });
   expect(reply).toMatchObject({ status: "succeeded", extraction: { pagesRead: 1, truncated: false, paginationStop: "control_absent" } });
   expect(reply.validation).toMatchObject({ actual: expect.stringContaining("paging stopped on the first page because the pagination control named nothing there") });
+});
+
+test("a read whose next control names nothing, on a page with a pager, follows the board's own Next", async ({ openHarness, page }) => {
+  const harness = await openHarness("job-board");
+  await openResults(harness, "");
+  // The reply never comes back: following Next loads page two, and the script
+  // that would answer goes with page one.
+  void harness.deliver({
+    type: "executeAction",
+    topFrameOnly: true,
+    extraction: { token: "job-board-pager-next" },
+    action: {
+      commandId: "extract-by-the-pager",
+      actionType: "web.dom.extract_list",
+      timeoutMs: 60_000,
+      extractList: { item: "article[data-jk]", fields: { title: "h2 a" }, paginate: { next: "[data-no-such-next]", maxPages: 50 }, minItems: 0 }
+    }
+  }).catch(() => undefined);
+  await page.waitForURL((address) => address.searchParams.get("page") === "2", { timeout: 20_000 });
 });
 
 test("a read that reached its page bound says the list went on", async ({ openHarness }) => {

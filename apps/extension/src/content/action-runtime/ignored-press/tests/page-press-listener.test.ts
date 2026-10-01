@@ -32,30 +32,67 @@ function eventTarget() {
   };
 }
 
-type FakeNode = { name: string; nodeType: 1; tagName: string; parentElement: FakeNode | null; parentNode: FakeNode | null; ownerDocument: unknown; getAttribute(name: string): null };
+type FakeNode = {
+  name: string;
+  nodeType: 1;
+  tagName: string;
+  parentElement: FakeNode | null;
+  parentNode: FakeNode | FakeRoot | null;
+  ownerDocument: unknown;
+  shadowRoot: FakeRoot | null;
+  children: FakeNode[];
+  getAttribute(name: string): null;
+  querySelectorAll(selector: "*"): FakeNode[];
+};
+
+/** A shadow root: a document fragment with a host, whose `querySelectorAll` stays inside it as a browser's does. */
+type FakeRoot = { name: string; nodeType: 11; host: FakeNode; children: FakeNode[]; querySelectorAll(selector: "*"): FakeNode[] };
+
+/** Every element beneath `parent` in its own tree, never entering a shadow root. */
+function lightDescendants(parent: { children: FakeNode[] }): FakeNode[] {
+  return parent.children.flatMap((child) => [child, ...lightDescendants(child)]);
+}
 
 type ResourceEntry = { startTime: number; initiatorType: string };
 
-/** A page: body > section > row > button, plus a widget appended to the body, with fakes for every observer. */
-function fakePage(options: { performanceObserver?: boolean } = {}) {
+/**
+ * A page: body > section > row > button > label, plus a widget appended to the
+ * body, with fakes for every observer. With `shadow`, the row is a host and the
+ * button sits at the top of its open root, as a picker's chip does.
+ */
+function fakePage(options: { performanceObserver?: boolean; shadow?: boolean } = {}) {
   const view = eventTarget();
   const navigation = eventTarget();
   const document = { ...eventTarget(), location: { href: "http://127.0.0.1:4000/ip/1" }, defaultView: undefined as unknown };
-  const node = (name: string, tag: string, parent: FakeNode | null): FakeNode => ({
-    name,
-    nodeType: 1,
-    tagName: tag.toUpperCase(),
-    parentElement: parent,
-    parentNode: parent,
-    ownerDocument: document,
-    getAttribute: () => null
-  });
+  const node = (name: string, tag: string, parent: FakeNode | null): FakeNode => {
+    const created: FakeNode = {
+      name,
+      nodeType: 1,
+      tagName: tag.toUpperCase(),
+      parentElement: parent,
+      parentNode: parent,
+      ownerDocument: document,
+      shadowRoot: null,
+      children: [],
+      getAttribute: () => null,
+      querySelectorAll: () => lightDescendants(created)
+    };
+    parent?.children.push(created);
+    return created;
+  };
   const body = node("body", "body", null);
   const section = node("section", "section", body);
   const row = node("row", "div", section);
-  const button = node("button", "button", row);
+  const button = node("button", "button", options.shadow ? null : row);
   const label = node("label", "span", button);
   const widget = node("widget", "div", body);
+  let root: FakeRoot | undefined;
+  if (options.shadow) {
+    const shadowRoot: FakeRoot = { name: "root", nodeType: 11, host: row, children: [button], querySelectorAll: () => lightDescendants(shadowRoot) };
+    row.shadowRoot = shadowRoot;
+    button.parentNode = shadowRoot;
+    root = shadowRoot;
+  }
 
   const mutations = { observed: [] as Array<{ target: FakeNode; init: MutationObserverInit }>, pending: 0, notify: undefined as (() => void) | undefined, disconnected: 0 };
   class FakeMutationObserver {
@@ -108,7 +145,7 @@ function fakePage(options: { performanceObserver?: boolean } = {}) {
     view,
     navigation,
     document,
-    elements: { body, section, row, button, label, widget },
+    elements: { body, section, row, button, label, widget, root },
     mutations,
     /** A request the page began `offsetMs` after (or, negative, before) the press, queued for the next flush. */
     request(initiatorType: string, offsetMs = 5) {
@@ -130,6 +167,24 @@ test("a change inside the pressed control's section is an answer, whether delive
   assert.deepEqual(page.seen, ["change"]);
   page.mutations.notify?.();
   assert.deepEqual(page.seen, ["change", "change"]);
+});
+
+test("a press inside a shadow root: the root is observed beside the section, so a panel opened inside it is an answer", () => {
+  // local-classifieds' radius chip (t194-w24 GAP 1): the scope walks out of
+  // the root to the section, whose subtree observation never sees into the
+  // root, and the panel the press opened there was pressed shut again.
+  const page = fakePage({ shadow: true });
+  assert.deepEqual(
+    page.mutations.observed.map((entry) => entry.target),
+    [page.elements.section, page.elements.root],
+    "the section around the host, then the root the control sits in"
+  );
+  for (const entry of page.mutations.observed) assert.deepEqual(entry.init, { childList: true, subtree: true, attributes: true, characterData: true });
+  page.listener.flush();
+  assert.deepEqual(page.seen, [], "while nothing changed, nothing is reported, so a press truly ignored is still pressed again");
+  page.mutations.pending = 1;
+  page.listener.flush();
+  assert.deepEqual(page.seen, ["change"]);
 });
 
 test("a page that did nothing reports nothing", () => {

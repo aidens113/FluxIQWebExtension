@@ -13,8 +13,9 @@
 //   always marks it too -- the control disabled, a spinner -- and that is seen.
 // - **change**: any mutation -- a child added or removed, an attribute, text --
 //   inside the pressed control's scope (`press-scope.ts`), the control's own
-//   `disabled` and `aria-*` included. Mutations elsewhere on the page are its
-//   own motion and are not observed at all.
+//   `disabled` and `aria-*` included, and inside every shadow root in that
+//   scope (`scope-roots.ts`), which a subtree observation does not reach.
+//   Mutations elsewhere on the page are its own motion and are not observed.
 // - **navigation**: the address differs from the one at the press, or the
 //   document began to leave (`beforeunload`, `pagehide`, the Navigation API's
 //   `navigate`, which a history-API move fires too).
@@ -25,6 +26,7 @@
 // Nothing here presses anything, and nothing the page wrote is read.
 
 import { composedContains } from "../../shadow-dom";
+import { scopeRoots } from "./scope-roots";
 import { pressScope } from "./press-scope";
 import type { PressSignal } from "./press-again";
 
@@ -91,7 +93,11 @@ function listenForChange(pressed: Element, page: PressPage, note: (signal: Press
   const observer = new Observer((records) => {
     if (records.length > 0) note("change");
   });
-  observer.observe(pressScope(pressed), OBSERVED);
+  const scope = pressScope(pressed);
+  observer.observe(scope, OBSERVED);
+  // A subtree observation stops at every shadow boundary; each root inside
+  // the scope is observed in its own right (`scope-roots.ts`).
+  for (const root of scopeRoots(pressed, scope)) observer.observe(root, OBSERVED);
   return {
     flush() {
       if (observer.takeRecords().length > 0) note("change");

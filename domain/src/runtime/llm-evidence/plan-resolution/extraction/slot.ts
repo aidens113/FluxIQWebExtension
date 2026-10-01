@@ -36,9 +36,9 @@
 // `paginate: false` reads only the page shown. Absent or `true`, the detected
 // pagination is read. A pagination the model wrote itself names controls it
 // was never shown, so it can only mean "keep reading": the detected one is read,
-// with the model's own `maxPages` or `maxScrolls` when its mode is the detected
-// one; with nothing detected it is refused. A literal `item` beside a handle is
-// replaced by the detected one for the same reason.
+// with the model's own `maxPages` or `maxScrolls` whatever mode it named
+// (`keptPagination`); with nothing detected it is refused. A literal `item`
+// beside a handle is replaced by the detected one for the same reason.
 //
 // Anything that does not name one detected list is refused with the code that
 // says why and the position it was refused at. **The list itself is never
@@ -206,16 +206,33 @@ function namedHandle(references: Reference[]): { handle: string; path: WebPlanVa
   return named ?? refused("web.handle.malformed", []);
 }
 
-/** The pagination the plan reads with: the detected one, bounded as the plan says; none; or `malformed`. */
+/**
+ * The pagination the plan reads with: the detected one, bounded as the plan
+ * says; none; or `malformed`.
+ *
+ * The plan's bound holds whatever mode it named. A mode the plan names is a
+ * control it was never shown, so the detected control is the one read; how much
+ * of the list it asked for is still its own to say. Until 2026-10-01 a bound
+ * was kept only when the plan's mode was the detected one (since `d9d23e3d`,
+ * 2026-09-16). That was harmless while detection proposed every page
+ * (`maxPages: 3` on the catalog then), because the detected bound already read
+ * the whole list. Since 2026-09-23 detection proposes one page (`f24b0687`,
+ * `detect-pagination.ts` `PROPOSED_MAX_PAGES`), so a plan that saw the numbered
+ * pager and wrote `{mode: "numbered", maxPages: 5}` read one page, truncated
+ * (t194-w27 G2). Keeping the bound reopens nothing the old rule closed: the
+ * controls are still the detected ones, and the bound is held to the same cap
+ * and refused past it exactly as a same-mode bound is. A page count and a
+ * scroll count both say how far to read, so a plan whose mode is not the
+ * detected one may give either, and the detected mode's own key wins when it
+ * gives both.
+ */
 function keptPagination(paginate: unknown, binding: WebLlmExtractionBinding): WebAutomationExtractListPagination | undefined | "malformed" {
   const detected = binding.extractList.paginate;
   if (paginate === false) return undefined;
   if (paginate === undefined || paginate === true) return detected;
   if (!isJsonRecord(paginate) || detected === undefined) return "malformed";
   const bounded = structuredClone(detected);
-  const sameMode = paginate.mode === undefined || paginate.mode === (detected.mode ?? "next");
-  if (!sameMode) return bounded;
-  const bound = bounded.mode === "scroll" ? paginate.maxScrolls : paginate.maxPages;
+  const bound = bounded.mode === "scroll" ? paginate.maxScrolls ?? paginate.maxPages : paginate.maxPages ?? paginate.maxScrolls;
   if (bound === undefined) return bounded;
   if (typeof bound !== "number" || !Number.isSafeInteger(bound) || bound < 1 || bound > WEB_AUTOMATION_EXTRACT_MAX_PAGES) return "malformed";
   if (bounded.mode === "scroll") bounded.maxScrolls = bound;

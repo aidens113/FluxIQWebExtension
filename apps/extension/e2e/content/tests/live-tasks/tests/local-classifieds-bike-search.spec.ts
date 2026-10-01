@@ -14,23 +14,27 @@
 // - The chain works -- cookie wall, category link, the timed notification, the
 //   radius picker's select and its double Apply inside the shadow root, the
 //   price boxes with Enter, the folded condition boxes, the scripted sort and
-//   the robot pause it trips -- except one press: a click on the picker's chip
-//   opens the panel and then closes it again, because the ignored-press watch
-//   cannot see a change inside a shadow root and presses a second time
-//   (`content/action-runtime/ignored-press/page-press-listener.ts`). The chain
-//   below falls back to Enter on the chip so the rest can be measured.
-// - Every read stops at 9 of 12 rows: the third batch fails once, the feed puts
-//   a bare-span "Try again" under it, and neither the one-page read's reveal
-//   (`content/extraction/list-wait.ts`) nor a scroll-paged read
-//   (`content/extraction/pagination.ts`) ever presses it; `load-retry.ts` would
-//   not count a bare focusable span as pressable either.
-// - Once that batch is retried, the detected proposal plus the instruction's
-//   conditions reads exactly the answer: adverts out, the batch repeat once,
-//   "Results outside your search" left out, the current price and not the
-//   struck one.
+//   the robot pause it trips. GAP 1, fixed in t194-w31: a click on the picker's
+//   chip opened the panel and then closed it again, because the ignored-press
+//   watch could not see a change inside a shadow root and pressed a second
+//   time (`content/action-runtime/ignored-press/page-press-listener.ts`); it
+//   now observes the shadow roots in the press's scope. The chain below keeps
+//   its fallback to Enter on the chip, which no longer runs.
+// - Every read stopped at 9 of 12 rows: the third batch fails once, the feed
+//   puts a bare-span "Try again" under it, and neither the one-page read's
+//   reveal (`content/extraction/list-wait.ts`) nor a scroll-paged read
+//   (`content/extraction/pagination.ts`) ever pressed it; `load-retry.ts` did
+//   not count a bare focusable span as pressable either. Fixed in t194-w30:
+//   both reads press the list's own Retry, at most twice a read.
+// - The detected proposal plus the instruction's conditions reads exactly the
+//   answer, with or without a manual retry first: adverts out, the batch
+//   repeat once, "Results outside your search" left out, the current price and
+//   not the struck one. Since t194-w28 the detection names a card's lines by
+//   their own class, so an advert's title is read like a listing's; the read
+//   picks its columns from the values a model sees and leaves the adverts out
+//   by the column that reads "Sponsored" (`readFromProposal`).
 //
-// A row marked `test.fail` asserts the correct answer and fails for its named
-// gap; once the gap's fix lands it passes unexpectedly and the marker comes off.
+// No row is marked `test.fail`: every gap these rows named is fixed.
 
 import type { JsonObject } from "fluxiq/core";
 import {
@@ -181,12 +185,17 @@ function evidenceRuntime(harness: ContentHarness, dispatched: Dispatched[]) {
 }
 
 /**
- * The read a model writes from the detected structure and the instruction:
- * the four columns it asked for, under its own names, picked by the field's
- * place in the card (title third, place fourth, the price the detection marked
- * a currency amount on every card), "leave out sponsored posts" as a condition
- * the sponsored cards fail -- they carry no title in the listing's place -- and
- * "list each bike once" as a dedupe on the link.
+ * The read a model writes from the detected structure and the instruction,
+ * choosing only from what it is shown: the packet's labels, kinds and coverage,
+ * and the rows of one exploratory read of the handle. The four columns it asked
+ * for, under its own names: the price the detection marked a currency amount on
+ * every card (the struck "was" price is on some cards only), the link, and of
+ * the card's two other lines of text the one whose values name Kelford -- the
+ * place the instruction names -- as the location, the other as the title.
+ * "Leave out sponsored posts" is a condition over the column that reads
+ * "Sponsored" (`is: absent`), and "list each bike once" a dedupe on the link.
+ * Since t194-w28 an advert's title is read like a listing's, so a condition
+ * on the title being present would no longer leave the adverts out.
  */
 async function readFromProposal(harness: ContentHarness): Promise<{ packet: StructurePacket; request: WebAutomationExtractListRequest; reply: BrowserActionResult }> {
   const dispatched: Dispatched[] = [];
@@ -194,22 +203,40 @@ async function readFromProposal(harness: ContentHarness): Promise<{ packet: Stru
   const detected = await runtime.executeTool({ ...BASE, callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
   expect(detected.resultCode, JSON.stringify(detected.evidence)).toBe("web.structure.detected");
   const packet = detected.evidence as unknown as StructurePacket;
+  const shown = packet.fields.map((entry) => `${entry.label} | ${entry.kind} | ${entry.coverage}`);
+  // The packet shows class-hash labels and no value (D3), so before choosing a
+  // model reads the handle once with every detected column and looks at the rows.
+  const explored = await runtime.executeTool({
+    ...BASE,
+    callId: "call.explore",
+    toolId: WEB_LLM_RUN_NODE_TOOL_ID,
+    value: { node: EXTRACT_LIST_NODE, parameters: { extractList: { handle: packet.extraction } }, consequences: [] }
+  });
+  expect(explored.resultCode, JSON.stringify(explored.evidence).slice(0, 2_000)).toBe("web.inspect.succeeded");
+  const seen = (dispatched.filter((entry) => entry.actionType === "web.dom.extract_list").at(-1)?.reply.extracted ?? []) as Row[];
+  const values = (key: string): string[] => seen.map((row) => row[key]).filter((value): value is string => typeof value === "string");
   const field = (what: string, test: (field: StructurePacket["fields"][number]) => boolean): string => {
-    const found = packet.fields.find(test);
-    expect(found, `the detection proposes a ${what} column: ${packet.fields.map((entry) => `${entry.label} (${entry.coverage})`).join(" | ")}`).toBeTruthy();
-    return found?.key ?? "";
+    const found = packet.fields.filter(test);
+    expect(found.length, `the detection proposes one ${what} column: ${shown.join(" || ")}`).toBe(1);
+    return found[0]?.key ?? "";
   };
+  // The card's own lines of text, on every card, that are not the price.
+  const lines = (entry: StructurePacket["fields"][number]): boolean => entry.kind === "text" && entry.coverage === 1 && !entry.label.endsWith("(currency amount)");
+  // The place the instruction names, Kelford, is what the location values name.
+  const namesKelford = (key: string): boolean => values(key).some((value) => /\bkelford\b/iu.test(value));
   const fields = {
-    title: field("title", (entry) => / > div:3 > span\./u.test(entry.label) && entry.coverage < 1 && entry.coverage > 0.5),
+    title: field("title", (entry) => lines(entry) && !namesKelford(entry.key)),
     price: field("price", (entry) => entry.label.endsWith("(currency amount)") && entry.coverage === 1),
-    location: field("location", (entry) => / > div:4 > span\./u.test(entry.label) && entry.coverage > 0.5),
+    location: field("location", (entry) => lines(entry) && namesKelford(entry.key)),
     url: field("url", (entry) => entry.kind === "link")
   };
+  // "Leave out sponsored posts": the column that reads "Sponsored" on the cards that are.
+  const sponsored = field("sponsored mark", (entry) => values(entry.key).includes("Sponsored"));
   const read = await runtime.executeTool({
     ...BASE,
     callId: "call.read",
     toolId: WEB_LLM_RUN_NODE_TOOL_ID,
-    value: { node: EXTRACT_LIST_NODE, parameters: { extractList: { handle: packet.extraction, fields, where: [{ field: "title", is: "present" }], dedupe: { by: ["url"] } } }, consequences: [] }
+    value: { node: EXTRACT_LIST_NODE, parameters: { extractList: { handle: packet.extraction, fields, where: [{ field: sponsored, is: "absent" }], dedupe: { by: ["url"] } } }, consequences: [] }
   });
   expect(read.resultCode, JSON.stringify(read.evidence).slice(0, 2_000)).toBe("web.inspect.succeeded");
   const sent = dispatched.filter((entry) => entry.actionType === "web.dom.extract_list").at(-1);
@@ -225,13 +252,12 @@ function withPaths(rows: readonly Row[], origin: string): Row[] {
 test.describe.configure({ timeout: 180_000 });
 
 test("the radius chip inside the picker's shadow root opens with one click", async ({ openHarness }) => {
-  test.fail(true, "GAP 1: the ignored-press watch cannot see a change inside a shadow root and presses again (content/action-runtime/ignored-press/page-press-listener.ts:94)");
   const harness = await openHarness("local-classifieds");
   await openBicycles(harness);
   const reply = await act(harness, "Kelford · Within 20 mi", "web.dom.click");
-  // GAP 1: the press opens the panel; the ignored-press watch sees no change
-  // because the change is inside the widget's shadow root, and presses again,
-  // which closes it. The result says "pressed once more".
+  // GAP 1 (fixed in t194-w31): the press opens the panel inside the widget's
+  // shadow root; the ignored-press watch now observes the shadow roots in the
+  // press's scope, sees the change, and does not press again to close it.
   expect(JSON.stringify(reply.validation), "the click was made once").not.toContain("pressed once more");
   expect(await pickerOpen(harness), "the radius panel is open after one click").toBe(true);
 });
@@ -246,18 +272,16 @@ test("the product's own actions walk the chain to the filtered, cheapest-first r
 });
 
 test("a literal read of the results returns the twelve bikes", async ({ openHarness }) => {
-  test.fail(true, "GAP 2: no read presses the failed batch's bare-span Try again (content/extraction/list-wait.ts:109-119, load-retry.ts:37)");
   const harness = await openHarness("local-classifieds");
   await searchBikes(harness);
   const reply = await harness.runAction({ commandId: "bike-search.literal", actionType: "web.dom.extract_list", timeoutMs: 60_000, extractList: LITERAL_READ });
   expect(reply.status, JSON.stringify(reply.validation)).toBe("succeeded");
-  // GAP 2: the third batch fails once and waits on a bare-span "Try again"
-  // that the read's reveal never presses, so the read ends at 9 rows.
+  // GAP 2 (fixed): the third batch fails once and waits on a bare-span "Try
+  // again", which the read's reveal now presses.
   expect(reply.extracted, `read ${reply.extraction?.recordCount} rows; "Try again" on the page: ${await harness.page.getByText("Try again").count()}`).toEqual(bikeRecords());
 });
 
 test("a literal read that pages by scrolling returns the twelve bikes", async ({ openHarness }) => {
-  test.fail(true, "GAP 2: scrollForMore stops scrolled_to_end at the failed batch (content/extraction/pagination.ts:448-461)");
   const harness = await openHarness("local-classifieds");
   await searchBikes(harness);
   const reply = await harness.runAction({
@@ -267,12 +291,11 @@ test("a literal read that pages by scrolling returns the twelve bikes", async ({
     extractList: { ...LITERAL_READ, paginate: { mode: "scroll", maxScrolls: 10 } }
   });
   expect(reply.status, JSON.stringify(reply.validation)).toBe("succeeded");
-  // GAP 2, scroll mode: `scrollForMore` stops as `scrolled_to_end` at the failed batch.
+  // GAP 2 (fixed), scroll mode: `scrollForMore` presses the failed batch's Try again rather than stopping `scrolled_to_end`.
   expect(reply.extracted, `read ${reply.extraction?.recordCount} rows, stop ${reply.extraction?.paginationStop}`).toEqual(bikeRecords());
 });
 
 test("the detected proposal and the instruction's conditions read the twelve bikes through the evidence runtime", async ({ openHarness }) => {
-  test.fail(true, "GAP 2: the one-page reveal stops at the failed batch (content/extraction/list-wait.ts:109-119)");
   const harness = await openHarness("local-classifieds");
   await searchBikes(harness);
   const { packet, request, reply } = await readFromProposal(harness);
@@ -282,7 +305,7 @@ test("the detected proposal and the instruction's conditions read the twelve bik
   expect(request.item, "the proposed item is in the first grid, the real results").toMatch(/^main > section > div:nth-of-type\(1\) > /u);
   expect(request.paginate).toBeUndefined();
   expect(reply.status, JSON.stringify(reply.validation)).toBe("succeeded");
-  // GAP 2 again: the one-page reveal stops at the failed batch.
+  // GAP 2 (fixed in t194-w30): the one-page reveal presses the failed batch's Try again.
   expect(withPaths((reply.extracted ?? []) as Row[], harness.lab.origin), `read ${reply.extraction?.recordCount} rows`).toEqual(bikeRecords());
 });
 

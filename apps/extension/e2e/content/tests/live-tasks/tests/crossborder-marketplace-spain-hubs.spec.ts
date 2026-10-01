@@ -20,10 +20,12 @@
 // column is chosen by the values a read showed, which is all a model has to go
 // on: the packet labels are paths through hashed class names (D3).
 //
-// A row marked `test.fail` asserts the correct answer and fails for its named
-// gap; once the gap's fix lands it passes unexpectedly and the marker comes off.
-// Rows that fail here fail for a product cause, named in the assertion and in
-// `docs/working/language-driven-flow-loop-plan/reports/t194-w26-spain-hubs-fixture.md`.
+// The gaps these rows traced (`docs/working/language-driven-flow-loop-plan/reports/
+// t194-w26-spain-hubs-fixture.md`) are fixed, and no row is marked `test.fail`:
+// G1 (the price drawn in sibling spans) and G2 (field paths by position) by
+// t194-w28, G3 (a detection while the results are skeletons) and G4 (the
+// numbered pager) by t194-w29, G5 (the page control picked by position) by
+// t194-w30. An assertion still names its gap, so a regression says which.
 //
 // What the harness cannot show: a list read that follows a pager link loads a
 // new document and the page script answering the harness dies with it. The
@@ -340,7 +342,6 @@ test.describe("crossborder-marketplace-spain-hubs, the site's own filters", () =
   });
 
   test("a detection made the moment the narrowed results load names the results, not the sidebar", async ({ openHarness }) => {
-    test.fail(true, "G3: a detection within 600 ms of load names the sidebar's filter groups (content/extraction/detect-structure.ts:118-120)");
     test.setTimeout(180_000);
     const harness = await openHarness(SCENARIO);
     await walkFilteredRoute(harness);
@@ -388,7 +389,6 @@ test.describe("crossborder-marketplace-spain-hubs, the site's own filters", () =
   });
 
   test("the four-column answer equals spainHubRecords(): the price as the results write it (16,49 €)", async ({ openHarness }) => {
-    test.fail(true, "G1: the price is drawn in four sibling spans and no detected column holds it whole (content/extraction/infer-fields.ts:385)");
     test.setTimeout(180_000);
     const harness = await openHarness(SCENARIO);
     await walkFilteredRoute(harness);
@@ -451,7 +451,6 @@ test.describe("crossborder-marketplace-spain-hubs, every page of the unfiltered 
   });
 
   test("the detection proposes the numbered pager (links 1-3), not the dead Next div", async ({ openHarness }) => {
-    test.fail(true, "G4: the numbered pager is not detected (content/extraction/detect-pagination.ts:98,110-123; item-selector.ts:90)");
     test.setTimeout(180_000);
     const harness = await openHarness(SCENARIO);
     await arriveAndSearch(harness);
@@ -462,7 +461,6 @@ test.describe("crossborder-marketplace-spain-hubs, every page of the unfiltered 
   });
 
   test("named as a fixed detection would name it, the pager is read across three documents, the person passing the traffic screen, each of the thirteen once", async ({ openHarness }) => {
-    test.fail(true, "G5: with no aria-current the page control is picked by position, and from page 2 Previous shares the number links' class (content/extraction/pagination.ts:525-527)");
     test.setTimeout(240_000);
     const harness = await openHarness(SCENARIO);
     const checkpoints = await catchCheckpoints(harness.page);
@@ -491,7 +489,6 @@ test.describe("crossborder-marketplace-spain-hubs, every page of the unfiltered 
 
 test.describe("crossborder-marketplace-spain-hubs-list-layout, the Flow built on the grid read on the list", () => {
   test("the literal request the grid build saved reads the thirteen on the list layout armed after the build", async ({ openHarness }) => {
-    test.fail(true, "G2: detected field paths are anchored through the card body by position (content/extraction/infer-fields.ts:486-566)");
     test.setTimeout(240_000);
     const harness = await openHarness(SCENARIO);
     await walkFilteredRoute(harness);
@@ -500,14 +497,16 @@ test.describe("crossborder-marketplace-spain-hubs-list-layout, the Flow built on
     const packet = await detect(read);
     const rows = await readEveryColumn(read, packet);
     const keys = instructionColumns(rows, packet);
+    const price = priceColumn(rows, packet);
+    expect(price.asWritten, "one detected column holds the price as the card writes it (G1)").toBe(true);
     const saved = await readList(read, {
       handle: packet.extraction,
-      fields: { title: keys.title, store: keys.store, rating: keys.rating },
+      fields: { title: keys.title, store: keys.store, price: price.key!, rating: keys.rating },
       where: [{ field: keys.ad, is: "absent" }, { field: "rating", atLeast: 4.5 }],
       paginate: false,
       minItems: 13
     });
-    expect(answer(saved.rows), "the grid build reads the thirteen").toEqual(expectedWithout("price"));
+    expect(answer(saved.rows), "the grid build reads the thirteen").toEqual(EXPECTED);
 
     // The variant is armed after the build (`live-tasks.ts:51`), which starts
     // the visit over; playback walks the same nodes and replays the saved
@@ -523,49 +522,43 @@ test.describe("crossborder-marketplace-spain-hubs-list-layout, the Flow built on
     await walkFilteredRoute(harness);
     const replay = await run(harness, { actionType: "web.dom.extract_list", timeoutMs: 30_000, extractList: saved.request }, "replay");
     expect(replay.status, `GAP G2 if failed: ${JSON.stringify(replay.validation)}`).toBe("succeeded");
-    expect(answer((replay.extracted ?? []) as Row[]), "GAP G2: the saved field paths name the card's children by their place under the card body (infer-fields.ts:516-566), and the list layout moves price and store into an aside and the rating row up a place").toEqual(expectedWithout("price"));
+    // The list layout moves the price and the store into an aside and the
+    // rating row up a place; the saved fields name each by its own class.
+    expect(answer((replay.extracted ?? []) as Row[]), "GAP G2: the saved field selectors name the card's children by their place under the card body (infer-fields.ts selectorWithinItem)").toEqual(EXPECTED);
   });
 
-  test("fix proof (G1+G2): fields named by the element's own class anywhere in the card read all four columns on the grid and on the list layout", async ({ openHarness }) => {
-    test.setTimeout(240_000);
+  test("the detection names the price by the element that draws it whole, and every column by its own class anywhere in the card (G1+G2)", async ({ openHarness }) => {
+    test.setTimeout(180_000);
     const harness = await openHarness(SCENARIO);
     await walkFilteredRoute(harness);
     await firstCardsDrawn(harness.page);
-    // What detection would emit with both fixes: the price div whose four
-    // spans together state a currency amount (G1), and every field anchored by
-    // the one element in the card that carries its class rather than by its
-    // path under the card body (G2). The class names are the build's own; the
-    // item selector is the one the grid build detected.
+    // What the two rows above prove by reading, said of the detection itself:
+    // the price is the div whose four spans together state it (G1), and each
+    // column is read by the one element in the card that carries its class,
+    // not by its place under the card body (G2). The class names are the
+    // build's own, and the labels a model is shown are still paths.
     const c = marketClasses(MARKET_SEED, "baseline");
     const read = reader(harness, []);
-    await detect(read);
-    const detectedItem = (read.dispatched.find((entry) => entry.reply.structure !== undefined)?.reply.structure as { proposal: { item: string } }).proposal.item;
-    const request: WebAutomationExtractListRequest = {
-      item: detectedItem,
-      fields: {
-        title: { kind: "text", selector: `:scope div.${c.cardTitle}`, required: true },
-        store: { kind: "text", selector: `:scope div.${c.storeName}`, required: true },
-        price: { kind: "text", selector: `:scope div.${c.price}`, required: true },
-        rating: { kind: "text", selector: `:scope span.${c.ratingValue}`, required: false }
-      },
-      where: [{ read: { kind: "text", selector: `:scope span.${c.adTag}` }, is: "absent" }, { field: "rating", atLeast: 4.5 }],
-      minItems: 13
-    };
-    const onGrid = await run(harness, { actionType: "web.dom.extract_list", timeoutMs: 30_000, extractList: request }, "grid");
-    expect(onGrid.status, JSON.stringify(onGrid.validation)).toBe("succeeded");
-    expect(answer((onGrid.extracted ?? []) as Row[]), "the grid").toEqual(EXPECTED);
-
-    const armed = await fetch(`${harness.lab.origin}/api/${SCENARIO}/set-mode`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${harness.lab.runToken}`, "content-type": "application/json" },
-      body: JSON.stringify({ mode: "list-layout" })
+    const packet = await detect(read);
+    const rows = await readEveryColumn(read, packet);
+    const keys = instructionColumns(rows, packet);
+    const price = priceColumn(rows, packet);
+    expect(price.asWritten, "one detected column holds the price as the card writes it").toBe(true);
+    const detected = (read.dispatched.find((entry) => entry.reply.structure !== undefined)?.reply.structure as { proposal: { fields: Array<{ key: string; label: string; spec: { selector?: string } }> } }).proposal.fields;
+    const field = (key: string) => detected.find((candidate) => candidate.key === key);
+    expect({
+      title: field(keys.title)?.spec.selector,
+      store: field(keys.store)?.spec.selector,
+      price: field(price.key!)?.spec.selector,
+      rating: field(keys.rating)?.spec.selector,
+      ad: field(keys.ad)?.spec.selector
+    }).toEqual({
+      title: `:scope div.${c.cardTitle}`,
+      store: `:scope div.${c.storeName}`,
+      price: `:scope div.${c.price}`,
+      rating: `:scope span.${c.ratingValue}`,
+      ad: `:scope span.${c.adTag}`
     });
-    expect(armed.ok).toBe(true);
-    await harness.page.goto(harness.url);
-    await contentReady(harness.page);
-    await walkFilteredRoute(harness);
-    const onList = await run(harness, { actionType: "web.dom.extract_list", timeoutMs: 30_000, extractList: request }, "list");
-    expect(onList.status, JSON.stringify(onList.validation)).toBe("succeeded");
-    expect(answer((onList.extracted ?? []) as Row[]), "the list layout").toEqual(EXPECTED);
+    expect(field(price.key!)?.label, "the price column says what it holds").toMatch(/ > div\.[\w-]+ \(currency amount\)$/u);
   });
 });

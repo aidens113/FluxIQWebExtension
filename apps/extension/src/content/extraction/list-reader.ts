@@ -318,7 +318,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     pagesRead: resume?.pagesRead ?? 0,
     scrolls: resume?.scrolls ?? 0,
     deadline: deadlineFor(options.timeoutMs),
-    hasUnreadItem
+    hasUnreadItem,
+    listRetries: { pressed: 0 }
   };
   const checkpoint = options.checkpoint;
   // What the read has spent on refused pages, carried across documents, and the
@@ -502,7 +503,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       // without scrolling the page a person is looking at.
       // Nor can a read that dedupes or sorts: a duplicate takes no place under
       // the bound, and a sort has to see every row.
-      revealCutShort = await awaitListComplete(item, rejects || order ? Number.MAX_SAFE_INTEGER : maxItems, progress.deadline) === "timed_out";
+      revealCutShort = await awaitListComplete(item, rejects || order ? Number.MAX_SAFE_INTEGER : maxItems, progress.deadline, progress.listRetries) === "timed_out";
       if (required > 1) {
         // Two waits on one page, reported as one: the second's answer, and both
         // their time, so the account's `waitedMs` is what the read actually
@@ -519,7 +520,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     // whole of its page before it is read, bounded as the read of one page is.
     if (pageByPage) {
       const want = { everything: rejects !== undefined || order !== undefined, records: readBound - records.length, taken: (element: Element) => read.has(element) };
-      revealCutShort = await awaitPageComplete(item, want, progress.deadline) === "timed_out";
+      revealCutShort = await awaitPageComplete(item, want, progress.deadline, progress.listRetries) === "timed_out";
     }
     const shown = Array.from(document.querySelectorAll(item));
     // A list no wait saw but the read does -- a later page's, or one drawn between the two -- still appeared.
@@ -622,15 +623,15 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       if (truncated && paginate) paginationStop = "item_limit";
       break;
     }
-    // A page reached by a control that shows only what earlier pages showed is
-    // not a next page: it is the same one again, which is what a Next that
-    // leads back to its own page loads. Following it again would read it again,
-    // up to the page bound, so the read ends here and says why.
+    // A page a control reached that shows only what earlier pages showed is the
+    // same page again, as a Next leading back to its own page loads: the read
+    // ends here, cut short where the pager showed a later one (`pagination.ts`).
     if (shownOnEarlierPages) {
       const repeated = progress.pagesRead > 1 && shownThisPage.length > 0 && shownThisPage.every((content) => shownOnEarlierPages.has(content));
       for (const content of shownThisPage) shownOnEarlierPages.add(content);
       if (repeated) {
         paginationStop = "page_repeated";
+        truncated = progress.laterPageShown === true;
         break;
       }
     }

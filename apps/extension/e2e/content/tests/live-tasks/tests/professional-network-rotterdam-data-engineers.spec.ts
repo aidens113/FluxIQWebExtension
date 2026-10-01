@@ -16,6 +16,11 @@
 // script the harness talks to, so its reply can be lost: `actAndLoad` says
 // when it was, and waits for the content script to announce itself in the new
 // document (the harness's init script re-injects it into every document).
+//
+// The two gaps these rows traced (report `t194-w27-rotterdam-fixture.md`) are
+// fixed, and no row is marked `test.fail`: G1, a script Next that leads back to
+// its own page, is swapped for the pager's next number (t194-w30); G2, a plan's
+// page bound dropped when its mode is not the detected one, is kept (t194-w32).
 
 import type { Page } from "@playwright/test";
 import type { JsonObject, JsonValue } from "fluxiq/core";
@@ -343,7 +348,6 @@ test.describe("professional-network: what the page proposes for the people resul
     // followNext swaps a Next for the pager's following number only when the
     // Next is a link to this very page (pagination.ts:376), so page 3 is never
     // reached. Flips to passing when that is fixed.
-    test.fail(true, "G1: a script Next that leads back to its own page is followed (pagination.ts:376)");
     test.setTimeout(240_000);
     const harness = await openHarness("professional-network");
     const result = await readFromProposal(harness, { maxPages: 5 });
@@ -352,12 +356,12 @@ test.describe("professional-network: what the page proposes for the people resul
   });
 
   test("a plan that names the numbered pager it sees keeps the page bound it asked for", async ({ openHarness }) => {
-    // Gap G2, observed 2026-10-01: the resolved request carries maxPages 1 and
-    // the read returns page 1 alone, truncated. A plan whose paginate names a
-    // mode other than the detected one keeps the detected bound
-    // (plan-resolution/extraction/slot.ts:216-217), and the detected bound is
-    // now always 1 (detect-pagination.ts:84). Flips to passing when fixed.
-    test.fail(true, "G2: a plan's maxPages is dropped when its mode is not the detected one (slot.ts:216-217)");
+    // Gap G2, observed and fixed 2026-10-01 (t194-w32): the resolved request
+    // carried maxPages 1 and the read returned page 1 alone, truncated. A plan
+    // whose paginate named a mode other than the detected one kept the
+    // detected bound, which is always 1 (detect-pagination.ts:84); the plan's
+    // own bound now holds whatever its mode (plan-resolution/extraction/slot.ts,
+    // keptPagination).
     test.setTimeout(240_000);
     const harness = await openHarness("professional-network");
     const result = await readFromProposal(harness, { mode: "numbered", maxPages: 5 });
