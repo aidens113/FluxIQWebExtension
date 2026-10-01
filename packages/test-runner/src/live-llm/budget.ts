@@ -23,14 +23,14 @@ export function liveLlmBudgetBreaches(plan: LiveLlmPlan, usage: LiveLlmObservedU
   const breaches: string[] = [];
   if (usage.calls > calls) breaches.push(`the run made ${usage.calls} provider call(s) against an authorized ${calls}`);
   if (usage.calls > declared.maxCallsPerRun) breaches.push(`the run made ${usage.calls} provider call(s) against --llm-max-calls ${declared.maxCallsPerRun}`);
-  // The run's spend ceiling, saved as the Flow's `maxEstimatedCostUsdPerRun`:
-  // the per-call limit across the authorized calls, held to Core's $0.25.
-  // Multiplying the operator's per-call cap by a large call count would give a
-  // number no run is allowed to reach. It is judged per phase, never summed:
-  // `settleBuild` holds a build's own usage to it and `settleRepair` the
-  // repair run's own, so each is allowed the whole ceiling.
+  // The build's spend ceiling, saved as the Flow's `maxEstimatedCostUsdPerRun`:
+  // `--llm-max-cost-usd`, held to Core's per-build ceiling, for the whole
+  // build whatever its call count -- never a per-call figure multiplied by
+  // the calls. It is judged per phase, never summed: `settleBuild` holds a
+  // build's own usage to it and `settleRepair` the repair run's own, so each
+  // is allowed the whole ceiling, as Core allows each.
   if (usage.totalEstimatedCostUsd > plan.maxTotalEstimatedCostUsd) {
-    breaches.push(`the run's estimated cost ${usage.totalEstimatedCostUsd} exceeded its total cost limit of ${plan.maxTotalEstimatedCostUsd} (--llm-max-cost-usd ${declared.maxEstimatedCostUsd} across ${calls} authorized call(s), held to Core's ceiling)`);
+    breaches.push(`the build's estimated cost ${usage.totalEstimatedCostUsd} exceeded its per-build cost ceiling of ${plan.maxTotalEstimatedCostUsd} (--llm-max-cost-usd ${declared.maxEstimatedCostUsd}, held to Core's per-build ceiling)`);
   }
   const accounting = usage.accounting;
   if (accounting) {

@@ -49,7 +49,7 @@ test("a campaign runs tasks one at a time, retries only RAM faults, and writes i
   assert.equal(summary.tasks[2].failureCategory, "ram-fault: segmentation fault");
   assert.equal(summary.tasks[3].failureCategory, "environment.missing");
   assert.equal(summary.tasks[3].runnerMessage, "Unknown option --instruction-task");
-  assert.deepEqual(summary.totals, { tasks: 4, passed: 1, succeeded: 1, failed: 1, stoppedForPermission: 0, noResult: 2, judgementsPassed: 1, built: 0, permissionRequired: 0, providerCalls: 2, reportedTokens: 15, reportedCostUsd: 0.75 });
+  assert.deepEqual(summary.totals, { tasks: 4, passed: 1, succeeded: 1, failed: 1, stoppedForPermission: 0, noResult: 2, judgementsPassed: 1, built: 0, permissionRequired: 0, providerCalls: 2, reportedTokens: 15, reportedCostUsd: 0.75, buildsOverCeiling: 0 });
   assert.ok(summary.finishedAt);
   assert.ok(lines.some((line) => line.includes("retrying")) && lines.some((line) => line.includes("no attempts left")));
 

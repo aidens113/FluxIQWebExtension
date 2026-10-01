@@ -27,6 +27,10 @@ test("each repair task becomes one adapt run of the recorded Flow, with the live
   // `performance.budget` after the money is spent. An operator may still give one.
   assert.equal(overridden.includes("--llm-max-run-tokens"), false);
   assert.equal(labRunArguments(CATALOG[0], parseCampaignArgs([])).includes("--llm-max-run-tokens"), false);
+  // Nor a cost: the per-build ceiling has one definition, Core's, which the
+  // Lab's plan applies to the whole build. A copied "0.25" here could only drift.
+  assert.equal(labRunArguments(CATALOG[0], parseCampaignArgs([])).includes("--llm-max-cost-usd"), false);
+  assert.equal(labRunArguments(REPAIRS[1], parseCampaignArgs([])).includes("--llm-max-cost-usd"), false);
   const operatorBudget = labRunArguments(REPAIRS[1], parseCampaignArgs(["--", "--llm-max-run-tokens", "5000000"]));
   assert.deepEqual(operatorBudget.slice(-2), ["--llm-max-run-tokens", "5000000"]);
   assert.equal(operatorBudget.filter((arg) => arg === "--llm-max-run-tokens").length, 1);

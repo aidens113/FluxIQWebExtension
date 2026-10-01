@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, LLM_LAB_SCHEMA_VERSION, llmActionConsequences, llmModels, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
-import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, LLM_LAB_MAX_ESTIMATED_COST_USD, LLM_LAB_SCHEMA_VERSION, llmActionConsequences, llmModels, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD } from "fluxiq/automation-studio";
+import { LIVE_LLM_BUILD_COST_CEILING_USD } from "../build-cost-ceiling.js";
 import type { PersistedFlowLlmExecution } from "../../flow-lane/index.js";
 import { planLiveLlmExecution, type LiveLlmPurpose } from "../live-llm-plan.js";
 
@@ -120,9 +121,9 @@ test("create-flow plans the web panel's iterating build_and_adapt, with the oper
   // ... while the operator's cost cap stays exactly theirs,
   const cheap = planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 48, maxEstimatedCostUsd: 0.01 }));
   assert.equal(cheap.maxEstimatedCostUsd, 0.01);
-  // held to Core's $0.25 across the whole build, and kept where it comes to less.
-  assert.equal(cheap.maxTotalEstimatedCostUsd, 0.25);
-  assert.equal(planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 20, maxEstimatedCostUsd: 0.01 })).maxTotalEstimatedCostUsd, 0.2);
+  // and it is the whole build's ceiling, never multiplied by the call count.
+  assert.equal(cheap.maxTotalEstimatedCostUsd, 0.01);
+  assert.equal(planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 20, maxEstimatedCostUsd: 0.01 })).maxTotalEstimatedCostUsd, 0.01);
   // ... a typed budget is still validated, and every other intent still honours it.
   assert.throws(() => planLiveLlmExecution(profile({ task: "create-flow" }, { maxTotalTokensPerRun: PER_REQUEST - 1 })), /--llm-max-run-tokens .* must be a whole number of at least/u);
   assert.equal(planLiveLlmExecution(profile({ task: "repair" }, { maxCallsPerRun: 48, maxTotalTokensPerRun: PER_REQUEST * 2 })).maxTotalTokensPerRun, PER_REQUEST * 2);
@@ -161,12 +162,38 @@ test("a cost cap of zero cannot authorize a live call", () => {
   assert.throws(() => planLiveLlmExecution(profile({}, { maxEstimatedCostUsd: 0 })), /cannot authorize a live provider call/u);
 });
 
-test("the run's spend ceiling is the per-call limit across the authorized calls, held to Core's $0.25", () => {
+test("--llm-max-cost-usd is the whole build's spend ceiling, held to Core's per-build ceiling", () => {
   assert.equal(planLiveLlmExecution(profile()).maxTotalEstimatedCostUsd, 0.25);
   assert.equal(planLiveLlmExecution(profile({ task: "adapt" })).maxTotalEstimatedCostUsd, 0.25);
-  // Below the ceiling, the operator's smaller number is kept.
-  assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 4, maxEstimatedCostUsd: 0.05 })).maxTotalEstimatedCostUsd, 0.2);
+  // Below the ceiling, the operator's smaller number is the build's, not one call's.
+  assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 4, maxEstimatedCostUsd: 0.05 })).maxTotalEstimatedCostUsd, 0.05);
   assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 4, maxEstimatedCostUsd: 0.9 })).maxTotalEstimatedCostUsd, 0.25);
+});
+
+test("the per-build ceiling has one definition, Core's, and the Lab contract's bound is that number", () => {
+  assert.equal(LIVE_LLM_BUILD_COST_CEILING_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD);
+  assert.equal(LIVE_LLM_BUILD_COST_CEILING_USD, 0.25);
+  // The contract package depends only on Core's public contracts, so it bounds
+  // the typed option with a mirror; a mirror that drifted would let an operator
+  // type a number Core then refuses, or refuse one Core allows.
+  assert.equal(LLM_LAB_MAX_ESTIMATED_COST_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD);
+  assert.equal(DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD);
+});
+
+test("no campaign row can plan more than the per-build ceiling for one build, whatever its calls and cap", () => {
+  // The live campaign's own rows: create tasks run 48 calls, repair tasks 26,
+  // both at --llm-max-cost-usd 0.25. Every call count the contract allows is
+  // tried, with caps at, under and over the ceiling.
+  for (const task of ["create-flow", "repair", "adapt", "diagnose"] as const) {
+    for (let calls = 1; calls <= LLM_LAB_MAX_CALLS_PER_RUN; calls += 1) {
+      for (const cost of [0.001, 0.05, 0.25, 0.3, 2]) {
+        const plan = planLiveLlmExecution(profile({ task }, { maxCallsPerRun: calls, maxEstimatedCostUsd: cost }));
+        assert.ok(plan.maxTotalEstimatedCostUsd <= LIVE_LLM_BUILD_COST_CEILING_USD, `${task} x${calls} at ${cost}`);
+        assert.ok(plan.maxEstimatedCostUsd <= plan.maxTotalEstimatedCostUsd, `${task} x${calls} at ${cost}: one call may not outspend its build`);
+        assert.equal(plan.maxTotalEstimatedCostUsd, Math.min(cost, LIVE_LLM_BUILD_COST_CEILING_USD), `${task} x${calls} at ${cost}: never scaled by the call count`);
+      }
+    }
+  }
 });
 
 test("a build of 64 calls at $0.25 each is allowed $0.25 in all, Core's ceiling, not 64 times the per-call cap", () => {
