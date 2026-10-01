@@ -13,7 +13,11 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ## Current State
 
-**Handoff, 2026-09-30 late. Read this first.** Integration round 3 is merged and pushed (Core `37ff0989`, downstream
+**Update, 2026-09-30 night.** t210 rounds 1-2 are merged to dev (Core `e5b8f015`, downstream `58ed498b`); round 3 and
+t215 are running with workers; live leads go out from the live briefs once the lane trees are fast-forwarded. See the
+ledger's "2026-09-30 night" entry.
+
+**Handoff, 2026-09-30 late.** Integration round 3 is merged and pushed (Core `37ff0989`, downstream
 `4586c957`). Labs are still stopped: no live run until t210 is merged (it removes the last caps, including the navigation
 memory that could refuse a shown link); then supervised live runs resume from
 [reports/supervisor-2026-09-30-live-briefs.md](./language-driven-flow-loop-plan/reports/supervisor-2026-09-30-live-briefs.md)
@@ -723,6 +727,25 @@ debug and partitioned so neither touches the other's files:
 - Validation: `node scripts/structure-audit.mjs` -> `structure-audit: passed` after `pnpm structure:baseline` (documents
   only; no code changed since the round-3 validation recorded above).
 - Outcome: Handed off. Pass streak 0.
+
+### 2026-09-30 night — t210 rounds 1-2 merged; round 3 and t215 resumed; Codex t216-t220 running
+- Agent: supervisor; workers for t210 round 3 and t215 dispatched in their own worktrees. Seventeen orphaned
+  monitor processes from dead sessions were killed (one, a `ui.sh` holder, kept a UI slot); no Lab was running.
+- Changed: t210's staged Core dev merge committed on its branch (`c070c94b`) after the supervisor isolated it from the
+  unfinished round 3 (round-3 files copied aside, checks run, files restored). Merged to dev: Core `e5b8f015`, downstream
+  `58ed498b`. Core libraries rebuilt (the downstream gate refused the stale dist, as designed).
+- Validation: supervisor-run. At `c070c94b` `npx tsc --noEmit -p .` exit 0 (the cached `pnpm check` only restored a
+  stamp); `pnpm docs:check` -> "structure-audit: passed" and "Deterministic framework reference is current."; vitest
+  conversations + exploration `Tests 85 passed (85)`. On merged dev: Core automation-studio vitest `32 failed | 4621
+  passed | 6 skipped`, all 32 "Test timed out in 15000ms" under four concurrent suites; the 24 files re-run with
+  `--testTimeout=120000` -> `Tests 129 passed (129)`, so no hang and no assertion failure (t215 owns the speed); web check
+  EXIT=0; downstream `pnpm check` EXIT=0; extension `# pass 1673 # fail 0`; domain `# pass 1061 # fail 0`; test-contracts
+  156/0; scenario-lab `# pass 614 # fail 6`, the six being `everything-store/tests/naive-paths` which sat idle 25 min (0
+  CPU, 12 fixture servers listening) and was killed; alone it passes `# pass 6 # fail 0` in 36 s. scenario-lab depends
+  only on test-contracts and Playwright, which t210 does not touch: a pre-existing intermittent wait without a timeout.
+- Outcome: pushed as below. Open defect: the naive-paths idle hang. Not done: workers committing to their own task
+  branch — the brain's `worker-git-guard` change was refused by the permission classifier as self-modification; left for
+  the user. Pass streak 0.
 
 ## Open Questions
 
