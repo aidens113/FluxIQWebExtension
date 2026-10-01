@@ -93,3 +93,49 @@ test("the request is empty or names one selector, and nothing else", () => {
     assert.equal(webAutomationStructureDetectionRequestValue(value), undefined, JSON.stringify(value));
   }
 });
+
+// The one record around the request's element, sent beside the run when the
+// element sits outside every item of it: the photo-social reply card beside
+// the inbox's thread rows (moon-jar audit cause 1).
+
+function replyCard(): Record<string, any> {
+  return {
+    container: "section.conversation > div > a.card2",
+    item: "section.conversation > div > a.card2 > div",
+    itemCount: 1,
+    fields: [
+      { key: "span", label: "span", spec: { kind: "text", selector: ":scope > span", required: true }, coverage: 1 },
+      { key: "span_2", label: "span (currency amount)", spec: { kind: "text", selector: ":scope > span:nth-of-type(2)", required: true }, coverage: 1 },
+      { key: "span_meta", label: "span.meta", spec: { kind: "text", selector: ":scope > span.meta", required: true }, coverage: 1 }
+    ],
+    confidence: 0.38
+  };
+}
+
+test("a record beside the run is copied with it, field by field, and leaves its page text behind", () => {
+  const withRecord = { ...detection(), record: replyCard() };
+  assert.deepEqual(webAutomationStructureDetectionValue(withRecord), withRecord);
+  const feed: Record<string, any> = { ...detection(), infiniteScroll: true, record: replyCard() };
+  delete feed.proposal.pagination;
+  assert.deepEqual(webAutomationStructureDetectionValue(feed), feed);
+  const noisy = { ...detection(), record: { ...replyCard(), sample: "€68.00" } };
+  const copied = webAutomationStructureDetectionValue(noisy);
+  assert.deepEqual(copied, { ...detection(), record: replyCard() });
+  assert.equal(JSON.stringify(copied).includes("€68.00"), false);
+});
+
+test("a record that is several items, or not a well-formed proposal, refuses the detection whole", () => {
+  const broken: Array<[string, (record: Record<string, any>) => void]> = [
+    ["a record of three items", (record) => { record.itemCount = 3; }],
+    ["a record of none", (record) => { record.itemCount = 0; }],
+    ["a record with no fields", (record) => { record.fields = []; }],
+    ["a record with no container", (record) => { record.container = ""; }],
+    ["a record with an element fingerprint", (record) => { record.fields[0].spec.element = { tagName: "span", text: "€68.00" }; }]
+  ];
+  for (const [why, damage] of broken) {
+    const record = replyCard();
+    damage(record);
+    assert.equal(webAutomationStructureDetectionValue({ ...detection(), record }), undefined, why);
+  }
+  assert.equal(webAutomationStructureDetectionValue({ ...detection(), record: "the card" }), undefined, "a record that is not an object");
+});

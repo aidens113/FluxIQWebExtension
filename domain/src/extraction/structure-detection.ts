@@ -55,9 +55,20 @@ export type WebAutomationStructureDetectionRefusal = (typeof WEB_AUTOMATION_STRU
  * picker leaves that to the person. It is set only when the page itself says
  * the list is a feed -- the ARIA feed pattern -- and no pagination control was
  * found, so an ordinary list that happens to end is never reported as one.
+ *
+ * `record` is the one record the request's element belongs to, read as a run
+ * of one (`itemCount` 1), when that element sits outside every item of the
+ * proposal's run -- a product card in a message thread, past which the nearest
+ * list is the inbox's threads. It is sent beside the run and never instead of
+ * it; a page with no run at all answers that record as the proposal itself.
  */
 export type WebAutomationStructureDetection =
-  | { ok: true; proposal: WebAutomationExtractionProposal; infiniteScroll?: true | undefined }
+  | {
+      ok: true;
+      proposal: WebAutomationExtractionProposal;
+      infiniteScroll?: true | undefined;
+      record?: WebAutomationExtractionProposal | undefined;
+    }
   | { ok: false; refused: WebAutomationStructureDetectionRefusal };
 
 /** The request copied, or `undefined` when it is not one. A selector that is sent must be a non-empty string. */
@@ -86,7 +97,15 @@ export function webAutomationStructureDetectionValue(value: unknown): WebAutomat
   if (detection.infiniteScroll !== undefined && detection.infiniteScroll !== true) return undefined;
   const proposal = proposalValue(detection.proposal);
   if (!proposal) return undefined;
-  return detection.infiniteScroll === true ? { ok: true, proposal, infiniteScroll: true } : { ok: true, proposal };
+  const copied: Extract<WebAutomationStructureDetection, { ok: true }> = { ok: true, proposal };
+  if (detection.infiniteScroll === true) copied.infiniteScroll = true;
+  if (detection.record !== undefined) {
+    // One record: its run is one item, and a "record" of several is not one.
+    const record = proposalValue(detection.record);
+    if (!record || record.itemCount !== 1) return undefined;
+    copied.record = record;
+  }
+  return copied;
 }
 
 function proposalValue(value: unknown): WebAutomationExtractionProposal | undefined {

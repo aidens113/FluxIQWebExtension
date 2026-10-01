@@ -63,9 +63,13 @@ export const RECOVERY_INTERFERENCE_BACKOFF_MS: readonly number[] = Object.freeze
 /** The whole defence's wall-clock budget, measured from the command's start. */
 export const RECOVERY_BUDGET_MS = 5_000;
 
-/** The ladder a fault is waited on: the page's for a target, the dialog's for an obstruction, the short one for everything else. */
+/**
+ * The ladder a fault is waited on: the page's for a target, the dialog's for an obstruction, the short one for everything
+ * else. A control the page has disabled for a moment before anything was dispatched ("I'm a person" reads "Please wait N"
+ * for 3 s) waits on the page's ladder, as a target that has not appeared yet does.
+ */
 export function recoveryBackoffLadder(fault: RecoveryFault): readonly number[] {
-  if (fault === "target_absent") return RECOVERY_TARGET_BACKOFF_MS;
+  if (fault === "target_absent" || fault === "disabled_target") return RECOVERY_TARGET_BACKOFF_MS;
   if (faultNeedsInterference(fault)) return RECOVERY_INTERFERENCE_BACKOFF_MS;
   return RECOVERY_BLIP_BACKOFF_MS;
 }

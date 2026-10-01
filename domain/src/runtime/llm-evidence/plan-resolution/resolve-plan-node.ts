@@ -30,6 +30,10 @@
 //
 // A handle's element in a child frame also writes `browserFrameId`, and a node
 // that already names a different frame is refused rather than silently moved.
+// Beside it goes `browserFrameUrlPath`, the path of the frame's document when
+// the element was shown, which is what finds the frame again once the page has
+// been reloaded and the id names nothing (`target-packets.ts`); an extraction
+// handle's list carries both the same way (`extraction/slot.ts`).
 //
 // A resolved selector handle also writes `element`: who the element the model
 // was shown is, in the shape a recorded node carries it
@@ -76,7 +80,7 @@ import type { WebAutomationExtractListRequest } from "../../../actions/extractio
 import { webAutomationActionWaitsOutChecks, webAutomationCheckWaitNode } from "../../../actions/check-wait";
 import { webAutomationActionDefinitions } from "../../../actions/schemas";
 import type { WebAutomationActionType } from "../../../actions/types";
-import { webAutomationOutputNodeId } from "../../../output-nodes";
+import { webAutomationOutputNodeId, webAutomationUrlPath } from "../../../output-nodes";
 import { webLlmNameAssumptions, type WebLlmNameAssumption, type WebLlmNameAssumptionSaid } from "../name-assumption";
 import type { WebLlmExtractionHandles } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
@@ -323,7 +327,7 @@ function lowerCase(value: JsonValue | undefined): string | undefined {
 }
 
 type Scope = { projectId: string; flowId: string };
-type Resolved = { value: JsonValue; frameId: number | undefined; element: JsonObject | undefined };
+type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined };
 /** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control instead when one does. */
 type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath; fits?: WebPlanHandleIssueCode | undefined };
 type NodeOutcome =
@@ -412,7 +416,7 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
     if (extractionNode && key === "extractList") {
       const slot = resolveWebExtractionSlot(value, scope, stores.extractions);
       if (slot.status === "resolved") {
-        replaced.set(key, { value: slot.request, frameId: slot.frameId, element: undefined });
+        replaced.set(key, { value: slot.request, frameId: slot.frameId, frameUrlPath: slot.frameUrlPath, element: undefined });
         // The Flow keeps this request under the plan's keys, and a draft read
         // back out of it shows the model those keys (`own-extraction-list.ts`).
         stores.extractions.wrote(scope, slot.request as unknown as WebAutomationExtractListRequest, slot.frameId);
@@ -428,7 +432,7 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
       else {
         const frameId = declaredFrame(parameters.browserFrameId);
         const own = webPlanOwnExtractionList(value, frameId, scope, stores.extractions);
-        if (own !== undefined && own !== value) replaced.set(key, { value: own, frameId, element: undefined });
+        if (own !== undefined && own !== value) replaced.set(key, { value: own, frameId, frameUrlPath: undefined, element: undefined });
         else if (own === undefined && stores.extractions.issuedFor(scope)) refusals.push({ code: "web.handle.extraction_required", kind: "extraction", path: [key] });
       }
       continue;
@@ -478,7 +482,11 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
   if (element) resolved.selector = element.value;
   const identity = element?.element;
   if (identity !== undefined && ELEMENT_NODE_IDS.has(nodeDefinitionId)) resolved.element = identity;
-  if (frameId !== undefined && frameId !== 0) resolved.browserFrameId = frameId;
+  if (frameId !== undefined && frameId !== 0) {
+    resolved.browserFrameId = frameId;
+    const frameUrlPath = webAutomationUrlPath([...replaced.values()].find((entry) => entry.frameUrlPath !== undefined)?.frameUrlPath);
+    if (frameUrlPath !== undefined) resolved.browserFrameUrlPath = frameUrlPath;
+  }
   return { status: "resolved", parameters: resolved, assumed };
 }
 
@@ -531,7 +539,7 @@ function resolveTarget(value: Record<string, unknown>, scope: Scope, targets: We
   if (value.location !== undefined && (typeof value.location !== "string" || value.location === "")) return "web.handle.malformed";
   const resolution = targets.resolve(scope, canonicalWebLlmTargetHandle(value.handle) ?? value.handle, value.location as string | undefined);
   if (!resolution.ok) return TARGET_ISSUES[resolution.code];
-  return { value: resolution.selector, frameId: resolution.frameId, element: resolution.element as unknown as JsonObject };
+  return { value: resolution.selector, frameId: resolution.frameId, frameUrlPath: resolution.frameUrlPath, element: resolution.element as unknown as JsonObject };
 }
 
 /** A handle slot's value written as a handle: any object with a `handle` key. Its shape is judged by the slot. */

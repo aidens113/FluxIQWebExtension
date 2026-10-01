@@ -140,7 +140,7 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
 
   const report = deps.checkActionability(element);
   if (!report.actionable) {
-    return deps.rejected(action, startedAt, report.code, "a target that can be clicked", report.detail, { ...evidence(), blockedAt: report.point });
+    return deps.rejected(action, startedAt, report.code, "a target that can be clicked", report.detail, { ...evidence(), blockedAt: report.point, refusedBeforeDispatch: true });
   }
 
   const link = navigatingLink(element);
