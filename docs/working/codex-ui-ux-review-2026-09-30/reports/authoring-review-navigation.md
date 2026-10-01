@@ -1,5 +1,11 @@
 # Authoring review navigation
 
+## Supervisor broad-gate corrections (2026-10-01)
+
+Supervisor observed two strict exactOptionalPropertyTypes errors in FlowEditorView lines125/128: explicit undefined was passed to optional panel callbacks. Structure audit also observed the new connector test bypassing the views barrel. These are real worker validation gaps: the previously passing focused renderer tests did not check strict types or structure. Supervisor whole-web suite completed exit0,293files/1775tests,136.08s before releasing only these corrections; onboarding remains held.
+
+Corrected both panel JSX sites to omit onOpenAdaptation when absent, preserving the callback when provided, and changed the connector test to import the existing views barrel. No type configuration, baseline or assertions changed. Core workdir, heavy label `codex t224 authoring strict corrections`, exact four owning paths listed below: worker session8567 observed **exit0,4files/55tests passed,15.27s**. `git diff --check` observed exit0. Product sources/tests/report frozen after these three-line corrections; supervisor owns corrected types/build verification. No active worker command remains; onboarding remains held.
+
 Outcome: Complete including supervisor-requested scope-race follow-up; final source/tests/report frozen (2026-10-01). Supervisor owns independent review and broad gates.
 
 Ownership: only the assigned t224 Core Steps view/connector, blank/improve authoring panels and owning tests. No commits, live/provider calls or broad suites.

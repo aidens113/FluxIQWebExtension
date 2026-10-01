@@ -1,5 +1,7 @@
 # Problems query feedback
 
+Latest state: Supervisor released only the two fixture typing corrections after full Core suite63749 passed293files/1775tests. Those corrections are applied and frozen. Shared focused run90915 through heavy.sh `codex t224 fixture typing focused` exited0,6files/66tests,10.39s; all global/Problems behavioral and existing architecture/host/view/transport tests pass. Scoped diff check0. `body` now asserts mock-call presence before indexing; absent onListProblems is omitted instead of explicitly undefined. Expectations/typeconfig/product code unchanged. Full observed log `C:/Users/osrs_/AppData/Local/Temp/codex-t224-fixture-typing-focused.log`. Supervisor must rerun broad types/build; worker does not claim TypeScript success from Vitest. Source/test/report frozen again.
+
 Status: Complete and frozen for supervisor review; bounded continuation brief and Current State read.
 
 Owns only paired Core ProblemsView.tsx and problems/tests/problems-query-feedback.test.tsx, plus this report. No commits, broad suites, live/browser/panel/provider calls.
@@ -22,3 +24,7 @@ Observed final explicit Git Bash/heavy.sh label `codex t224 problems final focus
 Scoped `git diff --check` exit 0. The view remains below the 800-line file budget; no new exports or baseline changes. Query failure text is fixed and does not display raw server content. Local validation states and command/transport ownership remain intact. Only the assigned view, new owning test and this own report changed by this worker.
 
 Both source files and report frozen. Supervisor must independently review/verify and run coordinated broader web checks after other workers freeze; no broad suite/typecheck/build or browser/accessibility certification performed by this worker. No commits/push, runtime edits, panel/live/provider calls, shared-document edits or other-worktree changes.
+
+## Supervisor broad typecheck follow-up
+
+Root broad web typecheck caught exactOptionalPropertyTypes in the new missing-provider fixture: it passes onListProblems explicitly undefined. Product source remains frozen while root fullsuite63749 runs. Pending narrowly scoped fix: omit the optional property instead of explicitly supplying undefined; preserve missing-provider/malformed-response behavioral assertions. No typeconfig/assertion changes. Await explicit source release before editing or focused recheck. The prior focused30/30 pass is Vitest behavior, not a claim of broad TypeScript success.

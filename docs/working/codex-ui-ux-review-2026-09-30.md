@@ -459,6 +459,51 @@ The entries below describe the completed initial batch. Execution resumed on
 - Outcome: Complete for current-source audit and initial recovery/draft batch.
 - Follow-up: Claude integrates local checkpoints; queued phases/live validation remain separate.
 
+## Next bounded worker briefs
+
+### Extension navigation audit
+- Worker: wait_gaps; isolated t224 downstream checkout, read-only product scope.
+- Read Current State and locate panel project/category/automation navigation modules and owning tests with rg.
+- Inspect keyboard menus, focus persistence, asynchronous navigation and organization controls; record concrete source defects and exact minimal implementation paths/regressions.
+- Own report: reports/extension-navigation-audit.md; no shared document, product/test edits, heavy/live/provider calls or commits.
+- Extraction source remains frozen during supervisor broad checks. Claude boundaries unchanged.
+
+### Runtime workspace implementation (held until Core production build completes)
+- Worker: lab_bookkeeping; paired t224 Core only. Read Current State and reports/runtime-workspace-audit.md.
+- Own new live-views/runtime/{RuntimeLive.tsx,RuntimeInventory.tsx,RuntimeRunDetail.tsx,runtime-snapshot.ts,index.ts,tests/runtime-snapshot.test.ts,tests/RuntimeLive.test.tsx} and programs/ProgramLiveViews.tsx only.
+- Implement the report's read-only global inventory, client-side pages, safe field projection, honest snapshot/stale/retry feedback and lazy run detail with selection/scope/unmount fencing.
+- Existing public runtime read endpoints/types only. No backend, metadata, styles, runtime/storage/context-packet or shared docs changes. No raw payload display/log/persistence, execution controls, live/provider calls or commits.
+- Tests: malformed/omitted sensitive fields, latest-request wins, distinct client sessions, filters/pages/selection, detail mismatch/retry/races, read-only composition. Run focused via heavy slots then freeze; supervisor verifies broad gates.
+- Own report: reports/runtime-workspace-implementation.md; return exact files, observed checks, limitations and unresolved contract constraints.
+
+### 2026-10-01 - Corrected compile and independent extraction checks
+- Agent: supervisor
+- Changed: strict optional props/test fixture corrections reviewed; read-only Runtime and extension navigation work scoped.
+- Validation: corrected Core web typecheck73179 exit0 (13487ms); Core audit28482 exit1 only inherited service4506/4505, no new violation. Independent extraction30/30 native0,349.30ms from owning package; first wrong-cwd invocation found no test files and is not accepted test evidence.
+- Outcome: Partial; Core production build36344, extension check84206/full suite24092 active. All product source frozen during these gates.
+- Follow-up: release onboarding and Runtime workers only after Core build; preserve extraction freeze through remaining extension build/audit. Continue read-only investigations and durable checkpoints meanwhile.
+
+### Sensitive-store authorization supervisor scope
+- Own Core live-views/database-manager.tsx and live-views/tests/database-manager-authorization.test.tsx only, after current Core build finishes.
+- Reproduce duplicate authorization activation, deferred success after modal close/store change, refusal/rejection feedback and credential reuse between stores.
+- Add synchronous submission lock plus modal/store/API/unmount completion fencing; disable submitted fields, preserve retryable current credentials on refusal, clear them on close or scope change, and show a local fixed safe failure message.
+- Cancel remains available to dismiss the UI and discard late completion; it does not claim to revoke a server grant. Validate successful grant shape/expiry before accepting it.
+- Existing runtime/security/grant contracts unchanged; synthetic data only. Focused tests and strict typecheck first; broader gates after workers freeze.
+
+### 2026-10-01 - Core gates passed; next disjoint implementation released
+- Agent: supervisor
+- Changed: exact strict fixes checkpoint445e12d9; paired Core Current State updated; onboarding and Runtime implementation released, supervisor database authorization scope begins.
+- Validation: corrected production build36344 native0,17pages,120426ms; corrected types and only inherited structure failure recorded above. Worker corrected focused55/66 passed and diffs reviewed.
+- Outcome: Complete for second Core batch, Active for next roadmap phase. No merge/push; source mutations restricted to written disjoint briefs.
+- Follow-up: extension full suite24092/build44384/audit69034 remain active on frozen extraction source. Continue Core implementation and read-only extension navigation audit; broader Core checks after coordinated freeze.
+
+### 2026-10-01 - Extraction full gates and database reproduction
+- Agent: supervisor
+- Changed: extraction architecture/lifecycle evidence recorded; Database Manager focused auth fixes underway.
+- Validation: extension full24092 native0,1716/1716 tests,112847.14ms; check84206 native0,34506ms; Chrome/Firefox/e2e build44384 native0,22files each,14430ms. Audit69034 has only stale generated working index following current documentation changes; regenerate through owner and rerun. Database original corrected-harness reproduction6/6 failed native1; first harness-only StatusText window.dispatchEvent failure excluded from evidence.
+- Outcome: Extraction functional gates pass; final documentation audit/checkpoint pending. Database source corrections active alongside disjoint onboarding/Runtime workers.
+- Follow-up: preserve tested extraction source, regenerate index and audit, then checkpoint exact seven source/test files plus frozen reports. No live/browser claims or Claude source changes.
+
 ## Open Questions
 
 - Browser visual validation awaits authorization for panel/browser management.

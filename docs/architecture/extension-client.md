@@ -1610,6 +1610,23 @@ from every other action's in three ways:
   sends the node's 5,000 ms default as the command timeout, which would cut a
   paginated read short at its first page.
 
+### Extraction dialog lifecycle
+
+The extraction sheet temporarily mounts at the extension document root while
+open, isolating other extension controls and preserving their prior inert state.
+It restores its current host and a visible extension control on close. Focus
+handling stays inside the active extension document; selecting the browser page
+does not cancel a pick or pull focus back. Field redraws preserve the logical
+control and text selection where possible.
+
+Confirmation freezes editing until acknowledgement. Cancellation immediately
+clears preview values from memory and rendered cells, retaining a visible pending
+or retryable failure sheet until the background acknowledges it. Per-operation
+epochs reject obsolete mount, polling, preview and command completions. The
+background remains the session owner across Firefox popup recreation; polling
+and column privacy rules remain unchanged. Controlled DOM tests verify these
+transitions; live browser focus and assistive-technology behavior remain unverified.
+
 ## Default Endpoint
 
 The default development endpoints are:

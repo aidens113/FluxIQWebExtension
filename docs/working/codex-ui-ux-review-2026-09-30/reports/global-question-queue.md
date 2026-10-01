@@ -1,5 +1,7 @@
 # Global question queue
 
+Latest state: Supervisor released only the two fixture typing corrections after full Core suite63749 passed293files/1775tests. Those corrections are applied and frozen. Shared focused run90915 through heavy.sh `codex t224 fixture typing focused` exited0,6files/66tests,10.39s; all global/Problems behavioral and existing architecture/host/view/transport tests pass. Scoped diff check0. `body` now asserts mock-call presence before indexing; absent onListProblems is omitted instead of explicitly undefined. Expectations/typeconfig/product code unchanged. Full observed log `C:/Users/osrs_/AppData/Local/Temp/codex-t224-fixture-typing-focused.log`. Supervisor must rerun broad types/build; worker does not claim TypeScript success from Vitest. Source/test/report frozen again.
+
 Status: Complete and frozen after supervisor stale-handler follow-up; fresh narrow validation passed.
 
 Owns only Core app/GlobalConversationPrompt.tsx and new app/tests/GlobalConversationPrompt.test.tsx plus this report. Problems files remain frozen. No runtime/API edits, shared docs, commits, broad checks or live calls.
