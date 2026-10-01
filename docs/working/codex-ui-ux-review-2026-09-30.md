@@ -11,6 +11,19 @@ Related: [working document index](./README.md)
 
 ## Current State
 
+Latest continuation checkpoint (2026-10-01): Core onboarding1a5afc47, Runtime
+d011b0ae and sensitive-store authorizationd5c979a6 are checkpointed; supervisor
+combined82/full300files1852tests/corrected types/production9733 passed. Structure
+has only inherited service4506/4505. Auth and operational-refresh/Compute workers
+are now released in their exact disjoint paths; supervisor clipboard control
+implementation has22 focused passing tests; one strict test callback typing
+correction is awaiting its rerun. Extension extraction checkpointc96f5f78 passed
+full1716/types/build/audit. Strip hidden-draw regression is corrected; supervisor
+related21/full1727/types/build pass. Final structure/checkpoint precedes release
+of explicit navigation focus. Auth and refresh receive additional route-change
+and hidden-before-microtask review; source not broadly frozen yet. Continue
+working beyond every batch.
+
 The user requested a primary focus on Core framework UI/UX across all web panels
 and the extension. Existing Core UX plans describe older implementations and lack
 live browser certification; they are background, not evidence of current behavior.
@@ -551,6 +564,71 @@ The entries below describe the completed initial batch. Execution resumed on
 - Validation: Core typecheck38949 failed only Runtime test helper string/ElementType; audit34979 reports inherited service4506/4505 plus Studio Session test hook import bypassing barrel. Exact test corrections prepared but held until full web30596 completes. No config/assertion/baseline relaxation.
 - Extension supervisor reviewed stable controls/IME guards, requested missing document.hasFocus correction, and independently ran final11/11 native0,261.79ms. Extension check94250/full suite31774 active on frozen source.
 - Outcome: Partial; all new strict issues will be corrected before build/checkpoints. Source review and worker read-only auth/freshness audits continue during gates.
+
+### Initial sign-in navigation implementation brief (held until corrected Core build)
+- Worker: trace_endings; paired t224 Core. Read Current State and reports/auth-navigation-audit.md.
+- Own app/AuthShell.tsx, app/auth-navigation/{localAuthDestination.ts,index.ts,tests/localAuthDestination.test.ts} (new), existing app/tests/AuthShell.test.tsx, and app/{get-started,programs/[programId],programs/automation-studio}/page.tsx plus each route's tests/page.test.tsx (new).
+- Preserve actual current local requested path/query/hash through password/TOTP and first credential replacement. Validate local same-origin destination, reject authority/backslash/control/ambiguous encoded leading separators; never obey arbitrary returnTo query as redirect authority.
+- Replace three unauthenticated root redirects with existing inline LoginPanel gates, preserving authenticated domain/program validation and loading. Fence late login/setup replies after unmount or actual route/query change.
+- Preserve all existing login/setup assertions/API bodies/factor requirements. No backend/API/lib-auth/session recovery/privileged PIN/storage/theme/legacy alias/ProgramLauncher or shared docs changes in this brief.
+- Tests: scoped routes/deep links, retries/TOTP/setup, unsafe destinations, stale completion, no loaders before login, authenticated route behavior. Focused+scoped types via heavy then freeze; own reports/auth-navigation-implementation.md. No broad/live/provider/commits.
+- Optional recents and legacy alias are separate subsequent supervisor units after this source freezes.
+
+### Operational refresh foundation and Compute implementation brief (held until corrected Core build)
+- Worker: lab_bookkeeping; paired t224 Core. Read Current State and reports/operational-freshness-audit.md.
+- Own programs/operational-refresh/{useOperationalSnapshot.ts,OperationalFreshness.tsx,index.ts,tests/useOperationalSnapshot.test.tsx} (new), live-views/compute-control.tsx, live-views/tests/compute-freshness.test.tsx (new), and existing compute-selection.test.tsx only for realistic timer/document harness adaptation.
+- Implement program-mounted generic owner-scoped read hook: visible reads10s after completion, single in-flight automatic read/coalesced manual/resume, hidden pause/read abort, one immediate resume, failure20/40/60s backoff,403 auto pause/manual recovery, last-success/loading/error/stale-after30s feedback; no mutation/retry loop inside API read.
+- Stable public hook contract supports optional local display clock cadence and payload validation; no unconditional root poll. Fixed safe UI feedback and render/request/captured-callback owner fences. Retain good data on transient failure.
+- Compute adopts hook preserving pure heartbeat thresholds and visible selection/activity; identify heartbeat status as sampled estimate while stale/paused. No focus jumps or server health changes.
+- Tests: timers/visibility/backoff/coalescing/races/unmount/API changes, fresh server heartbeat beyond300s, filtered selection and failures. Preserve existing coverage/expectations; scoped types then freeze, own reports/operational-refresh-implementation.md.
+- Background and Production adapters are held for later separate briefs; no changes there, shared time math, backend/runtime/storage/contracts/styles/metadata or shared docs. No broad/live/provider/commits.
+
+### 2026-10-01 - Third full web suite and durable database checkpoint
+- Agent: supervisor
+- Validation: full Core30596 native0,300files/1852tests,133.01s before test typing/import corrections. Database final scoped types62070 native0; checkpointd5c979a6 includes source,14 regressions and current-system paragraph. Extension check94250 passed61228ms; full31774 still active.
+- Outcome: Third Core functional suite passed; strict test corrections and final type/build/audit remain. Next auth/freshness briefs written and held.
+- Follow-up: review and verify exact test corrections, corrected typecheck and build, then release next file partitions; preserve source freeze and continue clipboard scoping independently.
+
+### Extension explicit navigation focus worker brief (held until strip suite completes)
+- Worker: wait_gaps; downstream t224 only. Read Current State and frozen extension-navigation-audit.md.
+- Own panel/shell/mount-panel.ts, panel/shell/tests/mount-panel-navigation.test.ts (new), panel/chat/chat-panel.ts, panel/chat/tests/navigation-focus.test.ts (new), under apps/extension/src only.
+- Explicit focused automation row activation opens its target then shows Chat then focuses visible enabled composer; if unavailable use the selected visible Chat tab. Latest Back hands focus to visible enabled composer or an explicitly labelled chat container fallback.
+- Handoff occurs only for user activation whose source owned focus in active visible extension document. General draws/reconnect/programmatic open/late responses never claim focus; browser-page focus remains free.
+- Keep local focus/event modeling within tests, existing chat generation/history/draft/scroll behavior intact. No shared harness, controllers/composer/context-line/top-bar/strip/extraction/background/Core/contracts/styles/shared docs edits.
+- Reproduce and test target/show/focus ordering, disabled/hidden destinations, unfocused document, external focus and stale replies. Focused heavy/type checks then freeze, own reports/extension-navigation-focus-implementation.md; no broad/live/provider/panel/commits.
+
+### 2026-10-01 - Corrected third types/audits and strip build
+- Agent: supervisor
+- Validation: Core corrected typecheck69624 native0,14708ms; corrected full audit84320 only inherited service4506/4505. Onboarding corrected48 and Runtime corrected18 focused pass; exact changes reviewed. Core production build now running on frozen source.
+- Extension final strip11 independently pass; check94250 native0,61228ms; build74032 native0,22files each,16403ms; audit98215 native0,136warnings/119baseline. Full31774 remains active.
+- Outcome: Partial pending Core build and extension full completion/checkpoints.
+- Follow-up: auth/freshness/navigation focus briefs remain held until owning gates complete; source mutations restricted to exact released paths.
+
+### 2026-10-01 - Strip whole-suite integration failure
+- Agent: supervisor
+- Validation: full extension31774 native1,1727tests/1719pass/8fail,116142.45ms. Focused strip11, types/build/audit passed; full failure is not waived.
+- Root source search identifies exactly8 existing automation-tab cases mounting an unshown strip whose new draw inspects ownerDocument before hidden early return. Worker reproduces this seam and may restore the owned strip's lazy hidden short-circuit; no shared fake-only fallback or assertion relaxation.
+- Outcome: Partial; navigation focus implementation held. Core build9733 remains active on frozen Core source.
+- Follow-up: verify exact failure/ordering correction with old row tests plus new strip/key tests, then rerun full extension gate and relevant final checks.
+
+### 2026-10-01 - Third Core batch checkpointed; fourth batch released
+- Agent: supervisor
+- Validation: final production9733 native0,17pages,101959ms. Original full1852/corrected strict gates and inherited-only audit recorded above; no new violations or relaxed limits.
+- Checkpoints: onboarding1a5afc47, Runtime d011b0ae, databased5c979a6. Auth and operational-refresh/Compute written briefs released; root clipboard exact planned scope released. No merge/push; Claude owns integration.
+- Follow-up: focused fourth-batch checks then coordinated freeze. Extension worker captures exact full-suite failures before approved hidden-strip ordering correction; no navigation handoff until verified.
+
+### 2026-10-01 - Exact strip regression corrected; clipboard reproduction
+- Agent: supervisor and workers
+- Root cause: full runner diagnosis reproduces8 automation-tab failures; first throw is exports.querySelectorAll on unshown strip before early return, rather than ownerDocument as first suspected. Restore unshown short-circuit before DOM/focus work; shown-strip ownership guard remains intact. No fake-only fallback/shared harness or assertion changes.
+- Validation: worker related21/21/scoped types0; supervisor independently21/21 native0,256.66ms. Corrected extension full/types/build active with full log captured under TEMP for diagnosable failures.
+- Clipboard: original real SecretKeys consumer3fail/1pass reproduced native1; corrected first4 pass; expiry still closes reveal. Shared responsibility now in focused ClipboardButton, both secret/TOTP consumers migrated and old void helper removed. Root adds component lifecycle/denial tests before freeze.
+- Outcome: Partial pending corrected extension full gates and fourth Core batch checks. New auth/freshness workers remain exact scoped; no runtime/backend changes or live/provider calls.
+
+### 2026-10-01 - Strip broad verification complete; fourth-batch review continues
+- Agent: supervisor
+- Validation: corrected extension42032 native0,1727/1727,111140.3163ms; corrected types41792 native0,19626ms; corrected build5348 native0,15486ms,22files each Chrome/Firefox/e2e. Final full structure passed136warnings/119baseline; no new baseline entries. Exact strip source reviewed again after hidden-return correction.
+- Outcome: Strip Complete; explicit navigation focus brief released after local checkpoint. Clipboard22 focused pass; corrected scoped12321 native0 after test-only act callback fix. Auth/refresh additional route-scope and pre-read cancellation review remains active; broader Core gates await refreeze.
+- Follow-up: preserve original Claude task handoff, keep all edits in paired t224, no merge/push or live operations. Record independent verification before accepting worker completion.
 
 ## Open Questions
 

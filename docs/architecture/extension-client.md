@@ -1610,6 +1610,15 @@ from every other action's in three ways:
   sends the node's 5,000 ms default as the command timeout, which would cut a
   paginated read short at its first page.
 
+### Stable navigation controls
+
+Automation export controls retain their identity across status updates for the
+same flow, run, dataset and format. Notice openers retain pending/error state.
+When a focused control is removed, the strip selects a visible enabled neighbor
+or fallback only while the extension document owns focus. Refresh never pulls
+focus back from the browser page. Tab arrows and Home/End retain native roving
+navigation; modified and composing key events remain unconsumed.
+
 ### Extraction dialog lifecycle
 
 The extraction sheet temporarily mounts at the extension document root while

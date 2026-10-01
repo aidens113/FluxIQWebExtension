@@ -36,31 +36,68 @@ export function createAutomationStrip(request: PanelStore["request"], controller
   ]);
   let shown: { readonly flowId: string; readonly name: string } | undefined;
   let lastStatus: ExtensionStatus | undefined;
-  let noticeButtons: OpenFluxIQButton[] = [];
+  const datasets = new Map<string, { element: HTMLElement; label: HTMLElement; buttons: HTMLButtonElement[] }>();
+  const noticeText = createElement("span");
+  notice.append(noticeText);
+  let noticeButton: OpenFluxIQButton | undefined;
+  let noticeKey: string | undefined;
 
   run.addEventListener("click", () => {
     if (shown !== undefined) void controller.run(shown.flowId);
   });
 
-  function exportLine(row: AutomationRowView): HTMLElement[] {
+  function exportLine(row: AutomationRowView | undefined): HTMLElement[] {
+    const keys = new Set<string>();
+    const ordered: HTMLElement[] = [];
+    if (row === undefined || row.running) { datasets.clear(); return ordered; }
     const runId = row.runId;
-    if (runId === undefined) return [];
-    return row.datasets.map((dataset) => {
+    if (runId === undefined) { datasets.clear(); return ordered; }
+    for (const dataset of row.datasets) {
+      const key = JSON.stringify([row.flowId, runId, dataset.datasetId]);
+      if (keys.has(key)) continue;
+      keys.add(key);
       const label = dataset.label ?? "Data";
       const count = dataset.recordCount === undefined ? "" : ` (${dataset.recordCount} row${dataset.recordCount === 1 ? "" : "s"})`;
-      const button = (format: ExportFormat, text: string): HTMLButtonElement => {
-        const made = createElement("button", { className: "link-button", text, attrs: { type: "button", "aria-label": `Export ${label} as ${text}` } });
-        made.disabled = row.exporting;
-        made.addEventListener("click", () => void controller.exportDataset(row.flowId, runId, dataset.datasetId, format));
-        return made;
-      };
-      return createElement("span", { className: "strip-dataset" }, [`${label}${count}: `, button("csv", "CSV"), " · ", button("json", "JSON")]);
-    });
+      let mounted = datasets.get(key);
+      if (mounted === undefined) {
+        const flowId = row.flowId;
+        const datasetId = dataset.datasetId;
+        const caption = createElement("span");
+        const buttons = (["csv", "json"] as const).map((format: ExportFormat) => {
+          const button = createElement("button", { className: "link-button", text: format.toUpperCase(), attrs: { type: "button" } });
+          button.addEventListener("click", () => void controller.exportDataset(flowId, runId, datasetId, format));
+          return button;
+        });
+        mounted = { element: createElement("span", { className: "strip-dataset" }, [caption, buttons[0]!, " · ", buttons[1]!]), label: caption, buttons };
+        datasets.set(key, mounted);
+      }
+      mounted.label.textContent = `${label}${count}: `;
+      for (const button of mounted.buttons) {
+        button.disabled = row.exporting;
+        button.setAttribute("aria-label", `Export ${label} as ${button.textContent}`);
+      }
+      ordered.push(mounted.element);
+    }
+    for (const key of datasets.keys()) if (!keys.has(key)) datasets.delete(key);
+    return ordered;
+  }
+
+  function controls(): HTMLButtonElement[] {
+    return [...exports.querySelectorAll<HTMLButtonElement>("button"), ...notice.querySelectorAll<HTMLButtonElement>("button")];
+  }
+
+  function visible(node: HTMLElement): boolean {
+    for (let parent: HTMLElement | null = node; parent !== null; parent = parent.parentElement) if (parent.hidden) return false;
+    return node.isConnected;
   }
 
   function draw(): void {
-    element.hidden = shown === undefined;
-    if (shown === undefined) return;
+    if (shown === undefined) { element.hidden = true; return; }
+    const previous = controls();
+    const active = element.ownerDocument.activeElement;
+    const index = previous.findIndex((button) => button === active);
+    const ownedFocus = index >= 0 && visible(element) && element.ownerDocument.visibilityState === "visible" && element.ownerDocument.hasFocus();
+    element.hidden = false;
     const state = controller.state();
     const row = state.rows.find((candidate) => candidate.flowId === shown?.flowId);
     lines.textContent = row === undefined
@@ -72,21 +109,36 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     run.setAttribute("aria-label", `Run ${row?.name ?? shown.name}`);
     hint.textContent = blocked ?? "";
     hint.hidden = blocked === undefined;
-    const datasets = row === undefined || row.running ? [] : exportLine(row);
-    exports.replaceChildren(...datasets);
-    exports.hidden = datasets.length === 0;
-    noticeButtons = [];
-    notice.replaceChildren();
+    const ordered = exportLine(row);
+    for (const child of Array.from(exports.children)) if (!ordered.includes(child as HTMLElement)) child.remove();
+    ordered.forEach((child, position) => {
+      if (exports.children[position] !== child) exports.insertBefore(child, exports.children[position] ?? null);
+    });
+    exports.hidden = ordered.length === 0;
     notice.hidden = row?.notice === undefined;
+    noticeText.textContent = row?.notice?.sentence ?? "";
+    notice.title = row?.notice?.detail ?? "";
+    const nextNoticeKey = row?.notice?.openFluxIQ ? JSON.stringify([row.flowId, row.runId]) : undefined;
+    if (nextNoticeKey !== noticeKey) {
+      noticeButton?.element.remove();
+      noticeButton = undefined;
+      noticeKey = nextNoticeKey;
+    }
     if (row?.notice !== undefined) {
-      notice.append(row.notice.sentence);
-      notice.title = row.notice.detail ?? "";
-      if (row.notice.openFluxIQ) {
-        const button = createOpenFluxIQButton(request, { label: "Open FluxIQ", look: "link" });
-        if (lastStatus !== undefined) button.observe(lastStatus);
-        noticeButtons.push(button);
-        notice.append(button.element);
+      if (row.notice.openFluxIQ && noticeButton === undefined) {
+        noticeButton = createOpenFluxIQButton(request, { label: "Open FluxIQ", look: "link" });
+        if (lastStatus !== undefined) noticeButton.observe(lastStatus);
+        notice.append(noticeButton.element);
       }
+    }
+    if (ownedFocus && visible(element)) {
+      const current = controls();
+      const focused = previous[index]!;
+      const available = (button: HTMLButtonElement) => !button.disabled && visible(button);
+      const target = current.includes(focused) ? focused
+        : [...previous.slice(index + 1), ...previous.slice(0, index).reverse()].find((button) => current.includes(button) && available(button))
+          ?? current.find(available) ?? (available(run) ? run : open.element.querySelector<HTMLButtonElement>("button"));
+      if (target !== null && target !== undefined && available(target) && element.ownerDocument.activeElement !== target) target.focus({ preventScroll: true });
     }
   }
 
@@ -101,7 +153,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     render(status) {
       lastStatus = status;
       open.observe(status);
-      for (const button of noticeButtons) button.observe(status);
+      noticeButton?.observe(status);
     }
   };
 }
