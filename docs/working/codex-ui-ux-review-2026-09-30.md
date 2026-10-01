@@ -504,6 +504,54 @@ The entries below describe the completed initial batch. Execution resumed on
 - Outcome: Extraction functional gates pass; final documentation audit/checkpoint pending. Database source corrections active alongside disjoint onboarding/Runtime workers.
 - Follow-up: preserve tested extraction source, regenerate index and audit, then checkpoint exact seven source/test files plus frozen reports. No live/browser claims or Claude source changes.
 
+### Extension stable strip and keyboard worker brief
+- Worker: wait_gaps; downstream t224 only. Read Current State and reports/extension-navigation-audit.md.
+- Exact ownership: panel/automations/automation-strip.ts, panel/automations/tests/automation-strip.test.ts (new), panel/shell/top-bar.ts, panel/shell/tests/top-bar.test.ts (new), all under apps/extension/src.
+- Preserve export/notice controls for stable flow/run/dataset/format identities; update handlers and pending state without detaching controls. Removed focused controls choose a visible neighbor/fallback only when this surface owns focus; unrelated focus untouched.
+- Plain tab arrows/Home/End continue working; modified/composing/229 events must remain unconsumed. Native Enter/Space activation stays intact.
+- Keep local per-test focus/event modeling inside the two tests. No shared harness, shell mounting, chat, extraction, background/Core, contracts/styles or shared docs edits.
+- Reproduce meaningful identity/focus/keyboard cases before implementation, then focused heavy checks/types; freeze exact files and own reports/extension-strip-keyboard-implementation.md. No broad/live/provider/panel commands or commits.
+- Next shell/Latest Back/rename handoffs remain serial follow-on work with separate briefs.
+
+### 2026-10-01 - Extraction checkpoint and database scoped authorization
+- Agent: supervisor
+- Changed: downstream extraction checkpointc96f5f78 after full1716/types/build/audit; Core database authorization source and14 owning regressions, API-domain grants/record reset included.
+- Why: a prior-scope accepted grant must not unlock the new UI, and a dismissed or replaced operation must not complete into it.
+- Validation: extraction final full structure native0,136warnings/119baseline after generated index regeneration. Database final focused16/16 native0,7.29s; earlier scoped types82642 native0, final scope changes awaiting types. Core onboarding worker restores existing3 GetStarted regressions before claiming final suite; Runtime display-owner review correction pending.
+- Outcome: Extraction Complete; Database focused verified/broad pending; onboarding/Runtime still active and file-partitioned.
+- Follow-up: coordinated Core freeze and independently reviewed narrow tests/types/full suite/build; continue extension strip/keyboard worker. Preserve original five-task t221 handoff and Claude integration ownership.
+
+### Sign-in destination read-only worker brief
+- Worker: trace_endings; paired t224 Core. Read Current State; locate AuthShell login/setup panels, domain login and program route gating/ProgramLauncher with rg.
+- Audit preservation of requested local path/query/domain/deep link through password, PIN/TOTP and credential setup flows. Include optional recent-history storage failure interrupting launcher navigation.
+- Propose validated local return-path handling without open redirects or backend auth/session contract changes, exact independent source/test ownership and meaningful regressions.
+- Own reports/auth-navigation-audit.md only. Core product/tests remain frozen during supervisor third-batch gates. No broad/heavy/live/provider/panel commands or shared docs/commits.
+
+### Operational freshness read-only worker brief
+- Worker: lab_bookkeeping; paired t224 Core. Read Current State; inspect only live-views/{compute-control.tsx,background-tasks.tsx,production-runner.tsx} and owning tests plus existing frontend polling/visibility utilities where directly referenced.
+- Confirm where mount-only snapshots plus local clocks misrepresent current state. Propose bounded visibility-aware refresh, stale/error/time feedback and selection/async guards with exact independent paths and tests.
+- No backend/runtime/storage/contract changes or global unconditional polling. Own reports/operational-freshness-audit.md only; product/tests frozen during third-batch gates. No heavy/live/provider/panel/shared docs/commits.
+
+### 2026-10-01 - Third Core batch independently reviewed and frozen
+- Agent: supervisor
+- Changed: onboarding original tests restored and independently inspected; Runtime owner-display correction reviewed; database final scoped types62070 passed.
+- Validation: combined supervisor69171 exit0,9files/82tests,8.86s (48onboarding,18Runtime,16Database). Core third-batch check38949/full suite30596/audit34979 active on frozen source.
+- Outcome: Partial pending broad gates/build. Extension strip worker corrects missing document.hasFocus guard before broader checks.
+- Follow-up: workers audit sign-in navigation and operational freshness read-only while Core gates run; root prepares clipboard design. Continue all roadmap phases, no batch stop or Claude interference.
+
+### Clipboard feedback supervisor design (held during Core gates)
+- Existing two consumers are Secret Keys revealed value and Identity Access manual TOTP key; shared copyText returns void and discards the clipboard promise, allowing false Copied feedback.
+- Next exact proposed ownership: components/controls/ClipboardButton.tsx (new), controls/index.ts, controls/tests/ClipboardButton.test.tsx (new), live-views/{shared.tsx,secret-keys.tsx,identity-access.tsx}, and an owning secret-copy consumer test if required.
+- Move clipboard control responsibility into a reusable component, then remove the old helper after both consumers migrate. Pending lock, acknowledged success, safe manual-copy fallback, value/scope/unmount fencing; no private-value logs or durable copies.
+- Validate denied/missing clipboard, deferred failure/success, duplicate activation, value replacement and unmount with synthetic data. Preserve reveal expiry and TOTP ownership; backend/secret operations remain separate.
+- Source mutations held until current Core suite and corrected type/build gates finish. Do not copy generic behavior into a live-view catch-all.
+
+### 2026-10-01 - Third-batch strict issues and extension focused verification
+- Agent: supervisor
+- Validation: Core typecheck38949 failed only Runtime test helper string/ElementType; audit34979 reports inherited service4506/4505 plus Studio Session test hook import bypassing barrel. Exact test corrections prepared but held until full web30596 completes. No config/assertion/baseline relaxation.
+- Extension supervisor reviewed stable controls/IME guards, requested missing document.hasFocus correction, and independently ran final11/11 native0,261.79ms. Extension check94250/full suite31774 active on frozen source.
+- Outcome: Partial; all new strict issues will be corrected before build/checkpoints. Source review and worker read-only auth/freshness audits continue during gates.
+
 ## Open Questions
 
 - Browser visual validation awaits authorization for panel/browser management.
