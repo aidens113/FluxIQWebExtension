@@ -20,7 +20,7 @@ import {
 } from "../..";
 import { WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS } from "../../capture";
 import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
-import { webNodeReadWithRejectedRows } from "../rejected-rows";
+import { WEB_NODE_REJECTED_ROWS_NOTE, webNodeReadWithRejectedRows } from "../rejected-rows";
 import { WEB_LLM_WITHHELD_TEXT } from "../../withheld";
 
 const CATALOG_CAPTURE = CAPTURED_DETECTIONS["product-catalog-largest"];
@@ -158,4 +158,41 @@ test("with every cap gone the screen still holds: a card number in a rejected ro
   const read = webNodeReadWithRejectedRows(payload).read as { rejectedRows: Array<{ rows: Array<{ name: string; price: string }> }> };
   assert.equal(read.rejectedRows[0]?.rows[0]?.price, WEB_LLM_WITHHELD_TEXT);
   assert.equal(read.rejectedRows[0]?.rows[0]?.name, long);
+});
+
+test("the model is shown, per condition, the rows it removed alone apart from the rows another condition also rejected, with one sentence on which to check", () => {
+  // run-mup2u8o3-6697c4be: the accessory rule (where 1) rejected 4 rows here,
+  // 2 of them alone -- a true pair and an accessory; the other 2 also failed price.
+  const truePair = { name: "Ultra Earbuds with Wireless Charging Case", price: "$59" };
+  const accessory = { name: "Charging Case Replacement for Ultra Earbuds", price: "$19" };
+  const payload: JsonObject = {
+    extracted: [{ name: "Basic Earbuds", price: "$19" }],
+    extraction: {
+      recordCount: 1, pagesRead: 2, truncated: false, missingFields: [], fieldNames: ["name", "price"],
+      conditions: { applied: 7, kept: 1, rejected: [3, 4], unfiltered: false, alone: [1, 2] },
+      rejectedSamples: [
+        [{ name: "Studio Headphones", price: "$99" }, { name: "Premium ear tips", price: "$79" }, { name: "Deluxe charging case", price: "$89" }],
+        [truePair, accessory, { name: "Premium ear tips", price: "$79" }, { name: "Deluxe charging case", price: "$89" }]
+      ],
+      rejectedSamplesAlone: [1, 2]
+    }
+  };
+  const { read, recorded } = webNodeReadWithRejectedRows(payload);
+  const shown = read as { rejectedRows: JsonObject[]; rejectedRowsNote?: string };
+  assert.deepEqual(shown.rejectedRows, [
+    { where: 0, rejected: 3, alone: 1, rowsAlone: [{ name: "Studio Headphones", price: "$99" }], rowsWithOthers: [{ name: "Premium ear tips", price: "$79" }, { name: "Deluxe charging case", price: "$89" }] },
+    { where: 1, rejected: 4, alone: 2, rowsAlone: [truePair, accessory], rowsWithOthers: [{ name: "Premium ear tips", price: "$79" }, { name: "Deluxe charging case", price: "$89" }] }
+  ]);
+  assert.equal(shown.rejectedRowsNote, WEB_NODE_REJECTED_ROWS_NOTE);
+  // Neither the rows nor their alone lead is in what the draft records; the count is, as a count.
+  const kept = (recorded as JsonObject).extraction as JsonObject;
+  assert.equal(Object.hasOwn(kept, "rejectedSamples"), false);
+  assert.equal(Object.hasOwn(kept, "rejectedSamplesAlone"), false);
+  assert.deepEqual((kept.conditions as JsonObject).alone, [1, 2]);
+  // A page build that does not order its rows: every row, unsplit, and no sentence.
+  const unordered = structuredClone(payload) as { extraction: JsonObject };
+  delete unordered.extraction.rejectedSamplesAlone;
+  const plain = webNodeReadWithRejectedRows(unordered as unknown as JsonObject).read as { rejectedRows: JsonObject[]; rejectedRowsNote?: string };
+  assert.deepEqual(plain.rejectedRows[1], { where: 1, rejected: 4, alone: 2, rows: [truePair, accessory, { name: "Premium ear tips", price: "$79" }, { name: "Deluxe charging case", price: "$89" }] });
+  assert.equal(plain.rejectedRowsNote, undefined);
 });

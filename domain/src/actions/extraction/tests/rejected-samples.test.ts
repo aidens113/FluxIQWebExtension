@@ -47,3 +47,22 @@ test("malformed samples drop the whole summary, as every other member does", () 
   delete uncounted.conditions;
   assert.equal(webAutomationExtractionSummaryValue({ ...uncounted, rejectedSamples: [] }), undefined);
 });
+
+test("each condition's alone count and the alone lead of each list arrive, held to the counts and the lists", () => {
+  const rejectedSamples = [[{ name: "Sponsored earbuds", price: "$20" }], [{ name: "Pro Earbuds Wireless Charging Case", price: null }, { name: "Sponsored charging case", price: "$12" }]];
+  const conditions = { ...SUMMARY.conditions, alone: [4, 5] };
+  const copied = webAutomationExtractionSummaryValue({ ...SUMMARY, conditions, rejectedSamples, rejectedSamplesAlone: [1, 1] });
+  assert.deepEqual(copied?.conditions?.alone, [4, 5]);
+  assert.deepEqual(copied?.rejectedSamplesAlone, [1, 1]);
+  // Absent is a page build that predates them, and the summary arrives whole.
+  assert.equal("alone" in (webAutomationExtractionSummaryValue(SUMMARY)?.conditions ?? {}), false);
+  // One count per condition, none above its rejections; one lead per list, none above its length.
+  for (const alone of [[4], [14, 5], [-1, 5], ["4", 5]]) {
+    assert.equal(webAutomationExtractionSummaryValue({ ...SUMMARY, conditions: { ...conditions, alone } }), undefined, JSON.stringify(alone));
+  }
+  for (const rejectedSamplesAlone of [[1], [2, 1], [1, 3], "1"]) {
+    assert.equal(webAutomationExtractionSummaryValue({ ...SUMMARY, rejectedSamples, rejectedSamplesAlone }), undefined, JSON.stringify(rejectedSamplesAlone));
+  }
+  // Only beside the lists.
+  assert.equal(webAutomationExtractionSummaryValue({ ...SUMMARY, rejectedSamplesAlone: [0, 0] }), undefined);
+});

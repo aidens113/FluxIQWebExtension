@@ -172,6 +172,20 @@ test("a failed lane whose run broke its budget fails on the budget, not on what 
   assert.equal(snapshot()?.observed.accounting.totalTokens, OVERSPENT_TOKENS, "the breach's evidence is written first");
 });
 
+test("a budget breach thrown in a failed lane's place keeps the lane's product failure as its cause, and only that", async () => {
+  const { settlement } = await harness({ detail: async () => failedRunDetail(OVERSPENT_TOKENS) });
+  await assert.rejects(
+    runLaneWithLiveLlmSettlement(settlement, async (identified) => { identified("run-failed"); throw unexpectedFailure; }),
+    (error: unknown) => error instanceof RunnerFailure && error.category === "performance.budget" && error.cause === unexpectedFailure,
+  );
+  const facility = new RunnerFailure("extension.worker", "The extension's service worker stopped");
+  const other = await harness({ detail: async () => failedRunDetail(OVERSPENT_TOKENS) });
+  await assert.rejects(
+    runLaneWithLiveLlmSettlement(other.settlement, async (identified) => { identified("run-failed"); throw facility; }),
+    (error: unknown) => error instanceof RunnerFailure && error.category === "performance.budget" && error.cause === undefined,
+  );
+});
+
 test("a failed lane whose run cannot be read, or was never named, still leaves a snapshot that says so", async () => {
   const unreadable = await harness({ detail: async () => { throw new Error("run detail unavailable"); } });
   await assert.rejects(runLaneWithLiveLlmSettlement(unreadable.settlement, async (identified) => { identified("run-failed"); throw unexpectedFailure; }), (error: unknown) => error === unexpectedFailure);

@@ -319,7 +319,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     }
     if (permission.kind === "refused") {
       return refusal(undefined, "permission_required", rejectionDetail({
-        reason: permission.requestId === null ? "nobody_to_ask" : "consequences_not_granted",
+        reason: permission.requestId === null ? "nobody_to_ask" : permission.declined ? "consequences_declined" : "consequences_not_granted",
         target: undefined, instead: undefined, missing: permission.missing, requestId: permission.requestId ?? undefined
       }), record);
     }
@@ -383,12 +383,15 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     const settled = await captureAfterAction(run.gateway, run.sessionId, run.request, run.request.signal);
     const after = settled === undefined ? undefined : run.restamp(settled);
     if (after) run.shown(after);
-    // What the node read, whole, for a node that reads. Never for the look
-    // itself: its payload is the raw snapshot, which is the page before any of
-    // this domain's sanitizing, and the packet beside it already says what the
-    // page is. Returning it would be the one path by which a page's own markup
-    // reached a decision. A list read's rejected-row samples are shown here and
-    // taken out of what is `recorded` for the replay.
+    // What the node read, whole, for a node that reads. Never the raw page:
+    // the look's payload is nothing else, and a press, a type or a navigation
+    // carries the extension's own snapshot of the page and record of the
+    // control too -- the page before any of this domain's sanitizing, which the
+    // packet beside it already says. That record is taken out of the read
+    // (`./page-record.ts`, `run-mup2i28c-6c7fc209`); it would be the one path
+    // by which a page's own markup reached a decision. A list read's
+    // rejected-row samples are shown here and taken out of what is `recorded`
+    // for the replay, which otherwise keeps the payload as the node answered.
     const { read: shownRead, recorded } = webNodeReadWithRejectedRows(result.payload as JsonValue | undefined);
     const read = node.proposes ? shownRead : undefined;
     run.addresses.ran(buildOf(run), { actionType: node.actionType, parameters: ran, read, location: after?.evidence.location ?? current?.evidence.location });

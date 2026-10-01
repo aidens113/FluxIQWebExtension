@@ -10,9 +10,13 @@
 // sends the next reader to look for a Lab defect that was never there.
 //
 // Only `runtime.behavior` is read as the product's: it is the class the lanes
-// raise for what the product did. Every other category -- a browser that
-// crashed, a server that did not answer, a gateway that would not pair -- stays
-// the facility's and is projected as before.
+// raise for what the product did. A `performance.budget` breach thrown in the
+// lane's place carries the product's failure as its cause
+// (`live-llm/budget-over-product-failure.ts`), and is read through it:
+// `run-mup2u8o3-6697c4be` built no Flow and overspent, and is the product's.
+// Every other category -- a browser that crashed, a server that did not
+// answer, a gateway that would not pair -- stays the facility's and is
+// projected as before.
 
 import { RunnerFailure } from "../failure.js";
 
@@ -41,6 +45,7 @@ const MAX_CODE_LENGTH = 96;
  * published anything: a lane that never did built no Flow either.
  */
 export function productFailureOf(error: unknown, lane: { flowLane: boolean; flowCreated: boolean | null | undefined }): ProductFailure | undefined {
+  if (error instanceof RunnerFailure && error.category === "performance.budget" && error.cause instanceof RunnerFailure && error.cause.category === "runtime.behavior") return productFailureOf(error.cause, lane);
   if (!(error instanceof RunnerFailure) || error.category !== "runtime.behavior") return undefined;
   if (!lane.flowLane) return Object.freeze({ code: "recording_lane.product_behavior" });
   if (lane.flowCreated === true) return Object.freeze({ code: "flow_lane.product_behavior" });

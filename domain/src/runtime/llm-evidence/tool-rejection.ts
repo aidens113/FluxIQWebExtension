@@ -296,6 +296,10 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  * - `consequences_not_granted`: the action's declared consequences include ones
  *   this run does not hold. `missing` names them and `requestId` names the
  *   request now in front of the person.
+ * - `consequences_declined`: the person declined this press. Do not make it
+ *   again with that declaration; do the task another way or finish without
+ *   it. `missing` names the classes they refused and `requestId` the request
+ *   they answered.
  * - `nobody_to_ask`: the same refusal with no run behind it to raise a request,
  *   so there is nobody it could be put to. `missing` still names the classes.
  */
@@ -341,6 +345,7 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "another_origin",
   "consequences_unreadable",
   "consequences_not_granted",
+  "consequences_declined",
   "nobody_to_ask",
   // The library verb names a node, and two things can be wrong with the naming.
   // `instead` carries what the call could have written: the nodes this domain

@@ -30,11 +30,19 @@
 // - **One list per condition, positionally**, beside `conditions.rejected`, so
 //   `rejectedSamples[2]` are rows `where[2]` turned down. A row several
 //   conditions rejected is a sample of each.
+// - **The rows a condition removed alone lead its list**, and
+//   `rejectedSamplesAlone[2]` says how many: rows every other condition held
+//   of, which are the ones that show whether `where[2]` is right. On
+//   `run-mup2u8o3-6697c4be` the accessory rule's 20 rows hid that it was eating
+//   earbuds; its 5 alone rows were 2 accessories and the 3 true pairs.
 
 import type { WebAutomationExtractionSummary } from "./summary";
 
 /** The parameter, and the summary member, that ask for and carry the samples: one name, so the two cannot drift. */
 export const WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY = "rejectedSamples" satisfies keyof WebAutomationExtractionSummary;
+
+/** The summary member that says how many leading rows of each list its condition removed alone. */
+export const WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_KEY = "rejectedSamplesAlone" satisfies keyof WebAutomationExtractionSummary;
 
 /** One rejected row: a declared field's value, or `null` where an optional field was unreadable. */
 export type WebAutomationExtractionRejectedRow = Record<string, string | null>;
@@ -74,4 +82,21 @@ function rowValue(value: unknown, fieldNames: readonly string[]): WebAutomationE
     else return undefined;
   }
   return row;
+}
+
+/**
+ * How many leading rows of each list its condition removed alone, copied, or
+ * `undefined` when it is not one count per list, none above its list's length.
+ */
+export function webAutomationExtractionRejectedSamplesAloneValue(
+  value: unknown,
+  lists: readonly (readonly WebAutomationExtractionRejectedRow[])[]
+): number[] | undefined {
+  if (!Array.isArray(value) || value.length !== lists.length) return undefined;
+  const out: number[] = [];
+  for (const [index, entry] of value.entries()) {
+    if (typeof entry !== "number" || !Number.isSafeInteger(entry) || entry < 0 || entry > (lists[index]?.length ?? 0)) return undefined;
+    out.push(entry);
+  }
+  return out;
 }
