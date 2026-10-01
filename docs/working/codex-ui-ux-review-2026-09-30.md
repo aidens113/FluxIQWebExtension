@@ -14,15 +14,16 @@ Related: [working document index](./README.md)
 Latest continuation checkpoint (2026-10-01): Core onboarding1a5afc47, Runtime
 d011b0ae and sensitive-store authorizationd5c979a6 are checkpointed; supervisor
 combined82/full300files1852tests/corrected types/production9733 passed. Structure
-has only inherited service4506/4505. Auth and operational-refresh/Compute workers
-are now released in their exact disjoint paths; supervisor clipboard control
-implementation has22 focused passing tests; one strict test callback typing
-correction is awaiting its rerun. Extension extraction checkpointc96f5f78 passed
-full1716/types/build/audit. Strip hidden-draw regression is corrected; supervisor
-related21/full1727/types/build pass. Final structure/checkpoint precedes release
-of explicit navigation focus. Auth and refresh receive additional route-change
-and hidden-before-microtask review; source not broadly frozen yet. Continue
-working beyond every batch.
+has only inherited service4506/4505. Auth and operational-refresh/Compute are
+checkpointed9d5e2533/e109b226; clipboard0738bc58 has22 focused passing tests
+and corrected scoped types. Fourth combined110/types pass; production29706
+passed17pages/128724ms. Initial full1942pass/1 source-only moved-controller
+contract failure is corrected, focused21pass; final full21515/types56689 rerun
+while Core source stays frozen. Next legacy launcher and Background/Production
+adapter briefs remain held. Extension extraction checkpointc96f5f78 passed
+full1716/types/build/audit. Strip related21/full1727/types/build/structure pass,
+checkpoint5e162c36. Explicit navigation focus worker owns only its four
+downstream paths. Continue working beyond every batch.
 
 The user requested a primary focus on Core framework UI/UX across all web panels
 and the extension. Existing Core UX plans describe older implementations and lack
@@ -629,6 +630,60 @@ The entries below describe the completed initial batch. Execution resumed on
 - Validation: corrected extension42032 native0,1727/1727,111140.3163ms; corrected types41792 native0,19626ms; corrected build5348 native0,15486ms,22files each Chrome/Firefox/e2e. Final full structure passed136warnings/119baseline; no new baseline entries. Exact strip source reviewed again after hidden-return correction.
 - Outcome: Strip Complete; explicit navigation focus brief released after local checkpoint. Clipboard22 focused pass; corrected scoped12321 native0 after test-only act callback fix. Auth/refresh additional route-scope and pre-read cancellation review remains active; broader Core gates await refreeze.
 - Follow-up: preserve original Claude task handoff, keep all edits in paired t224, no merge/push or live operations. Record independent verification before accepting worker completion.
+
+### Background and Production refresh adapter read-only brief
+- Worker: lab_bookkeeping; paired t224 Core. Read Current State, own frozen operational-refresh report and current hook public contract.
+- Inspect live-views/{background-tasks.tsx,production-runner.tsx} and their directly owning existing tests only. Product source frozen for fourth-batch supervisor gates.
+- Propose exact independent adapter/test paths adopting the shared hook while preserving launch drafts, per-run operation locks, selection and existing successful/error states.
+- Trace history/detail async owner and request races, replacement snapshot selected-run reconciliation and captured old mutation callbacks. Specify meaningful regressions before implementation.
+- Own reports/operational-adapters-audit.md only. No shared docs, source edits, heavy/live/provider/panel/commits; implementation requires later released written brief.
+
+### Legacy launcher navigation read-only brief
+- Worker: trace_endings; paired t224 Core. Read Current State and frozen auth-navigation report.
+- Inspect app/ProgramLauncher.tsx, existing app/tests/ProgramLauncher.test.tsx, and legacy domains/[domainId]/programs/[programId]/page.tsx plus directly owning tests if present.
+- Trace optional recent-storage failures interrupting navigation; legacy alias query preservation for start/flow/subflow/view/detail and repeated query entries. Treat path domainId as authoritative; arbitrary external destination is never accepted.
+- Propose exact isolated source/test paths and regression cases preserving original assertions. Server redirects cannot preserve unseen hash; document limits.
+- Own reports/legacy-launcher-navigation-audit.md only. Core source frozen during fourth-batch gates; no shared docs, heavy/live/provider/panel/commits. Implementation held for next written release.
+
+### 2026-10-01 - Fourth Core freeze and broad gates
+- Agent: supervisor
+- Independently reviewed final auth request generation/scope release, local destination validator, inline route gates, hook pre-read cancellation/current-owner callback fence and feedback placement outside Compute grid.
+- Combined47326 native0,13files/110tests,9.01s. Clipboard local checkpoint0738bc58; corrected consumer4 tests also native0. Auth69 and refresh19 included in combined run; worker claims independently confirmed.
+- Whole Core source frozen. Web check98099 native0,67584ms. Structure75057 reports inherited service4506/4505 plus stale working-doc index; regenerated owning index only, targeted docs-links/working-docs passed0warnings/16baseline. Full10138 and production29706 still running.
+- Full suite currently exposes one source-text contract expecting inline AbortController in Compute. Request ownership moved to the shared hook and behavioral cancellation tests pass; inspect complete suite result before updating the owning contract to follow that boundary. No production fallback or relaxed cancellation requirement.
+- Workers now read-only audit exact legacy launcher and operational adapter paths. Extension explicit navigation worker alone edits its four downstream files. No cross-tree validation contamination or Claude edits.
+
+### Legacy launcher navigation implementation brief (held until fourth Core gates complete)
+- Worker: trace_endings; paired t224 Core. Read Current State and frozen legacy-launcher-navigation audit.
+- Own app/ProgramLauncher.tsx, existing app/tests/ProgramLauncher.test.tsx, app/domains/[domainId]/programs/[programId]/page.tsx and new directly owning tests/page.test.tsx only.
+- Catch only optional recent-history persistence write failures; preserve in-memory recent/dedup/six-entry behavior, exact Link destinations/prefetch and all original3 tests. No preventDefault/router replacement or blocking warning.
+- Alias accepts promised searchParams scalar/array values; preserve each supplied value including repeated/empty entries, omit undefined and force one path-owned domainId. Fixed encoded local program destination; external-looking query values remain data. Document unavailable hash and original query byte/inter-key ordering limits.
+- Add actual callback continuation/storage getter/quota/retry tests and actual redirect capture tests for deep-link/start keys, repeated values, conflicting domainId and encoded identifiers. No authentication/backend/navigation consumer/recents schema changes.
+- Focused/scoped heavy then freeze; own reports/legacy-launcher-navigation-implementation.md. No broad/live/provider/panel/shared docs/commits.
+
+### Background and Production adapter implementation brief (held until fourth Core gates complete)
+- Worker: lab_bookkeeping; paired t224 Core. Read Current State and frozen operational-adapters-audit.md.
+- Own live-views/{background-tasks.tsx,production-runner.tsx}, new tests/{background-freshness.test.tsx,production-freshness.test.tsx}, existing tests/production-runner-operations.test.tsx only. Ask supervisor before responsibility-driven extraction needs extra paths.
+- Adopt shared owner-scoped snapshot hook and feedback outside explicit grids; preserve launch parameter defaults/drafts, selected ids/detail/log filters and operation locks. API changes mask previous drafts/data/errors during render, and old callbacks/results/finally never affect new owners.
+- Background current selected history page uses independent completion-based10s refresh with query owner task/status/offset/API, limit50; no reads for absent task and no extra history read per snapshot. Guard pagination/filter/search/fallback changes, abort hidden/unmount, clamp shrinking total once, derive selected detail from fresh same-id page object.
+- Post-write policy: coalesce requested refresh with pending read, preserve honest separate action acceptance vs last snapshot confirmation; next normal visible read within10s reconciles external state. Do not claim pending pre-write read confirms a mutation, queue extra loops or replay mutations.
+- Guard mutation source owner/current target/task/run before POST, synchronous duplicate locks and owner-scoped cleanup. Preserve independent per-run operations and retry/error feedback; aborted reads do not cancel server writes.
+- Authorize exactly one Production test update: overlapping manual Refresh expects one coalesced pending read; preserve target/default/post assertions and add newer-owner late-response regression. Keep all other original mutation/draft assertions.
+- Test cadence/visibility/backoff/stale/error recovery, selection/history races, external progress, captured old mutations and old finally/new same-id lock. Focused adapters+shared hook/pure tests and scoped types then freeze; own reports/operational-adapters-implementation.md. No backend/runtime/API/contracts/styles/shared docs/broad/live/provider/panel/commits.
+
+### Remaining clipboard consumers supervisor brief (held until fourth Core gates complete)
+- Exact Core ownership: controls/ClipboardButton.tsx and owning test; data/CodeViewer.tsx and new data/tests/CodeViewer.test.tsx; inspector/InspectorPanel.tsx and new inspector/tests/InspectorPanel.test.tsx; state/StateRawPanel.tsx and new state/tests/StateRawPanel.test.tsx; existing state/tests/StateExplorerView.test.tsx only for truthful moved clipboard contract coverage.
+- Extend shared control with explicit accessible label/icon-only presentation while retaining previous secret/TOTP behavior. Migrate source, selected ID and expanded raw JSON clipboard operations to shared pending/ack/failure lifecycle; preserve source download/search/wrap and inspector search/actions.
+- Selection/source/value change or raw collapse unmounts/replaces copy ownership. No old acknowledgements, exception contents, unused reset timers or clipboard writes after captured stale activation. Preserve raw lazy serialization and expand/collapse accessibility.
+- Reproduce actual missing clipboard, deferred old-selection/collapse acknowledgements and duplicate click cases; test component/consumer behavior with synthetic values. Existing source-only raw status assertion follows new shared ownership with behavioral status verification, never weaken acknowledgement requirement.
+- Root owns integration and documentation. No source mutations during fourth gate freeze; no browser/private state/provider calls.
+
+### 2026-10-01 - Fourth source checkpoints and moved cancellation contract
+- Agent: supervisor
+- Checkpoints: Core9d5e2533 auth11files, e109b226 refresh/Compute7files,0738bc58 clipboard/source/docs9files. No dev merge/push; full gate correction still pending, not reported complete.
+- Production29706 native0,17pages/128724ms. Initial full10138 native1,308files/1943tests,1942pass/1source contract failure,156.77s. No product test failures.
+- Corrected global-request-contract follows Compute's useOperationalSnapshot ownership and verifies signal pass-through plus shared controller cancellation/generation teardown. Other seven inline-view checks and coordinator assertions preserved. Real hook cancellation/Compute cases rerun with contract:87610 native0,5files/21tests,8.44s.
+- Final full21515/types56689 active; source freeze retained. Next exact implementation briefs written/held. Authored current-system captures sign-in and sampled refresh behavior; browser certification remains unperformed.
 
 ## Open Questions
 
