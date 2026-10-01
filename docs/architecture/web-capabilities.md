@@ -459,7 +459,7 @@ The recorder sends no file input value. `readElementValue`
 ([`content/describe-element.ts`](../../apps/extension/src/content/describe-element.ts))
 returns nothing for a file input, because its value is the chosen file's local
 name. So the input's descriptor carries no `value`, its `input` and `change`
-carry no `inputValue`, and the snapshot ranks it without one. Its descriptor
+carry no `inputValue`, and the snapshot lists it without one. Its descriptor
 still carries `inputType: "file"` and `hasValue`.
 
 A succeeded runtime action that has a recorded counterpart is also sent as a

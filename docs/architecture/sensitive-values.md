@@ -69,8 +69,10 @@ Withholding is unconditional and does not depend on a setting.
   so a sensitive control, or anything inside one such as a listbox's
   `<option>`, gives no `text` or `visibleText`, and a container's text leaves
   those contents out: a `<label>` wrapping a sensitive textarea reads as its
-  label. The snapshot ranks and admits elements by the same two readers, so a
-  control known only by its contents is not listed.
+  label. Rendered elements are still listed in document order; secret screening
+  withholds their sensitive contents without ranking or dropping ordinary
+  nameless controls. The domain's model packet separately omits a descriptor
+  that the shared sensitivity rule identifies as a sensitive control.
 
   Names follow, and the filter is in the name computation itself,
   `accessibleNameFor`
@@ -221,8 +223,11 @@ neither guard stamps one, and the adapter strips any flag it did not honour.
 ## Authored Data Shown To Judgement And Repair
 
 Authored parameters are not captured page evidence, but they still cross a
-model or artifact boundary only through Core's parameter screen. The
-created-Flow lane calls `automationStudioScreenedNodeParameters` and validates
+model or artifact boundary only through Core's parameter screen. Core's
+`automationStudioScreenedNodeParameters` preserves complete ordinary parameters
+for the model, while screening secrets, denied keys and locators. The
+created-Flow lane then applies its separate `createdFlowArtifactScreen`
+(`packages/test-runner/src/flow-lane/creation/artifact-screen.ts`) and validates
 the result with the repository-local `AuthoredFlowNode` contract before
 writing `snapshots/flow-lane.json`. Each action-node entry carries only its
 `nodeId`, `definitionId`, `outputId`, screened `parameters`, and
@@ -232,10 +237,13 @@ Those fields preserve three different facts. A missing parameter was never
 authored. A safe transformation may survive -- for example an absolute URL can
 be reduced to its origin -- while `parametersWithheld: ["url"]` still records
 that the original URL did not. A value omitted because the screen reached a
-depth, key, item, string, or byte budget is likewise named as withheld rather
+artifact depth, key, item or string bound is likewise named as withheld rather
 than silently reading as absent. The local contract rechecks bounded trees,
 closed identifiers, denied keys and safe URL origins; it never treats the
 artifact as permission to retain selectors, page text or supplied values.
+The artifact screen reduces URLs to origins and keeps only approved classifier
+or naming/comparand strings within its bounded trees. These artifact bounds
+never reduce the evidence or authored parameters Core shows the model.
 
 The same rule applies to result judgement and repair. The result-repair
 directive is bounded and screened before model judgement can influence
