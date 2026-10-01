@@ -269,6 +269,40 @@ The entries below describe the completed initial batch. Execution resumed on
 
 ## Worker Briefs — 2026-10-01 continuation
 
+### Brief: runtime-workspace-audit
+- Repository: paired Core t224.
+- Task: read-only architecture-compatible implementation design for Phase5.1 functional Runtime workspace using existing read APIs.
+- Required reads: Current State; shell finding3; ProgramLiveViews.tsx; runtime-control/metadata.ts,api/contracts.ts,api/handlers.ts; public runtime index/types/service snapshot/getRun; representative shared-UI panels/tests.
+- Owns (may edit): downstream reports/runtime-workspace-audit.md under this effort only.
+- Must not touch: product source/tests, all runtime/storage/context-packet source, shared/architecture docs, other worktrees; Core is frozen for root broad gates.
+- Definition of done: trace supported clients/capabilities/runs/dispatch/transport payloads and public imports; propose focused read-only operational workspace with bounded lists, selection, lazy detail, safe loading/error/retry/race/freshness feedback and exact owned files/tests. Avoid raw secret/recording logs; no new backend contract or mutation. Prefer real useful inspection over a preview dead end.
+- No heavy jobs/tests/build/provider/browser/panel/Lab/commits/push. Return source references, exact minimal scope, meaningful regressions and limits for immediate implementation brief after freeze release.
+
+### Brief: extraction-dialog-implementation
+- Repository: downstream t224; extension broad rows gates are complete and downstream product source released for this brief only.
+- Task: Phase4.2 implement extraction-dialog-audit.md's focused modal/async lifecycle design.
+- Required reads: Current State; own frozen audit; named files, privacy/preview tests read-only.
+- Owns (may edit): apps/extension/src/panel/extraction/panel.ts,panel-elements.ts,dialog-focus.ts(new),index.ts,tests/dialog-focus.test.ts(new),tests/panel.test.ts(new),tests/dialog-dom.ts(new focused local harness if needed).
+- Must not touch: field-row/preview/privacy reducers, recording/shell/content/background/contracts/shared fake DOM, Core, architecture/shared docs or other worktrees. Request any extra exact files.
+- Definition of done: root-mounted open sheet remains visible across host moves; exact prior inert restoration/listener cleanup; extension-document-only focus entry/trap/return, no page/browser focus stealing; field identity/caret preserved across redraw; IME/busy Escape safe, Close visibly disabled while busy; lifecycle epochs drop stale prepare/poll/preview/capture completions.
+- Explicitly authorized defect fixes: keep pending/failed cancellation shell visible with safe retry after immediate preview erasure; close modality only on acknowledgement/no-session; Confirm disables editable controls while submitted draft is pending. Preserve payload/privacy/capture counts and background picking ownership; no new private persistence/reconnect policy.
+- Report to: downstream reports/extraction-dialog-implementation.md under this effort.
+- Reproduce then focused lifecycle/panel + unchanged preview/preview-reread tests through bash heavy.sh. No whole suites until source freeze, no commits/live/browser/provider/panel calls. Report exact outcomes and limitations; synthetic focus tests are not browser certification.
+
+### Brief: onboarding-entry-implementation
+- Repository: paired Core t224.
+- Task: execute onboarding-entry-audit.md's guided entry design for Phase2.2.
+- Required reads: Current State; own frozen audit; Core code structure; exact files below and their referenced navigation commands.
+- Owns (may edit): Core app/page.tsx,app/tests/HomePage.test.tsx; app/get-started/GetStartedClient.tsx and tests/GetStartedClient.test.tsx; features/automation-studio/live/hooks/useAutomationBrowserEntry.ts and tests/browser-start-intent.test.tsx; onboarding/entry/StudioStartJourney.tsx,index.ts,tests/StudioStartJourney.test.tsx; live/components/AutomationStudioSession.tsx and tests/studio-start-entry.test.tsx. All app paths start apps/web/src/; feature-relative paths under same tree.
+- Must not touch: navigation.ts, runtime packages, shared onboarding types/checklist, existing authoring/Problems fixes, architecture/shared docs, other worktrees. Request extra exact files if needed. Keep oversized host within its current ratchet; focused entry module owns new behavior.
+- Definition of done: discoverable Get started; allowlisted describe/demonstrate/extract banner and explicit existing Create automation/Connected browsers actions; no URL-triggered mutation; canonical links and domain scope win; guarded replace removes only start on action/dismiss; refresh/back/idempotence and stale handlers safe; preserve project/workspace state.
+- Report to: downstream reports/onboarding-entry-implementation.md under this effort.
+- Reproduce then focused component/hook/wiring tests via bash heavy.sh. No broad gates/commit/live/browser/provider/panel calls. Report frozen source and exact results; do not promise Core-owned page extraction or bypass prerequisites.
+
+### Supervisor ownership: Selected run detail feedback
+- Owns Core runtime/RunActionLogView.tsx and runtime/tests/run-detail-feedback.test.tsx under web automation-studio feature.
+- Add independent action/event-detail loading/error/retry with clearly retained summaries; generation/abort protection, close/scope/selection races, malformed/mismatched detail handling. No runtime package/API changes.
+
 ### Brief: onboarding-entry-audit
 - Repository: paired Core t224.
 - Task: read-only scoped implementation design for Phase2.2 discoverable setup and consumed onboarding start intents.
@@ -363,6 +397,38 @@ The entries below describe the completed initial batch. Execution resumed on
 - Validation: independently reviewed source and10focusedtests; full extension19704 exit0,1695pass/0fail/0skip,115774ms; extension54177 types0; build73717 exit0,19004ms,Chrome/Firefox/e2e22files each.
 - Outcome: Accepted for source/component/bundle verification; live focus certification remains unexercised.
 - Follow-up: checkpoint rows and frozen reports, then implement extraction-dialog plan when read-only audit completes. Core focused checkpoints c71aa0fd/3d90046b/b2eb277f/2594f6c9. No merge/push; continue remaining roadmap.
+
+### 2026-10-01 - Core batch source freeze for broad gates
+- Agent: supervisor and workers
+- Changed: global question candidates/cursor continuation/handler guards; selected action/event detail loading/error/retry and page/scope abort guards.
+- Why: pending asks were masked by idle threads; failed detail reads looked like complete data.
+- Validation: supervisor global36/36 exit0(26160,9.18s); selected detail initial3fail/2pass then final8/8 exit0,7.80s. Downstream full audit passes135warnings/119baseline after rows.
+- Outcome: Partial pending Core broad types/tests/build/audit.
+- Follow-up: Core source frozen, onboarding implementation held; runtime audit read-only. Extraction implementation may edit only its downstream owned files, since downstream rows gates are complete. Continue useful audits during checks; no batch stop.
+
+### 2026-10-01 - Broad gates found strict typing and test import defects
+- Agent: supervisor
+- Changed: failure/resume record only; product snapshot remains frozen for web suite63749.
+- Why: focused runtime tests do not replace strict compile and structure checks.
+- Validation: web typecheck66630 reports optional callback props with explicit undefined, fixture helper undefined arrays/optional callback, and Compute test string-vs-ElementType. Core audit85381 exit1: inherited service4506/4505 plus new authoring test import bypassing views barrel.
+- Outcome: Partial; these new issues must be corrected, no compiler/baseline/expectation relaxation.
+- Follow-up: after web suite63749 finishes, release exact worker test/FlowEditor callback/import fixes plus root Compute helper typing, rerun focused/types/audit; build follows successful types. Onboarding held; Runtime audit read-only; extraction implementation continues downstream.
+
+### 2026-10-01 - Whole web suite passed; scoped compile corrections released
+- Agent: supervisor
+- Changed: root Compute helper parameter narrowed to its actual three intrinsic element types; worker optional-prop/test-fixture/import corrections released only.
+- Why: complete real strict typing fixes while preserving the tested behavior.
+- Validation: full web63749 exit0,293files/1775tests,136.08s; no failures/skips. This is the pre-compile-correction snapshot; focused reruns/types/build will verify final correction.
+- Outcome: Partial pending final corrected typecheck/build/audit.
+- Follow-up: source changes limited to compile/import corrections; onboarding remains held, extraction continues downstream, Runtime read-only report underway. No compiler/baseline/assertion weakening; continue roadmap after gates.
+
+### 2026-10-01 - Follow-on Core audit queue
+- Agent: supervisor
+- Changed: next-step evidence recorded without product mutations during compile correction gates.
+- Why: user requires continuous whole-Core/extension audit and fixes beyond initial batches.
+- Validation: current shared.tsx174 copyText returns void/unhandled clipboard promise; secret-keys.tsx205 immediately says Copied. Database-manager.tsx99 authorize-store lacks in-flight/scope guard. ProgramLauncher.tsx67 localStorage.setItem can throw on navigation; AuthShell login/setup destination is always root. These match prior audit findings and remain unfixed.
+- Outcome: Planned
+- Follow-up: after current Core gates release, partition clipboard feedback/secret reveal expiry, sensitive-store authorization, optional recents persistence and validated sign-in return path; synthetic rejection/duplicate/late completion/navigation tests. No private values in test/logs. Operational freshness and keyboard project organization remain queued too.
 
 - Core task branch: task/t224-codex-ui-ux-review, checkpoints239a52bb,
   e6eb33f2 (global recovery),95573296 (composer/fixture),07acd910 (resume record).
