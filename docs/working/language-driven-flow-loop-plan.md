@@ -13,17 +13,12 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ## Current State
 
-**Handoff, 2026-10-01 ~00:30. Read this first.** Every Lab is STOPPED by the user's order: "stop every single lab till
+**Update, 2026-10-01 afternoon. Read this first.** The Lab stop is LIFTED, lane by lane, now that the context issue is fixed: t223 (the approved compact view plus `find_on_page`) and lane B's B1 (only the current page in each request) are merged into dev. One whole decide request went from 471k to 53k tokens. Lane B is live first, on bigbox cart redesigned. About 120 extension unit tests fail on dev after t223; its lead is fixing them, and dev is not pushed until they pass. Merges now take narrow checks only, and full suites run at most twice a day (user rule, AGENTS.md).
+
+**Handoff, 2026-10-01 ~00:30.** Every Lab is STOPPED by the user's order: "stop every single lab till
 you figure that out NOW". No Lab of any kind (live or provider-free) runs until t223's compact page view is merged,
 validated, and its measured page size is sane. Integration round 4 is on dev. The pass streak is still 0: no task has
 produced a working Flow end to end.
-
-Tonight's finding: the model was sent each page as raw JSON. That was t200's "whole page": every element of every frame
-with every attribute, a pixel box and context fields, about 340 KB (113k tokens) for everything-store results. Lane B
-also found that every superseded page is re-sent whole in every request (15.7k growing to 215k input tokens per call),
-with almost no cache hits. That is why runs were slow and expensive and blew the $0.25 ceiling. Live spend tonight was
-$0.479 over two runs, both failed: lane B $0.182 and lane C $0.297, the latter over the ceiling. Lanes A and D were
-killed in the Lab prelude at $0.
 
 **Binding rules (user, all in force).**
 - **The compact page view (user, 2026-09-30 night; supersedes t200's raw JSON).**
