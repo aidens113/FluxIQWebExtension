@@ -113,7 +113,7 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
       persist();
       fit();
       syncButton();
-    }).catch(() => { if (operation === submitted) { operation = undefined; syncButton(); } });
+    }).catch(/* best-effort: restore retry controls after completion failure; controller owns send feedback */ () => { if (operation === submitted) { operation = undefined; syncButton(); } });
   }
 
   sendButton.addEventListener("click", () => {

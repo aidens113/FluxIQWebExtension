@@ -33,8 +33,7 @@
 import { RUNTIME_MESSAGES } from "../../shared/constants";
 import type { ExtensionStatus, RecordingState } from "../../shared/protocol";
 import { chooseAutomation, createAutomationsTab } from "../automations";
-import { createActivityFeed, createChatPanel, type ActivityFeed, type ChatTarget } from "../chat";
-import { createChatOwnerContext } from "../chat/owner-context";
+import { createActivityFeed, createChatOwnerContext, createChatPanel, type ActivityFeed, type ChatTarget } from "../chat";
 import { createElement } from "../dom";
 import { createStartView, startGuide } from "../getting-started";
 import { createOpenFluxIQButton } from "../open-fluxiq";

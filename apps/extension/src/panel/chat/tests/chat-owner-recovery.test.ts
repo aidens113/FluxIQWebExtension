@@ -8,7 +8,7 @@ import { RUNTIME_MESSAGES as M } from "../../../shared/constants";
 import { ACTIVITY_MESSAGES } from "../../../shared/activity/index";
 import { activityEvent, relayState } from "./activity-fixture";
 import type { PanelMessage, PanelStore } from "../../state";
-import { createOpenFluxIQButton } from "../../open-fluxiq/open-fluxiq-button";
+import { createOpenFluxIQButton } from "../../open-fluxiq";
 const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 const status = (projectId = "project-1", coreApiUrl = "http://core-a.invalid") => statusWith({ connectionState: "connected", paired: true, projectId, settings: { coreApiUrl, gatewayUrl: "ws://gateway.invalid", autoReconnect: true, captureMutations: false, captureInputValues: false, captureSnapshots: false } });
 for (const changed of ["project", "core"] as const) test(`confirmed ${changed} replacement immediately retires old target and turns`, async () => withFakeDocument(async () => {

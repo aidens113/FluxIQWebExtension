@@ -1,0 +1,82 @@
+# Extraction receiver ownership plan
+
+Status: Complete (bounded executable receiver plan; implementation HELD)
+Owner: recording_controls
+Date: 2026-10-01
+
+## Written brief
+
+- Backend preview three paths remain frozen for root independent and broad gates. Own only this report; no source/tests/check commands. Read parent Current State, extraction-session-ownership-audit.md S2 and completed real-ID plan.
+- Inspect exact downstream background/extraction/control.ts, content/message-handler.ts, content/picker/session.ts, content/picker-host.ts, content/picker/messages.ts and directly owning picker/session and background control/confirm tests only as needed. Supervisor additionally releases read-only background/tabs.ts sendToTab function only to establish dispatch-await guarantees. Bound further discovery to exact receiver contracts; request additional reading scope if necessary.
+- Trace stale awaited start/cancel/record commands against actual receiver lifecycle. Picker selection already drains its overlay before Confirm; a simplistic require-live-overlay-ID guard would break valid Confirm. Specify actual accepted/retired pick identity lifetime and exact later disjoint source/test partitions preserving supported valid recorded-event behavior.
+- Distinguish source-confirmed defects from project/recording/pairing authority not investigated. No authorization claims from session IDs, no protected recording-manager/runtime/storage/backend expansion.
+- Plan tests-first adverse schedules: cancel A cannot stop B after ensure/send await, stale start A cannot rearm after replacement/cancel, valid picked Confirm after overlay drains still records once, retired/mismatched A record cannot append B data, current sender/frame/D3/D12 boundaries preserved. Give exact new tests/fixture releases and compatibility decisions without weakening originals.
+- No implementation, shared docs/commits, heavy/broad/browser/Lab/provider/panel/private inspection. Update this report progressively and return executable plan plus unresolved proof/limits. Root owns integration and serial release after preview and real-ID work.
+
+Progress checkpoint: actual picker session is forgotten at click/auxclick or10s drain timeout; Confirm receiver currently stopPick unconditionally then recordExtraction, and cancel likewise ignores typed ID. Successful proposal must retain a separate confirmation identity after drain; overlay identity alone is insufficient. Background start does not recheck captured store object after ensureContentScript. Existing trusted testDefineExtraction records through the same content record message with a generated ID and no pick, so strict picked-only receiver acceptance would break an established seam; compatibility decision needed. No source/tests/gates.
+
+## Actual dispatch and lifetime findings
+
+Supervisor explicitly released read-only background/tabs.ts sendToTab at41?50. It constructs a Promise and immediately invokes chrome.tabs.sendMessage in its executor, with frame0 when requested; no extra await occurs before dispatch. Therefore an exact captured-store-object/state check immediately after ensureContentScript and immediately before deps.sendToTab genuinely fences unissued stale start in production. It cannot retract a message already issued to Chrome or prove the arrival order of independently issued messages.
+
+control.startPick stores A, awaits ensureContentScript, then currently sends without rechecking A (125?144). A replaced/cancelled/navigated during await can rearm an obsolete overlay. Failure cleanup currently clears by ID, rather than checking captured object; same-ID replacement tests must prove old error cleanup cannot remove a different current object. rearmPick sends captured refused session without an explicit current-object/picking check (204?210).
+
+Content picker session.phase is picking or draining. Pointerdown makes draining, sends a structural pickedMessage, then click/auxclick or10s timer calls stopPick and forgets session (session.ts:87?127). Escape while draining similarly stops local overlay/listeners but deliberately sends no cancellation (183?191). A successful proposal must remain confirmable after these ordinary releases. Existing session tests intentionally infer no target and verify message/Escape behavior; they do not model a valid proposal record after drain. picker-host only marks extension UI as excluded from page recording/snapshot/hit-test; it supplies no extraction ownership or teardown proof and needs no edit.
+
+Content extraction handling parses any string sessionId, starts it, stops picker on any cancel, and stops then records on any record (messages.ts:42?85). Thus old cancel/record A can stop current B. Record's actual definition gate/recording state still applies in recordExtraction; session IDs are additional local routing identity, not authorization. message-handler.ts:120 restricts extraction handling to top frame; its runtime sender is currently ignored. This plan neither changes nor certifies broader sender/auth enforcement.
+
+## Recommended bounded partitions, serial after current preview and real-ID work
+
+### A. Background unissued-start currentness ? exact two paths
+
+Product: apps/extension/src/background/extraction/control.ts. NEW owning test: apps/extension/src/background/tests/extraction-start-currentness.test.ts. No store/definition/wire/confirm/runtime/tabs edit required. Serial with backend preview and ID adoption because control overlaps.
+
+Capture the actual ExtractionSession returned by sessions.start. After ensureContentScript, require sessions.get(id)===captured and picking state before sendToTab; if no longer current, return existing no_session refusal and do not send. After send awaits, recheck exact object before reporting a usable start acknowledgement. Do not insist it is still picking after acknowledgement: real user pick may already have changed it to picked. Failure cleanup clears only when captured object is still stored; old catch/refusal cannot clear same-ID replacement. Before rearm dispatch require exact current stored refused object and picking state, retaining original failed-rearm refusal semantics. No stronger promise about already-issued stale commands.
+
+Tests-first actual handleExtractionControl with local deferred ensure/send: A cancelled/replaced/clearTab before ensure resolves sends zero pickStart; valid current sends exactly one to original tab/frame0; A error/refusal after same-ID object replacement does not remove replacement; fast pick before start ack still acknowledges correct real ID; retired rearm sends no new overlay. Original control/confirm/boundary/preview suites and shared harness unchanged.
+
+### B. Receiver known-retired/exact-ID lifecycle ? exact four initial paths, protocol decision required
+
+Proposed product: apps/extension/src/content/picker/session.ts and messages.ts. NEW owning tests: content/picker/tests/receiver-ownership.test.ts and content/picker/tests/confirmation-lifetime.test.ts. Existing session.test.ts remains unchanged. No picker-host, message-handler, recorded-event, recorder/Core/protected manager edit needed. Existing picker/index.ts needs no change because messages imports internal session directly. If truthful new content-refusal vocabulary is selected, add shared/extraction-messages.ts plus exact owning shared contract test only after explicit supervisor release; do not infer that extra release here.
+
+Session module owns one local identity lease separate from the overlay/listener lifetime. The lease tracks real current ID/form and whether a successful structural list proposal was produced. Keep a document-memory retired-ID set for known replaced/cancelled IDs; it contains identities only, never page values or tokens, and is not persisted. Unknown opaque IDs cannot prove chronology. Start B retires known A; repeated start for currently picking B is idempotent, refused B may rearm same B, and an accidental same-ID start after successful pick must not forget its confirmation identity. A known-retired start cannot replace B.
+
+Split ordinary drain release from retirement: internal release removes overlay/listeners/timer but leaves the successful picked lease; explicit matching cancellation/replacement retires it. Existing exported stopPick remains a hard local cleanup suitable for original test teardown; actual drain completion and draining Escape call the narrow release operation. A refusal/nonproposal remains rearmable under same ID as background currently expects. A stale drain timer captures original session/phase and does nothing after B; clearing a timer alone is not the ownership proof. Preserve swallowing the entire physical press,10s backstop and D3 structural messages.
+
+Matching cancel requires current lease ID equality before removing listeners/overlay or confirmation lease. Unknown/retired cancellation is an idempotent successful no-op and may remember that known cancelled ID so a later delivery of that same start cannot rearm it. It must not touch B. Current cancel after overlay already drained still retires its matching confirmation lease. Do not send background cancellation merely because document/popup disappeared.
+
+Record from current lease A is accepted only for exact A and a valid picked/confirmation lifecycle. It releases only A's overlay drain and invokes existing recordExtraction exactly once for that one accepted command; definition and recording gates remain authoritative. Never stop B before checking ID. Ordinary successful record must continue to work after click/auxclick/timer/draining-Escape released overlay. A mismatching/known-retired A record cannot emit any event or alter B.
+
+This unit should preserve current duplicate/retry recording behavior unless supervisor explicitly releases idempotence semantics: background records before run, a run failure leaves session picked, and a later Confirm retry may carry a newly built dataset nonce. Consuming all identity on first record or returning cached success for a different definition would change truthful recording/count contracts. A one-call valid Confirm emits one event; at-most-once across multiple explicit retries is a separate contract decision, not asserted by this bounded ownership plan.
+
+## Valid no-pick testDefineExtraction compatibility
+
+Existing defineForTest supplies generated sessionId to confirmExtraction when recording, with no content pick lease at all. Blanket require-picked guard would break supported Lab/control behavior. Supervisor explicitly requires preserving this seam. Bounded compatibility recommendation: when receiver has NO current lease and requested ID is not known retired, retain the legacy no-pick record path and existing recordable-definition/isRecording gates; do not create/replace a pick lease or stop any overlay. When a different live/picked lease B exists, an unowned A record must be refused rather than cancelling B. The seam's active-picker concurrency policy therefore needs supervisor acknowledgement; supported normal no-pick seam remains valid.
+
+This compatibility cannot distinguish an unknown historical record from an intentional no-pick definition in an otherwise idle content document. Document that unresolved proof. Do not pretend random ID or a new source flag authorizes the definition. A stronger explicit trusted-definition record mode/handshake would require synchronized shared message type, control/confirm routing, content parsing and tests, preserving exact control-page origin enforcement and test seam behavior; keep it HELD separately.
+
+For stale record/start refusal, prefer truthful local stale-session vocabulary rather than not_recording (which would be false). Existing vocabulary has only unreadable_request/not_recording/invalid_definition. Supervisor must choose either a narrow synchronized stale_session addition, or explicitly document invalid_definition as including invalid session binding; neither option authorizes silent wire change. Cancel no-op can keep existing ok:true semantics.
+
+## Never-seen already-issued start limit
+
+Known-retired A is rejectable after B; cancelled A can be tombstoned even when no overlay exists. However IDs are opaque strings, so receiver cannot know whether never-seen A delivered after B is older or a legitimate newly started pick. Background pre-dispatch guard prevents unissued stale work; it cannot revoke A already issued before B was created. Do not claim complete start delivery ordering from local ID set or assume Chrome ordering without evidence.
+
+Stronger ordering/handshake remains HELD. Future exact contract scope would include shared/extraction-messages.ts, background/extraction/control.ts and session-store.ts, content/picker/messages.ts and session.ts, plus owning background/content/shared tests. Need an actual browser-document/worker lifetime ordering handshake and restart semantics before inventing a counter or generation. A monotonically increasing number that resets on worker restart, or sorted UUIDs, is not proof. No protected recording/project authorization source is required for current bounded partition and none inspected here.
+
+## Tests-first receiver schedules and fixture boundaries
+
+- Actual handler start A then B, deliver old cancel A: B remains current with every listener/overlay; matching cancel B releases only B. Unknown cancel stays safe/idempotent. Known retired start A after B does nothing.
+- Successful structural proposal A, drain click/auxclick or captured10s timer, then record A through actual extractionContentMessage/handleExtractionMessage: valid existing definition records once for that call, with no page values attached; Escape during draining also preserves confirmation. Picking Escape retires/announces exact ID as original assertions require.
+- Refused proposal rearms same ID through background message; stale duplicate start does not downgrade a current successful picked lease; current repeated start does not duplicate listeners.
+- Retained old timer/listener after B cannot release B. Matching cancel after proposal drain retires confirmation without sending spurious background messages.
+- Old/mismatched/retired A record while B picking or picked emits zero, preserves B overlay/lease, returns chosen truthful refusal. Current invalid definition/not-recording refusal preserves appropriate current lease/retry behavior.
+- No-pick definition with no known owner succeeds through supported recording seam; no identity/pairing claim. Idle known-retired record remains refused. Define concurrency with current B is a policy test only after supervisor decision.
+- Recording-first/run-failure behavior and original top-frame/control-origin/D3/D12/20-row preview tests remain unchanged. No at-most-once retry guarantee without its own contract.
+
+New confirmation test needs a genuine successful proposal lifecycle; current old session fixture uses no hit target. Do not falsify picked phase through an invented ID property. Build NEW-test local minimal synthetic list DOM sufficient for actual inference, or use existing owning inference fixture only if direct bounded reuse is available. If that is too large/unsupported, request exact new test support/module scope rather than editing old session fixture/assertions or replacing inference with a production-only test hook. Recorder capture testing should use existing public setup/emit seam in a NEW local synthetic harness; ask for read-only recorder test-support scope before discovery, since protected recorder/runtime implementation is not part of this brief.
+
+After explicit source/test/compatibility release, run new original failures first then owning suites through external TEMP harness/heavy.sh, actual-config exact-root strict types, and protected-file/original assertion comparison. Supervisor independently reviews and runs coordinated full extension/type/build/structure; no live browser result inferred.
+
+## Final return
+
+Only this report changed. No source/tests/gates/commits/private/live/Core operations. Frozen preview/recovery/ID plans unchanged. Bounded background and receiver units are executable after exact release plus refusal/no-pick concurrency decisions; never-seen issued ordering, universal no-pick record proof, across-retry idempotence and project/recording authority remain explicitly HELD. Actual valid picked lifecycle survives overlay drain; local session ID is identity, not authorization.

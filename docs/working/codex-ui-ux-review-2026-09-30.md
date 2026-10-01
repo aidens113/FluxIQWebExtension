@@ -62,26 +62,33 @@ Three next slots are released: Menu two paths, mounted Chat eight and extraction
 draft/control four. Root ninth-supervisor-verification.md preserves original
 failures, refinements and exact full gates; no browser certification.
 
-Tenth Active: extraction draft/control frozen and independently verified66/66,
-native0/654.7189ms, strict four-root typing0. Core database semantic refinement
-passes existing three suites25/native0/8.70s. Menu independent130 pass and local
-Core687ddc58 checkpoint; Chat independent118/strict8roots0 and downstream425f58af
-checkpoint. Core types/build passed, full2547pass/1login-lock EPERM failed;
-full certification remains incomplete. All slots assigned: extraction recovery,
-shared environment implementation and bounded login-lock fix. Root turn Open
-FluxIQ lease tests-first2fail, corrected32pass/native0/276.3537ms; typing pending.
-
-Latest tenth Core Complete: corrected full61471 native0,340files2629tests/194.11s;
+Tenth Core Complete: corrected full61471 native0,340files2629tests/194.11s;
 types50626 native0/95150ms and build45474 native0/202003ms. Final structure only
 protected4506/4505 after comment-only cleanup rationale markers. Core source
-checkpoints687ddc58/2d9306b6/a466c972. Extension checkpoints9126ba06/425f58af/
-b3be2c24/9714f9a2; root shell60/native0/955.8845ms and strict4roots0, extraction
-102/scoped6roots0 and turn Open32/scoped4roots0. Full extension79670/types85639/
-build87286/structure79422 active on frozen source. Maximum slots now assigned:
-Core Combobox, Core Field and read-only extraction backend preview preparation.
+checkpoints687ddc58/2d9306b6/a466c972. Extension source checkpoints9126ba06/
+425f58af/b3be2c24/9714f9a2/929d9af6; root shell60/strict4roots0,
+extraction102/strict6roots0, mounted Chat118/strict8roots0 and turn Open32/
+strict4roots0. Full79670 observed2005pass/native0/112757.7935ms; types85639
+native0/27355ms; build87286 native0/22files per target/12423ms. Structure79422
+failed3 new violations: two cross-directory imports and one missing inline
+best-effort rationale. Root released Chat index export and reconciled those
+imports/comment after all full sessions closed; shell60/native0/934.9354ms and
+Chat33/native0/169.5105ms passed after reconciliation. Strict four-root types0 and
+actual scoped imports/swallowed-failure rules0; next full structure follows backend freeze.
+No baseline or compiler relaxation.
+
+Maximum slots assigned: runtime_contracts owns Core floating entry-focus two-file
+unit after Combobox freeze; deployment_docs_audit owns Core lazy database JSON
+two-file unit after Field freeze; recording_controls owns downstream backend preview
+three-file implementation. Exact written briefs are their reports. Session-ID
+adoption plan is Complete but held for serial implementation after backend
+preview. Root owns integration, verification and durable paired documents. Backend preview
+independent52/native0/856.2527ms; current downstream product/tests frozen for
+eleventh full gates. Combobox/Field independent54/strict4roots0 checkpoint10ce95a7.
+[Eleventh verification](./codex-ui-ux-review-2026-09-30/reports/eleventh-supervisor-verification.md)
+owns current results; receiver plan read-only while real-ID implementation waits.
 [Tenth verification](./codex-ui-ux-review-2026-09-30/reports/tenth-supervisor-verification.md)
-records limits; [shell working owner audit](./codex-ui-ux-review-2026-09-30/reports/shell-working-owner-audit.md)
-is read-only backlog. Broad gates follow owning source freeze; no Claude integration.
+preserves failures and limitations. No Claude integration or browser certification.
 
 Earlier batch evidence stays in the ledger, worker reports and first-four archive.
 [Superseded Current State](./codex-ui-ux-review-2026-09-30/archive/2026-10-01-pre-eighth-current-state.md)
@@ -526,6 +533,15 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Synthetic deferred tests first, original owning tests retained, narrow heavy/scoped then freeze. No shared helpers/callers/redaction/storage/protocol/Core/styles/docs edits, real activity/browser/provider/panel operations or commit/push.
 
 ## Work Ledger
+
+### 2026-10-01 - Maximum slots renewed after closed extension gates
+- Agent: supervisor
+- Changed: exact new briefs, root Chat facade/import/comment reconciliation, paired Current State.
+- Why: verify complete extension fixes and keep all three independent lanes productive without Claude interference.
+- Validation: extension full2005/native0/112757.7935ms, types0/27355ms and build0/12423ms; original structure3 failures preserved. Corrected shell60 and Chat33 pass; Core controls54/native0/3.03s independently observed.
+- Outcome: Narrow controls accepted; downstream structural reconciliation pending strict/structure. No merge/push/live/private operations.
+- Follow-up: database JSON, floating entry focus and backend preview workers active in exact disjoint partitions; session-ID implementation held.
+
 
 ### 2026-10-01 - Extraction Retry independently verified; next ownership audit active
 - Agent: supervisor

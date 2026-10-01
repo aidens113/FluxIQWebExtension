@@ -1,6 +1,6 @@
 # Menu keyboard and disabled activation recovery
 
-Status: Planned — product/test source held pending explicit supervisor release
+Status: Complete — exact two source/test paths frozen for independent supervisor review
 Owner: deployment_docs_audit worker
 Date: 2026-10-01
 
@@ -52,3 +52,38 @@ Use actual Menu with a bounded synthetic portal/document fixture, actual owning 
 ## Held decisions / boundaries
 
 Confirm disabled href non-link presentation and trigger-anchored native Tab policy with root before release. Exact two product/test paths appear sufficient; environment options mutation is within its existing public contract, but root can choose a separately owned environment policy follow-up instead. No source/test edits, heavy commands, browser/provider/panel/private payload operations, shared docs or commits occurred in planning. Global return/trap/Escape/new-body-root fixes remain separate backlog; source/component tests will not certify browser/IME/assistive-technology behavior.
+
+## Implementation ledger
+
+Supervisor released exact two paths after independently observed ninth Core338files2506tests/types/build. Approved disabled href non-link presentation, native trigger-departure Tab and cleanup suppression. New owning actual-component fixture and tests now written; initial reproduction pending. Shared environment source remains unchanged. Root requires caller exception propagation and operation-owned finally close, current captured option/lifetime fences and original assertions preserved.
+
+Initial native1 reproduced20failed/4passed in1.32s: disabled href, trigger keyboard entry, Tab close, modified/composing navigation, retained removed/disabled actions, duplicate activation, caller exception preventing close and ArrowUp fallback. Source then implemented approved policies and first narrow six-suite run passed112/native0/2.29s.
+
+Final behavior: eligible connected/rendered/nonhidden/noninert/effectively enabled menu items use a roving tab stop; trigger ArrowDown/Up enters first/last. Current native Arrow/Home/End movement uses owner-document focus and explicit absent-focus fallback. Modifier/handled/native IME events retain native behavior. Native Enter/Space are never synthesized; real button/link activation remains responsible. Disabled href options have aria-disabled non-link presentation without href, while enabled Next Link href and modified-click behavior remain intact. Current options are checked by captured option instance and synchronous menu epoch, fencing removed/replaced/disabled/retired callbacks. Newer menu epochs survive old action finalizers; dispatch lock release is epoch-owned too.
+
+Tab/Shift+Tab requires current event target to own document focus, closes synchronously, focuses an eligible trigger as native departure point, and leaves default movement unprevented. The environment options object's returnFocus stays null on Tab/action/outside/teardown. Current eligible Escape/explicit dismissal may restore the initiating trigger only if this menu still owns focus or removal leaves body/disconnected focus; outside moved focus is preserved. Original environment source, listeners/stack/trap/isolation/scroll behavior remain unchanged. Current option update reconciliation retains valid focus/roving ID, repairs removed owned focus, and does not claim outside control focus. Retired focus/key/viewport callbacks are fenced.
+
+## Final validation / exact return
+
+- Final six-suite native0:130/130,2.35s. New Menu42 plus unchanged component-contracts20, OperationGate1, Studio overlay-hardening10, Modal keyboard42 and ModalContent entry15. No original assertion changed or skipped. Reentrant action test synchronously closes/reopens its menu and proves old finally cannot close the newly registered menu.
+- Actual web tsconfig scoped to exact Menu/new-test roots: initial native1 on createNodeMock props unknown typing in the new test only; fixed with an explicit narrow props type. Final native0,3.86s. Temporary config removed; no compiler setting relaxed except disabling isolated incremental cache.
+- Exact Core source/test whitespace diff check native0. Source frozen after final checks: apps/web/src/features/programs/components/controls/Menu.tsx and new controls/tests/Menu-keyboard.test.tsx. Only this own downstream report changes additionally; no environment/Modal/Link/router/helper/style/shared docs/protected/backend source touched.
+- Bounded tests mock Next Link as its rendered native-anchor public boundary and inspect href/prevention, not an invented navigation implementation. They verify handler/focus call order, not real Next router transitions or browser native Tab destinations. Live browser/IME/inert/assistive-technology behavior remains uncertified. Global capture Escape IME guards and underlying-modal trapping stay separate source backlog.
+- Root owns independent review, module-budget assessment, full gates, authored docs/integration and any commit. No broad/live/provider/panel/private data/commit/push operations occurred.
+
+## Reproducible scoped type harness
+
+Run from paired Core t224. The original TEMP harness was removed in finally after the check; no persistent harness file was added.
+
+```powershell
+$menuTypeConfig = Join-Path $env:TEMP ('codex-menu-types-' + [guid]::NewGuid().ToString('N') + '.json')
+$env:CODEX_MENU_TYPE_CONFIG = $menuTypeConfig
+@'
+const fs = require('node:fs');
+const root = 'C:/Users/osrs_/FluxStuff/fxwork/t224/!FluxIQ/apps/web';
+const base = root + '/src/features/programs/components/controls/';
+fs.writeFileSync(process.env.CODEX_MENU_TYPE_CONFIG, JSON.stringify({ extends: root + '/tsconfig.json', compilerOptions: { incremental: false }, include: [], files: ['Menu.tsx','tests/Menu-keyboard.test.tsx'].map(file => base + file) }));
+'@ | node
+try { & 'C:/Program Files/Git/bin/bash.exe' 'C:/Users/osrs_/FluxStuff/build-slots/heavy.sh' 'codex menu final scoped types' pnpm --filter @fluxiq/web exec tsc --project $menuTypeConfig --noEmit; $menuTypeExit = $LASTEXITCODE } finally { Remove-Item -LiteralPath $menuTypeConfig; Remove-Item Env:CODEX_MENU_TYPE_CONFIG }
+exit $menuTypeExit
+```

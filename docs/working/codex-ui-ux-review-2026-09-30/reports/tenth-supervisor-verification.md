@@ -1,8 +1,12 @@
 # Tenth UI recovery verification
 
-Status: Active
+Status: Complete (tenth source and integration independently verified; current backend work separate)
 Owner: senior supervisor
 Date: 2026-10-01
+
+## Final current state
+
+Tenth Core full2629/types/build passed, structure only inherited protected4506/4505. Tenth extension full2005/types/build passed. Original structure3 failures were reconciled without behavior/compiler/baseline changes: independent shell60/Chat33, strict4roots0 and actual scoped imports/swallowed-failure rules0. Global structure follows the separately released new backend preview unit and is tracked in eleventh-supervisor-verification.md. Original failures and chronological provisional claims below remain historical evidence, superseded by this state. No browser certification, merge or push.
 
 ## Independently observed results
 
@@ -35,3 +39,9 @@ Chat independent root review covered all four product modules and new mounted sc
 Receipt final boundary gate passed three suites30/native0/386.3977ms, including nineteen new cases plus original structural/client seams. Two-root actual-config typing0 observed before the last test-only transport identity correction. Earlier eight/nine-suite aggregate passes remain provisional through panel worker source changes; root owning boundary gate imports no panel. Numeric validation/provenance source is frozen for the worker read helper.
 
 All worker slots remain assigned: mounted Chat implementation, extraction E3/E4 read-only recovery planning, and overlay environment read-only executable brief. Core is source-frozen for supervisor verification after Menu completion; extension full gates wait for mounted Chat freeze. New shell working-owner audit is read-only and awaits independent review of the Chat owner helper before implementation. Claude/main/protected backend paths, live browsers/providers/panel and private state remain untouched; no integration/push authorized for this isolated lane.
+
+## Closed extension gates and structure reconciliation
+
+Full79670 independently observed2005/2005/native0/112757.7935ms; types85639 native0/27355ms; production87286 native0/12423ms,22files each Chrome/Firefox/e2e. Sessions closed before product edits. Structure79422 native1 identified two new facade import violations and composer missing best-effort handler rationale. Root explicitly owns additional chat/index.ts facade export, mount-panel.ts import consolidation, Open FluxIQ test import through its existing facade and composer inline rationale; no behavior, compiler or baseline change. The composer still delegates send feedback to its controller and restores only its own operation controls. Unexpected completion errors remain existing best-effort behavior; this comment does not certify recovery from storage failures. Root affected tests/strict typing and targeted structure pending.
+
+All three workers released in writing: Combobox keyboard follow-up, database JSON implementation and backend preview implementation. Field frozen with worker33/scoped0 claim, root independent verification pending. Real-ID adoption plan Complete, implementation held until preview freeze. No merge/push/live/private operations.
