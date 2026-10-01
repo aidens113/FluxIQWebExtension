@@ -1,6 +1,7 @@
-import { chromium, type Browser, type Page } from "@playwright/test";
+import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import type { ExpectedFact } from "@fluxiq-web-extension/test-contracts";
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
+import { closeLabSession } from "../../tests/close-lab-session.js";
 
 /** One lab, one browser context, one page on the store's home page: a shopper's session. */
 export type StoreSession = { lab: RunningScenarioLab; page: Page; close(): Promise<void> };
@@ -9,6 +10,8 @@ export type StoreSession = { lab: RunningScenarioLab; page: Page; close(): Promi
 export type ReadCard = { sponsored: boolean; plus: boolean; name: string; price: string; rating: string; url: string };
 
 const RUN_TOKEN = "everything-store-browser-token";
+/** Far beyond any answer the in-process fixture gives, which is a few milliseconds even on a saturated machine. */
+const CONTROL_TIMEOUT_MS = 15_000;
 
 /**
  * Reads every listing card on a results page. What makes a card sponsored is
@@ -39,23 +42,38 @@ const READ_CART = String.raw`[...document.querySelectorAll('[data-name="Active I
 /** One browser for every session, launched once however many sessions start at the same moment. */
 let launching: Promise<Browser> | undefined;
 
+/**
+ * Opens a session. The lab is closed whatever fails after it starts, opening
+ * or closing: a lab left open keeps the test file from ever exiting
+ * (`closeLabSession`).
+ */
 async function openStore(mode?: string): Promise<StoreSession> {
   launching ??= chromium.launch({ channel: "chromium", headless: true });
   const browser = await launching;
   const lab = await startScenarioLab({ runToken: RUN_TOKEN, seed: 241 });
-  if (mode) await control(lab, "/api/everything-store/set-mode", { mode });
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-US", timezoneId: "UTC" });
-  const page = await context.newPage();
-  await page.goto(`${lab.origin}/scenarios/everything-store/`);
-  return { lab, page, close: async () => { await context.close(); await lab.close(); } };
+  let context: BrowserContext | undefined;
+  try {
+    if (mode) await control(lab, "/api/everything-store/set-mode", { mode });
+    context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-US", timezoneId: "UTC" });
+    const page = await context.newPage();
+    await page.goto(`${lab.origin}/scenarios/everything-store/`);
+    const opened = context;
+    return { lab, page, close: () => closeLabSession(lab, opened) };
+  } catch (error) {
+    // The opening failure is the one to report; the lab is closed either way.
+    await closeLabSession(lab, context).catch(() => undefined);
+    throw error;
+  }
 }
 
+/** A control or store API request. It is bounded, so a fixture that stops answering fails naming the request. */
 async function control(lab: RunningScenarioLab, path: string, body?: unknown): Promise<unknown> {
   const response = await fetch(`${lab.origin}${path}`, {
     method: body === undefined ? "GET" : "POST",
     headers: { authorization: `Bearer ${RUN_TOKEN}`, "content-type": "application/json" },
+    signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS),
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
+  }).catch((error: unknown) => { throw new Error(`${path} did not answer: ${String(error)}`, { cause: error }); });
   if (!response.ok) throw new Error(`${path} answered ${response.status}`);
   return response.json();
 }
@@ -106,12 +124,19 @@ async function awaitLiveProductPage(page: Page): Promise<void> {
   await page.getByTitle("Close", { exact: true }).click();
 }
 
-/** Types the words into the search box, searches, and passes the browser check the first search meets. */
+/**
+ * Types the words into the search box, searches, and passes the browser check
+ * the first search meets. Both waits are the page's own: the check's button
+ * is named "Continue shopping" `softCheckButton` after its page loads, and the
+ * results render `resultsHydrate` after theirs. A fixed six seconds counted
+ * the navigations too, and on a loaded machine the navigation alone took
+ * longer, so they keep Playwright's default bound instead.
+ */
 async function search(page: Page, words: string): Promise<void> {
   await page.getByRole("textbox", { name: "Search Brightaisle" }).fill(words);
   await page.getByRole("button", { name: "Go", exact: true }).first().click();
-  await page.getByRole("button", { name: "Continue shopping" }).click({ timeout: 6000 });
-  await page.locator(`[data-component="search-result"][data-sku]`).first().waitFor({ timeout: 6000 });
+  await page.getByRole("button", { name: "Continue shopping" }).click();
+  await page.locator(`[data-component="search-result"][data-sku]`).first().waitFor();
 }
 
 /** Scrolls until the page's last result has loaded, as a reader who reaches the bottom does. */

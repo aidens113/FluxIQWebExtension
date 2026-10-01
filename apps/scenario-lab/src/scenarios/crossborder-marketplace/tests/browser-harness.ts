@@ -1,6 +1,7 @@
 import { chromium, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
+import { closeLabSession } from "../../tests/close-lab-session.js";
 import { MARKET_SEED } from "../manifest/index.js";
 
 /**
@@ -43,7 +44,19 @@ export async function openSession(): Promise<Session> {
   browser ??= chromium.launch({ headless: true, channel: "chromium", args: ["--process-per-site"] });
   const runToken = `t042-${Math.random().toString(36).slice(2, 12)}-browser`;
   const lab = await startScenarioLab({ runToken, seed: MARKET_SEED });
-  const context = await (await browser).newContext({ viewport: { width: 1280, height: 720 }, locale: "en-US", timezoneId: "UTC" });
+  // From here the lab is closed whatever fails, opening or closing, or the file never exits (`closeLabSession`).
+  const context = await (await browser).newContext({ viewport: { width: 1280, height: 720 }, locale: "en-US", timezoneId: "UTC" })
+    .catch(async (error: unknown) => { await closeLabSession(lab).catch(() => undefined); throw error; });
+  try {
+    return await openTab(lab, context, runToken);
+  } catch (error) {
+    await closeLabSession(lab, context).catch(() => undefined);
+    throw error;
+  }
+}
+
+/** The session's first tab on the market's home page, and the session around it. */
+async function openTab(lab: RunningScenarioLab, context: BrowserContext, runToken: string): Promise<Session> {
   const errors: string[] = [];
   const watch = (page: Page) => {
     page.on("pageerror", (error) => errors.push(`pageerror: ${error.message}`));
@@ -82,10 +95,7 @@ export async function openSession(): Promise<Session> {
       const response = await fetch(`${lab.origin}/__control/final-state?scenario=crossborder-marketplace`, { headers: { authorization: `Bearer ${runToken}` } });
       return ((await response.json()) as { state: Record<string, unknown> }).state;
     },
-    async close() {
-      await context.close();
-      await lab.close();
-    },
+    close: () => closeLabSession(lab, context),
   };
   await first.goto(`${lab.origin}/scenarios/crossborder-marketplace/`);
   return session;

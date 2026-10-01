@@ -101,13 +101,15 @@ describe("a naive shopper fails", { concurrency: true }, () => {
       await kit.search(page, "wireless earbuds");
       const statuses: number[] = [];
       let retryAfter: string | null = null;
+      // Each page is left the moment its answer arrives, unread. Waiting for each to load made the burst only as fast
+      // as the browser renders, and on a loaded machine five pages then took longer than the limiter's window.
       for (let pageNumber = 2; pageNumber <= 6 && retryAfter === null; pageNumber += 1) {
-        const response = await page.goto(`${lab.origin}/scenarios/everything-store/s?k=wireless+earbuds&page=${Math.min(pageNumber, 5)}`);
+        const response = await page.goto(`${lab.origin}/scenarios/everything-store/s?k=wireless+earbuds&page=${Math.min(pageNumber, 5)}`, { waitUntil: "commit" });
         statuses.push(response?.status() ?? 0);
         retryAfter = response?.headers()["retry-after"] ?? null;
       }
       assert.ok(statuses.includes(429), `a burst is refused: ${statuses.join(", ")}`);
-      assert.ok(await page.getByTestId("rate-limited").isVisible());
+      await page.getByTestId("rate-limited").waitFor();
       await kit.pause(Number(retryAfter) * 1000 + 200);
       const retried = await page.goto(`${lab.origin}/scenarios/everything-store/s?k=wireless+earbuds&page=2`);
       assert.equal(retried?.status(), 200, "waiting as asked works");

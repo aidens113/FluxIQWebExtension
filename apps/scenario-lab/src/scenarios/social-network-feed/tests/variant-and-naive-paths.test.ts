@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { after, before, describe, it } from "node:test";
-import { chromium, type Browser, type Locator, type Page } from "@playwright/test";
+import { chromium, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import { resolveScenarioWorkflow, type ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
+import { closeLabSession } from "../../tests/close-lab-session.js";
 import { communityBySlug, feedPlanFor, fullDateText, MAYA, personBySlug } from "../content/index.js";
 import { cutText } from "../markup/index.js";
 import { socialNetworkFeedScenario as scenario } from "../scenario.js";
@@ -30,17 +31,25 @@ type Session = { lab: RunningScenarioLab; page: Page; errors: string[]; close():
 
 async function session(mode?: FeedMode): Promise<Session> {
   const lab = await startScenarioLab({ runToken: randomBytes(24).toString("base64url"), seed: manifest.seed });
-  if (mode) {
-    const response = await fetch(`${lab.origin}/api/${manifest.id}/set-mode`, { method: "POST", headers: { authorization: `Bearer ${lab.runToken}`, "content-type": "application/json" }, body: JSON.stringify({ mode }) });
-    assert.equal(response.status, 200);
+  let context: BrowserContext | undefined;
+  try {
+    if (mode) {
+      const response = await fetch(`${lab.origin}/api/${manifest.id}/set-mode`, { method: "POST", headers: { authorization: `Bearer ${lab.runToken}`, "content-type": "application/json" }, body: JSON.stringify({ mode }) });
+      assert.equal(response.status, 200);
+    }
+    context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-GB", timezoneId: "UTC" });
+    await context.route("**/favicon.ico", (route) => route.fulfill({ status: 204, body: "" }));
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(`${lab.origin}${ROOT}`);
+    const opened = context;
+    return { lab, page, errors, close: () => closeLabSession(lab, opened) };
+  } catch (error) {
+    // The opening failure is the one to report; the lab is closed either way, or the file never exits.
+    await closeLabSession(lab, context).catch(() => undefined);
+    throw error;
   }
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-GB", timezoneId: "UTC" });
-  await context.route("**/favicon.ico", (route) => route.fulfill({ status: 204, body: "" }));
-  const page = await context.newPage();
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto(`${lab.origin}${ROOT}`);
-  return { lab, page, errors, close: async () => { await context.close(); await lab.close(); } };
 }
 
 function locate(page: Page, target: string): Locator {

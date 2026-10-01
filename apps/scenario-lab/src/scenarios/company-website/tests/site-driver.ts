@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { chromium, type Browser, type BrowserContext, type Frame, type Locator, type Page } from "@playwright/test";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
+import { closeLabSession } from "../../tests/close-lab-session.js";
 import type { CompanyWebsiteState } from "../types.js";
 
 /**
@@ -37,8 +38,9 @@ export async function closeBrowser(): Promise<void> {
 /** A fresh lab and a fresh browser context; `arm` is posted before the start page loads, as the existing-Flow lane arms. */
 export async function withSite<T>(run: (session: SiteSession) => Promise<T>, options: { arm?: { operation: string; payload?: unknown }; seed?: number } = {}): Promise<T> {
   const lab = await startScenarioLab({ runToken: randomBytes(24).toString("base64url"), seed: options.seed ?? 4519 });
-  const context = await (await browser()).newContext({ viewport: { width: 1280, height: 720 }, locale: "en-GB", timezoneId: "UTC" });
+  let context: BrowserContext | undefined;
   try {
+    context = await (await browser()).newContext({ viewport: { width: 1280, height: 720 }, locale: "en-GB", timezoneId: "UTC" });
     if (options.arm) await mutate(lab, options.arm.operation, options.arm.payload ?? {});
     const page = await context.newPage();
     const consoleErrors: string[] = [];
@@ -47,8 +49,8 @@ export async function withSite<T>(run: (session: SiteSession) => Promise<T>, opt
     await page.goto(`${lab.origin}${START_PATH}`);
     return await run({ lab, page, context, consoleErrors });
   } finally {
-    await context.close();
-    await lab.close();
+    // The lab is closed whatever the context does, or the file never exits (`closeLabSession`).
+    await closeLabSession(lab, context);
   }
 }
 

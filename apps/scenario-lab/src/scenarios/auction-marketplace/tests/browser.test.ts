@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { after, before, test } from "node:test";
-import { chromium, type Browser, type Page } from "@playwright/test";
+import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { resolveScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
+import { closeLabSession } from "../../tests/close-lab-session.js";
 import { listingByHandle } from "../catalog/index.js";
 import { KESTREL_AUCTIONS } from "../manifest.js";
 import { MARKET_ROOT } from "../paths.js";
@@ -31,13 +32,21 @@ type Session = { lab: RunningScenarioLab; page: Page; errors: string[]; close():
 
 async function session(mode: AuctionMode = "baseline", seed = 4040): Promise<Session> {
   const lab = await startScenarioLab({ runToken: randomBytes(24).toString("base64url"), seed });
-  if (mode !== "baseline") await post(lab, "set-mode", { mode });
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-GB", timezoneId: "Europe/London" });
-  const page = await context.newPage();
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto(`${lab.origin}${MARKET_ROOT}`);
-  return { lab, page, errors, close: async () => { await context.close(); await lab.close(); } };
+  let context: BrowserContext | undefined;
+  try {
+    if (mode !== "baseline") await post(lab, "set-mode", { mode });
+    context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-GB", timezoneId: "Europe/London" });
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(`${lab.origin}${MARKET_ROOT}`);
+    const opened = context;
+    return { lab, page, errors, close: () => closeLabSession(lab, opened) };
+  } catch (error) {
+    // The opening failure is the one to report; the lab is closed either way, or the file never exits.
+    await closeLabSession(lab, context).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function post(lab: RunningScenarioLab, operation: string, payload: unknown): Promise<void> {
