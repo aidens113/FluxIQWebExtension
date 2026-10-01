@@ -1674,6 +1674,29 @@ no newer push or command acknowledgement has been observed. This prevents slow
 startup reads from rolling the displayed connection/recording state backwards;
 request results and command acknowledgement publication retain their contracts.
 
+Conversation reads invalidate old publications on thread or connection changes.
+Answers dispatch only for a pending ask in the confirmed current thread; each
+operation owns its completion and lock, so an old same-ID answer cannot release
+the new thread's pending answer. Injected request throws/rejections use fixed
+recoverable feedback and retain ordinary fulfilled relay failure behavior.
+Accepted sends retain their original destination across thread changes. A late
+refusal cannot place the newly opened thread into fallback; disconnected state
+takes precedence over fallback. Core/project replacement across the entire
+mounted Chat remains a separately scoped ownership concern.
+
+Automation metadata and controls use a local owner revision for confirmed
+gateway/Core address, client, project and pairing context. Missing optional
+settings retain the confirmed Core address; volatile runtime/session evidence
+does not reset an owner. Replacements retire foreign rows, details, notices and
+rendered callbacks. Connection epochs retire pending operations while retaining
+same-owner confirmed metadata. Current run/export operations verify their known
+flow/run/dataset tuple and own acknowledgement, delivery and lock release. A
+parsed detail summary that explicitly names another run or flow is withheld;
+legacy omitted summaries remain supported. Offline controls dispatch nothing,
+and a new active owner can recover from an old unsupported-list fallback using
+the existing cadence. These are frontend publication/activation guards and do
+not cancel or authorize commands already accepted by the background.
+
 Dataset export retains its operation lock through browser delivery. Preparation
 or click failure shows local Retry/Open FluxIQ feedback and releases the lock.
 Temporary download links and owned URLs are cleaned up on success and failure,

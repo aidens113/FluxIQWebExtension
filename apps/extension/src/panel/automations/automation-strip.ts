@@ -26,7 +26,7 @@ export type AutomationStrip = {
 
 /** Builds the strip over `controller`. */
 export function createAutomationStrip(request: PanelStore["request"], controller: AutomationsController): AutomationStrip {
-  const run = createElement("button", { className: "small-button strip-run", text: "Run", attrs: { type: "button" } });
+  let run = createElement("button", { className: "small-button strip-run", text: "Run", attrs: { type: "button" } });
   const open = createOpenFluxIQButton(request, { label: "Open in FluxIQ", look: "link" });
   const lines = createElement("p", { className: "strip-lines" });
   const hint = createElement("p", { className: "strip-hint", hidden: true });
@@ -39,6 +39,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     notice
   ]);
   let shown: AutomationName | undefined;
+  let renderedOwner = controller.state().ownerRevision;
   const nameListeners = new Set<(automation: AutomationName) => void>();
   let lastStatus: ExtensionStatus | undefined;
   const datasets = new Map<string, { element: HTMLElement; label: HTMLElement; buttons: HTMLButtonElement[] }>();
@@ -47,9 +48,21 @@ export function createAutomationStrip(request: PanelStore["request"], controller
   let noticeButton: OpenFluxIQButton | undefined;
   let noticeKey: string | undefined;
 
-  run.addEventListener("click", () => {
-    if (shown !== undefined) void controller.run(shown.flowId);
-  });
+  function bindRun(button: HTMLButtonElement, owner: number): void {
+    button.addEventListener("click", () => {
+      if (!button.disabled && !element.hidden && button === run && owner === controller.state().ownerRevision && shown !== undefined) void controller.run(shown.flowId, owner);
+    });
+  }
+  bindRun(run, renderedOwner);
+
+  function retireOwner(owner: number): void {
+    shown = undefined; renderedOwner = owner; datasets.clear(); exports.replaceChildren();
+    noticeButton?.element.remove(); noticeButton = undefined; noticeKey = undefined;
+    noticeText.textContent = ""; notice.hidden = true; lines.textContent = ""; hint.textContent = "";
+    const nextRun = createElement("button", { className: "small-button strip-run", text: "Run", attrs: { type: "button" } });
+    run.parentNode?.insertBefore(nextRun, run); run.remove(); run = nextRun; bindRun(run, owner);
+    element.hidden = true;
+  }
 
   function exportLine(row: AutomationRowView | undefined): HTMLElement[] {
     const keys = new Set<string>();
@@ -58,19 +71,22 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     const runId = row.runId;
     if (runId === undefined) { datasets.clear(); return ordered; }
     for (const dataset of row.datasets) {
-      const key = JSON.stringify([row.flowId, runId, dataset.datasetId]);
+      const key = JSON.stringify([renderedOwner, row.flowId, runId, dataset.datasetId]);
       if (keys.has(key)) continue;
       keys.add(key);
       const label = dataset.label ?? "Data";
       const count = dataset.recordCount === undefined ? "" : ` (${dataset.recordCount} row${dataset.recordCount === 1 ? "" : "s"})`;
       let mounted = datasets.get(key);
       if (mounted === undefined) {
+        const owner = renderedOwner;
         const flowId = row.flowId;
         const datasetId = dataset.datasetId;
         const caption = createElement("span");
         const buttons = (["csv", "json"] as const).map((format: ExportFormat) => {
           const button = createElement("button", { className: "link-button", text: format.toUpperCase(), attrs: { type: "button" } });
-          button.addEventListener("click", () => void controller.exportDataset(flowId, runId, datasetId, format));
+          button.addEventListener("click", () => {
+            if (owner === controller.state().ownerRevision && datasets.get(key)?.buttons.includes(button) && !element.hidden && !button.disabled) void controller.exportDataset(flowId, runId, datasetId, format, owner);
+          });
           return button;
         });
         mounted = { element: createElement("span", { className: "strip-dataset" }, [caption, buttons[0]!, " · ", buttons[1]!]), label: caption, buttons };
@@ -78,7 +94,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
       }
       mounted.label.textContent = `${label}${count}: `;
       for (const button of mounted.buttons) {
-        button.disabled = row.exporting;
+        button.disabled = row.exporting || controller.state().mode !== "list";
         button.setAttribute("aria-label", `Export ${label} as ${button.textContent}`);
       }
       ordered.push(mounted.element);
@@ -97,13 +113,14 @@ export function createAutomationStrip(request: PanelStore["request"], controller
   }
 
   function draw(): void {
+    const state = controller.state();
+    if (state.ownerRevision !== renderedOwner) retireOwner(state.ownerRevision);
     if (shown === undefined) { element.hidden = true; return; }
     const previous = controls();
     const active = element.ownerDocument.activeElement;
     const index = previous.findIndex((button) => button === active);
     const ownedFocus = index >= 0 && visible(element) && element.ownerDocument.visibilityState === "visible" && element.ownerDocument.hasFocus();
     element.hidden = false;
-    const state = controller.state();
     const row = state.rows.find((candidate) => candidate.flowId === shown?.flowId);
     const renamed = row && row.name !== shown.name ? { flowId: row.flowId, name: row.name } : undefined;
     if (renamed) shown = renamed;
@@ -154,8 +171,10 @@ export function createAutomationStrip(request: PanelStore["request"], controller
   return {
     element,
     show(automation) {
+      const owner = controller.state().ownerRevision;
+      if (owner !== renderedOwner) retireOwner(owner);
       shown = automation;
-      void controller.focus(automation?.flowId);
+      void controller.focus(automation?.flowId, renderedOwner);
       draw();
     },
     draw,

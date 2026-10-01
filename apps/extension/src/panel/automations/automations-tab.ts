@@ -78,11 +78,16 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
 
   const mountedRows = new Map<string, ReturnType<typeof automationRowElement>>();
   let rowOrder: string[] = [];
+  let renderedOwner = controller.state().ownerRevision;
   let active = false;
   let timer: ReturnType<typeof setInterval> | undefined;
 
   function draw(): void {
     const state = controller.state();
+    if (renderedOwner !== state.ownerRevision) {
+      for (const mounted of mountedRows.values()) mounted.remove();
+      mountedRows.clear(); rowOrder = []; renderedOwner = state.ownerRevision;
+    }
     const focusTarget = reconcileRows(state.mode === "list" ? state.rows : [], state.mode === "empty" ? empty : heading);
     offline.hidden = state.mode !== "offline";
     loading.hidden = state.mode !== "loading" || state.readError !== undefined;
@@ -92,7 +97,7 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
     readNotice.title = state.readError?.detail ?? "";
     readNotice.hidden = state.readError === undefined || state.mode === "offline";
     list.hidden = state.mode !== "list";
-    if (state.mode === "fallback") stopTimer();
+    syncTimer();
     strip.draw();
     if (focusTarget && active && !element.hidden && document.visibilityState === "visible" && document.activeElement !== focusTarget) {
       focusTarget.focus({ preventScroll: true });
@@ -110,7 +115,12 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
     for (const [index, row] of rows.entries()) {
       let mounted = mountedRows.get(row.flowId);
       if (mounted === undefined) {
-        mounted = automationRowElement(row, hooks.choose);
+        const owner = renderedOwner;
+        const created = automationRowElement(row, (chosen) => {
+          const state = controller.state();
+          if (owner === state.ownerRevision && mountedRows.get(chosen.flowId) === created && state.mode === "list" && state.rows.some((current) => current.flowId === chosen.flowId)) hooks.choose(chosen);
+        });
+        mounted = created;
         mountedRows.set(row.flowId, mounted);
       } else mounted.update(row);
       // Leave correctly placed nodes untouched; moving a focused node may blur it.
@@ -130,6 +140,14 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
     timer = undefined;
   }
 
+  function syncTimer(): void {
+    const mode = controller.state().mode;
+    if (!active || document.visibilityState !== "visible" || mode === "fallback" || mode === "offline") { stopTimer(); return; }
+    if (timer === undefined) timer = setInterval(() => {
+      if (active && document.visibilityState === "visible") void controller.refresh();
+    }, REFRESH_MS);
+  }
+
   draw();
 
   return {
@@ -138,7 +156,8 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
     render(status) {
       fallbackOpen.observe(status);
       strip.render(status);
-      if (controller.observe(status) && active) void controller.refresh();
+      if (controller.observe(status) && active && document.visibilityState === "visible") void controller.refresh();
+      syncTimer();
     },
     setWorking: (working) => controller.setWorking(working),
     setActive(next) {
@@ -146,11 +165,8 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
       active = next;
       stopTimer();
       if (!next) return;
-      void controller.refresh();
-      if (controller.state().mode === "fallback") return;
-      timer = setInterval(() => {
-        if (document.visibilityState === "visible") void controller.refresh();
-      }, REFRESH_MS);
+      if (document.visibilityState === "visible") void controller.refresh();
+      syncTimer();
     }
   };
 }

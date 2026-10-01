@@ -34,11 +34,11 @@ async function focused(body: (doc: { activeElement: FakeElement; focusCalls: num
 }
 
 function setup() {
-  let state: AutomationsState = { mode: "list", working: false, runInFlight: false, rows: [{ flowId: "f", name: "Orders", runId: "r", lines: ["Done"], running: false, exporting: false, datasets: [{ datasetId: "a", label: "Alpha" }, { datasetId: "b", label: "Beta" }] }] };
+  let state: AutomationsState = { ownerRevision: 0, mode: "list", working: false, runInFlight: false, rows: [{ flowId: "f", name: "Orders", runId: "r", lines: ["Done"], running: false, exporting: false, datasets: [{ datasetId: "a", label: "Alpha" }, { datasetId: "b", label: "Beta" }] }] };
   const calls: unknown[][] = [];
   const controller: AutomationsController = {
     state: () => state, observe: () => false, setWorking: () => {}, refresh: async () => {}, focus: async () => {}, run: async () => {},
-    exportDataset: async (...args) => { calls.push(args); state = { ...state, rows: state.rows.map((row) => ({ ...row, exporting: true })) }; strip.draw(); }
+    exportDataset: async (...args) => { calls.push(args.slice(0, 4)); state = { ...state, rows: state.rows.map((row) => ({ ...row, exporting: true })) }; strip.draw(); }
   };
   let requestCalls = 0;
   const request: PanelStore["request"] = async () => { requestCalls++; return { ok: false, sentence: "Failed", detail: "Try later" }; };
@@ -171,13 +171,13 @@ test("visible panel with remembered active control never claims browser-page foc
 test("only confirmed complete list absence explains unavailable automation", async () => focused(() => {
   const view = setup();
   for (const mode of ["list", "empty", "loading", "offline", "fallback"] as const) {
-    view.setState({ mode, rows: [], working: false, runInFlight: false });
+    view.setState({ ownerRevision: 0, mode, rows: [], working: false, runInFlight: false });
     const text = view.root.byClass("strip-lines")[0]!.textContent;
     if (mode === "list" || mode === "empty") assert.match(text, /unavailable in the current list/u);
     else assert.doesNotMatch(text, /unavailable/u);
     assert.equal(view.root.byClass("strip-run")[0]!.disabled, true);
   }
-  view.setState({ mode: "list", rows: [], working: false, runInFlight: false, readError: { sentence: "Could not read" } });
+  view.setState({ ownerRevision: 0, mode: "list", rows: [], working: false, runInFlight: false, readError: { sentence: "Could not read" } });
   assert.doesNotMatch(view.root.byClass("strip-lines")[0]!.textContent, /unavailable/u);
 }));
 

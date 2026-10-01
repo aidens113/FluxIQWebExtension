@@ -32,7 +32,7 @@ async function withFocusedDocument(body: (doc: { activeElement: FakeElement; foc
 function setup() {
   let flows = [{ flowId: "a", name: "Alpha", updatedAt: 3 }, { flowId: "b", name: "Beta", updatedAt: 2 }, { flowId: "c", name: "Gamma", updatedAt: 1 }];
   const chosen: AutomationRowView[] = [];
-  const connected = statusWith({ connectionState: "connected" });
+  const connected = statusWith({ connectionState: "connected", paired: true });
   const request = async <T>(message: PanelMessage): Promise<PanelResult<T>> => {
     assert.equal(message.type, M.listAutomations);
     return { ok: true, value: { payload: { flows, runs: [] } } as T };
@@ -147,7 +147,7 @@ test("connection loss moves row focus to the visible named heading", async () =>
   try {
     await view.refresh();
     view.rows()[0]!.focus();
-    view.tab.render(statusWith({ connectionState: "disconnected" }));
+    view.tab.render(statusWith({ connectionState: "disconnected", paired: true }));
     assert.equal(doc.activeElement.tagName, "H2");
     assert.equal(doc.activeElement.textContent, "Your automations");
     assert.equal(doc.activeElement.getAttribute("tabindex"), "-1");
