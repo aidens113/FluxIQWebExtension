@@ -31,13 +31,13 @@
 // - **G3** (fixed by t194-w32) a bound over a price written the continental way
 //   read the wrong number (`domain/src/actions/extraction/condition-match.ts`
 //   `NUMBER`);
-// - **G4** (grid-view row) a read whose every record is empty still passes its
-//   post-condition (`content/actions/extract-list.ts` `validationFor`);
+// - **G4** (fixed by the lead, the supervisor's decision) a read whose every
+//   record is empty passed its post-condition; it now fails
+//   (`content/actions/extract-list.ts` `validationFor`);
 // - and not a gap: the Next arrow that reloads page two does not trap a read,
 //   which takes the pager's next number instead (`extraction/pagination.ts`).
 //
-// G4 is not a `test.fail` row: the grid-view row asserts today's behaviour.
-// No row is marked `test.fail`; G1-G3 are fixed.
+// No row is marked `test.fail`; G1-G4 are fixed.
 //
 // Cross-document reads: a numbered link loads a new document and the harness's
 // page script dies with it. `readAcrossDocuments` is the worker's half
@@ -689,14 +689,15 @@ test.describe("auction-marketplace-kestrel-auctions on the fixture", () => {
     return { walk, manifestRead, proposal, offered };
   }
 
-  test("grid-view: price, bids and postage are detected columns, and the list layout's read comes back empty rather than failing", async ({ openHarness }) => {
+  test("grid-view: price, bids and postage are detected columns, and the list layout's read of the gallery fails, its rows reading nothing", async ({ openHarness }) => {
     const harness = await openHarness("auction-marketplace");
     const { manifestRead, proposal, offered } = await variantWalk(harness, "grid-view");
     // The Flow built on the list layout meets the gallery: its positions name
-    // no element, and the read says so only in its sentence (G4).
-    expect(manifestRead.status).toBe("succeeded");
+    // no element, and the read fails rather than answering ten empty rows (G4).
+    expect(manifestRead.status).toBe("failed");
     expect(manifestRead.extraction).toMatchObject({ recordCount: OWED.length, emptyRecords: OWED.length });
-    expect(manifestRead.validation?.status).toBe("passed");
+    expect(manifestRead.validation?.status).toBe("failed");
+    expect(JSON.stringify(manifestRead.validation)).toContain("every returned record is empty");
     for (const column of ["price", "bids", "postage"] as const) expect(offered[column], `a detected column is the owed ${column}`).not.toEqual([]);
     // G1's fix reads the gallery's titles too.
     const fixed = succeeded(await act(harness, {

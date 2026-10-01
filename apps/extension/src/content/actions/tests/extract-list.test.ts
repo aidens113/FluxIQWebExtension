@@ -393,10 +393,42 @@ test("the two halves of a zero read are told apart by itemsSeen, not by a durati
     emptyRecords: 2,
     listPresence: "appeared"
   });
-  // And the phrase says the second one in words, because "two records" with three
-  // null columns is the answer that looks most like a working read.
-  const actual = secondCall.validation.status === "passed" ? secondCall.validation.actual : "";
+  // And the second one fails, saying why in words, because "two records" with
+  // three null columns is the answer that looks most like a working read
+  // (t194-w25 G4: rows that read nothing are not an answer).
+  assert.equal(secondCall.validation.status, "failed");
+  const actual = secondCall.validation.status === "failed" ? secondCall.validation.actual : "";
   assert.match(actual, /every returned record is empty, so the fields were read off the wrong element/u);
+});
+
+test("rows that read nothing fail even where an empty list is allowed, and one row with anything in it passes", async () => {
+  const empty = (records: number, emptyRecords: number): ListExtractionOutcome => ({
+    records: Array.from({ length: records }, (_, index) => ({ name: index < emptyRecords ? null : "Ada", price: null, sku: null })),
+    pagesRead: 1,
+    truncated: false,
+    timedOut: false,
+    listPresence: "appeared",
+    itemsSeen: records,
+    blankFields: ["name", "price", "sku"].slice(records > emptyRecords ? 1 : 0),
+    incompleteRecords: records,
+    emptyRecords,
+    missingFields: [],
+    filtered: 0
+  });
+  const allowedEmpty: BrowserActionCommand = { ...COMMAND, extractList: { ...REQUEST, minItems: 0 } };
+  for (const [command, outcome, status] of [
+    [allowedEmpty, empty(10, 10), "failed"],
+    [COMMAND, empty(10, 10), "failed"],
+    [COMMAND, empty(10, 9), "passed"],
+    [allowedEmpty, empty(0, 0), "passed"]
+  ] as const) {
+    const { deps, calls } = dependencies(outcome);
+    await extractListAction(command, deps, 1);
+    const call = calls[0];
+    assert.equal(call?.builder, "success");
+    if (call?.builder !== "success") return;
+    assert.equal(call.validation.status, status, `${outcome.records.length} rows, ${outcome.emptyRecords} empty, minItems ${command.extractList?.minItems ?? 1}`);
+  }
 });
 
 test("a read the capability refused reports the refusal and no summary", async () => {

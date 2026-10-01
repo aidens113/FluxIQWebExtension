@@ -137,6 +137,32 @@ tests/condition-match.test.ts}`, `runtime/llm-evidence/plan-resolution/extractio
 the supervisor; killed runs unaccounted in the spend ledger (run 10's debug); F21's Core publication of `budgetBreaches`
 (a wire change); the link-text column glued to a badge is still offered beside the clean title span (a model may pick it).
 
+## Session 5c (2026-10-01, from ~22:45 UTC): the dev merge, and G4
+
+The supervisor committed F23-F28 (`32c764c3`) and merged dev (Core `83a6cc3a` clean; downstream stopped on 4 conflicts
+against lane A's F16, lane D's F20/F28/F31/F33). Resolved by the lead, both sides kept:
+- `ignored-press/page-press-listener.ts` (+ test): one implementation, `scopeRoots` (the roots the scope walk crossed,
+  closed ones too, plus every open root beneath the scope through dev's `openRootsWithin`), which is a superset of lane A's
+  `shadowRootsWithin`; lane A's guard for a scope that cannot be searched moved into `scope-roots.ts`. The test keeps both
+  rows (our chip-inside-a-root row, lane A's nested-widget row) over one fake page.
+- `extraction/detect-structure.ts`: lane D's `Attempt {answer, improvable}` with lone records, and our placeholder wait:
+  `attemptOf` (was `settledUnlessRefused`) also marks an answer improvable while a larger placeholder run is being drawn.
+- `extraction/tests/pagination.test.ts`: both appended blocks kept.
+- The merged tree failed the structure audit (`pagination.ts` 802 lines; `extraction/tests/` 26 files), so the pager
+  reading moved to `extraction/pager-reading/` (pagination.ts 685 lines) and `list-reader-lazy-tail.test.ts` folded into
+  `list-reader.test.ts`. Staged with the resolution.
+- **G4, the supervisor's decision: an all-empty read fails** (`content/actions/extract-list.ts` `validationFor`: rows came
+  back and every declared field of every row read nothing -> `failed`, whatever `minItems`; the domain already names it
+  `records_have_no_fields`); `actions/tests/extract-list.test.ts` (the old row now fails; a new row covers `minItems: 0`, 9 of
+  10 empty passes, 0 rows with `minItems: 0` passes); the kestrel grid-view row now expects the failure. Not staged.
+- Validation: Core libraries rebuilt rc 0; extension `tsc -p tsconfig.json` and `-p tsconfig.test.json` rc 0; narrow units
+  `content/extraction` + `ignored-press` 32 files `# pass 269 # fail 0`, `content/actions` 13 files `# pass 106 # fail 0`;
+  structure audit "passed (154 warning(s), 118 baselined)"; T2 extraction + live-tasks + click `122 passed, 2 failed`, the 2
+  in `click.spec.ts`; `press-answers` (lane A's) 3/3 and `shadow-roots` with 3 failures. **The 5 failures are dev's, not the
+  resolution's:** with dev's own `page-press-listener.ts` swapped in, the same 5 fail (`click.spec.ts:119` a press that
+  changes nothing now fails `output_not_observed`, lane A F16; `:132` a disabled target retried 5 times, lane D F32;
+  `shadow-root-controls.spec.ts:73` pre-existing; `:93,:163` clicks on a search box fail `output_not_observed`, lane A F16).
+
 ## Session 4 (2026-10-01, from 05:00 UTC), after round 3 and t210 rounds 1-2
 
 Trees fast-forwarded to pushed dev (downstream `58fd0cd3`, Core `e5b8f015`); every lane C fix set (F0-F16) is on dev.
