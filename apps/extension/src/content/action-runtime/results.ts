@@ -58,6 +58,7 @@ import type {
   JsonValue
 } from "../types";
 import { blockingDialog } from "./blocking-dialog";
+import { noteRefusedControl } from "./recovery";
 import { challengeIn } from "./challenge-evidence";
 import type { RateLimitNotice } from "./rate-limit-notice";
 import type { RobotCheckSighting } from "./robot-check";
@@ -112,8 +113,10 @@ export type ActionResultEvidence = {
   /**
    * The refused element itself, for a target refused as `covered` or `hidden`:
    * a dialog that holds it is the one the step is working in, never the one in
-   * its way (`blocking-dialog.ts`). It never leaves the page: `buildResult`
-   * copies only the fields above it by name.
+   * its way (`blocking-dialog.ts`). For a gate's `disabled`, how it looked is
+   * noted for recovery as a fingerprint (`recovery/refused-control.ts`). It
+   * never leaves the page: `buildResult` copies only the fields above it by
+   * name.
    */
   target?: Element | undefined;
 };
@@ -199,6 +202,9 @@ export function success(
   }, evidence);
 }
 
+/** The gate's reason word for a control the page will not let anything use yet (`actionability.ts`). */
+const DISABLED_REASON = "disabled";
+
 /**
  * An action refused before it ran: the target was disabled, hidden, or covered.
  *
@@ -241,12 +247,17 @@ export function actionRejected(
       failure: refusalRecord(code, { expected, actual: `${reason}: ${observed}; ${dialog.sentence}` }, evidence)
     }, evidence);
   }
-  return buildResult(action, startedAt, {
+  const result = buildResult(action, startedAt, {
     status: "failed",
     validation,
     message: `Action rejected: ${observed}`,
     failure: refusalRecord(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected, actual: `${reason}: ${observed}` }, evidence)
   }, evidence);
+  // A control the gate refused as disabled: recovery waits at it only while it
+  // shows it is changing, so how it looked is noted beside the result -- as a
+  // fingerprint, in this frame, never on the record (`recovery/refused-control.ts`).
+  if (evidence.refusedBeforeDispatch && reason === DISABLED_REASON && evidence.target) noteRefusedControl(result, evidence.target);
+  return result;
 }
 
 /**
