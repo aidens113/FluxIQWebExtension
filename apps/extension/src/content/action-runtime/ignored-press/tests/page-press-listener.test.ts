@@ -37,7 +37,7 @@ type FakeNode = { name: string; nodeType: 1; tagName: string; parentElement: Fak
 type ResourceEntry = { startTime: number; initiatorType: string };
 
 /** A page: body > section > row > button, plus a widget appended to the body, with fakes for every observer. */
-function fakePage(options: { performanceObserver?: boolean } = {}) {
+function fakePage(options: { performanceObserver?: boolean; shadowWidget?: boolean } = {}) {
   const view = eventTarget();
   const navigation = eventTarget();
   const document = { ...eventTarget(), location: { href: "http://127.0.0.1:4000/ip/1" }, defaultView: undefined as unknown };
@@ -56,6 +56,13 @@ function fakePage(options: { performanceObserver?: boolean } = {}) {
   const button = node("button", "button", row);
   const label = node("label", "span", button);
   const widget = node("widget", "div", body);
+  // A widget inside the section that draws itself in an open shadow root, which
+  // holds a nested widget with a root of its own.
+  const nestedRoot = { querySelectorAll: () => [] };
+  const nestedHost = Object.assign(node("nested-host", "span", null), { shadowRoot: nestedRoot });
+  const shadowRoot = { querySelectorAll: () => [nestedHost] };
+  const host = Object.assign(node("host", "fb-store-coupon", section), { shadowRoot });
+  if (options.shadowWidget) Object.assign(section, { querySelectorAll: () => [row, button, label, host] });
 
   const mutations = { observed: [] as Array<{ target: FakeNode; init: MutationObserverInit }>, pending: 0, notify: undefined as (() => void) | undefined, disconnected: 0 };
   class FakeMutationObserver {
@@ -109,6 +116,7 @@ function fakePage(options: { performanceObserver?: boolean } = {}) {
     navigation,
     document,
     elements: { body, section, row, button, label, widget },
+    roots: { shadowRoot, nestedRoot },
     mutations,
     /** A request the page began `offsetMs` after (or, negative, before) the press, queued for the next flush. */
     request(initiatorType: string, offsetMs = 5) {
@@ -130,6 +138,22 @@ test("a change inside the pressed control's section is an answer, whether delive
   assert.deepEqual(page.seen, ["change"]);
   page.mutations.notify?.();
   assert.deepEqual(page.seen, ["change", "change"]);
+});
+
+test("every open shadow root inside the section is observed as well, nested ones included", () => {
+  // A MutationObserver does not see into a shadow root: bigbox's store chip
+  // answers its press only inside its picker's root, and was pressed twice.
+  const page = fakePage({ shadowWidget: true });
+  assert.deepEqual(
+    page.mutations.observed.map((observed) => observed.target),
+    [page.elements.section, page.roots.shadowRoot, page.roots.nestedRoot]
+  );
+  for (const observed of page.mutations.observed) {
+    assert.deepEqual(observed.init, { childList: true, subtree: true, attributes: true, characterData: true });
+  }
+  page.mutations.pending = 1;
+  page.listener.flush();
+  assert.deepEqual(page.seen, ["change"], "a change inside a root is reported as the press's answer");
 });
 
 test("a page that did nothing reports nothing", () => {
