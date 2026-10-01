@@ -47,6 +47,13 @@ Preview accessibility audit Complete: proposed table naming/empty text and
 same-control caret restoration remain held. Its worker now audits exact two-file
 feedback wiring read-only. Progress checkpoints downstreama09bef0e/220dc1a4 and
 Core5eec244e preserve prior results/briefs; Ask source3a55a8b1 locally committed.
+Lazy source28ee7f6a is locally committed after root48pass/structure0; root scoped
+and full checks remain queued. Latest read-only main history shows Claude round6
+integrated downstream1884e5e2 at2d269cd7 and Coreb1dfc40e atc9518f84. Main Core
+clean; downstream task-tool scripts have Claude changes left untouched. Root
+does not claim to have observed Claude's round6 validation. All three workers now
+own Core hierarchy dialog, ProjectTree and generic shared Tree event ownership
+in disjoint files; no Core broad gates during their writes.
 Hierarchy correction is still active: first53/54 pass exposed actual failure
 feedback rendering; direct imported StatusText inspection and a StrictMode
 regression are released within its existing component/test ownership only.
