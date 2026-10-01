@@ -232,7 +232,7 @@ export class LiveLlmRun {
    */
   private spend(repairObserved: LiveLlmObservedUsage | undefined = this.repairObserved): LiveLlmRunSpend {
     const created = this.buildRecord !== undefined;
-    return liveLlmRunSpend({ build: created ? this.observed : undefined, runtime: created ? repairObserved : this.observed, judge: this.verification, reauthor: this.reauthor });
+    return liveLlmRunSpend({ build: created ? this.observed : undefined, runtime: created ? repairObserved : this.observed, judge: this.verification, reauthor: this.reauthor, ceilingUsd: this.plan.maxTotalEstimatedCostUsd });
   }
 
   /**
@@ -527,7 +527,7 @@ export class LiveLlmRun {
       // than inferred from the zero beside it. `null` for the ordinary run,
       // which is held to reaching a provider (`declared-provider-calls.ts`).
       expectedProviderCalls: this.declaredCalls,
-      observed: observed ? { ...observed, calls: spend.calls, totalEstimatedCostUsd: spend.totalEstimatedCostUsd, phases: spend.phases } : null,
+      observed: observed ? { ...observed, calls: spend.calls, totalEstimatedCostUsd: spend.totalEstimatedCostUsd, phases: spend.phases, perBuild: spend.perBuild } : null,
       // Every call the run made, by phase, written even when the phase this
       // snapshot settled from could not be read.
       runSpend: spend,
@@ -607,9 +607,9 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
-/** The whole run's calls and cost, for the settle event. */
+/** The whole run's calls and cost, for the settle event, and any build that spent past the per-build ceiling. */
 function spendSummary(spend: LiveLlmRunSpend): Record<string, unknown> {
-  return { calls: spend.calls, totalEstimatedCostUsd: spend.totalEstimatedCostUsd, ...(spend.uncountedPhases.length > 0 ? { uncountedPhases: spend.uncountedPhases } : {}) };
+  return { calls: spend.calls, totalEstimatedCostUsd: spend.totalEstimatedCostUsd, ...(spend.perBuild.overCeiling > 0 ? { buildsOverCeiling: spend.perBuild.overCeiling, perBuildCeilingUsd: spend.perBuild.ceilingUsd } : {}), ...(spend.uncountedPhases.length > 0 ? { uncountedPhases: spend.uncountedPhases } : {}) };
 }
 
 /** What a settlement publishes on the run's event stream: counts and a total, never a call. */

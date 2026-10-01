@@ -7,9 +7,16 @@
 // `snapshots/live-llm.json` `observed.totalEstimatedCostUsd`; its balance
 // failure, if any, comes from `provider-failures.local.json`. A run that died
 // before writing a file has that field null, not zero.
+//
+// The cost is the run's sum, which a build followed by a repair may rightly
+// take past $0.25. What the user's rule bounds is each build, so the outcome
+// also carries the run's spend per build against the ceiling it was planned
+// under (`perBuildSpend`, the same reading the live campaign's rows use): the
+// ceiling, the most any one build spent, and how many builds went past it.
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { perBuildSpend } from "../live-campaign/row/index.mjs";
 import { detectBalanceFailure } from "./balance-failure.mjs";
 
 const RUN_DIRECTORY = /^run-([a-z0-9]+)-[0-9a-f]{8}$/u;
@@ -17,7 +24,7 @@ const RUN_DIRECTORY = /^run-([a-z0-9]+)-[0-9a-f]{8}$/u;
 const SKEW_MS = 5_000;
 
 /**
- * @typedef {{ runId: string, startedAt: string | null, verdict: string | null, totalEstimatedCostUsd: number | null, balanceFailure: ReturnType<typeof detectBalanceFailure> }} RunOutcome
+ * @typedef {{ runId: string, startedAt: string | null, verdict: string | null, totalEstimatedCostUsd: number | null, buildCeilingUsd: number | null, maxBuildCostUsd: number | null, buildsOverCeiling: number | null, balanceFailure: ReturnType<typeof detectBalanceFailure> }} RunOutcome
  */
 
 /**
@@ -48,10 +55,19 @@ export async function readRunOutcomes(runsDirectory, { sinceMs, knownRunIds }) {
       startedAt,
       verdict: typeof run?.verdict === "string" ? run.verdict : typeof run?.status === "string" ? run.status : null,
       totalEstimatedCostUsd: costOf(liveLlm),
+      ...perBuildOf(liveLlm),
       balanceFailure: failures === null ? null : detectBalanceFailure(failures),
     });
   }
   return outcomes.sort((left, right) => String(left.startedAt).localeCompare(String(right.startedAt)));
+}
+
+/** The run's spend per build against its ceiling, or nulls where it recorded no ceiling. */
+function perBuildOf(liveLlm) {
+  const spend = perBuildSpend(liveLlm?.unreadable ? null : liveLlm, null);
+  return spend === null
+    ? { buildCeilingUsd: null, maxBuildCostUsd: null, buildsOverCeiling: null }
+    : { buildCeilingUsd: spend.ceilingUsd, maxBuildCostUsd: spend.maxBuildCostUsd, buildsOverCeiling: spend.overCeiling };
 }
 
 function costOf(liveLlm) {

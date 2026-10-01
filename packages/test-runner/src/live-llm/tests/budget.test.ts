@@ -176,15 +176,17 @@ test("a typed run token budget is the one the run is held to, and is named", () 
   assert.doesNotThrow(() => assertLiveLlmBudgetHeld(typed, adaptingUsage(10, perCall)));
 });
 
-test("an iterating run's total cost is bounded across its authorized calls", () => {
+test("an iterating build's total cost is held to --llm-max-cost-usd for the whole build, not per call", () => {
   const small = livePlan("adapt", { maxCallsPerRun: 4, maxEstimatedCostUsd: 0.05 });
-  const over = adaptingUsage(4, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.05 });
-  assert.doesNotThrow(() => assertLiveLlmBudgetHeld(small, over));
-  assert.throws(() => assertLiveLlmBudgetHeld(small, { ...over, totalEstimatedCostUsd: 0.21 }), /estimated cost 0\.21 exceeded its total cost limit of 0\.2 \(--llm-max-cost-usd 0\.05 across 4 authorized call/u);
-  // 26 calls at $0.25 would be $6.50; the run's spend ceiling is held to Core's $0.25.
+  const within = adaptingUsage(4, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.0125 });
+  assert.doesNotThrow(() => assertLiveLlmBudgetHeld(small, within));
+  // Four calls at the old per-call reading of $0.05 each come to $0.20: four times the build's own $0.05.
+  const perCallReading = adaptingUsage(4, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.05 });
+  assert.throws(() => assertLiveLlmBudgetHeld(small, perCallReading), /the build's estimated cost 0\.2 exceeded its per-build cost ceiling of 0\.05 \(--llm-max-cost-usd 0\.05, held to Core's per-build ceiling\)/u);
+  // 26 calls at $0.25 would be $6.50; the build's spend ceiling is Core's $0.25.
   assert.equal(adapting.maxTotalEstimatedCostUsd, 0.25);
   const pricey = adaptingUsage(26, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.01 });
-  assert.throws(() => assertLiveLlmBudgetHeld(adapting, pricey), /estimated cost 0\.26 exceeded its total cost limit of 0\.25 \(.*held to Core's ceiling\)/u);
+  assert.throws(() => assertLiveLlmBudgetHeld(adapting, pricey), /the build's estimated cost 0\.26 exceeded its per-build cost ceiling of 0\.25 \(.*held to Core's per-build ceiling\)/u);
 });
 
 test("a one-call diagnosis is judged across its one authorized call, not the larger cap typed", () => {

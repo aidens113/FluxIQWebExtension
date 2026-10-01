@@ -14,7 +14,7 @@
 //   pnpm lab:campaign --dry-run                    every task, commands only
 //   pnpm lab:campaign --kind extract --limit 3     the first three scraping tasks
 //   pnpm lab:campaign --kind repair --dry-run      the repair commands
-//   pnpm lab:campaign product-catalog-all-pages -- --llm-max-cost-usd 0.25
+//   pnpm lab:campaign product-catalog-all-pages -- --llm-max-cost-usd 0.1   lower the per-build ceiling
 //   pnpm lab:campaign social-scheduler-schedule-post -- --llm-permit send_or_publish
 //
 // Everything after `--` is handed to every task's Lab run unchanged, except the

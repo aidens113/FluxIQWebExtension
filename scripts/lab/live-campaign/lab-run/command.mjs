@@ -23,12 +23,20 @@ import { DEFAULT_PROFILES } from "./profiles.mjs";
  * run to every authorized call at the per-request limit (`runTokenBudget` in
  * packages/test-runner/src/live-llm/live-llm-plan.ts; the contract checks the
  * run budget only when one is given), so what bounds the run is its cost
- * ceiling, `--llm-max-cost-usd 0.25`, the call count and Core's stall guard.
+ * ceiling, the call count and Core's stall guard.
  * An operator may still give `--llm-max-run-tokens` after `--`.
+ *
+ * **No cost is passed either.** The cost ceiling is $0.25 per build, and it has
+ * one definition: Core's `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD`, which
+ * the Lab's plan applies to the whole build whatever its call count
+ * (`LIVE_LLM_BUILD_COST_CEILING_USD`, packages/test-runner/src/live-llm). The
+ * campaign used to pass `--llm-max-cost-usd 0.25`, a copy of that number. An
+ * operator may still lower it with `--llm-max-cost-usd` after `--`; nothing
+ * can raise it.
  */
 const REPAIR_LIMITS = Object.freeze([
   ["--llm-max-input-tokens", "992000"], ["--llm-max-output-tokens", "8000"], ["--llm-max-total-tokens", "1000000"],
-  ["--llm-max-calls", "26"], ["--llm-max-cost-usd", "0.25"],
+  ["--llm-max-calls", "26"],
 ]);
 
 /**
@@ -48,9 +56,9 @@ const REPAIR_LIMITS = Object.freeze([
  *
  * Describing a real page costs tokens, and 8000 is not enough to describe one.
  * The request limits are now the model's whole context window, as above. Cost
- * stays bounded where it belongs: by the cost ceiling below, not by a limit
- * that makes a large page undescribable, and no run token budget is passed,
- * for the reason given at `REPAIR_LIMITS`.
+ * stays bounded where it belongs: by the per-build cost ceiling, not by a limit
+ * that makes a large page undescribable, and neither a run token budget nor a
+ * cost is passed, for the reasons given at `REPAIR_LIMITS`.
  */
 const CREATE_LIMITS = Object.freeze([
   ["--llm-max-input-tokens", "992000"], ["--llm-max-output-tokens", "8000"], ["--llm-max-total-tokens", "1000000"],
@@ -65,10 +73,9 @@ const CREATE_LIMITS = Object.freeze([
   // against an authorized 26, and $0.90 bought six runs that measured nothing.
   // 48 is above what a build of these pages has been observed to need and below
   // the contract ceiling of 64. What bounds the run stays what always bounded
-  // it -- the cost ceiling below, not a count set
+  // it -- the per-build cost ceiling, not a count set
   // for a different shape of loop.
   ["--llm-max-calls", "48"],
-  ["--llm-max-cost-usd", "0.25"],
 ]);
 
 /**

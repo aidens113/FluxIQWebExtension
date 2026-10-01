@@ -245,7 +245,7 @@ async function admitLiveRunOrExit() {
 async function recordLiveFinish(admission, start, exitCode) {
   try {
     const { finishes, stopped } = await recordLiveRunFinish(admission, start, { exitCode });
-    note({ lab: "live-guard", state: "recorded", runs: finishes.map((finish) => ({ runId: finish.runId, verdict: finish.verdict, totalEstimatedCostUsd: finish.totalEstimatedCostUsd })) });
+    note({ lab: "live-guard", state: "recorded", runs: finishes.map((finish) => ({ runId: finish.runId, verdict: finish.verdict, totalEstimatedCostUsd: finish.totalEstimatedCostUsd, buildCeilingUsd: finish.buildCeilingUsd, maxBuildCostUsd: finish.maxBuildCostUsd, buildsOverCeiling: finish.buildsOverCeiling })) });
     if (stopped !== null) {
       note({ lab: "live-guard", state: "stopped", file: stopped, why: "the provider reported an empty balance or exhausted quota; every live run is refused until a person tops the account up and deletes this file" });
     }

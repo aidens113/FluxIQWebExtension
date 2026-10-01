@@ -16,6 +16,7 @@
 // them (`observed-usage.ts`). A check call the run phase already itemized, by
 // its request id, is taken out of that phase and counted under `judge` only.
 
+import { LIVE_LLM_BUILD_COST_CEILING_USD } from "./build-cost-ceiling.js";
 import type { LiveLlmObservedUsage } from "./observed-usage.js";
 import type { LiveLlmReauthorRecord } from "./reauthor-record.js";
 
@@ -36,6 +37,27 @@ export type LiveLlmRunSpend = {
     reauthor: LiveLlmSpendPhase | null;
   };
   uncountedPhases: Array<"judge" | "reauthor">;
+  /**
+   * The spend judged per build against the per-build ceiling, as Core judges
+   * it: the build, the run's own recovery and each re-author attempt is a
+   * build of its own, each allowed the whole ceiling and none summed with
+   * another. The result check is not a build: Core holds it to its own,
+   * smaller limit outside the run's budget, so it is reported in `phases` only.
+   */
+  perBuild: LiveLlmPerBuildSpend;
+};
+
+/** One build's spend against the per-build ceiling. */
+export type LiveLlmBuildSpend = { phase: "build" | "runtime" | "reauthor"; attempt: number | null; estimatedCostUsd: number; overCeiling: boolean };
+
+export type LiveLlmPerBuildSpend = {
+  /** The ceiling each build was held to: the plan's, which is Core's per-build ceiling or lower. */
+  ceilingUsd: number;
+  builds: LiveLlmBuildSpend[];
+  /** The most any one build spent, so a reader sees at once how near the ceiling the run came. */
+  maxBuildCostUsd: number;
+  /** How many builds spent more than the ceiling: 0 on every run Core held to it. */
+  overCeiling: number;
 };
 
 /** The result check's calls, as the settlement's verification record lists them. */
@@ -46,6 +68,8 @@ export function liveLlmRunSpend(input: {
   runtime?: LiveLlmObservedUsage | null | undefined;
   judge?: LiveLlmJudgeCalls | null | undefined;
   reauthor?: LiveLlmReauthorRecord | null | undefined;
+  /** The run plan's `maxTotalEstimatedCostUsd`; Core's per-build ceiling when the caller has no plan. */
+  ceilingUsd?: number | undefined;
 }): LiveLlmRunSpend {
   const build = input.build ? { calls: input.build.calls, estimatedCostUsd: input.build.totalEstimatedCostUsd } : null;
   const judgeCalls = input.judge?.interventions ?? [];
@@ -60,6 +84,27 @@ export function liveLlmRunSpend(input: {
     totalEstimatedCostUsd: sum(phases.map((phase) => phase?.estimatedCostUsd ?? 0)),
     phases: { build, runtime, judge, reauthor },
     uncountedPhases: input.reauthor && input.reauthor.uncountedAttempts > 0 ? ["reauthor"] : [],
+    perBuild: perBuildSpend(input.ceilingUsd ?? LIVE_LLM_BUILD_COST_CEILING_USD, build, runtime, input.reauthor),
+  };
+}
+
+/**
+ * Each build's spend against the ceiling. A re-author's attempts are each a
+ * build, so each is judged on its own figure; one whose cost Core did not
+ * record is listed at what was recorded, which is nothing.
+ */
+function perBuildSpend(ceilingUsd: number, build: LiveLlmSpendPhase | null, runtime: LiveLlmSpendPhase | null, reauthor: LiveLlmReauthorRecord | null | undefined): LiveLlmPerBuildSpend {
+  const of = (phase: LiveLlmBuildSpend["phase"], attempt: number | null, estimatedCostUsd: number): LiveLlmBuildSpend => ({ phase, attempt, estimatedCostUsd, overCeiling: estimatedCostUsd > ceilingUsd });
+  const builds = [
+    ...(build ? [of("build", null, build.estimatedCostUsd)] : []),
+    ...(runtime ? [of("runtime", null, runtime.estimatedCostUsd)] : []),
+    ...(reauthor?.attempts ?? []).map((attempt, index) => of("reauthor", attempt.attempt ?? index + 1, sum([attempt.estimatedCostUsd ?? 0]))),
+  ];
+  return {
+    ceilingUsd,
+    builds,
+    maxBuildCostUsd: builds.reduce((most, item) => Math.max(most, item.estimatedCostUsd), 0),
+    overCeiling: builds.filter((item) => item.overCeiling).length,
   };
 }
 

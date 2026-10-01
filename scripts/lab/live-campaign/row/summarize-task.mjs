@@ -9,6 +9,7 @@ import { personHandOffSummary } from "./person-hand-offs.mjs";
 import { repairJudgement } from "./repair-judgement.mjs";
 import { replaySummary } from "./replay-summary.mjs";
 import { repairOutcome } from "./repair-outcome.mjs";
+import { perBuildSpend } from "./build-spend.mjs";
 import { reportedSpend } from "./reported-spend.mjs";
 import { rungAttribution } from "./rung-attribution.mjs";
 
@@ -146,6 +147,12 @@ export function summarizeTask(task, attempts, final, bundle, timing = {}) {
     reportedCostUsd: spend.costUsd,
     spendSource: spend.source,
     callsWithoutReportedTokens: spend.callsWithoutReportedTokens,
+    /**
+     * The run's spend per build, each against the per-build ceiling it was
+     * planned under, never summed with another build; `null` when the run left
+     * no live-LLM record or no ceiling (`build-spend.mjs`).
+     */
+    perBuildSpend: perBuildSpend(liveLlm, flowLane),
     // A passed run has no failure category: the runner's own category survives
     // on the evaluation's judgement invariant, which is where a refusal the
     // declaration passed records what the runner had made of it.

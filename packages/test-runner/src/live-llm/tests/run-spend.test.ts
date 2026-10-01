@@ -2,7 +2,9 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD } from "fluxiq/automation-studio";
 import type { LiveLlmObservedUsage } from "../observed-usage.js";
+import type { LiveLlmReauthorRecord } from "../reauthor-record.js";
 import { liveLlmRunSpend } from "../run-spend.js";
 
 function usage(overrides: Partial<LiveLlmObservedUsage>): LiveLlmObservedUsage {
@@ -31,8 +33,50 @@ test("a run read from its interventions counts a check it already itemized once,
 });
 
 test("a run with nothing settled spends nothing, and a build alone is its own total", () => {
-  assert.deepEqual(liveLlmRunSpend({}), { calls: 0, totalEstimatedCostUsd: 0, phases: { build: null, runtime: null, judge: null, reauthor: null }, uncountedPhases: [] });
+  assert.deepEqual(liveLlmRunSpend({}), { calls: 0, totalEstimatedCostUsd: 0, phases: { build: null, runtime: null, judge: null, reauthor: null }, uncountedPhases: [], perBuild: { ceilingUsd: 0.25, builds: [], maxBuildCostUsd: 0, overCeiling: 0 } });
   const build = liveLlmRunSpend({ build: usage({ calls: 22, totalEstimatedCostUsd: 0.04178802 }) });
   assert.equal(build.calls, 22);
   assert.equal(build.totalEstimatedCostUsd, 0.04178802);
+});
+
+function reauthor(costs: number[]): LiveLlmReauthorRecord {
+  return {
+    source: "run-detail",
+    attempts: costs.map((estimatedCostUsd, index) => ({ attempt: index + 1, adaptationId: null, calls: 10, callsFrom: "loop", inputTokens: 1, outputTokens: 1, estimatedCostUsd })),
+    calls: costs.length * 10,
+    uncountedAttempts: 0,
+    totalEstimatedCostUsd: Number(costs.reduce((sum, cost) => sum + cost, 0).toFixed(9)),
+  };
+}
+
+test("spend is reported per build against Core's per-build ceiling, each build on its own", () => {
+  // A build, its playback's recovery and two re-author builds at $0.20 each:
+  // $0.80 for the run, and every build inside its own $0.25.
+  const spend = liveLlmRunSpend({
+    build: usage({ calls: 30, totalEstimatedCostUsd: 0.2 }),
+    runtime: usage({ calls: 5, totalEstimatedCostUsd: 0.2 }),
+    judge: { interventions: [{ requestId: "judge-1", estimatedCostUsd: 0.002 }] },
+    reauthor: reauthor([0.2, 0.2]),
+  });
+  assert.equal(spend.perBuild.ceilingUsd, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD);
+  assert.deepEqual(spend.perBuild.builds.map((item) => [item.phase, item.attempt, item.estimatedCostUsd, item.overCeiling]), [
+    ["build", null, 0.2, false], ["runtime", null, 0.2, false], ["reauthor", 1, 0.2, false], ["reauthor", 2, 0.2, false],
+  ]);
+  assert.equal(spend.perBuild.maxBuildCostUsd, 0.2);
+  assert.equal(spend.perBuild.overCeiling, 0);
+  // The result check is not a build: it stays in the phases and the run total only.
+  assert.equal(spend.totalEstimatedCostUsd, 0.802);
+});
+
+test("a build over the per-build ceiling is reported as over it, never folded into a run total that hides it", () => {
+  const spend = liveLlmRunSpend({ build: usage({ calls: 48, totalEstimatedCostUsd: 0.26 }), reauthor: reauthor([0.1, 0.3]) });
+  assert.deepEqual(spend.perBuild.builds.filter((item) => item.overCeiling).map((item) => [item.phase, item.attempt]), [["build", null], ["reauthor", 2]]);
+  assert.equal(spend.perBuild.overCeiling, 2);
+  assert.equal(spend.perBuild.maxBuildCostUsd, 0.3);
+});
+
+test("the ceiling a run is reported against is its plan's, which may only be lower than Core's", () => {
+  const spend = liveLlmRunSpend({ build: usage({ calls: 4, totalEstimatedCostUsd: 0.06 }), ceilingUsd: 0.05 });
+  assert.equal(spend.perBuild.ceilingUsd, 0.05);
+  assert.equal(spend.perBuild.overCeiling, 1);
 });

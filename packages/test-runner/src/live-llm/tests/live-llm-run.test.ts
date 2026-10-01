@@ -330,7 +330,7 @@ async function buildThenRepair(buildCostUsd: number, repairCostUsd: number) {
 
 function isCostBreach(error: unknown, spent: number): boolean {
   return error instanceof RunnerFailure && error.category === "performance.budget"
-    && error.message.includes(`estimated cost ${spent} exceeded its total cost limit of 0.25 `);
+    && error.message.includes(`estimated cost ${spent} exceeded its per-build cost ceiling of 0.25 `);
 }
 
 test("a build and its repair are each held to $0.25 on its own: $0.20 apiece passes, and either one over $0.25 fails", async () => {
