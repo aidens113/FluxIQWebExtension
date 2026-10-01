@@ -64,6 +64,12 @@ export type ListExtractionConditionReport = {
   unfiltered: boolean;
   /** One value each condition's own read found on an item it held of, or `null` (`item-filter.ts`); the one member read off the page. */
   seen?: (string | null)[] | undefined;
+  /**
+   * Per condition, the items it rejected that every other condition held of:
+   * the rows it removed by itself, which are the ones that show whether it is
+   * right. Positional like `rejected`, and never above it.
+   */
+  alone?: number[] | undefined;
 };
 
 /** The rows a read has to choose between, each with the required fields some row of it lacked. */

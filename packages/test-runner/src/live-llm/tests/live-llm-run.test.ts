@@ -548,3 +548,31 @@ test("a re-author's retries are counted too, and an attempt whose calls cannot b
   assert.deepEqual(unreadable.snapshot.runSpend.uncountedPhases, ["reauthor"]);
   assert.deepEqual(unreadable.published.at(-1)?.runTotal, { calls: 24, totalEstimatedCostUsd: 0.086099304, uncountedPhases: ["reauthor"] });
 });
+
+// `run-mup2u8o3-6697c4be`: the build ended without a Flow
+// (`flow_bootstrap.evidence_budget_exhausted`) after spending $0.2969 of its
+// $0.25 ceiling. The breach was thrown before the lane saw the build, so the
+// product's failure was lost and the run was stamped a facility failure.
+test("a build that ended without a Flow over its cost ceiling fails on the budget and carries the build's own failure", async () => {
+  const spent = 0.29693960399999997;
+  const overspentWithoutFlow: CreatedFlowBuild = {
+    ...proposedBuild,
+    outcome: "failed",
+    adaptationId: null,
+    providerCalls: 9,
+    accounting: { ...proposedBuild.accounting!, estimatedCostUsd: spent },
+    failure: { code: "flow_bootstrap.evidence_budget_exhausted", stage: null, httpStatus: null },
+  };
+  const { settle } = await settleBuildOnce(overspentWithoutFlow, { maxCallsPerRun: 64, maxEstimatedCostUsd: 0.25 });
+  const error = await settle().then(() => undefined, (caught: unknown) => caught);
+  assert.ok(isCostBreach(error, spent), `the category stays the budget's: ${String(error)}`);
+  const cause = (error as RunnerFailure).cause;
+  assert.ok(cause instanceof RunnerFailure && cause.category === "runtime.behavior", "the build without a Flow is kept as the cause");
+  assert.equal((cause.details?.failure as { code?: string } | undefined)?.code, "flow_bootstrap.evidence_budget_exhausted");
+
+  // A build that did propose a Flow and overspent carries nothing: the lane goes on to judge it.
+  const { settle: settleProposed } = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, estimatedCostUsd: spent } }, { maxCallsPerRun: 64, maxEstimatedCostUsd: 0.25 });
+  const proposedError = await settleProposed().then(() => undefined, (caught: unknown) => caught);
+  assert.ok(isCostBreach(proposedError, spent));
+  assert.equal((proposedError as RunnerFailure).cause, undefined);
+});

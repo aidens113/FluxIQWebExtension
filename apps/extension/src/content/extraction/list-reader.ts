@@ -223,6 +223,8 @@ export type ListExtractionOutcome = {
   conditions?: ListExtractionConditionReport | undefined;
   /** Every row each condition rejected, one list per condition, only for a read asked for them (`rejected-samples.ts`). */
   rejectedSamples?: ExtractedListRecord[][] | undefined;
+  /** Per condition, how many leading rows of its `rejectedSamples` list it removed alone; beside `rejectedSamples` only. */
+  rejectedSamplesAlone?: number[] | undefined;
   /**
    * Why a read that pages stopped paging, or absent for a read that did not page.
    *
@@ -337,8 +339,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
         missingFields: [...missing].sort(),
         filtered,
         ...(seen === undefined ? {} : { itemsSeen: seen }),
-        ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], seen: [...seenEach] } }),
-        ...(samples === undefined ? {} : { rejectedSamples: samples.rows() }),
+        ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], seen: [...seenEach], alone: [...aloneEach] } }),
+        ...(samples === undefined ? {} : { rejectedSamples: samples.rows(), rejectedSamplesAlone: samples.alone() }),
         ...(spent.retries + spent.rateLimits === 0 ? {} : { refusals: { ...spent } })
       });
     };
@@ -378,8 +380,10 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   let kept = carried.kept;
   const rejectedEach = [...carried.rejected];
   const seenEach = [...carried.seen]; // what each condition's own read found (`item-filter.ts`), carried like the counts
-  // A few of the rows each condition rejected, carried across documents like the counts.
-  const samples = rejectedSamplesFor(options.sampleRejected === true, rejects === undefined ? 0 : rejectedEach.length, resume?.rejectedSamples);
+  // Per condition, the items only it rejected, which say whether it is right (`rejected-samples.ts`); carried like the counts.
+  const aloneEach = [...carried.alone];
+  // Every row each condition rejected, its alone rows first, carried across documents like the counts.
+  const samples = rejectedSamplesFor(options.sampleRejected === true, rejects === undefined ? 0 : rejectedEach.length, resume?.rejectedSamples, resume?.rejectedSamplesAlone);
 
   // Items the selector named, counted once each, whichever page or scroll named
   // them: a set rather than a running sum, because a `loadMore` or `scroll` read
@@ -425,8 +429,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       ...(pageFault ? { pageFault: true } : {}),
       ...(listPresence === undefined ? {} : { listPresence }),
       ...(listWait === undefined ? {} : { listWait }),
-      ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered, seen: [...seenEach] } }),
-      ...(samples === undefined ? {} : { rejectedSamples: samples.rows() }),
+      ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered, seen: [...seenEach], alone: [...aloneEach] } }),
+      ...(samples === undefined ? {} : { rejectedSamples: samples.rows(), rejectedSamplesAlone: samples.alone() }),
       ...(paginate === undefined || paginationStop === undefined ? {} : { paginationStop }),
       ...(spent.retries === 0 ? {} : { pageRetries: spent.retries }),
       ...(refusedStatus === undefined ? {} : { refusedStatus }),
@@ -565,6 +569,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
               // was sized from, so the fallback is for the compiler rather than
               // for a case that happens.
               for (const index of rejectedBy) rejectedEach[index] = (rejectedEach[index] ?? 0) + 1;
+              const only = rejectedBy.length === 1 ? rejectedBy[0] : undefined;
+              if (only !== undefined) aloneEach[only] = (aloneEach[only] ?? 0) + 1;
               samples?.note(rejectedBy, itemRead.record);
               rememberRejected(rejectedRows, itemRead, fields, earlierPages !== undefined, order ? WEB_AUTOMATION_EXTRACT_MAX_ITEMS : maxItems);
             }
@@ -672,13 +678,14 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
  * this request's `where` -- one rejection count per condition is the only shape
  * a positional count can be added to, and the same request always has it.
  */
-function carriedConditionCounts(resume: ExtractionCheckpoint | undefined, conditions: number): { applied: number; kept: number; rejected: number[]; seen: (string | null)[] } {
+function carriedConditionCounts(resume: ExtractionCheckpoint | undefined, conditions: number): { applied: number; kept: number; rejected: number[]; seen: (string | null)[]; alone: number[] } {
   const carried = resume?.conditions;
   const none = (): (string | null)[] => Array.from({ length: conditions }, () => null);
-  if (carried === undefined || carried.rejected.length !== conditions) {
-    return { applied: 0, kept: 0, rejected: Array.from({ length: conditions }, () => 0), seen: none() };
-  }
-  return { applied: carried.applied, kept: carried.kept, rejected: [...carried.rejected], seen: carried.seen?.length === conditions ? [...carried.seen] : none() };
+  const zeros = (): number[] => Array.from({ length: conditions }, () => 0);
+  if (carried === undefined || carried.rejected.length !== conditions) return { applied: 0, kept: 0, rejected: zeros(), seen: none(), alone: zeros() };
+  // `seen` and `alone` from a page build that did not carry them start from none.
+  const alone = carried.alone?.length === conditions ? [...carried.alone] : zeros();
+  return { applied: carried.applied, kept: carried.kept, rejected: [...carried.rejected], seen: carried.seen?.length === conditions ? [...carried.seen] : none(), alone };
 }
 
 /** Whether a throw is a refusal of the whole read, which carries its own failure record, rather than a page fault. */

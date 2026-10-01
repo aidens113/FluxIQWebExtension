@@ -9,6 +9,7 @@
 
 import type { ExistingRunDetail } from "../existing-fluxiq-control.js";
 import type { RunnerFailure } from "../failure.js";
+import { budgetOverProductFailure } from "./budget-over-product-failure.js";
 import type { LiveLlmExplorationControl } from "./exploration-record.js";
 import type { LiveLlmRunBundle } from "./live-llm-run.js";
 
@@ -28,7 +29,8 @@ type LiveLlmLanePublish = (details: Record<string, unknown>) => Promise<unknown>
  *   reached) fail the run as before.
  * - The lane throws: `settleUnfinished` writes the snapshot from the run the
  *   lane identified, and the lane's failure is rethrown -- unless the run broke
- *   its budget, which is thrown in its place.
+ *   its budget, which is thrown in its place, carrying a product failure of
+ *   the lane's as its cause (`budget-over-product-failure.ts`).
  *
  * With no live run the lane simply runs.
  */
@@ -53,6 +55,6 @@ export async function runLaneWithLiveLlmSettlement<T extends { run: { runId: str
   } catch (error) {
     // A settlement that cannot even write its snapshot must not hide why the lane failed.
     const breach = await live.settleUnfinished(settlement.control, { projectId: settlement.projectId, runId }, settlement.bundle, settlement.publish).catch(() => undefined);
-    throw breach ?? error;
+    throw breach ? budgetOverProductFailure(breach, error) : error;
   }
 }

@@ -14,6 +14,7 @@ import { RunnerFailure } from "../failure.js";
 import type { CreatedFlowBuild, CreatedFlowBuildLlm, PersistedFlowLlmExecution } from "../flow-lane/index.js";
 import { authorizeFlowLiveLlmExecution, type LiveLlmAuthorizationControl } from "./authorize-flow.js";
 import { assertLiveLlmBudgetHeld } from "./budget.js";
+import { budgetOverProductFailure } from "./budget-over-product-failure.js";
 import { assertProviderCallsAsDeclared, type DeclaredProviderCalls } from "./declared-provider-calls.js";
 import { liveLlmBuildUsage } from "./build-usage.js";
 import { readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExplorationRecord } from "./exploration-record.js";
@@ -362,7 +363,13 @@ export class LiveLlmRun {
     this.buildRecord = build;
     // Deliberately no declaration: a build that reached no provider proposed
     // no Flow, so "the runtime absorbed it" can never be what happened here.
-    await this.settleObserved(liveLlmBuildUsage(build), bundle, publish, { build }, null, false);
+    try {
+      await this.settleObserved(liveLlmBuildUsage(build), bundle, publish, { build }, null, false);
+    } catch (error) {
+      // The breach is thrown before the lane sees the build, so a build that
+      // ended without a Flow is carried on it, or the run reads as the facility's.
+      throw budgetOverProductFailure(error, buildWithoutFlowFailure(build));
+    }
     const { provider, model } = build.accounting ?? {};
     if ((provider != null && provider !== this.plan.provider) || (model != null && model !== this.plan.model)) {
       throw new RunnerFailure("runtime.behavior", `Core's Flow build ran on ${provider ?? "an unreported provider"}/${model ?? "an unreported model"}, not the authorized ${this.plan.provider}/${this.plan.model}`);
@@ -623,4 +630,17 @@ function assertLaneFlag(plan: LiveLlmPlan, flowLane: boolean): void {
     return;
   }
   if (!flowLane) throw new RunnerFailure("fixture.invalid", "A live LLM run needs the Flow lane: pass --flow, which is what builds the Flow the provider is authorized against");
+}
+
+/**
+ * The failure the created-Flow lane raises for a build that ended without a
+ * Flow (`flow-lane/creation/lane.ts`), or `undefined` for a build that
+ * proposed one or stopped to ask a person, which the lane judges itself.
+ */
+function buildWithoutFlowFailure(build: CreatedFlowBuild): RunnerFailure | undefined {
+  if (build.outcome === "proposed" && build.adaptationId !== null) return undefined;
+  if (build.outcome === "permission_required" && build.permissionRequest) return undefined;
+  return new RunnerFailure("runtime.behavior", `FluxIQ did not build a Flow from the task's instruction (${build.failure?.code ?? "no proposal"})`, {
+    details: { failure: build.failure, providerCalls: build.providerCalls, providerInvocation: build.providerInvocation },
+  });
 }
