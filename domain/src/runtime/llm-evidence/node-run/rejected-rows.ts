@@ -36,8 +36,11 @@ import {
   webAutomationExtractionSummaryValue,
   WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_KEY,
   WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY,
+  webAutomationExtractListRequestRead,
+  type WebAutomationExtractItemCondition,
   type WebAutomationExtractionRejectedRow
 } from "../../../actions/extraction";
+import { webNodeNumericTextFilterSentence } from "./numeric-text-filter";
 import { present } from "../present";
 import { webNodeWithoutPageRecord } from "./page-record";
 import { webNodeReadResult } from "./read-result";
@@ -87,15 +90,21 @@ export function webNodeDispatchParameters(node: { actionType: string; proposes: 
  * page's sampling returned (`actions/extraction/rejected-samples.ts`), and both
  * halves pass the same screen, so a denied key or a credential-shaped string is
  * withheld from the samples exactly as it is from the kept rows.
+ *
+ * `parameters` are the ones the node ran with. Given, a text condition
+ * (`matches`, `contains`) whose rejected rows all read as numbers in its
+ * column adds one sentence to the note (`./numeric-text-filter.ts`, run 36):
+ * a bound reads "Aisha Khan and 4 other mutual friends" as 5, a pattern does
+ * not.
  */
-export function webNodeReadWithRejectedRows(payload: JsonValue | undefined): WebNodeReadWithRejectedRows {
+export function webNodeReadWithRejectedRows(payload: JsonValue | undefined, parameters?: JsonObject): WebNodeReadWithRejectedRows {
   const recorded = withoutSamples(payload);
-  const shown = rejectedRows(payload);
+  const shown = rejectedRows(payload, conditionsRan(parameters));
   // The page's own record never reaches the model (`./page-record.ts`); the
   // replay keeps the payload as the node answered it.
   const read = webNodeReadResult(webNodeWithoutPageRecord(recorded));
   if (shown === undefined) return { read, recorded };
-  const beside = present<WebNodeRejectedRowsBeside>({ rejectedRows: shown.rows, rejectedRowsNote: shown.anyAlone ? WEB_NODE_REJECTED_ROWS_NOTE : undefined }) as JsonObject;
+  const beside = present<WebNodeRejectedRowsBeside>({ rejectedRows: shown.rows, rejectedRowsNote: note(shown) }) as JsonObject;
   if (read === undefined) return { read: beside, recorded };
   if (typeof read !== "object" || read === null || Array.isArray(read)) return { read, recorded };
   return { read: { ...read, ...beside }, recorded };
@@ -125,7 +134,7 @@ function withoutSamples(payload: JsonValue | undefined): JsonValue | undefined {
  * as the kept rows then drops a key Core denies in evidence and withholds a
  * credential-shaped string (`./read-result.ts`).
  */
-function rejectedRows(payload: JsonValue | undefined): { rows: JsonValue; anyAlone: boolean } | undefined {
+function rejectedRows(payload: JsonValue | undefined, conditions: readonly WebAutomationExtractItemCondition[] | undefined): ShownRejectedRows | undefined {
   const summary = webAutomationExtractionSummaryValue(objectValue(payload)?.extraction);
   const samples = summary?.rejectedSamples;
   const counts = summary?.conditions?.rejected;
@@ -150,7 +159,44 @@ function rejectedRows(payload: JsonValue | undefined): { rows: JsonValue; anyAlo
   });
   if (shown.length === 0) return undefined;
   const screened = webNodeReadResult(shown);
-  return screened === undefined ? undefined : { rows: screened, anyAlone };
+  if (screened === undefined) return undefined;
+  return { rows: screened, anyAlone, numeric: conditions === undefined ? [] : numericSentences(screened, conditions) };
+}
+
+/** The rejected rows as shown, whether any condition removed one alone, and the numeric-column sentences. */
+type ShownRejectedRows = { rows: JsonValue; anyAlone: boolean; numeric: string[] };
+
+/** The note beside `rejectedRows`: the alone sentence when it applies, then each numeric-column sentence. */
+function note(shown: ShownRejectedRows): string | undefined {
+  const sentences = [...(shown.anyAlone ? [WEB_NODE_REJECTED_ROWS_NOTE] : []), ...shown.numeric];
+  return sentences.length === 0 ? undefined : sentences.join(" ");
+}
+
+/**
+ * The `where` the node ran with, positionally as the page counts it, or
+ * `undefined` when there is none or a condition of it was dropped -- a dropped
+ * condition would shift every index after it, and a sentence about the wrong
+ * condition is worse than none.
+ */
+function conditionsRan(parameters: JsonObject | undefined): readonly WebAutomationExtractItemCondition[] | undefined {
+  if (parameters === undefined) return undefined;
+  const read = webAutomationExtractListRequestRead(parameters.extractList);
+  if (read.dropped.some((part) => part.startsWith("where."))) return undefined;
+  return read.request?.where;
+}
+
+/** One sentence per shown condition whose rejected rows read as numbers in a column it tested as text. */
+function numericSentences(screened: JsonValue, conditions: readonly WebAutomationExtractItemCondition[]): string[] {
+  if (!Array.isArray(screened)) return [];
+  return screened.flatMap((entry): string[] => {
+    const shown = objectValue(entry);
+    const where = shown?.where;
+    const condition = typeof where === "number" ? conditions[where] : undefined;
+    if (shown === undefined || condition === undefined) return [];
+    const rows = [shown.rowsAlone, shown.rowsWithOthers, shown.rows].flatMap((list) => (Array.isArray(list) ? list : []));
+    const sentence = webNodeNumericTextFilterSentence(where as number, condition, rows);
+    return sentence === undefined ? [] : [sentence];
+  });
 }
 
 function row(sampled: WebAutomationExtractionRejectedRow): JsonObject {

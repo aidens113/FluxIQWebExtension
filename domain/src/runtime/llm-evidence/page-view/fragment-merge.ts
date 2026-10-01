@@ -35,13 +35,60 @@ export function mergedWebLlmFragments(lines: readonly WebLlmViewLine[], elements
   let index = 0;
   while (index < lines.length) {
     const end = runEnd(lines, index);
-    const run = lines.slice(index, end);
+    const run = withoutRepeatedPieces(lines.slice(index, end), result.at(-1));
     const joined = run.length >= 2 ? joinedRun(run, elements, tree, lined) : undefined;
     if (joined === undefined) result.push(...run);
     else if (!saysWhatPreviousSays(result.at(-1), joined)) result.push(joined);
     index = end;
   }
   return result;
+}
+
+/** What two writings of one amount share: their characters less spacing, `.` and `,`. */
+function skeleton(words: string | undefined): string {
+  return (words ?? "").replace(/[\s.,]/gu, "");
+}
+
+/**
+ * The run less every stretch of its fragments that only repeats, in pieces,
+ * the fragment line just before it. A store prints a price once for a screen
+ * reader and once more, drawn in pieces, for the eye -- bigbox's tile:
+ * `<span>$10.47</span>` beside an `aria-hidden` `<span>$10<sup>47</sup></span>`
+ * -- and the view printed it three times, `$10.47`, `$10`, `47` (lane B's
+ * bigbox run, 2026-10-01), because the unit price under the same holder kept
+ * F4 from joining the pieces. The pieces are compared with the line before by
+ * their characters less spacing, `.` and `,`, so `$10` and `47` repeat
+ * `$10.47`. Only fragments fold; a line with a letter is never dropped.
+ */
+function withoutRepeatedPieces(run: readonly WebLlmViewLine[], before: WebLlmViewLine | undefined): WebLlmViewLine[] {
+  if (!run.every(isFragment)) return [...run];
+  const kept: WebLlmViewLine[] = [];
+  let previous = before !== undefined && isFragment(before) ? skeleton(before.words) : "";
+  let index = 0;
+  while (index < run.length) {
+    const repeatEnd = repeatedStretchEnd(run, index, previous);
+    if (repeatEnd !== undefined) {
+      index = repeatEnd;
+      continue;
+    }
+    const line = run[index] as WebLlmViewLine;
+    kept.push(line);
+    previous = skeleton(line.words);
+    index += 1;
+  }
+  return kept;
+}
+
+/** One past the stretch from `start` whose pieces together say `previous`, or `undefined` when none does. */
+function repeatedStretchEnd(run: readonly WebLlmViewLine[], start: number, previous: string): number | undefined {
+  if (previous === "") return undefined;
+  let said = "";
+  for (let end = start; end < run.length; end += 1) {
+    said += skeleton((run[end] as WebLlmViewLine).words);
+    if (said === previous) return end + 1;
+    if (!previous.startsWith(said)) return undefined;
+  }
+  return undefined;
 }
 
 /** One past the last line of the letterless run starting at `start`, or `start + 1` when the line there is not a fragment. */
@@ -51,8 +98,15 @@ function runEnd(lines: readonly WebLlmViewLine[], start: number): number {
   return Math.max(end, start + 1);
 }
 
+/**
+ * A line that is a lone math symbol -- a stepper's `+` or `−`, a close `×` --
+ * is not a fragment: it is a control drawn as text, and joining it into its
+ * neighbours (`− 1 +`) would leave the model no handle to press it by.
+ */
+const LONE_SYMBOL = /^\s*\p{Sm}\s*$/u;
+
 function isFragment(line: WebLlmViewLine): boolean {
-  return line.role === "text" && line.words !== undefined && !LETTER.test(line.words);
+  return line.role === "text" && line.words !== undefined && !LETTER.test(line.words) && !LONE_SYMBOL.test(line.words);
 }
 
 function joinedRun(run: readonly WebLlmViewLine[], elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageTree, lined: ReadonlySet<WebLlmEvidenceElement>): WebLlmViewLine | undefined {

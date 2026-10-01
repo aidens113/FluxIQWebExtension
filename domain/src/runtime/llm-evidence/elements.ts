@@ -48,6 +48,15 @@ export type WebLlmEvidenceElement = {
    */
   ownText?: string;
   /**
+   * The element's words as a reader sees them, where `text` and a name taken
+   * from its content run together the words of children the page lays out as
+   * separate blocks -- "Pickup or delivery? Carden Falls Supercenter" beside
+   * "Pickup or delivery?Carden Falls Supercenter". The capture sends it only
+   * when the two differ by spacing alone. Display only: the page view prints
+   * it (`page-view/element/words.ts`); identity reads `name` and `text`.
+   */
+  readable?: string;
+  /**
    * The handle of the nearest ancestor this packet describes, in the composed
    * tree (t223). An ancestor the packet does not describe -- a sensitive
    * control, an element with no address -- is passed over to the next one up.
@@ -193,6 +202,7 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     label: rawLabel === name ? undefined : rawLabel,
     text,
     ownText: ownWords(raw.ownText),
+    readable: typeof raw.readableText === "string" ? screenedPageText(raw.readableText) : undefined,
     // Written by the packet (`./sanitize.ts`), which alone knows every
     // element's handle: the capture names the parent by its place in the list.
     parent: undefined,

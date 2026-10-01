@@ -32,6 +32,7 @@ import { clearableLayerOverPage, clearInterference } from "../interference";
 import { CLEAN_RECOVERY_ACCOUNT, type RecoveryAccount, type RecoveryOutcome } from "./account";
 import { recoveryBackoffMs, recoveryBudgetRemainingMs } from "./budget";
 import { faultMayHideBehindLayer, faultNeedsInterference, recoverableFault, type RecoveryFault } from "./fault";
+import { refusedControl, refusedControlChanging, type RefusedControlState } from "./refused-control";
 
 /** One execution's answer, and the account of what reaching it cost. */
 export type RecoveredExecution = {
@@ -83,11 +84,39 @@ export async function runWithRecovery(
   let waitedMs = 0;
   let attempts = 0;
   let dismissed = 0;
+  // The disabled control the previous attempt was refused at, while the
+  // attempts in a row keep being refused that way; `NOT_SEEN` otherwise.
+  let disabledBefore: RefusedControlState | undefined | typeof NOT_SEEN = NOT_SEEN;
+  // Whether the fault absorbed last was that first look and nothing more.
+  let looked = false;
   for (;;) {
     attempts += 1;
     const result = await attempt();
     const fault = recoverableFault(result, action);
     if (fault === undefined) return { result, account: account(attempts, absorbed, waitedMs, dismissed) };
+    if (fault === "disabled_target") {
+      // A control the gate refused as disabled is waited at only while it shows
+      // it is changing (`refused-control.ts`). The first such refusal is given
+      // one look, a tick long (`budget.ts`); a control that looked the same at
+      // that look, and does not say it is busy, is simply disabled, and its
+      // refusal is the answer. That look absorbed nothing -- it found the
+      // refusal was not transient -- so it leaves the account, and the page's
+      // refusal is reported as the verb wrote it. A control that was changing
+      // and then stopped was waited at for real, so this last refusal joins the
+      // account as the budget's end does below: the defence was reached and was
+      // not enough, and the outcome says `exhausted`, never `recovered`.
+      const control = refusedControl(result);
+      if (disabledBefore !== NOT_SEEN && !refusedControlChanging(disabledBefore, control)) {
+        if (looked) absorbed.pop();
+        else absorbed.push(fault);
+        return { result, account: account(attempts, absorbed, waitedMs, dismissed) };
+      }
+      looked = disabledBefore === NOT_SEEN;
+      disabledBefore = control;
+    } else {
+      disabledBefore = NOT_SEEN;
+      looked = false;
+    }
     const backoffMs = recoveryBackoffMs(fault, absorbed.length, action, startedAt, now());
     if (backoffMs === undefined) {
       // The fault was one this loop absorbs and there was no budget left to
@@ -119,6 +148,9 @@ export async function runWithRecovery(
     }
   }
 }
+
+/** No disabled refusal at the previous attempt, so the next one is a first and is given its look. */
+const NOT_SEEN = Symbol("no disabled refusal at the previous attempt");
 
 function account(attempts: number, absorbed: readonly RecoveryFault[], waitedMs: number, dismissed: number): RecoveryAccount {
   if (absorbed.length === 0) return attempts === 1 ? CLEAN_RECOVERY_ACCOUNT : { attempts, absorbed: [], waitedMs, dismissed, outcome: "clean" };

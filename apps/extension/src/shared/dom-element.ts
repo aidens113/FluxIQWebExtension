@@ -86,6 +86,17 @@ export type DomElementDescriptor = {
    */
   ownText?: string | undefined;
   /**
+   * The element's words as a reader sees them, where `text` runs together the
+   * words of children the page lays out as separate blocks: the bigbox chip's
+   * `text` is "Pickup or delivery?Carden Falls Supercenter", its readable words
+   * "Pickup or delivery? Carden Falls Supercenter". Present only when the two
+   * differ by spacing alone (`content/sensitive-text.ts`, "readable"). Display
+   * only: the page view prints it, and identity never reads it, so a recorded
+   * step and the page it replays on are still compared on `text` and the name.
+   * Snapshot-scoped, like `ownText`.
+   */
+  readableText?: string | undefined;
+  /**
    * The index, in the same snapshot's `interactiveElements`, of the element's
    * nearest listed ancestor in the composed tree (assigned slot, parent
    * element, shadow root host); the frame merge moves it to index the merged
@@ -191,7 +202,7 @@ export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "
  * - `frontLayer` and `leadStatement` are snapshot-scoped the same way: they say
  *   where one capture found the element painted and what it said on that
  *   page, and only the snapshot's element list writes them.
- * - `ownText`, `parent` and `hidden` are the snapshot list's structure (t223):
+ * - `ownText`, `readableText`, `parent` and `hidden` are the snapshot list's structure (t223):
  *   a position in one capture's list, and how that capture read the element's
  *   words and paint. A replay finds its target by identity, not by these.
  *
@@ -202,7 +213,7 @@ export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "
  */
 type UnwiredElementField =
   | "hasValue" | "selectedValue" | "options" | "changed" | "recentlyInteracted"
-  | "repeatCount" | "frontLayer" | "leadStatement" | "ownText" | "parent" | "hidden";
+  | "repeatCount" | "frontLayer" | "leadStatement" | "ownText" | "readableText" | "parent" | "hidden";
 
 /**
  * The recorded element's identity as it crosses the client gateway.

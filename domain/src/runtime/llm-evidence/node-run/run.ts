@@ -413,7 +413,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // by which a page's own markup reached a decision. A list read's
     // rejected-row samples are shown here and taken out of what is `recorded`
     // for the replay, which otherwise keeps the payload as the node answered.
-    const { read: shownRead, recorded } = webNodeReadWithRejectedRows(result.payload as JsonValue | undefined);
+    // The parameters it ran with, so a text filter that dropped numeric rows can say "use atLeast" (`./numeric-text-filter.ts`).
+    const { read: shownRead, recorded } = webNodeReadWithRejectedRows(result.payload as JsonValue | undefined, ran);
     const read = node.proposes ? shownRead : undefined;
     run.addresses.ran(buildOf(run), { actionType: node.actionType, parameters: ran, read, location: after?.evidence.location ?? current?.evidence.location });
     // Arriving from nowhere changed the page by definition: there was none. A

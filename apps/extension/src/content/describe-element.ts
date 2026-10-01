@@ -151,6 +151,22 @@ export function ownTextBeside(element: Element, text: string | undefined): strin
 }
 
 /**
+ * The element's words as a reader sees them, beside a `text` that runs the
+ * words of block children together: `undefined` unless the two differ by
+ * spacing alone. Only for the elements whose `text` is all their descendants'
+ * (an interactable or a semantic text element), read under the same
+ * sensitive-text rule (`"readable"`, `sensitive-text.ts`). Display only; see
+ * `readableText` on the descriptor.
+ */
+export function readableTextBeside(element: Element, text: string | undefined): string | undefined {
+  if (text === undefined) return undefined;
+  if (!isSemanticTextElement(element) && !isInteractableUiElement(element)) return undefined;
+  const readable = textOutsideSensitiveControls(element, "readable").replace(/\s+/g, " ").trim();
+  if (!readable || readable === text) return undefined;
+  return readable.replace(/\s+/g, "") === text.replace(/\s+/g, "") ? readable : undefined;
+}
+
+/**
  * What the control holds, or `undefined` when it holds nothing readable -- and
  * always `undefined` for a sensitive control, whose value must never leave the
  * page on any path, or for an element inside one. A span inside an editable
