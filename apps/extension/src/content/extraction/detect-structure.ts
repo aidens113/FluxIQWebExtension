@@ -19,6 +19,11 @@
 // `infiniteScroll` is reported only for a run whose page declares a feed and
 // offers no pagination control (`feed-signal.ts`).
 //
+// `continues` is reported for a run whose own section links to more of it
+// outside its items and its pagination -- a "See all" over a home page's four
+// friend requests of eight (`section-link/`, t195 w22e). It is a hint beside
+// the proposal and never pagination the read follows.
+//
 // **A page that has not drawn its list yet has no repeating run, and saying so
 // is worse than waiting.** `detectStructureWhenPresent` is the same bounded
 // wait the read makes (`page-render.ts`), for the same reason and with the same
@@ -92,6 +97,7 @@ import { inferListFromElement } from "./infer-list";
 import { largestRunsFirst } from "./largest-runs";
 import { waitUntil } from "./list-wait";
 import { largestPlaceholderRunApartFrom } from "./placeholder-run";
+import { sectionContinuation } from "./section-link";
 import { loneRecordAround } from "./single-record";
 
 type Refusal = Extract<WebAutomationStructureDetection, { ok: false }>;
@@ -203,9 +209,7 @@ function runAround(first: Element, elements: readonly Element[]): WebAutomationS
 
 /** The run's answer with the target's own record beside it. */
 function withRecord(run: Detected, record: WebAutomationExtractionProposal): Detected {
-  return run.infiniteScroll === true
-    ? { ok: true, proposal: run.proposal, infiniteScroll: true, record }
-    : { ok: true, proposal: run.proposal, record };
+  return { ...run, record };
 }
 
 /**
@@ -320,12 +324,27 @@ function outranks(candidate: WebAutomationExtractionProposal, incumbent: WebAuto
   return candidate.confidence > incumbent.confidence;
 }
 
-/** The proposal as an answer: refused when nothing in it may be read, with the feed signal beside it otherwise. */
+/** The proposal as an answer: refused when nothing in it may be read, with the feed signal and the section's link to more beside it otherwise. */
 function detected(proposal: WebAutomationExtractionProposal): Detected | Refusal {
   const items = queryAll(proposal.item);
   if (readableFieldCount(proposal) === 0 || items.some(isWithinSensitiveControl)) return refused("sensitive_region");
-  if (proposal.pagination !== undefined || !isDeclaredFeed(items, queryOne(proposal.container))) return { ok: true, proposal };
-  return { ok: true, proposal, infiniteScroll: true };
+  const holder = items[0]?.parentElement ?? null;
+  const continues = holder === null ? undefined : sectionContinuation(items, holder, paginationControls(proposal.pagination));
+  const feed = proposal.pagination === undefined && isDeclaredFeed(items, queryOne(proposal.container));
+  return {
+    ok: true,
+    proposal,
+    ...(feed ? { infiniteScroll: true as const } : {}),
+    ...(continues === undefined ? {} : { continues })
+  };
+}
+
+/** What the run's own pagination control names, which a section link never is. */
+function paginationControls(pagination: WebAutomationExtractionProposal["pagination"]): Element[] {
+  if (pagination === undefined || pagination.mode === "scroll") return [];
+  if (pagination.mode === "loadMore") return queryAll(pagination.control);
+  if (pagination.mode === "numbered") return queryAll(pagination.pages);
+  return queryAll(pagination.next);
 }
 
 function readableFieldCount(proposal: WebAutomationExtractionProposal): number {

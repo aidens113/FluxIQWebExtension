@@ -183,6 +183,12 @@ const DISABLED_REASON = "disabled";
  *
  * Not an obstruction: nothing stands over the control, so the loop waits and
  * does not press any layer's way out.
+ *
+ * Being this fault is what makes a refusal *eligible* to be waited at, not a
+ * promise it will be: the loop gives the first one a single look and keeps
+ * waiting only while the control shows it is changing -- its text or name moved,
+ * or it says `aria-busy` -- so a control that is simply disabled still fails
+ * promptly (`attempt.ts`, `refused-control.ts`).
  */
 function disabledBeforeDispatch(code: WebAutomationFailureCode, result: BrowserActionResult): boolean {
   if (code !== WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED) return false;

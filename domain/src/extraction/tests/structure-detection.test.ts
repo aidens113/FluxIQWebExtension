@@ -8,6 +8,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  webAutomationSectionLinkLabel,
   webAutomationStructureDetectionRequestValue,
   webAutomationStructureDetectionValue,
   WEB_AUTOMATION_STRUCTURE_DETECTION_REFUSALS
@@ -138,4 +139,51 @@ test("a record that is several items, or not a well-formed proposal, refuses the
     assert.equal(webAutomationStructureDetectionValue({ ...detection(), record }), undefined, why);
   }
   assert.equal(webAutomationStructureDetectionValue({ ...detection(), record: "the card" }), undefined, "a record that is not an object");
+});
+
+// The run's own section linking to more of it (t195 w22e): Circleway's Friends
+// home shows four of eight requests under a header whose "See all" opens the
+// rest (live run 36, cause 11). The label is one of a closed set of phrases,
+// so no page value crosses, and a link's path is a bounded same-origin path.
+
+test("a section link beside the run is copied with its closed-phrase label and its path, and nothing else", () => {
+  const withLink = { ...detection(), continues: { label: "See all", path: "/circleway/friends/requests/" } };
+  assert.deepEqual(webAutomationStructureDetectionValue(withLink), withLink);
+  const button = { ...detection(), continues: { label: "Show more" } };
+  assert.deepEqual(webAutomationStructureDetectionValue(button), button);
+  const noisy = { ...detection(), continues: { label: "View all ›", path: "/orders", sample: "Ada Lovelace" } };
+  const copied = webAutomationStructureDetectionValue(noisy);
+  assert.deepEqual(copied, { ...detection(), continues: { label: "View all ›", path: "/orders" } });
+  assert.equal(JSON.stringify(copied).includes("Ada Lovelace"), false);
+});
+
+test("a section link whose label is not wholly a closed phrase, or whose path is not a bounded path, refuses the detection whole", () => {
+  const broken: unknown[] = [
+    "See all",
+    { path: "/friends/requests/" },
+    { label: "See all 8 requests" },
+    { label: "Ada Lovelace" },
+    { label: " See all" },
+    { label: "see  all" },
+    { label: "See all" + " ›".repeat(12) },
+    { label: 7 },
+    { label: "See all", path: "friends/requests/" },
+    { label: "See all", path: "https://elsewhere.test/requests" },
+    { label: "See all", path: "/friends requests/" },
+    { label: "See all", path: `/${"a".repeat(300)}` },
+    { label: "See all", path: 3 }
+  ];
+  for (const continues of broken) {
+    assert.equal(webAutomationStructureDetectionValue({ ...detection(), continues }), undefined, JSON.stringify(continues));
+  }
+});
+
+test("the closed phrases are see, view or show, then all or more, whole, with nothing after but an arrow", () => {
+  for (const label of ["See all", "see all", "View all", "Show all", "See more", "View more", "Show more", "See all ›", "View all →", " See \n all "]) {
+    assert.ok(webAutomationSectionLinkLabel(label) !== undefined, label);
+  }
+  assert.equal(webAutomationSectionLinkLabel(" See \n all "), "See all");
+  for (const label of ["", "All", "See", "See all 8", "See all requests", "Show more like this", "Load more", "View sent requests", "More"]) {
+    assert.equal(webAutomationSectionLinkLabel(label), undefined, label);
+  }
 });
