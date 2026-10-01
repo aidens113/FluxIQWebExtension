@@ -327,6 +327,14 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Write findings/reproduction/decisions/check results progressively to own reports/settings-forget-recovery.md. Supervisor owns shared docs, integration and verification.
 - Narrow tests/scoped types via shared heavy wrapper only. No broad gates, live/browser/provider/panel activity, commit or push. Freeze exact source when ready for supervisor review.
 
+### Getting Started result recovery supervisor brief (released)
+
+- Exact source: apps/extension/src/panel/getting-started/start-view.ts; new owning tests/getting-started start-view.test.ts in that source directory's tests subfolder.
+- Reproduce audit finding6: requested connection goal renders while request awaits, then refusal must not install an already-obsolete error. Retain failures while the latest rendered goal is unmet; later goal observation clears them, explicit retry remains available.
+- Guard activation synchronously through pending acknowledgement, preserve existing labels, controls, guide rendering, approval codes and acknowledgement-first cancellation contract.
+- Catch unexpected transport rejection with fixed local retry text and finally release pending controls; reconcile that error against latest rendered status too. No background/protocol/request cancellation redesign.
+- Preserve existing start-steps tests unchanged; component tests use existing fake DOM, no shared helper edits or browser claim. Record reproduction/checks in own report; broad extension checks wait for Settings worker freeze.
+
 ## Work Ledger
 
 ### 2026-10-01 — Logout reproduced and fixed; extension recovery released
@@ -336,6 +344,7 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Extension read-only audit frozen with six source findings. Supervisor confirmed Settings render releases pending Disconnect and Save releases before reconnect; Forget currently closes on refusal. Exact four-file Settings/Forget implementation released to wait_gaps; remaining start/review/paused partitions remain queued.
 - All work remains isolated in t224; no merge, push, live execution or Claude changes.
 - Logout scoped types passed against actual web configuration, native0. Paused recording regression reproduced enabled Start on original source (6pass/1fail); two-file correction plus architecture note now passes all7 owning tests, native0/119.8275ms. Reports preserve exact evidence; broader gates await worker freeze.
+- Checkpoints: Core logout5d023f6f; downstream paused/recovery briefsfb66ce0b. Getting Started corrected original-source reproduction3fail/1pass confirms late Connect/Disconnect failures contradict observed goals and repeated synthetic handler activation is unguarded. Narrow fix passes component5 plus unchanged guide10 (15pass/native0/240.1355ms); actual-config scoped types for Start and paused source/tests now pass after correcting fixture subscribe/surface and temporary type resolution. Own start-result-recovery report records initial harness mistake and exact limits. Extension full gates remain deferred to Settings freeze.
 
 ### 2026-10-01 - Fifth Core and extension naming gates complete; sixth released
 - Agent: supervisor
