@@ -17,6 +17,21 @@
 // Every other field is listed, with its label whole (t200). Until 2026-09-30
 // fields were popped from the end until the packet fit the call's byte budget,
 // and the handle named only the fields that were left.
+//
+// **One record is a one-row table.** A list may have one item. A label/value
+// receipt (a `<dl>` of Role, Company, Reference, Submitted) and a lone record
+// on a page where nothing repeats arrive as the detection's proposal itself,
+// with `itemCount: 1`, and pass through here as any list does. When the target
+// sits outside the run the page found -- the reply card in a message thread,
+// whose nearest run is the inbox's thread rows, which carry no price -- the
+// page sends the card beside the run as `record`. It is split by the same rule
+// into a second handle and binding, and the packet carries it as `record` with
+// one closed sentence saying what it is and when to name it. Until 2026-10-01
+// the model was shown only the thread rows, and no plan could read the card
+// (t195 w19e, cause 1). A record's sensitive fields are dropped as a run's
+// are. One with no field left (which the wire reader already refuses, in
+// `extraction/structure-detection.ts`) would be left out, and the run answered
+// alone.
 
 import {
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
@@ -24,7 +39,7 @@ import {
   type WebAutomationExtractFieldSpec,
   type WebAutomationExtractListPagination
 } from "../../../actions/extraction";
-import type { WebAutomationStructureDetection } from "../../../extraction";
+import type { WebAutomationExtractionProposal, WebAutomationStructureDetection } from "../../../extraction";
 import { present } from "../present";
 import { screenedPageText } from "../withheld";
 import type { WebLlmExtractionBinding } from "./handles";
@@ -41,6 +56,9 @@ export const WEB_LLM_STRUCTURE_PAGINATION_MODES = ["none", "next_link", "load_mo
 
 export type WebLlmStructurePaginationMode = (typeof WEB_LLM_STRUCTURE_PAGINATION_MODES)[number];
 
+/** What the packet says of a `record`: domain text, never the page's. */
+const RECORD_NOTE = "record is the one item you aimed at, read as a one-row table; name its handle in extractList when the instruction is about that item";
+
 export type WebLlmStructureField = {
   /** The record field key the handle's extraction writes this column under (D16). */
   key: string;
@@ -54,6 +72,16 @@ export type WebLlmStructureField = {
   kind: WebAutomationExtractFieldKind;
   /** The share of items that have the field, from 0 to 1. Below 1, a record without it carries `null`. */
   coverage: number;
+};
+
+/** The one item the detection was aimed at, beside the run it found outward, under its own handle. */
+export type WebLlmStructureRecord = {
+  /** The opaque handle that names this one-item list. Copy it exactly into `extractList`. */
+  handle: string;
+  itemCount: number;
+  fields: WebLlmStructureField[];
+  /** What the record is and when to name it. A constant of this module. */
+  note: string;
 };
 
 export type WebLlmRepeatingStructure = {
@@ -70,12 +98,16 @@ export type WebLlmRepeatingStructure = {
   pagination: WebLlmStructurePaginationMode;
   /** How sure the detection is, from 0 to 1. */
   confidence: number;
+  /** The one item the target belongs to, when it lies outside the list above. */
+  record?: WebLlmStructureRecord;
 };
 
-/** A detection split into what the model sees and what the handle keeps. */
+/** A detection split into what the model sees and what each handle keeps. */
 export type WebLlmStructureSplit = {
   packet: WebLlmRepeatingStructure;
   binding: WebLlmExtractionBinding;
+  /** The record's binding, under `recordHandle`; absent when there is no record or none of its fields is readable. */
+  recordBinding: WebLlmExtractionBinding | undefined;
 };
 
 type DetectedStructure = Extract<WebAutomationStructureDetection, { ok: true }>;
@@ -83,22 +115,32 @@ type DetectedStructure = Extract<WebAutomationStructureDetection, { ok: true }>;
 export type WebLlmStructurePacketInput = {
   detection: DetectedStructure;
   handle: string;
+  /** The handle reserved for `detection.record`; ignored when the detection carries none. */
+  recordHandle: string | undefined;
   location: string;
   target: string | undefined;
   frameId: number | undefined;
+  /** The pathname of the child frame's document the list was detected in (`./handles.ts`). */
+  frameUrlPath: string | undefined;
 };
 
+type ReadableField = { key: string; spec: WebAutomationExtractFieldSpec; shown: WebLlmStructureField };
+
 /**
- * The packet and the binding, or `undefined` when no field is left once the
- * sensitive ones are dropped. Both halves are cut from the same list, so the
- * handle names exactly the fields the model was shown.
+ * The packet and the bindings, or `undefined` when no field of the run is left
+ * once the sensitive ones are dropped. Each half is cut from the same list, so
+ * a handle names exactly the fields the model was shown.
  */
 export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLlmStructureSplit | undefined {
   const proposal = input.detection.proposal;
-  const readable = proposal.fields
-    .filter((field) => field.spec.handling !== "exclude")
-    .map((field) => ({ key: field.key, spec: field.spec, shown: shownField(field.key, field.label, field.spec.kind, field.coverage) }));
+  const readable = readableFields(proposal);
   if (readable.length === 0) return undefined;
+  const infiniteScroll = input.detection.infiniteScroll === true;
+  const record = input.detection.record;
+  const recordReadable = record === undefined || input.recordHandle === undefined ? [] : readableFields(record);
+  const recordBinding = record === undefined || input.recordHandle === undefined || recordReadable.length === 0
+    ? undefined
+    : boundList(input, input.recordHandle, record, recordReadable, boundPagination(record.pagination, false));
 
   const packet = present<WebLlmRepeatingStructure>({
     schemaVersion: WEB_LLM_STRUCTURE_SCHEMA_VERSION,
@@ -108,15 +150,39 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     target: input.target,
     itemCount: proposal.itemCount,
     fields: readable.map((field) => field.shown),
-    pagination: paginationMode(proposal.pagination, input.detection.infiniteScroll === true),
-    confidence: proposal.confidence
+    pagination: paginationMode(proposal.pagination, infiniteScroll),
+    confidence: proposal.confidence,
+    record: recordBinding === undefined ? undefined : {
+      handle: recordBinding.handle,
+      itemCount: recordBinding.itemCount,
+      fields: recordReadable.map((field) => field.shown),
+      note: RECORD_NOTE
+    }
   });
+  const binding = boundList(input, input.handle, proposal, readable, boundPagination(proposal.pagination, infiniteScroll));
+  return { packet, binding, recordBinding };
+}
 
-  const paginate = boundPagination(proposal.pagination, input.detection.infiniteScroll === true);
-  const binding = present<WebLlmExtractionBinding>({
-    handle: input.handle,
+/** The proposal's fields a model may be shown and a handle may read: every one not proposed `exclude`. */
+function readableFields(proposal: WebAutomationExtractionProposal): ReadableField[] {
+  return proposal.fields
+    .filter((field) => field.spec.handling !== "exclude")
+    .map((field) => ({ key: field.key, spec: field.spec, shown: shownField(field.key, field.label, field.spec.kind, field.coverage) }));
+}
+
+/** The binding one handle keeps: the proposal's item, the readable fields under the keys shown, and its pagination. */
+function boundList(
+  input: WebLlmStructurePacketInput,
+  handle: string,
+  proposal: WebAutomationExtractionProposal,
+  readable: ReadableField[],
+  paginate: WebAutomationExtractListPagination | undefined
+): WebLlmExtractionBinding {
+  return present<WebLlmExtractionBinding>({
+    handle,
     location: input.location,
     frameId: input.frameId,
+    frameUrlPath: input.frameUrlPath,
     extractList: present<WebLlmExtractionBinding["extractList"]>({
       item: proposal.item,
       itemElement: undefined,
@@ -133,7 +199,6 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     }),
     itemCount: proposal.itemCount
   });
-  return { packet, binding };
 }
 
 function shownField(key: string, label: string, kind: WebAutomationExtractFieldKind, coverage: number): WebLlmStructureField {
@@ -173,6 +238,7 @@ function paginationMode(pagination: WebAutomationExtractListPagination | undefin
  * proposed. A feed the page only declared keeps a scroll bounded like the
  * picker bounds a control the page advertises no count for: by the domain's
  * own page bound, which the page-side reader stops short of when the feed ends.
+ * A record is one item and continues nowhere, so the feed is never its.
  */
 function boundPagination(pagination: WebAutomationExtractListPagination | undefined, infiniteScroll: boolean): WebAutomationExtractListPagination | undefined {
   if (pagination !== undefined) return structuredClone(pagination);

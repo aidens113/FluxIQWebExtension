@@ -20,6 +20,13 @@ test("the node says to detect the list, name it by its handle, and that it saves
   assert.equal(WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION.length <= 240, true, `${WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION.length} characters`);
 });
 
+test("the node's first sentence says one record is read as a list is, within the 80 characters Core keeps", () => {
+  // Detection answers a lone card or a label/value receipt as a list of one (t195 w20j).
+  const first = WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION.split(/(?<=\.) /u)[0] ?? "";
+  assert.match(first, /one record/u);
+  assert.equal(first.length <= 80, true, `${first.length} characters`);
+});
+
 test("the grammar leads with the handle form, and says how to keep, rename and read columns and pages", () => {
   const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
   // 700, with Core's parameter-description bound moved to match. The extra

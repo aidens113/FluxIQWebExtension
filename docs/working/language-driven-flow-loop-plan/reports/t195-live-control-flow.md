@@ -244,14 +244,72 @@ after the round-2 workers): Core 20 modified + 6 new under `packages/fluxiq/src/
   - Validation: domain check -> `domain-check-exit=0`; domain tests `tool-rejection-detail`, `press`, `node-run/tests` ->
     116/116; downstream audit `passed (145 warning(s), 118 baselined)`.
 
-**Next (not started: the concurrent-agent limit refused them; briefs are in the round-2 table).**
-- w20h: C1 frame path on LLM-built nodes + a 5 s frame wait; C2 detection origin inside a cross-origin frame.
-  apply-quillmark cannot pass without both.
-- w20i then w20j: single-record reads (the `<dl>` receipt, the moon-jar reply card). apply-quillmark and moon-jar
-  cannot pass without them.
-- w20k: a gate-level `disabled` ("I'm a person", 3 s) waited out (apply-quillmark, likely).
-- For t223 (its files): `node-run/run.ts` passes F29's `instead`; `tool-rejection.ts` rewords `consequences_declined`; keep
-  `data-fluxiq-frame-url` reachable for C1.
+**Live, 2026-10-01 ~20:50Z (Lab stop lifted for lane D; trees at dev: downstream `97efda59`, Core `3a52a587`).**
+- Core libraries were rebuilt first (`heavy.sh`: contracts reused, fluxiq rebuilt in 54 s, client-gateway-websocket
+  reused) -> `build-exit=0`.
+- **Run 35 (killed in the prelude; no run id; $0).** confirm-requests was launched 20:52:39Z, reason "first run after
+  F23-F29, the t223 compact view and lane B's B1". The guard admitted it (`sha256:9307fb9c...`). The prelude rebuilt
+  scenario-lab, the domain host, the domain and the extension; then the process exited 1 with no failure line. Every
+  `run-lab.mjs` exit path writes one, and there was no ledger `start`, so the process was killed from outside. That
+  coincides with the user's new rule, relayed by the coordinator: a live test must start the build by typing the
+  instruction into the real extension chat, never through the direct `generate-flow-bootstrap-adaptation` request.
+  t227 is building that launcher. No new direct-API run is launched until it is merged. Log: scratchpad
+  `runs/20261001T205239Z-social-network-feed-confirm-requests.log`. The coordinator later confirmed the supervisor
+  killed it, because DeepSeek was in an outage (requests accepted, never answered; every decide timed out at 45 s).
+  Nothing was left to debug. No Lab until the supervisor says the provider answers again.
+
+**Ready to commit (session 4b, F30-F32, downstream only; Core is clean).** These fixes clear the blockers that stopped
+apply-quillmark and moon-jar.
+- **F30 (w20h), apply C1 + C2.**
+  - LLM-built target and extract nodes inside a frame carry `browserFrameUrlPath` (the pathname of the frame URL the
+    element was shown in).
+  - The extension waits up to 5 s for a frame at that path before `TARGET_NOT_FOUND`.
+  - Detection inside a frame expects the frame's origin, not the top page's.
+  - Files: domain `llm-evidence/plan-resolution/{target-packets, resolve-plan-node, extraction/slot}.ts` + new
+    `tests/frame-path.test.ts`; `llm-evidence/structure/{handles, detect}.ts` + `tests/detect.test.ts`; extension
+    `src/runtime/{frame-address, action-runner}.ts` + `tests/frame-address.test.ts`.
+- **F31 (w20i + w20j), apply C3 + moon-jar cause 1: a one-record read.**
+  - A `<dl>` of dt/dd pairs is a 1-item proposal labelled by its dt.
+  - A lone record (the reply card) is answered beside the run found outward (never instead of it), or alone when there
+    is none.
+  - The domain issues it a second extraction handle and a packet line `record: {handle, itemCount: 1, fields, note}`.
+  - The extract_list sentence says "a repeating list, table or one record".
+  - `docs/architecture/page-evidence.md` gains "Detecting A List, Or One Record" (also F30's frame path and wait).
+  - Files: extension `content/extraction/{infer-list, detect-structure}.ts` and new `content/extraction/single-record/`
+    (`key-value-record`, `lone-record-level`, `lone-record`, `index` + tests); domain
+    `extraction/structure-detection.ts` + test; `llm-evidence/structure/{packet.ts, tests/badge-column.test.ts}` and new
+    `structure/tests/{record-detections.ts, record.test.ts}`, `plan-resolution/tests/one-record.test.ts`;
+    `output-nodes/extract-list/catalog-text.ts` + test.
+  - Not decided: a one-item handle does not force `maxItems: 1` (a second reply card would read 2 rows).
+- **F32 (w20k + lead), apply C5: a gate-level `disabled` is waited out.**
+  - The four actionability gates (click, type, select, check's first) mark the refusal with Core's existing
+    `effect: "unacted"`; a new key would make Core drop the record.
+  - Recovery absorbs it as the new fault `disabled_target`. The lead put it on the page's ladder (`budget.ts`), 3,750 ms,
+    which outlasts the 3 s "Please wait".
+  - w20k measured the veto: the recorded "I'm a person" scores 0.104 against "Please wait N" and is refused as
+    `target_not_found`, which already waits. The new path covers a recording the veto cannot check.
+  - Files: extension `content/actions/{click, type, select, check}.ts` + new `tests/gate-refusal.test.ts`;
+    `content/action-runtime/{results.ts, recovery/fault.ts, recovery/budget.ts}` + `recovery/tests/{attempt,
+    budget}.test.ts`.
+- **Lead's validation, after the last edit:**
+  - Domain tests `structure/tests`, `plan-resolution/tests`, `output-nodes/extract-list/tests` and `extraction/tests` ->
+    129/129.
+  - Extension tests `content/extraction/tests`, `content/extraction/single-record/tests`, `runtime/tests`,
+    `action-runtime/recovery/tests` and `actions/tests/gate-refusal.test.ts` -> 478/478.
+  - Budget pin: fails with the line reverted (`pass 8, fail 1`), passes restored (9/9).
+  - Domain check -> `domain-check-exit=0`. Structure audit -> `passed (146 warning(s), 118 baselined)`.
+  - Extension check -> exit 1, only 3 TS2610 errors in `src/panel/**/tests`. Those files are unchanged here; the errors
+    come from dev's `cfecc984` (fake-dom `ownerDocument`), and dev has since edited those files.
+- **Dev state at this tree's merge point, not this lane's:**
+  - `action-runtime/tests/store-chooser-replay.test.ts` fails 15/15 on this tree but passes 15/15 on dev `8b323fb7`, which
+    changed that test after the merge.
+  - `click`, `execute` and `page-identity` tests cannot load in isolation (`window is not defined`); the same happens on
+    dev.
+  Both should clear with the next dev merge.
+
+**Next.**
+- For t223 (its files): `tool-rejection.ts` rewords `consequences_declined`. F29's `run.ts` line is done. The frame URL is
+  still reachable (w20h checked).
 - Follow-ups outside lane files: `llm/evidence-loop/progress-trace.ts:87`, `activity/wording/tool-call.ts` and
   `activity/observer.ts:38` do not know F24's `dryrun.N.P.reanchor`/`.again` call ids or the `remembered` code (trace and
   chat wording); F24's `madeOptional` needs a press-time layer flag from the extension (`click.ts`/`results.ts`);

@@ -68,3 +68,11 @@ test("an unreadable timeout is treated as naming none, never as leaving no budge
     assert.equal(recoveryBackoffMs("target_absent", 0, command(timeoutMs), 0, 0), 250, `timeoutMs ${String(timeoutMs)} switched the defence off`);
   }
 });
+
+// "I'm a person" reads "Please wait N" and is disabled for 3 s after Submit
+// (job-board's ATS). A gate refusal before dispatch waits on the page's ladder,
+// whose 3,750 ms outlasts it; the short ladder's 750 ms did not (t195-w20k).
+test("a control disabled for a moment before dispatch is waited on the page's ladder, long enough for a 3 s wait", () => {
+  assert.deepEqual([...recoveryBackoffLadder("disabled_target")], [...RECOVERY_TARGET_BACKOFF_MS]);
+  assert.ok(sum(recoveryBackoffLadder("disabled_target")) >= 3_000);
+});

@@ -29,6 +29,11 @@
 // rather than as long as one handle is: each detected column under its detected
 // key, and each column under every key a plan wrote it under (`wrote`), because
 // the Flow keeps the plan's keys and the draft shows the model those.
+//
+// One detection can issue two handles: the list it found, and beside it the one
+// record the model aimed at, read as a one-row table (`./packet.ts`). Each is
+// an ordinary handle here, retained in the same scope, so the record's item is
+// an "own" list exactly as the run's item is.
 
 import type { WebAutomationExtractField, WebAutomationExtractListRequest } from "../../../actions/extraction";
 import { present } from "../present";
@@ -61,6 +66,14 @@ export type WebLlmExtractionBinding = {
   location: string;
   /** The child frame the structure is in; absent for the top frame. A Flow node carries it as `browserFrameId`. */
   frameId?: number;
+  /**
+   * For a list in a child frame, the pathname of that frame's document when
+   * the list was detected (`./detect.ts`). A Flow node carries it as
+   * `browserFrameUrlPath`, which finds the frame again once a reload has
+   * renumbered it. Absent for the top frame, and for a frame whose address was
+   * not known.
+   */
+  frameUrlPath?: string;
   /**
    * The `web.dom.extract_list` request the handle names: the item selector,
    * every field the model was shown under the key it was shown, and how the
@@ -174,6 +187,7 @@ function copyBinding(binding: WebLlmExtractionBinding): WebLlmExtractionBinding 
     handle: binding.handle,
     location: binding.location,
     frameId: binding.frameId,
+    frameUrlPath: binding.frameUrlPath,
     extractList: structuredClone(binding.extractList),
     itemCount: binding.itemCount
   });

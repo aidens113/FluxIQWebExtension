@@ -309,6 +309,59 @@ bytes of view (5.2%), the largest page 15,056 bytes; one whole decide request on
 everything-store results went from 1,414,167 bytes (471,405 tokens) to 159,997
 bytes (53,349 tokens).
 
+## Detecting A List, Or One Record
+
+`web.detect_repeating_structure` asks the page for the list around an element
+the model was shown, or for the page's largest list (`web.dom.capture_snapshot`
+with `detectStructure`; the page side is `apps/extension/src/content/extraction/`).
+The domain splits the answer (`domain/src/runtime/llm-evidence/structure/`):
+the model gets an opaque `extraction.N` handle with each column's key, label,
+kind and coverage, the item count and how the list continues; the handle store
+keeps the selectors. A plan names the handle in an extraction node's
+`extractList`, and the node is built from what the handle keeps
+(`plan-resolution/extraction/slot.ts`).
+
+A list may have one item, so a single record is read as a one-row table
+(t195). The page answers in one of three forms:
+
+- **A run.** The items that repeat around the target, as before.
+- **A run with the record beside it.** When the target lies outside every
+  item of the run, the page also sends the one record the target belongs to as
+  `record` (one item, no pagination). On photo-social's message thread that is
+  the reply card (name, price, note), and the run is the inbox's three thread
+  rows, which carry no price. The record gets a second handle in the same
+  scope and frame, and the packet carries it as
+  `record: {handle, itemCount: 1, fields, note}`, where `note` is one closed
+  sentence: name that handle when the instruction is about that item. A lone
+  record never replaces a run, so a model aimed at a cart's subtotal still
+  gets the cart lines.
+- **One record as the list.** A label/value `<dl>` (job-board's application
+  receipt: Role, Company, Reference, Submitted, each read from its `dd` and
+  labelled by its `dt`) comes back as the proposal itself with `itemCount: 1`.
+  So does a lone record on a page where nothing repeats, which the page answers
+  only after its 5 s wait for a run has passed.
+
+A one-item handle builds an extraction node like any other, including with
+`minItems` and `maxItems` of 1. The Flow keeps the record's item selector, and
+the handle store knows it as the Flow's own list, so a draft read back from the
+Flow is not refused as a guess. The record and receipt reads above are covered
+by provider-free tests on detection answers written from the scenarios' markup
+(`structure/tests/record-detections.ts`), not on captures; the page-side walk
+has not yet been run in a browser.
+
+**In a child frame**, detection captures that frame's own document and holds
+it to the origin the element was shown with (`data-fluxiq-frame-url`), not the
+top page's. The handle keeps the path of that frame's document, and every node
+a model builds in a child frame — an extraction node from a handle, or a
+click, type or other action on an element shown in the frame — carries
+`browserFrameUrlPath` (the pathname only, with no origin or query) beside
+`browserFrameId`. A reload renumbers frames, so when a command names a path,
+the extension waits up to 5 s for a frame at that path to appear, polling every
+100 ms, before it refuses `web.target.not_found`. The wait is cut to the
+command's own timeout less a 1 s margin
+(`apps/extension/src/runtime/frame-address.ts`, `waitForFrameChoice`). An
+ambiguous or empty frame list is answered at once.
+
 ## No Limits On The Way To A Model
 
 The user's order of 2026-09-30 (t200): "Remove ANY AND ALL LIMITS ON THE NUMBER
