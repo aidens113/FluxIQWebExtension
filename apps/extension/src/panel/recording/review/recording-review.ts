@@ -44,6 +44,7 @@ export function createRecordingReview(context: PanelContext): RecordingReview {
   // Moves each time the review starts over (hidden, or a fresh offer), so a
   // reply to an earlier review cannot land in a later one.
   let review = 0;
+  const actions = new Map<ReviewAction, HTMLButtonElement>();
 
   // Draws only when the phase changed, so a status push never rebuilds the
   // buttons under the person's pointer or focus.
@@ -89,12 +90,27 @@ export function createRecordingReview(context: PanelContext): RecordingReview {
   function buttonElement(button: ReviewButton, busy: boolean): HTMLButtonElement {
     const element = createElement("button", { className: LOOKS[button.look], text: button.label, attrs: { type: "button" } });
     element.disabled = busy && button.action !== "dismiss";
-    element.addEventListener("click", () => press(button.action));
+    element.addEventListener("click", () => {
+      if (!element.disabled && visible(element) && actions.get(button.action) === element && element.parentElement === buttons) press(button.action);
+    });
     return element;
+  }
+
+  function visible(node: HTMLElement): boolean {
+    if (!node.isConnected) return false;
+    for (let current: HTMLElement | null = node; current; current = current.parentElement) {
+      const style = current.ownerDocument.defaultView?.getComputedStyle(current);
+      if (current.hidden || current.hasAttribute("inert") || current.getAttribute("aria-hidden") === "true" || current.style.display === "none" || current.style.visibility === "hidden" || style?.display === "none" || style?.visibility === "hidden" || style?.visibility === "collapse") return false;
+    }
+    return true;
   }
 
   function draw(): void {
     const view = reviewView(model.phase);
+    const doc = element.ownerDocument;
+    const focused = doc.activeElement;
+    const removedFocus = [...actions].some(([action, node]) => node === focused && !view.buttons.some((button) => button.action === action));
+    const ownedFocus = removedFocus && visible(element) && doc.visibilityState === "visible" && doc.hasFocus();
     element.hidden = view.hidden;
     element.setAttribute("aria-busy", String(view.busy));
     heading.textContent = view.heading;
@@ -111,7 +127,26 @@ export function createRecordingReview(context: PanelContext): RecordingReview {
     more.textContent = extra > 0 ? `and ${extra} more ${extra === 1 ? "step" : "steps"}` : "";
     more.hidden = extra === 0;
     openFluxIQ.element.hidden = !view.openFluxIQ;
-    buttons.replaceChildren(...view.buttons.map((button) => buttonElement(button, view.busy)));
+    for (const [action, node] of actions) {
+      if (!view.buttons.some((button) => button.action === action)) { actions.delete(action); node.remove(); }
+    }
+    const shown = view.buttons.map((button) => {
+      const node = actions.get(button.action) ?? buttonElement(button, view.busy);
+      actions.set(button.action, node);
+      if (node.textContent !== button.label) node.textContent = button.label;
+      node.className = LOOKS[button.look];
+      node.disabled = view.busy && button.action !== "dismiss";
+      return node;
+    });
+    shown.forEach((node, index) => {
+      const current = buttons.children[index];
+      if (current !== node) buttons.insertBefore(node, current ?? null);
+    });
+    // Only repair focus removed by this redraw. Dismissal has no local visible
+    // target, and another field/page must keep any focus it acquired meanwhile.
+    if (ownedFocus && !view.hidden && doc.visibilityState === "visible" && doc.hasFocus() && (doc.activeElement === focused || doc.activeElement === doc.body || doc.activeElement === null)) {
+      shown.find((node) => !node.disabled && visible(node))?.focus({ preventScroll: true });
+    }
   }
 
   draw();

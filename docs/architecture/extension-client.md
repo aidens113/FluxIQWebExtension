@@ -83,6 +83,11 @@ the gear and Open FluxIQ) and, under it, exactly one screen
   "Extract Data From This Page"; a recording that just ended is reviewed at the
   top (analyze, preview, test, save), and the panel switches to this tab when
   a recording stops.
+  Review actions retain their mounted controls across phase changes, including
+  Done while analysis progresses into building. A removed focused action hands
+  focus to an available local control only while the visible review still owns
+  focus in the active document. Passive redraw and dismissal do not claim
+  external focus; reducer, request and review-epoch contracts remain unchanged.
 - **Settings**, opened by the gear in place of everything else: the two
   addresses and four switches with an explicit Save, Disconnect, the on-page
   status (Full, Small, Off), Report a problem, Forget this pairing, and Open

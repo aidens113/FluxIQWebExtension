@@ -11,29 +11,21 @@ Related: [working document index](./README.md)
 
 ## Current State
 
-Latest continuation checkpoint (2026-10-01): Core onboarding1a5afc47, Runtime
-d011b0ae and sensitive-store authorizationd5c979a6 are checkpointed; supervisor
-combined82/full300files1852tests/corrected types/production9733 passed. Structure
-has only inherited service4506/4505. Auth and operational-refresh/Compute are
-checkpointed9d5e2533/e109b226; clipboard0738bc58 has22 focused passing tests
-and corrected scoped types. Fourth combined110/types pass; production29706
-passed17pages/128724ms. Initial full1942pass/1 source-only moved-controller
-contract failure is corrected, focused21pass; final full21515 passed308files/
-1943tests/121.20s and types56689 passed15522ms. Fourth Core batch Complete;
-legacy launcher, Background/Production adapters and remaining clipboard
-consumer briefs now released in disjoint paths. Extension extraction checkpointc96f5f78 passed
-full1716/types/build/audit. Strip related21/full1727/types/build/structure pass,
-checkpoint5e162c36. Explicit navigation focus is Complete41f3df0b (full1738/
-types/build and corrected docs pass). Naming consistency worker owns six next
-downstream paths. Core fifth Complete: combined103/full314files1987tests,
-final types35028 and production69313 passed17pages/131107ms. Clipboard95004f19,
-launcher62a8532f and adapters1cd44425 saved; strict comment/contract correction
-checkpoint follows. Structure has only protected inherited service4506/4505
-after optional-write marker and index fixes; no config/baseline changes.
-Extension naming Complete: related48/full1747/types/build/structure pass.
-Next sixth Core database/runtime-log/logout briefs released in disjoint paths;
-extension settings/recording worker audits read-only.
-Continue working beyond every batch.
+Latest continuation checkpoint (2026-10-01): Core sixth Complete, root full
+319files2078tests/native0/187.86s, types native0, production17pages/native0/
+203827ms. Full structure has only inherited protected service4506/4505/native1,
+no config/baseline relaxation. Database e2f9f9dd and Runtime/layout5c28bdb3
+saved; root Runtime source-contract104passed before full rerun. All three
+seventh Core workers now released: Production parameters, Deployment and Docs,
+exact disjoint paths; source is unfrozen only within those briefs.
+
+Extension recording review verified: full1791/native0/121040.1252ms, types0,
+build22files per browser/native0/96138ms, full structure0/136warnings119baseline.
+Root shell45 and strict recording types independently pass. Prior settings
+5c61a4ba, Start0a861fd9 and pausedfb66ce0b remain protected. Recording review
+checkpoint follows; root Open FluxIQ utility two-path fix is now released.
+Original Claude task ids/handoff remain preserved below. No merge/push, live
+provider/browser/panel activity or protected-tree edits; continue beyond batches.
 
 The user requested a primary focus on Core framework UI/UX across all web panels
 and the extension. Existing Core UX plans describe older implementations and lack
@@ -353,7 +345,81 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Retain unchanged review-model/payload-parsing tests and all prior paused/extraction/settings/shell fixes. Unexpected promise recovery beyond existing request contract needs a source finding and supervisor release.
 - Progressive own report; local fake DOM/focus modeling may live in new test, no shared helper edits. Narrow tests/scoped types through shared heavy wrapper, then freeze for supervisor checks. No broad/live/provider/panel/commit/push.
 
+### Production parameter recovery implementation brief (released)
+
+- Worker: runtime_contracts (resumed lane), released after sixth Core full/type/build gates passed. Read Current State and frozen production-parameter-recovery-audit.md. Same paired t224 trees.
+- Exact Core paths under apps/web/src/features/programs/: live-views/production-runner.tsx; new production-parameters/{prepareProductionParameters.ts,ProductionParameterFields.tsx,index.ts,tests/prepareProductionParameters.test.ts,tests/ProductionParameterFields.test.tsx}; new live-views/tests/production-parameters-recovery.test.tsx; existing live-views/tests/production-runner.test.ts only for truthful moved source ownership.
+- Preserve original productionParameterFields export/valid legacy descriptor shape. Existing operations/freshness behavioral files unchanged and required. Direct Start metadata envelope, loops/delays, polling, target/API/draft locks and all runtime/backend/transport contracts unchanged.
+- Absent parameterSchema means existing empty metadata. Support object declarations with properties (top-level missing type permits legacy object inference), primitive string/boolean/number/integer fields; missing property type permits legacy string inference. Malformed declarations, unsupported object/array/union/composition and more than30 properties show fixed actionable limitation and block launch rather than truncate/coerce. Name the30-field limit explicitly.
+- Supported local UI constraints: required names, type-compatible primitive enums, correctly typed finite defaults, finite numeric minimum/maximum and safe integers. Required blank input needs correction; this is a documented UI policy, not a claim of comprehensive JSON Schema/server enforcement. Reject malformed/contradictory constraints/defaults; no clamping or implicit fallback.
+- Allow harmless annotations title/description/examples/$comment/readOnly/writeOnly/deprecated; use only string titles. Unknown assertion keywords/composition must produce an explicit unsupported declaration limitation, never imply their constraints were enforced. Define allowed property/top-level keys in the pure helper and test them.
+- Numeric blank/whitespace without a default, or explicitly cleared, omits an optional property; untouched valid defaults apply; explicit0 remains0. Reject nonfinite/invalid text and fractional/unsafe integers. Optional plain strings retain existing empty-string semantics; optional booleans retain false/default semantics. Required strings must be nonblank.
+- Optional enum without a default stays unset until chosen; selected empty string must remain distinguishable from absence. Use control-only encoded option indices with typed scalar normalization, not a wire sentinel. With a default, an unset choice may restore default. Defaults must satisfy declared enum/range. Do not silently choose first enum value.
+- Use own-property-safe draft reads and metadata construction; pure helper returns fields, normalized metadata and fixed issues without mutation. Field component is controlled/keyed, labelled and accessible; never focus/reset on polling. Current explicit drafts survive same-target schema refresh and revalidate; removed fields are never submitted.
+- Validate the captured current schema/draft before any Start POST. Invalid/unsupported launch preserves draft with actionable local feedback; corrected valid activation still uses original single lock and exact envelope. No extra polling/read or generic schema library.
+- Tests: numeric/required/default/enum/bounds/unsupported/30vs31 boundaries; mounted zeroPOST on invalid and exact valid metadata; refusal/retry/draft/schema-refresh/target/API/captured-handler/duplicate protections. Preserve original tests except truthful source-location assertions; no relaxations.
+- Own report reports/production-parameter-recovery-implementation.md; narrow heavy/scoped checks then freeze. No shared docs/extra source/broad/live/provider/panel/commit/push.
+
+### Deployment recovery implementation brief (released)
+
+- Worker: deployment_docs_audit, now released after sixth Core gates; read Current State and own frozen deployment-docs-recovery-audit.md findingsD1–D5. Same Core t224 tree.
+- Exact edited source: apps/web/src/features/programs/live-views/deployment-sync.tsx; new owning tests/deployment-sync-recovery.test.tsx; existing tests/deployment-sync.test.ts only truthful source-location assertions. Read deployment-sync response types if needed; no backend edits.
+- Key private workspace to API owner during render, layout teardown plus retained callback guards. Foreign snapshot/confirmation/result never appears under new owner and old callbacks never POST. Same-owner refresh preserves selected target, tab and confirmed detail when valid.
+- One synchronous action lock spans dry-run/sync/rollback through acknowledged mutation and reconciliation. No automatic mutation retry; explicit repository change confirmation remains mandatory and captured target/version cannot retarget. Refusal/rejection retains local retry feedback and selection; old Cancel/Confirm callbacks cannot close or submit a newer confirmation epoch.
+- Validate snapshot/target/git/version/run shapes used for rendering; invalid success is a recoverable read error. Caught snapshot refresh keeps last confirmed same-owner state marked stale with direct Retry. Git-unavailable/unknown state must not announce Clean or success. Do not infer checkout safety from UI.
+- Acknowledged action feedback stays separate from subsequent snapshot failure; no falsely failed action or automatic replay. Confirmed metadata removal invalidates unavailable captured target/version before mutation, even before passive cleanup.
+- Tests first for old/new owner confirmation and captured callbacks, duplicate actions, failure/rejection, same-owner state, invalid payload, unknownGit and acknowledged-write/read-failure. Existing confirmation/types/wire behavior unchanged; no generic coordinator/polling/styles/backend/shared helpers.
+- Own report reports/deployment-recovery-implementation.md; narrow heavy/scoped then freeze. No product edit before release, extra paths/broad/live/provider/panel/commit/push/shared docs.
+
+### Docs recovery implementation brief (released)
+
+- Worker: recording_controls, now released after sixth Core gates; read Current State and frozen deployment-docs-recovery-audit.md C1–C5. Same Core t224 tree.
+- Exact Core paths under apps/web/src/features/programs/: live-views/docs.tsx; new documentation-workspace/{useDocumentationWorkspace.ts,index.ts,tests/useDocumentationWorkspace.test.tsx}; new live-views/tests/docs-recovery.test.tsx; existing live-views/tests/docs.test.ts only truthful moved ownership assertions. Read current direct imports/types when needed to preserve page contract; no backend edits.
+- Cohesive hook owns snapshot/page read plus rebuild lifecycle, confirmed selection and separate channel/error/busy state; view retains filters, explorer/outline/tree/history/sandbox semantics. Key private view to API owner during render; layout teardown and captured-callback ownership fences. Owner changes mask old page/filter/history immediately, same-owner refresh preserves valid drafts/selection/content.
+- Synchronous single rebuild lock, caught/finally release, no automatic mutation retry. Order overlapping snapshot/rebuild responses so an older read cannot erase rebuilt metadata. Preserve acknowledged rebuild outcome even if subsequent current-page read fails.
+- Successful rebuild reloads current page even if id unchanged. Removed selected page reconciles to an available URL-requested or first confirmed page; no available page clears selected content/loading/error. Direct current-page Retry for failed read; explicit separately named Rebuild remains available for genuinely missing indexed content.
+- Validate snapshot/pages/sources/warnings and page fields actually rendered, including html string/identity; malformed success is recovery failure, zero indexed pages distinct from filtered no matches. No private error logging or exception text. Retained requests cannot act in new owner or selection context before passive cleanup.
+- Preserve existing virtualization/tree keyboard/folder expansion/outline/security/history helpers unchanged; C6 is a separate future brief. No styles/generic API/polling/backend/shared hooks. Keep helper focused below budgets, one export per owner and barrel.
+- Tests first for same-id rebuild reload, removed selection/direct retry, old owner/page/captured callbacks, duplicate rebuild, rejected/malformed response, busy reset and write/read distinction. Existing tree/outline/sandbox behavioral tests unchanged; explain source-location changes.
+- Own report reports/docs-recovery-implementation.md; narrow heavy/scoped then freeze. No product edit before release, extra paths/broad/live/provider/panel/commit/push/shared docs.
+
+### Deployment and Docs recovery read-only worker brief
+
+- Worker: lab_bookkeeping, after freezing database report. Read Current State; same Core t224 tree only.
+- Exact Core reads: apps/web/src/features/programs/live-views/deployment-sync.tsx and docs.tsx; their direct tests/deployment-sync.test.ts and docs.test.ts; shared program-api.ts only if necessary to distinguish fulfilled result from rejection contracts.
+- Audit snapshot/list/detail and mutation loading/error/retry/duplicate/current-owner behavior, editable draft/selected-path preservation, truthful empty/failed states and labels. No new polling/privileged actions assumed. Trace actual call order; separate source defects from browser hypotheses.
+- Own downstream report reports/deployment-docs-recovery-audit.md only; propose exact bounded files/tests and reproduced or source-confirmed sequences. No product/test/shared docs/heavy/broad/live/provider/panel/commit/push. Supervisor releases implementation after Core gates.
+
+### Runtime source-contract reconciliation worker brief (released)
+
+- Worker: runtime_contracts. Read Current State and frozen runtime-log-recovery-implementation report. Same Core t224 tree only.
+- Exact edited tests: apps/web/src/features/automation-studio/runtime/tests/request-generation.test.ts, runtime-views.test.tsx and runtime.test.tsx. Read RunActionLogView.tsx and its new runtime-log-recovery.test.tsx; product stays frozen.
+- Sixth full retained log confirms319files/2078tests,2072pass/6fail,178.24s, status1: stale function-string assumptions in these three tests. Inspect actual failure text in TEMP/codex-t224-sixth-core-full.log.
+- Make source-location assertions follow actual RuntimeLogScope ownership and current predicate equality, retaining bounded page/query/dataset/event/detail/generation/cancellation coverage and other component assertions. Do not alter product, constants, broad assertions, fixtures, skips, baseline or config. Verify wrapper owner scope too when relevant.
+- Use authored source reads for implementation now behind keyed wrapper; no export of private component just to satisfy tests. Preserve real behavior tests and source requirements; do not remove failing requirements.
+- Own downstream report reports/runtime-source-contract-reconciliation.md. Narrow affected plus new recovery/serializer and unchanged detail/refresh tests through heavy, then freeze. No broad/live/provider/panel/commit/push or shared docs.
+
+### Open FluxIQ utility recovery supervisor brief (released)
+
+- Exact source: apps/extension/src/panel/open-fluxiq/open-fluxiq-button.ts; new owning tests/open-fluxiq-button.test.ts in its tests subfolder. Own utility recovery report.
+- Reproduce late failed reply after observed address change; reconcile against current observed address immediately, preserving real same-address failures until retry or later address change. Add synchronous pending guard and finally release controls; exception catch is defensive under PanelStore never-throwing contract, fixed text only.
+- Preserve native labels/icon/styles/message/notice details and no automatic retry/new request. Tests synthetic only; no shared helper, caller, transport, status, storage or focus changes. Scoped checks then freeze; no browser/provider/panel management.
+
 ## Work Ledger
+
+### 2026-10-01 — Sixth Core complete; recording review verified; seventh lanes released
+
+- Validation: persisted resumed Core full53911 native0,319files2078tests/187.86s; types93193 native0; build89166 native0,17pages/203827ms. Full structure59396 native1 solely inherited protected service4506/4505; no config/baseline relaxation. Source-only six failures were corrected with preserved requirements and root104pass before successful full rerun.
+- Validation: resumed extension full62696 native0,1791tests/121040.1252ms; types23542 native0; build83952 native0,22files per Chrome/Firefox/e2e target/96138ms; full structure22975 native0,136warnings119baseline. Root recording review shell45 and strict typing independently passed. No live browser certification.
+- Released all three prepared Core implementation lanes in disjoint paths: production parameters, Deployment and Docs. Root continues Open FluxIQ utility recovery in downstream two-path unit. Completed reports/checkpoints saved locally; Claude integration ownership and protected trees remain untouched, no merge/push.
+
+### 2026-10-01 — Resume recovered actual gate results and worker briefs
+
+- Validation: retained full Core log printed319files/2078tests,2072pass/6fail,178.24s with explicit status1. All six are source/function-string inspections in three Runtime tests after implementation moved behind keyed scope. Exact test-only reconciliation released; product is frozen. Root prior source-only contract correction did not cover these additional tests.
+- Production log ends at build trace collection after17/17 pages; no final build completion retained. Prior sessions/worker registry are unavailable in the resumed turn and no t224 Node process remains. Build will rerun for actual completion; no false success claim. Core type result19698 was observed native0 before resumption; structure only inherited protected service4506/4505.
+- Restoring recording-review validation worker from existing report and deployment/docs read-only audit from its written brief. No lost-source reset, merge/push, live call or Claude change.
+- Validation: root Runtime corrected contracts43006 printed7files104pass/native0/11.20s, with persisted NATIVE_EXIT=0; source requirements reviewed. Root recording shell45/native0/842.3682ms and strict11937 native0/zero diagnostics. Resumed full Core53911/types93193/build89166 and extension62696/types23542/build83952 now run on frozen source, logs codex-t224-resumed-{core,extension}-{full,types,build}.log persist native status. Database checkpointe2f9f9dd saved. Three next implementation lanes are preparation-only until explicit gate release.
+- Observed extension full62696 native0/1791pass/121040.1252ms and types23542 native0; build83952 pending. Core types93193 native0; full/build pending. All three next lanes now have Held own-report implementation designs. Root utility audit saved Open/report/feed source sequences, with exact later serial partitions; no source edits or live claims during gates.
 
 ### 2026-10-01 — Sixth extension recovery verified; recording review next
 
@@ -361,6 +427,8 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Settings/Forget source independently reviewed and related23 passed before full gates. Paused/Start source plus strict scoped fixtures passed before these gates. Authored architecture reflects mutation/retry/focus behavior. All extension source is frozen until exact recording-review partition begins.
 - Runtime root first focused command mistakenly named two nonexistent legacy test paths, so actual66pass did not cover required old9. Corrected actual four-file command68875 plus independently rerun strict scoped68773 are pending; report claims are not supervisor verification.
 - Remaining workers: database metadata-pruning review refinement, read-only Production parameters, and newly released recording-review controls. No merge/push or Claude modifications.
+- Corrected Runtime independent focused68875 observed4files75pass/native0/9.71s; strict scoped68773 native0,0 owned/global and0 excluded dependency diagnostics. Source reviewed; prior missing-test-path command is superseded. Database metadata-pruning correction worker source-frozen pending types63150; final supervisor checks still pending.
+- Database root corrected owning/global-contract36pass/native0/7.79s plus strict scoped97474 native0. Initial root owning34 passed but old inline snapshot contract failed1; contract now verifies helper controller/signal/abort/lifetime guards, with other seven views and coordinator assertions preserved. Core full75160/types19698/build41829 run on frozen source; full structure96321 observed native1 solely inherited protected service4506/4505. Runtime+layout checkpoint5c28bdb3 saved. Production next implementation is written but held; database worker next audit is read-only during gates.
 
 ### 2026-10-01 — Logout reproduced and fixed; extension recovery released
 
