@@ -1,10 +1,14 @@
-// A step in the words a person uses. Core names its steps by tool and node
-// ids ("Using core.run_node", "Result: web.inspect.succeeded"); the chat never
-// shows one of those. A title Core (or the background) already wrote in words
-// is kept; a known id reads as what it did, in the present while it is under
-// way and in the past once it is done; an id nobody mapped reads as "Used a
-// tool" rather than as the id. Result codes and lists of issue codes are
-// dropped, since the step's mark already says whether it worked. No DOM.
+// A step in the words a person uses. An older Core named its steps by tool and
+// node ids ("Using core.run_node", "Result: web.inspect.succeeded"); the chat
+// never shows one of those. A title Core (or the background) already wrote in
+// words is kept -- a tool's too: Core names what a call does and on what
+// ("Clicking “No thanks”", "Reading the details of “Colour”"), and reading the
+// call's result code instead turned each of those into "Looked at the page" or
+// "Worked on the page" (t193, `run-muqiojz4-04a7a8fc`). Only a title that is
+// an id reads as what its tool did, in the present while it is under way and
+// in the past once it is done; an id nobody mapped reads as "Used a tool"
+// rather than as the id. Result codes and lists of issue codes are dropped,
+// since the step's mark already says whether it worked. No DOM.
 
 import type { ClientGatewayActivity } from "../../../../shared/activity/index";
 
@@ -73,7 +77,8 @@ function title(detail: ActivityDetail, step: ClientGatewayActivity["step"], stat
   }
   const known = TITLES[plain.toLowerCase()];
   if (known) return tense(known, status);
-  if (detail.kind === "tool" && ref !== undefined) {
+  const said = plain !== "" && !RAW_ID.test(plain) && !/^using\s/iu.test(plain);
+  if (detail.kind === "tool" && ref !== undefined && !said) {
     if (ref === "core.run_node") return tense(pageAction(detail.text), status);
     const tool = TOOLS[ref];
     if (tool) return tense(tool, status);
