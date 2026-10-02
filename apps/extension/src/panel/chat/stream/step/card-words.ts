@@ -1,9 +1,12 @@
 // An action card in words, for its view and for anyone who cannot see it:
 //
 //   name     Core's short name for the kind ("Click", "Robot check")
-//   target   what it acted on: the control's name Core gave, or "the page"
-//            for an action on the page that named none; nothing for an
-//            action that is not on a control (a test run, an edit to the Flow)
+//   target   what it acted on or looked for: the control's name Core gave, or
+//            the words a look searched for; nothing when Core named none. It
+//            never says "the page": "Click · the page" and "Action · the
+//            page" said nothing a person could tell apart (t193,
+//            `run-muqiojz4-04a7a8fc`), and the message above the card says
+//            what the step did
 //   outcome  "Working on it" and "Waiting for you" only while it is the
 //            action of the moment (the newest of work still under way);
 //            "Done", "Passed", "Didn't work: it wasn't on the page",
@@ -16,7 +19,7 @@
 // `state` drives the card's mark: `settled` is an action that never said how
 // it went. No DOM.
 
-import { ACTIVITY_ACTION_NAMES, type ActivityActionKind } from "fluxiq/ui";
+import { ACTIVITY_ACTION_NAMES } from "fluxiq/ui";
 import type { ActionCard } from "./action-card";
 
 /** The card's words and the state its mark shows. */
@@ -28,13 +31,10 @@ export type CardWords = {
   label: string;
 };
 
-/** Kinds that act on the page, so a card with no control's name says "the page". */
-const ON_THE_PAGE: ReadonlySet<ActivityActionKind> = new Set<ActivityActionKind>(["click", "type", "read", "other"]);
-
 /** `card` in words; `current` is true while it is the action of the moment. */
 export function cardWords(card: ActionCard, current: boolean): CardWords {
   const name = ACTIVITY_ACTION_NAMES[card.kind] ?? ACTIVITY_ACTION_NAMES.other;
-  const target = card.target ?? (ON_THE_PAGE.has(card.kind) ? "the page" : null);
+  const target = card.target;
   const [state, outcome] = outcomeOf(card, current);
   const label = [target === null ? name : `${name}, ${target}`, outcome].filter((part) => part !== null).join(": ");
   return { state, name, target, outcome, label };

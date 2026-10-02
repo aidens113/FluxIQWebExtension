@@ -210,7 +210,10 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
         const draft: StepMessage = drafts[owner.message]!;
         const before = draft.actions[owner.card];
         const card = actionCard(event, before?.key ?? cardKey(event));
-        if (card !== null && before !== undefined) draft.actions[owner.card] = card;
+        // The end keeps what the start named: a call's end is said after the
+        // page moved, and a name the start gave it is not lost
+        // ("Click · No thanks" became "Click · the page", t193).
+        if (card !== null && before !== undefined) draft.actions[owner.card] = { ...card, kind: card.kind === "other" ? before.kind : card.kind, target: card.target ?? before.target };
         draft.sequence = event.sequence;
         if (draft.kind !== "decision" && draft.kind !== "repair") {
           draft.title = words.title;

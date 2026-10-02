@@ -269,7 +269,7 @@ test("a settled build's every decision stays as its own message, with its reason
       assert.equal(steps[0]!.byClass("chat-step-title")[0]!.textContent, "Clicking button 1");
       assert.equal(steps[0]!.byClass("chat-step-text")[0]!.textContent, " — Reason 1.");
       assert.equal(steps[0]!.byClass("chat-card-outcome")[0]!.textContent, "Done");
-      assert.equal(steps[0]!.byClass("chat-card")[0]!.getAttribute("aria-label"), "Click, the page: Done");
+      assert.equal(steps[0]!.byClass("chat-card")[0]!.getAttribute("aria-label"), "Click: Done");
       assert.equal(root.byClass("chat-work").length, 0, "no fold");
     } finally {
       chat.setActive(false);

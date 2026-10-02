@@ -191,7 +191,7 @@ test("every event of the real build reads in a person's words, and the whole bui
     "Looking at the page — done",
     "Looking for the list of items",
     "Looking for the list of items — done",
-    "Thinking about the next step",
+    "Deciding the next step",
     "Trying a step on the page",
     "Trying a step on the page — couldn't find it on the page",
     "Trying a step on the page — done",
