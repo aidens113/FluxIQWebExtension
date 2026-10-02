@@ -80,6 +80,13 @@ Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name ol
   step isnt avaialble, it should use state to find current step. Of course if it keeps looping back to the same step
   and not progressing enough times, it should count as failed"; "that rule is supposed to be a GLOBAL runtime thing of
   core". Owned by t243.
+- **Partial test runs, one full judged run (2026-10-02):** "the repair loop/general LLM should be able to run from a
+  certain node to only test parts hte flow. One thing thouhg, it must test the entire flow & have that judged success
+  at least one time". A build or repair finishes only after a whole-Flow run from its start was judged successful on
+  the Flow as it finally stands. Owned by t244.
+- **A live round waits for every agreed change (2026-10-02):** the round launched before t243 was put on hold
+  ("did you implement allthe changes we talked about before starting labs?"); it resumes only after t243 and t244 are
+  merged and the lane trees re-synced.
 - **Chat cards are never generic (2026-10-01):** "it should actually show more detailed information of what its doing
   rather than just "looking at page"": each card says what it inspects or does, on what; the wait says "Deciding the
   next step" until the model's reason arrives.
@@ -583,6 +590,36 @@ checks only, heavy commands through `build-slots/heavy.sh`, no commits; `R/` is 
   `packages/test-runner/src/lab-runs/**`.
 - Done: narrow checks in both repositories with Core libraries rebuilt; report says Ready to commit, per fix.
 - Report to: `reports/t243-state-routing-runtime.md` in `fxwork/t243/!FluxIQWebExtension`
+
+#### Brief: t244-partial-runs-full-judged-gate (`lead-xhigh`, Core build and repair loops)
+- Repository: both, tree `fxwork/t244` (Core-paired).
+- Task (user, 2026-10-02, binding): "When testing, the repair loop/general LLM should be able to run from a certain
+  node to only test parts hte flow. One thing thouhg, it must test the entire flow & have that judged success at least
+  one time". (1) The build loop and the repair loops (re-author, ladder) get a tool to run the Flow from a chosen node,
+  optionally to a chosen end node, on the page as it stands. (2) A build cannot propose or finish, and a repair cannot
+  be accepted, until a whole-Flow run from its start was judged successful on the Flow as it finally stands; an edit
+  after that run needs another full run and judgement (supervisor's reading, stated to the user).
+- First: design in the report, starting from Core's `R/flow-draft/{dry-run,dry-run-gate,replay,replay-draft,step-place}.ts`
+  and `R/llm/node-tools/run-node.ts`; what a partial run costs and records; where each gate sits (build phases,
+  re-author, ladder, adaptation apply); how the judge's verdict is tied to the Flow version it judged.
+- Owns: Core `R/flow-draft/**`, `R/llm/node-tools/**`, `R/flow-bootstrap/unfinished-build/**`,
+  `R/recovery/refuted-result/**`, the gate's tests, `docs/architecture/automation-studio*`; domain tool descriptions
+  for the new tool.
+- Must not touch: `R/executor/**`, `R/route-state/**`, `R/flow-bootstrap/authoring/**` (t243). A needed executor
+  entry ("start at node X") is requested from the supervisor in the report, not edited.
+- Report to: `reports/t244-partial-runs-full-judged-gate.md` in `fxwork/t244/!FluxIQWebExtension`
+
+#### Brief: t245-sweep-1002-core-failures (`worker-high`)
+- Repository: Core, tree `fxwork/t245` (Core-paired). Sweep 1 on Core dev `2bc0baac`: 4 failed of 5,984.
+- Task: find each failure's cause and fix it forward: `service/runtime-adaptation/tests/repair-rerun.test.ts` (2, "a
+  repaired re-run of an optional press whose target is gone"; likely t174's F38 skip), `tests/service-adaptation/
+  tests/modes.test.ts` ("stable and continuous adaptive modes plus budget exhaustion"; check t240), and
+  `src/programs/tests/global-docs.test.ts` ("generates a TypeDoc-backed framework reference"). Decide per test whether
+  the behaviour or the expectation is wrong, with the binding rules as the reference; a load-only failure must be
+  shown passing alone and failing under load, with the cause.
+- Owns: those test files and any non-executor source a cause lives in. Must not touch `R/executor/**`,
+  `R/route-state/**` (t243) or t244's paths; an executor cause is reported, not edited.
+- Report to: `reports/t245-sweep-1002-core-failures.md` in `fxwork/t245/!FluxIQWebExtension`
 
 #### Briefs: live round 1002-L (lanes A-D, `lead-xhigh`)
 Common. The supervisor first merges dev into every lane tree (both repositories) and rebuilds Core libraries and the
