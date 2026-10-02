@@ -13,16 +13,13 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ## Current State
 
-**Update, 2026-10-01 night. Read this first.** Pass streak 0. Round 9 is pushed (page view shows every control, step logs, the $0.10 variable, lanes B and C); lanes A-C are live again.
-The compact view, the chat launcher and the first repeat guard are on dev (rounds 6-8, ledger below). The live runs
-still wandered, and the cause is now known: **the page view hid controls**. In the earbuds run the store's search box
-reached the model as `t489 field "Autumn Mega Sale: up to 70% off" =""` (its placeholder, no search marker), icon-only
-buttons had no line at all, and the model searched `find_on_page "Voltbay"` 29 times with 0 matches
-(`fxwork/t174/.../decision-dumps/build-2026-10-02T00-00-07-573Z-26504.jsonl`). **No live run until the page-view fix
-(PV) lands and a real recorded page is checked to show every control.** PV landed as t232 in round 9.
+**Handoff, 2026-10-01 late (user: "lets call it a day"). Read this first.** Pass streak 0, but every build now
+produces a Flow: the user's fix list (names-only catalog, web system prompt, one $0.10 purse per Flow, cheap older
+reads, opening navigation, covered-press close controls, stable request prefix, judge decides) is on dev and pushed.
+Tonight's runs fail in the **Flow's own playback**, not in the build. The top defect is `output_not_observed`, which
+ended 3 of 4 scenarios. All agents are stopped; no Lab, Core or browser process is running.
 
-Task ids: the task tool numbers branches (`task/t228-step-logs`, `task/t229-core-regressions`); the labels PV, CEIL and
-STEPS below are the plan's names for work that has no branch of its own or predates that numbering.
+Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name older work without a branch of its own.
 
 **Binding rules (user, all in force).**
 - **Live builds start from the real extension chat (2026-10-01):** a run started by a direct API request is never a
@@ -57,26 +54,43 @@ STEPS below are the plan's names for work that has no branch of its own or preda
 - **Live Lab trees are synced to dev before testing (2026-10-01):** "live testing labs need to actually be synced to main when
   you start testing them". After each merge round, merge dev into every lane tree (both repositories) and rebuild Core
   libraries and the extension; the Lab's behind-dev guard (t236) refuses a run whose checkout or Core lacks dev.
+- **A Flow run routes by page state, not build order (2026-10-01):** "runtime is supposed to have auto recovery and
+  state! ... it failed because there was a popup that didnt show up in test run. The runtime should have fallen back to
+  state check & realize that it should go to the proper node where there is no popup." An absent sometimes-present step
+  is skipped by observing state, never a failure; the Lab records each runtime step (no "step unknown").
+- **Chat cards are never generic (2026-10-01):** "it should actually show more detailed information of what its doing
+  rather than just "looking at page"": each card says what it inspects or does, on what; the wait says "Deciding the
+  next step" until the model's reason arrives.
 - **Process.** Lanes iterate on their own branches; the supervisor merges in rounds and is the only one who commits,
   merges or pushes. Heavy commands go through `build-slots/heavy.sh`. No LLM call grants.
 
-**In flight. The user's fix list is on dev (Core b17c2bfa, downstream fef43a29); live runs resumed lane by lane on trees synced to dev** (the Lab's behind-dev guard, t236, refuses a stale tree). Leads and workers cannot `git merge` (a hook refuses it): the supervisor merges dev into every tree.
-| Fix (evidence: `lab-runs/2026-10-01/run-*/steps/`) | Result | State |
-| --- | --- | --- |
-| Node catalog names only; `core.describe_nodes` on request (t235) | earbuds 0003 body 70,148 -> 26,865 chars; est. tokens 20,754 -> 8,521 | on dev |
-| Domain system instructions on every model request (t237) | web-1, 1,964 chars; system message 3,667 -> 5,634 | on dev |
-| One purse per Flow creation; decision replies held at 2,000 tokens (t234) | +2 to +3 decisions at the old stop points; unpriced calls held at the largest seen | on dev |
-| Older reads as short outcomes; `core.recall_result` (lane C F42) | run 13 last request body 238,196 -> 144,732 | on dev |
-| Opening navigation; empty finds name the search fields (lane A F31-F32) | | on dev |
-| Covered presses name close controls; describeCall chat headings (lane B) | | on dev |
-| Completion informs, judge decides; judge request 28,214 -> 8,113 (lane D F43-F46) | | on dev |
-| Cache-stable prefix: routing situations into the window, tools in front (lane B W2b) | run 40 uncached 227.9k -> 151.4k | lane B resolving the dev merge |
-| Dev's 8 failing Core tests (7 intended expectations; an improve request ended not doable) | | lane D resolving the dev merge |
-| Live runs: crossborder (lane A, slot-1), earbuds (lane C, slot-3) through the chat at $0.10 | | running |
+**Live results, 2026-10-01 night (step logs in `C:/Users/osrs_/FluxStuff/lab-runs/2026-10-01/<run>/steps/`).**
+| Run | Lane | Spent: creation / run recovery | Ending |
+| --- | --- | --- | --- |
+| crossborder `run-muqiho5c-e830ce01` | A | $0.0415 | Flow built and ran; playback goal failed (step unknown in the bundle) |
+| earbuds `run-muqiho7e-13be6c03` | C | $0.088 | built, judged wrong, stopped at the 2-repair-round limit while still progressing |
+| confirm-requests `run-muqilf9s-c3211328` | D | $0.0912 / $0.024 | last step (navigate back to feed) `output_not_observed`; repair no_repair |
+| bigbox `run-muqiojz4-04a7a8fc` | B | $0.0826 / ~$0.041 | `output_not_observed` |
+| earbuds `run-muqj2bgb-d048ec37` | C | $0.0484 | Flow ran; read 10 of 13 rows (the accessory filter drops pairs whose name mentions a charging case) |
+| crossborder `run-muqk4u32-0b36e58f` | A | $0.0614 | Flow ran; facts not held: cart-count, cart-line |
+| earbuds `run-muqk713g-d08ad3dc` | C | ~$0.082 / ~$0.039 | `output_not_observed` |
+First decide requests are 40-50k chars including the page (62-70k before), system message 5,634 with the web
+instructions, catalog 4,662 (names only). No creation purse went over $0.10 (t234's reconciliation).
 
-**Decided.** One purse per Flow: assigned to t234 (above).
+**Uncommitted, unverified lane work (agents stopped mid-task; verify before committing).**
+| Tree | What the lead was doing |
+| --- | --- |
+| `fxwork/t174` (A) | Why playback did not skip the absent popup / route by state; web instructions now web-3 (2,415 chars, "leave a chosen option alone, read what a press changed"); F37 "the press result says what changed"; flow-draft and page-view edits |
+| `fxwork/t193` (B) | Chat cards never generic: activity wording, observer, extension card-words/messages |
+| `fxwork/t194` (C) | earbuds 10-of-13 accessory filter; extraction rejected samples; result-verification accounts; "read list x5" question unanswered |
+| `fxwork/t195` (D) | Shared `output_not_observed` root cause; refuted-result attempt; resume tests; test-runner persisted-flow-run |
+
+**Committed, not on dev:** `task/t234-flow-purse` 1d9b199f (Core) and e6fd503b (downstream): a paid but refused reply
+charges its real cost; step-log `part` and the `read` phase; the chat interpreter's cost inside the creation purse.
+Merge dev into it, run its narrow checks, then merge.
 
 **Open defects (not assigned).**
+- Load-flaky Core tests (pass alone): `subflow.test.ts`, `service-recordings/proposals.test.ts`, `cancel-runtime-session`, `runs`.
 - Two Core tests time out only under parallel load and pass alone (12/12): `service/summaries/tests/run-detail-preservation.test.ts` and `tests/service-bootstrap/tests/adaptation.test.ts`; fix in the next full sweep.
 - `scripts/lab/core/build/tests/unbuilt.test.mjs` "refuses an unbuilt Core" fails about 1 run in 10 under load.
 - A click that lands on a 429 page is still `navigation_unexpected` (F14 covers navigation only).
@@ -88,8 +102,9 @@ STEPS below are the plan's names for work that has no branch of its own or preda
 - D1: the dry run never clears site data or repeats a lasting effect.
 - A press is refused only for a real layer (dialog, kind or front layer), not for anything that merely overlaps.
 - An instruction column no field reads is information for the model and the judge, never a refusal (F38).
-- `recovery-default-limits`: keep the 8-decision floor and reserve each call at a realistic cost, the ceiling being
-  the hard stop.
+- `recovery-default-limits`: the worst-case per-call hold stays (a true upper bound); the test was what was wrong (t229).
+- A Flow's creation has one $0.10 purse; each run's recovery has its own ceiling. Offered to the user to merge into one
+  total; not changed.
 - The judge gets per-condition removed-row counts (F19) and up to 60 screened characters of a condition's read (F14).
 
 **Waiting on the user.**
@@ -100,13 +115,16 @@ STEPS below are the plan's names for work that has no branch of its own or preda
 - `fxwork/t187-bench` and `fxwork/t192-bench`: delete only on a yes.
 
 **Next, in order.**
-1. PV lands: commit it on dev with its own task id, verify a real recorded page (earbuds, bigbox) shows the search
-   field and icon buttons.
-2. Merge round: CEIL Lab, Core regressions, lane B, lane C, t227 follow-ups, STEPS; rebuild Core libraries; narrow
-   checks; push both dev branches; merge dev into the lane trees.
-3. Live runs through the chat launcher with step logs and the $0.10 ceiling, all four lanes; then the approved
-   stronger-model comparison run on the same scenario.
-4. The per-Flow purse lead. Full suites twice a day, in the background.
+1. Resume each lane lead (or a fresh lead per lane from its report) to finish and verify its uncommitted work above;
+   commit on its branch, merge dev into it (leads cannot merge: the supervisor does), narrow checks, merge to dev.
+2. `output_not_observed` (lane D) first: it blocks 3 of 4 scenarios. Then lane A's state routing for absent popups and
+   runtime step records in the bundle. Merge t234's accounting fixes.
+3. Earbuds: the accessory filter (10 of 13) and whether repair rounds should continue while the purse allows and each
+   round progresses (the 2-round limit stopped a converging build).
+4. Sync every lane tree to dev in one pass (both repositories, rebuild Core libraries), commit nothing to dev while the
+   round launches, then run all four lanes; then the approved `deepseek-v4-pro` comparison (`--llm-model
+   deepseek-v4-pro --llm-cost-ceiling-usd 0.30`, one run).
+5. Full suites twice a day in the background; known load-flaky Core tests listed under Open defects.
 
 Older history: rung 1 is in `archive/rung1-history-to-2026-09-26.md`. The ledger to 2026-09-30 is in
 `archive/ledger-2026-09-28-to-30.md` and the Work Ledger below.
@@ -746,6 +764,19 @@ debug and partitioned so neither touches the other's files:
   - Core dev after rounds 11-12: `npx tsc --noEmit -p .` rc 0; vitest over llm, flow-bootstrap, flow-draft, activity, route-state, tests/service-bootstrap, result-verification, recovery and src/ui `Test Files 283 passed (283)`, `Tests 3089 passed (3089)`; structure audit passed; `docs-reference.mjs --check` current.
   - Downstream after rebuilding Core libraries: domain check rc 0; extension check rc 0; domain `# tests 1261 # pass 1261 # fail 0`; extension `# tests 2309 # pass 2309 # fail 0`; test-runner `# tests 1785 # pass 1785 # fail 0`; structure audit passed.
 - Outcome: pushed (see the push line in the commit log). Pass streak 0; live runs on hold by the user's order.
+
+### 2026-10-01 late — Fix list on dev; four lanes live; every build produces a Flow; playback fails; handoff
+- Agent: supervisor; lanes A-D; leads t234, t235, t237; workers t236, t238.
+- Changed:
+  - Merged into dev in both repositories and pushed: t235 (names-only catalog, `core.describe_nodes`), t237 (domain system instructions, web-1), t234 (one purse per Flow creation, 2,000-token decision replies, unpriced calls held at the largest seen), t194 F42, t195 F44-F46 and the 8 dev test fixes, t193 W2b (stable request prefix), t238 (the behind-dev guard admits docs-only gaps).
+  - Conflicts resolved by the supervisor: `service.ts` (purse with describe-nodes imports and the judge's calls; system-instruction imports; describeCall), `binding.test.ts` (both new blocks), `tools.ts` (view keys with system instructions), `phases.ts`, the generated reference.
+  - Live round on trees synced to dev (results in Current State). A docs-only commit on dev refused two lanes' launches (fixed by t238); leads cannot merge, so the supervisor syncs every tree in one pass before a round.
+  - t234 reconciled the spend: no creation purse exceeded $0.10; "over $0.10" totals added the playback run's own recovery. Its accounting fixes (paid refusals, step-log `part`, chat call inside the purse) are on its branch.
+  - User's new rules saved (memory and binding rules): a Flow run routes by page state, not build order; chat cards are never generic; live lab trees are synced to dev before testing.
+- Validation:
+  - Core dev after the last merges: `npx tsc --noEmit -p .` rc 0; vitest over llm, flow-bootstrap, flow-draft, recovery, route-state, service, tests, result-verification, loop-limits, conversations, activity, action-permissions and src/ui `Tests 3 failed | 4231 passed` (the 3 pass alone: `Test Files 2 passed`, `Tests 15 passed`); audit passed; reference current.
+  - Downstream after rebuilding Core: domain `# tests 1279 # pass 1279 # fail 0`; extension `# tests 2309 # pass 2309 # fail 0`; test-runner `# tests 1785 # pass 1785 # fail 0`; domain and extension checks rc 0; `node --test scripts/lab/live-guards/tests/*.test.mjs` 32/32 after t238.
+- Outcome: pushed. Agents stopped; lane trees hold uncommitted work listed in Current State. Pass streak 0.
 
 ## Open Questions
 
