@@ -72,6 +72,7 @@ import type { WebNodeOutcome } from "./outcome";
 import { webObservedControl } from "./observed-control";
 import { webAnsweredLayer, webNodePageChanges } from "./press-effect";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
+import { webNodeHeldFlow } from "./arrival";
 import { webUnshownAddressRefusal } from "./shown-addresses";
 import { webMovesThePage, webScopeAnchor, webStartLocationRefusal, WEB_NAVIGATION_ACTION } from "./start-location";
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
@@ -152,7 +153,9 @@ type WebNodeCallRecord = {
 
 /** Run the node a call named, and answer with what it did. */
 export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> {
-  const value = run.request.value;
+  // The opening look of a round that continues a Flow carries the Flow's calls, and runs without them (`./arrival.ts`).
+  const continuing = webNodeHeldFlow(run.request);
+  const value = continuing?.look ?? run.request.value;
   // A call Core made rather than the model: the draft being run again before it
   // may be proposed (`./replay.ts`). It goes to the same executor so it passes
   // the same permission gate, and it is answered in Core's closed replay
@@ -172,9 +175,15 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     return replayed;
   }
   // The build's opening call starts it not there, whatever the tab shows
-  // (`./arrival.ts`). A build told no start location is not touched.
-  if (run.request.startLocation !== undefined) run.arrivals.opening(buildOf(run), run.request.callId);
-  run.addresses.opening(buildOf(run), run.request.callId);
+  // (`./arrival.ts`). A build told no start location is not touched. A round
+  // that continues a Flow forgets nothing, and each navigation the Flow holds
+  // is an address shown and, told a start location, the build's arrival.
+  if (!continuing && run.request.startLocation !== undefined) run.arrivals.opening(buildOf(run), run.request.callId);
+  if (!continuing) run.addresses.opening(buildOf(run), run.request.callId);
+  for (const address of continuing?.addresses ?? []) {
+    run.addresses.held(buildOf(run), address, run.request.startLocation);
+    if (run.request.startLocation !== undefined) run.arrivals.arrive(buildOf(run));
+  }
   const node = webRunnableNode(value.node);
   // Before anything is captured: a call naming nothing runnable costs the page
   // nothing and is answered from what the catalog says.

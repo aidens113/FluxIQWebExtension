@@ -24,9 +24,18 @@ gets, filed against the last step that succeeded (run 38's C4). Behind it in run
 kept every visited object in `seen`, so a read whose `firstRows` and `extracted` share row objects was refused
 `evidence_not_json`. That refused every list read that returned a row, since `01082bc9`. Lanes C and D fixed C1 the
 same way (an ancestor check); lane D's copy, which also fixes `flow-bootstrap/plan/json-guards.ts`, is the one to
-merge. Round in flight: four leads finish and verify the uncommitted lane work (briefs below, "Briefs, 2026-10-02");
-the supervisor merges t234. Overlaps to resolve at merge: t174 and t193 both edit Core `flow-draft/{entry,index,step}.ts`
-and `activity/wording/action.ts`; t193 and t195 both edit `llm/evidence-loop.ts`.
+merge.
+
+**Merged and pushed 2026-10-02 (Core `ab1a3bcd`, downstream `39da4ee2`), each verified by the supervisor on the
+lane's tree and again after merging dev in:** t234 (one purse per Flow creation); t193 lane B (chat cards say what
+each call does and on what; the draft's `does`); t239 (judge calls reserve a 2,000-token reply, C7); t195 lane D (C1,
+C3 taken-not-added, C4, C5, step-log verdict); t194 lane C (judge sees each condition's alone rows; replay read
+account; structure field `at` handles, C2); t174 lane A (F38 an absent sometimes-present step is skipped, F39 a press
+that answered a popup is optional, F37, F33, F35, web-3). Lane A and lane B both name a step's control on the draft
+line (`control` and `does`); a line shows `control` only when the domain gave no `does`. **Open: unify the two fields.**
+t240 (repair rounds bounded by money and progress, C7 and C8) is committed on its branch and being extended; t241
+(a repair round opens with a look where the test left the page) and t242 (skips reach the run detail and the Lab) are
+dispatched. Then: sync every lane tree to dev and run the four live lanes.
 
 Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name older work without a branch of its own.
 
@@ -67,6 +76,10 @@ Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name ol
   state! ... it failed because there was a popup that didnt show up in test run. The runtime should have fallen back to
   state check & realize that it should go to the proper node where there is no popup." An absent sometimes-present step
   is skipped by observing state, never a failure; the Lab records each runtime step (no "step unknown").
+  **Widened 2026-10-02 into a global Core runtime rule:** "that same thing should apply to THE ENTIRE RUNTIME! if a
+  step isnt avaialble, it should use state to find current step. Of course if it keeps looping back to the same step
+  and not progressing enough times, it should count as failed"; "that rule is supposed to be a GLOBAL runtime thing of
+  core". Owned by t243.
 - **Chat cards are never generic (2026-10-01):** "it should actually show more detailed information of what its doing
   rather than just "looking at page"": each card says what it inspects or does, on what; the wait says "Deciding the
   next step" until the model's reason arrives.
@@ -529,96 +542,65 @@ on 2026-10-02. Later lane briefs live in each lane's own report.
 
 ### Briefs, 2026-10-02: finish and verify the lanes' uncommitted work
 
-Common to all four. Work only in your lane's two trees under `C:/Users/osrs_/FluxStuff/fxwork/<task>/`. No live
-Lab run and no provider call this round: code and narrow checks only (tests beside changed files, the typecheck of each
-touched package, `node scripts/structure-audit.mjs` in each repository; heavy commands through
-`build-slots/heavy.sh`). Do not commit; the report lists commit-ready files per repository with a proposed commit
-message per fix. Update your lane report as well as your own. Core paths below are under
-`packages/fluxiq/src/programs/automation-studio/runtime/` (`R/`).
+The lane finish round's common rules and briefs (t174, t193, t194, t195 leads) and the t239, t240 and t241 briefs
+are archived in [archive/briefs-2026-10-02.md](./language-driven-flow-loop-plan/archive/briefs-2026-10-02.md); all merged into dev.
+The briefs below are still in flight. Common rules for a non-live brief: no live run or provider call, narrow
+checks only, heavy commands through `build-slots/heavy.sh`, no commits; `R/` is Core's
+`packages/fluxiq/src/programs/automation-studio/runtime/`.
 
-#### Brief: t195-lead-1002 (lane D, `lead-xhigh`)
-- Repository: both, tree `fxwork/t195`
-- Task: finish and verify run 38's causes C1, C3, C4 (`debugs/run-muqilf9s-c3211328.md`, "Causes"), then C5 and the
-  second half of C8 (a re-author round that ended `repeat_refused` on an unchanged page and draft opens no identical
-  round), then the stage-2 instrumentation gap (the step log records the loop's parse verdict).
-- Required reads: that debug's Causes and gaps, `reports/t195-w32-refuted-not-a-step.md`, the tree's diff.
-- Owns: Core `R/llm/evidence-loop-decision.ts`, `R/flow-bootstrap/plan/json-guards.ts`, `R/llm/evidence-loop.ts`,
-  `R/llm/evidence-loop/tests/resume.test.ts`, `R/llm/tests/evidence-loop-tool-failure.test.ts`,
-  `R/recovery/refuted-result/**`, `R/service/runtime-adaptation/refuted-result-port.ts` and its test,
-  `R/llm/step-log/**`; downstream `packages/test-runner/src/flow-lane/persisted-flow-run.ts` and its test.
-- Must not touch: `R/flow-draft/**`, `R/activity/**`, `R/flow-bootstrap/unfinished-build/**`,
-  `R/llm/harness/token-limits.ts` (C7 waits for t234), anything under `domain/`.
-- Done: each cause has a failing-first test that now passes; narrow checks pass; report says Ready to commit.
-- Report to: `reports/t195-lead-1002.md`
+#### Brief: t242-skipped-steps-reach-run-detail (`worker`)
+- Repository: both, tree `fxwork/t242` (Core-paired)
+- Task: t174's F38 records a skipped sometimes-present step (`target_absent`), but the run detail drops `skipped`
+  (Core `R/service/summaries/conversions.ts`), so the Lab cannot tell a skip from a press, and F35's playback
+  `steps/` writes a skipped step's host attempt as a failed row. Carry `skipped` through the run detail and write it
+  in the Lab as skipped, never failed.
+- Required reads: `reports/t174-lead-1002.md` ("Not verified"), `R/executor/step-skip/**`.
+- Owns: Core `R/service/summaries/conversions.ts` and its tests; downstream
+  `packages/test-runner/src/lab-runs/{write-playback-steps,rewrite-steps-index}.ts` and their tests.
+- Must not touch: `R/executor/**`, `R/service.ts`, `domain/**`.
+- Done: failing-first tests on both sides; narrow checks with Core libraries rebuilt.
+- Report to: `reports/t242-skipped-steps-reach-run-detail.md` in `fxwork/t242/!FluxIQWebExtension`
 
-#### Brief: t174-lead-1002 (lane A, `lead`)
-- Repository: both, tree `fxwork/t174`
-- Task: finish and verify the in-flight F33 (draft control words), F35 (playback steps in the bundle), F37 (a press
-  result says what changed), the web-3 instructions and the final-state facts oracle. Then find why playback did not
-  skip the absent popup or route by page state (run `run-muqiho5c-e830ce01`; run 38's C9) and fix it if the fix stays
-  in this lane's files; otherwise report the cause, the file and the fix.
-- Required reads: `reports/t174-f33-draft-control.md`, `reports/t174-f35-playback-steps.md`,
-  `debugs/run-muqiho5c-e830ce01.md`, the tree's diff.
-- Owns: the files already changed in the tree, plus Core `R/route-state/**` and the runtime's step routing.
-- Must not touch: `R/recovery/refuted-result/**`, `R/llm/evidence-loop.ts`, `isJsonValue` anywhere, `R/activity/**`
-  beyond `wording/action.ts`.
-- Done: failing-first tests for each fix pass; narrow checks pass; report says Ready to commit.
-- Report to: `reports/t174-lead-1002.md`
+#### Brief: t243-state-routing-runtime (`lead-xhigh`, Core architecture)
+- Repository: both, tree `fxwork/t243` (Core-paired); Core owns the mechanism, the web domain only observes.
+- Task (user, 2026-10-02, binding): "that same thing should apply to THE ENTIRE RUNTIME! if a step isnt avaialble,
+  it should use state to find current step. Of course if it keeps looping back to the same step and not progressing
+  enough times, it should count as failed"; "that rule is supposed to be a GLOBAL runtime thing of core". For every
+  node of a Flow run, not only sometimes-present ones: when a step cannot run (its target is unavailable or its
+  expected state does not hold), Core observes the current state through the domain's observer and routes to the
+  node whose recorded expected pre-state matches, before any recovery ladder or model call. A bounded guard ends the
+  run as failed, with that stated reason, when routing keeps returning to the same node without progress. F38's skip of
+  an absent sometimes-present step becomes one case of this rule.
+- First: design in the report (what a node's expected pre-state is and where the build records it; Core's draft steps
+  already carry `stateBefore`/`stateAfter` digests and `R/route-state/` has an observer and router state; how matching
+  stays content-free in Core; the progress measure and its bound; how it orders against the recovery ladder; Flow
+  versions without pre-states). Then implement with failing-first tests, Core docs, and a Scenario Lab fixture where a
+  step is unavailable and the page is already past it.
+- Owns: Core `R/executor/**`, `R/route-state/**`, `R/flow-bootstrap/authoring/**`, the draft-to-Flow writer, their tests
+  and `docs/architecture/automation-studio*`; domain `src/runtime/llm-evidence/state-digest/**` and the domain's runtime
+  state observer; Scenario Lab fixtures it adds.
+- Must not touch: `R/llm/evidence-loop*.ts`, `R/result-verification/**`, `R/recovery/refuted-result/**`,
+  `packages/test-runner/src/lab-runs/**`.
+- Done: narrow checks in both repositories with Core libraries rebuilt; report says Ready to commit, per fix.
+- Report to: `reports/t243-state-routing-runtime.md` in `fxwork/t243/!FluxIQWebExtension`
 
-#### Brief: t193-lead-1002 (lane B, `lead`)
-- Repository: both, tree `fxwork/t193`
-- Task: finish and verify the in-flight chat-cards work (every card says what it inspects or does, on what; the wait
-  says "Deciding the next step") and the draft-legibility work.
-- Required reads: `reports/t193-wc-chat-cards.md`, `reports/t193-wd-draft-legibility.md`, the tree's diff.
-- Owns: the files already changed in the tree.
-- Must not touch: `R/recovery/refuted-result/**`, `isJsonValue` anywhere, `R/route-state/**`.
-- Done: tests beside each changed file pass; Core and extension typechecks pass; the extension builds; report says
-  Ready to commit, and states which `R/flow-draft/*` and `R/llm/evidence-loop.ts` hunks are this lane's.
-- Report to: `reports/t193-lead-1002.md`
+#### Briefs: live round 1002-L (lanes A-D, `lead-xhigh`)
+Common. The supervisor first merges dev into every lane tree (both repositories) and rebuilds Core libraries and the
+extension; the Lab's behind-dev guard must admit the tree. Each lead owns one slot and one scenario, runs it live from
+the extension chat, headed, deepseek-flash, under the $0.10 creation purse (`--llm-cost-ceiling-usd 0.10`), one run per
+invocation, at most three runs. After every run: the Full Debug Protocol above (step logs, the six stages, UI review
+from screenshots), a debug file in `debugs/`, then fix each cause on the lane's tree with failing-first tests and
+narrow checks, and rerun only on changed source. Stop at the first balance failure. No commits; the report lists each
+run (id, cost, stage reached, causes, fixes) and the commit-ready files per fix.
 
-#### Brief: t194-lead-1002 (lane C, `lead`)
-- Repository: both, tree `fxwork/t194`
-- Task: drop this tree's duplicate C1 fix (`isJsonValue` in `R/llm/evidence-loop-decision.ts` and its rows in
-  `R/llm/tests/evidence-loop-tool-failure.test.ts`; lane D's copy is the one merged). Finish and verify F19's
-  alone-rows (w49), the replay read account (w50), extraction rejected samples and the extraction summary. Then run 38's
-  C2: each shown structure field carries the page-view handle of its element in the first item.
-- Required reads: `reports/t194-w49-judge-alone-rows.md`, `reports/t194-w50-replay-read-account.md`,
-  `debugs/run-muqj2bgb-d048ec37.md`, C2 in `fxwork/t195/.../debugs/run-muqilf9s-c3211328.md`.
-- Owns: the files already changed in the tree, plus `domain/src/runtime/llm-evidence/structure/**`.
-- Must not touch: `R/recovery/refuted-result/**`, `R/flow-bootstrap/**`, `R/route-state/**`.
-- Done: failing-first tests pass; narrow checks pass; report says Ready to commit.
-- Report to: `reports/t194-lead-1002.md`
+| Lead | Tree | Slot | Scenario / task |
+| --- | --- | --- | --- |
+| t174-lead-1002L (A) | `fxwork/t174` | slot-1 | crossborder-marketplace-hub-to-cart |
+| t193-lead-1002L (B) | `fxwork/t193` | slot-2 | bigbox-retail-pickup-cart |
+| t194-lead-1002L (C) | `fxwork/t194` | slot-3 | everything-store-plus-earbuds-under-50 |
+| t195-lead-1002L (D) | `fxwork/t195` | slot-4 | social-network-feed-confirm-requests |
 
-#### Brief: t239-judge-reply-cap (`worker`)
-- Repository: both, tree `fxwork/t239` (task t239, Core-paired)
-- Task: run 38's C7, first half. A judge call holds an 8,000-token reply allowance, so its purse hold is about $0.011
-  for a call that costs $0.0005-$0.0009 (largest observed judge reply 412 tokens); round 1's test went unjudged with
-  $0.009 left. Give every model-backed judge call a reply cap of 2,000 tokens, derived the way t234 caps a build
-  decision's reply, and pass it as `tokenLimits` (`R/result-verification/build-test/judge.ts:101-113` passes none).
-- Required reads: C7 in `fxwork/t195/!FluxIQWebExtension/docs/working/language-driven-flow-loop-plan/debugs/run-muqilf9s-c3211328.md`;
-  `R/llm/harness/token-limits.ts`; each judge call site.
-- Owns: Core `R/llm/harness/token-limits.ts`, the judge call sites under `R/result-verification/` other than
-  `contracts.ts` and `read-account/**`, and their tests.
-- Must not touch: `R/flow-bootstrap/unfinished-build/**` (the second half of C7 waits for lane B), `R/recovery/**`.
-- Done: a failing-first test shows the judge's hold drops to the 2,000-token reply; tests beside changed files and
-  `pnpm --filter fluxiq check` pass; Core structure audit passes.
-- Report to: `reports/t239-judge-reply-cap.md` in `fxwork/t239/!FluxIQWebExtension`
-
-#### Brief: t240-repair-rounds-by-progress (`worker-high`)
-- Repository: both, tree `fxwork/t240` (task t240, Core-paired)
-- Task: a build's repair rounds are bounded by money and progress, not a count. Supervisor decision (2026-10-02):
-  `AUTOMATION_STUDIO_FLOW_BOOTSTRAP_MAX_REPAIR_ROUNDS = 2` stopped earbuds run `run-muqiho7e-13be6c03` while it was
-  still converging. A repair round opens only when (a) the creation purse can fund one decision plus one judge call at
-  their capped holds (run 38's C7, second half) and (b) the round before it progressed, measured from what the judge
-  and the test already report (for example fewer missing or extra records, a refuted condition now held); a round
-  with no measurable progress ends the build with that reason. Keep `AUTOMATION_STUDIO_FLOW_BOOTSTRAP_MAX_ROUNDS` as
-  the record reader's hard bound.
-- Required reads: `R/flow-bootstrap/unfinished-build/phases.ts`; C7 in the run-38 debug (as t239's brief).
-- Owns: Core `R/flow-bootstrap/unfinished-build/**` and its tests, `R/tests/service-bootstrap/tests/unfinished-build.test.ts`.
-- Must not touch: `R/recovery/**`, `R/flow-draft/**`, `R/llm/evidence-loop*.ts`, `R/result-verification/**`.
-- Done: failing-first tests for each rule (no fund, no progress, progress continues); narrow checks; architecture doc
-  `docs/architecture/automation-studio/llm-flow-bootstrap.md` states the rule.
-- Report to: `reports/t240-repair-rounds-by-progress.md` in `fxwork/t240/!FluxIQWebExtension`
+Report to: `reports/<lead>.md` in the lane tree.
 
 ---
 

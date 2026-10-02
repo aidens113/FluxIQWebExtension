@@ -112,6 +112,41 @@ test("a build's opening call re-arms the rule, so a second build of the flow is 
   assert.equal(pressed.resultCode, "web.action.rejected.not_at_start_location");
 });
 
+// Live run 38 (`run-muqilf9s-c3211328`, C3): a round whose draft already holds
+// the Flow ran the arrival again and began off the page the test left. It now
+// opens with Core's look carrying the Flow's calls (`held`), which reads the
+// page as it stands and does not re-arm the rule: a held navigation is the
+// build's arrival, as a replayed one is.
+test("a round whose draft holds the Flow looks at the page as it stands, and is arrived, from nothing remembered", async () => {
+  const stubbed = openTab();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+
+  const looked = await continuing(runtime, [{ node: NAVIGATE, parameters: { url: START } }, { node: CLICK, parameters: { selector: "#go" } }]);
+  assert.equal(looked.resultCode, "web.inspect.succeeded");
+  assert.equal((looked.evidence as JsonObject).location, START);
+  assert.equal(looked.draft?.proposes, false);
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.browser.navigate"), false);
+
+  const pressed = await press(runtime, "call.press");
+  assert.equal(pressed.resultCode, "web.action.succeeded");
+});
+
+test("a round whose draft holds the Flow does not re-arm the rule a build arrived under", async () => {
+  const runtime = createWebAutomationLlmEvidenceRuntime(openTab().gateway);
+  await opening(runtime);
+  await arrive(runtime);
+
+  assert.equal((await continuing(runtime, [])).resultCode, "web.inspect.succeeded");
+  assert.equal((await press(runtime, "call.again")).resultCode, "web.action.succeeded");
+});
+
+test("a held Flow with no navigation in it is not an arrival", async () => {
+  const runtime = createWebAutomationLlmEvidenceRuntime(openTab().gateway);
+
+  assert.equal((await continuing(runtime, [{ node: CLICK, parameters: { selector: "#go" } }])).resultCode, "web.inspect.succeeded");
+  assert.equal((await press(runtime, "call.press")).resultCode, "web.action.rejected.not_at_start_location");
+});
+
 test("a build told no start location is unchanged: the open page is read and pressed on", async () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(openTab().gateway);
 
@@ -181,6 +216,21 @@ test("a build told where it starts opens, through Core's registry, with this dom
   assert.notEqual(pressed.resultCode, "web.action.rejected.not_at_start_location", JSON.stringify(pressed.evidence));
 });
 
+test("a round whose draft holds the Flow opens, through Core's registry, with the look carrying its calls, and is arrived", async () => {
+  const stubbed = openTab();
+  const loop = bound(createWebAutomationLlmEvidenceRuntime(stubbed.gateway), START);
+  const look = loop.tools.find((tool) => tool.toolId === WEB_LLM_RUN_NODE_TOOL_ID)?.initialObservation?.input as JsonObject;
+  // As Core's loop sends it: the look, and each kept step's call as written (`AS/runtime/llm/evidence-loop.ts`).
+  const held = [{ node: NAVIGATE, parameters: { url: START } }, { node: CLICK, parameters: { target: { handle: "t1" } } }];
+
+  const opened = await loop.executeTool({ callId: "initial.core.run_node", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { ...look, held } }) as unknown as Execution;
+  assert.equal(opened.resultCode, "web.inspect.succeeded", JSON.stringify(opened.evidence));
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.browser.navigate"), false);
+
+  const pressed = await loop.executeTool({ callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { selector: "#go" }, consequences: [] } }) as unknown as Execution;
+  assert.notEqual(pressed.resultCode, "web.action.rejected.not_at_start_location", JSON.stringify(pressed.evidence));
+});
+
 test("a build told no start location opens, through Core's registry, with the look", () => {
   const runNode = bound(createWebAutomationLlmEvidenceRuntime(openTab().gateway), undefined).tools.find((tool) => tool.toolId === WEB_LLM_RUN_NODE_TOOL_ID);
   assert.equal(runNode?.initialObservation?.arrival, undefined);
@@ -201,6 +251,21 @@ async function opening(runtime: Runtime) {
   return await runtime.executeTool({
     ...PROJECT, callId: "initial.core.run_node", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: SNAPSHOT, parameters: {}, consequences: [] }
+  });
+}
+
+/** Core's opening look of a round whose draft already holds the Flow, carrying its calls. */
+async function continuing(runtime: Runtime, held: JsonObject[]) {
+  return await runtime.executeTool({
+    ...PROJECT, callId: "initial.core.run_node", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
+    value: { node: SNAPSHOT, parameters: {}, consequences: [], held }
+  });
+}
+
+async function press(runtime: Runtime, callId: string) {
+  return await runtime.executeTool({
+    ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
+    value: { node: CLICK, parameters: { target: { handle: "t1" } }, consequences: [] }
   });
 }
 

@@ -19,7 +19,12 @@
 //   on;
 // - every address-shaped string in what a reading node read and returned to the
 //   model (an extraction's `url` column), with its query, because the model was
-//   shown the query.
+//   shown the query;
+// - every address a navigation of the Flow goes to, when a round continues a
+//   Flow (`held`, `./arrival.ts`): that step passed this rule when it first
+//   ran. On run 38 (`run-muqilf9s-c3211328`, C8) the re-author was refused the
+//   Flow's own step-3 address four times. Only a held navigation's address
+//   counts, nothing else a held step carries.
 //
 // **How an address is compared.** By origin, by path with any trailing slash
 // dropped, and by the query's keys; the fragment is ignored. Since t200 a
@@ -37,7 +42,8 @@
 // **What is not touched.** Replaying the draft and running a saved Flow go to
 // what the step holds (`./replay.ts`), which this rule already let through when
 // the step first ran. A build's opening call forgets the last build of the same
-// flow, as arrival does (`./arrival.ts`).
+// flow, as arrival does (`./arrival.ts`); the opening look of a round that
+// continues a Flow forgets nothing, since it continues the same build.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebLlmSnapshotBinding } from "../sanitize";
@@ -75,6 +81,8 @@ export type WebNodeShownAddresses = {
   opening(build: WebNodeBuildKey, callId: string): void;
   /** A packet this build has been shown. */
   saw(build: WebNodeBuildKey, page: WebLlmSnapshotBinding): void;
+  /** An address a navigation of the Flow this round continues goes to, read against `base` as the step was. */
+  held(build: WebNodeBuildKey, address: string, base: string | undefined): void;
   /** A node that ran in this build: what it typed, and what it read and returned. */
   ran(build: WebNodeBuildKey, step: { actionType: string; parameters: JsonObject; read: JsonValue | undefined; location: string | undefined }): void;
   /** Whether this call is a navigation to an address this build was not shown. */
@@ -109,6 +117,10 @@ export function createWebNodeShownAddresses(): WebNodeShownAddresses {
         const link = parsed(element.href, undefined);
         remember(held, link, link === undefined ? [] : [...link.searchParams]);
       }
+    },
+    held(build, address, base) {
+      const url = parsed(address, base);
+      remember(memory(build), url, url === undefined ? [] : [...url.searchParams]);
     },
     ran(build, step) {
       const held = memory(build);
