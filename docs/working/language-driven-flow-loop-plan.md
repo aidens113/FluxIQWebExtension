@@ -570,6 +570,68 @@ debug and partitioned so neither touches the other's files:
 | t159 | The refusal reaches a run's stored accounting, and three workers' overlapping assumptions are reconciled | in flight |
 | — | **Supervisor, direct:** `service.ts` adopts the shared throw classifier and the never-null diagnostic; its private copy of the classification is gone and it is 4584 → 4566 lines | built |
 
+### Briefs, 2026-10-02: finish and verify the lanes' uncommitted work
+
+Common to all four. Work only in your lane's two trees under `C:/Users/osrs_/FluxStuff/fxwork/<task>/`. No live
+Lab run and no provider call this round: code and narrow checks only (tests beside changed files, the typecheck of each
+touched package, `node scripts/structure-audit.mjs` in each repository; heavy commands through
+`build-slots/heavy.sh`). Do not commit; the report lists commit-ready files per repository with a proposed commit
+message per fix. Update your lane report as well as your own. Core paths below are under
+`packages/fluxiq/src/programs/automation-studio/runtime/` (`R/`).
+
+#### Brief: t195-lead-1002 (lane D, `lead-xhigh`)
+- Repository: both, tree `fxwork/t195`
+- Task: finish and verify run 38's causes C1, C3, C4 (`debugs/run-muqilf9s-c3211328.md`, "Causes"), then C5 and the
+  second half of C8 (a re-author round that ended `repeat_refused` on an unchanged page and draft opens no identical
+  round), then the stage-2 instrumentation gap (the step log records the loop's parse verdict).
+- Required reads: that debug's Causes and gaps, `reports/t195-w32-refuted-not-a-step.md`, the tree's diff.
+- Owns: Core `R/llm/evidence-loop-decision.ts`, `R/flow-bootstrap/plan/json-guards.ts`, `R/llm/evidence-loop.ts`,
+  `R/llm/evidence-loop/tests/resume.test.ts`, `R/llm/tests/evidence-loop-tool-failure.test.ts`,
+  `R/recovery/refuted-result/**`, `R/service/runtime-adaptation/refuted-result-port.ts` and its test,
+  `R/llm/step-log/**`; downstream `packages/test-runner/src/flow-lane/persisted-flow-run.ts` and its test.
+- Must not touch: `R/flow-draft/**`, `R/activity/**`, `R/flow-bootstrap/unfinished-build/**`,
+  `R/llm/harness/token-limits.ts` (C7 waits for t234), anything under `domain/`.
+- Done: each cause has a failing-first test that now passes; narrow checks pass; report says Ready to commit.
+- Report to: `reports/t195-lead-1002.md`
+
+#### Brief: t174-lead-1002 (lane A, `lead`)
+- Repository: both, tree `fxwork/t174`
+- Task: finish and verify the in-flight F33 (draft control words), F35 (playback steps in the bundle), F37 (a press
+  result says what changed), the web-3 instructions and the final-state facts oracle. Then find why playback did not
+  skip the absent popup or route by page state (run `run-muqiho5c-e830ce01`; run 38's C9) and fix it if the fix stays
+  in this lane's files; otherwise report the cause, the file and the fix.
+- Required reads: `reports/t174-f33-draft-control.md`, `reports/t174-f35-playback-steps.md`,
+  `debugs/run-muqiho5c-e830ce01.md`, the tree's diff.
+- Owns: the files already changed in the tree, plus Core `R/route-state/**` and the runtime's step routing.
+- Must not touch: `R/recovery/refuted-result/**`, `R/llm/evidence-loop.ts`, `isJsonValue` anywhere, `R/activity/**`
+  beyond `wording/action.ts`.
+- Done: failing-first tests for each fix pass; narrow checks pass; report says Ready to commit.
+- Report to: `reports/t174-lead-1002.md`
+
+#### Brief: t193-lead-1002 (lane B, `lead`)
+- Repository: both, tree `fxwork/t193`
+- Task: finish and verify the in-flight chat-cards work (every card says what it inspects or does, on what; the wait
+  says "Deciding the next step") and the draft-legibility work.
+- Required reads: `reports/t193-wc-chat-cards.md`, `reports/t193-wd-draft-legibility.md`, the tree's diff.
+- Owns: the files already changed in the tree.
+- Must not touch: `R/recovery/refuted-result/**`, `isJsonValue` anywhere, `R/route-state/**`.
+- Done: tests beside each changed file pass; Core and extension typechecks pass; the extension builds; report says
+  Ready to commit, and states which `R/flow-draft/*` and `R/llm/evidence-loop.ts` hunks are this lane's.
+- Report to: `reports/t193-lead-1002.md`
+
+#### Brief: t194-lead-1002 (lane C, `lead`)
+- Repository: both, tree `fxwork/t194`
+- Task: drop this tree's duplicate C1 fix (`isJsonValue` in `R/llm/evidence-loop-decision.ts` and its rows in
+  `R/llm/tests/evidence-loop-tool-failure.test.ts`; lane D's copy is the one merged). Finish and verify F19's
+  alone-rows (w49), the replay read account (w50), extraction rejected samples and the extraction summary. Then run 38's
+  C2: each shown structure field carries the page-view handle of its element in the first item.
+- Required reads: `reports/t194-w49-judge-alone-rows.md`, `reports/t194-w50-replay-read-account.md`,
+  `debugs/run-muqj2bgb-d048ec37.md`, C2 in `fxwork/t195/.../debugs/run-muqilf9s-c3211328.md`.
+- Owns: the files already changed in the tree, plus `domain/src/runtime/llm-evidence/structure/**`.
+- Must not touch: `R/recovery/refuted-result/**`, `R/flow-bootstrap/**`, `R/route-state/**`.
+- Done: failing-first tests pass; narrow checks pass; report says Ready to commit.
+- Report to: `reports/t194-lead-1002.md`
+
 ---
 
 ## Work Ledger
