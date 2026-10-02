@@ -24,9 +24,18 @@ gets, filed against the last step that succeeded (run 38's C4). Behind it in run
 kept every visited object in `seen`, so a read whose `firstRows` and `extracted` share row objects was refused
 `evidence_not_json`. That refused every list read that returned a row, since `01082bc9`. Lanes C and D fixed C1 the
 same way (an ancestor check); lane D's copy, which also fixes `flow-bootstrap/plan/json-guards.ts`, is the one to
-merge. Round in flight: four leads finish and verify the uncommitted lane work (briefs below, "Briefs, 2026-10-02");
-the supervisor merges t234. Overlaps to resolve at merge: t174 and t193 both edit Core `flow-draft/{entry,index,step}.ts`
-and `activity/wording/action.ts`; t193 and t195 both edit `llm/evidence-loop.ts`.
+merge.
+
+**Merged and pushed 2026-10-02 (Core `ab1a3bcd`, downstream `39da4ee2`), each verified by the supervisor on the
+lane's tree and again after merging dev in:** t234 (one purse per Flow creation); t193 lane B (chat cards say what
+each call does and on what; the draft's `does`); t239 (judge calls reserve a 2,000-token reply, C7); t195 lane D (C1,
+C3 taken-not-added, C4, C5, step-log verdict); t194 lane C (judge sees each condition's alone rows; replay read
+account; structure field `at` handles, C2); t174 lane A (F38 an absent sometimes-present step is skipped, F39 a press
+that answered a popup is optional, F37, F33, F35, web-3). Lane A and lane B both name a step's control on the draft
+line (`control` and `does`); a line shows `control` only when the domain gave no `does`. **Open: unify the two fields.**
+t240 (repair rounds bounded by money and progress, C7 and C8) is committed on its branch and being extended; t241
+(a repair round opens with a look where the test left the page) and t242 (skips reach the run detail and the Lab) are
+dispatched. Then: sync every lane tree to dev and run the four live lanes.
 
 Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name older work without a branch of its own.
 
@@ -619,6 +628,38 @@ message per fix. Update your lane report as well as your own. Core paths below a
 - Done: failing-first tests for each rule (no fund, no progress, progress continues); narrow checks; architecture doc
   `docs/architecture/automation-studio/llm-flow-bootstrap.md` states the rule.
 - Report to: `reports/t240-repair-rounds-by-progress.md` in `fxwork/t240/!FluxIQWebExtension`
+- **Extension, after its first part (committed on the branch, dev merged in):** wire the round-0 `seedSignature` from
+  `R/service.ts` (about line 1617) so C8's round-0 case fires; the build-test judge returns its summary's
+  `totalRecordCount`, `totalRefusedCount` and `totalRowsMissingRequired` on a `no` verdict, and `progress.ts` counts
+  fewer missing or refused records as progress. Owns also `R/service.ts` (that call only) and
+  `R/result-verification/build-test/**`.
+
+#### Brief: t241-opening-look-where-test-left (`worker-high`)
+- Repository: both, tree `fxwork/t241` (Core-paired)
+- Task: run 38's C3 follow-up and C8's first half. A repair or re-author round whose draft already holds the Flow
+  opens with a look at the page where the test left it, never a navigation to the start (t195 made that navigation
+  taken rather than added; it still moves the page). The domain's opening look must neither re-arm the arrival rule
+  nor forget the build's shown addresses, and an address a kept draft step holds counts as shown.
+- Required reads: `reports/t195-lead-1002.md` (C3 decision and open item 2), C3 and C8 in the run-38 debug.
+- Owns: Core `R/llm/evidence-loop.ts` (the opening only) and its resume tests; domain
+  `src/runtime/llm-evidence/node-run/{arrival,run,shown-addresses,start-location}.ts` and their tests.
+- Must not touch: `R/flow-bootstrap/**`, `R/service*`, `R/result-verification/**`, `packages/test-runner/**`.
+- Done: failing-first tests (resumed round's first call is a look on the unchanged page; a kept step's address is not
+  refused `address_not_shown`); narrow checks in both repositories with Core libraries rebuilt.
+- Report to: `reports/t241-opening-look-where-test-left.md` in `fxwork/t241/!FluxIQWebExtension`
+
+#### Brief: t242-skipped-steps-reach-run-detail (`worker`)
+- Repository: both, tree `fxwork/t242` (Core-paired)
+- Task: t174's F38 records a skipped sometimes-present step (`target_absent`), but the run detail drops `skipped`
+  (Core `R/service/summaries/conversions.ts`), so the Lab cannot tell a skip from a press, and F35's playback
+  `steps/` writes a skipped step's host attempt as a failed row. Carry `skipped` through the run detail and write it
+  in the Lab as skipped, never failed.
+- Required reads: `reports/t174-lead-1002.md` ("Not verified"), `R/executor/step-skip/**`.
+- Owns: Core `R/service/summaries/conversions.ts` and its tests; downstream
+  `packages/test-runner/src/lab-runs/{write-playback-steps,rewrite-steps-index}.ts` and their tests.
+- Must not touch: `R/executor/**`, `R/service.ts`, `domain/**`.
+- Done: failing-first tests on both sides; narrow checks with Core libraries rebuilt.
+- Report to: `reports/t242-skipped-steps-reach-run-detail.md` in `fxwork/t242/!FluxIQWebExtension`
 
 ---
 
