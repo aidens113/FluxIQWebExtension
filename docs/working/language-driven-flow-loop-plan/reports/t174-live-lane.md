@@ -621,3 +621,20 @@ Lab runs paused for lane A by the supervisor (2026-10-02) until t229 lands. Do n
 Not done in F32: the covered refusal (`target_covered`, `instead: [t476]`) already names its cover, and the model dismissed it at once. The non-retry at 0021 followed from the find_on_page misreading, so the refusal detail is unchanged. It is a closed shape with no free text.
 Follow-up: Core `route-state/build-routing.ts` now takes the run's start state from the page the arrival left, but its comments still describe a look.
 Worker reports: `t174-f31-core.md`, `t174-f31-f32-domain.md`. Live runs held by the supervisor (2026-10-02) until the node-catalog trim lands on dev.
+
+### Session 8 (2026-10-02, t174-lead-1002): in-flight work finished; playback skips an absent popup
+
+No live run and no provider call. Full report: `t174-lead-1002.md`.
+
+| # | Fix | Files | Exposed by | Validation | Status |
+| --- | --- | --- | --- | --- | --- |
+| F33 | A draft step names the control it acted on (`control`). | Core `R/flow-draft/control-words.ts`, the seam; domain `node-run/run.ts`, `capture.ts` | run 43 | Core vitest 722/722; domain 398/398 | **Ready to commit** |
+| F35 | The final-state failure names its unheld facts (`stepId: final-state`); playback commands are written into `steps/`. | test-runner `flow-lane/creation/*`, `lab-runs/write-playback-steps.ts` | run 43 | test-runner `node --test` 194/194 | **Ready to commit** |
+| F36 | A card names a control by its visible text when it has no accessible name. | Core `R/activity/wording/action.ts` | run 43 | Core wording tests pass | **Ready to commit** |
+| F37 | A press result lists the lines it changed (`changed`). The lead found a TS2379 and 3 audit violations; w61 fixed them (`node-run/press-effect/`, `page-view/line/`). | domain | `run-muqk4u32-0b36e58f` | `domain check` rc 0; audit passed | **Ready to commit** |
+| web-3 | Press first and close only the covering layer; leave a chosen option. | domain `system-instructions` | runs 43, muqk4u32 | instructions tests pass | **Ready to commit** |
+| F38 | An absent sometimes-present step is skipped (`target_absent`): no ladder, no "Recovery started". | Core `R/executor/step-skip/`, `graph-run.ts` | muq66ff9 #11, run 38 C9, the user's rule | Failing-first: 11 fail at HEAD, all pass after | **Ready to commit** |
+| F39 | A press that answered a dialog or popup now gone carries `interruption: true`, and with no act its step is routed optional. | domain `press-effect/answered-layer.ts`; Core seam, `sometimes-present.ts`, `draft-routing.ts` | run 38 C9 | as above; workers' failing-first rows | **Ready to commit** (lands with Core) |
+
+Follow-up: routing to the node whose expected state matches needs a node pre-state that no build writes yet. It needs
+its own brief (`t174-lead-1002.md`, "Follow-ups").

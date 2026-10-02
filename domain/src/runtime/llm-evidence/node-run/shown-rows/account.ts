@@ -50,7 +50,10 @@ export function webNodeReadOutcome(read: JsonValue | undefined, links: WebNodeRe
   const rows = Array.isArray(extracted) ? extracted.map((row) => writtenRow(row, links)) : extracted;
   const account: JsonObject = {};
   if (links.used() && links.origin !== undefined) account.origin = links.origin;
-  if (Array.isArray(rows) && rows.length > 0) account.firstRows = rows.slice(0, WEB_NODE_READ_FIRST_ROWS);
+  // Copies, never the same objects `extracted` holds: Core's evidence check
+  // reads a value met twice as a cycle and refuses the whole result as
+  // `evidence_not_json` (live run 14, `run-muqiho7e-13be6c03`: every read refused).
+  if (Array.isArray(rows) && rows.length > 0) account.firstRows = rows.slice(0, WEB_NODE_READ_FIRST_ROWS).map(copied);
   const rest = restOfRows(rows, read.rejectedRows !== undefined);
   if (rest !== undefined) account.restOfRows = rest;
   const out: JsonObject = {};
@@ -87,4 +90,9 @@ function restOfRows(rows: JsonValue | undefined, rejected: boolean): string | un
 
 function isJsonObject(value: JsonValue | undefined): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** A JSON value whole, sharing no object with the one it was copied from. */
+function copied(value: JsonValue): JsonValue {
+  return JSON.parse(JSON.stringify(value)) as JsonValue;
 }

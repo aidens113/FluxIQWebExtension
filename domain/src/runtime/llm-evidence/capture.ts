@@ -195,6 +195,25 @@ export type WebLlmEvidenceToolExecution = {
      * it may be proposed -- and a step that says nothing is simply not replayed.
      */
     replay?: { from?: JsonObject; produced?: JsonObject };
+    /**
+     * The words of the control the call acted on: the same value its outcome
+     * carries as `control` (`./node-run/run.ts`). Absent where it acted on no
+     * control -- a look, a navigation -- and on a refusal, which has no
+     * outcome. Core shows it on the draft step beside `input`, so a step that
+     * pressed "Not now" cannot be read as Add to cart (`run-muqiho5c-e830ce01`);
+     * it is page text, and Core never writes it into the Flow's parameters.
+     */
+    control?: string;
+    /**
+     * The call answered an interruption: it pressed a control inside a layer
+     * that stood in front of the page -- a dialog, a consent wall, a chat
+     * popup -- and that layer was gone after it
+     * (`./node-run/press-effect/answered-layer.ts`). Core marks such a step
+     * optional, so a playback that meets no such layer skips it rather than
+     * failing on a control that is not there. `true` only; absent otherwise,
+     * and never on a look, a navigation, a read or a refusal.
+     */
+    interruption?: true;
   };
 };
 

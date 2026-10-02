@@ -22,6 +22,7 @@ import { buildCreatedFlowProposal, type CreatedFlowBuild, type CreatedFlowBuildC
 import { createdFlowAuthoredNodes } from "./authored-nodes.js";
 import { createdFlowActionTypes, createdFlowShape, type CreatedFlowShape } from "./flow-shape.js";
 import { judgeCreatedFlowDataset } from "./judgement.js";
+import type { FinalStateVerdict } from "./final-state-facts.js";
 import { assertCreatedFlowOracles, createdFlowOraclesHold, judgeCreatedFlowOracles, type CreatedFlowOracles } from "./oracles.js";
 import { assertCreatedFlowReachesItsOwnPage, createdFlowOwnPage, type CreatedFlowOwnPage } from "./own-page.js";
 import { judgeCreatedFlowPermissionStop, readCreatedFlowPermissionAsks, type CreatedFlowPermissionStop } from "./permission-point.js";
@@ -136,8 +137,11 @@ export type CreatedFlowLaneInput = {
    * failure is rethrown either way.
    */
   recordIncompleteEvidence?: (evidence: CreatedFlowLaneIncomplete) => Promise<unknown>;
-  /** The fixture oracle: a goal task's whole judgement, and a dataset task's second one wherever its workflow declares a final state (`oracles.ts`). */
-  checkFinalState: () => Promise<boolean>;
+  /**
+   * The fixture oracle: a goal task's whole judgement, and a dataset task's second one wherever its workflow declares a final state
+   * (`oracles.ts`). It names each fact that did not hold (`final-state-facts.ts`), so a failed playback says what it missed.
+   */
+  judgeFinalState: () => Promise<FinalStateVerdict>;
   bounds?: FluxIQHttpOptions;
   buildWait?: CreatedFlowBuildWait;
   fetchLab?: LabResetFetch;
@@ -372,7 +376,7 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   const { judgement } = request;
   // Judged before the publish and never throwing, so a Flow whose records are wrong is still published with its measurement.
   const extraction = judgement.judgeBy === "expected-dataset" ? judgeCreatedFlowDataset({ workflow, stepId: judgement.stepId, run, actionTypes, scenarioOrigin: input.scenarioOrigin }) : null;
-  const oracles = await judgeCreatedFlowOracles({ extraction, declaresFinalState: (workflow.expected.finalState?.length ?? 0) > 0, checkFinalState: input.checkFinalState });
+  const oracles = await judgeCreatedFlowOracles({ extraction, declaresFinalState: (workflow.expected.finalState?.length ?? 0) > 0, judgeFinalState: input.judgeFinalState });
   const oracleHeld = createdFlowOraclesHold(oracles);
   const observation = flowLaneObservation({
     flowCreated: true,

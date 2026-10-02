@@ -54,6 +54,11 @@
 // run's (`../plan-resolution/own-extraction-list.ts`). A one-item proposal --
 // a label/value receipt, or a lone record where nothing repeats -- needs
 // nothing of its own here: it is the run, with one item (`./packet.ts`).
+//
+// **Each column says where it is in the page view**: the handle of its element
+// in the first item, in the last packet the model was shown (`returned`), found
+// in the detection's own capture (`./first-item/`). Without a shown packet --
+// the recovery path's page-wide detection -- no column has one.
 
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationStructureDetectionValue, type WebAutomationStructureDetection } from "../../../extraction";
@@ -140,7 +145,11 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
     location: page.evidence.location,
     target: searchedPage ? undefined : target,
     frameId: element?.frameId,
-    frameUrlPath: element?.frameDocument?.path
+    frameUrlPath: element?.frameDocument?.path,
+    // Each column's element in the first item is found in the capture the
+    // detection answered with, and named by the handle the model was shown it
+    // by (`./first-item/`).
+    firstItem: { detected: page, shown: context.returned, frameId: element?.frameId }
   });
   if (!split) recoverable("sensitive_value");
   const scope = { projectId: request.projectId, flowId: request.flowId };

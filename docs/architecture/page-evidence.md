@@ -241,7 +241,7 @@ Every page leaves the domain as `web-llm-page.v3`
   `URL <location on a ~ base>   (~ = <base>)`, `VIEW <w>x<h> at the top · <n>
   elements ...`, `COVERING`, `DIALOG`, `LOADING`, `FRAMES ... did not answer`,
   `ARRIVED`, `SELECTED`, and `CAPTURE incomplete`.
-- **Which elements get a line**, in document order (`page-view/line-choice.ts`):
+- **Which elements get a line**, in document order (`page-view/line/choice.ts`):
   every visible control, every visible layer, every visible element with
   meaningful words of its own, and an image whose alt says something no line
   near it says. "Visible" is not a search capture's `hidden`, and a box, when
@@ -344,7 +344,7 @@ world, so three facts make those controls visible:
 
 An element that is a control only through a listener or a cursor, and that
 contains another control, gets a text line instead of a control line
-(`line-choice.ts`), so a list that delegates its buttons' clicks does not
+(`line/choice.ts`), so a list that delegates its buttons' clicks does not
 become one line holding them all. Such a control prints its own words, not
 every word under it; one with no words takes the alt text of its images.
 
@@ -377,7 +377,13 @@ with `detectStructure`; the page side is `apps/extension/src/content/extraction/
 The domain splits the answer (`domain/src/runtime/llm-evidence/structure/`):
 the model gets an opaque `extraction.N` handle with each column's key, label,
 kind and coverage, the item count and how the list continues; the handle store
-keeps the selectors. A plan names the handle in an extraction node's
+keeps the selectors. Each column also carries `at`, the page-view handle of its
+element in the list's first item, as the model was last shown the page, so a
+column labelled by a meaningless atomic-CSS class path can still be matched to
+the words the page view prints beside that handle (run 38, C2). The domain finds
+the element by walking the detection's own selectors over its capture
+(`structure/first-item/`); a column whose element cannot be told unambiguously,
+or a detection with no shown page, has no `at`. No value or selector is added. A plan names the handle in an extraction node's
 `extractList`, and the node is built from what the handle keeps
 (`plan-resolution/extraction/slot.ts`).
 

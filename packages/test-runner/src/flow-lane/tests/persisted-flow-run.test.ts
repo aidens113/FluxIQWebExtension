@@ -148,6 +148,40 @@ test("a failed Flow is a result, not a runner fault: the structured failure surv
 });
 
 /**
+ * Live run 38 (`run-muqilf9s-c3211328`): every step ran and matched, and Core's
+ * refutation of the result was filed under the last of them, a navigate back to
+ * the feed. The Lab listed it as a failed navigate, and every report after it
+ * said the Flow's last step failed. Both ways Core records it -- under that
+ * node, as it did then, or under no node, as it does now -- read the same.
+ */
+test("a refuted result's attempt is the result's verification, not a failed action of the step Core filed it under", async () => {
+  const refutation = { category: "output_not_observed", code: "core.result.does_not_answer_request", retryable: false, stage: "verification" };
+  const actionTypes = new Map([["node.s5", "web.dom.click"], ["node.s6", "web.browser.navigate"]]);
+  const steps = [
+    attempt({ attemptId: "attempt.s5", nodeId: "node.s5", order: 1, startedAt: 1_000, finishedAt: 1_100 }),
+    attempt({ attemptId: "attempt.s6", nodeId: "node.s6", order: 2, startedAt: 1_100, finishedAt: 1_400 }),
+  ];
+  for (const filedUnder of ["node.s6", "result-verification"]) {
+    const { client } = control(
+      { runPersistedFlow: async () => ({ session: { runId: "run.one", status: "failed" } }) },
+      { summary: { runId: "run.one", status: "failed" }, actionAttempts: [...steps, attempt({ attemptId: "result-verification.run.one", nodeId: filedUnder, definitionId: filedUnder === "node.s6" ? "web.output.browser-navigate" : filedUnder, order: 3, status: "failed", startedAt: 1_400, finishedAt: 2_628, failure: refutation })] },
+    );
+    const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", actionTypes });
+    assert.deepEqual(outcome.actions.map((action) => [action.actionType, action.nodeId, action.status]), [
+      ["web.dom.click", "node.s5", "succeeded"],
+      ["web.browser.navigate", "node.s6", "succeeded"],
+      ["result_verification", null, "failed"],
+    ], filedUnder);
+    assert.equal(outcome.actions.some((action) => action.actionType === "web.browser.navigate" && action.status === "failed"), false, `no failed navigate (${filedUnder})`);
+    // The run's failure is still the refutation, with its own category and stage.
+    assert.deepEqual(outcome.failure, refutation, filedUnder);
+    // No action latency for an action that never ran, and no time added to the navigate.
+    assert.equal(outcome.actions[2]?.durationMs, undefined, filedUnder);
+    assert.equal(outcome.extractionDurationsByNode.get("node.s6"), 300, filedUnder);
+  }
+});
+
+/**
  * `run-mudwci8d-de88aa32`, 2026-09-23. The first click missed a dialog the
  * fixture opens on a four-second timer; the retry found it 2.4 seconds later
  * and the run went on to store its records. That miss became the run's
