@@ -31,10 +31,14 @@
 // then nothing refuses the first look, no step ever reaches the page, and Core
 // refuses the finished build `bootstrap.cannot_reach_start_location` after it
 // has spent its decisions. So arrival is a fact of the build, not of the tab:
-// until a navigation node has succeeded in this build (`./arrival.ts`), the
-// page is treated as absent whether or not it could be read, and the same
-// refusal and the same one way past it apply. Core cannot write the missing
-// step, because only this domain knows which node navigates.
+// until a navigation node has succeeded in this build (`./arrival.ts`), every
+// node but a look treats the page as absent whether or not it could be read,
+// and the same refusal and the same one way past it apply. A look reads the
+// page as it stands (`run-muqc07fh-eeffbc86` refused the free look on the start
+// location itself): it runs nothing and is never a step of the Flow, so seeing
+// the page is not arriving. Only a page that cannot be read refuses a look.
+// Core opens such a build by running the node `runsNodes.arrival` names
+// (`../tools.ts`), so the step that reaches the page is the Flow's first.
 
 import type { WebAutomationActionType } from "../../../actions/types";
 import { rejectionDetail, type WebLlmToolRejectionDetail } from "../tool-rejection";

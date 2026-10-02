@@ -213,12 +213,21 @@ test("a call that read no page reports no state", async () => {
   assert.equal(unknown.stateDigests, undefined);
   assert.equal(fake.captures(), 0);
 
-  // Told where the Flow starts, and not there yet: the page read is not this
-  // build's page, so nothing is said of it.
+  // Told where the Flow starts, on the blank tab: a look found no page that
+  // could be read, so nothing is said of it.
   const start = "https://example.test/start";
+  const unreadable = await createWebAutomationLlmEvidenceRuntime(fakeGateway(undefined).gateway).executeTool({
+    ...PROJECT, callId: "call.early-look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: start,
+    value: { node: SNAPSHOT, parameters: {}, consequences: [] }
+  });
+  assert.equal(unreadable.resultCode, "web.action.rejected.not_at_start_location");
+  assert.equal(unreadable.stateDigests, undefined);
+
+  // Told where the Flow starts, and not there yet: a press is refused, and the
+  // page read is not this build's page, so nothing is said of it.
   const notThere = await createWebAutomationLlmEvidenceRuntime(fakeGateway(smallPage()).gateway).executeTool({
     ...PROJECT, callId: "call.early", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: start,
-    value: { node: SNAPSHOT, parameters: {}, consequences: [] }
+    value: { node: CLICK, parameters: { selector: "#go" }, consequences: [] }
   });
   assert.equal(notThere.resultCode, "web.action.rejected.not_at_start_location");
   assert.equal(notThere.stateDigests, undefined);
