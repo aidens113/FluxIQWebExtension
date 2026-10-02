@@ -76,6 +76,14 @@ test("capture_snapshot: succeeds with the snapshot and changes nothing", async (
   await expect(page.locator(RESULT)).toHaveText("Not submitted");
 });
 
+test("type with submit: enters the text, then presses Enter, and the form is sent as a person's Enter sends it (t193)", async ({ openHarness, page }) => {
+  const harness = await openHarness("basic-form");
+  const reply = await harness.runAction({ commandId: "type-submit", actionType: "web.dom.type", selector: NAME, text: "Ada", submit: true });
+  expect(reply).toMatchObject({ status: "succeeded", validation: { status: "passed" }, message: "Text entered, then Enter pressed in the field." });
+  await expect(page.locator(NAME)).toHaveValue("Ada");
+  await expect(page.locator(RESULT)).toHaveText("Submitted");
+});
+
 test("type: enters the text per character and validates that the field kept it", async ({ openHarness, page }) => {
   const harness = await openHarness("basic-form");
   const seen = await watchEvents(page, NAME, ["input", "change"]);
@@ -83,7 +91,8 @@ test("type: enters the text per character and validates that the field kept it",
   expect(reply).toMatchObject({
     status: "succeeded",
     validation: { status: "passed", expected: 'the field holds "Ada"', actual: 'the field holds "Ada"' },
-    message: "Text entered.",
+    // The field is in the form, and typing does not send it (t193 run 37): the result says so and names Submit.
+    message: `Text entered. Typing pressed no other key, so the field's form was not sent: if the page has not answered the text, press its "Submit" button (or Enter in the field) to send it, or type with submit set to true.`,
     element: { selector: NAME }
   });
   await expect(page.locator(NAME)).toHaveValue("Ada");

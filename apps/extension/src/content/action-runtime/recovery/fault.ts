@@ -158,7 +158,8 @@ const OBSTRUCTION_REASONS: readonly string[] = Object.freeze(["covered", "hidden
  */
 const OBSTRUCTION_FAULTS: Readonly<Partial<Record<WebAutomationFailureCode, RecoveryFault>>> = Object.freeze({
   [WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG]: "blocking_dialog",
-  [WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED]: "obstructed_target"
+  [WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED]: "obstructed_target",
+  [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE]: "obstructed_target"
 } as const);
 
 /** The refusal reason word for a control the page will not let anything use yet. */
@@ -191,7 +192,7 @@ const DISABLED_REASON = "disabled";
  * promptly (`attempt.ts`, `refused-control.ts`).
  */
 function disabledBeforeDispatch(code: WebAutomationFailureCode, result: BrowserActionResult): boolean {
-  if (code !== WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED) return false;
+  if (code !== WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE && code !== WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED) return false;
   const failure = result.failure;
   if (failure?.effect !== "unacted" || typeof failure.actual !== "string") return false;
   return failure.actual.startsWith(`${DISABLED_REASON}:`);
@@ -247,7 +248,8 @@ export function faultMayHideBehindLayer(fault: RecoveryFault): boolean {
 function obstructionFault(code: WebAutomationFailureCode, result: BrowserActionResult): RecoveryFault | undefined {
   const fault = OBSTRUCTION_FAULTS[code];
   if (fault === undefined) return undefined;
-  if (code !== WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED) return fault;
+  // The two codes a gate refusal may carry (`../results.ts`): its reason word says which refusal it was.
+  if (code !== WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE && code !== WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED) return fault;
   const actual = result.failure?.actual;
   if (typeof actual !== "string") return undefined;
   return OBSTRUCTION_REASONS.some((reason) => actual.startsWith(`${reason}:`)) ? fault : undefined;

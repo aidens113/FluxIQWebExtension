@@ -76,7 +76,7 @@ export const failureSurfacesManifest = createScenarioManifest({
           { id: "detach-target-disabled", subject: "detach-target", predicate: "enabled", value: false },
           { id: "nothing-happened", subject: "result", predicate: "text", value: "Ready" },
         ],
-        failure: { category: "blocked_by_capability_or_policy", code: "web.action.rejected" },
+        failure: { category: "unexpected_state", code: "web.target.not_actionable" },
       },
     },
     {

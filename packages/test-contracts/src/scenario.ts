@@ -104,8 +104,10 @@ export type ExpectedEvent = { type: string; count?: number };
  * declare the two a finished attempt reaches. There is deliberately no
  * `rejected`: no lane can report it, so an expectation spelled that way fails
  * on itself whatever the page does. A client refusal is `failed` here, with
- * the refusal carried by `expected.failure` -- category
- * `blocked_by_capability_or_policy`, code `web.action.rejected`.
+ * the refusal carried by `expected.failure` -- category `unexpected_state`,
+ * code `web.target.not_actionable` for a target the page would not let be used
+ * (hidden, covered, disabled), or `blocked_by_capability_or_policy`,
+ * `web.action.rejected` for one refused on purpose.
  */
 export const expectedActionOutcomes = ["succeeded", "failed"] as const;
 /**

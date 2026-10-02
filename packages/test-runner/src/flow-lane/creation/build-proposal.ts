@@ -483,8 +483,19 @@ function buildSteps(steps: readonly unknown[] | undefined): readonly CreatedFlow
 /** A refusal, read through Core's own diagnostic parser; a body that parser rejects keeps only its HTTP status. */
 function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number): CreatedFlowBuild {
   const payload = isRecord(envelope.payload) ? envelope.payload : {};
-  const diagnostic = parseAutomationStudioFlowBootstrapFailureDiagnostic(payload.diagnostic);
-  if (!diagnostic) return failed({ code: `lab.generation_http_${envelope.status}`, stage: null, httpStatus: envelope.status }, "unknown", durationMs);
+  return createdFlowBuildFromDiagnostic(payload.diagnostic, durationMs, envelope.status)
+    ?? failed({ code: `lab.generation_http_${envelope.status}`, stage: null, httpStatus: envelope.status }, "unknown", durationMs);
+}
+
+/**
+ * A failed build from Core's diagnostic of it, read through Core's own parser:
+ * what it spent, how far its loop got and why it failed. Undefined for a value
+ * that parser rejects. `httpStatus` is the refusal's, or null for a build whose
+ * diagnostic was read afterwards (`get-flow-bootstrap-failure`, the chat's).
+ */
+export function createdFlowBuildFromDiagnostic(value: unknown, durationMs: number, httpStatus: number | null): CreatedFlowBuild | undefined {
+  const diagnostic = parseAutomationStudioFlowBootstrapFailureDiagnostic(value);
+  if (!diagnostic) return undefined;
   const loop = diagnostic.evidenceLoop;
   const issueCodes = [...new Set((diagnostic.issueCodes ?? []).filter(isVocabulary))];
   const steps = buildSteps(loop?.steps) ?? undefined;
@@ -497,7 +508,7 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
     providerInvocation: diagnostic.providerInvocation,
     accounting: diagnostic.accounting ? accountingOf(diagnostic.accounting) : null,
     evidenceLoop: loop ? { decisionCount: loop.decisionCount, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary((steps ?? []).map((step) => step.toolId)), steps: steps ?? null, ...(loop.incompleteDraft ? { incompleteDraft: Object.freeze({ revision: loop.incompleteDraft.revision, steps: loop.incompleteDraft.steps }) } : {}) } : null,
-    failure: { code: diagnostic.code, stage: diagnostic.stage, httpStatus: envelope.status, ...(issueCodes.length ? { issueCodes } : {}), ...providerThrowCodes(diagnostic.providerThrow) },
+    failure: { code: diagnostic.code, stage: diagnostic.stage, httpStatus, ...(issueCodes.length ? { issueCodes } : {}), ...providerThrowCodes(diagnostic.providerThrow) },
     recoveredAfterTimeout: false,
     durationMs,
     instructedConsequences: null,

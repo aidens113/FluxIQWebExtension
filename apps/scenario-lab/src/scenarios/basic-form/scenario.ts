@@ -38,7 +38,7 @@ export type BasicFormState = {
  * It never goes away, and that is deliberate rather than convenient. A
  * self-dismissing promo would be absorbed by a retry on any runtime that
  * retried this failure, and this one does not: the domain marks
- * `web.action.rejected` non-retryable (`domain/src/runtime/failure/codes.ts`),
+ * `web.target.not_actionable` non-retryable (`domain/src/runtime/failure/codes.ts`),
  * so the ladder's retry rung is never offered the node. An overlay that
  * cleared would therefore measure exactly the same outcome and would make the
  * result look like a timing accident instead of the rule it is.
@@ -78,10 +78,10 @@ export const basicFormScenario = defineScenario<BasicFormState>({
             { action: "web.dom.click", outcome: "failed" },
           ],
           finalState: [{ id: "not-submitted", subject: "result", predicate: "text", value: "Not submitted" }],
-          failure: { category: "blocked_by_capability_or_policy", code: "web.action.rejected" },
+          failure: { category: "unexpected_state", code: "web.target.not_actionable" },
           recovery: {
             absorbedBy: "none",
-            because: "A covered control is refused as web.action.rejected, which the domain marks non-retryable, so the ladder's retry rung is never offered the node and clear_interference has no node to run.",
+            because: "A covered control is refused as web.target.not_actionable, which the domain marks non-retryable, so the ladder's retry rung is never offered the node and clear_interference has no node to run.",
           },
         },
       },

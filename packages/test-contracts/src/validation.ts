@@ -214,7 +214,7 @@ const validateExpected: Validator = (value, path, issues) => {
     requiredString(action, "action", actionPath, target);
     // No lane can report a refusal as an attempt status, so "rejected" is not
     // an outcome: declare `failed` and put the refusal in `expected.failure`
-    // as `blocked_by_capability_or_policy` / `web.action.rejected`.
+    // (`web.target.not_actionable` or `web.action.rejected`, `scenario.ts`).
     if (action.outcome !== undefined && !(expectedActionOutcomes as readonly string[]).includes(String(action.outcome))) issue(target, `${actionPath}.outcome`, `must be one of ${expectedActionOutcomes.join(", ")}; a refused action is "failed" with expected.failure naming the refusal`);
   });
   if (value.allowedConsoleErrors !== undefined) arrayOf(value.allowedConsoleErrors, `${path}.allowedConsoleErrors`, issues, (entry, entryPath, target) => {

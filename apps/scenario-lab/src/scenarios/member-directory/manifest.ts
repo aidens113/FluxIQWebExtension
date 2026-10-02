@@ -193,7 +193,7 @@ export const memberDirectoryManifest = createScenarioManifest({
             stats(BASELINE),
             listed(BASELINE),
           ],
-          failure: { category: "blocked_by_capability_or_policy", code: "web.action.rejected" },
+          failure: { category: "unexpected_state", code: "web.target.not_actionable" },
           finalState: [
             { id: "nothing-removed", subject: "member-stats", predicate: "text", value: statsText(BASELINE) },
             { id: "no-confirmation", subject: "confirm-dialog", predicate: "exists", value: false },
