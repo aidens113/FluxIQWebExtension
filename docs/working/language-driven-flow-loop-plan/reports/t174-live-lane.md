@@ -600,3 +600,9 @@ Checks for F29 and F30:
 | # | Run | Task | Cost (USD) | Tokens per call | Stage reached | Causes | Fixes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 40 | `run-muq6lqnw-fdfa7aac` | bigbox-retail-pickup-cart | 0.2077 (55 calls, recorded) | in 16.9k-35.6k (mean 30.0k), out about 98 | **4: a Flow was created and played back**; failed at s4 | The model kept "Set as my store" but not the chip press that opens the chooser. The build's test passed anyway: `verify.ts` read the hidden-in-closed-chooser button as gone and answered `present` (the store was already Millbrook). The completion check accepted a napkins act on a towels step and quantity via a repeated add. The playback repair was refused at its gate. Debug: `debugs/run-muq6lqnw-fdfa7aac.md` | routed: t196 / lane D (verify present-but-hidden; act-object binding; authoring), t193 (repair gate) |
+
+| # | Run | Task | Cost (USD) | Tokens per call | Stage reached | Causes | Fixes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 41 | `run-muq70foz-74caa189` | crossborder-marketplace-hub-to-cart | about 0.3232 from the dumps (116 calls: build 57, recovery 6, re-author 53); the ledger has no finish | in 7.5k-30.9k (build mean about 24.8k), out 80-86 | 4 and a re-author; **stopped by the supervisor** | The page view showed the search box only by its promo placeholder and printed no button lines, so 74 of 116 calls were `find_on_page`. The quantity box is named `"−"`. Chosen option chips carry no state. The re-author floundered from the home page. Lane A's F17 (the busy coupon) and F20 (the new tab) held live. Debug: `debugs/run-muq70foz-74caa189.md` | t229 (search identity, missing buttons, a line for every control); lane B (repeat guard on varied finds) |
+
+Lab runs paused for lane A by the supervisor (2026-10-02) until t229 lands. Do not edit `page-view/`, `kind.ts` or the extension capture meanwhile.
