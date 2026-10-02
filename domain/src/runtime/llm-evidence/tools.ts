@@ -64,7 +64,7 @@ import {
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "./denied-keys";
 import { WEB_LLM_OBSERVED_STATE_KEYS } from "./observed-state";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
-import { createWebNodeArrivals, createWebNodeShownAddresses, runWebOutputNode, webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_NAVIGATION_ACTION } from "./node-run";
+import { createWebNodeArrivals, createWebNodeShownAddresses, runWebOutputNode, webLlmCallWords, webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_NAVIGATION_ACTION, type WebLlmCallWords } from "./node-run";
 import {
   createWebLlmTargetPackets,
   resolveWebPlanNodeParameters,
@@ -194,6 +194,12 @@ export type WebAutomationLlmEvidenceRuntime = {
    * what leaves is a hash of less of it.
    */
   captureStateDigest(input: WebLlmStateDigestRequest): Promise<string | undefined>;
+  /**
+   * What a call names, in words a person reads, for the chat alone: the control
+   * its handle names on a page this build was shown, and the words it types or
+   * looks for, never into a control screened as sensitive (`./node-run/call-words.ts`).
+   */
+  describeCall(input: { projectId: string; flowId: string; toolId: string; value: JsonObject }): WebLlmCallWords | undefined;
   /**
    * That every result `executeTool` returns carries `stateDigests`, digested
    * from the captures the call already took, so Core never asks
@@ -325,6 +331,8 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
     // How Core reads a refusal without learning any of this domain's result
     // codes.
     classifyRefusal: webAutomationExplorationRefusalClassifier,
+    // The chat's words for each call: the control a handle names, and what is typed or looked for.
+    describeCall: (input) => webLlmCallWords(input, (scope, handle) => targetPackets.resolve(scope, handle, undefined)),
     // Detection alone. Everything else a build does is a node of the library,
     // which Core offers because Core is what enumerates the registry; this
     // domain says it can run one (`runsNodes`) and runs whichever the call

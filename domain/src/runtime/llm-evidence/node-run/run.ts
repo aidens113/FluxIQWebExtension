@@ -308,7 +308,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     if (current && covered) {
       run.shown(current);
       return refusal(current, covered.code, rejectionDetail({
-        reason: "covered_by_layer", target: covered.target, instead: covered.covers, missing: undefined, requestId: undefined
+        reason: "covered_by_layer", target: covered.target, instead: covered.covers, missing: undefined, requestId: undefined, closeWith: covered.closers
       }), record);
     }
     // No page, no control to have observed: the move that goes to the start

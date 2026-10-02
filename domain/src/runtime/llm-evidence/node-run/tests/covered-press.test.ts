@@ -47,7 +47,8 @@ function snapshot(layer: Layer): JsonObject {
   const layerElement: JsonObject = layer === "dialog"
     ? { tagName: "div", selector: cover, role: "dialog", accessibleName: "Choose a store" }
     : { tagName: "div", selector: cover, accessibleName: "Get $10 off your first pickup order" };
-  const popup: JsonObject[] = [layerElement, { tagName: "button", selector: `${cover} > button`, visibleText: "No thanks" }];
+  // The button's `parent` is the layer's index among the captured elements, as the capture writes it.
+  const popup: JsonObject[] = [layerElement, { tagName: "button", selector: `${cover} > button`, visibleText: "No thanks", parent: 0 }];
   const blocker: JsonObject = { selector: cover, label: layer === "dialog" ? "Choose a store" : "Get $10 off your first pickup order", blocks: 2, blocked: [storeButton, `${main} > main > a`] };
   // An overlap is a blocker the capture recognised no kind for.
   if (layer !== "overlap") blocker.kind = layer === "dialog" ? "consent" : "promotion";
@@ -79,8 +80,11 @@ test("a timed popup opens over the control: the press is refused before it is se
   assert.equal(refused.resultCode, "web.action.rejected.target_covered");
   assert.equal(refused.effectApplied, false);
   assert.deepEqual(page.clicks, [], "nothing was sent through the popup (C4)");
-  const evidence = refused.evidence as { detail: { reason: string; target: string; instead: string[] }; page: { schemaVersion: string; page: string } };
+  const evidence = refused.evidence as { detail: { reason: string; target: string; instead: string[]; closeWith?: string[]; next?: string }; page: { schemaVersion: string; page: string } };
   assert.equal(evidence.detail.reason, "covered_by_layer");
+  // What covers it, and how to clear it: the popup's own "No thanks", by handle, and to make the call again (crossborder run-muqc07fh-eeffbc86, 0018).
+  assert.deepEqual(evidence.detail.closeWith, [shownHandle(evidence, "No thanks")]);
+  assert.match(evidence.detail.next ?? "", /press one of closeWith to close it, then make this same call again, unchanged\.$/u);
   assert.equal(evidence.detail.target, storeButton, "the control kept its handle behind the popup (C1)");
   // The page comes back with the popup in it, and names it (C3, C9).
   assert.equal(evidence.page.schemaVersion, "web-llm-page.v3");

@@ -77,7 +77,7 @@
 import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebAutomationExtractListRequest } from "../../../actions/extraction";
-import { webAutomationActionWaitsOutChecks, webAutomationCheckWaitNode } from "../../../actions/check-wait";
+import { webAutomationCheckWaitNode, webAutomationCommandWaitsOutChecks } from "../../../actions/check-wait";
 import { webAutomationActionDefinitions } from "../../../actions/schemas";
 import type { WebAutomationActionType } from "../../../actions/types";
 import { webAutomationOutputNodeId, webAutomationUrlPath } from "../../../output-nodes";
@@ -510,7 +510,7 @@ function resolveRunOutput(parameters: JsonObject, scope: Scope, stores: WebPlanH
   // by itself, on this node's own timeout, exactly as a recorded one is
   // (`actions/check-wait.ts`): Core reads that timeout off this node, not off
   // the output's payload, and it is what bounds the command.
-  const checkWait = isWebOutputId(outputId) && runsWith !== undefined && webAutomationActionWaitsOutChecks(outputId)
+  const checkWait = isWebOutputId(outputId) && runsWith !== undefined && webAutomationCommandWaitsOutChecks(outputId, runsWith)
     ? webAutomationCheckWaitNode(outputId, { parameters: runsWith, timeoutMs: typeof parameters.timeoutMs === "number" ? parameters.timeoutMs : undefined })
     : undefined;
   const allowanceAdded = checkWait !== undefined && (checkWait.timeoutMs !== parameters.timeoutMs || checkWait.parameters.checkWaitMs !== runsWith?.checkWaitMs);

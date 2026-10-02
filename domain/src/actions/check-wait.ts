@@ -60,6 +60,20 @@ export function webAutomationActionWaitsOutChecks(outputId: string): boolean {
 }
 
 /**
+ * Whether this command is given the check allowance: a click or a navigation,
+ * and also typing that sends its form (`submit`) and a press of Enter, which
+ * land as a click does (`apps/extension/src/runtime/click-landing.ts`). t193's
+ * run 39 typed a bigbox search with `submit`, landed on the store's eight-second
+ * "Robot or human?" check, and was handed it standing. Typing that sends
+ * nothing, and any other key, keep the timeout they had.
+ */
+export function webAutomationCommandWaitsOutChecks(outputId: string, parameters: JsonObject): boolean {
+  if (webAutomationActionWaitsOutChecks(outputId)) return true;
+  if (outputId === "web.dom.type") return parameters.submit === true;
+  return outputId === "web.dom.keypress" && (parameters.key ?? parameters.text) === "Enter";
+}
+
+/**
  * The timeout a command had before the check allowance was added to it: what
  * every wait but the check's own is bounded by. `undefined` when the command
  * names no timeout.
@@ -85,7 +99,7 @@ export type WebAutomationCheckWaitNode = { parameters: JsonObject; timeoutMs?: n
  * (`nodes/policy/action.ts`). Any other node is returned as it is.
  */
 export function webAutomationCheckWaitNode(outputId: string, node: WebAutomationCheckWaitNode): WebAutomationCheckWaitNode {
-  if (!webAutomationActionWaitsOutChecks(outputId)) return node;
+  if (!webAutomationCommandWaitsOutChecks(outputId, node.parameters)) return node;
   const base = webAutomationBaseTimeoutMs({ timeoutMs: node.timeoutMs, checkWaitMs: numeric(node.parameters.checkWaitMs) }) ?? WEB_AUTOMATION_DEFAULT_ACTION_TIMEOUT_MS;
   return { parameters: { ...node.parameters, checkWaitMs: WEB_AUTOMATION_CHECK_WAIT_MS }, timeoutMs: base + WEB_AUTOMATION_CHECK_WAIT_MS };
 }
@@ -99,7 +113,7 @@ export function webAutomationCheckWaitNode(outputId: string, node: WebAutomation
  * are.
  */
 export function webAutomationCheckWaitParameters(outputId: string, parameters: JsonObject): JsonObject {
-  if (!webAutomationActionWaitsOutChecks(outputId)) return parameters;
+  if (!webAutomationCommandWaitsOutChecks(outputId, parameters)) return parameters;
   const base = webAutomationBaseTimeoutMs({ timeoutMs: numeric(parameters.timeoutMs), checkWaitMs: numeric(parameters.checkWaitMs) });
   return {
     ...parameters,

@@ -403,6 +403,16 @@ export type WebLlmToolRejectionDetail = {
    * with the right handle and the wrong node (`run-munnq7vz-98c3481c`).
    */
   useNode?: string;
+  /**
+   * On `covered_by_layer` only: the controls inside the first layer `instead`
+   * names that close it -- its "×", "No thanks", "Close" -- by handle, and the
+   * move in `next`. Handles and this domain's own words, never page text: the
+   * page the refusal carries shows each control's name. Crossborder's run
+   * `run-muqc07fh-eeffbc86` (step 0018) typed into a search field under a coupon
+   * popup, closed the popup, and never made the search again.
+   */
+  closeWith?: string[];
+  next?: string;
   /** Core's consequence classes this run does not hold. */
   missing?: string[];
   /** Core's id for the permission request now in front of the person. */
@@ -601,6 +611,7 @@ export function rejectionDetail(fields: {
   waitStoppedOn?: string | undefined;
   paginationStop?: string | undefined;
   repeatedAnswer?: number | undefined;
+  closeWith?: readonly string[] | undefined;
 }): WebLlmToolRejectionDetail {
   const reason = fields.reason === "parameters_not_resolved" && fields.instead !== undefined
     ? webLlmHandleRejectionReason(fields.instead)
@@ -614,6 +625,8 @@ export function rejectionDetail(fields: {
     // repeat of this refusal (`repeated-refusal.ts`), which passes `instead`
     // back through here, names the node again without knowing it exists.
     useNode: reason === "handle_wrong_kind_of_control" && fields.instead !== undefined ? webLlmHandleFittingNode(fields.instead) : undefined,
+    closeWith: fields.closeWith === undefined || fields.closeWith.length === 0 ? undefined : [...fields.closeWith],
+    next: reason === "covered_by_layer" ? (fields.closeWith?.length ? COVERED_NEXT_CLOSE : COVERED_NEXT) : undefined,
     missing: fields.missing === undefined ? undefined : [...fields.missing],
     requestId: fields.requestId,
     startLocation: fields.startLocation,
@@ -634,6 +647,11 @@ export function rejectionDetail(fields: {
     repeatedAnswer: wholeCount(fields.repeatedAnswer)
   });
 }
+
+/** What to do about a control a layer covers, when the layer's own close control is known (`closeWith`). */
+const COVERED_NEXT_CLOSE = "Nothing was done. The layer in instead covers the target: press one of closeWith to close it, then make this same call again, unchanged.";
+/** The same, when no control of the layer reads as closing it. */
+const COVERED_NEXT = "Nothing was done. The layer in instead covers the target: close or answer it with one of its own controls on the page, then make this same call again, unchanged.";
 
 /** A count fit to put on the wire, or nothing. */
 function wholeCount(value: number | undefined): number | undefined {
