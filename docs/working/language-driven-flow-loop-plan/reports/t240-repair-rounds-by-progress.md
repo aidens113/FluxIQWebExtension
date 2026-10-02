@@ -159,3 +159,85 @@ All of these are under `R/flow-bootstrap/unfinished-build/` unless a path says o
 5. **"More working steps" counts as progress only where neither round was judged.** It is the test's report, but it
    lets a judge-less build that adds working navigation steps continue until money or the 6-round backstop stops it.
    Say if you want it dropped.
+
+## Follow-up (coordinator, after commit 7c108850): Open questions 1 and 3
+
+Done in the same tree, on Core HEAD `4e695f10` (dev merged in). Nothing committed. Q4 and Q5 are unchanged, as
+instructed.
+
+### Q1: round-0 `seedSignature` wired from `R/service.ts`
+
+- **The call.** `R/service.ts`, the `runAutomationStudioFlowBootstrapBuildPhases({...})` call (about line 1618),
+  now passes `seedSignature: automationStudioFlowDraftReplaySignature(seed)`. `seed` is
+  `extend ? extend.seed.steps : keeper.draft?.seed`, the same Flow round 0's `draft` is seeded from at line 1589.
+  It is passed only when non-empty.
+- **Imports.** `automationStudioFlowDraftReplaySignature` was added to the existing `./flow-draft/index.ts` import.
+- **Line budget.** The wiring sits on the existing `judge: ...` line, with a trailing comment. `service.ts` is held
+  to its 4,489-line baseline: my first version added 2 lines and the audit failed with "4491 lines exceeds ...
+  Baseline for this entry is 4489". The diff is now `2 2` (net zero), and the audit passes.
+- **Test.** `R/tests/service-bootstrap/tests/unfinished-build.test.ts` gains "a continuation whose first round ends on
+  repeats with the kept draft unchanged":
+  - It goes through the real `generateFlowBootstrapAdaptation`.
+  - Build 1 adds steps until its 12 declared calls run out; its draft is kept.
+  - Build 2 presses again and again to no effect, adding nothing, until the loop's no-progress guard ends round 0 on
+    `repeat_without_progress`.
+  - It expects `flow_bootstrap.not_doable`, `tried.rounds: 1`, and the C8 sentence.
+  - Failing-first: with `service.ts` restored from `HEAD` it fails on `tried.rounds`. The second round opened, and the
+    repair-round C8 case only caught it after that. With the wiring it passes.
+
+### Q3: the judge returns record counts; progress counts them
+
+- **`R/result-verification/build-test/judge.ts`.**
+  - New type `AutomationStudioBuildTestRecordCounts { stored, refused, missingRequired }`.
+  - The `no` variant of `AutomationStudioBuildTestVerdict` gains a required `records`, read from the judged summary's
+    `totalRecordCount`, `totalRefusedCount` and `totalRowsMissingRequired`.
+  - The verdict type lives in `judge.ts`, so `result-verification/contracts.ts` and `read-account/**` are untouched.
+  - `service/flow-bootstrap-commands/build-judge.ts` passes the verdict through unchanged, so no edit was needed there.
+- **`unfinished-build/contracts.ts`.**
+  - New type `AutomationStudioFlowBootstrapJudgedRecords`.
+  - Optional `records` on the build's `no` verdict and on `AutomationStudioFlowBootstrapJudgedWrong`.
+  - Three new progress measures.
+- **`unfinished-build/judgement.ts`.** `judgedWrong` copies `records` into the judgement. It is not added to the
+  repair's resume value, so the prompt is unchanged.
+- **`unfinished-build/progress.ts`.** When both judgements are `no` and both carry counts, each of these is progress:
+  - `records_stored`: rows stored where none were;
+  - `fewer_records_refused`: fewer refused, with no fewer stored;
+  - `fewer_records_missing_required`: fewer missing a required value, with no fewer stored.
+
+  "No fewer stored" keeps a Flow that stopped reading from counting as fewer refusals.
+- **Tests (failing-first).**
+  - `build-test/tests/judge.test.ts`: "carries the summary's stored, refused and missing-required counts on a no".
+  - `unfinished-build/tests/repair-rounds.test.ts`, describe "a repair judged wrong for the same findings, measured by
+    what its test stored":
+    - three cases that repair again (fewer refused, fewer missing-required, stored where none were);
+    - one control: fewer refused only because fewer were stored ends `not_doable`.
+  - With `progress.ts`, `judgement.ts` and `judge.ts` restored from `HEAD`: `Tests 4 failed | 25 passed (29)`. The
+    failures were the three progress cases plus the judge test; the control passed. With the changes: `29 passed`.
+- **Docs.** `docs/architecture/automation-studio/llm-flow-bootstrap.md`: the progress bullet names the record
+  counts, and the C8 sentence says `service.ts` passes `seedSignature`.
+
+### Commands run and observed results (follow-up)
+
+- **Tests beside every changed file.**
+  - Command: `bash .../heavy.sh "t240-tests2" npx vitest run` over `unfinished-build/tests`,
+    `result-verification/build-test/tests`, and the service-bootstrap tests `unfinished-build`, `judged-build`,
+    `incomplete-draft` and `extend`.
+  - Result: `Test Files 16 passed (16)`, `Tests 124 passed (124)`.
+  - After the one-line fold in `service.ts`: `service-bootstrap/tests/unfinished-build.test.ts` -> `Tests 5 passed (5)`.
+- **Package check.** `pnpm --filter fluxiq check` (through heavy.sh) -> `check exit 0`, both before and after the
+  fold.
+- **Structure audit.** `node scripts/structure-audit.mjs`:
+  - first run: `1 violation(s)`, the `service.ts` line baseline above;
+  - after the fold: `structure-audit: passed (218 warning(s), 349 baselined)`.
+- **Framework reference.** `node scripts/docs-reference.mjs` -> `Wrote docs/reference/framework-reference.md and
+  packages/fluxiq/docs/reference/framework-reference.md (2972 public declarations)`. That adds the two new record
+  types; the other changed rows are line-number shifts.
+
+### Not verified (follow-up)
+
+- No live run. Production C8 still depends on two things I have not checked:
+  - whether the loop hands back seeded steps with the same `actionId` and `ranWith`, so that the signatures compare
+    equal; the service test shows they do for a kept continuation draft;
+  - whether that holds for an extend seed, which is untested at the service level.
+- The repair model is not told the record counts. Whether it should be is a prompt decision I left alone.
+
