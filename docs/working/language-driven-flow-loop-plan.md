@@ -604,6 +604,22 @@ message per fix. Update your lane report as well as your own. Core paths below a
   `pnpm --filter fluxiq check` pass; Core structure audit passes.
 - Report to: `reports/t239-judge-reply-cap.md` in `fxwork/t239/!FluxIQWebExtension`
 
+#### Brief: t240-repair-rounds-by-progress (`worker-high`)
+- Repository: both, tree `fxwork/t240` (task t240, Core-paired)
+- Task: a build's repair rounds are bounded by money and progress, not a count. Supervisor decision (2026-10-02):
+  `AUTOMATION_STUDIO_FLOW_BOOTSTRAP_MAX_REPAIR_ROUNDS = 2` stopped earbuds run `run-muqiho7e-13be6c03` while it was
+  still converging. A repair round opens only when (a) the creation purse can fund one decision plus one judge call at
+  their capped holds (run 38's C7, second half) and (b) the round before it progressed, measured from what the judge
+  and the test already report (for example fewer missing or extra records, a refuted condition now held); a round
+  with no measurable progress ends the build with that reason. Keep `AUTOMATION_STUDIO_FLOW_BOOTSTRAP_MAX_ROUNDS` as
+  the record reader's hard bound.
+- Required reads: `R/flow-bootstrap/unfinished-build/phases.ts`; C7 in the run-38 debug (as t239's brief).
+- Owns: Core `R/flow-bootstrap/unfinished-build/**` and its tests, `R/tests/service-bootstrap/tests/unfinished-build.test.ts`.
+- Must not touch: `R/recovery/**`, `R/flow-draft/**`, `R/llm/evidence-loop*.ts`, `R/result-verification/**`.
+- Done: failing-first tests for each rule (no fund, no progress, progress continues); narrow checks; architecture doc
+  `docs/architecture/automation-studio/llm-flow-bootstrap.md` states the rule.
+- Report to: `reports/t240-repair-rounds-by-progress.md` in `fxwork/t240/!FluxIQWebExtension`
+
 ---
 
 ## Work Ledger
