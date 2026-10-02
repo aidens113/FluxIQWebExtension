@@ -32,6 +32,17 @@ test("constructs isolated scenario and FluxIQ environments", () => {
   assert.equal(buildFluxIQEnvironment(allocation, { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core" }, { FLUXIQ_BUILD_PROGRESS_TRACE: "0" }).FLUXIQ_BUILD_PROGRESS_TRACE, "0");
 });
 
+test("gives Core a step log folder only when the run has one, never an inherited one", () => {
+  const paths = { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core" };
+  const steps = path.resolve("lab-runs/2026-10-01/run-a/steps");
+  assert.equal(buildFluxIQEnvironment(allocation, { ...paths, stepLogDirectory: steps }, {}).FLUXIQ_LLM_STEP_LOG_DIR, steps);
+  assert.equal("FLUXIQ_LLM_STEP_LOG_DIR" in buildFluxIQEnvironment(allocation, paths, {}), false, "absent, not set");
+  const inherited = { FLUXIQ_LLM_STEP_LOG_DIR: "C:/somewhere-else", INHERITED: "yes" };
+  assert.equal("FLUXIQ_LLM_STEP_LOG_DIR" in buildFluxIQEnvironment(allocation, paths, inherited), false, "a launcher's value does not reach a run given none");
+  assert.equal(buildFluxIQEnvironment(allocation, { ...paths, stepLogDirectory: steps }, inherited).FLUXIQ_LLM_STEP_LOG_DIR, steps);
+  assert.equal(buildFluxIQEnvironment(allocation, paths, inherited).INHERITED, "yes");
+});
+
 test("removes provider credentials case-insensitively without mutating the driver environment", () => {
   const source: NodeJS.ProcessEnv = { SAFE_VALUE: "retained", DEEPSEEK_API_KEY: "deepseek-fixture", openai_api_key: "openai-fixture" };
   const sanitized = withoutProviderSecrets(source);
