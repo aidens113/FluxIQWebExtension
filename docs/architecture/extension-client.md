@@ -443,8 +443,12 @@ and hides nothing the person needs, and ordinary links and buttons only break
 ties. Corners are tried bottom-left, top-left, bottom-right, top-right (the
 side panel covers the right of the Lab's emulated viewport without narrowing
 it, t191 round 1), and a corner the overlay holds is kept while it stays
-clear. When every corner is busy it shrinks to a 30-pixel dot, carrying only
-the mark, at whichever corner or side midpoint covers least. `PlacementKeeper`
+clear. When every corner is busy it stays a pill with its words, at the
+corner or side midpoint, full width or narrower (288 or 224 px), that covers
+the fewest fixed points, keeping the place it holds on a tie; it never becomes
+a text-less dot, because a status the person cannot read is no status (a feed
+with a sticky header and fixed bottom bars made the dot the common case, t195
+`run-murdouox-c5294247`, U3). A long line ends in an ellipsis. `PlacementKeeper`
 re-checks on resize, scroll and page DOM changes (its own UI's mutations are
 skipped), at most once per 800 ms; a check only reads, and the host moves --
 one write -- only when the answer changes. A page whose banner lives in a
@@ -456,8 +460,13 @@ reach the page. Its `data-fluxiq-activity` marker keeps it out of the recorder,
 DOM snapshots, evidence blockers and the interference checks
 (`isExtensionUiNode`). Only "done" fades, after `ACTIVITY_DONE_VISIBLE_MS`
 (6 s): a failure stays until new work starts or the person hides the overlay,
-and waiting for the person never fades. That fade is the only timer and it
-changes nothing but the display.
+and waiting for the person never fades. A second timer keeps the words
+readable: different words replace the ones up only once those have been up
+for `STATUS_DWELL_MS` (1.6 s, `status-dwell.ts`), so any three seconds show at
+most two changes of words, the bound the Lab's UI review reads as stable; the
+newest waiting status wins, the last is always drawn, and a take-down or a
+change of mode alone applies at once. Both timers change nothing but the
+display.
 
 Measured in a headed Chromium on company-website (t191-overlay2 probe, fake
 gateway, no Core): after the automation navigated, the new document's overlay

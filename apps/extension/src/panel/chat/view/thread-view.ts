@@ -82,5 +82,5 @@ export function createThreadView(onLiveAction: () => void = () => undefined): Th
 // A turn looks the same while what Core said in it, its question, and the
 // state of its answer do; a re-read that parsed a new but equal object keeps it.
 function signature(turn: CoreTurn, state: string): string {
-  return [turn.text, JSON.stringify(turn.ask), turn.attachment ? "1" : "0", state].join("\u0000");
+  return [turn.text, JSON.stringify(turn.ask), state].join("\u0000");
 }

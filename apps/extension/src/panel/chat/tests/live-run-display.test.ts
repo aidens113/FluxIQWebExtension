@@ -94,7 +94,8 @@ function failedBuild(conversationId: string | undefined): unknown[] {
 }
 
 test("U-B2: a chat-started build's stop is said once, by the chat's answer, and a build started elsewhere still says it", async () => {
-  const answer = `"Create an automation here" stopped because the build could not finish. ${ENDING} Before that I created the Flow and saved what it should do.`;
+  // Core's answer opens with the build's own ending, said once (`conversations/commands/progress.ts`).
+  const answer = `${ENDING} What is left: the Flow "Find the kettles", empty, with what you asked saved on it, so it can be built again.`;
   const thread = () => targetCore([{ conversationId: "conv-latest", subjectKind: "project", subjectId: "project-1", turns: [
     { turnId: "t1", author: "person", text: ASKED, createdAt: second(0) },
     { turnId: "t2", author: "automation", text: "Doing \"Create an automation here\".", createdAt: second(0) },

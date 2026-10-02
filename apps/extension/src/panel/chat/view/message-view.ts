@@ -2,8 +2,13 @@
 //
 //   the person    a bubble on the right, their words as typed
 //   FluxIQ        full width on the left, no bubble: its words formatted
-//                 (`parseAssistantText`), a note for an attachment only
-//                 FluxIQ can show, and a question's answer controls
+//                 (`parseAssistantText`) and a question's answer controls
+//
+// A turn's attachment is not shown. Every one Core writes is its own record of
+// a command it ran or will run, which the turn's words already say -- Core's
+// panel draws none -- and the line that stood for it, "FluxIQ attached
+// something you can see in FluxIQ. Open FluxIQ", named nothing (t195,
+// `run-murdouox-c5294247`, 09-failure-panel).
 //
 // The work that led to an answer is not folded into it: each step is its own
 // message before it (`step-message-view.ts`).
@@ -38,7 +43,6 @@ export function createMessageView(author: string): MessageView {
       const parts: HTMLElement[] = person
         ? [createElement("p", { className: "chat-bubble-text", text: turn.text })]
         : renderTextBlocks(parseAssistantText(turn.text));
-      if (turn.attachment) parts.push(createElement("p", { className: "chat-note" }, ["FluxIQ attached something you can see in FluxIQ. ", ask.openFluxIQ()]));
       if (turn.ask !== null) parts.push(askControls(turn.ask, ask));
       placeChildren(content, parts);
     }
