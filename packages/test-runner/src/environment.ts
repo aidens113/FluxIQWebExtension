@@ -28,6 +28,13 @@ export type TopologyPaths = {
   repositoryRoot: string;
   fluxiqRepositoryRoot: string;
   hostModulePath?: string;
+  /**
+   * Where Core writes one folder per model and tool step of the run, as
+   * `FLUXIQ_LLM_STEP_LOG_DIR` (`runtime/llm/step-log/` in Core). A live LLM run
+   * gives its central `lab-runs/<date>/<runId>/steps/` (`lab-runs/`); any other
+   * run gives none, and Core logs no steps.
+   */
+  stepLogDirectory?: string;
 };
 
 export function buildScenarioEnvironment(allocation: RunAllocation, seed: number, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
@@ -63,16 +70,23 @@ export function webPanelHostModulePath(repositoryRoot: string): string {
  * only when whoever launched the Lab exported it, so the first chat-driven live
  * runs (t227, 2026-10-01) left a `core.log` of six lines and could not be
  * debugged.
+ *
+ * `FLUXIQ_LLM_STEP_LOG_DIR` is set from `paths.stepLogDirectory` and from
+ * nothing else: a value inherited from whoever launched the Lab is dropped, so
+ * a run that was given no folder logs no steps, and four lanes never write
+ * their steps into one folder.
  */
 export function buildFluxIQEnvironment(allocation: RunAllocation, paths: TopologyPaths, base: NodeJS.ProcessEnv = process.env, args: readonly string[] = process.argv): NodeJS.ProcessEnv {
   const hostModulePath = paths.hostModulePath ?? webPanelHostModulePath(paths.repositoryRoot);
   // The per-build cost ceiling, from the run's flag, the environment or .env.local (`./live-llm/cost-ceiling-env.ts`);
   // the Lab's plan reads the same sources (`liveLlmBuildCostCeilingUsd`), so Core and the Lab hold a build to one number.
   const costCeiling = labCostCeilingValue(paths.repositoryRoot, args, base);
+  const { FLUXIQ_LLM_STEP_LOG_DIR: _inheritedStepLogDirectory, ...inherited } = withoutProviderSecrets(base);
   return {
     FLUXIQ_BUILD_PROGRESS_TRACE: "1",
-    ...withoutProviderSecrets(base),
+    ...inherited,
     ...(costCeiling === undefined ? {} : { [LAB_COST_CEILING_ENV]: costCeiling }),
+    ...(paths.stepLogDirectory ? { FLUXIQ_LLM_STEP_LOG_DIR: paths.stepLogDirectory } : {}),
     PORT: String(allocation.webPort),
     FLUXIQ_ROOT: allocation.fluxiqRoot,
     FLUXIQ_IMPORTER_ROOT: allocation.fluxiqRoot,

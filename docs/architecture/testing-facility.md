@@ -2726,3 +2726,87 @@ and the files in the same order and resolves the value through Core's own
 `resolveAutomationStudioLlmRunCostCeilingUsd`, so a value Core would refuse at
 start is refused by the Lab too. The Lab's tests derive every amount from that
 value (`live-llm/tests/lab-ceiling.ts`) rather than from a written number.
+
+## Per-step logs and the central run folder
+
+Every live LLM run (`lab run --live-llm`) is filed in one machine-wide folder,
+`~/FluxStuff/lab-runs/` (`C:/Users/osrs_/FluxStuff/lab-runs/` here), shared by
+every checkout, worktree and lane. `FLUXIQ_LAB_RUNS_DIR` moves it when set to
+an absolute path; tests use that. Runs without `--live-llm` are not filed and
+log no steps. The code is `packages/test-runner/src/lab-runs/`, wired into
+`run-scenario.ts`.
+
+```text
+lab-runs/
+  index.md                      one row per run, newest first
+  <YYYY-MM-DD>/<runId>/         the local date the run started
+    entry.json                  runId, startedAt, pid, lane, instance, task, scenarioId,
+                                verdict, bundlePath, repositoryRoot; at the end costUsd,
+                                finishedAt, steps
+    steps/                      written by Core as the run goes (FLUXIQ_LLM_STEP_LOG_DIR)
+      index.md                  Core's one line per step
+      NNNN-<kind>/              a model step: decide, judge, repair, chat, ...
+      NNNN-tool-<toolId>/       a tool call in the build loop
+      NNNN-test-<toolId>/       a test replay of the build
+        meta.json               written last: a folder holding it is complete
+        screenshot.jpg|png      the Lab's picture of the browser after the step,
+        screenshot.skipped.txt  or why there is none
+    summary.json  run.json  evaluation.json  report.html  review/  screenshots/
+    snapshots/live-llm.json  snapshots/flow-lane.json  logs/core.log
+    provider-failures.local.json
+```
+
+How a run fills it:
+
+1. Before Core starts, the Lab creates the folder and `steps/`, writes
+   `entry.json` with `verdict: "running"` and its own pid, and rebuilds the
+   index. Core's environment gets `FLUXIQ_LLM_STEP_LOG_DIR=<folder>/steps`, so
+   Core writes every step there from its first call and a run killed halfway
+   still leaves them. A non-live run's Core gets no such variable, and a value
+   inherited from the launcher's environment is dropped, so lanes never share a
+   step folder.
+2. Once the browser is up, the Lab looks at `steps/` every second. A complete
+   `tool-` or `test-` folder that is still the newest page step gets a picture,
+   taken by the run's own screenshot adapter (the native window capture, which
+   moves no focus, falling back to the front scenario tab), one capture at a
+   time and at most 5 s each. The file's extension is the image's real format.
+   A picture shows the page as it is when taken. So a step that the next page
+   step had already acted after gets `screenshot.skipped.txt` naming that step,
+   not a picture of the later page; this is common for a test's quick replays.
+   The same holds for a picture taken while the next page step started. The
+   model's own folders between two page steps do not count, since a decision
+   leaves the page as it was. A capture that fails, finds nothing or runs late
+   also writes `screenshot.skipped.txt` with the reason. The watcher stops
+   before the browser closes: a step finished since its last look is
+   photographed within 5 s, and any left are marked skipped.
+3. After the bundle is finalized, beside the local sidecars, the bundle gets
+   `steps` as a directory junction to the central `steps/`. The steps exist
+   once on disk, which matters because one decision request can be 1.4 MB.
+   Deleting a bundle with `fs.rm` or `Remove-Item -Recurse` removes the
+   junction and keeps the steps. The key files listed above are copied into
+   the central folder, and only those. Nothing in the central folder links
+   back to the bundle; `entry.json` holds its path as text. `entry.json` then
+   gets the verdict, `costUsd` (`snapshots/live-llm.json`
+   `observed.totalEstimatedCostUsd`, the figure the spend ledger records),
+   `finishedAt` and the step count, and the index is rebuilt.
+
+`index.md` is rebuilt from every `*/*/entry.json` each time a run starts or
+ends. Its columns are Started (local date and time), Lane
+(`FLUXIQ_LAB_LANE`, else `FLUXIQ_LAB_INSTANCE`, else `default`), Task (as the
+spend ledger names it, `<scenario>/<task>[/workflow=..][/variant=..]`),
+Verdict, Cost, Steps (the step folders there now) and a relative link to the
+folder. A run still `running` whose process no longer exists reads
+`unfinished`. Four lanes start and end runs at once, so the rebuild holds a
+`mkdir` lock, `<root>/.index.lock`, which is taken over after 30 s and
+abandoned after 15 s of waiting, when the write goes ahead without it. The
+file is replaced by writing a temporary file and renaming it.
+
+All of this is best-effort. A failure is written to stderr with the folder it
+concerns and never changes a run's verdict. A run that could not open its
+folder runs exactly as before, and its Core logs no steps. A run whose
+publication throws still has its entry closed as `failed`. No token, password
+or key is written: `entry.json` holds names, paths, times and figures, and
+the copied files are the ones the bundle's redaction attestation already
+covers, plus the provider-failure sidecar, which is redacted as it is written.
+What Core writes into `steps/` is Core's responsibility. It logs no header and
+screens every text it writes for credential shapes.
