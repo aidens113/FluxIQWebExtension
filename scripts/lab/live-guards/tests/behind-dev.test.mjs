@@ -120,3 +120,33 @@ test("a repository with no local dev branch, or no checkout at all, is refused w
     await lab.cleanup();
   }
 });
+
+test("a checkout that lacks only documentation commits is admitted; one more code commit refuses it", async () => {
+  const lab = await fixture();
+  try {
+    await repository(lab.web);
+    const coreDev = await repository(lab.core);
+    git(lab.core, "checkout", "--quiet", "--detach", coreDev);
+    git(lab.web, "checkout", "--quiet", "-b", "task/t999-lane");
+    git(lab.web, "checkout", "--quiet", "dev");
+    await mkdir(path.join(lab.web, "docs", "working"), { recursive: true });
+    await writeFile(path.join(lab.web, "docs", "working", "plan.md"), "Current State\n");
+    await writeFile(path.join(lab.web, "NOTES.md"), "notes\n");
+    git(lab.web, "add", "-A");
+    git(lab.web, "commit", "--quiet", "-m", "docs only");
+    git(lab.web, "checkout", "--quiet", "task/t999-lane");
+    assert.deepEqual(rules(await lab.admit()), []);
+    const ancestry = await readDevAncestry(lab.web);
+    assert.deepEqual([ancestry.contains, ancestry.docsOnly, ancestry.lacking], [false, true, 1]);
+
+    git(lab.web, "checkout", "--quiet", "dev");
+    await mkdir(path.join(lab.web, "src"), { recursive: true });
+    await writeFile(path.join(lab.web, "src", "run.ts"), "export {};\n");
+    git(lab.web, "add", "-A");
+    git(lab.web, "commit", "--quiet", "-m", "code");
+    git(lab.web, "checkout", "--quiet", "task/t999-lane");
+    assert.deepEqual(rules(await lab.admit()), ["behind-dev"]);
+  } finally {
+    await lab.cleanup();
+  }
+});

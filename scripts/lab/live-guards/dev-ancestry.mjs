@@ -20,6 +20,7 @@ import { runGit } from "../../worktree/index.mjs";
  *   dev: string | null,
  *   contains: boolean,
  *   lacking: number | null,
+ *   docsOnly: boolean,
  *   error: string | null,
  * }} DevAncestry
  */
@@ -40,10 +41,26 @@ export async function readDevAncestry(root) {
       throw error;
     });
     const lacking = contains ? 0 : Number(await runGit(root, ["rev-list", "--count", `${head}..${dev}`]));
-    return { root, head, dev, contains, lacking, error: null };
+    // What dev changed since this checkout last took it in. When every changed
+    // file is documentation (`docs/` or Markdown) the run tests the same code
+    // dev has, so the gap is no reason to refuse: the Lab's source fingerprint
+    // leaves the same files out. A gap that changes no file at all still counts.
+    const changed = contains ? [] : await changedSince(root, head, dev);
+    const docsOnly = changed.length > 0 && changed.every(isDocumentation);
+    return { root, head, dev, contains, lacking, docsOnly, error: null };
   } catch (error) {
-    return { root, head: null, dev: null, contains: false, lacking: null, error: error instanceof Error ? error.message : String(error) };
+    return { root, head: null, dev: null, contains: false, lacking: null, docsOnly: false, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+/** The files `dev` changed since its merge base with `head`. */
+async function changedSince(root, head, dev) {
+  const base = (await runGit(root, ["merge-base", head, dev])).trim();
+  return (await runGit(root, ["diff", "--name-only", base, dev])).split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
+}
+
+function isDocumentation(file) {
+  return file.startsWith("docs/") || file.endsWith(".md");
 }
 
 function exitedWith(error, code) {
