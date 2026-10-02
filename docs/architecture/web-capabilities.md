@@ -173,7 +173,11 @@ Pagination is checkpointed across a full-document navigation. The continuation
 reattaches in the replacement document with its earlier records and counters,
 waits for that document's list, and de-duplicates rows repeated across pages.
 This is the same read resumed, not a second action whose earlier answer was
-lost.
+lost. A `next` or numbered read counts the kept rows it leaves out as identical
+to an earlier page's row (`earlierPageRepeats` in the extraction summary,
+summed across documents in the checkpoint, `content/extraction/continued-read/`),
+so Core's read account tells the judges the read already drops such repeats
+instead of "it does not deduplicate" (live run `run-muqk713g`, cause C4).
 
 ## Actions Outside The 24
 
