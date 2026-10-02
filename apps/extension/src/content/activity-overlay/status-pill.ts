@@ -25,11 +25,17 @@
 // - **It is not a page change.** The host carries `data-fluxiq-activity`
 //   (`../picker-host.ts`), which the recorder, the snapshot, the evidence
 //   pass and the interference checks all skip.
-// - **It covers nothing the person needs.** It sits in a corner where no fixed
-//   part of the page is -- no cookie banner, chat widget, sticky bar or dialog
-//   -- and when every corner has one it shrinks to a dot where it covers
-//   least (`placement/`). It moves as the page changes, at most once per check
-//   interval, and stays put while its corner is clear.
+// - **It covers as little as it can, and always says what FluxIQ is doing.**
+//   It sits in a corner where no fixed part of the page is -- no cookie
+//   banner, chat widget, sticky bar or dialog -- and when every corner has one
+//   it takes the least-busy place on the viewport's edge, narrower if that
+//   covers less, its lines kept and ending in an ellipsis when they do not
+//   fit (`placement/`). It is never a text-less dot: the person reads the
+//   status on the page whenever FluxIQ works, side panel open or not (U3 of
+//   lane D's run-murdouox-c5294247 UI review). Sitting over a control changes
+//   nothing an action or the page view sees (the first and third points
+//   above; `tests/cover-detection.test.ts`). It moves as the page changes, at
+//   most once per check interval, and stays put while its place is the best.
 //
 // **Legibility** (the supervisor's review #8): a 14-pixel headline and a
 // 13-pixel detail, near-white on a near-black card of its own, so it reads the
@@ -48,6 +54,9 @@ import { inertElement } from "./inert-element";
 import type { ActivityOverlayView } from "./overlay-view";
 import { PhaseMark } from "./phase-mark";
 import { anchorStyle, PlacementKeeper, type OverlayPlacement } from "./placement";
+
+type Mode = ActivityOverlayView["mode"];
+type Width = OverlayPlacement["shape"];
 
 /** A custom element name: no page rule is written against it, and it may host a shadow root. */
 const HOST_TAG = "fluxiq-activity-overlay";
@@ -68,22 +77,23 @@ const SECONDARY = "#d8dde6";
 const MARK_SIZE = 14;
 const MARK_GAP = 10;
 const EDGE_MARGIN = 16;
-const DOT_SIZE = 30;
 
-/** What the overlay is drawn as: the full card, the one-line pill, or the dot a busy page leaves room for. */
-type Shape = ActivityOverlayView["mode"] | "dot";
-
-const SHAPE_SIZE: Readonly<Record<Shape, { readonly width: number; readonly height: number }>> = Object.freeze({
-  expanded: { width: 384, height: 66 },
-  collapsed: { width: 300, height: 36 },
-  dot: { width: DOT_SIZE, height: DOT_SIZE }
+/**
+ * Each mode's fixed box, full and narrow, so nothing the text does can move or
+ * resize the pill. The narrow box is for a page with no clear corner: the
+ * expanded card's still holds "Building your Flow" beside "Step 2 of 5" and
+ * about thirty characters of the detail line; the collapsed pill's, the
+ * headline.
+ */
+const SHAPE_SIZE: Readonly<Record<Mode, Readonly<Record<Width, { readonly width: number; readonly height: number }>>>> = Object.freeze({
+  expanded: { pill: { width: 384, height: 66 }, narrow: { width: 288, height: 66 } },
+  collapsed: { pill: { width: 300, height: 36 }, narrow: { width: 224, height: 36 } }
 });
 
-/** Each shape's fixed box, so nothing the text does can move the pill. */
-const SHAPE_BOX: Readonly<Record<Shape, Readonly<Record<string, string>>>> = Object.freeze({
-  expanded: { padding: "11px 16px 11px 14px", "border-radius": "14px", "align-items": "stretch" },
-  collapsed: { padding: "0 16px 0 13px", "border-radius": "999px", "align-items": "stretch" },
-  dot: { padding: "0", "border-radius": "999px", "align-items": "center" }
+/** Each mode's padding and corners. */
+const SHAPE_BOX: Readonly<Record<Mode, Readonly<Record<string, string>>>> = Object.freeze({
+  expanded: { padding: "11px 16px 11px 14px", "border-radius": "14px" },
+  collapsed: { padding: "0 16px 0 13px", "border-radius": "999px" }
 });
 
 type Nodes = {
@@ -99,11 +109,11 @@ type Nodes = {
 export class StatusPill {
   private nodes: Nodes | undefined;
   private shown: ActivityOverlayView | undefined;
-  private drawnShape: Shape | undefined;
+  private drawnShape: string | undefined;
   private fadeTimer: ReturnType<typeof setTimeout> | undefined;
   private fading: Animation | undefined;
   private readonly keeper = new PlacementKeeper({
-    sizes: () => ({ box: SHAPE_SIZE[this.shown?.mode ?? "expanded"], dot: DOT_SIZE, margin: EDGE_MARGIN }),
+    sizes: () => ({ box: SHAPE_SIZE[this.mode()].pill, narrow: SHAPE_SIZE[this.mode()].narrow, margin: EDGE_MARGIN }),
     place: (placement) => this.place(placement)
   });
 
@@ -122,13 +132,18 @@ export class StatusPill {
     const before = this.shown;
     this.shown = view;
     const nodes = this.ensureNodes();
-    if (before && before.mode !== view.mode) this.keeper.recheck();
+    if (before && before.mode !== view.mode) {
+      this.keeper.recheck();
+      // A side midpoint is centred by the box's height, which the mode sets,
+      // and the keeper only moves the host when the place itself changed.
+      this.place(this.keeper.placement());
+    }
     this.drawShape(nodes);
     nodes.mark.show(view.mark, view.accent);
     setText(nodes.headline, view.headline);
     setText(nodes.step, view.step);
     this.showTexts(nodes);
-    if (setText(nodes.detail, view.detail) && before?.detail && this.shape() === "expanded" && typeof nodes.detail.animate === "function") {
+    if (setText(nodes.detail, view.detail) && before?.detail && view.mode === "expanded" && typeof nodes.detail.animate === "function") {
       nodes.detail.animate([{ opacity: 0.25 }, { opacity: 1 }], { duration: DETAIL_FADE_MS, easing: "ease-out" });
     }
     if (view.fades) this.fadeTimer = setTimeout(() => this.fadeOut(), ACTIVITY_DONE_VISIBLE_MS);
@@ -148,41 +163,38 @@ export class StatusPill {
     return this.nodes;
   }
 
-  /** The keeper moved the overlay: pin the host there and redraw its shape. */
+  /** The keeper moved the overlay: pin the host there and redraw its box. */
   private place(placement: OverlayPlacement): void {
     const nodes = this.nodes;
     if (!nodes) return;
-    const size = SHAPE_SIZE[placement.shape === "dot" ? "dot" : this.shown?.mode ?? "expanded"];
+    const size = SHAPE_SIZE[this.mode()][placement.shape];
     for (const [property, value] of Object.entries(anchorStyle(placement.anchor, EDGE_MARGIN, size.height))) nodes.host.style.setProperty(property, value, "important");
-    if (this.shown) {
-      this.drawShape(nodes);
-      this.showTexts(nodes);
-    }
+    if (this.shown) this.drawShape(nodes);
   }
 
-  private shape(): Shape {
-    return this.keeper.placement().shape === "dot" ? "dot" : this.shown?.mode ?? "expanded";
+  private mode(): Mode {
+    return this.shown?.mode ?? "expanded";
   }
 
+  /** Sizes the pill for its mode and the width its place leaves; the lines inside are the same at either width. */
   private drawShape(nodes: Nodes): void {
-    const shape = this.shape();
+    const mode = this.mode();
+    const width = this.keeper.placement().shape;
+    const shape = `${mode}:${width}`;
     if (shape === this.drawnShape) return;
     this.drawnShape = shape;
-    const size = SHAPE_SIZE[shape];
-    for (const [property, value] of Object.entries({ ...SHAPE_BOX[shape], width: `${size.width}px`, height: `${size.height}px` })) {
+    const size = SHAPE_SIZE[mode][width];
+    for (const [property, value] of Object.entries({ ...SHAPE_BOX[mode], width: `${size.width}px`, height: `${size.height}px` })) {
       nodes.surface.style.setProperty(property, value, "important");
     }
-    nodes.top.style.setProperty("justify-content", shape === "dot" ? "center" : "flex-start", "important");
-    nodes.top.style.setProperty("gap", shape === "dot" ? "0" : `${MARK_GAP}px`, "important");
   }
 
-  /** Which text lines the current shape has room for. */
+  /** Which lines the mode shows: the headline always; the step and the detail in the expanded card, when there are any. */
   private showTexts(nodes: Nodes): void {
-    const shape = this.shape();
     const view = this.shown;
-    setDisplay(nodes.headline, shape !== "dot");
-    setDisplay(nodes.step, shape === "expanded" && Boolean(view?.step));
-    setDisplay(nodes.detail, shape === "expanded" && Boolean(view?.detail));
+    setDisplay(nodes.headline, true);
+    setDisplay(nodes.step, view?.mode === "expanded" && Boolean(view.step));
+    setDisplay(nodes.detail, view?.mode === "expanded" && Boolean(view.detail));
   }
 
   private fadeOut(): void {
@@ -246,6 +258,7 @@ function buildNodes(): Nodes {
     "flex-direction": "column",
     "justify-content": "center",
     gap: "3px",
+    "align-items": "stretch",
     "box-sizing": "border-box",
     "max-width": "100%",
     overflow: "hidden",

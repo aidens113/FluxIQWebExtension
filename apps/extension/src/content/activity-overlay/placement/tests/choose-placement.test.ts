@@ -1,6 +1,8 @@
 // Coverage of choose-placement.ts against synthetic pages: fixed rectangles
 // (banners, chat widgets, sticky headers) and ordinary controls, probed the
-// way the live page is probed -- one point at a time.
+// way the live page is probed -- one point at a time. However busy the page,
+// the answer is a pill that carries the status text, never a text-less dot
+// (U3 of lane D's run-murdouox-c5294247 UI review).
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -11,6 +13,7 @@ type Rect = { left: number; top: number; width: number; height: number };
 
 const VIEWPORT = { width: 1280, height: 720 };
 const BOX = { width: 384, height: 66 };
+const NARROW = { width: 280, height: 66 };
 
 /** A page of fixed boxes over ordinary controls; a later fixed box is on top, and fixed is always over a control. */
 function page(fixed: Rect[], controls: Rect[] = []): (x: number, y: number) => PointCover {
@@ -19,7 +22,7 @@ function page(fixed: Rect[], controls: Rect[] = []): (x: number, y: number) => P
 }
 
 function place(probe: PlacementInput["probe"], current?: OverlayPlacement): OverlayPlacement {
-  return choosePlacement({ viewport: VIEWPORT, box: BOX, dot: 30, margin: 16, probe, current });
+  return choosePlacement({ viewport: VIEWPORT, box: BOX, narrow: NARROW, margin: 16, probe, current });
 }
 
 const COOKIE_BANNER: Rect = { left: 0, top: 560, width: 1280, height: 160 };
@@ -58,20 +61,33 @@ test("a corner that becomes busy is left for a clear one", () => {
   assert.deepEqual(place(page([COOKIE_BANNER]), { shape: "pill", anchor: "bottom-left" }), { shape: "pill", anchor: "top-left" });
 });
 
-test("every corner busy: a dot at the least-busy edge", () => {
-  const dot = place(page([COOKIE_BANNER, STICKY_HEADER]));
-  assert.equal(dot.shape, "dot");
-  assert.equal(dot.anchor, "left", "the side midpoint is the only place clear of the header and the banner");
+test("every corner busy: the pill, text and all, at the least-busy edge -- never a dot", () => {
+  assert.deepEqual(place(page([COOKIE_BANNER, STICKY_HEADER])), { shape: "pill", anchor: "left" }, "the side midpoint is the only place clear of the header and the banner");
 });
 
-test("every place busy: the dot goes where the least of it is fixed", () => {
+test("every corner busy and the full pill over a fixed card: the narrower pill, where it covers nothing fixed", () => {
+  const sideCard: Rect = { left: 300, top: 300, width: 300, height: 120 };
+  const rightRail: Rect = { left: 1180, top: 0, width: 100, height: 720 };
+  assert.deepEqual(place(page([COOKIE_BANNER, STICKY_HEADER, sideCard, rightRail])), { shape: "narrow", anchor: "left" });
+});
+
+test("every place busy: the pill goes where the least of it is fixed, and keeps its text", () => {
   const leftRail: Rect = { left: 0, top: 0, width: 80, height: 720 };
   const narrowRightRail: Rect = { left: 1250, top: 0, width: 30, height: 720 };
-  assert.deepEqual(place(page([COOKIE_BANNER, STICKY_HEADER, leftRail, narrowRightRail])), { shape: "dot", anchor: "right" }, "the right midpoint is only half over the rail");
+  const placement = place(page([COOKIE_BANNER, STICKY_HEADER, leftRail, narrowRightRail]));
+  assert.notEqual(placement.shape, "dot");
+  assert.equal(placement.anchor, "right", "the right midpoint is only a sliver over the rail");
 });
 
-test("a dot comes back as the pill once a corner clears", () => {
-  assert.deepEqual(place(page([]), { shape: "dot", anchor: "left" }), { shape: "pill", anchor: "bottom-left" });
+test("a fallback place already held is kept while no place is less busy", () => {
+  const busy = page([COOKIE_BANNER, STICKY_HEADER, { left: 300, top: 300, width: 300, height: 120 }, { left: 1180, top: 0, width: 100, height: 720 }]);
+  const held: OverlayPlacement = { shape: "narrow", anchor: "left" };
+  assert.deepEqual(place(busy, held), held);
+});
+
+test("a fallback pill comes back to a corner once one clears", () => {
+  assert.deepEqual(place(page([]), { shape: "narrow", anchor: "left" }), { shape: "pill", anchor: "bottom-left" });
+  assert.deepEqual(place(page([]), { shape: "pill", anchor: "left" }), { shape: "pill", anchor: "bottom-left" });
 });
 
 test("the anchor's offsets pin two edges and free the other two", () => {

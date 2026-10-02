@@ -6,22 +6,28 @@
 //
 // Two sends can cross: the background answers a new document's readiness at
 // once, outside its delivery queue, while a paced send may still be on its
-// way. A display older than the one drawn, for the same unit of work, is
+// way. A display older than the one received, for the same unit of work, is
 // therefore ignored rather than drawn over the newer one.
+//
+// What is left goes through the dwell (`status-dwell.ts`): however fast
+// statuses arrive, each line stays up long enough to be read, the newest
+// waiting one is the one shown, and the last always reaches the page.
 
 import type { ActivityContentMessage } from "../../shared/activity";
 import { activityOverlayView } from "./overlay-view";
+import { StatusDwell } from "./status-dwell";
 import { StatusPill } from "./status-pill";
 
 /** One overlay per content-script instance; the pill removes any a superseded instance left. */
 const pill = new StatusPill();
+const dwell = new StatusDwell((view) => pill.update(view));
 
-let drawn: { activityId: string; sequence: number } | undefined;
+let received: { activityId: string; sequence: number } | undefined;
 
 /** Shows what `message` says, or takes the overlay out of the page when it says nothing is to be shown. */
 export function showActivityOverlay(message: ActivityContentMessage): void {
   const display = message.display;
-  if (display && drawn?.activityId === display.activityId && display.sequence < drawn.sequence) return;
-  drawn = display ? { activityId: display.activityId, sequence: display.sequence } : undefined;
-  pill.update(activityOverlayView(display, message.overlay));
+  if (display && received?.activityId === display.activityId && display.sequence < received.sequence) return;
+  received = display ? { activityId: display.activityId, sequence: display.sequence } : undefined;
+  dwell.show(activityOverlayView(display, message.overlay));
 }
