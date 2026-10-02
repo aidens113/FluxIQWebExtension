@@ -262,12 +262,12 @@ test("a failed click is never judged by where its tab went", async (t) => {
   assert.equal(browser.listening(), 0);
 });
 
-for (const actionType of ["web.dom.type", "web.dom.assert"] as const) {
-  test(`a ${actionType} is sent without watching where its tab goes`, async (t) => {
+for (const [label, extra] of [["web.dom.type", { actionType: "web.dom.type", text: "towels" }], ["web.dom.keypress", { actionType: "web.dom.keypress", key: "Tab" }], ["web.dom.assert", { actionType: "web.dom.assert" }]] as const) {
+  test(`a ${label} that sends nothing is sent without watching where its tab goes`, async (t) => {
     const browser = installBrowser(t, { "doc-landed": 404 });
-    const reply: BrowserActionResult = { ...REPLY, actionType };
+    const reply: BrowserActionResult = { ...REPLY, actionType: extra.actionType };
     let listeningDuringSend = -1;
-    const result = await sendClickCheckingLanding({ ...CLICK, actionType }, TAB_ID, async () => {
+    const result = await sendClickCheckingLanding({ ...CLICK, ...extra }, TAB_ID, async () => {
       listeningDuringSend = browser.listening();
       land(browser, `${ORIGIN}/gone`, "doc-landed");
       return reply;
@@ -459,6 +459,21 @@ test("a click that lands on a check which clears by itself waits it out untouche
   assert.equal(REPLY.checkWait, undefined, "the frame's own reply is not written on");
   assert.equal(page.asked, 3, "asked at the landing, again after half a second, and once more when the tab settled");
 });
+
+// Run 39 (t193): a bigbox search typed with `submit` landed on the store's self-clearing check and stood as a plain success.
+for (const extra of [{ actionType: "web.dom.type", text: "paper towels", submit: true }, { actionType: "web.dom.keypress", key: "Enter" }] as const) {
+  test(`a ${extra.actionType} that sends its form lands as a click does: a check that clears by itself is waited out, and said`, async (t) => {
+    const browser = installBrowser(t, { "doc-check": 200 });
+    const page = landedPage([SELF_CLEARING_CHECK, { challenge: null }]);
+    const result = await sendClickCheckingLanding({ ...CLICK, ...extra }, TAB_ID, async () => {
+      land(browser, `${ORIGIN}/scenarios/bigbox-retail/search?q=paper+towels`, "doc-check");
+      return { ...REPLY, actionType: extra.actionType };
+    }, page);
+    assert.equal(result.status, "succeeded");
+    assert.match(result.validation.status === "passed" ? result.validation.actual : "", /the page it landed on was a robot check that cleared by itself after \d+ ms, untouched$/u);
+    assert.equal(typeof result.checkWait?.waitedMs, "number");
+  });
+}
 
 test("a click whose reply is lost to its own navigation onto a robot check fails as needing a person", async (t) => {
   const browser = installBrowser(t, { "doc-check": 200 });

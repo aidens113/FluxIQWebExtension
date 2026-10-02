@@ -266,3 +266,22 @@ test("an assert with no parameters fails through the classifier rather than inve
   // record of its own for a malformed request.
   assert.deepEqual(result, failed);
 });
+
+test("a selector recorded inside a shadow root is asked with its host chain, from either place a command carries it", async () => {
+  // Lane A's run 40 (`run-muq6lqnw-fdfa7aac`): the dry run asked whether the
+  // store chooser's button was visible, and a selector written inside the
+  // chooser's root was asked of the light document, where it matches nothing.
+  const hosts = ["body > header > div > vr-fulfillment-picker"];
+  const element = { tagName: "button", selector: "div > ul > li:nth-of-type(3) > button", context: { shadowHosts: hosts } };
+  const declared = { ...action, selector: element.selector, assert: { kind: "visible" as const }, element };
+  const raw = { ...action, selector: element.selector, assert: { kind: "visible" as const }, options: { element } };
+  const plain = { ...action, assert: { kind: "visible" as const } };
+  for (const [command, expected] of [[declared, hosts], [raw, hosts], [plain, undefined]] as const) {
+    const asked: unknown[] = [];
+    const deps = dependencies(true, "", "");
+    const capturing = { ...deps, evaluateAssertion: (_request: unknown, target: unknown) => { asked.push(target); return deps.evaluateAssertion(_request as never, target as never); } } as ContentActionDependencies;
+    await assertAction(command as BrowserActionCommand, capturing, 100);
+    assert.deepEqual((asked[0] as { shadowHosts?: unknown }).shadowHosts, expected);
+    assert.equal((asked[0] as { selector?: unknown }).selector, command.selector);
+  }
+});

@@ -142,7 +142,7 @@ export function webAutomationRecoveryHarnessOptions(): AutomationStudioHarnessOp
     },
     {
       toolId: WEB_RECOVERY_FIND_OPTION_ID,
-      description: "Search the page the failing workflow is on for any words or attribute, and get every element that matches, in page order: query is matched, ignoring case, against every element's words, label, value, options and address and every attribute's name and value -- an id, class, name, test id or placeholder -- hidden, off-screen and text-less elements included. Each match is one line: its handle (copy it exactly to act on it), kind, words, the attribute that matched when the words did not, and where it is (on screen, above, below, off-page, not rendered). Fifty matches to a page; the last line says how to ask for the next fifty with after.",
+      description: "Reads only the page you are on, and is not the site's search (the site's own search is a field[search] line). Search the page the failing workflow is on for any words or attribute, and get every element that matches, in page order: query is matched, ignoring case, against every element's words, label, value, options and address and every attribute's name and value -- an id, class, name, test id or placeholder -- hidden, off-screen and text-less elements included. Each match is one line: its handle (copy it exactly to act on it), kind, words, the attribute that matched when the words did not, and where it is (on screen, above, below, off-page, not rendered). Fifty matches to a page; the last line says how to ask for the next fifty with after.",
       inputSchema: {
         type: "object",
         required: ["query"],

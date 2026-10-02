@@ -67,6 +67,12 @@ export type LiveLlmPlan = {
   maxTotalEstimatedCostUsd: number;
   /** The per-build ceiling the run's Core was started with (`liveLlmBuildCostCeilingUsd`), before `--llm-max-cost-usd` lowered it. */
   buildCostCeilingUsd: number;
+  /**
+   * The default model the run's Core was started with (`liveLlmCoreDefaultModel`,
+   * `FLUXIQ_LLM_DEFAULT_MODEL` from `--llm-model`): what a new Flow's build runs
+   * on there, so what a build typed into the extension's chat runs on.
+   */
+  coreDefaultModel: LlmModel;
   /** The budget the operator asked for, kept verbatim so the post-run check judges their numbers, not Core's. */
   declared: LlmTokenBudget;
   /**
@@ -87,10 +93,13 @@ export type LiveLlmPlan = {
  * `buildCostCeilingUsd` is the per-build ceiling the run's Core was started
  * with (`liveLlmBuildCostCeilingUsd`, `./build-cost-ceiling.ts`); it is passed
  * in rather than read here, so the plan cannot hold a build to a different
- * number than the Core it runs against.
+ * number than the Core it runs against. `coreDefaultModel` is that Core's
+ * default model (`liveLlmCoreDefaultModel`, `./core-default-model.ts`), passed
+ * in for the same reason; a Core given none builds on `DEFAULT_LLM_MODEL`.
  */
-export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeilingUsd: number): LiveLlmPlan {
+export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeilingUsd: number, coreDefaultModel: string = DEFAULT_LLM_MODEL): LiveLlmPlan {
   if (!Number.isFinite(buildCostCeilingUsd) || buildCostCeilingUsd <= 0) throw refusal(`the per-build cost ceiling ${buildCostCeilingUsd} is not a positive amount`);
+  if (!isLlmModel(coreDefaultModel)) throw refusal(`the run's Core default model ${describe(coreDefaultModel)} is unsupported; Core is configured for ${llmModels.join(", ")}`);
   if (profile.mode !== "live") throw refusal("only a live LLM profile can reach a provider");
   if (profile.provider !== "deepseek") throw refusal(`--llm-provider ${describe(profile.provider)} is unsupported; Core resolves only deepseek`);
   const model = profile.model ?? DEFAULT_LLM_MODEL;
@@ -136,6 +145,7 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeil
     maxEstimatedCostUsd: buildCeilingUsd,
     maxTotalEstimatedCostUsd: buildCeilingUsd,
     buildCostCeilingUsd,
+    coreDefaultModel,
     declared: { ...budget },
     permittedConsequences: permittedConsequencesOf(profile.permittedConsequences, purpose),
   };

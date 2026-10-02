@@ -15,7 +15,10 @@
 //   2. those parameters resolve, by the same resolution a replay uses, so the
 //      target is the one the Flow would act on;
 //   3. the target is on the page and visible, then enabled -- each asked of
-//      the page through `web.dom.assert`, which reads and never acts.
+//      the page through `web.dom.assert`, which reads and never acts. The
+//      `visible` check answers three ways: nothing matched (the target is not
+//      there), it matched and is shown, or it matched and is not shown -- and
+//      then the page says what hid it (`./hidden-target.ts`).
 //
 // Nothing that acts is dispatched, so the person's permission for the step's
 // declared classes is not asked again: the gate is asked for a check with no
@@ -25,29 +28,47 @@
 // **What each answer means.**
 //
 //   verified        -- the step could run now. Its effect was withheld.
-//   present         -- the target is not on the page, and the page is the one
-//                      the step acted on (its recorded location, compared
-//                      whole: `./missing-target.ts`, the same test a replayed
-//                      step answers `remembered` by). That is what an effect
-//                      already in place looks like: the line was saved while
-//                      exploring and its save
-//                      control is gone; the store was chosen and its card now
-//                      says "Your store" (t193-wH, `run-munri5gr-94d7f8a0`).
-//                      It passes.
-//   unreproducible  -- the target is not on the page, and the page is not the
-//                      one the step acted on, or where it is could not be read.
-//                      The steps before it no longer reach it (run 18,
+//   present         -- the target is not on the page, or it is there and
+//                      withdrawn itself while everything around it is shown,
+//                      and the page is the one the step acted on (its recorded
+//                      location, compared whole: `./missing-target.ts`, the
+//                      same test a replayed step answers `remembered` by). That
+//                      is what an effect already in place looks like: the line
+//                      was saved while exploring and its save control is gone;
+//                      the store was chosen and its card now says "Your store"
+//                      (t193-wH, `run-munri5gr-94d7f8a0`); a "Follow" is hidden
+//                      beside the "Following" that replaced it. It passes.
+//   unreproducible  -- the same two, and the page is not the one the step
+//                      acted on, or where it is could not be read. The steps
+//                      before it no longer reach it (run 18,
 //                      `run-munpwa5r-e7aefe04`: an add-to-cart replayed on the
 //                      search results because the steps that reach the product
 //                      page were withdrawn). It blocks.
-//   failed          -- the target is there and hidden or disabled, the page
-//                      would not answer the check, or the step does not
-//                      resolve. The Flow would not run it either.
+//   failed          -- the target is there inside a closed container, or there
+//                      and disabled, or hidden by something the page did not
+//                      name; or the page would not answer the check, or the
+//                      step does not resolve. The Flow would not run it either.
 //
-// The same page by location is not proof: two states can share a path, and a
-// step whose dialog never opened would read as present. It is the evidence this
-// domain has without acting, it separates run 18's case from run 21's, and it
-// is asked only of steps the dry run must not repeat anyway.
+// A target inside a closed container is never `present`, wherever the page
+// stands: a flyout, menu or panel no step before it opens is a step the Flow
+// cannot take on a fresh site. Lane A's run 40 (`run-muq6lqnw-fdfa7aac`) is why:
+// bigbox's "Set as my store" sits in the store chooser's flyout, the Flow never
+// pressed the chip that opens it, the check read the button as not there and
+// the page as the step's own, the dry run passed, and playback failed at the
+// button. The answer is `failed` with `found: "hidden"`, which Core already
+// reads as a step that failed its check (`AS/runtime/flow-draft/verify-only.ts`);
+// no new code was needed.
+//
+// What this still cannot see is a control *replaced* inside a closed
+// container: with the store already chosen, the chosen store's card holds
+// "Your store" and no button, closed flyout or not, so the target reads as not
+// there. Nothing the step recorded says what its effect looked like, so the
+// page's place for it is not checked.
+//
+// The same page by location is not proof either: two states can share a path.
+// It is the evidence this domain has without acting, it separates run 18's
+// case from run 21's, and it is asked only of steps the dry run must not repeat
+// anyway.
 //
 // Visible and enabled is not the whole of "actionable": a control covered by
 // a layer passes both. A replay would have found that by pressing, and this
@@ -62,6 +83,7 @@ import { resolveWebPlanNode } from "../plan-resolution";
 import { webLlmHandleRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
 import { webRunnableNode } from "./catalog";
+import { webNodeHiddenTarget } from "./hidden-target";
 import { webNodeReplayMissingTarget } from "./missing-target";
 import {
   WEB_NODE_REPLAY_RESULT_CODES,
@@ -136,7 +158,14 @@ export async function verifyWebOutputNode(run: WebNodeRun): Promise<WebLlmEviden
     }
     // The target was found and judged: it is there and not as a press needs it.
     if (code === WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH) {
-      return await webNodeReplayAnswerWithPage(run, WEB_NODE_REPLAY_RESULT_CODES.failed, `the step's target is on the page and ${check.fails}; it was not run`, false, facts("state_not_as_asserted"), check.fails);
+      const hidden = check.kind === "visible" ? webNodeHiddenTarget(result) : undefined;
+      // Withdrawn itself, with everything around it shown: read as a target
+      // that is gone, by the same page test.
+      if (hidden === "itself") return await webNodeReplayMissingTarget(run, "verify", facts("state_not_as_asserted"), undefined, "withdrawn");
+      const said = hidden === "enclosed"
+        ? "the step's target is on the page inside a closed container that no step before it opens; it was not run"
+        : `the step's target is on the page and ${check.fails}; it was not run`;
+      return await webNodeReplayAnswerWithPage(run, WEB_NODE_REPLAY_RESULT_CODES.failed, said, false, facts("state_not_as_asserted"), check.fails);
     }
     const refused = webActionFailureRefusal(result);
     return await webNodeReplayAnswerWithPage(run, WEB_NODE_REPLAY_RESULT_CODES.failed, `the step's target could not be checked (${refused.code})`, false, facts(refused.detail?.reason));

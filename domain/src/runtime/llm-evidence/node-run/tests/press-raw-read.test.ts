@@ -107,6 +107,7 @@ function call(site: ReturnType<typeof store>, callId: string, node: string, para
 /** Arrive at the store and look, returning the look's packet. */
 async function arriveAndLook(site: ReturnType<typeof store>): Promise<Packet> {
   const opening = await call(site, "initial.core.run_node", SNAPSHOT, {});
+  // The tab is blank until the navigation, and a page that cannot be read refuses even a look.
   assert.equal(opening.resultCode, "web.action.rejected.not_at_start_location");
   assert.equal((await call(site, "call.start", NAVIGATE, { url: HOME })).resultCode, "web.action.succeeded");
   return (await call(site, "call.look", SNAPSHOT, {})).evidence as Packet;

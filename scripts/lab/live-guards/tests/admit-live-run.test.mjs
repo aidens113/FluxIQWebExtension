@@ -17,6 +17,9 @@ const MINUTE = 60_000;
 /** A run id as the runner names it: its start time in base 36, then 8 hex digits. */
 const runIdAt = (ms, hex) => `run-${ms.toString(36)}-${hex}`;
 
+/** Every checkout level with its dev; `behind-dev.test.mjs` reads real repositories. */
+const level = async (root) => ({ root, head: "a".repeat(40), dev: "a".repeat(40), contains: true, lacking: 0, error: null });
+
 async function fixture() {
   const directory = await mkdtemp(path.join(os.tmpdir(), "live-guards-admit-"));
   const slots = path.join(directory, "lab-slots");
@@ -27,7 +30,7 @@ async function fixture() {
   const runs = path.join(root, "test-runs", "instances", "slot-1");
   let digest = "sha256:first";
   let clock = new Date(2026, 8, 30, 12, 0, 0).getTime();
-  const admit = (overrides = {}) => admitLiveRun({ args: ARGS, env, repositoryRoot: root, coreRoot: path.join(directory, "core"), slotsDirectory: slots, now: clock, isAlive: () => true, fingerprint: async () => ({ digest, files: 1 }), ...overrides });
+  const admit = (overrides = {}) => admitLiveRun({ args: ARGS, env, repositoryRoot: root, coreRoot: path.join(directory, "core"), slotsDirectory: slots, now: clock, isAlive: () => true, fingerprint: async () => ({ digest, files: 1 }), devAncestry: level, ...overrides });
   const writeRun = async (runId, { startedAt, cost, failures, verdict = "failed", liveLlm = { observed: { totalEstimatedCostUsd: cost } } }) => {
     const run = path.join(runs, runId);
     await mkdir(path.join(run, "snapshots"), { recursive: true });

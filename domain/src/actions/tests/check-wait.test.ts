@@ -40,3 +40,13 @@ test("dispatched parameters get the allowance on the timeout they name, once, an
   const typed = { selector: "#q", timeoutMs: 5_000 };
   assert.equal(webAutomationCheckWaitParameters("web.dom.type", typed), typed);
 });
+
+// t193 run 39: a bigbox search typed with `submit` landed on the store's eight-second check, with no allowance to wait it out.
+test("typing that sends its form and an Enter are given the allowance; typing that sends nothing and any other key are not", () => {
+  assert.deepEqual(webAutomationCheckWaitParameters("web.dom.type", { selector: "#q", text: "towels", submit: true, timeoutMs: 5_000 }), { selector: "#q", text: "towels", submit: true, timeoutMs: 20_000, checkWaitMs: 15_000 });
+  assert.deepEqual(webAutomationCheckWaitParameters("web.dom.keypress", { selector: "#q", key: "Enter" }), { selector: "#q", key: "Enter", checkWaitMs: 15_000 });
+  const tabbed = { selector: "#q", key: "Tab", timeoutMs: 5_000 };
+  assert.equal(webAutomationCheckWaitParameters("web.dom.keypress", tabbed), tabbed);
+  const unsent = { selector: "#q", text: "towels", submit: false };
+  assert.equal(webAutomationCheckWaitNode("web.dom.type", { parameters: unsent }).parameters, unsent);
+});

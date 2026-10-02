@@ -110,7 +110,9 @@ type ResolvedAssertionTarget = {
 /**
  * A selector is handed over unresolved, because `exists` and `absent` are
  * claims about whether anything matches it and `deps.resolveTarget` throws when
- * nothing does. Without one, the target is resolved however the action names it
+ * nothing does. It goes with the recorded host chain of a target written inside
+ * a shadow root, so it is asked where it was written and not of the light
+ * document, which it says nothing about. Without one, the target is resolved however the action names it
  * -- coordinates, visual bounds, fingerprint -- and a miss leaves an empty
  * target the capability reports as "nothing matched" rather than a throw.
  *
@@ -120,13 +122,27 @@ type ResolvedAssertionTarget = {
  * measured nothing worth reporting either.
  */
 function assertionTarget(action: BrowserActionCommand, deps: ContentActionDependencies): ResolvedAssertionTarget {
-  if (action.selector) return { target: { selector: action.selector } };
+  if (action.selector) return { target: { selector: action.selector, shadowHosts: recordedShadowHosts(action) } };
   try {
     const resolved = deps.resolveTarget(action);
     return { target: { element: resolved.element }, resolution: resolved.resolution };
   } catch {
     return { target: {} };
   }
+}
+
+/**
+ * The host chain the target was recorded under, from the declared element or
+ * the raw one beside it in `options` -- the two places the resolver reads a
+ * recorded target from -- and only when it is a list of selectors.
+ */
+function recordedShadowHosts(action: BrowserActionCommand): readonly string[] | undefined {
+  for (const element of [action.element, action.options?.element]) {
+    const context = element && typeof element === "object" ? (element as { context?: unknown }).context : undefined;
+    const hosts = context && typeof context === "object" ? (context as { shadowHosts?: unknown }).shadowHosts : undefined;
+    if (Array.isArray(hosts) && hosts.length && hosts.every((host) => typeof host === "string")) return hosts as string[];
+  }
+  return undefined;
 }
 
 /**
