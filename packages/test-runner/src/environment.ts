@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { RunAllocation } from "./allocation.js";
-import { LAB_COST_CEILING_ENV, labCostCeilingValue } from "./live-llm/index.js";
+import { LAB_COST_CEILING_ENV, LAB_DEFAULT_MODEL_ENV, labCostCeilingValue, labDefaultModelValue } from "./live-llm/index.js";
 
 /**
  * Provider credentials belong to the test driver. Child processes receive an
@@ -75,17 +75,26 @@ export function webPanelHostModulePath(repositoryRoot: string): string {
  * nothing else: a value inherited from whoever launched the Lab is dropped, so
  * a run that was given no folder logs no steps, and four lanes never write
  * their steps into one folder.
+ *
+ * `FLUXIQ_LLM_DEFAULT_MODEL` is likewise set from the run's `--llm-model` and
+ * from nothing else (`./live-llm/default-model-env.ts`): the model a new Flow's
+ * build runs on, which is the one a build typed into the extension's chat gets.
+ * An inherited value is dropped, so a run without the flag gives Core nothing
+ * and Core builds on its own default.
  */
 export function buildFluxIQEnvironment(allocation: RunAllocation, paths: TopologyPaths, base: NodeJS.ProcessEnv = process.env, args: readonly string[] = process.argv): NodeJS.ProcessEnv {
   const hostModulePath = paths.hostModulePath ?? webPanelHostModulePath(paths.repositoryRoot);
   // The per-build cost ceiling, from the run's flag, the environment or .env.local (`./live-llm/cost-ceiling-env.ts`);
   // the Lab's plan reads the same sources (`liveLlmBuildCostCeilingUsd`), so Core and the Lab hold a build to one number.
   const costCeiling = labCostCeilingValue(paths.repositoryRoot, args, base);
-  const { FLUXIQ_LLM_STEP_LOG_DIR: _inheritedStepLogDirectory, ...inherited } = withoutProviderSecrets(base);
+  // Core's default model, from the run's --llm-model only; refused here when Core would refuse it at start.
+  const defaultModel = labDefaultModelValue(args);
+  const { FLUXIQ_LLM_STEP_LOG_DIR: _inheritedStepLogDirectory, [LAB_DEFAULT_MODEL_ENV]: _inheritedDefaultModel, ...inherited } = withoutProviderSecrets(base);
   return {
     FLUXIQ_BUILD_PROGRESS_TRACE: "1",
     ...inherited,
     ...(costCeiling === undefined ? {} : { [LAB_COST_CEILING_ENV]: costCeiling }),
+    ...(defaultModel === undefined ? {} : { [LAB_DEFAULT_MODEL_ENV]: defaultModel }),
     ...(paths.stepLogDirectory ? { FLUXIQ_LLM_STEP_LOG_DIR: paths.stepLogDirectory } : {}),
     PORT: String(allocation.webPort),
     FLUXIQ_ROOT: allocation.fluxiqRoot,
