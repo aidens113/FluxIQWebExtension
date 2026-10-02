@@ -7,6 +7,32 @@ production profile, 48k in / 8k out / 56k per call, $0.25 cap. Launcher: scratch
 (t174's `live-run.sh` with slot-4, the t195 instance and tree, and a full log per run). From run 5 it passes
 `--llm-max-calls 64`, as t174's L1 does, because Core ignores the configured call limit (t193's cause B).
 
+## Session 5 (2026-10-02): run 38's causes finished without a Lab (t195-lead-1002)
+
+Brief: "Briefs, 2026-10-02" (dev's plan). Full account: `reports/t195-lead-1002.md`. No Lab run, no provider call,
+nothing committed.
+
+- **Done, Ready to commit.** Each fix has a test that fails with the fix reverted.
+  - C1: `isJsonValue` is an ancestor check in the loop and in `json-guards.ts`.
+  - C3: a round whose draft already holds a kept step takes its opening, never appends it. This covers the
+    re-author's seeded round, which w32's resume-only test missed, and keeps explore-again's opening.
+  - C4: the port's placeholders are wired. A refutation that names no step never reaches the patch ladder, and the
+    Lab reports `result_verification`.
+  - C5: new `recovery/refuted-result/ladder-skip.ts`. Once a re-author build explored (`decisionCount > 0`) and built
+    nothing, the ladder is skipped and the run records `ladderSkipped: structural_fix`.
+  - Stage-2 gap: the step log's `meta.json` carries `loopVerdict`, and `index.md` says `unread: <check>`.
+- **Not done: C8's second half.** The identical second round is opened by `unfinished-build/phases.ts:333-357`,
+  which this brief forbids. The fix is specified in the lead report.
+- Validation:
+  - tests beside the changes: 135/135;
+  - Core vitest over `llm`, `flow-bootstrap`, `service/runtime-adaptation`, `recovery/refuted-result` and
+    `tests/refuted-result`: 2219/2219, then 599/599 after the module move;
+  - Core check: exit 0;
+  - Core audit: passed (217, 349);
+  - Lab tests: 34/34;
+  - test-runner check: exit 0;
+  - downstream audit: passed (155, 118).
+
 ## Session 4 (2026-10-01): fixes that need no Lab, before live runs resume
 
 Brief (supervisor): trees fast-forwarded to local dev (downstream `a15a465e`, Core `f3778a8e`, round 5 with P1-P2).
