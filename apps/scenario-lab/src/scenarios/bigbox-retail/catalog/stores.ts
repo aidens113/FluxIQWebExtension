@@ -15,3 +15,9 @@ export const STORES: readonly Store[] = [
 
 /** The store a shopper has before they change it. */
 export const HOME_STORE_ID = "2291";
+
+/**
+ * The store the pickup cart is built for, Millbrook Crossing Supercenter. The
+ * `store-remembered` variant arms a site that already has it chosen.
+ */
+export const PICKUP_CART_STORE_ID = "1187";
