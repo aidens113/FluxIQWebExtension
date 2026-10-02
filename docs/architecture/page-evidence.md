@@ -304,6 +304,21 @@ Every page leaves the domain as `web-llm-page.v3`
   24 per window (Core's default recovery budget), and
   `validateTargetOverrideEvidence` checks a repair's handle against that
   packet. One that was let go, or edited, is `evidence_unrecognized`.
+- **The model is told how to read it.** The domain binds
+  `systemInstructions` (`llm-evidence/system-instructions/`, version
+  `web-1`, about 2,000 characters) on its evidence runtime, and Core places the
+  text in the system message of every model request made for this domain's
+  work (evidence decisions, bootstrap, runtime patch, result checks and the
+  chat), after Core's JSON and injection rules and before Core's task prose
+  (t237; Core's seam is `llm/domain-instructions/`). It says the model operates
+  a real website in the person's browser on their behalf, how the header lines,
+  element lines, states and markers above read, that the site's own search and
+  navigation find things while `find_on_page` searches only the current page,
+  that a covering popup is closed with its own control before a retry, that one
+  act on one item is done and `repeat` stated for a list, which acts are asked
+  of the person (money, delete, send/publish), never to type a secret or solve
+  a robot check, and that every build has a small cost ceiling. Change
+  `version` with the text, so a run's step log names what its model read.
 
 ### Controls The Markup Does Not Name
 
