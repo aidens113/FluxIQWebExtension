@@ -1,10 +1,11 @@
 // The live-run guards: what `run-lab.mjs` asks before a `--live-llm` run may
-// start, and what it records once the run ends. Design and the four rules:
+// start, and what it records once the run ends. Design and the five rules:
 // docs/architecture/testing-facility.md, "Live-run waste guards".
 
 export { admitLiveRun, DEBUG_DIRECTORY } from "./admit-live-run.mjs";
 export { detectBalanceFailure } from "./balance-failure.mjs";
 export { closeLaunch } from "./close-launch.mjs";
+export { readDevAncestry } from "./dev-ancestry.mjs";
 export { evaluateLiveGuards } from "./evaluate-live-guards.mjs";
 export { formatRefusals } from "./format-refusal.mjs";
 export { DEFAULT_LAB_SLOTS_DIRECTORY, guardFiles } from "./guard-files.mjs";
