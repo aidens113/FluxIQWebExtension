@@ -65,7 +65,7 @@ STEPS below are the plan's names for work that has no branch of its own or preda
 | --- | --- | --- |
 | Node catalog is 41,122 of 62,216 chars of every decide request | Names plus one-line description; full definitions on request; trim output schema and tool descriptions | t235 lead, open |
 | No domain system prompt: the model is never told it operates a website for a person, what the view means, or the rules | Core seam for domain system instructions on every request; the web instructions | t237 lead, open |
-| Superseded list reads kept whole (164,577 chars); absolute URLs 49,353 | Newest read whole, earlier as short outcomes; relative links | lane C, open (F40 rejected rows once: on dev) |
+| Superseded list reads kept whole (164,577 chars); absolute URLs 49,353 | Newest read whole, earlier as short outcomes; relative links | on dev (t194 F40, F42: run 13's last request body 238,196 -> 144,732 chars; `core.recall_result`) |
 | Two cost counts; 8,000-token reply holds (real max 593 over 6,119 decisions); a purse per phase | One purse per Flow creation; decision reply allowance 2,000 | t234 lead, open (F41 cost endings: on dev) |
 | Completion refusals for answerability and start location; judge request size; judge calls missing from the call count | Information, not refusal; measure and cut; agree the counts | lane D, open |
 | `find_on_page` as site search; opening capture refused | F31 opens the start location with no model call; F32 empty finds name the site's search fields | on dev (t174) |
