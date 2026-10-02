@@ -27,7 +27,7 @@ test("a run whose own accounting leaves the result check out has the check added
   // Core's accounting and per-call lines never list the result check's calls.
   const runtime = usage({ calls: 3, perCallRecords: "recorded", observedCalls: [call("diag-1", 0.001), call("diag-2", 0.001), call("patch-1", 0.001)], totalEstimatedCostUsd: 0.003, accounting: { calls: 3, inputTokens: 30, outputTokens: 3, totalTokens: 33, estimatedCostUsd: 0.003, budgetBreaches: 0, pendingCalls: 0 } });
   const spend = liveLlmRunSpend({ runtime, judge: { interventions: [{ requestId: "judge-1", estimatedCostUsd: 0.002 }] }, ceilingUsd: CEILING });
-  assert.deepEqual(spend.phases, { build: null, runtime: { calls: 3, estimatedCostUsd: 0.003 }, judge: { calls: 1, estimatedCostUsd: 0.002 }, reauthor: null });
+  assert.deepEqual(spend.phases, { build: null, runtime: { calls: 3, estimatedCostUsd: 0.003 }, judge: { calls: 1, estimatedCostUsd: 0.002 }, reauthor: null, chat: null });
   assert.equal(spend.calls, 4);
   assert.equal(spend.totalEstimatedCostUsd, 0.005);
 });
@@ -41,7 +41,7 @@ test("a run read from its interventions counts a check it already itemized once,
 });
 
 test("a run with nothing settled spends nothing, and a build alone is its own total", () => {
-  assert.deepEqual(liveLlmRunSpend({ ceilingUsd: CEILING }), { calls: 0, totalEstimatedCostUsd: 0, phases: { build: null, runtime: null, judge: null, reauthor: null }, uncountedPhases: [], perBuild: { ceilingUsd: CEILING, builds: [], maxBuildCostUsd: 0, overCeiling: 0 } });
+  assert.deepEqual(liveLlmRunSpend({ ceilingUsd: CEILING }), { calls: 0, totalEstimatedCostUsd: 0, phases: { build: null, runtime: null, judge: null, reauthor: null, chat: null }, uncountedPhases: [], stepLog: null, perBuild: { ceilingUsd: CEILING, builds: [], maxBuildCostUsd: 0, overCeiling: 0 } });
   const build = liveLlmRunSpend({ build: usage({ calls: 22, totalEstimatedCostUsd: 0.04178802 }), ceilingUsd: CEILING });
   assert.equal(build.calls, 22);
   assert.equal(build.totalEstimatedCostUsd, 0.04178802);
@@ -83,6 +83,53 @@ test("a build over the per-build ceiling is reported as over it, never folded in
   assert.deepEqual(spend.perBuild.builds.filter((item) => item.overCeiling).map((item) => [item.phase, item.attempt]), [["build", null], ["reauthor", 2]]);
   assert.equal(spend.perBuild.overCeiling, 2);
   assert.equal(spend.perBuild.maxBuildCostUsd, nano(CEILING * 1.2));
+});
+
+// `run-muqk713g-d08ad3dc`: 35 provider calls for $0.121157 in its step log,
+// but `llm.calls` was 17 and the ledger $0.12085128. Core recorded the failed
+// re-author's cost and no count of its 17 calls, and the chat's interpreter
+// call is in no record the settlement reads.
+test("the run's step log fills the calls Core did not count, and adds the chat call, without counting any call twice", () => {
+  const uncountedReauthor: LiveLlmReauthorRecord = {
+    source: "run-detail",
+    attempts: [{ attempt: 1, adaptationId: null, calls: null, callsFrom: "not_recorded", inputTokens: 418_087, outputTokens: 3_452, estimatedCostUsd: 0.061567476 }],
+    calls: 0,
+    uncountedAttempts: 1,
+    totalEstimatedCostUsd: 0.061567476,
+  };
+  const input = {
+    build: usage({ calls: 13, totalEstimatedCostUsd: 0.047871768 }),
+    runtime: usage({ calls: 2, totalEstimatedCostUsd: 0.009007356 }),
+    judge: { interventions: [{ requestId: "judge-1", estimatedCostUsd: 0.00176142 }, { requestId: "judge-2", estimatedCostUsd: 0.00064326 }] },
+    reauthor: uncountedReauthor,
+    ceilingUsd: CEILING,
+  };
+  const withoutLog = liveLlmRunSpend(input);
+  assert.equal(withoutLog.calls, 17, "Core's records alone leave the re-author's calls and the chat call out");
+  assert.deepEqual(withoutLog.uncountedPhases, ["reauthor"]);
+
+  const stepLog = { calls: 35, estimatedCostUsd: 0.121156656, byKind: { chat: { calls: 1, estimatedCostUsd: 0.000305376 }, decide: { calls: 29, estimatedCostUsd: 0.1 }, judge: { calls: 3, estimatedCostUsd: 0.01 }, diagnose: { calls: 1, estimatedCostUsd: 0.005 }, repair: { calls: 1, estimatedCostUsd: 0.005 } } };
+  const spend = liveLlmRunSpend({ ...input, stepLog });
+  assert.equal(spend.calls, 35);
+  assert.equal(spend.totalEstimatedCostUsd, 0.121156656);
+  assert.deepEqual(spend.phases.chat, { calls: 1, estimatedCostUsd: 0.000305376 });
+  assert.deepEqual(spend.phases.reauthor, { calls: 17, estimatedCostUsd: 0.061567476 });
+  assert.deepEqual(spend.uncountedPhases, []);
+  assert.deepEqual(spend.stepLog, { calls: 35, estimatedCostUsd: 0.121156656, filledReauthorCalls: 17, unattributed: { calls: 0, estimatedCostUsd: 0 } });
+  // The chat call is not a build: the per-build figures are unchanged.
+  assert.deepEqual(spend.perBuild, withoutLog.perBuild);
+});
+
+test("a step log that saw calls no phase claims adds them as unattributed, and one that saw fewer takes nothing away", () => {
+  const build = usage({ calls: 4, totalEstimatedCostUsd: 0.004 });
+  const more = liveLlmRunSpend({ build, stepLog: { calls: 6, estimatedCostUsd: 0.0065, byKind: { decide: { calls: 6, estimatedCostUsd: 0.0065 } } }, ceilingUsd: CEILING });
+  assert.equal(more.calls, 6);
+  assert.equal(more.totalEstimatedCostUsd, 0.0065);
+  assert.deepEqual(more.stepLog?.unattributed, { calls: 2, estimatedCostUsd: 0.0025 });
+  const fewer = liveLlmRunSpend({ build, stepLog: { calls: 2, estimatedCostUsd: 0.002, byKind: { decide: { calls: 2, estimatedCostUsd: 0.002 } } }, ceilingUsd: CEILING });
+  assert.equal(fewer.calls, 4);
+  assert.equal(fewer.totalEstimatedCostUsd, 0.004);
+  assert.deepEqual(fewer.stepLog?.unattributed, { calls: 0, estimatedCostUsd: 0 });
 });
 
 test("the ceiling a run is reported against is its plan's, which may only be lower than Core's", () => {
