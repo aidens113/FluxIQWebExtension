@@ -1,4 +1,4 @@
-import { STORES } from "../catalog/index.js";
+import { PICKUP_CART_STORE_ID, STORES } from "../catalog/index.js";
 import { addToLines, changeLine, requestedLine } from "./cart-operations.js";
 import { CHECKOUT_ERRORS, placeOrder } from "./checkout-operations.js";
 import { createBigboxState } from "./initial-state.js";
@@ -8,21 +8,24 @@ import { bigboxModes, type BigboxState } from "../types.js";
 
 /** Enough history to see what a run did, and a hard stop so a stuck page cannot grow the snapshot without bound. */
 const ACTIVITY_LIMIT = 50;
+/** The harness's arms, which start the shopper over rather than record something the shopper did. */
+const ARM_OPERATIONS: ReadonlySet<string> = new Set(["set-mode", "remember-pickup-store"]);
 
 /**
  * Every change the site can report. Page operations arrive from the browser
  * through `/api/bigbox-retail/<operation>`; `search-view`, `slots-fetch` and
  * `clear-express` are recorded by the routes that serve those documents.
- * `set-mode` arms a rendering and, like every armed fixture here, starts the
- * shopper over, so an armed run's oracle is its own. Anything else, or a
- * payload the page could not have sent, leaves the state as it was.
+ * `set-mode` arms a rendering and `remember-pickup-store` arms a site that
+ * already has the pickup cart's store chosen; like every armed fixture here,
+ * each starts the shopper over, so an armed run's oracle is its own. Anything
+ * else, or a payload the page could not have sent, leaves the state as it was.
  */
 export function mutateBigboxState(state: BigboxState, operation: string, payload: unknown): BigboxState {
   const fields = isRecord(payload) ? payload : {};
   const next = apply(state, operation, fields);
   if (next === undefined || next === state) return state;
   // An armed rendering starts from nothing, its activity included.
-  return operation === "set-mode" ? next : { ...next, activity: [...state.activity, operation].slice(-ACTIVITY_LIMIT) };
+  return ARM_OPERATIONS.has(operation) ? next : { ...next, activity: [...state.activity, operation].slice(-ACTIVITY_LIMIT) };
 }
 
 function apply(state: BigboxState, operation: string, payload: Record<string, unknown>): BigboxState | undefined {
@@ -31,6 +34,8 @@ function apply(state: BigboxState, operation: string, payload: Record<string, un
       const mode = bigboxModes.find((candidate) => candidate === payload.mode);
       return mode === undefined ? undefined : createBigboxState(mode);
     }
+    // The site remembers the store from an earlier visit: the store step has nothing left to do.
+    case "remember-pickup-store": return { ...createBigboxState(state.mode), storeId: PICKUP_CART_STORE_ID };
     case "consent": {
       const choice = text(payload, "choice");
       return state.consent === "pending" && (choice === "accept" || choice === "reject") ? { ...state, consent: choice === "accept" ? "accepted" : "rejected" } : undefined;

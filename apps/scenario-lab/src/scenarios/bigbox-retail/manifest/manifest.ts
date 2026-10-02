@@ -2,6 +2,7 @@ import { createScenarioManifest } from "../../../types.js";
 import { PICKUP_ORDER_WORKFLOW } from "./pickup-order-workflow.js";
 import { PICKUP_TOWELS_WORKFLOW } from "./pickup-towels-workflow.js";
 import { PRIMARY_EXPECTED, PRIMARY_SCRIPT, REDESIGNED_BUY_BOX } from "./primary-workflow.js";
+import { STORE_REMEMBERED } from "./store-remembered-variant.js";
 
 /**
  * ValueRidge, a big-box retailer's site with the mess a real one has: a
@@ -17,7 +18,8 @@ import { PRIMARY_EXPECTED, PRIMARY_SCRIPT, REDESIGNED_BUY_BOX } from "./primary-
  * links that open new tabs.
  *
  * The primary workflow builds a pickup cart for another store (judged by the
- * mini cart). `pickup-towels` reads qualifying listings across pages (judged
+ * mini cart); its `store-remembered` variant is a site that already has that
+ * store chosen, so the store step has nothing left to do. `pickup-towels` reads qualifying listings across pages (judged
  * by the records). `pickup-order` places an order, the consequential job
  * (judged by the confirmation's records).
  */
@@ -35,6 +37,6 @@ export const bigboxRetailManifest = createScenarioManifest({
     successFacts: [...PRIMARY_EXPECTED.finalState!],
   },
   expected: PRIMARY_EXPECTED,
-  variants: [REDESIGNED_BUY_BOX],
+  variants: [REDESIGNED_BUY_BOX, STORE_REMEMBERED],
   workflows: [PICKUP_TOWELS_WORKFLOW, PICKUP_ORDER_WORKFLOW],
 });
