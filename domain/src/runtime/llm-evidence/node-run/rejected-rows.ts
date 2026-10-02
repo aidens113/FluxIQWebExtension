@@ -17,10 +17,22 @@
 // model "rejected 20" for the accessory rule, 17 of which also failed price,
 // rating or Plus; the 5 it removed alone were 2 accessories and the 3 true
 // earbuds "... with Wireless Charging Case", and those 5 show at a glance what
-// the 20 hide. So each condition says `alone` (how many it removed alone),
-// `rowsAlone` and `rowsWithOthers`, and the read carries one sentence telling
-// the model which to check (`REJECTED_ROWS_NOTE`). A page build that does not
-// order its rows says `rows` as before.
+// the 20 hide. So each condition says `alone` (how many it removed alone) and
+// `rowsAlone`, and the read carries one sentence telling the model which to
+// check (`WEB_NODE_REJECTED_ROWS_NOTE`). A page build that does not order its
+// rows says `rows` per condition as before.
+//
+// **Every row is said once** (run 13, `run-muqbzu32-8691a65e`, F40). Until then
+// a row three conditions rejected was listed under each of the three, every
+// field whole, each link a 200-character address: of `rerun.13`'s 74,330
+// characters, 52,201 were `rejectedRows`, and the request grew by a read each
+// decision until the build ran out of money. So `rejectedRows` is one object:
+// `fields`, the column names once; `conditions`, each with its counts and its
+// `rowsAlone`; `rowsWithOthers`, every row more than one condition rejected,
+// once, grouped by the conditions it `failed`; and `~`, what a link written
+// `~/...` stands for, chosen as the page view chooses its own
+// (`../page-view/link-writer.ts`). A row is its values in the order of
+// `fields`. No row and no count is left out: only the repetition goes.
 //
 // **They go nowhere else.** They are asked for on the dispatched command only,
 // never on the parameters the Flow keeps, so a playback asks for none. They are
@@ -40,6 +52,7 @@ import {
   type WebAutomationExtractItemCondition,
   type WebAutomationExtractionRejectedRow
 } from "../../../actions/extraction";
+import { webLlmLinkWriter } from "../page-view";
 import { webNodeNumericTextFilterSentence } from "./numeric-text-filter";
 import { present } from "../present";
 import { webNodeWithoutPageRecord } from "./page-record";
@@ -49,11 +62,12 @@ import { webNodeReadResult } from "./read-result";
 const EXTRACT_LIST_ACTION = "web.dom.extract_list";
 
 /** The one sentence the model is given beside `rejectedRows`, when some condition removed rows alone. */
-export const WEB_NODE_REJECTED_ROWS_NOTE = "In rejectedRows, rowsAlone are rows that condition removed by itself (every other condition kept them): check each against the instruction, and if any is a row the instruction asks for, that condition is wrong and must change; rowsWithOthers also failed another condition.";
+export const WEB_NODE_REJECTED_ROWS_NOTE = "In rejectedRows, each row is its values in the order of fields; a condition's rowsAlone are rows it removed by itself (every other condition kept them): check each against the instruction, and if any is a row the instruction asks for, that condition is wrong and must change; rowsWithOthers lists once each row more than one condition rejected, under the conditions it failed.";
 
 /**
- * One condition's rejected rows as the model is shown them: `rowsAlone` and
- * `rowsWithOthers` from a page that ordered them, `rows` from one that did not.
+ * One condition's rejected rows as they are gathered: `rowsAlone` from a page
+ * that ordered them (its other rows go to the read's `rowsWithOthers`), `rows`
+ * from one that did not.
  */
 type WebNodeRejectedRowsEntry = {
   where: number;
@@ -61,8 +75,10 @@ type WebNodeRejectedRowsEntry = {
   alone?: number | undefined;
   rows?: JsonObject[] | undefined;
   rowsAlone?: JsonObject[] | undefined;
-  rowsWithOthers?: JsonObject[] | undefined;
 };
+
+/** The rows the same conditions, and no single one alone, rejected. */
+type WebNodeRejectedRowsGroup = { failed: number[]; rows: JsonObject[] };
 
 /** What the read carries beside its kept rows: the rejected rows, and the sentence on which to check. */
 type WebNodeRejectedRowsBeside = { rejectedRows: JsonValue; rejectedRowsNote?: string | undefined };
@@ -91,11 +107,10 @@ export function webNodeDispatchParameters(node: { actionType: string; proposes: 
  * halves pass the same screen, so a denied key or a credential-shaped string is
  * withheld from the samples exactly as it is from the kept rows.
  *
- * `parameters` are the ones the node ran with. Given, a text condition
- * (`matches`, `contains`) whose rejected rows all read as numbers in its
- * column adds one sentence to the note (`./numeric-text-filter.ts`, run 36):
- * a bound reads "Aisha Khan and 4 other mutual friends" as 5, a pattern does
- * not.
+ * `parameters` are the ones the node ran with. Given, a text condition that
+ * compares digits by text (`./numeric-text-filter.ts`, run 36) adds one
+ * sentence to the note: a bound reads "Aisha Khan and 4 other mutual friends"
+ * as 5, a pattern does not.
  */
 export function webNodeReadWithRejectedRows(payload: JsonValue | undefined, parameters?: JsonObject): WebNodeReadWithRejectedRows {
   const recorded = withoutSamples(payload);
@@ -125,9 +140,13 @@ function withoutSamples(payload: JsonValue | undefined): JsonValue | undefined {
 
 /**
  * Each condition that turned rows down, by its position in `where`, with how
- * many it rejected, how many of those it removed alone, and every row the page
- * sampled for it: the alone rows apart from the rows another condition also
- * rejected. `anyAlone` is whether any condition has an alone row to check.
+ * many it rejected, how many of those it removed alone, and the rows it removed
+ * alone; and once, for the whole read, every row more than one condition
+ * rejected, under the conditions it failed. `anyAlone` is whether any condition
+ * has an alone row to check.
+ *
+ * A row is the same row wherever its values are the same, which is how the page
+ * already says an identical row once (`content/extraction/rejected-samples.ts`).
  *
  * The samples are read through the summary's own copy, so only the read's
  * declared fields arrive, every row the page rejected, whole; the same screen
@@ -135,32 +154,138 @@ function withoutSamples(payload: JsonValue | undefined): JsonValue | undefined {
  * credential-shaped string (`./read-result.ts`).
  */
 function rejectedRows(payload: JsonValue | undefined, conditions: readonly WebAutomationExtractItemCondition[] | undefined): ShownRejectedRows | undefined {
-  const summary = webAutomationExtractionSummaryValue(objectValue(payload)?.extraction);
+  const whole = objectValue(payload);
+  const summary = webAutomationExtractionSummaryValue(whole?.extraction);
   const samples = summary?.rejectedSamples;
   const counts = summary?.conditions?.rejected;
   if (samples === undefined || counts === undefined) return undefined;
   const leads = summary?.rejectedSamplesAlone;
   const aloneCounts = summary?.conditions?.alone;
+  const links = linkWriting(whole?.url, samples);
   let anyAlone = false;
-  const shown: JsonObject[] = samples.flatMap((sampled, index): JsonObject[] => {
+  const withOthers = new Map<string, { row: JsonObject; failed: number[] }>();
+  const entries: JsonObject[] = samples.flatMap((sampled, index): JsonObject[] => {
     if (sampled.length === 0) return [];
     const rejected = counts[index] ?? sampled.length;
     const lead = leads?.[index];
     if (lead !== undefined && lead > 0) anyAlone = true;
+    for (const other of lead === undefined ? [] : sampled.slice(lead)) {
+      const key = JSON.stringify(other);
+      const said = withOthers.get(key) ?? { row: links.row(other), failed: [] };
+      said.failed.push(index);
+      withOthers.set(key, said);
+    }
+    const alone = lead === undefined ? [] : sampled.slice(0, lead);
     // A page build that did not order its rows says every row, unsplit.
     return [present<WebNodeRejectedRowsEntry>({
       where: index,
       rejected,
       alone: aloneCounts?.[index] ?? lead,
-      rows: lead === undefined ? sampled.map(row) : undefined,
-      rowsAlone: lead === undefined ? undefined : sampled.slice(0, lead).map(row),
-      rowsWithOthers: lead === undefined ? undefined : sampled.slice(lead).map(row)
+      rows: lead === undefined ? sampled.map(links.row) : undefined,
+      rowsAlone: alone.length === 0 ? undefined : alone.map(links.row)
     }) as JsonObject];
   });
-  if (shown.length === 0) return undefined;
-  const screened = webNodeReadResult(shown);
+  if (entries.length === 0) return undefined;
+  const screened = objectValue(webNodeReadResult(present<{ "~"?: string | undefined; conditions: JsonObject[]; rowsWithOthers?: JsonObject[] | undefined }>({
+    "~": links.used() ? links.base : undefined,
+    conditions: entries,
+    rowsWithOthers: withOthers.size === 0 ? undefined : groups(withOthers)
+  }) as JsonObject));
   if (screened === undefined) return undefined;
-  return { rows: screened, anyAlone, numeric: conditions === undefined ? [] : numericSentences(screened, conditions) };
+  return { rows: tabulated(screened), anyAlone, numeric: conditions === undefined ? [] : numericSentences(screened, conditions) };
+}
+
+/** The rows more than one condition rejected, one group per set of conditions, in the order of those sets. */
+function groups(withOthers: ReadonlyMap<string, { row: JsonObject; failed: number[] }>): JsonObject[] {
+  const bySet = new Map<string, WebNodeRejectedRowsGroup>();
+  for (const { row, failed } of withOthers.values()) {
+    const key = failed.join(",");
+    const group = bySet.get(key) ?? { failed, rows: [] };
+    group.rows.push(row);
+    bySet.set(key, group);
+  }
+  return [...bySet.values()].sort((a, b) => compareSets(a.failed, b.failed)) as unknown as JsonObject[];
+}
+
+function compareSets(a: readonly number[], b: readonly number[]): number {
+  for (let index = 0; index < Math.min(a.length, b.length); index += 1) {
+    const difference = (a[index] ?? 0) - (b[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return a.length - b.length;
+}
+
+/**
+ * How the rows write a link: an address on the read's own page origin as `~`
+ * and the rest, where `~` is what the page view would choose for the same page
+ * and these links (`../page-view/link-writer.ts`), so the written form reads
+ * back exactly. `used` says whether any value was written so.
+ */
+function linkWriting(location: JsonValue | undefined, samples: readonly WebAutomationExtractionRejectedRow[][]): {
+  base: string;
+  row: (sampled: WebAutomationExtractionRejectedRow) => JsonObject;
+  used: () => boolean;
+} {
+  const hrefs = samples.flat().flatMap((sampled) => Object.values(sampled).filter((value): value is string => typeof value === "string" && isAddress(value)));
+  const writer = typeof location === "string" && isAddress(location) ? webLlmLinkWriter(location, hrefs) : undefined;
+  let used = false;
+  const write = (value: string | null): string | null => {
+    if (writer === undefined || value === null || !isAddress(value)) return value;
+    const written = writer.write(value);
+    if (written.startsWith("~")) used = true;
+    return written.startsWith("~") ? written : value;
+  };
+  return {
+    base: writer?.base ?? "",
+    row: (sampled) => Object.fromEntries(Object.entries(sampled).map(([key, value]) => [key, write(value)])) as JsonObject,
+    used: () => used
+  };
+}
+
+/** An absolute web address, the only kind of value written with `~`. */
+function isAddress(value: string): boolean {
+  return /^https?:\/\//iu.test(value) && URL.canParse(value);
+}
+
+/**
+ * The screened rows as the model is shown them: the column names once, as
+ * `fields`, and each row its values in that order, `null` for a column it
+ * does not hold.
+ */
+function tabulated(screened: JsonObject): JsonObject {
+  const fields: string[] = [];
+  const lists = rowLists(screened);
+  for (const list of lists) for (const row of list) for (const key of Object.keys(objectValue(row) ?? {})) if (!fields.includes(key)) fields.push(key);
+  // Every member that holds rows says them as values; every other member is as screened.
+  const asValues = (holder: JsonValue | undefined): JsonObject => {
+    const out: JsonObject = {};
+    for (const [key, value] of Object.entries(objectValue(holder) ?? {})) {
+      out[key] = ROW_LISTS.includes(key) && Array.isArray(value) ? value.map((row) => fields.map((field) => objectValue(row)?.[field] ?? null)) : value;
+    }
+    return out;
+  };
+  const out: JsonObject = {};
+  if (screened["~"] !== undefined) out["~"] = screened["~"];
+  out.fields = fields;
+  out.conditions = arrayOf(screened.conditions).map(asValues);
+  if (screened.rowsWithOthers !== undefined) out.rowsWithOthers = arrayOf(screened.rowsWithOthers).map(asValues);
+  return out;
+}
+
+/** The members of a condition or a group that hold rows. */
+const ROW_LISTS: readonly string[] = ["rows", "rowsAlone"];
+
+/** Every list of rows the screened rejected rows hold. */
+function rowLists(screened: JsonObject): JsonValue[][] {
+  const lists: JsonValue[][] = [];
+  for (const entry of [...arrayOf(screened.conditions), ...arrayOf(screened.rowsWithOthers)]) {
+    const holder = objectValue(entry);
+    for (const key of ROW_LISTS) {
+      const list = holder?.[key];
+      if (Array.isArray(list)) lists.push(list);
+    }
+  }
+  return lists;
 }
 
 /** The rejected rows as shown, whether any condition removed one alone, and the numeric-column sentences. */
@@ -185,22 +310,23 @@ function conditionsRan(parameters: JsonObject | undefined): readonly WebAutomati
   return read.request?.where;
 }
 
-/** One sentence per shown condition whose rejected rows read as numbers in a column it tested as text. */
-function numericSentences(screened: JsonValue, conditions: readonly WebAutomationExtractItemCondition[]): string[] {
-  if (!Array.isArray(screened)) return [];
-  return screened.flatMap((entry): string[] => {
+/** One sentence per shown condition that compares digits by text in a column whose rejected rows read as numbers. */
+function numericSentences(screened: JsonObject, conditions: readonly WebAutomationExtractItemCondition[]): string[] {
+  const others = arrayOf(screened.rowsWithOthers).map(objectValue);
+  return arrayOf(screened.conditions).flatMap((entry): string[] => {
     const shown = objectValue(entry);
     const where = shown?.where;
     const condition = typeof where === "number" ? conditions[where] : undefined;
     if (shown === undefined || condition === undefined) return [];
-    const rows = [shown.rowsAlone, shown.rowsWithOthers, shown.rows].flatMap((list) => (Array.isArray(list) ? list : []));
+    const failedWithOthers = others.flatMap((group) => (arrayOf(group?.failed).includes(where as number) ? arrayOf(group?.rows) : []));
+    const rows = [...arrayOf(shown.rowsAlone), ...failedWithOthers, ...arrayOf(shown.rows)];
     const sentence = webNodeNumericTextFilterSentence(where as number, condition, rows);
     return sentence === undefined ? [] : [sentence];
   });
 }
 
-function row(sampled: WebAutomationExtractionRejectedRow): JsonObject {
-  return { ...sampled } as JsonObject;
+function arrayOf(value: JsonValue | undefined): JsonValue[] {
+  return Array.isArray(value) ? value : [];
 }
 
 function objectValue(value: JsonValue | undefined): JsonObject | undefined {
