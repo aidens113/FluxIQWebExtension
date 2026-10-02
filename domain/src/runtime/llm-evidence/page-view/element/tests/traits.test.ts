@@ -57,3 +57,10 @@ test("the line an element gets: control, then layer, then text, then image", () 
   assert.equal(webLlmViewTraits(el({ tag: "img" })).lineRole, undefined, "an image without an alt says nothing");
   assert.equal(webLlmViewTraits(el({ tag: "li", text: "Kettle", ownText: "" })).lineRole, undefined, "a list item whose words are its children's");
 });
+
+test("an element with a cursor of its own is a control; a label with one is not (t229)", () => {
+  const box = { x: 0, y: 0, width: 50, height: 20 };
+  assert.equal(webLlmViewTraits({ target: "t1", tag: "div", cursor: "pointer", box }).lineRole, "control");
+  assert.equal(webLlmViewTraits({ target: "t1", tag: "div", cursor: "not-allowed", text: "Sold out", box }).lineRole, "control");
+  assert.equal(webLlmViewTraits({ target: "t1", tag: "label", cursor: "pointer", text: "Free shipping", box }).lineRole, "text");
+});

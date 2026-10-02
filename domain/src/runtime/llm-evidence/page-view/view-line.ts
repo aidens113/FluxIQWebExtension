@@ -9,6 +9,8 @@ export type WebLlmViewLine = {
   role: WebLlmLineRole;
   /** What the line prints in quotes, W1 already applied; `undefined` for a line with no words. */
   words: string | undefined;
+  /** Only on a control line named by the alts of the images it holds (rule 5), whose words the image rule may take back. */
+  imageWords?: true;
   /** Only on a line F4 made from a run of letterless fragments: the elements whose words it joined. */
   merged?: readonly WebLlmEvidenceElement[];
 };

@@ -58,6 +58,7 @@ import {
   isSemanticTextElement
 } from "./element-traits";
 import { accessibleNameFor, authoredNameAttribute, elementContext, implicitRole, labelText } from "./identity";
+import { pageListensForPress } from "./page-press";
 import { selectorFor } from "./selector";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "./sensitive-text";
 import type { DomElementDescriptor } from "./types";
@@ -72,7 +73,9 @@ export function describeElement(element: Element): DomElementDescriptor {
   };
   if (bounds) descriptor.bounds = bounds;
   if (docBounds) descriptor.documentBounds = docBounds;
-  if (hasClickHandler(element)) descriptor.hasClickHandler = true;
+  // An `onclick` this world can see, or a press listener the page world saw
+  // the page add (t229): a `<div>` bound in script is a control too.
+  if (hasClickHandler(element) || pageListensForPress(element)) descriptor.hasClickHandler = true;
   const text = isInteractableUiElement(element) || isSemanticTextElement(element)
     ? visibleText(element)
     : directVisibleText(element);
