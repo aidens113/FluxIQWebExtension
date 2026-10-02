@@ -56,6 +56,13 @@ test("accepts workflow and variant ids, the reported automation failure, and ste
   assert.equal(parseRunManifestJson(JSON.stringify(value)).variantId, "short-catalog");
 });
 
+// A sometimes-present step observed absent did not run: it is neither succeeded nor failed.
+test("an action the run skipped is recorded as skipped", () => {
+  const value = manifest({ actions: [{ actionType: "web.dom.click", startedAt: "2026-09-11T10:00:04.000Z", durationMs: 30, status: "skipped" }] });
+  assert.deepEqual(issuePaths(value), []);
+  assert.equal(parseRunManifestJson(JSON.stringify(value)).actions[0].status, "skipped");
+});
+
 test("null records that FluxIQ reported no automation failure", () => {
   assert.deepEqual(issuePaths(manifest({ automationFailure: null })), []);
 });

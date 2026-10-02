@@ -30,13 +30,14 @@
 export type NodeAttempt = { readonly status?: unknown; readonly nodeId?: unknown; readonly failure?: { readonly stage?: unknown } | null; readonly clearedByPerson?: unknown };
 
 /**
- * Whether an attempt ended its node well: it succeeded, or it failed on a check
+ * Whether an attempt ended its node well: it succeeded, it was skipped (a
+ * sometimes-present step observed absent, so the run went on), or it failed on a check
  * only a person could pass and a person cleared it, so the run went on down the
  * node's `success` route with no further attempt (`persisted-flow-run.ts`
  * `clearedByPerson`).
  */
 function endedWell(attempt: NodeAttempt | undefined): boolean {
-  return attempt?.status === "succeeded" || attempt?.clearedByPerson === true;
+  return attempt?.status === "succeeded" || attempt?.status === "skipped" || attempt?.clearedByPerson === true;
 }
 
 /**

@@ -93,6 +93,53 @@ test("a declared literal, a credential shape and a value the extension marked re
   }
 });
 
+const NOT_FOUND = { category: "target_not_found", code: "web.target.not_found", retryable: false, stage: "target_resolution", expected: "the Accept button", actual: "no such control on the page" };
+
+test("a host attempt the run skipped (a sometimes-present step observed absent) is written as skipped, never failed", async (t) => {
+  const { attemptsDirectory, stepsDirectory } = await setUp(t, {
+    popup: attempt("popup", 1000, { status: "failed", failure: NOT_FOUND }),
+    // The same failure on a step the run did not skip stays a failure.
+    real: attempt("real", 3000, { status: "failed", failure: NOT_FOUND }),
+  });
+  const written = await writePlaybackSteps({
+    attemptsDirectory, stepsDirectory, since: 0, until: 5000, redactionLiterals: [],
+    skippedSteps: [{ nodeId: "node.popup", startedAt: 900, finishedAt: 1500, reason: "target_absent", code: "web.target.not_found" }],
+  });
+  assert.deepEqual(written.steps, [46, 47]);
+  const skipped = path.join(stepsDirectory, "0046-run-web.dom.click");
+  const meta = JSON.parse(await readFile(path.join(skipped, "meta.json"), "utf8"));
+  assert.equal(meta.status, "skipped");
+  assert.equal(meta.failureCode, null);
+  assert.deepEqual(meta.skipped, { reason: "target_absent", code: "web.target.not_found", nodeId: "node.popup" });
+  assert.match(meta.summary, /^skipped/u);
+  const result = JSON.parse(await readFile(path.join(skipped, "result.json"), "utf8"));
+  assert.equal(result.status, "skipped");
+  assert.equal(result.failure, null);
+  assert.equal(result.observed.actual, "no such control on the page", "what observed the absence is kept as evidence");
+  assert.equal(JSON.parse(await readFile(path.join(stepsDirectory, "0047-run-web.dom.click", "meta.json"), "utf8")).status, "failed");
+  const index = await readFile(path.join(stepsDirectory, "index.md"), "utf8");
+  assert.match(index, /\| 0046 \| run \| web\.dom\.click \| skipped/u);
+  assert.match(index, /\| 0047 \| run \| web\.dom\.click \| web\.target\.not_found:/u);
+});
+
+test("a skip that dispatched nothing (its ready state was judged not shown) is its own skipped step, in time order", async (t) => {
+  const { attemptsDirectory, stepsDirectory } = await setUp(t, { a: attempt("a", 1000), b: attempt("b", 3000) });
+  const written = await writePlaybackSteps({
+    attemptsDirectory, stepsDirectory, since: 0, until: 5000, redactionLiterals: [],
+    skippedSteps: [
+      { nodeId: "node.banner", startedAt: 2000, finishedAt: 2000, reason: "target_absent", code: "executor.ready_state.not_shown" },
+      // Outside the playback's window: a build's or a later replay's skip.
+      { nodeId: "node.other", startedAt: 9000, finishedAt: 9000, reason: "target_absent", code: "executor.ready_state.not_shown" },
+    ],
+  });
+  assert.deepEqual(written.steps, [46, 47, 48]);
+  assert.deepEqual((await readdir(stepsDirectory)).sort(), ["0045-judge", "0046-run-web.dom.click", "0047-run-skipped", "0048-run-web.dom.click", "index.md"]);
+  const meta = JSON.parse(await readFile(path.join(stepsDirectory, "0047-run-skipped", "meta.json"), "utf8"));
+  assert.equal(meta.status, "skipped");
+  assert.deepEqual(meta.skipped, { reason: "target_absent", code: "executor.ready_state.not_shown", nodeId: "node.banner" });
+  assert.equal(JSON.parse(await readFile(path.join(stepsDirectory, "0047-run-skipped", "call.json"), "utf8")).dispatched, false);
+});
+
 test("a run with no command attempts writes nothing and leaves Core's index alone", async (t) => {
   const root = await scratch(t);
   assert.deepEqual(await writePlaybackSteps({ attemptsDirectory: path.join(root, "absent"), stepsDirectory: path.join(root, "steps"), since: 0, until: 1, redactionLiterals: [] }), { steps: [], redacted: 0 });

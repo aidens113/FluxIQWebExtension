@@ -9,6 +9,7 @@ import { runActionStatus } from "../run-manifest/index.js";
 import { readHarnessRecovery, type HarnessRecoveryControl } from "./harness-recovery.js";
 import { LAB_PROJECT_DOMAIN_ID } from "./lab-project-domain.js";
 import { recoveredByNode } from "./node-recovery.js";
+import { skippedAttemptOf, type PersistedFlowActionSkip } from "./skipped-attempt.js";
 import { readRunDatasets, runDatasetSummaries, type FlowRunDataset, type RunDatasetSummary } from "./run-datasets.js";
 import { readFlowRunRoute, type FlowRunRoute } from "./taken-route.js";
 import { awaitTerminalRunDetail, LIVE_LLM_RUN_WAIT_MS, pendingWork, terminalDetailWaitMs, type PendingWork, type PersistedFlowTerminalWait } from "./terminal-run-wait.js";
@@ -125,6 +126,8 @@ export type PersistedFlowAction = {
    */
   hostTargetResolution?: PersistedHostTargetResolution;
   failure: AutomationStudioFailureRecord | null;
+  /** Set when Core skipped this node rather than ran it, a sometimes-present step observed absent (`skipped-attempt.ts`). */
+  skipped?: PersistedFlowActionSkip;
   /**
    * True when this attempt failed on something only a person can get past --
    * a robot check -- and a person cleared it: Core asked (`metadata.ask`,
@@ -571,7 +574,7 @@ function stopWithoutFailedAttempt(
   attemptedNodeIds: ReadonlySet<string>,
   actionTypes: ReadonlyMap<string, string> | undefined,
 ): FlowStopWithoutFailedAttempt | undefined {
-  if (status !== "failed" || !actionTypes?.size || !actions.every((action) => action.status === "succeeded")) return undefined;
+  if (status !== "failed" || !actionTypes?.size || !actions.every((action) => action.status === "succeeded" || action.status === "skipped")) return undefined;
   const actionNodeIds = [...actionTypes.keys()];
   const attemptedActions = actionNodeIds.filter((nodeId) => attemptedNodeIds.has(nodeId)).length;
   const unvisitedActions = actionNodeIds.length - attemptedActions;
@@ -662,15 +665,18 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
   const evidencePackets = evidencePacketsOf(attempt);
   const comparisonStatus = comparisonStatusOf(attempt);
   const extraction = extractionReadOf(attempt);
+  const skipped = verification ? undefined : skippedAttemptOf(attempt, startedAt, finishedAt);
   return {
     actionType: verification ? RESULT_VERIFICATION_ACTION_TYPE : actionTypes.get(nodeId) ?? (typeof attempt.definitionId === "string" ? attempt.definitionId : "unknown"),
     nodeId: attemptNodeId(nodeId),
     attemptIndex,
-    status: runActionStatus(attempt.status),
+    // A skipped step did not run: Core writes `succeeded`, which is not what it was.
+    status: skipped ? "skipped" : runActionStatus(attempt.status),
     startedAt: new Date(startedAt).toISOString(),
     ...(finishedAt === undefined ? {} : { durationMs: Math.max(0, Math.round(finishedAt - startedAt)) }),
     // Core's own record, parsed by Core's parser. A record Core would reject is treated as absent.
     failure: parseAutomationStudioFailureRecord(attempt.failure) ?? null,
+    ...(skipped ? { skipped } : {}),
     ...(clearedByPerson(attempt) ? { clearedByPerson: true as const } : {}),
     ...(isFiniteNumber(recordCount) ? { recordCount } : {}),
     ...(extraction ? { extraction } : {}),

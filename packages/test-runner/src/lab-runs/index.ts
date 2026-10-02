@@ -17,4 +17,4 @@ export { readRunEntry, type LabRunEntry } from "./run-entry.js";
 export { labRunsRoot } from "./runs-root.js";
 export { StepScreenshotWatcher, type StepCapture, type StepScreenshotWatcherInput } from "./step-screenshot-watcher.js";
 export { writeFileAtomically } from "./write-atomically.js";
-export { writePlaybackSteps, type PlaybackStepsInput, type PlaybackStepsWritten } from "./write-playback-steps.js";
+export { writePlaybackSteps, type PlaybackSkippedStep, type PlaybackStepsInput, type PlaybackStepsWritten } from "./write-playback-steps.js";
