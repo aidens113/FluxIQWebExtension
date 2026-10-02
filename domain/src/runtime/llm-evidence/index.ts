@@ -127,3 +127,6 @@ export {
   type WebLlmFailureEvidenceRequest,
   type WebLlmStateDigestRequest
 } from "./tools";
+// What every model request is told about operating a website for a person
+// (t237): Core places it in the system message through its `systemInstructions` seam.
+export { WEB_LLM_SYSTEM_INSTRUCTIONS } from "./system-instructions";
