@@ -433,6 +433,105 @@ in the Lab ledger (`chat/build-from-chat.ts:165-170`). For t191: the UI defects 
     is never asked); the first is a correctness check. Convert them to checklist information if t228's rule covers
     completion checks.
 
+**Round 4 (after F35-F40 merged: Core `43085660`, downstream `45c054c5`). Live runs PAUSED for t229 (the page view
+hides icon-only buttons and placeholder-only search boxes).**
+- **w24a: verify reads a target hidden in a closed panel.** Done; the lead has not validated it yet.
+  - The check never found the shadow-root store chooser at all: `web.dom.assert` looked only in the light document.
+    Now the assert looks inside the target's recorded shadow root.
+  - A target hidden by a closed container reports `enclosed:`, and `verify.ts` answers `core.replay.failed` /
+    `found: "hidden"`. A target hidden itself, or gone, on its own page stays `present`.
+  - Limit: run 40's own state (Millbrook already chosen, its card shows "Your store" instead of the button) still reads
+    `present`, which is right: the effect is in place. The missing chip press shows only on a fresh site. The test runs
+    on remembered state (A2-5, open), so it cannot see that.
+- **w24c: run 37's debug and fix.** Done; the lead has not validated it yet. Debug: `debugs/run-muq5v4zg-39182b58.md`.
+  - Cause: the per-item telling never said which step gets the repeat, so the model put it on the listing.
+  - The `over_not_before` refusal named no step. The schema said "first rerun the listing with a where" with no
+    condition, so the model resent an identical rerun three times and RG ended the round.
+  - Fixed in `flow-draft/{amendment, entry}.ts` and `llm/draft-amendment-feedback.ts`: positions, the exact repeat to
+    send, and "a listing that already keeps the right rows is not run again".
+  - For lane B: RG's count resets when an iteration is skipped. The repair's first look was refused
+    `not_at_start_location`. `address_not_shown` refused a correct URL.
+- **w24b: an act claim is bound to its object, and a quantity to a quantity step.** Done as refusals; **superseded**
+  by the structural change below, so its reasons become checklist information.
+- **Structural change (coordinator, replaces w24b's refusals; top priority).**
+  - The instructed-act completion check stops REFUSING. A completion the model declares ready goes to phase 2: the
+    test from the start, then a judge of the test's actual results against the instruction.
+  - A wrong result goes to repair with the judge's reasons.
+  - The checklist (including w24b's object and quantity findings and `span_stops_short`) is information for the model
+    and context for the judge.
+  - `act_consequence_undeclared` stays, because it is what makes a delete get asked.
+  - A re-authored Flow is judged on its own test, never on claims carried from the earlier Flow (lane A run 41).
+  - Cases to pin: lane B's `choice_is_the_act_step` ×6; run 36's 24 refusals with the checklist at done; lane A's
+    napkins-on-towels claim, which the judge must catch from the result.
+  - Step 1: w25 (read-only) maps the completion -> test -> judge -> repair path and partitions the change by file.
+    Step 2: implementation workers.
+
+**Ready to commit (session 4e, F41-F43).** Exactly the dirty files of both trees: downstream 6 modified + 2 new (F41);
+Core 58 paths (F42, F43). Reports `t195-w24{a,b,c}-*.md`, `t195-w25-completion-judge-design.md`, `t195-w26{a..d}-*.md`,
+`t195-w27-service-judge-tests.md`; debug `debugs/run-muq5v4zg-39182b58.md`.
+- **F41 (w24a): the build's test no longer passes a target hidden in a closed panel.**
+  - `web.dom.assert` looks the selector up inside the target's recorded shadow root (the bigbox store chooser lives in
+    one).
+  - A failed `visible` claim says `enclosed:` when a closed container hides it. `verify.ts` (`hidden-target.ts`, new)
+    then answers `core.replay.failed` / `hidden`.
+  - A target hidden itself, or gone, on its own page stays `present`. A target replaced because its effect is in place
+    (Millbrook's card showing "Your store") stays `present` too, which is right; the missing chip press shows only on a
+    fresh site (A2-5).
+  - Files: extension `content/action-runtime/assertion-evaluation.ts`, `content/actions/assert.ts` + tests; domain
+    `node-run/{verify, missing-target, hidden-target (new)}.ts` + `tests/replay-verify.test.ts`.
+- **F42 (w24c): run 37's cause.**
+  - The per-item telling and the schema name which step gets the repeat, and give the exact amendment to send.
+  - `over_not_before` carries the step the model named. A refusal about a listing carries a `next` with positions.
+  - "A listing that already keeps the right rows is not run again."
+  - Files: Core `flow-draft/{amendment, entry}.ts`, `llm/draft-amendment-feedback.ts` + tests.
+- **F43 (w25 design; w26a-d; w27; lead integration): the completion check is information; the test and the judge
+  decide.**
+  - W1 (`llm/node-tools/{replay-draft, dry-run-gate}.ts`, `loop-configuration.ts`, one line of `evidence-loop.ts`): the
+    test keeps each step's observation and reports it on every pass.
+  - W2 (`instructed-acts/*`, new `permission.ts`, `harness-options/{bootstrap-completion, draft-acts}.ts`): the
+    completion refuses only `act_consequence_undeclared`. Everything else, including w24b's object and quantity
+    findings and the repeat suggestion, is checklist information.
+  - W3 (`unfinished-build/*`, `llm/evidence-loop/resume.ts`): a finished round is judged.
+    - `yes` proposes.
+    - `no` repairs with the judge's expected/observed/advice; "not doable" only when a repair hands back the same Flow.
+    - `unknown`/`not_judged` proposes unverified, except a re-author with untested carried steps (run 41), which
+      repairs.
+  - W4 (new `result-verification/build-test/`, `contracts.ts`, `llm/diagnosis-instructions.ts`,
+    `llm/harness/request-evidence-check.ts`): `verifyAutomationStudioRunResult` over a `buildTest` account. That is
+    each step's own words, its claims as claims, the test's outcome and observation, and exploration's evidence for
+    withheld steps.
+  - w27: the service-bootstrap tests account for the judge's request. New `judged-build.test.ts` covers:
+    - a build reaches the judge with the test's observations;
+    - `no` repairs with the reasons;
+    - `yes` after repair proposes;
+    - no cost proposes "Flow not verified";
+    - run 40's napkins-on-towels reaches the judge.
+  - Lead:
+    - new `service/flow-bootstrap-commands/build-judge.ts` holds the wiring, so `service.ts` keeps its 4,491 lines;
+    - `service.ts` passes `observeTest`, `judge`, the unverified chat note, and `registry`/`resolution` for the
+      checklist's repeat suggestion;
+    - `incomplete-draft/parse.ts` accepts `judged_wrong`;
+    - `draft-from-flow.ts` exports `automationStudioFlowDraftStepCarried`, which the summary uses;
+    - the judge gives each of verify's two calls half of what is left, so it never overspends;
+    - `EXPLORE_AGAIN_INSTRUCTION` says complete when the Flow does what is asked;
+    - the `checklist.ts` comment is updated.
+- **Lead's validation, after the last edit:**
+  - Core `npx vitest run` over `flow-bootstrap/{instructed-acts, unfinished-build, incomplete-draft, tests}`,
+    `llm/{harness-options, node-tools, evidence-loop, evidence-progress, harness, tests}`, `flow-draft`,
+    `result-verification`, `tests/service-bootstrap` and `service/flow-bootstrap-commands` -> `Test Files 154 passed
+    (154)`, `Tests 1540 passed (1540)`.
+  - Core `tsc --noEmit` -> no errors. Core structure audit -> `passed (213 warning(s), 349 baselined)`. Core libraries
+    rebuilt -> `build-exit=0`.
+  - Downstream domain check -> 0; extension check -> 0 (dev's panel and `covered-press` errors are gone).
+  - Domain `node-run/tests` -> 107/107. Extension `content/action-runtime/tests` + `content/actions/tests` -> 204/204.
+  - `test:content -- check-assert.spec.ts` -> 14 passed. Downstream audit -> passed.
+- **For the supervisor:**
+  - Answerability and start-location still refuse completions; they were outside this change.
+  - A build audit's `providerCallCount` leaves out the judge's calls, though `accounting` includes them
+    (`service/flow-bootstrap-commands/evidence-trace.ts:232`).
+  - A run-41-shaped Flow with untested carried steps and no budget left ends at the budget with the draft kept, not
+    proposed.
+
 **Next.**
 - For t223 (its files): `tool-rejection.ts` rewords `consequences_declined`. F29's `run.ts` line is done. The frame URL is
   still reachable (w20h checked).
