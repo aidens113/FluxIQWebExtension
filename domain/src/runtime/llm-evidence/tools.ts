@@ -35,6 +35,7 @@ import type { FluxIQ } from "fluxiq";
 import type {
   AutomationStudioExplorationStopReason,
   AutomationStudioHarnessOptionBundle,
+  AutomationStudioLlmDomainSystemInstructions,
   AutomationStudioRuntimeTargetOverrideEvidenceValidation,
   AutomationStudioRuntimeTargetOverrideFailedAction,
   AutomationStudioRuntimeTargetOverrideTarget
@@ -63,6 +64,7 @@ import {
 } from "./harness-options";
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "./denied-keys";
 import { WEB_LLM_VIEW_KEYS } from "./observed-state";
+import { WEB_LLM_SYSTEM_INSTRUCTIONS } from "./system-instructions";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import { createWebNodeArrivals, createWebNodeShownAddresses, runWebOutputNode, webLlmCallWords, webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_NAVIGATION_ACTION, type WebLlmCallWords } from "./node-run";
 import {
@@ -145,6 +147,8 @@ export type WebAutomationLlmEvidenceRuntime = {
   /** The keys Core refuses in evidence from this domain. Core carries no browser vocabulary of its own, so the domain that knows what these words mean declares them and Core enforces the declaration. Required here, because the producer always knows: an evidence runtime that declared nothing would silently deny nothing. */
   deniedEvidenceKeys: readonly string[];
   observedStateKeys: readonly string[];
+  /** What Core tells the model on every request for this domain's work: that it operates a website for a person, how the page view reads, and the rules (`./system-instructions/`). Core checks it when the runtime is bound. */
+  systemInstructions: AutomationStudioLlmDomainSystemInstructions;
   tools: Array<{ toolId: string; description: string; inputSchema: JsonObject; effect?: "observe" | "mutate"; repeatPolicy?: "after_mutation"; initialObservation?: { input: JsonObject } }>;
   /**
    * That this domain can run a node of the library against its live page, and
@@ -322,6 +326,8 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
     deniedEvidenceKeys: WEB_LLM_DENIED_EVIDENCE_KEYS,
     // The page and a read's rows, each replaced only by a newer one of its kind (`./observed-state/`).
     observedStateKeys: WEB_LLM_VIEW_KEYS,
+    // Placed by Core in the system message of every model request (t237).
+    systemInstructions: WEB_LLM_SYSTEM_INSTRUCTIONS,
     // The options a runtime recovery may explore with, declared in full so
     // they carry their own availability, safety and stages and never reach
     // Flow authoring. `same_scope` is the safe default and matches what the
