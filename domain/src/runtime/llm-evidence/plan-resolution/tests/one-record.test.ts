@@ -65,8 +65,8 @@ test("the record's handle with two of its columns resolves to the card's item an
       extractList: {
         item: REPLY_CARD.item,
         fields: {
-          item: { kind: "text", selector: REPLY_CARD.name, required: true },
-          price: { kind: "text", selector: REPLY_CARD.price, required: true }
+          item: { kind: "text", selector: REPLY_CARD.name, required: false },
+          price: { kind: "text", selector: REPLY_CARD.price, required: false }
         },
         // One record reads one row, though the plan wrote no bound.
         maxItems: 1
@@ -85,7 +85,7 @@ test("the record's handle with two of its columns resolves to the card's item an
   // The Flow keeps the resolved request; read back as a draft, with each
   // selector withheld, it is the Flow's own list and gets them back.
   const kept = (resolved as { parameters: { extractList: JsonObject } }).parameters.extractList;
-  const draft = { item: kept.item as string, fields: { item: { kind: "text", required: true }, price: { kind: "text", required: true } }, maxItems: 1 };
+  const draft = { item: kept.item as string, fields: { item: { kind: "text", required: false }, price: { kind: "text", required: false } }, maxItems: 1 };
   assert.deepEqual(await resolve(runtime, draft), { status: "resolved", parameters: { extractList: kept } });
 });
 
@@ -102,9 +102,9 @@ test("a receipt detected as a list of one builds an extract node that reads exac
       extractList: {
         item: "dl.tl-receipt",
         fields: {
-          role: { kind: "text", selector: ":scope > dd:nth-of-type(1)", required: true },
-          company: { kind: "text", selector: ":scope > dd:nth-of-type(2)", required: true },
-          reference: { kind: "text", selector: ":scope > dd:nth-of-type(3)", required: true }
+          role: { kind: "text", selector: ":scope > dd:nth-of-type(1)", required: false },
+          company: { kind: "text", selector: ":scope > dd:nth-of-type(2)", required: false },
+          reference: { kind: "text", selector: ":scope > dd:nth-of-type(3)", required: false }
         },
         minItems: 1,
         maxItems: 1

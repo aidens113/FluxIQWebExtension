@@ -386,6 +386,27 @@ test("a build that proposed no Flow is written down with what the lane knew, and
   assert.equal(JSON.stringify(written).includes("Scrape the first page"), false);
 });
 
+/**
+ * `run-murdouox-c5294247` was typed into the chat and stopped at its build, and
+ * its `flow-lane.json` could not say how it was started: only the complete
+ * snapshot carried `buildEntry`. The incomplete one says it too, from the lane's
+ * own entry, whether or not the build left a chat record.
+ */
+test("an incomplete snapshot says how the build was started, as the complete one does", async () => {
+  const diagnostic = { code: "flow_bootstrap.evidence_repeat_without_progress", stage: "provider_output_validation", retryable: false, providerInvocation: "attempted", providerResponse: "received" };
+  const direct = await runLane(fakeCreationCore({ generation: { kind: "refused", status: 400, payload: { diagnostic } } }));
+  await assert.rejects(direct.run);
+  assert.equal(direct.incomplete[0]?.buildEntry, "direct-api");
+
+  // Typed into the chat, built, and then refused at its settlement: the build is held, and so is how it was started.
+  const refused = new RunnerFailure("runtime.behavior", "Live LLM run reached no provider");
+  const { core, entry } = chatCore();
+  const chat = await runLane(core, { entry, settle: async () => { throw refused; } });
+  await assert.rejects(chat.run, (error: unknown) => error === refused);
+  assert.equal(chat.incomplete[0]?.stoppedAt, "build");
+  assert.equal(chat.incomplete[0]?.buildEntry, "chat");
+});
+
 test("a settlement that refuses after the build still carries the build, and a failure after the publish leaves the complete snapshot alone", async () => {
   const refusal = new RunnerFailure("runtime.behavior", "Live LLM run reached no provider");
   const unsettled = await runLane(fakeCreationCore(), { settle: async () => { throw refusal; } });
@@ -534,6 +555,21 @@ test("a task whose act the operator permitted had nothing to ask, so no grant is
  * and approves nothing.
  */
 test("a build started from the extension's chat runs and is judged like any other, and the lane builds and reviews nothing itself", async () => {
+  const { core, entry, typed } = chatCore();
+  const { run, settled } = await runLane(core, { entry });
+  const outcome = await run;
+  assert.deepEqual(typed, [resolveCreatedFlowRequest(catalogScenario, datasetTask()).task.instruction], "the task's own instruction, typed once");
+  for (const call of ["create-flow", "save-flow-generation-instruction", "authorize", "generate", "approve", "apply"]) assert.equal(core.calls.includes(call), false, `the lane made no ${call} call of its own`);
+  assert.deepEqual(core.calls.slice(0, 3), ["prepare", "authorize-chat", "select-context"], "the page is presented and the key installed before anything is typed");
+  assert.equal(settled.length, 1);
+  assert.equal(settled[0]?.chat?.ending, "created");
+  assert.deepEqual(outcome.review, { adaptationId: ADAPTATION_ID, appliedMutationCount: 2 });
+  assert.equal(outcome.observation.reportedVerdict, "passed");
+  assert.equal(createdFlowLaneSnapshot(outcome).buildEntry, "chat");
+});
+
+/** A fake Core with a chat in front of it: the typed instruction makes, builds and applies the Flow, as Core's chat command does. */
+function chatCore(): { core: ReturnType<typeof fakeCreationCore>; entry: CreatedFlowLaneEntry; typed: string[] } {
   const core = fakeCreationCore({ adaptationStatus: "applied" });
   const base = core.control;
   const turns: Array<Record<string, unknown>> = [];
@@ -569,14 +605,5 @@ test("a build started from the extension's chat runs and is judged like any othe
     },
     wait: { pollMs: 1 },
   };
-  const { run, settled } = await runLane(core, { entry });
-  const outcome = await run;
-  assert.deepEqual(typed, [resolveCreatedFlowRequest(catalogScenario, datasetTask()).task.instruction], "the task's own instruction, typed once");
-  for (const call of ["create-flow", "save-flow-generation-instruction", "authorize", "generate", "approve", "apply"]) assert.equal(core.calls.includes(call), false, `the lane made no ${call} call of its own`);
-  assert.deepEqual(core.calls.slice(0, 3), ["prepare", "authorize-chat", "select-context"], "the page is presented and the key installed before anything is typed");
-  assert.equal(settled.length, 1);
-  assert.equal(settled[0]?.chat?.ending, "created");
-  assert.deepEqual(outcome.review, { adaptationId: ADAPTATION_ID, appliedMutationCount: 2 });
-  assert.equal(outcome.observation.reportedVerdict, "passed");
-  assert.equal(createdFlowLaneSnapshot(outcome).buildEntry, "chat");
-});
+  return { core, entry, typed };
+}
