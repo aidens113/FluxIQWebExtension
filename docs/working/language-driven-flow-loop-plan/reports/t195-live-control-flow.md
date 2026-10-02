@@ -547,6 +547,70 @@ committed.
   `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD`.
 - The framework reference is regenerated.
 
+**Ready to commit (session 4f, F44-F46, Core only; on the Core base before dev's latest 6 commits: a hook refuses
+`git merge` for leads, so the supervisor merges dev).** Reports `t195-w28a-completion-info-lean-judge.md`,
+`t195-w28b-judge-call-count.md`.
+- **F44 (w28a): answerability and start location are information.**
+  - A Flow with no record producer for a requested table, or one that never reaches its start, is accepted. What the
+    checks found travels as `notes` on the accepted verdict, then to the judge's `buildTest.notes` (the lead wired
+    `notes`/`observedStateKeys` into `service.ts`'s build judge, on its existing line).
+  - Checks 1-5 (plan that cannot be built) still refuse. Core's `llm-flow-bootstrap.md` is updated (the lead).
+- **F45 (w28a): the judge's request is lean.**
+  - On live run 36's 11-step Flow it went from 28,214 to 8,113 characters. Six page views were 17,816 of it.
+  - Cut: view keys, Core bookkeeping, repeated text (now `as step N`), handles and machine field keys. Rows stay whole.
+  - Pinned by `request-size.test.ts` on a run-36 fixture (`run-36-test.json`, synthetic scenario content; scanned: no
+    tokens or credentials).
+- **F46 (lead, after w28b stopped on a contract): the build's provider count agrees with its accounting.**
+  - The test-runner requires `decisionCount === providerCallCount`, and calls outside the loop belong in
+    `additionalProviderCallCount`/`totalProviderCallCount` (`evidence-trace.ts:183-205`). So the judge's spend gains
+    `calls` (one per verify intervention), the build judge accumulates them (`calls()`), and `service.ts:1633` adds them
+    to the authority's calls.
+  - Tests:
+    - `build-judge.test.ts` (2 then 4 calls; none without cost);
+    - `judge.test.ts` pins;
+    - `generation.test.ts` audit `additionalProviderCallCount: 1, totalProviderCallCount: 2`. With the `service.ts`
+      addition reverted, it reads `additionalProviderCallCount: 0`.
+  - `service.ts` stays at 4,491 lines.
+- **Validation (lead, after the last edit):**
+  - Core `tsc --noEmit -p .` -> `tsc-exit=0`.
+  - vitest over `result-verification`, `service`, `tests/service-bootstrap`, `llm/harness-options`, `llm/tests` and
+    `flow-bootstrap` -> `Test Files 1 failed | 178 passed (179)`, `Tests 1 failed | 2090 passed | 1 skipped`. The one
+    failure, `run-detail-preservation.test.ts`, passes alone 3/3 (2.9 s); it is a timeout under the parallel run.
+  - Structure audit -> `passed (215 warning(s), 349 baselined)`. Docs reference regenerated (2924 declarations),
+    `--check` -> current.
+- **Left for owners:** dead `cannot_reach_start` entries in `generation-failure/codes.ts`, `evidence-failure.ts` and
+  `activity/wording/completion-refusal.ts`.
+
+**Ready to commit (session 4g: dev's failing tests, on Core `4e8106c1`).** Reports `t195-w29-exploration-test.md` and
+`t195-w30-split-exploration-test.md`.
+- **Refuted-result (intended, expectations updated).** `reauthor-service.test.ts` (2) and `repair-replay-chain.test.ts`
+  (1) see one more `loop_verification`: the judge of the re-author build's own test. F43 intends it: the re-author is a
+  build, and a re-authored Flow is judged on its own test. The repaired run is then verified as before. The right-rows
+  check moves to the last call, and the build judge's call is asserted to carry `buildTest`. "Replays with no provider
+  call" still holds.
+- **`extension-chat.test.ts` "improve an automation" (defect, source fixed).** An extended draft's carried steps have
+  no replay (`draft-from-flow.ts`), so no build test can run them. W3's rule (an unsure verdict with untested carried
+  steps is repaired) made every improvement the judge could not see whole end "not doable".
+  - `phases.ts`: now only `no` repairs. An unsure verdict proposes unverified, and the "Flow not verified" chat note
+    names the carried steps (`build-judge.ts`). The claims still never decide, and the first real run is judged.
+  - `judged.test.ts`: the run-41 case is updated, and a new case pins that a `no` still repairs a re-authored Flow.
+- **`deepseek-bootstrap-exploration.test.ts` (4; intended F43/F44, rewritten by w29).**
+  - The stub now answers the judge, so `revealed` = decisions + judge calls.
+  - The 26-decision and "converges" cases encoded the answerability refusal loop F44 removed. Now the completion at
+    decision 10 is accepted with its note, the judge says no, and a repair or exploration follows.
+  - w29 also found a defect, fixed by the lead: after a judge's `no` that left nothing in the Flow, the explore-again
+    instruction never said what the judge found. `resume.ts` now adds it (`resume.test.ts` pin).
+  - w30 split the file (913 lines > 800) into `tests/deepseek-bootstrap/tests/{harness, observation, replies}.ts` +
+    `{exploration, answerability}.test.ts`, a pure move. Stale path comments in `resume.ts` and
+    `provider-retry/decision.ts` are fixed.
+- `runtime/recovery` and `runtime/llm` pass on this base (154 files, 1476/1476).
+- **Validation (lead, after the last edit):**
+  - `tsc --noEmit -p .` -> `tsc-exit=0`.
+  - vitest over `tests/deepseek-bootstrap`, `llm/evidence-loop`, `llm/provider-retry`, `flow-bootstrap/unfinished-build`,
+    `conversations/commands/tests/extension-chat.test.ts`, `tests/refuted-result`, `tests/service-bootstrap` and
+    `service/flow-bootstrap-commands` -> `Test Files 70 passed (70)`, `Tests 429 passed (429)`.
+  - Structure audit -> `passed (214 warning(s), 349 baselined)`. Docs reference regenerated -> current.
+
 **Next.**
 - For t223 (its files): `tool-rejection.ts` rewords `consequences_declined`. F29's `run.ts` line is done. The frame URL is
   still reachable (w20h checked).
