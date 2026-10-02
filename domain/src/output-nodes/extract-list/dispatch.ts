@@ -17,6 +17,12 @@
 // else can only find nothing. Only a request that did not parse leaves an
 // authored path alone, since there is then no extraction to reconcile it with.
 //
+// **The declared columns (live run 11).** Where the author's record output
+// names a subset of the field map, the read the page is sent keeps only those
+// columns; a column kept only to filter by is read by its condition instead
+// (`./declared-columns.ts`). Only then is `extractList` sent as the reader read
+// it rather than as written, since only then is there anything to change.
+//
 // **The timeout (D14).** The page reads each page of a list within
 // `WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS`, and the command's `timeoutMs`
 // bounds the whole read, so a paginated read with the node's default is cut
@@ -53,6 +59,7 @@ import {
   webAutomationExtractListRequestValue,
   webAutomationExtractListTimeoutMs
 } from "../../actions/extraction";
+import { webAutomationDeclaredColumnsRead } from "./declared-columns";
 import { webAutomationDerivedRecordOutput } from "./derived-record-output";
 import { webAutomationReconciledRecordOutput } from "./reconciled-record-output";
 import { WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH } from "./records-path";
@@ -67,13 +74,16 @@ const ENCRYPT_UNAVAILABLE_ISSUE = "record_schema.encrypt_unavailable";
 
 export function webAutomationExtractListDispatch(nodeParameters: JsonObject): WebAutomationExtractListDispatch {
   const { recordOutput: authored, ...rest } = nodeParameters;
-  const request = webAutomationExtractListRequestValue(rest.extractList);
-  const parameters = request !== undefined && leftDefault(rest.timeoutMs)
-    ? { ...rest, timeoutMs: webAutomationExtractListTimeoutMs(request) }
-    : rest;
+  const written = webAutomationExtractListRequestValue(rest.extractList);
+  const narrowed = written === undefined ? undefined : webAutomationDeclaredColumnsRead(authored, written);
+  const request = narrowed?.request ?? written;
+  const read = narrowed === undefined ? rest : { ...rest, extractList: narrowed.request as unknown as JsonValue };
+  const parameters = request !== undefined && leftDefault(read.timeoutMs)
+    ? { ...read, timeoutMs: webAutomationExtractListTimeoutMs(request) }
+    : read;
   const declared = authored === undefined || authored === null
     ? request === undefined ? undefined : webAutomationDerivedRecordOutput(request)
-    : request === undefined ? withRecordsPath(authored) : webAutomationReconciledRecordOutput(authored, request);
+    : request === undefined ? withRecordsPath(authored) : webAutomationReconciledRecordOutput(authored, request, narrowed?.columns);
   const timeout = commandTimeout(parameters.timeoutMs);
   if (declared === undefined) return { ok: true, payload: { parameters, ...timeout } };
   const parsed = parseAutomationStudioRecordOutput(declared);

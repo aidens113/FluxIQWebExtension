@@ -8,7 +8,7 @@ const context = { runToken: "unit-test-run-token-0001", seed: 108 };
 
 /** The category and code each armed surface must be reported as. */
 const EXPECTED_FAILURES: Record<string, { category: string; code: string }> = {
-  disabled: { category: "blocked_by_capability_or_policy", code: "web.action.rejected" },
+  disabled: { category: "unexpected_state", code: "web.target.not_actionable" },
   detached: { category: "target_not_found", code: "web.target.not_found" },
   "blocked-url": { category: "navigation_unexpected", code: "web.navigation.unexpected" },
 };

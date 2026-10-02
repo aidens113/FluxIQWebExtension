@@ -48,7 +48,7 @@ test("type: every character is a keydown, beforeinput, input and keyup, and the 
   const harness = await openHarness("basic-form");
   const seen = await watchKeyboard(page, NAME);
   const reply = await harness.runAction({ commandId: "type-ab", actionType: "web.dom.type", selector: NAME, text: "Ab" });
-  expect(reply).toMatchObject({ status: "succeeded", validation: { status: "passed" }, message: "Text entered." });
+  expect(reply).toMatchObject({ status: "succeeded", validation: { status: "passed" }, message: expect.stringMatching(/^Text entered\. Typing pressed no other key/u) });
   expect(await seen()).toEqual([
     "keydown:A", "beforeinput:insertText", "input:insertText", "keyup:A",
     "keydown:b", "beforeinput:insertText", "input:insertText", "keyup:b",
@@ -222,7 +222,7 @@ test("type: a disabled field is rejected with a code, and not one key reaches it
     message: "Action rejected: the element is disabled",
     validation: { status: "failed", expected: "a target that can be typed into", actual: "the element is disabled" },
     failure: {
-      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
+      category: "unexpected_state", code: "web.target.not_actionable", retryable: false, stage: "execution",
       expected: "a target that can be typed into", actual: "disabled: the element is disabled"
     }
   });
@@ -242,7 +242,7 @@ test("clear: a disabled field is rejected, and keeps the value it held", async (
     message: "Action rejected: the element is disabled",
     validation: { status: "failed", expected: "a target that can be cleared", actual: "the element is disabled" },
     failure: {
-      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
+      category: "unexpected_state", code: "web.target.not_actionable", retryable: false, stage: "execution",
       expected: "a target that can be cleared", actual: "disabled: the element is disabled"
     }
   });
@@ -260,7 +260,7 @@ test("keypress: a disabled target is rejected, so Enter cannot submit a form the
     message: "Action rejected: the element is disabled",
     validation: { status: "failed", expected: "a target that can receive the key press", actual: "the element is disabled" },
     failure: {
-      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
+      category: "unexpected_state", code: "web.target.not_actionable", retryable: false, stage: "execution",
       expected: "a target that can receive the key press", actual: "disabled: the element is disabled"
     }
   });

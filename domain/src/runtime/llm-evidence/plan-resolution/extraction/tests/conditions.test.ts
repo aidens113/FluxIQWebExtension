@@ -20,7 +20,7 @@ import test from "node:test";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationExtractListRequestValue } from "../../../../../actions/extraction";
 import { webAutomationOutputNodeId } from "../../../../../output-nodes";
-import { webAutomationDerivedRecordOutput, webAutomationExtractListIssues } from "../../../../../output-nodes/extract-list";
+import { webAutomationDeclaredColumnsRead, webAutomationDerivedRecordOutput, webAutomationExtractListIssues } from "../../../../../output-nodes/extract-list";
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
@@ -37,6 +37,7 @@ const HINT = "web.handle.expected.extract_list.handle_fields_paginate";
 const NAME = { kind: "text", selector: '[data-testid="product-name"]', required: true } satisfies JsonObject;
 const BADGE = { kind: "text", selector: '[data-testid="stock-badge"]', required: true } satisfies JsonObject;
 const PRICE = { kind: "text", selector: '[data-testid="product-price"]', required: true } satisfies JsonObject;
+const LINK = { kind: "link", selector: '[data-testid="product-link"]', required: true } satisfies JsonObject;
 
 function runtime(): WebAutomationLlmEvidenceRuntime {
   return createWebAutomationLlmEvidenceRuntime({
@@ -139,13 +140,13 @@ test("a condition may say of a detected column everything the dispatch reader ac
     // The two exclusions the everything-store instruction of 2026-09-24 carried
     // and the Flow did not (`run-mug1z9k9-ef625d8b`): a sponsored placement,
     // and the accessories sold beside the thing asked for.
-    [[{ field: "product-name", contains: ["ear tips", "charging case"], not: true }], [{ read: NAME, contains: ["ear tips", "charging case"], not: true }]],
-    [[{ field: "product-name", matches: "^Acme" }], [{ read: NAME, matches: ["^Acme"] }]],
+    [[{ field: "product-name", contains: ["ear tips", "charging case"], not: true }], [{ field: "name", contains: ["ear tips", "charging case"], not: true }]],
+    [[{ field: "product-name", matches: "^Acme" }], [{ field: "name", matches: ["^Acme"] }]],
     [[{ field: "stock-badge", equals: "In stock" }], [{ read: BADGE, equals: ["In stock"] }]],
-    [[{ field: "product-name", startsWith: "Acme", endsWith: "Black" }], [{ read: NAME, startsWith: ["Acme"], endsWith: ["Black"] }]],
+    [[{ field: "product-name", startsWith: "Acme", endsWith: "Black" }], [{ field: "name", startsWith: ["Acme"], endsWith: ["Black"] }]],
     // Written under another name, and read as the phrase it means.
     [[{ field: "product-price", lt: 50 }], [{ read: PRICE, lessThan: 50 }]],
-    [[{ field: "product-name", regex: "^Acme" }], [{ read: NAME, matches: ["^Acme"] }]],
+    [[{ field: "product-name", regex: "^Acme" }], [{ field: "name", matches: ["^Acme"] }]],
     // The whole instruction, as four conditions on one node.
     [
       [
@@ -156,7 +157,7 @@ test("a condition may say of a detected column everything the dispatch reader ac
       [
         { read: BADGE, is: "absent" },
         { read: PRICE, lessThan: 50 },
-        { read: NAME, contains: ["charging case"], not: true }
+        { field: "name", contains: ["charging case"], not: true }
       ]
     ]
   ];
@@ -230,9 +231,10 @@ test("a condition may name a column by the key this plan keeps it under, which i
         extractList: {
           item: CARD,
           fields: { title: NAME, cost: PRICE },
-          // Still the column's own read: a saved request needs no field map,
-          // whichever vocabulary named the column.
-          where: [{ read: PRICE, lessThan: 50 }, { read: BADGE, is: "absent" }]
+          // A kept column is named by the key it is kept under, so the stored
+          // step says what the plan said; the column the table does not keep
+          // carries its own read.
+          where: [{ field: "cost", lessThan: 50 }, { read: BADGE, is: "absent" }]
         }
       }
     }
@@ -304,4 +306,72 @@ test("two nodes that read the same columns and keep different items save into di
   // The rows differ, so the tables must: appended into one dataset, a read that
   // left the advertisements out would be indistinguishable from one that did not.
   assert.notEqual(wholeId, filteredId);
+});
+
+test("a condition over a kept column is stored by the key the plan keeps it under, however it named the column", async () => {
+  const instance = runtime();
+  const { extraction } = await detect(instance);
+
+  // The stored step is what a re-author is shown, selector withheld, and what a
+  // rerun patch restates. As `read: {kind: "text", required: true}` it named no
+  // column a model could recognise or write back
+  // (`reports/t194-w39-reauthor-patches.md`, "Which layer resolves keys today").
+  const resolved = await resolve(instance, {
+    handle: extraction,
+    fields: { title: "product-name", cost: { key: "product-price", required: false }, link: "product-link@href" },
+    where: [
+      // The detected key of a kept column, and the plan's own key for it. The
+      // plan keeps the price optional and the detection showed it required:
+      // the same column, since a condition asks only whether the item has it.
+      { field: "product-price", lessThan: 50 },
+      { field: "cost", atLeast: 10 },
+      // The link column, kept as its `href` attribute: a different value from
+      // the link the detection reads, so no kept key holds it.
+      { field: "product-link", is: "present" },
+      // A column the table does not keep.
+      { field: "stock-badge", is: "absent" }
+    ],
+    paginate: false
+  });
+  assert.equal(resolved.status, "resolved", JSON.stringify(resolved));
+  const stored = resolved.status === "resolved" ? resolved.parameters.extractList as JsonObject : {};
+  assert.deepEqual(stored.where, [
+    { field: "cost", lessThan: 50 },
+    { field: "cost", atLeast: 10 },
+    { read: LINK, is: "present" },
+    { read: BADGE, is: "absent" }
+  ]);
+
+  // The dispatch reader reads the stored step as written, so a rerun patch
+  // that restates `field: "cost"` names the same column the plan resolved to.
+  const read = webAutomationExtractListRequestValue(stored);
+  assert.deepEqual(read?.where, stored.where);
+  assert.deepEqual(webAutomationExtractListIssues(stored), []);
+});
+
+test("a condition by key over a column the declared schema then drops reads that column through its own spec", async () => {
+  const instance = runtime();
+  const { extraction } = await detect(instance);
+
+  // F34's shape: a column kept only to filter by, under a record output that
+  // declares the others. The resolver names the helper by its kept key; the
+  // declared-columns read takes it out of the field map and must turn the
+  // condition back into the column's own read, or the reference dangles.
+  const resolved = await resolve(instance, {
+    handle: extraction,
+    fields: { title: "product-name", stock: "stock-badge" },
+    where: [{ field: "stock", is: "absent" }],
+    paginate: false
+  });
+  assert.deepEqual(resolved, {
+    status: "resolved",
+    parameters: { extractList: { item: CARD, fields: { title: NAME, stock: BADGE }, where: [{ field: "stock", is: "absent" }] } }
+  });
+  const request = webAutomationExtractListRequestValue(resolved.status === "resolved" ? resolved.parameters.extractList : undefined);
+  assert.notEqual(request, undefined);
+  const declared = webAutomationDeclaredColumnsRead({ schema: { fields: [{ id: "title" }] } }, request!);
+  assert.deepEqual(declared?.request.fields, { title: NAME });
+  const { required: _required, ...badgeRead } = BADGE;
+  assert.deepEqual(declared?.request.where, [{ read: badgeRead, is: "absent" }]);
+  assert.deepEqual([...declared!.columns], ["title"]);
 });

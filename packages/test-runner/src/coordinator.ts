@@ -41,6 +41,8 @@ export type TopologyOptions = {
    * Defaults to `runsDirectory`.
    */
   coreWebBuildCacheRoot?: string;
+  /** Where Core logs each model and tool step of the run (`FLUXIQ_LLM_STEP_LOG_DIR`); a live LLM run's central `steps/` folder, absent for any other run. */
+  stepLogDirectory?: string;
 };
 
 export type RunningTopology = {
@@ -134,7 +136,7 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
 
     supervisor.start(coreWebServerProcessSpec({
       name: "fluxiq-web", build: coreWebBuild, port: allocation.webPort,
-      env: buildFluxIQEnvironment(allocation, { repositoryRoot, fluxiqRepositoryRoot, hostModulePath }),
+      env: buildFluxIQEnvironment(allocation, { repositoryRoot, fluxiqRepositoryRoot, hostModulePath, ...(options.stepLogDirectory ? { stepLogDirectory: options.stepLogDirectory } : {}) }),
       logPath: processLogPath(allocation.logsDir, "core"),
     }));
     const fluxiqOrigin = `http://127.0.0.1:${allocation.webPort}`;

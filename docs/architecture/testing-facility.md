@@ -897,8 +897,10 @@ status: a negative variant pins its action that way and names the failure in
 reaches. There is no `rejected`: no lane can report one, so an expectation
 spelled that way would fail on itself, and manifest validation refuses it. A
 client refusal is declared as `failed`, with `expected.failure` naming the
-refusal: category `blocked_by_capability_or_policy`, code
-`web.action.rejected`.
+refusal: category `unexpected_state`, code `web.target.not_actionable` for a
+target the page would not let be used (hidden, covered, disabled), or category
+`blocked_by_capability_or_policy`, code `web.action.rejected` for one refused on
+purpose.
 
 Validation also refuses an `expected.actions` entry, on a workflow or on any of
 its variants, whose type no step of that workflow's recording script can yield
@@ -1299,13 +1301,26 @@ What the chat cannot carry is refused before anything starts
 
 - `--llm-permit`. The chat sends no permit; the person answers at the point
   instead.
+- `--llm-max-cost-usd` below Core's per-build ceiling (below).
 - A model other than Core's default for a new Flow.
 - `--no-live-panel`, or a panel that did not show (`environment.missing`).
 
 Two limits come with the chat path:
 
-- A chat build runs on Core's own limits for a new Flow (the $0.25 run
-  ceiling). The run's own caps are applied when it is settled.
+- Every build is held to one per-build ceiling however it is started:
+  Core's run cost ceiling, `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default $0.10,
+  passed by the Lab to the run's Core), lowered by the Flow's own
+  `maxEstimatedCostUsdPerRun`. Core computes it for every
+  `generate-flow-bootstrap-adaptation`, and the chat's `flow.createHere` makes
+  that same call. The run plans with the same value (`plan.buildCostCeilingUsd`,
+  `live-llm-plan.ts`), lowered by `--llm-max-cost-usd`, and a direct build
+  writes it onto its Flow. A chat build's Flow is made inside Core's command,
+  so a lowered ceiling has no Flow to go onto: `--llm-max-cost-usd` below the
+  run's ceiling is refused for a chat build (`assertChatBuildable`). A run's
+  total is the sum of its builds, which is why a chat build plus the Flow's
+  repair can pass the ceiling with every build under it
+  (`run-muq66ff9-cb3767a1`, under the earlier $0.25 ceiling: build $0.098,
+  reauthors $0.160, $0.043 and $0.011, result check $0.012).
 - A chat build that fails leaves no readable record of what it spent. Core's
   diagnostic reaches the thread's sentence only, so such a build's accounting
   is `null`.
@@ -1659,7 +1674,7 @@ declared as well as the cost. The lane itself runs each condition with **no**
 model at all -- no `--live-llm`, no key and no `runIntent` -- so what finished
 the run can only have been the deterministic runtime.
 
-A condition whose declaration says `none` is not a gap. `web.action.rejected`
+A condition whose declaration says `none` is not a gap. `web.target.not_actionable`
 (a covered control) and `web.auth.required` (an expired session) are both
 non-retryable in the domain's failure table, so the retry rung is never offered
 those nodes, and `clear_interference` has no node to run because nothing writes
@@ -2621,9 +2636,9 @@ recorded page data out of source control and user-facing logs.
 
 Live-provider testing is an explicit opt-in lane and is not part of ordinary deterministic runs or CI. The Testing Lab driver is the sole process allowed to read provider credential environment variables. A case-insensitive explicit provider-secret denylist is removed at the final managed-process boundary and from both direct Chromium launch paths, so Core, Scenario Lab, setup/build commands, the browser, and the loaded extension cannot inherit the source key. Repository-local schema 0.1 contracts describe the LLM task, a non-secret execution profile, sanitized invocation provenance, and review/replay evaluation.
 
-The default Lab allowance is the model's whole context window: 992,000 input tokens, 8,000 output tokens and 1,000,000 total tokens per request (`DEFAULT_LLM_LAB_BUDGET`), with a 30-second timeout and a $0.25 per-build estimated-cost ceiling that may only be lowered (each call inherits that ceiling). Validation rejects any request total above 1,000,000 tokens (`LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST`, mirroring Core's DeepSeek model limits). That number is what the model can read, not a budget: on 2026-09-30 the user ordered that no limit hide page information from the model, and a request over the window fails loudly rather than being trimmed. The allowance used to be 8,000/2,000/10,000 under a 50,000-token ceiling, then 48,000/8,000/56,000 under Core's 64,000-token ceiling, and each made a real page impossible to describe. A live run permits no retries.
+The default Lab allowance is the model's whole context window: 992,000 input tokens, 8,000 output tokens and 1,000,000 total tokens per request (`DEFAULT_LLM_LAB_BUDGET`), with a 30-second timeout and Core's per-build estimated-cost ceiling (`FLUXIQ_LLM_RUN_COST_CEILING_USD`, default $0.10; see "Live-run waste guards"), which a run's options may only lower (each call inherits that ceiling). Validation rejects any request total above 1,000,000 tokens (`LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST`, mirroring Core's DeepSeek model limits). That number is what the model can read, not a budget: on 2026-09-30 the user ordered that no limit hide page information from the model, and a request over the window fails loudly rather than being trimmed. The allowance used to be 8,000/2,000/10,000 under a 50,000-token ceiling, then 48,000/8,000/56,000 under Core's 64,000-token ceiling, and each made a real page impossible to describe. A live run permits no retries.
 
-Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core run intent `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The live campaign (`scripts/lab/live-campaign`) passes no `--llm-max-run-tokens`: with whole-page requests a build may use more than a million tokens across its calls, and a run budget it outgrew would fail the run as `performance.budget` only after the money was spent, so what bounds a campaign run is its per-build spend ceiling, its call count and Core's stall guard. The spend ceiling is $0.25 per build, whatever the build's call count, and it has one definition: Core's `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD`, which the Lab imports as `LIVE_LLM_BUILD_COST_CEILING_USD` (`packages/test-runner/src/live-llm/build-cost-ceiling.ts`). `--llm-max-cost-usd` is the whole build's ceiling, not a per-call figure: it may only lower Core's ceiling, is never multiplied by the call count, and the live campaign passes none. The ceiling is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings, so Core's loop budget holds the build, the run's recovery and each re-author build to it, each on its own. The Lab's post-run check holds each settled phase to it again, and every live run reports its spend per build against it: `snapshots/live-llm.json` `observed.perBuild`, the campaign row's `perBuildSpend` with the summary's `buildsOverCeiling`, and the spend ledger's `buildCeilingUsd`, `maxBuildCostUsd` and `buildsOverCeiling`. There is no spend budget across runs. The model is the Flow's `llmModel` setting.
+Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core run intent `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The live campaign (`scripts/lab/live-campaign`) passes no `--llm-max-run-tokens`: with whole-page requests a build may use more than a million tokens across its calls, and a run budget it outgrew would fail the run as `performance.budget` only after the money was spent, so what bounds a campaign run is its per-build spend ceiling, its call count and Core's stall guard. The spend ceiling is per build, whatever the build's call count, and it has one definition: Core's `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD`, resolved from `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default $0.10, was a fixed $0.25 until 2026-10-01), which the Lab resolves for each run with `liveLlmBuildCostCeilingUsd` (`packages/test-runner/src/live-llm/build-cost-ceiling.ts`): the same sources it passes Core, through Core's own resolver, so the plan and Core hold a build to one number. `--llm-max-cost-usd` is the whole build's ceiling, not a per-call figure: it may only lower Core's ceiling, is never multiplied by the call count, and the live campaign passes none. The ceiling is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings, so Core's loop budget holds the build, the run's recovery and each re-author build to it, each on its own. The Lab's post-run check holds each settled phase to it again, and every live run reports its spend per build against it: `snapshots/live-llm.json` `observed.perBuild`, the campaign row's `perBuildSpend` with the summary's `buildsOverCeiling`, and the spend ledger's `buildCeilingUsd`, `maxBuildCostUsd` and `buildsOverCeiling`. There is no spend budget across runs. The model is the Flow's `llmModel` setting.
 
 **Model calls need no grant.** Core resolves the provider from the caller's own unlocked Secret Keys session. The Lab installs the key, saves the Flow's LLM settings and spend ceiling, and then sends its build (`generate-flow-bootstrap-adaptation`) or run (`run-runtime-session` with a `runIntent`). The one thing the operator still allows is a consequence: `--llm-permit` names the classes (`move_money`, `delete`, `send_or_publish`, `modify_existing`, `create_new`) the run's actions may cause, and the Lab sends them as `permittedConsequences` on the build and the run only when it names any. Absent, a consequential act stops and asks a person (`permission_required`). A created-Flow build started from the extension's chat carries no permit at all, so `--llm-permit` is refused for it, and the Lab's person answers the question in the chat instead ("The build is started from the extension's chat window" above). `snapshots/live-llm.json` records the plan's `authorized` bounds and its `permittedConsequences`.
 
@@ -2695,3 +2710,118 @@ The fingerprint is a SHA-256 over every file `git ls-files --cached --others
 read from the working tree, leaving out `docs/`, Markdown, and build and run
 output. Writing a debug does not change it; editing source in either
 repository does.
+
+#### The per-build cost ceiling
+
+The most one build, one recovery run or one re-author build may be estimated to
+spend is Core's run cost ceiling, `FLUXIQ_LLM_RUN_COST_CEILING_USD`, in US
+dollars: $0.10 when unset (the user's rule, 2026-10-01; it was a fixed $0.25).
+Core reads it once when it loads and refuses to start on a value that is not a
+positive amount of at most $10. It is the developer's and the Lab's knob, for
+trying a run under a different ceiling ("an easily configurable variable ...
+even for test purposes in the lab"); it is not the product's spending control,
+which is a separate user-facing setting.
+
+The Lab passes it to every Core it starts
+(`packages/test-runner/src/live-llm/cost-ceiling-env.ts`, used by
+`buildFluxIQEnvironment`), taking the first it finds of: the run's
+`--llm-cost-ceiling-usd <usd>` flag, the Lab's own environment, then `.env` and
+`.env.local` in the checkout (a later file wins, as the provider key does).
+Set nowhere, nothing is passed and Core uses its default. `--llm-max-cost-usd`
+remains the run's own limit and may only lower the ceiling; the Lab contract
+bounds it by Core's largest configurable ceiling, $10
+(`LLM_LAB_MAX_ESTIMATED_COST_USD`, pinned to
+`AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD`), and an unset one plans the
+ceiling itself.
+
+The Lab's plan, its post-run check (each call's cost and each build's total)
+and its spend reports use the same value Core gets:
+`liveLlmBuildCostCeilingUsd(repositoryRoot)` reads the flag, the environment
+and the files in the same order and resolves the value through Core's own
+`resolveAutomationStudioLlmRunCostCeilingUsd`, so a value Core would refuse at
+start is refused by the Lab too. The Lab's tests derive every amount from that
+value (`live-llm/tests/lab-ceiling.ts`) rather than from a written number.
+
+## Per-step logs and the central run folder
+
+Every live LLM run (`lab run --live-llm`) is filed in one machine-wide folder,
+`~/FluxStuff/lab-runs/` (`C:/Users/osrs_/FluxStuff/lab-runs/` here), shared by
+every checkout, worktree and lane. `FLUXIQ_LAB_RUNS_DIR` moves it when set to
+an absolute path; tests use that. Runs without `--live-llm` are not filed and
+log no steps. The code is `packages/test-runner/src/lab-runs/`, wired into
+`run-scenario.ts`.
+
+```text
+lab-runs/
+  index.md                      one row per run, newest first
+  <YYYY-MM-DD>/<runId>/         the local date the run started
+    entry.json                  runId, startedAt, pid, lane, instance, task, scenarioId,
+                                verdict, bundlePath, repositoryRoot; at the end costUsd,
+                                finishedAt, steps
+    steps/                      written by Core as the run goes (FLUXIQ_LLM_STEP_LOG_DIR)
+      index.md                  Core's one line per step
+      NNNN-<kind>/              a model step: decide, judge, repair, chat, ...
+      NNNN-tool-<toolId>/       a tool call in the build loop
+      NNNN-test-<toolId>/       a test replay of the build
+        meta.json               written last: a folder holding it is complete
+        screenshot.jpg|png      the Lab's picture of the browser after the step,
+        screenshot.skipped.txt  or why there is none
+    summary.json  run.json  evaluation.json  report.html  review/  screenshots/
+    snapshots/live-llm.json  snapshots/flow-lane.json  logs/core.log
+    provider-failures.local.json
+```
+
+How a run fills it:
+
+1. Before Core starts, the Lab creates the folder and `steps/`, writes
+   `entry.json` with `verdict: "running"` and its own pid, and rebuilds the
+   index. Core's environment gets `FLUXIQ_LLM_STEP_LOG_DIR=<folder>/steps`, so
+   Core writes every step there from its first call and a run killed halfway
+   still leaves them. A non-live run's Core gets no such variable, and a value
+   inherited from the launcher's environment is dropped, so lanes never share a
+   step folder.
+2. Once the browser is up, the Lab looks at `steps/` every second. A complete
+   `tool-` or `test-` folder that is still the newest page step gets a picture,
+   taken by the run's own screenshot adapter (the native window capture, which
+   moves no focus, falling back to the front scenario tab), one capture at a
+   time and at most 5 s each. The file's extension is the image's real format.
+   A picture shows the page as it is when taken. So a step that the next page
+   step had already acted after gets `screenshot.skipped.txt` naming that step,
+   not a picture of the later page; this is common for a test's quick replays.
+   The same holds for a picture taken while the next page step started. The
+   model's own folders between two page steps do not count, since a decision
+   leaves the page as it was. A capture that fails, finds nothing or runs late
+   also writes `screenshot.skipped.txt` with the reason. The watcher stops
+   before the browser closes: a step finished since its last look is
+   photographed within 5 s, and any left are marked skipped.
+3. After the bundle is finalized, beside the local sidecars, the bundle gets
+   `steps` as a directory junction to the central `steps/`. The steps exist
+   once on disk, which matters because one decision request can be 1.4 MB.
+   Deleting a bundle with `fs.rm` or `Remove-Item -Recurse` removes the
+   junction and keeps the steps. The key files listed above are copied into
+   the central folder, and only those. Nothing in the central folder links
+   back to the bundle; `entry.json` holds its path as text. `entry.json` then
+   gets the verdict, `costUsd` (`snapshots/live-llm.json`
+   `observed.totalEstimatedCostUsd`, the figure the spend ledger records),
+   `finishedAt` and the step count, and the index is rebuilt.
+
+`index.md` is rebuilt from every `*/*/entry.json` each time a run starts or
+ends. Its columns are Started (local date and time), Lane
+(`FLUXIQ_LAB_LANE`, else `FLUXIQ_LAB_INSTANCE`, else `default`), Task (as the
+spend ledger names it, `<scenario>/<task>[/workflow=..][/variant=..]`),
+Verdict, Cost, Steps (the step folders there now) and a relative link to the
+folder. A run still `running` whose process no longer exists reads
+`unfinished`. Four lanes start and end runs at once, so the rebuild holds a
+`mkdir` lock, `<root>/.index.lock`, which is taken over after 30 s and
+abandoned after 15 s of waiting, when the write goes ahead without it. The
+file is replaced by writing a temporary file and renaming it.
+
+All of this is best-effort. A failure is written to stderr with the folder it
+concerns and never changes a run's verdict. A run that could not open its
+folder runs exactly as before, and its Core logs no steps. A run whose
+publication throws still has its entry closed as `failed`. No token, password
+or key is written: `entry.json` holds names, paths, times and figures, and
+the copied files are the ones the bundle's redaction attestation already
+covers, plus the provider-failure sidecar, which is redacted as it is written.
+What Core writes into `steps/` is Core's responsibility. It logs no header and
+screens every text it writes for credential shapes.

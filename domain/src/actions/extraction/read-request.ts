@@ -319,9 +319,23 @@ function fieldMapValue(value: unknown): Record<string, WebAutomationExtractField
 
 /**
  * Today's string grammar, or a spec copied field by field. A spec property that
- * is sent but unreadable refuses the field rather than being dropped, and so
- * does an `attribute` or `header` on a kind that does not read one: dropped,
- * the page would read something other than what the field names.
+ * is sent but unreadable refuses the field rather than being dropped.
+ *
+ * **The field is read by its kind, and a member its kind does not take is left
+ * behind** -- an `attribute` on anything but an `attribute` field, a `header` on
+ * anything but a `column` field. Until 2026-10-01 such a member refused the
+ * field, and with it the whole request. The case that mattered was not a slip
+ * the model made but one the rerun made for it: Core's rerun merge patches a
+ * changed kind over the old spec, and a `column` field's member is `header`, not
+ * `column`, so `{kind: "text"}` over `{kind: "column", header}` arrived as a
+ * `text` field still carrying `header` (t194-w42, cause 6a). The kind is what
+ * the model chose; a member that kind never reads changes nothing the page
+ * would do, so refusing the field over it refused a read the model asked for.
+ * The member is absent from the request this returns, and so from every copy
+ * built from it -- the command the gateway lifts among them. A kind that
+ * *needs* its member and lacks it -- an `attribute` field naming no attribute,
+ * a `column` field naming no header -- still cannot execute and is still
+ * refused. The same holds for a condition's `read`, which is read here too.
  */
 function fieldValue(value: unknown): WebAutomationExtractField | undefined {
   if (typeof value === "string") return value.length > 0 ? value : undefined;
@@ -330,8 +344,8 @@ function fieldValue(value: unknown): WebAutomationExtractField | undefined {
   if (!spec || kind === undefined) return undefined;
   const attribute = kind === "attribute" ? nonEmptyString(spec.attribute) : undefined;
   const header = kind === "column" ? nonEmptyString(spec.header) : undefined;
-  if (kind === "attribute" ? attribute === undefined : spec.attribute !== undefined) return undefined;
-  if (kind === "column" ? header === undefined : spec.header !== undefined) return undefined;
+  if (kind === "attribute" && attribute === undefined) return undefined;
+  if (kind === "column" && header === undefined) return undefined;
   const selector = optionalValue(spec.selector, nonEmptyString);
   const required = optionalValue(spec.required, booleanValue);
   const handling = optionalValue(spec.handling, (entry) => memberOf(entry, WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS));

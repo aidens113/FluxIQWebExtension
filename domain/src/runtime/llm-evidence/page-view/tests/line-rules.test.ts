@@ -122,3 +122,46 @@ test("words the capture read from separate blocks print apart; an authored name 
     { tag: "button", name: "Close dialog", readable: "× Close" }
   ]), ["t1 button \"Pickup or delivery? Carden Falls Supercenter\"", "t2 \"Sign In Account\"", "t3 button \"Close dialog\""]);
 });
+
+test("5: a control with no words is named by the images it holds; a repeated alt is taken back from it, the line kept (t229)", () => {
+  assert.deepEqual(bodyLines([
+    { tag: "a", href: LINK },
+    { tag: "img", name: "lena.moss's profile picture", parent: "t1" },
+    { tag: "div", cursor: "pointer", attributes: [["title", "Grey"]] },
+    { tag: "img", name: "", parent: "t3" },
+    { tag: "div", cursor: "pointer" },
+    { tag: "svg", parent: "t5" }
+  ]), ["t1 link \"lena.moss's profile picture\" ~/item", "t3 clickable \"Grey\"", "t5 clickable"]);
+  assert.deepEqual(bodyLines([
+    { tag: "a", href: LINK, item: { index: 1, total: 2 } },
+    { tag: "img", name: "Kettle deluxe", parent: "t1", item: { index: 1, total: 2 } },
+    { tag: "a", href: LINK, name: "Kettle deluxe", item: { index: 1, total: 2 } }
+  ]), ["- 1/2", "t1 link ~/item", "t3 link \"Kettle deluxe\" ~/item"]);
+});
+
+test("a click handler or a cursor makes a control only of an element holding none: a delegate gets its text line (t229)", () => {
+  assert.deepEqual(bodyLines([
+    { tag: "ul", hasClickHandler: true, text: "Post one …see more", ownText: "" },
+    { tag: "li", text: "Post one …see more", ownText: "Post one", parent: "t1" },
+    { tag: "button", name: "…see more", parent: "t2" },
+    { tag: "div", hasClickHandler: true, text: "Not now" },
+    { tag: "div", cursor: "pointer", text: "Messaging", ownText: "Messaging" },
+    { tag: "button", name: "More", parent: "t5" }
+  ]), ["t2 \"Post one …see more\"", "t3 button \"…see more\"", "t4 clickable \"Not now\"", "t5 \"Messaging\"", "t6 button \"More\""]);
+});
+
+test("F1: words under a control printed without words do not fold into it (t229)", () => {
+  assert.deepEqual(bodyLines([
+    { tag: "div", cursor: "pointer" },
+    { tag: "div", text: "Ship to 🇩🇪 Germany / EUR", parent: "t1" }
+  ]), ["t1 clickable", "t2 \"Ship to 🇩🇪 Germany / EUR\""]);
+});
+
+test("a control the page only drew says its own words; its children's words keep their lines unless its line holds them (t229)", () => {
+  assert.deepEqual(bodyLines([
+    { tag: "div", cursor: "pointer", text: "Welcome back Mara Orders to be shipped (0)", ownText: "" },
+    { tag: "span", text: "Welcome back", parent: "t1" },
+    { tag: "div", cursor: "pointer", text: "Accept all" },
+    { tag: "span", text: "Accept all", parent: "t3" }
+  ]), ["t1 clickable", "t2 \"Welcome back\"", "t3 clickable \"Accept all\""]);
+});

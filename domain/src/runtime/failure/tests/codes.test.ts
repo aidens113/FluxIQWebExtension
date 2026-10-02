@@ -29,6 +29,7 @@ import {
 // [vocabulary name, wire code, category, retryable, stage]
 const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, string]> = [
   ["ACTION_REJECTED", "web.action.rejected", "blocked_by_capability_or_policy", false, "execution"],
+  ["TARGET_NOT_ACTIONABLE", "web.target.not_actionable", "unexpected_state", false, "execution"],
   ["TARGET_NOT_FOUND", "web.target.not_found", "target_not_found", true, "target_resolution"],
   ["TARGET_AMBIGUOUS", "web.target.ambiguous", "target_ambiguous", false, "target_resolution"],
   ["OUTPUT_NOT_OBSERVED", "web.validation.output_not_observed", "output_not_observed", true, "verification"],

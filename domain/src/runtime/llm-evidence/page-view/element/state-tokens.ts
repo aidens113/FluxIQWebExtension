@@ -1,10 +1,17 @@
 // The state a line states after its words (t223, "State tokens"), each only
 // when it applies, in this order:
 //
-//   ="value" (or ="" for an empty field) · for a select ="label" [a|b|c] ·
-//   checked/unchecked · open/closed · disabled · @column (or @c<n>) ·
-//   the link target · covered-by tA,tB · focused · on a layer: modal, its
-//   kind, covers <n>
+//   placeholder "…" · ="value" (or ="" for an empty field) · for a select
+//   ="label" [a|b|c] · checked/unchecked · open/closed · selected · pressed ·
+//   current · marked · disabled · @column (or @c<n>) · the link target ·
+//   covered-by tA,tB · focused · on a layer: modal, its kind, covers <n>
+//
+// t229 added what a person sees of a control's state beyond checked and open:
+// `selected` (`aria-selected`), `pressed` (`aria-pressed`), `current`
+// (`aria-current`, the page a menu says you are on), `marked` (drawn apart
+// from the like options beside it, as a shop draws the chosen size), and
+// `disabled` for a control whose own cursor refuses a press. A field's
+// placeholder is printed apart from its name, and not when it is the name.
 //
 // The link target is written by the caller (`../link-writer.ts`,
 // `../link-repeats.ts`), because how it is written depends on the lines
@@ -16,9 +23,12 @@ import { attributeValue } from "./attribute-value";
 import { quotedWords } from "./quoted";
 
 /** The element's state tokens for a line of the given kind, with the link target already written. */
-export function webLlmStateTokens(element: WebLlmEvidenceElement, kind: string | undefined, linkTarget: string | undefined): string[] {
+export function webLlmStateTokens(element: WebLlmEvidenceElement, kind: string | undefined, linkTarget: string | undefined, words?: string): string[] {
   const tokens: string[] = [];
-  if (kind === "field" || kind?.startsWith("field:")) {
+  const field = kind?.startsWith("field") === true;
+  const placeholder = field ? attributeValue(element, "placeholder")?.trim() : undefined;
+  if (placeholder !== undefined && placeholder !== "" && placeholder !== words) tokens.push(`placeholder ${quotedWords(placeholder)}`);
+  if (field) {
     if (element.value !== undefined) tokens.push(`=${quotedWords(element.value)}`);
     else if (element.hasValue === false) tokens.push("=\"\"");
   }
@@ -26,7 +36,13 @@ export function webLlmStateTokens(element: WebLlmEvidenceElement, kind: string |
   const checked = element.checked ?? ariaState(attributeValue(element, "aria-checked"));
   if (checked !== undefined) tokens.push(checked ? "checked" : "unchecked");
   if (element.expanded !== undefined) tokens.push(element.expanded ? "open" : "closed");
-  if (attributeValue(element, "disabled") !== undefined || attributeValue(element, "aria-disabled")?.trim().toLowerCase() === "true") tokens.push("disabled");
+  if (ariaState(attributeValue(element, "aria-selected")) === true) tokens.push("selected");
+  if (ariaState(attributeValue(element, "aria-pressed")) === true) tokens.push("pressed");
+  const current = attributeValue(element, "aria-current")?.trim().toLowerCase();
+  if (current !== undefined && current !== "" && current !== "false") tokens.push("current");
+  if (element.marked === true && kind !== undefined) tokens.push("marked");
+  const refused = element.cursor === "not-allowed";
+  if (refused || attributeValue(element, "disabled") !== undefined || attributeValue(element, "aria-disabled")?.trim().toLowerCase() === "true") tokens.push("disabled");
   if (element.cell !== undefined) tokens.push(columnToken(element.cell));
   if (linkTarget !== undefined) tokens.push(linkTarget);
   if (element.coveredBy !== undefined && element.coveredBy.length > 0) tokens.push(`covered-by ${element.coveredBy.join(",")}`);

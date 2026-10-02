@@ -5,7 +5,7 @@
 // right for the category, which must stay `performance.budget`, but it threw
 // the product's failure away: `run-mup2u8o3-6697c4be`'s build ended without a
 // Flow (`flow_bootstrap.evidence_budget_exhausted`) after spending $0.2969 of a
-// $0.25 ceiling, the breach replaced the lane's `runtime.behavior`, and the
+// ceiling of $0.25 (the ceiling then), the breach replaced the lane's `runtime.behavior`, and the
 // runner, finding no product failure, stamped the run
 // `facilityFailure: scenario.execute / unclassified`.
 //

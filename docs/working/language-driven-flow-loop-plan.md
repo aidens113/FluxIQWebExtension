@@ -13,144 +13,97 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ## Current State
 
-**Update, 2026-10-01 afternoon. Read this first.** The Lab stop is LIFTED, lane by lane, now that the context issue is fixed: t223 (the approved compact view plus `find_on_page`) and lane B's B1 (only the current page in each request) are merged into dev. One whole decide request went from 471k to 53k tokens. Lane B is live first, on bigbox cart redesigned. About 120 extension unit tests fail on dev after t223; its lead is fixing them, and dev is not pushed until they pass. Merges now take narrow checks only, and full suites run at most twice a day (user rule, AGENTS.md).
+**Update, 2026-10-01 evening. Read this first.** Pass streak 0: no live run has yet produced a working Flow.
+The compact view, the chat launcher and the first repeat guard are on dev (rounds 6-8, ledger below). The live runs
+still wandered, and the cause is now known: **the page view hid controls**. In the earbuds run the store's search box
+reached the model as `t489 field "Autumn Mega Sale: up to 70% off" =""` (its placeholder, no search marker), icon-only
+buttons had no line at all, and the model searched `find_on_page "Voltbay"` 29 times with 0 matches
+(`fxwork/t174/.../decision-dumps/build-2026-10-02T00-00-07-573Z-26504.jsonl`). **No live run until the page-view fix
+(PV) lands and a real recorded page is checked to show every control.**
 
-**Handoff, 2026-10-01 ~00:30.** Every Lab is STOPPED by the user's order: "stop every single lab till
-you figure that out NOW". No Lab of any kind (live or provider-free) runs until t223's compact page view is merged,
-validated, and its measured page size is sane. Integration round 4 is on dev. The pass streak is still 0: no task has
-produced a working Flow end to end.
+Task ids: the task tool numbers branches (`task/t228-step-logs`, `task/t229-core-regressions`); the labels PV, CEIL and
+STEPS below are the plan's names for work that has no branch of its own or predates that numbering.
 
 **Binding rules (user, all in force).**
-- **Live builds start from the real extension chat (user, 2026-10-01):** "the tests should be using the actual extension chat window to prompt the model building flow". A run started by a direct API request is never a pass. t227 builds the chat launcher; no new direct-API launch.
-- **The compact page view (user, 2026-09-30 night; supersedes t200's raw JSON).**
-  - Quotes: "ITS NOT SUPPOSED TO FEED IN THE ENTIRE PAGE JUST RAW"; "theres literally no fucking reason it should be
-    500kb"; "only giving model elements that have visible text/buttons/etc with the least possible data in terms of
-    format. Then allow the model to search the page for certain things by visible or any other text (id, class, name,
-    etc)".
-  - **The format is approved** ("The format you sent me looks perfect. Its very small"), in
-    `fxwork/t223/.../reports/t223-format-example.md`:
-    - a PAGE/URL/VIEW/COVERING header;
-    - `[region]` lines and `- i/n` item markers;
-    - one `<handle> <kind> "<words>" <state>` line per visible-text or interactive element, with links on a `~` base;
-    - `find_on_page` over text and every attribute, hidden elements included, paged explicitly;
-    - `describe` for one element's full detail.
-  - Prototype sizes: 32.8 KB to 3.5 KB, 123.7 KB to 7.1 KB, and 340.5 KB to 22.3 KB. The user expects most pages to be
-    far below 10k tokens.
-- **No caps or ranking among qualifying elements (user, 2026-09-30):** "Remove ANY AND ALL LIMITS ON THE NUMBER OF
-  ELEMENTS PASSED TO MODEL. DO NOT HIDE INFORMATION OR USE ANY RANKING ALGORITHM."
-  - The compact view honours this: everything not in the view is reachable by search.
-  - Secret screening and the $0.25 per-build ceiling stay. A request too big for the window fails loudly with its size.
-- **A build has three phases (user, 2026-09-30):**
-  1. Live exploration that *authors* an intelligent draft. No replay from the start and no blind recording of executed
-     steps.
-  2. Test and judge once the model says it is ready. A replay from the start is allowed here and in repair, never in
-     exploration.
-  3. Repair, finish, or declare "not doable" "ONLY IF THERE IS ABSOLUTELY NO WAY TO ACHIEVE IT", with the reason.
-- **Live runs.**
-  - Four live slots (`lab-slots/slot-1..4`), one per lane, with no queueing between them. Headed browsers only, and only
-    the ten realistic scenarios.
-  - A run is started only by a live agent, for a reason. No keepers, loops or cron.
-  - Everything stops at the first balance failure.
-  - A pass is a working Flow that did the task. A permission stop is never a pass.
-  - A failure is a product or Lab defect, never "machine load".
-  - Every debug reviews the UI from screenshots.
-- **Process.** Lanes iterate on their own branches and the supervisor merges in rounds. Only the supervisor commits,
+- **Live builds start from the real extension chat (2026-10-01):** a run started by a direct API request is never a
+  pass. The chat launcher is on dev (t227).
+- **The compact page view (2026-09-30 night):** "ITS NOT SUPPOSED TO FEED IN THE ENTIRE PAGE JUST RAW"; "only giving
+  model elements that have visible text/buttons/etc with the least possible data in terms of format. Then allow the
+  model to search the page". The approved format is `fxwork/t223/.../reports/t223-format-example.md`: a header,
+  `[region]` lines, one `<handle> <kind> "<words>" <state>` line per visible-text or interactive element,
+  `find_on_page` over text and every attribute, `describe` for one element. **Every visible control must get a line**
+  (PV's guard spec enforces it across the ten scenarios).
+- **No caps or ranking among qualifying elements (2026-09-30).** A request too big for the window fails loudly.
+- **No action restrictions beyond permissions (2026-10-01):** "there should be no restrictions on what the model can
+  do (other than the already defined security ones for things like delete...)". Only money, delete and send/publish
+  ask the person; secret screening stays; covered marks, layers and unknown addresses are information, never refusals.
+- **No repeated failing actions (2026-10-01):** one general guard refuses an identical retry of a failed or no-effect
+  call on an unchanged page (RG on dev; lane B extends it to observations that change nothing).
+- **Cost ceiling $0.10 per Flow, one variable (2026-10-01):** "bring the ceiling down to $0.1 per flow max";
+  "should be an easily configurable variable ... even for test purposes in the lab"; the product's user-facing
+  spending limit is separate. Core reads `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default 0.10, max 10, invalid stops
+  Core); the Lab passes `--llm-cost-ceiling-usd`, then its env, then `.env`/`.env.local`. The tasks should finish in
+  far fewer than 60 actions.
+- **Every run step logged as files (2026-10-01):** exact provider request (no auth header), raw response, parsed
+  decision, each tool call and result, the page text, under `test-runs/<run-id>/steps/NNNN-*/` (STEPS).
+- **A build has three phases (2026-09-30):** live exploration authors the draft (no replay); test and judge once the
+  model says ready; repair, finish, or "not doable" only if there is absolutely no way, with the reason.
+- **Live runs:** four slots, one per lane; headed browsers only; only the ten realistic scenarios; started only by a
+  live agent for a reason; stop at the first balance failure; a permission stop is never a pass; a failure is a
+  product or Lab defect, never machine load; every debug reviews the UI from screenshots.
+- **Validation cadence (2026-10-01):** merges take narrow checks only; full suites at most twice a day, in the
+  background ("you should not be running a 15-30 min suite every single time you merge dev"). `pnpm task finish`
+  runs the audit by default and the full check only with `--full-check`.
+- **Process.** Lanes iterate on their own branches; the supervisor merges in rounds and is the only one who commits,
   merges or pushes. Heavy commands go through `build-slots/heavy.sh`. No LLM call grants.
-- **Extension UI (user).** The chat is primary and every step is its own message with the model's reason. Actions show
-  as cards with icons. Settings sit behind a gear. A link opens the Core panel.
 
-**On dev (round 4; see the ledger entry "Integration round 4").**
-- t210 rounds 1-3b: the conversation, context packet and adaptation records reach the model whole, read page by page.
-- t215: fewer SQLite round trips.
-- t222: scenario-lab tests no longer hang on a dead browser.
-- The Codex branches t216, t217, t219, t220, t221 and t224, plus the supervisor's fix for the import cycle t220
-  introduced.
-- Lane A's F14: a 404, 429 or 503 navigation no longer reports success.
-- A Windows build-lock EPERM race, fixed in both repositories.
-
-Core is at `1e27fbd8`; downstream is round 4 plus this handoff.
-
-**Not on dev yet: committed on the lane branches, waiting for round 5.**
-
-| Branch | Fixes | Verified by the supervisor? |
+**In flight.**
+| Work | Where | State |
 | --- | --- | --- |
-| `task/t193-live-self-repair` | W1: no raw snapshot on a press. W2: a cache-stable request prefix. C5-C7: amendments wait for their rerun, no act is claimed on a look, every step number is shown. | No: lead only |
-| `task/t194-live-judge-answer` | F17: the ceiling is checked before each call. F18: `clearedWait` is accepted (overlaps t216's key list: take the union). F19 and F20. | Yes: Core 1003/1003, domain 1063, extension 1678, test-runner 1729 |
-| `task/t195-live-control-flow` | P1: a declined ask no longer blocks later asks. P2: a clearer `repeat_span_unknown` message. | No: lead only |
+| PV: page view shows every control (search fields marked with the placeholder kept apart, icon-only and press-listener buttons, quantity box named, chosen chips, image swatches) | main downstream checkout, uncommitted | worker-high running; Playwright headed guard spec `apps/extension/e2e/content/tests/evidence/tests/page-view-controls.spec.ts` |
+| CEIL Core: the variable and its tests | Core dev `fc26cfd6`, not pushed | done; automation-studio 4946 pass, 3 fail (next row) |
+| CEIL Lab: flag/env/.env, plan, post-run check, spend reports, contract mirror bounded by Core's $10 max | main downstream checkout, uncommitted | precedence tests pass; worker finishing plan and reports |
+| Core regressions: `build-routing` 30/28/2 vs 29/29/3; `run-consequence-permission` patches after a person's no; `recovery-default-limits` reserves worst-case cost so only 3 of 8 decisions fit $0.10 | `fxwork/t229`, `task/t229-core-regressions` | worker-high running |
+| STEPS: per-step request/response/decision/tool files plus `lab-runs/index.md` | `fxwork/t228`, `task/t228-step-logs` | lead running |
+| Lane B (t193): observation-only repeat guard, type-then-submit, chooser opening step kept, the `manual_intervention` repair refusal | `fxwork/t193` | lead running; RP, RG2, S4 committed, awaiting merge |
+| Lane C (t194): F32-F39, last F38 unmatched column shown as information (Core `bf626777`), F39 stray read members dropped (downstream `5568dc7e`) | `fxwork/t194` | done, verified 370/370, awaiting merge |
+| Lane D (t195): the completion check becomes information with test and judge deciding; verify present-but-hidden; a re-authored Flow judged on its own result; run 37's missing Confirm | `fxwork/t195` | lead running |
+| Lane A (t174) | `fxwork/t174` | paused until PV; next is crossborder run 42 |
+| t227 follow-ups (Core `51ec2f12`, downstream `6e2e312f`) | `task/t227-chat-driven-live-runs` | committed, awaiting merge |
 
-**In progress: t223, the compact page view (`fxwork/t223`, Core-paired, `lead-xhigh`).**
-- State: uncommitted, about 95 downstream and 6 Core files. Its report is
-  `fxwork/t223/!FluxIQWebExtension/docs/working/language-driven-flow-loop-plan/reports/t223-compact-page-view.md`.
-  - The format rules are fixed.
-  - W1 (measurement) is done.
-  - At the lead's stop: W2 (capture: `ownText`, `parent`, `includeHidden`), W3 (`tN` handles) and W4 (element fields,
-    hidden-proof handles, a `web-state.v3` digest, the new `domain/src/runtime/llm-evidence/page-view/`) are built.
-    - The view is not wired in yet: the model still gets v2 packets.
-    - The extension passed 1692/1692 (lead-run).
-    - Re-run before trusting them: W4's domain 1130/1130 and W3's Core 1,597 passed (both worker-reported only).
-  - Measured view: 20 pages 2,174,142 B down to 116,258 B (5.3%).
-    - everything-store start 2,791 B, bigbox start 5,927 B, everything-store results 13,754 B. All three beat the
-      approved example.
-  - One whole decide request on the results page today: 1,413,957 B, about 471k tokens (the provider recorded 477,506).
-    - Pages are 95.6% of it, and 4 of them are earlier pages.
-    - 41% is `read.snapshot`, a raw page copy inside node-run outcomes. W5 must remove it (lane B's W1 removes it on a
-      press).
-  - Still to do: re-run the domain check and tests; W5, wiring every path in the report's "Every path an element reaches
-    a model" table; W6, `page-find/`; W7, registration and descriptions; then the after-measurement with
-    `t223-request-measure.mjs --publish`.
-- Lane B routed C1-C4 and C9 to t223. Handles keyed on an `nth-of-type` selector are renumbered when a popup appears
-  (`stable-handles.ts`).
+**Decided, not yet assigned.** One purse per Flow: build, re-authors, repairs and checks share the one $0.10 ceiling;
+a Flow's spend is kept on its creation record and summed. Assign a lead after the next merge round.
 
-**Open defects (not yet assigned).**
-- **`URL.canParse`.** It is used in 5 extension files, but Chrome needs 120 and Firefox 115, while the manifests admit
-  116 and 109. Fix it with a safe helper, plus a check that fails the build on `URL.canParse`.
-- **Stale domain dist.** `packages/test-runner/scripts/domain-dist.mjs` builds the domain only when `dist` is absent and
-  never rebuilds a stale one. Round 4's test-runner run failed on a stale dist (TS2305) until the supervisor rebuilt it.
-  Use the build-cache fingerprint.
-- **Lab entry test.** `scripts/lab/core/build/tests/unbuilt.test.mjs` "refuses an unbuilt Core" fails about 1 run in 10
-  under load: no refusal line, only the `core-commit` prelude. It is the same before and after round 4.
-- **Core audit on `service.ts`.** The lane trees report it failing at 4,506 lines against a baseline of 4,505. The main
-  Core checkout's audit passes, probably because of line endings. Check it.
-- **A person's no.** `recovery/runtime-exploration.ts` still treats a person's no as silence (from lane D; t193's area).
-- **429 on a click.** A click that lands on a 429 page is still `navigation_unexpected` (from lane A; F14 covers
-  navigation only).
-- **`run-bench.ts`** rebuilds a resumed evaluation without the stop label.
+**Open defects (not assigned).**
+- `scripts/lab/core/build/tests/unbuilt.test.mjs` "refuses an unbuilt Core" fails about 1 run in 10 under load.
+- A click that lands on a 429 page is still `navigation_unexpected` (F14 covers navigation only).
+- `run-bench.ts` rebuilds a resumed evaluation without the stop label.
+- The accepted result's `warnings` (F38) is not persisted; needs Core `runtime/service.ts`.
 
 **Decisions made (supervisor; the user may override).**
-- Robot checks: FluxIQ never presses or solves one (t197).
-- F10: money, delete and send/publish ask every time.
+- Robot checks: FluxIQ never presses or solves one (t197). Money, delete and send/publish ask every time (F10).
 - D1: the dry run never clears site data or repeats a lasting effect.
-- withdraw-stale-requests declares `permissionPoint: delete @ Withdraw`.
-- The judge gets per-condition counts of the rows a condition removed, not the rows themselves (lane C F19).
-- The judge sees up to 60 screened characters of the value a condition read (F14).
-- The activity stream carries the model's own reason (t191 D9).
-- Declined: SQLite pools kept open while idle.
+- A press is refused only for a real layer (dialog, kind or front layer), not for anything that merely overlaps.
+- An instruction column no field reads is information for the model and the judge, never a refusal (F38).
+- `recovery-default-limits`: keep the 8-decision floor and reserve each call at a realistic cost, the ceiling being
+  the hard stop.
+- The judge gets per-condition removed-row counts (F19) and up to 60 screened characters of a condition's read (F14).
 
 **Waiting on the user.**
-- **B1, superseded pages (lane B).** Every earlier page is re-sent whole in every request (`context-window.ts`). It
-  overflows the 1M window around call 22 on bigbox and defeats the cache. The compact view shrinks each page 10-17x, but
-  the history still grows with every step.
-  - Supervisor's recommendation: keep the current page in the compact view, and replace each superseded page with the
-    step outcome that replaced it (what changed). The old page stays reachable through `find_on_page` on the current
-    page only. A t223 W8 measurement of the whole request should come first.
-- **Workers committing on their own task branches.** This was proposed and not objected to. It needs the brain's
-  `hooks/worker-git-guard.mjs` (plus the agent definitions and global rules) to allow `git commit` on `task/*` branches.
-  The permission classifier refused the supervisor's edit as self-modification, so the user must make it or allow it.
+- **Removing the remaining pre-action refusals.** The permission classifier refused the edit as a security weakening,
+  so it was not worked around. The user must make it or allow it.
+- **Workers committing on their own task branches.** Needs the brain's `hooks/worker-git-guard.mjs` changed; refused
+  as self-modification.
 - `fxwork/t187-bench` and `fxwork/t192-bench`: delete only on a yes.
-- The Core-panel confirmation before a chat "yes" applies a change: offered, not built.
 
 **Next, in order.**
-1. **t223.** Resume its lead from its report. Finish W2-W8, verify, merge, and measure real pages. Then lift the Lab
-   stop.
-2. **Round 5.**
-   - Merge `task/t193`, `t194` and `t195` (re-run t193's and t195's validation first).
-   - Resolve t194 F18 against t216's key list as a union.
-   - Fix `URL.canParse` and `domain-dist.mjs`.
-   - Fast-forward the lane trees.
-3. **Live runs.** Re-dispatch the four live leads from
-   `reports/supervisor-2026-09-30-live-briefs.md` once the Lab stop is lifted. Lane order: D's confirm-requests then
-   pickup-order; C's earbuds; B's bigbox cart redesigned; A's crossborder hub-to-cart.
-4. **B1.** Decide it with the user, using t223's W8 numbers.
+1. PV lands: commit it on dev with its own task id, verify a real recorded page (earbuds, bigbox) shows the search
+   field and icon buttons.
+2. Merge round: CEIL Lab, Core regressions, lane B, lane C, t227 follow-ups, STEPS; rebuild Core libraries; narrow
+   checks; push both dev branches; merge dev into the lane trees.
+3. Live runs through the chat launcher with step logs and the $0.10 ceiling, all four lanes; then the approved
+   stronger-model comparison run on the same scenario.
+4. The per-Flow purse lead. Full suites twice a day, in the background.
 
 Older history: rung 1 is in `archive/rung1-history-to-2026-09-26.md`. The ledger to 2026-09-30 is in
 `archive/ledger-2026-09-28-to-30.md` and the Work Ledger below.
@@ -738,6 +691,20 @@ debug and partitioned so neither touches the other's files:
   - Core: tsc EXIT=0; web check EXIT=0. vitest over automation-studio and database-manager gave `10 failed | 4781 passed`, all timeouts: the 8 files re-run with `--testTimeout=120000` gave `Tests 80 passed (80)`. t226 re-run: tsc 0; llm, flow-bootstrap and recovery 2154/2154; audit passed; docs:check current.
   - Downstream on the final Core (`f3778a8e`): domain build EXIT=0; `pnpm check` EXIT=0 with `# pass 548 # fail 0`, the structure audit passed and 10 package checks Done; `pnpm test` EXIT=0 (extension 1720, domain 1077, scenario-lab 620, test-contracts 156, the rest 0 failed); `pnpm build` EXIT=0.
 - Outcome: pushed. Labs are still stopped for t223. Pass streak 0.
+
+### 2026-10-01 evening — Root cause of the wandering runs found (the page view hid controls); the $0.10 ceiling is one variable
+- Agent: supervisor; PV worker-high; CEIL workers (Core resolver, Core tests, Lab); lane C lead; Core-regressions worker-high.
+- Changed:
+  - Root cause, from the earbuds decision dump: the search box reached the model as a plain `field` named by its placeholder, icon-only buttons had no line, and the model ran `find_on_page "Voltbay"` 29 times with 0 matches. PV is fixing capture and the view in the main checkout; no live run until it lands.
+  - CEIL Core, committed `fc26cfd6`: `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default 0.10, max 10, invalid stops Core), `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD` and a new Flow's default take it; tests derive amounts from it. 18 of 21 tests the lower ceiling broke were updated to derive from it.
+  - CEIL Lab (uncommitted): `packages/test-runner/src/live-llm/cost-ceiling-env.ts` passes the flag, env or `.env`/`.env.local` value to every Core the Lab starts.
+  - Lane C F38 (Core `bf626777`) and F39 (downstream `5568dc7e`) committed on `task/t194-live-judge-answer`.
+  - The three remaining Core failures went to `task/t229-core-regressions` (`fxwork/t229`): two fail the same at $0.25 (merge regressions, one a permission regression), and recovery reserves worst-case cost per call.
+- Validation:
+  - CEIL Core: `npx tsc --noEmit` exit 0; `run-cost-ceiling-env.test.ts` passes; with `FLUXIQ_LLM_RUN_COST_CEILING_USD=0.07` the old 0.1 assertions failed showing 0.07; automation-studio vitest `3 failed | 4946 passed | 1 skipped`; `node scripts/structure-audit.mjs` passed.
+  - Lab: `cost-ceiling-env.test.ts` precedence tests pass (flag, env, `.env.local` over `.env`, unset, missing amount).
+  - Lane C, re-run by the supervisor in `fxwork/t194/!FluxIQ/packages/fluxiq`: `npx vitest run` over result-verification, llm/harness-options and flow-bootstrap/authoring gave `Test Files 36 passed (36)`, `Tests 370 passed (370)`; structure audit rc 0 in both repositories.
+- Outcome: Core dev is one commit ahead of origin, held for the merge round. Pass streak 0.
 
 ## Open Questions
 

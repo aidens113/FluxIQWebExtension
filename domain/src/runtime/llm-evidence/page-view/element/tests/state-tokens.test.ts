@@ -34,3 +34,21 @@ test("aria-checked, the disabled attribute, a column with no header, and coversC
   assert.deepEqual(webLlmStateTokens(el({ tag: "td", cell: { row: 1, column: 2, header: "Price" } }), undefined, undefined), ["@Price"]);
   assert.deepEqual(webLlmStateTokens(el({ tag: "div", covers: ["t2"], coversCount: 7, kind: "promotion" }), "layer", undefined), ["promotion", "covers 7"]);
 });
+
+test("selected, pressed, current, marked and a refusing cursor's disabled, after open and before the column (t229)", () => {
+  const element = el({
+    tag: "div", expanded: true, cursor: "not-allowed", marked: true,
+    attributes: [["aria-selected", "true"], ["aria-pressed", "true"], ["aria-current", "page"]]
+  });
+  assert.deepEqual(webLlmStateTokens(element, "clickable", undefined), ["open", "selected", "pressed", "current", "marked", "disabled"]);
+  const unset = el({ tag: "a", attributes: [["aria-selected", "false"], ["aria-pressed", "false"], ["aria-current", "false"]] });
+  assert.deepEqual(webLlmStateTokens(unset, "link", undefined), [], "a state the page wrote as false is not stated");
+  assert.deepEqual(webLlmStateTokens(el({ tag: "span", marked: true }), undefined, undefined), [], "a text line is not marked");
+});
+
+test("a field's placeholder is printed apart, first, unless it is the field's words (t229)", () => {
+  const field = el({ tag: "input", hasValue: false, attributes: [["placeholder", "Autumn Mega Sale: up to 70% off"]] });
+  assert.deepEqual(webLlmStateTokens(field, "field[search]", undefined), ["placeholder \"Autumn Mega Sale: up to 70% off\"", "=\"\""]);
+  assert.deepEqual(webLlmStateTokens(field, "field[search]", undefined, "Autumn Mega Sale: up to 70% off"), ["=\"\""]);
+  assert.deepEqual(webLlmStateTokens(field, "button", undefined), [], "only a field has a placeholder to print");
+});

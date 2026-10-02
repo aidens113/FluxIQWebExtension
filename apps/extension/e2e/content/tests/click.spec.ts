@@ -138,7 +138,7 @@ test.describe("on failure-surfaces", () => {
       message: "Action rejected: the element is disabled",
       validation: { status: "failed", expected: "a target that can be clicked", actual: "the element is disabled" },
       failure: {
-        category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
+        category: "unexpected_state", code: "web.target.not_actionable", retryable: false, stage: "execution",
         expected: "a target that can be clicked", actual: "disabled: the element is disabled"
       },
       element: { selector: DISABLED_TARGET }
@@ -155,7 +155,7 @@ test.describe("on failure-surfaces", () => {
     const reply = await harness.runAction({ commandId: "click-covered", actionType: "web.dom.click", selector: DETACH_TARGET });
     expect(reply).toMatchObject({
       status: "failed",
-      failure: { category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution" },
+      failure: { category: "unexpected_state", code: "web.target.not_actionable", retryable: false, stage: "execution" },
       validation: { status: "failed", expected: "a target that can be clicked" }
     });
     // The text now carries the defence's account too: a covered target is an
@@ -186,7 +186,7 @@ test.describe("on failure-surfaces", () => {
       message: "Action rejected: the element's display is none",
       validation: { status: "failed", expected: "a target that can be clicked" },
       failure: {
-        category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
+        category: "unexpected_state", code: "web.target.not_actionable", retryable: false, stage: "execution",
         expected: "a target that can be clicked"
       }
     });

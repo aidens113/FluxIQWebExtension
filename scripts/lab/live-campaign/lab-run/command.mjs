@@ -26,13 +26,15 @@ import { DEFAULT_PROFILES } from "./profiles.mjs";
  * ceiling, the call count and Core's stall guard.
  * An operator may still give `--llm-max-run-tokens` after `--`.
  *
- * **No cost is passed either.** The cost ceiling is $0.25 per build, and it has
- * one definition: Core's `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD`, which
+ * **No cost is passed either.** The cost ceiling is per build, and it has one
+ * definition: Core's `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD`, read from
+ * `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default $0.10; set for a run with the
+ * Lab's `--llm-cost-ceiling-usd`, the developer and Lab knob), which
  * the Lab's plan applies to the whole build whatever its call count
- * (`LIVE_LLM_BUILD_COST_CEILING_USD`, packages/test-runner/src/live-llm). The
- * campaign used to pass `--llm-max-cost-usd 0.25`, a copy of that number. An
- * operator may still lower it with `--llm-max-cost-usd` after `--`; nothing
- * can raise it.
+ * (`liveLlmBuildCostCeilingUsd`, packages/test-runner/src/live-llm). The
+ * campaign used to pass `--llm-max-cost-usd 0.25`, a copy of the ceiling then. An
+ * operator may still lower it with `--llm-max-cost-usd` after `--`; only the
+ * ceiling variable itself can raise it.
  */
 const REPAIR_LIMITS = Object.freeze([
   ["--llm-max-input-tokens", "992000"], ["--llm-max-output-tokens", "8000"], ["--llm-max-total-tokens", "1000000"],

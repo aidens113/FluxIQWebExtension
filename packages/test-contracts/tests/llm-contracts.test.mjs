@@ -38,7 +38,7 @@ test("exports conservative defaults and a non-overridable request ceiling", () =
   assert.equal(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, 1_000_000);
   assert.deepEqual(DEFAULT_LLM_LAB_BUDGET, {
     maxInputTokens: 992_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 1_000_000,
-    maxCallsPerRun: 26, timeoutMs: 30_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
+    maxCallsPerRun: 26, timeoutMs: 30_000, maxRetries: 0, maxEstimatedCostUsd: 10,
   });
   // The default request must fit under the ceiling, which is the relationship
   // that actually matters and which seven separate copies of these numbers kept
@@ -66,7 +66,7 @@ test("validates an explicit loopback-only live profile", () => {
     { budget: { ...liveProfile.budget, maxCallsPerRun: 0 } },
     { budget: { ...liveProfile.budget, maxCallsPerRun: 65 } },
     { budget: { ...liveProfile.budget, maxCallsPerRun: 2.5 } },
-    { budget: { ...liveProfile.budget, maxEstimatedCostUsd: 0.26 } },
+    { budget: { ...liveProfile.budget, maxEstimatedCostUsd: 10.01 } },
     { profileId: "sk-secretvalue12345678" },
     { provider: "api_key_value" },
     { model: "m".repeat(201) },

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import { assertLiveLlmBudgetHeld, assertLiveLlmProviderWasReached, liveLlmBudgetBreaches } from "../budget.js";
-import { planLiveLlmExecution } from "../live-llm-plan.js";
+import { LAB_CEILING_USD, planAtLabCeiling } from "./lab-ceiling.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "../observed-usage.js";
 
 /**
@@ -13,7 +13,7 @@ import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "../observed-usa
  */
 
 function livePlan(task: LlmExecutionProfile["task"], budget: Partial<LlmExecutionProfile["budget"]>) {
-  return planLiveLlmExecution({
+  return planAtLabCeiling({
     schemaVersion: LLM_LAB_SCHEMA_VERSION,
     profileId: `lab-${task}`,
     mode: "live",
@@ -33,6 +33,11 @@ function livePlan(task: LlmExecutionProfile["task"], budget: Partial<LlmExecutio
 
 /** The shared per-request budget, imported rather than copied. */
 const PER_REQUEST = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
+
+/** `amount` as a breach message prints it, escaped for a pattern. */
+function escaped(amount: number): string {
+  return String(amount).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
 
 const plan = livePlan("diagnose", { maxCallsPerRun: 1, maxEstimatedCostUsd: 0.25 });
 
@@ -183,10 +188,13 @@ test("an iterating build's total cost is held to --llm-max-cost-usd for the whol
   // Four calls at the old per-call reading of $0.05 each come to $0.20: four times the build's own $0.05.
   const perCallReading = adaptingUsage(4, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.05 });
   assert.throws(() => assertLiveLlmBudgetHeld(small, perCallReading), /the build's estimated cost 0\.2 exceeded its per-build cost ceiling of 0\.05 \(--llm-max-cost-usd 0\.05, held to Core's per-build ceiling\)/u);
-  // 26 calls at $0.25 would be $6.50; the build's spend ceiling is Core's $0.25.
-  assert.equal(adapting.maxTotalEstimatedCostUsd, 0.25);
-  const pricey = adaptingUsage(26, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.01 });
-  assert.throws(() => assertLiveLlmBudgetHeld(adapting, pricey), /the build's estimated cost 0\.26 exceeded its per-build cost ceiling of 0\.25 \(.*held to Core's per-build ceiling\)/u);
+  // 26 calls at Core's ceiling each would be 26 times it; the build's spend ceiling is Core's ceiling.
+  assert.equal(adapting.maxTotalEstimatedCostUsd, LAB_CEILING_USD);
+  // 26 calls at a 25th of the ceiling come to 1.04 times it.
+  const perCall = LAB_CEILING_USD / 25;
+  const pricey = adaptingUsage(26, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: perCall });
+  assert.ok(pricey.totalEstimatedCostUsd > LAB_CEILING_USD);
+  assert.throws(() => assertLiveLlmBudgetHeld(adapting, pricey), new RegExp(`the build's estimated cost ${escaped(pricey.totalEstimatedCostUsd)} exceeded its per-build cost ceiling of ${escaped(LAB_CEILING_USD)} \\(.*held to Core's per-build ceiling\\)`, "u"));
 });
 
 test("a one-call diagnosis is judged across its one authorized call, not the larger cap typed", () => {

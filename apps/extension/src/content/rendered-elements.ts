@@ -19,8 +19,11 @@
 // **Not rendered**, and so neither listed nor descended into:
 //
 // - `script`, `style`, `noscript` and `template`, which draw nothing;
-// - an element carrying `hidden`, whatever a stylesheet says about it;
-// - an element whose computed `display` is `none`;
+// - an element whose computed `display` is `none`, which is what `hidden`
+//   does unless a stylesheet says otherwise. One that does is drawn, and is
+//   listed: company-website's chat launcher sets `hidden` while its class
+//   draws it as a sixty-pixel circle, and a person still sees and presses it
+//   (t229);
 // - a light child of an open shadow root's host that no slot places, which is
 //   not in the painted tree at all;
 // - the extension's own overlays (`picker-host.ts`), which are not the page.
@@ -43,7 +46,7 @@
 // **`includeHidden`** (t223) is a search's capture: `web.find_on_page` and
 // `web.describe_element` look for words a closed menu or a collapsed panel
 // holds. With it, the walk also lists what it would skip as not rendered -- a
-// `hidden` or `display: none` subtree, a hidden-visibility element, an element
+// `display: none` subtree, `hidden` ones included, a hidden-visibility element, an element
 // with no box -- and names each in `hidden`, in the same composed order. It
 // still never lists `script`, `style`, `noscript`, `template`, the extension's
 // overlays, `html` or `body`, nor two things that hold no words a person could
@@ -97,8 +100,7 @@ export function renderedElements(root: Document = document, options: RenderedEle
     const inside = insideUnrendered.pop() === true;
     if (!inside) walked += 1;
     if (isPrunedWithItsSubtree(element)) continue;
-    let unrendered = inside || element.hasAttribute("hidden");
-    if (unrendered && !includeHidden) continue;
+    let unrendered = inside;
     let standing: Standing;
     if (unrendered) {
       if (isNeverListedHidden(element)) continue;

@@ -184,6 +184,9 @@ test("a failed action's refusal code is read from the client's closed code, neve
     [{ status: "failed", failure: { code: codes.ACTION_REJECTED, actual: "covered: the cookie banner" } }, "target_covered"],
     [{ status: "failed", failure: { code: codes.ACTION_REJECTED, actual: "disabled: Save" } }, "target_not_actionable"],
     [{ status: "failed", failure: { code: codes.ACTION_REJECTED, actual: "the words covered: later" } }, "target_not_actionable"],
+    // The gate's page-state refusals carry their own code since t193 (Core's `unexpected_state`); read the same way.
+    [{ status: "failed", failure: { code: codes.TARGET_NOT_ACTIONABLE, actual: "covered: the added-to-cart drawer" } }, "target_covered"],
+    [{ status: "failed", failure: { code: codes.TARGET_NOT_ACTIONABLE, actual: "hidden: the element has a zero-size box" } }, "target_not_actionable"],
     [{ status: "failed", failure: { code: codes.TARGET_NOT_FOUND } }, "target_not_found"],
     [{ status: "failed", failure: { code: codes.TARGET_AMBIGUOUS } }, "target_not_found"],
     [{ status: "failed", failure: { code: codes.PAGE_CHANGED } }, "page_changed"],

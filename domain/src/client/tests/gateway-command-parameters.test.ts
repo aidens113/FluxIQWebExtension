@@ -74,6 +74,10 @@ assert.equal(mapped("web.browser.navigate", { url: "https://example.test", newTa
 assert.equal(mapped("web.dom.check", { selector: "#terms", checked: false }).checked, false);
 assert.equal(mapped("web.dom.check", { selector: "#terms", checked: true }).checked, true);
 assert.equal(mapped("web.dom.check", { selector: "#terms", checked: "false" }).checked, undefined);
+// `type.ts` sends the field's form after the text only on a literal `true` (t193 runs 36-38: queries typed and never sent).
+assert.equal(mapped("web.dom.type", { selector: "#q", text: "napkins", submit: true }).submit, true);
+assert.equal(mapped("web.dom.type", { selector: "#q", text: "napkins" }).submit, undefined);
+assert.equal(mapped("web.dom.type", { selector: "#q", text: "napkins", submit: "yes" }).submit, undefined);
 
 // -- `web.dom.assert`: kind, expected, timeout --------------------------------
 assert.deepEqual(mapped("web.dom.assert", { assert: { kind: "text", expected: "Saved", timeoutMs: 2_000 } }).assert, { kind: "text", expected: "Saved", timeoutMs: 2_000 });
@@ -171,12 +175,19 @@ assert.deepEqual(
   webAutomationReadActionParameters({ extractList: { item: "li", fields: { card: { kind: "text", handling: "encrypt" } } } }).lifted.extractList?.fields,
   { card: { kind: "text", handling: "encrypt" } }
 );
+// A member the field's kind does not take is dropped and the field read by its
+// kind, never refused (t194-w45): a rerun that changes a field's kind leaves the
+// old kind's member behind, and the read the model chose still runs.
+for (const [fields, read] of [
+  [{ title: { kind: "text", selector: "h3", attribute: "title" } }, { title: { kind: "text", selector: "h3" } }],
+  [{ title: { kind: "link", header: "Title" } }, { title: { kind: "link" } }]
+] as Array<[JsonObject, JsonObject]>) {
+  assert.deepEqual(webAutomationReadActionParameters({ extractList: { item: "li", fields } }).lifted.extractList?.fields, read, JSON.stringify(fields));
+}
 const malformedSpecs: Array<[why: string, fields: JsonObject]> = [
   ["an attribute field naming no attribute", { href: { kind: "attribute", selector: "a" } }],
   ["an attribute field naming an empty attribute", { href: { kind: "attribute", selector: "a", attribute: "" } }],
   ["a column field naming no header", { price: { kind: "column" } }],
-  ["an attribute on a kind that reads none", { title: { kind: "text", selector: "h3", attribute: "title" } }],
-  ["a header on a kind that reads none", { title: { kind: "link", header: "Title" } }],
   ["an unknown kind", { title: { kind: "html", selector: "h3" } }],
   ["a spec with no kind", { title: { selector: "h3" } }],
   ["an empty selector", { title: { kind: "text", selector: "" } }],
@@ -352,7 +363,7 @@ assert.deepEqual(webAutomationActionFromGatewayCommand({ commandId: "command.sna
 // it. Every parameter name the lift reads is sent unreadable to every action
 // type, and the pairs refused whole must be exactly these five, so a schema
 // that starts or stops requiring a lifted field shows up here, not on a page.
-const LIFTED_PARAMETER_NAMES = ["browserTabId", "tabId", "browserFrameId", "frameId", "browserFrameUrlPath", "newTab", "option", "scroll", "wait", "modifiers", "checked", "assert", "extractList", "upload", "dialog", "tab", "download"];
+const LIFTED_PARAMETER_NAMES = ["browserTabId", "tabId", "browserFrameId", "frameId", "browserFrameUrlPath", "newTab", "option", "scroll", "wait", "modifiers", "checked", "submit", "assert", "extractList", "upload", "dialog", "tab", "download"];
 const refusedPairs = WEB_AUTOMATION_ACTION_TYPES.flatMap((actionType) => LIFTED_PARAMETER_NAMES
   .filter((name) => "status" in webAutomationActionFromGatewayCommand({ commandId: "command.matrix", actionType, parameters: { [name]: "unreadable" } }))
   .map((name) => `${actionType} ${name}`));

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile, type ScenarioExpected } from "@fluxiq-web-extension/test-contracts";
 import { assertProviderCallsAsDeclared, declaredProviderCalls } from "../declared-provider-calls.js";
-import { planLiveLlmExecution } from "../live-llm-plan.js";
+import { planAtLabCeiling } from "./lab-ceiling.js";
 import type { LiveLlmObservedUsage } from "../observed-usage.js";
 
 /**
@@ -18,7 +18,7 @@ import type { LiveLlmObservedUsage } from "../observed-usage.js";
  * scenario with the declaration, zero calls, passed).
  */
 
-const plan = planLiveLlmExecution({
+const plan = planAtLabCeiling({
   schemaVersion: LLM_LAB_SCHEMA_VERSION,
   profileId: "lab-adapt",
   mode: "live",

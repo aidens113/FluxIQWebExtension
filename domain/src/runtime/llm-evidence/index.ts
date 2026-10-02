@@ -57,6 +57,7 @@ export * from "./page-find";
 export { screenWebBuildRefusalDiagnostic, type WebBuildRefusalDiagnostic } from "./refusal-diagnostic";
 export {
   sanitizeWebLlmSnapshot,
+  sanitizeWebLlmSnapshotWithBindings,
   WEB_LLM_EVIDENCE_SCHEMA_VERSION,
   type WebLlmPageEvidence,
   type WebLlmSanitizeOptions,

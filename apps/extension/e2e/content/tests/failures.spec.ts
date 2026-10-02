@@ -37,7 +37,7 @@ async function swallowNavigation(page: Page, selector: string): Promise<void> {
 }
 
 test.describe("on failure-surfaces", () => {
-  test("a refused target is ACTION_REJECTED, one code whatever the reason, with the reason in the record", async ({ openHarness }) => {
+  test("a refused target is TARGET_NOT_ACTIONABLE, one code whatever the page-state reason, with the reason in the record", async ({ openHarness }) => {
     const harness = await openHarness("failure-surfaces");
     const reply = await harness.runAction({ commandId: "rejected", actionType: "web.dom.click", selector: DISABLED_TARGET });
     expect(reply).toMatchObject({
@@ -46,8 +46,8 @@ test.describe("on failure-surfaces", () => {
       // what the operator reads.
       validation: { status: "failed", expected: "a target that can be clicked", actual: "the element is disabled" },
       failure: {
-        category: "blocked_by_capability_or_policy",
-        code: WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED,
+        category: "unexpected_state",
+        code: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE,
         retryable: false,
         stage: "execution",
         expected: "a target that can be clicked",
@@ -63,8 +63,8 @@ test.describe("on failure-surfaces", () => {
     await page.locator(DETACH_TARGET).evaluate((element) => { (element as HTMLElement).style.display = "none"; });
     const reply = await harness.runAction({ commandId: "hidden", actionType: "web.dom.click", selector: DETACH_TARGET });
     expect(reply.failure).toMatchObject({
-      category: "blocked_by_capability_or_policy",
-      code: WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED,
+      category: "unexpected_state",
+      code: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE,
       // The reason still heads the record; the defence's account follows it,
       // because a hidden target is an obstruction the runtime tries to clear
       // before it reports (`action-runtime/recovery/record.ts`).

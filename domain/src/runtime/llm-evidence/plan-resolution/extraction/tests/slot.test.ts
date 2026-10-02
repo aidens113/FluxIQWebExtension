@@ -139,7 +139,7 @@ test("a column named in the instruction's own words resolves to the detected one
       item: CARD,
       fields: CARD_FIELDS,
       where: [
-        { read: CARD_FIELDS.rating, atLeast: 4 },
+        { field: "rating", atLeast: 4 },
         { read: { kind: "text", selector: testId("stock-badge"), required: true }, is: "present" }
       ]
     })

@@ -7,7 +7,8 @@
 //
 // The runner is Node, so the tree is a fake with only the members
 // `rendered-elements.ts` reads, and `getComputedStyle` answers from each fake
-// element's own style. What only a real page proves -- that Chromium computes
+// element's own style, over the browser's own `[hidden] { display: none }`.
+// What only a real page proves -- that Chromium computes
 // the styles and boxes these fakes state -- is the content harness's.
 
 import assert from "node:assert/strict";
@@ -58,7 +59,7 @@ function page(...content: FakeElement[]): { document: Document; body: FakeElemen
 function withStyles<T>(body: () => T): T {
   const globals = globalThis as unknown as Record<string, unknown>;
   const previous = Object.getOwnPropertyDescriptor(globals, "getComputedStyle");
-  globals.getComputedStyle = (element: FakeElement) => ({ display: "block", visibility: "visible", opacity: "1", ...element.style });
+  globals.getComputedStyle = (element: FakeElement) => ({ display: element.hasAttribute("hidden") ? "none" : "block", visibility: "visible", opacity: "1", ...element.style });
   try {
     return body();
   } finally {
@@ -105,6 +106,14 @@ test("what draws nothing is pruned with everything inside it", () => {
     el("main", {}, { id: "kept" })
   );
   assert.deepEqual(listed(document), ["main#kept"]);
+});
+
+test("a [hidden] element a stylesheet draws all the same is listed: a person sees it (t229)", () => {
+  const { document } = page(
+    el("div", { display: "grid" }, { hidden: "", id: "launcher" }).add(el("span", {}, { id: "launcher-words" })),
+    el("div", {}, { hidden: "", id: "closed" }).add(el("button"))
+  );
+  assert.deepEqual(listed(document), ["div#launcher", "span#launcher-words"]);
 });
 
 test("what a person may not be able to use is listed all the same: aria-hidden, transparent, tiny, nameless", () => {

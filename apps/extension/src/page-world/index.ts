@@ -6,9 +6,11 @@
 // here should grow beyond wiring, and nothing in this directory may import
 // extension, domain, or Core modules: the page can read and rewrite everything
 // this bundle defines, so it holds no tokens, no recorded data, and no
-// messaging to the background worker. Its only channel is the DOM contract in
-// `shared/dialog-channel.ts`.
+// messaging to the background worker. Its only channels are the DOM contracts
+// in `shared/dialog-channel.ts` and `shared/press-probe-event.ts`.
 
 import { installDialogOverride } from "./dialog-override";
+import { installPressListenerWatch } from "./press-listeners";
 
 installDialogOverride();
+installPressListenerWatch();

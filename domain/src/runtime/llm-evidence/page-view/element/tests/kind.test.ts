@@ -18,12 +18,12 @@ test("every kind the format names", () => {
     [{ tag: "input", inputType: "image" }, "button"],
     [{ tag: "input", inputType: "reset" }, "button"],
     [{ tag: "input" }, "field"],
-    [{ tag: "input", inputType: "search" }, "field"],
+    [{ tag: "input", inputType: "search" }, "field[search]"],
     [{ tag: "input", inputType: "email" }, "field:email"],
     [{ tag: "input", inputType: "number" }, "field:number"],
     [{ tag: "textarea" }, "field"],
     [{ tag: "div", role: "textbox" }, "field"],
-    [{ tag: "div", role: "searchbox" }, "field"],
+    [{ tag: "div", role: "searchbox" }, "field[search]"],
     [{ tag: "div", attributes: [["contenteditable", ""]] }, "field"],
     [{ tag: "select" }, "select"],
     [{ tag: "input", inputType: "checkbox" }, "checkbox"],
@@ -41,6 +41,9 @@ test("every kind the format names", () => {
     [{ tag: "img" }, "img"],
     [{ tag: "i", role: "img" }, "img"],
     [{ tag: "div", hasClickHandler: true }, "clickable"],
+    [{ tag: "div", cursor: "pointer" }, "clickable"],
+    [{ tag: "div", cursor: "not-allowed" }, "clickable"],
+    [{ tag: "label", cursor: "pointer" }, undefined],
     [{ tag: "div", isDialog: { modal: true } }, "dialog"],
     [{ tag: "div", covers: ["t2"] }, "layer"],
     [{ tag: "div", coversCount: 3 }, "layer"],
@@ -56,4 +59,18 @@ test("the role the page wrote decides before the tag", () => {
   assert.equal(webLlmElementKind(el({ tag: "a", href: "https://shop.test/", role: "button" })), "button");
   assert.equal(webLlmElementKind(el({ tag: "input", inputType: "checkbox", role: "switch" })), "switch");
   assert.equal(webLlmElementKind(el({ tag: "button", hasClickHandler: true })), "button", "clickable only when nothing else names it");
+});
+
+test("a search box is field[search]: by type, role, a search landmark or form, or a q/search name or id (t229)", () => {
+  const rows: Array<[Partial<WebLlmEvidenceElement> & { tag: string }, string | undefined]> = [
+    [{ tag: "input", landmark: "search" }, "field[search]"],
+    [{ tag: "input", searchForm: true }, "field[search]"],
+    [{ tag: "input", attributes: [["name", "q"]] }, "field[search]"],
+    [{ tag: "input", attributes: [["id", "Search"]] }, "field[search]"],
+    [{ tag: "div", role: "combobox", landmark: "search" }, "field[search]"],
+    [{ tag: "input", attributes: [["name", "email"]] }, "field"],
+    [{ tag: "input", inputType: "email", landmark: "search" }, "field:email"],
+    [{ tag: "select", landmark: "search" }, "select"]
+  ];
+  for (const [fields, kind] of rows) assert.equal(webLlmElementKind(el(fields)), kind, JSON.stringify(fields));
 });

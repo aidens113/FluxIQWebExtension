@@ -88,6 +88,19 @@ export async function webActionPermission(input: {
   effect: "observe" | "mutate";
 }): Promise<WebActionPermission> {
   if (input.declared === undefined) return { kind: "no_consequence" };
+  // An explicit `null` from an action that only reads is "none declared", the
+  // same as no key at all. Nobody wrote it: until t194-w35 the domain wrote
+  // `consequences: null` back onto every call that carried none
+  // (`./node-run/run.ts`, `nodeCall`), Core kept that as the step's input, and
+  // each rerun's merge patch carried it forward -- so a read was refused
+  // `consequences_unreadable` sixteen times running for a declaration the model
+  // never made (`run-muq4oaof-464f5bce`). A read is never gated on what it
+  // declared, so this costs the gate nothing. An acting one is not given the
+  // same reading here: a press that sent `null` would otherwise be pressed
+  // without Core ever being asked, so `null` stays unreadable for it, and the
+  // library verb refuses it before this as a declaration missing, which is
+  // what it is (`./node-run/run.ts`).
+  if (input.declared === null && input.effect === "observe") return { kind: "no_consequence" };
   if (!Array.isArray(input.declared) || input.declared.length > 10 || !input.declared.every(isAutomationStudioActionConsequence)) return { kind: "invalid" };
   const declared: readonly AutomationStudioActionConsequence[] = input.declared;
   // Nobody to ask, so only what nobody could have allowed is missing -- and
