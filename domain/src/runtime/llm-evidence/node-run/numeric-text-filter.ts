@@ -17,6 +17,14 @@
 // shown value does not read as a number gets none: a name with a digit in it
 // is not a count.
 //
+// **Only a condition that compares digits by text** (run 13,
+// `run-muqbzu32-8691a65e`, cause 2): a `matches` pattern holding a digit or a
+// digit class, or a `contains` term holding a digit. Every product name on a
+// store holds a digit ("Bluetooth 5.3", "50H Playtime"), so the sentence fired
+// for `name not contains ["ear tips", "charging case"]`, which compares no
+// number at all, and the model spent two reruns answering it. A quantifier's
+// count (`\w{3}`) is not a digit the pattern compares.
+//
 // The sentence is built from the rows after the screen (`./read-result.ts`), so
 // it quotes nothing the rows beside it do not already quote, and it is bounded:
 // at most `NAMED_ROWS` rows, each label cut to `LABEL_CHARACTERS`.
@@ -43,6 +51,7 @@ export function webNodeNumericTextFilterSentence(where: number, condition: WebAu
   const column = condition.field;
   if (column === undefined || (condition.matches === undefined && condition.contains === undefined)) return undefined;
   if (condition.equals !== undefined || WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS.some((key) => condition[key] !== undefined)) return undefined;
+  if (!comparesDigits(condition)) return undefined;
   const named: string[] = [];
   let read = 0;
   for (const shown of rows) {
@@ -62,6 +71,18 @@ export function webNodeNumericTextFilterSentence(where: number, condition: WebAu
   const more = read > named.length ? `, and ${read - named.length} more` : "";
   return `where ${where} tests the text of ${cut(column)}, which reads as numbers (${named.join(", ")}${more}); for at least or at most use atLeast or atMost.`;
 }
+
+/** Whether the condition compares digits by text: a pattern with a digit or a digit class, or a contained term with a digit. */
+function comparesDigits(condition: WebAutomationExtractItemCondition): boolean {
+  const patterns = condition.matches === undefined ? [] : [condition.matches].flat();
+  const terms = condition.contains === undefined ? [] : [condition.contains].flat();
+  return patterns.some((pattern) => DIGIT_IN_PATTERN.test(pattern.replace(QUANTIFIER_COUNT, ""))) || terms.some((term) => /[0-9]/u.test(term));
+}
+
+/** A digit, `\d`, or a Unicode number class, in a pattern's text. */
+const DIGIT_IN_PATTERN = /[0-9]|\\d|\\p\{N/u;
+/** A `{n}`, `{n,}` or `{n,m}` quantifier, whose count is not a digit the pattern compares. */
+const QUANTIFIER_COUNT = /\{[0-9]+(?:,[0-9]*)?\}/gu;
 
 /** The row's first other non-empty value, as the row names itself, or `undefined` when it has none fit to quote. */
 function rowLabel(row: JsonObject, column: string): string | undefined {

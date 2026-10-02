@@ -88,10 +88,12 @@ test("an exploring list read shows the model the rows each condition rejected, b
   const read = (ran.evidence as JsonObject).read as JsonObject;
   assert.deepEqual(read.extracted, [{ name: "Basic Earbuds", price: "$19" }]);
   // Only the condition that rejected something, by its position in `where`,
-  // with its count and the rows: the true earbuds among them.
-  assert.deepEqual(read.rejectedRows, [
-    { where: 1, rejected: 3, rows: SAMPLED }
-  ]);
+  // with its count and the rows, each its values in the order of `fields`: the
+  // true earbuds among them.
+  assert.deepEqual(read.rejectedRows, {
+    fields: ["name", "price"],
+    conditions: [{ where: 1, rejected: 3, rows: SAMPLED.map((sampled) => [sampled.name, sampled.price]) }]
+  });
   // Inside the evidence, never a new member of the execution result.
   for (const key of Object.keys(ran)) assert.equal(WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS.includes(key), true, key);
 });
@@ -134,18 +136,18 @@ test("the samples and the kept rows come back whole, with no byte budget, and th
   };
   const { read, recorded } = webNodeReadWithRejectedRows(payload);
   assert.equal(JSON.stringify(recorded).includes("rejectedSamples"), false);
-  const whole = read as { extracted: unknown[]; rejectedRows: Array<{ rows: unknown[] }> };
+  const whole = read as { extracted: unknown[]; rejectedRows: { conditions: Array<{ rows: unknown[] }> } };
   // Every kept row and every sampled row: nothing is dropped to fit (t200).
   assert.equal(whole.extracted.length, 40);
-  assert.deepEqual(whole.rejectedRows.map((entry) => entry.rows.length), [3, 3, 3, 3]);
+  assert.deepEqual(whole.rejectedRows.conditions.map((entry) => entry.rows.length), [3, 3, 3, 3]);
   // Nothing bounds what a page sends either (user, 2026-09-30): every rejected
   // row the page sent reaches the model, every value whole
   // (`actions/extraction/rejected-samples.ts`).
   const flooded = structuredClone(payload) as { extraction: { rejectedSamples: unknown[][] } };
   flooded.extraction.rejectedSamples[0] = Array.from({ length: 300 }, (_unused, index) => ({ name: `${index} ${"y".repeat(5_000)}` }));
-  const all = webNodeReadWithRejectedRows(flooded as unknown as JsonObject).read as { rejectedRows: Array<{ rows: Array<{ name: string }> }> };
-  assert.equal(all.rejectedRows[0]?.rows.length, 300);
-  assert.equal(all.rejectedRows[0]?.rows[299]?.name, `299 ${"y".repeat(5_000)}`);
+  const all = webNodeReadWithRejectedRows(flooded as unknown as JsonObject).read as { rejectedRows: { fields: string[]; conditions: Array<{ rows: string[][] }> } };
+  assert.equal(all.rejectedRows.conditions[0]?.rows.length, 300);
+  assert.equal(all.rejectedRows.conditions[0]?.rows[299]?.[all.rejectedRows.fields.indexOf("name")], `299 ${"y".repeat(5_000)}`);
 });
 
 test("with every cap gone the screen still holds: a card number in a rejected row is withheld, and the rest of the row is whole", () => {
@@ -158,12 +160,12 @@ test("with every cap gone the screen still holds: a card number in a rejected ro
       rejectedSamples: [[{ name: long, price: "4111 1111 1111 1111" }]]
     }
   };
-  const read = webNodeReadWithRejectedRows(payload).read as { rejectedRows: Array<{ rows: Array<{ name: string; price: string }> }> };
-  assert.equal(read.rejectedRows[0]?.rows[0]?.price, WEB_LLM_WITHHELD_TEXT);
-  assert.equal(read.rejectedRows[0]?.rows[0]?.name, long);
+  const read = webNodeReadWithRejectedRows(payload).read as { rejectedRows: { fields: string[]; conditions: Array<{ rows: string[][] }> } };
+  assert.deepEqual(read.rejectedRows.fields, ["name", "price"]);
+  assert.deepEqual(read.rejectedRows.conditions[0]?.rows[0], [long, WEB_LLM_WITHHELD_TEXT]);
 });
 
-test("the model is shown, per condition, the rows it removed alone apart from the rows another condition also rejected, with one sentence on which to check", () => {
+test("the model is shown, per condition, the rows it removed alone, and once for the read the rows more than one condition rejected, with one sentence on which to check", () => {
   // run-mup2u8o3-6697c4be: the accessory rule (where 1) rejected 4 rows here,
   // 2 of them alone -- a true pair and an accessory; the other 2 also failed price.
   const truePair = { name: "Ultra Earbuds with Wireless Charging Case", price: "$59" };
@@ -181,11 +183,17 @@ test("the model is shown, per condition, the rows it removed alone apart from th
     }
   };
   const { read, recorded } = webNodeReadWithRejectedRows(payload);
-  const shown = read as { rejectedRows: JsonObject[]; rejectedRowsNote?: string };
-  assert.deepEqual(shown.rejectedRows, [
-    { where: 0, rejected: 3, alone: 1, rowsAlone: [{ name: "Studio Headphones", price: "$99" }], rowsWithOthers: [{ name: "Premium ear tips", price: "$79" }, { name: "Deluxe charging case", price: "$89" }] },
-    { where: 1, rejected: 4, alone: 2, rowsAlone: [truePair, accessory], rowsWithOthers: [{ name: "Premium ear tips", price: "$79" }, { name: "Deluxe charging case", price: "$89" }] }
-  ]);
+  const shown = read as { rejectedRows: JsonObject; rejectedRowsNote?: string };
+  // The two rows both conditions rejected are said once, under both; until
+  // run 13 each was said under each condition.
+  assert.deepEqual(shown.rejectedRows, {
+    fields: ["name", "price"],
+    conditions: [
+      { where: 0, rejected: 3, alone: 1, rowsAlone: [["Studio Headphones", "$99"]] },
+      { where: 1, rejected: 4, alone: 2, rowsAlone: [[truePair.name, truePair.price], [accessory.name, accessory.price]] }
+    ],
+    rowsWithOthers: [{ failed: [0, 1], rows: [["Premium ear tips", "$79"], ["Deluxe charging case", "$89"]] }]
+  });
   assert.equal(shown.rejectedRowsNote, WEB_NODE_REJECTED_ROWS_NOTE);
   // Neither the rows nor their alone lead is in what the draft records; the count is, as a count.
   const kept = (recorded as JsonObject).extraction as JsonObject;
@@ -195,8 +203,8 @@ test("the model is shown, per condition, the rows it removed alone apart from th
   // A page build that does not order its rows: every row, unsplit, and no sentence.
   const unordered = structuredClone(payload) as { extraction: JsonObject };
   delete unordered.extraction.rejectedSamplesAlone;
-  const plain = webNodeReadWithRejectedRows(unordered as unknown as JsonObject).read as { rejectedRows: JsonObject[]; rejectedRowsNote?: string };
-  assert.deepEqual(plain.rejectedRows[1], { where: 1, rejected: 4, alone: 2, rows: [truePair, accessory, { name: "Premium ear tips", price: "$79" }, { name: "Deluxe charging case", price: "$89" }] });
+  const plain = webNodeReadWithRejectedRows(unordered as unknown as JsonObject).read as { rejectedRows: { conditions: JsonObject[] }; rejectedRowsNote?: string };
+  assert.deepEqual(plain.rejectedRows.conditions[1], { where: 1, rejected: 4, alone: 2, rows: [[truePair.name, truePair.price], [accessory.name, accessory.price], ["Premium ear tips", "$79"], ["Deluxe charging case", "$89"]] });
   assert.equal(plain.rejectedRowsNote, undefined);
 });
 
@@ -212,7 +220,7 @@ const HOME_CARDS = [
   { name: "Jonas Weber", mutual: "Aisha Khan and 4 other mutual friends" }
 ];
 
-function filteredRead(condition: JsonObject): { read: { rejectedRows?: JsonObject[]; rejectedRowsNote?: string }; parameters: JsonObject } {
+function filteredRead(condition: JsonObject): { read: { rejectedRows?: JsonObject; rejectedRowsNote?: string }; parameters: JsonObject } {
   const rejected = HOME_CARDS.filter((card) => !webAutomationExtractConditionHolds(condition as WebAutomationExtractItemCondition, card[condition.field as "name" | "mutual"]));
   const kept = HOME_CARDS.filter((card) => !rejected.includes(card));
   const payload: JsonObject = {
@@ -225,7 +233,7 @@ function filteredRead(condition: JsonObject): { read: { rejectedRows?: JsonObjec
     }
   };
   const parameters: JsonObject = { extractList: { item: ".request-card", fields: { name: ".name", mutual: ".mutual" }, where: [condition] } };
-  return { read: webNodeReadWithRejectedRows(payload, parameters).read as { rejectedRows?: JsonObject[]; rejectedRowsNote?: string }, parameters };
+  return { read: webNodeReadWithRejectedRows(payload, parameters).read as { rejectedRows?: JsonObject; rejectedRowsNote?: string }, parameters };
 }
 
 test("a text condition that drops rows whose column reads as numbers says so, naming each row with the number a bound would read (run 36)", () => {
