@@ -661,6 +661,47 @@ message per fix. Update your lane report as well as your own. Core paths below a
 - Done: failing-first tests on both sides; narrow checks with Core libraries rebuilt.
 - Report to: `reports/t242-skipped-steps-reach-run-detail.md` in `fxwork/t242/!FluxIQWebExtension`
 
+#### Brief: t243-state-routing-runtime (`lead-xhigh`, Core architecture)
+- Repository: both, tree `fxwork/t243` (Core-paired); Core owns the mechanism, the web domain only observes.
+- Task (user, 2026-10-02, binding): "that same thing should apply to THE ENTIRE RUNTIME! if a step isnt avaialble,
+  it should use state to find current step. Of course if it keeps looping back to the same step and not progressing
+  enough times, it should count as failed"; "that rule is supposed to be a GLOBAL runtime thing of core". For every
+  node of a Flow run, not only sometimes-present ones: when a step cannot run (its target is unavailable or its
+  expected state does not hold), Core observes the current state through the domain's observer and routes to the
+  node whose recorded expected pre-state matches, before any recovery ladder or model call. A bounded guard ends the
+  run as failed, with that stated reason, when routing keeps returning to the same node without progress. F38's skip of
+  an absent sometimes-present step becomes one case of this rule.
+- First: design in the report (what a node's expected pre-state is and where the build records it; Core's draft steps
+  already carry `stateBefore`/`stateAfter` digests and `R/route-state/` has an observer and router state; how matching
+  stays content-free in Core; the progress measure and its bound; how it orders against the recovery ladder; Flow
+  versions without pre-states). Then implement with failing-first tests, Core docs, and a Scenario Lab fixture where a
+  step is unavailable and the page is already past it.
+- Owns: Core `R/executor/**`, `R/route-state/**`, `R/flow-bootstrap/authoring/**`, the draft-to-Flow writer, their tests
+  and `docs/architecture/automation-studio*`; domain `src/runtime/llm-evidence/state-digest/**` and the domain's runtime
+  state observer; Scenario Lab fixtures it adds.
+- Must not touch: `R/llm/evidence-loop*.ts`, `R/result-verification/**`, `R/recovery/refuted-result/**`,
+  `packages/test-runner/src/lab-runs/**`.
+- Done: narrow checks in both repositories with Core libraries rebuilt; report says Ready to commit, per fix.
+- Report to: `reports/t243-state-routing-runtime.md` in `fxwork/t243/!FluxIQWebExtension`
+
+#### Briefs: live round 1002-L (lanes A-D, `lead-xhigh`)
+Common. The supervisor first merges dev into every lane tree (both repositories) and rebuilds Core libraries and the
+extension; the Lab's behind-dev guard must admit the tree. Each lead owns one slot and one scenario, runs it live from
+the extension chat, headed, deepseek-flash, under the $0.10 creation purse (`--llm-cost-ceiling-usd 0.10`), one run per
+invocation, at most three runs. After every run: the Full Debug Protocol above (step logs, the six stages, UI review
+from screenshots), a debug file in `debugs/`, then fix each cause on the lane's tree with failing-first tests and
+narrow checks, and rerun only on changed source. Stop at the first balance failure. No commits; the report lists each
+run (id, cost, stage reached, causes, fixes) and the commit-ready files per fix.
+
+| Lead | Tree | Slot | Scenario / task |
+| --- | --- | --- | --- |
+| t174-lead-1002L (A) | `fxwork/t174` | slot-1 | crossborder-marketplace-hub-to-cart |
+| t193-lead-1002L (B) | `fxwork/t193` | slot-2 | bigbox-retail-pickup-cart |
+| t194-lead-1002L (C) | `fxwork/t194` | slot-3 | everything-store-plus-earbuds-under-50 |
+| t195-lead-1002L (D) | `fxwork/t195` | slot-4 | social-network-feed-confirm-requests |
+
+Report to: `reports/<lead>.md` in the lane tree.
+
 ---
 
 ## Work Ledger
