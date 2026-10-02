@@ -44,12 +44,12 @@ const TARGET_HINT = "web.handle.expected.selector.handle_location";
 const CARD = '[data-testid="product-card"]';
 const testId = (id: string) => `[data-testid="${id}"]`;
 const NEXT = { next: testId("pagination-next"), maxPages: 3 };
-/** What the fixture's recording reads from each card, as a request. */
+/** What the fixture's recording reads from each card, as a request. None is required: a read requires a column only where it says so, whatever coverage the detection measured (`../columns.ts`, `unrequired`). */
 const CARD_FIELDS = {
-  name: { kind: "text", selector: testId("product-name"), required: true },
-  price: { kind: "text", selector: testId("product-price"), required: true },
-  rating: { kind: "text", selector: testId("product-rating"), required: true },
-  url: { kind: "attribute", selector: testId("product-link"), attribute: "href", required: true }
+  name: { kind: "text", selector: testId("product-name"), required: false },
+  price: { kind: "text", selector: testId("product-price"), required: false },
+  rating: { kind: "text", selector: testId("product-rating"), required: false },
+  url: { kind: "attribute", selector: testId("product-link"), attribute: "href", required: false }
 } satisfies JsonObject;
 /** The columns the instruction asked for, named by the detected keys the model was shown. */
 const RENAMED = { name: "product-name", price: "product-price", rating: "product-rating", url: "product-link@href" };
@@ -112,7 +112,7 @@ test("a detected list keeps the columns the plan names, under the plan's keys, o
   // The link column itself is the absolute address; only `@href` is the href as written.
   assert.deepEqual(
     await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: { url: "product-link" }, paginate: false } }),
-    resolvedList({ item: CARD, fields: { url: { kind: "link", selector: testId("product-link"), required: true } } })
+    resolvedList({ item: CARD, fields: { url: { kind: "link", selector: testId("product-link"), required: false } } })
   );
 });
 
@@ -262,7 +262,7 @@ test("the list may be named with the location its evidence reported, at the item
 test("a table's columns may be named by header, and a feed's by attribute, with its scroll bounded", async () => {
   const table = runtimeOver(CAPTURED_DETECTIONS["data-table-largest"]);
   const rows = await detect(table);
-  const header = (name: string) => ({ kind: "column", header: name, required: true });
+  const header = (name: string) => ({ kind: "column", header: name, required: false });
   const inventory = { product: header("Product"), category: header("Category"), price: header("Price"), stock: header("Stock") };
   const item = CAPTURED_DETECTIONS["data-table-largest"].structure.ok ? CAPTURED_DETECTIONS["data-table-largest"].structure.proposal.item : "";
   for (const fields of [
@@ -284,9 +284,9 @@ test("a table's columns may be named by header, and a feed's by attribute, with 
     resolvedList({
       item: testId("feed-item"),
       fields: {
-        title: { kind: "text", selector: testId("feed-item-title"), required: true },
-        author: { kind: "text", selector: testId("feed-item-author"), required: true },
-        published: { kind: "attribute", selector: testId("feed-item-time"), attribute: "datetime", required: true }
+        title: { kind: "text", selector: testId("feed-item-title"), required: false },
+        author: { kind: "text", selector: testId("feed-item-author"), required: false },
+        published: { kind: "attribute", selector: testId("feed-item-time"), attribute: "datetime", required: false }
       },
       paginate: { mode: "scroll", maxScrolls: 10 },
       maxItems: 40
