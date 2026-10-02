@@ -130,6 +130,12 @@ export const WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1" as co
  *   `chrome://` or gallery URL, an enterprise policy. No retry of any kind
  *   clears it and nothing on the page can be dealt with; the only move is to be
  *   somewhere else.
+ * - `refused_by_page`: the press landed and the page refused it in words of
+ *   its own, beside the control, and did nothing: it needs something first --
+ *   a choice made, a field filled (`page_needs_something_first`) -- or it was
+ *   busy, or the press came too fast (`page_busy_try_later`). The page's words
+ *   are on the page the refusal carries, never in the refusal. Until t174 F40
+ *   (2026-10-02) the first was a success and the second `action_failed`.
  * - `action_failed`: the action failed for a reason none of these names.
  * - `page_unreadable`: the page could not be captured at all.
  *
@@ -170,6 +176,7 @@ export const WEB_LLM_TOOL_REJECTION_CODES = [
   "action_timed_out",
   "output_not_observed",
   "not_permitted_here",
+  "refused_by_page",
   "action_failed",
   "page_unreadable",
   "not_at_start_location",
@@ -286,6 +293,14 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   not read, so the command was refused before it was dispatched. Write the
  *   node's own parameter shape.
  *
+ * What the page answered a press with (`refused_by_page`):
+ * - `page_needs_something_first`: the page wrote beside the control that it
+ *   needs something before it will do this -- a choice, a value, a field --
+ *   and did nothing. Read what it asked for on the page, give it that, then
+ *   press again; the same press first is answered the same way.
+ * - `page_busy_try_later`: the page said it was busy, or that presses came too
+ *   fast, and did nothing. The same press may work a moment later.
+ *
  * What this domain already said (`answered_the_same_again`):
  * - the answer to this call is byte-for-byte the one it was given last time,
  *   and `repeatedAnswer` says how many times in a row that has now happened.
@@ -350,6 +365,8 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "page_not_scriptable",
   "channel_to_page_failed",
   "parameter_not_readable",
+  "page_needs_something_first",
+  "page_busy_try_later",
   "answered_the_same_again",
   "page_unchanged_after_action",
   "already_at_destination",

@@ -638,3 +638,16 @@ No live run and no provider call. Full report: `t174-lead-1002.md`.
 
 Follow-up: routing to the node whose expected state matches needs a node pre-state that no build writes yet. It needs
 its own brief (`t174-lead-1002.md`, "Follow-ups").
+
+### Session 9 (2026-10-02, t174-lead-1002L): round 1002-L, held before the first run
+
+No live run: the Lab's debug guard first needed `debugs/run-muqk4u32-0b36e58f.md` (w70), and the supervisor then held
+all runs until t243 merges. Full report: `t174-lead-1002L.md`.
+
+| # | Fix | Files | Exposed by | Validation | Status |
+| --- | --- | --- | --- | --- | --- |
+| F40 | A press the page answers with "it needs something first" fails `web.action.refused_by_page` | extension `content/**`, domain `failure/`, `action-failure/`, `tool-rejection.ts`, docs | muqk4u32 0027, s12 | T2 press-answers 4 passed; domain 439/439; extension 365/365 | **Ready to commit** |
+| F41 | A kept step brings the whole way to its page, detours left out; a refusal names taken steps not in the Flow | Core `R/flow-draft/`, `R/llm/node-tools/dry-run-gate.ts` | muqk4u32 0028-0055 | Core 186/186; 7 fail at HEAD | **Ready to commit** |
+| F42 | The consequence finding in plain words; only money/delete/send ask | Core `R/action-permissions/`, `R/flow-bootstrap/action-permissions.ts`, `R/service.ts` | muqk4u32 `00017` | Core 222/222; 7 fail at HEAD | **Ready to commit** |
+| F44 | Cards: "the page turned it down", not "it wasn't allowed" | Core `src/ui/activity-action/failure-reason.ts` | w71 | 135/135; 3 fail first | **Ready to commit** |
+| F43 | Replayed steps carry `changed` | (reverted) | muqk4u32 0071 | +21% dry run, 4 t243 rows | **Parked** |

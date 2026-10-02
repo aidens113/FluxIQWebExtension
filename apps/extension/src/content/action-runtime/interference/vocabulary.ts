@@ -161,6 +161,23 @@ export function isTransientRefusalText(text: string): boolean {
 }
 
 /**
+ * The phrases a page writes beside a press it will not carry out until it is
+ * given something first: "Please select a Color.", "Please enter a quantity.",
+ * "This field is required.", "You have reached the purchase limit for this
+ * item." A closed list, each on word boundaries, and each a refusal rather than
+ * information: no stock, price or availability words, which a press that worked
+ * may bring as well ("Only 30 pieces available.", "sold out"). "Required" alone
+ * is not on it -- it is a field's label -- and neither is "are required", which
+ * is the legend a form carries whether or not anything was refused.
+ */
+const PAGE_REQUIREMENT_PHRASE = /\b(?:please (?:select|choose|pick|enter|fill in|fill out|provide|specify)|is required|purchase limit)\b/iu;
+
+/** Whether a line a press brought says the page needs something first and did not carry the press out (`../rate-limit-notice.ts`). */
+export function isPageRequirementText(text: string): boolean {
+  return PAGE_REQUIREMENT_PHRASE.test(text);
+}
+
+/**
  * The acknowledgement a rate-limit notice offers, as the whole label: OK, Okay,
  * Got it, Understood, I understand. Anchored at both ends, so "OK, delete it" or
  * "OK to charge my card" cannot match; "Close" and a close glyph are already

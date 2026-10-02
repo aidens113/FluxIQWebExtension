@@ -52,11 +52,27 @@
 // every word it had (the coupon's "…", a spinner in place of "Add to cart"), or
 // it says `aria-busy` -- the watch keeps reading past the window, for at most
 // `BUSY_LIMIT_MS` from the press, and reads once more when it stops working.
+//
+// **A page that will not carry the press out until it is given something first
+// says so in a line it writes into the same region.** crossborder's Add to cart,
+// pressed with no colour chosen, writes "Please select a Color." under the
+// options and adds nothing. Until 2026-10-02 the click passed on its hit test,
+// was pressed once more as ignored, and reported success with nothing in the
+// cart, in exploration, the dry run and playback alike (`run-muqk4u32-0b36e58f`,
+// t174 F40). So the watch also reads each short line the press wrote into the
+// region (`written-lines/`) against a closed phrase list
+// (`interference/vocabulary.ts`, "please select", "is required", "purchase
+// limit"), and such a line is reported as a refusal that needs something first
+// (`needs`). It settles at once: there is no wait to read and nothing to be
+// gained by pressing again until the page has what it asked for. Its line comes
+// after the server for a limit the server decides, so it too is read past the
+// window while the control is still working.
 
 import { composedParent } from "../shadow-dom";
-import { boundedLayerText, isRateLimitLayerText, isTransientRefusalText, overlaysOverPage } from "./interference";
+import { boundedLayerText, isPageRequirementText, isRateLimitLayerText, isTransientRefusalText, overlaysOverPage } from "./interference";
+import { watchWrittenLines, type WrittenLines } from "./written-lines";
 
-/** A press the page refused for going too fast, or because it was busy, as far as it may be reported. */
+/** A press the page refused -- for going too fast, because it was busy, or because it needs something first -- as far as it may be reported. */
 export type RateLimitNotice = {
   /** How long after the press the notice was seen. */
   afterMs: number;
@@ -64,6 +80,8 @@ export type RateLimitNotice = {
   retryAfterMs?: number;
   /** The page said it was busy and could not carry the press out, rather than that the press went too fast. */
   busy?: true;
+  /** The page wrote beside the control that it needs something first -- a choice, a value -- and did not carry the press out. */
+  needs?: true;
 };
 
 export type RateLimitWatch = {
@@ -90,6 +108,8 @@ export type RateLimitProbe = {
   regionTexts?(pressed: Element): readonly string[];
   /** The pressed control's own bounded words. */
   labelOf?(pressed: Element): string;
+  /** The short lines the press writes into the pressed control's region, from the moment this is called (`written-lines/`). */
+  writtenLines?(pressed: Element): WrittenLines;
 };
 
 /** How often the page is looked at while the window is open. */
@@ -128,7 +148,13 @@ function pressedRegionTexts(pressed: Element): string[] {
   return texts;
 }
 
-const PAGE_PROBE: RateLimitProbe = { layers: overlaysOverPage, textOf: boundedLayerText, regionTexts: pressedRegionTexts, labelOf: boundedLayerText };
+const PAGE_PROBE: RateLimitProbe = {
+  layers: overlaysOverPage,
+  textOf: boundedLayerText,
+  regionTexts: pressedRegionTexts,
+  labelOf: boundedLayerText,
+  writtenLines: (pressed) => watchWrittenLines(pressed, REGION_LEVELS)
+};
 
 /**
  * Starts watching, from just before the press on `pressed`, for a rate-limit
@@ -146,11 +172,13 @@ export function watchRateLimitNotice(pressed: Element, probe: RateLimitProbe = P
     wake?.();
   };
   const unlisten = listenForLeaving(pressed, leave);
+  const written = probe.writtenLines?.(pressed);
   let stopped = false;
   const stop = (): void => {
     if (stopped) return;
     stopped = true;
     unlisten();
+    written?.stop();
   };
 
   /** Whether the pressed control's region says the page was busy. */
@@ -186,7 +214,11 @@ export function watchRateLimitNotice(pressed: Element, probe: RateLimitProbe = P
       const retryAfterMs = namedWaitMs(text);
       return { afterMs: Date.now() - startedAt, ...(retryAfterMs === undefined ? {} : { retryAfterMs }) };
     }
-    if (leaving || !pressed.isConnected) return "answered";
+    if (leaving) return "answered";
+    // Read before the control is asked after: a page that redraws its form
+    // with the line in it replaces the control too.
+    if ((written?.take() ?? []).some(isPageRequirementText)) return { afterMs: Date.now() - startedAt, needs: true };
+    if (!pressed.isConnected) return "answered";
     return busyRefusal() ? { afterMs: Date.now() - startedAt, busy: true } : undefined;
   };
 
@@ -197,10 +229,10 @@ export function watchRateLimitNotice(pressed: Element, probe: RateLimitProbe = P
    * retries at once into the same refusal (`run-munq51ik-a7ebd077`).
    */
   let waitless: RateLimitNotice | undefined;
-  /** Whether this sighting ends the watch now: anything but a notice still missing its wait. */
+  /** Whether this sighting ends the watch now: anything but a notice still missing its wait. A page that needs something first names none to miss. */
   const settles = (found: RateLimitNotice | "answered" | undefined): boolean => {
     if (found === undefined) return false;
-    if (found !== "answered" && found.retryAfterMs === undefined) {
+    if (found !== "answered" && found.needs === undefined && found.retryAfterMs === undefined) {
       waitless ??= found;
       return false;
     }
