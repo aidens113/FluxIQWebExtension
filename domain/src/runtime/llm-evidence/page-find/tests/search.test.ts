@@ -79,7 +79,7 @@ test("fifty matches to a page, in page order, and the last line says how to ask 
   assert.equal(last.length, 21);
   assert.equal(last[1], "t101 button \"Item 101\" on screen");
   assert.equal(last.at(-1), "t120 button \"Item 120\" on screen");
-  assert.deepEqual(lines(webLlmFindOnPage(page(elements), "nowhere", 0).found), ["0 matches for \"nowhere\""]);
+  assert.deepEqual(lines(webLlmFindOnPage(page(elements), "nowhere", 0).found)[0], "0 matches for \"nowhere\"");
 });
 
 test("the query is read with its whitespace collapsed, and anything else is refused with the domain's input reasons", () => {
@@ -102,4 +102,34 @@ test("the query is read with its whitespace collapsed, and anything else is refu
   assert.equal(refused({ query: 7 }), "value_not_text");
   assert.equal(refused({ query: "x", after: -1 }), "not_a_number");
   assert.equal(refused({ query: "x", after: 1.5 }), "not_a_number");
+});
+
+// F32 (`run-muqc07fh-eeffbc86`): twelve searches of the home page for a product,
+// each answered only `0 matches`, beside the site's own search box.
+test("an empty search says only this page was read, and names the site's search fields to use instead", () => {
+  const found = webLlmFindOnPage(page([
+    { target: "t12", tag: "a", name: "Deals", href: "https://shop.test/deals", box: BOX, onViewport: true },
+    { target: "t489", tag: "input", inputType: "search", label: "Search Voltbay", box: BOX, onViewport: true },
+    { target: "t490", tag: "input", inputType: "text", attributes: [["name", "q"]], box: BOX, onViewport: true }
+  ]), "Voltbay Pro", 0).found;
+  assert.deepEqual(lines(found), [
+    "0 matches for \"Voltbay Pro\"",
+    "Nothing on this page holds those words, hidden elements included; find_on_page reads only the page you are on, never the rest of the site. To look across the site, type it into the site's search field t489 or t490 and submit it, or follow a link to the page that lists it."
+  ]);
+});
+
+test("an empty search on a page with no search field says only to follow a link", () => {
+  const found = webLlmFindOnPage(page([
+    { target: "t1", tag: "input", inputType: "text", label: "Coupon", box: BOX, onViewport: true }
+  ]), "earbuds", 0).found;
+  assert.deepEqual(lines(found), [
+    "0 matches for \"earbuds\"",
+    "Nothing on this page holds those words, hidden elements included; find_on_page reads only the page you are on, never the rest of the site. To look across the site, follow a link to the page that lists it."
+  ]);
+});
+
+test("a search that matched, or a later page of one, says nothing more", () => {
+  const elements: WebLlmEvidenceElement[] = [{ target: "t489", tag: "input", inputType: "search", label: "Search", box: BOX, onViewport: true }];
+  assert.deepEqual(lines(webLlmFindOnPage(page(elements), "search", 0).found), ["1 match for \"search\"", "t489 field[search] \"Search\" on screen"]);
+  assert.deepEqual(lines(webLlmFindOnPage(page(elements), "nothing", 50).found), ["0 matches for \"nothing\""]);
 });

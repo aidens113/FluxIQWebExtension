@@ -54,23 +54,27 @@ STEPS below are the plan's names for work that has no branch of its own or preda
 - **Validation cadence (2026-10-01):** merges take narrow checks only; full suites at most twice a day, in the
   background ("you should not be running a 15-30 min suite every single time you merge dev"). `pnpm task finish`
   runs the audit by default and the full check only with `--full-check`.
+- **Live Lab trees are synced to dev before testing (2026-10-01):** "live testing labs need to actually be synced to main when
+  you start testing them". After each merge round, merge dev into every lane tree (both repositories) and rebuild Core
+  libraries and the extension; the Lab's behind-dev guard (t236) refuses a run whose checkout or Core lacks dev.
 - **Process.** Lanes iterate on their own branches; the supervisor merges in rounds and is the only one who commits,
   merges or pushes. Heavy commands go through `build-slots/heavy.sh`. No LLM call grants.
 
-**In flight.**
-| Work | Where | State |
+**In flight. NO LIVE RUNS until every open row below is on dev (user, 2026-10-01: "you need to fix all these problems before running any more live tests").** Then merge dev into every lane tree, rebuild, and run (the Lab's behind-dev guard, t236, refuses a stale tree). Leads and workers cannot `git merge` (a hook refuses it): the supervisor merges dev into every tree.
+| Problem (evidence: `lab-runs/2026-10-01/run-*/steps/`) | Fix | State |
 | --- | --- | --- |
-| Lane A (t174): crossborder hub-to-cart, live from the chat | `fxwork/t174`, slot-1 | running, up to 3 runs |
-| Lane B (t193): bigbox cart redesigned, does run 40's repair now run | `fxwork/t193`, slot-2 | running, up to 3 runs |
-| Lane C (t194): earbuds, the run that exposed the page-view bug | `fxwork/t194`, slot-3 | running, up to 3 runs |
-| Lane D (t195): F41-F43 committed (completion informs, judge decides, shadow-root test) | `fxwork/t195` | lead resolving 7 Core conflicts from merging dev; then merge, then slot-4 |
-| Core regressions: `build-routing` 30/28/2 vs 29/29/3; `run-consequence-permission` patches after a person's no; `recovery-default-limits` reserves worst-case cost | `fxwork/t229`, `task/t229-core-regressions` | worker-high running |
-| t233: `FLUXIQ_LLM_DEFAULT_MODEL`, so the `deepseek-v4-pro` comparison can start from the chat (planned at a $0.30 Lab ceiling for that one run) | `fxwork/t233`, `task/t233-chat-model-knob` | worker-high running |
+| Node catalog is 41,122 of 62,216 chars of every decide request | Names plus one-line description; full definitions on request; trim output schema and tool descriptions | t235 lead, open |
+| No domain system prompt: the model is never told it operates a website for a person, what the view means, or the rules | Core seam for domain system instructions on every request; the web instructions | t237 lead, open |
+| Superseded list reads kept whole (164,577 chars); absolute URLs 49,353 | Newest read whole, earlier as short outcomes; relative links | on dev (t194 F40, F42: run 13's last request body 238,196 -> 144,732 chars; `core.recall_result`) |
+| Two cost counts; 8,000-token reply holds (real max 593 over 6,119 decisions); a purse per phase | One purse per Flow creation; decision reply allowance 2,000 | t234 lead, open (F41 cost endings: on dev) |
+| Completion refusals for answerability and start location; judge request size; judge calls missing from the call count | F44 they inform the judge; F45 judge request 28,214 -> 8,113 chars on run 36; F46 judge calls counted | on dev (t195, Core 4e8106c1) |
+| `find_on_page` as site search; opening capture refused | F31 opens the start location with no model call; F32 empty finds name the site's search fields | on dev (t174) |
+| Press under a popup; chat "hidden"; "Looking at the page" on every step; welcome screen | covered press names the close controls; chat says covered by a popup; describeCall headings; first screenshot after the send | on dev (t193) |
 
-**Decided, not yet assigned.** One purse per Flow: build, re-authors, repairs and checks share the one $0.10 ceiling;
-a Flow's spend is kept on its creation record and summed. Assign a lead after the next merge round.
+**Decided.** One purse per Flow: assigned to t234 (above).
 
 **Open defects (not assigned).**
+- Two Core tests time out only under parallel load and pass alone (12/12): `service/summaries/tests/run-detail-preservation.test.ts` and `tests/service-bootstrap/tests/adaptation.test.ts`; fix in the next full sweep.
 - `scripts/lab/core/build/tests/unbuilt.test.mjs` "refuses an unbuilt Core" fails about 1 run in 10 under load.
 - A click that lands on a 429 page is still `navigation_unexpected` (F14 covers navigation only).
 - `run-bench.ts` rebuilds a resumed evaluation without the stop label.
@@ -727,6 +731,18 @@ debug and partitioned so neither touches the other's files:
   - Each build stopped about $0.023 short: the purse holds each call's worst case (every input token uncached at peak rates plus an 8,000-token reply). Measured over 63 decisions: reply tokens median 90, max 515; prompt average 25,393, max 72,677 (earbuds amendments), cache-hit share 0.55. Inputs to the per-Flow purse task: size the decision reply allowance to use (about 2,000), and stop prompt growth during amendments.
 - Validation: read from `C:/Users/osrs_/FluxStuff/lab-runs/2026-10-01/<run>/steps/` (index.md, page.txt, decision.json, response.json usage) and each run's `summary.json` `firstFailure`.
 - Outcome: lanes A-C debugging, up to two more runs each. Pass streak 0.
+
+### 2026-10-01 late — Rounds 10-12: lanes A-D, t229, t233, t236 merged; the user's fix list before any live run
+- Agent: supervisor; lanes A-D; t229, t233, t236 workers; leads t234, t235, t237.
+- Changed:
+  - Merged into dev in both repositories: t195 (lane D F41-F43: the completion check informs and the judge decides), t229 (a person's standing no stops recovery's repair), t233 (`FLUXIQ_LLM_DEFAULT_MODEL`), t236 (the Lab refuses a live run whose checkout or Core lacks dev), t194 F40-F41, t174 F31-F32, t193 L1, OP2, CV, PW, CW, WB.
+  - Conflicts resolved by the supervisor: `phases.ts` (lane D's `phase2` with lane C's `costSpending`), `service.ts` (lane D's judge wiring with lane B's `describeCall`), domain `tools.ts` imports (union), the generated framework reference (regenerated).
+  - The user ordered no live runs until the fix list lands, and that lab trees are synced to dev before testing (memory and binding rule). The user found the catalog bloat and the missing domain system prompt; t235 and t237 own them.
+  - Leads cannot run `git merge` (hook), so the supervisor merges dev into every tree: t234 merged; t194, t195 (Core) and t235 are mid-edit and merge at their report.
+- Validation:
+  - Core dev after rounds 11-12: `npx tsc --noEmit -p .` rc 0; vitest over llm, flow-bootstrap, flow-draft, activity, route-state, tests/service-bootstrap, result-verification, recovery and src/ui `Test Files 283 passed (283)`, `Tests 3089 passed (3089)`; structure audit passed; `docs-reference.mjs --check` current.
+  - Downstream after rebuilding Core libraries: domain check rc 0; extension check rc 0; domain `# tests 1261 # pass 1261 # fail 0`; extension `# tests 2309 # pass 2309 # fail 0`; test-runner `# tests 1785 # pass 1785 # fail 0`; structure audit passed.
+- Outcome: pushed (see the push line in the commit log). Pass streak 0; live runs on hold by the user's order.
 
 ## Open Questions
 

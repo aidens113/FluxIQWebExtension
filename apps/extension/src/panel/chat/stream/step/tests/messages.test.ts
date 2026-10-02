@@ -281,3 +281,32 @@ test("a note with no words is not a message: Core's own look before the first de
     ["Exploring again", "Nothing is in the Flow yet. Exploring on from the page as it stands.", null]
   ]);
 });
+
+// Every step says what it does, and a press a popup covered says so (t193 round 11, from
+// crossborder run-muqc07fh-eeffbc86): the chat said "Working on the page" and "Typing into the
+// page" for every step, and "it was hidden on the page" of a search typed under a coupon popup.
+test("a step's message names what it does, its card names the control, and a covered press is said as covered", () => {
+  const TYPED = 'Typing "Voltbay USB-C hub" into “Search”';
+  const CLOSE = "Clicking “×”";
+  const FOUND = 'Looking for "Voltbay" on the page';
+  const events = [
+    decide(1),
+    thought(2, TYPED, "I'll search the store for the hub."),
+    tool(3, TYPED, "started"),
+    tool(4, TYPED, "failed", { text: "Result: web.action.rejected.target_covered · Node: web.output.dom-type" }),
+    decide(5),
+    thought(6, CLOSE, "Close the coupon popup, then search again."),
+    tool(7, CLOSE, "succeeded", { text: "Result: web.action.succeeded · Node: web.output.dom-click" }),
+    decide(8),
+    thought(9, FOUND, "Check whether the home page names the store."),
+    activityEvent(10, { phase: "exploring", detail: { kind: "tool", title: FOUND, ref: "web.find_on_page", status: "succeeded", text: "Result: web.inspect.succeeded" } })
+  ];
+  const messages = stepMessages(events, 100);
+  assert.deepEqual(messages.map((message) => message.title), [TYPED, CLOSE, FOUND]);
+  assert.deepEqual(messages.map((message) => message.actions.map((card) => [card.kind, card.target, card.outcome, card.why])), [
+    [["type", "Search", "failed", "a popup or banner on the page was covering it"]],
+    [["click", "×", "done", null]],
+    [["look", null, "done", null]]
+  ]);
+});
+

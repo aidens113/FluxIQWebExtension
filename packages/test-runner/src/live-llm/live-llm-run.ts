@@ -8,7 +8,7 @@
 // done. A model call needs no grant; the only thing a run carries is its
 // intent and the consequences the operator permitted (`--llm-permit`).
 
-import { DEFAULT_LLM_MODEL, type LlmActionConsequence, type LlmExecutionProfile, type LlmUsage } from "@fluxiq-web-extension/test-contracts";
+import { type LlmActionConsequence, type LlmExecutionProfile, type LlmUsage } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
 import type { CreatedFlowBuild, CreatedFlowBuildLlm, PersistedFlowLlmExecution } from "../flow-lane/index.js";
@@ -18,6 +18,7 @@ import { budgetOverProductFailure } from "./budget-over-product-failure.js";
 import { assertProviderCallsAsDeclared, type DeclaredProviderCalls } from "./declared-provider-calls.js";
 import { liveLlmBuildUsage } from "./build-usage.js";
 import { liveLlmBuildCostCeilingUsd } from "./build-cost-ceiling.js";
+import { liveLlmCoreDefaultModel } from "./core-default-model.js";
 import { readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExplorationRecord } from "./exploration-record.js";
 import { planLiveLlmExecution, type LiveLlmPlan } from "./live-llm-plan.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usage.js";
@@ -55,11 +56,15 @@ export async function beginLiveLlmRun(input: {
   environment: NodeJS.ProcessEnv;
   flowLane: boolean;
   targetMode: string;
-  /** Where the per-build cost ceiling is read: what `buildFluxIQEnvironment` gives Core, by default this process's arguments and environment. */
+  /**
+   * Where the per-build cost ceiling and Core's default model are read: what
+   * `buildFluxIQEnvironment` gives Core, by default this process's arguments
+   * and environment. The default model is read from `args`' `--llm-model` only.
+   */
   costCeilingSources?: { args: readonly string[]; environment: NodeJS.ProcessEnv };
 }): Promise<LiveLlmRun> {
   const sources = input.costCeilingSources ?? { args: process.argv, environment: process.env };
-  const plan = planLiveLlmExecution(input.profile, liveLlmBuildCostCeilingUsd(input.repositoryRoot, sources.args, sources.environment));
+  const plan = planLiveLlmExecution(input.profile, liveLlmBuildCostCeilingUsd(input.repositoryRoot, sources.args, sources.environment), liveLlmCoreDefaultModel(sources.args));
   assertLaneFlag(plan, input.flowLane);
   if (input.targetMode !== "isolated" && input.targetMode !== "persistent-isolated") {
     throw new RunnerFailure("fixture.invalid", `A live LLM run needs a Core this runner owns, and the ${input.targetMode} target's is not; use --target isolated or persistent-isolated`);
@@ -162,6 +167,12 @@ export class LiveLlmRun {
    * default model. A run that permitted a consequence or chose another model
    * would be measuring something it never asked for.
    *
+   * **The model.** That default is what the Lab gave the run's Core
+   * (`plan.coreDefaultModel`, `FLUXIQ_LLM_DEFAULT_MODEL` from `--llm-model`,
+   * `./default-model-env.ts`), so a chat build runs on the run's model exactly
+   * when the two are equal; `--llm-model deepseek-v4-pro` gives Core that
+   * default, and the build runs on it.
+   *
    * **The per-build ceiling.** Every build is held to one ceiling however it is
    * started: Core's run cost ceiling as the Lab passed it to the run's Core
    * (`plan.buildCostCeilingUsd`, `FLUXIQ_LLM_RUN_COST_CEILING_USD`), lowered by the
@@ -181,8 +192,8 @@ export class LiveLlmRun {
     if (this.plan.permittedConsequences.length > 0) {
       throw new RunnerFailure("fixture.invalid", `--llm-permit ${this.plan.permittedConsequences.join(",")} cannot reach a build started from the extension's chat: the chat sends no permit, and the Lab's person answers FluxIQ's question at the task's permission point instead. Leave it out, ${direct}`);
     }
-    if (this.plan.model !== DEFAULT_LLM_MODEL) {
-      throw new RunnerFailure("fixture.invalid", `A build started from the extension's chat runs on FluxIQ's own default model for a new Flow (${DEFAULT_LLM_MODEL}), not ${this.plan.model}. Leave --llm-model out, ${direct}`);
+    if (this.plan.model !== this.plan.coreDefaultModel) {
+      throw new RunnerFailure("fixture.invalid", `A build started from the extension's chat runs on the default model the run's Core was started with (${this.plan.coreDefaultModel}), not ${this.plan.model}. Pass --llm-model ${this.plan.model} so the Lab starts Core on it, ${direct}`);
     }
     const ceiling = this.plan.buildCostCeilingUsd;
     if (this.plan.maxTotalEstimatedCostUsd !== ceiling) {
@@ -335,6 +346,7 @@ export class LiveLlmRun {
       profileId: plan.profileId,
       provider: plan.provider,
       model: plan.model,
+      coreDefaultModel: plan.coreDefaultModel,
       task: plan.task,
       purpose: plan.purpose,
       authorized: {

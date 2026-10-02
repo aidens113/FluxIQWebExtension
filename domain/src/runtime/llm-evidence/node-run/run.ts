@@ -225,10 +225,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // *is* the snapshot node running, so taking one before it and one after it
     // would make the cheapest thing a build does cost three.
     if (node.actionType === WEB_LLM_OBSERVATION_NODE_ACTION) {
-      const looked = await currentPage(run, run.request);
-      // Nothing to look at: this build was told where its Flow starts and has
-      // not got there. The free first look is where that is said, so the
-      // model's first paid decision is made knowing where it is meant to be.
+      // A look reads the page as it stands, arrived or not, as find_on_page
+      // does (`run-muqc07fh-eeffbc86` refused it on the start location). It is
+      // never a step of the Flow, so it cannot stand in for arriving. Only an
+      // unreadable page, the blank tab, answers it with where to go.
+      const looked = await readablePage(run, run.request);
       if (!looked) return notThereYet(run, record);
       run.shown(looked);
       // One capture, which is both the state the look found and the one it left.
@@ -307,7 +308,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     if (current && covered) {
       run.shown(current);
       return refusal(current, covered.code, rejectionDetail({
-        reason: "covered_by_layer", target: covered.target, instead: covered.covers, missing: undefined, requestId: undefined
+        reason: "covered_by_layer", target: covered.target, instead: covered.covers, missing: undefined, requestId: undefined, closeWith: covered.closers
       }), record);
     }
     // No page, no control to have observed: the move that goes to the start
@@ -764,23 +765,25 @@ function crossOrigin(node: WebRunnableNode, parameters: JsonObject, location: st
  * stood on the start location, the first look read it, no step ever reached
  * it, and the Flow was refused `bootstrap.cannot_reach_start_location`. The
  * capture is still taken, so the calls made are the same whichever tab the
- * build was handed, and what it read is discarded unseen.
+ * build was handed. A look alone reads the page through {@link readablePage}.
  *
  * A build that was told no start location is unchanged in every respect: the
  * refusal is raised as it always was, because there is nowhere to send the
  * model and "the page could not be read" is then the whole truth.
  */
 async function currentPage(run: WebNodeRun, request: WebLlmEvidenceToolRequest): Promise<WebLlmSnapshotBinding | undefined> {
-  const capture = async () => run.restamp(await captureEvidence(run.gateway, run.sessionId, request, run.request.signal));
-  if (run.request.startLocation === undefined) return await capture();
-  let page: WebLlmSnapshotBinding;
+  const page = await readablePage(run, request);
+  return run.request.startLocation === undefined || run.arrivals.arrived(buildOf(run)) ? page : undefined;
+}
+
+/** The page as it stands, arrived or not; `undefined` only for the unreadable page of a build told its start location. */
+async function readablePage(run: WebNodeRun, request: WebLlmEvidenceToolRequest): Promise<WebLlmSnapshotBinding | undefined> {
   try {
-    page = await capture();
+    return run.restamp(await captureEvidence(run.gateway, run.sessionId, request, run.request.signal));
   } catch (error) {
-    if (error instanceof RecoverableToolRejection && error.code === "page_unreadable") return undefined;
+    if (run.request.startLocation !== undefined && error instanceof RecoverableToolRejection && error.code === "page_unreadable") return undefined;
     throw error;
   }
-  return run.arrivals.arrived(buildOf(run)) ? page : undefined;
 }
 
 /** The build this call belongs to, as the arrival memory keys it. */
