@@ -44,6 +44,18 @@
 // would cut short a read of fifty paced pages, which needs two minutes for its
 // pacing alone.
 //
+// **The rows each condition removed by itself (t194 w49).** A read with `where`
+// conditions is sent asking the page for the rows each condition removed by
+// itself -- rows every other condition kept -- and only those
+// (`WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_ONLY`). On live run 15
+// (`run-muqj2bgb-d048ec37`) the Flow held 10 of 13 earbuds: the accessory rule
+// `name not contains ["charging case", ...]` removed by itself three earbuds sold
+// "with Wireless Charging Case", and the judge was told only "5 of them by
+// itself" and passed it. The rows reach the judge's read account as labels
+// (Core `runtime/result-verification/read-account/`). Information only: the
+// read keeps and stores exactly what it did. A Flow whose parameters already
+// say `rejectedSamples` is sent as it says.
+//
 // A request that does not parse derives nothing and scales nothing: it is sent
 // as authored, and the dispatch refuses it with its own reason.
 
@@ -56,8 +68,11 @@ import type { AutomationNodeExecutionResult } from "fluxiq/automation-studio/nod
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS,
+  WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_ONLY,
+  WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY,
   webAutomationExtractListRequestValue,
-  webAutomationExtractListTimeoutMs
+  webAutomationExtractListTimeoutMs,
+  type WebAutomationExtractListRequest
 } from "../../actions/extraction";
 import { webAutomationDeclaredColumnsRead } from "./declared-columns";
 import { webAutomationDerivedRecordOutput } from "./derived-record-output";
@@ -78,9 +93,10 @@ export function webAutomationExtractListDispatch(nodeParameters: JsonObject): We
   const narrowed = written === undefined ? undefined : webAutomationDeclaredColumnsRead(authored, written);
   const request = narrowed?.request ?? written;
   const read = narrowed === undefined ? rest : { ...rest, extractList: narrowed.request as unknown as JsonValue };
-  const parameters = request !== undefined && leftDefault(read.timeoutMs)
+  const timed = request !== undefined && leftDefault(read.timeoutMs)
     ? { ...read, timeoutMs: webAutomationExtractListTimeoutMs(request) }
     : read;
+  const parameters = withAloneRowsAsked(timed, request);
   const declared = authored === undefined || authored === null
     ? request === undefined ? undefined : webAutomationDerivedRecordOutput(request)
     : request === undefined ? withRecordsPath(authored) : webAutomationReconciledRecordOutput(authored, request, narrowed?.columns);
@@ -90,6 +106,12 @@ export function webAutomationExtractListDispatch(nodeParameters: JsonObject): We
   if (!parsed.ok) return { ok: false, result: recordOutputRefusal(parsed.issues) };
   // The parsed output is plain JSON; its type only spells the optional keys.
   return { ok: true, payload: { parameters, ...timeout, recordOutput: parsed.output as unknown as JsonObject } };
+}
+
+/** The parameters asking for the rows each condition removed by itself, for a read with conditions that does not already say (see the header). */
+function withAloneRowsAsked(parameters: JsonObject, request: WebAutomationExtractListRequest | undefined): JsonObject {
+  if (!request?.where?.length || Object.hasOwn(parameters, WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY)) return parameters;
+  return { ...parameters, [WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY]: WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_ONLY };
 }
 
 function leftDefault(timeoutMs: JsonValue | undefined): boolean {
