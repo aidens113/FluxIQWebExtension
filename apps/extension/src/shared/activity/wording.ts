@@ -8,8 +8,9 @@
 // chat header and the chat rows cannot drift apart:
 //
 // - a tool is named by what it does to the page ("Looking for the list of
-//   items"), a model decision by what it is for ("Thinking about the next
-//   step"), the completion check by what it checks;
+//   items"); a model decision, while it is being made, by what it is for
+//   ("Deciding the next step"), and once made by the model's own stated reason
+//   for it; the completion check by what it checks;
 // - a tool's result code becomes a short outcome ("done", "couldn't find it
 //   on the page", "that didn't work, trying another way");
 // - Core's own sentence is kept when it is already human ("Running step 2 of
@@ -19,8 +20,9 @@
 // Core names what a tool call does from the call's own input (its
 // `detail.title`, e.g. "Clicking “Get a free quote”"), marks a dry run's calls
 // `verifying` ("Trying the Flow from the start: …") and its own bookkeeping
-// calls as `note` rows. Those words are used as they come; the rules above are
-// the fallback for a Core that sends only the tool id.
+// calls as `note` rows. Those words are used as they come, ahead of any table
+// here; the rules above are the fallback for a Core that sends only the tool
+// id, and "Thinking about the next step" for one that sends no detail.
 //
 // Pure: no browser API, no clock. Nothing here matches `RAW_ID`.
 
@@ -45,6 +47,8 @@ export type ActivityWording = {
 const RAW_ID = /\b[a-z]+\.[a-z_]+/iu;
 
 const DRAFT_TOOL_ID = "core.flow_draft";
+/** Core's row while a decision is being made (`runtime/activity/observer.ts`). */
+const DECIDING = "Deciding the next step";
 const RUN_NODE_TOOL_ID = "core.run_node";
 
 /** Tools whose purpose alone names them. */
@@ -112,7 +116,7 @@ function wordsOf(event: ClientGatewayActivity): readonly [string, string | null]
     const ended = detail?.status ? detail.status !== "started" : code !== undefined;
     return [toolAction(toolId, event, code), ended ? toolOutcome(detail?.status, code) : null];
   }
-  if (event.phase === "thinking" || detail?.kind === "thought") return [PHASE_ACTIONS.thinking, null];
+  if (event.phase === "thinking" || detail?.kind === "thought") return [thoughtAction(event), null];
   if (detail?.title === "Completion check" || /^(Checking the proposed (result|Flow)|The proposed (result|Flow))/u.test(event.label)) {
     const status = detail?.status ?? (/passed|checks out/u.test(event.label) ? "succeeded" : /refused|sent back/u.test(event.label) ? "failed" : "started");
     // Core's newer sentence says only the plan passed; the older "passed its check" is kept as it was read.
@@ -143,11 +147,28 @@ function resultCodeOf(event: ClientGatewayActivity): string | undefined {
   return fromLabel && fromLabel !== "done" && fromLabel !== "failed" ? fromLabel : undefined;
 }
 
+/**
+ * A decision in words: the model's stated reason once it is made (a thought
+ * row's text), else Core's own sentence ("Deciding the next step", "The AI
+ * model provider did not answer"), else, for a Core that sends no detail,
+ * "Thinking about the next step". Every decision read "Thinking about the next
+ * step", before and after the model answered (t193).
+ */
+function thoughtAction(event: ClientGatewayActivity): string {
+  const detail = event.detail;
+  if (detail === undefined) return PHASE_ACTIONS.thinking;
+  const reason = detail.kind === "thought" ? humanOr(detail.text ?? "", "") : "";
+  return reason || humanOr(event.label, humanOr(detail.title, DECIDING));
+}
+
 function toolAction(toolId: string, event: ClientGatewayActivity, code: string | undefined): string {
-  const named = TOOL_ACTIONS[toolId];
-  if (named) return named;
+  if (toolId === DRAFT_TOOL_ID) return TOOL_ACTIONS[DRAFT_TOOL_ID]!;
+  // Core's own words for the call first: they name its target ("Looking for
+  // the repeating list around “Products”"), which a table here cannot.
   const said = coreAction(event);
   if (said) return said;
+  const named = TOOL_ACTIONS[toolId];
+  if (named) return named;
   if (toolId !== RUN_NODE_TOOL_ID) return "Working on the page";
   const label = event.step?.label?.trim();
   // The leading word of an id or label is usually its verb ("click.search-result",

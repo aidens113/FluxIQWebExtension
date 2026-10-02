@@ -589,6 +589,21 @@ message per fix. Update your lane report as well as your own. Core paths below a
 - Done: failing-first tests pass; narrow checks pass; report says Ready to commit.
 - Report to: `reports/t194-lead-1002.md`
 
+#### Brief: t239-judge-reply-cap (`worker`)
+- Repository: both, tree `fxwork/t239` (task t239, Core-paired)
+- Task: run 38's C7, first half. A judge call holds an 8,000-token reply allowance, so its purse hold is about $0.011
+  for a call that costs $0.0005-$0.0009 (largest observed judge reply 412 tokens); round 1's test went unjudged with
+  $0.009 left. Give every model-backed judge call a reply cap of 2,000 tokens, derived the way t234 caps a build
+  decision's reply, and pass it as `tokenLimits` (`R/result-verification/build-test/judge.ts:101-113` passes none).
+- Required reads: C7 in `fxwork/t195/!FluxIQWebExtension/docs/working/language-driven-flow-loop-plan/debugs/run-muqilf9s-c3211328.md`;
+  `R/llm/harness/token-limits.ts`; each judge call site.
+- Owns: Core `R/llm/harness/token-limits.ts`, the judge call sites under `R/result-verification/` other than
+  `contracts.ts` and `read-account/**`, and their tests.
+- Must not touch: `R/flow-bootstrap/unfinished-build/**` (the second half of C7 waits for lane B), `R/recovery/**`.
+- Done: a failing-first test shows the judge's hold drops to the 2,000-token reply; tests beside changed files and
+  `pnpm --filter fluxiq check` pass; Core structure audit passes.
+- Report to: `reports/t239-judge-reply-cap.md` in `fxwork/t239/!FluxIQWebExtension`
+
 ---
 
 ## Work Ledger

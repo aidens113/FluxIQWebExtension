@@ -306,7 +306,37 @@ test("a step's message names what it does, its card names the control, and a cov
   assert.deepEqual(messages.map((message) => message.actions.map((card) => [card.kind, card.target, card.outcome, card.why])), [
     [["type", "Search", "failed", "a popup or banner on the page was covering it"]],
     [["click", "×", "done", null]],
-    [["look", null, "done", null]]
+    [["look", '"Voltbay"', "done", null]]
   ]);
+});
+
+// t193 (run-muqiojz4-04a7a8fc): the row that ended a press of "No thanks" was said after the popup
+// had gone, named nothing, and turned the card into "Click · the page".
+test("a card's end keeps the control its start named", () => {
+  const CLOSE = "Clicking “No thanks”";
+  const events = [
+    decide(1),
+    thought(2, CLOSE, "Close the sign-up popup."),
+    tool(3, CLOSE, "started"),
+    tool(4, "Clicking on the page", "succeeded", { text: "Result: web.action.succeeded · Node: web.output.dom-click" })
+  ];
+  const messages = stepMessages(events, 100);
+  assert.deepEqual(messages.map((message) => message.actions.map((card) => [card.kind, card.target, card.outcome])), [[["click", "No thanks", "done"]]]);
+});
+
+// t193: an action with no decision before it was titled from its result code -- "Looked at the
+// page", "Worked on the page" -- whatever Core had said it did.
+test("an action's message keeps Core's own words for what it did", () => {
+  const LOOK = "Reading the details of “Colour”";
+  const messages = stepMessages([
+    activityEvent(1, { phase: "exploring", detail: { kind: "tool", title: LOOK, ref: "web.describe_element", status: "started" } }),
+    activityEvent(2, { phase: "exploring", detail: { kind: "tool", title: LOOK, ref: "web.describe_element", status: "succeeded", text: "Result: web.inspect.succeeded" } }),
+    tool(3, "Opening where the Flow starts", "succeeded", { text: "Result: web.action.succeeded · Node: web.output.browser-navigate" })
+  ], 100);
+  assert.deepEqual(messages.map((message) => [message.title, message.actions.map((card) => [card.kind, card.target])]), [
+    [LOOK, [["look", "Colour"]]],
+    ["Opening where the Flow starts", [["navigate", null]]]
+  ]);
+  assert.equal(stepMessages([tool(1, "Using core.run_node", "succeeded", { text: "Result: web.inspect.succeeded" })], 100)[0]!.title, "Looked at the page", "an older Core's id still reads as what it did");
 });
 

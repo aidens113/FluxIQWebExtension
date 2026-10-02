@@ -115,7 +115,12 @@ test("an event that carries only Core's sentence is read from it", () => {
 });
 
 test("decisions and the completion check", () => {
-  assert.equal(activityWording(event({ phase: "thinking", label: "Deciding the next step", detail: { kind: "thought", title: "Deciding the next step", status: "started" } })).sentence, "Thinking about the next step");
+  // t193: every decision read "Thinking about the next step", before and after the model answered.
+  assert.equal(activityWording(event({ phase: "thinking", label: "Deciding the next step", detail: { kind: "thought", title: "Deciding the next step", status: "started" } })).sentence, "Deciding the next step");
+  const reason = "Closing the sign-up popup that covers the store picker.";
+  assert.equal(activityWording(event({ phase: "exploring", label: "Clicking “No thanks”", detail: { kind: "thought", title: "Clicking “No thanks”", text: reason, status: "succeeded" } })).sentence, reason);
+  assert.equal(activityWording(event({ phase: "exploring", label: "Clicking “No thanks”", detail: { kind: "thought", title: "Clicking “No thanks”", text: "Run web.output.dom-click on t332.", status: "succeeded" } })).sentence, "Clicking “No thanks”", "a reason naming an id gives way to the action");
+  assert.equal(activityWording(event({ phase: "thinking", label: "The AI model provider did not answer", detail: { kind: "thought", title: "Deciding the next step", status: "failed", text: "The AI model provider did not answer this request. Asking it again; the build stops if it keeps not answering." } })).sentence, "The AI model provider did not answer this request. Asking it again; the build stops if it keeps not answering.");
   const check = (status: "started" | "succeeded" | "failed", label: string) => activityWording(event({ phase: "verifying", label, detail: { kind: "check", title: "Completion check", status, ...(status === "failed" ? { text: "bootstrap.instructed_act_missing" } : {}) } }));
   assert.equal(check("started", "Checking the proposed result").sentence, "Checking the Flow does what you asked");
   assert.equal(check("succeeded", "The proposed result passed its check").sentence, "Checking the Flow does what you asked — done");

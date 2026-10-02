@@ -69,14 +69,14 @@ test("a card for each kind: Core's icon in an aria-hidden mark, Core's name, the
       return [text(card, "chat-card-target"), text(card, "chat-card-outcome"), card.getAttribute("data-state"), card.getAttribute("aria-label")];
     };
     assert.deepEqual(read("click"), ["Get a free quote", "Done", "done", "Click, Get a free quote: Done"]);
-    assert.deepEqual(read("type"), ["the page", "Didn't work: the field was covered by a banner.", "failed", "Type, the page: Didn't work: the field was covered by a banner."]);
+    assert.deepEqual(read("type"), [undefined, "Didn't work: the field was covered by a banner.", "failed", "Type: Didn't work: the field was covered by a banner."]);
     assert.deepEqual(read("read"), ["Listings", "Done", "done", "Read list, Listings: Done"]);
     assert.deepEqual(read("navigate"), [undefined, "Done", "done", "Open page: Done"]);
     assert.deepEqual(read("test"), [undefined, "Didn't work: it didn't work the same way again", "failed", "Test run: Didn't work: it didn't work the same way again"]);
     assert.deepEqual(read("person_check"), [undefined, "Waiting for you", "waiting", "Robot check: Waiting for you"], "a wait Core has not settled still waits while its work is under way");
     assert.deepEqual(read("permission"), [undefined, "Waiting for you", "waiting", "Permission: Waiting for you"]);
     assert.deepEqual(read("repair"), ["Accept cookies", "Done", "done", "Repair, Accept cookies: Done"]);
-    assert.deepEqual(read("other"), ["the page", "Done", "done", "Action, the page: Done"]);
+    assert.deepEqual(read("other"), [undefined, "Done", "done", "Action: Done"]);
     for (const message of fake(view.element).byClass("chat-step-msg")) {
       assert.equal(message.byClass("chat-step-line")[0]!.hidden, true, "a message that is an action is only its card");
     }
