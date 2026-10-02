@@ -9,14 +9,23 @@
 // and on its card ("Typing "USB-C hub" into “Search”").
 //
 // - `target` is the accessible name, else the visible words, of the control the
-//   call's handle names on a page this build was shown.
+//   call's handle names on a page this build was shown. A step that carries no
+//   handle the build was shown -- a dry run's, a rerun's, a recorded node's --
+//   carries the element's identity instead (`parameters.element`), and is named
+//   from that: those read a bare "Test run" and "Click · the page" (t193,
+//   `run-muqiojz4-04a7a8fc`). The looks that name a control by handle are named
+//   the same way: the element whose details are read (`web.describe_element`)
+//   and the one a list is detected around (`web.detect_repeating_structure`),
+//   each also as the repair harness offers it (`web.recovery.*`).
 // - `text` is the words the call types (`web.dom.type`), the key it presses
 //   (`web.dom.keypress`), or the words it looks for (`web.find_on_page`). The
-//   words typed are said only into a control this domain knows and does not
+//   words typed are said only into a control this domain can name and does not
 //   screen as sensitive: never into a password or card field, never into a
 //   control it cannot name, and never a secret request, which is not words.
 //
-// Nothing here decides anything; an answer that cannot be given is no answer.
+// Core turns these into the sentence by the call's verb ("Reading the details
+// of “Colour”"); nothing here writes a sentence, decides anything, or changes
+// the shape Core reads. An answer that cannot be given is no answer.
 
 import type { JsonObject } from "fluxiq/core";
 import { isSensitiveFieldSignature } from "../../../sensitivity";
@@ -28,7 +37,19 @@ import { WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 /** The words a call names, as Core's chat shows them. */
 export type WebLlmCallWords = { target?: string; text?: string };
 
-const FIND_TOOL_ID = "web.find_on_page";
+type Element = { accessibleName?: unknown; visibleText?: unknown; inputType?: unknown };
+
+const FIND_TOOL_IDS: ReadonlySet<string> = new Set(["web.find_on_page", "web.recovery.find_on_page"]);
+/** Tools whose `target` is one handle and that type nothing: looks at a control, and the repair harness's press. */
+const HANDLE_TOOL_IDS: ReadonlySet<string> = new Set([
+  "web.describe_element",
+  "web.detect_repeating_structure",
+  "web.recovery.describe_element",
+  "web.recovery.detect_repeating_structure",
+  "web.recovery.press"
+]);
+/** The repair harness's field entry: a `target` handle and the `value` it enters. */
+const ENTER_FIELD_TOOL_ID = "web.recovery.enter_field";
 const TYPE_NODE = "web.output.dom-type";
 const KEY_NODE = "web.output.dom-keypress";
 
@@ -37,29 +58,47 @@ export function webLlmCallWords(
   call: WebLlmTargetScope & { toolId: string; value: JsonObject },
   resolve: (scope: WebLlmTargetScope, handle: string) => WebLlmTargetResolution
 ): WebLlmCallWords | undefined {
-  if (call.toolId === FIND_TOOL_ID) return wordsOf(undefined, stringOf(call.value.query));
+  const scope = { projectId: call.projectId, flowId: call.flowId };
+  const shown = (written: unknown): Element | undefined => {
+    const handle = typeof written === "string" ? canonicalWebLlmTargetHandle(written) : undefined;
+    const resolved = handle === undefined ? undefined : resolve(scope, handle);
+    return resolved?.ok ? resolved.element : undefined;
+  };
+  if (FIND_TOOL_IDS.has(call.toolId)) return wordsOf(undefined, stringOf(call.value.query));
+  if (HANDLE_TOOL_IDS.has(call.toolId)) return wordsOf(nameOf(shown(call.value.target)), undefined);
+  if (call.toolId === ENTER_FIELD_TOOL_ID) {
+    const element = shown(call.value.target);
+    return wordsOf(nameOf(element), sayableInto(element) ? stringOf(call.value.value) : undefined);
+  }
   if (call.toolId !== WEB_LLM_RUN_NODE_TOOL_ID) return undefined;
   const parameters = objectOf(call.value.parameters);
   if (!parameters) return undefined;
-  const handle = handleOf(parameters);
-  const resolved = handle === undefined ? undefined : resolve({ projectId: call.projectId, flowId: call.flowId }, handle);
-  const element = resolved?.ok ? resolved.element : undefined;
-  const target = stringOf(element?.accessibleName) ?? stringOf(element?.visibleText);
+  // A handle the build was shown first; else the identity the step carries.
+  const element = elementOf(parameters, shown) ?? objectOf(parameters.element) as Element | undefined;
+  const target = nameOf(element);
   const node = stringOf(call.value.node);
   if (node === KEY_NODE) return wordsOf(target, stringOf(parameters.key));
   if (node !== TYPE_NODE) return wordsOf(target, undefined);
-  // The words typed only into a control known not to hold a secret.
-  const sayable = element !== undefined && !isSensitiveFieldSignature({ inputType: element.inputType });
-  return wordsOf(target, sayable ? stringOf(parameters.text) : undefined);
+  return wordsOf(target, sayableInto(element) ? stringOf(parameters.text) : undefined);
 }
 
-/** The handle a run-node call's parameters name its control by, written any of the ways the resolver reads. */
-function handleOf(parameters: JsonObject): string | undefined {
+/** The element a run-node call's handle names, written any of the ways the resolver reads one. */
+function elementOf(parameters: JsonObject, shown: (written: unknown) => Element | undefined): Element | undefined {
   for (const written of [objectOf(parameters.target)?.handle, objectOf(parameters.element)?.handle, parameters.selector]) {
-    const handle = typeof written === "string" ? canonicalWebLlmTargetHandle(written) : undefined;
-    if (handle !== undefined) return handle;
+    const element = shown(written);
+    if (element !== undefined) return element;
   }
   return undefined;
+}
+
+/** The words typed are said only into a control this domain can name and knows not to hold a secret. */
+function sayableInto(element: Element | undefined): boolean {
+  if (element === undefined || nameOf(element) === undefined) return false;
+  return !isSensitiveFieldSignature({ inputType: typeof element.inputType === "string" ? element.inputType : undefined });
+}
+
+function nameOf(element: Element | undefined): string | undefined {
+  return stringOf(element?.accessibleName) ?? stringOf(element?.visibleText);
 }
 
 function wordsOf(target: string | undefined, text: string | undefined): WebLlmCallWords | undefined {

@@ -2693,7 +2693,7 @@ variable moves it.
 | Rule | Refuses when | Satisfied by |
 | --- | --- | --- |
 | `balance` | `STOP-balance` exists | The user topping the account up and deleting the file; no override |
-| `behind-dev` | This checkout's HEAD does not contain its local `dev` (`git merge-base --is-ancestor dev HEAD`), or the FluxIQ Core it builds against (`FLUXIQ_CORE_ROOT`, else `../!FluxIQ`, as the Lab resolves it) does not contain Core's local `dev`; or git cannot answer, for example no local `dev` branch | `git merge dev` in the named checkout, then rebuilding Core's libraries and the extension; `OVERRIDE-behind-dev` |
+| `behind-dev` | This checkout's HEAD does not contain its local `dev` (`git merge-base --is-ancestor dev HEAD`), or the FluxIQ Core it builds against (`FLUXIQ_CORE_ROOT`, else `../!FluxIQ`, as the Lab resolves it) does not contain Core's local `dev`, unless every file `dev` changed since is documentation (`docs/` or Markdown, which the source fingerprint also leaves out); or git cannot answer, for example no local `dev` branch | `git merge dev` in the named checkout, then rebuilding Core's libraries and the extension; `OVERRIDE-behind-dev` |
 | `loop` | The instance already started 3 live runs in the last 30 minutes | Waiting, with the relaunch loop stopped; `OVERRIDE-loop` |
 | `debug` | The instance's previous live run has no `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` in the tree it runs from | Writing that debug; `OVERRIDE-debug` |
 | `unchanged` | The previous live run of the same instance and task did not pass and the source fingerprint is unchanged | Changing the source; `OVERRIDE-unchanged` |
@@ -2833,6 +2833,19 @@ lab-runs/
     snapshots/live-llm.json  snapshots/flow-lane.json  logs/core.log
     provider-failures.local.json
 ```
+
+A model step's `meta.json` says whose money it spent. `part` is `creation` for
+a call inside a Flow's creation build, `reauthor` for one inside a refuted
+result's re-author build, and `null` for everything else: the chat
+interpreter, the playback run, its result check and its diagnose/patch ladder.
+A creation draws on the Flow's one creation purse (`FLUXIQ_LLM_RUN_COST_CEILING_USD`,
+$0.10; the chat interpreter's cost is carried into it). A re-author and its
+ladder draw on the run's own recovery ceiling. So summing a run by `phase`
+alone mixes two ceilings: group by `part` first. `phase` is `read` for the
+build's reading of its instructions. `costUsd` is the provider's reported cost
+even for a reply Core refused (`llm.provider_output_invalid`, truncated
+output), because the call was paid for either way. The index's Cost is the run's whole
+total across both ceilings, not one purse.
 
 How a run fills it:
 

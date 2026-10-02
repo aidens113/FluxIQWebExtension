@@ -82,6 +82,9 @@ test("step sentences: navigate names the hostname; fixed verbs for the rest", ()
   assert.equal(stepSentence(step("web.browser.navigate", { url: "https://shop.example.com/search?q=x" }), "present"), "Opening shop.example.com");
   assert.equal(stepSentence(step("web.browser.navigate", { url: "https://shop.example.com/" }), "past"), "Opened shop.example.com");
   assert.equal(stepSentence(step("web.browser.navigate"), "present"), "Opening a page");
+  // t193: a capture said "Looking at the page" wherever it ran; it names the site when the run knows it.
+  assert.equal(stepSentence(step("web.dom.capture_snapshot", { url: "https://shop.example.com/cart" }), "present"), "Looking over shop.example.com");
+  assert.equal(stepSentence(step("web.dom.capture_snapshot", { url: "https://shop.example.com/cart" }), "past"), "Looked over shop.example.com");
   const table: Array<[RuntimeCommandStatus["actionType"], string, string]> = [
     ["web.dom.keypress", "Pressing a key", "Pressed a key"],
     ["web.dom.scroll", "Scrolling the page", "Scrolled the page"],
@@ -89,7 +92,7 @@ test("step sentences: navigate names the hostname; fixed verbs for the rest", ()
     ["web.dom.wait_for_text", "Waiting for the page", "Page was ready"],
     ["web.dom.extract", "Reading data from the page", "Read data from the page"],
     ["web.dom.extract_list", "Reading data from the page", "Read data from the page"],
-    ["web.dom.capture_snapshot", "Looking at the page", "Looked at the page"],
+    ["web.dom.capture_snapshot", "Looking over the whole page", "Looked over the whole page"],
     ["web.dom.assert", "Checking the page", "Checked the page"],
     ["web.dom.upload", "Attaching files", "Attached files"],
     ["web.dom.dialog", "Answering a pop-up", "Answered a pop-up"],
@@ -103,7 +106,7 @@ test("step sentences: navigate names the hostname; fixed verbs for the rest", ()
 });
 
 test("step sentences: an unknown or missing action type is a generic sentence", () => {
-  assert.equal(stepSentence(step(undefined), "present"), "Working on the page");
+  assert.equal(stepSentence(step(undefined), "present"), "Running a step");
   assert.equal(stepSentence(step(undefined), "past"), "Finished a step");
   assert.equal(stepSentence(step("web.dom.teleport" as RuntimeCommandStatus["actionType"]), "past"), "Finished a step");
 });
