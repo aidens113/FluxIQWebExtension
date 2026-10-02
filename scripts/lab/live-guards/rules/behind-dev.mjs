@@ -6,11 +6,13 @@
 // A checkout on `dev`, a task branch merged up with `dev`, and a detached
 // shared Core at or past Core's `dev` all pass. A checkout git cannot answer
 // for -- no local `dev`, no checkout at all -- is refused with git's reason.
+// A checkout that lacks only documentation commits (every file dev changed
+// since is under `docs/` or Markdown) passes: it runs the code dev has.
 
 /** @param {import("./guard-state.mjs").GuardState} state */
 export function checkBehindDev(state) {
   const sides = [["this repository", state.devAncestry.repository], ["the FluxIQ Core it builds against", state.devAncestry.core]];
-  const failing = sides.filter(([, ancestry]) => ancestry.error !== null || !ancestry.contains);
+  const failing = sides.filter(([, ancestry]) => ancestry.error !== null || (!ancestry.contains && !ancestry.docsOnly));
   if (failing.length === 0) return null;
   const why = failing.map(([label, ancestry]) => ancestry.error !== null
     ? `the dev ancestry of ${label}, ${ancestry.root}, could not be read: ${ancestry.error}`
