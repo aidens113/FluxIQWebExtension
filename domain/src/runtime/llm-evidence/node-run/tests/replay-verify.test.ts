@@ -23,7 +23,7 @@ const CART = "https://example.test/cart";
 const PERMITTED = async () => ({ permitted: true as const });
 const SAVE = { replay: "verify", node: CLICK, parameters: { selector: "#save", element: { tagName: "button" } }, consequences: ["modify_existing"], from: { location: CART } };
 
-type AssertAnswer = { status: string; failure?: { code: string } };
+type AssertAnswer = { status: string; failure?: { code: string; actual?: string } };
 const NOT_THERE: readonly AssertAnswer[] = [{ status: "timed_out", failure: { code: "web.action.timeout" } }, { status: "failed", failure: { code: "web.target.not_found" } }];
 
 test("a verify is a replay call of its own kind", () => {
@@ -98,6 +98,71 @@ test("a verify whose target is there but disabled or hidden fails, and says whic
     assert.equal((answered.evidence as JsonObject).found, found);
     assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.click"), false);
   }
+});
+
+// Lane A's run 40 (`run-muq6lqnw-fdfa7aac`): bigbox's "Set as my store" sat in
+// the store chooser's closed flyout, the Flow never pressed the chip that opens
+// it, and the check answered `present` on the step's own page. The page now
+// says what hid a target it judged not shown
+// (`apps/extension/src/content/action-runtime/assertion-evaluation.ts`).
+const ENCLOSED: AssertAnswer = { status: "failed", failure: { code: "web.validation.state_mismatch", actual: "enclosed: it is present inside a closed container, so it is not visible" } };
+const WITHDRAWN: AssertAnswer = { status: "failed", failure: { code: "web.validation.state_mismatch", actual: "it is present but not visible" } };
+
+test("a verify whose target is there inside a closed container fails as hidden, on the very page it acted on", async () => {
+  const stubbed = stub({ visible: ENCLOSED });
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const answered = await runtime.executeTool({ ...PROJECT, callId: "dryrun.1.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: SAVE });
+  assert.equal(answered.resultCode, "core.replay.failed");
+  assert.equal(answered.resultReason, "state_not_as_asserted");
+  assert.equal((answered.evidence as JsonObject).ok, false);
+  assert.equal((answered.evidence as JsonObject).found, "hidden");
+  assert.match(String((answered.evidence as JsonObject).said), /closed container/u);
+  assert.equal(answered.effectApplied, false);
+  // Only the visible check went out: a hidden target is not asked whether it is enabled.
+  assert.deepEqual(stubbed.commands.filter((command) => command.actionType === "web.dom.assert").map((command) => (command.parameters.assert as JsonObject).kind), ["visible"]);
+});
+
+test("a verify whose target is withdrawn itself, everything around it shown, reads as its effect in place on its own page", async () => {
+  const stubbed = stub({ visible: WITHDRAWN });
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const answered = await runtime.executeTool({ ...PROJECT, callId: "dryrun.1.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: SAVE });
+  assert.equal(answered.resultCode, "core.replay.present");
+  assert.equal(answered.resultReason, undefined);
+  assert.equal((answered.evidence as JsonObject).ok, true);
+  assert.equal((answered.evidence as JsonObject).found, "hidden");
+  assert.equal(answered.effectApplied, false);
+});
+
+test("a verify whose target is withdrawn itself on another page is unreproducible", async () => {
+  const stubbed = stub({ visible: WITHDRAWN });
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const value: JsonObject = { ...SAVE, from: { location: "https://example.test/product/kettle" } };
+  const answered = await runtime.executeTool({ ...PROJECT, callId: "dryrun.1.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value });
+  assert.equal(answered.resultCode, "core.replay.unreproducible");
+  assert.equal(answered.resultReason, "state_not_as_asserted");
+  assert.equal((answered.evidence as JsonObject).found, "hidden");
+});
+
+test("a target the page judged hidden without saying how stays failed", async () => {
+  // A client that does not say, or a record whose text was withheld: the less
+  // favourable answer, as before the page could say.
+  for (const actual of [undefined, "a withheld value of 12 characters", "it is present but not visible yet"]) {
+    const failure: { code: string; actual?: string } = { code: "web.validation.state_mismatch" };
+    if (actual !== undefined) failure.actual = actual;
+    const stubbed = stub({ visible: { status: "failed", failure } });
+    const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+    const answered = await runtime.executeTool({ ...PROJECT, callId: "dryrun.1.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: SAVE });
+    assert.equal(answered.resultCode, "core.replay.failed", String(actual));
+    assert.equal((answered.evidence as JsonObject).found, "hidden", String(actual));
+  }
+});
+
+test("only the visible check is read for what hid the target: a disabled one is disabled", async () => {
+  const stubbed = stub({ enabled: WITHDRAWN });
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const answered = await runtime.executeTool({ ...PROJECT, callId: "dryrun.1.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: SAVE });
+  assert.equal(answered.resultCode, "core.replay.failed");
+  assert.equal((answered.evidence as JsonObject).found, "disabled");
 });
 
 test("a verify of a step that names no element checks only that it resolves", async () => {

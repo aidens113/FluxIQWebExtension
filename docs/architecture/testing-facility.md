@@ -1308,7 +1308,10 @@ What the chat cannot carry is refused before anything starts
 - `--llm-permit`. The chat sends no permit; the person answers at the point
   instead.
 - `--llm-max-cost-usd` below Core's per-build ceiling (below).
-- A model other than Core's default for a new Flow.
+- A model other than the default the run's Core was started with. That
+  default is the run's `--llm-model`, which the Lab passes to Core (see "The
+  default model" below), so `--llm-model deepseek-v4-pro` builds on it from
+  the chat.
 - `--no-live-panel`, or a panel that did not show (`environment.missing`).
 
 Two limits come with the chat path:
@@ -2687,9 +2690,19 @@ variable moves it.
 | Rule | Refuses when | Satisfied by |
 | --- | --- | --- |
 | `balance` | `STOP-balance` exists | The user topping the account up and deleting the file; no override |
+| `behind-dev` | This checkout's HEAD does not contain its local `dev` (`git merge-base --is-ancestor dev HEAD`), or the FluxIQ Core it builds against (`FLUXIQ_CORE_ROOT`, else `../!FluxIQ`, as the Lab resolves it) does not contain Core's local `dev`; or git cannot answer, for example no local `dev` branch | `git merge dev` in the named checkout, then rebuilding Core's libraries and the extension; `OVERRIDE-behind-dev` |
 | `loop` | The instance already started 3 live runs in the last 30 minutes | Waiting, with the relaunch loop stopped; `OVERRIDE-loop` |
 | `debug` | The instance's previous live run has no `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` in the tree it runs from | Writing that debug; `OVERRIDE-debug` |
 | `unchanged` | The previous live run of the same instance and task did not pass and the source fingerprint is unchanged | Changing the source; `OVERRIDE-unchanged` |
+
+`behind-dev` is the user's rule of 2026-10-01: live testing runs on code synced
+to the integrated `dev` line. A lane worktree that missed a merge round tests
+code `dev` has already replaced and spends real money measuring nothing. A
+checkout on `dev`, a task branch merged up with `dev`, and the detached shared
+Core at or past Core's `dev` all pass. The refusal names the repository, its
+HEAD and how many `dev` commits it lacks. It is separate from the Lab's older
+Core-commit check, which judges only a detached Core and is passed by
+`FLUXIQ_LAB_ALLOW_BEHIND_CORE=1`; this rule has no variable, only the file.
 
 A refusal names every rule that refused and how to satisfy it, and ends with a
 `{"status":"failed","category":"lab.live-guard",...}` line, which the live
@@ -2749,6 +2762,45 @@ and the files in the same order and resolves the value through Core's own
 `resolveAutomationStudioLlmRunCostCeilingUsd`, so a value Core would refuse at
 start is refused by the Lab too. The Lab's tests derive every amount from that
 value (`live-llm/tests/lab-ceiling.ts`) rather than from a written number.
+
+#### The default model
+
+A build started from the extension's chat makes its Flow inside Core's
+`flow.createHere` command, and that Flow names no model, so the build runs on
+Core's default model: `FLUXIQ_LLM_DEFAULT_MODEL`, `deepseek-flash` when unset
+(`runtime/llm/deepseek/models.ts` in Core). It is built as the ceiling is: Core
+resolves it once when it loads, refuses to start on a value that is not one of
+its configured models (`AUTOMATION_STUDIO_DEEPSEEK_MODELS`), and uses it for
+every call whose caller names no model -- a new Flow's builds, and the chat
+window's own reading of a message. A Flow's `llmModel` still wins wherever it is
+set. Cost estimates and reservations price the model a call is made on, not the
+default's rates. It is the developer's and the Lab's knob, for comparing a chat
+build on another model (t233, 2026-10-01); it is not a product setting.
+
+The Lab passes the run's `--llm-model` to every Core it starts as that variable
+(`packages/test-runner/src/live-llm/default-model-env.ts`, used by
+`buildFluxIQEnvironment`), and from nothing else: not the Lab's environment, not
+`.env`, and a value inherited from whoever launched the Lab is dropped. Without
+`--llm-model` nothing is passed and Core builds on its own default, which is the
+Lab's `DEFAULT_LLM_MODEL`. An `--llm-model` Core would refuse is refused by the
+Lab, through Core's own `resolveAutomationStudioLlmDefaultModel`, before a Core
+starts or a key is read. The run's plan records what Core was given as
+`plan.coreDefaultModel` (`liveLlmCoreDefaultModel`), as `plan.buildCostCeilingUsd`
+records the ceiling, and `assertChatBuildable` accepts the run's model when it
+equals that. A comparison run on the stronger model is therefore:
+
+```text
+pnpm lab run ... --live-llm --llm-task create-flow --llm-model deepseek-v4-pro
+pnpm lab:campaign <task-id> --llm-model deepseek-v4-pro
+```
+
+The live campaign always hands each run its `--llm-model` (default
+`deepseek-flash`), so a campaign run gives Core that default explicitly; it is
+the same model Core would use unset.
+
+`deepseek-v4-pro` costs about four and a half times as much per token, so the
+same per-build ceiling buys fewer calls; raise it with `--llm-cost-ceiling-usd`
+when the comparison needs equal room.
 
 ## Per-step logs and the central run folder
 

@@ -6,6 +6,7 @@ export { assertLiveLlmBudgetHeld, assertLiveLlmProviderWasReached, liveLlmBudget
 export { budgetOverProductFailure } from "./budget-over-product-failure.js";
 export { liveLlmBuildCostCeilingUsd } from "./build-cost-ceiling.js";
 export { liveLlmBuildUsage } from "./build-usage.js";
+export { liveLlmCoreDefaultModel } from "./core-default-model.js";
 export { assertProviderCallsAsDeclared, declaredProviderCalls, type DeclaredProviderCalls } from "./declared-provider-calls.js";
 export { liveLlmExplorationRecord, readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExplorationRecord, type LiveLlmExplorationSource } from "./exploration-record.js";
 export { configureFlowLiveLlmExecution, type LiveLlmFlowSettingsControl } from "./flow-settings.js";
@@ -18,3 +19,4 @@ export { liveLlmRunSpend, type LiveLlmBuildSpend, type LiveLlmJudgeCalls, type L
 export { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
 export { ensureLiveLlmSecretKey, LAB_LIVE_LLM_KEY_NAME, type LiveLlmSecretKeyControl, type LiveLlmSecretKeyReference } from "./secret-key.js";
 export * from "./cost-ceiling-env.js";
+export * from "./default-model-env.js";
