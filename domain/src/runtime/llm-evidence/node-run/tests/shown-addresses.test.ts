@@ -21,6 +21,8 @@ const SHOWN_ITEM = `${ORIGIN}/scenarios/bigbox-retail/ip/kitchen-napkins/4188314
 /** The address run 28 composed: the other product's slug with the shown product's id. */
 const MADE_UP_ITEM = `${ORIGIN}/scenarios/bigbox-retail/ip/paper-towels/418831402`;
 const SEARCH = `${ORIGIN}/scenarios/bigbox-retail/search`;
+/** A step of the saved Flow whose address no page in this stub shows. */
+const FLOW_ITEM = `${ORIGIN}/scenarios/bigbox-retail/ip/paper-towels/418830127`;
 const NAVIGATE = "web.output.browser-navigate";
 const SNAPSHOT = "web.output.dom-capture_snapshot";
 const CLICK = "web.output.dom-click";
@@ -146,6 +148,55 @@ test("a new build of the flow forgets what the last one was shown and searched",
   assert.equal(again.resultCode, "web.action.rejected.address_not_shown");
 });
 
+// Live run 38 (`run-muqilf9s-c3211328`, cause C8): the re-author's opening
+// forgot everything the build had been shown, and its navigation to the Flow's
+// own step-3 address was refused `address_not_shown` four times. A round whose
+// draft holds the Flow opens with Core's look carrying the Flow's calls under
+// `held`: it forgets nothing, and a held navigation's address counts as shown,
+// since it passed this rule when it first ran. Nothing else is widened.
+test("a round that continues the Flow may go to the Flow's own step address, from nothing remembered (run 38 C8)", async () => {
+  const site = bigbox();
+  site.at(START);
+
+  const opened = await continuing(site, [{ node: NAVIGATE, parameters: { url: START } }, { node: CLICK, parameters: { target: { handle: "t1" } } }, { node: NAVIGATE, parameters: { url: FLOW_ITEM } }]);
+  assert.equal(opened.resultCode, "web.inspect.succeeded");
+  // A look on the page where the test left it: nothing was navigated.
+  assert.deepEqual(site.navigations(), []);
+
+  const went = await call(site, "call.flow-step", { node: NAVIGATE, parameters: { url: FLOW_ITEM } });
+  assert.equal(went.resultCode, "web.action.succeeded");
+  // An address neither the page nor the Flow holds is still refused.
+  const madeUp = await call(site, "call.made-up", { node: NAVIGATE, parameters: { url: MADE_UP_ITEM } });
+  assert.equal(madeUp.resultCode, "web.action.rejected.address_not_shown");
+});
+
+test("a round that continues the Flow forgets nothing its build was shown and searched", async () => {
+  const site = bigbox();
+  await arrive(site);
+  const looked = await call(site, "call.look", { node: SNAPSHOT, parameters: {} });
+  await call(site, "call.type", { node: TYPE, parameters: { target: { handle: handleOf(looked, "Search") }, text: "paper towels" } });
+  await call(site, "call.press", { node: CLICK, parameters: { target: { handle: handleOf(looked, "Go") } } });
+  const results = site.location()!;
+  site.at(START);
+
+  assert.equal((await continuing(site, [{ node: NAVIGATE, parameters: { url: START } }])).resultCode, "web.inspect.succeeded");
+  const again = await call(site, "call.results", { node: NAVIGATE, parameters: { url: results } });
+  assert.equal(again.resultCode, "web.action.succeeded");
+});
+
+test("held calls count only on Core's own opening look, never on a call the model names", async () => {
+  const site = bigbox();
+  await arrive(site);
+  const held = [{ node: NAVIGATE, parameters: { url: FLOW_ITEM } }];
+
+  for (const callId of ["call.held", "initial.model.1"]) {
+    const sent = await site.runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, value: { node: SNAPSHOT, parameters: {}, consequences: [], held } });
+    assert.equal(sent.resultCode, "web.action.rejected.invalid_input", callId);
+  }
+  const went = await call(site, "call.flow-step", { node: NAVIGATE, parameters: { url: FLOW_ITEM } });
+  assert.equal(went.resultCode, "web.action.rejected.address_not_shown");
+});
+
 // The guard remembers everything a build was shown (2026-09-30). It kept the
 // newest 512 addresses, 16 typed texts and the first 256 address strings of a
 // read six levels deep, so on a whole page a link the model had been shown
@@ -185,6 +236,11 @@ async function arrive(site: ReturnType<typeof bigbox>): Promise<void> {
   assert.equal(opening.resultCode, blank ? "web.action.rejected.not_at_start_location" : "web.inspect.succeeded");
   const went = await call(site, "call.start", { node: NAVIGATE, parameters: { url: START } });
   assert.equal(went.resultCode, "web.action.succeeded");
+}
+
+/** Core's opening look of a round whose draft already holds the Flow (`AS/runtime/llm/evidence-loop.ts`). */
+function continuing(site: ReturnType<typeof bigbox>, held: Call[]) {
+  return site.runtime.executeTool({ ...PROJECT, callId: "initial.core.run_node", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, value: { node: SNAPSHOT, parameters: {}, consequences: [], held } });
 }
 
 function call(site: ReturnType<typeof bigbox>, callId: string, value: Call) {
@@ -234,7 +290,9 @@ function bigbox(options: { readRows?: JsonObject[]; extraLinks?: number } = {}) 
     navigations: () => [...navigated],
     location: () => location,
     /** The tab back to the blank one a browser opens on. */
-    blank: () => { location = undefined; }
+    blank: () => { location = undefined; },
+    /** The tab where a test of the Flow left it, with nothing dispatched. */
+    at: (url: string) => { location = url; }
   };
 }
 
