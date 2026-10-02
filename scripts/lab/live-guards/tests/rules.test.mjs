@@ -3,11 +3,14 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkBalanceStop, checkPreviousDebug, checkRelaunchLoop, checkUnchangedRerun, evaluateLiveGuards, guardFiles } from "../index.mjs";
+import { checkBalanceStop, checkBehindDev, checkPreviousDebug, checkRelaunchLoop, checkUnchangedRerun, evaluateLiveGuards, guardFiles } from "../index.mjs";
 
 const NOW = new Date(2026, 8, 30, 12, 0, 0).getTime();
 const at = (msAgo) => new Date(NOW - msAgo).toISOString();
 const MINUTE = 60_000;
+
+/** A checkout whose HEAD contains its local dev. */
+const level = (root) => ({ root, head: "a".repeat(40), dev: "a".repeat(40), contains: true, lacking: 0, error: null });
 
 function state(overrides = {}) {
   return {
@@ -16,6 +19,7 @@ function state(overrides = {}) {
     stopBalance: null,
     entries: [],
     fingerprint: "sha256:current",
+    devAncestry: { repository: level("/web"), core: level("/core") },
     hasDebug: () => true,
     debugPath: (runId) => `debugs/${runId}.md`,
     files: guardFiles("/slots"),
@@ -33,7 +37,7 @@ test("balance: a STOP-balance file refuses every run, whatever override files ex
   assert.equal(refusal.rule, "balance");
   assert.match(refusal.why, /Insufficient Balance\.$/u);
   assert.match(refusal.remedy, /STOP-balance by hand/u);
-  assert.deepEqual(evaluateLiveGuards(stopped, new Set(["balance", "loop", "debug", "unchanged"])).refusals.map((each) => each.rule), ["balance"]);
+  assert.deepEqual(evaluateLiveGuards(stopped, new Set(["balance", "behind-dev", "loop", "debug", "unchanged"])).refusals.map((each) => each.rule), ["balance"]);
 });
 
 test("unchanged: a failed task is not rerun on the same source, but is after a change, after a pass, or for another task", () => {
@@ -73,7 +77,20 @@ test("loop: a fourth start within 30 minutes on one instance is refused; older s
   assert.equal(checkRelaunchLoop(state({ entries: [...two, start(1 * MINUTE, "slot-2")] })), null);
 });
 
+test("behind-dev: a checkout or Core whose HEAD lacks its dev is refused, naming each side; one git could not read is refused with git's reason", () => {
+  assert.equal(checkBehindDev(state()), null);
+  const behind = { ...level("/web"), head: "b".repeat(40), contains: false, lacking: 3 };
+  const refusal = checkBehindDev(state({ devAncestry: { repository: behind, core: { ...level("/core"), root: "/core", error: "/core has no local dev branch (refs/heads/dev)", contains: false, head: null, dev: null, lacking: null } } }));
+  assert.equal(refusal.rule, "behind-dev");
+  assert.match(refusal.why, /this repository, \/web, is at bbbbbbb, which lacks 3 commit\(s\) of its local dev \(aaaaaaa\)/u);
+  assert.match(refusal.why, /FluxIQ Core it builds against, \/core, could not be read: \/core has no local dev branch/u);
+  assert.match(refusal.remedy, /In \/web and \/core, run `git merge dev`/u);
+  assert.match(refusal.remedy, /OVERRIDE-behind-dev/u);
+  assert.deepEqual(evaluateLiveGuards(state({ devAncestry: { repository: behind, core: level("/core") } }), new Set(["behind-dev"])).overridden, ["behind-dev"]);
+});
+
 test("evaluation reports every refusing rule, in order, so one refusal names them all", () => {
-  const evaluated = evaluateLiveGuards(state({ stopBalance: "stopped", entries: [finish({}), start(1 * MINUTE), start(2 * MINUTE), start(3 * MINUTE)], hasDebug: () => false }), new Set());
-  assert.deepEqual(evaluated.refusals.map((each) => each.rule), ["balance", "loop", "debug", "unchanged"]);
+  const behind = { ...level("/web"), contains: false, lacking: 1 };
+  const evaluated = evaluateLiveGuards(state({ stopBalance: "stopped", devAncestry: { repository: behind, core: level("/core") }, entries: [finish({}), start(1 * MINUTE), start(2 * MINUTE), start(3 * MINUTE)], hasDebug: () => false }), new Set());
+  assert.deepEqual(evaluated.refusals.map((each) => each.rule), ["balance", "behind-dev", "loop", "debug", "unchanged"]);
 });

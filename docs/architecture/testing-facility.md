@@ -2682,9 +2682,19 @@ variable moves it.
 | Rule | Refuses when | Satisfied by |
 | --- | --- | --- |
 | `balance` | `STOP-balance` exists | The user topping the account up and deleting the file; no override |
+| `behind-dev` | This checkout's HEAD does not contain its local `dev` (`git merge-base --is-ancestor dev HEAD`), or the FluxIQ Core it builds against (`FLUXIQ_CORE_ROOT`, else `../!FluxIQ`, as the Lab resolves it) does not contain Core's local `dev`; or git cannot answer, for example no local `dev` branch | `git merge dev` in the named checkout, then rebuilding Core's libraries and the extension; `OVERRIDE-behind-dev` |
 | `loop` | The instance already started 3 live runs in the last 30 minutes | Waiting, with the relaunch loop stopped; `OVERRIDE-loop` |
 | `debug` | The instance's previous live run has no `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` in the tree it runs from | Writing that debug; `OVERRIDE-debug` |
 | `unchanged` | The previous live run of the same instance and task did not pass and the source fingerprint is unchanged | Changing the source; `OVERRIDE-unchanged` |
+
+`behind-dev` is the user's rule of 2026-10-01: live testing runs on code synced
+to the integrated `dev` line. A lane worktree that missed a merge round tests
+code `dev` has already replaced and spends real money measuring nothing. A
+checkout on `dev`, a task branch merged up with `dev`, and the detached shared
+Core at or past Core's `dev` all pass. The refusal names the repository, its
+HEAD and how many `dev` commits it lacks. It is separate from the Lab's older
+Core-commit check, which judges only a detached Core and is passed by
+`FLUXIQ_LAB_ALLOW_BEHIND_CORE=1`; this rule has no variable, only the file.
 
 A refusal names every rule that refused and how to satisfy it, and ends with a
 `{"status":"failed","category":"lab.live-guard",...}` line, which the live

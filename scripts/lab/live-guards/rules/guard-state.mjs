@@ -8,6 +8,7 @@
  *   stopBalance: string | null,
  *   entries: import("../ledger.mjs").LedgerEntry[],
  *   fingerprint: string,
+ *   devAncestry: { repository: import("../dev-ancestry.mjs").DevAncestry, core: import("../dev-ancestry.mjs").DevAncestry },
  *   hasDebug: (runId: string) => boolean,
  *   debugPath: (runId: string) => string,
  *   files: ReturnType<typeof import("../guard-files.mjs").guardFiles>,
@@ -16,4 +17,4 @@
  */
 
 /** Every rule's name, in the order the rules are asked. */
-export const RULE_NAMES = ["balance", "loop", "debug", "unchanged"];
+export const RULE_NAMES = ["balance", "behind-dev", "loop", "debug", "unchanged"];

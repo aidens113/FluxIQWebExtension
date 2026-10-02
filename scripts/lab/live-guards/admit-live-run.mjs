@@ -11,6 +11,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { isProcessAlive } from "../../build-cache/index.mjs";
 import { evaluateLiveGuards } from "./evaluate-live-guards.mjs";
+import { readDevAncestry } from "./dev-ancestry.mjs";
 import { DEFAULT_LAB_SLOTS_DIRECTORY, guardFiles } from "./guard-files.mjs";
 import { readLedger } from "./ledger.mjs";
 import { describeLiveLaunch } from "./live-launch.mjs";
@@ -26,6 +27,7 @@ export const DEBUG_DIRECTORY = path.join("docs", "working", "language-driven-flo
  *   args: string[], env: NodeJS.ProcessEnv, repositoryRoot: string, coreRoot: string,
  *   slotsDirectory?: string, now?: number, isAlive?: (pid: number) => boolean,
  *   fingerprint?: (roots: string[]) => Promise<{ digest: string, files: number }>,
+ *   devAncestry?: (root: string) => Promise<import("./dev-ancestry.mjs").DevAncestry>,
  * }} options
  * @returns {Promise<null | {
  *   launch: { instance: string, scenarioId: string, task: string, fingerprint: string, repositoryRoot: string, runsDirectory: string },
@@ -35,19 +37,21 @@ export const DEBUG_DIRECTORY = path.join("docs", "working", "language-driven-flo
  * }>} null when the invocation makes no provider call and is not guarded
  */
 export async function admitLiveRun(options) {
-  const { args, env, repositoryRoot, coreRoot, slotsDirectory = DEFAULT_LAB_SLOTS_DIRECTORY, now = Date.now(), isAlive = isProcessAlive, fingerprint = sourceFingerprint } = options;
+  const { args, env, repositoryRoot, coreRoot, slotsDirectory = DEFAULT_LAB_SLOTS_DIRECTORY, now = Date.now(), isAlive = isProcessAlive, fingerprint = sourceFingerprint, devAncestry = readDevAncestry } = options;
   const described = describeLiveLaunch(args, env);
   if (described === null) return null;
   const files = guardFiles(slotsDirectory);
 
   await reconcileLedger(files, { now, isAlive });
-  const [entries, stopBalance, tree] = await Promise.all([
+  const [entries, stopBalance, tree, repositoryAncestry, coreAncestry] = await Promise.all([
     readLedger(files.ledger), readStop(files.stopBalance), fingerprint([repositoryRoot, coreRoot]),
+    devAncestry(repositoryRoot), devAncestry(coreRoot),
   ]);
   const debugPath = (runId) => path.join(repositoryRoot, DEBUG_DIRECTORY, `${runId}.md`);
   const overrides = new Set(RULE_NAMES.filter((rule) => existsSync(files.override(rule))));
   const { refusals, overridden } = evaluateLiveGuards({
     now, launch: described, stopBalance, entries, fingerprint: tree.digest,
+    devAncestry: { repository: repositoryAncestry, core: coreAncestry },
     hasDebug: (runId) => existsSync(debugPath(runId)), debugPath, files,
   }, overrides);
 
