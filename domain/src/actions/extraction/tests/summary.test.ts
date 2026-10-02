@@ -228,3 +228,16 @@ test("an order report that is not two counts drops the whole summary", () => {
   // Unknown keys inside it are left behind, as they are everywhere else here.
   assert.deepEqual(webAutomationExtractionSummaryValue({ ...SUMMARY, order: { duplicates: 0, unsortable: 0, page: "text" } })?.order, { duplicates: 0, unsortable: 0 });
 });
+
+// Live run `run-muqk713g`: 12 rows passed every condition and 10 were stored,
+// and nothing said the other two were repeats an earlier page had already
+// yielded, so every judge asked for a dedupe the read already did.
+test("the rows a read left out as repeats of an earlier page's travel as a count, and are absent from a page that did not count them", () => {
+  const repeated = { ...SUMMARY, earlierPageRepeats: 2 };
+  assert.deepEqual(webAutomationExtractionSummaryValue(repeated), repeated);
+  assert.deepEqual(webAutomationExtractionSummaryValue({ ...SUMMARY, earlierPageRepeats: 0 }), { ...SUMMARY, earlierPageRepeats: 0 });
+  assert.equal("earlierPageRepeats" in (webAutomationExtractionSummaryValue(SUMMARY) ?? {}), false);
+  for (const value of [-1, 1.5, "2", null, Number.NaN]) {
+    assert.equal(webAutomationExtractionSummaryValue({ ...SUMMARY, earlierPageRepeats: value }), undefined, `earlierPageRepeats: ${JSON.stringify(value)}`);
+  }
+});

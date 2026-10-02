@@ -99,6 +99,19 @@ export type ExtractionCheckpoint = {
    * session. Absent for a read that met no refused page.
    */
   refusals?: ExtractionCheckpointRefusals | undefined;
+  /**
+   * Kept rows a `next` or numbered read left out so far, across every document
+   * read, because each repeated field for field a record an earlier page had
+   * yielded (the domain's `earlierPageRepeats`).
+   *
+   * It travels for the reason `itemsSeen` does: a store whose Next is a plain
+   * link loads every results page as a new document, so a count that restarted
+   * at each document would report only the last one's repeats. Absent in a
+   * checkpoint from a read that does not move page by page or from a page build
+   * that did not count them, and then it stays absent for the rest of the read
+   * (`content/extraction/continued-read/carried-count.ts`).
+   */
+  earlierPageRepeats?: number | undefined;
 };
 
 /** A checkpoint's refused-page counts. */
@@ -153,7 +166,7 @@ export type ExtractionCheckpointMessage = {
  */
 export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint | undefined {
   if (typeof value !== "object" || value === null) return undefined;
-  const { records, pagesRead, scrolls, missingFields, filtered, itemsSeen, conditions, rejectedSamples, rejectedSamplesAlone, refusals } = value as Record<string, unknown>;
+  const { records, pagesRead, scrolls, missingFields, filtered, itemsSeen, conditions, rejectedSamples, rejectedSamplesAlone, refusals, earlierPageRepeats } = value as Record<string, unknown>;
   if (!Array.isArray(records) || !records.every(isRecord)) return undefined;
   if (!isCount(pagesRead) || !isCount(scrolls)) return undefined;
   if (!Array.isArray(missingFields) || !missingFields.every((name) => typeof name === "string")) return undefined;
@@ -164,6 +177,7 @@ export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint |
   // items. Refusing rather than dropping the member is what keeps an absent count
   // meaning one thing: not counted, never counted wrongly.
   if (itemsSeen !== undefined && !isCount(itemsSeen)) return undefined;
+  if (earlierPageRepeats !== undefined && !isCount(earlierPageRepeats)) return undefined;
   // And again: sent but unreadable is refused, never read as no conditions.
   const conditionCounts = conditions === undefined ? undefined : conditionCountsValue(conditions);
   if (conditions !== undefined && conditionCounts === undefined) return undefined;
@@ -185,7 +199,8 @@ export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint |
     ...(conditionCounts === undefined ? {} : { conditions: conditionCounts }),
     ...(rejectedSamples === undefined ? {} : { rejectedSamples: (rejectedSamples as ExtractionCheckpointRecord[][]).map((rows) => rows.map((row) => ({ ...row }))) }),
     ...(rejectedSamplesAlone === undefined ? {} : { rejectedSamplesAlone: [...rejectedSamplesAlone as number[]] }),
-    ...(refusalCounts === undefined ? {} : { refusals: refusalCounts })
+    ...(refusalCounts === undefined ? {} : { refusals: refusalCounts }),
+    ...(earlierPageRepeats === undefined ? {} : { earlierPageRepeats })
   };
 }
 

@@ -30,6 +30,10 @@ test("anything that is not a checkpoint is refused rather than partly read", () 
     { ...CHECKPOINT, itemsSeen: 1.5 },
     { ...CHECKPOINT, itemsSeen: "8" },
     { ...CHECKPOINT, itemsSeen: null },
+    { ...CHECKPOINT, earlierPageRepeats: -1 },
+    { ...CHECKPOINT, earlierPageRepeats: 0.5 },
+    { ...CHECKPOINT, earlierPageRepeats: "2" },
+    { ...CHECKPOINT, earlierPageRepeats: null },
     { records: [], pagesRead: 1, scrolls: 0 }
   ];
   for (const value of refused) assert.equal(readExtractionCheckpoint(value), undefined, JSON.stringify(value));
@@ -50,6 +54,15 @@ test("the item count crosses the document boundary, and an absent one stays abse
   // Zero is a real count -- a document whose selector named nothing -- and is kept
   // as one rather than folded into absence.
   assert.equal(readExtractionCheckpoint({ ...CHECKPOINT, itemsSeen: 0 })?.itemsSeen, 0);
+});
+
+test("the count of rows left out as repeats of an earlier page crosses the document boundary, and an absent one stays absent", () => {
+  // A read whose Next loads a new document would otherwise report no count for
+  // every page after its first document's, the earbuds store's read among them.
+  const counted = { ...CHECKPOINT, earlierPageRepeats: 3 };
+  assert.deepEqual(readExtractionCheckpoint(counted), counted);
+  assert.equal("earlierPageRepeats" in (readExtractionCheckpoint(CHECKPOINT) ?? {}), false);
+  assert.equal(readExtractionCheckpoint({ ...CHECKPOINT, earlierPageRepeats: 0 })?.earlierPageRepeats, 0);
 });
 
 test("the condition counts cross the document boundary, and unreadable ones refuse the checkpoint rather than becoming none", () => {

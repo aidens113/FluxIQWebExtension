@@ -316,10 +316,13 @@ function cardsOf(page: number, first = 1, last = 4): FakeElement[] {
 /**
  * What a page draws in its results: every card, or, with a lazy tail, its eager
  * cards and a sentinel under the last of them that fetches the rest once a
- * scroll brings it within reach, and replaces itself with them.
+ * scroll brings it within reach, and replaces itself with them. With
+ * `shifted`, every page after the first leads with page one's first card
+ * again, as a search whose index shifted between page loads shows it.
  */
-function resultsOf(page: number, tail: LazyTail | undefined, scrolled: Viewport): FakeElement[] {
-  if (tail === undefined) return cardsOf(page);
+function resultsOf(page: number, tail: LazyTail | undefined, scrolled: Viewport, shifted = false): FakeElement[] {
+  const carried = shifted && page > 1 ? cardsOf(1, 1, 1) : [];
+  if (tail === undefined) return [...carried, ...cardsOf(page)];
   const sentinel = new FakeElement("div", { "data-sentinel": "" });
   let requested = false;
   scrolled.listeners.push(() => {
@@ -327,7 +330,7 @@ function resultsOf(page: number, tail: LazyTail | undefined, scrolled: Viewport)
     requested = true;
     setTimeout(() => { sentinel.replaceWith(...cardsOf(page, tail.eager + 1, tail.eager + tail.lazy)); }, tail.loadMs);
   });
-  return [...cardsOf(page, 1, tail.eager), sentinel];
+  return [...carried, ...cardsOf(page, 1, tail.eager), sentinel];
 }
 
 /**
@@ -336,9 +339,10 @@ function resultsOf(page: number, tail: LazyTail | undefined, scrolled: Viewport)
  * `drawPager` is called. Pressing a pager link replaces the results with that
  * page's and the pager with that page's, as the store's does, scrolls back to
  * the top, and records where it led. With `lazyTail`, each page's results end
- * in the store's sentinel (see the header).
+ * in the store's sentinel (see the header). With `shifted`, each later page
+ * leads with page one's first card again (`resultsOf`).
  */
-export function storePage(page: number, options: { pager?: "drawn" | "late" | "none"; lazyTail?: LazyTail } & PagerStyle = {}): StorePage {
+export function storePage(page: number, options: { pager?: "drawn" | "late" | "none"; lazyTail?: LazyTail; shifted?: boolean } & PagerStyle = {}): StorePage {
   const saved = {
     document: (globalThis as Record<string, unknown>).document,
     window: (globalThis as Record<string, unknown>).window,
@@ -347,13 +351,13 @@ export function storePage(page: number, options: { pager?: "drawn" | "late" | "n
   };
   const followed: number[] = [];
   const scrolled: Viewport = { root: new FakeElement("body"), scrollY: 0, scrolls: 0, listeners: [] };
-  const results = new FakeElement("div", { role: "list" }, "", resultsOf(page, options.lazyTail, scrolled));
+  const results = new FakeElement("div", { role: "list" }, "", resultsOf(page, options.lazyTail, scrolled, options.shifted));
   // The page the document shows, which its address follows as a new document's would.
   let current = page;
   const turnTo = (target: number): void => {
     followed.push(target);
     current = target;
-    results.replaceChildren(...resultsOf(target, options.lazyTail, scrolled));
+    results.replaceChildren(...resultsOf(target, options.lazyTail, scrolled, options.shifted));
     scrolled.scrollY = 0;
     // A pager drawn with the list is redrawn with it, for the page it now shows.
     if (nav.parentElement) {
