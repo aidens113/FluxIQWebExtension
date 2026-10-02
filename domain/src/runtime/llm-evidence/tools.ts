@@ -63,7 +63,7 @@ import {
   webAutomationRecoveryHarnessOptionBundle
 } from "./harness-options";
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "./denied-keys";
-import { WEB_LLM_OBSERVED_STATE_KEYS } from "./observed-state";
+import { WEB_LLM_VIEW_KEYS } from "./observed-state";
 import { WEB_LLM_SYSTEM_INSTRUCTIONS } from "./system-instructions";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import { createWebNodeArrivals, createWebNodeShownAddresses, runWebOutputNode, webLlmCallWords, webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_NAVIGATION_ACTION, type WebLlmCallWords } from "./node-run";
@@ -324,7 +324,8 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
     // Declared once, in `./denied-keys.ts`, because what a reading node read
     // is held to the same list before it is ever returned.
     deniedEvidenceKeys: WEB_LLM_DENIED_EVIDENCE_KEYS,
-    observedStateKeys: WEB_LLM_OBSERVED_STATE_KEYS,
+    // The page and a read's rows, each replaced only by a newer one of its kind (`./observed-state/`).
+    observedStateKeys: WEB_LLM_VIEW_KEYS,
     // Placed by Core in the system message of every model request (t237).
     systemInstructions: WEB_LLM_SYSTEM_INSTRUCTIONS,
     // The options a runtime recovery may explore with, declared in full so
