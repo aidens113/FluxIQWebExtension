@@ -29,10 +29,15 @@
 // decision until the build ran out of money. So `rejectedRows` is one object:
 // `fields`, the column names once; `conditions`, each with its counts and its
 // `rowsAlone`; `rowsWithOthers`, every row more than one condition rejected,
-// once, grouped by the conditions it `failed`; and `~`, what a link written
-// `~/...` stands for, chosen as the page view chooses its own
-// (`../page-view/link-writer.ts`). A row is its values in the order of
-// `fields`. No row and no count is left out: only the repetition goes.
+// once, grouped by the conditions it `failed`. A row is its values in the
+// order of `fields`. No row and no count is left out: only the repetition goes.
+//
+// **Links are written from the page's origin, stated once for the read**
+// (t194 w48). F40 wrote them from `~`, as the page view does, with `~` stated
+// inside `rejectedRows`. A read now writes its kept rows and these with one
+// writer (`./shown-rows/links.ts`), as paths from the origin the read states once as
+// its `origin` (`./shown-rows/account.ts`), so a link here is also an address the
+// rule on where a build may navigate can read (`./shown-addresses.ts`).
 //
 // **They go nowhere else.** They are asked for on the dispatched command only,
 // never on the parameters the Flow keeps, so a playback asks for none. They are
@@ -52,11 +57,11 @@ import {
   type WebAutomationExtractItemCondition,
   type WebAutomationExtractionRejectedRow
 } from "../../../actions/extraction";
-import { webLlmLinkWriter } from "../page-view";
 import { webNodeNumericTextFilterSentence } from "./numeric-text-filter";
 import { present } from "../present";
 import { webNodeWithoutPageRecord } from "./page-record";
 import { webNodeReadResult } from "./read-result";
+import { webNodeReadLinks, webNodeReadOutcome, type WebNodeReadLinks } from "./shown-rows";
 
 /** The only verb whose rows a condition decides. */
 const EXTRACT_LIST_ACTION = "web.dom.extract_list";
@@ -114,15 +119,17 @@ export function webNodeDispatchParameters(node: { actionType: string; proposes: 
  */
 export function webNodeReadWithRejectedRows(payload: JsonValue | undefined, parameters?: JsonObject): WebNodeReadWithRejectedRows {
   const recorded = withoutSamples(payload);
-  const shown = rejectedRows(payload, conditionsRan(parameters));
+  // One writer for the whole read, so its kept rows and its rejected rows state one origin (`./shown-rows/links.ts`).
+  const links = webNodeReadLinks(objectValue(payload)?.url);
+  const shown = rejectedRows(payload, conditionsRan(parameters), links);
   // The page's own record never reaches the model (`./page-record.ts`); the
   // replay keeps the payload as the node answered it.
   const read = webNodeReadResult(webNodeWithoutPageRecord(recorded));
-  if (shown === undefined) return { read, recorded };
+  if (shown === undefined) return { read: webNodeReadOutcome(read, links), recorded };
   const beside = present<WebNodeRejectedRowsBeside>({ rejectedRows: shown.rows, rejectedRowsNote: note(shown) }) as JsonObject;
   if (read === undefined) return { read: beside, recorded };
   if (typeof read !== "object" || read === null || Array.isArray(read)) return { read, recorded };
-  return { read: { ...read, ...beside }, recorded };
+  return { read: webNodeReadOutcome({ ...read, ...beside }, links), recorded };
 }
 
 /** The summary members that carry the samples, which the recorded payload leaves out. */
@@ -153,7 +160,7 @@ function withoutSamples(payload: JsonValue | undefined): JsonValue | undefined {
  * as the kept rows then drops a key Core denies in evidence and withholds a
  * credential-shaped string (`./read-result.ts`).
  */
-function rejectedRows(payload: JsonValue | undefined, conditions: readonly WebAutomationExtractItemCondition[] | undefined): ShownRejectedRows | undefined {
+function rejectedRows(payload: JsonValue | undefined, conditions: readonly WebAutomationExtractItemCondition[] | undefined, links: WebNodeReadLinks): ShownRejectedRows | undefined {
   const whole = objectValue(payload);
   const summary = webAutomationExtractionSummaryValue(whole?.extraction);
   const samples = summary?.rejectedSamples;
@@ -161,7 +168,6 @@ function rejectedRows(payload: JsonValue | undefined, conditions: readonly WebAu
   if (samples === undefined || counts === undefined) return undefined;
   const leads = summary?.rejectedSamplesAlone;
   const aloneCounts = summary?.conditions?.alone;
-  const links = linkWriting(whole?.url, samples);
   let anyAlone = false;
   const withOthers = new Map<string, { row: JsonObject; failed: number[] }>();
   const entries: JsonObject[] = samples.flatMap((sampled, index): JsonObject[] => {
@@ -171,7 +177,7 @@ function rejectedRows(payload: JsonValue | undefined, conditions: readonly WebAu
     if (lead !== undefined && lead > 0) anyAlone = true;
     for (const other of lead === undefined ? [] : sampled.slice(lead)) {
       const key = JSON.stringify(other);
-      const said = withOthers.get(key) ?? { row: links.row(other), failed: [] };
+      const said = withOthers.get(key) ?? { row: writtenRow(other, links), failed: [] };
       said.failed.push(index);
       withOthers.set(key, said);
     }
@@ -181,13 +187,12 @@ function rejectedRows(payload: JsonValue | undefined, conditions: readonly WebAu
       where: index,
       rejected,
       alone: aloneCounts?.[index] ?? lead,
-      rows: lead === undefined ? sampled.map(links.row) : undefined,
-      rowsAlone: alone.length === 0 ? undefined : alone.map(links.row)
+      rows: lead === undefined ? sampled.map((row) => writtenRow(row, links)) : undefined,
+      rowsAlone: alone.length === 0 ? undefined : alone.map((row) => writtenRow(row, links))
     }) as JsonObject];
   });
   if (entries.length === 0) return undefined;
-  const screened = objectValue(webNodeReadResult(present<{ "~"?: string | undefined; conditions: JsonObject[]; rowsWithOthers?: JsonObject[] | undefined }>({
-    "~": links.used() ? links.base : undefined,
+  const screened = objectValue(webNodeReadResult(present<{ conditions: JsonObject[]; rowsWithOthers?: JsonObject[] | undefined }>({
     conditions: entries,
     rowsWithOthers: withOthers.size === 0 ? undefined : groups(withOthers)
   }) as JsonObject));
@@ -215,36 +220,9 @@ function compareSets(a: readonly number[], b: readonly number[]): number {
   return a.length - b.length;
 }
 
-/**
- * How the rows write a link: an address on the read's own page origin as `~`
- * and the rest, where `~` is what the page view would choose for the same page
- * and these links (`../page-view/link-writer.ts`), so the written form reads
- * back exactly. `used` says whether any value was written so.
- */
-function linkWriting(location: JsonValue | undefined, samples: readonly WebAutomationExtractionRejectedRow[][]): {
-  base: string;
-  row: (sampled: WebAutomationExtractionRejectedRow) => JsonObject;
-  used: () => boolean;
-} {
-  const hrefs = samples.flat().flatMap((sampled) => Object.values(sampled).filter((value): value is string => typeof value === "string" && isAddress(value)));
-  const writer = typeof location === "string" && isAddress(location) ? webLlmLinkWriter(location, hrefs) : undefined;
-  let used = false;
-  const write = (value: string | null): string | null => {
-    if (writer === undefined || value === null || !isAddress(value)) return value;
-    const written = writer.write(value);
-    if (written.startsWith("~")) used = true;
-    return written.startsWith("~") ? written : value;
-  };
-  return {
-    base: writer?.base ?? "",
-    row: (sampled) => Object.fromEntries(Object.entries(sampled).map(([key, value]) => [key, write(value)])) as JsonObject,
-    used: () => used
-  };
-}
-
-/** An absolute web address, the only kind of value written with `~`. */
-function isAddress(value: string): boolean {
-  return /^https?:\/\//iu.test(value) && URL.canParse(value);
+/** One sampled row with each address on the read's origin written from it (`./shown-rows/links.ts`). */
+function writtenRow(sampled: WebAutomationExtractionRejectedRow, links: WebNodeReadLinks): JsonObject {
+  return Object.fromEntries(Object.entries(sampled).map(([key, value]) => [key, value === null ? null : links.write(value)])) as JsonObject;
 }
 
 /**
@@ -265,7 +243,6 @@ function tabulated(screened: JsonObject): JsonObject {
     return out;
   };
   const out: JsonObject = {};
-  if (screened["~"] !== undefined) out["~"] = screened["~"];
   out.fields = fields;
   out.conditions = arrayOf(screened.conditions).map(asValues);
   if (screened.rowsWithOthers !== undefined) out.rowsWithOthers = arrayOf(screened.rowsWithOthers).map(asValues);

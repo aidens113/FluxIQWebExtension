@@ -1,5 +1,5 @@
-// Every rejected row said once, links written from `~` (`../rejected-rows.ts`,
-// run 13, F40).
+// Every rejected row said once (`../rejected-rows.ts`, run 13, F40), links
+// written from the page's origin, which the read states once (t194 w48).
 //
 // Live run 13 (`run-muqbzu32-8691a65e`, cause 1): the read `rerun.13` ran five
 // conditions over 94 earbuds; the page sampled 72 distinct rejected rows, 46 of
@@ -97,7 +97,6 @@ function shownUntilRun13(payload: JsonObject): JsonObject[] {
 }
 
 type Shown = {
-  "~": string;
   fields: string[];
   conditions: Array<{ where: number; rejected: number; alone: number; rowsAlone?: string[][] }>;
   rowsWithOthers: Array<{ failed: number[]; rows: string[][] }>;
@@ -105,7 +104,8 @@ type Shown = {
 
 test("run 13's rejected rows are each said once, every count kept, in well under half the characters", () => {
   const { payload, rows } = run13();
-  const shown = (webNodeReadWithRejectedRows(payload).read as { rejectedRows: Shown }).rejectedRows;
+  const read = webNodeReadWithRejectedRows(payload).read as { origin: string; rejectedRows: Shown };
+  const shown = read.rejectedRows;
   const before = JSON.stringify(shownUntilRun13(payload)).length;
   const after = JSON.stringify(shown).length;
   // 134 rows said until run 13, 72 distinct.
@@ -125,27 +125,30 @@ test("run 13's rejected rows are each said once, every count kept, in well under
     const matching = said.filter(({ values }) => values[0] === row.name);
     assert.equal(matching.length, 1, row.name);
     assert.deepEqual(matching[0]?.failed, failed, row.name);
-    // The other values whole; the link read back from `~` is the exact address.
+    // The other values whole; the link read back from the read's origin is the exact address.
     const [, price, rating, written] = matching[0]?.values ?? [];
     assert.deepEqual([price, rating], [row.price, row.rating]);
-    assert.ok(written?.startsWith("~/"), written);
-    assert.equal(`${shown["~"]}${written?.slice(1)}`, row.url);
+    assert.ok(written?.startsWith("/scenarios/everything-store/"), written);
+    assert.equal(`${read.origin}${written}`, row.url);
   }
 });
 
-test("`~` is what the page view would choose: the store's own directory, and links on another origin stay whole", () => {
+test("the origin is the read page's, stated once on the read, and links on another origin stay whole", () => {
   const { payload } = run13();
   const elsewhere = structuredClone(payload) as { extraction: { rejectedSamples: Row[][] } };
   const first = elsewhere.extraction.rejectedSamples[0]?.[0];
   assert.ok(first);
   first.url = "https://cdn.example.net/earbuds/B0SYN00000";
-  const shown = (webNodeReadWithRejectedRows(elsewhere as unknown as JsonObject).read as { rejectedRows: Shown }).rejectedRows;
-  assert.equal(shown["~"], STORE);
+  const read = webNodeReadWithRejectedRows(elsewhere as unknown as JsonObject).read as { origin?: string; rejectedRows: Shown & { origin?: string } };
+  const shown = read.rejectedRows;
+  assert.equal(read.origin, ORIGIN);
+  assert.equal(shown.origin, undefined);
   assert.equal(shown.conditions[0]?.rowsAlone?.[0]?.[3], "https://cdn.example.net/earbuds/B0SYN00000");
-  // A read with no address of its own writes every link whole and declares no `~`.
+  // A read with no address of its own writes every link whole and states no origin.
   const nowhere = structuredClone(payload) as JsonObject;
   delete nowhere.url;
-  const whole = (webNodeReadWithRejectedRows(nowhere).read as { rejectedRows: Partial<Shown> }).rejectedRows;
-  assert.equal(whole["~"], undefined);
+  const nowhereRead = webNodeReadWithRejectedRows(nowhere).read as { origin?: string; rejectedRows: Partial<Shown> };
+  const whole = nowhereRead.rejectedRows;
+  assert.equal(nowhereRead.origin, undefined);
   assert.ok(whole.conditions?.[0]?.rowsAlone?.[0]?.[3]?.startsWith(STORE));
 });

@@ -62,7 +62,7 @@ import {
   webAutomationRecoveryHarnessOptionBundle
 } from "./harness-options";
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "./denied-keys";
-import { WEB_LLM_OBSERVED_STATE_KEYS } from "./observed-state";
+import { WEB_LLM_VIEW_KEYS } from "./observed-state";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import { createWebNodeArrivals, createWebNodeShownAddresses, runWebOutputNode, webObservationNodeId, webRunnableNodeIds } from "./node-run";
 import {
@@ -306,7 +306,8 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
     // Declared once, in `./denied-keys.ts`, because what a reading node read
     // is held to the same list before it is ever returned.
     deniedEvidenceKeys: WEB_LLM_DENIED_EVIDENCE_KEYS,
-    observedStateKeys: WEB_LLM_OBSERVED_STATE_KEYS,
+    // The page and a read's rows, each replaced only by a newer one of its kind (`./observed-state/`).
+    observedStateKeys: WEB_LLM_VIEW_KEYS,
     // The options a runtime recovery may explore with, declared in full so
     // they carry their own availability, safety and stages and never reach
     // Flow authoring. `same_scope` is the safe default and matches what the
