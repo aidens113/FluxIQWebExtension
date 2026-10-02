@@ -532,6 +532,21 @@ Core 58 paths (F42, F43). Reports `t195-w24{a,b,c}-*.md`, `t195-w25-completion-j
   - A run-41-shaped Flow with untested carried steps and no budget left ends at the budget with the draft kept, not
     proposed.
 
+**Core dev merge after F41-F43 (Core `4f78cadc`, downstream `016dea39`).** Seven conflicts were resolved and staged, not
+committed.
+- `judgement.ts`: `checklistRead` returns dev's `proven`. The finished judgement reads what worked off the round's
+  steps by id, because its repair seed has no replays.
+- `not-done.ts`: both new functions are kept.
+- `phases.ts`: W3's `phase2` is kept, with dev's step-log `test` scope on its unfinished branch. The judge needs no scope
+  (a verdict's own phase).
+- `entry.ts`: F42's telling, lane B's opener sentence, and "complete when the Flow does what the person asked".
+- `draft-acts.ts`: the repeat suggestion and lane C's unread-column notes, both kept.
+- `draft-acts.test.ts`: dev's file stays; F43's moves to `draft-acts-repeat.test.ts`.
+- `generation.test.ts`: dev's ceiling constant, and the judge's cap is `(ceiling - spent) / 2`.
+- The $0.25 assumptions in F43 (`judged-build.test.ts`, a `phases.ts` comment) now use
+  `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD`.
+- The framework reference is regenerated.
+
 **Next.**
 - For t223 (its files): `tool-rejection.ts` rewords `consequences_declined`. F29's `run.ts` line is done. The frame URL is
   still reachable (w20h checked).
