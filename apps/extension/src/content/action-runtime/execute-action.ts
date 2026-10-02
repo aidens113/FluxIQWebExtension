@@ -28,7 +28,7 @@ import { watchInPlaceEffect } from "./in-place-effect";
 import { watchIgnoredPress } from "./ignored-press";
 import { watchRateLimitNotice } from "./rate-limit-notice";
 import { watchRobotCheck } from "./robot-check";
-import { actionFailure, actionNeedsPerson, actionNotImplemented, actionRateLimited, actionRejected, actionTimedOut, success } from "./results";
+import { actionFailure, actionNeedsPerson, actionNotImplemented, actionRateLimited, actionRefusedByPage, actionRejected, actionTimedOut, success } from "./results";
 import { listReadFor } from "./extraction-continuation";
 
 export async function executeAction(action: BrowserActionCommand, extractionContinuation?: unknown): Promise<BrowserActionResult> {
@@ -57,6 +57,7 @@ export async function executeAction(action: BrowserActionCommand, extractionCont
     failure: actionFailure,
     rejected: actionRejected,
     rateLimited: actionRateLimited,
+    refusedByPage: actionRefusedByPage,
     needsPerson: actionNeedsPerson,
     timedOut: actionTimedOut,
     notImplemented: actionNotImplemented

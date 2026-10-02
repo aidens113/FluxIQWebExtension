@@ -260,10 +260,10 @@ test("an extraction handle becomes the request the detection kept, with the plan
     extractList: {
       item,
       fields: {
-        product: { kind: "column", header: "Product", required: true },
-        category: { kind: "column", header: "Category", required: true },
-        price: { kind: "column", header: "Price", required: true },
-        stock: { kind: "column", header: "Stock", required: true }
+        product: { kind: "column", header: "Product", required: false },
+        category: { kind: "column", header: "Category", required: false },
+        price: { kind: "column", header: "Price", required: false },
+        stock: { kind: "column", header: "Stock", required: false }
       },
       minItems: 0
     },

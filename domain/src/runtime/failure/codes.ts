@@ -91,8 +91,8 @@ export const WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
    * nothing confirmed. Produced by `content/actions/click.ts` from what
    * `content/action-runtime/rate-limit-notice.ts` saw.
    *
-   * The only row that states the act did not happen (`effect: "unacted"`), and
-   * that is what it is for. A press is a mutating act, and Core refuses to repeat
+   * It states the act did not happen (`effect: "unacted"`), as REFUSED_BY_PAGE
+   * does, and that is what it is for. A press is a mutating act, and Core refuses to repeat
    * one whose failure may already have landed; the page's own notice is the
    * evidence that nothing landed, so the node's own re-run -- after the wait the
    * page named, which rides on the record as `retryAfterMs` -- does the act. The
@@ -103,6 +103,29 @@ export const WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
    * as accepted and one as done.
    */
   RATE_LIMITED: "web.action.rate_limited",
+  /**
+   * The page refused a press because it needs something first, and said so in
+   * the pressed control's own region: crossborder's Add to cart, pressed with
+   * no colour chosen, writes "Please select a Color." and adds nothing. Produced
+   * by `content/actions/click.ts` from what
+   * `content/action-runtime/rate-limit-notice.ts` saw, matched against a closed
+   * phrase list (`content/action-runtime/interference/vocabulary.ts`); the
+   * record carries none of the page's words.
+   *
+   * Not retryable: the same press on the same page is answered the same way,
+   * so neither the click's own second press, the content-side recovery loop
+   * nor Core's retry rung makes it again. It is the page's state rather than a
+   * policy, so its Core category is `unexpected_state`, as
+   * TARGET_NOT_ACTIONABLE's is: the move is to give the page what it asked for
+   * -- choose the colour -- and press again, which the model or a repair does.
+   * Like RATE_LIMITED it states the act did not happen (`effect: "unacted"`),
+   * because the page said it did nothing.
+   *
+   * Until 2026-10-02 the press passed on its hit test, was pressed once more as
+   * "ignored", and reported success with nothing in the cart, in exploration,
+   * the dry run and playback alike (`run-muqk4u32-0b36e58f`, t174 F40).
+   */
+  REFUSED_BY_PAGE: "web.action.refused_by_page",
   /**
    * The browser refused the action because this extension may not touch that
    * page: a host the manifest does not request, a `chrome://` or gallery URL, or
@@ -177,8 +200,8 @@ export type WebAutomationFailureRecord = Omit<AutomationStudioFailureRecord, "co
 
 /**
  * What a code always means: its Core category, whether retrying it unchanged
- * can work, where it was decided, and -- on the one row whose producer can
- * prove it -- that the act did not happen.
+ * can work, where it was decided, and -- on the rows whose producer can prove
+ * it -- that the act did not happen.
  */
 export type WebAutomationFailureCodeDefinition = {
   readonly category: AutomationStudioAdaptiveFailureClass;
@@ -229,6 +252,9 @@ export const WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS: Readonly<Record<WebAutomat
   // The page's own notice says the press confirmed nothing, so the act did not
   // happen and making it again after the named wait is not a second act.
   "web.action.rate_limited": { category: "action_failed", retryable: true, stage: "execution", effect: "unacted" },
+  // The page said it needs something first and did nothing: its state, which
+  // answers the same press the same way until something else on it changes.
+  "web.action.refused_by_page": { category: "unexpected_state", retryable: false, stage: "execution", effect: "unacted" },
   // A page this extension may not touch answers the same way however many times
   // it is asked, so the row says so: `dispatch`, because the browser refused
   // before the verb was reached, and not retryable.

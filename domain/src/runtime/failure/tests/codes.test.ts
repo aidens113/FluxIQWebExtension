@@ -43,6 +43,9 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
   // t195: a press the page refused as "too fast" and said so. Retryable, and the
   // one row that states the act did not happen (`UNACTED` below).
   ["RATE_LIMITED", "web.action.rate_limited", "action_failed", true, "execution"],
+  // t174 F40: a press the page answered with "Please select a Color." beside it
+  // and nothing done. The page's state, not retryable, and unacted.
+  ["REFUSED_BY_PAGE", "web.action.refused_by_page", "unexpected_state", false, "execution"],
   // t163's finding 2. A manifest-permission refusal reported as the retryable
   // `web.action.failed` cost run-muht9lpw-a39aa056 three attempts and then the
   // run, so the refusal has its own non-retryable row and the dead channel it
@@ -57,7 +60,7 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
 ];
 
 /** The rows whose producer can prove the act did not happen, which carry `effect: "unacted"`. Every other row states nothing. */
-const UNACTED: ReadonlySet<string> = new Set(["RATE_LIMITED"]);
+const UNACTED: ReadonlySet<string> = new Set(["RATE_LIMITED", "REFUSED_BY_PAGE"]);
 
 /** A row's effect, spread onto the record the row builds. */
 function effectOf(name: string): { effect?: "unacted" } {
@@ -221,4 +224,41 @@ test("a dialog in the way reaches the model under Core's own diagnosis, and a ch
   assert.equal(challenge.resolution, "manual_intervention");
   assert.equal(challenge.modelNeeded, false);
   assert.equal(challenge.stillAchievable, "no");
+});
+
+test("a press the page refused for needing something first is Core's unexpected state, for the model, and is not retried", () => {
+  // t174 F40: crossborder's Add to cart answered "Please select a Color." and
+  // added nothing. Asserted through Core's real parser and Stage A diagnosis:
+  // the page's state, a move the model (or a repair) makes -- choose the colour
+  // -- and never the same press again unchanged.
+  const record = webAutomationFailureRecord("web.action.refused_by_page" as WebAutomationFailureCode, {
+    expected: "the page accepts the press",
+    actual: "the page answered the press 4 ms after it with a line beside the control saying it needs something first, and did nothing"
+  });
+  assert.equal(record.retryable, false);
+  assert.equal(record.effect, "unacted");
+  assert.equal(record.retryAfterMs, undefined);
+  assert.deepEqual(parseAutomationStudioFailureRecord(record), record);
+  const diagnosis = buildAutomationStudioRuntimeDeterministicDiagnosis({
+    projectId: "project.one",
+    flowId: "flow.one",
+    runId: "run.one",
+    failedAttempt: {
+      attemptId: "node.add.attempt.1",
+      nodeId: "node.add",
+      definitionId: "web.dom.click",
+      startedAt: 1,
+      finishedAt: 2,
+      status: "failed",
+      route: "failed",
+      inputs: {},
+      outputs: {},
+      effects: [],
+      message: "Action refused by the page: it needs something first.",
+      failure: record
+    }
+  });
+  assert.equal(diagnosis.failureClass, "unexpected_state");
+  assert.equal(diagnosis.resolution, "model_required");
+  assert.equal(diagnosis.modelNeeded, true);
 });
