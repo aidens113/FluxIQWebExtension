@@ -23,8 +23,21 @@ import { WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH } from "../../actions/types";
  * manifests and the briefs call it, and the value is what Core stores.
  */
 export const WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
-  /** The target was found but refused the action: disabled, hidden, or covered by another element. */
+  /**
+   * The action was refused on purpose: a value this extension does not read, a
+   * page it may not touch, a key it will not fake, a request it cannot carry out.
+   */
   ACTION_REJECTED: "web.action.rejected",
+  /**
+   * The target was found, and the page as it stood would not let it be used:
+   * hidden, covered by another element, or disabled. That is the page's state,
+   * not a decision anyone made, so it is Core's `unexpected_state` and a repair
+   * may change the Flow to reach the state it needs. Until t193 (2026-10-02) it
+   * was ACTION_REJECTED, and lane A's run 40 failed playback on "Set as my
+   * store" inside a closed chooser, read by Core as a policy refusal that only a
+   * person could answer: the repair was refused at its gate.
+   */
+  TARGET_NOT_ACTIONABLE: "web.target.not_actionable",
   /** No element matched the action's target with enough confidence. */
   TARGET_NOT_FOUND: "web.target.not_found",
   /** Several elements matched the action's target and none could be preferred. */
@@ -202,6 +215,7 @@ export const WEB_AUTOMATION_RETRY_AFTER_MAX_MS = 3_600_000;
  */
 export const WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS: Readonly<Record<WebAutomationFailureCode, WebAutomationFailureCodeDefinition>> = Object.freeze({
   "web.action.rejected": { category: "blocked_by_capability_or_policy", retryable: false, stage: "execution" },
+  "web.target.not_actionable": { category: "unexpected_state", retryable: false, stage: "execution" },
   "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution" },
   "web.target.ambiguous": { category: "target_ambiguous", retryable: false, stage: "target_resolution" },
   "web.validation.output_not_observed": { category: "output_not_observed", retryable: true, stage: "verification" },

@@ -897,8 +897,10 @@ status: a negative variant pins its action that way and names the failure in
 reaches. There is no `rejected`: no lane can report one, so an expectation
 spelled that way would fail on itself, and manifest validation refuses it. A
 client refusal is declared as `failed`, with `expected.failure` naming the
-refusal: category `blocked_by_capability_or_policy`, code
-`web.action.rejected`.
+refusal: category `unexpected_state`, code `web.target.not_actionable` for a
+target the page would not let be used (hidden, covered, disabled), or category
+`blocked_by_capability_or_policy`, code `web.action.rejected` for one refused on
+purpose.
 
 Validation also refuses an `expected.actions` entry, on a workflow or on any of
 its variants, whose type no step of that workflow's recording script can yield
@@ -1659,7 +1661,7 @@ declared as well as the cost. The lane itself runs each condition with **no**
 model at all -- no `--live-llm`, no key and no `runIntent` -- so what finished
 the run can only have been the deterministic runtime.
 
-A condition whose declaration says `none` is not a gap. `web.action.rejected`
+A condition whose declaration says `none` is not a gap. `web.target.not_actionable`
 (a covered control) and `web.auth.required` (an expired session) are both
 non-retryable in the domain's failure table, so the retry rung is never offered
 those nodes, and `clear_interference` has no node to run because nothing writes

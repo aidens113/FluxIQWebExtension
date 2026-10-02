@@ -264,7 +264,7 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
     { id: "url", label: "URL", valueType: "string", required: true, ui: { control: "text", placeholder: "https://example.com" } },
     { id: "newTab", label: "New Tab", valueType: "boolean", defaultValue: false }
   ];
-  if (outputId === "web.dom.type") return [...selectorParameters, { id: "text", label: "Text", valueType: "string", defaultValue: "", ui: { control: "textarea" } }];
+  if (outputId === "web.dom.type") return [...selectorParameters, { id: "text", label: "Text", valueType: "string", defaultValue: "", ui: { control: "textarea" } }, { id: "submit", label: "Send Form After Typing", valueType: "boolean", defaultValue: false }];
   if (outputId === "web.dom.select") return [...selectorParameters, { id: "value", label: "Value", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("option", "Option")];
   if (outputId === "web.dom.keypress") return [...selectorParameters, { id: "key", label: "Key", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("modifiers", "Modifiers")];
   if (outputId === "web.dom.scroll") return [

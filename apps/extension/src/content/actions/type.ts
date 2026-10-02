@@ -36,7 +36,11 @@
 // form leaves that form unsent, and the result says so (`unsentForm`). Live
 // runs 36 and 37 (t193, bigbox) typed a shorter product name into the results
 // page's search field, were told only "Text entered.", and then searched the
-// unchanged page for results eleven and twelve times.
+// unchanged page for results eleven and twelve times. A command with `submit`
+// then presses Enter in the field, which sends its form the way a person's
+// Enter does (`../action-runtime/keyboard/implicit-submission.ts`): a search
+// typed and sent is one step. Typing that held and a send that did not is a
+// failed step, because sending was what was asked.
 
 import { isSensitiveFormControl } from "../element-traits";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
@@ -67,13 +71,18 @@ export function typeAction(action: BrowserActionCommand, deps: ContentActionDepe
 
   const actual = enteredText(element);
   const held = actual === text;
+  const typed = { expected: `the field holds ${describeFieldValue(text, withheld)}`, actual: heldText(actual, text, withheld), redacted: withheld };
+  if (held && action.submit === true) {
+    const sent = deps.keyboard.pressKey(element, "Enter");
+    return deps.success(action, startedAt, sent.held ? "Text entered, then Enter pressed in the field." : "Text entered, but Enter did not send the field's form.", {
+      status: sent.held ? "passed" : "failed",
+      expected: `${typed.expected}, then ${sent.expected}`,
+      actual: `${typed.actual}; ${sent.detail}`,
+      redacted: withheld
+    }, evidence());
+  }
   const unsent = held ? unsentForm(element) : undefined;
-  return deps.success(action, startedAt, held ? `Text entered.${unsent ? ` ${unsent}` : ""}` : "The field did not keep the text.", {
-    status: held ? "passed" : "failed",
-    expected: `the field holds ${describeFieldValue(text, withheld)}`,
-    actual: heldText(actual, text, withheld),
-    redacted: withheld
-  }, evidence());
+  return deps.success(action, startedAt, held ? `Text entered.${unsent ? ` ${unsent}` : ""}` : "The field did not keep the text.", { status: held ? "passed" : "failed", ...typed }, evidence());
 }
 
 /**
@@ -114,7 +123,7 @@ function unsentForm(element: Element): string | undefined {
   const submit = form.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
   const name = submit ? controlName(submit) : "";
   const press = name ? `press its "${name}" button (or Enter in the field)` : "press Enter in the field";
-  return `Typing pressed no other key, so the field's form was not sent: if the page has not answered the text, ${press} to send it.`;
+  return `Typing pressed no other key, so the field's form was not sent: if the page has not answered the text, ${press} to send it, or type with submit set to true.`;
 }
 
 /** A control's own name: its label, else its words, else an input's value. */

@@ -104,7 +104,7 @@ test.describe("modal-flows", () => {
 
     expect(reply).toMatchObject({
       status: "failed",
-      failure: { category: "blocked_by_capability_or_policy", code: WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, retryable: false, stage: "execution" }
+      failure: { category: "unexpected_state", code: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE, retryable: false, stage: "execution" }
     });
     expect(reply.failure?.actual).toMatch(/^covered: /u);
     expect(reply.message).toMatch(/^Action rejected: /u);

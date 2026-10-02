@@ -345,6 +345,12 @@ export type WebAutomationActionCommand = {
   modifiers?: WebAutomationKeyModifiers | undefined;
   /** `web.dom.check`: the state to leave the checkbox or radio in. */
   checked?: boolean | undefined;
+  /**
+   * `web.dom.type`: after the text, send the field's form as Enter does. Typing
+   * alone sends nothing, and live runs 36-38 (t193) typed search queries that
+   * were never sent; a search is one step with this, not two.
+   */
+  submit?: boolean | undefined;
   /** `web.dom.extract`: which value of the target to read. Without it a read is the legacy `options.mode`. */
   extract?: WebAutomationExtractRead | undefined;
   /** `web.dom.extract_list`. */

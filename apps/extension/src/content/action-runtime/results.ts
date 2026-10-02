@@ -206,6 +206,16 @@ export function success(
 const DISABLED_REASON = "disabled";
 
 /**
+ * The reasons that are the page's state rather than a refusal anyone decided:
+ * the actionability gate's three (`actionability.ts`). They are reported as
+ * TARGET_NOT_ACTIONABLE, Core's `unexpected_state`, which a repair may answer;
+ * ACTION_REJECTED is kept for what is refused on purpose. Lane A's run 40
+ * (t174) failed playback on a button hidden inside a closed chooser, and Core,
+ * told `blocked_by_capability_or_policy`, refused the repair as needing a person.
+ */
+const PAGE_STATE_REASONS: ReadonlySet<string> = new Set(["disabled", "hidden", "covered"]);
+
+/**
  * An action refused before it ran: the target was disabled, hidden, or covered.
  *
  * `reason` is the verb's own word for the refusal -- `disabled`, `covered`,
@@ -251,7 +261,7 @@ export function actionRejected(
     status: "failed",
     validation,
     message: `Action rejected: ${observed}`,
-    failure: refusalRecord(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected, actual: `${reason}: ${observed}` }, evidence)
+    failure: refusalRecord(PAGE_STATE_REASONS.has(reason) ? WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE : WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected, actual: `${reason}: ${observed}` }, evidence)
   }, evidence);
   // A control the gate refused as disabled: recovery waits at it only while it
   // shows it is changing, so how it looked is noted beside the result -- as a
