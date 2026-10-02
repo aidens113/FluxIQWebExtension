@@ -717,6 +717,17 @@ debug and partitioned so neither touches the other's files:
   - Downstream after the merges (Core libraries rebuilt): test-runner `# tests 1781 # pass 1781 # fail 0`; domain check rc 0; domain tests `# tests 1241 # pass 1241 # fail 0`; extension check rc 0 after the test fix; extension tests `# tests 2297 # pass 2297 # fail 0`; structure audit passed.
 - Outcome: pushed Core dev `b369ca14` and downstream dev `ff175763`. Known on dev: the 3 Core failures t229 is fixing. Pass streak 0.
 
+### 2026-10-01 night — First live runs after round 9: every build stops at the $0.10 ceiling with a partial Flow
+- Agent: supervisor; lanes A-C running.
+- Changed: nothing in code; findings recorded for the lanes and the per-Flow purse task.
+  - The page view is confirmed on a real loaded extension: bigbox `t11 field[search] "Search" placeholder "…"` and `t12 button "Search"`; earbuds `t17 field[search] "Search Brightaisle"` and `t18 button "Go"`; crossborder `t489 field[search] placeholder "Autumn Mega Sale…"`.
+  - Runs: bigbox `run-muqbzqtu-4e6299f9` (22 decisions, $0.0772, 3 of 6 asks stepped); earbuds `run-muqbzu32-8691a65e` (15 decisions, $0.0738, ended mid-amendment); crossborder `run-muqc07fh-eeffbc86` (25 decisions, $0.0774, 4 of 5 asks, "Space Grey" missing). All `lab.chat_build_failed` at the spending limit.
+  - Every chat build: step 0002, Core's read-only opening capture `initial.core.run_node`, is refused `not_at_start_location` while the screenshot shows the tab at that exact address (assigned to lane A).
+  - Crossborder: seven `find_on_page` calls for "Voltbay" on the home page (0 matches; the observation guard refused two), the model using a page search as a site search (lane A).
+  - Each build stopped about $0.023 short: the purse holds each call's worst case (every input token uncached at peak rates plus an 8,000-token reply). Measured over 63 decisions: reply tokens median 90, max 515; prompt average 25,393, max 72,677 (earbuds amendments), cache-hit share 0.55. Inputs to the per-Flow purse task: size the decision reply allowance to use (about 2,000), and stop prompt growth during amendments.
+- Validation: read from `C:/Users/osrs_/FluxStuff/lab-runs/2026-10-01/<run>/steps/` (index.md, page.txt, decision.json, response.json usage) and each run's `summary.json` `firstFailure`.
+- Outcome: lanes A-C debugging, up to two more runs each. Pass streak 0.
+
 ## Open Questions
 
 - Which complex scenario goes first? `everything-store` is the known multi-step
