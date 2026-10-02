@@ -16,7 +16,6 @@
 // them (`observed-usage.ts`). A check call the run phase already itemized, by
 // its request id, is taken out of that phase and counted under `judge` only.
 
-import { LIVE_LLM_BUILD_COST_CEILING_USD } from "./build-cost-ceiling.js";
 import type { LiveLlmObservedUsage } from "./observed-usage.js";
 import type { LiveLlmReauthorRecord } from "./reauthor-record.js";
 
@@ -68,8 +67,8 @@ export function liveLlmRunSpend(input: {
   runtime?: LiveLlmObservedUsage | null | undefined;
   judge?: LiveLlmJudgeCalls | null | undefined;
   reauthor?: LiveLlmReauthorRecord | null | undefined;
-  /** The run plan's `maxTotalEstimatedCostUsd`; Core's per-build ceiling when the caller has no plan. */
-  ceilingUsd?: number | undefined;
+  /** The run plan's `maxTotalEstimatedCostUsd`: the per-build ceiling the run was held to. */
+  ceilingUsd: number;
 }): LiveLlmRunSpend {
   const build = input.build ? { calls: input.build.calls, estimatedCostUsd: input.build.totalEstimatedCostUsd } : null;
   const judgeCalls = input.judge?.interventions ?? [];
@@ -84,7 +83,7 @@ export function liveLlmRunSpend(input: {
     totalEstimatedCostUsd: sum(phases.map((phase) => phase?.estimatedCostUsd ?? 0)),
     phases: { build, runtime, judge, reauthor },
     uncountedPhases: input.reauthor && input.reauthor.uncountedAttempts > 0 ? ["reauthor"] : [],
-    perBuild: perBuildSpend(input.ceilingUsd ?? LIVE_LLM_BUILD_COST_CEILING_USD, build, runtime, input.reauthor),
+    perBuild: perBuildSpend(input.ceilingUsd, build, runtime, input.reauthor),
   };
 }
 

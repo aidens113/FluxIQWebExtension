@@ -17,6 +17,7 @@ import { assertLiveLlmBudgetHeld } from "./budget.js";
 import { budgetOverProductFailure } from "./budget-over-product-failure.js";
 import { assertProviderCallsAsDeclared, type DeclaredProviderCalls } from "./declared-provider-calls.js";
 import { liveLlmBuildUsage } from "./build-usage.js";
+import { liveLlmBuildCostCeilingUsd } from "./build-cost-ceiling.js";
 import { readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExplorationRecord } from "./exploration-record.js";
 import { planLiveLlmExecution, type LiveLlmPlan } from "./live-llm-plan.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usage.js";
@@ -54,8 +55,11 @@ export async function beginLiveLlmRun(input: {
   environment: NodeJS.ProcessEnv;
   flowLane: boolean;
   targetMode: string;
+  /** Where the per-build cost ceiling is read: what `buildFluxIQEnvironment` gives Core, by default this process's arguments and environment. */
+  costCeilingSources?: { args: readonly string[]; environment: NodeJS.ProcessEnv };
 }): Promise<LiveLlmRun> {
-  const plan = planLiveLlmExecution(input.profile);
+  const sources = input.costCeilingSources ?? { args: process.argv, environment: process.env };
+  const plan = planLiveLlmExecution(input.profile, liveLlmBuildCostCeilingUsd(input.repositoryRoot, sources.args, sources.environment));
   assertLaneFlag(plan, input.flowLane);
   if (input.targetMode !== "isolated" && input.targetMode !== "persistent-isolated") {
     throw new RunnerFailure("fixture.invalid", `A live LLM run needs a Core this runner owns, and the ${input.targetMode} target's is not; use --target isolated or persistent-isolated`);

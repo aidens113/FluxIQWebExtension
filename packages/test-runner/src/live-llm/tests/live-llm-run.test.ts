@@ -7,7 +7,7 @@ import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type
 import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
 import type { CreatedFlowBuild } from "../../flow-lane/index.js";
-import { planLiveLlmExecution } from "../live-llm-plan.js";
+import { LAB_CEILING_USD, planAtLabCeiling } from "./lab-ceiling.js";
 import { beginLiveLlmRun, LiveLlmRun } from "../live-llm-run.js";
 
 /**
@@ -80,7 +80,7 @@ const detail: ExistingRunDetail = {
 
 async function runOnce(budget: Partial<LlmExecutionProfile["budget"]>) {
   const core = fakeCore();
-  const run = new LiveLlmRun(planLiveLlmExecution(profile(budget)), CREDENTIAL);
+  const run = new LiveLlmRun(planAtLabCeiling(profile(budget)), CREDENTIAL);
   const execution = await run.authorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   const written: Array<{ path: string; value: unknown }> = [];
   await run.settle(
@@ -102,11 +102,11 @@ test("an adapt run readies its Flow with its spend ceiling, carries its intent a
   assert.deepEqual(execution, { intent: "diagnose_and_adapt", permittedConsequences: [] });
   // The run's spend ceiling is a Flow setting now, saved with the rest.
   const saved = core.settingsRequests[0]?.flow.metadata;
-  assert.deepEqual(saved.adaptationPolicySettings, { maxEstimatedCostUsdPerRun: 0.25 });
+  assert.deepEqual(saved.adaptationPolicySettings, { maxEstimatedCostUsdPerRun: LAB_CEILING_USD });
   assert.equal(saved.llmModel, DEFAULT_LLM_MODEL);
   assert.equal(snapshot.authorized.maxCalls, 26);
   assert.equal(snapshot.authorized.maxTotalTokensPerRun, PER_REQUEST * 26);
-  assert.equal(snapshot.authorized.maxTotalEstimatedCostUsd, 0.25);
+  assert.equal(snapshot.authorized.maxTotalEstimatedCostUsd, LAB_CEILING_USD);
   assert.deepEqual(snapshot.permittedConsequences, []);
   assert.equal(snapshot.exploration.source, "absent");
   assert.equal(snapshot.exploration.counts.actions, null, "an unexplored run must not read as an exploration that did nothing");
@@ -116,7 +116,7 @@ test("an adapt run readies its Flow with its spend ceiling, carries its intent a
 
 test("a run's --llm-permit travels with its intent and is recorded, and a typed token budget is kept", async () => {
   const core = fakeCore();
-  const run = new LiveLlmRun(planLiveLlmExecution({ ...profile({ maxTotalTokensPerRun: PER_REQUEST * 3 }), task: "repair", permittedConsequences: ["create_new", "send_or_publish"] }), CREDENTIAL);
+  const run = new LiveLlmRun(planAtLabCeiling({ ...profile({ maxTotalTokensPerRun: PER_REQUEST * 3 }), task: "repair", permittedConsequences: ["create_new", "send_or_publish"] }), CREDENTIAL);
   const execution = await run.authorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   assert.deepEqual(execution, { intent: "explore_and_adapt", permittedConsequences: ["send_or_publish", "create_new"] });
   assert.deepEqual(run.describe().permittedConsequences, ["send_or_publish", "create_new"]);
@@ -142,12 +142,12 @@ test("a live run refuses before a credential is read when its lane or target doe
 });
 
 test("a create-flow run fits only a scenario run that carries an instruction task and no recorded Flow lane", () => {
-  const create = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }), CREDENTIAL);
+  const create = new LiveLlmRun(planAtLabCeiling({ ...profile({}), task: "create-flow" }), CREDENTIAL);
   assert.equal(create.createsFlow, true);
   create.assertLane({ flowLane: false, creation: true });
   assert.throws(() => create.assertLane({ flowLane: false, creation: false }), /needs an instruction task to build from/u);
   assert.throws(() => create.assertLane({ flowLane: true, creation: true }), /drop --flow/u);
-  const adapt = new LiveLlmRun(planLiveLlmExecution(profile({})), CREDENTIAL);
+  const adapt = new LiveLlmRun(planAtLabCeiling(profile({})), CREDENTIAL);
   assert.equal(adapt.createsFlow, false);
   adapt.assertLane({ flowLane: true, creation: false });
   assert.throws(() => adapt.assertLane({ flowLane: true, creation: true }), /An instruction task is built only by --llm-task create-flow, not adapt/u);
@@ -159,7 +159,7 @@ test("a create-flow run fits only a scenario run that carries an instruction tas
 });
 
 test("a create-flow run's Flow repairs with the exploring intent, so its repair can be tried, applied and replayed", () => {
-  const create = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }), CREDENTIAL);
+  const create = new LiveLlmRun(planAtLabCeiling({ ...profile({}), task: "create-flow" }), CREDENTIAL);
   // `explore_and_adapt` tries its repair rather than only proposing one, which
   // is what the wrong-answer route requires: under the narrow intent a run that
   // answered wrongly was refused.
@@ -167,19 +167,19 @@ test("a create-flow run's Flow repairs with the exploring intent, so its repair 
   // The repair lane names the playback's intent; the dry run still describes the build's.
   assert.deepEqual(create.describeRepair(), { task: "create-flow", purpose: "explore_and_adapt" });
   assert.equal(create.describe().purpose, "build_and_adapt");
-  const adapt = new LiveLlmRun(planLiveLlmExecution(profile({})), CREDENTIAL);
+  const adapt = new LiveLlmRun(planAtLabCeiling(profile({})), CREDENTIAL);
   assert.deepEqual([adapt.repairsFlow, adapt.proposesRepairOnly, adapt.describeRepair()], [true, true, { task: "adapt", purpose: "diagnose_and_adapt" }]);
-  const repair = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "repair" }), CREDENTIAL);
+  const repair = new LiveLlmRun(planAtLabCeiling({ ...profile({}), task: "repair" }), CREDENTIAL);
   assert.deepEqual([repair.repairsFlow, repair.proposesRepairOnly, repair.describeRepair().purpose], [true, false, "explore_and_adapt"]);
   // A diagnosis changes nothing, so it has no repair to apply.
-  const diagnose = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "diagnose" }), CREDENTIAL);
+  const diagnose = new LiveLlmRun(planAtLabCeiling({ ...profile({}), task: "diagnose" }), CREDENTIAL);
   assert.deepEqual([diagnose.repairsFlow, diagnose.proposesRepairOnly], [false, false]);
 });
 
 test("a build run readies only a build, and a Flow run only a run", async () => {
-  const create = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }), CREDENTIAL);
+  const create = new LiveLlmRun(planAtLabCeiling({ ...profile({}), task: "create-flow" }), CREDENTIAL);
   await assert.rejects(create.authorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /A build_and_adapt run builds a Flow; it never runs one/u);
-  const adapt = new LiveLlmRun(planLiveLlmExecution(profile({})), CREDENTIAL);
+  const adapt = new LiveLlmRun(planAtLabCeiling(profile({})), CREDENTIAL);
   await assert.rejects(adapt.buildAuthorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /A diagnose_and_adapt run cannot build a Flow/u);
 });
 
@@ -205,7 +205,7 @@ async function settleBuildOnce(build: CreatedFlowBuild, budget: Partial<LlmExecu
   // The whole per-request triple is the shared budget's. Overriding only the
   // output and total limits left the input limit at the default, and input plus
   // output may not exceed the total, so every build below was refused unrun.
-  const run = new LiveLlmRun(planLiveLlmExecution({ ...profile(budget), task: "create-flow" }), CREDENTIAL);
+  const run = new LiveLlmRun(planAtLabCeiling({ ...profile(budget), task: "create-flow" }), CREDENTIAL);
   const prepared = await run.buildAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   const written: Array<{ path: string; value: unknown }> = [];
   const published: Record<string, unknown>[] = [];
@@ -298,7 +298,7 @@ test("a create-flow run repairs the Flow it built with explore_and_adapt, and se
   assert.deepEqual(snapshot.build, proposedBuild, "the build stays as settled");
   assert.equal(snapshot.observed.accounting.totalTokens, 23_000, "and its totals are not folded into the repair's");
   assert.equal(snapshot.repair.purpose, "explore_and_adapt");
-  assert.equal(snapshot.repair.authorized.maxTotalEstimatedCostUsd, 0.25);
+  assert.equal(snapshot.repair.authorized.maxTotalEstimatedCostUsd, LAB_CEILING_USD);
   assert.equal(snapshot.repair.runId, "run-1");
   assert.equal(snapshot.repair.observed.calls, 3);
   assert.equal(snapshot.repair.observed.observedCalls.length, 3);
@@ -308,14 +308,14 @@ test("a create-flow run repairs the Flow it built with explore_and_adapt, and se
 });
 
 /**
- * The user's rule: a Flow build may spend $0.25 in all, and its repair another
- * $0.25 of its own. `settleBuild` judges the build's record and `settleRepair`
- * the repair run's detail, each against the plan's total, so neither phase's
- * spend is counted against the other's, and neither may pass $0.25 however
- * many calls it was allowed.
+ * The user's rule: a Flow build may spend Core's ceiling in all, and its repair
+ * another ceiling of its own. `settleBuild` judges the build's record and
+ * `settleRepair` the repair run's detail, each against the plan's total, so
+ * neither phase's spend is counted against the other's, and neither may pass
+ * the ceiling however many calls it was allowed.
  */
 async function buildThenRepair(buildCostUsd: number, repairCostUsd: number) {
-  const { core, run, settle } = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, estimatedCostUsd: buildCostUsd } }, { maxCallsPerRun: 64, maxEstimatedCostUsd: 0.25 });
+  const { core, run, settle } = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, estimatedCostUsd: buildCostUsd } }, { maxCallsPerRun: 64, maxEstimatedCostUsd: LAB_CEILING_USD });
   const build = await settle().then(() => undefined, (error: unknown) => error);
   await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   const repairDetail: ExistingRunDetail = {
@@ -330,24 +330,26 @@ async function buildThenRepair(buildCostUsd: number, repairCostUsd: number) {
 
 function isCostBreach(error: unknown, spent: number): boolean {
   return error instanceof RunnerFailure && error.category === "performance.budget"
-    && error.message.includes(`estimated cost ${spent} exceeded its per-build cost ceiling of 0.25 `);
+    && error.message.includes(`estimated cost ${spent} exceeded its per-build cost ceiling of ${LAB_CEILING_USD} `);
 }
 
-test("a build and its repair are each held to $0.25 on its own: $0.20 apiece passes, and either one over $0.25 fails", async () => {
-  const within = await buildThenRepair(0.2, 0.2);
-  assert.equal(within.build, undefined, "a $0.20 build is inside its own $0.25");
-  assert.equal(within.repair, undefined, "and a $0.20 repair inside its own, though the two come to $0.40");
-  // The Flow is configured with the ceiling for both phases: 64 calls at $0.25 still total $0.25.
-  assert.deepEqual(within.core.settingsRequests[0]?.flow.metadata.adaptationPolicySettings, { maxEstimatedCostUsdPerRun: 0.25 });
-  assert.deepEqual(within.core.settingsRequests[1]?.flow.metadata.adaptationPolicySettings, { maxEstimatedCostUsdPerRun: 0.25 });
+test("a build and its repair are each held to Core's ceiling on its own: 0.8 of it apiece passes, and either one over it fails", async () => {
+  const under = Number((LAB_CEILING_USD * 0.8).toFixed(9));
+  const over = Number((LAB_CEILING_USD * 1.04).toFixed(9));
+  const within = await buildThenRepair(under, under);
+  assert.equal(within.build, undefined, "a build at 0.8 of the ceiling is inside its own ceiling");
+  assert.equal(within.repair, undefined, "and a repair at 0.8 inside its own, though the two come to 1.6 times it");
+  // The Flow is configured with the ceiling for both phases: 64 calls at the ceiling still total the ceiling.
+  assert.deepEqual(within.core.settingsRequests[0]?.flow.metadata.adaptationPolicySettings, { maxEstimatedCostUsdPerRun: LAB_CEILING_USD });
+  assert.deepEqual(within.core.settingsRequests[1]?.flow.metadata.adaptationPolicySettings, { maxEstimatedCostUsdPerRun: LAB_CEILING_USD });
 
-  const buildOver = await buildThenRepair(0.26, 0.2);
-  assert.ok(isCostBreach(buildOver.build, 0.26), `a $0.26 build fails on its own: ${String(buildOver.build)}`);
+  const buildOver = await buildThenRepair(over, under);
+  assert.ok(isCostBreach(buildOver.build, over), `a build over the ceiling fails on its own: ${String(buildOver.build)}`);
   assert.equal(buildOver.repair, undefined, "and does not count against its repair");
 
-  const repairOver = await buildThenRepair(0.2, 0.26);
+  const repairOver = await buildThenRepair(under, over);
   assert.equal(repairOver.build, undefined);
-  assert.ok(isCostBreach(repairOver.repair, 0.26), `a $0.26 repair fails on its own: ${String(repairOver.repair)}`);
+  assert.ok(isCostBreach(repairOver.repair, over), `a repair over the ceiling fails on its own: ${String(repairOver.repair)}`);
 });
 
 /**
@@ -419,7 +421,7 @@ test("a verification record that cannot be read says so, and settles the run all
 });
 
 test("only a create-flow run readies a repair of the Flow it built, and a repair that cannot be read back is recorded, not raised", async () => {
-  const adapt = new LiveLlmRun(planLiveLlmExecution(profile({})), CREDENTIAL);
+  const adapt = new LiveLlmRun(planAtLabCeiling(profile({})), CREDENTIAL);
   await assert.rejects(adapt.repairAuthorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /Only a create-flow run repairs the Flow it built/u);
 
   const { core, run, written, settle } = await settleBuildOnce(proposedBuild);
@@ -551,10 +553,11 @@ test("a re-author's retries are counted too, and an attempt whose calls cannot b
 
 // `run-mup2u8o3-6697c4be`: the build ended without a Flow
 // (`flow_bootstrap.evidence_budget_exhausted`) after spending $0.2969 of its
-// $0.25 ceiling. The breach was thrown before the lane saw the build, so the
-// product's failure was lost and the run was stamped a facility failure.
+// ceiling, then $0.25: about 1.19 times it. The breach was thrown before the
+// lane saw the build, so the product's failure was lost and the run was
+// stamped a facility failure. The test keeps that proportion to Core's ceiling.
 test("a build that ended without a Flow over its cost ceiling fails on the budget and carries the build's own failure", async () => {
-  const spent = 0.29693960399999997;
+  const spent = Number((LAB_CEILING_USD * 1.18775841599).toFixed(9));
   const overspentWithoutFlow: CreatedFlowBuild = {
     ...proposedBuild,
     outcome: "failed",
@@ -563,7 +566,7 @@ test("a build that ended without a Flow over its cost ceiling fails on the budge
     accounting: { ...proposedBuild.accounting!, estimatedCostUsd: spent },
     failure: { code: "flow_bootstrap.evidence_budget_exhausted", stage: null, httpStatus: null },
   };
-  const { settle } = await settleBuildOnce(overspentWithoutFlow, { maxCallsPerRun: 64, maxEstimatedCostUsd: 0.25 });
+  const { settle } = await settleBuildOnce(overspentWithoutFlow, { maxCallsPerRun: 64, maxEstimatedCostUsd: LAB_CEILING_USD });
   const error = await settle().then(() => undefined, (caught: unknown) => caught);
   assert.ok(isCostBreach(error, spent), `the category stays the budget's: ${String(error)}`);
   const cause = (error as RunnerFailure).cause;
@@ -571,7 +574,7 @@ test("a build that ended without a Flow over its cost ceiling fails on the budge
   assert.equal((cause.details?.failure as { code?: string } | undefined)?.code, "flow_bootstrap.evidence_budget_exhausted");
 
   // A build that did propose a Flow and overspent carries nothing: the lane goes on to judge it.
-  const { settle: settleProposed } = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, estimatedCostUsd: spent } }, { maxCallsPerRun: 64, maxEstimatedCostUsd: 0.25 });
+  const { settle: settleProposed } = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, estimatedCostUsd: spent } }, { maxCallsPerRun: 64, maxEstimatedCostUsd: LAB_CEILING_USD });
   const proposedError = await settleProposed().then(() => undefined, (caught: unknown) => caught);
   assert.ok(isCostBreach(proposedError, spent));
   assert.equal((proposedError as RunnerFailure).cause, undefined);

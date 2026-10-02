@@ -9,8 +9,7 @@
 // operator still allows is a consequence (`--llm-permit`).
 
 import { DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, isLlmModel, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
-import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, automationStudioLlmRunCostCeilingUsd } from "fluxiq/automation-studio";
-import { LIVE_LLM_BUILD_COST_CEILING_USD } from "./build-cost-ceiling.js";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../failure.js";
 
 /**
@@ -82,8 +81,14 @@ export type LiveLlmPlan = {
  * refuses with a message naming the option at fault. Nothing here contacts a
  * provider: a profile that cannot be executed within its own stated bounds
  * fails before a run starts and before a key is read.
+ *
+ * `buildCostCeilingUsd` is the per-build ceiling the run's Core was started
+ * with (`liveLlmBuildCostCeilingUsd`, `./build-cost-ceiling.ts`); it is passed
+ * in rather than read here, so the plan cannot hold a build to a different
+ * number than the Core it runs against.
  */
-export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan {
+export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeilingUsd: number): LiveLlmPlan {
+  if (!Number.isFinite(buildCostCeilingUsd) || buildCostCeilingUsd <= 0) throw refusal(`the per-build cost ceiling ${buildCostCeilingUsd} is not a positive amount`);
   if (profile.mode !== "live") throw refusal("only a live LLM profile can reach a provider");
   if (profile.provider !== "deepseek") throw refusal(`--llm-provider ${describe(profile.provider)} is unsupported; Core resolves only deepseek`);
   const model = profile.model ?? DEFAULT_LLM_MODEL;
@@ -109,11 +114,11 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
   const runTokens = runTokenBudget(budget.maxTotalTokensPerRun, tokenLimits.maxTotalTokens, maxCalls);
   if (!Number.isSafeInteger(budget.timeoutMs) || budget.timeoutMs < 1) throw refusal(`--llm-timeout-ms ${budget.timeoutMs} must be a positive integer`);
   if (!Number.isFinite(budget.maxEstimatedCostUsd) || budget.maxEstimatedCostUsd <= 0) {
-    throw refusal(`--llm-max-cost-usd ${budget.maxEstimatedCostUsd} cannot authorize a live provider call; give a positive per-build limit at or below ${LIVE_LLM_BUILD_COST_CEILING_USD}`);
+    throw refusal(`--llm-max-cost-usd ${budget.maxEstimatedCostUsd} cannot authorize a live provider call; give a positive per-build limit at or below ${buildCostCeilingUsd}`);
   }
   // `--llm-max-cost-usd` is what one build may spend, not one call: Core's
   // ceiling lowered by the operator's number, and never raised by any.
-  const buildCeilingUsd = automationStudioLlmRunCostCeilingUsd(budget.maxEstimatedCostUsd);
+  const buildCeilingUsd = Math.min(buildCostCeilingUsd, budget.maxEstimatedCostUsd);
   return {
     profileId: profile.profileId,
     provider: "deepseek",

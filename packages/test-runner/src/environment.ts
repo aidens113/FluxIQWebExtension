@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { RunAllocation } from "./allocation.js";
+import { LAB_COST_CEILING_ENV, labCostCeilingValue } from "./live-llm/index.js";
 
 /**
  * Provider credentials belong to the test driver. Child processes receive an
@@ -63,11 +64,15 @@ export function webPanelHostModulePath(repositoryRoot: string): string {
  * runs (t227, 2026-10-01) left a `core.log` of six lines and could not be
  * debugged.
  */
-export function buildFluxIQEnvironment(allocation: RunAllocation, paths: TopologyPaths, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+export function buildFluxIQEnvironment(allocation: RunAllocation, paths: TopologyPaths, base: NodeJS.ProcessEnv = process.env, args: readonly string[] = process.argv): NodeJS.ProcessEnv {
   const hostModulePath = paths.hostModulePath ?? webPanelHostModulePath(paths.repositoryRoot);
+  // The per-build cost ceiling, from the run's flag, the environment or .env.local (`./live-llm/cost-ceiling-env.ts`);
+  // the Lab's plan reads the same sources (`liveLlmBuildCostCeilingUsd`), so Core and the Lab hold a build to one number.
+  const costCeiling = labCostCeilingValue(paths.repositoryRoot, args, base);
   return {
     FLUXIQ_BUILD_PROGRESS_TRACE: "1",
     ...withoutProviderSecrets(base),
+    ...(costCeiling === undefined ? {} : { [LAB_COST_CEILING_ENV]: costCeiling }),
     PORT: String(allocation.webPort),
     FLUXIQ_ROOT: allocation.fluxiqRoot,
     FLUXIQ_IMPORTER_ROOT: allocation.fluxiqRoot,
