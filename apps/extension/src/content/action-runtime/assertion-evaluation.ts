@@ -20,14 +20,58 @@
 // CSS transition -- so an observer would sleep through exactly the claims this
 // module exists to judge.
 //
+// A selector written inside a shadow root is looked for in the roots its
+// recorded host chain reaches (`../selector`'s `resolveShadowScope`, the scope
+// the resolver presses in), never in the light document around it, where it
+// means nothing. Until t195-w24a it was asked of the document alone, so a
+// control inside a widget -- bigbox's store chooser -- matched nothing however
+// plainly it was there, and a `visible` claim about it read as a subject that
+// never appeared.
+//
+// A `visible` claim that fails on an element that is there says which of two
+// things hid it, and the build's dry run, which checks a step whose effect
+// lasts rather than pressing it, reads which
+// (`domain/src/runtime/llm-evidence/node-run/hidden-target.ts`):
+//
+//   enclosed -- a container the element sits in is closed. An ancestor, across
+//     shadow boundaries, is not rendered (`display: none`, which the `hidden`
+//     attribute gives), is a `<details>` that is not open while the element is
+//     not its summary, or hides what it holds (`visibility: hidden` the element
+//     inherits). `actual` leads with the closed word `enclosed:`. The control is
+//     there and nothing offers it until something opens the container -- a step
+//     the Flow cannot take: bigbox's "Set as my store" inside the store
+//     chooser's closed flyout, in a Flow that never pressed the chip that opens
+//     it (`run-muq6lqnw-fdfa7aac`).
+//   itself -- every container is open and the element alone is not shown: its
+//     own `display`, `visibility`, opacity or box. `actual` is the sentence it
+//     always was. That is how a control withdrawn once its effect is in place
+//     looks -- a "Follow" hidden beside the "Following" that replaced it.
+//
 // The outcome carries its timing as well as its verdict, because without it the
 // verb cannot tell a claim that was false immediately from one that was false
 // for the whole window, and a test cannot tell a wait that ran from a wait that
 // was deleted. `validation-outcome.ts` turns the two into a status.
 
+import { resolveShadowScope } from "../selector";
+import { composedParent } from "../shadow-dom";
 import type { WebAutomationAssertRequest } from "../types";
 
-export type AssertionTarget = { selector?: string | undefined; element?: Element | undefined };
+/**
+ * What a claim is about. `shadowHosts` is the recorded host chain of a target
+ * written inside a shadow root, so its `selector` is asked in those roots.
+ */
+export type AssertionTarget = { selector?: string | undefined; element?: Element | undefined; shadowHosts?: readonly string[] | undefined };
+
+/**
+ * What a failed `visible` claim says when a container the element sits in is
+ * closed. The leading word is closed and is read by the domain's dry-run check
+ * (`domain/src/runtime/llm-evidence/node-run/hidden-target.ts`), the way
+ * `covered:` leads an actionability refusal; the rest is prose.
+ */
+const ASSERTION_ENCLOSED_ACTUAL = "enclosed: it is present inside a closed container, so it is not visible";
+
+/** What a failed `visible` claim says when the element alone is not shown. Pinned word for word by the harness. */
+const ASSERTION_HIDDEN_ACTUAL = "it is present but not visible";
 
 /**
  * What one attempt could say about the claim. This is the distinction the
@@ -121,8 +165,12 @@ function evaluateOnce(request: WebAutomationAssertRequest, target: AssertionTarg
     return { held: false, expected: `${where} is ${claim}`, actual: `nothing matched ${where}`, verdict: "pending" };
   }
   if (request.kind === "visible") {
-    const visible = isVisible(found);
-    return { held: visible, expected: `${where} is visible`, actual: visible ? "it is visible" : "it is present but not visible", verdict: "judged" };
+    // A closed container hides what it holds even where the element still
+    // reports a box of its own, as a closed `<details>` may.
+    const enclosed = isInsideClosedContainer(found);
+    const visible = !enclosed && isVisible(found);
+    const actual = visible ? "it is visible" : enclosed ? ASSERTION_ENCLOSED_ACTUAL : ASSERTION_HIDDEN_ACTUAL;
+    return { held: visible, expected: `${where} is visible`, actual, verdict: "judged" };
   }
   const enabled = isEnabled(found);
   return { held: enabled, expected: `${where} is enabled`, actual: enabled ? "it is enabled" : "it is present but disabled", verdict: "judged" };
@@ -130,8 +178,22 @@ function evaluateOnce(request: WebAutomationAssertRequest, target: AssertionTarg
 
 /** The element as it is right now: a selector is re-queried, a bare element must still be in the document. */
 function currentElement(target: AssertionTarget): Element | undefined {
-  if (target.selector) return document.querySelector(target.selector) ?? undefined;
+  if (target.selector) return firstMatch(target.selector, target.shadowHosts);
   if (target.element) return target.element.isConnected ? target.element : undefined;
+  return undefined;
+}
+
+/**
+ * The first element `selector` matches: in the document, or -- for a target
+ * recorded inside a shadow root -- in the roots its host chain reaches now,
+ * resolved again on every attempt so a widget that renders late is still found.
+ */
+function firstMatch(selector: string, hosts: readonly string[] | undefined): Element | undefined {
+  if (!hosts?.length) return document.querySelector(selector) ?? undefined;
+  for (const root of resolveShadowScope(hosts).roots) {
+    const found = root.querySelector(selector);
+    if (found) return found;
+  }
   return undefined;
 }
 
@@ -179,8 +241,37 @@ function urlOutcome(expected: string | undefined): AssertionAttempt {
 function isVisible(element: Element): boolean {
   const rect = element.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return false;
-  const style = getComputedStyle(element);
+  const style = viewOf(element).getComputedStyle(element);
   return style.visibility !== "hidden" && style.display !== "none" && Number.parseFloat(style.opacity) !== 0;
+}
+
+/**
+ * Whether a container the element sits in is closed, so it is not shown
+ * whatever its own style says. The header names the three ways a container
+ * closes; anything else that hides an element is the element's own.
+ */
+function isInsideClosedContainer(element: Element): boolean {
+  const view = viewOf(element);
+  const parent = composedParent(element);
+  // Visibility is inherited, so an element that is not visible while its parent
+  // is not either was hidden with its container, not on its own.
+  if (parent && !visibilityShown(view.getComputedStyle(element).visibility) && !visibilityShown(view.getComputedStyle(parent).visibility)) return true;
+  let child = element;
+  for (let ancestor = parent; ancestor; child = ancestor, ancestor = composedParent(ancestor)) {
+    if (view.getComputedStyle(ancestor).display === "none") return true;
+    // A closed disclosure renders its summary and nothing else.
+    if (ancestor.tagName === "DETAILS" && !ancestor.hasAttribute("open") && child.tagName !== "SUMMARY") return true;
+  }
+  return false;
+}
+
+function visibilityShown(visibility: string | undefined): boolean {
+  return visibility === undefined || visibility === "" || visibility === "visible";
+}
+
+/** The element's own window, as the actionability gate reads style: right in a frame, and in a stub page. */
+function viewOf(element: Element): Pick<Window, "getComputedStyle"> {
+  return element.ownerDocument?.defaultView ?? window;
 }
 
 /** `:disabled` covers an ancestor `<fieldset disabled>`; `aria-disabled` covers a control the page only claims is off. */

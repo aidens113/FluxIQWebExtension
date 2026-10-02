@@ -19,9 +19,14 @@
 //     `run-munpwa5r-e7aefe04`). It blocks, unless Core asks the step again on
 //     its own page (`AS/runtime/flow-draft/site-memory.ts`).
 //
-// The same page by location is not proof: two states can share a path, and a
-// step whose dialog never opened reads the same. It is the evidence this domain
-// has without acting, and it is the same test for both kinds of step.
+// A checked step's target that is there and withdrawn itself -- hidden while
+// everything around it is shown -- is read the same way (`./verify.ts`). One
+// hidden inside a closed container never reaches this: that is a step the Flow
+// cannot take, and the check answers `failed` (`./hidden-target.ts`).
+//
+// The same page by location is not proof: two states can share a path. It is
+// the evidence this domain has without acting, and it is the same test for both
+// kinds of step.
 
 import type { JsonObject } from "fluxiq/core";
 import type { WebLlmEvidenceToolExecution } from "../capture";
@@ -35,31 +40,47 @@ import type { WebNodeRun } from "./context";
  * `kind` is what Core asked: `step` runs the step again, and its command went
  * out (`acted`, so the page is not also said to be what it found); `verify`
  * only checked it. `failure` is the client's own word for the miss, said on an
- * unreproducible replay as it always was.
+ * unreproducible replay as it always was. `shown` is how a checked step's
+ * target is missing: `gone` from the page, or `withdrawn` -- there and hidden
+ * itself, which a replayed step never reports.
  */
-export async function webNodeReplayMissingTarget(run: WebNodeRun, kind: "step" | "verify", about: WebNodeReplayFacts, failure?: string): Promise<WebLlmEvidenceToolExecution> {
+export async function webNodeReplayMissingTarget(
+  run: WebNodeRun,
+  kind: "step" | "verify",
+  about: WebNodeReplayFacts,
+  failure?: string,
+  shown: "gone" | "withdrawn" = "gone"
+): Promise<WebLlmEvidenceToolExecution> {
   const page = await webNodeReplayPage(run);
   const actedOn = actedOnLocation(run.request.value);
   const replayed = kind === "step";
+  const withdrawn = !replayed && shown === "withdrawn";
+  const found = replayed ? undefined : withdrawn ? "hidden" : "missing";
   if (page && actedOn !== undefined && page.evidence.location === actedOn) {
     return webNodeReplayAnswerOnPage(run, page, {
       code: replayed ? WEB_NODE_REPLAY_RESULT_CODES.remembered : WEB_NODE_REPLAY_RESULT_CODES.present,
       said: replayed
         ? "the step's target is gone from the page it acted on, which is how a site that remembers the step looks; the step stays in the Flow"
-        : "the step's target is gone from the page it acted on, which is how its effect already in place looks; it was not run",
+        : withdrawn
+          ? "the step's target is hidden on the page it acted on while everything around it is shown, which is how its effect already in place looks; it was not run"
+          : "the step's target is gone from the page it acted on, which is how its effect already in place looks; it was not run",
       acted: false,
       ok: true,
       // A step that passed refused nothing, so it says no reason.
       about: { resultReason: undefined, nodeId: about.nodeId, assumed: about.assumed },
-      found: replayed ? undefined : "missing"
+      found
     });
   }
   return webNodeReplayAnswerOnPage(run, page, {
     code: WEB_NODE_REPLAY_RESULT_CODES.unreproducible,
-    said: replayed ? `the step did not run (${failure ?? "target_not_found"})` : "the step's target is not on the page, and this is not the page it acted on; it was not run",
+    said: replayed
+      ? `the step did not run (${failure ?? "target_not_found"})`
+      : withdrawn
+        ? "the step's target is hidden, and this is not the page it acted on; it was not run"
+        : "the step's target is not on the page, and this is not the page it acted on; it was not run",
     acted: replayed,
     about,
-    found: replayed ? undefined : "missing"
+    found
   });
 }
 
