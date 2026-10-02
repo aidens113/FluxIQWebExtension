@@ -60,16 +60,19 @@ STEPS below are the plan's names for work that has no branch of its own or preda
 - **Process.** Lanes iterate on their own branches; the supervisor merges in rounds and is the only one who commits,
   merges or pushes. Heavy commands go through `build-slots/heavy.sh`. No LLM call grants.
 
-**In flight. NO LIVE RUNS until every open row below is on dev (user, 2026-10-01: "you need to fix all these problems before running any more live tests").** Then merge dev into every lane tree, rebuild, and run (the Lab's behind-dev guard, t236, refuses a stale tree). Leads and workers cannot `git merge` (a hook refuses it): the supervisor merges dev into every tree.
-| Problem (evidence: `lab-runs/2026-10-01/run-*/steps/`) | Fix | State |
+**In flight. The user's fix list is on dev (Core b17c2bfa, downstream fef43a29); live runs resumed lane by lane on trees synced to dev** (the Lab's behind-dev guard, t236, refuses a stale tree). Leads and workers cannot `git merge` (a hook refuses it): the supervisor merges dev into every tree.
+| Fix (evidence: `lab-runs/2026-10-01/run-*/steps/`) | Result | State |
 | --- | --- | --- |
-| Node catalog is 41,122 of 62,216 chars of every decide request | Names plus one-line description; full definitions on request; trim output schema and tool descriptions | t235 lead, open |
-| No domain system prompt: the model is never told it operates a website for a person, what the view means, or the rules | Core seam for domain system instructions on every request; the web instructions | t237 lead, open |
-| Superseded list reads kept whole (164,577 chars); absolute URLs 49,353 | Newest read whole, earlier as short outcomes; relative links | on dev (t194 F40, F42: run 13's last request body 238,196 -> 144,732 chars; `core.recall_result`) |
-| Two cost counts; 8,000-token reply holds (real max 593 over 6,119 decisions); a purse per phase | One purse per Flow creation; decision reply allowance 2,000 | t234 lead, open (F41 cost endings: on dev) |
-| Completion refusals for answerability and start location; judge request size; judge calls missing from the call count | F44 they inform the judge; F45 judge request 28,214 -> 8,113 chars on run 36; F46 judge calls counted | on dev (t195, Core 4e8106c1) |
-| `find_on_page` as site search; opening capture refused | F31 opens the start location with no model call; F32 empty finds name the site's search fields | on dev (t174) |
-| Press under a popup; chat "hidden"; "Looking at the page" on every step; welcome screen | covered press names the close controls; chat says covered by a popup; describeCall headings; first screenshot after the send | on dev (t193) |
+| Node catalog names only; `core.describe_nodes` on request (t235) | earbuds 0003 body 70,148 -> 26,865 chars; est. tokens 20,754 -> 8,521 | on dev |
+| Domain system instructions on every model request (t237) | web-1, 1,964 chars; system message 3,667 -> 5,634 | on dev |
+| One purse per Flow creation; decision replies held at 2,000 tokens (t234) | +2 to +3 decisions at the old stop points; unpriced calls held at the largest seen | on dev |
+| Older reads as short outcomes; `core.recall_result` (lane C F42) | run 13 last request body 238,196 -> 144,732 | on dev |
+| Opening navigation; empty finds name the search fields (lane A F31-F32) | | on dev |
+| Covered presses name close controls; describeCall chat headings (lane B) | | on dev |
+| Completion informs, judge decides; judge request 28,214 -> 8,113 (lane D F43-F46) | | on dev |
+| Cache-stable prefix: routing situations into the window, tools in front (lane B W2b) | run 40 uncached 227.9k -> 151.4k | lane B resolving the dev merge |
+| Dev's 8 failing Core tests (7 intended expectations; an improve request ended not doable) | | lane D resolving the dev merge |
+| Live runs: crossborder (lane A, slot-1), earbuds (lane C, slot-3) through the chat at $0.10 | | running |
 
 **Decided.** One purse per Flow: assigned to t234 (above).
 
