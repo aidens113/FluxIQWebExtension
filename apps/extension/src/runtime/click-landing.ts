@@ -21,8 +21,14 @@
 // overrides the status, as it does a navigation's address: a check served 403
 // is still the person's to answer, not a refused page.
 //
-// - Only `web.dom.click` is watched, and only its own tab's top frame. A
-//   navigation in another tab, or in a child frame, is not the click's landing.
+// - Only a press is watched -- `web.dom.click`, a `web.dom.type` that sends its
+//   form (`submit`), and a `web.dom.keypress` of Enter -- and only its own tab's
+//   top frame. A navigation in another tab, or in a child frame, is not the
+//   press's landing. A typed search sent with Enter lands exactly as a press of
+//   its Search button does: t193's run 39 typed a bigbox search with `submit`,
+//   landed on the store's "Robot or human?" check that clears itself in eight
+//   seconds, was told only "Text entered, then Enter pressed", and spent six of
+//   its decisions looking at a check that was about to lift.
 // - Only a click that succeeded is judged; a failed click already says why. A
 //   click whose reply is lost because its page unloaded first is judged too: a
 //   refused landing is its failure, a check it landed on is judged as above,
@@ -176,7 +182,7 @@ export async function sendClickCheckingLanding(
   access: LandedTabAccess,
   pace?: OriginPace
 ): Promise<BrowserActionResult> {
-  if (action.actionType !== "web.dom.click") return await send();
+  if (!pressMayLand(action)) return await send();
   const watch = watchTopFrameNavigation(tabId);
   const opened = watchOpenedTab(tabId);
   try {
@@ -220,6 +226,13 @@ export async function sendClickCheckingLanding(
     watch.stop();
     opened.stop();
   }
+}
+
+/** Whether an action is a press whose page may navigate: a click, a typed entry sent with Enter, or Enter itself. */
+function pressMayLand(action: BrowserActionCommand): boolean {
+  if (action.actionType === "web.dom.click") return true;
+  if (action.actionType === "web.dom.type") return action.submit === true;
+  return action.actionType === "web.dom.keypress" && (action.key ?? action.text) === "Enter";
 }
 
 /** The tab a click was pressed in, the tab it opened, and when the click began. */
