@@ -114,6 +114,15 @@ test("binds from the production host seam and selects the sole trusted web clien
   // arrived here only to be refused (`../../../../docs` t126).
   assert.deepEqual(bound?.runsNodes?.initial, { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] });
   assert.deepEqual(bound?.runsNodes?.runnable, webRunnableNodeIds());
+  // The node that moves the page and the parameter Core writes the start
+  // location into, so a build's opening call is the Flow's first kept step
+  // (F31): found by what the node runs, so it is the navigation node.
+  assert.deepEqual(bound?.runsNodes?.arrival, { node: "web.output.browser-navigate", parameter: "url" });
+  const findDescription = bound?.tools.find(tool => tool.toolId === "web.find_on_page")?.description ?? "";
+  // F32: twelve searches of the home page for a product the site's own search
+  // would have found. It opens by saying which page it reads.
+  assert.match(findDescription, /^Reads only the page you are on, and is not the site's search \(the site's own search is a field\[search\] line\)\./u);
+  assert.equal(findDescription.length <= 2_000, true, `${findDescription.length} characters, over Core's 2,000`);
   assert.ok(!bound?.runsNodes?.runnable?.some(id => id.startsWith("builtin.")), "only this domain's own nodes are offered");
   assert.deepEqual(bound?.tools.map(tool => ({ toolId: tool.toolId, effect: tool.effect, repeatPolicy: tool.repeatPolicy, initialObservation: tool.initialObservation })), [
     // Observe-only, and deliberately without a repeat policy: a second target is a different request, and Core refuses an identical one.

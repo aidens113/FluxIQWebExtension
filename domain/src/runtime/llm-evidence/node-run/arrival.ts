@@ -19,6 +19,10 @@
 // process is held to the rule again rather than inheriting the first one's
 // arrival.
 //
+// **What it holds back.** Every node that acts or reads for the Flow. A look
+// (the observation node) is not held: it reads the page as it stands, because
+// it runs nothing and is never a step of the Flow (`./run.ts`).
+//
 // **Bounded like the repeated-refusal memory** (`../repeated-refusal.ts`,
 // REMEMBERED_ANSWERS), and for the same reason: a build that has moved on to
 // another flow has nothing to remember here, and letting its slot go costs at

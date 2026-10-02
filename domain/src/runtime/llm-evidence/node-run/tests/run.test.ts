@@ -46,6 +46,8 @@ test("the runtime offers detection beside Core's library verb, and says it runs 
   // it offers to it and a refusal names it back (`../../tools.ts`).
   assert.deepEqual(runtime.runsNodes, {
     initial: { node: SNAPSHOT, parameters: {}, consequences: [] },
+    // The node Core runs with the start location as the build's opening call.
+    arrival: { node: "web.output.browser-navigate", parameter: "url" },
     runnable: webRunnableNodeIds()
   });
 });

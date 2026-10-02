@@ -64,7 +64,7 @@ import {
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "./denied-keys";
 import { WEB_LLM_OBSERVED_STATE_KEYS } from "./observed-state";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
-import { createWebNodeArrivals, createWebNodeShownAddresses, runWebOutputNode, webObservationNodeId, webRunnableNodeIds } from "./node-run";
+import { createWebNodeArrivals, createWebNodeShownAddresses, runWebOutputNode, webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_NAVIGATION_ACTION } from "./node-run";
 import {
   createWebLlmTargetPackets,
   resolveWebPlanNodeParameters,
@@ -156,6 +156,13 @@ export type WebAutomationLlmEvidenceRuntime = {
    */
   runsNodes?: {
     initial?: JsonObject;
+    /**
+     * The node that goes to a location, and the parameter that names it. Core
+     * writes a build's start location into that parameter and runs the node as
+     * the build's opening call, so the step that reaches the page is the
+     * Flow's first kept step rather than one the model has to think of.
+     */
+    arrival?: { node: string; parameter: string };
     /**
      * The nodes this domain will actually run, by id. Core narrows the library
      * it offers the model to these.
@@ -251,6 +258,7 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
   // Which node one free look runs, read from this domain's own definitions
   // rather than named here (`./node-run/catalog.ts`).
   const observationNode = webObservationNodeId();
+  const arrivalNode = webRunnableNodeIds().find((id) => webRunnableNode(id)?.actionType === WEB_NAVIGATION_ACTION);
   const returnedEvidence = new Map<string, WebLlmSnapshotBinding>();
   const extractionHandles = createWebLlmExtractionHandles();
   const targetPackets = createWebLlmTargetPackets();
@@ -355,7 +363,7 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
       // Held to Core's 2,000 characters like the description above.
       {
         toolId: WEB_LLM_FIND_ON_PAGE_TOOL_ID,
-        description: "Search the page you are on for any words or attribute, and get every element that matches. The page you are shown is one line per element that has visible words or is a control, in page order: its handle (tN, copied exactly to act on it), its kind (link, button, field, select, checkbox, img, h2, ...), its words in quotes, and its state (=\"value\", checked, open, disabled, covered-by). A link's address follows it, ~ standing for the base the URL line names, and lines such as [main], - 3/16 (an item of a list) and --- below the fold --- say where things are. Everything else -- a closed menu's items, a collapsed panel, an icon with no words, text off screen, an id, class, name, test id, placeholder or any other attribute -- is found here: query is matched, ignoring case, against every element's words, label, value, options and address and every attribute's name and value, hidden elements included. Each match is one line: handle, kind, words, the attribute that matched when the words did not, and where it is (on screen, above, below, off-page, not rendered). Fifty matches to a page, in page order; the last line says how to ask for the next fifty with after. Observes only, and is never a step of the Flow.",
+        description: "Reads only the page you are on, and is not the site's search (the site's own search is a field[search] line). Search this page for any words or attribute, and get every element that matches. The page you are shown is one line per element that has visible words or is a control, in page order: its handle (tN, copied exactly to act on it), its kind (link, button, field, select, checkbox, img, h2, ...), its words in quotes, and its state (=\"value\", checked, open, disabled, covered-by). A link's address follows it, ~ standing for the base the URL line names, and lines such as [main], - 3/16 (an item of a list) and --- below the fold --- say where things are. Everything else -- a closed menu's items, a collapsed panel, an icon with no words, text off screen, an id, class, name, test id, placeholder or any other attribute -- is found here: query is matched, ignoring case, against every element's words, label, value, options and address and every attribute's name and value, hidden elements included. Each match is one line: handle, kind, words, the attribute that matched when the words did not, and where it is (on screen, above, below, off-page, not rendered). Fifty matches to a page, in page order; the last line says how to ask for the next fifty with after. Observes only, and is never a step of the Flow.",
         inputSchema: {
           type: "object",
           properties: { query: { type: "string", minLength: 1, maxLength: 200 }, after: { type: "integer", minimum: 0 } },
@@ -379,9 +387,14 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
     // already in front of it. The look's argument is this domain's, not the
     // model's, which is what makes it safe to take. `runnable` is said on both
     // paths: a domain that offered no observation node still runs only these.
-    runsNodes: observationNode
-      ? { initial: { node: observationNode, parameters: {}, consequences: [] }, runnable: webRunnableNodeIds() }
-      : { runnable: webRunnableNodeIds() },
+    // `arrival` is the node that moves the page, found by what it runs rather
+    // than by name, and its `url` parameter: Core writes a build's start
+    // location into it for the build's opening call.
+    runsNodes: present<NonNullable<WebAutomationLlmEvidenceRuntime["runsNodes"]>>({
+      initial: observationNode ? { node: observationNode, parameters: {}, consequences: [] } : undefined,
+      arrival: arrivalNode ? { node: arrivalNode, parameter: "url" } : undefined,
+      runnable: webRunnableNodeIds()
+    }),
     // Every call below reports the states it saw from its own captures
     // (`./capture.ts`, `withCallStates`), which is what makes this true.
     stateDigestsOnCalls: true,

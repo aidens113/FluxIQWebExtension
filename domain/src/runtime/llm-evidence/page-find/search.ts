@@ -12,6 +12,13 @@
 // off the page. When the words are not what matched, the field or attribute
 // that did is printed beside them, a window of about sixty characters around
 // the match, so the model can see why it matched without the whole value.
+//
+// A search that found nothing says what it searched (F32). On
+// `run-muqc07fh-eeffbc86` the model searched the home page twelve times for a
+// product name, each answered only `0 matches`, while the page held the site's
+// own search box: it took this tool for the site's search. So an empty answer
+// says this page holds none of it, that only this page was read, and how to
+// look across the site -- the site's search fields by handle, or a link.
 
 import { present } from "../present";
 import type { WebLlmEvidenceElement } from "../elements";
@@ -44,10 +51,20 @@ export function webLlmFindOnPage(evidence: WebLlmPageEvidence, query: string, af
   });
   const shown = matches.slice(after, after + WEB_LLM_FIND_PAGE_SIZE);
   const lines = [`${matches.length} ${matches.length === 1 ? "match" : "matches"} for ${quotedWords(query)}`];
+  if (matches.length === 0 && after === 0) lines.push(nothingHere(evidence));
   for (const { element, match } of shown) lines.push(matchLine(element, match, evidence));
   const left = matches.length - (after + shown.length);
   if (left > 0) lines.push(`… ${left} more: web.find_on_page ${JSON.stringify({ query, after: after + shown.length })}`);
   return present<WebLlmFindResult>({ schemaVersion: WEB_LLM_FIND_SCHEMA_VERSION, trust: evidence.trust, location: evidence.location, found: lines.join("\n") });
+}
+
+/** What an empty search says: only this page was read, and how to look across the site. */
+function nothingHere(evidence: WebLlmPageEvidence): string {
+  const fields = evidence.elements.filter((element) => webLlmElementKind(element) === "field[search]").map((element) => element.target);
+  const across = fields.length === 0
+    ? "To look across the site, follow a link to the page that lists it."
+    : `To look across the site, type it into the site's search field ${fields.join(" or ")} and submit it, or follow a link to the page that lists it.`;
+  return `Nothing on this page holds those words, hidden elements included; find_on_page reads only the page you are on, never the rest of the site. ${across}`;
 }
 
 /** Where an element matched: in its words, or in a named field or attribute's value or name. */

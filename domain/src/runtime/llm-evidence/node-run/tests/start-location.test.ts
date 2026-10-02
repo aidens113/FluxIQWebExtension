@@ -29,7 +29,8 @@ test("the free first look says where the Flow starts instead of that the page co
 
   assert.equal(looked.resultCode, "web.action.rejected.not_at_start_location");
   assert.deepEqual((looked.evidence as JsonObject).detail, { reason: "start_location_not_reached", startLocation: START });
-  // Nothing of the page is in it, because there is no page.
+  // Nothing of the page is in it, because there is no page. A tab that can be
+  // read is looked at as it stands (`./arrival.test.ts`); only this one refuses.
   assert.equal((looked.evidence as JsonObject).page, undefined);
 });
 

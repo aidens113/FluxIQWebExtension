@@ -176,8 +176,14 @@ carries an optional `startLocation`: where the Flow it writes starts, in the
 bound domain's own spelling, which Core carries and never parses
 (`!FluxIQ/.../runtime/flow-bootstrap/start-location.ts`). Given one, Core shows
 it in the bootstrap context and passes it to this domain on every tool call, and
-the domain refuses every call with `not_at_start_location` -- naming where to go
--- until the Flow has got there. The only call that runs from nowhere is the
+the domain refuses every call that acts or reads for the Flow with
+`not_at_start_location` -- naming where to go -- until the Flow has got there.
+A look (the observation node) is the exception since 2026-10-01: it reads the
+page as it stands, arrived or not, because it runs nothing and is never a step
+of the Flow; only a page that cannot be read -- the blank tab -- answers it
+`not_at_start_location`. The domain also names its arrival node and parameter
+(`runsNodes.arrival`: the navigation node and `url`), which Core runs with the
+start location as the build's opening call. The only call that runs from nowhere is the
 navigation whose destination is on the start location's origin; it runs with no
 current page, records the start location as the step's replay origin, and the
 state digest answers nothing rather than failing the step that reaches the page.
@@ -1819,8 +1825,10 @@ port drawn per run, so nothing written down beforehand could carry one. So the
 run passes it to Core as the bootstrap's **start location**
 (`generate-flow-bootstrap-adaptation`, `startLocation`). Core shows it to the
 model in the bootstrap context and passes it to the web domain on every tool
-call; the domain then refuses every call with `not_at_start_location`, naming
-where to go, until the Flow has got there
+call; the domain then refuses every call but a look with
+`not_at_start_location`, naming where to go, until the Flow has got there. A
+look reads the page as it stands; only a page that cannot be read answers it
+`not_at_start_location`
 (`domain/src/runtime/llm-evidence/node-run/start-location.ts`). The step that
 gets there is a step that ran, so it is in the draft, so it is in the Flow.
 

@@ -137,7 +137,10 @@ test("a new build of the flow forgets what the last one was shown and searched",
   await call(site, "call.press", { node: CLICK, parameters: { target: { handle: handleOf(looked, "Go") } } });
   const results = site.location()!;
 
-  // The opening call of the next build re-arms the rule: this build has not searched.
+  // The opening call of the next build re-arms the rule: this build has not
+  // searched. It opens on a blank tab, because a look reads the page as it
+  // stands and the results page would show this build the address itself.
+  site.blank();
   await arrive(site);
   const again = await call(site, "call.results", { node: NAVIGATE, parameters: { url: results } });
   assert.equal(again.resultCode, "web.action.rejected.address_not_shown");
@@ -172,10 +175,14 @@ test("every address a read returned may be followed, however many and however de
   assert.equal(went.resultCode, "web.action.succeeded");
 });
 
-/** The build's opening look, then the move to the start location. */
+/**
+ * The build's opening look, then the move to the start location. The look
+ * reads the page as it stands, so only the blank tab refuses it.
+ */
 async function arrive(site: ReturnType<typeof bigbox>): Promise<void> {
+  const blank = site.location() === undefined;
   const opening = await call(site, "initial.core.run_node", { node: SNAPSHOT, parameters: {} });
-  assert.equal(opening.resultCode, "web.action.rejected.not_at_start_location");
+  assert.equal(opening.resultCode, blank ? "web.action.rejected.not_at_start_location" : "web.inspect.succeeded");
   const went = await call(site, "call.start", { node: NAVIGATE, parameters: { url: START } });
   assert.equal(went.resultCode, "web.action.succeeded");
 }
@@ -225,7 +232,9 @@ function bigbox(options: { readRows?: JsonObject[]; extraLinks?: number } = {}) 
   return {
     runtime: createWebAutomationLlmEvidenceRuntime(gateway),
     navigations: () => [...navigated],
-    location: () => location
+    location: () => location,
+    /** The tab back to the blank one a browser opens on. */
+    blank: () => { location = undefined; }
   };
 }
 

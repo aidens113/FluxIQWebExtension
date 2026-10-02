@@ -5,5 +5,6 @@ export { webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSE
 export { runWebOutputNode } from "./run";
 export type { WebNodeRun } from "./context";
 export { createWebNodeArrivals, type WebNodeArrivals } from "./arrival";
+export { WEB_NAVIGATION_ACTION } from "./start-location";
 export { createWebNodeShownAddresses, type WebNodeShownAddresses } from "./shown-addresses";
 export { replayWebOutputNode, webNodeRecordCount, webNodeReplayCall, webNodeReplayStatement, WEB_LLM_REPLAY_KEY, type WebNodeReplayStatement } from "./replay";
