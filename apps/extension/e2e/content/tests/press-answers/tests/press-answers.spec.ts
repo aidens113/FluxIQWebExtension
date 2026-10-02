@@ -94,6 +94,44 @@ test("crossborder: the coupon's busy first claim is refused, not collected; the 
   ]);
 });
 
+// t174 F40 (`run-muqk4u32-0b36e58f`): with the colour un-chosen, Add to cart
+// writes "Please select a Color." under the options -- outside the buy bar the
+// button sits in -- and adds nothing. The click read the silence inside the bar
+// as an ignored press, pressed again and reported success, in exploration, the
+// dry run and playback alike.
+test("crossborder: Add to cart with the colour un-chosen is refused by the page, pressed once, and adds nothing; chosen again, it adds", async ({ openHarness, page }) => {
+  test.setTimeout(120_000);
+  const harness = await openHarness("crossborder-marketplace");
+  const state = async (): Promise<MarketState> => (await harness.finalState()).state as unknown as MarketState;
+  await page.goto(new URL(`/scenarios/crossborder-marketplace/item/${OFFICIAL}`, harness.lab.origin).href);
+  // As in the run: the chat pill over Add to cart, the welcome coupons over the page.
+  await expect(page.locator(`.${market.chatPill}`)).toBeVisible({ timeout: 6_000 });
+  await expect(page.getByText("Never miss a price drop", { exact: true })).toBeVisible({ timeout: 8_000 });
+
+  // Space Grey is the item page's own choice, so pressing it un-chooses it.
+  const spaceGrey = await pathTo(page, marketOption("Color", "Space Grey"));
+  const unchosen = await harness.runAction({ commandId: "unchoose", actionType: "web.dom.click", selector: spaceGrey });
+  expect(unchosen.status, actualOf(unchosen)).toBe("succeeded");
+
+  const refused = await harness.runAction({ commandId: "add-refused", actionType: "web.dom.click", selector: `[data-testid="add-to-cart"]` });
+  expect(refused.status, actualOf(refused)).toBe("failed");
+  expect(refused.failure?.code, actualOf(refused)).toBe("web.action.refused_by_page");
+  expect(refused.failure?.retryable).toBe(false);
+  expect(refused.failure?.effect).toBe("unacted");
+  expect(actualOf(refused), "a refused press is never pressed once more").not.toMatch(/pressed once more/u);
+  expect(`${refused.failure?.expected} ${refused.failure?.actual} ${refused.message ?? ""}`, "the result says what was concluded, never the page's words").not.toMatch(/select a color/iu);
+  await expect(page.locator(`.${market.errorTip}`)).toHaveText("Please select a Color.");
+  await page.waitForTimeout(1_500);
+  expect((await state()).cart, "the refused press added nothing").toEqual([]);
+  await expect(page.locator(`.${market.cartBadge}`)).toHaveText("0");
+
+  const chosen = await harness.runAction({ commandId: "choose", actionType: "web.dom.click", selector: spaceGrey });
+  expect(chosen.status, actualOf(chosen)).toBe("succeeded");
+  const added = await harness.runAction({ commandId: "add", actionType: "web.dom.click", selector: `[data-testid="add-to-cart"]` });
+  expect(added.status, actualOf(added)).toBe("succeeded");
+  await expect.poll(async () => (await state()).cart.map((line) => `${line.listingId} ${line.choice.color} x${line.quantity}`), { timeout: 5_000 }).toEqual([`${OFFICIAL} Space Grey x1`]);
+});
+
 // ---- bigbox-retail -----------------------------------------------------------
 
 type BigboxState = { storeId: string; promo: string };

@@ -102,7 +102,13 @@ const NAMED: ReadonlyArray<readonly [string, string, string | undefined]> = [
   [WEB_AUTOMATION_FAILURE_CODES.TRANSPORT_TRANSIENT, "action_failed", "channel_to_page_failed"],
   [WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE, "invalid_input", "node_not_runnable_here"],
   [WEB_AUTOMATION_FAILURE_CODES.NOT_IMPLEMENTED, "invalid_input", "node_not_runnable_here"],
-  [WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, "invalid_input", "parameter_not_readable"]
+  [WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, "invalid_input", "parameter_not_readable"],
+  // t174 F40: the page refused the press and said so. Both arrived as a bare
+  // `action_failed` -- the coupon's busy line at run-muqk4u32 step 0021 read
+  // "Didn't work: the step wasn't accepted" -- and the colour Add to cart
+  // refused had no code of its own at all.
+  ["web.action.refused_by_page", "refused_by_page", "page_needs_something_first"],
+  [WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, "refused_by_page", "page_busy_try_later"]
 ];
 
 test("every failure code the page can send is named, and only the two that name nothing stay bare", () => {
@@ -125,6 +131,24 @@ test("every failure code the page can send is named, and only the two that name 
   for (const code of Object.values(WEB_AUTOMATION_FAILURE_CODES)) {
     const reason = refusalFor(code).detail?.reason;
     if (reason !== undefined) assert.ok(WEB_LLM_TOOL_REJECTION_REASONS.includes(reason), `${code} answered with an unlisted reason ${reason}`);
+  }
+});
+
+test("a page's refusal says which kind it was in words Core's repeat guard reads one way each, and none of the page's own", () => {
+  // Core's repeat guard lets a call be made again on the same page only when its
+  // result code or reason says to try later (`RETRY_LATER` in
+  // `AS/runtime/llm/repeat-guard/outcomes.ts`, restated here). A busy page may be
+  // pressed again; a page that needs a choice first is answered the same way
+  // until the choice is made, so its words must not say "later".
+  const RETRY_LATER = /rate[_-]?limit|too[_-]?many|throttl|retry|disabled|busy|not[_-]?ready|loading|timed[_-]?out|timeout|try[_-]?again/iu;
+  const needs = webActionFailureRefusal({ status: "failed", failure: { code: "web.action.refused_by_page", actual: "Please select a Color." } });
+  const busy = webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, actual: "Network busy, please try again" } });
+  assert.equal(RETRY_LATER.test(`web.action.rejected.${needs.code} ${needs.detail?.reason ?? ""}`), false);
+  assert.equal(RETRY_LATER.test(`web.action.rejected.${busy.code} ${busy.detail?.reason ?? ""}`), true);
+  for (const refusal of [needs, busy]) {
+    const said = JSON.stringify(refusal);
+    assert.equal(/select a color|network busy/iu.test(said), false, `a refusal repeated the page's notice: ${said}`);
+    assert.equal(refusal.personNeeded, undefined);
   }
 });
 

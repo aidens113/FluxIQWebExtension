@@ -323,6 +323,31 @@ export function actionRateLimited(
 }
 
 /**
+ * A press the page refused because it needs something first, and said so in a
+ * line beside the control (`rate-limit-notice.ts`, `notice.needs`):
+ * crossborder's Add to cart with no colour chosen. REFUSED_BY_PAGE is not
+ * retryable -- the same press is answered the same way until the page has what
+ * it asked for -- and states the act did not happen. The texts say what was
+ * concluded, never what the line wrote: the model reads that on the page.
+ */
+export function actionRefusedByPage(
+  action: BrowserActionCommand,
+  startedAt: number,
+  notice: RateLimitNotice,
+  evidence: ActionResultEvidence = {}
+): BrowserActionResult {
+  const expected = "the page accepts the press";
+  const actual = `the page answered the press ${notice.afterMs} ms after it with a line beside the control saying it needs something first, and did nothing`;
+  const validation = boundValidation({ status: "failed", expected, actual });
+  return buildResult(action, startedAt, {
+    status: "failed",
+    validation,
+    message: "Action refused by the page: it needs something first, which it says beside the control.",
+    failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.REFUSED_BY_PAGE, { expected, actual })
+  }, evidence);
+}
+
+/**
  * A press the page answered with a robot check a person must answer: one only
  * a person can, or one that said it would clear by itself and had not within
  * the wait (`robot-check/robot-check-watch.ts`). USER_INTERVENTION_REQUIRED
