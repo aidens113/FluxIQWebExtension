@@ -2834,6 +2834,19 @@ lab-runs/
     provider-failures.local.json
 ```
 
+A model step's `meta.json` says whose money it spent. `part` is `creation` for
+a call inside a Flow's creation build, `reauthor` for one inside a refuted
+result's re-author build, and `null` for everything else: the chat
+interpreter, the playback run, its result check and its diagnose/patch ladder.
+A creation draws on the Flow's one creation purse (`FLUXIQ_LLM_RUN_COST_CEILING_USD`,
+$0.10; the chat interpreter's cost is carried into it). A re-author and its
+ladder draw on the run's own recovery ceiling. So summing a run by `phase`
+alone mixes two ceilings: group by `part` first. `phase` is `read` for the
+build's reading of its instructions. `costUsd` is the provider's reported cost
+even for a reply Core refused (`llm.provider_output_invalid`, truncated
+output), because the call was paid for either way. The index's Cost is the run's whole
+total across both ceilings, not one purse.
+
 How a run fills it:
 
 1. Before Core starts, the Lab creates the folder and `steps/`, writes
