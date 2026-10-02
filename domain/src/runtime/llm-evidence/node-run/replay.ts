@@ -42,7 +42,8 @@
 //
 // **Nothing here shows the model a page it has not earned.** A replayed step
 // that failed carries the page, because that is the page a correction has to be
-// made from; one that worked carries a line saying so and nothing else.
+// made from; one that worked carries a line saying so and nothing else -- a
+// list read's line says what it read, in counts.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
@@ -60,6 +61,7 @@ import {
   webNodeReplayAnswer as answer,
   webNodeReplayAnswerWithPage as answerWithPage,
   webNodeReplayPermissionReason as permissionReason,
+  webNodeReplayReadSaid as readSaid,
   type WebNodeReplayFacts
 } from "./replay-answer";
 import type { WebNodeRun } from "./context";
@@ -329,15 +331,19 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // What the step read then and what it reads now, each counted the same way:
   // from a list read's own account, and otherwise the longest list
   // (`webNodeProduced`). What counts as a change is `readChange`.
-  const changed = readChange(recordedProduced(value.produced), webNodeProduced(result.payload as JsonValue | undefined));
+  const payload = result.payload as JsonValue | undefined;
+  const changed = readChange(recordedProduced(value.produced), webNodeProduced(payload));
   if (changed !== undefined) {
     return await answerWithPage(run, REPLAY_RESULT_CODES.changed, changed, true, { resultReason: undefined, nodeId: node.definitionId, assumed });
   }
   // A step that replayed refuses nothing and tells nothing apart, so it says
   // neither of those; the answers above it are the ones a reader has to
   // separate. What its parameters assumed it does say, because that is as true
-  // of a step that worked as of one that did not.
-  return answer(REPLAY_RESULT_CODES.replayed, "the step ran again", true, { resultReason: undefined, nodeId: undefined, assumed });
+  // of a step that worked as of one that did not. A list read says what it
+  // read, because its line is all the judge of a build's test sees of it
+  // (`./replay-answer.ts`); every other step says only that it ran.
+  const said = readSaid(payload, isJsonRecord(parameters.extractList) ? parameters.extractList.where : undefined) ?? "the step ran again";
+  return answer(REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed });
 }
 
 /** How many rows a reading node's payload holds: the longest list it carries. */
