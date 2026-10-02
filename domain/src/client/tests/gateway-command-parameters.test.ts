@@ -175,12 +175,19 @@ assert.deepEqual(
   webAutomationReadActionParameters({ extractList: { item: "li", fields: { card: { kind: "text", handling: "encrypt" } } } }).lifted.extractList?.fields,
   { card: { kind: "text", handling: "encrypt" } }
 );
+// A member the field's kind does not take is dropped and the field read by its
+// kind, never refused (t194-w45): a rerun that changes a field's kind leaves the
+// old kind's member behind, and the read the model chose still runs.
+for (const [fields, read] of [
+  [{ title: { kind: "text", selector: "h3", attribute: "title" } }, { title: { kind: "text", selector: "h3" } }],
+  [{ title: { kind: "link", header: "Title" } }, { title: { kind: "link" } }]
+] as Array<[JsonObject, JsonObject]>) {
+  assert.deepEqual(webAutomationReadActionParameters({ extractList: { item: "li", fields } }).lifted.extractList?.fields, read, JSON.stringify(fields));
+}
 const malformedSpecs: Array<[why: string, fields: JsonObject]> = [
   ["an attribute field naming no attribute", { href: { kind: "attribute", selector: "a" } }],
   ["an attribute field naming an empty attribute", { href: { kind: "attribute", selector: "a", attribute: "" } }],
   ["a column field naming no header", { price: { kind: "column" } }],
-  ["an attribute on a kind that reads none", { title: { kind: "text", selector: "h3", attribute: "title" } }],
-  ["a header on a kind that reads none", { title: { kind: "link", header: "Title" } }],
   ["an unknown kind", { title: { kind: "html", selector: "h3" } }],
   ["a spec with no kind", { title: { selector: "h3" } }],
   ["an empty selector", { title: { kind: "text", selector: "" } }],

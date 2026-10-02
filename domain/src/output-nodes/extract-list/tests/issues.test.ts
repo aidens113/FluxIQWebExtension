@@ -63,7 +63,8 @@ test("each malformed shape is refused with the code for its part", () => {
     [{ ...good, fields: { name: 4 } }, ["web.extract_list.invalid_field"]],
     [{ ...good, fields: { name: { kind: "html" } } }, ["web.extract_list.invalid_field"]],
     [{ ...good, fields: { name: { kind: "attribute", selector: "a" } } }, ["web.extract_list.invalid_field"]],
-    [{ ...good, fields: { name: { kind: "text", header: "Name" } } }, ["web.extract_list.invalid_field"]],
+    // A member the kind does not take is dropped, not refused (t194-w45).
+    [{ ...good, fields: { name: { kind: "text", header: "Name" } } }, []],
     [{ ...good, fields: { name: { kind: "text", handling: "hide" } } }, ["web.extract_list.invalid_field"]],
     [{ ...good, fields: { name: { kind: "text", css: ".name" } } }, ["web.extract_list.unknown_field_key"]],
     [{ ...good, fields: { email: { kind: "text", handling: "exclude" } } }, ["web.extract_list.all_fields_excluded"]],

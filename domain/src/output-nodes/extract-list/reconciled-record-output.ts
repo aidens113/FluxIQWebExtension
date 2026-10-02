@@ -39,6 +39,11 @@
 // same reason: the node knows where its rows are, the catalog tells a model to
 // leave it out, and a path naming anywhere else can only find nothing.
 //
+// **Except which kept columns are stored**, when the author's schema names a
+// subset of the field map: the rest were read only to filter by, and are left
+// out of the read and the schema alike (`./declared-columns.ts`, live run 11's
+// `plus` and `ad`).
+//
 // A field's **label** is the one part of the schema an author does decide, and
 // it is kept: a recording's own record output carries the names the user gave
 // their columns (`domain/src/web-panel-host.ts`), and reconciling must leave a
@@ -61,10 +66,16 @@ const SCHEMA_ONLY = "schema-only";
  * The record output the node saves under: the author's, with the columns the
  * extraction reads and the records path the node supplies.
  *
+ * `columns` are the kept columns the author declared, when the dispatch
+ * narrowed the read to them (`./declared-columns.ts`). A column the read still
+ * takes for an ordering and the author did not declare is then left out of the
+ * schema, so Core's capture, which copies each row by the schema, does not
+ * store it. An excluded column stays declared, as it always is (D12).
+ *
  * A value that is not an object is handed back untouched, so the dispatch's
  * parse refuses it with its own codes as it always did.
  */
-export function webAutomationReconciledRecordOutput(authored: JsonValue, request: WebAutomationExtractListRequest): JsonValue {
+export function webAutomationReconciledRecordOutput(authored: JsonValue, request: WebAutomationExtractListRequest, columns?: ReadonlySet<string>): JsonValue {
   if (!isJsonObject(authored)) return authored;
   const schema = webAutomationRecordOutput({
     datasetId: SCHEMA_ONLY,
@@ -72,7 +83,10 @@ export function webAutomationReconciledRecordOutput(authored: JsonValue, request
     request,
     fieldLabels: authoredFieldLabels(isJsonObject(authored.schema) ? authored.schema : undefined)
   }).schema;
-  return { ...authored, schema: schema as unknown as JsonValue, recordsPath: WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH };
+  const stored = columns === undefined
+    ? schema
+    : { ...schema, fields: schema.fields.filter((field) => columns.has(field.id) || field.handling === "exclude") };
+  return { ...authored, schema: stored as unknown as JsonValue, recordsPath: WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH };
 }
 
 /**
