@@ -39,7 +39,7 @@ function form(submit?: Record<string, unknown>): unknown {
   return { querySelector: () => (submit ? { getAttribute: (name: string) => (submit[name] as string | undefined) ?? null, textContent: submit.textContent ?? "" } : null) };
 }
 
-function run(typeAction: Awaited<ReturnType<typeof installPlatform>>, element: Element, keeps = true, submit?: { sends: boolean; pressed: string[]; status?: string }): string {
+function run(typeAction: Awaited<ReturnType<typeof installPlatform>>, element: Element, keeps = true, submit?: { sends: boolean; pressed: string[]; status?: string | undefined }): string {
   let said = "";
   const deps = {
     resolveTarget: () => ({ element, resolution: {} }),
