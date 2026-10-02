@@ -534,6 +534,35 @@ for them exactly as `captureStateDigest` and `observeRouteState` would, and a
 search reads as the same state as a look. The route state names every dialog,
 every blocker and every control.
 
+A Flow node keeps a route signature of the page it started on and the page it
+left (t243). The host runtime's `signRouteState`
+(`route-state/signature.ts`, `web-route.v1`) reduces a route state to hashes
+alone: `path` is the FNV-1a hash of the path's shape (lowercased, a segment
+holding a digit read as `#`, one longer than 24 characters as `*`, so
+`/p/123` and `/p/456` are one shape); `layers` hashes the sorted distinct
+dialog and blocker names, or is `""` when nothing stands in front of the page;
+`controls` is a bottom-64 sketch of the distinct control names (the 64
+smallest of their FNV-1a hashes, each passed through MurmurHash3's finaliser
+so numbered names do not cluster); and `count` is how many distinct control
+names there were. Names are whitespace-collapsed, trimmed and lowercased
+first. A signature holds no page text, title or path, and stays under Core's
+2,048-character bound. `compareRouteSignatures`
+(`route-state/compare-signatures.ts`) reports `closeness`, the Jaccard index of
+the two control sets estimated from the sketches (exact when neither page had
+more than 64 controls; 1 when both have none, 0 when one has none), and
+matches only when `layers` are equal, path shapes are equal and `closeness` is
+at least 0.5, so a page with a popup open never matches the same page without
+it. A signature of any other version never matches. A node also keeps its
+step's effect: `signRouteEffect(before, after)` (`route-state/effect/sign.ts`,
+`web-effect.v1`) records, with the same names and hashes as `controls`, the 16
+smallest hashes of the control names the step added and of those it removed,
+and the path shape it moved to when that changed. When the step cannot run,
+`routeEffectHolds(effect, observed)` (`route-state/effect/holds.ts`) holds only
+when the step added something, every added hash is among the observed page's
+exact control hashes, and any recorded path shape is the observed one; it never
+tests `removed`, because a layer the run itself opened, such as a store picker,
+may still show controls the recorded step removed.
+
 Core carries every evidence entry in call order beside the complete draft and
 history; the domain declares `page` (and the packet's `elements`, `dialogs` and
 `blockedBy`) as its observed-state keys, so each earlier page is replaced by

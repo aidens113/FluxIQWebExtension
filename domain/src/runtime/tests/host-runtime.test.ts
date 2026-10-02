@@ -18,6 +18,7 @@ import {
   type WebAutomationHostRuntimeBoundary,
   type WebAutomationHostRuntimeGateway
 } from "../host-runtime";
+import { compareWebAutomationRouteSignatures, webAutomationRouteEffect, webAutomationRouteEffectHolds, webAutomationRouteSignature } from "../route-state";
 import { WEB_STATE_DIFF_SCHEMA_VERSION } from "../state-diff";
 
 const CLICK_NODE_ID = webAutomationOutputNodeId("web.dom.click");
@@ -209,6 +210,40 @@ test("the route state a Router tests is the sanitized packet projected: location
   assert.equal(typeof page.controls, "string");
   assert.doesNotMatch(JSON.stringify(state), /leaked-token|4111111111111111|#got-it|#card/u);
   assert.deepEqual(boundary.routeStatePaths?.map((entry) => entry.path), ["state.page.path", "state.page.location", "state.page.title", "state.page.dialog", "state.page.blockedBy", "state.page.controls"]);
+});
+
+// t243: Core records a signature of each node's pre- and post-state and asks
+// the host whether a recorded one is the page observed now.
+test("the boundary signs a route state and compares two signatures with the route-state functions", () => {
+  const boundary = createWebAutomationHostRuntime(gateway([]).gateway);
+  assert.equal(typeof boundary.signRouteState, "function");
+  assert.equal(typeof boundary.compareRouteSignatures, "function");
+  const cart: JsonObject = { page: { path: "/cart", controls: "Proceed to checkout | Remove item" } };
+  const popup: JsonObject = { page: { path: "/cart", dialog: "Join our newsletter", controls: "Proceed to checkout | Remove item" } };
+  assert.deepEqual(boundary.signRouteState!(cart), webAutomationRouteSignature(cart));
+  const recorded = boundary.signRouteState!(cart);
+  const observed = boundary.signRouteState!(popup);
+  assert.deepEqual(boundary.compareRouteSignatures!(recorded, recorded), compareWebAutomationRouteSignatures(recorded, recorded));
+  assert.deepEqual(boundary.compareRouteSignatures!(recorded, observed), compareWebAutomationRouteSignatures(recorded, observed));
+  assert.equal(boundary.compareRouteSignatures!(recorded, recorded).matches, true);
+  assert.equal(boundary.compareRouteSignatures!(recorded, observed).matches, false);
+});
+
+// t243: Core records the effect of each node's step and asks the host whether
+// it is already on the page when the step cannot run.
+test("the boundary signs a step's effect and judges it with the route-state functions", () => {
+  const boundary = createWebAutomationHostRuntime(gateway([]).gateway);
+  assert.equal(typeof boundary.signRouteEffect, "function");
+  assert.equal(typeof boundary.routeEffectHolds, "function");
+  const product: JsonObject = { page: { path: "/p/1042", controls: "Add to cart | Quantity" } };
+  const added: JsonObject = { page: { path: "/p/1042", controls: "Add to cart | Quantity | View cart | Continue shopping" } };
+  const outOfStock: JsonObject = { page: { path: "/p/2077", controls: "Quantity | Notify me" } };
+  const effect = boundary.signRouteEffect!(product, added);
+  assert.deepEqual(effect, webAutomationRouteEffect(product, added));
+  assert.equal(boundary.routeEffectHolds!(effect, added), webAutomationRouteEffectHolds(effect, added));
+  assert.equal(boundary.routeEffectHolds!(effect, added), true);
+  assert.equal(boundary.routeEffectHolds!(effect, outOfStock), webAutomationRouteEffectHolds(effect, outOfStock));
+  assert.equal(boundary.routeEffectHolds!(effect, outOfStock), false);
 });
 
 test("the boundary's expectation evaluator judges conditions through the same gateway", async () => {
