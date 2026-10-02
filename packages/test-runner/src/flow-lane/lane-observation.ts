@@ -79,7 +79,7 @@ export function recordingLaneProbeObservation(input: {
     ? { reportedVerdict: null, automationFailureReported: null }
     : automationFailure
       ? { reportedVerdict: "failed", automationFailureReported: { category: automationFailure.category, ...(automationFailure.code === undefined ? {} : { code: automationFailure.code }) } }
-      : actions.every((action) => action.status === "succeeded")
+      : actions.every((action) => action.status === "succeeded" || action.status === "skipped")
         ? { reportedVerdict: "passed", automationFailureReported: null }
         : { reportedVerdict: "failed", automationFailureReported: { category: "ambiguous_or_unknown" } };
   return {
@@ -186,7 +186,7 @@ function reportedVerdict(run: PersistedFlowRunOutcome): RunEvaluation["reportedV
   // run -- which is what this lane exists to measure, so it would have
   // measured the opposite of the truth.
   if (run.status !== "succeeded") return "failed";
-  if (!((run.actions.every((action) => action.status === "succeeded") && !run.failure) || absorbedEveryFailure(run.actions))) return "failed";
+  if (!((run.actions.every((action) => action.status === "succeeded" || action.status === "skipped") && !run.failure) || absorbedEveryFailure(run.actions))) return "failed";
   if (run.resultVerification === "refuted") return "failed";
   return run.resultVerification === "unverified" ? "unverified" : "passed";
 }

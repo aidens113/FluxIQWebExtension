@@ -109,7 +109,8 @@ function nodeAttribution(attempts: readonly PersistedFlowAction[]): NodeRecovery
   if (!last) throw new RunnerFailure("runtime.behavior", "A node was grouped with no attempts");
   const rungsRun = inLadderOrder(attempts.slice(1).flatMap((attempt) => attempt.retry ? [attempt.retry.rung] : [])) as PersistedLadderRung[];
   const hostStrategy = last.hostTargetResolution?.strategy ?? null;
-  const succeeded = last.status === "succeeded";
+  // A skipped node ended well too: its step was not on the page, and the run went on.
+  const succeeded = last.status === "succeeded" || last.status === "skipped";
   return {
     nodeId: last.nodeId,
     actionType: last.actionType,
@@ -164,7 +165,7 @@ function inLadderOrder(rungs: readonly ExpectedRecoveryRung[]): ExpectedRecovery
  * it. What it is not is the run's outcome.
  */
 export function absorbedEveryFailure(actions: readonly PersistedFlowAction[]): boolean {
-  if (actions.every((action) => action.status === "succeeded")) return false;
+  if (actions.every((action) => action.status === "succeeded" || action.status === "skipped")) return false;
   return recoveryAttribution(actions).nodes.every((node) => node.succeeded);
 }
 
