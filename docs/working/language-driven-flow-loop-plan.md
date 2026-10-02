@@ -13,13 +13,13 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ## Current State
 
-**Update, 2026-10-01 evening. Read this first.** Pass streak 0: no live run has yet produced a working Flow.
+**Update, 2026-10-01 night. Read this first.** Pass streak 0. Round 9 is pushed (page view shows every control, step logs, the $0.10 variable, lanes B and C); lanes A-C are live again.
 The compact view, the chat launcher and the first repeat guard are on dev (rounds 6-8, ledger below). The live runs
 still wandered, and the cause is now known: **the page view hid controls**. In the earbuds run the store's search box
 reached the model as `t489 field "Autumn Mega Sale: up to 70% off" =""` (its placeholder, no search marker), icon-only
 buttons had no line at all, and the model searched `find_on_page "Voltbay"` 29 times with 0 matches
 (`fxwork/t174/.../decision-dumps/build-2026-10-02T00-00-07-573Z-26504.jsonl`). **No live run until the page-view fix
-(PV) lands and a real recorded page is checked to show every control.**
+(PV) lands and a real recorded page is checked to show every control.** PV landed as t232 in round 9.
 
 Task ids: the task tool numbers branches (`task/t228-step-logs`, `task/t229-core-regressions`); the labels PV, CEIL and
 STEPS below are the plan's names for work that has no branch of its own or predates that numbering.
@@ -60,16 +60,12 @@ STEPS below are the plan's names for work that has no branch of its own or preda
 **In flight.**
 | Work | Where | State |
 | --- | --- | --- |
-| PV: page view shows every control (search fields marked with the placeholder kept apart, icon-only and press-listener buttons, quantity box named, chosen chips, image swatches) | main downstream checkout, uncommitted | worker-high running; Playwright headed guard spec `apps/extension/e2e/content/tests/evidence/tests/page-view-controls.spec.ts` |
-| CEIL Core: the variable and its tests | Core dev `fc26cfd6`, not pushed | done; automation-studio 4946 pass, 3 fail (next row) |
-| CEIL Lab: flag/env/.env, plan, post-run check, spend reports, contract mirror bounded by Core's $10 max | main downstream checkout, uncommitted | precedence tests pass; worker finishing plan and reports |
-| Core regressions: `build-routing` 30/28/2 vs 29/29/3; `run-consequence-permission` patches after a person's no; `recovery-default-limits` reserves worst-case cost so only 3 of 8 decisions fit $0.10 | `fxwork/t229`, `task/t229-core-regressions` | worker-high running |
-| STEPS: per-step request/response/decision/tool files plus `lab-runs/index.md` | `fxwork/t228`, `task/t228-step-logs` | lead running |
-| Lane B (t193): observation-only repeat guard, type-then-submit, chooser opening step kept, the `manual_intervention` repair refusal | `fxwork/t193` | lead running; RP, RG2, S4 committed, awaiting merge |
-| Lane C (t194): F32-F39, last F38 unmatched column shown as information (Core `bf626777`), F39 stray read members dropped (downstream `5568dc7e`) | `fxwork/t194` | done, verified 370/370, awaiting merge |
-| Lane D (t195): the completion check becomes information with test and judge deciding; verify present-but-hidden; a re-authored Flow judged on its own result; run 37's missing Confirm | `fxwork/t195` | lead running |
-| Lane A (t174) | `fxwork/t174` | paused until PV; next is crossborder run 42 |
-| t227 follow-ups (Core `51ec2f12`, downstream `6e2e312f`) | `task/t227-chat-driven-live-runs` | committed, awaiting merge |
+| Lane A (t174): crossborder hub-to-cart, live from the chat | `fxwork/t174`, slot-1 | running, up to 3 runs |
+| Lane B (t193): bigbox cart redesigned, does run 40's repair now run | `fxwork/t193`, slot-2 | running, up to 3 runs |
+| Lane C (t194): earbuds, the run that exposed the page-view bug | `fxwork/t194`, slot-3 | running, up to 3 runs |
+| Lane D (t195): F41-F43 committed (completion informs, judge decides, shadow-root test) | `fxwork/t195` | lead resolving 7 Core conflicts from merging dev; then merge, then slot-4 |
+| Core regressions: `build-routing` 30/28/2 vs 29/29/3; `run-consequence-permission` patches after a person's no; `recovery-default-limits` reserves worst-case cost | `fxwork/t229`, `task/t229-core-regressions` | worker-high running |
+| t233: `FLUXIQ_LLM_DEFAULT_MODEL`, so the `deepseek-v4-pro` comparison can start from the chat (planned at a $0.30 Lab ceiling for that one run) | `fxwork/t233`, `task/t233-chat-model-knob` | worker-high running |
 
 **Decided, not yet assigned.** One purse per Flow: build, re-authors, repairs and checks share the one $0.10 ceiling;
 a Flow's spend is kept on its creation record and summed. Assign a lead after the next merge round.
@@ -705,6 +701,21 @@ debug and partitioned so neither touches the other's files:
   - Lab: `cost-ceiling-env.test.ts` precedence tests pass (flag, env, `.env.local` over `.env`, unset, missing amount).
   - Lane C, re-run by the supervisor in `fxwork/t194/!FluxIQ/packages/fluxiq`: `npx vitest run` over result-verification, llm/harness-options and flow-bootstrap/authoring gave `Test Files 36 passed (36)`, `Tests 370 passed (370)`; structure audit rc 0 in both repositories.
 - Outcome: Core dev is one commit ahead of origin, held for the merge round. Pass streak 0.
+
+### 2026-10-01 night — Integration round 9 pushed: page view shows every control (t232), step logs (t228), ceiling Lab side, lanes B and C, t227; live runs resumed
+- Agent: supervisor; lane leads A-D; workers PV, PV-docs, CEIL Lab, Core regressions (t229), model knob (t233).
+- Changed:
+  - Merged into dev in both repositories: t232 (PV, committed on its own branch so its id is reserved), t228 (step logs), t193 (lane B: observation-only repeat guard, opener kept, `type` with `submit`, `web.target.not_actionable` so repair may answer a hidden/covered/disabled target), t194 (lane C F32-F39), t227 (chat display fixes), and the CEIL Lab commit `3d3020a6`.
+  - Conflicts resolved by the supervisor: `environment.ts` passes both the ceiling and `FLUXIQ_LLM_STEP_LOG_DIR`; `testing-facility.md` keeps both new sections. t227's `assertChatBuildable` compared the plan to the Core constant loaded in the Lab's own process, so a raised `--llm-cost-ceiling-usd` would have refused every chat build: the plan now records `buildCostCeilingUsd` (the ceiling its Core was started with) and the check uses it, with a new test for the raised case.
+  - Post-merge test fixes: Core `action-of.test.ts` (an event field the type does not declare); extension `type-unsent-form.test.ts` (`status?: string | undefined`).
+  - Lane D F41-F43 committed on `task/t195-live-control-flow` (Core `4f78cadc`, downstream `016dea39`); merging dev into it left 7 Core conflicts, which its lead is resolving.
+  - Lanes A, B and C fast-forwarded to dev and sent on live runs (crossborder slot-1, bigbox slot-2, earbuds slot-3), headed, from the chat, at $0.10, up to 3 runs each.
+  - t233 opened: `FLUXIQ_LLM_DEFAULT_MODEL`, so the approved `deepseek-v4-pro` comparison can start from the chat (today the chat check refuses any non-default model).
+- Validation:
+  - PV (supervisor): `pnpm --filter @fluxiq-web-extension/domain check` rc 0; extension check rc 0; `pnpm test:content -- page-view-controls --headed` `12 passed (1.5m)`.
+  - Core after the merges: `npx tsc --noEmit -p .` rc 0 after the test fix; vitest over runtime/llm, flow-draft, flow-bootstrap, result-verification, activity, tests/service-bootstrap and src/ui `Test Files 232 passed (232)`, `Tests 2446 passed (2446)`; structure audit passed; reference regenerated.
+  - Downstream after the merges (Core libraries rebuilt): test-runner `# tests 1781 # pass 1781 # fail 0`; domain check rc 0; domain tests `# tests 1241 # pass 1241 # fail 0`; extension check rc 0 after the test fix; extension tests `# tests 2297 # pass 2297 # fail 0`; structure audit passed.
+- Outcome: pushed Core dev `b369ca14` and downstream dev `ff175763`. Known on dev: the 3 Core failures t229 is fixing. Pass streak 0.
 
 ## Open Questions
 
