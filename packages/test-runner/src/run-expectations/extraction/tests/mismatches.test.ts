@@ -60,14 +60,47 @@ test("an expected null against an empty cell is stated as the two different thin
   assert.deepEqual(absent.records[0]?.fields, [{ field: "employees", expected: { held: "null" }, observed: { held: "absent" } }]);
 });
 
-test("a field the expectation names nowhere is counted and never named", () => {
+test("a field the expectation names nowhere is named under the fixture-page rule and its value never leaves", () => {
   // The one place a page can put something no fixture author chose, so the one
   // place a published value could be something nobody meant to publish.
   const step = detail([abbeyfield], [{ ...abbeyfield, unlockCode: "PLANTED-UNLOCK-CODE-DO-NOT-EXTRACT-4242" }]);
   assert.equal(step.records[0]?.unexpectedFields, 1);
+  assert.equal(step.records[0]?.kind, "extra-columns", "every named field agrees, so the extra key is the whole defect");
   assert.deepEqual(step.records[0]?.fields, [], "no named field differs, so no value is published");
-  assert.equal(JSON.stringify(step).includes("unlockCode"), false, "the field name never leaves");
-  assert.equal(JSON.stringify(step).includes("PLANTED"), false, "nor its value");
+  assert.deepEqual(step.records[0]?.extraFields, ["unlockCode"]);
+  assert.equal(JSON.stringify(step).includes("PLANTED"), false, "the value never leaves");
+  // Under a withholding rule the key is counted and not named either.
+  const withheld = detail([abbeyfield], [{ ...abbeyfield, unlockCode: "PLANTED-UNLOCK-CODE-DO-NOT-EXTRACT-4242" }], { disclosure: "scenario-declares-secrets" });
+  assert.equal(withheld.records[0]?.kind, "extra-columns");
+  assert.equal(withheld.records[0]?.unexpectedFields, 1);
+  assert.equal(withheld.records[0]?.extraFields, undefined);
+  assert.deepEqual(withheld.extraColumns, { records: 1, furtherNames: 1, matchedRecords: 1, matchedInAnyOrder: 1 });
+  assert.equal(JSON.stringify(withheld).includes("unlockCode"), false, "the name does not leave under a withholding rule");
+  assert.equal(JSON.stringify(withheld).includes("PLANTED"), false);
+});
+
+test("rows right on every named column but carrying extra columns say so, and say how many would pair without them", () => {
+  // Live run 11 (`everything-store-plus-earbuds-under-50`): the stored answer
+  // carried `plus` and `ad` beside the columns asked for, so no row paired and
+  // every row was reported as `values-differ` with no field -- which read as
+  // "every value wrong" when most values were right.
+  const item = (name: string, price: string): ExtractionRecord => ({ name, price });
+  const expected = [item("Earbuds A", "19.99"), item("Earbuds B", "24.99"), item("Earbuds C", "39.00")];
+  const withHelpers = (record: ExtractionRecord): ExtractionRecord => ({ ...record, plus: "true", ad: "false" });
+  const observed = [withHelpers(expected[0]!), withHelpers(expected[1]!), withHelpers(item("Earbuds C", "59.00")), withHelpers(item("Earbuds D", "12.00"))];
+  const step = detail(expected, observed);
+  assert.equal(step.matchedRecords, 0, "the verdict stays strict: extra columns are a wrong answer");
+  assert.equal(step.matchedInAnyOrder, 0);
+  assert.deepEqual(step.records.map((record) => [record.position, record.kind]), [[0, "extra-columns"], [1, "extra-columns"], [2, "values-differ"], [3, "observed-not-expected"]]);
+  assert.deepEqual(step.records[0]?.extraFields, ["plus", "ad"]);
+  assert.deepEqual(step.records[0]?.fields, []);
+  // A record wrong on a named field is still `values-differ`, and still names the extra keys.
+  assert.deepEqual(step.records[2]?.fields.map((field) => field.field), ["price"]);
+  assert.deepEqual(step.records[2]?.extraFields, ["plus", "ad"]);
+  assert.deepEqual(step.extraColumns, { records: 4, names: ["plus", "ad"], furtherNames: 0, matchedRecords: 2, matchedInAnyOrder: 2 });
+  assert.equal(JSON.stringify(step).includes("\"true\""), false, "an extra column's value is never published");
+  // A step whose observed records carry no extra key states no summary.
+  assert.equal(detail(expected, [expected[0]!, expected[1]!, item("Earbuds C", "59.00")]).extraColumns, undefined);
 });
 
 test("a scenario that declares replay secrets withholds every observed value and says so", () => {

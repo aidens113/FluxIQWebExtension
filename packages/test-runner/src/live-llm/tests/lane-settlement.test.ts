@@ -4,7 +4,7 @@ import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type
 import type { ExistingRunDetail, ExistingRunProviderCall } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
 import { runLaneWithLiveLlmSettlement } from "../lane-settlement.js";
-import { planLiveLlmExecution } from "../live-llm-plan.js";
+import { planAtLabCeiling } from "./lab-ceiling.js";
 import { LiveLlmRun } from "../live-llm-run.js";
 
 // `run-mu4rpka7-845d919a` reached DeepSeek three times, and its lane then threw
@@ -37,7 +37,7 @@ const PROFILE: LlmExecutionProfile = {
  * moved more than once, and a literal overspend would simply have stopped
  * breaching.
  */
-const RUN_TOKEN_BUDGET = planLiveLlmExecution(PROFILE).maxTotalTokensPerRun;
+const RUN_TOKEN_BUDGET = planAtLabCeiling(PROFILE).maxTotalTokensPerRun;
 const OVERSPENT_TOKENS = RUN_TOKEN_BUDGET + DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
 
 const call = (taskKind: string, sequence: number): ExistingRunProviderCall => ({
@@ -108,7 +108,7 @@ function runDetailWithExploration(stageDetail: Record<string, unknown> = {}): un
 }
 
 async function harness(options: { authorize?: boolean; detail?: () => Promise<ExistingRunDetail> } = {}) {
-  const live = new LiveLlmRun(planLiveLlmExecution(PROFILE), CREDENTIAL);
+  const live = new LiveLlmRun(planAtLabCeiling(PROFILE), CREDENTIAL);
   if (options.authorize !== false) await live.authorizer(fakeCore(), { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   const written: Array<{ path: string; value: Record<string, any> }> = [];
   const published: Record<string, unknown>[] = [];

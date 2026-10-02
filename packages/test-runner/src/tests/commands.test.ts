@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_ESTIMATED_COST_USD } from "@fluxiq-web-extension/test-contracts";
 import { expandMatrix, parseLabCommand } from "../commands.js";
 
 test("parses finite run options", () => assert.deepEqual(parseLabCommand(["run", "basic-form", "--seed", "7", "--evidence", "events"]), { command: "run", scenarioId: "basic-form", seed: 7, evidence: "events" }));
@@ -141,7 +141,8 @@ test("live LLM CLI rejects unsafe budgets and multi-run matrices", () => {
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-total-tokens", String(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST + 1)]), new RegExp(String(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST)));
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-input-tokens", String(DEFAULT_LLM_LAB_BUDGET.maxInputTokens + 1)]), /must cover/);
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-calls", "65"]), /from 1 to 64/);
-  assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-cost-usd", "0.26"]), /0.25/);
+  // The contract bounds a declared cost by Core's largest configurable ceiling ($10); the plan then holds it to the ceiling Core resolved.
+  assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-cost-usd", String(LLM_LAB_MAX_ESTIMATED_COST_USD + 0.01)]), new RegExp(`maxEstimatedCostUsd: must be a finite number from 0 to ${LLM_LAB_MAX_ESTIMATED_COST_USD}`, "u"));
   const lowerCost = parseLabCommand(["run", "basic-form", ...base, "--llm-max-cost-usd", "0.10"]);
   assert.equal(lowerCost.command === "run" ? lowerCost.llm?.budget.maxEstimatedCostUsd : undefined, 0.1);
   assert.throws(() => parseLabCommand(["matrix", "--all", ...base]), /exactly one explicit scenario/);

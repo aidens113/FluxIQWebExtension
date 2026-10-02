@@ -45,7 +45,7 @@ import { webAutomationUrlPath } from "../output-nodes";
 /** The command fields that come from a gateway command's `parameters` rather than from its target or envelope. */
 export type WebAutomationLiftedActionParameters = Pick<
   WebAutomationActionCommand,
-  "tabId" | "frameId" | "frameUrlPath" | "newTab" | "option" | "scroll" | "wait" | "modifiers" | "checked" | "assert" | "extract" | "extractList" | "detectStructure" | "upload" | "dialog" | "tab" | "download"
+  "tabId" | "frameId" | "frameUrlPath" | "newTab" | "option" | "scroll" | "wait" | "modifiers" | "checked" | "submit" | "assert" | "extract" | "extractList" | "detectStructure" | "upload" | "dialog" | "tab" | "download"
 >;
 
 /**
@@ -81,6 +81,7 @@ export function webAutomationReadActionParameters(parameters: JsonObject): WebAu
     wait: waitRequestValue(parameters.wait),
     modifiers: keyModifiersValue(parameters.modifiers),
     checked: booleanValue(parameters.checked),
+    submit: booleanValue(parameters.submit),
     assert: assertRequestValue(parameters.assert),
     extract: webAutomationExtractReadValue(parameters.extract),
     extractList: webAutomationExtractListRequestValue(parameters.extractList),

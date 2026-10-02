@@ -50,6 +50,8 @@ test("whatever a producer put beside the declared fields is left behind", () => 
   noisy.proposal.fields[0].sample = "a page value";
   noisy.proposal.fields[0].spec.sample = "a page value";
   noisy.proposal.pagination.sample = "a page value";
+  // A member the field's kind does not take is dropped too (t194-w45).
+  noisy.proposal.fields[0].spec.attribute = "href";
   const copied = webAutomationStructureDetectionValue(noisy);
   assert.deepEqual(copied, detection());
   assert.equal(JSON.stringify(copied).includes("a page value"), false);
@@ -74,7 +76,6 @@ test("a detection any part of which is malformed is refused whole", () => {
     ["a repeated key", (value) => { value.proposal.fields[1].key = "name"; }],
     ["an element fingerprint, which holds page values", (value) => { value.proposal.fields[0].spec.element = { tagName: "span", text: "Ada" }; }],
     ["an unknown kind", (value) => { value.proposal.fields[0].spec.kind = "html"; }],
-    ["an attribute on a text field", (value) => { value.proposal.fields[0].spec.attribute = "href"; }],
     ["an unknown pagination mode", (value) => { value.proposal.pagination = { mode: "teleport", maxPages: 2 }; }],
     ["a pagination with no bound", (value) => { value.proposal.pagination = { next: "a" }; }],
     ["every field excluded", (value) => { for (const field of value.proposal.fields) field.spec.handling = "exclude"; }]

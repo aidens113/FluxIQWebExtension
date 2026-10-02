@@ -3,7 +3,7 @@ import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail, ExistingRunProviderCall } from "../../existing-fluxiq-control.js";
 import { assertLiveLlmBudgetHeld, liveLlmBudgetBreaches } from "../budget.js";
-import { planLiveLlmExecution } from "../live-llm-plan.js";
+import { LAB_CEILING_USD, planAtLabCeiling } from "./lab-ceiling.js";
 import { liveLlmObservedUsage } from "../observed-usage.js";
 
 /**
@@ -14,7 +14,7 @@ import { liveLlmObservedUsage } from "../observed-usage.js";
  * without them says so instead of pretending.
  */
 
-const adapting = planLiveLlmExecution({
+const adapting = planAtLabCeiling({
   schemaVersion: LLM_LAB_SCHEMA_VERSION,
   profileId: "lab-adapt",
   mode: "live",
@@ -90,26 +90,31 @@ test("every call Core itemized is observed, evidence calls included, in Core's o
 
 test("an evidence call over a per-call cap fails the run, and is named", () => {
   const pricey = [...iterating];
-  pricey[2] = line(3, "evidence_tool_decision", { estimatedCostUsd: 0.9, outputTokens: 9_000, inputTokens: 900, totalTokens: 9_900 });
+  // Nine times the per-call cap, which is Core's ceiling when no lower cost is declared.
+  const overCap = Number((LAB_CEILING_USD * 9).toFixed(9));
+  pricey[2] = line(3, "evidence_tool_decision", { estimatedCostUsd: overCap, outputTokens: 9_000, inputTokens: 900, totalTokens: 9_900 });
   const observed = liveLlmObservedUsage(detail(pricey, 4));
 
-  assert.throws(() => assertLiveLlmBudgetHeld(adapting, observed), /call 3 \(evidence_tool_decision\) cost 0\.9 against --llm-max-cost-usd 0\.25/u);
+  const amount = (value: number) => String(value).replace(/\./gu, "\\.");
+  assert.throws(() => assertLiveLlmBudgetHeld(adapting, observed), new RegExp(`call 3 \\(evidence_tool_decision\\) cost ${amount(overCap)} against its per-call cap of ${amount(LAB_CEILING_USD)} \\(--llm-max-cost-usd`, "u"));
   assert.throws(() => assertLiveLlmBudgetHeld(adapting, observed), /call 3 \(evidence_tool_decision\) used 9000 output tokens against --llm-max-output-tokens/u);
   // Read the old way, from the interventions, the same run passed: that call was invisible.
   assert.deepEqual(liveLlmBudgetBreaches(adapting, liveLlmObservedUsage(detail(undefined, 4))), []);
 });
 
 test("a figure the provider did not report stays unknown, while Core's charged totals still bound the run", () => {
+  // A reservation inside the ceiling, so only the unreported figure is under test.
+  const reserved = Number((LAB_CEILING_USD / 2).toFixed(9));
   const unreported = [...iterating];
   unreported[1] = line(2, "evidence_tool_decision", {
     inputTokens: null, outputTokens: null, totalTokens: null, estimatedCostUsd: null,
-    charged: { inputTokens: 8_000, outputTokens: 2_000, totalTokens: 10_000, estimatedCostUsd: 0.0769, tokens: "reserved", cost: "reserved" },
+    charged: { inputTokens: 8_000, outputTokens: 2_000, totalTokens: 10_000, estimatedCostUsd: reserved, tokens: "reserved", cost: "reserved" },
   });
   const observed = liveLlmObservedUsage(detail(unreported, 4));
 
   assert.deepEqual(observed.observedCalls[1], { requestId: "llm.evidence_tool_decision.2", taskKind: "evidence_tool_decision", stage: "gather", provider: "deepseek", model: DEFAULT_LLM_MODEL, promptVersion: "automation-studio.evidence_tool_decision.v1+stage.gather", validationOk: true, validationCodes: [], inputTokens: null, outputTokens: null, totalTokens: null, estimatedCostUsd: null });
   // Summed in Core's order, as its accounting was.
-  const charged = [0.001, 0.0769, 0.001, 0.001].reduce((total, cost) => total + cost, 0);
+  const charged = [0.001, reserved, 0.001, 0.001].reduce((total, cost) => total + cost, 0);
   assert.equal(observed.totalEstimatedCostUsd, charged);
   // No per-call breach is invented for the unreported call ...
   assert.deepEqual(liveLlmBudgetBreaches(adapting, observed), []);

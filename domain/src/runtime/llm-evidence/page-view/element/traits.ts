@@ -23,8 +23,21 @@ export type WebLlmViewTraits = {
    * failed to measure must not take a control off the page (t223, "no caps").
    */
   visible: boolean;
-  /** A link, button, field, menu or other thing a person operates. */
+  /**
+   * A link, button, field, menu or other thing a person operates -- and an
+   * element the page gave a cursor of its own that says "press here" or
+   * "this refuses a press", which is how a page that draws its controls as
+   * `<div>`s shows a person they are controls (t229). A `<label>` given a
+   * pointer is not one: it presses the control it names, which has its own line.
+   */
   control: boolean;
+  /**
+   * A control only by what the page bound or drew -- a press listener, a
+   * cursor of its own -- and not by its tag, role or editability. Its `text`
+   * is every word under it, a closed flyout's included, so its line says its
+   * own words (`./words.ts`).
+   */
+  drawn: boolean;
   /** An open dialog, or something painted over other controls. */
   layer: boolean;
   /** A paragraph, list item, table cell, definition, caption, quotation or heading: its `text` is all of its descendants' words. */
@@ -44,17 +57,27 @@ const CONTROL_ROLES: ReadonlySet<string> = new Set([
 ]);
 const SEMANTIC_TAGS: ReadonlySet<string> = new Set(["p", "li", "td", "th", "dt", "dd", "figcaption", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6"]);
 
-/** Everything the page view's line rules ask of one element. */
-export function webLlmViewTraits(element: WebLlmEvidenceElement): WebLlmViewTraits {
+/**
+ * Everything the page view's line rules ask of one element.
+ *
+ * `delegate` says the element holds a control of its own (`../line-choice.ts`).
+ * Then a click handler or a cursor does not make it a control: a feed list that
+ * listens for presses on the "…see more" buttons inside it, or a card with a
+ * pointer whose title is a link, is where presses are heard, and what a person
+ * presses is inside it (t229). Its link, button, field or role still does.
+ */
+export function webLlmViewTraits(element: WebLlmEvidenceElement, delegate = false): WebLlmViewTraits {
   const role = pageRole(element);
   const box = element.box;
   const visible = element.hidden !== true && (box === undefined || (box.x + box.width > 0 && box.y + box.height > 0));
-  const control = isControl(element, role);
+  const strong = isControl(element, role);
+  const drawn = !strong && !delegate && isDrawnControl(element);
+  const control = strong || drawn;
   const layer = element.isDialog !== undefined || element.covers !== undefined || element.coversCount !== undefined;
   const semantic = SEMANTIC_TAGS.has(element.tag);
   const image = element.tag === "img" || role === "img";
   const ownWords = element.ownText ?? element.text ?? (semantic ? element.name : undefined);
-  return { visible, control, layer, semantic, image, ownWords, lineRole: lineRole({ control, layer, image, ownWords }, element) };
+  return { visible, control, drawn, layer, semantic, image, ownWords, lineRole: lineRole({ control, layer, image, ownWords }, element) };
 }
 
 /** The first token of the role the page wrote, lower-cased. */
@@ -67,9 +90,13 @@ function isControl(element: WebLlmEvidenceElement, role: string | undefined): bo
   if (CONTROL_TAGS.has(element.tag)) return true;
   if (element.tag === "input") return element.inputType !== "hidden";
   if (role !== undefined && CONTROL_ROLES.has(role)) return true;
-  if (element.hasClickHandler === true) return true;
   const editable = attributeValue(element, "contenteditable");
   return editable !== undefined && editable.trim().toLowerCase() !== "false";
+}
+
+/** A control only by what the page bound or drew: a press listener, or a cursor of its own. */
+function isDrawnControl(element: WebLlmEvidenceElement): boolean {
+  return element.hasClickHandler === true || (element.cursor !== undefined && element.tag !== "label");
 }
 
 function lineRole(traits: Pick<WebLlmViewTraits, "control" | "layer" | "image" | "ownWords">, element: WebLlmEvidenceElement): WebLlmLineRole | undefined {

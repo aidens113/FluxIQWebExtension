@@ -473,7 +473,7 @@ function checkedDisabled(actionRejected: RejectAction): BrowserActionResult {
 test("a click the gate refused because the control was disabled for a moment is waited out, and lands", async (t) => {
   const actionRejected = await installRejectionPage(t);
   const refusal = gateDisabled(actionRejected);
-  assert.equal(refusal.failure?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, "the code is unchanged: the statement is the effect, not a new code");
+  assert.equal(refusal.failure?.code, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE, "the gate's page-state code: the statement is the effect, not a new code");
   assert.equal(refusal.failure?.effect, "unacted");
 
   const shield = page("web.dom.click", [refusal]);
@@ -515,7 +515,7 @@ test("a control that is simply disabled fails after one look, with the gate's re
   const reported = recordRecovery(result, account);
   assert.equal(reported.message, "Action rejected: the element is disabled");
   assert.deepEqual(reported.validation, { status: "failed", expected: "a target that can be clicked", actual: "the element is disabled" });
-  assert.equal(reported.failure?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED);
+  assert.equal(reported.failure?.code, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE);
   assert.equal(reported.failure?.retryable, false);
   assert.equal(reported.failure?.actual, "disabled: the element is disabled");
 });
@@ -556,7 +556,7 @@ test("a countdown that stops changing is refused at the attempt that shows it, a
 test("a disabled control check.ts found after setCheckedState is refused, not waited out", async (t) => {
   const actionRejected = await installRejectionPage(t);
   const refusal = checkedDisabled(actionRejected);
-  assert.equal(refusal.failure?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED);
+  assert.equal(refusal.failure?.code, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE);
   assert.ok(refusal.failure?.actual?.startsWith("disabled:"), "the same reason word the gate writes");
   assert.equal(refusal.failure?.effect, undefined, "written after setCheckedState, so it states nothing about the act");
 
@@ -588,7 +588,7 @@ test("a control that stays busy past the budget fails with the page's own refusa
   const { result, account } = await runWithRecovery(bare("web.dom.click"), 0, attempt, advancingPause, () => clock);
   assert.equal(result.status, "failed");
   assert.equal(result, refusals.at(-1), "the reported result must be the last attempt's own");
-  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED);
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE);
   assert.equal(account.outcome, "exhausted");
   assert.ok(dispatchedAt < RECOVERY_BUDGET_MS, `an attempt was dispatched at ${dispatchedAt} ms, past the budget`);
   assert.ok(account.absorbed.length >= 2 && account.absorbed.every((fault) => fault === "disabled_target"));

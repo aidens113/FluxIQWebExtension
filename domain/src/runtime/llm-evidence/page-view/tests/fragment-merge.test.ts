@@ -70,3 +70,25 @@ test("a quantity stepper drawn as plain spans keeps its minus and plus as lines 
     { tag: "span", text: "+", parent: "t1" }
   ]), ["t2 \"−\"", "t3 \"1\"", "t4 \"+\""]);
 });
+
+test("a price printed once for a screen reader and again in pieces for the eye prints once", () => {
+  // bigbox's tile: `<span>$10.47</span><span aria-hidden>$10<sup>47</sup></span>`
+  // and a unit price under the same block (lane B's bigbox run, 2026-10-01).
+  assert.deepEqual(bodyLines([
+    { tag: "div" },
+    { tag: "span", text: "$10.47", parent: "t1" },
+    { tag: "span", text: "$1047", ownText: "$10", parent: "t1" },
+    { tag: "sup", text: "47", parent: "t3" },
+    { tag: "span", text: "1.4 ¢/sheet", parent: "t1" }
+  ]), ["t2 \"$10.47\"", "t5 \"1.4 ¢/sheet\""]);
+});
+
+test("pieces that say a different amount from the line before are kept", () => {
+  assert.deepEqual(bodyLines([
+    { tag: "div" },
+    { tag: "span", text: "$10.47", parent: "t1" },
+    { tag: "span", text: "$999", ownText: "$9", parent: "t1" },
+    { tag: "sup", text: "99", parent: "t3" },
+    { tag: "span", text: "1.4 ¢/sheet", parent: "t1" }
+  ]), ["t2 \"$10.47\"", "t3 \"$9\"", "t4 \"99\"", "t5 \"1.4 ¢/sheet\""]);
+});

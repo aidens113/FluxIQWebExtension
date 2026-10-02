@@ -21,6 +21,7 @@ expected failure names.
 | Name | Code | Category | Retryable | Stage |
 | --- | --- | --- | --- | --- |
 | `ACTION_REJECTED` | `web.action.rejected` | `blocked_by_capability_or_policy` | no | `execution` |
+| `TARGET_NOT_ACTIONABLE` | `web.target.not_actionable` | `unexpected_state` | no | `execution` |
 | `TARGET_NOT_FOUND` | `web.target.not_found` | `target_not_found` | yes | `target_resolution` |
 | `TARGET_AMBIGUOUS` | `web.target.ambiguous` | `target_ambiguous` | no | `target_resolution` |
 | `OUTPUT_NOT_OBSERVED` | `web.validation.output_not_observed` | `output_not_observed` | yes | `verification` |
@@ -165,7 +166,8 @@ identity across bundles, and is compiler-checked at the throw.
 - **Result builders** (`content/action-runtime/results.ts`,
   `runtime/action-results.ts`): `OUTPUT_NOT_OBSERVED` for a failed
   post-condition, `STATE_MISMATCH` for a failed `web.dom.assert`,
-  `ACTION_REJECTED` for a target the actionability gate refused, `TIMEOUT`
+  `TARGET_NOT_ACTIONABLE` for a target the actionability gate refused,
+  `ACTION_REJECTED` for anything refused on purpose, `TIMEOUT`
   for a wait or action that ran out of time, `NOT_IMPLEMENTED` for a
   registered verb that is not built, `AUTH_REQUIRED` where the page itself
   explains the failure better than the verb, and `UNKNOWN` as the last resort.
@@ -267,9 +269,15 @@ table's own tests they are covered by
 `client/tests/gateway-mapping.test.ts` and
 `content/actions/tests/page-identity.test.ts`.
 
-`ACTION_REJECTED` is one code, not a family: the capability's own reason
-(`disabled`, `hidden`, `covered`, and the rest) is carried in the record's
-`actual`, not in the code.
+`TARGET_NOT_ACTIONABLE` is one code, not a family: the actionability gate's
+reason (`disabled`, `hidden`, `covered`) is carried in the record's `actual`,
+not in the code. It is the page's state, so its category is `unexpected_state`,
+which Core's repair may answer. `ACTION_REJECTED` (`blocked_by_capability_or_policy`)
+is kept for what is refused on purpose: a sensitive value, a page the extension
+may not touch, a key whose default cannot be faked, a request it cannot carry
+out. Until 2026-10-02 the gate's refusals were `ACTION_REJECTED` too, and Core
+read a button hidden inside a closed chooser as a policy refusal and refused to
+repair the Flow, as needing a person (lane A, t174 run 40).
 
 ## A Robot Check Parks, It Does Not End
 

@@ -175,3 +175,49 @@ test("an off dedupe and an empty sort are no dedupe and no sort, not faults", ()
   assert.deepEqual(read.dropped, []);
   assert.deepEqual(Object.keys(read.request ?? {}).sort(), ["fields", "item"]);
 });
+
+// A field is read by its kind, and a member its kind does not take is left
+// behind rather than refusing the field (t194-w45). The case that forced it:
+// Core's rerun merge patches `{kind: "text"}` over `{kind: "column", header}`
+// and the `header` stays, because a column's member is not named after its kind.
+
+test("a member the field's kind does not take is dropped, and the field reads by its kind", () => {
+  const rows: Array<[why: string, written: Record<string, unknown>, read: Record<string, unknown>]> = [
+    ["a rerun's text over a column", { kind: "text", header: "Price", required: false }, { kind: "text", required: false }],
+    ["a header on a link", { kind: "link", selector: "a", header: "Title" }, { kind: "link", selector: "a" }],
+    ["an attribute on text", { kind: "text", selector: "h3", attribute: "title" }, { kind: "text", selector: "h3" }],
+    ["an attribute on a column", { kind: "column", header: "Price", attribute: "data-price" }, { kind: "column", header: "Price" }],
+    ["a header on an attribute", { kind: "attribute", selector: "a", attribute: "href", header: "Link" }, { kind: "attribute", selector: "a", attribute: "href" }],
+    ["a stray member that is not even a string", { kind: "value", selector: "input", header: 3, attribute: null }, { kind: "value", selector: "input" }]
+  ];
+  for (const [why, written, read] of rows) {
+    const request = { item: "tr", fields: { name: ".name", other: written } };
+    const result = webAutomationExtractListRequestRead(request);
+    assert.deepEqual(result.request?.fields.other, read, why);
+    // Nothing the read can do without was dropped: the field is whole, read by
+    // the kind the model chose, so a producer's wire copy reads it the same way.
+    assert.deepEqual(result.dropped, [], why);
+    assert.deepEqual(webAutomationExtractListRequestWhole(request), result.request, why);
+  }
+});
+
+test("a condition's read drops a member its kind does not take, and the condition still runs", () => {
+  const read = webAutomationExtractListRequestRead({
+    item: "tr",
+    fields: { name: ".name" },
+    where: [{ read: { kind: "text", selector: ".ad", header: "Ad", required: false }, is: "absent" }]
+  });
+  assert.deepEqual(read.dropped, []);
+  assert.deepEqual(read.request?.where, [{ read: { kind: "text", selector: ".ad", required: false }, is: "absent" }]);
+});
+
+test("a kind that needs its own member and lacks it is still refused, whatever else it carries", () => {
+  for (const [why, spec] of [
+    ["an attribute field carrying only a header", { kind: "attribute", selector: "a", header: "Link" }],
+    ["a column field carrying only an attribute", { kind: "column", attribute: "data-price" }]
+  ] as Array<[string, Record<string, unknown>]>) {
+    assert.equal(webAutomationExtractListRequestValue({ item: "tr", fields: { name: ".name", other: spec } }), undefined, why);
+    const condition = webAutomationExtractListRequestRead({ item: "tr", fields: { name: ".name" }, where: [{ read: spec, is: "present" }] });
+    assert.deepEqual(condition.dropped, ["where.0"], why);
+  }
+});

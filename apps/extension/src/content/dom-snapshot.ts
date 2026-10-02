@@ -31,11 +31,11 @@
 // this file, using the same shared rule rather than a second one.
 
 import { compactObject } from "./compact-object";
-import { frontLayerTest, isLeadStatement, pageEvidence, recentlyInteractedElements, type SnapshotElementCounts, type SnapshotElementEntry } from "./evidence";
+import { frontLayerTest, isLeadStatement, ownPressCursor, pageEvidence, recentlyInteractedElements, setApartFromLikeSiblings, type SnapshotElementCounts, type SnapshotElementEntry } from "./evidence";
 import { currentFrameViewportOffset, isTopFrame } from "./frame-geometry";
 import { observedEventElementQueue } from "./event-elements";
-import { describeElement, ownTextBeside } from "./describe-element";
-import { isSensitiveFormControl } from "./element-traits";
+import { describeElement, ownTextBeside, readableTextBeside } from "./describe-element";
+import { isActionableElement, isSensitiveFormControl } from "./element-traits";
 import { listedParentIndexes } from "./listed-parents";
 import { renderedElements } from "./rendered-elements";
 import { repeatExemplars } from "./repeat-exemplars";
@@ -214,15 +214,20 @@ function touchedElements(): ReadonlySet<Element> {
 /**
  * The element's descriptor, with the facts only a snapshot knows: for a run's
  * exemplar, how many elements the run holds; whether it is on a front layer;
- * whether it is one of the main region's lead statements; its own words beside
- * its descendants'; its listed parent. The two flags are written only when
- * true, and the last two only when there is something to say.
+ * whether it is one of the main region's lead statements; the cursor it sets
+ * for itself and, for something a person presses, whether it is drawn apart
+ * from its like siblings (t229); its own words beside its descendants'; its
+ * listed parent. The flags are written only when true, and the rest only when
+ * there is something to say.
  */
 function snapshotDescriptor(element: Element, repeatCount: number | undefined, frontLayer: boolean, parent: number | undefined): DomElementDescriptor {
   const descriptor = describeElement(element);
   if (repeatCount !== undefined) descriptor.repeatCount = repeatCount;
   if (frontLayer) descriptor.frontLayer = true;
   if (isLeadStatement(element)) descriptor.leadStatement = true;
+  const cursor = ownPressCursor(element);
+  if (cursor !== undefined) descriptor.cursor = cursor;
+  if ((cursor !== undefined || isActionableElement(element)) && setApartFromLikeSiblings(element)) descriptor.setApart = true;
   return withStructure(element, descriptor, parent);
 }
 
@@ -241,6 +246,8 @@ function hiddenDescriptor(element: Element, parent: number | undefined): DomElem
 function withStructure(element: Element, descriptor: DomElementDescriptor, parent: number | undefined): DomElementDescriptor {
   const ownText = ownTextBeside(element, descriptor.text);
   if (ownText !== undefined) descriptor.ownText = ownText;
+  const readableText = readableTextBeside(element, descriptor.text);
+  if (readableText !== undefined) descriptor.readableText = readableText;
   if (parent !== undefined) descriptor.parent = parent;
   return descriptor;
 }

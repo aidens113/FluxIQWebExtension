@@ -27,9 +27,16 @@
 //   readable in `apps/scenario-lab`.
 // - **Observed values of fields the expectation names**, in full to a cap,
 //   when the disclosure rule allows it. A field the expectation names nowhere
-//   is counted and never shown: an unnamed field is the one place a page can
+//   never has its value shown: an unnamed field is the one place a page can
 //   put something no fixture author chose, so it is the one place a value
 //   could be something nobody meant to publish.
+// - **The names of those unnamed fields**, under the same disclosure rule as
+//   observed values and never under a withholding one. A stored answer that
+//   carries two helper columns beside the four asked for is wrong, and the
+//   judgement keeps failing it; but without the columns' names the artifact
+//   reported every such row as `values-differ` with no field, which says
+//   nothing (live run 11, `plus` and `ad`). A key is the run's column name,
+//   not page text, and it is published only where the page's own values are.
 //
 // And the bundle redacts on top of this: `EvidenceBundle.writeStructured`
 // scrubs every configured secret and the live provider credential from what it
@@ -89,8 +96,12 @@ export type ExtractionFieldValue =
   | { held: "text"; characters: number; value: string; cut?: true }
   | { held: "withheld"; characters: number; rule: ExtractionDisclosureRule };
 
-/** Why one record position did not match. */
-export const extractionMismatchKinds = ["values-differ", "moved", "expected-not-observed", "observed-not-expected"] as const;
+/**
+ * Why one record position did not match. `extra-columns` is a record whose
+ * every named field agrees and which still fails because it carries a key the
+ * expectation names nowhere: the values are right and the shape is not.
+ */
+export const extractionMismatchKinds = ["values-differ", "extra-columns", "moved", "expected-not-observed", "observed-not-expected"] as const;
 export type ExtractionMismatchKind = (typeof extractionMismatchKinds)[number];
 
 /** One field of one record, as the two sides held it. */
@@ -109,10 +120,35 @@ export type ExtractionRecordMismatch = {
   furtherFields: number;
   /**
    * Fields this observed record carried that the expectation names nowhere.
-   * Counted, never named: a record can mismatch on one of these alone, and
-   * that is worth seeing, but naming it would publish a key a page chose.
+   * A record can mismatch on one of these alone, which is `extra-columns`.
    */
   unexpectedFields: number;
+  /**
+   * Those fields' names, to `MAX_FIELDS_PER_RECORD`, in the record's order.
+   * Names only, never values, and only under the `fixture-page` rule: under a
+   * withholding rule they are counted above and not named.
+   */
+  extraFields?: string[];
+};
+
+/**
+ * What the observed records' extra keys did to the step: how many records
+ * carried one, which keys they were, and what would have matched on the
+ * expectation's named fields alone. It is a diagnosis, not a softer verdict --
+ * the judgement still fails every such record -- so a reader sees "six of
+ * thirteen right, but two extra columns" rather than "nothing matched".
+ */
+export type ExtractionExtraColumns = {
+  /** Observed records carrying at least one key the expectation names nowhere. */
+  records: number;
+  /** The distinct extra keys in first-seen order, to `MAX_FIELDS_PER_RECORD`; omitted under a withholding rule. */
+  names?: string[];
+  /** Distinct extra keys past that bound, or every one of them when `names` is withheld. */
+  furtherNames: number;
+  /** Positions that would match had the extra keys been dropped. */
+  matchedRecords: number;
+  /** The same, position set aside. */
+  matchedInAnyOrder: number;
 };
 
 /** One extract step's mismatches. */
@@ -137,6 +173,8 @@ export type ExtractionStepMismatches = {
   /** Of those, the ones detailed below. */
   detailedRecords: number;
   records: ExtractionRecordMismatch[];
+  /** Present only when some observed record carried a key the expectation names nowhere. */
+  extraColumns?: ExtractionExtraColumns;
   disclosure: ExtractionDisclosureRule;
 };
 
@@ -152,7 +190,7 @@ export type ExtractionMismatchReport = {
   steps: ExtractionStepMismatches[];
 };
 
-const BOUNDARY = "Field names and expected values are the fixture's own, authored in this repository. An observed value is published only for a field the expectation names, and only under the step's stated disclosure rule; every other observed value states its length and that it was withheld. No selector, URL, page heading or raw markup is published, and the bundle redacts every configured secret from this file on write.";
+const BOUNDARY = "Field names and expected values are the fixture's own, authored in this repository. An observed value is published only for a field the expectation names, and only under the step's stated disclosure rule; every other observed value states its length and that it was withheld. An observed field the expectation names nowhere is counted, and its name (never its value) is published only under the fixture-page rule. No selector, URL, page heading or raw markup is published, and the bundle redacts every configured secret from this file on write.";
 
 /** One step's mismatch detail, or `undefined` when there is nothing to detail. */
 export function extractionStepMismatches(input: {
@@ -190,12 +228,14 @@ export function extractionStepMismatches(input: {
     mismatches.push(recordMismatch({ position, expected, records, pairing, optional, named, disclosure: input.disclosure, context: input.context }));
   }
   if (mismatchedRecords === 0) return undefined;
+  const extraColumns = extraColumnsSummary(expected, records, optional, named, input.disclosure, input.context);
   return {
     stepIndex: input.stepIndex, stepId: input.stepId,
     expectedRecords: expected.length, observedRecords: records.length,
     comparedRecords, matchedRecords, matchedInAnyOrder,
     orderOnly: expected.length === records.length && matchedInAnyOrder === comparedRecords && matchedRecords < comparedRecords,
     mismatchedRecords, detailedRecords: mismatches.length, records: mismatches,
+    ...(extraColumns ? { extraColumns } : {}),
     disclosure: input.disclosure,
   };
 }
@@ -222,7 +262,7 @@ function recordMismatch(input: {
   const { position, expected, records, pairing, optional, named, disclosure, context } = input;
   const wanted = expected[position];
   const actual = records[position];
-  if (!wanted) return { position, kind: "observed-not-expected", fields: [], furtherFields: 0, unexpectedFields: unexpectedFieldCount(actual, named) };
+  if (!wanted) return { position, kind: "observed-not-expected", fields: [], furtherFields: 0, ...extraFieldDetail(actual, named, disclosure) };
   const movedTo = pairing[position];
   // A moved record matched whole, so no field of it differs and it carries no
   // field the expectation does not name -- `matchesExtractionRecord` would not
@@ -238,12 +278,47 @@ function recordMismatch(input: {
   const differing = [...named]
     .filter((field) => !fieldMatches(wanted, actual, field, optional, context))
     .map((field) => ({ field, expected: fieldValue(wanted, field, disclosure, true), observed: fieldValue(actual, field, disclosure, false) }));
+  const extra = extraFieldDetail(actual, named, disclosure);
   return {
-    position, kind: "values-differ",
+    // Every named field agrees, so the keys the expectation names nowhere are
+    // the whole reason this record failed (`matchesExtractionRecord`).
+    position, kind: differing.length === 0 && extra.unexpectedFields > 0 ? "extra-columns" : "values-differ",
     fields: differing.slice(0, MAX_FIELDS_PER_RECORD),
     furtherFields: Math.max(0, differing.length - MAX_FIELDS_PER_RECORD),
-    unexpectedFields: unexpectedFieldCount(actual, named),
+    ...extra,
   };
+}
+
+/** The step-level summary of extra keys, or `undefined` when no observed record carried one. */
+function extraColumnsSummary(expected: readonly ExtractionRecord[], records: readonly ExtractionRecord[], optional: ReadonlySet<string>, named: ReadonlySet<string>, disclosure: ExtractionDisclosureRule, context: ExtractedValueContext | undefined): ExtractionExtraColumns | undefined {
+  const perRecord = records.map((record) => extraFieldNames(record, named));
+  const carrying = perRecord.filter((keys) => keys.length > 0).length;
+  if (carrying === 0) return undefined;
+  // The same pairing as the verdict, over records with their extra keys
+  // dropped, so "would have matched" means exactly what "matched" means.
+  const stripped = records.map((record) => Object.fromEntries(Object.entries(record).filter(([key]) => named.has(key))) as ExtractionRecord);
+  const pairing = extractionRecordPairing(expected, stripped, optional, context);
+  const distinct = [...new Set(perRecord.flat())];
+  const shown = disclosure === "fixture-page" ? distinct.slice(0, MAX_FIELDS_PER_RECORD).map(publishedName) : undefined;
+  return {
+    records: carrying,
+    ...(shown ? { names: shown } : {}),
+    furtherNames: distinct.length - (shown?.length ?? 0),
+    matchedRecords: pairing.reduce<number>((total, at, position) => total + (at === position ? 1 : 0), 0),
+    matchedInAnyOrder: pairing.filter((at) => at !== undefined).length,
+  };
+}
+
+/** One record's extra-key count, and the keys' names where the disclosure rule publishes them. */
+function extraFieldDetail(record: ExtractionRecord | undefined, named: ReadonlySet<string>, disclosure: ExtractionDisclosureRule): Pick<ExtractionRecordMismatch, "unexpectedFields" | "extraFields"> {
+  const extra = record ? extraFieldNames(record, named) : [];
+  if (extra.length === 0 || disclosure !== "fixture-page") return { unexpectedFields: extra.length };
+  return { unexpectedFields: extra.length, extraFields: extra.slice(0, MAX_FIELDS_PER_RECORD).map(publishedName) };
+}
+
+/** A key name as published: cut at the value cap, so no name can carry an unbounded string out. */
+function publishedName(name: string): string {
+  return [...name].slice(0, MAX_VALUE_CHARACTERS).join("");
 }
 
 /**
@@ -260,8 +335,8 @@ function fieldMatches(wanted: ExtractionRecord, actual: ExtractionRecord, field:
 }
 
 /** Fields an observed record carried that the expectation names nowhere. */
-function unexpectedFieldCount(record: ExtractionRecord | undefined, named: ReadonlySet<string>): number {
-  return record ? Object.keys(record).filter((field) => !named.has(field)).length : 0;
+function extraFieldNames(record: ExtractionRecord, named: ReadonlySet<string>): string[] {
+  return Object.keys(record).filter((field) => !named.has(field));
 }
 
 /**

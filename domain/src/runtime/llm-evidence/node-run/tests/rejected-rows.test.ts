@@ -106,8 +106,10 @@ test("the samples are never in what the Flow keeps, and a playback of it asks fo
   assert.equal(JSON.stringify(ran.draft).includes(TRUE_EARBUDS), false);
   const kept = ran.draft?.ranWith?.parameters as JsonObject;
   assert.equal(Object.hasOwn(kept, "rejectedSamples"), false);
-  // A sample list is three long; the payload's longest list without them is two.
-  assert.equal(ran.draft?.replay?.produced?.records, 2, "the replay counts the payload without samples");
+  // A sample list is three long; the read's own account says it returned one
+  // row, and that is what the replay compares (t194-w35: until then this was
+  // the payload's longest list, two -- the column names).
+  assert.equal(ran.draft?.replay?.produced?.records, 1, "the replay counts the read's own rows, not the samples");
   // The playback's own dispatch of those parameters carries no request for samples.
   const playback = webAutomationExtractListDispatch(kept);
   assert.ok(playback.ok, "the kept parameters dispatch");

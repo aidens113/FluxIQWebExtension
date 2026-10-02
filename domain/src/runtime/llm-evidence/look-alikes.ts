@@ -150,6 +150,8 @@ export function webLlmElementDescription(element: WebLlmEvidenceElement): string
     // Part of `text`, a handle, and a flag only a search capture sets: none
     // tells two elements apart for a person (t223).
     ownText: undefined,
+    // `text` again, spaced for reading: it tells nothing `text` does not.
+    readable: undefined,
     parent: undefined,
     hidden: undefined,
     // Not identity for this purpose: a row's copy of a control usually differs
@@ -182,6 +184,14 @@ export function webLlmElementDescription(element: WebLlmEvidenceElement): string
     recent: undefined,
     changed: undefined,
     repeats: undefined,
+    // How the page draws it (t229): a cursor and a class are state a hover or
+    // a choice changes, and every option of a picker shares them, so they tell
+    // no two alike options apart. Whether the form is a search, and whether
+    // the name is only a placeholder, are read from `form` and `name`.
+    cursor: undefined,
+    marked: undefined,
+    searchForm: undefined,
+    placeholderName: undefined,
     // What stands in front of the page (`layers.ts`): it changes as a dialog
     // opens or a wall is dismissed, and the handles it names are no cue a
     // person reads. The dialog two alike controls sit in is told by `dialog`.

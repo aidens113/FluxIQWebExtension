@@ -114,7 +114,7 @@ test("upload: a disabled file input is refused instead of taking files nothing w
   });
   expect(reply, reply.message).toMatchObject({
     status: "failed",
-    failure: { code: "web.action.rejected", category: "blocked_by_capability_or_policy" }
+    failure: { code: "web.target.not_actionable", category: "unexpected_state" }
   });
   expect(actualOf(reply)).toContain("disabled");
   expect(await page.locator(UPLOAD_INPUT).evaluate((element) => (element as HTMLInputElement).files?.length ?? 0)).toBe(0);
@@ -132,7 +132,7 @@ test("upload: a file input in an inert subtree is refused, because the page has 
     selector: UPLOAD_INPUT,
     upload: { files: [FILE] }
   });
-  expect(reply, reply.message).toMatchObject({ status: "failed", failure: { code: "web.action.rejected" } });
+  expect(reply, reply.message).toMatchObject({ status: "failed", failure: { code: "web.target.not_actionable" } });
   expect(actualOf(reply)).toContain("inert");
 });
 

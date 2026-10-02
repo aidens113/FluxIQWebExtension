@@ -1,6 +1,6 @@
 // The one word the page view prints for what an element is (t223, "Kinds"):
 // `link`, `button`, `field` (`field:<type>` for an input that is not text or
-// search), `select`, `checkbox`, `radio`, `switch`, `toggle`, `tab`,
+// search, `field[search]` for a search box), `select`, `checkbox`, `radio`, `switch`, `toggle`, `tab`,
 // `menuitem`, `option`, `slider`, `treeitem`, `h1`-`h6`, `img`, `clickable`,
 // `dialog` and `layer`. Plain text has no kind.
 //
@@ -8,6 +8,14 @@
 // marked `role="button"` is a button. Three roles the format does not name are
 // given the nearest kind it does: `combobox` and `spinbutton` are fields a
 // person types into, and a `listbox` is chosen from, as a select is.
+//
+// A search box is said to be one (t229): the crossborder marketplace's read
+// `field "Autumn Mega Sale: up to 70% off"`, and the model searched the home
+// page for a store 29 times without ever typing into it. A field is a search
+// box when its type is `search`, its role `searchbox`, it sits in a `search`
+// landmark or a form whose action is a search, or the page named it, or gave
+// it the id, `q` or `search`. An element with a cursor of its own and no kind
+// of its own is `clickable`, as one with a click handler is.
 
 import type { WebLlmEvidenceElement } from "../../elements";
 import { attributeValue } from "./attribute-value";
@@ -37,12 +45,18 @@ const HEADING_TAG = /^h[1-6]$/u;
 
 /** The element's kind word, or `undefined` for plain text. */
 export function webLlmElementKind(element: WebLlmEvidenceElement): string | undefined {
+  const kind = ownKind(element);
+  return kind === "field" && isSearchBox(element) ? "field[search]" : kind;
+}
+
+function ownKind(element: WebLlmEvidenceElement): string | undefined {
   const role = element.role?.trim().split(/\s+/u)[0]?.toLowerCase();
   const byRole = role === undefined ? undefined : ROLE_KINDS[role];
   if (byRole !== undefined) return byRole;
   const byTag = tagKind(element);
   if (byTag !== undefined) return byTag;
   if (element.hasClickHandler === true) return "clickable";
+  if (element.cursor !== undefined && element.tag !== "label") return "clickable";
   if (element.isDialog !== undefined) return "dialog";
   if (element.covers !== undefined || element.coversCount !== undefined) return "layer";
   return undefined;
@@ -61,6 +75,15 @@ function tagKind(element: WebLlmEvidenceElement): string | undefined {
   const editable = attributeValue(element, "contenteditable");
   if (editable !== undefined && editable.trim().toLowerCase() !== "false") return "field";
   return undefined;
+}
+
+const SEARCH_NAMES: ReadonlySet<string> = new Set(["q", "search"]);
+
+/** A field a person searches the site with. */
+function isSearchBox(element: WebLlmEvidenceElement): boolean {
+  if (element.inputType === "search" || element.role?.trim().toLowerCase() === "searchbox") return true;
+  if (element.landmark === "search" || element.searchForm === true) return true;
+  return ["name", "id"].some((key) => SEARCH_NAMES.has(attributeValue(element, key)?.trim().toLowerCase() ?? ""));
 }
 
 function inputKind(type: string): string | undefined {

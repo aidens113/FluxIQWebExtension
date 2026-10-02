@@ -55,6 +55,7 @@ import { armScenarioVariant } from "./lab-control/index.js";
 import { LAB_PROJECT_DOMAIN_ID, createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, withDeclaredFlowRepair, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type LiveRepairLaneInput, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, chromiumExtensionStorageDirs, runRedactionScopes, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
+import { LabRunRecord } from "./lab-runs/index.js";
 import { runProviderFailureLog, writeProviderFailureSidecar } from "./provider-failure/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
@@ -151,6 +152,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   const bundle = new EvidenceBundle({ rootDirectory: options.runsDirectory, runId, scenarioId: scenario.id, redaction: { secrets }, evidencePolicy: evidence.capture });
   await bundle.initialize();
   const startedAt = new Date().toISOString();
+  // A live run is filed in the machine-wide `lab-runs/<date>/<runId>/` (`lab-runs/`), opened before Core starts so that Core logs every model and tool step into its `steps/`.
+  const labRun = live ? await LabRunRecord.open({ environment, runId, startedAt, scenarioId: scenario.id, work: creation?.task.id ?? live.describeRepair().task, workflowId: options.workflowId, variantId: options.variantId, bundlePath: path.resolve(options.runsDirectory, runId), repositoryRoot: options.repositoryRoot }) : undefined;
   let topology: RunningTopology | undefined;
   let context: BrowserContext | undefined;
   let extensionPage: Page | undefined;
@@ -226,7 +229,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       ? options.runsDirectory
       : path.join(options.runsDirectory, ".work");
     const ownsIsolatedCore = topologyTarget.mode === "isolated" || topologyTarget.mode === "persistent-isolated";
-    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath, copyStartupFailureLogs: logsDirectory => copyProcessLogs(bundle, logsDirectory), ...(ownsIsolatedCore && labPaths.hostPrebuilt ? { prepareHost: false } : {}), ...(ownsIsolatedCore ? { bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
+    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath, copyStartupFailureLogs: logsDirectory => copyProcessLogs(bundle, logsDirectory), ...(labRun?.stepsDirectory ? { stepLogDirectory: labRun.stepsDirectory } : {}), ...(ownsIsolatedCore && labPaths.hostPrebuilt ? { prepareHost: false } : {}), ...(ownsIsolatedCore ? { bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
     let existingControl: ExistingFluxIQControlClient | undefined;
     if (target.mode === "existing") {
       existingControl = await openExistingFluxIQControl(target, options.runsDirectory);
@@ -258,7 +261,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     }
     const launched = await launchBrowser(topology, extensionPath);
     ({ context, browserVersion } = launched); await startTrace.attach(context); // The extension start, timestamped, for extension-start.local.json.
-    periodicCapture.start();
+    periodicCapture.start(); labRun?.watchSteps(() => screenshotAdapter.capture(evidenceEvent(runId, scenario.id, undefined, "checkpoint", "The page after a step"))); // A picture into each page step's folder, by the same capture.
     const scenarioOrigins = new Set(scenarioNetworkOrigins(topology.scenarioOrigin));
     const isScenarioUrl = (url: string) => { try { return scenarioOrigins.has(new URL(url).origin); } catch { return false; } };
     networkGuard = await installRunNetworkGuard(context, topology, [...scenarioOrigins]);
@@ -527,6 +530,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   } finally {
     setFacilityStage("scenario.cleanup");
     await periodicCapture.stop({ finalCapture: verdict !== "passed" }); // A passed run's `final` event already pictured its end.
+    await labRun?.stopWatching(); // Before the browser closes.
     stepRunner?.dispose();
     consoleErrors?.dispose();
     if (recordingStarted && extensionPage) await runtimeMessage(extensionPage, { type: "fluxiq.stopRecording" }).catch(() => undefined);
@@ -686,8 +690,10 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     bundle.registerEvidencePolicy(evidence.capture);
     const finalized = await bundle.finalize({ verdict, metrics });
     await writeProviderFailureSidecar({ runDirectory: finalized.path, runId, log: providerFailures }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined); await writeExtensionStartSidecar({ runDirectory: finalized.path, runId, trace: startTrace, secrets }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined); // After `finalize`, never before: the artifact index is a walk of the staging directory, so a file written there would be published. A clean run writes none.
+    await labRun?.close({ verdict, bundlePath: finalized.path }); // Best-effort, after `finalize` like the sidecars: links the bundle's `steps` to the run's, copies its key files, rebuilds `lab-runs/index.md`.
     return { runId, verdict, path: finalized.path, ...(observation ? { observation } : {}), ...(evaluation ? { evaluation } : {}), ...(failureCategory ? { failureCategory } : {}), ...(permissionStop ? { permissionStop: { verdict: "stopped_for_permission" as const, ...permissionStop } } : {}) };
   } finally {
+    await labRun?.close({ verdict: "failed" }); // A run whose publication threw still leaves the index; after a close above, nothing.
     if (topology && !topologyStateRemoved && !keepsRunState(environment)) await removeRunOwnedTopologyState(topology).catch(() => undefined);
   }
 }

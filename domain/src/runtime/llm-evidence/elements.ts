@@ -48,6 +48,15 @@ export type WebLlmEvidenceElement = {
    */
   ownText?: string;
   /**
+   * The element's words as a reader sees them, where `text` and a name taken
+   * from its content run together the words of children the page lays out as
+   * separate blocks -- "Pickup or delivery? Carden Falls Supercenter" beside
+   * "Pickup or delivery?Carden Falls Supercenter". The capture sends it only
+   * when the two differ by spacing alone. Display only: the page view prints
+   * it (`page-view/element/words.ts`); identity reads `name` and `text`.
+   */
+  readable?: string;
+  /**
    * The handle of the nearest ancestor this packet describes, in the composed
    * tree (t223). An ancestor the packet does not describe -- a sensitive
    * control, an element with no address -- is passed over to the next one up.
@@ -74,6 +83,24 @@ export type WebLlmEvidenceElement = {
   options?: Array<{ value: string; label: string }>;
   /** The page listens for a click on it. */
   hasClickHandler?: true;
+  /**
+   * The cursor the element sets for itself (t229): `pointer` where the page
+   * says "press here", `not-allowed` where it refuses a press. Only where its
+   * parent shows another, so the insides of a pressable element do not carry
+   * it. How a page that draws its controls as `<div>`s shows a person they are
+   * controls; the page view prints such an element as one.
+   */
+  cursor?: "pointer" | "not-allowed";
+  /** The element is drawn apart from its like siblings -- the one chip of a picker with a darker border (t229). */
+  marked?: true;
+  /** It sits in a form whose action is a search (`/search`, `search.php`), so a text field in it is a search box (t229). */
+  searchForm?: true;
+  /**
+   * Its name is only its placeholder: no `<label>`, `aria-label`,
+   * `aria-labelledby` or `title` names it (t229). Display only: the page view
+   * prints the placeholder as `placeholder "…"` and not as its name.
+   */
+  placeholderName?: true;
   /** Where it is on the page, in document coordinates, rounded to whole pixels. */
   box?: { x: number; y: number; width: number; height: number };
   /** Whether any of it is inside the viewport as captured. */
@@ -193,6 +220,7 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     label: rawLabel === name ? undefined : rawLabel,
     text,
     ownText: ownWords(raw.ownText),
+    readable: typeof raw.readableText === "string" ? screenedPageText(raw.readableText) : undefined,
     // Written by the packet (`./sanitize.ts`), which alone knows every
     // element's handle: the capture names the parent by its place in the list.
     parent: undefined,
@@ -207,6 +235,10 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     href,
     options: options?.length ? options : undefined,
     hasClickHandler: trueFlag(raw.hasClickHandler),
+    cursor: raw.cursor === "pointer" || raw.cursor === "not-allowed" ? raw.cursor : undefined,
+    marked: trueFlag(raw.setApart),
+    searchForm: searchFormFlag(raw.context),
+    placeholderName: placeholderNameFlag(name, rawLabel, byName),
     box: documentBox(raw.documentBounds),
     onViewport: typeof raw.isVisibleOnViewport === "boolean" ? raw.isVisibleOnViewport : undefined,
     revealKind,
@@ -240,6 +272,32 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     position: documentPosition(raw.documentBounds),
     shadowHosts: shadowHostChain(raw.context)
   };
+}
+
+/** A form whose action names a search: `/search`, `/search.php`, `/searchresults`. */
+const SEARCH_ACTION = /(?:^|[/._-])search/iu;
+
+/** Whether the element's form's action is a search, read from the address's path alone. */
+function searchFormFlag(context: unknown): true | undefined {
+  if (!isJsonRecord(context)) return undefined;
+  const action = pageText(context.formAction);
+  if (action === undefined) return undefined;
+  const path = action.split(/[?#]/u)[0] ?? "";
+  return SEARCH_ACTION.test(path) ? true : undefined;
+}
+
+/**
+ * Whether the name is only the placeholder: the accessible name falls back to
+ * it when nothing labels the field, and a placeholder is an example or an
+ * advertisement ("Autumn Mega Sale: up to 70% off"), not what the field is.
+ * A `<label>`, `aria-label`, `title` or `aria-labelledby` that says the same
+ * words is a label, and then the name is the label's.
+ */
+function placeholderNameFlag(name: string | undefined, label: string | undefined, attributes: Record<string, unknown>): true | undefined {
+  const placeholder = screenedPageText(attributes.placeholder);
+  if (name === undefined || placeholder !== name || label === name) return undefined;
+  const authored = ["aria-label", "title"].some((key) => screenedPageText(attributes[key]) === name) || attributes["aria-labelledby"] !== undefined;
+  return authored ? undefined : true;
 }
 
 /**

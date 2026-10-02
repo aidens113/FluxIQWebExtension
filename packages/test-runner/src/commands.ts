@@ -144,7 +144,7 @@ export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>
 const llmOptionNames = [
   "--live-llm", "--llm-profile", "--llm-provider", "--llm-model", "--llm-task", "--llm-permit",
   "--llm-max-input-tokens", "--llm-max-output-tokens", "--llm-max-total-tokens",
-  "--llm-max-calls", "--llm-max-run-tokens", "--llm-timeout-ms", "--llm-max-retries", "--llm-max-cost-usd",
+  "--llm-max-calls", "--llm-max-run-tokens", "--llm-timeout-ms", "--llm-max-retries", "--llm-max-cost-usd", "--llm-cost-ceiling-usd",
 ] as const;
 
 function llmOptions(args: string[]): LlmExecutionProfile | undefined {

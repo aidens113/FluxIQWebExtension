@@ -168,7 +168,7 @@ test("check: a disabled control is rejected with the disabled reason and is left
     status: "failed",
     validation: { status: "failed", actual: "the element is disabled" },
     failure: {
-      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false,
+      category: "unexpected_state", code: "web.target.not_actionable", retryable: false,
       expected: "the control is checked", actual: "disabled: the element is disabled"
     }
   });

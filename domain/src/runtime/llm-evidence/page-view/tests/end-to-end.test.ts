@@ -107,7 +107,7 @@ test("a realistic capture becomes the approved compact page", () => {
     "t4 \"Portland 97214\"",
     "[search]",
     "t7 select \"Search in\" =\"All\" [All|Electronics]",
-    "t9 field \"Search Brightaisle\" =\"wireless earbuds\"",
+    "t9 field[search] \"Search Brightaisle\" =\"wireless earbuds\"",
     "t10 button \"Go\"",
     "[main]",
     "- 1/2",

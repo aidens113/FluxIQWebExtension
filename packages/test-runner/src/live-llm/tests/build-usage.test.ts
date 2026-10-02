@@ -3,7 +3,7 @@ import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import { liveLlmBudgetBreaches } from "../budget.js";
 import { liveLlmBuildUsage } from "../build-usage.js";
-import { planLiveLlmExecution } from "../live-llm-plan.js";
+import { planAtLabCeiling } from "./lab-ceiling.js";
 import type { CreatedFlowBuild, CreatedFlowBuildStep } from "../../flow-lane/index.js";
 
 /**
@@ -16,7 +16,7 @@ import type { CreatedFlowBuild, CreatedFlowBuildStep } from "../../flow-lane/ind
  * record rather than as a call that escaped its caps.
  */
 
-const plan = planLiveLlmExecution({
+const plan = planAtLabCeiling({
   schemaVersion: LLM_LAB_SCHEMA_VERSION,
   profileId: "lab-create-flow",
   mode: "live",

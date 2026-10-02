@@ -49,13 +49,15 @@ export function liveLlmBudgetBreaches(plan: LiveLlmPlan, usage: LiveLlmObservedU
     breaches.push(`the run used ${runTokens} total tokens against its run token budget of ${plan.maxTotalTokensPerRun}${declared.maxTotalTokensPerRun === undefined ? "" : ` (--llm-max-run-tokens ${declared.maxTotalTokensPerRun})`}`);
   }
   // Every itemized call is held to the per-call caps, the calls that gathered
-  // evidence as much as the diagnosis and the patch. A figure the provider did
+  // evidence as much as the diagnosis and the patch. A call's cost cap is the
+  // plan's, the declared number held to Core's ceiling, so an unset
+  // `--llm-max-cost-usd` (the contract's $10 bound) does not loosen it. A figure the provider did
   // not report is not checked here rather than read as zero; Core's run totals
   // above still bound it.
   for (const [index, call] of usage.observedCalls.entries()) {
     const name = `call ${index + 1}${call.taskKind ? ` (${call.taskKind})` : ""}`;
-    if (call.estimatedCostUsd !== null && call.estimatedCostUsd > declared.maxEstimatedCostUsd) {
-      breaches.push(`${name} cost ${call.estimatedCostUsd} against --llm-max-cost-usd ${declared.maxEstimatedCostUsd}`);
+    if (call.estimatedCostUsd !== null && call.estimatedCostUsd > plan.maxEstimatedCostUsd) {
+      breaches.push(`${name} cost ${call.estimatedCostUsd} against its per-call cap of ${plan.maxEstimatedCostUsd} (--llm-max-cost-usd ${declared.maxEstimatedCostUsd}, held to Core's per-build ceiling)`);
     }
     if (call.inputTokens !== null && call.inputTokens > declared.maxInputTokens) {
       breaches.push(`${name} used ${call.inputTokens} input tokens against --llm-max-input-tokens ${declared.maxInputTokens}`);

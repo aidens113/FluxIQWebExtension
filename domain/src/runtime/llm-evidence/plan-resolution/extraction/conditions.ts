@@ -30,13 +30,27 @@
 // them (`run-mug1z9k9-ef625d8b`), and a grammar the resolver accepted but the
 // page refused would be the same wrong answer with more steps.
 //
-// **The resolved condition carries the column's own spec rather than a field
-// key**, and that is deliberate. The item a read leaves out is usually one it
-// does not want a column for either: a Flow that excludes sponsored placements
-// wants sixteen rows of name, price, rating and url, not seventeen columns one
-// of which is the ad label. Carrying the spec lets a condition test a column
-// the table does not keep, and leaves the saved request able to run with no
-// reference to its own field map.
+// **A condition over a column the table does not keep carries the column's own
+// spec** (`read`), and that is deliberate. The item a read leaves out is usually
+// one it does not want a column for either: a Flow that excludes sponsored
+// placements wants sixteen rows of name, price, rating and url, not seventeen
+// columns one of which is the ad label. Carrying the spec lets a condition test
+// a column the table does not keep.
+//
+// **A condition over a column the table keeps names it by the kept key**
+// (`field`), since 2026-10-01. Until then it carried the spec too, so the stored
+// Flow -- and the step a re-author is shown, with the selector withheld -- said
+// `read: {kind: "text", required: true}` where the plan had written
+// `field: "rating"`. A rerun patch could only restate that anonymous read, never
+// name the column, and a model shown it could not tell which column it tested
+// (`reports/t194-w39-reauthor-patches.md`, "Which layer resolves keys today").
+// By key, the stored step says `field: "rating"`, a rerun writing the same
+// resolves the same way through the dispatch reader
+// (`actions/extraction/read-request.ts`), and the page tests the value already in
+// the row. A declared schema that later drops the column from the read turns the
+// condition back into the column's own spec
+// (`output-nodes/extract-list/declared-columns.ts`), so the reference never
+// dangles.
 //
 // **A condition may also name a column by the key the plan keeps it under**,
 // and until 2026-09-23 it could not. A plan that keeps a column renames it --
@@ -144,12 +158,13 @@ function readCondition(entry: unknown, columns: WebExtractionConditionColumns, p
   // a condition contradicting itself is refused as a whole, since no one key
   // explains it.
   if (!says.ok) return { ok: false, issue: "web.handle.malformed", path: says.key === undefined ? path : [...path, says.key] };
+  const kept = keptKeyOf(column.key, column.field, columns.kept);
   return {
     ok: true,
     assumed: column.assumed,
     condition: present<WebAutomationExtractItemCondition>({
-      field: undefined,
-      read: column.field,
+      field: kept,
+      read: kept === undefined ? column.field : undefined,
       is: says.says.is,
       atLeast: says.says.atLeast,
       atMost: says.says.atMost,
@@ -202,6 +217,41 @@ function conditionColumn(
     unknown ??= column;
   }
   return unknown!;
+}
+
+/**
+ * The key this plan keeps the condition's column under, or `undefined` when the
+ * plan keeps no column that reads the same value.
+ *
+ * The key the condition found its column by is preferred when the plan keeps
+ * that very column under it; otherwise the first kept key whose column reads
+ * the same value. Two keys reading one column hold the same value in every row,
+ * so which of them is named changes no outcome.
+ *
+ * "The same value" ignores `required`: whether a row may lack the column is a
+ * question about the row, and a condition asks only whether the item has the
+ * value (`apps/extension/src/content/extraction/item-filter.ts` tests a
+ * condition by key against the row's value, `undefined` when it is missing,
+ * exactly as it tests a condition's own read).
+ */
+function keptKeyOf(found: string, column: WebAutomationExtractField, kept: Record<string, WebAutomationExtractField>): string | undefined {
+  const identity = columnIdentity(column);
+  const reads = (key: string): boolean => Object.hasOwn(kept, key) && columnIdentity(kept[key]!) === identity;
+  if (reads(found)) return found;
+  return Object.keys(kept).find(reads);
+}
+
+/** What a column reads from the page, as one comparable string: every member of its spec but `required`, in a fixed order. */
+function columnIdentity(column: WebAutomationExtractField): string {
+  if (typeof column === "string") return JSON.stringify(["string", column]);
+  const { required: _required, ...read } = column;
+  return JSON.stringify(sortedKeys(read));
+}
+
+function sortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortedKeys);
+  if (!isJsonRecord(value)) return value;
+  return Object.fromEntries(Object.keys(value).sort().filter((key) => value[key] !== undefined).map((key) => [key, sortedKeys(value[key])]));
 }
 
 /** The column the condition names: one of the naming keys, or a table header. Two that disagree name no one column. */

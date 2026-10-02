@@ -58,6 +58,7 @@ import {
   isSemanticTextElement
 } from "./element-traits";
 import { accessibleNameFor, authoredNameAttribute, elementContext, implicitRole, labelText } from "./identity";
+import { pageListensForPress } from "./page-press";
 import { selectorFor } from "./selector";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "./sensitive-text";
 import type { DomElementDescriptor } from "./types";
@@ -72,7 +73,9 @@ export function describeElement(element: Element): DomElementDescriptor {
   };
   if (bounds) descriptor.bounds = bounds;
   if (docBounds) descriptor.documentBounds = docBounds;
-  if (hasClickHandler(element)) descriptor.hasClickHandler = true;
+  // An `onclick` this world can see, or a press listener the page world saw
+  // the page add (t229): a `<div>` bound in script is a control too.
+  if (hasClickHandler(element) || pageListensForPress(element)) descriptor.hasClickHandler = true;
   const text = isInteractableUiElement(element) || isSemanticTextElement(element)
     ? visibleText(element)
     : directVisibleText(element);
@@ -148,6 +151,22 @@ export function ownTextBeside(element: Element, text: string | undefined): strin
   if (!isSemanticTextElement(element) && !isInteractableUiElement(element)) return undefined;
   const own = directVisibleText(element) ?? "";
   return own === (text ?? "") ? undefined : own;
+}
+
+/**
+ * The element's words as a reader sees them, beside a `text` that runs the
+ * words of block children together: `undefined` unless the two differ by
+ * spacing alone. Only for the elements whose `text` is all their descendants'
+ * (an interactable or a semantic text element), read under the same
+ * sensitive-text rule (`"readable"`, `sensitive-text.ts`). Display only; see
+ * `readableText` on the descriptor.
+ */
+export function readableTextBeside(element: Element, text: string | undefined): string | undefined {
+  if (text === undefined) return undefined;
+  if (!isSemanticTextElement(element) && !isInteractableUiElement(element)) return undefined;
+  const readable = textOutsideSensitiveControls(element, "readable").replace(/\s+/g, " ").trim();
+  if (!readable || readable === text) return undefined;
+  return readable.replace(/\s+/g, "") === text.replace(/\s+/g, "") ? readable : undefined;
 }
 
 /**

@@ -317,8 +317,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // Saying nothing is not the same as saying it causes nothing: a step that
     // declared nothing would be waved past the gate every time the Flow ran,
     // and the one fact nobody but the model holds is what its own step means on
-    // this site.
-    if (node.effect === "mutate" && value.consequences === undefined) {
+    // this site. An explicit `null` is the same as saying nothing: it is what a
+    // stored call carried forward before `nodeCall` stopped writing it, and
+    // "missing" is the refusal that tells the model what to write instead.
+    if (node.effect === "mutate" && (value.consequences === undefined || value.consequences === null)) {
       return refusal(undefined, "invalid_input", rejectionDetail({
         reason: "missing_input_keys", target: undefined, instead: CALL_KEYS, missing: undefined, requestId: undefined
       }), record);
@@ -685,12 +687,21 @@ function safeCall(value: JsonObject, parameters: JsonObject): JsonObject {
  * Never stripped. This is what the Flow's step is built from, and a web step
  * runs on a selector by necessity; the declaration is applied to what the model
  * is *shown* instead (`safeCall`).
+ *
+ * **`consequences` is written only when the call carried one.** Until t194-w35
+ * a call with none was written back with `consequences: null`. Core takes this
+ * as the step's input (`llm/evidence-loop/call-record.ts`), a rerun is a merge
+ * patch over that input that never names the key, and the permission check
+ * read the `null` as an unreadable declaration -- so live run 11's re-author had
+ * sixteen reruns of a read refused `consequences_unreadable` for a word nobody
+ * wrote (`run-muq4oaof-464f5bce`). A `null` that arrives is dropped the same
+ * way, so a call already stored with one stops carrying it from its next run.
  */
 function nodeCall(value: JsonObject, parameters: JsonObject): JsonObject {
-  return present<{ node: JsonValue; parameters: JsonObject; consequences: JsonValue }>({
+  return present<{ node: JsonValue; parameters: JsonObject; consequences?: JsonValue }>({
     node: value.node ?? null,
     parameters,
-    consequences: value.consequences ?? null
+    consequences: value.consequences === null ? undefined : value.consequences
   }) as unknown as JsonObject;
 }
 

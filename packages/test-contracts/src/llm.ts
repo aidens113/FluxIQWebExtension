@@ -45,7 +45,16 @@ export const LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST = 1_000_000 as const;
  * asked for evidence unreachable.
  */
 export const LLM_LAB_MAX_CALLS_PER_RUN = 64 as const;
-export const LLM_LAB_MAX_ESTIMATED_COST_USD = 0.25 as const;
+/**
+ * The most `--llm-max-cost-usd` may declare: Core's largest configurable
+ * per-build ceiling (`AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD`), not the
+ * ceiling itself. The ceiling is `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default
+ * $0.10), set per run, so a static bound can only be its maximum; the Lab's
+ * plan then holds the build to the ceiling Core resolved, and a declared number
+ * may only lower it. Mirrored because this package depends only on Core's
+ * public contracts; the test runner's plan tests pin it to Core's export.
+ */
+export const LLM_LAB_MAX_ESTIMATED_COST_USD = 10 as const;
 
 /**
  * `repair` is the iterating repair of a Flow that failed: the Lab plans it as

@@ -251,11 +251,12 @@ Every page leaves the domain as `web-llm-page.v3`
   letterless fragments of one value (`$`, `39.`, `99`) are joined. No element
   that qualifies is capped, ranked or cut.
 - **A line** is `<handle> [<heading>] [<kind>] ["<words>"] <state>`: the `tN`
-  handle, the kind (`link`, `button`, `field[:type]`, `select`, `checkbox`,
-  `radio`, `toggle`, `tab`, `img`, `h1`-`h6`, `clickable`, `dialog`, `layer`,
-  ...), the words in quotes, and states (`="value"`, a select's options,
-  `checked`, `open`, `disabled`, a table cell's column, a link's address,
-  `covered-by tA`, `focused`). Links are written on the page's `~` base, and a
+  handle, the kind (`link`, `button`, `field[:type]`, `field[search]`,
+  `select`, `checkbox`, `radio`, `toggle`, `tab`, `img`, `h1`-`h6`,
+  `clickable`, `dialog`, `layer`, ...), the words in quotes, and states
+  (`="value"`, a select's options, `checked`, `open`, `disabled`, `selected`,
+  `pressed`, `current`, `marked`, `placeholder "…"`, a table cell's column, a
+  link's address, `covered-by tA`, `focused`). Links are written on the page's `~` base, and a
   repeated address is written `same href`.
 - **Structure markers** on lines of their own: `[landmark]` (with frame, modal
   dialog and form), `- i/n` for a list item, `- row r`, and
@@ -303,6 +304,50 @@ Every page leaves the domain as `web-llm-page.v3`
   24 per window (Core's default recovery budget), and
   `validateTargetOverrideEvidence` checks a repair's handle against that
   packet. One that was let go, or edited, is `evidence_unrecognized`.
+
+### Controls The Markup Does Not Name
+
+Many pages build controls from styled `<div>`s bound with `addEventListener`.
+An isolated content script cannot see a listener the page adds in its own
+world, so three facts make those controls visible:
+
+- **The press probe.** `page-world/press-listeners.ts` runs in the page's world
+  at document start, wraps `addEventListener` and the `onclick` setter, and
+  remembers which elements get press listeners; it writes nothing to the page.
+  `content/page-press.ts` asks about one element by dispatching the cancelable
+  `fluxiq:press-probe` event (`shared/press-probe-event.ts`), and
+  `describe-element.ts` sets `hasClickHandler` from the answer. Such an element
+  prints as `clickable` (`traits.ts`, `kind.ts`).
+- **`cursor`** (`content/evidence/press-cursor.ts`): the element's own
+  `pointer` or `not-allowed`, recorded only where its parent's cursor differs.
+  A pointer makes the element a control; `not-allowed` adds `disabled`.
+- **`setApart`** (`content/evidence/set-apart.ts`): set on the one member of a
+  run of like siblings that carries a class few of the others carry (siblings
+  with a `not-allowed` cursor are left out of the run). It prints `marked`,
+  beside `selected` (`aria-selected`), `pressed` (`aria-pressed`) and
+  `current` (`aria-current`), for pages that mark a chosen chip by class only.
+
+An element that is a control only through a listener or a cursor, and that
+contains another control, gets a text line instead of a control line
+(`line-choice.ts`), so a list that delegates its buttons' clicks does not
+become one line holding them all. Such a control prints its own words, not
+every word under it; one with no words takes the alt text of its images.
+
+**Fields.** `kind.ts` prints `field[search]` for type `search`, role
+`searchbox`, a field inside a `search` landmark, a field in a form whose action
+is a search (the sanitize flag `searchForm`, from `context.formAction`), and a
+field named or id'd `q` or `search`. Sanitize sets `placeholderName` when a
+field's only name is its placeholder; a placeholder is never a field's words
+(`words.ts`) and is shown as `placeholder "…"` whenever it differs from the
+line's words (`state-tokens.ts`). `identity/label.ts` `nearbyLabel` skips a
+neighbour that is a control or has no letter or digit, and looks before the
+field's wrappers, up to two levels, while each wrapper holds no other field;
+that is how a stepper box between "−" and "+" is named "Quantity".
+
+Visibility goes by computed `display`, not the `hidden` attribute
+(`rendered-elements.ts`). The guard spec
+`apps/extension/e2e/content/tests/evidence/tests/page-view-controls.spec.ts`
+checks that every visible control on the ten scenarios gets a line.
 
 Measured on 20 scenario pages (t223), the packets' 2,248,731 bytes are 117,929
 bytes of view (5.2%), the largest page 15,056 bytes; one whole decide request on

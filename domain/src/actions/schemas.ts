@@ -227,7 +227,7 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
   {
     actionType: "web.dom.type",
     label: "Type Text",
-    description: "Enter text into an editable DOM element.",
+    description: "Enter text into an editable DOM element. With submit set to true it then sends the field's form, as pressing Enter does: a search typed and sent in one step.",
     // `text` is required. It was not, and that is why a recorded password step
     // replayed as a field typed empty: `payloads.ts` filled `text` with `""`
     // when the recorder had withheld the value, `hasExecutableParameters`
@@ -239,7 +239,7 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
     // A withheld value is supplied at run time instead of carried: `text` may
     // therefore also be the secret request `output-nodes/secret-binding.ts`
     // builds, which names the run input the value arrives in and never a value.
-    parameterSchema: { type: "object", required: ["selector", "text"], properties: { ...elementProperties, text: { type: "string", label: "Text, or the secret request it is supplied through" }, value: { type: "string" } } }
+    parameterSchema: { type: "object", required: ["selector", "text"], properties: { ...elementProperties, text: { type: "string", label: "Text, or the secret request it is supplied through" }, value: { type: "string" }, submit: { type: "boolean", label: "Then send the field's form, as Enter does" } } }
   },
   { actionType: "web.dom.clear", label: "Clear Field", description: "Clear an editable DOM element.", parameterSchema: selectorSchema },
   {

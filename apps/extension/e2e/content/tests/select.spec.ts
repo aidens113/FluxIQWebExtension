@@ -153,7 +153,7 @@ test("a disabled select is rejected with a code, not reported as a selection nob
     // Every refusal carries the closed set's one code, so the reason it was
     // refused rides in the record's `actual` as "<reason>: <what was observed>".
     failure: {
-      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
+      category: "unexpected_state", code: "web.target.not_actionable", retryable: false, stage: "execution",
       expected: "a target that can be selected in", actual: "disabled: the element is disabled"
     }
   });
@@ -169,7 +169,7 @@ test("a hidden select is rejected as hidden, so the reason is the capability's o
     message: "Action rejected: the element's display is none",
     validation: { status: "failed", expected: "a target that can be selected in" },
     failure: {
-      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false,
+      category: "unexpected_state", code: "web.target.not_actionable", retryable: false,
       expected: "a target that can be selected in"
     }
   });
@@ -192,7 +192,7 @@ test("a disabled option cannot be selected, while an enabled one in the same sel
     message: 'Action rejected: the option "team" (Team) is disabled',
     validation: { status: "failed", expected: 'a selectable option matching label "Team"', actual: 'the option "team" (Team) is disabled' },
     failure: {
-      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
+      category: "unexpected_state", code: "web.target.not_actionable", retryable: false, stage: "execution",
       expected: 'a selectable option matching label "Team"', actual: 'disabled: the option "team" (Team) is disabled'
     }
   });

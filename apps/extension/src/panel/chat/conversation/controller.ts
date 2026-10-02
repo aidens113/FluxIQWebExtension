@@ -295,13 +295,14 @@ export function createConversationController(request: PanelStore["request"], onC
       onChange();
       const asked = generation;
       const result = await safeRequest<{ payload?: { conversation?: unknown } }>(threadSendRequest(target, shown, body));
-      sending = false;
       if (asked !== generation) {
         // The person moved to another thread meanwhile; the message went to the one it was written in.
+        sending = false;
         onChange();
         return result.ok;
       }
       if (!result.ok) {
+        sending = false;
         failed(result, SEND_FAILED, (sentence) => (sendError = sentence));
         onChange();
         return false;
@@ -314,8 +315,16 @@ export function createConversationController(request: PanelStore["request"], onC
       } else if (shown) {
         shown = { ...shown, revision: undefined };
       }
-      onChange();
+      // The send stays on its way until the thread holding it has been read
+      // (U-B1). Ended here, a first message left the card with no turns, no
+      // "Sending" line and nothing being sent for the length of that read, which
+      // is the empty chat's own state: the welcome screen showed in the middle
+      // of the build the message had just started, in every chat-driven Lab
+      // run (`run-muq3ubys-4b4dbf5b`, `run-muq5vb5w-b50aaab7`,
+      // `run-muq6mlom-2ae53681`).
       await controller.refresh();
+      sending = false;
+      onChange();
       return true;
     },
     async answer(askId, kind, value) {
