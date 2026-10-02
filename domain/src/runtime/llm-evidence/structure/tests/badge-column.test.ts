@@ -39,7 +39,7 @@ const DETECTION = {
 function split() {
   const detection = webAutomationStructureDetectionValue(structuredClone(DETECTION));
   assert.ok(detection?.ok, "the wire reader accepts the detection");
-  const result = splitDetectedStructure({ detection, handle: "extraction.1", recordHandle: undefined, location: "https://store.test/s", target: undefined, frameId: undefined, frameUrlPath: undefined });
+  const result = splitDetectedStructure({ detection, handle: "extraction.1", recordHandle: undefined, location: "https://store.test/s", target: undefined, frameId: undefined, frameUrlPath: undefined, firstItem: undefined });
   assert.ok(result, "a readable column is left");
   return result;
 }

@@ -149,3 +149,43 @@ run-muqbzu32: 15 decisions sent before and after.
   restored. tsc rc 0. The directory set plus tests/refuted-result: 1796 passed, 3 failed (lane D:
   reauthor-service x2, repair-replay-chain, which fail on dev too). Structure audit passed; reference
   current.
+
+## Live runs over $0.10 in the Lab index (2026-10-01 night), investigated and fixed
+
+Read-only findings (step meta.json, snapshots/live-llm.json observed.phases/perBuild, spend ledger):
+- bigbox run-muqiojz4-04a7a8fc. Creation (inside the purse): 31 calls, steps 0003-0066 (29 decisions), judge
+  0082 and the instruction reading 0083 (tagged "explore", round null), $0.082646. That equals the Lab's
+  build phase and is within $0.10. The playback run's own ceilings: result-check judges 0084-0085 $0.002124;
+  re-author build 0087-0106 $0.030004; diagnose 0107 $0.004462; patch 0108 refused as
+  llm.provider_output_invalid with reported usage 14,335 in (1,280 cached), 187 out, about $0.0041.
+  The index's $0.1336 counted 0108 at its hold of $0.0144, about $0.0103 over. The step sum ($0.1195)
+  counted it at $0 (meta costUsd null), about $0.0041 under. True total, chat included, about $0.1236 across
+  two ceilings.
+- confirm-requests run-muqilf9s-c3211328. Creation: 37 calls, $0.091164, within $0.10. Recovery: result-check
+  judges $0.001473, re-author $0.017623, diagnose and patch $0.005901. The index ($0.1162) equals the step sum
+  less the chat call.
+- The chat interpreter call (panel_command, flow.createHere, $0.0003) was outside every purse and outside
+  the index total.
+- Neither purse breached. Each "over $0.10" figure is creation plus the playback run's recovery.
+
+Fixes (Core, uncommitted):
+- W7: AutomationStudioLlmProviderError.paid. The DeepSeek envelope reader attaches the reply's usage to
+  every refusal after the reply arrived (output_invalid, truncated, padding_truncated,
+  usage_limit_exceeded). The harness settles the run ledger and the purse at that usage, including a
+  provider result the harness could not parse. The provider's step is priced.
+- W8: step-log context gains `part` ("creation" | "reauthor", null otherwise) and phase "read"; run()
+  merges, plus a new within(). meta.json has `part`, and a failed step's cost is read from `paid`.
+- W9: the panel-command model reports its cost (execution.paid). Every chat build (create-here, explore,
+  improve) passes interpretationCostUsd through the API, and generation-request validates it. The
+  creation purse carries it on top of the record (a repair ignores it). The build body is tagged with its
+  part, and the instruction reading with phase "read".
+- Lead: testing-facility.md documents part, read, refused-reply cost and what the index Cost adds up.
+  Framework reference regenerated.
+
+Validation (lead, observed): Core tsc exit 0; structure audit "passed (219 warning(s), 349 baselined)";
+docs-reference current. vitest over the affected directories (279 files): 2940 passed, 6 failed:
+- 3 lane D (fail on dev);
+- cancel-runtime-session and runs, which pass in isolation (11/11, twice): load-sensitive;
+- extension-chat "improves an automation", which fails on t234 HEAD before these edits too and passes on
+  dev eed0cc34 (t195's later fix); it resolves on the next dev merge.
+Core libs rebuilt. Downstream: structure audit passed, domain tsc 0, docs-links passed.

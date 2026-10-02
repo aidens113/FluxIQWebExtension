@@ -1,5 +1,6 @@
-// The rows each `where` condition turned down, for the model that is
-// still writing the conditions -- and for nobody else.
+// The rows each `where` condition turned down: every one for the model that is
+// still writing the conditions, and the rows a condition removed by itself for
+// the judge of a Flow's playback.
 //
 // Counts cannot tell a condition that removed advertisements from one that
 // removed answers. Live run `run-munq5s8x-6d620cdf` wrote
@@ -13,11 +14,17 @@
 // held to four rules that together keep them where they are useful:
 //
 // - **Asked for, never sent by default.** The page collects them only when the
-//   command carries `rejectedSamples: true` beside `extractList`, which the
-//   exploring node run adds to the one command it dispatches and never to the
-//   parameters the Flow keeps (`runtime/llm-evidence/node-run/rejected-rows.ts`).
-//   A Flow played back asks for none, so no stored result, dataset, bundle or
-//   run artifact of a playback can carry one.
+//   command carries `rejectedSamples` beside `extractList`, and never on the
+//   parameters the Flow keeps. `true`, every rejected row, is what the exploring
+//   node run adds to the one command it dispatches
+//   (`runtime/llm-evidence/node-run/rejected-rows.ts`). `"alone"`, only the rows
+//   each condition removed by itself, is what a Flow's playback asks for
+//   (`output-nodes/extract-list/dispatch.ts`, t194 w49): on live run 15
+//   (`run-muqj2bgb-d048ec37`) the judge was told the accessory rule removed 5
+//   rows by itself and could not see that 3 were earbuds "with Wireless
+//   Charging Case" (user: no hidden information). The rows go no further than
+//   the run record's extraction account, as labels (Core
+//   `service/summaries/extraction-summary.ts`); no dataset holds them.
 // - **Every row, whole.** No row count and no character cut (user, 2026-09-30:
 //   "Remove ANY AND ALL LIMITS ON THE NUMBER OF ELEMENTS PASSED TO MODEL. DO NOT
 //   HIDE INFORMATION"). What keeps a secret out is the screen the node run puts
@@ -40,6 +47,14 @@ import type { WebAutomationExtractionSummary } from "./summary";
 
 /** The parameter, and the summary member, that ask for and carry the samples: one name, so the two cannot drift. */
 export const WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY = "rejectedSamples" satisfies keyof WebAutomationExtractionSummary;
+
+/**
+ * The value of `rejectedSamples` that asks for only the rows each condition
+ * removed by itself (every other condition kept them): each list is then its
+ * alone rows and nothing else, and `rejectedSamplesAlone` is each list's length.
+ * `true` asks for every rejected row.
+ */
+export const WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_ONLY = "alone";
 
 /** The summary member that says how many leading rows of each list its condition removed alone. */
 export const WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_KEY = "rejectedSamplesAlone" satisfies keyof WebAutomationExtractionSummary;

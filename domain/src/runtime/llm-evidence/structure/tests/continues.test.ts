@@ -41,7 +41,8 @@ function split(detection: Detected) {
     location: "http://circleway.test/circleway/friends/",
     target: undefined,
     frameId: undefined,
-    frameUrlPath: undefined
+    frameUrlPath: undefined,
+    firstItem: undefined
   });
   assert.ok(result, "the run has readable fields");
   return result;

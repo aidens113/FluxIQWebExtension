@@ -8,7 +8,9 @@
 // depending on which of the two produced it.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
+import { isWebAutomationExtractFieldKey, webAutomationExtractionSummaryValue } from "../../../actions/extraction";
 import { captureEvidence, toolExecution, withCallStates, type WebLlmEvidenceToolExecution } from "../capture";
+import { isJsonRecord } from "../untrusted-json";
 import type { WebLlmNameAssumption } from "../name-assumption";
 import { publishedWebLlmPage } from "../page-view";
 import { present } from "../present";
@@ -145,6 +147,50 @@ export async function webNodeReplayAnswerWithPage(
   found?: WebNodeVerifyFinding
 ): Promise<WebLlmEvidenceToolExecution> {
   return webNodeReplayAnswerOnPage(run, await webNodeReplayPage(run), { code, said, acted, about, found });
+}
+
+/**
+ * What a replayed list read says it read, in one line, or nothing for a step
+ * that is not one.
+ *
+ * A step that replayed used to say only "the step ran again", and for a read
+ * that is the one line the judge of a build's test is given of it: Core sends
+ * the replay's answer as the step's `observed`
+ * (`AS/runtime/result-verification/build-test/observation.ts`). Run 15's judge
+ * (`run-muqj2bgb-d048ec37`, steps 0033 and 0034) was told nothing more of a
+ * read that kept ten rows from five pages and stopped on a disabled Next, so it
+ * was unsure, then said the pagination never resolved and sent a working Flow
+ * back. The line is the read's own account (`actions/extraction/summary.ts`):
+ * counts, field keys and closed words, so nothing in it is page text. A
+ * condition is named by the field its `where` entry tests, in the request's
+ * order, or by its position where the request does not line up with the report.
+ */
+export function webNodeReplayReadSaid(payload: JsonValue | undefined, where: unknown): string | undefined {
+  const summary = isJsonRecord(payload) ? webAutomationExtractionSummaryValue(payload.extraction) : undefined;
+  if (!summary) return undefined;
+  const conditions = summary.conditions;
+  const rows = conditions?.unfiltered
+    ? `answered with ${counted(summary.recordCount, "row")} its conditions rejected, as they kept none`
+    : `kept ${counted(summary.recordCount, "row")}`;
+  const stop = summary.paginationStop ? `, stopped on ${summary.paginationStop}` : "";
+  const parts = [`the step ran again: ${rows} from ${counted(summary.pagesRead, "page")}${stop}${summary.truncated ? ", cut short" : ""}`];
+  if (summary.itemsSeen !== undefined) parts.push(`${counted(summary.itemsSeen, "item")} seen`);
+  if (conditions && conditions.rejected.length) {
+    const fields = Array.isArray(where) && where.length === conditions.rejected.length ? where.map((entry) => (isJsonRecord(entry) ? entry.field : undefined)) : [];
+    const each = conditions.rejected.map((rejected, index) => {
+      const field = fields[index];
+      const name = isWebAutomationExtractFieldKey(field) ? field : `condition ${index + 1}`;
+      const alone = conditions.alone?.[index];
+      return alone === undefined ? `${name} ${rejected}` : `${name} ${rejected} (${alone})`;
+    });
+    parts.push(`per condition rejected${conditions.alone ? " (removed alone)" : ""}: ${each.join(", ")}`);
+  }
+  return parts.join("; ");
+}
+
+/** A count with its noun, plural unless it is one. */
+function counted(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 /** Which of the four permission refusals this was, in this domain's own words. */

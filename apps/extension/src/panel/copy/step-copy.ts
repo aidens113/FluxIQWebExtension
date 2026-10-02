@@ -21,8 +21,16 @@ const named = (verb: Record<Tense, string>, fallback: Record<Tense, string>): St
 
 const fixed = (present: string, past: string): StepWords => () => ({ present, past });
 
+/** A step said with the site it works on when the run knows it ("Looking over shop.example"), else `fallback`. */
+const onSite = (verb: Record<Tense, string>, fallback: Record<Tense, string>): StepWords => (_name, runtime) => {
+  const hostname = pageHostname(runtime.url);
+  return hostname === undefined ? fallback : { present: `${verb.present} ${hostname}`, past: `${verb.past} ${hostname}` };
+};
+
 // Every action type the domain can run has a sentence; a new one fails the
-// build here instead of reaching a person as "Working on the page".
+// build here instead of reaching a person as "Working on the page". A capture
+// says the site it reads rather than "Looking at the page", which said nothing
+// a person could tell apart from any other look (t193).
 const STEPS = {
   "web.browser.navigate": (_name, runtime) => {
     const hostname = pageHostname(runtime.url);
@@ -44,7 +52,7 @@ const STEPS = {
   "web.dom.wait_for_text": fixed("Waiting for the page", "Page was ready"),
   "web.dom.extract": fixed("Reading data from the page", "Read data from the page"),
   "web.dom.extract_list": fixed("Reading data from the page", "Read data from the page"),
-  "web.dom.capture_snapshot": fixed("Looking at the page", "Looked at the page"),
+  "web.dom.capture_snapshot": onSite({ present: "Looking over", past: "Looked over" }, { present: "Looking over the whole page", past: "Looked over the whole page" }),
   "web.dom.assert": fixed("Checking the page", "Checked the page"),
   "web.dom.upload": fixed("Attaching files", "Attached files"),
   "web.dom.dialog": fixed("Answering a pop-up", "Answered a pop-up"),
@@ -52,7 +60,7 @@ const STEPS = {
   "web.browser.download": fixed("Waiting for a download", "Download finished")
 } satisfies Record<BrowserActionType, StepWords>;
 
-const UNKNOWN: Record<Tense, string> = { present: "Working on the page", past: "Finished a step" };
+const UNKNOWN: Record<Tense, string> = { present: "Running a step", past: "Finished a step" };
 
 /** The step `runtime` describes, as a sentence in `tense`. */
 export function stepSentence(runtime: RuntimeCommandStatus, tense: Tense): string {

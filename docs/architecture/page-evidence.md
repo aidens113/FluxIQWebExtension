@@ -377,7 +377,13 @@ with `detectStructure`; the page side is `apps/extension/src/content/extraction/
 The domain splits the answer (`domain/src/runtime/llm-evidence/structure/`):
 the model gets an opaque `extraction.N` handle with each column's key, label,
 kind and coverage, the item count and how the list continues; the handle store
-keeps the selectors. A plan names the handle in an extraction node's
+keeps the selectors. Each column also carries `at`, the page-view handle of its
+element in the list's first item, as the model was last shown the page, so a
+column labelled by a meaningless atomic-CSS class path can still be matched to
+the words the page view prints beside that handle (run 38, C2). The domain finds
+the element by walking the detection's own selectors over its capture
+(`structure/first-item/`); a column whose element cannot be told unambiguously,
+or a detection with no shown page, has no `at`. No value or selector is added. A plan names the handle in an extraction node's
 `extractList`, and the node is built from what the handle keeps
 (`plan-resolution/extraction/slot.ts`).
 

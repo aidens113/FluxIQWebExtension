@@ -13,16 +13,22 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ## Current State
 
-**Update, 2026-10-01 night. Read this first.** Pass streak 0. Round 9 is pushed (page view shows every control, step logs, the $0.10 variable, lanes B and C); lanes A-C are live again.
-The compact view, the chat launcher and the first repeat guard are on dev (rounds 6-8, ledger below). The live runs
-still wandered, and the cause is now known: **the page view hid controls**. In the earbuds run the store's search box
-reached the model as `t489 field "Autumn Mega Sale: up to 70% off" =""` (its placeholder, no search marker), icon-only
-buttons had no line at all, and the model searched `find_on_page "Voltbay"` 29 times with 0 matches
-(`fxwork/t174/.../decision-dumps/build-2026-10-02T00-00-07-573Z-26504.jsonl`). **No live run until the page-view fix
-(PV) lands and a real recorded page is checked to show every control.** PV landed as t232 in round 9.
+**Handoff, 2026-10-01 late (user: "lets call it a day"). Read this first.** Pass streak 0, but every build now
+produces a Flow: the user's fix list (names-only catalog, web system prompt, one $0.10 purse per Flow, cheap older
+reads, opening navigation, covered-press close controls, stable request prefix, judge decides) is on dev and pushed.
+Tonight's runs fail in the **Flow's own playback**, not in the build. The top defect is `output_not_observed`, which
+ended 3 of 4 scenarios. All agents are stopped; no Lab, Core or browser process is running.
 
-Task ids: the task tool numbers branches (`task/t228-step-logs`, `task/t229-core-regressions`); the labels PV, CEIL and
-STEPS below are the plan's names for work that has no branch of its own or predates that numbering.
+**2026-10-02 session (supervisor).** `output_not_observed` is not a playback cause. It is the label a refuted result
+gets, filed against the last step that succeeded (run 38's C4). Behind it in run 38 is **C1**: Core's `isJsonValue`
+kept every visited object in `seen`, so a read whose `firstRows` and `extracted` share row objects was refused
+`evidence_not_json`. That refused every list read that returned a row, since `01082bc9`. Lanes C and D fixed C1 the
+same way (an ancestor check); lane D's copy, which also fixes `flow-bootstrap/plan/json-guards.ts`, is the one to
+merge. Round in flight: four leads finish and verify the uncommitted lane work (briefs below, "Briefs, 2026-10-02");
+the supervisor merges t234. Overlaps to resolve at merge: t174 and t193 both edit Core `flow-draft/{entry,index,step}.ts`
+and `activity/wording/action.ts`; t193 and t195 both edit `llm/evidence-loop.ts`.
+
+Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name older work without a branch of its own.
 
 **Binding rules (user, all in force).**
 - **Live builds start from the real extension chat (2026-10-01):** a run started by a direct API request is never a
@@ -57,26 +63,43 @@ STEPS below are the plan's names for work that has no branch of its own or preda
 - **Live Lab trees are synced to dev before testing (2026-10-01):** "live testing labs need to actually be synced to main when
   you start testing them". After each merge round, merge dev into every lane tree (both repositories) and rebuild Core
   libraries and the extension; the Lab's behind-dev guard (t236) refuses a run whose checkout or Core lacks dev.
+- **A Flow run routes by page state, not build order (2026-10-01):** "runtime is supposed to have auto recovery and
+  state! ... it failed because there was a popup that didnt show up in test run. The runtime should have fallen back to
+  state check & realize that it should go to the proper node where there is no popup." An absent sometimes-present step
+  is skipped by observing state, never a failure; the Lab records each runtime step (no "step unknown").
+- **Chat cards are never generic (2026-10-01):** "it should actually show more detailed information of what its doing
+  rather than just "looking at page"": each card says what it inspects or does, on what; the wait says "Deciding the
+  next step" until the model's reason arrives.
 - **Process.** Lanes iterate on their own branches; the supervisor merges in rounds and is the only one who commits,
   merges or pushes. Heavy commands go through `build-slots/heavy.sh`. No LLM call grants.
 
-**In flight. The user's fix list is on dev (Core b17c2bfa, downstream fef43a29); live runs resumed lane by lane on trees synced to dev** (the Lab's behind-dev guard, t236, refuses a stale tree). Leads and workers cannot `git merge` (a hook refuses it): the supervisor merges dev into every tree.
-| Fix (evidence: `lab-runs/2026-10-01/run-*/steps/`) | Result | State |
-| --- | --- | --- |
-| Node catalog names only; `core.describe_nodes` on request (t235) | earbuds 0003 body 70,148 -> 26,865 chars; est. tokens 20,754 -> 8,521 | on dev |
-| Domain system instructions on every model request (t237) | web-1, 1,964 chars; system message 3,667 -> 5,634 | on dev |
-| One purse per Flow creation; decision replies held at 2,000 tokens (t234) | +2 to +3 decisions at the old stop points; unpriced calls held at the largest seen | on dev |
-| Older reads as short outcomes; `core.recall_result` (lane C F42) | run 13 last request body 238,196 -> 144,732 | on dev |
-| Opening navigation; empty finds name the search fields (lane A F31-F32) | | on dev |
-| Covered presses name close controls; describeCall chat headings (lane B) | | on dev |
-| Completion informs, judge decides; judge request 28,214 -> 8,113 (lane D F43-F46) | | on dev |
-| Cache-stable prefix: routing situations into the window, tools in front (lane B W2b) | run 40 uncached 227.9k -> 151.4k | lane B resolving the dev merge |
-| Dev's 8 failing Core tests (7 intended expectations; an improve request ended not doable) | | lane D resolving the dev merge |
-| Live runs: crossborder (lane A, slot-1), earbuds (lane C, slot-3) through the chat at $0.10 | | running |
+**Live results, 2026-10-01 night (step logs in `C:/Users/osrs_/FluxStuff/lab-runs/2026-10-01/<run>/steps/`).**
+| Run | Lane | Spent: creation / run recovery | Ending |
+| --- | --- | --- | --- |
+| crossborder `run-muqiho5c-e830ce01` | A | $0.0415 | Flow built and ran; playback goal failed (step unknown in the bundle) |
+| earbuds `run-muqiho7e-13be6c03` | C | $0.088 | built, judged wrong, stopped at the 2-repair-round limit while still progressing |
+| confirm-requests `run-muqilf9s-c3211328` | D | $0.0912 / $0.024 | last step (navigate back to feed) `output_not_observed`; repair no_repair |
+| bigbox `run-muqiojz4-04a7a8fc` | B | $0.0826 / ~$0.041 | `output_not_observed` |
+| earbuds `run-muqj2bgb-d048ec37` | C | $0.0484 | Flow ran; read 10 of 13 rows (the accessory filter drops pairs whose name mentions a charging case) |
+| crossborder `run-muqk4u32-0b36e58f` | A | $0.0614 | Flow ran; facts not held: cart-count, cart-line |
+| earbuds `run-muqk713g-d08ad3dc` | C | ~$0.082 / ~$0.039 | `output_not_observed` |
+First decide requests are 40-50k chars including the page (62-70k before), system message 5,634 with the web
+instructions, catalog 4,662 (names only). No creation purse went over $0.10 (t234's reconciliation).
 
-**Decided.** One purse per Flow: assigned to t234 (above).
+**Uncommitted, unverified lane work (agents stopped mid-task; verify before committing).**
+| Tree | What the lead was doing |
+| --- | --- |
+| `fxwork/t174` (A) | Why playback did not skip the absent popup / route by state; web instructions now web-3 (2,415 chars, "leave a chosen option alone, read what a press changed"); F37 "the press result says what changed"; flow-draft and page-view edits |
+| `fxwork/t193` (B) | Chat cards never generic: activity wording, observer, extension card-words/messages |
+| `fxwork/t194` (C) | earbuds 10-of-13 accessory filter; extraction rejected samples; result-verification accounts; "read list x5" question unanswered |
+| `fxwork/t195` (D) | Shared `output_not_observed` root cause; refuted-result attempt; resume tests; test-runner persisted-flow-run |
+
+**Committed, not on dev:** `task/t234-flow-purse` 1d9b199f (Core) and e6fd503b (downstream): a paid but refused reply
+charges its real cost; step-log `part` and the `read` phase; the chat interpreter's cost inside the creation purse.
+Merge dev into it, run its narrow checks, then merge.
 
 **Open defects (not assigned).**
+- Load-flaky Core tests (pass alone): `subflow.test.ts`, `service-recordings/proposals.test.ts`, `cancel-runtime-session`, `runs`.
 - Two Core tests time out only under parallel load and pass alone (12/12): `service/summaries/tests/run-detail-preservation.test.ts` and `tests/service-bootstrap/tests/adaptation.test.ts`; fix in the next full sweep.
 - `scripts/lab/core/build/tests/unbuilt.test.mjs` "refuses an unbuilt Core" fails about 1 run in 10 under load.
 - A click that lands on a 429 page is still `navigation_unexpected` (F14 covers navigation only).
@@ -88,8 +111,9 @@ STEPS below are the plan's names for work that has no branch of its own or preda
 - D1: the dry run never clears site data or repeats a lasting effect.
 - A press is refused only for a real layer (dialog, kind or front layer), not for anything that merely overlaps.
 - An instruction column no field reads is information for the model and the judge, never a refusal (F38).
-- `recovery-default-limits`: keep the 8-decision floor and reserve each call at a realistic cost, the ceiling being
-  the hard stop.
+- `recovery-default-limits`: the worst-case per-call hold stays (a true upper bound); the test was what was wrong (t229).
+- A Flow's creation has one $0.10 purse; each run's recovery has its own ceiling. Offered to the user to merge into one
+  total; not changed.
 - The judge gets per-condition removed-row counts (F19) and up to 60 screened characters of a condition's read (F14).
 
 **Waiting on the user.**
@@ -100,13 +124,16 @@ STEPS below are the plan's names for work that has no branch of its own or preda
 - `fxwork/t187-bench` and `fxwork/t192-bench`: delete only on a yes.
 
 **Next, in order.**
-1. PV lands: commit it on dev with its own task id, verify a real recorded page (earbuds, bigbox) shows the search
-   field and icon buttons.
-2. Merge round: CEIL Lab, Core regressions, lane B, lane C, t227 follow-ups, STEPS; rebuild Core libraries; narrow
-   checks; push both dev branches; merge dev into the lane trees.
-3. Live runs through the chat launcher with step logs and the $0.10 ceiling, all four lanes; then the approved
-   stronger-model comparison run on the same scenario.
-4. The per-Flow purse lead. Full suites twice a day, in the background.
+1. Resume each lane lead (or a fresh lead per lane from its report) to finish and verify its uncommitted work above;
+   commit on its branch, merge dev into it (leads cannot merge: the supervisor does), narrow checks, merge to dev.
+2. `output_not_observed` (lane D) first: it blocks 3 of 4 scenarios. Then lane A's state routing for absent popups and
+   runtime step records in the bundle. Merge t234's accounting fixes.
+3. Earbuds: the accessory filter (10 of 13) and whether repair rounds should continue while the purse allows and each
+   round progresses (the 2-round limit stopped a converging build).
+4. Sync every lane tree to dev in one pass (both repositories, rebuild Core libraries), commit nothing to dev while the
+   round launches, then run all four lanes; then the approved `deepseek-v4-pro` comparison (`--llm-model
+   deepseek-v4-pro --llm-cost-ceiling-usd 0.30`, one run).
+5. Full suites twice a day in the background; known load-flaky Core tests listed under Open defects.
 
 Older history: rung 1 is in `archive/rung1-history-to-2026-09-26.md`. The ledger to 2026-09-30 is in
 `archive/ledger-2026-09-28-to-30.md` and the Work Ledger below.
@@ -496,61 +523,102 @@ in flight at a time.
 
 ## Worker Briefs
 
-Three discovery briefs were dispatched on 2026-09-24. Their reports are in
-[reports/](./language-driven-flow-loop-plan/reports/):
+The 2026-09-24 discovery briefs, the 2026-09-26 Core fix briefs and the table of tasks run 8's debug produced (t140 to
+t162) moved to [archive/briefs-2026-09-24-to-26.md](./language-driven-flow-loop-plan/archive/briefs-2026-09-24-to-26.md)
+on 2026-10-02. Later lane briefs live in each lane's own report.
 
-- **scenario inventory** — every live task classified single-node or multi-node,
-  the exact action chain a correct Flow needs for each complex one, which
-  fixtures support complex work that no task exercises, and the verbatim
-  single-task run commands.
-- **run evidence audit** — whether the six stages above can be answered from the
-  artifacts a run already writes, demonstrated against a real failed multi-step
-  run, with each gap traced to the line of code that drops it.
-- **MVP capability status** — deterministic replay, automatic repair and
-  self-judgement: what exists, what is wired, what is unreachable, what is
-  absent, and what breaks first on a Flow of six nodes with a branch.
+### Briefs, 2026-10-02: finish and verify the lanes' uncommitted work
 
-Two fix briefs were dispatched into Core on 2026-09-26, both out of run 8's
-debug and partitioned so neither touches the other's files:
+Common to all four. Work only in your lane's two trees under `C:/Users/osrs_/FluxStuff/fxwork/<task>/`. No live
+Lab run and no provider call this round: code and narrow checks only (tests beside changed files, the typecheck of each
+touched package, `node scripts/structure-audit.mjs` in each repository; heavy commands through
+`build-slots/heavy.sh`). Do not commit; the report lists commit-ready files per repository with a proposed commit
+message per fix. Update your lane report as well as your own. Core paths below are under
+`packages/fluxiq/src/programs/automation-studio/runtime/` (`R/`).
 
-- **t140, `runtime/llm/`** — carry the refusal
-  `applyAutomationStudioFlowDraftAmendments` already computes, tell the model why
-  its amendment changed nothing before asking it again, and record the reasons on
-  the decision row. It may not change the no-progress guard's arithmetic and may
-  not guess which step a refusal meant.
-- **t141, `runtime/recovery/repair-context/parameter-screen.ts`** — carry a
-  filter condition's and a field declaration's own declared vocabulary at the
-  depth a compound parameter actually puts them, while `text`, `value`, a
-  locator-shaped string and a secret-shaped string stay withheld and stay named.
+#### Brief: t195-lead-1002 (lane D, `lead-xhigh`)
+- Repository: both, tree `fxwork/t195`
+- Task: finish and verify run 38's causes C1, C3, C4 (`debugs/run-muqilf9s-c3211328.md`, "Causes"), then C5 and the
+  second half of C8 (a re-author round that ended `repeat_refused` on an unchanged page and draft opens no identical
+  round), then the stage-2 instrumentation gap (the step log records the loop's parse verdict).
+- Required reads: that debug's Causes and gaps, `reports/t195-w32-refuted-not-a-step.md`, the tree's diff.
+- Owns: Core `R/llm/evidence-loop-decision.ts`, `R/flow-bootstrap/plan/json-guards.ts`, `R/llm/evidence-loop.ts`,
+  `R/llm/evidence-loop/tests/resume.test.ts`, `R/llm/tests/evidence-loop-tool-failure.test.ts`,
+  `R/recovery/refuted-result/**`, `R/service/runtime-adaptation/refuted-result-port.ts` and its test,
+  `R/llm/step-log/**`; downstream `packages/test-runner/src/flow-lane/persisted-flow-run.ts` and its test.
+- Must not touch: `R/flow-draft/**`, `R/activity/**`, `R/flow-bootstrap/unfinished-build/**`,
+  `R/llm/harness/token-limits.ts` (C7 waits for t234), anything under `domain/`.
+- Done: each cause has a failing-first test that now passes; narrow checks pass; report says Ready to commit.
+- Report to: `reports/t195-lead-1002.md`
 
-### The Tasks Run 8's Debug Produced
+#### Brief: t174-lead-1002 (lane A, `lead`)
+- Repository: both, tree `fxwork/t174`
+- Task: finish and verify the in-flight F33 (draft control words), F35 (playback steps in the bundle), F37 (a press
+  result says what changed), the web-3 instructions and the final-state facts oracle. Then find why playback did not
+  skip the absent popup or route by page state (run `run-muqiho5c-e830ce01`; run 38's C9) and fix it if the fix stays
+  in this lane's files; otherwise report the cause, the file and the fix.
+- Required reads: `reports/t174-f33-draft-control.md`, `reports/t174-f35-playback-steps.md`,
+  `debugs/run-muqiho5c-e830ce01.md`, the tree's diff.
+- Owns: the files already changed in the tree, plus Core `R/route-state/**` and the runtime's step routing.
+- Must not touch: `R/recovery/refuted-result/**`, `R/llm/evidence-loop.ts`, `isJsonValue` anywhere, `R/activity/**`
+  beyond `wording/action.ts`.
+- Done: failing-first tests for each fix pass; narrow checks pass; report says Ready to commit.
+- Report to: `reports/t174-lead-1002.md`
 
-| | What it does | State |
-| --- | --- | --- |
-| t140 | A refused amendment tells the model why, with the positions that do exist and how close the loop is to stopping | built |
-| t141 | A filter condition's and a field declaration's own declared keys reach the repair | built |
-| t142 | The read tolerates a bad part instead of refusing the whole request; nearest-column resolution on the literal path | built |
-| t143 | Read-only: the zero read is our own 2 s early settle | answered |
-| t146 | The refusals reach the stored trace, a declined rerun says so, `evidence-loop.ts` 941 → 636 lines | built |
-| t147 | What a filter compared *against* reaches the repair; a reduced URL is named as reduced | built |
-| t144 | A build failure that parses — the state a code implies was written out three times and nothing tied them together; now one table, type-keyed so a code without a rule fails compilation | built |
-| t145 | A provider refusal names itself, screened; and those two runs were never a provider 400 | built |
-| t148 | A still page is not an empty one, and `required` stops defaulting to true | built, bundle rebuilt |
-| t149 | A near-miss column resolves on the *detected* path; `accepts` derived from each column's spec, since a detection carries no sample values | built |
-| t150 | `run-scenario.ts` 812 → 688 lines across 20 modules; the audit and the index gate are open again | built |
-| t151 | The screen's vocabulary gets its own module; `expectedState`'s comparand carried, since withholding it was a false claim about the same request | built |
-| t152 | Every harness return states `providerInvocation`, a refused reservation stops presenting provider metadata, and the refusal gets a typed home | built |
-| t153 | The read's account of its wait becomes a countable field, and `itemsSeen` crosses a document boundary | built |
-| t154 | The two screens on one request agree; a credential in an authored condition no longer reaches the model through the looser path | built |
-| t155 | The drop at `resolve-plan-node.ts` is closed; the wire is **deliberately not** widened, for the reason below | partial, by design |
-| t156 | A short column word resolves against a long detected key: `url` 0.042 → 0.497, `name`/`price`/`rating` identical, `banana` still refused, floor unchanged | built |
-| t157 | A draft that must shrink is still a draft; a 1,109-byte guidance floor was discarding twelve real steps and reporting nothing to show | built |
-| t158 | `listWait`, `itemsSeen` and `emptyRecords` reach a run bundle; an unfamiliar stop word resolves to `unknown` and keeps the read. **Spans both repositories and neither half works alone** | built |
-| t162 | A budget too small to show the draft is loud, the trace says whether the model saw all of it, and the guidance's growth is measured | in flight |
-| t161 | The model is shown the filter vocabulary it already had, and the node's guarantees it could not know about | in flight |
-| t160 | A withheld path uses dotted indices, so it stops reading as a class selector — the notation was the defect, not the screen | built |
-| t159 | The refusal reaches a run's stored accounting, and three workers' overlapping assumptions are reconciled | in flight |
-| — | **Supervisor, direct:** `service.ts` adopts the shared throw classifier and the never-null diagnostic; its private copy of the classification is gone and it is 4584 → 4566 lines | built |
+#### Brief: t193-lead-1002 (lane B, `lead`)
+- Repository: both, tree `fxwork/t193`
+- Task: finish and verify the in-flight chat-cards work (every card says what it inspects or does, on what; the wait
+  says "Deciding the next step") and the draft-legibility work.
+- Required reads: `reports/t193-wc-chat-cards.md`, `reports/t193-wd-draft-legibility.md`, the tree's diff.
+- Owns: the files already changed in the tree.
+- Must not touch: `R/recovery/refuted-result/**`, `isJsonValue` anywhere, `R/route-state/**`.
+- Done: tests beside each changed file pass; Core and extension typechecks pass; the extension builds; report says
+  Ready to commit, and states which `R/flow-draft/*` and `R/llm/evidence-loop.ts` hunks are this lane's.
+- Report to: `reports/t193-lead-1002.md`
+
+#### Brief: t194-lead-1002 (lane C, `lead`)
+- Repository: both, tree `fxwork/t194`
+- Task: drop this tree's duplicate C1 fix (`isJsonValue` in `R/llm/evidence-loop-decision.ts` and its rows in
+  `R/llm/tests/evidence-loop-tool-failure.test.ts`; lane D's copy is the one merged). Finish and verify F19's
+  alone-rows (w49), the replay read account (w50), extraction rejected samples and the extraction summary. Then run 38's
+  C2: each shown structure field carries the page-view handle of its element in the first item.
+- Required reads: `reports/t194-w49-judge-alone-rows.md`, `reports/t194-w50-replay-read-account.md`,
+  `debugs/run-muqj2bgb-d048ec37.md`, C2 in `fxwork/t195/.../debugs/run-muqilf9s-c3211328.md`.
+- Owns: the files already changed in the tree, plus `domain/src/runtime/llm-evidence/structure/**`.
+- Must not touch: `R/recovery/refuted-result/**`, `R/flow-bootstrap/**`, `R/route-state/**`.
+- Done: failing-first tests pass; narrow checks pass; report says Ready to commit.
+- Report to: `reports/t194-lead-1002.md`
+
+#### Brief: t239-judge-reply-cap (`worker`)
+- Repository: both, tree `fxwork/t239` (task t239, Core-paired)
+- Task: run 38's C7, first half. A judge call holds an 8,000-token reply allowance, so its purse hold is about $0.011
+  for a call that costs $0.0005-$0.0009 (largest observed judge reply 412 tokens); round 1's test went unjudged with
+  $0.009 left. Give every model-backed judge call a reply cap of 2,000 tokens, derived the way t234 caps a build
+  decision's reply, and pass it as `tokenLimits` (`R/result-verification/build-test/judge.ts:101-113` passes none).
+- Required reads: C7 in `fxwork/t195/!FluxIQWebExtension/docs/working/language-driven-flow-loop-plan/debugs/run-muqilf9s-c3211328.md`;
+  `R/llm/harness/token-limits.ts`; each judge call site.
+- Owns: Core `R/llm/harness/token-limits.ts`, the judge call sites under `R/result-verification/` other than
+  `contracts.ts` and `read-account/**`, and their tests.
+- Must not touch: `R/flow-bootstrap/unfinished-build/**` (the second half of C7 waits for lane B), `R/recovery/**`.
+- Done: a failing-first test shows the judge's hold drops to the 2,000-token reply; tests beside changed files and
+  `pnpm --filter fluxiq check` pass; Core structure audit passes.
+- Report to: `reports/t239-judge-reply-cap.md` in `fxwork/t239/!FluxIQWebExtension`
+
+#### Brief: t240-repair-rounds-by-progress (`worker-high`)
+- Repository: both, tree `fxwork/t240` (task t240, Core-paired)
+- Task: a build's repair rounds are bounded by money and progress, not a count. Supervisor decision (2026-10-02):
+  `AUTOMATION_STUDIO_FLOW_BOOTSTRAP_MAX_REPAIR_ROUNDS = 2` stopped earbuds run `run-muqiho7e-13be6c03` while it was
+  still converging. A repair round opens only when (a) the creation purse can fund one decision plus one judge call at
+  their capped holds (run 38's C7, second half) and (b) the round before it progressed, measured from what the judge
+  and the test already report (for example fewer missing or extra records, a refuted condition now held); a round
+  with no measurable progress ends the build with that reason. Keep `AUTOMATION_STUDIO_FLOW_BOOTSTRAP_MAX_ROUNDS` as
+  the record reader's hard bound.
+- Required reads: `R/flow-bootstrap/unfinished-build/phases.ts`; C7 in the run-38 debug (as t239's brief).
+- Owns: Core `R/flow-bootstrap/unfinished-build/**` and its tests, `R/tests/service-bootstrap/tests/unfinished-build.test.ts`.
+- Must not touch: `R/recovery/**`, `R/flow-draft/**`, `R/llm/evidence-loop*.ts`, `R/result-verification/**`.
+- Done: failing-first tests for each rule (no fund, no progress, progress continues); narrow checks; architecture doc
+  `docs/architecture/automation-studio/llm-flow-bootstrap.md` states the rule.
+- Report to: `reports/t240-repair-rounds-by-progress.md` in `fxwork/t240/!FluxIQWebExtension`
 
 ---
 
@@ -598,102 +666,16 @@ debug and partitioned so neither touches the other's files:
 - Outcome: Accepted
 - Follow-up: superseded by the entries below.
 
-### 2026-09-30 — Integration round 3 merged and pushed: the whole page, the three-phase build, the audit's fixes
-- Agent: supervisor, with t191, t196, t200, t202-t214 and lanes A-D; each owner's claim re-run by the supervisor before
-  its commit; conflicts resolved by the supervisor or by a worker it briefed (t196, t200).
-- Changed: pushed Core `25c8b32f..37ff0989`, downstream `888386b0..4625fd99`. Regressions found and fixed on the way: lane
-  B's store-failure pool read (t207), native nodes losing Flow inputs (t209, from lane D's de5d5bfa), the chat-build tests
-  under t200's window rule (t214), t200's loss of the Lab artifact screen (t212), dev's stale Core dist hiding a bad import
-  (now refused by the test scripts and `pnpm check`), the web taxonomy missing `onboarding`, and `evidence-loop/` over 25 files.
-- Validation: on Core `e458f1ea` + docs `37ff0989`, downstream `a099165e`: `CORE_BUILD=0`, `CORE_CHECK=0`, `pnpm docs:check` ->
-  "Deterministic framework reference is current." after regeneration; Core vitest runtime+storage+ui `4526 passed, 9 failed`,
-  all nine 15 s timeouts in heavy service tests, no assertion failure; alone, `execution-digest` 4/4, `modes` 4/4, `flow-map`
-  2/2, and four still time out at 15 s (run-detail-preservation, adaptive-loop auto-apply, instruction-readiness,
-  subflow-pagination); web `1457 passed (1457)`; `DS_BUILD=0`, `DS_CHECK=0`; extension `# pass 1673 # fail 0`; domain
-  `# pass 1057 # fail 0`; scenario-lab `# pass 620 # fail 0`; test-runner `# pass 1726 # fail 0`.
-- Outcome: Pushed as a validated checkpoint with the heavy-service-test timeouts stated, not hidden; t215 owns their speed.
-  t210 (the last caps: harness token defaults, the ranked 64-node catalog, the 512-address navigation memory) merges
-  before live runs resume. Pass streak 0.
-
-### 2026-09-30 — Handoff: round 3 pushed, t210 and t215 stopped mid-task, Codex tasks written
-- Agent: supervisor. The user asked to wrap up in this window; t210 and t215 were told to stop and record their state.
-- Changed: this document's Current State; `codex-tasks-2026-09-30.md` (five Codex tasks, pushed `ee704db7`);
-  `reports/supervisor-2026-09-30-live-briefs.md` (pushed `4625fd99`). t210's branch holds rounds 1-2 committed and a
-  resolved, uncommitted Core dev merge plus an unfinished round 3; t215 measured the slow service tests and changed no code.
-- Validation: `node scripts/structure-audit.mjs` -> `structure-audit: passed` after `pnpm structure:baseline` (documents
-  only; no code changed since the round-3 validation recorded above).
-- Outcome: Handed off. Pass streak 0.
-
-### 2026-09-30 night — Archived: t210 rounds 1-3b merged, every Lab stopped for the page view, the build-lock race
-- Agent: supervisor, with t210, t215 and t222 workers and the four lane leads
-- Full entries moved to [archive/ledger-2026-09-30-night.md](./language-driven-flow-loop-plan/archive/ledger-2026-09-30-night.md)
-  on 2026-10-01 under the compaction threshold.
-- What they settled: t210's last caps merged; the user rejected the raw 500 KB page and stopped every Lab; the compact
-  format was approved; a Windows build-lock EPERM race was fixed in both repositories.
+### 2026-09-30 to 2026-10-01 round 5 — Archived: rounds 3-5 merged and pushed, t210 page view, Codex t216-t224, lanes re-dispatched
+- Agent: supervisor, with lane leads t174, t193, t194, t195, t210, t215 and Codex t216-t224
+- Full entries moved to [archive/ledger-2026-09-30-to-10-01.md](./language-driven-flow-loop-plan/archive/ledger-2026-09-30-to-10-01.md)
+  on 2026-10-02 under the compaction threshold.
+- What they settled: integration round 3 (the whole page, the three-phase build, the audit's fixes) and rounds 4-5
+  (t215, t222, Codex t216-t224, lanes B-D, t225 compat fixes, t226 loop split, decision B1) merged and pushed; every
+  Lab stopped for the page view (t223).
 - Validation: recorded in each archived entry; nothing here is re-validated.
 - Outcome: Accepted
 - Follow-up: superseded by the entries below.
-
-### 2026-10-01 — Integration round 4: t215, t222, Codex t216-t224, lane A F14; lane B-D fixes held for round 5; handoff
-- Agent: supervisor, with the t222 and t215 workers, the lane leads t174/t193/t194/t195, the t223 lead, and Codex's
-  branches. The user asked to stop for the day; the leads were told to stop and record their state.
-- Changed:
-  - **Merged into Core dev:** t221, t216, t217, t220, t224 (Codex), then t215.
-    - Conflicts resolved by the supervisor: `llm-flow-bootstrap.md` took t217's every-ending text and kept t220's
-      diagnostic paragraph; `evidence-loop-decision.ts` takes the union of the exact-key lists (`diagnostic` from t220,
-      `clearedWait` from t216).
-    - Two framework-reference regenerations.
-  - **Merged into downstream dev:** t222, t221, t216, t217, t219, t220, t224, then t174 (lane A F14).
-    - Conflicts resolved: `testing-facility.md` kept dev's current text plus t220's refusal-diagnostic paragraph;
-      `navigate-action.test.ts` kept t216's cleared-wait test and t174's status tests.
-  - **Import cycle fixed (Core `1e27fbd8`).** t220 made `llm/evidence-loop-decision.ts` import the evidence-loop barrel.
-    That barrel loads `completion-attempt.ts`, which imports the decision module, so
-    `automationStudioLlmEvidenceCompletionAttempt` was undefined. `completion-attempt.test.ts` failed on t220's own
-    branch as well. The diagnostic screen moved to `llm/evidence-diagnostic/` with its own barrel.
-  - **Lane fixes committed on their task branches, not merged:**
-    - t193 W1, W2, C5-C7 (Core `a88e8dd9`, downstream `0521f377`);
-    - t194 F17-F20 (`a96074dc`, `7b3db972`);
-    - t195 P1-P2 (`b72fa8a1`, `78d166f2`).
-  - Current State rewritten for the stop.
-- Validation: every check below was run by the supervisor and its output observed.
-  - **t222:** in its tree, `pnpm --filter @fluxiq-web-extension/scenario-lab test` -> `# tests 620 # pass 620 # fail
-    0`; audit passed.
-  - **t215:** in its tree, `npx tsc --noEmit -p .` EXIT=0; vitest over storage, database-manager, service-flows,
-    summaries and service-adaptation (`--testTimeout=60000`) `Tests 433 passed (433)`.
-    - After merging dev in: the full automation-studio and database-manager run gave `39 failed | 4662 passed`, all
-      timeouts. The 22 files re-run with `--testTimeout=120000` gave `Tests 103 passed (103)`.
-  - **Lane A F14:** in t174's tree, extension `# pass 1687 # fail 0`. On merged dev, extension `# pass 1709 # fail 0`.
-  - **Lane C:** in t194's tree, Core tsc EXIT=0; vitest over llm, result-verification and summaries `Tests 1003
-    passed (1003)`; domain 1063/0, extension 1678/0, test-runner 1729/0.
-  - **Round 4 on main dev (core libs rebuilt):**
-    - Core tsc EXIT=0; web check EXIT=0; web test EXIT=0; downstream build EXIT=0.
-    - Core vitest over automation-studio and database-manager: `10 failed | 4725 passed`. On re-run with
-      `--testTimeout=120000`, everything passed except `completion-attempt.test.ts` ("is not a function"). That was the
-      import cycle.
-    - After the fix, vitest over runtime/llm, flow-bootstrap and flow-bootstrap-commands: `Tests 1650 passed (1650)`.
-      Core audit passed (2 baseline entries lowered); docs:check current.
-    - Downstream test: extension 1709/0, domain 1066/0, scenario-lab 620/0, test-contracts 156/0, other packages 0
-      failed.
-    - test-runner first failed with TS2305 (`screenWebBuildRefusalDiagnostic`) on a stale domain dist that
-      `domain-dist.mjs` never rebuilds. After `pnpm --filter @fluxiq-web-extension/domain build`: `# pass 1731 # fail 0`.
-    - Downstream check's script tests: `not ok 72` (Lab `unbuilt.test.mjs`). It is intermittent: 1 of 3 alone on dev,
-      then 0 of 6 on pre-round-4 code and 0 of 6 on round 4.
-  - **Final full downstream `pnpm check`:** after the Core libraries were rebuilt and the index regenerated, `pnpm check` EXIT=0, `# pass 548 # fail 0`, "structure-audit: passed (136 warning(s), 118 baselined)", and all 10 package checks Done.
-- Outcome: Pushed: Core dev to `1e27fbd8` and downstream dev with this entry. Open defects and the B1 decision are in Current State. Labs stay stopped for t223. Pass streak 0.
-
-### 2026-10-01 — Integration round 5: lanes B-D, t225 compat fixes, t226 loop split; B1 decided; lanes re-dispatched
-- Agent: supervisor; workers t225 and t226; t223 lead (phases A and B); lane leads A-D re-dispatched for fixes that need no Lab.
-- Changed:
-  - Merged into dev: t194 (lane C F17-F20), t193 (lane B W1, W2, C5-C7) and t195 (lane D P1-P2) in both repositories.
-    - Conflicts resolved by the supervisor: the result reader keeps lane C's named checks plus t220's diagnostic; evidence-loop keeps lane B's held amendments plus lane C's codes; rejected-rows keeps both imports.
-    - Fix `84766496`: the merge first dropped the `present` import.
-  - Merged: t225 (`URL.canParse` replaced, with a guard test; test-runner rebuilds a stale domain dist) and Core t226 (`evidence-loop.ts` 802 to 731 lines).
-  - t223: phase A (the diagnostic speaks `tN`) committed and round 5 merged into it. Phase B (wiring, search, describe, measurement) is running.
-  - B1 is decided on the supervisor's recommendation: a request carries the current page in full, and each superseded page is replaced by the step outcome. Assigned to lane B.
-- Validation:
-  - Core: tsc EXIT=0; web check EXIT=0. vitest over automation-studio and database-manager gave `10 failed | 4781 passed`, all timeouts: the 8 files re-run with `--testTimeout=120000` gave `Tests 80 passed (80)`. t226 re-run: tsc 0; llm, flow-bootstrap and recovery 2154/2154; audit passed; docs:check current.
-  - Downstream on the final Core (`f3778a8e`): domain build EXIT=0; `pnpm check` EXIT=0 with `# pass 548 # fail 0`, the structure audit passed and 10 package checks Done; `pnpm test` EXIT=0 (extension 1720, domain 1077, scenario-lab 620, test-contracts 156, the rest 0 failed); `pnpm build` EXIT=0.
-- Outcome: pushed. Labs are still stopped for t223. Pass streak 0.
 
 ### 2026-10-01 evening — Root cause of the wandering runs found (the page view hid controls); the $0.10 ceiling is one variable
 - Agent: supervisor; PV worker-high; CEIL workers (Core resolver, Core tests, Lab); lane C lead; Core-regressions worker-high.
@@ -746,6 +728,19 @@ debug and partitioned so neither touches the other's files:
   - Core dev after rounds 11-12: `npx tsc --noEmit -p .` rc 0; vitest over llm, flow-bootstrap, flow-draft, activity, route-state, tests/service-bootstrap, result-verification, recovery and src/ui `Test Files 283 passed (283)`, `Tests 3089 passed (3089)`; structure audit passed; `docs-reference.mjs --check` current.
   - Downstream after rebuilding Core libraries: domain check rc 0; extension check rc 0; domain `# tests 1261 # pass 1261 # fail 0`; extension `# tests 2309 # pass 2309 # fail 0`; test-runner `# tests 1785 # pass 1785 # fail 0`; structure audit passed.
 - Outcome: pushed (see the push line in the commit log). Pass streak 0; live runs on hold by the user's order.
+
+### 2026-10-01 late — Fix list on dev; four lanes live; every build produces a Flow; playback fails; handoff
+- Agent: supervisor; lanes A-D; leads t234, t235, t237; workers t236, t238.
+- Changed:
+  - Merged into dev in both repositories and pushed: t235 (names-only catalog, `core.describe_nodes`), t237 (domain system instructions, web-1), t234 (one purse per Flow creation, 2,000-token decision replies, unpriced calls held at the largest seen), t194 F42, t195 F44-F46 and the 8 dev test fixes, t193 W2b (stable request prefix), t238 (the behind-dev guard admits docs-only gaps).
+  - Conflicts resolved by the supervisor: `service.ts` (purse with describe-nodes imports and the judge's calls; system-instruction imports; describeCall), `binding.test.ts` (both new blocks), `tools.ts` (view keys with system instructions), `phases.ts`, the generated reference.
+  - Live round on trees synced to dev (results in Current State). A docs-only commit on dev refused two lanes' launches (fixed by t238); leads cannot merge, so the supervisor syncs every tree in one pass before a round.
+  - t234 reconciled the spend: no creation purse exceeded $0.10; "over $0.10" totals added the playback run's own recovery. Its accounting fixes (paid refusals, step-log `part`, chat call inside the purse) are on its branch.
+  - User's new rules saved (memory and binding rules): a Flow run routes by page state, not build order; chat cards are never generic; live lab trees are synced to dev before testing.
+- Validation:
+  - Core dev after the last merges: `npx tsc --noEmit -p .` rc 0; vitest over llm, flow-bootstrap, flow-draft, recovery, route-state, service, tests, result-verification, loop-limits, conversations, activity, action-permissions and src/ui `Tests 3 failed | 4231 passed` (the 3 pass alone: `Test Files 2 passed`, `Tests 15 passed`); audit passed; reference current.
+  - Downstream after rebuilding Core: domain `# tests 1279 # pass 1279 # fail 0`; extension `# tests 2309 # pass 2309 # fail 0`; test-runner `# tests 1785 # pass 1785 # fail 0`; domain and extension checks rc 0; `node --test scripts/lab/live-guards/tests/*.test.mjs` 32/32 after t238.
+- Outcome: pushed. Agents stopped; lane trees hold uncommitted work listed in Current State. Pass streak 0.
 
 ## Open Questions
 

@@ -50,8 +50,41 @@ test("a read whose conditions kept rows and now answer unfiltered has changed; t
   assert.equal(alreadyUnfiltered.resultCode, "core.replay.replayed");
 });
 
+// Run 15 (`run-muqj2bgb-d048ec37`): the judge of the build's test was told of
+// this read only "the step ran again", was unsure, and then said the pagination
+// never resolved. The replay now states the read's own account.
+test("a replayed list read says what it read: rows kept, pages and why it stopped, items seen, and each condition's rejections", async () => {
+  const where = [
+    { field: "ad", is: "absent" },
+    { field: "plus", is: "present" },
+    { field: "rating", atLeast: 4 },
+    { field: "price", lessThan: 50 },
+    { field: "name", contains: ["ear tips", "charging case"], not: true }
+  ];
+  const payload = liveRead({ recordCount: 10, itemsSeen: 94, unfiltered: false });
+  const extraction = payload.extraction as JsonObject;
+  Object.assign(extraction, { pagesRead: 5, paginationStop: "control_disabled" });
+  extraction.conditions = { applied: 94, kept: 12, rejected: [20, 37, 34, 40, 20], unfiltered: false, alone: [4, 6, 12, 3, 5] };
+  const replayed = await replay(payload, { records: 10, itemsSeen: 94, unfiltered: false }, { extractList: { ...READ.extractList, where } });
+  assert.equal(replayed.resultCode, "core.replay.replayed");
+  assert.equal(
+    (replayed.evidence as JsonObject).said,
+    "the step ran again: kept 10 rows from 5 pages, stopped on control_disabled; 94 items seen; per condition rejected (removed alone): ad 20 (4), plus 37 (6), rating 34 (12), price 40 (3), name 20 (5)"
+  );
+
+  // A request that does not line up with the report names its conditions by position.
+  const unaligned = await replay(payload, { records: 10, itemsSeen: 94, unfiltered: false });
+  assert.match(String((unaligned.evidence as JsonObject).said), /per condition rejected \(removed alone\): condition 1 20 \(4\), condition 2 37 \(6\)/u);
+});
+
+test("a replayed step whose payload carries no read account still says only that it ran", async () => {
+  const replayed = await replay({ clicked: true }, {});
+  assert.equal(replayed.resultCode, "core.replay.replayed");
+  assert.equal((replayed.evidence as JsonObject).said, "the step ran again");
+});
+
 /** Replay the read once against a page that answers with `payload`, as the build recorded `produced`. */
-async function replay(payload: JsonObject, produced: JsonObject) {
+async function replay(payload: JsonObject, produced: JsonObject, parameters: JsonObject = READ) {
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
@@ -62,7 +95,7 @@ async function replay(payload: JsonObject, produced: JsonObject) {
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   return await runtime.executeTool({
     ...PROJECT, callId: "dryrun.1.19", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
-    value: { replay: "step", node: EXTRACT, parameters: READ, consequences: [], produced }
+    value: { replay: "step", node: EXTRACT, parameters, consequences: [], produced }
   });
 }
 

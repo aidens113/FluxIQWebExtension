@@ -42,6 +42,15 @@
 // carries it with one closed sentence. The model already sees the link in the
 // page view; the sentence tells it what the link means. It is never pagination:
 // the handle's binding does not follow it.
+//
+// **A column says where it is in the page view.** On a site styled by atomic
+// classes every label is a class path that means nothing
+// (`div.x0531l50 > div.x1a4yqcp`), and a model shown seven of them mapped
+// `mutual` to the Confirm button's column (live run 38, `run-muqilf9s-c3211328`,
+// C2). Each field now carries `at`, the handle of its element in the list's
+// first item, as the model was shown it (`./first-item/`), and the packet says
+// once what `at` is. The page view prints that handle's words, so no value and
+// no selector is added. A field whose element cannot be told has no `at`.
 
 import {
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
@@ -52,6 +61,7 @@ import {
 import type { WebAutomationExtractionProposal, WebAutomationStructureDetection } from "../../../extraction";
 import { present } from "../present";
 import { screenedPageText } from "../withheld";
+import { webLlmFirstItemHandles, type WebLlmFirstItemPages } from "./first-item";
 import type { WebLlmExtractionBinding } from "./handles";
 
 export const WEB_LLM_STRUCTURE_SCHEMA_VERSION = "web-llm-structure.v1" as const;
@@ -68,6 +78,9 @@ export type WebLlmStructurePaginationMode = (typeof WEB_LLM_STRUCTURE_PAGINATION
 
 /** What the packet says of a `record`: domain text, never the page's. */
 const RECORD_NOTE = "record is the one item you aimed at, read as a one-row table; name its handle in extractList when the instruction is about that item";
+
+/** What the packet says of `at`, once, when a field carries one: domain text. */
+const AT_NOTE = "a field's at is the handle of that column's element in the first item; its line in the page view shows what the column holds";
 
 /** What the packet says of a section's link to more: domain text around the link's closed-phrase label. */
 function continuesNote(label: string): string {
@@ -87,6 +100,12 @@ export type WebLlmStructureField = {
   kind: WebAutomationExtractFieldKind;
   /** The share of items that have the field, from 0 to 1. Below 1, a record without it carries `null`. */
   coverage: number;
+  /**
+   * The page-view handle of the field's element in the first item, as the
+   * model was last shown the page (`./first-item/`). Absent when that element
+   * cannot be told or was not shown.
+   */
+  at?: string;
 };
 
 /** The run's own section linking to more of it, outside its items and its pagination. */
@@ -127,6 +146,8 @@ export type WebLlmRepeatingStructure = {
   record?: WebLlmStructureRecord;
   /** The section's link to more items, when the list here may be partial. */
   continues?: WebLlmStructureContinues;
+  /** What a field's `at` is. A constant of this module, present when any field, the record's included, has one. */
+  atNote?: string;
 };
 
 /** A detection split into what the model sees and what each handle keeps. */
@@ -149,6 +170,8 @@ export type WebLlmStructurePacketInput = {
   frameId: number | undefined;
   /** The pathname of the child frame's document the list was detected in (`./handles.ts`). */
   frameUrlPath: string | undefined;
+  /** The captures each field's `at` is found with; `undefined` gives no field one. */
+  firstItem: WebLlmFirstItemPages | undefined;
 };
 
 type ReadableField = { key: string; spec: WebAutomationExtractFieldSpec; shown: WebLlmStructureField };
@@ -160,11 +183,11 @@ type ReadableField = { key: string; spec: WebAutomationExtractFieldSpec; shown: 
  */
 export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLlmStructureSplit | undefined {
   const proposal = input.detection.proposal;
-  const readable = readableFields(proposal);
+  const readable = readableFields(proposal, input.firstItem);
   if (readable.length === 0) return undefined;
   const infiniteScroll = input.detection.infiniteScroll === true;
   const record = input.detection.record;
-  const recordReadable = record === undefined || input.recordHandle === undefined ? [] : readableFields(record);
+  const recordReadable = record === undefined || input.recordHandle === undefined ? [] : readableFields(record, input.firstItem);
   const recordBinding = record === undefined || input.recordHandle === undefined || recordReadable.length === 0
     ? undefined
     : boundList(input, input.recordHandle, record, recordReadable, boundPagination(record.pagination, false), true);
@@ -185,7 +208,8 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
       fields: recordReadable.map((field) => field.shown),
       note: RECORD_NOTE
     },
-    continues: continuesOf(input.detection.continues)
+    continues: continuesOf(input.detection.continues),
+    atNote: [...readable, ...(recordBinding === undefined ? [] : recordReadable)].some((field) => field.shown.at !== undefined) ? AT_NOTE : undefined
   });
   const paginate = boundPagination(proposal.pagination, infiniteScroll);
   // A primary proposal of one item with no way to continue is a record by
@@ -203,11 +227,15 @@ function continuesOf(continues: DetectedStructure["continues"]): WebLlmStructure
   return present<WebLlmStructureContinues>({ label, path: continues.path, note: continuesNote(label) });
 }
 
-/** The proposal's fields a model may be shown and a handle may read: every one not proposed `exclude`. */
-function readableFields(proposal: WebAutomationExtractionProposal): ReadableField[] {
+/**
+ * The proposal's fields a model may be shown and a handle may read: every one
+ * not proposed `exclude`, each with its element's handle where it can be told.
+ */
+function readableFields(proposal: WebAutomationExtractionProposal, firstItem: WebLlmFirstItemPages | undefined): ReadableField[] {
+  const at = firstItem === undefined ? new Map<string, string>() : webLlmFirstItemHandles(proposal, firstItem);
   return proposal.fields
     .filter((field) => field.spec.handling !== "exclude")
-    .map((field) => ({ key: field.key, spec: field.spec, shown: shownField(field.key, field.label, field.spec.kind, field.coverage) }));
+    .map((field) => ({ key: field.key, spec: field.spec, shown: shownField(field.key, field.label, field.spec.kind, field.coverage, at.get(field.key)) }));
 }
 
 /** The binding one handle keeps: the proposal's item, the readable fields under the keys shown, and its pagination. */
@@ -243,15 +271,16 @@ function boundList(
   });
 }
 
-function shownField(key: string, label: string, kind: WebAutomationExtractFieldKind, coverage: number): WebLlmStructureField {
-  return {
+function shownField(key: string, label: string, kind: WebAutomationExtractFieldKind, coverage: number, at: string | undefined): WebLlmStructureField {
+  return present<WebLlmStructureField>({
     key,
     // A label is page structure, but it is still page text: one line,
     // screened, and the key when nothing readable is left of it.
     label: screenedPageText(label) ?? key,
     kind,
-    coverage: Math.round(coverage * 100) / 100
-  };
+    coverage: Math.round(coverage * 100) / 100,
+    at
+  });
 }
 
 /** The spec the handle keeps: the proposal's, with the handling left at its default, since every kept field is read. */

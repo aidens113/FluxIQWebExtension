@@ -1,8 +1,9 @@
 // T1 coverage of who gets a read's rejected-row samples: a command that asks
-// for them (the exploring model's node run adds `rejectedSamples: true` beside
-// `extractList`) and nobody else -- a Flow played back never asks, so its
-// summary stays counts alone. The rows that are sent survive the domain's
-// wire copy whole: nothing cuts them.
+// for every one (the exploring model's node run adds `rejectedSamples: true`
+// beside `extractList`), a command that asks for the rows each condition removed
+// by itself (a Flow's playback, `rejectedSamples: "alone"`, t194 w49), and
+// nobody else -- a command that does not ask stays counts alone. The rows that
+// are sent survive the domain's wire copy whole: nothing cuts them.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -72,7 +73,7 @@ test("a command that asks for samples gets them on the summary, and they survive
   assert.deepEqual(evidence?.extracted, [{ name: "Basic Earbuds" }]);
 });
 
-test("a command that does not ask -- every playback -- neither collects samples nor carries them", async () => {
+test("a command that does not ask neither collects samples nor carries them", async () => {
   for (const options of [undefined, { extractList: {} }, { extractList: {}, rejectedSamples: "yes" }]) {
     const { options: given, evidence } = await run({ ...COMMAND, ...(options === undefined ? {} : { options }) });
     assert.equal(given?.sampleRejected, undefined, JSON.stringify(options));
@@ -118,5 +119,45 @@ test("the summary carries each condition's alone count on every read, and the al
     finishedAt: 2
   }).extraction as { conditions?: { alone?: number[] }; rejectedSamplesAlone?: number[] } | undefined;
   assert.deepEqual(wire?.conditions?.alone, [1]);
+  assert.deepEqual(wire?.rejectedSamplesAlone, [1]);
+});
+
+// Live run 15 (run-muqj2bgb-d048ec37): the accessory rule removed by itself three earbuds sold "with Wireless
+// Charging Case", and the judge of the playback was told only how many. A playback now asks for those rows.
+test("a playback that asks for the alone rows gets each condition's alone lead and nothing else, through the wire copy", async () => {
+  const earbud = { name: "Trevio T5 Wireless Earbuds, Wireless Charging Case, Rose Gold" };
+  const alsoFailedPrice = { name: "Charging Case Replacement" };
+  let given: ListExtractionOptions | undefined;
+  let evidence: ActionResultEvidence | undefined;
+  const deps = {
+    extractList: async (_request: unknown, options?: ListExtractionOptions): Promise<ListExtractionOutcome> => {
+      given = options;
+      return {
+        ...outcome(false),
+        conditions: { applied: 3, kept: 1, rejected: [2], unfiltered: false, alone: [1] },
+        rejectedSamples: [[earbud, alsoFailedPrice]],
+        rejectedSamplesAlone: [1]
+      };
+    },
+    captureSnapshot: () => ({ url: "https://example.test/", title: "Example", viewport: { width: 1, height: 1, scrollX: 0, scrollY: 0 }, interactiveElements: [] }),
+    success: (_action: unknown, _startedAt: unknown, _message: unknown, _validation: unknown, built?: ActionResultEvidence) => {
+      evidence = built;
+      return { commandId: COMMAND.commandId, actionType: COMMAND.actionType, status: "succeeded", validation: { status: "none", reason: "evidence-only" }, startedAt: 1, finishedAt: 2 };
+    },
+    failure: (_action: unknown, error: unknown) => { throw error; }
+  } as unknown as ContentActionDependencies;
+  await extractListAction({ ...COMMAND, options: { extractList: {}, rejectedSamples: "alone" } }, deps, 1);
+  // The page collects as it does for every row; the summary sends the alone lead only.
+  assert.equal(given?.sampleRejected, true);
+  const wire = webAutomationActionResultPayload({
+    commandId: COMMAND.commandId,
+    actionType: COMMAND.actionType,
+    status: "succeeded",
+    validation: { status: "none", reason: "evidence-only" },
+    ...(evidence?.extraction ? { extraction: evidence.extraction } : {}),
+    startedAt: 1,
+    finishedAt: 2
+  }).extraction as { rejectedSamples?: unknown; rejectedSamplesAlone?: unknown } | undefined;
+  assert.deepEqual(wire?.rejectedSamples, [[earbud]]);
   assert.deepEqual(wire?.rejectedSamplesAlone, [1]);
 });

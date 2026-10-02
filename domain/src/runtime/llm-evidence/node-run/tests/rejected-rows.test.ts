@@ -98,7 +98,7 @@ test("an exploring list read shows the model the rows each condition rejected, b
   for (const key of Object.keys(ran)) assert.equal(WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS.includes(key), true, key);
 });
 
-test("the samples are never in what the Flow keeps, and a playback of it asks for none", async () => {
+test("the samples are never in what the Flow keeps, and a playback of it never asks for every rejected row", async () => {
   const { ran, runtime, stubbed } = await explore();
   // The exploring model saw the true earbuds, on a command that asked for them...
   assert.equal(stubbed.commands.find((command) => command.actionType === "web.dom.extract_list")?.parameters.rejectedSamples, true);
@@ -112,16 +112,18 @@ test("the samples are never in what the Flow keeps, and a playback of it asks fo
   // row, and that is what the replay compares (t194-w35: until then this was
   // the payload's longest list, two -- the column names).
   assert.equal(ran.draft?.replay?.produced?.records, 1, "the replay counts the read's own rows, not the samples");
-  // The playback's own dispatch of those parameters carries no request for samples.
+  // The playback's own dispatch of those parameters never asks for every rejected
+  // row: at most for the rows each condition removed by itself, which the judge
+  // is shown (`output-nodes/extract-list/dispatch.ts`, t194 w49).
   const playback = webAutomationExtractListDispatch(kept);
   assert.ok(playback.ok, "the kept parameters dispatch");
-  assert.equal(Object.hasOwn(playback.payload.parameters as JsonObject, "rejectedSamples"), false);
+  assert.notEqual((playback.payload.parameters as JsonObject).rejectedSamples, true);
   // And Core's replay of the draft runs the same parameters, asking for none.
   const before = stubbed.commands.length;
   await runtime.executeTool({ ...PROJECT, callId: "dryrun.1.1", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: { replay: "step", node: "web.output.dom-extract_list", parameters: kept, consequences: [] } });
   const replayed = stubbed.commands.slice(before).find((command) => command.actionType === "web.dom.extract_list");
   assert.ok(replayed, "the replay dispatched the read");
-  assert.equal(Object.hasOwn(replayed.parameters, "rejectedSamples"), false);
+  assert.notEqual(replayed.parameters.rejectedSamples, true);
 });
 
 test("the samples and the kept rows come back whole, with no byte budget, and the recorded payload holds no samples", () => {
