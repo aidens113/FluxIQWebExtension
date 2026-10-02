@@ -1,0 +1,169 @@
+// Live run 38, C2 (`run-muqilf9s-c3211328`): on Circleway's friend requests,
+// styled by atomic classes, every detected column was labelled by a class path
+// that means nothing, and the model mapped `mutual` to the Confirm button's
+// column. Each column now carries `at`, the handle the page view gave its
+// element in the list's first item, so the model can read which column says
+// "1 mutual friend". The page below is that page's shape: the same class paths,
+// the same field selector forms the detection writes.
+
+import assert from "node:assert/strict";
+import test from "node:test";
+import type { JsonObject, JsonValue } from "fluxiq/core";
+import {
+  createWebAutomationLlmEvidenceRuntime,
+  WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
+  WEB_LLM_RUN_NODE_TOOL_ID,
+  WEB_LLM_STRUCTURE_RESULT_CODE,
+  type WebAutomationLlmEvidenceRuntime,
+  type WebLlmRepeatingStructure
+} from "../..";
+import { shownHandle, shownPageLines } from "../../page-view/tests/shown-page-lines";
+
+const SCOPE = { projectId: "project.one", flowId: "flow.one" };
+const URL_ = "http://127.0.0.1:4173/scenarios/social-network-feed/friends/requests/";
+const CONTAINER = "body > div:nth-of-type(2) > div";
+const BODY = "div.x0531l50.x1r2vv8.x4q0id2";
+
+/** The detection the page answers for the requests, with the field selector forms `infer-fields.ts` writes. */
+const STRUCTURE = {
+  ok: true,
+  proposal: {
+    container: CONTAINER,
+    item: `${CONTAINER} > div.x1a.xrow`,
+    itemCount: 2,
+    fields: [
+      field("avatar_url", "a.x1cf2e2r.xu37y6r.xvzo2ll url", "link", ":scope > a.x1cf2e2r.xu37y6r.xvzo2ll", 1),
+      field("name", `${BODY} > a.x0ybvghy.x130pqy.x1yfagd`, "text", `:scope > ${BODY} > a.x0ybvghy.x130pqy.x1yfagd`, 1),
+      // Read by its own classes anywhere in the item, labelled by its path.
+      field("mutual", `${BODY} > div.x1a4yqcp.xa73opb.xtlve1b`, "text", ":scope div.x1a4yqcp.xa73opb.xtlve1b", 1),
+      field("age", `${BODY} > span.x0gwrdxv.x1ksheh.x4q0id2`, "text", `:scope > ${BODY} > span.x0gwrdxv.x1ksheh.x4q0id2`, 1),
+      field("confirm", `${BODY} > div.x1507i5.x1mgzeci.xu37y6r`, "text", `:scope > ${BODY} > div.x1507i5.x1mgzeci.xu37y6r`, 1),
+      // A positional step, the last resort a path takes.
+      field("delete", `${BODY} > div:3`, "text", `:scope > ${BODY} > div:nth-of-type(3)`, 1),
+      // Only the second request has it: nothing in the first item to point at.
+      field("new_badge", "span.xbadge", "text", ":scope span.xbadge", 0.5)
+    ],
+    confidence: 0.75
+  }
+};
+
+function field(key: string, label: string, kind: string, selector: string, coverage: number): JsonObject {
+  return { key, label, spec: { kind, selector, required: coverage >= 1 }, coverage };
+}
+
+/** One request card under the container at `parent`, as the capture lists it: every rendered element, its parent by index. */
+function request(elements: JsonObject[], parent: number, position: number, person: { slug: string; name: string; mutual: string; age: string; badge: boolean }): void {
+  const add = (element: JsonObject): number => elements.push(element) - 1;
+  const item = `${CONTAINER} > div:nth-of-type(${position})`;
+  const listPosition = { index: position, total: 2 };
+  const card = add({ tagName: "div", selector: item, attributes: { class: "xrow x1a" }, parent, context: { listPosition } });
+  add({ tagName: "a", selector: `${item} > a`, attributes: { class: "x1cf2e2r xu37y6r xvzo2ll", href: `/people/${person.slug}/` }, parent: card, context: { listPosition } });
+  const body = add({ tagName: "div", selector: `${item} > div`, attributes: { class: "x0531l50 x1r2vv8 x4q0id2" }, parent: card, context: { listPosition } });
+  const inBody = `${item} > div`;
+  add({ tagName: "a", selector: `${inBody} > a`, accessibleName: person.name, visibleText: person.name, attributes: { class: "x0ybvghy x130pqy x1yfagd", href: `/people/${person.slug}/` }, parent: body, context: { listPosition } });
+  add({ tagName: "div", selector: `${inBody} > div:nth-of-type(1)`, visibleText: person.mutual, attributes: { class: "x1a4yqcp xa73opb xtlve1b" }, parent: body, context: { listPosition } });
+  if (person.badge) add({ tagName: "span", selector: `${inBody} > span:nth-of-type(1)`, visibleText: "New", attributes: { class: "xbadge" }, parent: body, context: { listPosition } });
+  add({ tagName: "span", selector: person.badge ? `${inBody} > span:nth-of-type(2)` : `${inBody} > span`, visibleText: person.age, attributes: { class: "x0gwrdxv x1ksheh x4q0id2" }, parent: body, context: { listPosition } });
+  add({ tagName: "div", selector: `${inBody} > div:nth-of-type(2)`, role: "button", accessibleName: "Confirm", visibleText: "Confirm", attributes: { class: "x1507i5 x1mgzeci xu37y6r", role: "button" }, parent: body, context: { listPosition } });
+  add({ tagName: "div", selector: `${inBody} > div:nth-of-type(3)`, role: "button", accessibleName: "Delete", visibleText: "Delete", attributes: { class: "x07beeli x1ksheh x4q0id2", role: "button" }, parent: body, context: { listPosition } });
+}
+
+/** The requests page; `banner` puts a notice above the list, which renumbers every element after it in a capture of its own. */
+function requestsPage(banner: boolean): JsonObject[] {
+  const elements: JsonObject[] = [];
+  if (banner) elements.push({ tagName: "div", selector: "body > div:nth-of-type(1)", visibleText: "You have new notifications" });
+  elements.push({ tagName: "h2", selector: "body > div:nth-of-type(2) > h2", visibleText: "Friend requests" });
+  const container = elements.push({ tagName: "div", selector: CONTAINER, attributes: { class: "x9f619 xlist" } }) - 1;
+  request(elements, container, 1, { slug: "tom.becker.9", name: "Tom Becker", mutual: "1 mutual friend", age: "2w", badge: false });
+  request(elements, container, 2, { slug: "amara-osei", name: "Amara Osei", mutual: "23 mutual friends", age: "3d", badge: true });
+  return elements;
+}
+
+function runtimeOver(elements: () => JsonObject[], url: () => string = () => URL_): WebAutomationLlmEvidenceRuntime {
+  return createWebAutomationLlmEvidenceRuntime({
+    eligibleSessionIds: () => ["session.one"],
+    structureDetectionSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
+      const snapshot: JsonObject = { url: url(), title: "Friend requests", interactiveElements: elements() };
+      return { status: "succeeded", payload: command.parameters.detectStructure === undefined ? { snapshot } : { snapshot, structure: structuredClone(STRUCTURE) as JsonValue } };
+    }
+  });
+}
+
+/** A look at the page, as the model reads it. */
+async function look(runtime: WebAutomationLlmEvidenceRuntime): Promise<unknown> {
+  return (await runtime.executeTool({ ...SCOPE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } })).evidence;
+}
+
+async function detect(runtime: WebAutomationLlmEvidenceRuntime): Promise<WebLlmRepeatingStructure> {
+  const result = await runtime.executeTool({ ...SCOPE, callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
+  assert.equal(result.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
+  return result.evidence as WebLlmRepeatingStructure;
+}
+
+/** Each field key with its `at`, absent ones left out. */
+function atOf(packet: WebLlmRepeatingStructure): Record<string, string> {
+  return Object.fromEntries(packet.fields.flatMap((shown) => shown.at === undefined ? [] : [[shown.key, shown.at]]));
+}
+
+/** The handles the page view gave the first request's elements. */
+function firstRequestHandles(shown: unknown): Record<string, string> {
+  const lines = shownPageLines(shown);
+  const avatar = lines.find((line) => line.kind === "link" && line.words === undefined);
+  assert.ok(avatar, "the avatar link has a line of its own");
+  return {
+    avatar_url: avatar.target,
+    name: shownHandle(shown, "Tom Becker"),
+    mutual: shownHandle(shown, "1 mutual friend"),
+    age: shownHandle(shown, "2w"),
+    confirm: shownHandle(shown, "Confirm"),
+    delete: shownHandle(shown, "Delete")
+  };
+}
+
+test("each detected column carries the handle the page view gave its element in the first item", async () => {
+  const runtime = runtimeOver(() => requestsPage(false));
+  const shown = await look(runtime);
+  const packet = await detect(runtime);
+
+  assert.deepEqual(atOf(packet), firstRequestHandles(shown));
+  // The column the model mistook is told apart by what its line says.
+  const mutual = packet.fields.find((shownField) => shownField.key === "mutual");
+  assert.equal(mutual?.at, shownHandle(shown, "1 mutual friend"));
+  assert.notEqual(mutual?.at, shownHandle(shown, "Confirm"));
+  // A column the first item does not have points at nothing.
+  assert.equal(packet.fields.find((shownField) => shownField.key === "new_badge")?.at, undefined);
+  assert.equal(typeof packet.atNote, "string");
+  // Still no value and no selector (D3).
+  const wire = JSON.stringify(packet);
+  for (const words of ["1 mutual friend", "Tom Becker", "Confirm", "nth-of-type", ":scope", CONTAINER]) assert.equal(wire.includes(words), false, `the packet does not quote ${words}`);
+});
+
+test("the handle is the one the model was shown, not the detection capture's own numbering", async () => {
+  let banner = false;
+  const runtime = runtimeOver(() => requestsPage(banner));
+  const shown = await look(runtime);
+  // A notice appears above the list before the detection: its own capture
+  // numbers every element one later, and the model has not seen that capture.
+  banner = true;
+  const packet = await detect(runtime);
+  assert.deepEqual(atOf(packet), firstRequestHandles(shown));
+});
+
+test("with no page shown, no column is pointed at, and the packet reads as it did", async () => {
+  const unseen = await detect(runtimeOver(() => requestsPage(false)));
+  assert.deepEqual(atOf(unseen), {});
+  assert.equal(unseen.atNote, undefined);
+  assert.deepEqual(unseen.fields.map((shownField) => Object.keys(shownField)), unseen.fields.map(() => ["key", "label", "kind", "coverage"]));
+});
+
+test("a detection on another page than the one shown points at nothing", async () => {
+  let url = `${URL_}sent/`;
+  const runtime = runtimeOver(() => requestsPage(false), () => url);
+  await look(runtime);
+  url = URL_;
+  const packet = await detect(runtime);
+  assert.deepEqual(atOf(packet), {});
+  assert.equal(packet.atNote, undefined);
+});
