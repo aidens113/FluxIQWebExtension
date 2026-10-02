@@ -50,8 +50,13 @@
 // gets every row each `where` condition rejected**, on the summary's
 // `rejectedSamples`. Only the exploring model's own node run sends it, so the
 // model that wrote a condition can see which rows it turned down
-// (`domain/src/runtime/llm-evidence/node-run/rejected-rows.ts`); a Flow played
-// back never does, and its summary carries no rows.
+// (`domain/src/runtime/llm-evidence/node-run/rejected-rows.ts`). **A Flow played
+// back sends `rejectedSamples: "alone"`** (`domain/src/output-nodes/extract-list/
+// dispatch.ts`, t194 w49) and gets only the rows each condition removed by
+// itself -- rows every other condition kept -- so the judge of the run can check
+// them against the instruction: on live run 15 it was told the accessory rule
+// removed 5 rows by itself and could not see that 3 were true earbuds. The page
+// collects as it does for `true`, and the summary sends each list's alone lead.
 
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation, WebAutomationExtractListRequest } from "../types";
 import type { ContentActionDependencies } from "./types";
@@ -61,17 +66,21 @@ type ExtractionSummary = NonNullable<BrowserActionResult["extraction"]>;
 
 /** The command parameter that asks for rejected-row samples, spelled as the summary member that carries them. */
 const REJECTED_SAMPLES = "rejectedSamples" satisfies keyof ExtractionSummary;
+/** Its value asking for only the rows each condition removed by itself (the domain's `WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_ONLY`). */
+const REJECTED_ALONE_ONLY = "alone";
 
 export async function extractListAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const request = action.extractList;
   if (!request) return deps.failure(action, new Error("web.dom.extract_list needs extractList parameters."), startedAt);
   try {
-    const sampleRejected = action.options?.[REJECTED_SAMPLES] === true;
+    const asked = action.options?.[REJECTED_SAMPLES];
+    const aloneOnly = asked === REJECTED_ALONE_ONLY;
+    const sampleRejected = asked === true || aloneOnly;
     const outcome = await deps.extractList(request, { timeoutMs: action.timeoutMs, ...(sampleRejected ? { sampleRejected } : {}) });
     const minItems = minimumItems(request.minItems);
     const fieldNames = includedFieldNames(request);
     const expected = `at least ${count(minItems, "record")}, each carrying ${fieldNames.join(", ")}`;
-    const evidence = { extracted: outcome.records, extraction: summaryOf(outcome, fieldNames), snapshot: deps.captureSnapshot() };
+    const evidence = { extracted: outcome.records, extraction: summaryOf(outcome, fieldNames, aloneOnly), snapshot: deps.captureSnapshot() };
     if (outcome.timedOut) {
       return deps.timedOut(action, startedAt, `Timed out extracting the list after ${count(outcome.pagesRead, "page")}.`, {
         status: "failed",
@@ -114,7 +123,7 @@ function includedFieldNames(request: WebAutomationExtractListRequest): string[] 
  * `recordCount: 0` has to group by a field. The presence is not repeated inside
  * it -- `listPresence` is that fact, and two copies of one fact can disagree.
  */
-function summaryOf(outcome: Outcome, fieldNames: readonly string[]): ExtractionSummary {
+function summaryOf(outcome: Outcome, fieldNames: readonly string[], aloneOnly: boolean): ExtractionSummary {
   return {
     recordCount: outcome.records.length,
     pagesRead: outcome.pagesRead,
@@ -131,14 +140,29 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[]): ExtractionS
     // Only beside the counts they illustrate, and only for a read asked for them;
     // each list leads with the rows its condition removed alone, and
     // `rejectedSamplesAlone` says how many (`extraction/rejected-samples.ts`).
-    ...(outcome.conditions && outcome.rejectedSamples ? { rejectedSamples: outcome.rejectedSamples.map((rows) => rows.map((row) => ({ ...row }))) } : {}),
-    ...(outcome.conditions && outcome.rejectedSamples && outcome.rejectedSamplesAlone ? { rejectedSamplesAlone: [...outcome.rejectedSamplesAlone] } : {}),
+    ...(outcome.conditions ? sampledRows(outcome, aloneOnly) : {}),
     ...(outcome.paginationStop ? { paginationStop: outcome.paginationStop } : {}),
     // What dedupe and sort took -- the repeats left out and the rows a sort key
     // could not read -- so a sort over a column the page states as prose is
     // visible to the verifier rather than looking like page order.
     ...(outcome.order ? { order: { duplicates: outcome.order.duplicates, unsortable: outcome.order.unsortable } } : {})
   };
+}
+
+/**
+ * The rejected rows the read was asked for, copied: every one with the alone
+ * lead of each list, or for a playback (`aloneOnly`) each list cut to its alone
+ * lead, which is then the whole list. A playback read whose page did not say
+ * the leads sends no rows, since it cannot tell which were alone.
+ */
+function sampledRows(outcome: Outcome, aloneOnly: boolean): Pick<ExtractionSummary, "rejectedSamples" | "rejectedSamplesAlone"> {
+  const samples = outcome.rejectedSamples;
+  const leads = outcome.rejectedSamplesAlone;
+  if (!samples) return {};
+  if (!aloneOnly) return { rejectedSamples: samples.map((rows) => rows.map((row) => ({ ...row }))), ...(leads ? { rejectedSamplesAlone: [...leads] } : {}) };
+  if (!leads) return {};
+  const alone = samples.map((rows, index) => rows.slice(0, leads[index] ?? 0).map((row) => ({ ...row })));
+  return { rejectedSamples: alone, rejectedSamplesAlone: alone.map((rows) => rows.length) };
 }
 
 /** The condition report copied, each list its own array. */
