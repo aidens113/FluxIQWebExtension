@@ -24,11 +24,10 @@ test("the name, the target and the outcome, on one accessible line", () => {
   });
 });
 
-test("an action on the page that named nothing acts on the page; one that is not on a control names no target", () => {
-  assert.equal(cardWords(card({ kind: "type", target: null }), false).target, "the page");
-  assert.equal(cardWords(card({ kind: "read", target: null }), false).target, "the page");
-  assert.equal(cardWords(card({ kind: "other", target: null }), false).target, "the page");
-  for (const kind of ["navigate", "look", "wait", "person_check", "permission", "draft", "test", "repair"] as const) {
+// t193 (run-muqiojz4-04a7a8fc): "Click · the page" and "Action · the page" said nothing a person
+// could tell apart; the message above the card says what the step did.
+test("a card that named nothing says no target, never \"the page\"", () => {
+  for (const kind of ["click", "type", "read", "other", "navigate", "look", "wait", "person_check", "permission", "draft", "test", "repair"] as const) {
     const words = cardWords(card({ kind, target: null }), false);
     assert.equal(words.target, null, kind);
     assert.equal(words.name, ACTIVITY_ACTION_NAMES[kind]);

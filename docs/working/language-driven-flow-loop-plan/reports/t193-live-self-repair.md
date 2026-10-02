@@ -149,6 +149,17 @@ runs: **$2.68**, of which **$1.92 (runs 10-32) was spent by the unattended keepe
 189 later launches failed on the empty balance and spent nothing. Every one of the 33 runs has its debug file. Session 2
 made one run (33) and two validated Core fix sets (C2; C3/C6/C9/K7), both waiting to be committed (Fix log).
 
+## Session 5 (2026-10-02, lead t193-lead-1002): chat cards and draft legibility, Ready to commit
+
+No Lab run and no provider call. The lead finished and verified WC (`t193-wc-chat-cards.md`) and WD
+(`t193-wd-draft-legibility.md`). Review found that WD's draft `does` was asked of `describeCall` after the call ran,
+when a click that closed its overlay leaves its handle naming nothing: the "×" case it was written for. The lead moved
+the ask before the call (`R/llm/evidence-loop.ts:422`). A failing-first test was added in `authored-draft.test.ts`:
+`expected [ undefined ] to deeply equal [ { target: '×' } ]` with the old order, `17 passed` with the fix. Narrow checks
+all pass: Core tsc 0, Core vitest `992 passed (992)` over 100 files, both structure audits, docs reference current,
+extension and domain tsc 0, extension tests `308/308`, domain node-run `133/133`, and the extension build. Files,
+commits and the hunks shared with other lanes are in `t193-lead-1002.md`.
+
 ## Session 4 (2026-10-01, after round 5): three fixes that need no Lab
 
 Trees: downstream `a15a465e`, Core `f3778a8e` (round 5; W1, W2 and C5-C7 are merged there). Labs stay stopped until

@@ -594,9 +594,35 @@ async function readRunDetail(
     .sort((left, right) => numberOf(left.order) - numberOf(right.order));
   const interventions = Array.isArray(detail.interventions) ? detail.interventions : [];
   const actions = attempts.map((attempt, index) => flowAction(attempt, actionTypes, index));
+  // A refuted result's attempt ran no node, so it names none here and adds no time to one.
+  const nodeAttempts = attempts.filter((attempt) => !isResultVerificationAttempt(attempt));
   // In attempt order, one entry per attempt that names a node, so a retried node appears once per attempt.
-  const attemptNodeIds = attempts.flatMap((attempt) => (typeof attempt.nodeId === "string" ? [attempt.nodeId] : []));
-  return { summaryStatus: typeof summary.status === "string" ? summary.status : undefined, actions, attemptNodeIds, harnessActivations: interventions.length, datasets: runDatasetSummaries(detail), durationsByNode: attemptDurationsByNode(attempts), resultVerification: resultVerificationOf(detail), runDetail: detail };
+  const attemptNodeIds = nodeAttempts.flatMap((attempt) => (typeof attempt.nodeId === "string" ? [attempt.nodeId] : []));
+  return { summaryStatus: typeof summary.status === "string" ? summary.status : undefined, actions, attemptNodeIds, harnessActivations: interventions.length, datasets: runDatasetSummaries(detail), durationsByNode: attemptDurationsByNode(nodeAttempts), resultVerification: resultVerificationOf(detail), runDetail: detail };
+}
+
+/**
+ * Core's attempt-id prefix for the attempt a refuted result amounts to (Core
+ * `runtime/recovery/refuted-result/attempt.ts`,
+ * `AUTOMATION_STUDIO_REFUTED_RESULT_ATTEMPT_PREFIX`, plus its separator).
+ */
+const RESULT_VERIFICATION_ATTEMPT_PREFIX = "result-verification.";
+
+/**
+ * The action type the lane gives that attempt: the verification of the run's
+ * result, never a failed action of the node Core filed it under.
+ *
+ * Core filed it under the last step that succeeded when no step stored
+ * records, so live run 38 (`run-muqilf9s-c3211328`) listed a navigate that ran
+ * and matched as a failed navigate, and every reader after it -- `run.json`,
+ * `evaluation.json`, the brief -- said the Flow's last navigate failed. Read by
+ * the attempt id rather than the node, so a run Core recorded either way reads
+ * the same.
+ */
+const RESULT_VERIFICATION_ACTION_TYPE = "result_verification";
+
+function isResultVerificationAttempt(attempt: Record<string, unknown>): boolean {
+  return typeof attempt.attemptId === "string" && attempt.attemptId.startsWith(RESULT_VERIFICATION_ATTEMPT_PREFIX);
 }
 
 /**
@@ -624,8 +650,10 @@ function resultVerificationOf(detail: Record<string, unknown>): PersistedResultV
  */
 function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<string, string>, attemptIndex: number): PersistedFlowAction {
   const startedAt = numberOf(attempt.startedAt);
-  const finishedAt = typeof attempt.finishedAt === "number" && Number.isFinite(attempt.finishedAt) ? attempt.finishedAt : undefined;
-  const nodeId = typeof attempt.nodeId === "string" ? attempt.nodeId : "";
+  // The result's verification: no node, and no action latency, because no action ran.
+  const verification = isResultVerificationAttempt(attempt);
+  const finishedAt = !verification && typeof attempt.finishedAt === "number" && Number.isFinite(attempt.finishedAt) ? attempt.finishedAt : undefined;
+  const nodeId = !verification && typeof attempt.nodeId === "string" ? attempt.nodeId : "";
   const recordCount = optionalRecord(attempt.metadata)?.recordCount;
   const targetResolution = targetResolutionOf(attempt);
   const hostTargetResolution = hostTargetResolutionOf(attempt);
@@ -635,7 +663,7 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
   const comparisonStatus = comparisonStatusOf(attempt);
   const extraction = extractionReadOf(attempt);
   return {
-    actionType: actionTypes.get(nodeId) ?? (typeof attempt.definitionId === "string" ? attempt.definitionId : "unknown"),
+    actionType: verification ? RESULT_VERIFICATION_ACTION_TYPE : actionTypes.get(nodeId) ?? (typeof attempt.definitionId === "string" ? attempt.definitionId : "unknown"),
     nodeId: attemptNodeId(nodeId),
     attemptIndex,
     status: runActionStatus(attempt.status),
