@@ -6,13 +6,14 @@
 // that heading's tag before its kind, `t246 h2 link "..."`, so a card's title
 // link still reads as the card's heading.
 
-import type { WebLlmEvidenceViewport } from "../page-evidence";
-import { quotedWords, webLlmElementKind, webLlmStateTokens } from "./element";
-import { webLlmLinkRepeats } from "./link-repeats";
-import type { WebLlmLinkWriter } from "./link-writer";
-import type { WebLlmPageTree } from "./page-tree";
-import { webLlmStructureMarkers } from "./structure-markers";
-import type { WebLlmViewLine } from "./view-line";
+import type { WebLlmEvidenceViewport } from "../../page-evidence";
+import { quotedWords, webLlmStateTokens } from "../element";
+import { webLlmLineKind } from "./kind";
+import { webLlmLinkRepeats } from "../link-repeats";
+import type { WebLlmLinkWriter } from "../link-writer";
+import type { WebLlmPageTree } from "../page-tree";
+import { webLlmStructureMarkers } from "../structure-markers";
+import type { WebLlmViewLine } from "../view-line";
 
 const HEADING_TAG = /^h[1-6]$/u;
 
@@ -25,7 +26,7 @@ export function renderedWebLlmLines(lines: readonly WebLlmViewLine[], tree: WebL
   for (const line of lines) {
     const element = line.element;
     written.push(...markersBefore(element));
-    const kind = line.role === "image" ? "img" : lineKind(line);
+    const kind = webLlmLineKind(line);
     const heading = kind !== undefined && HEADING_TAG.test(kind)
       ? undefined
       : tree.ancestors(element).find((ancestor) => HEADING_TAG.test(ancestor.tag));
@@ -35,13 +36,4 @@ export function renderedWebLlmLines(lines: readonly WebLlmViewLine[], tree: WebL
     written.push(parts.filter((part): part is string => part !== undefined && part !== "").join(" "));
   }
   return written;
-}
-
-/**
- * The kind a line prints. A delegate (`./line-choice.ts`) holds a control and
- * gets the line a non-control gets, so it is not called `clickable`.
- */
-function lineKind(line: WebLlmViewLine): string | undefined {
-  const kind = webLlmElementKind(line.element);
-  return kind === "clickable" && line.role !== "control" ? undefined : kind;
 }

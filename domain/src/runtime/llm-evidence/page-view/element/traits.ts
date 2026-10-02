@@ -60,7 +60,7 @@ const SEMANTIC_TAGS: ReadonlySet<string> = new Set(["p", "li", "td", "th", "dt",
 /**
  * Everything the page view's line rules ask of one element.
  *
- * `delegate` says the element holds a control of its own (`../line-choice.ts`).
+ * `delegate` says the element holds a control of its own (`../line/choice.ts`).
  * Then a click handler or a cursor does not make it a control: a feed list that
  * listens for presses on the "…see more" buttons inside it, or a card with a
  * pointer whose title is a link, is where presses are heard, and what a person

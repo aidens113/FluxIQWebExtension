@@ -32,7 +32,7 @@ import { randomBytes } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { BrowserContext, Page } from "@playwright/test";
-import { assertClonePackage, assertRunManifest, canonicalClonePackageJson, flowLaneExclusion, resolveScenarioWorkflow, scenarioPageFactSchedule, type FacilityFailureStage, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type RunEvaluation, type WebScenario } from "@fluxiq-web-extension/test-contracts";
+import { assertClonePackage, assertRunManifest, canonicalClonePackageJson, flowLaneExclusion, resolveScenarioWorkflow, scenarioPageFactSchedule, type FacilityFailureStage, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type RunEvaluation, type WebScenario, type ExpectedFact } from "@fluxiq-web-extension/test-contracts";
 import { EvidenceBundle, EvidenceCaptureController, sha256 } from "@fluxiq-web-extension/test-evidence";
 import type { EvidenceMode } from "./commands.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "./coordinator.js";
@@ -52,10 +52,10 @@ import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePacka
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant } from "./lab-control/index.js";
-import { LAB_PROJECT_DOMAIN_ID, createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, withDeclaredFlowRepair, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type LiveRepairLaneInput, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
+import { LAB_PROJECT_DOMAIN_ID, judgeExpectedFacts, type CreatedFlowLaneEvidence, type FinalStateVerdict, type FlowLaneEvidence, type UnheldFact, createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, withDeclaredFlowRepair, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type LiveRepairLaneInput, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, chromiumExtensionStorageDirs, runRedactionScopes, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
-import { LabRunRecord } from "./lab-runs/index.js";
+import { LabRunRecord, writePlaybackSteps } from "./lab-runs/index.js";
 import { runProviderFailureLog, writeProviderFailureSidecar } from "./provider-failure/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
@@ -158,6 +158,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   let context: BrowserContext | undefined;
   let extensionPage: Page | undefined;
   let scenarioPage: Page | undefined;
+  // When the created Flow's playback was dispatched and judged (epoch ms): its command attempts are written into the run's `steps/` after Core stops (`lab-runs/write-playback-steps.ts`).
+  let playbackWindow: { since: number; until?: number } | undefined;
   let networkGuard: DeterministicNetworkGuard | undefined;
   let recordingStarted = false;
   let browserVersion = "unavailable";
@@ -283,6 +285,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     // What either Flow lane is handed: present the page, publish what the Flow did, and consult the fixture oracle.
     const flowRunHooks = <E extends { observation: RunLaneObservation; run: PersistedFlowRunOutcome }>(activeTopology: RunningTopology, publish: (evidence: E) => Promise<void>) => ({
       prepareFlowPage: async (moment?: "build" | "playback") => {
+        if (moment === "playback") playbackWindow = { since: Date.now() };
         // A task whose variant is armed after the build has FluxIQ explore the unarmed page, and its Flow meet the variant:
         // the site changes after the Flow was made. The fixture starts unarmed, so the build's page is simply not armed,
         // and the armed facts are not checked against a page that was not armed.
@@ -321,6 +324,12 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       checkFinalState: async () => {
         try { scenarioPage = await findScenarioPageWithExpectedState(context!, page, activeTopology.scenarioOrigin, scenario, flowWorkflow); return true; }
         catch { return false; }
+      },
+      // The created-Flow lane's oracle: the same judgement, naming each fact that did not hold (`flow-lane/creation/final-state-facts.ts`).
+      judgeFinalState: async (): Promise<FinalStateVerdict> => {
+        if (playbackWindow) playbackWindow.until ??= Date.now();
+        try { scenarioPage = await findScenarioPageWithExpectedState(context!, page, activeTopology.scenarioOrigin, scenario, flowWorkflow); return { held: true, unheldFacts: [] }; }
+        catch { return nearestFinalStateMisses(context!, page, activeTopology.scenarioOrigin, finalStateFacts(scenario, flowWorkflow)); }
       },
     });
     // `--replays N`: approve the repair this run produced, apply it, and replay the Flow N times with no model, so "the model fixed it" becomes "the Flow
@@ -391,8 +400,9 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         authorizeRun: live.repairAuthorizer(control, activeTopology),
         settleRun: flowRunId => live.settleRepair(control, { projectId: createdProjectId, runId: flowRunId }, bundle, details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The created Flow's repair attempt finished"), details })),
         recordIncompleteEvidence: incomplete => bundle.writeStructured("snapshots/flow-lane.json", incomplete),
-        ...flowRunHooks(activeTopology, async evidence => {
-          await bundle.writeStructured("snapshots/flow-lane.json", createdFlowLaneSnapshot(evidence));
+        ...flowRunHooks<CreatedFlowLaneEvidence>(activeTopology, async evidence => {
+          // A missed fact's observed value is page text, published by the rule `snapshots/extraction-mismatches.json` follows: withheld where the scenario declares a secret.
+          await bundle.writeStructured("snapshots/flow-lane.json", createdFlowLaneSnapshot(scenario.secrets?.length ? { ...evidence, oracles: { ...evidence.oracles, ...(evidence.oracles.unheldFacts ? { unheldFacts: evidence.oracles.unheldFacts.map(fact => ({ ...fact, observed: "[withheld: the scenario declares a secret]" })) } : {}) } } : evidence));
           await writeFlowExtractionMismatches(bundle, scenario, evidence.extraction);
         }),
       });
@@ -491,7 +501,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
           ...(live ? { authorizeLiveLlm: live.authorizer(control, activeTopology) } : {}),
           // Closes the discard window for the second read: Core audits the Flow's runtime confirmations against the finalized recording.
           flowDispatchStarting: at => { discardWindowUntil = at; },
-          ...flowRunHooks(activeTopology, async evidence => {
+          ...flowRunHooks<FlowLaneEvidence>(activeTopology, async evidence => {
             await bundle.writeStructured("snapshots/flow-lane.json", flowLaneSnapshot(evidence));
             await writeFlowExtractionMismatches(bundle, scenario, evidence.extraction);
           }),
@@ -524,7 +534,9 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     const pairingWaitDetails = pairingStatusWaitFailureDetails(error);
     const httpTransportDetails = httpTransportFailureDetails(error);
     const topologyReadinessDetails = topologyReadinessFailureDetails(error);
-    const failureEvent = { ...evidenceEvent(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.details && (error.category === "recording.contract" || (error.category === "runtime.behavior" && !scenario.secrets?.length)) ? { failureDetails: error.details } : {}), ...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {}), ...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {}), ...(extensionStartDetails ? { failureDetails: extensionStartDetails } : {}), ...(httpTransportDetails ? { failureDetails: httpTransportDetails } : {}), ...(topologyReadinessDetails ? { failureDetails: topologyReadinessDetails } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}), ...(productFailure ? { productFailure } : {}) } };
+    // A final state that did not hold names its facts in the message; its step is the final-state check, not an unknown one.
+    const failureStepId = error instanceof RunnerFailure && (error.details?.oracles as { finalState?: unknown } | undefined)?.finalState === "failed" ? "final-state" : undefined;
+    const failureEvent = { ...evidenceEvent(runId, scenario.id, failureStepId, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.details && (error.category === "recording.contract" || (error.category === "runtime.behavior" && !scenario.secrets?.length)) ? { failureDetails: error.details } : {}), ...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {}), ...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {}), ...(extensionStartDetails ? { failureDetails: extensionStartDetails } : {}), ...(httpTransportDetails ? { failureDetails: httpTransportDetails } : {}), ...(topologyReadinessDetails ? { failureDetails: topologyReadinessDetails } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}), ...(productFailure ? { productFailure } : {}) } };
     // The picture is taken at the failure, before cleanup changes what is on screen.
     await capture.trigger(failureEvent).catch(() => undefined); await uiReview.finish("failure");
   } finally {
@@ -610,6 +622,13 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory } }).catch(() => undefined);
     }
     if (topology) await copyProcessLogs(bundle, topology.allocation.logsDir);
+    // Core has stopped, so its step log is closed: the created Flow's playback commands join the build's steps. Best-effort, and said when it fails.
+    if (topology && labRun?.stepsDirectory && playbackWindow) {
+      await writePlaybackSteps({ attemptsDirectory: path.join(topology.allocation.storageDir, "artifacts", "runtime", "command-attempts"), stepsDirectory: labRun.stepsDirectory, since: playbackWindow.since, until: playbackWindow.until ?? Date.now(), redactionLiterals: redactionLiterals ?? [] })
+        .then(written => process.stderr.write(`[lab] the Flow's playback is in steps/ as ${written.steps.length} step(s)
+`), (error: unknown) => process.stderr.write(`[lab] the Flow's playback could not be written into steps/: ${error instanceof Error ? error.message : String(error)}
+`));
+    }
     // Core has stopped and its logs are in the bundle; the clone cleanup below
     // deletes the workspace, and `finalize` renames the staging directory. This is
     // the one point where both trees are complete and still exist. A persistent-isolated
@@ -708,6 +727,17 @@ async function pairExtension(page: Page, topology: RunningTopology, trace: Exten
 }
 /** The facts `finalStateFacts` chooses: the final state, then a positive primary run's playback-goal facts. */
 async function assertFinalState(page: Page, scenario: WebScenario, workflow: ResolvedScenarioWorkflow) { await assertExpectedFacts(finalStateFacts(scenario, workflow), playwrightScenarioFactProbe(page)); }
+/** The final-state facts that did not hold, on the fixture page that came nearest the goal, newest first among equals. */
+async function nearestFinalStateMisses(context: BrowserContext, fallback: Page, origin: string, facts: readonly ExpectedFact[]): Promise<FinalStateVerdict> {
+  try {
+    let nearest: UnheldFact[] | undefined;
+    for (const candidate of new Set([...context.pages().filter(item => !item.isClosed() && item.url().startsWith(`${origin}/`)).reverse(), fallback])) {
+      const unheld = await judgeExpectedFacts(facts, playwrightScenarioFactProbe(candidate));
+      if (!nearest || unheld.length < nearest.length) nearest = unheld;
+    }
+    return { held: false, unheldFacts: nearest ?? [], ...(nearest?.length ? {} : { unjudged: "every fact held when read again" }) };
+  } catch (error) { return { held: false, unheldFacts: [], unjudged: error instanceof Error ? error.message : String(error) }; }
+}
 async function findScenarioPageWithExpectedState(context: BrowserContext, fallback: Page, origin: string, scenario: WebScenario, workflow: ResolvedScenarioWorkflow): Promise<Page> { for (const candidate of context.pages().filter(item => !item.isClosed() && item.url().startsWith(`${origin}/`)).reverse()) { try { await assertFinalState(candidate, scenario, workflow); return candidate; } catch {} } await assertFinalState(fallback, scenario, workflow); return fallback; }
 function resolveWorkflow(scenario: WebScenario, options: RunScenarioOptions, target: FluxIQTargetConfiguration): ResolvedScenarioWorkflow {
   let workflow: ResolvedScenarioWorkflow;

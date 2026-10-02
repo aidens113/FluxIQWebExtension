@@ -9,6 +9,7 @@ import type { LabResetFetch } from "../../reset-scenario-lab.js";
 import type { CreatedFlowBuild } from "../build-proposal.js";
 import { runCreatedFlowLane, type CreatedFlowLaneEntry, type CreatedFlowLaneEvidence, type CreatedFlowLaneIncomplete } from "../lane.js";
 import { resolveCreatedFlowRequest, type CreatedFlowRequest } from "../request.js";
+import type { UnheldFact } from "../final-state-facts.js";
 import { createdFlowLaneSnapshot } from "../snapshot.js";
 import { ADAPTATION_ID, EXTRACTING_NODES, FLOW_ID, PROJECT_ID, fakeCreationCore, type FakeCreationCoreOptions } from "./fake-creation-core.js";
 import { permissionRequiredDiagnostic } from "./permission-required-diagnostic.js";
@@ -25,6 +26,8 @@ type LaneOptions = {
   request?: CreatedFlowRequest;
   workflow?: ResolvedScenarioWorkflow;
   finalStateHolds?: boolean;
+  /** What the oracle names when the final state did not hold. */
+  unheldFacts?: readonly UnheldFact[];
   secrets?: readonly DeclaredSecret[];
   settle?: (build: CreatedFlowBuild) => Promise<void>;
   authorizeRun?: (flowId: string) => Promise<PersistedFlowLlmExecution>;
@@ -61,7 +64,7 @@ async function runLane(core: ReturnType<typeof fakeCreationCore>, options: LaneO
     prepareFlowPage: async () => { core.calls.push("prepare"); },
     recordEvidence: async (published) => { core.calls.push("publish"); evidence.push(published); },
     recordIncompleteEvidence: async (published) => { core.calls.push("publish-incomplete"); incomplete.push(published); },
-    checkFinalState: async () => { core.calls.push("oracle"); return options.finalStateHolds ?? true; },
+    judgeFinalState: async () => { core.calls.push("oracle"); return options.finalStateHolds ?? true ? { held: true, unheldFacts: [] } : { held: false, unheldFacts: options.unheldFacts ?? [] }; },
     fetchLab,
   });
   // Every test but the permission-point ones reads a lane that ran a Flow; a stop reaching them is a failure of its own.
@@ -194,6 +197,21 @@ test("a goal task is judged by the fixture oracle, and fails when the goal did n
   await assert.rejects(missed.run, /The created Flow ran, but the scenario's playback goal did not hold afterwards/u);
   assert.equal(missed.evidence[0]?.observation.oracleVerdict, "failed");
   assert.ok(core.calls.indexOf("oracle") < core.calls.indexOf("publish"), "the oracle is consulted before the run is published");
+});
+
+// run-muqiho5c-e830ce01: a playback whose goal did not hold was reported as
+// "step unknown", though the goal is a list of concrete facts. The failure now
+// names each fact, and its details carry what each expected and what the page showed.
+test("a goal task whose goal did not hold names each fact that did not, with its expected and observed value", async () => {
+  const unheldFacts: UnheldFact[] = [
+    { factId: "cart-line", subject: "mini-cart-line", predicate: "text", expected: "Voltbay hub x3", observed: null },
+    { factId: "coupons-held", subject: "coupon-wallet", predicate: "contains", expected: "OFFICIAL5", observed: "" },
+  ];
+  const missed = await runLane(fakeCreationCore(), { request: resolveCreatedFlowRequest(catalogScenario, goalTask()), finalStateHolds: false, unheldFacts });
+  await assert.rejects(missed.run, (error: unknown) => error instanceof RunnerFailure
+    && error.message === "The created Flow ran, but the scenario's playback goal did not hold afterwards (facts not held: cart-line, coupons-held)"
+    && JSON.stringify(error.details?.oracles) === JSON.stringify({ records: "not_declared", finalState: "failed", unheldFacts }));
+  assert.deepEqual(createdFlowLaneSnapshot(missed.evidence[0]!).oracles, { records: "not_declared", finalState: "failed", unheldFacts });
 });
 
 test("a refused build is settled, then fails the run with Core's code, and nothing is applied", async () => {

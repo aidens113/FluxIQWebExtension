@@ -36,11 +36,11 @@
 // alike images cannot remove each other. F1 and F4 need `parent`; without it
 // they do not apply, and the view prints a duplicate rather than dropping words.
 
-import type { WebLlmEvidenceElement } from "../elements";
-import { meaningfulWords, normalisedWords, webLlmElementWords, webLlmViewTraits } from "./element";
-import { mergedWebLlmFragments } from "./fragment-merge";
-import type { WebLlmPageTree } from "./page-tree";
-import type { WebLlmViewLine } from "./view-line";
+import type { WebLlmEvidenceElement } from "../../elements";
+import { meaningfulWords, normalisedWords, webLlmElementWords, webLlmViewTraits } from "../element";
+import { mergedWebLlmFragments } from "../fragment-merge";
+import type { WebLlmPageTree } from "../page-tree";
+import type { WebLlmViewLine } from "../view-line";
 
 /** The page view's element lines, in document order. */
 export function chosenWebLlmLines(elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageTree): WebLlmViewLine[] {

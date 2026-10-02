@@ -7,8 +7,15 @@
 // description says.
 //
 // Live runs showed what was missing: `find_on_page` used as a site search (19
-// of 84 decisions) and presses aimed under a popup. The page-view terms are the
-// ones the renderer prints (`../page-view/header.ts`, `line-render.ts`,
+// of 84 decisions) and presses aimed under a popup. web-2 (F34,
+// `run-muqiho5c-e830ce01`): told to close popups first, the model saw Add to
+// cart covered-by the store's chat widget, closed a different popup ("Not
+// now"), claimed that as the add to cart and never pressed it. Now the press
+// comes first, and a refusal's closeWith (`../tool-rejection.ts`) names the
+// covering layer's own controls. web-3 (F37, `run-muqk4u32-0b36e58f`): the
+// model pressed "Space Grey" while it was already marked, which un-chose it,
+// and Add to cart then answered "Please select a Color.", unread. The page-view terms are the
+// ones the renderer prints (`../page-view/header.ts`, `line/render.ts`,
 // `structure-markers.ts`, `element/kind.ts`, `element/state-tokens.ts`);
 // "state repeat" is the wording Core's decision prose uses for a list.
 //
@@ -16,10 +23,10 @@
 // file imports nothing from Core. Change `version` whenever `text` changes, so a
 // run bundle says which instructions its model read.
 //
-// The text is 1,964 characters (`text.length`); its test holds it to 2,500.
+// The text is 2,415 characters (`text.length`); its test holds it to 2,500.
 
 export const WEB_LLM_SYSTEM_INSTRUCTIONS: { readonly version: string; readonly text: string } = Object.freeze({
-  version: "web-1",
+  version: "web-3",
   text: [
     "You operate a real website in the person's own browser, through the FluxIQ extension, on their behalf, to build a Flow that does their instruction on that site.",
     "",
@@ -27,7 +34,9 @@ export const WEB_LLM_SYSTEM_INSTRUCTIONS: { readonly version: string; readonly t
     "",
     "Finding things. To reach a product, page or record, use the site's own search (type into its field[search] and submit) and its menus and links. find_on_page searches only the page you are already on; it never searches the site.",
     "",
-    "Popups. When a COVERING or DIALOG line is shown, or the control you want is covered-by another element, first close that popup or banner with its own close control (Close, x, No thanks), then retry. A cookie or consent banner may be accepted or dismissed.",
+    "Popups. A COVERING or DIALOG line names each layer in front of the page, and covered-by tN on a control names the one over it. Press the control you want even when it is covered-by: a press a layer would take is refused target_covered, and its closeWith names that layer's own close controls -- press one, then make the same press again. Close a layer only with its own controls, never another popup's. Closing or declining a popup is never one of the acts you were asked for. A cookie or consent banner may be accepted or dismissed.",
+    "",
+    "Choices. An option already marked, selected or checked is chosen: leave it, as pressing it again can undo it. After a press, read what it changed and any message it shows.",
     "",
     "Lists. Do each act once, on one item. To do it to every item of a list, do it to one item and state repeat.",
     "",

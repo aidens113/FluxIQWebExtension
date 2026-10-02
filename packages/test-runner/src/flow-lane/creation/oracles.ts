@@ -10,12 +10,19 @@
 
 import { RunnerFailure } from "../../failure.js";
 import type { FlowExtractionJudgement } from "../expectations.js";
+import type { FinalStateVerdict, UnheldFact } from "./final-state-facts.js";
 import { assertCreatedFlowDataset, createdFlowDatasetHolds } from "./judgement.js";
 
-/** Each oracle's verdict, `not_declared` where the task holds the run to no such thing. */
+/**
+ * Each oracle's verdict, `not_declared` where the task holds the run to no such
+ * thing. A failed final state carries the facts that did not hold
+ * (`final-state-facts.ts`), and `finalStateUnjudged` when they could not be read.
+ */
 export type CreatedFlowOracles = Readonly<{
   records: "held" | "failed" | "not_declared";
   finalState: "held" | "failed" | "not_declared";
+  unheldFacts?: readonly UnheldFact[];
+  finalStateUnjudged?: string;
 }>;
 
 /**
@@ -26,11 +33,20 @@ export type CreatedFlowOracles = Readonly<{
 export async function judgeCreatedFlowOracles(input: {
   extraction: FlowExtractionJudgement | null;
   declaresFinalState: boolean;
-  checkFinalState: () => Promise<boolean>;
+  judgeFinalState: () => Promise<FinalStateVerdict>;
 }): Promise<CreatedFlowOracles> {
   const records = input.extraction ? (createdFlowDatasetHolds(input.extraction) ? "held" : "failed") : "not_declared";
-  const finalState = !input.extraction || input.declaresFinalState ? ((await input.checkFinalState()) ? "held" : "failed") : "not_declared";
-  return { records, finalState };
+  if (input.extraction && !input.declaresFinalState) return { records, finalState: "not_declared" };
+  const verdict = await input.judgeFinalState();
+  if (verdict.held) return { records, finalState: "held" };
+  return { records, finalState: "failed", ...(verdict.unheldFacts.length > 0 ? { unheldFacts: verdict.unheldFacts } : {}), ...(verdict.unjudged === undefined ? {} : { finalStateUnjudged: verdict.unjudged }) };
+}
+
+/** The facts a failed final state names, for the failure's one line: `cart-line, coupons-held`, or why none could be named. */
+function unheldFactsClause(oracles: CreatedFlowOracles): string {
+  const ids = (oracles.unheldFacts ?? []).map(fact => fact.factId);
+  if (ids.length > 0) return ` (fact${ids.length === 1 ? "" : "s"} not held: ${ids.join(", ")})`;
+  return oracles.finalStateUnjudged === undefined ? "" : ` (its facts could not be read: ${oracles.finalStateUnjudged})`;
 }
 
 /** Whether every oracle the task declares held. */
@@ -50,11 +66,11 @@ export function assertCreatedFlowOracles(extraction: FlowExtractionJudgement | n
       assertCreatedFlowDataset(extraction);
     } catch (error) {
       if (!finalStateFailed || !(error instanceof RunnerFailure)) throw error;
-      throw new RunnerFailure(error.category, `${error.message}; and the scenario's final state did not hold afterwards`, { details: { ...(error.details ?? {}), oracles } });
+      throw new RunnerFailure(error.category, `${error.message}; and the scenario's final state did not hold afterwards${unheldFactsClause(oracles)}`, { details: { ...(error.details ?? {}), oracles } });
     }
   }
   if (!finalStateFailed) return;
   throw new RunnerFailure("runtime.behavior", extraction
-    ? "The created Flow stored the expected records, but the scenario's final state did not hold afterwards"
-    : "The created Flow ran, but the scenario's playback goal did not hold afterwards", { details: { oracles } });
+    ? `The created Flow stored the expected records, but the scenario's final state did not hold afterwards${unheldFactsClause(oracles)}`
+    : `The created Flow ran, but the scenario's playback goal did not hold afterwards${unheldFactsClause(oracles)}`, { details: { oracles } });
 }
