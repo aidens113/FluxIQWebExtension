@@ -56,7 +56,10 @@ untrusted and must not be written to Lab artifacts or logs.
 Production composition binds `domain/src/runtime/llm-evidence/` through
 `registerWebAutomationRuntime`, called by the web-panel host. The domain
 advertises its runnable web node library; Core offers `core.run_node` to run
-those registered nodes and `core.flow_draft` to author the Flow. The domain's
+those registered nodes, `core.describe_nodes` to read their full definitions
+(each decision is shown the library by name only, plus the nodes the build
+has described; a describe call costs no page capture) and `core.flow_draft` to
+author the Flow. The domain's
 additional `web.detect_repeating_structure` observation names an extraction structure
 without publishing selectors or values; `web.find_on_page` searches the whole
 page, hidden elements and every attribute included, and `web.describe_element`
