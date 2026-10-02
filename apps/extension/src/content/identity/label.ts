@@ -24,12 +24,14 @@
 // preceding siblings, forty text parts eight levels deep -- bound the search
 // for a label, not the label found.
 
-import { isSensitiveFormControl } from "../element-traits";
+import { isActionableElement, isSensitiveFormControl } from "../element-traits";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensitive-text";
 import { normalizedText } from "./normalized-text";
 
 const MAX_ASSOCIATED_LABELS = 4;
 const MAX_NEARBY_SIBLINGS = 4;
+/** How many wrappers above an unlabelled control are looked before, each holding no other control. */
+const MAX_LABEL_WRAPPERS = 2;
 const NEARBY_LABEL_TAGS = new Set(["label", "span", "div", "p", "dt", "strong", "b", "legend", "th"]);
 const NESTED_CONTROL_SELECTOR = "input,select,textarea,button";
 
@@ -92,13 +94,33 @@ function collectLabelText(node: Node, control: Element, parts: string[], depth: 
  * An unlabelled control takes the nearest label-shaped element before it: a
  * short piece of text that holds no control of its own. Restricting this to
  * labelable controls keeps it from inventing labels for ordinary containers.
+ *
+ * When nothing before it qualifies, the text before its wrapper is asked, and
+ * before that wrapper's wrapper, as long as the wrapper holds no other field:
+ * the crossborder item page puts its quantity box in a row with a "−" and a
+ * "+" beside it, and the row under the word "Quantity" (t229).
  */
 function nearbyLabel(element: Element): string | undefined {
   if (!isLabelableControl(element)) return undefined;
-  const fromSiblings = labelBeforeSiblings(element);
-  if (fromSiblings) return fromSiblings;
-  const wrapper = element.parentElement;
-  return wrapper?.childElementCount === 1 ? labelBeforeSiblings(wrapper) : undefined;
+  let current = element;
+  for (let level = 0; level <= MAX_LABEL_WRAPPERS; level += 1) {
+    const found = labelBeforeSiblings(current);
+    if (found) return found;
+    const wrapper = current.parentElement;
+    if (!wrapper || !holdsOneField(wrapper)) return undefined;
+    current = wrapper;
+  }
+  return undefined;
+}
+
+/** The wrapper holds exactly one labelable control, so text before it can only be that control's label. */
+function holdsOneField(wrapper: Element): boolean {
+  let fields = 0;
+  for (const inside of wrapper.querySelectorAll("*")) {
+    if (isLabelableControl(inside)) fields += 1;
+    if (fields > 1) return false;
+  }
+  return fields === 1;
 }
 
 function labelBeforeSiblings(element: Element): string | undefined {
@@ -113,10 +135,17 @@ function labelBeforeSiblings(element: Element): string | undefined {
   return undefined;
 }
 
+/**
+ * A label-shaped element's words, or nothing when it is not a label: one that
+ * holds a control, one that is a control itself, or a glyph with no letter or
+ * digit in it -- the "−" a quantity stepper draws beside its box is the button
+ * that lowers it, not the box's name (t229).
+ */
 function nearbyLabelText(candidate: Element): string | undefined {
   if (!NEARBY_LABEL_TAGS.has(candidate.tagName.toLowerCase())) return undefined;
-  if (candidate.querySelector(NESTED_CONTROL_SELECTOR)) return undefined;
-  return normalizedText(textOutsideSensitiveControls(candidate));
+  if (candidate.querySelector(NESTED_CONTROL_SELECTOR) || (candidate.tagName.toLowerCase() !== "label" && isActionableElement(candidate))) return undefined;
+  const text = normalizedText(textOutsideSensitiveControls(candidate));
+  return text !== undefined && /[\p{L}\p{N}]/u.test(text) ? text : undefined;
 }
 
 function isLabelableControl(element: Element): boolean {

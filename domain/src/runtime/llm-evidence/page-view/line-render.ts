@@ -25,14 +25,23 @@ export function renderedWebLlmLines(lines: readonly WebLlmViewLine[], tree: WebL
   for (const line of lines) {
     const element = line.element;
     written.push(...markersBefore(element));
-    const kind = line.role === "image" ? "img" : webLlmElementKind(element);
+    const kind = line.role === "image" ? "img" : lineKind(line);
     const heading = kind !== undefined && HEADING_TAG.test(kind)
       ? undefined
       : tree.ancestors(element).find((ancestor) => HEADING_TAG.test(ancestor.tag));
     const prefix = heading !== undefined && !lined.has(heading) ? heading.tag : undefined;
     const target = kind === "link" && element.href !== undefined ? linkTarget(element.target, element.href) : undefined;
-    const parts = [element.target, prefix, kind, line.words === undefined ? undefined : quotedWords(line.words), ...webLlmStateTokens(element, kind, target)];
+    const parts = [element.target, prefix, kind, line.words === undefined ? undefined : quotedWords(line.words), ...webLlmStateTokens(element, kind, target, line.words)];
     written.push(parts.filter((part): part is string => part !== undefined && part !== "").join(" "));
   }
   return written;
+}
+
+/**
+ * The kind a line prints. A delegate (`./line-choice.ts`) holds a control and
+ * gets the line a non-control gets, so it is not called `clickable`.
+ */
+function lineKind(line: WebLlmViewLine): string | undefined {
+  const kind = webLlmElementKind(line.element);
+  return kind === "clickable" && line.role !== "control" ? undefined : kind;
 }

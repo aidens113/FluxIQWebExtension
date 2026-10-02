@@ -99,3 +99,18 @@ test("the text beside an unlabelled control leaves out a marked element's words"
     assert.equal(labelText(handle), "Handle");
   });
 });
+
+test("a stepper's glyph is not the box's label: the text before a wrapper holding no other field is (t229)", async () => {
+  const quantity = labelled(input("text", "1"));
+  const row = element("div", {}, element("div", {}, "−"), quantity, element("div", {}, "+"), element("span", {}, "112 pieces available"));
+  const group = element("div", {}, element("div", {}, "Quantity"), row);
+  const first = labelled(input("text", ""));
+  const second = labelled(input("text", ""));
+  const pair = element("div", {}, first, second);
+  const form = element("div", {}, element("div", {}, "Your names"), pair);
+  await withLabelPage([group, form], ({ labelText }) => {
+    assert.equal(labelText(quantity), "Quantity");
+    // A wrapper with two fields in it is not either field's label.
+    assert.equal(labelText(second), undefined);
+  });
+});

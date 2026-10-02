@@ -8,14 +8,14 @@
 
 import { present } from "../../present";
 
-const KINDS = /^(?:link|button|field(?::[\w-]+)?|select|checkbox|radio|switch|toggle|tab|menuitem|option|slider|treeitem|img|clickable|dialog|layer|h[1-6])$/u;
+const KINDS = /^(?:link|button|field(?::[\w-]+|\[search\])?|select|checkbox|radio|switch|toggle|tab|menuitem|option|slider|treeitem|img|clickable|dialog|layer|h[1-6])$/u;
 
 export type ShownPageLine = {
   /** The handle the line starts with, `tN`. */
   target: string;
   /** The heading tag written before the kind, for a line under a heading that has no line of its own. */
   heading?: string;
-  /** The kind word, `field:email` included; absent for plain text. */
+  /** The kind word, `field:email` and `field[search]` included; absent for plain text. */
   kind?: string;
   /** The words, unquoted; absent for a line without any. */
   words?: string;
