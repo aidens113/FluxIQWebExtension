@@ -55,7 +55,7 @@ import { armScenarioVariant } from "./lab-control/index.js";
 import { LAB_PROJECT_DOMAIN_ID, judgeExpectedFacts, type CreatedFlowLaneEvidence, type FinalStateVerdict, type FlowLaneEvidence, type UnheldFact, createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, withDeclaredFlowRepair, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type LiveRepairLaneInput, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, chromiumExtensionStorageDirs, runRedactionScopes, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
-import { LabRunRecord, writePlaybackSteps } from "./lab-runs/index.js";
+import { LabRunRecord, writePlaybackSteps, type PlaybackSkippedStep } from "./lab-runs/index.js";
 import { runProviderFailureLog, writeProviderFailureSidecar } from "./provider-failure/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
@@ -210,6 +210,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   // category cannot tell "the fixture disagreed" from "the rig broke first".
   let oracleVerdict: "passed" | "failed" | null = null;
   const actions: RunActionTiming[] = [];
+  // Each Flow run's skipped attempts (a sometimes-present step observed absent), for the playback step log to write as skipped.
+  const playbackSkips: PlaybackSkippedStep[] = [];
   // null: FluxIQ reported no failure. On the Flow lane it is set from the observation the lane publishes, failed runs included.
   let automationFailure: RunAutomationFailure | null | undefined = target.mode === "existing" || target.mode === "clone" ? undefined : null;
   const cloneState: CloneRunState = { sourceSessionIdentityVerified: false, sourceHashVerifiedAfterRun: false, cleanupOutcome: "pending" };
@@ -319,6 +321,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         oracleVerdict = evidence.observation.oracleVerdict;
         automationFailure = evidence.observation.automationFailureReported;
         actions.push(...evidence.run.actions.map(action => ({ actionType: action.actionType, startedAt: action.startedAt, ...(action.durationMs === undefined ? {} : { durationMs: action.durationMs }), status: action.status })));
+        playbackSkips.push(...evidence.run.actions.flatMap(action => action.skipped ? [{ nodeId: action.nodeId, ...action.skipped }] : []));
         await publish(evidence);
       },
       checkFinalState: async () => {
@@ -624,7 +627,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     if (topology) await copyProcessLogs(bundle, topology.allocation.logsDir);
     // Core has stopped, so its step log is closed: the created Flow's playback commands join the build's steps. Best-effort, and said when it fails.
     if (topology && labRun?.stepsDirectory && playbackWindow) {
-      await writePlaybackSteps({ attemptsDirectory: path.join(topology.allocation.storageDir, "artifacts", "runtime", "command-attempts"), stepsDirectory: labRun.stepsDirectory, since: playbackWindow.since, until: playbackWindow.until ?? Date.now(), redactionLiterals: redactionLiterals ?? [] })
+      await writePlaybackSteps({ attemptsDirectory: path.join(topology.allocation.storageDir, "artifacts", "runtime", "command-attempts"), stepsDirectory: labRun.stepsDirectory, since: playbackWindow.since, until: playbackWindow.until ?? Date.now(), redactionLiterals: redactionLiterals ?? [], skippedSteps: playbackSkips })
         .then(written => process.stderr.write(`[lab] the Flow's playback is in steps/ as ${written.steps.length} step(s)
 `), (error: unknown) => process.stderr.write(`[lab] the Flow's playback could not be written into steps/: ${error instanceof Error ? error.message : String(error)}
 `));

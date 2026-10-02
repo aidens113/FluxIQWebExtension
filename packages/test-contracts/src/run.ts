@@ -69,7 +69,13 @@ export type RunStepTiming = {
   durationMs: number;
   outcome: "succeeded" | "failed";
 };
-export const runActionStatuses = ["succeeded", "failed", "timed_out", "cancelled", "queued", "running", "waiting", "unknown"] as const;
+/**
+ * `skipped` is an attempt the run passed over rather than ran: a
+ * sometimes-present step (a popup, a banner) whose target was observed absent
+ * (Core `executor/step-skip/absent-step.ts`). It did not run, so it is neither
+ * `succeeded` nor `failed`, and it ended its node well: the run went on.
+ */
+export const runActionStatuses = ["succeeded", "failed", "skipped", "timed_out", "cancelled", "queued", "running", "waiting", "unknown"] as const;
 /**
  * One FluxIQ action the run executed: the Core round-trip probe on the
  * recording lane, or a persisted Flow's action attempt on existing and clone.
