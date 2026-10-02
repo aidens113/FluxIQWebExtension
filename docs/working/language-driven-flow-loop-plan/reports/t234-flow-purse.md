@@ -134,3 +134,18 @@ run-muqbzu32: 15 decisions sent before and after.
 - Docs: Core architecture text on the build purse and `node scripts/docs-reference.mjs --check`;
   extension test-runner only if Lab budget code reads these constants.
 - Out of scope (t235): request composition and the node catalog.
+
+## Post-merge regression fix (after Core ab781df8 and the dev merge)
+
+- Cause: `repair-purse-chain.test.ts` "is capped at a Flow's $0.10..." spent $0.12. Its provider reports
+  $0.03 a call but does not price, and the purse held unpriced calls at nothing, refusing only once spend
+  reached the ceiling. On dev the loop's average-based count stopped the re-author build first; with that
+  count removed, nothing bounded unpriced calls.
+- Fix (`llm/build-purse/purse.ts`): an unpriced call is held at the most any call on the purse has reported
+  costing (a measured figure; nothing until one has reported). New unit test in `build-purse/tests/purse.test.ts`.
+  My own `creation-spend.test.ts` (e) depended on the overshoot; it was rescaled so the judge spends 0.4 of the
+  ceiling per answer.
+- Validation: the pre-fix purse swapped in fails the regression test and the new unit test (2 failed);
+  restored. tsc rc 0. The directory set plus tests/refuted-result: 1796 passed, 3 failed (lane D:
+  reauthor-service x2, repair-replay-chain, which fail on dev too). Structure audit passed; reference
+  current.
