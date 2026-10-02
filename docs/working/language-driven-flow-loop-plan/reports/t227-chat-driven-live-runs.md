@@ -37,6 +37,22 @@ empty (`unmerged 0`) once it was clear Core needs a change; the restart with `--
 - **r2 (coordinator):** a chat run's `core.log` had no build trace. The trace was on only when the launcher exported `FLUXIQ_BUILD_PROGRESS_TRACE`. Now `environment.ts` turns it on for every Lab-started Core. The chat and direct paths share one trace wrapper.
 - **r2 audit fixes:** imports go through barrels, and the three `prove-*` files moved to `extension-chat-check/prove/`. Two of the moves are staged renames, because `git mv` was used.
 
+- **t228 (2026-10-01): blocked, nothing changed.** The order to remove every refusal of the model's actions except permission, privacy and the repeat guard was stopped by the permission system. Reading the extension's `actionability.ts` and `click.ts` was denied as "Security Test Removal". The first edit, to `shown-addresses.ts`, was denied as "Security Weaken", and so was a `git status`. The full classification table went to the supervisor and is with the user. No REMOVE item will be pursued until the user decides.
+- **Per-build ceiling (coordinator, "the user's money, first"), lead.** The premise was checked first.
+  - Run 12 (`run-muq66ff9-cb3767a1`, $0.3239) never passed the ceiling. The ledger records `maxBuildCostUsd 0.1603` and `buildsOverCeiling 0`.
+  - The chat build cost $0.098. The Flow's repair then made three reauthor builds ($0.160, $0.043, $0.011) and a $0.012 result check.
+  - The ceiling does hold for chat builds. Lane B's chat build `run-muq3ubys-4b4dbf5b` ended "stopped at its spending limit of $0.25".
+  - Core computes one ceiling for every `generate-flow-bootstrap-adaptation`, in `service.ts` and `loop-limits/flow-bootstrap-evidence-loop.ts`: `automationStudioLlmRunCostCeilingUsd` lowered by the Flow's `maxEstimatedCostUsdPerRun`. The chat's `create-here` makes that same call.
+  - The real gap: a lowered `--llm-max-cost-usd` could not reach the Flow a chat build makes. `LiveLlmRun.assertChatBuildable` now refuses it, and a test pins the chat plan's ceiling to Core's function.
+- **Chat display fixes (lead).**
+  - **U-B1, the welcome screen mid-build.** The panel that sent showed "Sending your message" (window capture at 24.757 s) and then the thread (26.052 s). In between, `send()` ended the send before re-reading the thread, so for that read the card had no turns, no live line and `loaded`: the empty state. Lane B's UI-review capture landed in that window, at 25.750 s, in every run. Fix: `conversation/controller.ts` keeps the send in flight until the read lands.
+  - **U-B2, the stop said twice.** A chat-started build's failed marker repeated the chat's answer. The extension's `stream/step/messages.ts` and Core web's `activity/steps/messages.ts` now skip a failed build marker or `ended` row that carries a `conversationId`.
+  - **U-A1, a failed step read "Done".** Core never ends a run step. A step closed by the run's recovery for that node, or by the run failing, is now marked failed; any other closing marks it done. Same two files.
+  - **U-A2, a merge read "Action · the page".** A step event carried no definition id.
+    - Core `activity/step.ts` adds `Node: <definition>` to `detail.text`, the record tool rows carry, and code-only text is never shown.
+    - `ui/activity-action` maps Core's control node ids to new kinds `join`, `branch` and `repeat` ("Join paths", "Choose path", "Repeat"; icons git-merge, git-branch, repeat). It maps by whole id, not by word: "Switch my pickup store" is no branch.
+    - The extension's `lucide-nodes.ts` and Core web's `action-icons.ts` carry the icons.
+
 ## Validation (observed 2026-10-01)
 
 - Core `npx vitest run src/programs/automation-studio/runtime/conversations --maxWorkers=2 --minWorkers=1`: `Test Files 14 passed (14)`, `Tests 91 passed (91)`.
@@ -51,6 +67,18 @@ empty (`unmerged 0`) once it was clear Core needs a change; the restart with `--
   - The build stopped on `flow_bootstrap.provider_secret_unavailable`, and the thread said "Your model key is locked".
   - The stage recorded `lab.chat_build_failed`, with `chat.ending: failed` and the person's, answer and result turns at 3, 4 and 5.
 - **Dry run:** `pnpm lab run everything-store --live-llm ... --llm-task create-flow --instruction-task everything-store-plus-earbuds-under-50 ... --dry-run` → `status ready`, `buildEntry chat`, run ceiling $0.25, `permittedConsequences []`.
+
+- **Ceiling and display round (after the dev fast-forward to `60217d05` / `d5730a5a`):**
+  - Core `npx vitest run src/ui/activity-action src/programs/automation-studio/runtime/activity` plus the activity publisher and handler tests: `Test Files 25 passed (25)`, `Tests 246 passed (246)`.
+  - Core web `npx vitest run src/features/automation-studio/conversation`: `Test Files 26 passed (26)`, `Tests 267 passed (267)`.
+  - Core web `heavy.sh npx tsc --noEmit`: exit 0.
+  - Core library build: `fluxiq build: Done`.
+  - Core audit: `passed (211 warning(s), 349 baselined)`.
+  - Extension: the tests of `panel/chat/{tests,conversation/tests,stream/tests,stream/step/tests,view/tests}` and `panel/icons/tests`, bundled as `scripts/test-extension.mjs` does: `# tests 187`, `# pass 187`, `# fail 0`.
+  - With the U-B1 and U-A1 fixes undone, their new tests failed (`not ok`), and they pass with the fixes restored.
+  - `heavy.sh pnpm --filter @fluxiq-web-extension/extension check`: passed.
+  - test-runner build and `node --test dist/live-llm/tests/*.test.js`: `# tests 102`, `# pass 102`.
+  - Lab audit: `passed (154 warning(s), 118 baselined)`; `--rule docs-links` and `--rule working-docs` passed.
 
 ## Live runs
 

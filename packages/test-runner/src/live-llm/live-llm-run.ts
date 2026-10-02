@@ -161,6 +161,19 @@ export class LiveLlmRun {
    * person at the task's point -- and Core's chat builds a new Flow on its own
    * default model. A run that permitted a consequence or chose another model
    * would be measuring something it never asked for.
+   *
+   * **The per-build ceiling.** Every build is held to one ceiling however it is
+   * started: Core's run cost ceiling as the Lab passed it to the run's Core
+   * (`plan.buildCostCeilingUsd`, `FLUXIQ_LLM_RUN_COST_CEILING_USD`), lowered by the
+   * Flow's own `maxEstimatedCostUsdPerRun` (`loop-limits/flow-bootstrap-
+   * evidence-loop.ts`, computed in `service.ts` for every
+   * `generate-flow-bootstrap-adaptation`, which is the call the chat's
+   * `flow.createHere` makes too). This run's ceiling is the same function of
+   * `--llm-max-cost-usd` (`live-llm-plan.ts`), and the direct build writes it
+   * onto the Flow. A chat build's Flow is made inside Core's command, so a
+   * ceiling the operator lowered has no Flow to be written onto and would not
+   * hold: the build would run to Core's own. Refused here, so the number a run
+   * reports as its ceiling is always the one the build was held to.
    */
   assertChatBuildable(): void {
     if (!this.createsFlow) return;
@@ -170,6 +183,10 @@ export class LiveLlmRun {
     }
     if (this.plan.model !== DEFAULT_LLM_MODEL) {
       throw new RunnerFailure("fixture.invalid", `A build started from the extension's chat runs on FluxIQ's own default model for a new Flow (${DEFAULT_LLM_MODEL}), not ${this.plan.model}. Leave --llm-model out, ${direct}`);
+    }
+    const ceiling = this.plan.buildCostCeilingUsd;
+    if (this.plan.maxTotalEstimatedCostUsd !== ceiling) {
+      throw new RunnerFailure("fixture.invalid", `A build started from the extension's chat is held to FluxIQ's per-build ceiling of $${ceiling}, and --llm-max-cost-usd ${this.plan.maxTotalEstimatedCostUsd} cannot reach the Flow the chat makes. Leave --llm-max-cost-usd out, ${direct}`);
     }
   }
 

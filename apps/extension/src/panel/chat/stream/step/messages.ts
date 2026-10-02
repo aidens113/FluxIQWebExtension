@@ -35,7 +35,8 @@
 // question to the person (a robot check or a permission) and a run's step
 // are each a message with its own card. A card that started is updated in
 // place when it ends. A run step Core never ends is over once anything later
-// happens in its unit of work.
+// happens in its unit of work: failed when that is the run's recovery from
+// that step or the run failing, done otherwise.
 //
 // A card waiting on the person (a robot check, a permission) is over only
 // when Core says so: the ask row that settles the wait carries the same ask
@@ -96,6 +97,8 @@ type Unit = {
   open: Map<string, Place>;
   /** A run step Core started and will not end. */
   step: number | undefined;
+  /** The node that run step ran (its `detail.ref`), so the row that says it failed can be told from any later row. */
+  stepNode: string | undefined;
   /** Each ask's card, by its ask id (`activityActionKey`), so the row that settles it finds it. */
   asks: Map<string, Place>;
   /** A robot-check card still waiting for its other half: the ask, or the tool that met the check. */
@@ -105,6 +108,17 @@ type Unit = {
 /** A robot check still waiting on the person: the only card the other half of a check joins. */
 function waitsOnPerson(card: Pick<ActionCard, "kind" | "outcome">): boolean {
   return card.kind === "person_check" && card.outcome === "waiting";
+}
+
+/**
+ * Whether `event`, the row after a run step Core started, says that step
+ * failed: the run's recovery from a failed step names the node it recovers
+ * (`ref`, `executor/graph-run.ts` in Core), and a run that fails ends on its
+ * final `failed` row.
+ */
+function stepFailedBy(event: ClientGatewayActivity, node: string | undefined): boolean {
+  if (event.phase === "failed") return true;
+  return event.phase === "repairing" && node !== undefined && event.detail?.ref === node;
 }
 
 /** The messages for `events` (oldest first), at most `limit` of them, the newest. */
@@ -149,14 +163,21 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
     lastAt = at;
     let unit = units.get(event.activityId);
     if (unit === undefined) {
-      unit = { decision: undefined, open: new Map(), step: undefined, asks: new Map(), check: undefined };
+      unit = { decision: undefined, open: new Map(), step: undefined, stepNode: undefined, asks: new Map(), check: undefined };
       units.set(event.activityId, unit);
     }
     if (unit.step !== undefined) {
       const over = drafts[unit.step]!;
-      over.actions = over.actions.map((card) => (card.outcome === "working" ? { ...card, outcome: "done" } : card));
+      // Core never ends a run step, so the next row of its unit does -- and
+      // says how. A recovery for that same node, or the run itself failing, is
+      // the step failing: a press that did not work read "Done" just above
+      // "Run failed" (U-A1, `run-muq6lqnw-fdfa7aac`). Anything else is the run
+      // moving on past a step that worked.
+      const outcome = stepFailedBy(event, unit.stepNode) ? "failed" : "done";
+      over.actions = over.actions.map((card) => (card.outcome === "working" ? { ...card, outcome } : card));
       over.sequence = Math.max(over.sequence, event.sequence);
       unit.step = undefined;
+      unit.stepNode = undefined;
     }
     const detail = event.detail;
     if (detail === undefined || isInternalStep(detail)) continue;
@@ -258,10 +279,18 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
     unit.decision = undefined;
     if (detail.kind === "step") {
       const marker = event.step === undefined;
-      // A build's start and finish say nothing the live line and the answer do not.
-      if (marker && event.subject.kind === "build" && status !== "failed") continue;
+      // A build's start and finish say nothing the live line and the answer do
+      // not. Nor does a failed finish when the build was started from a chat:
+      // the chat's command writes how the build ended, and how far it got, into
+      // that thread as its answer, so the marker said the same ending twice
+      // (U-B2, in every chat-driven Lab run). A build started anywhere else has
+      // no answer in a thread, and its failure is said here.
+      if (marker && event.subject.kind === "build" && (status !== "failed" || event.conversationId !== undefined)) continue;
       const placed = add(event, detail, "step", at, marker ? null : actionCard(event, cardKey(event)));
-      if (!marker && status === "started") unit.step = placed;
+      if (!marker && status === "started") {
+        unit.step = placed;
+        unit.stepNode = detail.ref;
+      }
       continue;
     }
     if (detail.kind === "note" && words.text === undefined) continue;

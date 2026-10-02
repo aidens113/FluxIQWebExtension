@@ -65,6 +65,8 @@ export type LiveLlmPlan = {
    * budget holds every build and recovery on the Flow to, each on its own.
    */
   maxTotalEstimatedCostUsd: number;
+  /** The per-build ceiling the run's Core was started with (`liveLlmBuildCostCeilingUsd`), before `--llm-max-cost-usd` lowered it. */
+  buildCostCeilingUsd: number;
   /** The budget the operator asked for, kept verbatim so the post-run check judges their numbers, not Core's. */
   declared: LlmTokenBudget;
   /**
@@ -133,6 +135,7 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeil
     timeoutMs: Math.min(budget.timeoutMs, CORE_MAX_TIMEOUT_MS),
     maxEstimatedCostUsd: buildCeilingUsd,
     maxTotalEstimatedCostUsd: buildCeilingUsd,
+    buildCostCeilingUsd,
     declared: { ...budget },
     permittedConsequences: permittedConsequencesOf(profile.permittedConsequences, purpose),
   };

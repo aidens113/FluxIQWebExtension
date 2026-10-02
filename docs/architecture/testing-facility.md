@@ -1301,13 +1301,26 @@ What the chat cannot carry is refused before anything starts
 
 - `--llm-permit`. The chat sends no permit; the person answers at the point
   instead.
+- `--llm-max-cost-usd` below Core's per-build ceiling (below).
 - A model other than Core's default for a new Flow.
 - `--no-live-panel`, or a panel that did not show (`environment.missing`).
 
 Two limits come with the chat path:
 
-- A chat build runs on Core's own limits for a new Flow (the run cost
-  ceiling, `FLUXIQ_LLM_RUN_COST_CEILING_USD`, default $0.10). The run's own caps are applied when it is settled.
+- Every build is held to one per-build ceiling however it is started:
+  Core's run cost ceiling, `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default $0.10,
+  passed by the Lab to the run's Core), lowered by the Flow's own
+  `maxEstimatedCostUsdPerRun`. Core computes it for every
+  `generate-flow-bootstrap-adaptation`, and the chat's `flow.createHere` makes
+  that same call. The run plans with the same value (`plan.buildCostCeilingUsd`,
+  `live-llm-plan.ts`), lowered by `--llm-max-cost-usd`, and a direct build
+  writes it onto its Flow. A chat build's Flow is made inside Core's command,
+  so a lowered ceiling has no Flow to go onto: `--llm-max-cost-usd` below the
+  run's ceiling is refused for a chat build (`assertChatBuildable`). A run's
+  total is the sum of its builds, which is why a chat build plus the Flow's
+  repair can pass the ceiling with every build under it
+  (`run-muq66ff9-cb3767a1`, under the earlier $0.25 ceiling: build $0.098,
+  reauthors $0.160, $0.043 and $0.011, result check $0.012).
 - A chat build that fails leaves no readable record of what it spent. Core's
   diagnostic reaches the thread's sentence only, so such a build's accounting
   is `null`.
