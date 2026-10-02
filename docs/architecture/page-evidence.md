@@ -241,7 +241,7 @@ Every page leaves the domain as `web-llm-page.v3`
   `URL <location on a ~ base>   (~ = <base>)`, `VIEW <w>x<h> at the top · <n>
   elements ...`, `COVERING`, `DIALOG`, `LOADING`, `FRAMES ... did not answer`,
   `ARRIVED`, `SELECTED`, and `CAPTURE incomplete`.
-- **Which elements get a line**, in document order (`page-view/line-choice.ts`):
+- **Which elements get a line**, in document order (`page-view/line/choice.ts`):
   every visible control, every visible layer, every visible element with
   meaningful words of its own, and an image whose alt says something no line
   near it says. "Visible" is not a search capture's `hidden`, and a box, when
@@ -344,7 +344,7 @@ world, so three facts make those controls visible:
 
 An element that is a control only through a listener or a cursor, and that
 contains another control, gets a text line instead of a control line
-(`line-choice.ts`), so a list that delegates its buttons' clicks does not
+(`line/choice.ts`), so a list that delegates its buttons' clicks does not
 become one line holding them all. Such a control prints its own words, not
 every word under it; one with no words takes the alt text of its images.
 

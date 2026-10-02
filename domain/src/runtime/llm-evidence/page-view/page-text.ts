@@ -4,8 +4,7 @@
 import type { WebLlmPageEvidence } from "../sanitize";
 import { webLlmElementKind } from "./element";
 import { webLlmPageHeader } from "./header";
-import { chosenWebLlmLines } from "./line-choice";
-import { renderedWebLlmLines } from "./line-render";
+import { chosenWebLlmLines, renderedWebLlmLines } from "./line";
 import { webLlmLinkWriter } from "./link-writer";
 import { webLlmPageTree } from "./page-tree";
 

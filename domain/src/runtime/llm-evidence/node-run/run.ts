@@ -68,7 +68,9 @@ import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION, t
 import { withClearedWait } from "./cleared-wait";
 import { webCoveredTarget } from "./covered-target";
 import type { WebNodeRun } from "./context";
+import type { WebNodeOutcome } from "./outcome";
 import { webObservedControl } from "./observed-control";
+import { webAnsweredLayer, webNodePageChanges } from "./press-effect";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
 import { webUnshownAddressRefusal } from "./shown-addresses";
 import { webMovesThePage, webScopeAnchor, webStartLocationRefusal, WEB_NAVIGATION_ACTION } from "./start-location";
@@ -93,48 +95,11 @@ const HANDLE_SHAPE = ['target: {"handle": "tN"}', 'extractList: {"handle": "extr
 /** The keys the library verb takes, and all it takes (`Core runtime/llm/node-tools/`). */
 const CALL_KEYS = ["node", "parameters", "consequences"];
 
-/**
- * What a node call says about itself, beside the page it left behind.
- *
- * Written by name rather than spread, because a field that quietly stops
- * arriving here costs nothing that shows: the model simply reasons with less
- * (`../present.ts`).
- */
 /** The press node, by the id the catalog gives it. */
 const PRESS_NODE_ID = "web.output.dom-click";
 
 /** What a press that left the page looking the same is told, beside `pageChanged: false`. */
 const PRESS_AGAIN = "The press landed and the page did not change. Some pages take the first press after they load only as a wake-up: press the same control once more before trying anything else, and keep both presses, since the Flow will need them too.";
-
-export type WebNodeOutcome = {
-  ok: true;
-  /** The node that ran, as the catalog names it. */
-  node: string;
-  /** The command's own status, as the page reported it. */
-  status: string;
-  /** Whether the page looked different afterwards. Absent where it was not compared. */
-  pageChanged?: boolean;
-  /**
-   * Said beside `pageChanged: false` after a press, and nowhere else
-   * (`PRESS_AGAIN`): some pages take the first press after they load only as a
-   * wake-up. Lane t195's run `run-munuxns5-833f4313` pressed bigbox's Add to cart,
-   * saw nothing change, navigated away and back, and did it again for forty
-   * decisions without ever pressing twice in a row.
-   */
-  unchangedPress?: string;
-  /**
-   * The node ran and the page it left could not be read, however long it was
-   * waited for (`../capture.ts`, `captureAfterAction`). The packet then has no
-   * page in it, and the next call's own look is where the page is read again.
-   */
-  pageUnreadable?: true;
-  /** The control it acted on, in the words the model was shown. */
-  control?: string;
-  /** What a reading node read, whole but for its secrets (`./read-result.ts`). */
-  read?: JsonValue;
-  /** Whether a successful run of this node is a step of the Flow. */
-  inFlow: boolean;
-};
 
 /** What the call reports to the draft Core is accruing (`AS/runtime/flow-draft/`). */
 export type WebNodeDraftStatement = NonNullable<WebLlmEvidenceToolExecution["draft"]>;
@@ -182,7 +147,7 @@ type WebNodeCallRecord = {
    * behind it -- so it is the same statement a success would have made
    * (`personDraft`).
    */
-  standing?: { input: JsonObject; ranWith: JsonObject; replay: WebNodeReplayStatement };
+  standing?: { input: JsonObject; ranWith: JsonObject; replay: WebNodeReplayStatement; control: string | undefined };
 };
 
 /** Run the node a call named, and answer with what it did. */
@@ -234,11 +199,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       run.shown(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, control: undefined, read: undefined, inFlow: false })),
+        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, changed: undefined, control: undefined, read: undefined, inFlow: false })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
-        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined }),
+        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined, control: undefined, interruption: undefined }),
         // A look that worked refuses nothing, so it says neither why it refused
         // nor which node it would have named: the draft statement beside it
         // already carries `actionId`, and a successful call is not the row a
@@ -363,7 +328,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     record.standing = {
       input: safeCall(value, written),
       ranWith: nodeCall(value, flowParameters(written, ran)),
-      replay: webNodeReplayStatement({ location: foundAt(current, run.request.startLocation, undefined), payload: undefined, reads: false })
+      replay: webNodeReplayStatement({ location: foundAt(current, run.request.startLocation, undefined), payload: undefined, reads: false }),
+      control: control.name
     };
     record.acted = true;
     // A list read also asks for a few of the rows its conditions turned down,
@@ -433,6 +399,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       pageChanged: changed,
       unchangedPress: changed === false && node.definitionId === PRESS_NODE_ID ? PRESS_AGAIN : undefined,
       pageUnreadable: after === undefined ? true : undefined,
+      // Which lines it changed, on the same page only (`./press-effect/page-changes.ts`, t174/F37).
+      changed: webNodePageChanges(node, current, after),
       control: control.name,
       read,
       inFlow: node.proposes
@@ -484,7 +452,17 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // replay resets to, and for a Flow that starts by going somewhere that
         // step found no page at all -- so what it records is where it was sent,
         // which is what a reset has to put the page back to (`./replay.ts`).
-        replay: webNodeReplayStatement({ location: foundAt(current, run.request.startLocation, after), payload: recorded, reads: node.proposes })
+        replay: webNodeReplayStatement({ location: foundAt(current, run.request.startLocation, after), payload: recorded, reads: node.proposes }),
+        // The words of the control it acted on, the outcome's own `control`:
+        // the draft the model is shown names the step by them beside `input`,
+        // where a handle alone let a press of "Not now" be taken for Add to
+        // cart (`run-muqiho5c-e830ce01`). Absent where it acted on no control.
+        control: outcome.control,
+        // The press answered a layer that stood in front of the page and was
+        // gone after it (`./press-effect/answered-layer.ts`): Core makes such a
+        // step optional, so a playback that meets no such layer skips it.
+        // Absent otherwise, and never on a look, a navigation or a read.
+        interruption: node.effect === "mutate" && !webMovesThePage(node) && webAnsweredLayer(current?.evidence, after?.evidence, firstHandle(written)) ? true : undefined
       }),
       // The node ran and nothing was refused, so neither of the refusal fields
       // is said: the draft statement above already names the node under
@@ -546,6 +524,9 @@ function refusal(
     // exactly the one likely to carry a key the domain denies.
     input: safeCall(record.call ?? {}, record.parameters ?? {}),
     ranWith: undefined,
+    // No outcome said what it acted on, so neither does the draft.
+    control: undefined,
+    interruption: undefined,
     // Whether a call of this kind belongs in a result, which is a property of
     // the node and not of this attempt. That it did not work is said by
     // `effectApplied: false`, and the two are held apart so a failed step stays
@@ -586,7 +567,7 @@ function refusal(
 function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
   const input = record.standing?.input ?? safeCall(record.call ?? {}, record.parameters ?? {});
   if (!record.acted || record.standing === undefined) {
-    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined });
+    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined, control: undefined, interruption: undefined });
   }
   return present<WebNodeDraftStatement>({
     actionId: record.actionId,
@@ -594,7 +575,9 @@ function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
     input,
     ranWith: record.standing.ranWith,
     proposes: record.proposes,
-    replay: record.standing.replay
+    replay: record.standing.replay,
+    control: record.standing.control,
+    interruption: undefined
   });
 }
 

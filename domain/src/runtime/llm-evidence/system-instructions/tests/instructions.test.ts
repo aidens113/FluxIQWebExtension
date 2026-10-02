@@ -37,10 +37,22 @@ test("site search is the site's own search field, and find_on_page reads only th
   assert.match(text, /find_on_page searches only the page you are already on; it never searches the site/u);
 });
 
-test("a covering popup is closed with its own close control first, then the act is retried", () => {
-  assert.match(text, /first close that popup or banner with its own close control/u);
-  assert.match(text, /then retry/u);
+// F34 (`run-muqiho5c-e830ce01`): told to close popups first, the model closed a
+// popup that was not over Add to cart, called that the add to cart, and never
+// pressed it. The press comes first; a refusal names the covering layer's closers.
+test("a covered control is pressed first, and only a refusal's closeWith closes the layer over it, then the press is made again", () => {
+  assert.match(text, /Press the control you want even when it is covered-by/u);
+  assert.match(text, /refused target_covered, and its closeWith names that layer's own close controls -- press one, then make the same press again/u);
+  assert.match(text, /never another popup's/u);
+  assert.match(text, /Closing or declining a popup is never one of the acts you were asked for/u);
   assert.match(text, /consent banner may be accepted or dismissed/u);
+  assert.doesNotMatch(text, /first close that popup/u);
+});
+
+// F37 (`run-muqk4u32-0b36e58f`): pressing a marked "Space Grey" un-chose it, and Add to cart's "Please select a Color." went unread.
+test("an option already chosen is left alone, and a press's changes and messages are read", () => {
+  assert.match(text, /An option already marked, selected or checked is chosen: leave it, as pressing it again can undo it/u);
+  assert.match(text, /After a press, read what it changed and any message it shows/u);
 });
 
 test("a list is one act on one item and a stated repeat", () => {
