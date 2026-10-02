@@ -54,21 +54,25 @@ STEPS below are the plan's names for work that has no branch of its own or preda
 - **Validation cadence (2026-10-01):** merges take narrow checks only; full suites at most twice a day, in the
   background ("you should not be running a 15-30 min suite every single time you merge dev"). `pnpm task finish`
   runs the audit by default and the full check only with `--full-check`.
+- **Live Lab trees are synced to dev before testing (2026-10-01):** "live testing labs need to actually be synced to main when
+  you start testing them". After each merge round, merge dev into every lane tree (both repositories) and rebuild Core
+  libraries and the extension; the Lab's behind-dev guard (t236) refuses a run whose checkout or Core lacks dev.
 - **Process.** Lanes iterate on their own branches; the supervisor merges in rounds and is the only one who commits,
   merges or pushes. Heavy commands go through `build-slots/heavy.sh`. No LLM call grants.
 
-**In flight.**
-| Work | Where | State |
+**In flight. NO LIVE RUNS until every row below is on dev (user, 2026-10-01: "you need to fix all these problems before running any more live tests").** Then merge dev into every lane tree, rebuild, and run (the Lab's behind-dev guard, t236, refuses a stale tree).
+| Problem (evidence: `lab-runs/2026-10-01/run-*/steps/`) | Fix | Where |
 | --- | --- | --- |
-| Lane A (t174): crossborder hub-to-cart, live from the chat | `fxwork/t174`, slot-1 | running, up to 3 runs |
-| Lane B (t193): bigbox cart redesigned, does run 40's repair now run | `fxwork/t193`, slot-2 | running, up to 3 runs |
-| Lane C (t194): earbuds, the run that exposed the page-view bug | `fxwork/t194`, slot-3 | running, up to 3 runs |
-| Lane D (t195): F41-F43 committed (completion informs, judge decides, shadow-root test) | `fxwork/t195` | lead resolving 7 Core conflicts from merging dev; then merge, then slot-4 |
-| Core regressions: `build-routing` 30/28/2 vs 29/29/3; `run-consequence-permission` patches after a person's no; `recovery-default-limits` reserves worst-case cost | `fxwork/t229`, `task/t229-core-regressions` | worker-high running |
-| t233: `FLUXIQ_LLM_DEFAULT_MODEL`, so the `deepseek-v4-pro` comparison can start from the chat (planned at a $0.30 Lab ceiling for that one run) | `fxwork/t233`, `task/t233-chat-model-knob` | worker-high running |
+| The node catalog is 41,122 of 62,216 chars of every decide request (59 full definitions) | Names plus one-line description; full definitions only for nodes the model asks for; trim output schema and tool descriptions | t235 lead, `fxwork/t235` |
+| Superseded list reads kept whole (164,577 chars in run 13's last request); absolute URLs 49,353 | Newest read whole, earlier reads as short outcomes, full rows on request; relative links | lane C (t194) |
+| Two cost counts (purse and `loop-budget.ts`) can stop a build; holds price an 8,000-token reply (real max 515); each creation phase its own purse | One purse per Flow creation, the only authority; reply allowance sized to use | t234 lead, `fxwork/t234` |
+| `find_on_page` used as a site search (19 of 84 decisions, 11 of 25 on crossborder) | Its description and zero-match result point at the page's search field and navigation | lane A (t174) |
+| Core's opening capture refused `not_at_start_location` with the tab at that address | Root cause (tab targeted or state timing) | lane A (t174) |
+| A press under a popup: model not told what covers it or how to close it; chat says "hidden" | The refusal names the cover and its close control; the chat says "blocked by" | lane B (t193) |
+| Chat shows "Looking at the page" for every decision; empty welcome screen flashes at build start (4/4) | Each step says what it does; root-cause the flash | lane B (t193) |
+| Done on branches, awaiting merge: lane B L1 (Enter gets the landing check) and OP2 (opener step); lane C F40 (rejected rows once) and F41 (cost endings carry figures) | merge round | t193, t194 |
 
-**Decided, not yet assigned.** One purse per Flow: build, re-authors, repairs and checks share the one $0.10 ceiling;
-a Flow's spend is kept on its creation record and summed. Assign a lead after the next merge round.
+**Decided.** One purse per Flow: assigned to t234 (above).
 
 **Open defects (not assigned).**
 - `scripts/lab/core/build/tests/unbuilt.test.mjs` "refuses an unbuilt Core" fails about 1 run in 10 under load.
