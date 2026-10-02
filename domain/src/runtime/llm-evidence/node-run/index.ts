@@ -7,3 +7,4 @@ export type { WebNodeRun } from "./context";
 export { createWebNodeArrivals, type WebNodeArrivals } from "./arrival";
 export { createWebNodeShownAddresses, type WebNodeShownAddresses } from "./shown-addresses";
 export { replayWebOutputNode, webNodeRecordCount, webNodeReplayCall, webNodeReplayStatement, WEB_LLM_REPLAY_KEY, type WebNodeReplayStatement } from "./replay";
+export { webLlmCallWords, type WebLlmCallWords } from "./call-words";
