@@ -38,6 +38,8 @@ const NAME = { kind: "text", selector: '[data-testid="product-name"]', required:
 const BADGE = { kind: "text", selector: '[data-testid="stock-badge"]', required: true } satisfies JsonObject;
 const PRICE = { kind: "text", selector: '[data-testid="product-price"]', required: true } satisfies JsonObject;
 const LINK = { kind: "link", selector: '[data-testid="product-link"]', required: true } satisfies JsonObject;
+/** A detected column as a read keeps it: the detection's coverage-derived `required` is not carried (`../columns.ts`, `unrequired`). A condition's own read keeps the detected spec. */
+const asKept = (spec: JsonObject): JsonObject => ({ ...spec, required: false });
 
 function runtime(): WebAutomationLlmEvidenceRuntime {
   return createWebAutomationLlmEvidenceRuntime({
@@ -85,7 +87,7 @@ test("a condition names a detected column and becomes the column's own read, so 
   });
   assert.deepEqual(resolved, {
     status: "resolved",
-    parameters: { extractList: { item: CARD, fields: { name: NAME }, where: [{ read: BADGE, is: "absent" }] } }
+    parameters: { extractList: { item: CARD, fields: { name: asKept(NAME) }, where: [{ read: BADGE, is: "absent" }] } }
   });
 
   // And it is a request the page reads as written, with no issue to repair.
@@ -115,7 +117,7 @@ test("a condition may be written every way a column may be named, on its own or 
   for (const [where, expected] of rows) {
     assert.deepEqual(
       await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where, paginate: false }),
-      { status: "resolved", parameters: { extractList: { item: CARD, fields: { name: NAME }, where: expected } } },
+      { status: "resolved", parameters: { extractList: { item: CARD, fields: { name: asKept(NAME) }, where: expected } } },
       JSON.stringify(where)
     );
   }
@@ -128,7 +130,7 @@ test("an empty clause resolves to no conditions, because filtering is optional",
   // of it -- gets the plain read it would have got by writing no clause, rather
   // than a refusal it has to spend a repair on. `where: []` was refused until
   // 2026-09-24.
-  const plain = { status: "resolved", parameters: { extractList: { item: CARD, fields: { name: NAME } } } };
+  const plain = { status: "resolved", parameters: { extractList: { item: CARD, fields: { name: asKept(NAME) } } } };
   assert.deepEqual(await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where: [], paginate: false }), plain);
   assert.deepEqual(await resolve(instance, { handle: extraction, fields: { name: "product-name" }, paginate: false }), plain);
 });
@@ -165,7 +167,7 @@ test("a condition may say of a detected column everything the dispatch reader ac
     const resolved = await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where, paginate: false });
     assert.deepEqual(
       resolved,
-      { status: "resolved", parameters: { extractList: { item: CARD, fields: { name: NAME }, where: expected } } },
+      { status: "resolved", parameters: { extractList: { item: CARD, fields: { name: asKept(NAME) }, where: expected } } },
       JSON.stringify(where)
     );
     // And what it resolved to is a request the page reads as written: the
@@ -230,7 +232,7 @@ test("a condition may name a column by the key this plan keeps it under, which i
       parameters: {
         extractList: {
           item: CARD,
-          fields: { title: NAME, cost: PRICE },
+          fields: { title: asKept(NAME), cost: asKept(PRICE) },
           // A kept column is named by the key it is kept under, so the stored
           // step says what the plan said; the column the table does not keep
           // carries its own read.
@@ -251,7 +253,7 @@ test("a condition may name a column by the key this plan keeps it under, which i
       where: [{ field: "stock-badge", is: "absent" }],
       paginate: false
     }),
-    { status: "resolved", parameters: { extractList: { item: CARD, fields: { "stock-badge": PRICE }, where: [{ read: BADGE, is: "absent" }] } } }
+    { status: "resolved", parameters: { extractList: { item: CARD, fields: { "stock-badge": asKept(PRICE) }, where: [{ read: BADGE, is: "absent" }] } } }
   );
 });
 
@@ -365,12 +367,12 @@ test("a condition by key over a column the declared schema then drops reads that
   });
   assert.deepEqual(resolved, {
     status: "resolved",
-    parameters: { extractList: { item: CARD, fields: { title: NAME, stock: BADGE }, where: [{ field: "stock", is: "absent" }] } }
+    parameters: { extractList: { item: CARD, fields: { title: asKept(NAME), stock: asKept(BADGE) }, where: [{ field: "stock", is: "absent" }] } }
   });
   const request = webAutomationExtractListRequestValue(resolved.status === "resolved" ? resolved.parameters.extractList : undefined);
   assert.notEqual(request, undefined);
   const declared = webAutomationDeclaredColumnsRead({ schema: { fields: [{ id: "title" }] } }, request!);
-  assert.deepEqual(declared?.request.fields, { title: NAME });
+  assert.deepEqual(declared?.request.fields, { title: asKept(NAME) });
   const { required: _required, ...badgeRead } = BADGE;
   assert.deepEqual(declared?.request.where, [{ read: badgeRead, is: "absent" }]);
   assert.deepEqual([...declared!.columns], ["title"]);

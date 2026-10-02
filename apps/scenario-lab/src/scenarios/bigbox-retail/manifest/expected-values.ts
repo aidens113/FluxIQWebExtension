@@ -30,6 +30,12 @@ export const START_FACTS = [
   fact("leftover-cart", "mini-cart-summary", "1 item · Subtotal $3.97"),
 ];
 
+/** The same shopper on a site that already remembers the pickup cart's store (`store-remembered`). */
+export const REMEMBERED_STORE_FACTS = [
+  fact("store-remembered", "mini-cart-store", "Pickup store: Millbrook Crossing Supercenter"),
+  fact("leftover-cart", "mini-cart-summary", "1 item · Subtotal $3.97"),
+];
+
 /**
  * The pickup cart, built for Millbrook Crossing Supercenter: the soap kept,
  * two 12-roll packs and one 250-count pack added, all three for pickup, and
