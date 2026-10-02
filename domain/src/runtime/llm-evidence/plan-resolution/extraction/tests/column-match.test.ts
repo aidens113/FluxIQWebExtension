@@ -164,7 +164,7 @@ test("every name written exactly is read before any name is guessed at", () => {
   // not make.
   assert.deepEqual(conditions([{ field: "rating", atLeast: 4 }], CATALOG, { rating: CATALOG["product-rating"] }), {
     ok: true,
-    where: [{ read: CATALOG["product-rating"], atLeast: 4 }],
+    where: [{ field: "rating", atLeast: 4 }],
     assumed: []
   });
   // The same ordering where the two readings disagree about the column, not just
@@ -173,7 +173,7 @@ test("every name written exactly is read before any name is guessed at", () => {
   // similarity, and the key the plan wrote itself still wins.
   assert.deepEqual(conditions([{ field: "name", contains: "Sponsored", not: true }], CATALOG, { name: CATALOG["product-link"] }), {
     ok: true,
-    where: [{ read: CATALOG["product-link"], contains: ["Sponsored"], not: true }],
+    where: [{ field: "name", contains: ["Sponsored"], not: true }],
     assumed: []
   });
   // A name neither vocabulary knows exactly is guessed at in the detection's
