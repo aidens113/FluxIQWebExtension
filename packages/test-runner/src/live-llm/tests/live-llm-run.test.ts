@@ -7,6 +7,7 @@ import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type
 import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
 import type { CreatedFlowBuild } from "../../flow-lane/index.js";
+import { automationStudioLlmRunCostCeilingUsd } from "fluxiq/automation-studio";
 import { planLiveLlmExecution } from "../live-llm-plan.js";
 import { beginLiveLlmRun, LiveLlmRun } from "../live-llm-run.js";
 
@@ -156,6 +157,23 @@ test("a create-flow run fits only a scenario run that carries an instruction tas
   assert.equal(described.purpose, "build_and_adapt");
   assert.deepEqual(described.credentialSource, { name: "DEEPSEEK_API_KEY", from: "test" });
   assert.equal(JSON.stringify(described).includes(CREDENTIAL.value), false);
+});
+
+/**
+ * A chat build is held to the one per-build ceiling every build is held to,
+ * from the same Core function this run computes its own from: the plan's
+ * ceiling for a create-flow run with the profile's own limit is exactly
+ * Core's, and a lower one the operator asked for, which cannot reach the Flow
+ * the chat makes, is refused before anything starts.
+ */
+test("a chat build's per-build ceiling is Core's own, and a lower one that cannot reach the chat's Flow is refused", () => {
+  const ceiling = automationStudioLlmRunCostCeilingUsd();
+  const chat = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }), CREDENTIAL);
+  assert.equal(chat.describe().authorized.maxTotalEstimatedCostUsd, ceiling, "the run's ceiling and every build's come from one function");
+  chat.assertChatBuildable();
+  const lowered = new LiveLlmRun(planLiveLlmExecution({ ...profile({ maxEstimatedCostUsd: ceiling / 2 }), task: "create-flow" }), CREDENTIAL);
+  assert.equal(lowered.describe().authorized.maxTotalEstimatedCostUsd, ceiling / 2, "a direct build writes the lowered ceiling onto its Flow");
+  assert.throws(() => lowered.assertChatBuildable(), /held to FluxIQ's per-build ceiling of \$0\.25, and --llm-max-cost-usd 0\.125 cannot reach the Flow the chat makes/u);
 });
 
 test("a create-flow run's Flow repairs with the exploring intent, so its repair can be tried, applied and replayed", () => {

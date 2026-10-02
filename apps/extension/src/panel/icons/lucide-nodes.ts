@@ -86,5 +86,25 @@ export const LUCIDE_ICON_NODES: Readonly<Record<string, readonly LucideIconNode[
   "circle-dot": [
     ["circle", { cx: "12", cy: "12", r: "10" }],
     ["circle", { cx: "12", cy: "12", r: "1" }]
+  ],
+  // The Flow's own control steps (`join`, `branch`, `repeat`): they act on its
+  // paths, not on the page (U-A2).
+  "git-merge": [
+    ["circle", { cx: "18", cy: "18", r: "3" }],
+    ["circle", { cx: "6", cy: "6", r: "3" }],
+    ["path", { d: "M6 21V9a9 9 0 0 0 9 9" }]
+  ],
+  "git-branch": [
+    // lucide draws this stroke as `<line x1="6" y1="3" x2="6" y2="15">`; the same stroke as a path, the one tag this set draws lines with.
+    ["path", { d: "M6 3v12" }],
+    ["circle", { cx: "18", cy: "6", r: "3" }],
+    ["circle", { cx: "6", cy: "18", r: "3" }],
+    ["path", { d: "M18 9a9 9 0 0 1-9 9" }]
+  ],
+  repeat: [
+    ["path", { d: "m17 2 4 4-4 4" }],
+    ["path", { d: "M3 11v-1a4 4 0 0 1 4-4h14" }],
+    ["path", { d: "m7 22-4-4 4-4" }],
+    ["path", { d: "M21 13v1a4 4 0 0 1-4 4H3" }]
   ]
 });
