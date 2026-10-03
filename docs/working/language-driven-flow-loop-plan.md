@@ -73,8 +73,10 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
   `45bd6232`) and rebuilt as `pnpm task start` builds a tree (Core `buildCore` 48-102 s, then `pnpm build` 61-144 s,
   all rc 0). Leads t174/t193/t194/t195-lead-1003 (`lead-xhigh`) run slots 1-4 from the briefs below; reports
   `reports/<lead>.md` in each lane tree.
-- **Sweep 2** (full suites on dev, background; logs in the supervisor's scratchpad `sweep2/`): Core `pnpm test`, then
-  downstream `pnpm check`, `pnpm test`, `pnpm build`. Findings are fixed forward.
+- **Sweep 2, green** (full suites on dev after t252, Core `6beae684`, downstream `45bd6232`): Core `pnpm test` rc 0
+  (contracts 55/55, gateway 10/10, fluxiq 720 files / 6,733 passed + 1 skipped, apps/web 354 files / 2,904); downstream
+  `pnpm check` rc 0 (scripts 556 passed, 1 skipped; audit passed), `pnpm test` rc 0 (test-runner 1,862/1,862 among
+  others), `pnpm build` rc 0. The second and last full sweep allowed today.
 
 **Binding rules (user, all in force).**
 - **General Flow authoring before any more live runs (2026-10-02 night):** "The model should be ABLE to explore &
@@ -134,7 +136,7 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
 **Next, in order.**
 1. ~~Lane B: land.~~ Done 2026-10-03.
 2. ~~t252: land.~~ Done 2026-10-03. 3. ~~t254: land.~~ Done 2026-10-03.
-4. Sweep 2: running; fix forward what it finds.
+4. ~~Sweep 2.~~ Green 2026-10-03; no more full sweeps today.
 5. Lane trees synced and rebuilt; dispatch round 1003 (briefs below), lane A's run then the `deepseek-v4-pro`
    comparison. Debug every run; merge the lanes' fixes in rounds.
 
