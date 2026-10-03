@@ -25,3 +25,11 @@ test("the playback step log is handed the run's skips, so a skipped step is writ
   assert.match(call, /skippedSteps: playbackSkips/u);
   assert.equal(source.match(/writePlaybackSteps\(/gu)?.length, 1, "one call");
 });
+
+test("each Flow run's state routing consultations reach the playback step log beside its skips", async () => {
+  const source = await runnerSource();
+  assert.match(source, /const playbackRoutings: PlaybackStateRoutingStep\[\] = \[\];/u, "one list for the run");
+  assert.match(source, /playbackRoutings\.push\(\.\.\.evidence\.run\.actions\.flatMap\(action => action\.stateRouting \? \[\{ nodeId: action\.nodeId, \.\.\.action\.stateRouting \}\] : \[\]\)\);/u, "collected beside the actions, from the run detail's own attempts");
+  const call = source.slice(source.indexOf("await writePlaybackSteps({"), source.indexOf("})", source.indexOf("await writePlaybackSteps({")));
+  assert.match(call, /stateRoutingSteps: playbackRoutings/u);
+});

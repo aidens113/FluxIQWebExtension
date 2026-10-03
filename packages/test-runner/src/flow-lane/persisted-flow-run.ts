@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord, type LlmActionConsequence, type RunActionTiming, type RunExtractionRead, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
 import type { AutomationNodeTargetResolution } from "fluxiq/automation-studio/nodes";
 import { RunnerFailure } from "../failure.js";
+import { comparisonStatusOf } from "./comparison-status.js";
 import { extractionReadOf } from "./extraction-read.js";
 import { attemptNodeId, hostTargetResolutionOf, readinessOf, retryOf, type PersistedFlowActionReadiness, type PersistedFlowActionRetry, type PersistedHostTargetResolution } from "./persisted-attempt.js";
 import { FLUXIQ_HTTP_MAX_TIMEOUT_MS, isBoundedHttpFailure, type FluxIQHttpOptions } from "../http-control/index.js";
@@ -10,6 +11,7 @@ import { readHarnessRecovery, type HarnessRecoveryControl } from "./harness-reco
 import { LAB_PROJECT_DOMAIN_ID } from "./lab-project-domain.js";
 import { recoveredByNode } from "./node-recovery.js";
 import { onSkipRoute, skippedAttemptOf, stateRoutedOf, type PersistedFlowActionSkip, type PersistedStateRouted } from "./skipped-attempt.js";
+import { stateRoutingAttemptOf, type PersistedStateRouting } from "./state-routing-attempt.js";
 import { readRunDatasets, runDatasetSummaries, type FlowRunDataset, type RunDatasetSummary } from "./run-datasets.js";
 import { readFlowRunRoute, type FlowRunRoute } from "./taken-route.js";
 import { awaitTerminalRunDetail, LIVE_LLM_RUN_WAIT_MS, pendingWork, terminalDetailWaitMs, type PendingWork, type PersistedFlowTerminalWait } from "./terminal-run-wait.js";
@@ -128,6 +130,12 @@ export type PersistedFlowAction = {
   failure: AutomationStudioFailureRecord | null;
   /** Set when Core skipped this node rather than ran it: a sometimes-present step absent, or one routed past by page state (`skipped-attempt.ts`). */
   skipped?: PersistedFlowActionSkip;
+  /**
+   * What the runtime made of the page when this step could not run (Core t243, carried by the run detail since t250;
+   * `state-routing-attempt.ts`): set on a routed step beside `skipped`, and on a failed step that consulted the page
+   * and found no way on, which otherwise reads like one that never consulted it.
+   */
+  stateRouting?: PersistedStateRouting;
   /**
    * True when this attempt failed on something only a person can get past --
    * a robot check -- and a person cleared it: Core asked (`metadata.ask`,
@@ -668,6 +676,7 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
   const comparisonStatus = comparisonStatusOf(attempt);
   const extraction = extractionReadOf(attempt);
   const skipped = verification ? undefined : skippedAttemptOf(attempt, startedAt, finishedAt);
+  const stateRouting = verification ? undefined : stateRoutingAttemptOf(attempt, startedAt, finishedAt);
   return {
     actionType: verification ? RESULT_VERIFICATION_ACTION_TYPE : actionTypes.get(nodeId) ?? (typeof attempt.definitionId === "string" ? attempt.definitionId : "unknown"),
     nodeId: attemptNodeId(nodeId),
@@ -679,6 +688,7 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
     // Core's own record, parsed by Core's parser. A record Core would reject is treated as absent.
     failure: parseAutomationStudioFailureRecord(attempt.failure) ?? null,
     ...(skipped ? { skipped } : {}),
+    ...(stateRouting ? { stateRouting } : {}),
     ...(clearedByPerson(attempt) ? { clearedByPerson: true as const } : {}),
     ...(isFiniteNumber(recordCount) ? { recordCount } : {}),
     ...(extraction ? { extraction } : {}),
@@ -691,16 +701,6 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
   };
 }
 
-/** The shape of Core's comparison status names: lowercase words joined by underscores. */
-const COMPARISON_STATUS_NAME = /^[a-z]+(?:_[a-z]+)*$/u;
-
-/**
- * Core's `comparisonStatus`, kept only when it has the shape of one of Core's
- * names, at most 64 characters. The run detail types it as any string (Core
- * `model/flow-adaptation.ts`) and Core's union is not a public export, so the
- * shape is what keeps a value that is not a name, which could carry page text,
- * out of the bundle.
- */
 /**
  * Whether Core's `metadata.ask` says a person cleared this attempt: the
  * person-needed question, answered, and the run sent on down `success`. Closed
@@ -709,11 +709,6 @@ const COMPARISON_STATUS_NAME = /^[a-z]+(?:_[a-z]+)*$/u;
 function clearedByPerson(attempt: Record<string, unknown>): boolean {
   const ask = optionalRecord(optionalRecord(attempt.metadata)?.ask);
   return ask?.personNeeded === true && ask.status === "answered" && ask.route === "success";
-}
-
-function comparisonStatusOf(attempt: Record<string, unknown>): string | undefined {
-  const status = attempt.comparisonStatus;
-  return typeof status === "string" && status.length <= 64 && COMPARISON_STATUS_NAME.test(status) ? status : undefined;
 }
 
 /**
