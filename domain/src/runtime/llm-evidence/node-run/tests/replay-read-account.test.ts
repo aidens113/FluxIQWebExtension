@@ -13,6 +13,7 @@ import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
 import { webNodeReplayStatement } from "../replay";
+import { webNodeReplayReadRows } from "../replay-answer";
 import { WEB_LLM_WITHHELD_TEXT } from "../../withheld";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
@@ -155,10 +156,13 @@ test("a replayed read with conditions asks the page for the rows each removed by
   }), { extractList: { item: ".card", fields: fieldMap(), where: WHERE } });
   assert.equal(replayed.result.resultCode, "core.replay.replayed");
   assert.equal(replayed.sent?.rejectedSamples, "alone");
+  // A row the price condition left out carries the price it tested (t195-w34, run
+  // `run-murwcaj0-40e56557` R6); the name condition's rows carry none, since
+  // the column it tested is their label.
   assert.deepEqual((replayed.result.evidence as JsonObject).readRows, {
     rows: [{ name: "Trevio T5 Wireless Earbuds, Ivory" }, { name: "Soundcrest Air Lite" }],
     leftOutOnlyByThis: [
-      { condition: "price", rows: [{ name: "Soundcrest Air Pro Max" }] },
+      { condition: "price", rows: [{ name: "Soundcrest Air Pro Max", price: "$89.99" }] },
       { condition: "name", rows: [{ name: LUMO }, { name: AURELLE }] }
     ]
   });
@@ -231,3 +235,67 @@ async function replaySent(payload: JsonObject, parameters: JsonObject) {
   return { result, sent };
 }
 
+
+// t195-w34, live run `run-murwcaj0-40e56557` (cause R6): the friend-requests
+// read kept "5 or more mutual friends" with a regex that dropped Jonas Weber
+// ("Aisha Khan and 4 other mutual friends" is five), and the judge, shown only
+// the names left out, called them "exactly the requests with fewer than five
+// mutual friends". A left-out row now carries the value its condition tested.
+const DETECTED = "div_x0531l50_x1r2vv8_x4q0id2_div_x1a4yqcp_xa73opb_xtlve1b";
+const FRIEND_FIELDS = ["name", "mutualFriends"];
+const FRIENDS_LEFT_OUT = [
+  { name: "Tom Becker", mutualFriends: "2 mutual friends" },
+  { name: "Jonas Weber", mutualFriends: "Aisha Khan and 4 other mutual friends" },
+  { name: "Priya Nair", mutualFriends: null }
+];
+
+function friendsRead(): JsonObject {
+  return {
+    extracted: [{ name: "Amara Osei", mutualFriends: "12 mutual friends" }],
+    extraction: {
+      recordCount: 1, pagesRead: 1, itemsSeen: 4, truncated: false, fieldNames: FRIEND_FIELDS, missingFields: [],
+      conditions: { applied: 4, kept: 1, rejected: [3], unfiltered: false, alone: [3] },
+      rejectedSamples: [FRIENDS_LEFT_OUT], rejectedSamplesAlone: [3]
+    }
+  };
+}
+
+test("a left-out row carries the value its condition tested, from the column the page ran the condition on", () => {
+  const written = [{ field: DETECTED, matches: "(?:[5-9]|[1-9][0-9]+) mutual friend" }];
+  const ran = [{ field: "mutualFriends", matches: "(?:[5-9]|[1-9][0-9]+) mutual friend" }];
+  const rows = webNodeReplayReadRows(friendsRead(), written, ran) as JsonObject;
+  assert.deepEqual(rows.leftOutOnlyByThis, [{
+    condition: DETECTED,
+    rows: [
+      { name: "Tom Becker", mutualFriends: "2 mutual friends" },
+      { name: "Jonas Weber", mutualFriends: "Aisha Khan and 4 other mutual friends" },
+      // A row with no value there says so: empty, not left without one.
+      { name: "Priya Nair", mutualFriends: "" }
+    ]
+  }]);
+  // The rows the read returned are labels only.
+  assert.deepEqual(rows.rows, [{ name: "Amara Osei" }]);
+});
+
+test("a left-out row says no tested value where the condition tested its label, read a value of its own, or the call gave no ran conditions", () => {
+  const leftOut = (ran: unknown) => ((webNodeReplayReadRows(friendsRead(), [{ field: DETECTED, matches: "x" }], ran) as JsonObject).leftOutOnlyByThis as JsonObject[])[0]!.rows;
+  const labels = [{ name: "Tom Becker" }, { name: "Jonas Weber" }, { name: "Priya Nair" }];
+  assert.deepEqual(leftOut([{ field: "name", contains: "x" }]), labels);
+  assert.deepEqual(leftOut([{ read: { kind: "attribute", attribute: "data-x" }, is: "absent" }]), labels);
+  assert.deepEqual(leftOut(undefined), labels);
+  // Not one entry per condition: nothing lines up, so nothing is guessed.
+  assert.deepEqual(leftOut([{ field: "mutualFriends", matches: "x" }, { field: "name", is: "present" }]), labels);
+  // A column the read does not keep is not in the row.
+  assert.deepEqual(leftOut([{ field: "seller", matches: "x" }]), labels);
+});
+
+test("a tested value shaped like a secret is written withheld, as a label is", () => {
+  const payload = friendsRead();
+  ((payload.extraction as JsonObject).rejectedSamples as JsonObject[][])[0]![0] = { name: "Tom Becker", mutualFriends: "token sk-live-4f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c" };
+  const rows = webNodeReplayReadRows(payload, [{ field: DETECTED, matches: "x" }], [{ field: "mutualFriends", matches: "x" }]) as JsonObject;
+  assert.deepEqual((rows.leftOutOnlyByThis as JsonObject[])[0]!.rows, [
+    { name: "Tom Becker", mutualFriends: WEB_LLM_WITHHELD_TEXT },
+    { name: "Jonas Weber", mutualFriends: "Aisha Khan and 4 other mutual friends" },
+    { name: "Priya Nair", mutualFriends: "" }
+  ]);
+});

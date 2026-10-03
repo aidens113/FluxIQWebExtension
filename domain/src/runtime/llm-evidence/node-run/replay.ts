@@ -354,10 +354,13 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // of a step that worked as of one that did not. A list read says what it
   // read, because its line is all the judge of a build's test sees of it
   // (`./replay-answer.ts`); every other step says only that it ran.
-  // Its rows go beside the line, by label (`./replay-answer.ts`).
+  // Its rows go beside the line, by label (`./replay-answer.ts`), and a row a
+  // condition left out by itself with the value that condition tested, read
+  // from the `where` the page ran (t195-w34, run `run-murwcaj0-40e56557` R6).
   const where = isJsonRecord(parameters.extractList) ? parameters.extractList.where : undefined;
+  const ranWhere = isJsonRecord(resolvedParameters.extractList) ? resolvedParameters.extractList.where : undefined;
   const said = readSaid(payload, where) ?? "the step ran again";
-  return answer(REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed }, true, readRows(payload, where));
+  return answer(REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed }, true, readRows(payload, where, ranWhere));
 }
 
 /** How many rows a reading node's payload holds: the longest list it carries. */
