@@ -72,11 +72,13 @@ hotfix `bdc459dd` (a module cycle t250 introduced); t253 (run-4 replay fixture a
   (unfinished-build 110/110, tsc clean, audit passed); a combined rerun of the narrow set and `pnpm --filter fluxiq
   check` are still owed. murzln6g: gate need $0.0187 -> $0.0077, so its repair round opens. Must merge dev (lane D's
   `phases.ts`; the report lists the hunks) before landing.
-- **Lane B (t193) round 1002-M:** fixes committed (Core `98324a2c`, downstream units 5-10). `git merge dev` is in
-  progress in both trees: all 24 conflicts resolved, no markers left, nothing staged (combination decisions in
-  `reports/t193-lead-1002M.md`, "Merge of dev, 2026-10-03"). Core tsc 0 and vitest 4025 passed / 1 load timeout
-  (`adaptation.test.ts`, 9/9 alone). Still owed: `pnpm --filter fluxiq check`, the audit, web tsc, a Core library
-  rebuild and every downstream check. Then stage the 24 files and commit both merges.
+- **Lane B (t193) round 1002-M: landed 2026-10-03** (dev Core `8b952335`, downstream `db9260c8`, both pushed).
+  Combination decisions in `reports/t193-lead-1002M.md`, "Merge of dev, 2026-10-03"; verification in
+  `reports/t193-w-merge-verify.md`. Supervisor re-check on dev: Core `pnpm --filter fluxiq check` rc 0; downstream
+  audit passed after the index regeneration; domain check rc 0; extension check first rc 1 (10 false TS errors,
+  `tested` missing from `ActivityAction`: Core's dist predated the merge), rc 0 after `pnpm --filter fluxiq build`.
+  Fixed mechanically (`c14e3560`): the domain and extension `check` scripts now run `scripts/check/core-build.mjs`
+  first, which refuses a stale Core build by name (build-cache tests 14/14).
 
 **Binding rules (user, all in force).**
 - **General Flow authoring before any more live runs (2026-10-02 night):** "The model should be ABLE to explore &
@@ -134,7 +136,7 @@ hotfix `bdc459dd` (a module cycle t250 introduced); t253 (run-4 replay fixture a
 - `fxwork/t187-bench` and `fxwork/t192-bench`: delete only on a yes.
 
 **Next, in order.**
-1. Lane B: check its lead's resolution, commit the merge, verify on the combined tree, land.
+1. ~~Lane B: land.~~ Done 2026-10-03.
 2. t252: finish P3; merge lanes D and B into it; verify (the scripted confirm-requests proof must pass); land.
 3. t254: merge dev; verify (murzln6g reproduction, no `max_tokens`, billed pricing); land.
 4. Sweep 2 in the background (Core `pnpm test` now runs every package).
