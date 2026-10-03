@@ -14,10 +14,12 @@ import {
   type WebLlmEvidenceGateway
 } from "../..";
 import { webNodeRecordCount } from "../replay";
+import { WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS } from "../../capture";
 import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const CLICK = "web.output.dom-click";
+const EXTRACT_LIST = "web.output.dom-extract_list";
 const SNAPSHOT = "web.output.dom-capture_snapshot";
 const START = "https://example.test/start";
 const PERMITTED = async () => ({ permitted: true as const });
@@ -130,6 +132,89 @@ test("a replayed step the run does not hold permission for does not act", async 
   });
   assert.equal(refused.resultCode, "core.replay.failed");
   assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.click"), false);
+});
+
+// t252 (D6, D7): the build's test runs a loop once per row, sending each body
+// step with the pass's row as `item`. The replay scopes the step's control to
+// that row exactly as the Flow's For Each does (`output-nodes/targets/row-scope.ts`).
+const CARD_CONTROL: JsonObject = {
+  selector: "li.request:nth-of-type(1) button.confirm",
+  element: { tagName: "button", visibleText: "Confirm", context: { listPosition: { index: 1, total: 3 }, record: { text: "Tom Becker 1 mutual friend Confirm" } } }
+};
+const ROW_SCOPED_ELEMENT = { tagName: "button", visibleText: "Confirm", context: { listPosition: { index: 1, total: 3 }, record: { values: ["Amara Osei", "23 mutual friends"] } } };
+
+test("a replayed step carrying a row presses that row's control, as the Flow's loop pass does", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const replayed = await runtime.executeTool({
+    ...PROJECT, callId: "dryrun.1.3", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: CLICK, parameters: CARD_CONTROL, consequences: [], item: { name: "Amara Osei", mutual: "23 mutual friends" } }
+  });
+  assert.equal(replayed.resultCode, "core.replay.replayed");
+  const clicked = stubbed.commands.find((command) => command.actionType === "web.dom.click");
+  assert.deepEqual(clicked?.parameters, { selector: CARD_CONTROL.selector, element: ROW_SCOPED_ELEMENT, checkWaitMs: 15_000 });
+});
+
+test("a replayed step with no row, or a row that is not an object, runs on what the step recorded", async () => {
+  for (const item of [undefined, "Amara Osei", ["Amara Osei"]]) {
+    const stubbed = stub();
+    const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+    const value: JsonObject = { replay: "step", node: CLICK, parameters: CARD_CONTROL, consequences: [] };
+    if (item !== undefined) value.item = item;
+    await runtime.executeTool({ ...PROJECT, callId: "dryrun.1.3", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value });
+    const clicked = stubbed.commands.find((command) => command.actionType === "web.dom.click");
+    assert.deepEqual(clicked?.parameters, { ...CARD_CONTROL, checkWaitMs: 15_000 }, JSON.stringify(item));
+  }
+});
+
+test("a checked step carrying a row checks that row's control", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const checked = await runtime.executeTool({
+    ...PROJECT, callId: "dryrun.1.3", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "verify", node: CLICK, parameters: CARD_CONTROL, consequences: ["modify_existing"], from: { location: START }, item: { name: "Amara Osei", mutual: "23 mutual friends" } }
+  });
+  assert.equal(checked.resultCode, "core.replay.verified");
+  const asserted = stubbed.commands.filter((command) => command.actionType === "web.dom.assert");
+  assert.ok(asserted.length > 0);
+  for (const command of asserted) assert.deepEqual(command.parameters.element, ROW_SCOPED_ELEMENT);
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.click"), false);
+});
+
+// D6: the walker loops over the rows the list read returned *in this test*, so
+// a replayed read answers them on `outputs`, keyed by the node's `records` port,
+// exactly as the Flow's extract_list saves them: each row held to the record
+// schema the node's dispatch derives, which keeps only the fields it reads.
+test("a replayed list read answers the rows the Flow's extract_list would produce, on outputs.records", async () => {
+  const stubbed = stub({ payload: { extracted: [{ name: "Amara Osei", mutual: "23 mutual friends", stray: "x" }, { name: "Jon Park", mutual: "4 mutual friends" }] } });
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const read = await runtime.executeTool({
+    ...PROJECT, callId: "dryrun.1.1", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: EXTRACT_LIST, parameters: { extractList: { item: "li.request", fields: { name: ".name", mutual: ".mutual" } } }, consequences: [] }
+  });
+  assert.equal(read.resultCode, "core.replay.replayed");
+  assert.deepEqual(read.outputs, { records: [{ name: "Amara Osei", mutual: "23 mutual friends" }, { name: "Jon Park", mutual: "4 mutual friends" }] });
+});
+
+test("a replayed step that is not a list read, or a read that did not replay, answers no outputs", async () => {
+  const stubbed = stub({ payload: { extracted: [{ name: "Amara Osei" }] } });
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const pressed = await runtime.executeTool({
+    ...PROJECT, callId: "dryrun.1.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: CLICK, parameters: { selector: "#go" }, consequences: [] }
+  });
+  assert.equal(Object.hasOwn(pressed, "outputs"), false);
+  const empty = stub({ payload: { extracted: [] } });
+  const collapsed = await createWebAutomationLlmEvidenceRuntime(empty.gateway).executeTool({
+    ...PROJECT, callId: "dryrun.1.1", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: EXTRACT_LIST, parameters: { extractList: { item: "li.request", fields: { name: ".name" } } }, consequences: [], produced: { records: 2 } }
+  });
+  assert.equal(collapsed.resultCode, "core.replay.changed");
+  assert.equal(Object.hasOwn(collapsed, "outputs"), false);
+});
+
+test("outputs is a key this domain publishes only beside Core's reader of it", () => {
+  assert.equal(WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS.includes("outputs"), true);
 });
 
 test("what a read produced is the longest list its payload carries", () => {

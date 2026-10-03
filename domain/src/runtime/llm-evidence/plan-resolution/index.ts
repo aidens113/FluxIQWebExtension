@@ -25,6 +25,8 @@ export {
   type WebPlanStepIssueCode,
   type WebPlanStepPermission
 } from "./step-permission";
+// A bound value Core's executor resolves when the Flow runs, passed untouched.
+export { isWebPlanStateBinding } from "./state-binding";
 export {
   createWebLlmTargetPackets,
   type WebLlmTargetPackets,

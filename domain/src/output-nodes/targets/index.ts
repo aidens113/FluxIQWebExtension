@@ -18,3 +18,4 @@
 // barrel keeps every existing importer working while that happens.
 
 export * from "./targets";
+export * from "./row-scope";

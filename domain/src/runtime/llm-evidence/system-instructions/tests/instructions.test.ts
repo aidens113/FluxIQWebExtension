@@ -12,13 +12,14 @@ import { createWebAutomationLlmEvidenceRuntime } from "../../tools";
 
 const { text, version } = WEB_LLM_SYSTEM_INSTRUCTIONS;
 
-test("the version is one Core's seam accepts", () => {
+test("the version is one Core's seam accepts, and names the text with loops and written steps", () => {
   assert.match(version, /^[a-z0-9][a-z0-9._-]{0,63}$/u);
+  assert.equal(version, "web-4");
 });
 
-test("the text holds no control character but a newline, and stays under 2,500 characters", () => {
+test("the text holds no control character but a newline, and stays under 2,800 characters", () => {
   assert.doesNotMatch(text, /[\u0000-\u0009\u000b-\u001f\u007f]/u);
-  assert.ok(text.length > 0 && text.length <= 2500, `text is ${text.length} characters`);
+  assert.ok(text.length > 0 && text.length <= 2800, `text is ${text.length} characters`);
 });
 
 test("it says the model operates a website on the person's behalf", () => {
@@ -55,8 +56,18 @@ test("an option already chosen is left alone, and a press's changes and messages
   assert.match(text, /After a press, read what it changed and any message it shows/u);
 });
 
-test("a list is one act on one item and a stated repeat", () => {
-  assert.match(text, /do it to one item and state repeat/u);
+// t252 (D8, run `run-murwcaj0-40e56557`): the model pressed Confirm on a row its
+// own listing excluded, so the build itself accepted a request the Flow had to
+// leave alone. Repetitive work is a loop over the rows a listing kept: one act
+// on one kept row, or the act written without doing it, and values bound.
+test("repetitive work is a loop over the rows a listing kept: act on one kept row or write the act, and bind values", () => {
+  assert.match(text, /Repetitive work is a loop/u);
+  assert.match(text, /list the items with a where that keeps only the ones to act on/u);
+  assert.match(text, /act once on one item it kept, or write the act \(write true\) without doing it, then state repeat/u);
+  assert.match(text, /never act on every item/u);
+  assert.ok(text.includes('{"$input": name}'));
+  assert.ok(text.includes('{"$row": field}'));
+  assert.doesNotMatch(text, /do it to one item and state repeat/u);
 });
 
 test("money, delete and send or publish are asked of the person; no secrets; no robot checks", () => {

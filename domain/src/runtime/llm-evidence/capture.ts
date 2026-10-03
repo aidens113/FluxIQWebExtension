@@ -175,6 +175,17 @@ export type WebLlmEvidenceToolExecution = {
    */
   clearedWait?: WebAutomationClearedCheckWait;
   /**
+   * The node's output values, keyed by the node's output port id, where the
+   * call produced values a later step of the Flow consumes (t252, D6).
+   *
+   * Today exactly one producer: a replayed list read answers `records`, the
+   * rows exactly as the Flow's extract_list saves them
+   * (`./node-run/replay-answer.ts`, `webNodeReplayFlowRows`), so the build's test can run a loop once per
+   * row the read returned *in the test*. Absent everywhere else, including a
+   * read whose replay did not pass.
+   */
+  outputs?: JsonObject;
+  /**
    * What this one call did, for the draft Core is accruing.
    *
    * One tool runs whichever node of the library the call names, so the name to
@@ -214,6 +225,14 @@ export type WebLlmEvidenceToolExecution = {
      * and never on a look, a navigation, a read or a refusal.
      */
     interruption?: true;
+    /**
+     * The step was written, not run: `core.run_node` with `write: true` checked
+     * and resolved it as a live call would and stopped before its command
+     * (`./node-run/written-step.ts`, t252 D1). `true` only, and only beside the
+     * result code `core.run_node.written`, which is what Core marks a written
+     * step by; absent on every call that ran or was refused.
+     */
+    written?: true;
   };
 };
 
@@ -299,9 +318,14 @@ type WebLlmEvidenceToolCallFacts = {
  *
  * Widening it is one entry here **after** Core's list has learned the same key,
  * never before. `tests/name-assumption.test.ts` holds the two together.
+ *
+ * `outputs` is the one exception to that order, and only by a task boundary:
+ * t252 adds it here (P2) and to Core's list (P1b) in one unit of work, and the
+ * two land together. This side must not reach `dev` without Core's, because
+ * until then every replayed list read would be refused whole.
  */
 export const WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS: readonly string[] = [
-  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "diagnostic", "repeatedAnswer", "personNeeded", "nodeId", "stateDigests", "routeState", "clearedWait", "draft"
+  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "diagnostic", "repeatedAnswer", "personNeeded", "nodeId", "stateDigests", "routeState", "clearedWait", "outputs", "draft"
 ];
 
 export function toolExecution(
@@ -336,8 +360,20 @@ export function toolExecution(
     // Written afterwards, by `withClearedWait` (`./node-run/cleared-wait.ts`),
     // onto a node run whose command waited out a check that cleared by itself.
     clearedWait: undefined,
+    // Written afterwards, by `withNodeOutputs`, onto a replayed list read.
+    outputs: undefined,
     draft
   }));
+}
+
+/**
+ * The result, with the node's output values written on it (`outputs`), as
+ * `withCallStates` writes its digests: onto the result just built, so the
+ * answer's own code, evidence and states stay exactly as they were.
+ */
+export function withNodeOutputs(execution: WebLlmEvidenceToolExecution, outputs: JsonObject | undefined): WebLlmEvidenceToolExecution {
+  if (outputs !== undefined) execution.outputs = outputs;
+  return execution;
 }
 
 /**

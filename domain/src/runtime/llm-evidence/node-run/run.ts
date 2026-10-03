@@ -35,6 +35,10 @@
 // (`USER_INTERVENTION_REQUIRED`) is marked `personNeeded`, and its draft
 // statement is the step as it stands once the person has cleared the check
 // (`personDraft`): Core asks the person and never shows the model the refusal.
+//
+// **A call may be written rather than run** (`write: true`, t252): it meets
+// every check below up to the command, the gate excepted, and answers with the
+// step it would be (`./written-step.ts`).
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webActionFailureRefusal } from "../action-failure";
@@ -59,7 +63,6 @@ import { resolveWebPlanNode } from "../plan-resolution";
 import { WEB_DECLINED_PRESS_INSTEAD } from "../press";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
-import { withoutWebLlmDeniedKeys } from "../denied-keys";
 import { WEB_LLM_EXTRACTION_HANDLE_PATTERN } from "../structure";
 import { RecoverableToolRejection, rejectionDetail, toolRejection, type WebLlmToolRejectionCode } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
@@ -76,6 +79,8 @@ import { webNodeHeldFlow } from "./arrival";
 import { webUnshownAddressRefusal } from "./shown-addresses";
 import { webMovesThePage, webScopeAnchor, webStartLocationRefusal, WEB_NAVIGATION_ACTION } from "./start-location";
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
+import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
+import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
 
 const EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 /**
@@ -93,8 +98,10 @@ const ELEMENT_SLOTS = ["selector", "target", "element"];
 const KEPT_ELEMENT_SLOT = "target";
 const EXTRACTION_SLOT = "extractList";
 const HANDLE_SHAPE = ['target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'];
-/** The keys the library verb takes, and all it takes (`Core runtime/llm/node-tools/`). */
+/** The keys the library verb takes (`Core runtime/llm/node-tools/`), as a refusal names them. */
 const CALL_KEYS = ["node", "parameters", "consequences"];
+/** And all it accepts: `write` asks for the step to be written rather than run (`./written-step.ts`). */
+const ACCEPTED_KEYS = [...CALL_KEYS, "write"];
 
 /** The press node, by the id the catalog gives it. */
 const PRESS_NODE_ID = "web.output.dom-click";
@@ -190,7 +197,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   if (!node) return refusal(undefined, "invalid_input", unknownNode(value.node), { call: value });
   const parameters = isJsonRecord(value.parameters) ? value.parameters : undefined;
   const record: WebNodeCallRecord = { actionId: node.definitionId, effect: node.effect, proposes: node.proposes, call: value, parameters: isJsonRecord(value.parameters) ? value.parameters : {} };
-  if (!parameters || Object.keys(value).some((key) => !CALL_KEYS.includes(key))) {
+  const writing = webNodeWriteAsked(value);
+  if (!parameters || writing === "invalid" || Object.keys(value).some((key) => !ACCEPTED_KEYS.includes(key))) {
     return refusal(undefined, "invalid_input", rejectionDetail({ reason: "unexpected_input_keys", target: undefined, instead: CALL_KEYS, missing: undefined, requestId: undefined }), record);
   }
   let current: WebLlmSnapshotBinding | undefined;
@@ -212,7 +220,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
-        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined, control: undefined, interruption: undefined }),
+        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined }),
         // A look that worked refuses nothing, so it says neither why it refused
         // nor which node it would have named: the draft statement beside it
         // already carries `actionId`, and a successful call is not the row a
@@ -278,7 +286,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // would land on the cover (`./covered-target.ts`, C4). The refusal names
     // the cover and carries the page it is on, so the layer can be dealt with
     // first -- a popup that opened on a timer is named this way (C9).
-    const covered = current && node.effect === "mutate" ? webCoveredTarget(current.evidence, firstHandle(written)) : undefined;
+    const covered = current && node.effect === "mutate" && !writing ? webCoveredTarget(current.evidence, firstHandle(written)) : undefined;
     if (current && covered) {
       run.shown(current);
       return refusal(current, covered.code, rejectionDetail({
@@ -300,7 +308,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         reason: "missing_input_keys", target: undefined, instead: CALL_KEYS, missing: undefined, requestId: undefined
       }), record);
     }
-    const permission = await webActionPermission({
+    // A written step does nothing, so nobody is asked; it is held to its declaration and the node's parameters instead.
+    const writeIssue = writing ? webWrittenStepIssue(node, ran, value.consequences) : undefined;
+    if (writeIssue) return refusal(undefined, "invalid_input", writeIssue, record);
+    const permission = writing ? { kind: "no_consequence" as const } : await webActionPermission({
       check: run.request.permission,
       declared: value.consequences,
       control,
@@ -332,6 +343,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       if (current) run.shown(current);
       return refusal(current, "address_not_shown", webUnshownAddressRefusal(run.request.startLocation), record);
     }
+    if (writing) return webWrittenStep({ node, value, written, ran, current, location: foundAt(current, run.request.startLocation, undefined), control: control.name, assumed });
     // What this step is, should it meet a robot check: the statement a success
     // would make, less what only the page it left can say.
     record.standing = {
@@ -471,7 +483,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // gone after it (`./press-effect/answered-layer.ts`): Core makes such a
         // step optional, so a playback that meets no such layer skips it.
         // Absent otherwise, and never on a look, a navigation or a read.
-        interruption: node.effect === "mutate" && !webMovesThePage(node) && webAnsweredLayer(current?.evidence, after?.evidence, firstHandle(written)) ? true : undefined
+        interruption: node.effect === "mutate" && !webMovesThePage(node) && webAnsweredLayer(current?.evidence, after?.evidence, firstHandle(written)) ? true : undefined,
+        written: undefined
       }),
       // The node ran and nothing was refused, so neither of the refusal fields
       // is said: the draft statement above already names the node under
@@ -536,6 +549,7 @@ function refusal(
     // No outcome said what it acted on, so neither does the draft.
     control: undefined,
     interruption: undefined,
+    written: undefined,
     // Whether a call of this kind belongs in a result, which is a property of
     // the node and not of this attempt. That it did not work is said by
     // `effectApplied: false`, and the two are held apart so a failed step stays
@@ -576,7 +590,7 @@ function refusal(
 function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
   const input = record.standing?.input ?? safeCall(record.call ?? {}, record.parameters ?? {});
   if (!record.acted || record.standing === undefined) {
-    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined, control: undefined, interruption: undefined });
+    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined });
   }
   return present<WebNodeDraftStatement>({
     actionId: record.actionId,
@@ -586,7 +600,8 @@ function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
     proposes: record.proposes,
     replay: record.standing.replay,
     control: record.standing.control,
-    interruption: undefined
+    interruption: undefined,
+    written: undefined
   });
 }
 
@@ -644,58 +659,6 @@ function nodeEvidence(page: WebLlmPageEvidence, outcome: WebNodeOutcome): JsonVa
   const published: JsonObject = publishedWebLlmPage(page) as unknown as JsonObject;
   const said: JsonObject = outcome as unknown as JsonObject;
   return { ...published, ...said } as unknown as JsonValue;
-}
-
-/**
- * The parameters the Flow's step keeps: resolved, except for the list an
- * extraction reads.
- *
- * An element is kept resolved because a handle names a control on a page as it
- * was, and a page that re-renders stops having it. A detected list is the other
- * way round: its handle belongs to the Flow rather than to a page, and the plan
- * resolver *refuses* a literal request outright once a list has been detected,
- * because a model that was shown a handle and wrote selectors instead can only
- * have guessed them. So the handle is what is written down, and it is resolved
- * again when the plan is assembled. Live, keeping the resolved request instead
- * had a build refused `web.handle.extraction_required` twenty-three times for
- * a fault in what Core had written down rather than in anything the model
- * wrote (`run-mudakzor-ec549d9d`).
- */
-function flowParameters(written: JsonObject, ran: JsonObject): JsonObject {
-  return written[EXTRACTION_SLOT] === undefined ? ran : { ...ran, [EXTRACTION_SLOT]: written[EXTRACTION_SLOT] };
-}
-
-/**
- * The call as the model may be shown it again: its own words, with every key
- * the domain denies removed (`../denied-keys.ts`).
- */
-function safeCall(value: JsonObject, parameters: JsonObject): JsonObject {
-  return withoutWebLlmDeniedKeys(nodeCall(value, parameters));
-}
-
-/**
- * One library call, written by name: the node, its parameters and what the
- * call said running it would lastingly do.
- *
- * Never stripped. This is what the Flow's step is built from, and a web step
- * runs on a selector by necessity; the declaration is applied to what the model
- * is *shown* instead (`safeCall`).
- *
- * **`consequences` is written only when the call carried one.** Until t194-w35
- * a call with none was written back with `consequences: null`. Core takes this
- * as the step's input (`llm/evidence-loop/call-record.ts`), a rerun is a merge
- * patch over that input that never names the key, and the permission check
- * read the `null` as an unreadable declaration -- so live run 11's re-author had
- * sixteen reruns of a read refused `consequences_unreadable` for a word nobody
- * wrote (`run-muq4oaof-464f5bce`). A `null` that arrives is dropped the same
- * way, so a call already stored with one stops carrying it from its next run.
- */
-function nodeCall(value: JsonObject, parameters: JsonObject): JsonObject {
-  return present<{ node: JsonValue; parameters: JsonObject; consequences?: JsonValue }>({
-    node: value.node ?? null,
-    parameters,
-    consequences: value.consequences === null ? undefined : value.consequences
-  }) as unknown as JsonObject;
 }
 
 /**

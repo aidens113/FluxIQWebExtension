@@ -25,7 +25,12 @@
 //            `io/gateway-output-dispatcher.ts` sends, so what is being proved
 //            is the Flow and not a rehearsal of it. Core sends back where the
 //            step found the page (`from`), which is what tells `remembered`
-//            from `unreproducible`.
+//            from `unreproducible`. A step of a loop's body arrives with the
+//            pass's row as `item`, and its control is scoped to that row
+//            exactly as the Flow's For Each scopes it
+//            (`output-nodes/targets/row-scope.ts`, t252); a list read answers
+//            the rows it returned on `outputs.records`, which is what the test
+//            loops over.
 //
 //   verify -- check a step whose effect lasts, and run nothing that acts: a
 //            dry run never repeats a lasting effect (`./verify.ts`).
@@ -49,9 +54,9 @@
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
-import { webAutomationExtractListAloneRowsAsked } from "../../../output-nodes";
+import { webAutomationExtractListAloneRowsAsked, webAutomationScopedToRow } from "../../../output-nodes";
 import { webActionFailureRefusal, webActionNeedsPerson } from "../action-failure";
-import { assertActive, toolMetadata, withPersonNeeded, type WebLlmEvidenceToolExecution } from "../capture";
+import { assertActive, toolMetadata, withNodeOutputs, withPersonNeeded, type WebLlmEvidenceToolExecution } from "../capture";
 import { present } from "../present";
 import { webActionPermission } from "../permission";
 import { resolveWebPlanNode } from "../plan-resolution";
@@ -63,6 +68,7 @@ import {
   WEB_NODE_REPLAY_RESULT_CODES as REPLAY_RESULT_CODES,
   webNodeReplayAnswer as answer,
   webNodeReplayAnswerWithPage as answerWithPage,
+  webNodeReplayFlowRows as flowRows,
   webNodeReplayPermissionReason as permissionReason,
   webNodeReplayReadRows as readRows,
   webNodeReplayReadSaid as readSaid,
@@ -250,7 +256,9 @@ async function resetPage(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> 
 async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> {
   const value = run.request.value;
   const node = webRunnableNode(value.node);
-  const parameters = isJsonRecord(value.parameters) ? value.parameters : undefined;
+  // Scoped to the pass's row before anything reads them, so the gate, the
+  // resolution and the command all see the control the Flow's pass acts on.
+  const parameters = isJsonRecord(value.parameters) ? webAutomationScopedToRow(value.parameters, value.item) : undefined;
   // Two different faults, and they were one answer until 2026-09-25: a step
   // naming a node this domain cannot run is a draft that should never have been
   // assembled, while a step whose parameters are not a record is a draft
@@ -357,7 +365,9 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // Its rows go beside the line, by label (`./replay-answer.ts`).
   const where = isJsonRecord(parameters.extractList) ? parameters.extractList.where : undefined;
   const said = readSaid(payload, where) ?? "the step ran again";
-  return answer(REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed }, true, readRows(payload, where));
+  const replayed = answer(REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed }, true, readRows(payload, where));
+  // A list read's rows, as the Flow's own read saves them, for the test to loop over (D6).
+  return withNodeOutputs(replayed, node.actionType === EXTRACT_LIST_ACTION ? flowRows(resolvedParameters, payload) : undefined);
 }
 
 /** How many rows a reading node's payload holds: the longest list it carries. */
