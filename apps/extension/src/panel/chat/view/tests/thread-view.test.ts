@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ClientGatewayActivity } from "../../../../shared/activity/index";
-import type { AskControlsContext, CoreTurn } from "../../conversation";
+import { parseThreadPage, type AskControlsContext, type CoreTurn } from "../../conversation";
 import { buildChatStream } from "../../stream";
 import { activityEvent, eventTime } from "../../tests/activity-fixture";
 import { fake, withFakeDocument } from "../../tests/fake-dom";
@@ -17,7 +17,7 @@ const ASK: AskControlsContext = { answering: false, error: undefined, answer: ()
 const controls = (): TurnControls => ({ ask: ASK, state: "" });
 
 function turn(turnId: string, author: string, text = turnId): CoreTurn {
-  return { turnId, author, text, ask: null, attachment: false };
+  return { turnId, author, text, ask: null };
 }
 
 const QUOTE = "Clicking “Get a free quote”";
@@ -92,5 +92,24 @@ test("a step message and its card are the same elements from its decision to its
     assert.deepEqual(list.children.slice(0, 3).map((child) => child.getAttribute("data-author") ?? child.getAttribute("data-kind")), ["person", "decision", "fluxiq"]);
     assert.equal(list.children[1], step, "the message stays once the work settled");
     assert.equal(list.children[3]!.hidden, true);
+  });
+});
+
+// t195, `run-murdouox-c5294247` (09-failure-panel): a command's answer ended "FluxIQ attached something you can
+// see in FluxIQ. Open FluxIQ", which named nothing. Every attachment Core writes today is its own record of the
+// command it ran or will run, which the turn's words already say (Core's panel draws none), so no line is shown.
+test("an answer carrying Core's record of the command it ran shows no attachment line", async () => {
+  await withFakeDocument(() => {
+    const page = parseThreadPage({
+      conversation: { conversationId: "conv-1", projectId: "project-1", revision: 1 },
+      turns: [{ turnId: "t1", author: "automation", text: "I could not build this Flow.", ask: null, attachment: { kind: "panel-capability-result", ref: "flow.createHere" } }],
+      hasMore: false
+    });
+    assert.ok(page);
+    const view = createThreadView();
+    view.render(buildChatStream([{ turn: page.turns[0]!, at: eventTime(0) }], []), null, controls);
+    const answer = fake(view.element).children[0]!;
+    assert.equal(answer.byClass("chat-note").length, 0);
+    assert.doesNotMatch(answer.textContent, /attached/u);
   });
 });
