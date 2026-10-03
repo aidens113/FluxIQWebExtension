@@ -26,13 +26,17 @@ then stop for the supervisor to commit the merge (t252 then does w7 and P4; t254
 chat `max_tokens` 600, recovery's ledger at billed price, judge overshoot in phases' accounting, a round stopped by
 the judging reserve spends it testing and judging the Flow so far). t254's merge is verified and committed (Core
 `b5533c0c`: tsc 0, audit passed, docs-reference current, unfinished-build 129/129 incl. murzln6g funding, domain
-check 0); its stage 2 (the four decisions) is in progress. **t255** (`fxwork/t255`, Core-paired) takes
-lane B's run-record gaps: the ending cut at "...was not..." in the Lab's files, `live-llm.json` booking the judge
-inside `phases.build`, and Core step-log result folders for amendment decisions (`reports/t255-w1-run-record-gaps.md`);
-the overlay `pageLoads` gap waits for lane B's `ui-review` changes to land. Core `880577fc` (dev, unpushed): the
-`$0.25` comments in `refuted-result-port.ts` and `repair-authority.ts` now name the run cost ceiling. **t256**
-(`fxwork/t256`, Core-paired) shows `applied`/`notAppliedReason` in the web Adaptations view
-(`reports/t256-w1-web-adaptation-applied.md`).
+check 0); its stage 2 (the four decisions) is in progress. **t255 landed** (dev Core `d89877d3`, downstream
+`622eccf8`, pushed): the Lab writes FluxIQ's whole ending; `live-llm.json` books the judge and the consequence read
+apart from the build (murzln6g re-derived: build 30 calls $0.086255, judge 2 $0.001936, read 1 $0.000380,
+unattributed 0); Core's step log writes `NNNN-answer-<toolId>` folders for amendments and refused repeats, so later
+step numbers shift by those folders. Supervisor checks after merging dev: Core check 0, step-log + evidence-loop
+216/216, test-runner check 0, changed tests 161/161, audit passed. Left open: `flow-lane.json`'s own
+`instructedConsequences` stays null, and Core's `judgeAccounting` gives no judge call count. **t257**
+(`fxwork/t257-ui-review-page-swaps`) takes the overlay gaps: a document change with the overlay present counts as a
+page load, and each picture is timed against the samples (`reports/t257-w1-ui-review-page-swaps.md`). Core
+`880577fc` (pushed): the `$0.25` comments now name the run cost ceiling. **t256** (`fxwork/t256`, Core-paired) shows
+`applied`/`notAppliedReason` in the web Adaptations view and its inbox rows (`reports/t256-w1-web-adaptation-applied.md`).
 
 **Dev heads.** Core `8f92b399`, pushed (the last commit gives the web app lane C's `recall` icon; apps/web had
 stopped typechecking). Downstream dev `3b1655b8`, pushed 2026-10-03. Lane C's commit
