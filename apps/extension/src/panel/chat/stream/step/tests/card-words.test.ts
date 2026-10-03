@@ -27,7 +27,7 @@ test("the name, the target and the outcome, on one accessible line", () => {
 // t193 (run-muqiojz4-04a7a8fc): "Click · the page" and "Action · the page" said nothing a person
 // could tell apart; the message above the card says what the step did.
 test("a card that named nothing says no target, never \"the page\"", () => {
-  for (const kind of ["click", "type", "read", "other", "navigate", "look", "wait", "person_check", "permission", "draft", "test", "repair"] as const) {
+  for (const kind of ["click", "type", "read", "other", "navigate", "look", "wait", "person_check", "permission", "draft", "test", "result_check", "repair"] as const) {
     const words = cardWords(card({ kind, target: null }), false);
     assert.equal(words.target, null, kind);
     assert.equal(words.name, ACTIVITY_ACTION_NAMES[kind]);

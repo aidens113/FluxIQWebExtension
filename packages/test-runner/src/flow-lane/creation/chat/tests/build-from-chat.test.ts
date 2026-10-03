@@ -82,7 +82,7 @@ function fakeChat(options: FakeChatOptions) {
       if (options.ending === "awaiting_permission") {
         adaptation = proposal("proposed", { consequences: { declared: [], instructed: [], permissionRequest: { action: { kind: "click", verb: "press" }, control: { name: "Place order", kind: "button" }, consequences: ["move_money"], missing: ["move_money"] } } as unknown as NonNullable<ExistingFlowAdaptation["consequences"]> });
       }
-      const said = options.ending === "created" ? 'Created the Flow "Find every pair", explored the site, and put the steps it worked out into the Flow.' : '"Create an automation here" stopped because the build failed. Before that I created the Flow and saved what it should do.';
+      const said = options.ending === "created" ? 'Created the Flow "Find every pair", explored the site, and put the steps it worked out into the Flow.' : '"Create an automation here" stopped because the build failed. What is left: the Flow "Find every pair", empty, with what you asked saved on it, so it can be built again.';
       turn("automation", said, { kind: "panel-capability-result", ref: "flow.createHere" });
     },
     shows: async () => "Couldn't send that. Try again.",
@@ -134,7 +134,7 @@ test("a build that ended without a proposal is a failed build of the Flow it mad
   assert.deepEqual(made.build.failure, { code: "lab.chat_build_failed", stage: "chat", httpStatus: null });
   assert.equal(made.build.providerInvocation, "unknown", "a refused build's spend is not readable from the chat");
   assert.equal(made.build.chat?.ending, "failed");
-  assert.match(made.said ?? "", /Before that I created the Flow/u);
+  assert.match(made.said ?? "", /What is left: the Flow "Find every pair", empty/u);
 });
 
 test("a build that finished still waiting on a question is the permission ending, never applied", async () => {

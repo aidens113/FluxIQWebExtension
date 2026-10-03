@@ -45,7 +45,21 @@ downstream `pnpm check`, `pnpm test`, `pnpm build` -> rc 0.
 
 **Live round 1002-L launched, then held (supervisor's mistake):** it started before t243, so the leads hold after
 lane D's one in-flight run (`launch-murdolfv-b6d20d87`, confirm-requests); it resumes after t243 and t244 merge and
-the lane trees are re-synced.
+the lane trees are re-synced. That run (`run-murdouox-c5294247`, $0.0562, stage 4, no Flow) proved C1, C2, C3 with
+t241 and C8 with t240 live; its causes R2, R3 and two wording gaps merged (Core `109b387c`). Leads A, B and C spent $0
+(the hold arrived first) and fixed causes from their earlier runs' debugs.
+
+**Merged since (each verified by the supervisor on the lane tree and again after merging dev in):** t245 (sweep 1's
+four Core failures: F38 expectations, two load timeouts); t243 (global Core state routing: a step that cannot run
+continues where the page is, before the ladder, ending as failed on the fourth return to one node without progress;
+R4), with a t242 x t243 type fix (a run-detail skip is `target_absent` or `state_routed` with `toNodeId` and
+`direction`); lane A (F40-F42, F44); lane B (rerun put-back, do-only repair, chat wording, overlay never a dot; its
+consequence sentence yielded to lane A's). Core `62d65481`, downstream `4237b3c2`. Core's web app has two failures on
+dev that sweep 1 never ran (`pnpm -r test` stops at the first failing package): t247.
+
+**Two sessions share the dev queue (2026-10-02 evening):** this session lands t193 then t194; session
+`fluxiqwebextension-8d` lands t244 (after t194), t246, t247, t248 and re-syncs the lane trees. Handshake in both
+repositories: "merging tNNN" before, "tNNN done" with the new heads after; neither starts while the other holds dev.
 
 Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name older work without a branch of its own.
 
@@ -103,18 +117,9 @@ Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name ol
 - **Process.** Lanes iterate on their own branches; the supervisor merges in rounds and is the only one who commits,
   merges or pushes. Heavy commands go through `build-slots/heavy.sh`. No LLM call grants.
 
-**Live results, 2026-10-01 night (step logs in `C:/Users/osrs_/FluxStuff/lab-runs/2026-10-01/<run>/steps/`).**
-| Run | Lane | Spent: creation / run recovery | Ending |
-| --- | --- | --- | --- |
-| crossborder `run-muqiho5c-e830ce01` | A | $0.0415 | Flow built and ran; playback goal failed (step unknown in the bundle) |
-| earbuds `run-muqiho7e-13be6c03` | C | $0.088 | built, judged wrong, stopped at the 2-repair-round limit while still progressing |
-| confirm-requests `run-muqilf9s-c3211328` | D | $0.0912 / $0.024 | last step (navigate back to feed) `output_not_observed`; repair no_repair |
-| bigbox `run-muqiojz4-04a7a8fc` | B | $0.0826 / ~$0.041 | `output_not_observed` |
-| earbuds `run-muqj2bgb-d048ec37` | C | $0.0484 | Flow ran; read 10 of 13 rows (the accessory filter drops pairs whose name mentions a charging case) |
-| crossborder `run-muqk4u32-0b36e58f` | A | $0.0614 | Flow ran; facts not held: cart-count, cart-line |
-| earbuds `run-muqk713g-d08ad3dc` | C | ~$0.082 / ~$0.039 | `output_not_observed` |
-First decide requests are 40-50k chars including the page (62-70k before), system message 5,634 with the web
-instructions, catalog 4,662 (names only). No creation purse went over $0.10 (t234's reconciliation).
+**Live results, 2026-10-01 night:** seven runs across the four lanes, $0.04-$0.09 creation each, none over $0.10; every
+build produced a Flow and playback failed (debugs in `debugs/`; run ids and endings in
+[archive/live-results-2026-10-01-night.md](./language-driven-flow-loop-plan/archive/live-results-2026-10-01-night.md)). First decide requests were 40-50k chars, system message 5,634, catalog 4,662 (names only).
 
 **Open defects (not assigned).**
 - Load-flaky Core tests (pass alone): `subflow.test.ts`, `service-recordings/proposals.test.ts`, `cancel-runtime-session`, `runs`.
@@ -142,12 +147,14 @@ instructions, catalog 4,662 (names only). No creation purse went over $0.10 (t23
 - `fxwork/t187-bench` and `fxwork/t192-bench`: delete only on a yes.
 
 **Next, in order.**
-1. Verify and merge t243 (global Core state routing), t244 (partial runs, one full judged run) and t245 (sweep 1's 4
-   Core failures); route any executor entry t244 requests to t243.
-2. Merge lane D's in-flight run debug and fixes; re-sync every lane tree to dev (both repositories, rebuild Core
-   libraries and the extension), then release the four held live leads; then the approved `deepseek-v4-pro`
-   comparison (`--llm-model deepseek-v4-pro --llm-cost-ceiling-usd 0.30`, one run).
-3. Open follow-ups: unify `control` and `does`; the existing/clone path's skip status; sweep 2 later today.
+1. Land t194 (lane C), then t244 (partial runs, one full judged run; resolves against lanes A-C in its own files),
+   t246, t247 and t248, per the two-session handshake.
+2. Re-sync every lane tree to dev (both repositories, rebuild Core libraries and the extension), then release the
+   four held live leads; then the approved `deepseek-v4-pro` comparison (`--llm-model deepseek-v4-pro
+   --llm-cost-ceiling-usd 0.30`, one run). Watch for a double act on a backward state route (t243 open item 2).
+3. Open follow-ups: unify `control` and `does`; the existing/clone path's skip status; signatures for recorded Flows
+   (t243 open item 4); a dropped column on a rerun needs the domain's denied keys in the loop (t195 R3); sweep 2,
+   with `pnpm -r --no-bail test` in Core.
 
 Older history: rung 1 is in `archive/rung1-history-to-2026-09-26.md`. The ledger to 2026-09-30 is in
 `archive/ledger-2026-09-28-to-30.md` and the Work Ledger below.
@@ -614,6 +621,21 @@ checks only, heavy commands through `build-slots/heavy.sh`, no commits; `R/` is 
 - Owns: those test files and any non-executor source a cause lives in. Must not touch `R/executor/**`,
   `R/route-state/**` (t243) or t244's paths; an executor cause is reported, not edited.
 - Report to: `reports/t245-sweep-1002-core-failures.md` in `fxwork/t245/!FluxIQWebExtension`
+
+#### Briefs: t246, t247, t248 (recorded after dispatch; the supervisor dispatched them from prompts, an error)
+- **t246-service-test-setup-cost** (`worker-high`, Core): one service test case costs 5-9 s alone, so 20-23 service
+  tests reach their 15 s timeout under load. Profile a representative case with measured numbers and remove the cost
+  at its source, keeping isolation and what the tests check. Owns Core test helpers and fixtures under `R/tests/**`
+  and `R/service/**/tests/**`; not t243's or t244's paths. Done: before/after timings alone and under load, all
+  passing, Core check and audit.
+- **t247-web-app-sweep-failures** (`worker`, Core web app): `ProjectTree.tsx` is 301 lines against 300 (decompose by
+  responsibility, never trim lines or raise the limit); the settings round trip's run-ceiling default reads NaN where
+  $0.25 is expected (find the wrong side); Core's root `pnpm test` runs every package (`--no-bail`). Done: both pass,
+  the whole web suite and its typecheck pass, Core audit.
+- **t248-lab-records-state-routing** (`worker`, downstream Lab): parse `state_routed` skip marks, carry them through
+  the actions table and `steps/` as "routed to <node> (<direction>)", never failed, with a run-level count; add the
+  bigbox `store-remembered` Lab row and its testing-facility line (t243 open item 1). Done: failing-first tests,
+  test-runner check and tests, audit.
 
 #### Briefs: live round 1002-L (lanes A-D, `lead-xhigh`)
 Common. The supervisor first merges dev into every lane tree (both repositories) and rebuilds Core libraries and the

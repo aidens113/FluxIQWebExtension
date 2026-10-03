@@ -207,7 +207,7 @@ function withLayout(dom: unknown, cover: () => "fixed" | null): () => void {
   };
 }
 
-test("a page with no clear corner gets a dot, drawn with the same nodes, and the pill comes back when a corner clears", () => {
+test("a page with every corner busy keeps a pill with its text, never a dot, drawn with the same nodes", () => {
   withFakeDom((dom) => {
     let busy = true;
     const restore = withLayout(dom, () => (busy ? "fixed" : null));
@@ -218,13 +218,20 @@ test("a page with no clear corner gets a dot, drawn with the same nodes, and the
       const surfaceNode = host.shadow!.children[0]!;
       const nodes = host.descendants();
       const created = dom.created;
-      assert.deepEqual([surfaceNode.style.getPropertyValue("width"), surfaceNode.style.getPropertyValue("height")], ["30px", "30px"], "a dot");
-      const hidden = nodes.filter((node) => node.style.getPropertyValue("display") === "none" && ["Building your Flow", "Step 1 of 3", "Deciding the next step"].includes(node.textContent));
-      assert.equal(hidden.length, 3, "no text in a dot, though every line is kept up to date");
+      const [width, height] = [surfaceNode.style.getPropertyValue("width"), surfaceNode.style.getPropertyValue("height")];
+      assert.notEqual(width, "30px", "not a dot");
+      assert.ok(Number.parseInt(width, 10) >= 240, `wide enough to read a line (${width})`);
+      assert.equal(height, "66px", "the expanded card's height: the detail line is kept");
+      for (const line of ["Building your Flow", "Step 1 of 3", "Deciding the next step"]) {
+        const node = nodes.find((candidate) => candidate.children.length === 0 && candidate.textContent === line);
+        assert.ok(node, `${line} is drawn`);
+        assert.notEqual(node.style.getPropertyValue("display"), "none", `${line} is shown`);
+        if (line !== "Step 1 of 3") assert.equal(node.style.getPropertyValue("text-overflow"), "ellipsis", `${line} ends in an ellipsis when it does not fit, and is never removed`);
+      }
       assert.equal(host.style.getPropertyValue("pointer-events"), "none");
       busy = false;
       surface.update(view({ mode: "collapsed", step: "Step 1 of 3" }));
-      assert.deepEqual([surfaceNode.style.getPropertyValue("width"), surfaceNode.style.getPropertyValue("height")], ["300px", "36px"], "the pill again, once a corner is clear");
+      assert.deepEqual([surfaceNode.style.getPropertyValue("width"), surfaceNode.style.getPropertyValue("height")], ["300px", "36px"], "the full pill in a clear corner");
       assert.deepEqual([host.style.getPropertyValue("left"), host.style.getPropertyValue("bottom")], ["16px", "16px"]);
       assert.equal(dom.created, created, "no node was created to change shape");
       assert.equal(hostOf(surface), host);

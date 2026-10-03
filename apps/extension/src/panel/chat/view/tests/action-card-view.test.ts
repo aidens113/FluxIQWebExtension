@@ -32,6 +32,7 @@ const ONE_OF_EACH: ReadonlyArray<[ActivityActionKind, (sequence: number) => Clie
   ["permission", (n) => event(n, "waiting_permission", { kind: "ask", title: "Asked for permission to send the message" })],
   ["draft", (n) => event(n, "building", { kind: "tool", title: "Amending the draft flow", ref: "core.flow_draft", status: "succeeded" })],
   ["test", (n) => event(n, "verifying", { kind: "tool", title: "Using core.dry_run", ref: "core.dry_run", status: "failed", text: "Result: core.replay.diverged" })],
+  ["result_check", (n) => event(n, "verifying", { kind: "check", title: "Result check", status: "succeeded", text: "The result was judged to answer the request." })],
   ["repair", (n) => event(n, "repairing", { kind: "tool", title: "Clicking “Accept cookies”", ref: "core.run_node", status: "succeeded" })],
   ["other", (n) => event(n, "exploring", { kind: "tool", title: "Using core.something_else", ref: "core.something_else", status: "succeeded" })]
 ];
@@ -73,6 +74,8 @@ test("a card for each kind: Core's icon in an aria-hidden mark, Core's name, the
     assert.deepEqual(read("read"), ["Listings", "Done", "done", "Read list, Listings: Done"]);
     assert.deepEqual(read("navigate"), [undefined, "Done", "done", "Open page: Done"]);
     assert.deepEqual(read("test"), [undefined, "Didn't work: it didn't work the same way again", "failed", "Test run: Didn't work: it didn't work the same way again"]);
+    // t193 (run-muqiojz4-04a7a8fc, 00019): a real run's result check read "Test run · Working on it".
+    assert.deepEqual(read("result_check"), [undefined, "Passed: the result was judged to answer the request.", "done", "Check result: Passed: the result was judged to answer the request."]);
     assert.deepEqual(read("person_check"), [undefined, "Waiting for you", "waiting", "Robot check: Waiting for you"], "a wait Core has not settled still waits while its work is under way");
     assert.deepEqual(read("permission"), [undefined, "Waiting for you", "waiting", "Permission: Waiting for you"]);
     assert.deepEqual(read("repair"), ["Accept cookies", "Done", "done", "Repair, Accept cookies: Done"]);
@@ -190,5 +193,21 @@ test("a wait Core has not settled still says so once its work is over: only Core
     view.render(buildChatStream([], [robot(1)]), null, controls, null);
     const card = cards(fake(view.element))[0]!;
     assert.deepEqual([card.getAttribute("data-state"), text(card, "chat-card-outcome"), card.getAttribute("aria-label")], ["waiting", "Waiting for you", "Robot check: Waiting for you"]);
+  });
+});
+
+// t193 (run-muqiojz4-04a7a8fc): the navigate card read "Open page" with no page
+// named (00019, 00020), and a press refused for naming no control from the page
+// read "Didn't work: it wasn't on the page" (00020, S/0090).
+test("a navigate card names its page, and a refusal says its own reason", async () => {
+  await withFakeDocument(() => {
+    const view = createThreadView();
+    const events = [
+      event(1, "running", { kind: "step", title: "Opening “/ip/valueridge-napkins”", ref: "n11", status: "succeeded", text: "Node: web.output.browser-navigate" }, { step: { index: 11, count: 14, nodeId: "n11" } }),
+      event(2, "repairing", { kind: "tool", title: "Clicking “Add to cart”", ref: "core.run_node", status: "succeeded", text: "Result: web.action.rejected.target_unobserved · Reason: target_not_a_handle · Node: web.output.dom-click" })
+    ];
+    view.render(buildChatStream([], events), null, controls, "run-1");
+    const labels = cards(fake(view.element)).map((card) => card.getAttribute("aria-label"));
+    assert.deepEqual(labels, ["Open page, /ip/valueridge-napkins: Done", "Repair, Add to cart: Didn't work: it didn't name a control from the page"]);
   });
 });

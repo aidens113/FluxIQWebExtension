@@ -1,9 +1,22 @@
 // Where the overlay goes: the corner of the viewport where it covers no part
 // of the page that stays put over the content -- a cookie banner, a chat
-// widget, a sticky header, a dialog -- and, failing every corner, a small dot
-// at the place that covers least (U3 of the t174 live lane's UI review, and
-// the supervisor's review #7: the bottom-left pill sat over company-website's
-// cookie banner).
+// widget, a sticky header, a dialog -- and, failing every corner, the
+// least-busy place on the viewport's edge, still as a pill that carries its
+// words (U3 of the t174 live lane's UI review, the supervisor's review #7: the
+// bottom-left pill sat over company-website's cookie banner).
+//
+// It never shrinks to a text-less dot. Until 2026-10-02 it did, whenever every
+// corner held a fixed part, and on a busy page -- a social feed with a sticky
+// header, a fixed bottom bar and a chat dock, a store -- that was the common
+// case: lane D's run-murdouox-c5294247 showed a 30-pixel dot, no status
+// readable, at three of nine moments. The user's rule is that the status is
+// readable on the page whenever FluxIQ works.
+//
+// Covering a fixed part is a matter of what the person watching can see, never
+// of what the automation can do: the overlay takes no pointer, so a hit test
+// and a click pass through it, and the cover checks skip it by its marker
+// (`../status-pill.ts`, `../tests/cover-detection.test.ts`). So when no place
+// is clear, the least of the page is covered and the words stay.
 //
 // Pure: the page is reached only through `probe`, which says what lies under
 // one point, so the choice is tested against synthetic rectangles in Node.
@@ -13,22 +26,26 @@
 // 1. A corner is **busy** when any sampled point of the pill's box there lies
 //    on a fixed or sticky part of the page. Ordinary content scrolls away from
 //    under the pill, so it only breaks ties: among clear corners the one over
-//    the fewest controls (links, buttons, fields) wins, and after that the
-//    first in `CORNERS` order. The left corners come first because the side
-//    panel opens on the right and, in the Lab's emulated viewport, covers the
-//    right 400 pixels of the page without narrowing it (t191 round 1).
+//    the fewest controls wins, and after that the first in `CORNERS` order. The
+//    left corners come first because the side panel opens on the right and, in
+//    the Lab's emulated viewport, covers the right 400 pixels of the page
+//    without narrowing it (t191 round 1).
 // 2. **The overlay stays put while its corner is clear.** A corner it already
 //    holds is kept for as long as nothing fixed moves under it, so scrolling
 //    past links never makes it hop between corners.
-// 3. When every corner is busy it becomes a **dot**: the smallest mark, at
-//    whichever of the corners and side midpoints covers the least, fixed parts
-//    weighing far more than controls.
+// 3. When every corner is busy it takes the **least-busy place**: of the
+//    corners and the side midpoints, with the full pill or a narrower one, the
+//    one over the fewest fixed points; then the full pill before the narrow
+//    one, so more of the words fit; then the place it already holds, so
+//    controls scrolling past do not move it (rule 2); then the fewest
+//    controls; then `FALLBACK_ANCHORS` order. The narrow pill keeps
+//    the same lines; a line that does not fit ends in an ellipsis.
 
 /** A place on the viewport's edge the overlay is pinned to. */
 export type OverlayAnchor = "bottom-left" | "top-left" | "bottom-right" | "top-right" | "left" | "right";
 
-/** Where the overlay is, and whether it is the full pill or the dot. */
-export type OverlayPlacement = { readonly shape: "pill" | "dot"; readonly anchor: OverlayAnchor };
+/** Where the overlay is, and whether it is the full pill or the narrower one a busy page leaves room for. Both carry the words. */
+export type OverlayPlacement = { readonly shape: "pill" | "narrow"; readonly anchor: OverlayAnchor };
 
 /** What lies under one point: a fixed or sticky part of the page, an ordinary control, or nothing in the way. */
 export type PointCover = "fixed" | "control" | null;
@@ -38,8 +55,8 @@ export type PlacementInput = {
   readonly viewport: { readonly width: number; readonly height: number };
   /** The pill's box in its current mode. */
   readonly box: { readonly width: number; readonly height: number };
-  /** The dot's diameter. */
-  readonly dot: number;
+  /** The narrower pill's box in the current mode, for a page with no clear corner. */
+  readonly narrow: { readonly width: number; readonly height: number };
   /** The gap between the overlay and the viewport's edge. */
   readonly margin: number;
   readonly probe: (x: number, y: number) => PointCover;
@@ -48,10 +65,8 @@ export type PlacementInput = {
 };
 
 const CORNERS: readonly OverlayAnchor[] = ["bottom-left", "top-left", "bottom-right", "top-right"];
-const DOT_ANCHORS: readonly OverlayAnchor[] = [...CORNERS, "left", "right"];
-
-/** How much more one fixed point weighs than one control when a dot looks for the least-busy place. */
-const FIXED_WEIGHT = 100;
+/** Every place a busy page is searched for, the left side first (rule 1). */
+const FALLBACK_ANCHORS: readonly OverlayAnchor[] = ["bottom-left", "top-left", "left", "bottom-right", "top-right", "right"];
 /** The most pixels between two sampled points along either side of a box. */
 const SAMPLE_STEP = 36;
 /** Points are sampled this far inside the box's edge, where a neighbour's anti-aliased border cannot count. */
@@ -59,7 +74,7 @@ const SAMPLE_INSET = 2;
 
 type Cost = { readonly fixed: number; readonly controls: number };
 
-/** The placement for `input`: a clear corner, the corner already held, or a dot. */
+/** The placement for `input`: a clear corner, the corner already held, or the least-busy place. Always a pill with its words. */
 export function choosePlacement(input: PlacementInput): OverlayPlacement {
   const { current } = input;
   if (current?.shape === "pill" && CORNERS.includes(current.anchor) && costAt(input, current.anchor, input.box).fixed === 0) return current;
@@ -70,15 +85,30 @@ export function choosePlacement(input: PlacementInput): OverlayPlacement {
     if (!best || cost.controls < best.controls) best = { anchor, controls: cost.controls };
   }
   if (best) return { shape: "pill", anchor: best.anchor };
-  const dotBox = { width: input.dot, height: input.dot };
-  let dot: { anchor: OverlayAnchor; weight: number } | undefined;
-  for (const anchor of DOT_ANCHORS) {
-    const cost = costAt(input, anchor, dotBox);
-    const weight = cost.fixed * FIXED_WEIGHT + cost.controls;
-    const keeps = current?.shape === "dot" && current.anchor === anchor;
-    if (!dot || weight < dot.weight || (weight === dot.weight && keeps)) dot = { anchor, weight };
+  return leastBusy(input);
+}
+
+/** Rule 3: every corner is busy, so the place and width that cover the least, the words kept. */
+function leastBusy(input: PlacementInput): OverlayPlacement {
+  const { current } = input;
+  let chosen: { placement: OverlayPlacement; rank: readonly number[] } | undefined;
+  for (const anchor of FALLBACK_ANCHORS) {
+    for (const shape of ["pill", "narrow"] as const) {
+      const cost = costAt(input, anchor, shape === "pill" ? input.box : input.narrow);
+      const held = current?.shape === shape && current.anchor === anchor ? 0 : 1;
+      const rank = [cost.fixed, shape === "pill" ? 0 : 1, held, cost.controls];
+      if (!chosen || before(rank, chosen.rank)) chosen = { placement: { shape, anchor }, rank };
+    }
   }
-  return { shape: "dot", anchor: dot?.anchor ?? "bottom-left" };
+  return chosen?.placement ?? { shape: "pill", anchor: "bottom-left" };
+}
+
+/** Whether `left` ranks strictly ahead of `right`, compared term by term. */
+function before(left: readonly number[], right: readonly number[]): boolean {
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return left[index]! < right[index]!;
+  }
+  return false;
 }
 
 /** The box `size` pinned at `anchor`, in viewport coordinates, clipped to the viewport. */
