@@ -473,6 +473,12 @@ export class LiveLlmRun {
    * overspend is raised, as it is for every live run. Reaching no provider is
    * not a failure here: a repair Core refused before diagnosis calls nothing,
    * and says why in the run's recovery record.
+   *
+   * Core's post-run result checks are filed among the run's interventions, but
+   * they are not a repair: `repair.observed` lists recovery only, the checks
+   * are `verification`'s, and they settle with an event of their own
+   * (`resultChecks`). The run's spend is computed from the whole detail
+   * exactly as before, so the totals do not move (run-murwd8le-79e735a8).
    */
   async settleRepair(control: LiveLlmRunDetailReader, input: { projectId: string; runId: string | undefined }, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<void> {
     if (!this.repairPrepared || this.repairObserved) return;
@@ -484,18 +490,43 @@ export class LiveLlmRun {
       observed = undefined;
     }
     if (input.runId) await this.readRunRecords(control, { projectId: input.projectId, runId: input.runId });
+    const checks = this.verification?.interventions ?? [];
+    const checksCost = checks.reduce((sum, call) => sum + (call.estimatedCostUsd ?? 0), 0);
+    const recovery = observed ? this.withoutResultChecks(observed, checks) : undefined;
     const repair = {
       purpose: plan.purpose,
       runId: input.runId ?? null,
       authorized: { maxCalls: plan.maxCalls, maxTotalTokensPerRun: plan.maxTotalTokensPerRun, maxEstimatedCostUsd: plan.maxEstimatedCostUsd, maxTotalEstimatedCostUsd: plan.maxTotalEstimatedCostUsd, timeoutMs: plan.timeoutMs },
-      observed: observed ?? null,
+      observed: recovery ?? null,
       ...(observed ? {} : { settlement: input.runId ? "run_detail_unreadable" : "run_not_identified" }),
+      ...(checks.length > 0 ? { resultChecks: { calls: checks.length, totalEstimatedCostUsd: Number(checksCost.toFixed(9)), record: "verification" } } : {}),
     };
     await this.writeSnapshot(bundle, this.observed ?? null, { ...(this.buildRecord ? { build: this.buildRecord } : {}), repair }, observed);
-    if (!observed) return;
+    if (!observed || !recovery) return;
     this.repairObserved = observed;
-    await publish({ repair: usageSummary(observed), runTotal: spendSummary(this.spend()) });
+    const runTotal = spendSummary(this.spend());
+    // A playback that only had its result checked made no repair, so it publishes none; one that called nothing at all still settles as before.
+    if (recovery.calls > 0 || recovery.interventions > 0 || checks.length === 0) await publish({ repair: usageSummary(recovery), runTotal });
+    if (checks.length > 0) await publish({ resultChecks: { calls: checks.length, totalEstimatedCostUsd: Number(checksCost.toFixed(9)), status: this.verification?.status ?? null }, runTotal });
     assertLiveLlmBudgetHeld(plan, observed);
+  }
+
+  /**
+   * The playback's own usage without Core's result checks: the calls and cost
+   * are the run phase's as `run-spend.ts` counts it (the checks taken out
+   * where they were counted in), and the itemized calls and the intervention
+   * count leave the checks out, matched by request id.
+   */
+  private withoutResultChecks(observed: LiveLlmObservedUsage, checks: LiveLlmVerificationRecord["interventions"]): LiveLlmObservedUsage {
+    const runtime = this.spend(observed).phases.runtime;
+    const checkIds = new Set(checks.flatMap((call) => call.requestId ?? []));
+    return {
+      ...observed,
+      calls: runtime?.calls ?? observed.calls,
+      interventions: Math.max(0, observed.interventions - checks.length),
+      observedCalls: observed.observedCalls.filter((call) => call.requestId === null || !checkIds.has(call.requestId)),
+      totalEstimatedCostUsd: runtime?.estimatedCostUsd ?? observed.totalEstimatedCostUsd,
+    };
   }
 
   private async authorize(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials, flowId: string, plan: LiveLlmPlan): Promise<void> {

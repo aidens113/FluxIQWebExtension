@@ -312,7 +312,8 @@ const DECISIONS: Decision[] = [
   {
     name: "dry-run replay step that ran",
     request: () => ({ ...PROJECT, callId: "dryrun.1.1", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: { replay: "step", node: CLICK, parameters: { selector: "#go" }, consequences: [] } }),
-    bracketed: false, captures: { old: 0, now: 0 }, digests: "none"
+    // t174-w82: a replayed in-place step is read before and after.
+    bracketed: false, captures: { old: 2, now: 2 }, digests: "none"
   },
   {
     name: "dry-run replay step that failed",
@@ -320,7 +321,8 @@ const DECISIONS: Decision[] = [
     request: () => ({ ...PROJECT, callId: "dryrun.1.1", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: { replay: "step", node: CLICK, parameters: { selector: "#go" }, consequences: [] } }),
     // Its one capture is the page the correction is made from, read after the
     // step's command went out, so it says only what the step left.
-    bracketed: false, captures: { old: 1, now: 1 }, digests: "after"
+    // t174-w82: a replayed in-place step is read before and after.
+    bracketed: false, captures: { old: 2, now: 2 }, digests: "after"
   }
 ];
 

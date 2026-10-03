@@ -9,6 +9,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ClientGatewayActivity } from "../../../../../shared/activity/index";
 import { activityEvent, eventTime } from "../../../tests/activity-fixture";
+import { ACTIVITY_RESULT_CHECK_LABELS } from "fluxiq/ui";
+import { cardWords } from "../card-words";
 import { stepMessages, type StepMessage } from "../messages";
 
 type Detail = NonNullable<ClientGatewayActivity["detail"]>;
@@ -340,3 +342,88 @@ test("an action's message keeps Core's own words for what it did", () => {
   assert.equal(stepMessages([tool(1, "Using core.run_node", "succeeded", { text: "Result: web.inspect.succeeded" })], 100)[0]!.title, "Looked at the page", "an older Core's id still reads as what it did");
 });
 
+
+// t174-w85 D1 (run-murwd8le-79e735a8, 00019): the result check's start ("Result check
+// started") stayed an orphan grey "Check result" card above the verdict, and the verdict
+// of a result Core could not confirm read "Didn't pass" in red.
+test("a run's result check is one card that settles, and an unconfirmed verdict reads as not confirmed", () => {
+  const run = { activityId: "run-1", subject: { kind: "run" as const, id: "run-1", projectId: "project-1" } };
+  const events = [
+    activityEvent(1, { ...run, phase: "verifying", label: "Checking the result answers the request", detail: { kind: "check", title: "Result check started", status: "started" } }),
+    activityEvent(2, { ...run, phase: "verifying", label: ACTIVITY_RESULT_CHECK_LABELS.unconfirmed, detail: { kind: "check", title: "Result check", status: "failed", text: "The result could not be confirmed." } })
+  ];
+  const cards = stepMessages(events, 100).flatMap((message) => message.actions);
+  assert.equal(cards.length, 1, "the start and the verdict are one card");
+  const words = cardWords(cards[0]!, false);
+  assert.deepEqual([words.name, words.state, words.outcome], ["Check result", "unconfirmed", "Not confirmed: the result could not be confirmed."]);
+});
+
+// t174-w85 D4 (00014): a test step read "Test run · Autumn Mega Sale: up to 70…".
+test("a build's test step reads as testing its action, with what it typed", () => {
+  const events = [
+    activityEvent(1, { phase: "verifying", detail: { kind: "tool", title: 'Typing "Voltbay USB-C hub" into “Autumn Mega Sale: up to 70% off”', ref: "core.run_node", status: "started", text: "Node: web.output.dom-type" } }),
+    activityEvent(2, { phase: "verifying", detail: { kind: "tool", title: 'Typing "Voltbay USB-C hub" into “Autumn Mega Sale: up to 70% off”', ref: "core.run_node", status: "succeeded", text: "Result: core.replay.replayed · Node: web.output.dom-type" } })
+  ];
+  const cards = stepMessages(events, 100).flatMap((message) => message.actions);
+  assert.equal(cards.length, 1);
+  const words = cardWords(cards[0]!, false);
+  assert.deepEqual([words.name, words.target, words.outcome], ["Testing: Type", '"Voltbay USB-C hub" into Autumn Mega Sale: up to 70% off', "Done"]);
+});
+
+// t174-w90 D8 (run-murwd8le-79e735a8, 00018): the playback card "Click · Get coupons" read
+// "Didn't work" with no reason, though the press was refused as the page being busy. Core's row
+// that opens the recovery settles the step it recovers, with the failure's code
+// (`activity/step-recovering.ts`); the rows below are the sequence Core emits for that run
+// (`executor/tests/failed-step-reason.test.ts` in Core).
+const playback = (sequence: number, fields: Partial<ClientGatewayActivity>) => activityEvent(sequence, { activityId: "run:r1", subject: { kind: "run", id: "r1", projectId: "p" }, ...fields });
+const playStep = (sequence: number, index: number, node: string, label: string, definition = "builtin.policy.action") => playback(sequence, {
+  phase: "running",
+  label: `Running step ${index} of 3: ${label}`,
+  step: { index, count: 3, nodeId: node, label },
+  detail: { kind: "step", title: label, status: "started", ref: node, text: `Node: ${definition}` }
+});
+const recovering = (sequence: number, node: string, label: string, code: string | undefined) => playback(sequence, {
+  phase: "repairing",
+  label: `Recovering from a failed step: ${label}`,
+  detail: { kind: "step", title: label, status: "failed", ref: node, text: [code ? `Result: ${code}` : "", "Node: builtin.policy.action"].filter(Boolean).join(" · ") }
+});
+const recoveryThought = (sequence: number, node: string) => playback(sequence, {
+  phase: "repairing",
+  label: "Trying the step again",
+  detail: { kind: "thought", title: "Trying the step again", text: "The page said it was busy, so I'm trying the press again.", status: "succeeded", ref: node }
+});
+
+test("a playback step that failed says why, from the code on the row that settles it, and that row is no message of its own", () => {
+  const events = [
+    playStep(1, 1, "n1.open", "Open the item"),
+    playStep(2, 2, "n3.coupon", "Get coupons"),
+    recovering(3, "n3.coupon", "Get coupons", "web.action.rate_limited"),
+    recoveryThought(4, "n3.coupon"),
+    playStep(5, 2, "n3.coupon", "Get coupons"),
+    playStep(6, 3, "n4.cart", "Add to cart")
+  ];
+  const messages = stepMessages(events, 100);
+  assert.deepEqual(messages.map((message) => message.title), ["Step 1: Open the item", "Step 2: Get coupons", "Trying the step again", "Step 2: Get coupons", "Step 3: Add to cart"]);
+  const failed = messages[1]!.actions[0]!;
+  assert.deepEqual([failed.outcome, failed.why], ["failed", "the page was busy"]);
+  assert.match(cardWords(failed, false).outcome ?? "", /the page was busy/u);
+  assert.deepEqual(messages[3]!.actions.map((card) => [card.outcome, card.why]), [["done", null]], "the retry that worked is done");
+});
+
+test("a failed playback step whose settling row names no code still reads as failed, with no reason", () => {
+  const messages = stepMessages([playStep(1, 1, "n3.coupon", "Get coupons"), recovering(2, "n3.coupon", "Get coupons", undefined)], 100);
+  assert.deepEqual(messages.map((message) => message.title), ["Step 1: Get coupons"]);
+  assert.deepEqual(messages[0]!.actions.map((card) => [card.outcome, card.why]), [["failed", null]]);
+});
+
+test("a playback through a Merge shows no Join paths card, even from a Core that still announced the merge", () => {
+  const announced = [
+    playStep(1, 1, "n1.open", "Open the item"),
+    playback(2, { phase: "running", label: "Running step 2 of 4", step: { index: 2, count: 4, nodeId: "n2.join" }, detail: { kind: "step", title: "Step 2 of 4", status: "started", ref: "n2.join", text: "Node: builtin.control.merge" } }),
+    playStep(3, 3, "n3.coupon", "Get coupons")
+  ];
+  const messages = stepMessages(announced, 100);
+  assert.deepEqual(messages.map((message) => message.title), ["Step 1: Open the item", "Step 3: Get coupons"]);
+  assert.equal(messages.flatMap((message) => message.actions).some((card) => card.kind === "join"), false);
+  assert.deepEqual(messages[0]!.actions.map((card) => card.outcome), ["done"], "the step before the merge still ends as done");
+});

@@ -560,3 +560,46 @@ test("a sentence where a route's word belongs is dropped, and the run it describ
   serve(refutedRun({ resultRepair: { attempted: true, nodeId: "node.one", code: "" } }));
   assert.deepEqual((await run(control)).harnessRecovery?.resultRepair, { attempted: true, nodeId: "node.one", code: null });
 });
+
+// run-murwd8le-79e735a8 (Cause 12): Core files each post-run result check as a
+// run intervention (`result-verification/verify.ts`), marked
+// `metadata.source: verifyAutomationStudioRunResult`. The record kept `kind`
+// only, so the two checks of a run that needed no recovery were published as
+// two diagnoses and `attempted: true`: "diagnosis on a run that succeeded".
+// Recovery now lists only recovery; the checks are their own member.
+const resultChecked = (withRecovery: boolean) => () => ({
+  summary: { ...summary, status: "succeeded", interventionCount: withRecovery ? 3 : 2, adaptationCount: 0 },
+  routeDecisions: [], subflows: [], actionAttempts: [attempt],
+  interventions: [
+    ...(withRecovery ? [{ interventionId: "intervention.diagnosis", kind: "diagnosis", validation: { ok: true, issues: [] }, createdAt: 1_050 }] : []),
+    { interventionId: "intervention.check.1", kind: "diagnosis", validation: { ok: true, issues: [] }, createdAt: 1_100, metadata: { requestId: "llm.loop_verification.one", source: "verifyAutomationStudioRunResult", verificationCheck: 1 } },
+    { interventionId: "intervention.check.2", kind: "diagnosis", validation: { ok: false, issues: ["verification.unsure: PRIVATE-ISSUE"] }, createdAt: 1_200, metadata: { requestId: "llm.loop_verification.two", source: "verifyAutomationStudioRunResult", verificationCheck: 2 } },
+  ],
+  adaptationIds: [], changeProposalIds: [],
+  metadata: {},
+});
+
+test("a run whose only interventions were result checks records no recovery, and lists the checks on their own", async (t) => {
+  const { control, serve } = await core(t);
+  serve(resultChecked(false));
+  const outcome = await run(control);
+  assert.deepEqual(outcome.harnessRecovery, {
+    attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [], refusalCode: null, refusalRung: null,
+    resultChecks: [
+      { kind: "diagnosis", validationOk: true, validationCodes: [] },
+      { kind: "diagnosis", validationOk: false, validationCodes: ["verification.unsure"] },
+    ],
+  });
+  assert.deepEqual(validateRunHarnessRecovery(outcome.harnessRecovery), { valid: true, value: outcome.harnessRecovery });
+  assert.equal(JSON.stringify(snapshotOf(outcome).harnessRecovery).includes("PRIVATE"), false);
+});
+
+test("a run that recovered and was then checked keeps the recovery in interventions and the checks apart", async (t) => {
+  const { control, serve } = await core(t);
+  serve(resultChecked(true));
+  const outcome = await run(control);
+  assert.equal(outcome.harnessRecovery?.attempted, true);
+  assert.deepEqual(outcome.harnessRecovery?.interventions, [{ kind: "diagnosis", validationOk: true, validationCodes: [] }]);
+  assert.equal(outcome.harnessRecovery?.resultChecks?.length, 2);
+  assert.deepEqual(validateRunHarnessRecovery(outcome.harnessRecovery), { valid: true, value: outcome.harnessRecovery });
+});

@@ -11,7 +11,9 @@
 // reads the resolution's values, so a new one needs no change. Core's own
 // sentence about any other action (`said`) is kept only when it is in words;
 // a line that names an id or a result code ("Result: web.click.succeeded ·
-// Node: web.output.dom-click") is not words.
+// Node: web.output.dom-click") is not words. Core's marks that a step was part
+// of a test run (`testing`) and that a result check could not confirm the
+// result (`unconfirmed`) are carried as Core gave them.
 
 import { activityActionOf, type ActivityAction } from "fluxiq/ui";
 import type { ClientGatewayActivity } from "../../../../shared/activity/index";
@@ -46,6 +48,8 @@ export function actionCard(event: ClientGatewayActivity, key: string): ActionCar
     target: action.target,
     outcome: action.outcome,
     why: action.why,
+    ...(action.testing ? { testing: true as const } : {}),
+    ...(action.unconfirmed ? { unconfirmed: true as const } : {}),
     key,
     said: asked ? undefined : sentence,
     answer: asked && detail.resolution !== undefined ? sentence : undefined,

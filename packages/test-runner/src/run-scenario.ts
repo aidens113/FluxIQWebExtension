@@ -52,7 +52,7 @@ import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePacka
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant } from "./lab-control/index.js";
-import { LAB_PROJECT_DOMAIN_ID, judgeExpectedFacts, type CreatedFlowLaneEvidence, type FinalStateVerdict, type FlowLaneEvidence, type UnheldFact, createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, withDeclaredFlowRepair, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type LiveRepairLaneInput, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
+import { LAB_PROJECT_DOMAIN_ID, judgeEveryFact, withholdObservedFactValues, type JudgedFact, type JudgedFinalState, type CreatedFlowLaneEvidence, type FlowLaneEvidence, createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, withDeclaredFlowRepair, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type LiveRepairLaneInput, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, chromiumExtensionStorageDirs, runRedactionScopes, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
 import { LabRunRecord, writePlaybackSteps, type PlaybackSkippedStep, type PlaybackStateRoutingStep } from "./lab-runs/index.js";
@@ -333,10 +333,14 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         catch { return false; }
       },
       // The created-Flow lane's oracle: the same judgement, naming each fact that did not hold (`flow-lane/creation/final-state-facts.ts`).
-      judgeFinalState: async (): Promise<FinalStateVerdict> => {
+      // A pass keeps every fact's observed value too, read again on the page that held, so a passing run says what the page read (Cause 13, run-murwd8le-79e735a8).
+      judgeFinalState: async (): Promise<JudgedFinalState> => {
         if (playbackWindow) playbackWindow.until ??= Date.now();
-        try { scenarioPage = await findScenarioPageWithExpectedState(context!, page, activeTopology.scenarioOrigin, scenario, flowWorkflow); return { held: true, unheldFacts: [] }; }
+        let held: Page;
+        try { held = scenarioPage = await findScenarioPageWithExpectedState(context!, page, activeTopology.scenarioOrigin, scenario, flowWorkflow); }
         catch { return nearestFinalStateMisses(context!, page, activeTopology.scenarioOrigin, finalStateFacts(scenario, flowWorkflow)); }
+        // The same facts just held on this page, so a read that fails now is a real failure and propagates.
+        return { held: true, unheldFacts: [], facts: await judgeEveryFact(finalStateFacts(scenario, flowWorkflow), playwrightScenarioFactProbe(held)) };
       },
     });
     // `--replays N`: approve the repair this run produced, apply it, and replay the Flow N times with no model, so "the model fixed it" becomes "the Flow
@@ -405,11 +409,12 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         settleBuild: build => live.settleBuild(build, bundle, details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The live Flow build finished"), details })),
         // The created Flow's playback runs with the model taking part, so a Flow that fails is repaired rather than refused for want of a model, and its result is judged.
         authorizeRun: live.repairAuthorizer(control, activeTopology),
-        settleRun: flowRunId => live.settleRepair(control, { projectId: createdProjectId, runId: flowRunId }, bundle, details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The created Flow's repair attempt finished"), details })),
+        // Core's post-run result checks are not a repair: they settle with their own words (`resultChecks`), and only recovery is called one (Cause 12, run-murwd8le-79e735a8).
+        settleRun: flowRunId => live.settleRepair(control, { projectId: createdProjectId, runId: flowRunId }, bundle, details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "resultChecks" in details ? "The created Flow's result was checked" : "The created Flow's repair attempt finished"), details })),
         recordIncompleteEvidence: incomplete => bundle.writeStructured("snapshots/flow-lane.json", incomplete),
         ...flowRunHooks<CreatedFlowLaneEvidence>(activeTopology, async evidence => {
-          // A missed fact's observed value is page text, published by the rule `snapshots/extraction-mismatches.json` follows: withheld where the scenario declares a secret.
-          await bundle.writeStructured("snapshots/flow-lane.json", createdFlowLaneSnapshot(scenario.secrets?.length ? { ...evidence, oracles: { ...evidence.oracles, ...(evidence.oracles.unheldFacts ? { unheldFacts: evidence.oracles.unheldFacts.map(fact => ({ ...fact, observed: "[withheld: the scenario declares a secret]" })) } : {}) } } : evidence));
+          // Every fact's observed value is page text, held or not, published by the rule `snapshots/extraction-mismatches.json` follows: withheld where the scenario declares a secret.
+          await bundle.writeStructured("snapshots/flow-lane.json", createdFlowLaneSnapshot(scenario.secrets?.length ? { ...evidence, oracles: withholdObservedFactValues(evidence.oracles) } : evidence));
           await writeFlowExtractionMismatches(bundle, scenario, evidence.extraction);
         }),
       });
@@ -735,14 +740,16 @@ async function pairExtension(page: Page, topology: RunningTopology, trace: Exten
 /** The facts `finalStateFacts` chooses: the final state, then a positive primary run's playback-goal facts. */
 async function assertFinalState(page: Page, scenario: WebScenario, workflow: ResolvedScenarioWorkflow) { await assertExpectedFacts(finalStateFacts(scenario, workflow), playwrightScenarioFactProbe(page)); }
 /** The final-state facts that did not hold, on the fixture page that came nearest the goal, newest first among equals. */
-async function nearestFinalStateMisses(context: BrowserContext, fallback: Page, origin: string, facts: readonly ExpectedFact[]): Promise<FinalStateVerdict> {
+async function nearestFinalStateMisses(context: BrowserContext, fallback: Page, origin: string, facts: readonly ExpectedFact[]): Promise<JudgedFinalState> {
   try {
-    let nearest: UnheldFact[] | undefined;
+    let nearest: JudgedFact[] | undefined;
+    const misses = (judged: readonly JudgedFact[]) => judged.filter(fact => !fact.held).length;
     for (const candidate of new Set([...context.pages().filter(item => !item.isClosed() && item.url().startsWith(`${origin}/`)).reverse(), fallback])) {
-      const unheld = await judgeExpectedFacts(facts, playwrightScenarioFactProbe(candidate));
-      if (!nearest || unheld.length < nearest.length) nearest = unheld;
+      const judged = await judgeEveryFact(facts, playwrightScenarioFactProbe(candidate));
+      if (!nearest || misses(judged) < misses(nearest)) nearest = judged;
     }
-    return { held: false, unheldFacts: nearest ?? [], ...(nearest?.length ? {} : { unjudged: "every fact held when read again" }) };
+    const unheld = (nearest ?? []).filter(fact => !fact.held).map(({ held: _held, ...fact }) => fact);
+    return { held: false, unheldFacts: unheld, ...(unheld.length ? {} : { unjudged: "every fact held when read again" }), ...(nearest?.length ? { facts: nearest } : {}) };
   } catch (error) { return { held: false, unheldFacts: [], unjudged: error instanceof Error ? error.message : String(error) }; }
 }
 async function findScenarioPageWithExpectedState(context: BrowserContext, fallback: Page, origin: string, scenario: WebScenario, workflow: ResolvedScenarioWorkflow): Promise<Page> { for (const candidate of context.pages().filter(item => !item.isClosed() && item.url().startsWith(`${origin}/`)).reverse()) { try { await assertFinalState(candidate, scenario, workflow); return candidate; } catch {} } await assertFinalState(fallback, scenario, workflow); return fallback; }

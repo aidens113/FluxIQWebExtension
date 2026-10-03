@@ -294,13 +294,15 @@ const DECISIONS: Decision[] = [
   {
     name: "dry-run replay step that ran",
     request: () => ({ ...PROJECT, callId: "dryrun.1.1", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: { replay: "step", node: CLICK, parameters: { selector: "#go" }, consequences: [] } }),
-    captures: 0, routeState: false
+    // t174-w82: a replayed in-place step is read before and after.
+    captures: 2, routeState: false
   },
   {
     name: "dry-run replay step that failed",
     clickFails: true,
     request: () => ({ ...PROJECT, callId: "dryrun.1.1", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: { replay: "step", node: CLICK, parameters: { selector: "#go" }, consequences: [] } }),
-    captures: 1, routeState: true
+    // t174-w82: a replayed in-place step is read before and after.
+    captures: 2, routeState: true
   }
 ];
 

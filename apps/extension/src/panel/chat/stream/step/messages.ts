@@ -36,7 +36,10 @@
 // are each a message with its own card. A card that started is updated in
 // place when it ends. A run step Core never ends is over once anything later
 // happens in its unit of work: failed when that is the run's recovery from
-// that step or the run failing, done otherwise.
+// that step or the run failing, done otherwise. The row that opens that
+// recovery settles the step with the failure's code, which becomes the card's
+// reason ("the page was busy"); it is never a message of its own. A Merge's
+// step ("Join paths") is no message: it does nothing a person could see.
 //
 // A card waiting on the person (a robot check, a permission) is over only
 // when Core says so: the ask row that settles the wait carries the same ask
@@ -121,6 +124,18 @@ function stepFailedBy(event: ClientGatewayActivity, node: string | undefined): b
   return event.phase === "repairing" && node !== undefined && event.detail?.ref === node;
 }
 
+/**
+ * Whether `event` is Core's row that settles a failed run step as its recovery
+ * opens (`activity/step-recovering.ts` in Core): a `repairing` step row that
+ * failed, names the node it ran (`ref`) and carries the failure's code in its
+ * record, but opens no step of its own. It is the step's card's reason, never
+ * a message: as one it was a bare "Recovery started" line (t174-w88 D5).
+ */
+function settlesStep(event: ClientGatewayActivity): boolean {
+  const detail = event.detail;
+  return event.phase === "repairing" && event.step === undefined && detail?.kind === "step" && detail.status === "failed" && detail.ref !== undefined;
+}
+
 /** The messages for `events` (oldest first), at most `limit` of them, the newest. */
 export function stepMessages(events: readonly ClientGatewayActivity[], limit: number): StepMessage[] {
   const drafts: StepMessage[] = [];
@@ -174,13 +189,17 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
       // "Run failed" (U-A1, `run-muq6lqnw-fdfa7aac`). Anything else is the run
       // moving on past a step that worked.
       const outcome = stepFailedBy(event, unit.stepNode) ? "failed" : "done";
-      over.actions = over.actions.map((card) => (card.outcome === "working" ? { ...card, outcome } : card));
+      // The row that settles it says why it failed, from the failure's code:
+      // "Click · Get coupons" read "Didn't work" with no reason when the page
+      // had said it was busy (D8, `run-murwd8le-79e735a8`).
+      const why = outcome === "failed" && settlesStep(event) ? actionCard(event, "")?.why ?? null : null;
+      over.actions = over.actions.map((card) => (card.outcome === "working" ? { ...card, outcome, ...(why === null ? {} : { why }) } : card));
       over.sequence = Math.max(over.sequence, event.sequence);
       unit.step = undefined;
       unit.stepNode = undefined;
     }
     const detail = event.detail;
-    if (detail === undefined || isInternalStep(detail)) continue;
+    if (detail === undefined || isInternalStep(detail) || settlesStep(event)) continue;
     const status = detail.status;
     const words = stepWords(detail, event.step);
 
@@ -289,7 +308,12 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
       // (U-B2, in every chat-driven Lab run). A build started anywhere else has
       // no answer in a thread, and its failure is said here.
       if (marker && event.subject.kind === "build" && (status !== "failed" || event.conversationId !== undefined)) continue;
-      const placed = add(event, detail, "step", at, marker ? null : actionCard(event, cardKey(event)));
+      const card = marker ? null : actionCard(event, cardKey(event));
+      // A Merge joins the Flow's paths and does nothing a person could see: a
+      // "Join paths" card was a step that was not one (U-A2). Core no longer
+      // announces it (t174-w88); one that still does is not shown either.
+      if (card?.kind === "join") continue;
+      const placed = add(event, detail, "step", at, card);
       if (!marker && status === "started") {
         unit.step = placed;
         unit.stepNode = detail.ref;

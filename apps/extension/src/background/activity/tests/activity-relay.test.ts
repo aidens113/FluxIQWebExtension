@@ -45,6 +45,7 @@ type HarnessOptions = {
   automationTabId?: ActivityRelayDeps["automationTabId"];
   deliver?: ActivityRelayDeps["deliverToTab"];
   broadcast?: ActivityRelayDeps["broadcast"];
+  overlayTabIds?: ActivityRelayDeps["overlayTabIds"];
 };
 
 function harness(options: HarnessOptions = {}) {
@@ -70,6 +71,7 @@ function harness(options: HarnessOptions = {}) {
     deliverToTab: options.deliver ?? (async (target, message) => {
       delivered.push({ tabId: target, message });
     }),
+    ...(options.overlayTabIds ? { overlayTabIds: options.overlayTabIds } : {}),
     live: () => true,
     clock
   };
@@ -420,3 +422,54 @@ for (const panel of ["open", "closed"] as const) {
     }
   });
 }
+
+// Moment 8 and screenshot 00013 of the t174 UI review of run-murwd8le-79e735a8:
+// the Flow's test ran in one tab while the person looked at another (a result
+// opened a new tab), and the overlay was drawn only in the driven one.
+test("the overlay is drawn in every tab it is meant for -- the driven tab and the one in front -- and taken down only where it no longer belongs", async () => {
+  let tabs: readonly number[] = [7, 9];
+  const h = harness({ overlayTabIds: async () => tabs });
+  await h.relay.accept(activity(1));
+  await settle();
+  assert.deepEqual(h.delivered.map((entry) => [entry.tabId, entry.message.display?.detail ?? null]), [[7, "Running step 1"], [9, "Running step 1"]]);
+  h.delivered.length = 0;
+  tabs = [9];
+  h.clock.advance(1_300);
+  await h.relay.accept(activity(2));
+  await settle();
+  assert.deepEqual(h.delivered.map((entry) => [entry.tabId, entry.message.display?.detail ?? null]), [[7, null], [9, "Running step 2"]]);
+  h.delivered.length = 0;
+  await h.relay.noteContentReady(9, 0);
+  await h.relay.noteContentReady(7, 0);
+  assert.deepEqual(h.delivered.map((entry) => entry.tabId), [9], "a new document in the front tab gets the overlay; one in a tab it left does not");
+});
+
+// Moment 7: the overlay was absent for one 200 ms sample when the driven tab
+// navigated (step 0052 opened the cart in the same tab). The new document asks
+// at `document_start`; the tab the overlay is already drawn in is answered
+// without first reading the tab list again.
+test("a new document in the tab the overlay is drawn in is answered without resolving the target again", async () => {
+  let resolutions = 0;
+  const h = harness({ automationTabId: async () => {
+    resolutions += 1;
+    return 7;
+  } });
+  await h.relay.accept(activity(1));
+  await settle();
+  const before = resolutions;
+  await h.relay.noteContentReady(7, 0);
+  assert.equal(resolutions, before, "no tab lookup between the ask and the answer");
+  assert.equal(h.delivered.at(-1)?.message.display?.detail, "Running step 1");
+});
+
+test("a change of phase on the same tab never takes the overlay down", async () => {
+  const h = harness();
+  await h.relay.accept(activity(1, { phase: "thinking", label: "Deciding the next step" }));
+  for (const [sequence, phase, label] of [[2, "exploring", "Clicking “Add to cart”"], [3, "repairing", "Fixing a step"], [4, "verifying", "Judging the Flow"], [5, "thinking", "Deciding the next step"]] as const) {
+    h.clock.advance(1_300);
+    await h.relay.accept(activity(sequence, { phase, label }));
+    await settle();
+  }
+  assert.ok(h.delivered.length >= 4);
+  assert.ok(h.delivered.every((entry) => entry.message.display !== null), "every send to the page carries a display");
+});

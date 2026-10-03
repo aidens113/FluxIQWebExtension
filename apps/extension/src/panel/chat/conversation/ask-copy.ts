@@ -8,8 +8,18 @@
 // option by id, an open question takes words. A question this panel cannot
 // answer -- a kind it does not know, or a choice with no options -- says so and
 // points to FluxIQ, rather than offering buttons Core would refuse.
+//
+// An answered robot check says nothing under its turn: the check's own card
+// in the stream ("Robot check · Done. You pressed Continue.") already tells
+// the press, and a "You chose "Continue"." here made it the second of three
+// tellings of one press (D7 of the run-murwd8le-79e735a8 UI review). The check
+// is told from every other ask by Core's option ids for it
+// (`runtime/parking/person-needed-ask.ts`), never by its words.
 
 import type { CoreAsk } from "./core-thread";
+
+/** Core's option ids on its robot-check ask: Continue and Stop. */
+const PERSON_CHECK_OPTIONS: ReadonlySet<string> = new Set(["person_done", "person_stop"]);
 
 /** One answer button: its words, and the `kind` and `value` it sends. */
 export type AskChoice = { label: string; kind: string; value?: string };
@@ -22,14 +32,16 @@ export type AskPresentation =
   /** It can be answered only in FluxIQ. */
   | { state: "elsewhere"; sentence: string }
   /** Answered, or no longer waiting. */
-  | { state: "settled"; sentence: string };
+  | { state: "settled"; sentence: string }
+  /** Answered, and the stream's card for it already says how: nothing is shown. */
+  | { state: "silent" };
 
 const ELSEWHERE = "Answer this in FluxIQ.";
 
 /** How `ask` shows. */
 export function askPresentation(ask: CoreAsk): AskPresentation {
   if (ask.status === "expired") return { state: "settled", sentence: "FluxIQ stopped waiting for an answer." };
-  if (ask.status !== "pending") return { state: "settled", sentence: answeredSentence(ask) };
+  if (ask.status !== "pending") return isPersonCheck(ask) && ask.answer !== null ? { state: "silent" } : { state: "settled", sentence: answeredSentence(ask) };
   switch (ask.kind) {
     case "permission":
       return { state: "choices", choices: [{ label: "Allow", kind: "grant" }, { label: "Don't allow", kind: "deny" }] };
@@ -61,4 +73,9 @@ function answeredSentence(ask: CoreAsk): string {
     default:
       return "You answered.";
   }
+}
+
+/** Core's robot-check ask, told by its option ids. */
+function isPersonCheck(ask: CoreAsk): boolean {
+  return ask.kind === "choice" && (ask.options?.some((option) => PERSON_CHECK_OPTIONS.has(option.id)) ?? false);
 }

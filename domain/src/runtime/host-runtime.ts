@@ -34,6 +34,14 @@
 //    t223), because Core returns it to a recovery model as `core.state_snapshot`.
 //    A state ref cannot carry more, or more sensitive, page data than a page the
 //    model is shown, and the diff (`./state-diff/`) is of the view's own lines.
+//  - **A snapshot says how to come back to it.** `from` is `{ location }`, the
+//    token a step's `replay.from` is and a reset navigates to
+//    (`llm-evidence/node-run/replay.ts`), so a re-author can put the page back
+//    where a node started in the run it repairs (t194 C-D, `run-murwcmx2`: a
+//    rerun of the Flow's list read ran on results page 5). It is the page's
+//    real address, because a reset to a screened one would not reach the page,
+//    and it is written only when that address is exactly what the packet
+//    already publishes -- nothing in it withheld -- so it carries no secret.
 //  - **Snapshots are not stored here.** Core hands both refs back to
 //    `inspectStateDiff`, so the diff reads the summaries it was given. A cache
 //    keyed by `stateRef` would be a second copy of state Core already holds.
@@ -45,7 +53,7 @@ import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { dispatchWebAutomationOutput } from "../io/gateway-output-dispatcher";
 import { webAutomationOutputNodeId } from "../output-nodes";
 import { createWebAutomationExpectationEvaluator, type WebAutomationExpectationDispatch } from "./expectation";
-import { publishedWebLlmPage, sanitizeWebLlmSnapshot } from "./llm-evidence";
+import { publishedWebLlmPage, sanitizeWebLlmSnapshot, screenedEvidenceUrl } from "./llm-evidence";
 import {
   compareWebAutomationRouteSignatures,
   WEB_AUTOMATION_ROUTE_STATE_PATHS,
@@ -130,10 +138,12 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       // than a ref pointing at nothing.
       // The page as the model reads every page (t223): Core returns this summary
       // to a recovery model as `core.state_snapshot`, and diffs two of them.
-      const summary = publishedWebLlmPage(sanitizeWebLlmSnapshot(actionSnapshot(result.payload))) as unknown as JsonObject;
+      const snapshot = actionSnapshot(result.payload);
+      const summary = publishedWebLlmPage(sanitizeWebLlmSnapshot(snapshot)) as unknown as JsonObject;
       captures += 1;
       const stateSnapshotId = `web.state.${captures}`;
-      return { stateSnapshotId, stateRef: `${stateSnapshotId}@${input.attemptId}:${input.point}`, capturedAt: Date.now(), summary };
+      const from = resetToken(snapshot);
+      return { stateSnapshotId, stateRef: `${stateSnapshotId}@${input.attemptId}:${input.point}`, capturedAt: Date.now(), summary, ...(from ? { from } : {}) };
     },
     // What a Router's `state.*` conditions test, observed on the page the run
     // stands on before any step runs, and what a Flow build is shown so it can
@@ -180,6 +190,21 @@ export function bindWebAutomationHostRuntime(fluxiq: FluxIQ): void {
 function actionSnapshot(payload: JsonObject | undefined): unknown {
   const action = payload?.result;
   return isRecord(action) ? action.snapshot : undefined;
+}
+
+/**
+ * The reset token for the captured page: its real address, the way a step's
+ * `replay.from` names a page, or nothing when the address is not one the packet
+ * publishes whole -- not HTTP(S), carrying credentials, or holding any part the
+ * packet withholds (`llm-evidence/location.ts`).
+ */
+function resetToken(snapshot: unknown): JsonObject | undefined {
+  const written = isRecord(snapshot) ? snapshot.url : undefined;
+  // Undefined for an address that does not parse, is not HTTP(S) or carries credentials; after it, `new URL` cannot throw.
+  const screened = typeof written === "string" ? screenedEvidenceUrl(written) : undefined;
+  if (screened === undefined) return undefined;
+  const location = new URL(written as string).href;
+  return screened === location ? { location } : undefined;
 }
 
 /** A web output node, or a recorded action whose `outputId` names a web output. Nothing else acts on a page. */
