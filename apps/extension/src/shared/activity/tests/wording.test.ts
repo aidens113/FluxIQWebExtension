@@ -195,6 +195,24 @@ test("a dry run reads as trying the Flow from the start, and a step that did not
   assert.equal(activityWording(named({ phase: "verifying", title: "Running a step", label: "Trying the Flow from the start: running a step — done", status: "succeeded", text: "Result: core.replay.replayed" })).sentence, "Trying the Flow from the start: running a step — done");
 });
 
+// t193 1002-M (`run-murzln6g-11debe1d`, C10): the overlay said "done" for a step
+// the test only checked, and "that didn't work, trying another way" for the
+// drawer's "×" the Flow passes over, while the card said "Done" and "Didn't
+// work". What the test did with such a step is Core's to say, in the words its
+// card says it in (`activityActionTested`), so the overlay takes Core's.
+test("a dry run step the test only checked, found already done, or passed over says what the test did, in Core's words", () => {
+  const label = "Trying the Flow from the start: clicking “Add to cart”";
+  const said = (outcome: string, text: string) => activityWording(named({ phase: "verifying", title: "Clicking “Add to cart”", label: `${label} — ${outcome}`, status: "succeeded", text })).sentence;
+  assert.equal(said("checked, not pressed", "Result: core.replay.verified · Node: web.output.dom-click"), `${label} — checked, not pressed`);
+  assert.equal(said("already done on the site", "Result: core.replay.present · Node: web.output.dom-click"), `${label} — already done on the site`);
+  assert.equal(said("already done on the site", "Result: core.replay.remembered · Node: web.output.dom-click"), `${label} — already done on the site`);
+  assert.equal(said("skipped: not there, optional", "Result: core.replay.failed · Excused: interruption · Node: web.output.dom-click"), `${label} — skipped: not there, optional`);
+  // A step that did not hold and is not excused reads as before.
+  assert.equal(said("didn't work the same way again", "Result: core.replay.unreproducible · Node: web.output.dom-click"), `${label} — it didn't work the same way again`);
+  // An older Core, whose sentence said only "done", is read as it was.
+  assert.equal(said("done", "Result: core.replay.verified · Node: web.output.dom-click"), `${label} — done`);
+});
+
 test("Core's bookkeeping calls are marked internal, and nothing else is", () => {
   const reset = activityWording(named({ phase: "verifying", kind: "note", title: "Putting the page back to where the Flow starts", label: "Trying the Flow from the start", status: "started" }));
   assert.equal(reset.internal, true);

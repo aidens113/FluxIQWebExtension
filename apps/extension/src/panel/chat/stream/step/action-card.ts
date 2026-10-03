@@ -46,6 +46,8 @@ export function actionCard(event: ClientGatewayActivity, key: string): ActionCar
     target: action.target,
     outcome: action.outcome,
     why: action.why,
+    // What a test of the Flow did with a step it did not simply do again (Core's `activityActionTested`).
+    ...(action.tested === undefined ? {} : { tested: action.tested }),
     key,
     said: asked ? undefined : sentence,
     answer: asked && detail.resolution !== undefined ? sentence : undefined,

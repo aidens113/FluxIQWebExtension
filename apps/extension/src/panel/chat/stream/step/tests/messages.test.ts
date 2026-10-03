@@ -84,8 +84,8 @@ test("checks and repairs are messages with their verdict and diagnosis; a check 
   assert.equal(messages[1]!.sequence, 3);
   assert.deepEqual(messages.map((message) => message.actions.map((card) => [card.key, card.kind, card.outcome, card.check])), [
     [],
-    [["action:build-1#2", "test", "done", true]],
-    [["action:build-1#4", "test", "failed", true]],
+    [["action:build-1#2", "ready_check", "done", true]],
+    [["action:build-1#4", "ready_check", "failed", true]],
     []
   ], "a check is its own card, updated in place; a repair's diagnosis and the failure marker are words");
 });

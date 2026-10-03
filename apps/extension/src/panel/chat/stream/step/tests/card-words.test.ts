@@ -6,7 +6,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ACTIVITY_ACTION_NAMES } from "fluxiq/ui";
-import type { ActionCard } from "../action-card";
+import type { ClientGatewayActivity } from "../../../../../shared/activity/index";
+import { actionCard, type ActionCard } from "../action-card";
 import { cardWords } from "../card-words";
 
 function card(fields: Partial<ActionCard>): ActionCard {
@@ -61,4 +62,39 @@ test("a wait on the person that Core settled says Core's sentence: done with it,
   assert.equal(cardWords(card({ ...robot, outcome: "failed", why: "you pressed Stop", answer: "You pressed Stop." }), false).outcome, "Didn't work: you pressed Stop");
   assert.equal(cardWords(card({ ...robot, outcome: "failed", answer: "Something new happened." }), false).outcome, "Didn't work. Something new happened.", "a way to end Core has no why for yet");
   assert.equal(cardWords(card({ ...robot, answer: "You pressed Continue." }), false).label, "Robot check: Done. You pressed Continue.");
+});
+
+// t193 1002-M (`run-murzln6g-11debe1d`, C10): six test steps the test did not
+// press read "Done", and the drawer's "×" the Flow passes over read "Didn't
+// work: it didn't work the same way again".
+test("a test step says what the test did with it: done again, checked, already done on the site, or skipped", () => {
+  assert.equal(cardWords(card({ kind: "test", tested: "Checked, not pressed" }), false).outcome, "Checked, not pressed");
+  assert.equal(cardWords(card({ kind: "test", tested: "Already done on the site" }), false).label, "Test run, Get a free quote: Already done on the site");
+  assert.equal(cardWords(card({ kind: "test" }), false).outcome, "Done");
+
+  const row = (seq: number, text: string): ClientGatewayActivity => ({
+    activityId: "build:b", sequence: seq, subject: { kind: "build", id: "b", projectId: "p" }, at: "2026-10-02T06:08:30.000Z", phase: "verifying",
+    label: "Trying the Flow from the start: clicking “×”", detail: { kind: "tool", title: "Clicking “×”", status: "succeeded", ref: "core.run_node", text }
+  });
+  const words = (seq: number, text: string) => cardWords(actionCard(row(seq, text), `action:build:b#${seq}`)!, false);
+  assert.deepEqual([words(1, "Result: core.replay.failed · Excused: interruption · Node: web.output.dom-click").state, words(1, "Result: core.replay.failed · Excused: interruption · Node: web.output.dom-click").outcome], ["done", "Skipped: not there, optional"]);
+  assert.equal(words(2, "Result: core.replay.verified · Node: web.output.dom-click").outcome, "Checked, not pressed");
+  assert.equal(words(3, "Result: core.replay.remembered · Node: web.output.dom-click").outcome, "Already done on the site");
+  assert.equal(words(4, "Result: core.replay.replayed · Node: web.output.dom-click").outcome, "Done");
+  assert.equal(words(5, "Result: core.replay.failed · Node: web.output.dom-click").outcome, "Didn't work: it didn't work the same way again");
+});
+
+// t193 1002-M (C9): the completion check read "Test run · Passed" before the
+// test had run a step. It checks the plan; the test is still to come.
+test("the completion check is a ready check that says the test is still to come, never a test run that passed", () => {
+  const check = (status: "succeeded" | "failed", text: string): ClientGatewayActivity => ({
+    activityId: "build:b", sequence: 7, subject: { kind: "build", id: "b", projectId: "p" }, at: "2026-10-02T06:08:02.000Z", phase: "verifying",
+    label: "The proposed Flow’s plan checks out; it still has to run cleanly", detail: { kind: "check", title: "Completion check", status, text }
+  });
+  const ready = cardWords(actionCard(check("succeeded", "It still has to run cleanly from its start."), "action:build:b#7")!, false);
+  assert.equal(ready.name, "Ready check");
+  assert.equal(ready.outcome, "Ready to test: it still has to run cleanly from its start.");
+  assert.doesNotMatch(ready.label, /Test run|Passed/u);
+  const back = cardWords(actionCard(check("failed", "The Flow never reads the list."), "action:build:b#8")!, false);
+  assert.deepEqual([back.state, back.outcome], ["failed", "Sent back: the Flow never reads the list."]);
 });
