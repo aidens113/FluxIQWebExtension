@@ -31,21 +31,22 @@
 // request names no bound.
 //
 // The two modes that move to another page -- `next` and `numbered` -- also
-// leave out a record that repeats one an earlier page already yielded, field
-// for field. An element cannot say that: a page replaced in place, or loaded
-// as a new document, shows only new elements, so the listing a search's index
-// shifted onto the top of the next page would otherwise be read twice, and
-// only when the page happened to be replaced rather than reloaded. Two equal
-// records on the same page are still two records, as the page shows them.
+// leave out, and count (`earlierPageRepeats`), a record that repeats one an
+// earlier page yielded, field for field. An element cannot say that: a page
+// replaced in place, or loaded as a new document, shows only new elements, so
+// the listing a search's index shifted onto the next page would be read twice,
+// and only when the page happened to be replaced rather than reloaded. Two
+// equal records on the same page are still two records, as the page shows them.
 //
 // A read can outlive its document. With a `checkpoint`, the records and pages
-// read so far, and the item count its account is built from, are handed over,
-// and awaited, before each control is followed;
-// with `resume`, a new document goes on from such a checkpoint -- its records
-// count toward the bound, its pages toward `maxPages`, its items toward
-// `itemsSeen`, and in every mode none of its records is read again, since a new
-// document can only show them as new elements -- after waiting for the page to
-// show its records (`page-render.ts`). The worker's side of that is
+// read so far, and the counts its account is built from, are handed over, and
+// awaited, before each control is followed; with `resume`, a new document goes
+// on from such a checkpoint -- its records count toward the bound, its pages
+// toward `maxPages`, its items toward `itemsSeen`, its repeats toward
+// `earlierPageRepeats`, and in every mode none of its records is read again,
+// since a new document can only show them as new elements -- after waiting for
+// the page to show its records (`page-render.ts`). What is carried, and what an
+// absent count means, is `continued-read/`. The worker's side of that is
 // `runtime/extract-list-continuation.ts`. A document the server refused (429,
 // 503) is waited out and reloaded, and the reload goes on the same way; one it
 // kept refusing ends the read truncated, with the records already read
@@ -121,6 +122,7 @@ import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";
 import { filteredListAnswer, type ListExtractionConditionReport } from "./filtered-answer";
 import { itemFilterFor } from "./item-filter";
 import { awaitListComplete, awaitPageComplete } from "./list-wait";
+import { carriedConditionCounts, carriedCount, readCheckpoint } from "./continued-read";
 import { listRowOrderFor, type ListExtractionOrderReport } from "./order-rows";
 import { rejectedSamplesFor } from "./rejected-samples";
 import { awaitListPresent, awaitPageRendered, type ListPresence, type ListWait } from "./page-render";
@@ -243,6 +245,8 @@ export type ListExtractionOutcome = {
   refusedStatus?: number | undefined;
   /** What `dedupe` and `sort` did, in counts alone, or absent for a request that named neither. */
   order?: ListExtractionOrderReport | undefined;
+  /** Kept rows a `next` or numbered read left out as repeats of an earlier page's (the domain's `earlierPageRepeats`), across every document, as `itemsSeen` is; absent from any other read, and from a continued one whose checkpoint did not carry a count. */
+  earlierPageRepeats?: number | undefined;
 };
 
 /**
@@ -286,19 +290,16 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
 
   const records: ExtractedListRecord[] = resume ? resume.records.map((record) => ({ ...record })) : [];
   // Every dedupe identity a kept row already has, the carried rows' included,
-  // and how many kept rows this document left out for repeating one.
+  // and how many kept rows this document left out for repeating one, or for
+  // repeating, field for field, a record an earlier page yielded -- the second
+  // added to the count a continued read was handed (`repeatsSoFar`).
   const identities = new Set<string>(order === undefined ? [] : records.flatMap((record) => order.identity(record) ?? []));
-  let duplicates = 0;
+  let duplicates = 0, earlierPageRepeats = 0;
   const missing = new Set<string>(resume?.missingFields ?? []);
   // The rows the conditions rejected, kept only so a read the conditions emptied
   // has something to answer with. They are bounded and deduplicated exactly as
   // the records are, and a read that kept anything at all never looks at them.
-  const rejectedRows = rejects === undefined ? undefined : {
-    records: [] as ExtractedListRecord[],
-    missing: new Set<string>(),
-    seen: new Set<string>(),
-    truncated: false
-  };
+  const rejectedRows = rejects === undefined ? undefined : { records: [] as ExtractedListRecord[], missing: new Set<string>(), seen: new Set<string>(), truncated: false };
   // Every item already read, kept across pages, with its content key when
   // content counts (scroll mode) and "" when only the element does.
   const read = new Map<Element, string>();
@@ -306,6 +307,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   // earlier page yielded, in the modes that move to another page, and in every
   // mode each record a continued read carried here from another document.
   const pageByPage = movesToAnotherPage(paginate);
+  const repeatsBefore = carriedCount(resume, "earlierPageRepeats");
+  const repeatsSoFar = (): number | undefined => (pageByPage && repeatsBefore !== undefined ? repeatsBefore + earlierPageRepeats : undefined);
   const earlierPages = pageByPage || resume ? new Set(records.map((record) => contentKey(record, fields))) : undefined;
   const keyOf = (itemRead: ItemRead): string => (contentAware ? contentKey(itemRead.record, fields) : "");
   const hasUnreadItem = (): boolean => Array.from(document.querySelectorAll(item)).some((element) => {
@@ -327,24 +330,13 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   const host = options.pageHost ?? BROWSER_PAGE_HOST;
   const spent = { retries: resume?.refusals?.retries ?? 0, rateLimits: resume?.refusals?.rateLimits ?? 0 };
   let refusedStatus: number | undefined;
+  // The whole read so far, so the document this control loads goes on adding to it rather than starting over.
   if (checkpoint) {
-    progress.beforeFollow = () => {
-      // `itemsSeen` is the whole read's count so far, so the document this control
-      // loads goes on adding to it rather than starting over. Left out where this
-      // read could not know it, which is the one thing an absent count may mean.
-      const seen = itemsSeen();
-      return checkpoint({
-        records: records.map((record) => ({ ...record })),
-        pagesRead: progress.pagesRead,
-        scrolls: progress.scrolls,
-        missingFields: [...missing].sort(),
-        filtered,
-        ...(seen === undefined ? {} : { itemsSeen: seen }),
-        ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], seen: [...seenEach], alone: [...aloneEach] } }),
-        ...(samples === undefined ? {} : { rejectedSamples: samples.rows(), rejectedSamplesAlone: samples.alone() }),
-        ...(spent.retries + spent.rateLimits === 0 ? {} : { refusals: { ...spent } })
-      });
-    };
+    progress.beforeFollow = () => checkpoint(readCheckpoint({
+      records, pagesRead: progress.pagesRead, scrolls: progress.scrolls, missing, filtered, itemsSeen: itemsSeen(),
+      conditions: rejects === undefined ? undefined : { applied, kept, rejected: rejectedEach, seen: seenEach, alone: aloneEach },
+      samples, refusals: spent, earlierPageRepeats: repeatsSoFar()
+    }));
   }
   let truncated = false;
   let timedOut = false;
@@ -369,13 +361,9 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   let filtered = resume?.filtered ?? 0;
   // Items the conditions were asked about, and how many of them each condition
   // rejected, across the whole read: a continued read starts from the counts its
-  // predecessor checkpointed, as it starts from its `filtered` and `itemsSeen`.
-  // Until 2026-09-30 these restarted at each document, so a read that paged
-  // through documents of cards and ended on one with none -- the store's
-  // rate-limit page, by every sign the bundle kept -- reported `applied: 0`, as
-  // if its conditions had done nothing (`run-munnhi5q-4867dabe`). Its rejected
-  // rows still do not travel, which is `filtered-answer.ts`'s concern, not the
-  // count's.
+  // predecessor checkpointed (`continued-read/`), as it starts from its
+  // `filtered` and `itemsSeen`. Its rejected rows still do not travel, which is
+  // `filtered-answer.ts`'s concern, not the count's.
   const carried = carriedConditionCounts(resume, request.where?.length ?? 0);
   let applied = carried.applied;
   let kept = carried.kept;
@@ -393,13 +381,10 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   // number says what the page held rather than what the read kept.
   //
   // The set can only hold this document's elements, so a continued read adds
-  // what its predecessor counted. `undefined` is a checkpoint from a page build
-  // that counted nothing: there is no beginning to add to, so the read says
-  // nothing rather than reporting one document's items as the whole read's, and
-  // that absence travels on to the next document in place of a number that would
-  // be missing its start.
+  // what its predecessor counted, or says nothing where that is unknown
+  // (`continued-read/carried-count.ts`).
   const namedItems = new Set<Element>();
-  const itemsSeenBefore = resume === undefined ? 0 : resume.itemsSeen;
+  const itemsSeenBefore = carriedCount(resume, "itemsSeen");
   const itemsSeen = (): number | undefined => (itemsSeenBefore === undefined ? undefined : itemsSeenBefore + namedItems.size);
 
   /** The read as it stands, with `filtered-answer.ts` deciding which rows it answers with. */
@@ -417,6 +402,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     const ordered = order?.apply(answer.records, maxItems);
     const answered = ordered?.rows ?? answer.records;
     const seen = itemsSeen();
+    const repeats = repeatsSoFar();
     return {
       records: answered,
       pagesRead: progress.pagesRead,
@@ -435,7 +421,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       ...(paginate === undefined || paginationStop === undefined ? {} : { paginationStop }),
       ...(spent.retries === 0 ? {} : { pageRetries: spent.retries }),
       ...(refusedStatus === undefined ? {} : { refusedStatus }),
-      ...(ordered === undefined ? {} : { order: { duplicates: duplicates + ordered.duplicates, unsortable: ordered.unsortable } })
+      ...(ordered === undefined ? {} : { order: { duplicates: duplicates + ordered.duplicates, unsortable: ordered.unsortable } }),
+      ...(repeats === undefined ? {} : { earlierPageRepeats: repeats })
     };
   };
 
@@ -582,6 +569,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
         }
         const content = earlierPages ? contentKey(itemRead.record, fields) : "";
         if (earlierPages?.has(content)) {
+          if (pageByPage) earlierPageRepeats += 1;
           read.set(element, key);
           continue;
         }
@@ -671,22 +659,6 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   }
 
   return outcome({ timedOut });
-}
-
-/**
- * The condition counts a continued read starts from: its predecessor's, or
- * zeros for a read that began here, and zeros too for counts that do not fit
- * this request's `where` -- one rejection count per condition is the only shape
- * a positional count can be added to, and the same request always has it.
- */
-function carriedConditionCounts(resume: ExtractionCheckpoint | undefined, conditions: number): { applied: number; kept: number; rejected: number[]; seen: (string | null)[]; alone: number[] } {
-  const carried = resume?.conditions;
-  const none = (): (string | null)[] => Array.from({ length: conditions }, () => null);
-  const zeros = (): number[] => Array.from({ length: conditions }, () => 0);
-  if (carried === undefined || carried.rejected.length !== conditions) return { applied: 0, kept: 0, rejected: zeros(), seen: none(), alone: zeros() };
-  // `seen` and `alone` from a page build that did not carry them start from none.
-  const alone = carried.alone?.length === conditions ? [...carried.alone] : zeros();
-  return { applied: carried.applied, kept: carried.kept, rejected: [...carried.rejected], seen: carried.seen?.length === conditions ? [...carried.seen] : none(), alone };
 }
 
 /** Whether a throw is a refusal of the whole read, which carries its own failure record, rather than a page fault. */

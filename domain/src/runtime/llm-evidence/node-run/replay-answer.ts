@@ -10,12 +10,14 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { isWebAutomationExtractFieldKey, webAutomationExtractionSummaryValue } from "../../../actions/extraction";
 import { captureEvidence, toolExecution, withCallStates, type WebLlmEvidenceToolExecution } from "../capture";
+import { webLlmEvidenceKeyIsDenied } from "../denied-keys";
 import { isJsonRecord } from "../untrusted-json";
 import type { WebLlmNameAssumption } from "../name-assumption";
 import { publishedWebLlmPage } from "../page-view";
 import { present } from "../present";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import type { WebLlmToolRejectionReason } from "../tool-rejection";
+import { screenedText } from "../withheld";
 import type { WebNodeRun } from "./context";
 
 /**
@@ -53,7 +55,7 @@ export type WebNodeVerifyFinding = "missing" | "hidden" | "disabled";
  * with the page -- are the same fields, and a field dropped from one is a
  * compile error rather than a packet the model quietly reasons without.
  */
-type WebNodeReplayAnswer = { ok: boolean; code: string; said: string; found?: WebNodeVerifyFinding };
+type WebNodeReplayAnswer = { ok: boolean; code: string; said: string; found?: WebNodeVerifyFinding; readRows?: JsonObject };
 
 /**
  * What a replay answer says about itself beyond Core's replay code
@@ -88,8 +90,8 @@ export type WebNodeReplayFacts = {
  * page, which is what `effectApplied` tells Core. They differ only for a
  * checked step, which passed and did nothing.
  */
-export function webNodeReplayAnswer(code: string, said: string, ok = false, about?: WebNodeReplayFacts, acted = ok): WebLlmEvidenceToolExecution {
-  return toolExecution(present<WebNodeReplayAnswer>({ ok, code, said, found: undefined }) as unknown as JsonValue, acted, code, undefined, undefined, about);
+export function webNodeReplayAnswer(code: string, said: string, ok = false, about?: WebNodeReplayFacts, acted = ok, readRows?: JsonObject): WebLlmEvidenceToolExecution {
+  return toolExecution(present<WebNodeReplayAnswer>({ ok, code, said, found: undefined, readRows }) as unknown as JsonValue, acted, code, undefined, undefined, about);
 }
 
 /**
@@ -124,7 +126,8 @@ export function webNodeReplayAnswerOnPage(
   page: WebLlmSnapshotBinding | undefined,
   answer: { code: string; said: string; acted: boolean; about?: WebNodeReplayFacts | undefined; found?: WebNodeVerifyFinding | undefined; ok?: boolean }
 ): WebLlmEvidenceToolExecution {
-  const verdict: JsonObject = present<WebNodeReplayAnswer>({ ok: answer.ok ?? false, code: answer.code, said: answer.said, found: answer.found }) as unknown as JsonObject;
+  // An answer on a page did not replay a read, so it names no rows.
+  const verdict: JsonObject = present<WebNodeReplayAnswer>({ ok: answer.ok ?? false, code: answer.code, said: answer.said, found: answer.found, readRows: undefined }) as unknown as JsonObject;
   if (page) {
     // The page, with what the replay made of this step written on the same
     // result: the one shape every other page has (`web-llm-page.v3`), and a
@@ -176,16 +179,92 @@ export function webNodeReplayReadSaid(payload: JsonValue | undefined, where: unk
   const parts = [`the step ran again: ${rows} from ${counted(summary.pagesRead, "page")}${stop}${summary.truncated ? ", cut short" : ""}`];
   if (summary.itemsSeen !== undefined) parts.push(`${counted(summary.itemsSeen, "item")} seen`);
   if (conditions && conditions.rejected.length) {
-    const fields = Array.isArray(where) && where.length === conditions.rejected.length ? where.map((entry) => (isJsonRecord(entry) ? entry.field : undefined)) : [];
+    const named = conditionNames(where, conditions.rejected.length);
     const each = conditions.rejected.map((rejected, index) => {
-      const field = fields[index];
-      const name = isWebAutomationExtractFieldKey(field) ? field : `condition ${index + 1}`;
+      const name = named[index]!;
       const alone = conditions.alone?.[index];
       return alone === undefined ? `${name} ${rejected}` : `${name} ${rejected} (${alone})`;
     });
     parts.push(`per condition rejected${conditions.alone ? " (removed alone)" : ""}: ${each.join(", ")}`);
   }
   return parts.join("; ");
+}
+
+/** What a replayed read names of its rows: Core's member, `readRows` (see `webNodeReplayReadRows`). */
+type WebNodeReplayReadRows = { rows?: JsonObject[] | undefined; leftOutOnlyByThis?: JsonObject[] | undefined };
+
+/** The rows one condition removed by itself. */
+type WebNodeReplayLeftOut = { condition: string; rows: JsonObject[] };
+
+/** A value that is an address rather than text: a URL, or a path from an origin. Core's label rule's own. */
+const ADDRESS = /^(?:[a-z][a-z\d+.-]*:\/\/|\/)/iu;
+
+/**
+ * The rows a replayed list read names beside its line, by label, or nothing for
+ * a step that is not one.
+ *
+ * The line is counts only, and live run `run-muqk713g` (C3) showed counts are
+ * not enough: its build-test judge was told "name 20 (5)" of a read that kept
+ * 10 of the 13 earbuds asked for, and passed it; the three pairs missing were
+ * rows the name condition removed by itself. So the answer also carries
+ * `readRows`: `rows`, the rows the read returned, and `leftOutOnlyByThis`, per
+ * condition that removed rows by itself, those rows, which the replay asks the
+ * page for as a Flow's playback does (`output-nodes/extract-list/dispatch.ts`).
+ * Core screens them and sends the judge their labels
+ * (`AS/runtime/result-verification/build-test/read-rows.ts`, the member's name
+ * is Core's), as it sends a playback's judge `leftOutOnlyByThis`.
+ *
+ * Each row is its label, as a one-column record `{ column: label }`: its first
+ * column in the read's field order holding text that is not an address, else
+ * its first value, the rule Core labels a playback's rows by
+ * (`AS/runtime/service/summaries/extraction-summary.ts`). A column this domain
+ * denies in evidence is never a label, and a label shaped like a secret is
+ * written withheld (`../withheld.ts`). Every row is named: nothing caps a
+ * list (user rule, 2026-09-30: no caps among qualifying rows), as nothing caps
+ * the playback judge's `leftOutOnlyByThis`.
+ */
+export function webNodeReplayReadRows(payload: JsonValue | undefined, where: unknown): JsonObject | undefined {
+  const summary = isJsonRecord(payload) ? webAutomationExtractionSummaryValue(payload.extraction) : undefined;
+  if (!summary || !isJsonRecord(payload)) return undefined;
+  const fields = summary.fieldNames;
+  const rows = labelled(Array.isArray(payload.extracted) ? payload.extracted : [], fields);
+  const samples = summary.rejectedSamples;
+  const leads = summary.rejectedSamplesAlone;
+  const named = conditionNames(where, samples?.length ?? 0);
+  const leftOut = (samples ?? []).flatMap((sampled, index): JsonObject[] => {
+    const alone = labelled(sampled.slice(0, leads?.[index] ?? 0), fields);
+    return alone.length ? [present<WebNodeReplayLeftOut>({ condition: named[index]!, rows: alone }) as unknown as JsonObject] : [];
+  });
+  if (!rows.length && !leftOut.length) return undefined;
+  return present<WebNodeReplayReadRows>({
+    rows: rows.length ? rows : undefined,
+    leftOutOnlyByThis: leftOut.length ? leftOut : undefined
+  }) as unknown as JsonObject;
+}
+
+/** Each row's label, in order; a row with no value to name it by is left out, as Core leaves it out. */
+function labelled(rows: readonly unknown[], fields: readonly string[]): JsonObject[] {
+  return rows.flatMap((row): JsonObject[] => {
+    if (!isJsonRecord(row)) return [];
+    const cells = fields.flatMap((key): Array<[string, string]> => {
+      const value = row[key];
+      return !webLlmEvidenceKeyIsDenied(key) && typeof value === "string" && value.trim() ? [[key, value.trim()]] : [];
+    });
+    const chosen = cells.find(([, value]) => /\p{L}/u.test(value) && !ADDRESS.test(value)) ?? cells[0];
+    return chosen ? [{ [chosen[0]]: screenedText(chosen[1]) }] : [];
+  });
+}
+
+/**
+ * Each condition's name: the field its `where` entry tests, in the request's
+ * order, or its position where the request does not line up with the report.
+ */
+function conditionNames(where: unknown, count: number): string[] {
+  const fields = Array.isArray(where) && where.length === count ? where.map((entry) => (isJsonRecord(entry) ? entry.field : undefined)) : [];
+  return Array.from({ length: count }, (_, index) => {
+    const field = fields[index];
+    return isWebAutomationExtractFieldKey(field) ? field : `condition ${index + 1}`;
+  });
 }
 
 /** A count with its noun, plural unless it is one. */

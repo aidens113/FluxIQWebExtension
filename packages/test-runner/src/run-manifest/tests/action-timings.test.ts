@@ -42,3 +42,15 @@ test("Flow action attempts become timings in attempt order; an unfinished attemp
     { actionType: "web.dom.click", startedAt: "2026-09-11T10:00:00.500Z", status: "running" },
   ]);
 });
+
+// The existing/clone target path: Core writes `succeeded` for a step it passed
+// over (a sometimes-present step absent, or a step routed past by page state,
+// t243), so the run's timings say skipped, never succeeded.
+test("a skipped or state-routed attempt is timed as skipped, not succeeded", () => {
+  const started = Date.parse("2026-09-11T10:00:00.000Z");
+  assert.deepEqual(flowActionTimings([
+    { attemptId: "a1", nodeId: "n1", definitionId: "web.dom.click", order: 1, status: "succeeded", route: "state_routed", skipped: { reason: "state_routed", code: "web.target.not_found", toNodeId: "n3", direction: "forward", startedAt: started, finishedAt: started + 5 }, startedAt: started, finishedAt: started + 5 },
+    { attemptId: "a2", nodeId: "n2", definitionId: "web.dom.click", order: 2, status: "succeeded", route: "skipped", startedAt: started + 10, finishedAt: started + 10 },
+    { attemptId: "a3", nodeId: "n3", definitionId: "web.dom.click", order: 3, status: "succeeded", startedAt: started + 20, finishedAt: started + 30 },
+  ]).map(timing => timing.status), ["skipped", "skipped", "succeeded"]);
+});

@@ -54,7 +54,9 @@
 // itself" and passed it. The rows reach the judge's read account as labels
 // (Core `runtime/result-verification/read-account/`). Information only: the
 // read keeps and stores exactly what it did. A Flow whose parameters already
-// say `rejectedSamples` is sent as it says.
+// say `rejectedSamples` is sent as it says. The draft's replay asks the same
+// way (`webAutomationExtractListAloneRowsAsked`, t194 w55), for the judge of
+// the build's test.
 //
 // A request that does not parse derives nothing and scales nothing: it is sent
 // as authored, and the dispatch refuses it with its own reason.
@@ -106,6 +108,17 @@ export function webAutomationExtractListDispatch(nodeParameters: JsonObject): We
   if (!parsed.ok) return { ok: false, result: recordOutputRefusal(parsed.issues) };
   // The parsed output is plain JSON; its type only spells the optional keys.
   return { ok: true, payload: { parameters, ...timeout, recordOutput: parsed.output as unknown as JsonObject } };
+}
+
+/**
+ * A list read's parameters asking for the rows each condition removed by
+ * itself, for a read with conditions that does not already say; any other
+ * parameters as they are. The draft's replay asks with this too
+ * (`runtime/llm-evidence/node-run/replay.ts`, t194 w55), so the judge of a
+ * build's test can be shown those rows as a playback's judge is.
+ */
+export function webAutomationExtractListAloneRowsAsked(parameters: JsonObject): JsonObject {
+  return withAloneRowsAsked(parameters, webAutomationExtractListRequestValue(parameters.extractList));
 }
 
 /** The parameters asking for the rows each condition removed by itself, for a read with conditions that does not already say (see the header). */

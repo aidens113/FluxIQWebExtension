@@ -272,3 +272,12 @@ test("the sentence never quotes a value the screen withheld", () => {
   assert.ok(!note.includes("4111"), note);
   assert.ok(note.includes("(4)"), note);
 });
+
+// Live run `run-muqk713g` (C1): the note told the explorer to check each alone row against the instruction, and it
+// still kept `name not contains "charging case"`, which removed three earbuds sold "with Wireless Charging Case":
+// it read a row that mentions the excluded thing as the excluded thing. The note now draws that line, in general words.
+test("the rejected-rows note says a row that only mentions an excluded thing is not that thing", () => {
+  assert.match(WEB_NODE_REJECTED_ROWS_NOTE, /is the excluded kind of thing, not one whose text only mentions it/u);
+  assert.match(WEB_NODE_REJECTED_ROWS_NOTE, /an item sold with or including an excluded part is still the item/u);
+  assert.doesNotMatch(WEB_NODE_REJECTED_ROWS_NOTE, /earbud|charging/iu);
+});

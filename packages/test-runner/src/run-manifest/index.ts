@@ -2,3 +2,5 @@
 export * from "./action-timings.js";
 export * from "./automation-failure.js";
 export * from "./create-run-manifest.js";
+export * from "./repository-changes.js";
+export * from "./run-invocation.js";

@@ -9,10 +9,27 @@ const verdicts = ["passed", "failed", "inconclusive"] as const;
 
 const repository: Check = (input, path, issues) => {
   const value = object(input, path, issues); if (!value) return;
-  keys(value, ["path", "commit", "dirty"], path, issues); text(value, "path", path, issues);
+  keys(value, ["path", "commit", "dirty", "changes", "changesOmitted"], path, issues); text(value, "path", path, issues);
+  if (value.changes !== undefined) array(value.changes, `${path}.changes`, issues, repositoryChange);
+  if (value.changesOmitted !== undefined) finite(value.changesOmitted, `${path}.changesOmitted`, issues, 0, Number.MAX_SAFE_INTEGER, true);
   if (typeof value.commit !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(value.commit)) add(issues, `${path}.commit`, "must be a full lowercase Git commit digest");
   if (typeof value.dirty !== "boolean") add(issues, `${path}.dirty`, "must be a boolean");
 };
+const repositoryChange: Check = (input, path, issues) => {
+  const value = object(input, path, issues); if (!value) return;
+  keys(value, ["status", "path", "from"], path, issues); text(value, "status", path, issues); text(value, "path", path, issues);
+  if (value.from !== undefined) text(value, "from", path, issues);
+};
+const stringItem: Check = (input, path, issues) => { if (typeof input !== "string") add(issues, path, "must be a string"); };
+const fluxiqName: Check = (input, path, issues) => { if (typeof input !== "string" || !/^FLUXIQ_[A-Z0-9_]+$/u.test(input)) add(issues, path, "must be a FLUXIQ_ variable name"); };
+function validateInvocation(input: unknown, issues: ValidationIssue[]): void {
+  const path = "$.invocation"; const value = object(input, path, issues); if (!value) return;
+  keys(value, ["via", "script", "labInvocation", "args", "fluxiqEnvironment"], path, issues);
+  enumeration(value.via, ["run-lab", "test-runner"], `${path}.via`, issues);
+  if (value.script !== undefined) text(value, "script", path, issues);
+  if (value.labInvocation !== undefined) enumeration(value.labInvocation, ["unreadable"], `${path}.labInvocation`, issues);
+  array(value.args, `${path}.args`, issues, stringItem); array(value.fluxiqEnvironment, `${path}.fluxiqEnvironment`, issues, fluxiqName);
+}
 const compatibility: Check = (input, path, issues) => {
   const value = object(input, path, issues); if (!value) return;
   keys(value, ["packageName", "requested", "resolvedVersion", "source", "integrity"], path, issues);
@@ -30,7 +47,7 @@ const artifact: Check = (input, path, issues) => {
 
 export function validateRunManifest(input: unknown): ValidationResult<RunManifest> {
   const issues: ValidationIssue[] = []; const value = object(input, "$", issues); if (!value) return result(input, issues);
-  keys(value, ["schemaVersion", "runId", "scenarioId", "scenarioRevision", "seed", "status", "startedAt", "finishedAt", "repositories", "compatibility", "lockfiles", "extension", "environment", "ports", "processExits", "artifacts", "redactionState", "verdict", "fluxiqExecution", "workflowId", "variantId", "automationFailure", "steps", "actions"], "$", issues);
+  keys(value, ["schemaVersion", "runId", "scenarioId", "scenarioRevision", "seed", "status", "startedAt", "finishedAt", "repositories", "compatibility", "lockfiles", "extension", "environment", "ports", "processExits", "artifacts", "redactionState", "invocation", "verdict", "fluxiqExecution", "workflowId", "variantId", "automationFailure", "steps", "actions"], "$", issues);
   if (value.schemaVersion !== "0.1") add(issues, "$.schemaVersion", "must equal 0.1");
   for (const key of ["runId", "scenarioId", "scenarioRevision"] as const) text(value, key, "$", issues);
   finite(value.seed, "$.seed", issues, 0, 0xffffffff, true); enumeration(value.status, statuses, "$.status", issues); date(value.startedAt, "$.startedAt", issues);
@@ -46,6 +63,7 @@ export function validateRunManifest(input: unknown): ValidationResult<RunManifes
   array(value.artifacts, "$.artifacts", issues, artifact);
   if (Array.isArray(value.artifacts)) uniqueStrings(value.artifacts.filter(objectValue).map(entry => entry.path), "$.artifacts", issues, "artifact paths");
   enumeration(value.redactionState, ["pending", "verified", "failed", "not_applicable"], "$.redactionState", issues);
+  if (value.invocation !== undefined) validateInvocation(value.invocation, issues);
   if (value.verdict !== undefined) enumeration(value.verdict, verdicts, "$.verdict", issues);
   if (value.fluxiqExecution !== undefined) validateFluxIQExecution(value.fluxiqExecution, issues);
   for (const key of ["workflowId", "variantId"] as const) if (value[key] !== undefined) kebabId(value[key], `$.${key}`, issues);
