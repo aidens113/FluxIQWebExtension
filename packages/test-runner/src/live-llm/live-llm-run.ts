@@ -11,7 +11,7 @@
 import { type LlmActionConsequence, type LlmExecutionProfile, type LlmUsage } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
-import type { CreatedFlowBuild, CreatedFlowBuildLlm, PersistedFlowLlmExecution } from "../flow-lane/index.js";
+import { withSettledBuild, type CreatedFlowBuild, type CreatedFlowBuildLlm, type CreatedFlowSettledBuild, type PersistedFlowLlmExecution } from "../flow-lane/index.js";
 import { authorizeFlowLiveLlmExecution, installLiveLlmSessionKey, type LiveLlmAuthorizationControl } from "./authorize-flow.js";
 import { assertLiveLlmBudgetHeld } from "./budget.js";
 import { budgetOverProductFailure } from "./budget-over-product-failure.js";
@@ -25,6 +25,7 @@ import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usag
 import { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
 import { readLiveLlmReauthor, type LiveLlmReauthorRecord } from "./reauthor-record.js";
 import { liveLlmRunSpend, type LiveLlmRunSpend } from "./run-spend.js";
+import { readLiveLlmStepLogInstructed } from "./step-log-instructed.js";
 import { readLiveLlmStepLogSpend, type LiveLlmStepLogSpend } from "./step-log-spend.js";
 import type { ProviderFailureRequestBounds } from "../provider-failure/index.js";
 
@@ -147,6 +148,8 @@ export class LiveLlmRun {
   private reauthor: LiveLlmReauthorRecord | undefined;
   /** A created Flow's build record, kept so the repair's settlement rewrites the snapshot with it. */
   private buildRecord: CreatedFlowBuild | undefined;
+  /** Where the build record's `instructedConsequences` came from: Core's proposal, the run's step log (a build that left no proposal), or neither. */
+  private instructedFrom: "proposal" | "step_log" | null = null;
   /** Whether a created Flow's playback was readied for the model, and what that run spent; `undefined` before it settled. */
   private repairPrepared = false;
   private repairObserved: LiveLlmObservedUsage | undefined;
@@ -443,9 +446,19 @@ export class LiveLlmRun {
    * snapshot carries that record as `build`: the proposal's outcome, Core's
    * call count and totals, the evidence loop's counts, and any refusal code.
    * A build Core says ran on another provider or model fails here too.
+   *
+   * Answers with that record and where its instructed consequences came from,
+   * so the lane keeps the same build in `flow-lane.json` as this snapshot keeps
+   * in `live-llm.json`: the step log is read once, here, under one rule
+   * (`withInstructedFromStepLog`).
    */
-  async settleBuild(build: CreatedFlowBuild, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<void> {
+  async settleBuild(settled: CreatedFlowBuild, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<CreatedFlowSettledBuild> {
+    // Read before anything below can throw, and carried on whatever is thrown
+    // (`withSettledBuild`): a breach or a build that reached no provider is the
+    // run that most needs its record, and flow-lane.json must hold this one too.
+    const build = await this.withInstructedFromStepLog(settled);
     this.buildRecord = build;
+    const answer: CreatedFlowSettledBuild = Object.freeze({ build, instructedConsequencesFrom: this.instructedFrom });
     // Deliberately no declaration: a build that reached no provider proposed
     // no Flow, so "the runtime absorbed it" can never be what happened here.
     try {
@@ -453,12 +466,31 @@ export class LiveLlmRun {
     } catch (error) {
       // The breach is thrown before the lane sees the build, so a build that
       // ended without a Flow is carried on it, or the run reads as the facility's.
-      throw budgetOverProductFailure(error, buildWithoutFlowFailure(build));
+      throw withSettledBuild(budgetOverProductFailure(error, buildWithoutFlowFailure(build)), answer);
     }
     const { provider, model } = build.accounting ?? {};
     if ((provider != null && provider !== this.plan.provider) || (model != null && model !== this.plan.model)) {
-      throw new RunnerFailure("runtime.behavior", `Core's Flow build ran on ${provider ?? "an unreported provider"}/${model ?? "an unreported model"}, not the authorized ${this.plan.provider}/${this.plan.model}`);
+      throw withSettledBuild(new RunnerFailure("runtime.behavior", `Core's Flow build ran on ${provider ?? "an unreported provider"}/${model ?? "an unreported model"}, not the authorized ${this.plan.provider}/${this.plan.model}`), answer);
     }
+    return answer;
+  }
+
+  /**
+   * The build with the consequences its reading of the instructions found,
+   * from the step log when Core's record has none. Core publishes them only on
+   * a proposal, so a build that left none -- refused, or stopped at its
+   * spending limit -- read `null` though it had read them
+   * (`run-murzln6g-11debe1d`, `S/0015`). A record that has them, or a run with
+   * no step log or no reading in it, is returned as it came.
+   */
+  private async withInstructedFromStepLog(build: CreatedFlowBuild): Promise<CreatedFlowBuild> {
+    if (build.instructedConsequences !== null) {
+      this.instructedFrom = "proposal";
+      return build;
+    }
+    const read = this.stepLogDirectory ? await readLiveLlmStepLogInstructed(this.stepLogDirectory) : null;
+    this.instructedFrom = read ? "step_log" : null;
+    return read ? Object.freeze({ ...build, instructedConsequences: read }) : build;
   }
 
   /**
@@ -666,6 +698,10 @@ export class LiveLlmRun {
       // What Core's result verification did and every call it made, which the
       // accounting above does not include. `null` before a settlement read one.
       verification: this.verification ?? null,
+      // Where `build.instructedConsequences` was read from, on a run that
+      // settled a build: Core's proposal, or the step log's reading of the
+      // instructions for a build that left no proposal.
+      ...(this.buildRecord ? { instructedConsequencesFrom: this.instructedFrom } : {}),
       ...extra,
     });
   }

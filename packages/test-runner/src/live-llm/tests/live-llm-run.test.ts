@@ -6,7 +6,7 @@ import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
-import type { CreatedFlowBuild } from "../../flow-lane/index.js";
+import { settledBuildOf, type CreatedFlowBuild } from "../../flow-lane/index.js";
 import { LAB_CEILING_USD, planAtLabCeiling } from "./lab-ceiling.js";
 import { planLiveLlmExecution } from "../live-llm-plan.js";
 import { beginLiveLlmRun, LiveLlmRun } from "../live-llm-run.js";
@@ -281,6 +281,57 @@ test("a refused build's content-free progress survives unchanged in the live sna
   for (const forbidden of ["Private instruction text", "data-testid=private-card", "http://127.0.0.1/private", "sha256:"]) assert.equal(serialized.includes(forbidden), false);
 });
 
+// `run-murzln6g-11debe1d`: the build stopped at its spending limit, left no
+// proposal, and live-llm.json said `instructedConsequences: null` although
+// `S/0015` had read them.
+test("a build that left no proposal carries the consequences its step log read from the instructions, and says where they came from", async (t) => {
+  const steps = await mkdtemp(path.join(os.tmpdir(), "fluxiq-live-llm-instructed-"));
+  t.after(() => rm(steps, { recursive: true, force: true }));
+  // `S/0015/decision.json`'s own list.
+  const instructed = [
+    { consequence: "modify_existing", quote: "Switch my pickup store to Millbrook Crossing Supercenter" },
+    { consequence: "create_new", quote: "add two packs of the ValueRidge Essentials Select-A-Size Paper Towels in the 12 Double Rolls size and one pack of the ValueRidge Everyday Dinner Napkins in the 250 Count size to my cart, both for pickup" },
+  ];
+  await mkdir(path.join(steps, "0015-decide"));
+  await writeFile(path.join(steps, "0015-decide", "meta.json"), JSON.stringify({ kind: "decide", provider: "deepseek", costUsd: 0.000379548, part: "creation", phase: "read" }));
+  await writeFile(path.join(steps, "0015-decide", "decision.json"), JSON.stringify({ response: { decision: { kind: "complete", result: { instructed } } } }));
+  const stopped: CreatedFlowBuild = { ...proposedBuild, outcome: "failed", adaptationId: null, instructedConsequences: null, failure: { code: "lab.chat_build_failed", stage: "chat", httpStatus: null } };
+  const { run, written, settle } = await settleBuildOnce(stopped);
+  run.readStepLogFrom(steps);
+  const answered = await settle();
+  const snapshot = written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
+  assert.deepEqual(snapshot.build.instructedConsequences, instructed);
+  assert.equal(snapshot.instructedConsequencesFrom, "step_log");
+  // The lane keeps what the settlement answers, so flow-lane.json holds the very record live-llm.json does.
+  assert.equal(answered.build, snapshot.build);
+  assert.equal(answered.instructedConsequencesFrom, "step_log");
+
+  const fromProposal = await settleBuildOnce(proposedBuild);
+  fromProposal.run.readStepLogFrom(steps);
+  assert.deepEqual(await fromProposal.settle(), { build: proposedBuild, instructedConsequencesFrom: "proposal" });
+
+  // A settlement that throws read the step log first and carries what it read
+  // on the error, so flow-lane.json holds the record live-llm.json was given:
+  // a build that reached no provider, and one over its run budget.
+  for (const throwing of [
+    { ...stopped, providerCalls: 0, providerInvocation: "not_attempted" as const, accounting: null, evidenceLoop: null },
+    { ...stopped, accounting: { ...proposedBuild.accounting!, totalTokens: Number.MAX_SAFE_INTEGER } },
+  ]) {
+    const breached = await settleBuildOnce(throwing);
+    breached.run.readStepLogFrom(steps);
+    const error = await breached.settle().then(() => assert.fail("the settlement must throw"), (thrown: unknown) => thrown);
+    assert.ok(error instanceof RunnerFailure);
+    const written = breached.written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
+    assert.deepEqual(written.build.instructedConsequences, instructed);
+    assert.equal(written.instructedConsequencesFrom, "step_log");
+    assert.equal(settledBuildOf(error)?.build, written.build, "the error carries the very record live-llm.json holds");
+    assert.equal(settledBuildOf(error)?.instructedConsequencesFrom, "step_log");
+  }
+  const proposed = fromProposal.written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
+  assert.deepEqual(proposed.build.instructedConsequences, [], "Core's own record is never replaced");
+  assert.equal(proposed.instructedConsequencesFrom, "proposal");
+});
+
 test("a build that reached no provider fails the run closed, after its evidence is written, and says where Core stopped", async () => {
   const refused: CreatedFlowBuild = { ...proposedBuild, outcome: "failed", adaptationId: null, providerCalls: 0, providerInvocation: "not_attempted", accounting: null, evidenceLoop: null, failure: { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", httpStatus: 400 } };
   const { written, settle } = await settleBuildOnce(refused);
@@ -550,6 +601,7 @@ test("a run that re-authored reports every call it made -- build, checks and re-
     judge: { calls: 2, estimatedCostUsd: 0.001830072 },
     reauthor: { calls: 36, estimatedCostUsd: 0.042481212 },
     chat: null,
+    read: null,
   });
   assert.deepEqual(snapshot.observed.phases, snapshot.runSpend.phases);
   assert.deepEqual(snapshot.reauthor.attempts, [{ attempt: 1, adaptationId: REAUTHOR_ID, calls: 36, callsFrom: "adaptation", inputTokens: 441_137, outputTokens: 10_071, estimatedCostUsd: 0.042481212 }]);
@@ -613,7 +665,7 @@ test("a run whose step log Core wrote counts every call in it -- the chat's and 
   assert.deepEqual(snapshot.runSpend.phases.chat, { calls: 1, estimatedCostUsd: 0.0003 });
   assert.deepEqual(snapshot.runSpend.phases.reauthor, { calls: 36, estimatedCostUsd: 0.042481212 });
   assert.deepEqual(snapshot.runSpend.uncountedPhases, []);
-  assert.deepEqual(snapshot.runSpend.stepLog, { calls: 61, estimatedCostUsd: 0.086399304, filledReauthorCalls: 36, unattributed: { calls: 0, estimatedCostUsd: 0 } });
+  assert.deepEqual(snapshot.runSpend.stepLog, { calls: 61, estimatedCostUsd: 0.086399304, filledReauthorCalls: 36, unattributed: { calls: 0, estimatedCostUsd: 0 }, fromBuild: { judge: { calls: 0, estimatedCostUsd: 0 }, read: { calls: 0, estimatedCostUsd: 0 }, calls: 0, estimatedCostUsd: 0 } });
   assert.deepEqual(published.at(-1)?.runTotal, { calls: 61, totalEstimatedCostUsd: 0.086399304 });
 });
 

@@ -13,56 +13,60 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ## Current State
 
-**Handoff 2026-10-03 (user: "lets wrap it up for tonight"). Read this first.** Live runs are held by the user until
+**Session 2026-10-03 (resumed after the night handoff). Read this first.** Live runs are held by the user until
 general Flow authoring (t252) lands. Round 1002-M gave the first honest pass: lane A crossborder
-`run-murwd8le-79e735a8` ($0.0579, built from the chat, judged yes on the Flow as it stood, 4 of 4 facts). All agents
-were told to stop at a safe point; no Lab, Core or browser process is meant to be running.
+`run-murwd8le-79e735a8` ($0.0579, built from the chat, judged yes on the Flow as it stood, 4 of 4 facts).
 
-**Dev heads.** Core `8f92b399`, pushed (the last commit gives the web app lane C's `recall` icon; apps/web had
-stopped typechecking). Downstream local dev is about 55 commits ahead of origin `04a5e3ce` and **not
-pushed**: the permission classifier refused the push after the fake-key rewrite. **The user must run**
-`git -C "C:/Users/osrs_/FluxStuff/!FluxIQWebExtension" push origin dev` (a plain fast-forward). Lane C's commit
-`c56b8cfb` had a DeepSeek-shaped fake key; the user approved a fake, and the unpushed commits on dev, t194 and t244 were
-rewritten to `sk-FAKE-test-value-not-a-real-key` (checked against the real key by hash, not key-shaped, test 5/5).
+**Dev heads.** Core `d89877d3` and downstream `622eccf8` or later, both pushed (the downstream push the night
+handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`).
 
-**Landed 2026-10-02/03 (session 8d), each verified on its tree and again after merging dev in (ledger below):** t244
-(`core.run_flow` part runs; a build or re-author finishes only on a judged yes about the Flow as it stands); t246
-(project database idle grace); t247 (Core `pnpm test` `--no-bail`, web fixes); t248 (the Lab reads state-routed skips);
-t249 (a runtime patch is applied only after a whole judged run); t250 (run detail `stateRouting`, stale $0.25 gone) and
-hotfix `bdc459dd` (a module cycle t250 introduced); t253 (run-4 replay fixture after t193's put-back rule); round
-1002-M fixes of lanes A (t174), C (t194) and D (t195), integrated with each other.
+**Landed this session, each verified by the supervisor on the merged tree (ledger below):**
+- **Lane B (t193) round 1002-M** (Core `8b952335`, downstream `db9260c8`). Combination decisions:
+  `reports/t193-lead-1002M.md`, "Merge of dev, 2026-10-03"; verification: `reports/t193-w-merge-verify.md`. On dev:
+  Core check 0, domain check 0, audit passed; the extension check gave 10 false TS errors against a Core dist older
+  than the merge, rc 0 after `pnpm --filter fluxiq build`. Closed mechanically (`c14e3560`): the domain and extension
+  `check` scripts run `scripts/check/core-build.mjs` first, which refuses a stale Core build by name.
+- **t255 run records** (Core `d89877d3`, downstream `622eccf8`): the Lab writes FluxIQ's whole ending;
+  `live-llm.json` books the judge and the consequence read apart from the build (murzln6g: build 30 calls $0.086255,
+  judge 2 $0.001936, read 1 $0.000380); Core's step log writes `NNNN-answer-<toolId>` folders for amendments and
+  refused repeats (later step numbers shift by them). Left open: `flow-lane.json`'s `instructedConsequences` stays
+  null; Core's `judgeAccounting` gives no judge call count.
+- **t256** (Core `75e66057`): the web Adaptations view and inbox rows say applied, held back (plain reason), or
+  waiting for a judged run; summaries carry `judgedApplication`. Rows indexed before it show it once re-saved.
+- **t257** (downstream `702c7dbc`): the Lab's UI review counts every document change as a page load (old count kept
+  as `pageLoadGaps`; murzln6g moment 6: 0 -> 1); samples carry a screened `pageUrl`; pictures carry `takenAt`.
+- **t259** (downstream `955630de`): `flow-lane.json` and `live-llm.json` carry the same settled build and
+  `instructedConsequencesFrom` in every ending, a throwing settlement included (235/235, check 0).
+- Core `880577fc`: the `$0.25` comments in `refuted-result-port.ts` and `repair-authority.ts` name the run ceiling.
+- Session 8d (2026-10-02/03): t244, t246-t250, t253 and lanes A (t174), C (t194), D (t195); see the ledger.
 
 **Round 1002-M (step logs under `C:/Users/osrs_/FluxStuff/lab-runs/2026-10-02/<run>/`).**
 | Lane | Runs | Ending | Fixed since |
 | --- | --- | --- | --- |
 | A crossborder | `murwd8le` $0.058 | pass | 14 of 16 causes: tests no longer re-press lasting acts, judges see the end page, cards |
-| B bigbox | `murwdp4f` $0.087, `murzln6g` $0.089 | no Flow: purse; judged no with $0.011 left | 10 causes (on its branch, merging) |
+| B bigbox | `murwdp4f` $0.087, `murzln6g` $0.089 | no Flow: purse; judged no with $0.011 left | 10 causes (landed); purse at true cost (t254) |
 | C earbuds | `murwcmx2` $0.098 | built, playback refuted (10 of 13), re-author `not_doable` untested | rerun from start pages, unmeasured round never not_doable, confirming judge call |
-| D confirm-requests | `murwcaj0` $0.089, `murz83zy` $0.088 | no Flow: loop clicked one hard-coded row; purse | reorder hint, single-row twin, column `at` per item, not_doable only on the judge's stillAchievable no |
+| D confirm-requests | `murwcaj0` $0.089, `murz83zy` $0.088 | no Flow: loop clicked one hard-coded row; purse | reorder hint, single-row twin, column `at` per item; row-general Flows (t252) |
 
-**In flight (uncommitted or mid-merge; each agent's state is in its report).**
+**In flight (each agent's state is in its report).**
 - **t252 general Flow authoring** (`fxwork/t252`, both repositories; design `docs/working/general-flow-authoring-plan.md`
-  in the t252 tree, report `.../general-flow-authoring-plan/reports/t252-lead.md`). P1 (Core: written steps,
-  `amend_draft bind` to `$row`/`$input`/earlier output, Flow inputs) and P2 (domain: write mode, replay scoped to the
-  row from `item`) are committed (Core `e4854d20`, downstream `c62900cb`) and merged with dev through lane C
-  (`0d7d3071` / `3ca6194b`). P3 is checkpointed (Core `97c9e33a`, downstream `ce110576`): the build's test runs a
-  repeat once per row with the row as `item`, a lasting act is verified per row and never pressed, the judge sees one
-  line per row, stored nodes keep declared consequences (Core vitest 183 files / 1721 passed; domain, extension and
-  test-runner checks rc 0). Not started: w7 (the parity test and the scripted confirm-requests proof) and P4 docs.
-  Lane D is not merged into t252 yet; likely conflicts are listed in the t252 report. `fxwork/t251` holds the original
-  design; abandon it once t252 lands.
-- **t254 purse holds at true cost** (`fxwork/t254`; investigation `reports/t254-purse-hold-investigation.md`).
-  Uncommitted: price only what is sent; the round gate holds two judge calls and measures the next round's first
-  decision; exploration keeps two judge holds back; no `max_tokens` anywhere; billed at DeepSeek's actual price
-  (off-peak, cached input); replies reserved at twice the observed maximum; checkpointed (Core `6cb19105`). All implemented and tested piecewise
-  (unfinished-build 110/110, tsc clean, audit passed); a combined rerun of the narrow set and `pnpm --filter fluxiq
-  check` are still owed. murzln6g: gate need $0.0187 -> $0.0077, so its repair round opens. Must merge dev (lane D's
-  `phases.ts`; the report lists the hunks) before landing.
-- **Lane B (t193) round 1002-M:** fixes committed (Core `98324a2c`, downstream units 5-10). `git merge dev` is in
-  progress in both trees: all 24 conflicts resolved, no markers left, nothing staged (combination decisions in
-  `reports/t193-lead-1002M.md`, "Merge of dev, 2026-10-03"). Core tsc 0 and vitest 4025 passed / 1 load timeout
-  (`adaptation.test.ts`, 9/9 alone). Still owed: `pnpm --filter fluxiq check`, the audit, web tsc, a Core library
-  rebuild and every downstream check. Then stage the 24 files and commit both merges.
+  and report `.../general-flow-authoring-plan/reports/t252-lead.md` in that tree). P1-P3 committed (P3: the build's
+  test runs a repeat once per row with the row as `item`, a lasting act is verified per row, never pressed; the judge
+  sees one line per row; stored nodes keep declared consequences). Merge of lane B's tip (lanes A-D) committed (Core
+  `5f0bb788`, downstream `04178c6b`): only a skipped lasting act excuses a per-row step; node-run layer files moved to
+  `node-run/layer/`; Core check 0, node-tools + build-test 275/275, downstream checks 0, domain 725/725. Now: w7
+  (parity test; scripted confirm-requests proof with variants) and P4 docs; then the supervisor merges dev and lands.
+  Abandon `fxwork/t251` once t252 lands.
+- **t254 purse holds at true cost** (`fxwork/t254`; `reports/t254-purse-holds-true-cost.md`). Merge of lane B
+  committed (Core `b5533c0c`; unfinished-build 129/129 incl. murzln6g funding, tsc 0, audit passed). Stage 2, the
+  supervisor's four decisions: no chat `max_tokens` 600; recovery's ledger at the billed price; judge overshoot in
+  phases' accounting; a round stopped by the judging reserve spends it testing and judging the Flow so far. Stage 2
+  done (316 files / 3,447 tests incl. murzln6g, check 0, no `max_tokens` sent anywhere). Stage 3 (supervisor): an
+  unchanged Flow already judged no is not re-judged (ends at cost with those findings); recovery prices each call at
+  the rate in force when it is made.
+- **t258** (`fxwork/t258`, Core-paired): `service/datasets/tests/service-wiring.test.ts` "store cannot be opened"
+  fails on dev with a pool-closing AggregateError (a return of t207's family); root cause and fix
+  (`reports/t258-w1-service-wiring-store.md`).
 
 **Binding rules (user, all in force).**
 - **General Flow authoring before any more live runs (2026-10-02 night):** "The model should be ABLE to explore &
@@ -110,7 +114,9 @@ hotfix `bdc459dd` (a module cycle t250 introduced); t253 (run-4 replay fixture a
 - A Flow's creation has one $0.10 purse; each run's recovery has its own ceiling (offered to merge; unchanged).
 
 **Waiting on the user.**
-- The downstream push (above).
+- Removing 41 landed task worktrees (t184-t238 except the lanes, t224 and t251; each has no commit off dev in either
+  repository) with `pnpm task abandon <id>`: the auto-mode classifier refused it as interfering with workloads.
+  `abandon` refuses any branch with unlanded commits and never touches the remote.
 - t252: stored Flow nodes now keep their declared consequences, but a plain stored run does not check them; turning
   that check on changes what every stored Flow does at run time.
 - Removing the remaining pre-action refusals (the classifier refused the edit as a security weakening).
@@ -118,7 +124,7 @@ hotfix `bdc459dd` (a module cycle t250 introduced); t253 (run-4 replay fixture a
 - `fxwork/t187-bench` and `fxwork/t192-bench`: delete only on a yes.
 
 **Next, in order.**
-1. Lane B: check its lead's resolution, commit the merge, verify on the combined tree, land.
+1. ~~Lane B: land.~~ Done 2026-10-03.
 2. t252: finish P3; merge lanes D and B into it; verify (the scripted confirm-requests proof must pass); land.
 3. t254: merge dev; verify (murzln6g reproduction, no `max_tokens`, billed pricing); land.
 4. Sweep 2 in the background (Core `pnpm test` now runs every package).
@@ -631,6 +637,26 @@ run (id, cost, stage reached, causes, fixes) and the commit-ready files per fix.
 | t193-lead-1002L (B) | `fxwork/t193` | slot-2 | bigbox-retail-pickup-cart |
 | t194-lead-1002L (C) | `fxwork/t194` | slot-3 | everything-store-plus-earbuds-under-50 |
 | t195-lead-1002L (D) | `fxwork/t195` | slot-4 | social-network-feed-confirm-requests |
+
+Report to: `reports/<lead>.md` in the lane tree.
+
+#### Briefs: live round 1003 (lanes A-D, `lead-xhigh`; pending: dispatch only after t252 and t254 land)
+Common: as 1002-L above, with these changes. The supervisor merges dev into every lane tree (both repositories),
+rebuilds Core libraries and the extension, and confirms the Lab's behind-dev guard admits each tree. What this round must
+show, beyond each lane's own causes:
+- the build may generalise: a repetitive instruction becomes a row-general Flow (a repeat bound to `$row`), tested once
+  per row with lasting acts checked, never pressed (t252);
+- the purse holds what calls cost: a build with money left tests and judges before it ends, and an ending at cost names
+  what was left and why it was not enough (t254);
+- the run's records are whole: FluxIQ's ending, the judge booked apart from the build in `live-llm.json`, Core's answer
+  folders for amendments (t255), UI-review `pageLoads` and picture timing (t257). A record gap is itself a cause.
+
+| Lead | Tree | Slot | Scenario | Carry in |
+| --- | --- | --- | --- | --- |
+| t174-lead-1003 (A) | `fxwork/t174` | slot-1 | crossborder-marketplace-hub-to-cart | open causes 2, 6, 10, 11, 15; UI D6, D9. After a flash run, one approved comparison run: `--llm-model deepseek-v4-pro --llm-cost-ceiling-usd 0.30` |
+| t193-lead-1003 (B) | `fxwork/t193` | slot-2 | bigbox-retail-pickup-cart | C4, R2-C8, R2-C9, C13, C14, C16, C17 (`reports/t193-lead-1002M.md`, "For the supervisor") |
+| t194-lead-1003 (C) | `fxwork/t194` | slot-3 | everything-store-plus-earbuds-under-50 | the re-author's ending is now judged; reach and debug it |
+| t195-lead-1003 (D) | `fxwork/t195` | slot-4 | social-network-feed-confirm-requests | the hard-coded-row loop: the build must write the row-general Flow |
 
 Report to: `reports/<lead>.md` in the lane tree.
 

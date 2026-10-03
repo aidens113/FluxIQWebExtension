@@ -36,6 +36,8 @@ export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
     // test-only and never a pass. The chat's own record is on `build.chat`.
     buildEntry: evidence.build.chat ? "chat" as const : "direct-api" as const,
     build: evidence.build,
+    // Where `build.instructedConsequences` came from, as `live-llm.json` says it.
+    instructedConsequencesFrom: evidence.instructedConsequencesFrom,
     review: evidence.review,
     flowId: evidence.flowId,
     flowShape: evidence.shape,

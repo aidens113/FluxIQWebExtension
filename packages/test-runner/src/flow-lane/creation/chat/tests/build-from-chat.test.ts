@@ -29,6 +29,8 @@ type FakeChatOptions = {
   replyWithoutModel?: boolean;
   /** What Core kept of a failed build (`get-flow-bootstrap-failure`); absent, Core does not answer the read. */
   kept?: unknown;
+  /** The words of a failed build's result turn, when not the default. */
+  failedSaid?: string;
 };
 
 function fakeChat(options: FakeChatOptions) {
@@ -82,7 +84,7 @@ function fakeChat(options: FakeChatOptions) {
       if (options.ending === "awaiting_permission") {
         adaptation = proposal("proposed", { consequences: { declared: [], instructed: [], permissionRequest: { action: { kind: "click", verb: "press" }, control: { name: "Place order", kind: "button" }, consequences: ["move_money"], missing: ["move_money"] } } as unknown as NonNullable<ExistingFlowAdaptation["consequences"]> });
       }
-      const said = options.ending === "created" ? 'Created the Flow "Find every pair", explored the site, and put the steps it worked out into the Flow.' : '"Create an automation here" stopped because the build failed. What is left: the Flow "Find every pair", empty, with what you asked saved on it, so it can be built again.';
+      const said = options.ending === "created" ? 'Created the Flow "Find every pair", explored the site, and put the steps it worked out into the Flow.' : options.failedSaid ?? '"Create an automation here" stopped because the build failed. What is left: the Flow "Find every pair", empty, with what you asked saved on it, so it can be built again.';
       turn("automation", said, { kind: "panel-capability-result", ref: "flow.createHere" });
     },
     shows: async () => "Couldn't send that. Try again.",
@@ -135,6 +137,17 @@ test("a build that ended without a proposal is a failed build of the Flow it mad
   assert.equal(made.build.providerInvocation, "unknown", "a refused build's spend is not readable from the chat");
   assert.equal(made.build.chat?.ending, "failed");
   assert.match(made.said ?? "", /What is left: the Flow "Find every pair", empty/u);
+});
+
+/** FluxIQ's ending in live run `run-murzln6g-11debe1d`, read off its chat (screenshot 15); every record cut it at "...was not...". */
+const MURZLN6G_ENDING = `The build stopped at its spending limit of $0.10 before the Flow was finished: it had spent $0.089 ($0.000 of it by earlier builds of this Flow), which left $0.011, too little for another round: its next decision and the judging of its Flow could cost up to $0.019. 5 of the 6 things you asked worked when the Flow was run from its start; still to do: "in the 250 Count size": nothing I tried did it. The Flow (13 steps) ran from its start, but what it did was judged not to be what you asked. I explored live once over 30 decisions, and what held it up was that the Flow it said was ready was not judged to do what you asked. The Flow so far was kept, and building again carries on from it, with $0.011 left of this Flow's $0.10. What is left: the Flow "Switch my pickup store to Millbrook Crossing Supercenter, then add two packs...", empty, with what you asked saved on it, so it can be built again.`;
+
+test("FluxIQ's ending is carried whole, however long, so the record says why in all its words", async () => {
+  const { control, chat, wait } = fakeChat({ answer: "build", ending: "failed", failedSaid: MURZLN6G_ENDING });
+  const made = await buildCreatedFlowFromChat(control, chat, SCOPE, wait);
+  assert.ok(MURZLN6G_ENDING.length > 600, "the run's ending is longer than the cut that lost its end");
+  assert.equal(made.said, MURZLN6G_ENDING);
+  assert.match(made.said ?? "", /was not judged to do what you asked\. The Flow so far was kept/u);
 });
 
 test("a build that finished still waiting on a question is the permission ending, never applied", async () => {
