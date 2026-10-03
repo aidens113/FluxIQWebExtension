@@ -28,7 +28,9 @@ the judging reserve spends it testing and judging the Flow so far). **t255** (`f
 lane B's run-record gaps: the ending cut at "...was not..." in the Lab's files, `live-llm.json` booking the judge
 inside `phases.build`, and Core step-log result folders for amendment decisions (`reports/t255-w1-run-record-gaps.md`);
 the overlay `pageLoads` gap waits for lane B's `ui-review` changes to land. Core `880577fc` (dev, unpushed): the
-`$0.25` comments in `refuted-result-port.ts` and `repair-authority.ts` now name the run cost ceiling.
+`$0.25` comments in `refuted-result-port.ts` and `repair-authority.ts` now name the run cost ceiling. **t256**
+(`fxwork/t256`, Core-paired) shows `applied`/`notAppliedReason` in the web Adaptations view
+(`reports/t256-w1-web-adaptation-applied.md`).
 
 **Dev heads.** Core `8f92b399`, pushed (the last commit gives the web app lane C's `recall` icon; apps/web had
 stopped typechecking). Downstream dev `3b1655b8`, pushed 2026-10-03. Lane C's commit
@@ -120,6 +122,9 @@ hotfix `bdc459dd` (a module cycle t250 introduced); t253 (run-4 replay fixture a
 - A Flow's creation has one $0.10 purse; each run's recovery has its own ceiling (offered to merge; unchanged).
 
 **Waiting on the user.**
+- Removing 41 landed task worktrees (t184-t238 except the lanes, t224 and t251; each has no commit off dev in either
+  repository) with `pnpm task abandon <id>`: the auto-mode classifier refused it as interfering with workloads.
+  `abandon` refuses any branch with unlanded commits and never touches the remote.
 - t252: stored Flow nodes now keep their declared consequences, but a plain stored run does not check them; turning
   that check on changes what every stored Flow does at run time.
 - Removing the remaining pre-action refusals (the classifier refused the edit as a security weakening).
