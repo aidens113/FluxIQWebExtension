@@ -1624,6 +1624,13 @@ two is what Core spent outside the loop. A record whose total is not the loop's
 calls plus the ones outside it is refused rather than reported
 (`existing-fluxiq-control/adaptation-evidence-loop.ts`).
 
+A live run's totals (and so its spend-ledger entry) also count the calls Core's
+records leave out, from the run's own step log (`steps/*/meta.json`,
+`live-llm/step-log-spend.ts`): the extension chat's interpreter call, as a
+`chat` phase, and the calls of a re-author Core recorded a cost for and no
+count. Anything else the log saw is added as `unattributed`, never subtracted
+(`run-muqk713g-d08ad3dc`: 17 counted of 35 calls before this).
+
 ### When Core is still writing a run
 
 Core saves a run in stages: the status its steps earned first, then the verdict
@@ -1977,7 +1984,11 @@ category only when the run had otherwise passed. The result holds counts, scope
 names, relative paths with every literal redacted out, and categories, never
 content or a literal. It is written to `snapshots/redaction-attestation.json`,
 and `run.json` records `redactionState`, which is `verified` only when the
-attestation passed.
+attestation passed. `run.json` also names each repository's uncommitted paths
+(`changes`, status letters and paths only, never content) and how the run was
+started (`invocation`: the Lab's arguments, screened, and the names, never the
+values, of the `FLUXIQ_*` variables set), so a debug can tell which fixes a run
+held (`packages/test-runner/src/run-manifest/`).
 
 The cell reader runs Node's built-in `node:sqlite` in a child process started
 with `--experimental-sqlite`. It is given the literal on stdin, only the

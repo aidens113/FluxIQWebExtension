@@ -43,10 +43,13 @@
 // **Nothing here shows the model a page it has not earned.** A replayed step
 // that failed carries the page, because that is the page a correction has to be
 // made from; one that worked carries a line saying so and nothing else -- a
-// list read's line says what it read, in counts.
+// list read's line says what it read, in counts, and beside it the rows it
+// returned and the rows each condition removed by itself, by label, which the
+// replay asks the page for as a Flow's playback does (t194 w55).
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
+import { webAutomationExtractListAloneRowsAsked } from "../../../output-nodes";
 import { webActionFailureRefusal, webActionNeedsPerson } from "../action-failure";
 import { assertActive, toolMetadata, withPersonNeeded, type WebLlmEvidenceToolExecution } from "../capture";
 import { present } from "../present";
@@ -61,6 +64,7 @@ import {
   webNodeReplayAnswer as answer,
   webNodeReplayAnswerWithPage as answerWithPage,
   webNodeReplayPermissionReason as permissionReason,
+  webNodeReplayReadRows as readRows,
   webNodeReplayReadSaid as readSaid,
   type WebNodeReplayFacts
 } from "./replay-answer";
@@ -69,6 +73,9 @@ import { verifyWebOutputNode } from "./verify";
 
 /** The reserved key Core marks a replay call with, and what it may ask for. */
 export const WEB_LLM_REPLAY_KEY = "replay";
+
+/** The one verb whose replay asks for the rows its conditions removed by themselves. */
+const EXTRACT_LIST_ACTION = "web.dom.extract_list";
 
 /** The command a reset dispatches: the same move the Flow's own navigate makes. */
 const RESET_ACTION = "web.browser.navigate";
@@ -294,7 +301,12 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
       assumed
     });
   }
-  const ran = resolved.status === "resolved" ? resolved.parameters : parameters;
+  // A list read with conditions asks the page for the rows each removed by
+  // itself, exactly as the Flow's playback will (`output-nodes/extract-list/
+  // dispatch.ts`), so the judge of the build's test can be shown them; it reads
+  // and keeps the same rows either way.
+  const resolvedParameters = resolved.status === "resolved" ? resolved.parameters : parameters;
+  const ran = node.actionType === EXTRACT_LIST_ACTION ? webAutomationExtractListAloneRowsAsked(resolvedParameters) : resolvedParameters;
   const result = await run.gateway.executeAction(run.sessionId, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) });
   assertActive(run.request.signal);
   if (result.status !== "succeeded") {
@@ -342,8 +354,10 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // of a step that worked as of one that did not. A list read says what it
   // read, because its line is all the judge of a build's test sees of it
   // (`./replay-answer.ts`); every other step says only that it ran.
-  const said = readSaid(payload, isJsonRecord(parameters.extractList) ? parameters.extractList.where : undefined) ?? "the step ran again";
-  return answer(REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed });
+  // Its rows go beside the line, by label (`./replay-answer.ts`).
+  const where = isJsonRecord(parameters.extractList) ? parameters.extractList.where : undefined;
+  const said = readSaid(payload, where) ?? "the step ran again";
+  return answer(REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed }, true, readRows(payload, where));
 }
 
 /** How many rows a reading node's payload holds: the longest list it carries. */

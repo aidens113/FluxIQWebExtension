@@ -11,6 +11,8 @@ import type { ExistingFlowExecution, ExistingFluxIQPreflight } from "../existing
 import type { IsolatedCloneImportResult } from "../isolated-flow-importer.js";
 import type { FluxIQPanelVerificationOutcome } from "../panel-verification.js";
 import type { FluxIQTargetConfiguration } from "../target-config.js";
+import { repositoryChanges } from "./repository-changes.js";
+import { runInvocation } from "./run-invocation.js";
 import { runRedactionState, type RunRedactionAttestation } from "../redaction-attestation/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -49,6 +51,8 @@ export type RunManifestInput = {
   actions: RunActionTiming[];
   /** What the run's redaction attestation observed; absent when none ran. Only a passed one records `verified`. */
   redaction?: RunRedactionAttestation | undefined;
+  /** How the run was started; tests pass one, a real run reads its own (`runInvocation()`). */
+  invocation?: RunManifest["invocation"];
 };
 
 /** Builds the run's `run.json`: provenance, environment, execution metadata, and run detail. */
@@ -81,6 +85,7 @@ export async function createRunManifest(input: RunManifestInput): Promise<RunMan
     processExits: topology?.processExitCodes() ?? {},
     artifacts: [],
     redactionState: runRedactionState(input.redaction),
+    invocation: input.invocation ?? runInvocation(),
     verdict: input.verdict,
     ...(fluxiqExecution ? { fluxiqExecution } : {}),
     ...(input.workflowId ? { workflowId: input.workflowId } : {}),
@@ -120,8 +125,11 @@ function cloneExecutionMetadata(state: CloneRunState, panelVerification?: FluxIQ
 async function revision(root: string) {
   const safeDirectory = `safe.directory=${path.resolve(root).replaceAll("\\", "/")}`;
   const { stdout } = await execFileAsync("git", ["-c", safeDirectory, "rev-parse", "HEAD"], { cwd: root });
-  const statusResult = await execFileAsync("git", ["-c", safeDirectory, "status", "--porcelain"], { cwd: root });
-  return { path: path.resolve(root), commit: stdout.trim(), dirty: Boolean(statusResult.stdout.trim()) };
+  const { changes, changesOmitted } = await repositoryChanges(root);
+  return {
+    path: path.resolve(root), commit: stdout.trim(), dirty: changes.length > 0 || (changesOmitted ?? 0) > 0,
+    changes, ...(changesOmitted ? { changesOmitted } : {}),
+  };
 }
 
 async function lockfiles(repositoryRoot: string, fluxiqRepositoryRoot: string) {

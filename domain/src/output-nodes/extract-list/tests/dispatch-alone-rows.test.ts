@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_ONLY, WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY } from "../../../actions/extraction";
-import { webAutomationExtractListDispatch } from "../dispatch";
+import { webAutomationExtractListAloneRowsAsked, webAutomationExtractListDispatch } from "../dispatch";
 
 const filtered = { item: "li.product", fields: { name: ".name" }, where: [{ field: "name", contains: ["charging case"], not: true }] };
 
@@ -34,4 +34,14 @@ test("a read with no conditions, or one that does not parse, asks for none", () 
 
 test("a node whose parameters already say is sent as they say", () => {
   assert.equal(parametersOf({ extractList: filtered, rejectedSamples: true })[WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY], true);
+});
+
+// t194 w55: the draft's replay asks the same way, for the judge of the build's test.
+test("the replay's ask is the dispatch's: a read with conditions asks for its alone rows, any other parameters are left as they are", () => {
+  const node = { extractList: filtered };
+  assert.equal(webAutomationExtractListAloneRowsAsked(node)[WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY], "alone");
+  assert.equal(Object.hasOwn(node, WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY), false);
+  assert.equal(webAutomationExtractListAloneRowsAsked({ extractList: filtered, rejectedSamples: false })[WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY], false);
+  const unfiltered = { extractList: { item: "li.product", fields: { name: ".name" } } };
+  assert.deepEqual(webAutomationExtractListAloneRowsAsked(unfiltered), unfiltered);
 });
