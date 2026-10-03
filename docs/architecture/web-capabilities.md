@@ -567,10 +567,13 @@ tested directly:
 - a failed validation is not a success: the result is `failed` with Core's
   `output_not_observed`, retryable, at the `verification` stage, carrying the
   two values that disagreed;
-- a target that was disabled, hidden, or covered is TARGET_NOT_ACTIONABLE —
+- a target that was disabled or covered is TARGET_NOT_ACTIONABLE —
   `web.target.not_actionable`, category `unexpected_state`, never retryable,
-  with the gate's own reason in the record's `actual` — and anything refused on
-  purpose is ACTION_REJECTED (`web.action.rejected`,
+  with the gate's own reason in the record's `actual`; a target that is in the
+  document and not shown (the gate's `hidden`) is TARGET_NOT_SHOWN —
+  `web.target.not_shown`, category `target_not_found`, retryable, at
+  `target_resolution`, so a Flow run finds the current step by state — and
+  anything refused on purpose is ACTION_REJECTED (`web.action.rejected`,
   `blocked_by_capability_or_policy`);
 - a wait or an action that ran out of time is `timed_out` with Core's `timeout`
   category, never flattened to `failed`;

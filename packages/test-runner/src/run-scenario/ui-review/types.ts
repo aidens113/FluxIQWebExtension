@@ -34,6 +34,12 @@ export type OverlaySample = {
   step?: string;
   /** `document.visibilityState` of the sampled tab: a hidden tab does not paint, whatever the overlay says. */
   documentVisibility?: string;
+  /**
+   * `performance.timeOrigin` of the document the read was taken in: it changes
+   * whenever the tab loads a new document and only then, so two samples with
+   * different values were read from different documents. Absent on a failed read.
+   */
+  documentOrigin?: number;
   /** Why this read failed; the other fields are then absent. */
   error?: string;
 };
@@ -46,10 +52,16 @@ export type OverlayChangeCounts = {
   visibleSamples: number;
   /** A present sample whose text differs from the previous present sample's. */
   textChanges: number;
-  /** Present flipped between consecutive readable samples. */
+  /** Present flipped between consecutive readable samples, a page load's gap excluded. */
   presenceToggles: number;
-  /** Visible flipped between consecutive readable samples. */
+  /** Visible flipped between consecutive readable samples, a page load's gap excluded. */
   visibilityToggles: number;
+  /**
+   * A single absent sample whose immediate neighbours were both readable, present,
+   * and read from different documents: the browser swapping documents, which no
+   * product code can bridge. It is counted here and as no toggle of either kind.
+   */
+  pageLoads: number;
   /** A change back to a text already shown earlier in the window (A, B, A). */
   textRevisits: number;
   distinctTexts: number;

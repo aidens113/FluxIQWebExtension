@@ -187,6 +187,9 @@ test("a failed action's refusal code is read from the client's closed code, neve
     // The gate's page-state refusals carry their own code since t193 (Core's `unexpected_state`); read the same way.
     [{ status: "failed", failure: { code: codes.TARGET_NOT_ACTIONABLE, actual: "covered: the added-to-cart drawer" } }, "target_covered"],
     [{ status: "failed", failure: { code: codes.TARGET_NOT_ACTIONABLE, actual: "hidden: the element has a zero-size box" } }, "target_not_actionable"],
+    // A target the page has and does not show is Core's `target_not_found` since
+    // t193-1002m, and the model is still told what it was told before.
+    [{ status: "failed", failure: { code: codes.TARGET_NOT_SHOWN, actual: "hidden: the element's display is none" } }, "target_not_actionable"],
     [{ status: "failed", failure: { code: codes.TARGET_NOT_FOUND } }, "target_not_found"],
     [{ status: "failed", failure: { code: codes.TARGET_AMBIGUOUS } }, "target_not_found"],
     [{ status: "failed", failure: { code: codes.PAGE_CHANGED } }, "page_changed"],

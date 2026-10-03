@@ -30,6 +30,10 @@ import {
 const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, string]> = [
   ["ACTION_REJECTED", "web.action.rejected", "blocked_by_capability_or_policy", false, "execution"],
   ["TARGET_NOT_ACTIONABLE", "web.target.not_actionable", "unexpected_state", false, "execution"],
+  // t193 (2026-10-02): a target in the DOM and not shown -- the gate's `hidden`
+  // reason. Core's `target_not_found`, so a Flow run routes by page state or
+  // takes the step's sometimes-present skip instead of the recovery ladder.
+  ["TARGET_NOT_SHOWN", "web.target.not_shown", "target_not_found", true, "target_resolution"],
   ["TARGET_NOT_FOUND", "web.target.not_found", "target_not_found", true, "target_resolution"],
   ["TARGET_AMBIGUOUS", "web.target.ambiguous", "target_ambiguous", false, "target_resolution"],
   ["OUTPUT_NOT_OBSERVED", "web.validation.output_not_observed", "output_not_observed", true, "verification"],
@@ -261,4 +265,17 @@ test("a press the page refused for needing something first is Core's unexpected 
   assert.equal(diagnosis.failureClass, "unexpected_state");
   assert.equal(diagnosis.resolution, "model_required");
   assert.equal(diagnosis.modelNeeded, true);
+});
+
+test("a target the page has and does not show is Core's target_not_found, so the run routes by state; disabled and covered stay the page's unexpected state", () => {
+  // Live run `run-murwdp4f-35f976d2` (cause R1-C2): a chat card's close button,
+  // in the DOM and not shown until the card opens, failed as
+  // `web.target.not_actionable` (`unexpected_state`), so the step never routed
+  // by state or took its sometimes-present skip -- Core does both only for
+  // `target_not_found` (`R/executor/state-routing/could-not-run.ts`).
+  const hidden = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN, { actual: "hidden: the element's display is none" });
+  assert.deepEqual(hidden, { category: "target_not_found", code: "web.target.not_shown", retryable: true, stage: "target_resolution", actual: "hidden: the element's display is none" });
+  assert.deepEqual(parseAutomationStudioFailureRecord({ ...hidden, effect: "unacted" }), { ...hidden, effect: "unacted" }, "the gate's unacted statement survives Core's parser");
+  const actionable = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE];
+  assert.deepEqual(actionable, { category: "unexpected_state", retryable: false, stage: "execution" }, "disabled and covered are unchanged");
 });

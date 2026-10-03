@@ -50,8 +50,10 @@ export type CreatedFlowChatWait = { now?: () => number; sleep?: (ms: number) => 
  * is the Flow the chat made, `null` when it made none. `applied` is the change
  * the chat put into it, `null` unless it did. `said` is FluxIQ's own last word
  * about the instruction in the thread -- its answer when it built nothing, the
- * build's result otherwise -- bounded, so a failure can say why in FluxIQ's
- * words.
+ * build's result otherwise -- whole, so a failure says why in all of FluxIQ's
+ * words. It is not cut: live run `run-murzln6g-11debe1d` lost the end of its
+ * ending ("...was not...") in every record, and the evidence bundle already
+ * screens what it writes for secrets.
  */
 export type CreatedFlowChatBuild = Readonly<{
   build: CreatedFlowBuild;
@@ -65,7 +67,6 @@ const RESULT_ATTACHMENT = "panel-capability-result";
 const CREATE_HERE = "flow.createHere";
 /** Core's own note on an answer it gave without the model (`instructions/respond.ts`). */
 const READ_WITHOUT_MODEL = /I read your message without the model/u;
-const SAID_MAX = 600;
 const POLL_MS = 500;
 const SEND_MS = 60_000;
 const ANSWER_MS = 60_000;
@@ -143,7 +144,7 @@ export async function buildCreatedFlowFromChat(
     const chatRecord = record(turns, { became: other ? "other_capability" : "no_build", ...(other ? { otherCapability: other } : {}), ending: "failed", resultTurn: started?.result?.ordinal ?? null, secondsToEnding: null });
     await chat.picture?.("ended");
     const build = failedCreatedFlowBuild({ code: other ? "lab.chat_ran_other_capability" : "lab.chat_started_no_build", stage: "chat", httpStatus: null }, "not_attempted", now() - sentAt);
-    return Object.freeze({ build: Object.freeze({ ...build, chat: chatRecord }), flowId: null, applied: null, said: bounded((started?.result ?? answer).text) });
+    return Object.freeze({ build: Object.freeze({ ...build, chat: chatRecord }), flowId: null, applied: null, said: (started?.result ?? answer).text });
   }
 
   const ended = started.result ?? await until(Math.max(0, (wait.deadlineMs ?? DEADLINE_MS) - (now() - sentAt)), async () => after(await thread()).find((turn) => isResult(turn) && turn.attachment!.ref === CREATE_HERE));
@@ -154,7 +155,7 @@ export async function buildCreatedFlowFromChat(
   if (made.length > 1) throw new RunnerFailure("runtime.behavior", `FluxIQ's chat made ${made.length} Flows for one instruction`, { details: { stage: "chat.flow", conversationId, flows: made.length } });
   const flowId = made[0] ?? null;
   const ending = (fields: Pick<CreatedFlowChatRecord, "ending">) => record(turns, { became: "build", resultTurn: ended?.ordinal ?? null, secondsToEnding: ended ? Math.round(durationMs / 100) / 10 : null, ...fields });
-  const said = ended ? bounded(ended.text) : null;
+  const said = ended ? ended.text : null;
   if (!ended || flowId === null) {
     const code = !ended ? "lab.chat_build_unfinished" : "lab.chat_build_failed";
     const build = failedCreatedFlowBuild({ code, stage: "chat", httpStatus: null }, "unknown", durationMs);
@@ -227,10 +228,6 @@ function askCounts(turns: readonly CreatedFlowChatTurn[]): CreatedFlowChatRecord
   const permission = asks.filter((ask) => ask.kind === "permission").length;
   const personCheck = asks.filter((ask) => ask.controlKind === "person_check").length;
   return Object.freeze({ permission, personCheck, other: asks.length - permission - personCheck });
-}
-
-function bounded(text: string): string {
-  return text.length > SAID_MAX ? `${text.slice(0, SAID_MAX - 3)}...` : text;
 }
 
 function seconds(ms: number): number {

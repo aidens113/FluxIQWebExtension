@@ -103,7 +103,7 @@ export class UiReviewRecorder {
     const moment: UiReviewMoment = { index, label, phase, at: new Date().toISOString(), atMs, scenario: pictures.scenario, panel: pictures.panel, overlay };
     this.moments.push(moment);
     const counts = overlay.counts;
-    this.log(`[lab] ui review #${index} ${label}: scenario ${pictures.scenario.file ?? pictures.scenario.withheld ?? pictures.scenario.error}; panel (${pictures.panel.source}) ${pictures.panel.file ?? pictures.panel.withheld ?? pictures.panel.error}; overlay ${counts.status}, ${counts.visibleSamples}/${counts.samples} visible, ${counts.textChanges} text change(s), ${counts.presenceToggles} presence toggle(s)`);
+    this.log(`[lab] ui review #${index} ${label}: scenario ${pictures.scenario.file ?? pictures.scenario.withheld ?? pictures.scenario.error}; panel (${pictures.panel.source}) ${pictures.panel.file ?? pictures.panel.withheld ?? pictures.panel.error}; overlay ${counts.status}, ${counts.visibleSamples}/${counts.samples} visible, ${counts.textChanges} text change(s), ${counts.presenceToggles} presence toggle(s), ${counts.pageLoads} page load(s)`);
   }
 
   private async sampleOverlay(context: BrowserContext, page: Page): Promise<OverlaySampleWindow> {

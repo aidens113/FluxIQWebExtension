@@ -6,7 +6,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ACTIVITY_ACTION_NAMES } from "fluxiq/ui";
-import type { ActionCard } from "../action-card";
+import type { ClientGatewayActivity } from "../../../../../shared/activity/index";
+import { actionCard, type ActionCard } from "../action-card";
 import { cardWords } from "../card-words";
 
 function card(fields: Partial<ActionCard>): ActionCard {
@@ -82,4 +83,25 @@ test("a test run's step is named by its action and says it was a test", () => {
   assert.deepEqual([typed.name, typed.target, typed.label], ["Testing: Type", '"Voltbay USB-C hub" into Autumn Mega Sale: up to 70% off', 'Testing: Type, "Voltbay USB-C hub" into Autumn Mega Sale: up to 70% off: Done']);
   assert.equal(cardWords(card({ testing: true }), false).name, "Testing: Click");
   assert.equal(cardWords(card({}), false).name, "Click", "a build's own step is not a test");
+});
+
+// t193 1002-M (`run-murzln6g-11debe1d`, C10): six test steps the test did not
+// press read "Done", and the drawer's "×" the Flow passes over read "Didn't
+// work: it didn't work the same way again". Merged with t174-w85 D4: such a
+// step is named by its action and marked as a test; these words are its outcome.
+test("a test step says what the test did with it: done again, checked, already done on the site, or skipped", () => {
+  assert.equal(cardWords(card({ kind: "test", tested: "Checked, not pressed" }), false).outcome, "Checked, not pressed");
+  assert.equal(cardWords(card({ kind: "test", tested: "Already done on the site" }), false).label, "Test run, Get a free quote: Already done on the site");
+  assert.equal(cardWords(card({ kind: "test" }), false).outcome, "Done");
+
+  const row = (seq: number, text: string): ClientGatewayActivity => ({
+    activityId: "build:b", sequence: seq, subject: { kind: "build", id: "b", projectId: "p" }, at: "2026-10-02T06:08:30.000Z", phase: "verifying",
+    label: "Trying the Flow from the start: clicking “×”", detail: { kind: "tool", title: "Clicking “×”", status: "succeeded", ref: "core.run_node", text }
+  });
+  const words = (seq: number, text: string) => cardWords(actionCard(row(seq, text), `action:build:b#${seq}`)!, false);
+  assert.deepEqual([words(1, "Result: core.replay.failed · Excused: interruption · Node: web.output.dom-click").state, words(1, "Result: core.replay.failed · Excused: interruption · Node: web.output.dom-click").outcome], ["done", "Skipped: not there, optional"]);
+  assert.equal(words(2, "Result: core.replay.verified · Node: web.output.dom-click").outcome, "Checked, not pressed");
+  assert.equal(words(3, "Result: core.replay.remembered · Node: web.output.dom-click").outcome, "Already done on the site");
+  assert.equal(words(4, "Result: core.replay.replayed · Node: web.output.dom-click").outcome, "Done");
+  assert.equal(words(5, "Result: core.replay.failed · Node: web.output.dom-click").outcome, "Didn't work: it didn't work the same way again");
 });

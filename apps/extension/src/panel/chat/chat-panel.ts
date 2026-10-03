@@ -138,7 +138,7 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     hidden: true,
     attrs: { type: "button", "aria-label": "Jump to latest", title: "Jump to latest" }
   }, ["↓"]);
-  const follower = createScrollFollower(scroller, (show) => (jump.hidden = !show));
+  const follower = createScrollFollower(scroller, (show) => (jump.hidden = !show), column);
   jump.addEventListener("click", () => follower.followNow());
   const composer = createComposer((text) => {
     if (!actionsAllowed()) return Promise.resolve(false);
