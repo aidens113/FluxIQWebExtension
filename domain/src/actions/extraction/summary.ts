@@ -79,6 +79,27 @@ export type WebAutomationExtractionSummary = {
   paginationStop?: WebAutomationExtractionPaginationStop | undefined;
   /** What `dedupe` and `sort` did, or absent for a read whose request named neither. */
   order?: WebAutomationExtractionOrderReport | undefined;
+  /**
+   * Records a read that moves to another page (`next`, `numbered`) left out
+   * because each repeated, field for field, a record an earlier page had
+   * already yielded -- with or without a `dedupe`, since the page does this on
+   * every such read. Counted after `where` and before `dedupe` and the item
+   * bound, so `conditions.kept` above `recordCount` is these, `order.duplicates`
+   * and the bound between them.
+   *
+   * It exists because live run `run-muqk713g` kept 12 rows through its
+   * conditions and stored 10, the other two repeats of an earlier page, and
+   * nothing said so: every judge, told the read did not deduplicate, asked for
+   * a dedupe it already did.
+   *
+   * `0` from such a read that met no repeat. A read continued in another
+   * document sums its documents' counts, carried in its checkpoint
+   * (`apps/extension/src/shared/extraction-continuation.ts`). Absent from a read
+   * that does not move to another page, from a page build that predates it, and
+   * from a continued read whose checkpoint carried no count: an absent count is
+   * unknown, never zero.
+   */
+  earlierPageRepeats?: number | undefined;
 };
 
 /**
@@ -334,6 +355,9 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
   // What dedupe and sort did, held to the same rule.
   const order = summary.order === undefined ? undefined : webAutomationExtractionOrderReportValue(summary.order);
   if (summary.order !== undefined && order === undefined) return undefined;
+  // The repeats of earlier pages the read left out, held to the rule every count is.
+  const earlierPageRepeats = countValue(summary.earlierPageRepeats);
+  if (summary.earlierPageRepeats !== undefined && earlierPageRepeats === undefined) return undefined;
   // No cross-check against `recordCount`, unlike `kept > applied` below: a
   // continued read carries its predecessor's records, so `recordCount` above
   // `itemsSeen` is a legitimate read, and dropping the account would lose the
@@ -352,7 +376,8 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
     ...(rejectedSamples !== undefined ? { rejectedSamples } : {}),
     ...(rejectedSamplesAlone !== undefined ? { rejectedSamplesAlone } : {}),
     ...(paginationStop !== undefined ? { paginationStop } : {}),
-    ...(order !== undefined ? { order } : {})
+    ...(order !== undefined ? { order } : {}),
+    ...(earlierPageRepeats !== undefined ? { earlierPageRepeats } : {})
   };
 }
 

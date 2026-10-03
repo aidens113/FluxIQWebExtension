@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -517,8 +517,9 @@ const REAUTHOR_ID = "adaptation.bootstrap.2b83be32-6264-481a-baec-e18bf3dc3922";
 const appliedReauthor = { attempt: 1, routed: true, adaptationId: REAUTHOR_ID, applied: true, durationMs: 173_400, accounting: { requestId: "evidence.aa628a38", provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 441_137, outputTokens: 10_071, totalTokens: 451_208, estimatedCostUsd: 0.042481212 } };
 const reauthorAdaptation = () => ({ adaptation: { evidenceLoop: { providerCallCount: 35, additionalProviderCallCount: 1, totalProviderCallCount: 36 } } });
 
-async function settleReauthoredRun(attempts: unknown[], adaptation: () => unknown = reauthorAdaptation) {
+async function settleReauthoredRun(attempts: unknown[], adaptation: () => unknown = reauthorAdaptation, stepsDirectory?: string) {
   const { core, run, written, published, settle } = await settleBuildOnce(reauthoredBuild, { maxCallsPerRun: 48 });
+  if (stepsDirectory) run.readStepLogFrom(stepsDirectory);
   await settle();
   await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   const reads: Array<{ endpoint: string; payload: Record<string, unknown> }> = [];
@@ -548,6 +549,7 @@ test("a run that re-authored reports every call it made -- build, checks and re-
     runtime: { calls: 0, estimatedCostUsd: 0 },
     judge: { calls: 2, estimatedCostUsd: 0.001830072 },
     reauthor: { calls: 36, estimatedCostUsd: 0.042481212 },
+    chat: null,
   });
   assert.deepEqual(snapshot.observed.phases, snapshot.runSpend.phases);
   assert.deepEqual(snapshot.reauthor.attempts, [{ attempt: 1, adaptationId: REAUTHOR_ID, calls: 36, callsFrom: "adaptation", inputTokens: 441_137, outputTokens: 10_071, estimatedCostUsd: 0.042481212 }]);
@@ -575,6 +577,40 @@ test("a re-author's retries are counted too, and an attempt whose calls cannot b
   assert.equal(unreadable.snapshot.observed.totalEstimatedCostUsd, 0.086099304, "its cost is Core's accounting and still counted");
   assert.deepEqual(unreadable.snapshot.runSpend.uncountedPhases, ["reauthor"]);
   assert.deepEqual(unreadable.published.at(-1)?.runTotal, { calls: 24, totalEstimatedCostUsd: 0.086099304, uncountedPhases: ["reauthor"] });
+});
+
+/** A step log as Core writes one: a folder per step, `meta.json` last; tool steps name no provider. */
+async function writeStepLog(t: test.TestContext, steps: Array<[kind: string, costUsd: number | null]>): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-live-run-steps-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const [index, [kind, costUsd]] of steps.entries()) {
+    const folder = path.join(root, `${String(index + 1).padStart(4, "0")}-${kind}`);
+    await mkdir(folder, { recursive: true });
+    await writeFile(path.join(folder, "meta.json"), JSON.stringify(kind.startsWith("tool-") ? { kind: "tool" } : { kind, provider: "deepseek", model: DEFAULT_LLM_MODEL, costUsd }));
+  }
+  return root;
+}
+
+// `run-muqk713g-d08ad3dc`: `llm.calls` 17 and a ledger $0.12085128, while its
+// step log held 35 provider calls for $0.121157 -- the failed re-author's 17
+// calls, which Core recorded a cost for and no count, and the chat's own call.
+test("a run whose step log Core wrote counts every call in it -- the chat's and an uncounted re-author's -- in llm.calls and the ledger's total", async (t) => {
+  const steps: Array<[string, number | null]> = [
+    ["chat", 0.0003],
+    ["decide", 0.04178802], ...Array.from({ length: 21 }, (): [string, number] => ["decide", 0]),
+    ["tool-core.run_node", null],
+    ["judge", 0.001247076], ["judge", 0.000582996],
+    ["decide", 0.042481212], ...Array.from({ length: 35 }, (): [string, number] => ["decide", 0]),
+  ];
+  const { run, snapshot, published } = await settleReauthoredRun([appliedReauthor], () => { throw new Error("gone"); }, await writeStepLog(t, steps));
+  assert.equal(snapshot.observed.calls, 1 + 22 + 2 + 36);
+  assert.equal(snapshot.observed.totalEstimatedCostUsd, 0.086399304);
+  assert.equal(run.usage.calls, 61, "the evaluation's llm.calls is the step log's count");
+  assert.deepEqual(snapshot.runSpend.phases.chat, { calls: 1, estimatedCostUsd: 0.0003 });
+  assert.deepEqual(snapshot.runSpend.phases.reauthor, { calls: 36, estimatedCostUsd: 0.042481212 });
+  assert.deepEqual(snapshot.runSpend.uncountedPhases, []);
+  assert.deepEqual(snapshot.runSpend.stepLog, { calls: 61, estimatedCostUsd: 0.086399304, filledReauthorCalls: 36, unattributed: { calls: 0, estimatedCostUsd: 0 } });
+  assert.deepEqual(published.at(-1)?.runTotal, { calls: 61, totalEstimatedCostUsd: 0.086399304 });
 });
 
 // `run-mup2u8o3-6697c4be`: the build ended without a Flow

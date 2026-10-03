@@ -145,7 +145,10 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[], aloneOnly: b
     // What dedupe and sort took -- the repeats left out and the rows a sort key
     // could not read -- so a sort over a column the page states as prose is
     // visible to the verifier rather than looking like page order.
-    ...(outcome.order ? { order: { duplicates: outcome.order.duplicates, unsortable: outcome.order.unsortable } } : {})
+    ...(outcome.order ? { order: { duplicates: outcome.order.duplicates, unsortable: outcome.order.unsortable } } : {}),
+    // The kept rows a page-by-page read left out as repeats of an earlier page's,
+    // so kept rows above stored ones say why (`extraction/list-reader.ts`).
+    ...(outcome.earlierPageRepeats === undefined ? {} : { earlierPageRepeats: outcome.earlierPageRepeats })
   };
 }
 

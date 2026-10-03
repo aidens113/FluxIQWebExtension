@@ -154,6 +154,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   const startedAt = new Date().toISOString();
   // A live run is filed in the machine-wide `lab-runs/<date>/<runId>/` (`lab-runs/`), opened before Core starts so that Core logs every model and tool step into its `steps/`.
   const labRun = live ? await LabRunRecord.open({ environment, runId, startedAt, scenarioId: scenario.id, work: creation?.task.id ?? live.describeRepair().task, workflowId: options.workflowId, variantId: options.variantId, bundlePath: path.resolve(options.runsDirectory, runId), repositoryRoot: options.repositoryRoot }) : undefined;
+  if (live && labRun?.stepsDirectory) live.readStepLogFrom(labRun.stepsDirectory); // The run's totals count every provider call Core logs there (`live-llm/step-log-spend.ts`).
   let topology: RunningTopology | undefined;
   let context: BrowserContext | undefined;
   let extensionPage: Page | undefined;
