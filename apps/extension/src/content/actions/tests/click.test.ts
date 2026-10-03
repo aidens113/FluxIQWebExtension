@@ -102,7 +102,7 @@ function fakeWatch(effect: InPlaceEffect | undefined, events: string[]): { make:
   };
 }
 
-type NoticeRecord = { made: number; settledWith: number[]; stopped: number; refusedWith: RateLimitNotice[] };
+type NoticeRecord = { made: number; settledWith: number[]; stopped: number; refusedWith: RateLimitNotice[]; refusedByPageWith: RateLimitNotice[] };
 
 /** A rate-limit watch that reports `notice` when settled (`later` for a press made once more), and records how the verb used it. */
 function fakeNoticeWatch(
@@ -110,7 +110,7 @@ function fakeNoticeWatch(
   events: string[],
   later?: RateLimitNotice
 ): { make: ContentActionDependencies["watchRateLimitNotice"]; record: NoticeRecord } {
-  const record: NoticeRecord = { made: 0, settledWith: [], stopped: 0, refusedWith: [] };
+  const record: NoticeRecord = { made: 0, settledWith: [], stopped: 0, refusedWith: [], refusedByPageWith: [] };
   return {
     record,
     make: () => {
@@ -225,6 +225,18 @@ function dependencies(
         status: "failed",
         validation: { status: "failed", expected: "the page accepts the press", actual: "refused" },
         failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { retryAfterMs: notice.retryAfterMs }),
+        startedAt,
+        finishedAt: startedAt
+      };
+    },
+    refusedByPage: (action: BrowserActionCommand, startedAt: number, notice: RateLimitNotice): BrowserActionResult => {
+      notices.record.refusedByPageWith.push(notice);
+      return {
+        commandId: action.commandId,
+        actionType: action.actionType,
+        status: "failed",
+        validation: { status: "failed", expected: "the page accepts the press", actual: "refused: needs something first" },
+        failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.REFUSED_BY_PAGE),
         startedAt,
         finishedAt: startedAt
       };
@@ -370,13 +382,13 @@ test("a button the page answers with a going-too-fast notice fails as rate limit
   assert.equal(result.failure?.retryable, true);
   assert.equal(result.failure?.effect, "unacted");
   assert.equal(result.failure?.retryAfterMs, 12_500);
-  assert.deepEqual(notices, { made: 1, settledWith: [500], stopped: 1, refusedWith: [{ afterMs: 3, retryAfterMs: 12_500 }] });
+  assert.deepEqual(notices, { made: 1, settledWith: [500], stopped: 1, refusedWith: [{ afterMs: 3, retryAfterMs: 12_500 }], refusedByPageWith: [] });
 });
 
 test("a button with no such notice still passes on its hit test, after the rate-limit window", async (t) => {
   const { result, notices } = await click(t, { link: false, prevent: false }, undefined);
   assert.equal(result.status, "succeeded");
-  assert.deepEqual(notices, { made: 1, settledWith: [500], stopped: 1, refusedWith: [] });
+  assert.deepEqual(notices, { made: 1, settledWith: [500], stopped: 1, refusedWith: [], refusedByPageWith: [] });
 });
 
 test("the rate-limit, robot-check and ignored-press watches start between the hover and the press, so what was already there is never the press's answer", async (t) => {
@@ -551,4 +563,29 @@ test("a link is never watched for an ignored press, and never pressed twice: its
   const { ignored, events } = await click(t, { link: true, prevent: true }, undefined, CLICK, undefined, undefined, 1_000, IGNORED);
   assert.equal(ignored.made, 0);
   assert.equal(events.filter((event) => event === "click").length, 1);
+});
+
+// The press the page refused because it needs something first (t174 F40):
+// crossborder's Add to cart, with no colour chosen, writes "Please select a
+// Color." into the item's error line -- outside the buy bar, so the
+// ignored-press watch saw nothing -- and adds nothing. It used to be pressed
+// once more and reported a success.
+test("a first press the page answers with a line that it needs something first fails as refused by the page and is never pressed again", async (t) => {
+  const { result, events, notices } = await click(t, { link: false, prevent: false }, undefined, CLICK, { afterMs: 4, needs: true }, undefined, 1_000, IGNORED);
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, "web.action.refused_by_page");
+  assert.equal(result.failure?.retryable, false, "no backoff and no recovery loop makes the same press again");
+  assert.deepEqual(notices.refusedByPageWith, [{ afterMs: 4, needs: true }]);
+  assert.deepEqual(notices.refusedWith, [], "it is not reported as a rate limit");
+  assert.deepEqual(events, FIRST_PRESS, "one press, never a blind second one");
+});
+
+test("the press made once more is refused by the page when the page answers it so", async (t) => {
+  const { result, events, notices } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, {
+    seen: [],
+    secondNotice: { afterMs: 2, needs: true }
+  });
+  assert.equal(result.failure?.code, "web.action.refused_by_page");
+  assert.deepEqual(notices.refusedByPageWith, [{ afterMs: 2, needs: true }]);
+  assert.deepEqual(events, [...FIRST_PRESS, ...SECOND_PRESS]);
 });

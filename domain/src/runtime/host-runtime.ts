@@ -46,7 +46,14 @@ import { dispatchWebAutomationOutput } from "../io/gateway-output-dispatcher";
 import { webAutomationOutputNodeId } from "../output-nodes";
 import { createWebAutomationExpectationEvaluator, type WebAutomationExpectationDispatch } from "./expectation";
 import { publishedWebLlmPage, sanitizeWebLlmSnapshot } from "./llm-evidence";
-import { WEB_AUTOMATION_ROUTE_STATE_PATHS, webAutomationRouteState } from "./route-state";
+import {
+  compareWebAutomationRouteSignatures,
+  WEB_AUTOMATION_ROUTE_STATE_PATHS,
+  webAutomationRouteEffect,
+  webAutomationRouteEffectHolds,
+  webAutomationRouteSignature,
+  webAutomationRouteState
+} from "./route-state";
 import { webAutomationStateDiff } from "./state-diff";
 
 /**
@@ -142,6 +149,16 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       return webAutomationRouteState(sanitizeWebLlmSnapshot(actionSnapshot(result.payload)));
     },
     routeStatePaths: WEB_AUTOMATION_ROUTE_STATE_PATHS,
+    // The hashes-only signature Core keeps of each node's pre- and post-state,
+    // and whether a recorded one is the page observed now (t243). Pure and
+    // synchronous; the rule is in `./route-state/compare-signatures.ts`.
+    signRouteState: (state) => webAutomationRouteSignature(state),
+    compareRouteSignatures: (recorded, observed) => compareWebAutomationRouteSignatures(recorded, observed),
+    // The hashes-only effect Core keeps of each node's step, and whether it is
+    // already on the page when the step cannot run (t243). Pure and
+    // synchronous; the rule is in `./route-state/effect/holds.ts`.
+    signRouteEffect: (before, after) => webAutomationRouteEffect(before, after),
+    routeEffectHolds: (effect, observed) => webAutomationRouteEffectHolds(effect, observed),
     inspectStateDiff(input) {
       if (input.before?.summary === undefined || input.after?.summary === undefined) {
         throw new Error("A web state diff needs a snapshot on both sides, so none was computed.");

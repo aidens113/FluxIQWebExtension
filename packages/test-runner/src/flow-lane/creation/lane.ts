@@ -209,6 +209,8 @@ export type CreatedFlowLaneIncomplete = Readonly<{
   failure: { category: RunnerFailureCategory | null; message: string } | null;
   permissionStop?: CreatedFlowLanePermissionStop["permissionStop"];
   task: ReturnType<typeof describeCreatedFlowRequest>;
+  /** How the build was started, as the complete snapshot says it: the lane's own entry, since a build that stopped may leave no chat record (`run-murdouox-c5294247`). */
+  buildEntry: CreatedFlowLaneEntry["kind"];
   flowId: string | null;
   build: CreatedFlowBuild | null;
   review: CreatedFlowReview | null;
@@ -514,6 +516,7 @@ function incompleteCreatedFlowLaneEvidence(input: CreatedFlowLaneInput, progress
     stoppedAt: progress.stage,
     failure: error === undefined ? null : { category: error instanceof RunnerFailure ? error.category : null, message: error instanceof Error ? error.message : String(error) },
     task: describeCreatedFlowRequest(input.request),
+    buildEntry: input.entry.kind,
     flowId: progress.flowId ?? null,
     build: progress.build ?? null,
     review: progress.review ?? null,

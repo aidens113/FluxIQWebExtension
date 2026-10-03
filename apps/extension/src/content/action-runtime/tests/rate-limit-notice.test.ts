@@ -234,3 +234,75 @@ test("a control whose label never had words is not read as working", async () =>
   assert.equal(await watchRateLimitNotice(pressedElement(), probe).settle(100), undefined);
   assert.ok(Date.now() - began < 600);
 });
+
+// A page that will not carry the press out until it is given something first,
+// saying so in a line it writes beside the control: crossborder's Add to cart,
+// pressed with no colour chosen, writes "Please select a Color." into the item's
+// error line and adds nothing (t174 F40, `run-muqk4u32-0b36e58f`). The page is
+// faked at the lines written into the pressed control's region since the last
+// look (`writtenLines`); what is written there is the page's, and only the
+// verdict leaves the watch.
+
+/** A page with no layers whose region is written `lines(elapsed)` at each look after the press, and whose control reads `label(elapsed)`. */
+function writingPage(lines: (elapsedMs: number) => readonly string[], label: (elapsedMs: number) => string = () => "Add to cart"): RateLimitProbe & { stopped: () => boolean } {
+  let pressedAt: number | undefined;
+  let stopped = false;
+  return {
+    layers: () => [],
+    textOf: () => "",
+    regionTexts: () => [""],
+    labelOf: () => {
+      if (pressedAt === undefined) {
+        pressedAt = Date.now();
+        return "Add to cart";
+      }
+      return label(Date.now() - pressedAt);
+    },
+    writtenLines: () => ({
+      take: () => (pressedAt === undefined ? [] : lines(Date.now() - pressedAt)),
+      stop: () => {
+        stopped = true;
+      }
+    }),
+    stopped: () => stopped
+  };
+}
+
+test("a line the press wrote beside the control saying the page needs something first is a refusal, answered at once", async () => {
+  const probe = writingPage(() => ["Please select a Color."]);
+  const began = Date.now();
+  const found = await watchRateLimitNotice(pressedElement(), probe).settle(500);
+  assert.equal(found?.needs, true);
+  assert.equal(found?.busy, undefined);
+  assert.equal(found?.retryAfterMs, undefined, "nothing to wait for: the page wants something first");
+  assert.deepEqual(Object.keys(found ?? {}).sort(), ["afterMs", "needs"], "nothing the page wrote leaves the watch");
+  assert.ok(Date.now() - began < 400, "the window was not waited out");
+  assert.equal(probe.stopped(), true, "the watch on the region's lines is stopped with the watch");
+});
+
+test("a line the press wrote that is stock, price or a confirmation is no refusal", async () => {
+  for (const line of ["Only 30 pieces available.", "Added to cart!", "This combination is sold out.", "€23.99"]) {
+    assert.equal(await watchRateLimitNotice(pressedElement(), writingPage(() => [line])).settle(60), undefined, line);
+  }
+});
+
+test("a requirement written once the control stops working is still found: the purchase limit comes after the server", async () => {
+  // crossborder's Add to cart shows a spinner for 700 ms and the request, then
+  // "You have reached the purchase limit for this item." with nothing added.
+  const busyUntilMs = 400;
+  const probe = writingPage(
+    (elapsed) => (elapsed < busyUntilMs ? [] : ["You have reached the purchase limit for this item."]),
+    (elapsed) => (elapsed < busyUntilMs ? "" : "Add to cart")
+  );
+  const found = await watchRateLimitNotice(pressedElement(), probe).settle(100);
+  assert.equal(found?.needs, true);
+});
+
+test("a line saying the page needs something first wins over a busy line seen in the same press", async () => {
+  const probe: RateLimitProbe = { ...writingPage(() => ["Please enter a quantity."]), regionTexts: (() => {
+    let call = 0;
+    return () => [call++ === 0 ? "Get coupons" : "Get coupons Network busy, please try again"];
+  })() };
+  const found = await watchRateLimitNotice(pressedElement(), probe).settle(200);
+  assert.equal(found?.needs, true);
+});

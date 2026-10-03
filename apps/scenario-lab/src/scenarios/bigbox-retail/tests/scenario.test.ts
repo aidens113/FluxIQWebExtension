@@ -22,9 +22,9 @@ test("the manifest is valid, loopback-only, and declares the three workflows and
   assert.deepEqual(validateWebScenario(manifest), { valid: true, value: manifest });
   assert.equal(manifest.networkPolicy, "loopback-only");
   assert.deepEqual([manifest.id, manifest.seed, manifest.startPath], ["bigbox-retail", 239, "/scenarios/bigbox-retail/"]);
-  assert.deepEqual(manifest.variants?.map((variant) => variant.id), ["redesigned-buy-box"]);
+  assert.deepEqual(manifest.variants?.map((variant) => variant.id), ["redesigned-buy-box", "store-remembered"]);
   assert.deepEqual(manifest.workflows?.map((workflow) => [workflow.id, (workflow.variants ?? []).map((variant) => variant.id)]), [["pickup-towels", ["list-layout"]], ["pickup-order", []]]);
-  for (const selection of [{}, { variantId: "redesigned-buy-box" }, { workflowId: "pickup-towels" }, { workflowId: "pickup-towels", variantId: "list-layout" }, { workflowId: "pickup-order" }]) {
+  for (const selection of [{}, { variantId: "redesigned-buy-box" }, { variantId: "store-remembered" }, { workflowId: "pickup-towels" }, { workflowId: "pickup-towels", variantId: "list-layout" }, { workflowId: "pickup-order" }]) {
     assert.equal(resolveScenarioWorkflow(manifest, selection).expected.failure, undefined, JSON.stringify(selection));
   }
 });

@@ -10,7 +10,7 @@ import { activityEvent, eventTime } from "../../tests/activity-fixture";
 import { buildChatStream, CHAT_STEP_MESSAGE_LIMIT, type ChatStreamItem } from "../stream-items";
 
 function turn(turnId: string, author = "person"): CoreTurn {
-  return { turnId, author, text: turnId, ask: null, attachment: false };
+  return { turnId, author, text: turnId, ask: null };
 }
 
 const note = (sequence: number, title: string, at?: number) =>
@@ -84,7 +84,7 @@ test("what a build was asked is the person's message, once, where the build said
 });
 
 test("a request the person typed into the thread is not shown twice", () => {
-  const typed: CoreTurn = { turnId: "p1", author: "person", text: "Switch my store to Millbrook.  Do not check out.", ask: null, attachment: false };
+  const typed: CoreTurn = { turnId: "p1", author: "person", text: "Switch my store to Millbrook.  Do not check out.", ask: null };
   const events = [activityEvent(1, { request: ["Switch my store to Millbrook.", "Do not check out."].join("\n") })];
   assert.deepEqual(keys(buildChatStream([{ turn: typed, at: eventTime(0) }], events).items), ["turn:p1"]);
   // FluxIQ saying the same words is not the person saying them.
