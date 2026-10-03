@@ -281,6 +281,32 @@ test("a refused build's content-free progress survives unchanged in the live sna
   for (const forbidden of ["Private instruction text", "data-testid=private-card", "http://127.0.0.1/private", "sha256:"]) assert.equal(serialized.includes(forbidden), false);
 });
 
+// `run-murzln6g-11debe1d`: the build stopped at its spending limit, left no
+// proposal, and live-llm.json said `instructedConsequences: null` although
+// `S/0015` had read them.
+test("a build that left no proposal carries the consequences its step log read from the instructions, and says where they came from", async (t) => {
+  const steps = await mkdtemp(path.join(os.tmpdir(), "fluxiq-live-llm-instructed-"));
+  t.after(() => rm(steps, { recursive: true, force: true }));
+  const instructed = [{ consequence: "modify_existing", quote: "Switch my pickup store to Millbrook Crossing Supercenter" }];
+  await mkdir(path.join(steps, "0015-decide"));
+  await writeFile(path.join(steps, "0015-decide", "meta.json"), JSON.stringify({ kind: "decide", provider: "deepseek", costUsd: 0.000379548, part: "creation", phase: "read" }));
+  await writeFile(path.join(steps, "0015-decide", "decision.json"), JSON.stringify({ response: { decision: { kind: "complete", result: { instructed } } } }));
+  const stopped: CreatedFlowBuild = { ...proposedBuild, outcome: "failed", adaptationId: null, instructedConsequences: null, failure: { code: "lab.chat_build_failed", stage: "chat", httpStatus: null } };
+  const { run, written, settle } = await settleBuildOnce(stopped);
+  run.readStepLogFrom(steps);
+  await settle();
+  const snapshot = written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
+  assert.deepEqual(snapshot.build.instructedConsequences, instructed);
+  assert.equal(snapshot.instructedConsequencesFrom, "step_log");
+
+  const fromProposal = await settleBuildOnce(proposedBuild);
+  fromProposal.run.readStepLogFrom(steps);
+  await fromProposal.settle();
+  const proposed = fromProposal.written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
+  assert.deepEqual(proposed.build.instructedConsequences, [], "Core's own record is never replaced");
+  assert.equal(proposed.instructedConsequencesFrom, "proposal");
+});
+
 test("a build that reached no provider fails the run closed, after its evidence is written, and says where Core stopped", async () => {
   const refused: CreatedFlowBuild = { ...proposedBuild, outcome: "failed", adaptationId: null, providerCalls: 0, providerInvocation: "not_attempted", accounting: null, evidenceLoop: null, failure: { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", httpStatus: 400 } };
   const { written, settle } = await settleBuildOnce(refused);
@@ -550,6 +576,7 @@ test("a run that re-authored reports every call it made -- build, checks and re-
     judge: { calls: 2, estimatedCostUsd: 0.001830072 },
     reauthor: { calls: 36, estimatedCostUsd: 0.042481212 },
     chat: null,
+    read: null,
   });
   assert.deepEqual(snapshot.observed.phases, snapshot.runSpend.phases);
   assert.deepEqual(snapshot.reauthor.attempts, [{ attempt: 1, adaptationId: REAUTHOR_ID, calls: 36, callsFrom: "adaptation", inputTokens: 441_137, outputTokens: 10_071, estimatedCostUsd: 0.042481212 }]);
@@ -613,7 +640,7 @@ test("a run whose step log Core wrote counts every call in it -- the chat's and 
   assert.deepEqual(snapshot.runSpend.phases.chat, { calls: 1, estimatedCostUsd: 0.0003 });
   assert.deepEqual(snapshot.runSpend.phases.reauthor, { calls: 36, estimatedCostUsd: 0.042481212 });
   assert.deepEqual(snapshot.runSpend.uncountedPhases, []);
-  assert.deepEqual(snapshot.runSpend.stepLog, { calls: 61, estimatedCostUsd: 0.086399304, filledReauthorCalls: 36, unattributed: { calls: 0, estimatedCostUsd: 0 } });
+  assert.deepEqual(snapshot.runSpend.stepLog, { calls: 61, estimatedCostUsd: 0.086399304, filledReauthorCalls: 36, unattributed: { calls: 0, estimatedCostUsd: 0 }, fromBuild: { judge: { calls: 0, estimatedCostUsd: 0 }, read: { calls: 0, estimatedCostUsd: 0 }, calls: 0, estimatedCostUsd: 0 } });
   assert.deepEqual(published.at(-1)?.runTotal, { calls: 61, totalEstimatedCostUsd: 0.086399304 });
 });
 

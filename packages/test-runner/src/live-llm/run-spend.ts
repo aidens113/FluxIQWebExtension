@@ -24,6 +24,18 @@
 // The chat's calls are a phase of their own; a re-author left uncounted takes
 // the calls the log saw beyond every counted phase; and anything still beyond
 // them is added as `unattributed`, never subtracted when the log saw fewer.
+//
+// **The build's judge and its reading of the instructions are phases of their
+// own.** Core books the build judge's spend into the build's accounting with
+// no call (`phases.ts` `judgeAccounting`), and the reading of the person's
+// instructions likewise, so the build phase carried their cost and the log's
+// calls for them landed in `unattributed` at $0 (`run-murzln6g-11debe1d`:
+// build 30 calls for $0.08857, judge null, 3 unattributed calls at $0). The
+// step log names each call's build and phase (`byPart`), so the creation
+// build's `judge` calls join the judge phase and its `read` calls are `read`;
+// their cost comes out of the build's only when Core's figure is the one that
+// held it (`creationBuildSplit`). Core's purse holds the build to its ceiling
+// with them in, so the per-build figures keep Core's whole build cost.
 
 import type { LiveLlmObservedUsage } from "./observed-usage.js";
 import type { LiveLlmReauthorRecord } from "./reauthor-record.js";
@@ -40,12 +52,14 @@ export type LiveLlmRunSpend = {
     build: LiveLlmSpendPhase | null;
     /** The Flow run's own calls: diagnosis, exploration and runtime repair. */
     runtime: LiveLlmSpendPhase | null;
-    /** Core's result check, on the run's interventions. */
+    /** Core's result check, on the run's interventions, and the creation build's own judge, from the step log. */
     judge: LiveLlmSpendPhase | null;
     /** Every re-author attempt, its retries included. */
     reauthor: LiveLlmSpendPhase | null;
     /** The extension chat's own calls (its interpreter), read from the step log: Core records them nowhere else. */
     chat: LiveLlmSpendPhase | null;
+    /** The creation build's reading of the person's instructions (the consequences they ask for), from the step log. */
+    read: LiveLlmSpendPhase | null;
   };
   uncountedPhases: Array<"judge" | "reauthor">;
   /** What the run's step log held and what it added to the phases; `null` when there was no step log to read. */
@@ -67,7 +81,17 @@ export type LiveLlmStepLogReconciliation = {
   filledReauthorCalls: number;
   /** Calls and cost the log saw that no phase accounts for, added to the run's totals. */
   unattributed: LiveLlmSpendPhase & { calls: number };
+  /**
+   * The creation build's judge and read calls the log gave phases of their
+   * own, and how much of Core's build figure was theirs: `calls` and
+   * `estimatedCostUsd` are what came out of `phases.build`, 0 where Core's
+   * build figure did not hold them.
+   */
+  fromBuild: LiveLlmCreationBuildSplit;
 };
+
+type LiveLlmStepLogShare = LiveLlmSpendPhase & { calls: number };
+type LiveLlmCreationBuildSplit = { judge: LiveLlmStepLogShare; read: LiveLlmStepLogShare; calls: number; estimatedCostUsd: number };
 
 /** One build's spend against the per-build ceiling. */
 export type LiveLlmBuildSpend = { phase: "build" | "runtime" | "reauthor"; attempt: number | null; estimatedCostUsd: number; overCeiling: boolean };
@@ -95,9 +119,13 @@ export function liveLlmRunSpend(input: {
   /** The run plan's `maxTotalEstimatedCostUsd`: the per-build ceiling the run was held to. */
   ceilingUsd: number;
 }): LiveLlmRunSpend {
-  const build = input.build ? { calls: input.build.calls, estimatedCostUsd: input.build.totalEstimatedCostUsd } : null;
+  const coreBuild = input.build ? { calls: input.build.calls, estimatedCostUsd: input.build.totalEstimatedCostUsd } : null;
+  const split = creationBuildSplit(coreBuild, input.stepLog);
+  const build = coreBuild && split ? { calls: Math.max(0, coreBuild.calls - split.calls), estimatedCostUsd: Math.max(0, sum([coreBuild.estimatedCostUsd, -split.estimatedCostUsd])) } : coreBuild;
   const judgeCalls = input.judge?.interventions ?? [];
-  const judge = judgeCalls.length > 0 ? { calls: judgeCalls.length, estimatedCostUsd: sum(judgeCalls.map((call) => call.estimatedCostUsd ?? 0)) } : null;
+  const checkJudge = judgeCalls.length > 0 ? { calls: judgeCalls.length, estimatedCostUsd: sum(judgeCalls.map((call) => call.estimatedCostUsd ?? 0)) } : null;
+  const judge = split && split.judge.calls > 0 ? { calls: (checkJudge?.calls ?? 0) + split.judge.calls, estimatedCostUsd: sum([checkJudge?.estimatedCostUsd ?? 0, split.judge.estimatedCostUsd]) } : checkJudge;
+  const read = split && split.read.calls > 0 ? { calls: split.read.calls, estimatedCostUsd: split.read.estimatedCostUsd } : null;
   const runtime = input.runtime ? runtimeWithoutJudge(input.runtime, judgeCalls) : null;
   let reauthor: LiveLlmSpendPhase | null = input.reauthor && input.reauthor.attempts.length > 0
     ? { calls: input.reauthor.uncountedAttempts > 0 && input.reauthor.calls === 0 ? null : input.reauthor.calls, estimatedCostUsd: input.reauthor.totalEstimatedCostUsd }
@@ -108,7 +136,7 @@ export function liveLlmRunSpend(input: {
   const counted = (phases: ReadonlyArray<LiveLlmSpendPhase | null>) => phases.reduce((total, phase) => total + (phase?.calls ?? 0), 0);
   let stepLog: LiveLlmStepLogReconciliation | null = null;
   if (input.stepLog) {
-    let beyond = input.stepLog.calls - counted([build, runtime, judge, reauthor, chat]);
+    let beyond = input.stepLog.calls - counted([build, runtime, judge, reauthor, chat, read]);
     let filledReauthorCalls = 0;
     if (reauthor && reauthorUncounted && beyond > 0) {
       filledReauthorCalls = beyond;
@@ -116,23 +144,56 @@ export function liveLlmRunSpend(input: {
       reauthorUncounted = false;
       beyond = 0;
     }
-    const costBeyond = sum([input.stepLog.estimatedCostUsd, ...[build, runtime, judge, reauthor, chat].map((phase) => -(phase?.estimatedCostUsd ?? 0))]);
+    const costBeyond = sum([input.stepLog.estimatedCostUsd, ...[build, runtime, judge, reauthor, chat, read].map((phase) => -(phase?.estimatedCostUsd ?? 0))]);
     stepLog = {
       calls: input.stepLog.calls,
       estimatedCostUsd: input.stepLog.estimatedCostUsd,
       filledReauthorCalls,
       // A cost beyond the phases below a hundredth of a micro-dollar is rounding between two records, not a call.
       unattributed: { calls: Math.max(0, beyond), estimatedCostUsd: costBeyond > 1e-8 ? costBeyond : 0 },
+      fromBuild: split ?? { judge: { calls: 0, estimatedCostUsd: 0 }, read: { calls: 0, estimatedCostUsd: 0 }, calls: 0, estimatedCostUsd: 0 },
     };
   }
-  const phases = [build, runtime, judge, reauthor, chat];
+  const phases = [build, runtime, judge, reauthor, chat, read];
   return {
     calls: counted(phases) + (stepLog?.unattributed.calls ?? 0),
     totalEstimatedCostUsd: sum([...phases.map((phase) => phase?.estimatedCostUsd ?? 0), stepLog?.unattributed.estimatedCostUsd ?? 0]),
-    phases: { build, runtime, judge, reauthor, chat },
+    phases: { build, runtime, judge, reauthor, chat, read },
     uncountedPhases: reauthorUncounted ? ["reauthor"] : [],
     stepLog,
-    perBuild: perBuildSpend(input.ceilingUsd, build, runtime, input.reauthor),
+    perBuild: perBuildSpend(input.ceilingUsd, coreBuild, runtime, input.reauthor),
+  };
+}
+
+/**
+ * The creation build's judge and read calls, from the step log, and how much
+ * of Core's build figure was theirs; `undefined` with no build, or a log that
+ * names no creation judge or read.
+ *
+ * Core's build figure counts its decisions; whether it also holds the judge's
+ * and the read's spend is read off the figures rather than assumed: their cost
+ * comes out of the build when Core's build cost is nearer the log's whole
+ * creation build than the log's creation build without them, and their calls
+ * when Core's count is exactly the log's creation calls with them. Where
+ * neither held, nothing comes out, and they are still phases of their own.
+ */
+function creationBuildSplit(build: { calls: number; estimatedCostUsd: number } | null, stepLog: LiveLlmStepLogSpend | null | undefined): LiveLlmCreationBuildSplit | undefined {
+  const creation = stepLog?.byPart?.creation;
+  if (!build || !creation) return undefined;
+  const share = (phase: string): LiveLlmStepLogShare => ({ calls: creation[phase]?.calls ?? 0, estimatedCostUsd: creation[phase]?.estimatedCostUsd ?? 0 });
+  const judge = share("judge");
+  const read = share("read");
+  if (judge.calls + read.calls === 0) return undefined;
+  const all = Object.values(creation);
+  const allCalls = all.reduce((total, phase) => total + phase.calls, 0);
+  const allCost = sum(all.map((phase) => phase.estimatedCostUsd));
+  const ownCost = sum([allCost, -judge.estimatedCostUsd, -read.estimatedCostUsd]);
+  const heldCost = Math.abs(build.estimatedCostUsd - allCost) < Math.abs(build.estimatedCostUsd - ownCost);
+  return {
+    judge,
+    read,
+    calls: build.calls === allCalls ? judge.calls + read.calls : 0,
+    estimatedCostUsd: heldCost ? sum([judge.estimatedCostUsd, read.estimatedCostUsd]) : 0,
   };
 }
 
