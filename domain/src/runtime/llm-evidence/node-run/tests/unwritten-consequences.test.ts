@@ -93,6 +93,82 @@ test("the permission check reads null from a read as none declared, and from an 
   assert.equal(asked, 0);
 });
 
+// A declaration written inside `parameters` rather than beside them is read
+// where it was written (`../nested-consequences.ts`). Live run
+// `run-murzln6g-11debe1d` had three presses refused `missing_input_keys` for
+// exactly this, each costing a paid decision to resend.
+
+test("a press declaring [] inside its parameters runs, recorded with [] beside the parameters", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const handle = await firstHandle(runtime);
+  const pressed = await runtime.executeTool({
+    ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { node: CLICK, parameters: { target: { handle }, consequences: [] } }
+  });
+  assert.equal(pressed.resultCode, "web.action.succeeded", JSON.stringify(pressed.evidence));
+  const click = stubbed.commands.find((command) => command.actionType === "web.dom.click");
+  assert.ok(click);
+  assert.equal(Object.hasOwn(click.parameters, "consequences"), false);
+  assert.deepEqual(pressed.draft?.input, { node: CLICK, parameters: { target: { handle } }, consequences: [] });
+  const ranWith = pressed.draft?.ranWith as JsonObject & { parameters: JsonObject };
+  assert.deepEqual(ranWith.consequences, []);
+  assert.equal(Object.hasOwn(ranWith.parameters, "consequences"), false);
+});
+
+test("a nested [\"modify_existing\"] reaches the permission check as the call's declaration", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const handle = await firstHandle(runtime);
+  const asked: unknown[] = [];
+  const pressed = await runtime.executeTool({
+    ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID,
+    permission: async (request) => {
+      asked.push(request.consequences);
+      return { permitted: true as const };
+    },
+    value: { node: CLICK, parameters: { target: { handle }, consequences: ["modify_existing"] } }
+  });
+  assert.deepEqual(asked, [["modify_existing"]]);
+  assert.deepEqual(pressed.draft?.input, { node: CLICK, parameters: { target: { handle } }, consequences: ["modify_existing"] });
+});
+
+test("a press declaring nothing anywhere is still refused missing_input_keys", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const handle = await firstHandle(runtime);
+  const refused = await runtime.executeTool({
+    ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { node: CLICK, parameters: { target: { handle } } }
+  });
+  const evidence = refused.evidence as JsonObject & { code: string; detail: { reason: string } };
+  assert.equal(evidence.code, "invalid_input");
+  assert.equal(evidence.detail.reason, "missing_input_keys");
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.click"), false);
+});
+
+test("a declaration beside the parameters wins over one inside them", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const handle = await firstHandle(runtime);
+  const asked: unknown[] = [];
+  const pressed = await runtime.executeTool({
+    ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID,
+    permission: async (request) => {
+      asked.push(request.consequences);
+      return { permitted: true as const };
+    },
+    value: { node: CLICK, parameters: { target: { handle }, consequences: ["modify_existing"] }, consequences: [] }
+  });
+  assert.deepEqual(asked, [[]]);
+  assert.deepEqual((pressed.draft?.input as JsonObject).consequences, []);
+});
+
+async function firstHandle(runtime: ReturnType<typeof createWebAutomationLlmEvidenceRuntime>): Promise<string> {
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  return shownPageLines(looked.evidence)[0]!.target;
+}
+
 function stub() {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
   const gateway: WebLlmEvidenceGateway = {

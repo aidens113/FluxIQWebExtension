@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
+import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 import { webNodeReplayCall } from "../replay";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
@@ -54,6 +55,33 @@ test("a verify resolves the step and checks its target without acting on it", as
   assert.deepEqual(asserted[0]?.parameters.element, { tagName: "button" });
   // The person is not asked about a lasting consequence for a check that has none.
   assert.equal(checks.every((request) => (request as { consequences: unknown[] }).consequences.length === 0), true);
+  // A dry run's check is of parameters the draft already resolved: it states no new form of the step.
+  assert.equal(verified.draft, undefined);
+});
+
+// Run `run-murwcaj0-40e56557` (R7, t195-w35): Core checks a rerun of a step whose
+// act was already done instead of doing the act again, and the step then takes
+// the rerun's new argument. That argument names a handle, which means nothing
+// on the next page; the Flow runs on what it resolved to. So a check of a
+// handle-written argument that passes states the resolved form, as a run does.
+test("a passing check of a handle-written argument states what it resolved to, so the step can take it", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+  const other = shownPageLines(looked.evidence).find((line) => line.words?.includes("Move to cart"))!.target;
+  const checked = await runtime.executeTool({
+    ...PROJECT, callId: "rerun.6", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "verify", node: CLICK, parameters: { target: { handle: other } }, consequences: [], from: { location: CART } }
+  });
+  assert.equal(checked.resultCode, "core.replay.verified", JSON.stringify(checked.evidence).slice(0, 400));
+  assert.equal(checked.effectApplied, false);
+  assert.equal(stubbed.commands.some((command) => command.actionType === CLICK.replace("web.output.dom-", "web.dom.")), false);
+  const ranWith = checked.draft?.ranWith as JsonObject | undefined;
+  assert.equal(ranWith?.node, CLICK);
+  const parameters = ranWith?.parameters as JsonObject | undefined;
+  assert.equal(parameters?.selector, "#other");
+  assert.equal("target" in (parameters ?? {}), false);
+  assert.deepEqual(ranWith?.consequences, []);
 });
 
 test("a verify whose target is gone from the page the step acted on says its effect is already in place, and passes", async () => {

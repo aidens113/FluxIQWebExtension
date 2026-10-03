@@ -79,14 +79,14 @@ function requestsPage(banner: boolean): JsonObject[] {
   return elements;
 }
 
-function runtimeOver(elements: () => JsonObject[], url: () => string = () => URL_): WebAutomationLlmEvidenceRuntime {
+function runtimeOver(elements: () => JsonObject[], url: () => string = () => URL_, structure: JsonObject = STRUCTURE): WebAutomationLlmEvidenceRuntime {
   return createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
     structureDetectionSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
       if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
       const snapshot: JsonObject = { url: url(), title: "Friend requests", interactiveElements: elements() };
-      return { status: "succeeded", payload: command.parameters.detectStructure === undefined ? { snapshot } : { snapshot, structure: structuredClone(STRUCTURE) as JsonValue } };
+      return { status: "succeeded", payload: command.parameters.detectStructure === undefined ? { snapshot } : { snapshot, structure: structuredClone(structure) as JsonValue } };
     }
   });
 }
@@ -107,7 +107,7 @@ function atOf(packet: WebLlmRepeatingStructure): Record<string, string> {
   return Object.fromEntries(packet.fields.flatMap((shown) => shown.at === undefined ? [] : [[shown.key, shown.at]]));
 }
 
-/** The handles the page view gave the first request's elements. */
+/** The handles the page view gave the first request's elements, and the badge only the second request has. */
 function firstRequestHandles(shown: unknown): Record<string, string> {
   const lines = shownPageLines(shown);
   const avatar = lines.find((line) => line.kind === "link" && line.words === undefined);
@@ -118,7 +118,8 @@ function firstRequestHandles(shown: unknown): Record<string, string> {
     mutual: shownHandle(shown, "1 mutual friend"),
     age: shownHandle(shown, "2w"),
     confirm: shownHandle(shown, "Confirm"),
-    delete: shownHandle(shown, "Delete")
+    delete: shownHandle(shown, "Delete"),
+    new_badge: shownHandle(shown, "New")
   };
 }
 
@@ -132,8 +133,8 @@ test("each detected column carries the handle the page view gave its element in 
   const mutual = packet.fields.find((shownField) => shownField.key === "mutual");
   assert.equal(mutual?.at, shownHandle(shown, "1 mutual friend"));
   assert.notEqual(mutual?.at, shownHandle(shown, "Confirm"));
-  // A column the first item does not have points at nothing.
-  assert.equal(packet.fields.find((shownField) => shownField.key === "new_badge")?.at, undefined);
+  // A column the first item does not have is pointed at in the first item that has it (t195, below).
+  assert.equal(packet.fields.find((shownField) => shownField.key === "new_badge")?.at, shownHandle(shown, "New"));
   assert.equal(typeof packet.atNote, "string");
   // Still no value and no selector (D3).
   const wire = JSON.stringify(packet);
@@ -166,4 +167,43 @@ test("a detection on another page than the one shown points at nothing", async (
   const packet = await detect(runtime);
   assert.deepEqual(atOf(packet), {});
   assert.equal(packet.atNote, undefined);
+});
+
+// Live round 1002-M, R2 (`run-murwcaj0-40e56557`, step 0042): after Amara's
+// request was confirmed, her card alone read "Request accepted" beside a
+// Message link, and those two columns (coverage 0.13) had no `at` because the
+// first card lacked them. The model could not tell which key held "Request
+// accepted", filtered on the Delete column, and asked for the same detection
+// three more times. A column the first item lacks is pointed at in the first
+// item that has it; one no item has still points at nothing.
+test("a column the first item lacks carries the handle of its element in the first item that has it", async () => {
+  const proposal = STRUCTURE.proposal;
+  const structure: JsonObject = {
+    ...STRUCTURE,
+    proposal: {
+      ...proposal,
+      fields: [
+        ...proposal.fields,
+        field("pinned", "span.xpin", "text", ":scope span.xpin", 0)
+      ]
+    }
+  };
+  const runtime = runtimeOver(() => requestsPage(false), () => URL_, structure);
+  const shown = await look(runtime);
+  const packet = await detect(runtime);
+  const at = atOf(packet);
+
+  assert.equal(at.new_badge, shownHandle(shown, "New"));
+  // Full-coverage columns keep the first item's handles.
+  assert.equal(at.name, shownHandle(shown, "Tom Becker"));
+  assert.equal(at.delete, shownHandle(shown, "Delete"));
+  // A column no item has is pointed at by nothing.
+  assert.equal(at.pinned, undefined);
+  assert.equal(typeof packet.atNote, "string");
+  assert.match(packet.atNote ?? "", /first item that has it/u);
+  // t195-w39, run `run-murwcaj0-40e56557` (R9): the model took the Confirm column's
+  // at (Tom's card) as "the Confirm control" for every kept row. The note says
+  // at is that one item's own element, and what to act on for the rows kept.
+  assert.match(packet.atNote ?? "", /that item's own element, so acting on it acts on that item only/u);
+  assert.match(packet.atNote ?? "", /to act on the rows a listing keeps, use the control inside one of the rows it keeps/u);
 });

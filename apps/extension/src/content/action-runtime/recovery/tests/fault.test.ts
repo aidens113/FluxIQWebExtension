@@ -106,7 +106,8 @@ test("a verb that only reads absorbs every transient fault the closed set names,
         .filter((code) => RECOVERY_FAULT_BY_CODE[code] !== undefined)
         .filter((code) => code !== WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED)
         .map((code) => recoverableFault(failed(actionType, code), command(actionType))),
-      ["target_absent", "output_not_observed", "page_changed", "timeout", "transport", "action_failed"]
+      // `obstructed_target` is TARGET_NOT_SHOWN's, absorbed as the obstruction it always was.
+      ["obstructed_target", "target_absent", "output_not_observed", "page_changed", "timeout", "transport", "action_failed"]
     );
   }
 });
@@ -198,6 +199,26 @@ test("a mutating verb absorbs it too, because the gate refused before anything w
     assert.equal(recoverableFault(failed(actionType, WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, "covered: the point 10,20 landed on div.scrim"), command(actionType)), "obstructed_target");
     assert.equal(recoverableFault(failed(actionType, WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, "hidden: the element is inert"), command(actionType)), "obstructed_target");
   }
+});
+
+test("a target the gate found hidden is absorbed as an obstruction under its own code, exactly as it was under TARGET_NOT_ACTIONABLE", () => {
+  // t193-1002m: the gate's `hidden` refusal travels as TARGET_NOT_SHOWN, Core's
+  // `target_not_found`, so a Flow run routes by state. What this loop does with
+  // it in the page is unchanged: clear what may be over it, then attempt again,
+  // on every verb, because the gate refused before anything was dispatched.
+  for (const actionType of RECOVERY_KNOWN_ACTION_TYPES) {
+    assert.equal(
+      recoverableFault(failed(actionType, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN, "hidden: the element's display is none"), command(actionType)),
+      "obstructed_target",
+      actionType
+    );
+    assert.equal(
+      recoverableFault(failed(actionType, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE, "hidden: the element's display is none"), command(actionType)),
+      "obstructed_target",
+      `${actionType}, the code a hidden target had before`
+    );
+  }
+  assert.equal(faultNeedsInterference("obstructed_target"), true);
 });
 
 test("a refusal the target made on its own account is not an obstruction, so a dispatched verb is never repeated", () => {

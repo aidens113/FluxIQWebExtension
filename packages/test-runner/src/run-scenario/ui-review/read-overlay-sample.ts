@@ -12,7 +12,7 @@ const READ_TIMEOUT_MS = 1_000;
 // Runs in the sampled tab's main world. Read-only: it changes nothing in the page, which the recorder may be recording.
 const HOST_STATE = `(() => {
   const hosts = document.querySelectorAll(${JSON.stringify(HOST_TAG)});
-  const out = { hostCount: hosts.length, documentVisibility: document.visibilityState };
+  const out = { hostCount: hosts.length, documentVisibility: document.visibilityState, documentOrigin: performance.timeOrigin };
   const host = hosts[0];
   if (!host) return out;
   const r = host.getBoundingClientRect();
@@ -23,7 +23,7 @@ const HOST_STATE = `(() => {
     inViewport: r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight, attributes };
 })()`;
 
-type HostState = { hostCount: number; documentVisibility?: string; rect?: OverlaySample["rect"]; display?: string; visibility?: string; opacity?: number; inViewport?: boolean; attributes?: Record<string, string> };
+type HostState = { hostCount: number; documentVisibility?: string; documentOrigin?: number; rect?: OverlaySample["rect"]; display?: string; visibility?: string; opacity?: number; inViewport?: boolean; attributes?: Record<string, string> };
 type DescribedNode = { nodeType?: number; nodeName?: string; nodeValue?: string; children?: DescribedNode[]; shadowRoots?: DescribedNode[] };
 
 /**
@@ -43,7 +43,7 @@ export async function readOverlaySample(cdp: OverlayCdp, atMs: number, secrets: 
     if (evaluated?.exceptionDetails) return { atMs, present: false, hostCount: 0, visible: false, error: `overlay state threw: ${screenText(String(evaluated.exceptionDetails.text ?? "exception"), secrets)}` };
     const state = evaluated?.result?.value as HostState | undefined;
     if (!state || typeof state.hostCount !== "number") return { atMs, present: false, hostCount: 0, visible: false, error: "overlay state returned no value" };
-    const base = { atMs, hostCount: state.hostCount, ...(state.documentVisibility === undefined ? {} : { documentVisibility: state.documentVisibility }) };
+    const base = { atMs, hostCount: state.hostCount, ...(state.documentVisibility === undefined ? {} : { documentVisibility: state.documentVisibility }), ...(typeof state.documentOrigin === "number" && Number.isFinite(state.documentOrigin) ? { documentOrigin: state.documentOrigin } : {}) };
     if (state.hostCount === 0) return { ...base, present: false, visible: false };
     const textParts = (await hostText(cdp)).map(part => screenText(part, secrets));
     const phaseName = textParts[0];

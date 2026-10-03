@@ -19,6 +19,14 @@
 // unreproducible steps were genuine absences -- each spent the full 3.75 s
 // target-absent recovery ladder, which an ambiguous target does not retry --
 // so this is a defect in the criterion, not the cause of that run's verdict.
+//
+// A target that is there and hidden is the same: a failure. Since t193-1002m
+// the client reports it as `web.target.not_shown`, whose Core category is
+// `target_not_found` so a Flow *run* finds the current step by state, but the
+// replay reads the client's own code and answers `remembered` only for
+// `web.target.not_found`. Lane A's run 40 depends on it: bigbox's "Set as my
+// store", hidden inside a store chooser the Flow never opened, must keep
+// failing the build's test (`../hidden-target.ts`).
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -44,6 +52,16 @@ test("a replayed step whose target is now ambiguous is failed, not unreproducibl
   assert.equal(replayed.resultCode, "core.replay.failed");
 });
 
+test("a replayed step whose target is hidden is failed, never remembered", async () => {
+  const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFailingClickWith("web.target.not_shown", "hidden: the element's display is none"));
+  const replayed = await runtime.executeTool({
+    ...PROJECT, callId: "dryrun.1.3", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: CLICK, parameters: { selector: "#go" }, consequences: [] }
+  });
+  assert.equal(replayed.effectApplied, false);
+  assert.equal(replayed.resultCode, "core.replay.failed");
+});
+
 test("a replayed step whose target is absent stays unreproducible", async () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFailingClickWith("web.target.not_found"));
   const replayed = await runtime.executeTool({
@@ -53,12 +71,13 @@ test("a replayed step whose target is absent stays unreproducible", async () => 
   assert.equal(replayed.resultCode, "core.replay.unreproducible");
 });
 
-function gatewayFailingClickWith(code: string): WebLlmEvidenceGateway {
+function gatewayFailingClickWith(code: string, actual?: string): WebLlmEvidenceGateway {
+  const failure = actual === undefined ? { code } : { code, actual };
   return {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
       if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page() } };
-      if (command.actionType === "web.dom.click") return { status: "failed", failure: { code }, error: "no" };
+      if (command.actionType === "web.dom.click") return { status: "failed", failure, error: "no" };
       return { status: "succeeded", payload: { value: "ok" } };
     }
   };

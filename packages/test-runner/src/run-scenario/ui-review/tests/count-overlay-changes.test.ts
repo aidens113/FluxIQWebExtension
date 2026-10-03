@@ -8,7 +8,7 @@ const failed = (atMs: number): OverlaySample => ({ atMs, present: false, hostCou
 
 test("an overlay that shows one status throughout is stable", () => {
   const counts = countOverlayChanges([0, 200, 400, 600].map(at => shown(at, "BUILDING | Reading the page")));
-  assert.deepEqual(counts, { samples: 4, readFailures: 0, presentSamples: 4, visibleSamples: 4, textChanges: 0, presenceToggles: 0, visibilityToggles: 0, textRevisits: 0, distinctTexts: 1, status: "stable" });
+  assert.deepEqual(counts, { samples: 4, readFailures: 0, presentSamples: 4, visibleSamples: 4, textChanges: 0, presenceToggles: 0, visibilityToggles: 0, textRevisits: 0, distinctTexts: 1, pageLoads: 0, status: "stable" });
 });
 
 test("no overlay in any sample is absent, not stable", () => {
@@ -52,4 +52,49 @@ test("a failed read is counted and skipped: it is neither absence nor a toggle",
   assert.equal(counts.readFailures, 1);
   assert.equal(counts.presenceToggles, 0);
   assert.equal(counts.status, "stable");
+});
+
+// A sample read from a given document (`performance.timeOrigin`).
+const inDoc = (sample: OverlaySample, documentOrigin: number): OverlaySample => ({ ...sample, documentOrigin });
+
+test("one absent sample between two documents is a page load, not flicker", () => {
+  const counts = countOverlayChanges([inDoc(shown(0, "A"), 1), inDoc(shown(200, "A"), 1), inDoc(gone(400), 2), inDoc(shown(600, "B"), 2), inDoc(shown(800, "B"), 2)]);
+  assert.equal(counts.pageLoads, 1);
+  assert.equal(counts.presenceToggles, 0);
+  assert.equal(counts.visibilityToggles, 0);
+  assert.equal(counts.textChanges, 1);
+  assert.equal(counts.status, "changed");
+  const same = countOverlayChanges([inDoc(shown(0, "A"), 1), inDoc(gone(200), 1), inDoc(shown(400, "A"), 2)]);
+  assert.equal(same.pageLoads, 1);
+  assert.equal(same.status, "stable", "the same status across a page load is unchanged");
+});
+
+test("one absent sample inside one document still counts two toggles and is flickering", () => {
+  const counts = countOverlayChanges([inDoc(shown(0, "A"), 1), inDoc(gone(200), 1), inDoc(shown(400, "A"), 1)]);
+  assert.equal(counts.pageLoads, 0);
+  assert.equal(counts.presenceToggles, 2);
+  assert.equal(counts.status, "flickering");
+});
+
+test("two absent samples across a document change still count as toggles", () => {
+  const counts = countOverlayChanges([inDoc(shown(0, "A"), 1), inDoc(gone(200), 1), inDoc(gone(400), 2), inDoc(shown(600, "A"), 2)]);
+  assert.equal(counts.pageLoads, 0);
+  assert.equal(counts.presenceToggles, 2);
+  assert.equal(counts.status, "flickering");
+});
+
+test("an absence next to a failed read, or between samples that cannot name their document, counts as before", () => {
+  const nextToFailure = countOverlayChanges([inDoc(shown(0, "A"), 1), failed(200), inDoc(gone(400), 2), inDoc(shown(600, "A"), 2)]);
+  assert.equal(nextToFailure.pageLoads, 0);
+  assert.equal(nextToFailure.presenceToggles, 2);
+  const unnamed = countOverlayChanges([shown(0, "A"), gone(200), inDoc(shown(400, "A"), 2)]);
+  assert.equal(unnamed.pageLoads, 0);
+  assert.equal(unnamed.presenceToggles, 2);
+});
+
+test("a revisit across a page load is still flickering", () => {
+  const counts = countOverlayChanges([inDoc(shown(0, "A"), 1), inDoc(shown(200, "B"), 1), inDoc(gone(400), 1), inDoc(shown(600, "A"), 2)]);
+  assert.equal(counts.pageLoads, 1);
+  assert.equal(counts.textRevisits, 1);
+  assert.equal(counts.status, "flickering");
 });
