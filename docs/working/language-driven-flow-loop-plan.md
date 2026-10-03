@@ -24,7 +24,9 @@ a worker verifies it (`reports/t193-w-merge-verify.md`). Lane B's tip was merged
 downstream 4) and t254 (Core 5; downstream clean) so each resolves lanes A-D once; their leads resolve and verify,
 then stop for the supervisor to commit the merge (t252 then does w7 and P4; t254 then takes four decisions: no
 chat `max_tokens` 600, recovery's ledger at billed price, judge overshoot in phases' accounting, a round stopped by
-the judging reserve spends it testing and judging the Flow so far). **t255** (`fxwork/t255`, Core-paired) takes
+the judging reserve spends it testing and judging the Flow so far). t254's merge is verified and committed (Core
+`b5533c0c`: tsc 0, audit passed, docs-reference current, unfinished-build 129/129 incl. murzln6g funding, domain
+check 0); its stage 2 (the four decisions) is in progress. **t255** (`fxwork/t255`, Core-paired) takes
 lane B's run-record gaps: the ending cut at "...was not..." in the Lab's files, `live-llm.json` booking the judge
 inside `phases.build`, and Core step-log result folders for amendment decisions (`reports/t255-w1-run-record-gaps.md`);
 the overlay `pageLoads` gap waits for lane B's `ui-review` changes to land. Core `880577fc` (dev, unpushed): the
