@@ -74,11 +74,12 @@
 // a layer passes both. A replay would have found that by pressing, and this
 // does not press; playback still does.
 
-import type { JsonObject } from "fluxiq/core";
+import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import { webActionFailureRefusal, webActionNeedsPerson } from "../action-failure";
 import { assertActive, toolMetadata, withPersonNeeded, type WebLlmEvidenceToolExecution } from "../capture";
 import { webActionPermission } from "../permission";
+import { present } from "../present";
 import { resolveWebPlanNode } from "../plan-resolution";
 import { webLlmHandleRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
@@ -135,9 +136,13 @@ export async function verifyWebOutputNode(run: WebNodeRun): Promise<WebLlmEviden
   }
   const target = targetOf(resolved.status === "resolved" ? resolved.parameters : parameters);
   const facts = (resultReason: WebNodeReplayFacts["resultReason"]): WebNodeReplayFacts => ({ resultReason, nodeId: node.definitionId, assumed });
+  // What a passing check states the step runs with: only for an argument
+  // written in handles, which resolution rewrote. A dry run checks the form the
+  // draft already resolved, which resolves unchanged and states nothing.
+  const ranWith = resolved.status === "resolved" ? resolvedCall(value, resolved.parameters) : undefined;
   // A step that names no element -- a navigation, a key, a tab -- has nothing
   // on the page to check. That its parameters resolve is all a check can say.
-  if (!target) return passed(WEB_NODE_REPLAY_RESULT_CODES.verified, "the step names no element; its parameters resolve, and it was not run", facts(undefined));
+  if (!target) return passed(WEB_NODE_REPLAY_RESULT_CODES.verified, "the step names no element; its parameters resolve, and it was not run", facts(undefined), ranWith);
   for (const check of CHECKS) {
     const result = await run.gateway.executeAction(run.sessionId, {
       actionType: CHECK_ACTION,
@@ -170,12 +175,30 @@ export async function verifyWebOutputNode(run: WebNodeRun): Promise<WebLlmEviden
     const refused = webActionFailureRefusal(result);
     return await webNodeReplayAnswerWithPage(run, WEB_NODE_REPLAY_RESULT_CODES.failed, `the step's target could not be checked (${refused.code})`, false, facts(refused.detail?.reason));
   }
-  return passed(WEB_NODE_REPLAY_RESULT_CODES.verified, "the step's target is on the page, visible and enabled; it was not run", facts(undefined));
+  return passed(WEB_NODE_REPLAY_RESULT_CODES.verified, "the step's target is on the page, visible and enabled; it was not run", facts(undefined), ranWith);
 }
 
-/** A step that passed its check: `ok`, and nothing done to the page. */
-function passed(code: string, said: string, about: WebNodeReplayFacts): WebLlmEvidenceToolExecution {
-  return webNodeReplayAnswer(code, said, true, about, false);
+/**
+ * A step that passed its check: `ok`, and nothing done to the page. With
+ * `ranWith`, the answer states the resolved form of an argument written in
+ * handles, under `draft.ranWith` as a run states it (`./run.ts`): Core checks a
+ * rerun of a step whose act was already done rather than doing the act again,
+ * and the step then takes the rerun's argument (`AS/runtime/llm/node-tools/
+ * rerun-check.ts`, run `run-murwcaj0-40e56557` R7). A handle names nothing on
+ * the next page, so without this the step would keep no form the Flow can run.
+ */
+function passed(code: string, said: string, about: WebNodeReplayFacts, ranWith?: JsonObject): WebLlmEvidenceToolExecution {
+  const answered = webNodeReplayAnswer(code, said, true, about, false);
+  return ranWith ? { ...answered, draft: { ranWith } } : answered;
+}
+
+/** One library call as the Flow keeps it: the node, its resolved parameters and its declaration when it carried one (as `./run.ts` writes it). */
+function resolvedCall(value: JsonObject, parameters: JsonObject): JsonObject {
+  return present<{ node: JsonValue; parameters: JsonObject; consequences?: JsonValue }>({
+    node: value.node ?? null,
+    parameters,
+    consequences: value.consequences === null ? undefined : value.consequences
+  }) as unknown as JsonObject;
 }
 
 /** The keys of the step's resolved parameters that name its element, or nothing when it names none. */
