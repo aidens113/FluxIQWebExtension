@@ -24,6 +24,7 @@ import type { WebLlmSnapshotBinding } from "../../sanitize";
 import { quotedWords, webLlmLineFacts, type WebLlmLineFact } from "../../page-view";
 import type { WebRunnableNode } from "../catalog";
 import { webMovesThePage } from "../start-location";
+import { webIsTextLine as isText } from "./text-line";
 
 /** At most this many changes are named; the rest are counted. */
 const MOST_CHANGES = 8;
@@ -31,7 +32,6 @@ const MOST_CHANGES = 8;
 const ENTRY_LENGTH = 120;
 /** The fewest characters of words an entry keeps, however long the rest of it is. */
 const LEAST_WORDS = 24;
-const HEADING = /^h[1-6]$/u;
 
 /**
  * The state tokens a change is said of. A paired state says only where it now
@@ -126,11 +126,6 @@ function stateChanges(was: readonly string[], now: readonly string[]): string[] 
     else if (had && !has) changes.push(`no longer ${token}`);
   }
   return changes;
-}
-
-/** A line the view prints as text: plain words, or a heading's. */
-function isText(line: WebLlmLineFact): boolean {
-  return line.words !== undefined && (line.kind === undefined || HEADING.test(line.kind));
 }
 
 /** One entry: the handle, the line's words (or its kind, where it has none) cut to fit, and what changed. */

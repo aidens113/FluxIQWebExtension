@@ -139,6 +139,80 @@ test("what a read produced is the longest list its payload carries", () => {
   assert.equal(webNodeRecordCount(undefined), undefined);
 });
 
+// t174-w82, cause 4 of `run-murwd8le-79e735a8`: build-test replays 0045 and
+// 0068 answered `core.replay.replayed`, "the step ran again", while the page
+// said "You have reached the purchase limit for this item.". A replayed press
+// is read as an exploration press is: the page's refusal fails the step and is
+// quoted, and a press that ran says what it changed on the page.
+
+test("a replayed press the page refused fails, carrying the refusal and the line the page answered with", async () => {
+  const stubbed = answeringStub({ code: "web.action.refused_by_page" }, "You have reached the purchase limit for this item.");
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const refused = await runtime.executeTool({
+    ...PROJECT, callId: "dryrun.1.15", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: CLICK, parameters: { selector: "#go" }, consequences: [] }
+  });
+  assert.equal(refused.resultCode, "core.replay.failed");
+  assert.equal(refused.effectApplied, false);
+  assert.equal(refused.resultReason, "page_needs_something_first");
+  const value = refused.evidence as JsonObject;
+  assert.equal(value.ok, false);
+  assert.equal(value.said, "the step did not run (refused_by_page)");
+  const tip = shownPageLines(value).find((line) => line.words === "You have reached the purchase limit for this item.")!.target;
+  assert.deepEqual(value.notice, [`${tip} "You have reached the purchase limit for this item."`]);
+});
+
+test("a replayed press the page answered busy still fails with the busy reason, and quotes the busy line", async () => {
+  const stubbed = answeringStub({ code: "web.action.rate_limited" }, "Network busy, please try again");
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const busy = await runtime.executeTool({
+    ...PROJECT, callId: "dryrun.1.9", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: CLICK, parameters: { selector: "#go" }, consequences: [] }
+  });
+  assert.equal(busy.resultCode, "core.replay.failed");
+  assert.equal(busy.resultReason, "page_busy_try_later");
+  const value = busy.evidence as JsonObject;
+  assert.deepEqual(value.notice, [`${shownPageLines(value).find((line) => line.words === "Network busy, please try again")!.target} "Network busy, please try again"`]);
+});
+
+test("a replayed press that ran says what it changed on the page, as an exploration press does", async () => {
+  const stubbed = answeringStub(undefined, "Added to cart!");
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const replayed = await runtime.executeTool({
+    ...PROJECT, callId: "dryrun.1.15", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: CLICK, parameters: { selector: "#go" }, consequences: [] }
+  });
+  assert.equal(replayed.resultCode, "core.replay.replayed");
+  const value = replayed.evidence as JsonObject;
+  assert.equal(value.said, "the step ran again");
+  const changed = value.changed as string[];
+  assert.equal(changed.length, 1);
+  assert.match(changed[0]!, /^t[1-9]\d* "Added to cart!" appeared$/u);
+  // A step that ran carries a line, never the page.
+  assert.equal("page" in value, false);
+});
+
+/** A page whose Go button the page answers, failing with `failure` or not, by writing `answer` beside it. */
+function answeringStub(failure: { code: string } | undefined, answer: string) {
+  let answered = false;
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") {
+        const elements: JsonObject[] = [{ tagName: "button", selector: "#go", visibleText: "Go" }];
+        if (answered) elements.push({ tagName: "span", selector: "#tip", visibleText: answer });
+        return { status: "succeeded", payload: { snapshot: { url: START, title: "Fixture", viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 }, interactiveElements: elements } } };
+      }
+      if (command.actionType === "web.dom.click") {
+        answered = true;
+        if (failure) return { status: "failed", failure: { code: failure.code }, error: "no" };
+      }
+      return { status: "succeeded", payload: { value: "ok" } };
+    }
+  };
+  return { gateway };
+}
+
 function stub(options: { clickFailure?: { code?: string }; payload?: JsonObject } = {}) {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
   const gateway: WebLlmEvidenceGateway = {
