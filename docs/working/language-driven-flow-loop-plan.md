@@ -18,10 +18,16 @@ general Flow authoring (t252) lands. Round 1002-M gave the first honest pass: la
 `run-murwd8le-79e735a8` ($0.0579, built from the chat, judged yes on the Flow as it stood, 4 of 4 facts). All agents
 were told to stop at a safe point; no Lab, Core or browser process is meant to be running.
 
+**Session 2026-10-03 (resumed).** Downstream dev pushed (`04a5e3ce..3b1655b8`, a fast-forward, by the supervisor).
+Lane B's merge committed on its branch (Core `de59b261`, downstream `8f42d443`, then dev's newest commit merged in);
+a worker verifies it (`reports/t193-w-merge-verify.md`). Lane B's tip was merged into t252 (Core 13 conflicts,
+downstream 4) and t254 (Core 5; downstream clean) so each resolves lanes A-D once; their leads resolve and verify,
+then stop for the supervisor to commit the merge (t252 then does w7 and P4; t254 then takes four decisions: no
+chat `max_tokens` 600, recovery's ledger at billed price, judge overshoot in phases' accounting, a round stopped by
+the judging reserve spends it testing and judging the Flow so far).
+
 **Dev heads.** Core `8f92b399`, pushed (the last commit gives the web app lane C's `recall` icon; apps/web had
-stopped typechecking). Downstream local dev is about 55 commits ahead of origin `04a5e3ce` and **not
-pushed**: the permission classifier refused the push after the fake-key rewrite. **The user must run**
-`git -C "C:/Users/osrs_/FluxStuff/!FluxIQWebExtension" push origin dev` (a plain fast-forward). Lane C's commit
+stopped typechecking). Downstream dev `3b1655b8`, pushed 2026-10-03. Lane C's commit
 `c56b8cfb` had a DeepSeek-shaped fake key; the user approved a fake, and the unpushed commits on dev, t194 and t244 were
 rewritten to `sk-FAKE-test-value-not-a-real-key` (checked against the real key by hash, not key-shaped, test 5/5).
 
@@ -110,7 +116,6 @@ hotfix `bdc459dd` (a module cycle t250 introduced); t253 (run-4 replay fixture a
 - A Flow's creation has one $0.10 purse; each run's recovery has its own ceiling (offered to merge; unchanged).
 
 **Waiting on the user.**
-- The downstream push (above).
 - t252: stored Flow nodes now keep their declared consequences, but a plain stored run does not check them; turning
   that check on changes what every stored Flow does at run time.
 - Removing the remaining pre-action refusals (the classifier refused the edit as a security weakening).
