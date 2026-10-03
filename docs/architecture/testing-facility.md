@@ -1394,6 +1394,28 @@ scalar-list fields retain their prior screen.
 This is an artifact contract, not a claim that the current provider-backed
 hard scenario has passed live. A campaign result must supply that evidence.
 
+#### Every fact's value, and result checks kept apart from recovery
+
+A pass is recorded with what it was compared on (t174-w84, after
+`run-murwd8le-79e735a8` passed with no fact value anywhere in its bundle).
+`snapshots/flow-lane.json` `oracles.facts` lists every final-state fact,
+held or not: its subject, the expected text, and the value read on the page
+that was judged (`judgeEveryFact`, `flow-lane/creation/oracles.ts`). A
+scenario that declares a secret has every observed value withheld, the rule
+the unheld facts already followed. A failure's `details` still carries only
+`unheldFacts`.
+
+Core files each post-run result check as a run intervention whose
+`metadata.source` is `verifyAutomationStudioRunResult`. The Lab reads that
+source (`isResultCheckIntervention`, `flow-lane/harness-recovery.ts`) and
+files those calls as `harnessRecovery.resultChecks`, never as recovery.
+`interventions`, `attempted` and `harnessActivations` count recovery only.
+In `snapshots/live-llm.json` they appear as `repair.resultChecks`
+(`record: "verification"`), and in `events.ndjson` as "The created Flow's
+result was checked". Spend totals are unchanged. Before this change, a run
+that needed no repair reported its two result checks as two diagnoses and a
+"repair attempt".
+
 ### What a list read says about itself
 
 A read of zero records is the same record, everywhere else in the bundle,

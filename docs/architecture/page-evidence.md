@@ -223,6 +223,11 @@ as a dialog's Close, is dispatched unchanged on every pass.
   before and after snapshots were captured: the view's element lines that
   appeared or left, handle-free and compared as a multiset, as text. A summary
   stored before t223 as a packet is written as the view first.
+  A snapshot also carries `from: { location }`, the page's real address as the
+  reset token a step's `replay.from` is, so Core's re-author can put the page
+  back where a node started in the run it repairs (t194 cause C-D). It is
+  written only when that address is exactly what the packet publishes, nothing
+  in it withheld, so it carries no secret; otherwise the snapshot has no `from`.
 
 ## What A Model Reads: The Compact Page View
 

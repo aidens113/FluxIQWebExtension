@@ -417,6 +417,14 @@ test("harness activations come from the run detail's interventions", async () =>
   assert.equal((await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" })).harnessActivations, 2);
 });
 
+/** t174-w91: Core's post-run result checks are interventions too, but no harness activation (reports/t174-w84.md, Cause 12). */
+test("harness activations leave out Core's post-run result checks", async () => {
+  const check = (interventionId: string) => ({ interventionId, metadata: { source: "verifyAutomationStudioRunResult" } });
+  const getRunDetail = async () => ({ interventions: [{ interventionId: "one", kind: "diagnosis" as const }] });
+  const { client } = control({ getRunDetail }, { interventions: [{ interventionId: "one" }, check("check.one"), check("check.two")] });
+  assert.equal((await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" })).harnessActivations, 1);
+});
+
 test("a run with no durable action, or a detail for another run, is refused", async () => {
   const { client: empty } = control({}, { actionAttempts: [] });
   await assert.rejects(

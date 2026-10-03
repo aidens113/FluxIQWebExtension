@@ -11,7 +11,7 @@ const CODE = /^[a-z][a-z0-9_.-]{1,127}$/u;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
 const IDENTIFIER_MAX_LENGTH = 256;
 
-const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode", "refusalRung", "contextSections", "resultReauthor", "resultRepair"] as const satisfies readonly (keyof RunHarnessRecovery)[];
+const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode", "refusalRung", "contextSections", "resultReauthor", "resultRepair", "resultChecks"] as const satisfies readonly (keyof RunHarnessRecovery)[];
 const resultReauthorKeys = ["routed", "refusal", "adaptationId", "applied", "failureCode", "failureStage", "failureRetryable", "providerInvocation", "providerResponse", "providerStatus"] as const satisfies readonly (keyof RunHarnessResultReauthor)[];
 const resultRepairKeys = ["attempted", "nodeId", "code", "phase", "outcome"] as const satisfies readonly (keyof RunHarnessResultRepair)[];
 const contextSectionKeys = ["included", "omitted"] as const;
@@ -104,6 +104,8 @@ export function validateRunHarnessRecovery(input: unknown): ValidationResult<Run
     if (value.resultRepair !== undefined && value.resultRepair !== null) {
       checkResultRepair(value.resultRepair, "$.resultRepair", issues);
     }
+    // Core's result checks: the intervention's shape, so no sentence travels, and never counted as recovery above.
+    if (value.resultChecks !== undefined) array(value.resultChecks, "$.resultChecks", issues, checkIntervention);
   }
   return result(input, issues);
 }

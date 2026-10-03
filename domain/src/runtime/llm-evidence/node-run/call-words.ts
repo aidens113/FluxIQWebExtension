@@ -16,7 +16,8 @@
 //   `run-muqiojz4-04a7a8fc`). The looks that name a control by handle are named
 //   the same way: the element whose details are read (`web.describe_element`)
 //   and the one a list is detected around (`web.detect_repeating_structure`),
-//   each also as the repair harness offers it (`web.recovery.*`).
+//   each also as the repair harness offers it (`web.recovery.*`). A list read
+//   (`web.output.dom-extract_list`) is named by the fields it reads.
 // - `text` is the words the call types (`web.dom.type`), the key it presses
 //   (`web.dom.keypress`), or the words it looks for (`web.find_on_page`). The
 //   words typed are said only into a control this domain can name and does not
@@ -52,6 +53,28 @@ const HANDLE_TOOL_IDS: ReadonlySet<string> = new Set([
 const ENTER_FIELD_TOOL_ID = "web.recovery.enter_field";
 const TYPE_NODE = "web.output.dom-type";
 const KEY_NODE = "web.output.dom-keypress";
+const LIST_NODE = "web.output.dom-extract_list";
+/** The most field names a list read's subject lists before it says how many more. */
+const MAX_FIELDS = 3;
+
+/**
+ * The fields a list read reads, by the names its author gave them ("name,
+ * price, rating and 3 more"), never the selectors behind them nor a value read.
+ * A build's test named every step but this one, a bare "Test run" (t194,
+ * `run-murwcmx2-a1c6edf7`, screenshot 00016). `fields` is the request's map of
+ * name to selector, or a list of names.
+ */
+function fieldsRead(fields: unknown): string | undefined {
+  const written = Array.isArray(fields)
+    ? fields.map((field) => typeof field === "string" ? field : stringOf(objectOf(field)?.name))
+    : Object.keys(objectOf(fields) ?? {});
+  const names = [...new Set(written.map((name) => name?.replace(/[_-]+/gu, " ").replace(/\s+/gu, " ").trim()).filter((name): name is string => Boolean(name)))];
+  if (names.length === 0) return undefined;
+  const shown = names.slice(0, MAX_FIELDS);
+  const more = names.length - shown.length;
+  if (more > 0) return `${shown.join(", ")} and ${more} more`;
+  return shown.length > 1 ? `${shown.slice(0, -1).join(", ")} and ${shown.at(-1)}` : shown[0];
+}
 
 /** What `call` names, from the pages this build was shown (`resolve`), or nothing. */
 export function webLlmCallWords(
@@ -73,6 +96,7 @@ export function webLlmCallWords(
   if (call.toolId !== WEB_LLM_RUN_NODE_TOOL_ID) return undefined;
   const parameters = objectOf(call.value.parameters);
   if (!parameters) return undefined;
+  if (stringOf(call.value.node) === LIST_NODE) return wordsOf(fieldsRead(objectOf(parameters.extractList)?.fields), undefined);
   // A handle the build was shown first; else the identity the step carries.
   const element = elementOf(parameters, shown) ?? objectOf(parameters.element) as Element | undefined;
   const target = nameOf(element);

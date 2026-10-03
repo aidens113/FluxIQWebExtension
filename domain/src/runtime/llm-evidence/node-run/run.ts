@@ -69,8 +69,8 @@ import { withClearedWait } from "./cleared-wait";
 import { webCoveredTarget } from "./covered-target";
 import type { WebNodeRun } from "./context";
 import type { WebNodeOutcome } from "./outcome";
-import { webObservedControl } from "./observed-control";
-import { webAnsweredLayer, webNodePageChanges } from "./press-effect";
+import { webLabelledIdentity, webObservedControl } from "./observed-control";
+import { webAnsweredLayer, webNodeNoticedDetail, webNodePageChanges, webPressChoice } from "./press-effect";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
 import { webNodeHeldFlow } from "./arrival";
 import { webUnshownAddressRefusal } from "./shown-addresses";
@@ -211,7 +211,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       run.shown(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, changed: undefined, control: undefined, read: undefined, inFlow: false })),
+        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, choice: undefined, changed: undefined, control: undefined, read: undefined, inFlow: false })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
@@ -276,7 +276,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         reason: "target_not_a_handle", target: undefined, instead: HANDLE_SHAPE, missing: undefined, requestId: undefined
       }), record);
     }
-    const ran = resolved.status === "resolved" ? resolved.parameters : written;
+    // A control named only by the label beside it is named by that label in the node it keeps (`./observed-control.ts`).
+    const ran = webLabelledIdentity(resolved.status === "resolved" ? resolved.parameters : written, current?.evidence, firstHandle(written));
     // A press on a control the look just taken shows covered is not sent: it
     // would land on the cover (`./covered-target.ts`, C4). The refusal names
     // the cover and carries the page it is on, so the layer can be dealt with
@@ -411,6 +412,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       pageChanged: changed,
       unchangedPress: changed === false && node.definitionId === PRESS_NODE_ID ? PRESS_AGAIN : undefined,
       pageUnreadable: after === undefined ? true : undefined,
+      // A press that un-chose (or chose) the control it pressed says so first (`./press-effect/choice.ts`).
+      choice: webPressChoice(node, current, after, firstHandle(written)),
       // Which lines it changed, on the same page only (`./press-effect/page-changes.ts`, t174/F37).
       changed: webNodePageChanges(node, current, after),
       control: control.name,
@@ -491,7 +494,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // refused (`../tool-rejection.ts`).
       const page = error.page ? run.restamp(error.page) : undefined;
       if (page) run.shown(page);
-      const refused = refusal(page, error.code, error.detail, record);
+      // A refusal the page wrote quotes what it wrote (`./press-effect/notice.ts`).
+      const refused = refusal(page, error.code, webNodeNoticedDetail(error.code, error.detail, record.found, page), record);
       // A robot check is the person's. The refusal is kept as the run's record
       // says it, and Core puts the check to the person rather than to the model.
       return error.personNeeded ? withPersonNeeded(refused, personDraft(record)) : refused;

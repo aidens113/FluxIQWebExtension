@@ -213,6 +213,13 @@ instead of "it does not deduplicate" (live run `run-muqk713g`, cause C4).
   `from`), which is its effect already in place, and
   `core.replay.unreproducible` when it is gone from another page. So a dry run
   never repeats a lasting effect such as a save, an add or a submit.
+  A replayed list read's answer (`replay-answer.ts`) names the rows it
+  returned and, per condition, the rows that condition alone left out
+  (`readRows`); it also reaches the exploring model as `core.run_flow`'s last
+  step, so it carries the same check an explored read's `rejectedRowsNote` asks
+  for, as `readRows.note` (`rejected-rows.ts`; t194 cause C-E, live run
+  `run-murwcmx2`), and says when the conditions kept no row. No row is left out
+  for the note.
 - **Legacy dotted aliases** (`browser.navigate`, `dom.click`, and the rest) are
   accepted on the wire and resolved to their canonical types once, in the
   domain (see below). The map is total over all eighteen types. For seven of

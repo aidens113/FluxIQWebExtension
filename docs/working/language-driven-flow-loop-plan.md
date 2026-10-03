@@ -63,6 +63,11 @@ dev `5b79cda3`:**
 Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name older work without a branch of its own.
 
 **Binding rules (user, all in force).**
+- **General Flow authoring lands before any more live runs (2026-10-02 night):** "The model should be ABLE to explore &
+  'record'/test different node configurations, but it should also be able/encouraged to build dynamic & smart flows
+  from what its gathered without going through every iteration"; "implement that feature first before any mroe live
+  runs". Design t251 (`general-flow-authoring-plan.md`), implementation t252; round 1002-M is held after lanes B and D's
+  second runs.
 - **Live builds start from the real extension chat (2026-10-01):** a run started by a direct API request is never a
   pass. The chat launcher is on dev (t227).
 - **The compact page view (2026-09-30 night):** "ITS NOT SUPPOSED TO FEED IN THE ENTIRE PAGE JUST RAW"; "only giving
@@ -81,7 +86,9 @@ Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name ol
   "should be an easily configurable variable ... even for test purposes in the lab"; the product's user-facing
   spending limit is separate. Core reads `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default 0.10, max 10, invalid stops
   Core); the Lab passes `--llm-cost-ceiling-usd`, then its env, then `.env`/`.env.local`. The tasks should finish in
-  far fewer than 60 actions.
+  far fewer than 60 actions. **Billed dollars, no output cap (2026-10-03):** "It should be billed at how much it actually costs, and i never
+  told you to add any cap on output. Remove that": the purse charges DeepSeek's actual price (off-peak, cached input),
+  requests send no `max_tokens`, and holds reserve an observed-max reply (t254).
 - **Every run step logged as files (2026-10-01):** exact provider request (no auth header), raw response, parsed
   decision, each tool call and result, the page text, under `test-runs/<run-id>/steps/NNNN-*/` (STEPS).
 - **A build has three phases (2026-09-30):** live exploration authors the draft (no replay); test and judge once the
@@ -142,8 +149,8 @@ Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name ol
 - `fxwork/t187-bench` and `fxwork/t192-bench`: delete only on a yes.
 
 **Next, in order.**
-1. Live round 1002-M: the four lanes re-synced to Core `424a70b3` / downstream `5b79cda3` and rebuilt; leads A-D
-   released (brief below). Then the approved `deepseek-v4-pro` comparison (`--llm-model deepseek-v4-pro
+1. Land t252 (general Flow authoring: record AND generalise; design t251), then re-sync and release round 1002-M's
+   leads A-D (held after their first runs; B and D ran twice). Then the approved `deepseek-v4-pro` comparison (`--llm-model deepseek-v4-pro
    --llm-cost-ceiling-usd 0.30`, one run). Watch for a double act on a backward state route (t243 open item 2).
 2. Open follow-ups: unify `control` and `does`; signatures for recorded Flows (t243 open item 4); a dropped column on
    a rerun needs the domain's denied keys in the loop (t195 R3); sweep 2, with `pnpm -r --no-bail test` in Core.

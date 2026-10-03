@@ -59,16 +59,20 @@ import { webLlmHandleRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
 import { webRunnableNode } from "./catalog";
 import { webNodeReplayMissingTarget } from "./missing-target";
+import { webNodePageChanges, webNodePageNotice } from "./press-effect";
 import {
   WEB_NODE_REPLAY_RESULT_CODES as REPLAY_RESULT_CODES,
   webNodeReplayAnswer as answer,
+  webNodeReplayAnswerOnPage as answerOnPage,
   webNodeReplayAnswerWithPage as answerWithPage,
+  webNodeReplayPage as replayPage,
   webNodeReplayPermissionReason as permissionReason,
   webNodeReplayReadRows as readRows,
   webNodeReplayReadSaid as readSaid,
   type WebNodeReplayFacts
 } from "./replay-answer";
 import type { WebNodeRun } from "./context";
+import { webMovesThePage } from "./start-location";
 import { verifyWebOutputNode } from "./verify";
 
 /** The reserved key Core marks a replay call with, and what it may ask for. */
@@ -307,6 +311,12 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // and keeps the same rows either way.
   const resolvedParameters = resolved.status === "resolved" ? resolved.parameters : parameters;
   const ran = node.actionType === EXTRACT_LIST_ACTION ? webAutomationExtractListAloneRowsAsked(resolvedParameters) : resolvedParameters;
+  // A step that changes the page in place -- a press, a type, a choice -- is
+  // read as the same call is read while exploring (`./run.ts`, t174-w82): the
+  // page before it, so a refusal can quote what the page then wrote and a step
+  // that ran can say what it changed. Not shown to the model; only compared.
+  const inPlace = node.effect === "mutate" && !webMovesThePage(node);
+  const before = inPlace ? await replayPage(run, false) : undefined;
   const result = await run.gateway.executeAction(run.sessionId, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) });
   assertActive(run.request.signal);
   if (result.status !== "succeeded") {
@@ -330,9 +340,12 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // word folds into `target_not_found` (`../action-failure/refusal.ts`) but
     // which is a control that is there and cannot be told apart, not one that
     // is gone. So this reads the client's own code, not the merged word.
+    // A press the page refused in words of its own (`refused_by_page`, busy
+    // included, whose reason Core reads as "may work later") fails as it always
+    // did, and quotes those words, as the exploration refusal does.
     const answered = result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND
       ? await webNodeReplayMissingTarget(run, "step", about, failure)
-      : await answerWithPage(run, REPLAY_RESULT_CODES.failed, `the step did not run (${failure})`, true, about);
+      : await failedOnPage(run, `the step did not run (${failure})`, about, failure === "refused_by_page" ? before : undefined);
     // A replayed step that landed on a robot check did not fail on its own
     // account: a person has to clear the check. Still `core.replay.failed`,
     // which is Core's closed vocabulary, and marked so Core can ask rather than
@@ -354,10 +367,25 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // of a step that worked as of one that did not. A list read says what it
   // read, because its line is all the judge of a build's test sees of it
   // (`./replay-answer.ts`); every other step says only that it ran.
-  // Its rows go beside the line, by label (`./replay-answer.ts`).
+  // Its rows go beside the line, by label (`./replay-answer.ts`), and a row a
+  // condition left out by itself with the value that condition tested, read
+  // from the `where` the page ran (t195-w34, run `run-murwcaj0-40e56557` R6).
   const where = isJsonRecord(parameters.extractList) ? parameters.extractList.where : undefined;
+  const ranWhere = isJsonRecord(resolvedParameters.extractList) ? resolvedParameters.extractList.where : undefined;
   const said = readSaid(payload, where) ?? "the step ran again";
-  return answer(REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed }, true, readRows(payload, where));
+  // What it changed on the page it stayed on, as an exploration press says it (`./press-effect/page-changes.ts`).
+  const after = before === undefined ? undefined : await replayPage(run, false);
+  return answer(REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed }, true, readRows(payload, where, ranWhere), webNodePageChanges(node, before, after));
+}
+
+/**
+ * A replayed step that failed, on the page it failed on, quoting what that page
+ * wrote since `before` when there is a `before` to compare with
+ * (`./press-effect/notice.ts`).
+ */
+async function failedOnPage(run: WebNodeRun, said: string, about: WebNodeReplayFacts, before: Parameters<typeof webNodePageNotice>[0]): Promise<WebLlmEvidenceToolExecution> {
+  const page = await replayPage(run);
+  return answerOnPage(run, page, { code: REPLAY_RESULT_CODES.failed, said, acted: true, about, notice: webNodePageNotice(before, page) });
 }
 
 /** How many rows a reading node's payload holds: the longest list it carries. */

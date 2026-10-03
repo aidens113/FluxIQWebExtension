@@ -46,9 +46,28 @@ test("a fixed box in the bottom-left corner only, however small, makes it busy",
   assert.deepEqual(place(page([backToTop])), { shape: "pill", anchor: "top-left" });
 });
 
-test("among clear corners, the one over the fewest controls wins", () => {
+test("among clear corners, the one over the fewest controls wins, on the left side first", () => {
   const logoAndNav: Rect = { left: 0, top: 0, width: 700, height: 90 };
-  assert.deepEqual(place(page([COOKIE_BANNER], [logoAndNav])), { shape: "pill", anchor: "top-right" });
+  const leftLinks: Rect = { left: 0, top: 0, width: 400, height: 720 };
+  assert.deepEqual(place(page([], [leftLinks])), { shape: "pill", anchor: "bottom-left" }, "controls never send it to the right while a left corner is clear");
+  assert.deepEqual(place(page([COOKIE_BANNER], [logoAndNav])), { shape: "pill", anchor: "top-left" }, "the clear left corner, controls and all");
+  const bottomLinks: Rect = { left: 0, top: 560, width: 200, height: 160 };
+  assert.deepEqual(place(page([], [logoAndNav, bottomLinks])), { shape: "pill", anchor: "bottom-left" }, "between two left corners over controls, the fewer");
+});
+
+// Screenshot 00004 of the run-murwd8le-79e735a8 UI review: a cookie banner
+// across the bottom, a sticky header, and a sticky category column on the left
+// sent the pill to the right midpoint -- under the side panel, which in the
+// Lab's emulated viewport covers the right of the page without narrowing it.
+test("every corner busy and the left edge partly fixed: the pill stays on the left, where the side panel cannot hide it", () => {
+  const stickyCategories: Rect = { left: 36, top: 110, width: 220, height: 450 };
+  const placement = place(page([COOKIE_BANNER, STICKY_HEADER, stickyCategories]));
+  assert.ok(["left", "top-left", "bottom-left"].includes(placement.anchor), `on the left: ${placement.anchor}`);
+});
+
+test("only a left edge fixed from top to bottom sends the pill to the right", () => {
+  const leftRail: Rect = { left: 0, top: 0, width: 480, height: 720 };
+  assert.deepEqual(place(page([leftRail])), { shape: "pill", anchor: "bottom-right" });
 });
 
 test("a corner already held is kept while nothing fixed is under it, whatever controls scroll past", () => {
@@ -76,7 +95,7 @@ test("every place busy: the pill goes where the least of it is fixed, and keeps 
   const narrowRightRail: Rect = { left: 1250, top: 0, width: 30, height: 720 };
   const placement = place(page([COOKIE_BANNER, STICKY_HEADER, leftRail, narrowRightRail]));
   assert.notEqual(placement.shape, "dot");
-  assert.equal(placement.anchor, "right", "the right midpoint is only a sliver over the rail");
+  assert.equal(placement.anchor, "left", "a left place over part of a rail, rather than a clearer one the side panel may cover");
 });
 
 test("a fallback place already held is kept while no place is less busy", () => {

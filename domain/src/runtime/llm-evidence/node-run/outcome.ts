@@ -33,6 +33,13 @@ export type WebNodeOutcome = {
    */
   pageUnreadable?: true;
   /**
+   * One sentence, ahead of `changed`, when the press un-chose the very control
+   * it pressed -- or chose it: `This press un-chose "Space Grey": it was chosen
+   * before.` (`./press-effect/choice.ts`). Information, never a refusal: the
+   * press ran. Absent where the pressed control's choice was left as it was.
+   */
+  choice?: string;
+  /**
    * What a press, a type or a choice changed on the page it stayed on, in the
    * view's line terms: `t941 "Space Grey" no longer marked`,
    * `t968 "Please select a Color." appeared` (`./press-effect/page-changes.ts`). Absent
