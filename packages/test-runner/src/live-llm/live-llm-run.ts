@@ -25,6 +25,7 @@ import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usag
 import { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
 import { readLiveLlmReauthor, type LiveLlmReauthorRecord } from "./reauthor-record.js";
 import { liveLlmRunSpend, type LiveLlmRunSpend } from "./run-spend.js";
+import { readLiveLlmStepLogSpend, type LiveLlmStepLogSpend } from "./step-log-spend.js";
 import type { ProviderFailureRequestBounds } from "../provider-failure/index.js";
 
 /** What the run needs from whichever Core it is driving, kept structural so this module imports no topology. */
@@ -149,10 +150,24 @@ export class LiveLlmRun {
   /** Whether a created Flow's playback was readied for the model, and what that run spent; `undefined` before it settled. */
   private repairPrepared = false;
   private repairObserved: LiveLlmObservedUsage | undefined;
+  /** The run's step log (`steps/`), where Core writes every provider call; `undefined` for a run that keeps none. */
+  private stepLogDirectory: string | undefined;
+  /** What that log held when the snapshot was last written; `null` before then, or when there was none. */
+  private stepLog: LiveLlmStepLogSpend | null = null;
   /** What the run's scenario declares about provider calls; `null` until the runner reads the resolved workflow, and for a scenario that declares nothing. */
   private declaredCalls: DeclaredProviderCalls | null = null;
 
   constructor(private readonly plan: LiveLlmPlan, private readonly credential: LiveLlmProviderCredential) {}
+
+  /**
+   * Where Core logs this run's model and tool steps (`FLUXIQ_LLM_STEP_LOG_DIR`).
+   * Every settlement reads it again, so the run's totals count the calls only
+   * the log records: the chat's own, and a re-author's Core did not count
+   * (`run-spend.ts`).
+   */
+  readStepLogFrom(stepsDirectory: string): void {
+    this.stepLogDirectory = stepsDirectory;
+  }
 
   /** Whether this run builds its Flow from an instruction task rather than from a recording. */
   get createsFlow(): boolean {
@@ -287,7 +302,7 @@ export class LiveLlmRun {
 
   /**
    * What the evaluation records: every provider call this run paid for -- the
-   * build's, the Flow run's own, Core's result check and any re-author
+   * build's, the Flow run's own, Core's result check, any re-author and the chat's own
    * (`run-spend.ts`). `calls` stays 0 until the run has settled.
    */
   get usage(): LlmUsage {
@@ -302,7 +317,7 @@ export class LiveLlmRun {
    */
   private spend(repairObserved: LiveLlmObservedUsage | undefined = this.repairObserved): LiveLlmRunSpend {
     const created = this.buildRecord !== undefined;
-    return liveLlmRunSpend({ build: created ? this.observed : undefined, runtime: created ? repairObserved : this.observed, judge: this.verification, reauthor: this.reauthor, ceilingUsd: this.plan.maxTotalEstimatedCostUsd });
+    return liveLlmRunSpend({ build: created ? this.observed : undefined, runtime: created ? repairObserved : this.observed, judge: this.verification, reauthor: this.reauthor, stepLog: this.stepLog, ceilingUsd: this.plan.maxTotalEstimatedCostUsd });
   }
 
   /**
@@ -577,6 +592,7 @@ export class LiveLlmRun {
    * `verification` keep each phase's own record as before.
    */
   private async writeSnapshot(bundle: LiveLlmRunBundle, observed: LiveLlmObservedUsage | null, extra: Record<string, unknown>, repairObserved?: LiveLlmObservedUsage): Promise<void> {
+    if (this.stepLogDirectory) this.stepLog = await readLiveLlmStepLogSpend(this.stepLogDirectory);
     const spend = this.spend(repairObserved ?? this.repairObserved);
     await bundle.writeStructured("snapshots/live-llm.json", {
       schemaVersion: "0.1",

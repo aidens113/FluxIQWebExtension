@@ -38,3 +38,17 @@ test("the copy is bounded in depth and in list length, and an emptied record is 
   assert.equal((publishableTree(Array.from({ length: 50 }, (_, index) => index)) as readonly number[]).length, 32);
   assert.equal(publishableTree({ message: "a sentence", nested: { text: "another" } }), undefined);
 });
+
+// Core records no round's stop word today (t194-w60: the round ending is held only in
+// `unfinished-build/phases.ts` locals, and `reauthor-build.ts` drops the build ending). This pins
+// what the copy carries once Core writes one: a stop word under `stopped` or `noRoute.kind`
+// travels, and one under a `...Reason` name never would, since that name reads as content.
+test("a round's stop word travels under a code-shaped name and is dropped under a reason-shaped one", () => {
+  assert.deepEqual(publishableTree({ rounds: [
+    { round: 0, stopped: "repeat_without_progress", decisions: 9 },
+    { round: 1, stopped: "repeat_without_progress", noRoute: { kind: "repeated_unchanged" }, stopReason: "repeated_unchanged" },
+  ] }), { rounds: [
+    { round: 0, stopped: "repeat_without_progress", decisions: 9 },
+    { round: 1, stopped: "repeat_without_progress", noRoute: { kind: "repeated_unchanged" } },
+  ] });
+});

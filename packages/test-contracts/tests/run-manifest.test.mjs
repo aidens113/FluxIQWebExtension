@@ -100,3 +100,19 @@ test("step and action timings must be arrays of objects", () => {
   assert.ok(paths.includes("$.steps"));
   assert.ok(paths.includes("$.actions[0]"));
 });
+
+test("a manifest records repository changes and how the run was invoked, by path and name only", () => {
+  const facility = { path: "/repo", commit, dirty: true, changes: [{ status: " M", path: "a.ts" }, { status: "R ", path: "b.ts", from: "c.ts" }], changesOmitted: 3 };
+  const invocation = { via: "run-lab", script: "run-lab.mjs", args: ["--scenario", "x"], fluxiqEnvironment: ["FLUXIQ_LAB_INVOCATION"] };
+  assert.doesNotThrow(() => assertRunManifest(manifest({ repositories: { facility, core: { path: "/core", commit, dirty: false } }, invocation })));
+  assert.doesNotThrow(() => assertRunManifest(manifest({ invocation: { via: "test-runner", labInvocation: "unreadable", args: [], fluxiqEnvironment: [] } })));
+});
+
+test("malformed changes and invocation records are rejected", () => {
+  const bad = issuePaths(manifest({
+    repositories: { facility: { path: "/repo", commit, dirty: true, changes: [{ status: "M", path: "" , extra: 1 }], changesOmitted: -1 }, core: { path: "/core", commit, dirty: false } },
+    invocation: { via: "shell", labInvocation: "bad", args: [1], fluxiqEnvironment: ["PATH"], value: "x" },
+  }));
+  for (const p of ["$.repositories.facility.changes[0].path", "$.repositories.facility.changesOmitted", "$.invocation.via", "$.invocation.labInvocation", "$.invocation.args[0]", "$.invocation.fluxiqEnvironment[0]"]) assert.ok(bad.includes(p), `${p} in ${bad.join(",")}`);
+  assert.ok(bad.some(p => p.startsWith("$.repositories.facility.changes[0]")) && bad.some(p => p.startsWith("$.invocation")));
+});

@@ -30,6 +30,7 @@ export function flowActionTimings(actions: readonly ExistingRunAction[], actionT
     actionType: actionTypes.get(action.nodeId) ?? action.definitionId,
     startedAt: new Date(action.startedAt).toISOString(),
     ...(action.finishedAt === undefined ? {} : { durationMs: Math.max(0, Math.round(action.finishedAt - action.startedAt)) }),
-    status: runActionStatus(action.status),
+    // Core writes `succeeded` for a step it passed over rather than ran; it did not run, so it reads skipped.
+    status: action.status === "succeeded" && (action.skipped !== undefined || action.route !== undefined) ? "skipped" : runActionStatus(action.status),
   }));
 }

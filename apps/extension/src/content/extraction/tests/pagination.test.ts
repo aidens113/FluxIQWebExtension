@@ -405,3 +405,44 @@ test("a load-more control hidden only while the page settles is waited for, not 
   const { advance } = await pressFrom(control, 3, 3);
   assert.deepEqual(advance, { outcome: "truncated", stop: "page_limit" });
 });
+
+// A `next` or numbered read leaves out a record that repeats, field for field,
+// one an earlier page already yielded, and counts it as `earlierPageRepeats`.
+// Live run `run-muqk713g` kept 12 rows through its conditions and stored 10, the
+// other two such repeats, and nothing said so: every judge was told the read did
+// not deduplicate and asked for a dedupe. With `shifted`, every page after the
+// first leads with page one's first card again (`store-pager.ts`).
+
+const NUMBERED: WebAutomationExtractListPagination = { mode: "numbered", pages: PAGE_ITEM, maxPages: 10 };
+
+test("a numbered read counts the records it left out as repeats of an earlier page's", async () => {
+  const page = storePage(1, { current: "self-link", shifted: true });
+  try {
+    const outcome = await extractList({ ...CARDS, paginate: NUMBERED }, { timeoutMs: 30_000 });
+    assert.equal(outcome.pagesRead, PAGE_COUNT);
+    // Page one's first card is kept once; its repeat at the top of each later page is left out.
+    assert.deepEqual(outcome.records.map((record) => record.card), cardIds(...EVERY_PAGE));
+    assert.equal(outcome.earlierPageRepeats, PAGE_COUNT - 1);
+  } finally {
+    page.restore();
+  }
+});
+
+test("a page-by-page read that met no repeat says zero, and a read of one page says nothing", async () => {
+  const paged = storePage(1, { current: "self-link" });
+  try {
+    const outcome = await extractList({ ...CARDS, paginate: NUMBERED }, { timeoutMs: 30_000 });
+    assert.deepEqual(outcome.records.map((record) => record.card), cardIds(...EVERY_PAGE));
+    assert.equal(outcome.earlierPageRepeats, 0);
+  } finally {
+    paged.restore();
+  }
+  const single = storePage(1, { current: "self-link" });
+  try {
+    const outcome = await extractList({ ...CARDS }, { timeoutMs: 30_000 });
+    assert.deepEqual(outcome.records.map((record) => record.card), cardIds(1));
+    assert.equal("earlierPageRepeats" in outcome, false);
+  } finally {
+    single.restore();
+  }
+});

@@ -13,6 +13,7 @@ import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
 import { webNodeReplayStatement } from "../replay";
+import { WEB_LLM_WITHHELD_TEXT } from "../../withheld";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const EXTRACT = "web.output.dom-extract_list";
@@ -130,3 +131,103 @@ function page(): JsonObject {
     interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }]
   };
 }
+
+// t194 w55: a replayed list read names its rows to the judge of a build's test.
+// Live run `run-muqk713g` (C3): the judge was told "name 20 (5)" of a read that
+// kept 10 of the 13 earbuds asked for and passed it; the three missing pairs
+// were rows the name condition removed by itself. The replay now asks the page
+// for those rows, as a Flow's playback does, and its answer names them, with
+// the rows it returned, by label (Core `result-verification/build-test/
+// read-rows.ts` screens them).
+const FIELDS = ["url", "name", "price"];
+const WHERE = [
+  { field: "price", lessThan: 50 },
+  { field: "name", contains: ["ear tips", "charging case"], not: true }
+];
+const LUMO = "Lumo Audio Drift Pro Wireless Earbuds, Wireless Charging Case, Touch Control, White";
+const AURELLE = "Aurelle Pods Fit Wireless Earbuds, Ivory with Wireless Charging Case";
+
+test("a replayed read with conditions asks the page for the rows each removed by itself, and names them beside the rows it kept", async () => {
+  const kept = [row("Trevio T5 Wireless Earbuds, Ivory", "$22.99"), row("Soundcrest Air Lite", "$19.99")];
+  const replayed = await replaySent(readOf(kept, {
+    rejected: [1, 3], alone: [1, 2],
+    samples: [[row("Soundcrest Air Pro Max", "$89.99")], [row(LUMO, "$26.99"), row(AURELLE, "$39.99")]], leads: [1, 2]
+  }), { extractList: { item: ".card", fields: fieldMap(), where: WHERE } });
+  assert.equal(replayed.result.resultCode, "core.replay.replayed");
+  assert.equal(replayed.sent?.rejectedSamples, "alone");
+  assert.deepEqual((replayed.result.evidence as JsonObject).readRows, {
+    rows: [{ name: "Trevio T5 Wireless Earbuds, Ivory" }, { name: "Soundcrest Air Lite" }],
+    leftOutOnlyByThis: [
+      { condition: "price", rows: [{ name: "Soundcrest Air Pro Max" }] },
+      { condition: "name", rows: [{ name: LUMO }, { name: AURELLE }] }
+    ]
+  });
+  // The counts line is unchanged.
+  assert.match(String((replayed.result.evidence as JsonObject).said), /per condition rejected \(removed alone\): price 1 \(1\), name 3 \(2\)$/u);
+});
+
+test("a replayed read names every row it returned, with no cap, and withholds a label shaped like a secret", async () => {
+  const kept = Array.from({ length: 53 }, (_, index) => row(index === 0 ? "Gift card 4111 1111 1111 1111" : `Earbuds ${index}`, "$10.00"));
+  const replayed = await replaySent(readOf(kept), { extractList: { item: ".card", fields: fieldMap() } });
+  const rows = (replayed.result.evidence as JsonObject).readRows as JsonObject;
+  // A read without conditions asks for no rejected rows.
+  assert.equal(replayed.sent?.rejectedSamples, undefined);
+  assert.equal((rows.rows as JsonObject[]).length, 53);
+  assert.equal(rows.rowsNotShown, undefined);
+  assert.deepEqual((rows.rows as JsonObject[])[0], { name: `Gift card ${WEB_LLM_WITHHELD_TEXT}` });
+  assert.equal(rows.leftOutOnlyByThis, undefined);
+});
+
+test("a Flow whose read already says what rejected rows to ask for is replayed as it says", async () => {
+  const replayed = await replaySent(readOf([row("Soundcrest Air Lite", "$19.99")], { rejected: [0, 1], alone: [0, 1] }), {
+    extractList: { item: ".card", fields: fieldMap(), where: WHERE },
+    rejectedSamples: false
+  });
+  assert.equal(replayed.sent?.rejectedSamples, false);
+  assert.deepEqual((replayed.result.evidence as JsonObject).readRows, { rows: [{ name: "Soundcrest Air Lite" }] });
+});
+
+test("a replayed step that is not a list read names no rows", async () => {
+  const replayed = await replaySent({ clicked: true }, { extractList: { item: ".card", fields: fieldMap(), where: WHERE } });
+  assert.equal((replayed.result.evidence as JsonObject).readRows, undefined);
+  assert.equal((replayed.result.evidence as JsonObject).said, "the step ran again");
+});
+
+/** One row as the page reads it: its address first, so the label is the first column that is text. */
+function row(name: string, price: string): Record<string, string> {
+  return { url: `https://example.test/p/${encodeURIComponent(name).slice(0, 12)}`, name, price };
+}
+
+function fieldMap(): JsonObject {
+  return Object.fromEntries(FIELDS.map((field) => [field, `.${field}`]));
+}
+
+/** A list read's payload: the rows it kept, and its account with, when given, the rows each condition removed by itself. */
+function readOf(kept: Array<Record<string, string>>, conditions?: { rejected: number[]; alone: number[]; samples?: Array<Array<Record<string, string>>>; leads?: number[] }): JsonObject {
+  const extraction: JsonObject = { recordCount: kept.length, pagesRead: 1, itemsSeen: kept.length + 4, truncated: false, fieldNames: FIELDS, missingFields: [] };
+  if (conditions) {
+    extraction.conditions = { applied: kept.length + 4, kept: kept.length, rejected: conditions.rejected, unfiltered: false, alone: conditions.alone };
+    if (conditions.samples) Object.assign(extraction, { rejectedSamples: conditions.samples, rejectedSamplesAlone: conditions.leads ?? [] });
+  }
+  return { extracted: kept, extraction };
+}
+
+/** Replay the read once against a page that answers with `payload`, keeping the parameters the read was sent with. */
+async function replaySent(payload: JsonObject, parameters: JsonObject) {
+  let sent: JsonObject | undefined;
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page() } };
+      sent = command.parameters as JsonObject;
+      return { status: "succeeded", payload };
+    }
+  };
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const result = await runtime.executeTool({
+    ...PROJECT, callId: "dryrun.1.19", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: EXTRACT, parameters, consequences: [], produced: { records: 1 } }
+  });
+  return { result, sent };
+}
+

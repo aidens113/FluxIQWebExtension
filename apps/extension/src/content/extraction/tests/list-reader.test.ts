@@ -10,9 +10,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { extractList } from "../list-reader";
 import type { RefusedPageHost } from "../pagination";
-import type { ExtractionCheckpoint } from "../../../shared/extraction-continuation";
+import { readExtractionCheckpoint, type ExtractionCheckpoint } from "../../../shared/extraction-continuation";
 import type { WebAutomationExtractListRequest } from "../../types";
-import { nthPagerLink, STORE_ITEM, STORE_LAZY_TAIL, storePage } from "./store-pager";
+import { nthPagerLink, PAGE_ITEM, STORE_ITEM, STORE_LAZY_TAIL, storePage } from "./store-pager";
 
 test("an encrypt field refuses the read as not implemented before the page is read", async () => {
   await assert.rejects(
@@ -505,6 +505,59 @@ test("a reveal the deadline cuts short ends the read as out of time, with the pa
     assert.equal(outcome.paginationStop, "deadline");
     assert.equal(outcome.pagesRead, 1);
     assert.deepEqual(page.followed, [], "a read out of time does not go on to the next page");
+  } finally {
+    page.restore();
+  }
+});
+
+//
+// A `next` or numbered read leaves out a record that repeats, field for field,
+// one an earlier page yielded, and counts it (`earlierPageRepeats`). A store
+// whose Next is a plain link loads every results page as a new document, as the
+// earbuds store does, so the count has to cross documents in the checkpoint as
+// `itemsSeen` does, or exactly that read reports no count at all. With
+// `shifted`, every page after the first leads with page one's first card again
+// (`store-pager.ts`).
+
+/** A numbered read of three pages of the store, each later page leading with a repeat. */
+const SHIFTED_READ: WebAutomationExtractListRequest = { ...CARDS, paginate: { mode: "numbered", pages: PAGE_ITEM, maxPages: 3 } };
+
+test("a read continued in a new document adds its own repeats of earlier pages' records to the count its predecessor handed over", async () => {
+  // The first document reads pages one and two and checkpoints before each
+  // control it follows; the last checkpoint, read as the worker reads it, is
+  // what the second document, page three, goes on from.
+  const taken: ExtractionCheckpoint[] = [];
+  const first = storePage(1, { current: "self-link", shifted: true });
+  try {
+    await extractList(SHIFTED_READ, { timeoutMs: 30_000, checkpoint: async (progress) => { taken.push(progress); } });
+  } finally {
+    first.restore();
+  }
+  assert.deepEqual(taken.map((checkpoint) => checkpoint.earlierPageRepeats), [0, 1], "page two's repeat of 1-1 is in the checkpoint taken before page three");
+  const handed = readExtractionCheckpoint(taken[1]);
+  assert.equal(handed?.earlierPageRepeats, 1, "the worker's copy of the checkpoint keeps the count");
+  const second = storePage(3, { current: "self-link", shifted: true });
+  try {
+    const outcome = await extractList(SHIFTED_READ, { timeoutMs: 30_000, resume: handed, pageHost: SERVED });
+    assert.equal(outcome.pagesRead, 3);
+    assert.deepEqual(outcome.records.map((record) => record.card), [...cardIds(1, 1, 4), ...cardIds(2, 1, 4), ...cardIds(3, 1, 4)]);
+    // Page two's repeat, handed over, and page three's own: the whole read's two.
+    assert.equal(outcome.earlierPageRepeats, 2);
+  } finally {
+    second.restore();
+  }
+});
+
+test("a continued read handed no repeat count reports none and hands none on, rather than its own document's as the read's", async () => {
+  const taken: ExtractionCheckpoint[] = [];
+  const page = storePage(2, { current: "self-link", shifted: true });
+  try {
+    const resume: ExtractionCheckpoint = { records: cardIds(1, 1, 4).map((card) => ({ card })), pagesRead: 1, scrolls: 0, missingFields: [], itemsSeen: 4 };
+    const outcome = await extractList(SHIFTED_READ, { timeoutMs: 30_000, resume, pageHost: SERVED, checkpoint: async (progress) => { taken.push(progress); } });
+    assert.deepEqual(outcome.records.map((record) => record.card), [...cardIds(1, 1, 4), ...cardIds(2, 1, 4), ...cardIds(3, 1, 4)]);
+    assert.equal(taken.length, 1);
+    assert.equal("earlierPageRepeats" in (taken[0] ?? {}), false);
+    assert.equal("earlierPageRepeats" in outcome, false);
   } finally {
     page.restore();
   }
