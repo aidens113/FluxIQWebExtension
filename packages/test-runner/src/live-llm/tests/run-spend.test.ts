@@ -15,6 +15,9 @@ function nano(amount: number): number {
   return Number(amount.toFixed(9));
 }
 
+/** A step log that names no creation judge or read takes nothing out of the build. */
+const NOTHING_FROM_BUILD = { judge: { calls: 0, estimatedCostUsd: 0 }, read: { calls: 0, estimatedCostUsd: 0 }, calls: 0, estimatedCostUsd: 0 };
+
 function usage(overrides: Partial<LiveLlmObservedUsage>): LiveLlmObservedUsage {
   return { calls: 0, interventions: 0, observedCalls: [], perCallRecords: "not recorded", unrecordedCalls: null, totalEstimatedCostUsd: 0, accounting: null, gate: null, ...overrides };
 }
@@ -27,7 +30,7 @@ test("a run whose own accounting leaves the result check out has the check added
   // Core's accounting and per-call lines never list the result check's calls.
   const runtime = usage({ calls: 3, perCallRecords: "recorded", observedCalls: [call("diag-1", 0.001), call("diag-2", 0.001), call("patch-1", 0.001)], totalEstimatedCostUsd: 0.003, accounting: { calls: 3, inputTokens: 30, outputTokens: 3, totalTokens: 33, estimatedCostUsd: 0.003, budgetBreaches: 0, pendingCalls: 0 } });
   const spend = liveLlmRunSpend({ runtime, judge: { interventions: [{ requestId: "judge-1", estimatedCostUsd: 0.002 }] }, ceilingUsd: CEILING });
-  assert.deepEqual(spend.phases, { build: null, runtime: { calls: 3, estimatedCostUsd: 0.003 }, judge: { calls: 1, estimatedCostUsd: 0.002 }, reauthor: null, chat: null });
+  assert.deepEqual(spend.phases, { build: null, runtime: { calls: 3, estimatedCostUsd: 0.003 }, judge: { calls: 1, estimatedCostUsd: 0.002 }, reauthor: null, chat: null, read: null });
   assert.equal(spend.calls, 4);
   assert.equal(spend.totalEstimatedCostUsd, 0.005);
 });
@@ -41,7 +44,7 @@ test("a run read from its interventions counts a check it already itemized once,
 });
 
 test("a run with nothing settled spends nothing, and a build alone is its own total", () => {
-  assert.deepEqual(liveLlmRunSpend({ ceilingUsd: CEILING }), { calls: 0, totalEstimatedCostUsd: 0, phases: { build: null, runtime: null, judge: null, reauthor: null, chat: null }, uncountedPhases: [], stepLog: null, perBuild: { ceilingUsd: CEILING, builds: [], maxBuildCostUsd: 0, overCeiling: 0 } });
+  assert.deepEqual(liveLlmRunSpend({ ceilingUsd: CEILING }), { calls: 0, totalEstimatedCostUsd: 0, phases: { build: null, runtime: null, judge: null, reauthor: null, chat: null, read: null }, uncountedPhases: [], stepLog: null, perBuild: { ceilingUsd: CEILING, builds: [], maxBuildCostUsd: 0, overCeiling: 0 } });
   const build = liveLlmRunSpend({ build: usage({ calls: 22, totalEstimatedCostUsd: 0.04178802 }), ceilingUsd: CEILING });
   assert.equal(build.calls, 22);
   assert.equal(build.totalEstimatedCostUsd, 0.04178802);
@@ -115,7 +118,7 @@ test("the run's step log fills the calls Core did not count, and adds the chat c
   assert.deepEqual(spend.phases.chat, { calls: 1, estimatedCostUsd: 0.000305376 });
   assert.deepEqual(spend.phases.reauthor, { calls: 17, estimatedCostUsd: 0.061567476 });
   assert.deepEqual(spend.uncountedPhases, []);
-  assert.deepEqual(spend.stepLog, { calls: 35, estimatedCostUsd: 0.121156656, filledReauthorCalls: 17, unattributed: { calls: 0, estimatedCostUsd: 0 } });
+  assert.deepEqual(spend.stepLog, { calls: 35, estimatedCostUsd: 0.121156656, filledReauthorCalls: 17, unattributed: { calls: 0, estimatedCostUsd: 0 }, fromBuild: NOTHING_FROM_BUILD });
   // The chat call is not a build: the per-build figures are unchanged.
   assert.deepEqual(spend.perBuild, withoutLog.perBuild);
 });
@@ -136,4 +139,49 @@ test("the ceiling a run is reported against is its plan's, which may only be low
   const spend = liveLlmRunSpend({ build: usage({ calls: 4, totalEstimatedCostUsd: 0.06 }), ceilingUsd: 0.05 });
   assert.equal(spend.perBuild.ceilingUsd, 0.05);
   assert.equal(spend.perBuild.overCeiling, 1);
+});
+
+// `run-murzln6g-11debe1d`, its real figures: Core's build record counted the
+// 30 explore decisions and carried $0.088570608, which is the decisions'
+// $0.086255124 plus the judge's two calls ($0.001935936, `S/0069`-`S/0070`) and
+// the reading of the instructions ($0.000379548, `S/0015`), booked with no call
+// (`phases.ts` `judgeAccounting`). live-llm.json said build 30 calls, judge
+// null, and 3 unattributed calls at $0.
+const MURZLN6G_STEP_LOG = {
+  calls: 34,
+  estimatedCostUsd: 0.088887084,
+  byKind: { chat: { calls: 1, estimatedCostUsd: 0.000316476 }, decide: { calls: 31, estimatedCostUsd: 0.086634672 }, judge: { calls: 2, estimatedCostUsd: 0.001935936 } },
+  byPart: { creation: { explore: { calls: 30, estimatedCostUsd: 0.086255124 }, read: { calls: 1, estimatedCostUsd: 0.000379548 }, judge: { calls: 2, estimatedCostUsd: 0.001935936 } } },
+};
+
+test("the creation build's judge and its reading of the instructions are phases of their own, their cost taken out of the build that held it", () => {
+  const spend = liveLlmRunSpend({ build: usage({ calls: 30, totalEstimatedCostUsd: 0.088570608 }), stepLog: MURZLN6G_STEP_LOG, ceilingUsd: CEILING });
+  assert.deepEqual(spend.phases, {
+    build: { calls: 30, estimatedCostUsd: 0.086255124 },
+    runtime: null,
+    judge: { calls: 2, estimatedCostUsd: 0.001935936 },
+    reauthor: null,
+    chat: { calls: 1, estimatedCostUsd: 0.000316476 },
+    read: { calls: 1, estimatedCostUsd: 0.000379548 },
+  });
+  assert.equal(spend.calls, 34, "every call in the log is in a phase");
+  assert.equal(spend.totalEstimatedCostUsd, 0.088887084, "the run's total is unchanged: nothing is counted twice");
+  assert.deepEqual(spend.stepLog?.unattributed, { calls: 0, estimatedCostUsd: 0 });
+  assert.deepEqual(spend.stepLog?.fromBuild, { judge: { calls: 2, estimatedCostUsd: 0.001935936 }, read: { calls: 1, estimatedCostUsd: 0.000379548 }, calls: 0, estimatedCostUsd: 0.002315484 });
+  // Core's purse held the build to its ceiling with the judge and the read in it.
+  assert.deepEqual(spend.perBuild.builds, [{ phase: "build", attempt: null, estimatedCostUsd: 0.088570608, overCeiling: false }]);
+});
+
+test("a build figure that never held the judge or the read loses nothing, and one that counted their calls loses those too", () => {
+  const apart = liveLlmRunSpend({ build: usage({ calls: 30, totalEstimatedCostUsd: 0.086255124 }), stepLog: MURZLN6G_STEP_LOG, ceilingUsd: CEILING });
+  assert.deepEqual(apart.phases.build, { calls: 30, estimatedCostUsd: 0.086255124 });
+  assert.deepEqual(apart.phases.judge, { calls: 2, estimatedCostUsd: 0.001935936 });
+  assert.equal(apart.totalEstimatedCostUsd, 0.088887084);
+  const counted = liveLlmRunSpend({ build: usage({ calls: 33, totalEstimatedCostUsd: 0.088570608 }), stepLog: MURZLN6G_STEP_LOG, ceilingUsd: CEILING });
+  assert.deepEqual(counted.phases.build, { calls: 30, estimatedCostUsd: 0.086255124 });
+  assert.equal(counted.calls, 34);
+  // The playback's result check and the build's judge are one phase, each counted once.
+  const checked = liveLlmRunSpend({ build: usage({ calls: 30, totalEstimatedCostUsd: 0.088570608 }), judge: { interventions: [{ requestId: "check-1", estimatedCostUsd: 0.001 }] }, stepLog: { ...MURZLN6G_STEP_LOG, calls: 35, estimatedCostUsd: 0.089887084 }, ceilingUsd: CEILING });
+  assert.deepEqual(checked.phases.judge, { calls: 3, estimatedCostUsd: 0.002935936 });
+  assert.deepEqual(checked.stepLog?.unattributed, { calls: 0, estimatedCostUsd: 0 });
 });
