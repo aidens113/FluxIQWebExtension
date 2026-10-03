@@ -118,8 +118,8 @@ Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name ol
   merges or pushes. Heavy commands go through `build-slots/heavy.sh`. No LLM call grants.
 
 **Live results, 2026-10-01 night:** seven runs across the four lanes, $0.04-$0.09 creation each, none over $0.10; every
-build produced a Flow and playback failed (debugs in `debugs/`, the table in the ledger entry "Fix list on dev; four lanes
-live"). First decide requests were 40-50k chars, system message 5,634, catalog 4,662 (names only).
+build produced a Flow and playback failed (debugs in `debugs/`; run ids and endings in
+[archive/live-results-2026-10-01-night.md](./language-driven-flow-loop-plan/archive/live-results-2026-10-01-night.md)). First decide requests were 40-50k chars, system message 5,634, catalog 4,662 (names only).
 
 **Open defects (not assigned).**
 - Load-flaky Core tests (pass alone): `subflow.test.ts`, `service-recordings/proposals.test.ts`, `cancel-runtime-session`, `runs`.
