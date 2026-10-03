@@ -24,7 +24,11 @@ a worker verifies it (`reports/t193-w-merge-verify.md`). Lane B's tip was merged
 downstream 4) and t254 (Core 5; downstream clean) so each resolves lanes A-D once; their leads resolve and verify,
 then stop for the supervisor to commit the merge (t252 then does w7 and P4; t254 then takes four decisions: no
 chat `max_tokens` 600, recovery's ledger at billed price, judge overshoot in phases' accounting, a round stopped by
-the judging reserve spends it testing and judging the Flow so far).
+the judging reserve spends it testing and judging the Flow so far). **t255** (`fxwork/t255`, Core-paired) takes
+lane B's run-record gaps: the ending cut at "...was not..." in the Lab's files, `live-llm.json` booking the judge
+inside `phases.build`, and Core step-log result folders for amendment decisions (`reports/t255-w1-run-record-gaps.md`);
+the overlay `pageLoads` gap waits for lane B's `ui-review` changes to land. Core `880577fc` (dev, unpushed): the
+`$0.25` comments in `refuted-result-port.ts` and `repair-authority.ts` now name the run cost ceiling.
 
 **Dev heads.** Core `8f92b399`, pushed (the last commit gives the web app lane C's `recall` icon; apps/web had
 stopped typechecking). Downstream dev `3b1655b8`, pushed 2026-10-03. Lane C's commit
