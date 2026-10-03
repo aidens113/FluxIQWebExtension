@@ -6,8 +6,8 @@
 // record every provider call reaches -- the chat's own interpreter call, and a
 // failed re-author's calls, reach no record the settlement reads from Core
 // (`run-muqk713g-d08ad3dc`: 35 calls in its step log, 17 in `llm.calls`). It
-// is read here only to count: a kind, a provider name and a cost per folder;
-// no request, answer or page content.
+// is read here only to count: a kind, a part, a phase, a provider name and a
+// cost per folder; no request, answer or page content.
 
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -20,10 +20,20 @@ export type LiveLlmStepLogSpend = {
   estimatedCostUsd: number;
   /** The same, by the step's `kind` (`chat`, `decide`, `judge`, `diagnose`, `repair`, ...). */
   byKind: Record<string, LiveLlmStepLogKind>;
+  /**
+   * The calls a build made, by the build Core's scope names on the step
+   * (`part`: `creation` or `reauthor`) and then by its `phase` (`explore`,
+   * `test`, `repair`, `read` -- the build's reading of its instructions -- and
+   * `judge`). A step with no part -- the chat, a playback run, its result
+   * check -- is in no entry. Absent on a log read before Core named parts.
+   */
+  byPart?: Record<string, Record<string, LiveLlmStepLogKind>>;
 };
 
 const STEP_FOLDER = /^\d{4,}-/u;
 const KIND = /^[a-z][a-z0-9_.-]{0,63}$/u;
+/** The builds Core's step-log scope names (`AutomationStudioLlmStepLogPart`). */
+const PARTS = new Set(["creation", "reauthor"]);
 
 /**
  * The step log's provider calls, or `null` when there is no log to read or it
@@ -42,6 +52,7 @@ export async function readLiveLlmStepLogSpend(stepsDirectory: string): Promise<L
     throw error;
   }
   const byKind: Record<string, LiveLlmStepLogKind> = {};
+  const byPart: Record<string, Record<string, LiveLlmStepLogKind>> = {};
   let calls = 0;
   let cost = 0;
   for (const name of names) {
@@ -52,10 +63,17 @@ export async function readLiveLlmStepLogSpend(stepsDirectory: string): Promise<L
     const entry = byKind[kind] ??= { calls: 0, estimatedCostUsd: 0 };
     entry.calls += 1;
     entry.estimatedCostUsd = nano(entry.estimatedCostUsd + costUsd);
+    if (typeof meta.part === "string" && PARTS.has(meta.part)) {
+      const phase = typeof meta.phase === "string" && KIND.test(meta.phase) ? meta.phase : kind;
+      const ofPart = byPart[meta.part] ??= {};
+      const inPhase = ofPart[phase] ??= { calls: 0, estimatedCostUsd: 0 };
+      inPhase.calls += 1;
+      inPhase.estimatedCostUsd = nano(inPhase.estimatedCostUsd + costUsd);
+    }
     calls += 1;
     cost += costUsd;
   }
-  return calls === 0 ? null : { calls, estimatedCostUsd: nano(cost), byKind };
+  return calls === 0 ? null : { calls, estimatedCostUsd: nano(cost), byKind, byPart };
 }
 
 async function readMeta(file: string): Promise<Record<string, unknown> | null> {

@@ -41,6 +41,7 @@ test("every provider call in the step log is counted once, by kind, and tool and
       decide: { calls: 3, estimatedCostUsd: 0.007677192 },
       judge: { calls: 1, estimatedCostUsd: 0.00176142 },
     },
+    byPart: {},
   });
 });
 
@@ -49,4 +50,22 @@ test("a folder without a complete meta.json is not a call yet, and an absent or 
   assert.equal((await readLiveLlmStepLogSpend(directory))?.calls, 1);
   assert.equal(await readLiveLlmStepLogSpend(path.join(directory, "missing")), null);
   assert.equal(await readLiveLlmStepLogSpend(await stepLog(t, { "0001-tool-core.run_node": { kind: "tool" } })), null);
+});
+
+test("a build's calls are tallied by the build and phase Core's scope wrote on them, and a call outside any build is in none", async (t) => {
+  // `run-murzln6g-11debe1d` in miniature: the chat, an explore decision, the reading of the instructions and the build's judge.
+  const directory = await stepLog(t, {
+    "0001-chat": { ...provider("chat", 0.000316476), part: null, phase: "chat" },
+    "0003-decide": { ...provider("decide", 0.003428112), part: "creation", phase: "explore" },
+    "0015-decide": { ...provider("decide", 0.000379548), part: "creation", phase: "read" },
+    "0069-judge": { ...provider("judge", 0.001330488), part: "creation", phase: "judge" },
+    "0070-judge": { ...provider("judge", 0.000605448), part: "creation", phase: "judge" },
+    "0071-decide": { ...provider("decide", 0.001), part: "reauthor", phase: "explore" },
+  });
+  const spend = await readLiveLlmStepLogSpend(directory);
+  assert.deepEqual(spend?.byPart, {
+    creation: { explore: { calls: 1, estimatedCostUsd: 0.003428112 }, read: { calls: 1, estimatedCostUsd: 0.000379548 }, judge: { calls: 2, estimatedCostUsd: 0.001935936 } },
+    reauthor: { explore: { calls: 1, estimatedCostUsd: 0.001 } },
+  });
+  assert.deepEqual(spend?.byKind.decide, { calls: 3, estimatedCostUsd: 0.00480766 });
 });
