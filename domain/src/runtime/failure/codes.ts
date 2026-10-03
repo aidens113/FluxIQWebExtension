@@ -30,14 +30,40 @@ export const WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   ACTION_REJECTED: "web.action.rejected",
   /**
    * The target was found, and the page as it stood would not let it be used:
-   * hidden, covered by another element, or disabled. That is the page's state,
-   * not a decision anyone made, so it is Core's `unexpected_state` and a repair
-   * may change the Flow to reach the state it needs. Until t193 (2026-10-02) it
-   * was ACTION_REJECTED, and lane A's run 40 failed playback on "Set as my
-   * store" inside a closed chooser, read by Core as a policy refusal that only a
-   * person could answer: the repair was refused at its gate.
+   * covered by another element, or disabled. That is the page's state, not a
+   * decision anyone made, so it is Core's `unexpected_state` and a repair may
+   * change the Flow to reach the state it needs. Until t193 (2026-10-02) it was
+   * ACTION_REJECTED, and lane A's run 40 failed playback on "Set as my store"
+   * inside a closed chooser, read by Core as a policy refusal that only a person
+   * could answer: the repair was refused at its gate. A target that is not
+   * shown at all left this code for TARGET_NOT_SHOWN the same day.
    */
   TARGET_NOT_ACTIONABLE: "web.target.not_actionable",
+  /**
+   * The target is in the document and not shown: `display:none` on it or an
+   * ancestor, no box, not rendered, inert, or nowhere inside the viewport --
+   * the actionability gate's `hidden` reason (`content/action-runtime/
+   * actionability.ts`), decided before any verb dispatched.
+   *
+   * Core's `target_not_found`, because for the Flow a control nobody can see is
+   * a step that is not available, and the user's runtime rule (2026-10-02) is
+   * that a step that is not available is found by state: Core routes by page
+   * state, or takes a sometimes-present step's skip, only for that category
+   * (`R/executor/state-routing/could-not-run.ts`). Under TARGET_NOT_ACTIONABLE
+   * a chat card's close button, hidden until the card opens or after the site
+   * remembered its dismissal, went to the recovery ladder instead (live run
+   * `run-murwdp4f-35f976d2`, t193-1002m cause R1-C2). Retryable for the same
+   * reason TARGET_NOT_FOUND is: it may be shown once the page settles, and
+   * nothing was dispatched, so another attempt repeats no act.
+   *
+   * What it is *not*: a draft replay's `remembered`. Only TARGET_NOT_FOUND
+   * reads as a control the site stopped serving (`runtime/llm-evidence/
+   * node-run/replay.ts`); a hidden one fails the build's test, so lane A's
+   * "Set as my store" inside a closed flyout keeps failing it. The model is
+   * told `target_not_actionable` for it, as before
+   * (`runtime/llm-evidence/action-failure/refusal.ts`).
+   */
+  TARGET_NOT_SHOWN: "web.target.not_shown",
   /** No element matched the action's target with enough confidence. */
   TARGET_NOT_FOUND: "web.target.not_found",
   /** Several elements matched the action's target and none could be preferred. */
@@ -239,6 +265,9 @@ export const WEB_AUTOMATION_RETRY_AFTER_MAX_MS = 3_600_000;
 export const WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS: Readonly<Record<WebAutomationFailureCode, WebAutomationFailureCodeDefinition>> = Object.freeze({
   "web.action.rejected": { category: "blocked_by_capability_or_policy", retryable: false, stage: "execution" },
   "web.target.not_actionable": { category: "unexpected_state", retryable: false, stage: "execution" },
+  // A target the page has and does not show is a step that is not available:
+  // Core finds the current step by state for it, as for one not found at all.
+  "web.target.not_shown": { category: "target_not_found", retryable: true, stage: "target_resolution" },
   "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution" },
   "web.target.ambiguous": { category: "target_ambiguous", retryable: false, stage: "target_resolution" },
   "web.validation.output_not_observed": { category: "output_not_observed", retryable: true, stage: "verification" },

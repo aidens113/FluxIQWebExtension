@@ -169,7 +169,8 @@ test("a hidden select is rejected as hidden, so the reason is the capability's o
     message: "Action rejected: the element's display is none",
     validation: { status: "failed", expected: "a target that can be selected in" },
     failure: {
-      category: "unexpected_state", code: "web.target.not_actionable", retryable: false,
+      // Not shown is Core's `target_not_found` (t193-1002m), so a Flow run routes by state.
+      category: "target_not_found", code: "web.target.not_shown", retryable: true,
       expected: "a target that can be selected in"
     }
   });

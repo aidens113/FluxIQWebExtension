@@ -16,7 +16,11 @@
 //            "Didn't pass: no price was shown"; "Not confirmed: ..." for a
 //            result check Core could not confirm, which is no failure: an
 //            unverified run that met its task read "Didn't pass" in red
-//            (t174-w85 D1); for a wait on the person
+//            (t174-w85 D1); for a step of a test of the Flow that it did not
+//            simply do again, Core's words for what it did instead: "Checked,
+//            not pressed", "Already done on the site", "Skipped: not there,
+//            optional" (t193 1002-M, C10: all of them read "Done", and the
+//            skipped one "Didn't work"); for a wait on the person
 //            that Core settled, its sentence: "Done. You pressed Continue.",
 //            "Didn't work: you pressed Stop"; nothing for an action that
 //            never said it ended once the work moved on
@@ -58,6 +62,7 @@ function outcomeOf(card: ActionCard, current: boolean): [CardWords["state"], str
       return ["waiting", "Waiting for you"];
     case "done":
       if (card.answer !== undefined) return ["done", `Done. ${card.answer}`];
+      if (card.tested !== undefined) return ["done", card.tested];
       return ["done", joined(card.check ? "Passed" : "Done", card.check ? card.said : undefined)];
     case "failed":
       if (card.unconfirmed) return ["unconfirmed", joined("Not confirmed", card.said)];
