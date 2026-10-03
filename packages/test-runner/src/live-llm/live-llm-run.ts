@@ -11,7 +11,7 @@
 import { type LlmActionConsequence, type LlmExecutionProfile, type LlmUsage } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
-import type { CreatedFlowBuild, CreatedFlowBuildLlm, PersistedFlowLlmExecution } from "../flow-lane/index.js";
+import { withSettledBuild, type CreatedFlowBuild, type CreatedFlowBuildLlm, type CreatedFlowSettledBuild, type PersistedFlowLlmExecution } from "../flow-lane/index.js";
 import { authorizeFlowLiveLlmExecution, installLiveLlmSessionKey, type LiveLlmAuthorizationControl } from "./authorize-flow.js";
 import { assertLiveLlmBudgetHeld } from "./budget.js";
 import { budgetOverProductFailure } from "./budget-over-product-failure.js";
@@ -446,10 +446,19 @@ export class LiveLlmRun {
    * snapshot carries that record as `build`: the proposal's outcome, Core's
    * call count and totals, the evidence loop's counts, and any refusal code.
    * A build Core says ran on another provider or model fails here too.
+   *
+   * Answers with that record and where its instructed consequences came from,
+   * so the lane keeps the same build in `flow-lane.json` as this snapshot keeps
+   * in `live-llm.json`: the step log is read once, here, under one rule
+   * (`withInstructedFromStepLog`).
    */
-  async settleBuild(settled: CreatedFlowBuild, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<void> {
+  async settleBuild(settled: CreatedFlowBuild, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<CreatedFlowSettledBuild> {
+    // Read before anything below can throw, and carried on whatever is thrown
+    // (`withSettledBuild`): a breach or a build that reached no provider is the
+    // run that most needs its record, and flow-lane.json must hold this one too.
     const build = await this.withInstructedFromStepLog(settled);
     this.buildRecord = build;
+    const answer: CreatedFlowSettledBuild = Object.freeze({ build, instructedConsequencesFrom: this.instructedFrom });
     // Deliberately no declaration: a build that reached no provider proposed
     // no Flow, so "the runtime absorbed it" can never be what happened here.
     try {
@@ -457,12 +466,13 @@ export class LiveLlmRun {
     } catch (error) {
       // The breach is thrown before the lane sees the build, so a build that
       // ended without a Flow is carried on it, or the run reads as the facility's.
-      throw budgetOverProductFailure(error, buildWithoutFlowFailure(build));
+      throw withSettledBuild(budgetOverProductFailure(error, buildWithoutFlowFailure(build)), answer);
     }
     const { provider, model } = build.accounting ?? {};
     if ((provider != null && provider !== this.plan.provider) || (model != null && model !== this.plan.model)) {
-      throw new RunnerFailure("runtime.behavior", `Core's Flow build ran on ${provider ?? "an unreported provider"}/${model ?? "an unreported model"}, not the authorized ${this.plan.provider}/${this.plan.model}`);
+      throw withSettledBuild(new RunnerFailure("runtime.behavior", `Core's Flow build ran on ${provider ?? "an unreported provider"}/${model ?? "an unreported model"}, not the authorized ${this.plan.provider}/${this.plan.model}`), answer);
     }
+    return answer;
   }
 
   /**

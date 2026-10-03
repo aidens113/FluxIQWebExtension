@@ -52,6 +52,44 @@ export type CreatedFlowLaneEntry =
   | Readonly<{ kind: "chat"; chat: CreatedFlowChat; authorizeChat: () => Promise<void>; wait?: CreatedFlowChatWait }>
   | Readonly<{ kind: "direct-api" }>;
 
+/**
+ * A build as its settlement left it: the record both snapshots carry, and where
+ * its `instructedConsequences` came from -- Core's proposal, the run's step log
+ * (a build that left no proposal), or neither.
+ */
+export type CreatedFlowSettledBuild = Readonly<{
+  build: CreatedFlowBuild;
+  instructedConsequencesFrom: "proposal" | "step_log" | null;
+}>;
+
+/** Where a settlement's answer rides on the error it threw; a symbol, so no serializer of the error ever writes it. */
+const SETTLED_BUILD = Symbol("fluxiq.lab.settledBuild");
+
+/**
+ * `error` carrying `settled`, the answer a settlement had made before it
+ * threw. The error is returned as it came -- same object, category, message
+ * and details -- with the answer as a non-enumerable symbol property, which
+ * `JSON.stringify` and the evidence bundle never read. A value that cannot
+ * carry a property is returned unchanged.
+ */
+export function withSettledBuild(error: unknown, settled: CreatedFlowSettledBuild): unknown {
+  if (error !== null && typeof error === "object" && Object.isExtensible(error)) {
+    Object.defineProperty(error, SETTLED_BUILD, { value: settled, enumerable: false, configurable: true });
+  }
+  return error;
+}
+
+/** The settlement's answer a thrown error carries (`withSettledBuild`), if it carries one. */
+export function settledBuildOf(error: unknown): CreatedFlowSettledBuild | undefined {
+  return error !== null && typeof error === "object" ? (error as { [SETTLED_BUILD]?: CreatedFlowSettledBuild })[SETTLED_BUILD] : undefined;
+}
+
+/** Keeps the settled record as the lane's build, for both snapshots. */
+function holdSettledBuild(progress: CreatedFlowLaneProgress, settled: CreatedFlowSettledBuild): void {
+  progress.build = settled.build;
+  progress.instructedConsequencesFrom = settled.instructedConsequencesFrom;
+}
+
 /** What starting the build left: the Flow, its build, the change put into it when the chat applied it, and FluxIQ's own words about it. */
 type StartedBuild = { flowId: string | null; build: CreatedFlowBuild; buildPermitted: readonly string[]; applied: CreatedFlowReview | null; said: string | null; settlement?: unknown };
 
@@ -90,8 +128,19 @@ export type CreatedFlowLaneInput = {
    * breach or on a build that reached no provider. Called once, before the
    * proposal is applied or anything is judged, whether the build proposed a
    * Flow or not.
+   *
+   * Answers with the build as it settled it, which is the record the lane
+   * keeps from then on, so `flow-lane.json` and `live-llm.json` carry one
+   * build. A live run's settlement fills `instructedConsequences` from the
+   * run's step log when Core published none, which it does only on a proposal
+   * (`run-murzln6g-11debe1d`, `S/0015`). A settlement that throws after it
+   * settled the record -- a budget breach, a build that reached no provider --
+   * carries its answer on the thrown error (`withSettledBuild`), so the
+   * incomplete `flow-lane.json` of the run that most needs reading holds the
+   * same build as `live-llm.json`. A settlement that throws without one leaves
+   * the lane with the build as Core reported it.
    */
-  settleBuild: (build: CreatedFlowBuild) => Promise<void>;
+  settleBuild: (build: CreatedFlowBuild) => Promise<CreatedFlowSettledBuild>;
   /**
    * Readies the created Flow's playback for the model, against the Flow as the
    * review left it, and answers with the run's intent. With it, a Flow that
@@ -172,6 +221,8 @@ export type CreatedFlowLaneEvidence = Readonly<{
   extraction: FlowExtractionJudgement | null;
   /** Each oracle the run was held to, and how it came out: the run passes only when none failed. */
   oracles: CreatedFlowOracles;
+  /** Where `build.instructedConsequences` came from, as `live-llm.json` says it. */
+  instructedConsequencesFrom: CreatedFlowSettledBuild["instructedConsequencesFrom"];
 }>;
 
 /**
@@ -213,6 +264,8 @@ export type CreatedFlowLaneIncomplete = Readonly<{
   buildEntry: CreatedFlowLaneEntry["kind"];
   flowId: string | null;
   build: CreatedFlowBuild | null;
+  /** Where `build.instructedConsequences` came from, as `live-llm.json` says it; `null` too when the settlement answered nothing. */
+  instructedConsequencesFrom: CreatedFlowSettledBuild["instructedConsequencesFrom"];
   review: CreatedFlowReview | null;
   flowShape: CreatedFlowShape | null;
   authoredNodes: readonly AuthoredFlowNode[] | null;
@@ -233,6 +286,7 @@ type CreatedFlowLaneProgress = {
   published: boolean;
   flowId?: string;
   build?: CreatedFlowBuild;
+  instructedConsequencesFrom?: CreatedFlowSettledBuild["instructedConsequencesFrom"];
   review?: CreatedFlowReview;
   shape?: CreatedFlowShape;
   authoredNodes?: readonly AuthoredFlowNode[];
@@ -387,7 +441,7 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
     automationFailureExpected: workflow.expected.failure ?? null,
     extraction: extraction?.measurements ?? [],
   });
-  const evidence: CreatedFlowLaneEvidence = Object.freeze({ request, build, review, flowId, shape, authoredNodes, ownPage, run, observation, extraction, oracles });
+  const evidence: CreatedFlowLaneEvidence = Object.freeze({ request, build, review, flowId, shape, authoredNodes, ownPage, run, observation, extraction, oracles, instructedConsequencesFrom: progress.instructedConsequencesFrom ?? null });
   progress.stage = "publish";
   await input.recordEvidence(evidence);
   // From here the complete snapshot is on disk, so a failing expectation below
@@ -422,11 +476,17 @@ async function startDirectBuild(input: CreatedFlowLaneInput, progress: CreatedFl
     buildPermitted = llm.permittedConsequences;
     return llm;
   };
-  const build = await buildCreatedFlowProposal(input.control, { projectId, flowId, instruction: request.task.instruction, startLocation: input.startLocation, authorize }, bounds, input.buildWait);
+  const proposed = await buildCreatedFlowProposal(input.control, { projectId, flowId, instruction: request.task.instruction, startLocation: input.startLocation, authorize }, bounds, input.buildWait);
   // Held before the settlement and before either refusal after it, which are the
   // two endings that used to leave a run with no artifact at all.
-  progress.build = build;
-  await input.settleBuild(build);
+  progress.build = proposed;
+  const settled = await input.settleBuild(proposed).catch((error: unknown) => {
+    const carried = settledBuildOf(error);
+    if (carried) holdSettledBuild(progress, carried);
+    throw error;
+  });
+  holdSettledBuild(progress, settled);
+  const { build } = settled;
   return { flowId, build, buildPermitted, applied: null, said: null };
 }
 
@@ -455,14 +515,24 @@ async function startChatBuild(input: CreatedFlowLaneInput, entry: Extract<Create
   // instruction is, and it is raised below with this as its cause. An
   // overspend still outranks everything.
   let settlement: unknown;
-  await input.settleBuild(made.build).catch((error: unknown) => {
+  let build = made.build;
+  await input.settleBuild(made.build).then((settled) => {
+    build = settled.build;
+    holdSettledBuild(progress, settled);
+  }, (error: unknown) => {
+    // Held whichever way the error goes: thrown on below, or kept as the cause of the chat's own failure.
+    const carried = settledBuildOf(error);
+    if (carried) {
+      build = carried.build;
+      holdSettledBuild(progress, carried);
+    }
     if (made.flowId !== null || (error instanceof RunnerFailure && error.category === "performance.budget")) throw error;
     settlement = error;
   });
   if (made.applied && made.applied.appliedMutationCount < 1) {
-    throw new RunnerFailure("runtime.behavior", "FluxIQ's chat applied the build's proposal but Core reported no change to the Flow", { details: { adaptationId: made.applied.adaptationId, chat: made.build.chat ?? null } });
+    throw new RunnerFailure("runtime.behavior", "FluxIQ's chat applied the build's proposal but Core reported no change to the Flow", { details: { adaptationId: made.applied.adaptationId, chat: build.chat ?? null } });
   }
-  return { flowId: made.flowId, build: made.build, buildPermitted: [], applied: made.applied ? Object.freeze({ ...made.applied }) : null, said: made.said, settlement };
+  return { flowId: made.flowId, build, buildPermitted: [], applied: made.applied ? Object.freeze({ ...made.applied }) : null, said: made.said, settlement };
 }
 
 /**
@@ -519,6 +589,7 @@ function incompleteCreatedFlowLaneEvidence(input: CreatedFlowLaneInput, progress
     buildEntry: input.entry.kind,
     flowId: progress.flowId ?? null,
     build: progress.build ?? null,
+    instructedConsequencesFrom: progress.instructedConsequencesFrom ?? null,
     review: progress.review ?? null,
     flowShape: progress.shape ?? null,
     authoredNodes: progress.authoredNodes ?? null,

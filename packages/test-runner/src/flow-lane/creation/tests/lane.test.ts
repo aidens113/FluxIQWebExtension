@@ -7,7 +7,7 @@ import type { DeclaredSecret } from "../../declared-secrets.js";
 import type { PersistedFlowLlmExecution } from "../../persisted-flow-run.js";
 import type { LabResetFetch } from "../../reset-scenario-lab.js";
 import type { CreatedFlowBuild } from "../build-proposal.js";
-import { runCreatedFlowLane, type CreatedFlowLaneEntry, type CreatedFlowLaneEvidence, type CreatedFlowLaneIncomplete } from "../lane.js";
+import { runCreatedFlowLane, withSettledBuild, type CreatedFlowLaneEntry, type CreatedFlowLaneEvidence, type CreatedFlowLaneIncomplete, type CreatedFlowSettledBuild } from "../lane.js";
 import { resolveCreatedFlowRequest, type CreatedFlowRequest } from "../request.js";
 import type { UnheldFact } from "../final-state-facts.js";
 import { createdFlowLaneSnapshot } from "../snapshot.js";
@@ -29,7 +29,8 @@ type LaneOptions = {
   /** What the oracle names when the final state did not hold. */
   unheldFacts?: readonly UnheldFact[];
   secrets?: readonly DeclaredSecret[];
-  settle?: (build: CreatedFlowBuild) => Promise<void>;
+  /** The settlement's own work; what it answers replaces the build, as a live run's settlement does. */
+  settle?: (build: CreatedFlowBuild) => Promise<CreatedFlowSettledBuild | void>;
   authorizeRun?: (flowId: string) => Promise<PersistedFlowLlmExecution>;
   settleRun?: (runId: string | undefined) => Promise<void>;
   /** What the operator permitted the build (`--llm-permit`). */
@@ -58,7 +59,11 @@ async function runLane(core: ReturnType<typeof fakeCreationCore>, options: LaneO
     secrets: options.secrets ?? [],
     entry: options.entry ?? { kind: "direct-api" },
     authorizeBuild: async () => { core.calls.push("authorize"); return { permittedConsequences: options.permitted ?? [] }; },
-    settleBuild: async (build) => { core.calls.push("settle"); settled.push(build); await options.settle?.(build); },
+    settleBuild: async (build) => {
+      core.calls.push("settle");
+      settled.push(build);
+      return await options.settle?.(build) ?? { build, instructedConsequencesFrom: build.instructedConsequences === null ? null : "proposal" };
+    },
     ...(options.authorizeRun ? { authorizeRun: options.authorizeRun } : {}),
     ...(options.settleRun ? { settleRun: options.settleRun } : {}),
     prepareFlowPage: async () => { core.calls.push("prepare"); },
@@ -607,3 +612,72 @@ function chatCore(): { core: ReturnType<typeof fakeCreationCore>; entry: Created
   };
   return { core, entry, typed };
 }
+
+/** `run-murzln6g-11debe1d`, `S/0015/decision.json`: the reading its build made before any page evidence. */
+const MURZLN6G_READ = [
+  { consequence: "modify_existing", quote: "Switch my pickup store to Millbrook Crossing Supercenter" },
+  { consequence: "create_new", quote: "add two packs of the ValueRidge Essentials Select-A-Size Paper Towels in the 12 Double Rolls size and one pack of the ValueRidge Everyday Dinner Napkins in the 250 Count size to my cart, both for pickup" },
+] as const;
+
+// `run-murzln6g-11debe1d`: Core publishes a build's instructed consequences
+// only on its proposal, so the build that left none read `null` in both
+// snapshots. The live settlement now fills them from the step log, and the lane
+// keeps the build the settlement answered with, so `flow-lane.json` carries
+// the same record as `live-llm.json` rather than its own unsettled copy.
+test("a build that left no proposal keeps the instructed consequences its settlement read, and where they came from", async () => {
+  const diagnostic = { code: "flow_bootstrap.evidence_repeat_without_progress", stage: "provider_output_validation", retryable: false, providerInvocation: "attempted", providerResponse: "received" };
+  const fromStepLog = async (build: CreatedFlowBuild): Promise<CreatedFlowSettledBuild> => ({ build: { ...build, instructedConsequences: MURZLN6G_READ }, instructedConsequencesFrom: "step_log" });
+  const { run, settled, incomplete } = await runLane(fakeCreationCore({ generation: { kind: "refused", status: 400, payload: { diagnostic } } }), { settle: fromStepLog });
+  await assert.rejects(run, /FluxIQ did not build a Flow/u);
+  assert.equal(settled[0]?.instructedConsequences, null, "Core's record had none");
+  assert.deepEqual(incomplete[0]?.build?.instructedConsequences, MURZLN6G_READ);
+  assert.equal(incomplete[0]?.instructedConsequencesFrom, "step_log");
+
+  // A settlement that refused answered nothing: the build is Core's own, and nothing is claimed about where its consequences came from.
+  const refusal = new RunnerFailure("runtime.behavior", "Live LLM run reached no provider");
+  const unsettled = await runLane(fakeCreationCore(), { settle: async () => { throw refusal; } });
+  await assert.rejects(unsettled.run, (error: unknown) => error === refusal);
+  assert.equal(unsettled.incomplete[0]?.instructedConsequencesFrom, null);
+});
+
+test("a chat build, and a direct build that proposed a Flow, are judged and published on the build their settlement answered with", async () => {
+  const { core, entry } = chatCore();
+  const chat = await runLane(core, { entry, settle: async (build) => ({ build: { ...build, instructedConsequences: MURZLN6G_READ }, instructedConsequencesFrom: "step_log" }) });
+  const outcome = await chat.run;
+  assert.deepEqual(outcome.build.instructedConsequences, MURZLN6G_READ);
+  assert.deepEqual(createdFlowLaneSnapshot(outcome).build.instructedConsequences, MURZLN6G_READ);
+  assert.equal(createdFlowLaneSnapshot(outcome).instructedConsequencesFrom, "step_log");
+
+  const direct = await runLane(fakeCreationCore());
+  const proposed = await direct.run;
+  assert.equal(proposed.build, direct.settled[0], "a settlement that changed nothing hands back Core's own record");
+  assert.equal(createdFlowLaneSnapshot(proposed).instructedConsequencesFrom, "proposal");
+});
+
+// The settlement that throws -- a Lab budget breach, a build that reached no
+// provider -- ends the run that most needs reading. It had already filled the
+// record from the step log and written it to live-llm.json, and it carries that
+// answer on the error, so the incomplete flow-lane.json says the same.
+test("a settlement that throws still hands the lane the build it filled from the step log, and the error is unchanged", async () => {
+  const fromStepLog = (build: CreatedFlowBuild): CreatedFlowSettledBuild => ({ build: { ...build, instructedConsequences: MURZLN6G_READ }, instructedConsequencesFrom: "step_log" });
+  const breach = (build: CreatedFlowBuild) => withSettledBuild(new RunnerFailure("performance.budget", "Live LLM run exceeded its budget", { details: { calls: 34 } }), fromStepLog(build));
+
+  const diagnostic = { code: "flow_bootstrap.evidence_budget_exhausted", stage: "provider_output_validation", retryable: false, providerInvocation: "attempted", providerResponse: "received" };
+  let thrown: unknown;
+  const direct = await runLane(fakeCreationCore({ generation: { kind: "refused", status: 400, payload: { diagnostic } } }), { settle: async (build) => { thrown = breach(build); throw thrown; } });
+  await assert.rejects(direct.run, (error: unknown) => error === thrown && error instanceof RunnerFailure && error.category === "performance.budget");
+  assert.equal(direct.settled[0]?.instructedConsequences, null, "Core's record had none");
+  assert.deepEqual(direct.incomplete[0]?.build?.instructedConsequences, MURZLN6G_READ);
+  assert.equal(direct.incomplete[0]?.instructedConsequencesFrom, "step_log");
+  assert.deepEqual(direct.incomplete[0]?.build?.failure, direct.settled[0]?.failure, "the rest of the record is Core's own");
+  // The answer rides on the error unseen: nothing that serializes the failure writes it a second time.
+  assert.equal(JSON.stringify(thrown).includes("Millbrook"), false);
+  assert.deepEqual(Object.keys(thrown as object).includes("build"), false);
+
+  // A chat build the settlement refused carries the filled record the same way.
+  const { core, entry } = chatCore();
+  const chat = await runLane(core, { entry, settle: async (build) => { throw withSettledBuild(new RunnerFailure("runtime.behavior", "Live LLM run reached no provider"), fromStepLog(build)); } });
+  await assert.rejects(chat.run, /reached no provider/u);
+  assert.deepEqual(chat.incomplete[0]?.build?.instructedConsequences, MURZLN6G_READ);
+  assert.equal(chat.incomplete[0]?.instructedConsequencesFrom, "step_log");
+});
