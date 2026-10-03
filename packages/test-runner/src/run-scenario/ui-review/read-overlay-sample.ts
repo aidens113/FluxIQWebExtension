@@ -1,4 +1,5 @@
 import { screenText } from "../extension-start-trace/index.js";
+import { screenLocation } from "./screen-location.js";
 import type { OverlaySample } from "./types.js";
 import { withTimeout } from "./with-timeout.js";
 
@@ -12,7 +13,7 @@ const READ_TIMEOUT_MS = 1_000;
 // Runs in the sampled tab's main world. Read-only: it changes nothing in the page, which the recorder may be recording.
 const HOST_STATE = `(() => {
   const hosts = document.querySelectorAll(${JSON.stringify(HOST_TAG)});
-  const out = { hostCount: hosts.length, documentVisibility: document.visibilityState, documentOrigin: performance.timeOrigin };
+  const out = { hostCount: hosts.length, documentVisibility: document.visibilityState, documentOrigin: performance.timeOrigin, href: location.href };
   const host = hosts[0];
   if (!host) return out;
   const r = host.getBoundingClientRect();
@@ -23,7 +24,7 @@ const HOST_STATE = `(() => {
     inViewport: r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight, attributes };
 })()`;
 
-type HostState = { hostCount: number; documentVisibility?: string; documentOrigin?: number; rect?: OverlaySample["rect"]; display?: string; visibility?: string; opacity?: number; inViewport?: boolean; attributes?: Record<string, string> };
+type HostState = { hostCount: number; documentVisibility?: string; documentOrigin?: number; href?: string; rect?: OverlaySample["rect"]; display?: string; visibility?: string; opacity?: number; inViewport?: boolean; attributes?: Record<string, string> };
 type DescribedNode = { nodeType?: number; nodeName?: string; nodeValue?: string; children?: DescribedNode[]; shadowRoots?: DescribedNode[] };
 
 /**
@@ -34,6 +35,10 @@ type DescribedNode = { nodeType?: number; nodeName?: string; nodeValue?: string;
  * `DOM.describeNode` with `pierce` returns closed shadow roots too. Its box and
  * computed style are read by a main-world expression that changes nothing.
  *
+ * Each read carries the location of the document it was taken in, screened by
+ * `screenLocation` (origin and path, never query or fragment), so a change of
+ * document says which page the tab moved to.
+ *
  * It never throws: a read that fails is a sample carrying `error`, which
  * `countOverlayChanges` counts as a failed read rather than an absent overlay.
  */
@@ -43,7 +48,7 @@ export async function readOverlaySample(cdp: OverlayCdp, atMs: number, secrets: 
     if (evaluated?.exceptionDetails) return { atMs, present: false, hostCount: 0, visible: false, error: `overlay state threw: ${screenText(String(evaluated.exceptionDetails.text ?? "exception"), secrets)}` };
     const state = evaluated?.result?.value as HostState | undefined;
     if (!state || typeof state.hostCount !== "number") return { atMs, present: false, hostCount: 0, visible: false, error: "overlay state returned no value" };
-    const base = { atMs, hostCount: state.hostCount, ...(state.documentVisibility === undefined ? {} : { documentVisibility: state.documentVisibility }), ...(typeof state.documentOrigin === "number" && Number.isFinite(state.documentOrigin) ? { documentOrigin: state.documentOrigin } : {}) };
+    const base = { atMs, hostCount: state.hostCount, ...(state.documentVisibility === undefined ? {} : { documentVisibility: state.documentVisibility }), ...(typeof state.documentOrigin === "number" && Number.isFinite(state.documentOrigin) ? { documentOrigin: state.documentOrigin } : {}), ...(typeof state.href === "string" ? { pageUrl: screenLocation(state.href, secrets) } : {}) };
     if (state.hostCount === 0) return { ...base, present: false, visible: false };
     const textParts = (await hostText(cdp)).map(part => screenText(part, secrets));
     const phaseName = textParts[0];

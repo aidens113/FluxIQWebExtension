@@ -2983,9 +2983,21 @@ A run's UI review (`packages/test-runner/src/run-scenario/ui-review/`) samples
 the on-page activity overlay about every 200 ms for about 3 s at each moment
 and reads the window as `stable`, `changed` or `flickering` (a revisit, two or
 more presence or visibility toggles, or three or more text changes). Each
-sample records the document it was read from (`performance.timeOrigin`). One
-absent sample whose neighbours were both read, present, from different
-documents is the browser loading a new page, which no product code can bridge:
-it is counted as `pageLoads`, shown in the `[lab] ui review` line, and makes no
-toggle. Any other absence counts as a toggle: two or more samples, one inside
-a single document, or one beside a failed read.
+sample records the document it was read from (`performance.timeOrigin`) and
+that document's location as `pageUrl`, screened to origin and path like every
+other recorded location. Every change of document between consecutive readable
+samples is a page load, counted as `pageLoads` whether or not the overlay was
+absent across it. One absent sample whose neighbours were both read, present,
+from different documents is that load's gap, which no product code can bridge:
+it is counted as `pageLoadGaps` as well and makes no toggle. Both counts are
+shown in the `[lab] ui review` line and the review's summary. Any other
+absence counts as a toggle: two or more samples, one inside a single document,
+or one beside a failed read.
+
+Each picture records when it was taken against its moment's overlay samples:
+`takenAt`, `windowMs` (the capture's span in milliseconds from the window's
+`startedAt`, negative before the first read) and `overlaySamples` (the index of
+the last read begun before the capture and the first begun after it). A
+picture without the overlay whose neighbouring samples say absent was taken
+before it appeared; one whose neighbours both say present and visible is a
+rendering defect.

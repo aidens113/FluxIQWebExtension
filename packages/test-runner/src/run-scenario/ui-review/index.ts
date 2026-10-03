@@ -2,6 +2,7 @@
 // and the on-page activity overlay's measured state (`recorder.ts` says why).
 // The capture helpers stay internal; the spine needs the recorder, and the tests the parts they pin.
 export { countOverlayChanges } from "./count-overlay-changes.js";
+export { placeCaptureInWindow, type CaptureSpan } from "./place-capture-in-window.js";
 export { readOverlaySample, type OverlayCdp } from "./read-overlay-sample.js";
 export { sampleOverlayWindow, type OverlayWindowOptions } from "./sample-overlay-window.js";
 export { uiReviewPaths } from "./review-paths.js";
