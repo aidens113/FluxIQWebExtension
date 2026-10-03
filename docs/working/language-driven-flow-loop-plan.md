@@ -635,6 +635,26 @@ run (id, cost, stage reached, causes, fixes) and the commit-ready files per fix.
 
 Report to: `reports/<lead>.md` in the lane tree.
 
+#### Briefs: live round 1003 (lanes A-D, `lead-xhigh`; pending: dispatch only after t252 and t254 land)
+Common: as 1002-L above, with these changes. The supervisor merges dev into every lane tree (both repositories),
+rebuilds Core libraries and the extension, and confirms the Lab's behind-dev guard admits each tree. What this round must
+show, beyond each lane's own causes:
+- the build may generalise: a repetitive instruction becomes a row-general Flow (a repeat bound to `$row`), tested once
+  per row with lasting acts checked, never pressed (t252);
+- the purse holds what calls cost: a build with money left tests and judges before it ends, and an ending at cost names
+  what was left and why it was not enough (t254);
+- the run's records are whole: FluxIQ's ending, the judge booked apart from the build in `live-llm.json`, Core's answer
+  folders for amendments (t255), UI-review `pageLoads` and picture timing (t257). A record gap is itself a cause.
+
+| Lead | Tree | Slot | Scenario | Carry in |
+| --- | --- | --- | --- | --- |
+| t174-lead-1003 (A) | `fxwork/t174` | slot-1 | crossborder-marketplace-hub-to-cart | open causes 2, 6, 10, 11, 15; UI D6, D9. After a flash run, one approved comparison run: `--llm-model deepseek-v4-pro --llm-cost-ceiling-usd 0.30` |
+| t193-lead-1003 (B) | `fxwork/t193` | slot-2 | bigbox-retail-pickup-cart | C4, R2-C8, R2-C9, C13, C14, C16, C17 (`reports/t193-lead-1002M.md`, "For the supervisor") |
+| t194-lead-1003 (C) | `fxwork/t194` | slot-3 | everything-store-plus-earbuds-under-50 | the re-author's ending is now judged; reach and debug it |
+| t195-lead-1003 (D) | `fxwork/t195` | slot-4 | social-network-feed-confirm-requests | the hard-coded-row loop: the build must write the row-general Flow |
+
+Report to: `reports/<lead>.md` in the lane tree.
+
 ---
 
 ## Work Ledger
