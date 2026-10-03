@@ -462,3 +462,22 @@ test("propagates bounded caller interruption to an in-flight Flow request", asyn
   controller.abort(new Error("caller detail must not be propagated"));
   await assert.rejects(() => pending, error => /was interrupted/.test(String(error)) && !String(error).includes("caller detail"));
 });
+
+// Core's run detail marks a step it passed over (t242, t243): the existing/clone
+// path keeps the mark in its closed shape, and the skip route, so the run's
+// timings can say skipped rather than succeeded.
+test("run detail keeps a skipped attempt's closed mark and its skip route, and drops a mark carrying page text", async (t) => {
+  const routed = { ...action, attemptId: "attempt.routed", route: "state_routed", skipped: { reason: "state_routed", code: "web.target.not_found", toNodeId: "node.search", direction: "backward" } };
+  const leaky = { ...action, attemptId: "attempt.leaky", route: "skipped", skipped: { reason: "target_absent", code: "Accept all cookies on Shop" } };
+  const pressed = { ...action, attemptId: "attempt.pressed", route: "success" };
+  const client = await mockedClient(t, url => {
+    if (endpoint(url) === "get-flow-run-detail") return json({ ok: true, payload: { runDetail: { summary, actionAttempts: [routed, leaky, pressed], adaptationIds: [], changeProposalIds: [] } } });
+    throw new Error(`unexpected ${url.pathname}`);
+  });
+  const [first, second, third] = (await client.getRunDetail("project.web", "run.one")).actionAttempts;
+  assert.deepEqual(first?.skipped, { reason: "state_routed", code: "web.target.not_found", toNodeId: "node.search", direction: "backward", startedAt: 11, finishedAt: 12 });
+  assert.equal(first?.route, "state_routed");
+  assert.equal(second?.route, "skipped");
+  assert.equal(second && "skipped" in second, false);
+  assert.equal(third && ("route" in third || "skipped" in third), false);
+});

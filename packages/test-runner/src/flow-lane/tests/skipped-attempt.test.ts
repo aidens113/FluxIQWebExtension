@@ -62,3 +62,55 @@ test("a run with a skipped step and every other step pressed is judged passed, w
   const timings = outcome.actions.map(action => ({ actionType: action.actionType, startedAt: action.startedAt, status: action.status }));
   assert.equal(recordingLaneProbeObservation({ oracleVerdict: "passed", actions: timings, automationFailure: null, automationFailureExpected: null, extraction: [] }).reportedVerdict, "passed");
 });
+
+// A step that could not run because the page was elsewhere is passed over and
+// the run continues at the node matching the page (Core t243,
+// `executor/state-routing/routed-attempt.ts`): the attempt reads
+// `route: "state_routed"` and its mark says where the run went and which way.
+const routed = (overrides: Record<string, unknown> = {}) => ({ reason: "state_routed", code: "web.target.not_found", toNodeId: "node.search", direction: "forward", ...overrides });
+
+test("a state-routed attempt is reported as skipped, with where the run went and which way, and no failure", async () => {
+  const outcome = await run([attempt({ route: "state_routed", skipped: routed() }), attempt({ attemptId: "back", order: 1, route: "state_routed", startedAt: 2_000, finishedAt: 2_010, skipped: routed({ code: "executor.ready_state.not_shown", toNodeId: "node.store", direction: "backward" }) })]);
+  assert.deepEqual(outcome.actions[0]!.skipped, { reason: "state_routed", code: "web.target.not_found", toNodeId: "node.search", direction: "forward", startedAt: 1_000, finishedAt: 1_030 });
+  assert.deepEqual(outcome.actions[1]!.skipped, { reason: "state_routed", code: "executor.ready_state.not_shown", toNodeId: "node.store", direction: "backward", startedAt: 2_000, finishedAt: 2_010 });
+  assert.deepEqual(outcome.actions.map(action => action.status), ["skipped", "skipped"], "a routed step did not run, so it reads neither succeeded nor failed");
+  assert.equal(outcome.failure, null);
+  assert.deepEqual(outcome.stateRouted, { forward: 1, backward: 1 }, "the run counts its routed steps");
+});
+
+test("a state-routed mark that is not Core's closed shape carries no skip", async () => {
+  const outcome = await run([
+    attempt({ attemptId: "a", skipped: routed({ code: "Switch to Millbrook" }) }),
+    attempt({ attemptId: "b", skipped: routed({ toNodeId: "the search box on ValueRidge" }) }),
+    attempt({ attemptId: "c", skipped: routed({ toNodeId: 7 }) }),
+    attempt({ attemptId: "d", skipped: routed({ direction: "sideways" }) }),
+    attempt({ attemptId: "e", skipped: routed({ page: "Millbrook Crossing Supercenter" }) }),
+    attempt({ attemptId: "f", skipped: { reason: "target_absent", code: "web.target.not_found", toNodeId: "node.search" } }),
+    attempt({ attemptId: "g", skipped: { reason: "state_routed", code: "web.target.not_found", direction: "forward" } }),
+  ]);
+  for (const action of outcome.actions) assert.equal("skipped" in action, false, `${action.attemptIndex} carries no skip`);
+  assert.equal("stateRouted" in outcome, false, "a run that routed nothing says nothing about routing");
+});
+
+test("a run whose only non-press is a state-routed step is judged passed, every node ending well", async () => {
+  const outcome = await run([
+    attempt({ route: "state_routed", skipped: routed() }),
+    attempt({ attemptId: "go.attempt.1", nodeId: "node.go", order: 1, route: "success", startedAt: 2_000, finishedAt: 2_040 }),
+  ]);
+  assert.equal(flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: outcome, automationFailureExpected: null, extraction: [] }).reportedVerdict, "passed");
+  assert.deepEqual(recoveredByNode(outcome.actions), [true, true]);
+  assert.equal(absorbedEveryFailure(outcome.actions), false);
+});
+
+// A routed attempt reads `route: "state_routed"` (or `"skipped"`) with Core's
+// `succeeded`; a mark the Lab rejects drops the mark's detail, never the fact
+// that the step did not run (t243 W1 open question 3).
+test("an attempt down a skip route reads skipped even when its mark is not Core's closed shape", async () => {
+  const outcome = await run([
+    attempt({ attemptId: "a", route: "state_routed", skipped: routed({ toNodeId: "the search box on ValueRidge" }) }),
+    attempt({ attemptId: "b", route: "skipped" }),
+    attempt({ attemptId: "c", route: "state_routed", status: "failed" }),
+  ]);
+  assert.deepEqual(outcome.actions.map(action => action.status), ["skipped", "skipped", "failed"]);
+  for (const action of outcome.actions) assert.equal("skipped" in action, false);
+});

@@ -6,7 +6,7 @@ import {
   adaptationConsequences, adaptationEvidenceLoop, array, boolean, enumeration, finite, integer, invalid, nullableText, nullableUrl, optionalRecord, positiveInteger, record, stringArray, text,
   type ExistingAdaptationConsequenceCrossCheck, type ExistingAdaptationConsequences, type ExistingAdaptationDeclaredAction, type ExistingAdaptationEvidenceLoop, type JsonRecord,
 } from "./existing-fluxiq-control/index.js";
-import type { CreatedFlowBuildRequest, PersistedFlowLlmExecution } from "./flow-lane/index.js";
+import { skippedAttemptOf, type CreatedFlowBuildRequest, type PersistedFlowActionSkip, type PersistedFlowLlmExecution } from "./flow-lane/index.js";
 import { FluxIQControlClient, type FluxIQHttpOptions } from "./http-control/index.js";
 import type { ProviderFailureLog } from "./provider-failure/index.js";
 
@@ -110,7 +110,17 @@ export type ExistingFlowAdaptation = ExistingFlowAdaptationSummary & {
   accounting?: { provider?: string; model?: string; inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCostUsd?: number };
   evidenceLoop?: ExistingAdaptationEvidenceLoop;
 };
-export type ExistingRunAction = { attemptId: string; nodeId: string; definitionId: string; order: number; status: RuntimeStatus | "unknown"; startedAt: number; finishedAt?: number; message?: string };
+/**
+ * A run's action attempt. Core writes `succeeded` for a step it passed over
+ * rather than ran (a sometimes-present step absent, or a step routed past by
+ * page state, t243), so a skip is kept beside the status: `route` only when it
+ * is one of the two skip routes, and `skipped` only in Core's closed mark shape
+ * (`flow-lane/skipped-attempt.ts`).
+ */
+export type ExistingRunAction = { attemptId: string; nodeId: string; definitionId: string; order: number; status: RuntimeStatus | "unknown"; startedAt: number; finishedAt?: number; message?: string; route?: ExistingRunSkipRoute; skipped?: PersistedFlowActionSkip };
+
+/** The routes down which Core passes a step over without running it. */
+export type ExistingRunSkipRoute = "skipped" | "state_routed";
 export type ExistingRunEvent = { sequence: number; eventId: string; eventKind: "run_summary" | "route_decision" | "subflow_execution" | "action_attempt" | "recovery_attempt" | "intervention"; timestampMs: number; title: string; status?: string; entityId?: string };
 export type ExistingGatewayDiscovery = { enabled: boolean; sessionCount: number; pairingCount: number; trustedClientCount: number; publicUrl: string | null; listening: boolean; runtimeId?: string };
 export type ExistingFlowDependency = { publicationId: string; projectId: string; flowId: string; version: string; status: "published" | "deprecated"; flowDigest: string; requiredRuntimeCapabilities: string[] };
@@ -757,7 +767,15 @@ function runtimePatchAttempt(value: unknown, at: string): ExistingRuntimePatchAt
     ...(permissionRequired ? { permissionRequired } : {}),
   };
 }
-function runAction(value: unknown, at: string): ExistingRunAction { const item = record(value, at); return { attemptId: text(item.attemptId, `${at}.attemptId`), nodeId: text(item.nodeId, `${at}.nodeId`), definitionId: text(item.definitionId, `${at}.definitionId`), order: integer(item.order, `${at}.order`), status: enumeration(item.status, ["queued", "running", "waiting", "succeeded", "failed", "cancelled", "unknown"] as const, `${at}.status`), startedAt: finite(item.startedAt, `${at}.startedAt`), ...(item.finishedAt === undefined ? {} : { finishedAt: finite(item.finishedAt, `${at}.finishedAt`) }), ...(typeof item.message === "string" ? { message: item.message } : {}) }; }
+function runAction(value: unknown, at: string): ExistingRunAction { const item = record(value, at); return { attemptId: text(item.attemptId, `${at}.attemptId`), nodeId: text(item.nodeId, `${at}.nodeId`), definitionId: text(item.definitionId, `${at}.definitionId`), order: integer(item.order, `${at}.order`), status: enumeration(item.status, ["queued", "running", "waiting", "succeeded", "failed", "cancelled", "unknown"] as const, `${at}.status`), startedAt: finite(item.startedAt, `${at}.startedAt`), ...(item.finishedAt === undefined ? {} : { finishedAt: finite(item.finishedAt, `${at}.finishedAt`) }), ...(typeof item.message === "string" ? { message: item.message } : {}), ...runActionSkip(item) }; }
+
+/** The skip route and Core's closed skip mark, when the attempt carries them; a mark in any other shape is dropped. */
+function runActionSkip(item: Record<string, unknown>): Pick<ExistingRunAction, "route" | "skipped"> {
+  const route = item.route === "skipped" || item.route === "state_routed" ? item.route : undefined;
+  const startedAt = typeof item.startedAt === "number" ? item.startedAt : 0;
+  const skipped = skippedAttemptOf(item, startedAt, typeof item.finishedAt === "number" ? item.finishedAt : undefined);
+  return { ...(route ? { route } : {}), ...(skipped ? { skipped } : {}) };
+}
 function runEvent(value: unknown, at: string): ExistingRunEvent { const item = record(value, at); return { sequence: integer(item.sequence, `${at}.sequence`), eventId: text(item.eventId, `${at}.eventId`), eventKind: enumeration(item.eventKind, ["run_summary", "route_decision", "subflow_execution", "action_attempt", "recovery_attempt", "intervention"] as const, `${at}.eventKind`), timestampMs: finite(item.timestampMs, `${at}.timestampMs`), title: text(item.title, `${at}.title`), ...(typeof item.status === "string" ? { status: item.status } : {}), ...(typeof item.entityId === "string" ? { entityId: item.entityId } : {}) }; }
 function routeDecision(value: unknown, at: string): ExistingRouteDecision { const item = record(value, at); return { decisionId: text(item.decisionId, `${at}.decisionId`), routerId: text(item.routerId, `${at}.routerId`), ...(typeof item.selectedRuleId === "string" ? { selectedRuleId: item.selectedRuleId } : {}), ...(typeof item.selectedSubflowId === "string" ? { selectedSubflowId: item.selectedSubflowId } : {}), ...(typeof item.fallbackUsed === "boolean" ? { fallbackUsed: item.fallbackUsed } : {}) }; }
 function subflowExecution(value: unknown, at: string): ExistingSubflowExecution { const item = record(value, at); const metadata = optionalRecord(item.metadata, `${at}.metadata`); return { entryId: text(item.entryId, `${at}.entryId`), subflowId: text(item.subflowId, `${at}.subflowId`), status: status(item.status, `${at}.status`), ...(typeof metadata?.graphFlowId === "string" ? { graphFlowId: metadata.graphFlowId } : {}), ...(typeof metadata?.routeDecisionId === "string" ? { routeDecisionId: metadata.routeDecisionId } : {}) }; }

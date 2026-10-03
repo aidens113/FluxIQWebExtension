@@ -13,7 +13,11 @@
 // -- is the page's state, not a failure, so it is written as `skipped`: the host
 // attempt that observed the absence becomes a skipped row, and a skip that
 // dispatched nothing (its ready state was judged not shown) becomes its own
-// `NNNN-run-skipped` folder, so every runtime step is listed.
+// `NNNN-run-skipped` folder, so every runtime step is listed. A step passed
+// over because the page was elsewhere, the run routing to the node matching the
+// page (Core t243, `state_routed`), is written the same way and says where the
+// run went and which way: "routed to <node> (forward)". That is how a debug sees
+// the runtime consulted the page rather than failed the step.
 //
 // What is copied is bounded: the command's parameters, the outcome's status,
 // failure record and validation, never the page snapshot the result carries.
@@ -39,18 +43,19 @@ export type PlaybackStepsInput = Readonly<{
   /**
    * The run's skipped steps, from the run detail's action attempts that carry
    * Core's `skipped` mark (`!FluxIQ` `executor/step-skip/absent-step.ts`): a
-   * sometimes-present step whose target was observed absent. Epoch ms, Core's
+   * sometimes-present step whose target was observed absent, or a step the run
+   * passed over by page state (`executor/state-routing/routed-attempt.ts`). Epoch ms, Core's
    * clock, the same one `dispatchedAt` is stamped with. Absent, every attempt
    * is written as the host reported it.
    */
   skippedSteps?: readonly PlaybackSkippedStep[];
 }>;
 
-/** One attempt the run skipped rather than ran, as the run detail records it. */
-export type PlaybackSkippedStep = Readonly<{ nodeId: string | null; startedAt: number; finishedAt: number; reason: string; code: string }>;
+/** One attempt the run skipped rather than ran, as the run detail records it; a state-routed one also names where the run went, and which way. */
+export type PlaybackSkippedStep = Readonly<{ nodeId: string | null; startedAt: number; finishedAt: number; reason: string; code: string; toNodeId?: string; direction?: "forward" | "backward" }>;
 
-/** The step numbers written, in order, and how many attempts' files had anything replaced. */
-export type PlaybackStepsWritten = Readonly<{ steps: readonly number[]; redacted: number }>;
+/** The step numbers written, in order; how many attempts' files had anything replaced; how many steps were skipped, and of those how many the run passed over by page state. */
+export type PlaybackStepsWritten = Readonly<{ steps: readonly number[]; redacted: number; skipped: number; stateRouted: number }>;
 
 const REDACTED = "[redacted]";
 /** The credential shapes Core's step log screens for (`!FluxIQ` `runtime/llm/step-log/screen.ts`), kept in step with it. */
@@ -75,7 +80,9 @@ export async function writePlaybackSteps(input: PlaybackStepsInput): Promise<Pla
     }
   }
   const entries = playbackEntries(attempts, (input.skippedSteps ?? []).filter(skip => skip.startedAt >= input.since && skip.startedAt <= input.until));
-  if (entries.length === 0) return { steps: [], redacted: 0 };
+  const skipped = entries.filter(entry => entry.skip).length;
+  const stateRouted = entries.filter(entry => entry.skip?.reason === "state_routed").length;
+  if (entries.length === 0) return { steps: [], redacted: 0, skipped, stateRouted };
   await mkdir(input.stepsDirectory, { recursive: true });
   let next = await highestStep(input.stepsDirectory);
   const steps: number[] = [];
@@ -101,7 +108,7 @@ export async function writePlaybackSteps(input: PlaybackStepsInput): Promise<Pla
     steps.push(next);
   }
   await rewriteStepsIndex(input.stepsDirectory);
-  return { steps, redacted };
+  return { steps, redacted, skipped, stateRouted };
 }
 
 type Entry = { at: number; attempt?: Json; skip?: PlaybackSkippedStep };
@@ -185,8 +192,14 @@ function undispatchedSkipFiles(skip: PlaybackSkippedStep, step: number): StepFil
   };
 }
 
-const skipMark = (skip: PlaybackSkippedStep) => ({ reason: skip.reason, code: skip.code, nodeId: skip.nodeId });
-const skipSummary = (skipped: ReturnType<typeof skipMark>) => `skipped (${skipped.reason}, ${skipped.code}): a sometimes-present step not on the page${skipped.nodeId ? ` at ${skipped.nodeId}` : ""}`;
+/** The skip as a step file records it: a state-routed one with its destination and direction, a sometimes-present one without. */
+const skipMark = (skip: PlaybackSkippedStep): SkipMark => skip.reason === "state_routed" && skip.toNodeId !== undefined && skip.direction !== undefined
+  ? { reason: skip.reason, code: skip.code, nodeId: skip.nodeId, toNodeId: skip.toNodeId, direction: skip.direction }
+  : { reason: skip.reason, code: skip.code, nodeId: skip.nodeId };
+type SkipMark = { reason: string; code: string; nodeId: string | null; toNodeId?: string; direction?: "forward" | "backward" };
+const skipSummary = (skipped: SkipMark) => skipped.toNodeId !== undefined
+  ? `skipped (${skipped.reason}, ${skipped.code}): routed to ${skipped.toNodeId} (${skipped.direction}), the page already elsewhere${skipped.nodeId ? ` than ${skipped.nodeId}` : ""}`
+  : `skipped (${skipped.reason}, ${skipped.code}): a sometimes-present step not on the page${skipped.nodeId ? ` at ${skipped.nodeId}` : ""}`;
 
 function screen(content: string, literals: readonly string[]): string {
   let screened = content.replace(CREDENTIAL_SHAPES, REDACTED);
