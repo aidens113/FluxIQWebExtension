@@ -94,8 +94,7 @@ export type ChatPanel = {
 export type OpenFluxIQControl = { readonly element: HTMLElement; observe(status: ExtensionStatus): void };
 
 /**
- * Makes an Open FluxIQ control, for a question or an attachment that only
- * FluxIQ can show. The panel passes its own (`panel/open-fluxiq/`), so the
+ * Makes an Open FluxIQ control, for a question that only FluxIQ can show. The panel passes its own (`panel/open-fluxiq/`), so the
  * chat does not reach into it.
  */
 export type OpenFluxIQFactory = (style: { label: string; look: "small" | "link"; canOpen?: () => boolean }) => OpenFluxIQControl;
