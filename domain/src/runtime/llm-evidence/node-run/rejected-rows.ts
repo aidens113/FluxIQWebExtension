@@ -66,8 +66,10 @@ import { webNodeReadLinks, webNodeReadOutcome, type WebNodeReadLinks } from "./s
 /** The only verb whose rows a condition decides. */
 const EXTRACT_LIST_ACTION = "web.dom.extract_list";
 
+// The parenthesis is live run `run-muqk713g`'s (C1): told to check each alone row, the model still kept a name
+// condition that removed three asked items sold "with" the part the instruction excluded.
 /** The one sentence the model is given beside `rejectedRows`, when some condition removed rows alone. */
-export const WEB_NODE_REJECTED_ROWS_NOTE = "In rejectedRows, each row is its values in the order of fields; a condition's rowsAlone are rows it removed by itself (every other condition kept them): check each against the instruction, and if any is a row the instruction asks for, that condition is wrong and must change; rowsWithOthers lists once each row more than one condition rejected, under the conditions it failed.";
+export const WEB_NODE_REJECTED_ROWS_NOTE = "In rejectedRows, each row is its values in the order of fields; a condition's rowsAlone are rows it removed by itself (every other condition kept them): check each against the instruction, and if any is a row the instruction asks for, that condition is wrong and must change (a row the instruction excludes is one that is the excluded kind of thing, not one whose text only mentions it: an item sold with or including an excluded part is still the item); rowsWithOthers lists once each row more than one condition rejected, under the conditions it failed.";
 
 /**
  * One condition's rejected rows as they are gathered: `rowsAlone` from a page

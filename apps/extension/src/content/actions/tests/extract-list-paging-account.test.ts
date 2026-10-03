@@ -113,3 +113,24 @@ test("every stop a Flow can act on has a phrase, the ordinary endings have none,
   assert.doesNotMatch(actual(unpaged), /paging stopped/u);
   assert.equal((unpaged.evidence as { extraction?: { paginationStop?: string } }).extraction?.paginationStop, undefined);
 });
+
+// Live run `run-muqk713g`: 12 rows passed every condition, 10 were stored, and
+// the two repeats of an earlier page were said nowhere.
+test("the rows a page-by-page read left out as repeats of an earlier page ride on the summary and survive the wire copy", async () => {
+  const seen = await run(outcome({ pagesRead: 3, paginationStop: "control_disabled", earlierPageRepeats: 2 }));
+  const summary = (seen.evidence as { extraction?: { earlierPageRepeats?: number } }).extraction;
+  assert.equal(summary?.earlierPageRepeats, 2);
+  const wire = webAutomationActionResultPayload({
+    commandId: COMMAND.commandId,
+    actionType: COMMAND.actionType,
+    status: "succeeded",
+    validation: seen.validation,
+    extraction: summary as NonNullable<BrowserActionResult["extraction"]>,
+    startedAt: 1,
+    finishedAt: 2
+  });
+  assert.equal((wire.extraction as { earlierPageRepeats?: number } | undefined)?.earlierPageRepeats, 2);
+  // A read that did not count them sends nothing, never a zero it did not count.
+  const uncounted = await run(outcome({}));
+  assert.equal("earlierPageRepeats" in ((uncounted.evidence as { extraction?: object }).extraction ?? {}), false);
+});

@@ -3,7 +3,17 @@ import type { ScenarioStepOperation } from "./scenario.js";
 
 export const RUN_SCHEMA_VERSION = "0.1" as const;
 
-export type RepositoryRevision = { path: string; commit: string; dirty: boolean };
+export type RepositoryChange = { status: string; path: string; from?: string };
+/** `changes` names changed paths and porcelain status only, never content; `changesOmitted` counts entries past the cap. */
+export type RepositoryRevision = { path: string; commit: string; dirty: boolean; changes?: RepositoryChange[]; changesOmitted?: number };
+/** How the run was started: screened arguments and FLUXIQ_ variable names only, never values. */
+export type RunInvocationRecord = {
+  via: "run-lab" | "test-runner";
+  script?: string;
+  labInvocation?: "unreadable";
+  args: string[];
+  fluxiqEnvironment: string[];
+};
 export type PackageCompatibility = {
   packageName: string;
   requested: string;
@@ -125,6 +135,8 @@ export type RunManifest = {
    * nothing was scanned, and `pending` when no attestation ran.
    */
   redactionState: "pending" | "verified" | "failed" | "not_applicable";
+  /** How the run was started; absent in manifests written before it was recorded. */
+  invocation?: RunInvocationRecord;
   verdict?: "passed" | "failed" | "inconclusive";
   /** Sanitized execution provenance only. Credentials and raw gateway data are forbidden. */
   fluxiqExecution?: FluxIQExecutionMetadata;
