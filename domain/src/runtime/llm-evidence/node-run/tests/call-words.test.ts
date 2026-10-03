@@ -57,3 +57,16 @@ test("a look at one control names it: its details, or the list around it", () =>
   assert.deepEqual(look("web.recovery.enter_field", { target: "t11", value: "towels" }), { target: "Search", text: "towels" });
   assert.deepEqual(look("web.recovery.enter_field", { target: "t20", value: "hunter2" }), { target: "Password" });
 });
+
+// t194 (`run-murwcmx2-a1c6edf7`, screenshot 00016): every step of the build's test named its
+// subject except the list read, a bare "Test run". A read names the fields it reads.
+test("a list read names the fields it reads, never the selectors behind them", () => {
+  const read = (fields: unknown) => run("web.output.dom-extract_list", { extractList: { handle: "extraction.2", fields }, timeoutMs: 20000 });
+  assert.deepEqual(read({ name: "div_css-1h13pfs_h2 span", price: "span.price" }), { target: "name and price" });
+  assert.deepEqual(read({ name: "a", price: "b", rating: "c", url: "d@href", plus: "e", ad: "data-ad-id" }), { target: "name, price, rating and 3 more" });
+  assert.deepEqual(read({ product_title: "a" }), { target: "product title" });
+  assert.deepEqual(read(["name", { name: "price" }]), { target: "name and price" });
+  assert.equal(read({}), undefined);
+  assert.equal(read("name"), undefined);
+  assert.equal(run("web.output.dom-extract_list", { timeoutMs: 20000 }), undefined);
+});
