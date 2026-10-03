@@ -79,6 +79,9 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
   others), `pnpm build` rc 0. The second and last full sweep allowed today.
 
 **Binding rules (user, all in force).**
+- **Shorter start, unless the person names the route (2026-10-03):** a Flow may start at the stable address where the
+  work begins and drop the steps that only travelled there; "if the user explicitly instructs bot to go the long way
+  to achieve goal that is respected". An instruction that names how to get there keeps those steps.
 - **General Flow authoring before any more live runs (2026-10-02 night):** "The model should be ABLE to explore &
   'record'/test different node configurations, but it should also be able/encouraged to build dynamic & smart flows
   from what its gathered without going through every iteration"; "implement that feature first before any mroe live
