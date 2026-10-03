@@ -211,6 +211,114 @@ test("a press that would move money still stops and asks, under that same gate",
   assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.click"), false);
 });
 
+// t252 (D1): a written step. `core.run_node` with `write: true` is checked and
+// resolved exactly as a live call is -- the node, the handle into the frozen
+// identity, the declaration a mutating node owes -- and stops before the
+// command: nothing is pressed and nobody is asked, because nothing is done.
+const NAVIGATE = "web.output.browser-navigate";
+const START = "https://example.test/start";
+
+async function lookedHandle(runtime: ReturnType<typeof createWebAutomationLlmEvidenceRuntime>): Promise<string> {
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  return shownPageLines(looked.evidence)[0]!.target;
+}
+
+/** A permission check that records every question and permits nothing, so a call that asked is seen. */
+function askedNothing() {
+  const asked: unknown[] = [];
+  return { asked, check: async (question: unknown) => { asked.push(question); return { permitted: false as const, missing: [], requestId: "request.one" }; } };
+}
+
+test("a written press is resolved into the step the Flow keeps and is not pressed, and nobody is asked", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const handle = await lookedHandle(runtime);
+  const gate = askedNothing();
+  const written = await runtime.executeTool({
+    ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: gate.check,
+    value: { node: CLICK, parameters: { target: { handle } }, consequences: ["modify_existing"], write: true }
+  });
+  assert.equal(written.resultCode, "core.run_node.written");
+  assert.equal(written.effectApplied, false);
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.click"), false);
+  assert.deepEqual(gate.asked, []);
+  assert.deepEqual(written.draft, {
+    actionId: CLICK,
+    effect: "mutate",
+    input: { node: CLICK, parameters: { target: { handle } }, consequences: ["modify_existing"] },
+    // The frozen identity the handle resolved to, with its declaration, as a live run's `ranWith`.
+    ranWith: { node: CLICK, parameters: { selector: "#go", element: { tagName: "button", visibleText: "Go", selector: "#go" } }, consequences: ["modify_existing"] },
+    proposes: true,
+    written: true,
+    replay: { from: { location: START } },
+    control: "Go"
+  });
+});
+
+test("a written step carrying a bound value keeps it untouched, and counts it as given", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  await lookedHandle(runtime);
+  const url = { $state: { path: "site", fallback: START } };
+  const written = await runtime.executeTool({
+    ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID,
+    value: { node: NAVIGATE, parameters: { url }, consequences: [], write: true }
+  });
+  assert.equal(written.resultCode, "core.run_node.written", JSON.stringify(written.evidence));
+  assert.deepEqual(written.draft?.ranWith, { node: NAVIGATE, parameters: { url }, consequences: [] });
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.browser.navigate"), false);
+});
+
+test("a written step is held to the node's parameters: a required one missing, or one of the wrong kind, is refused", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  await lookedHandle(runtime);
+  const missing = await runtime.executeTool({ ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: NAVIGATE, parameters: {}, consequences: [], write: true } });
+  const missingEvidence = missing.evidence as JsonObject & { code: string; detail: { reason: string; missing?: string[] } };
+  assert.equal(missingEvidence.code, "invalid_input");
+  assert.equal(missingEvidence.detail.reason, "missing_input_keys");
+  assert.deepEqual(missingEvidence.detail.missing, ["url"]);
+  const wrongKind = await runtime.executeTool({ ...PROJECT, callId: "call.three", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: NAVIGATE, parameters: { url: 5 }, consequences: [], write: true } });
+  const wrongEvidence = wrongKind.evidence as JsonObject & { code: string; detail: { reason: string; target?: string } };
+  assert.equal(wrongEvidence.code, "invalid_input");
+  assert.equal(wrongEvidence.detail.reason, "parameter_not_readable");
+  assert.equal(wrongEvidence.detail.target, "url");
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.browser.navigate"), false);
+});
+
+test("a written mutating step must declare its consequences readably, as a live one must", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const handle = await lookedHandle(runtime);
+  const undeclared = await runtime.executeTool({ ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle } }, write: true } });
+  assert.equal((undeclared.evidence as JsonObject & { detail: { reason: string } }).detail.reason, "missing_input_keys");
+  assert.equal(undeclared.draft?.written, undefined);
+  const unreadable = await runtime.executeTool({ ...PROJECT, callId: "call.three", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle } }, consequences: ["whatever"], write: true } });
+  assert.equal((unreadable.evidence as JsonObject & { detail: { reason: string } }).detail.reason, "consequences_unreadable");
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.click"), false);
+});
+
+test("a written step whose handle names nothing is refused as a live one is", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  await lookedHandle(runtime);
+  const refused = await runtime.executeTool({ ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: "t999" } }, consequences: [], write: true } });
+  assert.equal((refused.evidence as JsonObject & { code: string }).code, "target_unobserved");
+  assert.equal(refused.draft?.written, undefined);
+});
+
+test("write must be a boolean, and write: false is an ordinary live run", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const handle = await lookedHandle(runtime);
+  const odd = await runtime.executeTool({ ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle } }, consequences: [], write: "yes" } });
+  assert.equal((odd.evidence as JsonObject & { detail: { reason: string } }).detail.reason, "unexpected_input_keys");
+  const live = await runtime.executeTool({ ...PROJECT, callId: "call.three", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle } }, consequences: [], write: false } });
+  assert.equal(live.resultCode, "web.action.succeeded");
+  assert.equal(live.draft?.written, undefined);
+  assert.equal(stubbed.commands.filter((command) => command.actionType === "web.dom.click").length, 1);
+});
+
 function stub(options: { failClick?: boolean } = {}) {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
   let title = "Fixture";

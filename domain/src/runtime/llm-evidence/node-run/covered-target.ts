@@ -12,8 +12,7 @@
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import type { WebLlmEvidenceElement } from "../elements";
 import type { WebLlmPageEvidence } from "../sanitize";
-import { webIsLayer } from "./layer-element";
-import { webInLayer } from "./layer-member";
+import { webInLayer, webIsLayer } from "./layer";
 
 export type WebCoveredTarget = {
   /** A modal dialog covers it, or something that is not one -- a banner, an overlay. */
@@ -39,7 +38,7 @@ const MAX_CLOSERS = 3;
 export function webCoveredTarget(page: WebLlmPageEvidence, written: string | undefined): WebCoveredTarget | undefined {
   const target = canonicalWebLlmTargetHandle(written);
   if (target === undefined) return undefined;
-  // Only a layer refuses a press (`./layer-element.ts`): `coveredBy` also
+  // Only a layer refuses a press (`./layer/element.ts`): `coveredBy` also
   // marks ordinary overlap, and refusing that refused live presses that would
   // have worked.
   const layer = (handle: string): boolean => webIsLayer(page.elements.find((element) => element.target === handle));
@@ -51,7 +50,7 @@ export function webCoveredTarget(page: WebLlmPageEvidence, written: string | und
 
 /**
  * The controls of `cover` that close it: those that belong to it
- * (`./layer-member.ts`) and read as closing.
+ * (`./layer/member.ts`) and read as closing.
  */
 function closersOf(page: WebLlmPageEvidence, cover: string): string[] {
   const byHandle = new Map(page.elements.map((element) => [element.target, element] as const));

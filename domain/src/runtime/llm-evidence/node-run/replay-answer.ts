@@ -8,7 +8,9 @@
 // depending on which of the two produced it.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
+import { validateAutomationStudioRecords, type AutomationStudioRecordSchema } from "fluxiq/automation-studio/nodes";
 import { isWebAutomationExtractFieldKey, webAutomationExtractionSummaryValue } from "../../../actions/extraction";
+import { webAutomationExtractListDispatch } from "../../../output-nodes";
 import { captureEvidence, toolExecution, withCallStates, type WebLlmEvidenceToolExecution } from "../capture";
 import { webLlmEvidenceKeyIsDenied } from "../denied-keys";
 import { isJsonRecord } from "../untrusted-json";
@@ -294,6 +296,38 @@ export function webNodeReplayReadRows(payload: JsonValue | undefined, where: unk
     leftOutOnlyByThis: leftOut.length ? leftOut : undefined,
     note: notes.length ? notes.join(" ") : undefined
   }) as unknown as JsonObject;
+}
+
+/**
+ * The rows a replayed list read gives the Flow, as the node's `records` output,
+ * or nothing when the Flow's read would save none (t252, D6).
+ *
+ * The build's test runs a loop once per row the list read returned *in the
+ * test*, sending each body step that row as `item`. Core hands a For Each pass
+ * exactly the rows its capture saved (`AS/runtime/executor/record-capture.ts`):
+ * the client's `extracted`, each held to the record output the node's dispatch
+ * derives or reconciles (`output-nodes/extract-list/dispatch.ts`), which keeps
+ * only the fields it reads and leaves out an excluded one. So the same two
+ * steps happen here, with the same functions, on the resolved parameters the
+ * replay ran with. A read whose dispatch would refuse its record output, whose
+ * answer holds no row list, or whose every row the schema refuses answers no
+ * rows, as the Flow's capture saves none; a read with no record output at all
+ * saves nothing either.
+ *
+ * Unlike `readRows`, these are whole rows, page text and all: they are values
+ * the Flow carries from one node to the next, not words for a judge, and Core
+ * carries them on `outputs` rather than showing them.
+ */
+export function webNodeReplayFlowRows(parameters: JsonObject, payload: JsonValue | undefined): JsonObject | undefined {
+  const dispatch = webAutomationExtractListDispatch(parameters);
+  const extracted = isJsonRecord(payload) ? payload.extracted : undefined;
+  if (!dispatch.ok || !Array.isArray(extracted)) return undefined;
+  const output = isJsonRecord(dispatch.payload.recordOutput) ? dispatch.payload.recordOutput : undefined;
+  if (!output || !isJsonRecord(output.schema)) return undefined;
+  const maxRecords = typeof output.maxRecords === "number" ? output.maxRecords : undefined;
+  const validated = validateAutomationStudioRecords(extracted, output.schema as unknown as AutomationStudioRecordSchema, { maxRecords });
+  if (validated.rows.length === 0 && validated.invalidCount > 0) return undefined;
+  return { records: validated.rows };
 }
 
 /**

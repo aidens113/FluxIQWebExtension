@@ -13,7 +13,7 @@ import type { WebAutomationActionType } from "../actions/types";
 import { webAutomationOutputNodeDefinitions } from "./definitions";
 import { webAutomationExtractListDispatch } from "./extract-list";
 import { webAutomationOutputNodeParameterContracts } from "./parameter-contracts";
-import { webAutomationRecordValues } from "./targets";
+import { webAutomationScopedToRow } from "./targets";
 
 export const WEB_AUTOMATION_IMPORTER_PACKAGE_ID = "@fluxiq-web-extension/domain";
 export const WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION = "0.1.0";
@@ -74,7 +74,9 @@ export function createWebAutomationOutputNodeImplementationBundle(
 function createOutputNodeImplementation(outputId: WebAutomationActionType): AutomationStudioNativeNodeImplementation {
   return (context): AutomationNodeExecutionResult => {
     try {
-      const parameters = scopedToRow(compactJsonObject(context.parameters), context.inputs?.item);
+      // The pass's row, when a For Each hands one, scopes the recorded control
+      // to that row (`./targets/row-scope.ts`).
+      const parameters = webAutomationScopedToRow(compactJsonObject(context.parameters), context.inputs?.item);
       if (outputId !== "web.dom.extract_list") return dispatching({ outputId, parameters: webAutomationCheckWaitParameters(outputId, parameters) });
       const extraction = webAutomationExtractListDispatch(parameters);
       return extraction.ok ? dispatching({ outputId, ...extraction.payload }) : extraction.result;
@@ -128,45 +130,6 @@ function implementationThrew(outputId: WebAutomationActionType, error: unknown):
     message: `${outputId} could not be prepared, so nothing was sent to the browser.`,
     failure
   };
-}
-
-/**
- * The node's parameters with its recorded target scoped to the row a For Each
- * pass is on (t195).
- *
- * A loop over an extraction's rows ran its body's click on the element the build
- * recorded, so every pass pressed the same card's control (live runs
- * `run-munnop9n-5475d593`, `run-munnyvbr-11c28a0f`). Core hands the pass's row
- * to a body node that declares the `item` input (`definitions.ts`), as the
- * extraction's validated record: field key to string.
- *
- * The row replaces the recorded `element.context.record`, which named the row
- * the Flow was built on, with the row's own values. The page then accepts the
- * recorded control only inside a record holding every one of them
- * (`content/identity/record.ts`), and resolves the same control in that row
- * when the recorded selector answers with another (`resolve-target.ts`).
- *
- * Only where the build saw the control inside a repeated thing: a recorded
- * `record`, or -- for a node a model built from a snapshot handle, whose element
- * carries its list position and never a record
- * (`runtime/llm-evidence/plan-resolution/element-identity.ts`) -- a
- * `listPosition`. A control that sat in no repeated thing -- a dialog's Close,
- * the page's search box -- is the same control on every pass and is dispatched
- * untouched. So is everything when no row arrived, the row is not an object, or
- * it holds no non-empty string.
- */
-function scopedToRow(parameters: JsonObject, item: JsonValue | undefined): JsonObject {
-  if (!isJsonObject(item)) return parameters;
-  const element = isJsonObject(parameters.element) ? parameters.element : undefined;
-  const elementContext = element && isJsonObject(element.context) ? element.context : undefined;
-  if (!element || !elementContext || !(isJsonObject(elementContext.record) || isJsonObject(elementContext.listPosition))) return parameters;
-  const values = webAutomationRecordValues(Object.values(item));
-  if (!values) return parameters;
-  return { ...parameters, element: { ...element, context: { ...elementContext, record: { values } } } };
-}
-
-function isJsonObject(value: JsonValue | undefined): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function dispatching(payload: JsonObject): AutomationNodeExecutionResult {

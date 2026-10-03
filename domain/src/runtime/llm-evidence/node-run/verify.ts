@@ -75,6 +75,7 @@
 // does not press; playback still does.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
+import { webAutomationScopedToRow } from "../../../output-nodes";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import { webActionFailureRefusal, webActionNeedsPerson } from "../action-failure";
 import { assertActive, toolMetadata, withPersonNeeded, type WebLlmEvidenceToolExecution } from "../capture";
@@ -115,7 +116,8 @@ const CHECKS = [
 export async function verifyWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> {
   const value = run.request.value;
   const node = webRunnableNode(value.node);
-  const parameters = isJsonRecord(value.parameters) ? value.parameters : undefined;
+  // A loop's body step is checked on the pass's row, as `./replay.ts` runs one.
+  const parameters = isJsonRecord(value.parameters) ? webAutomationScopedToRow(value.parameters, value.item) : undefined;
   if (!node) return webNodeReplayAnswer(WEB_NODE_REPLAY_RESULT_CODES.failed, "the step names nothing this domain can run", false, { resultReason: "node_not_runnable_here", nodeId: undefined, assumed: undefined });
   if (!parameters) return webNodeReplayAnswer(WEB_NODE_REPLAY_RESULT_CODES.failed, "the step carries no parameters to check", false, { resultReason: undefined, nodeId: node.definitionId, assumed: undefined });
   const permission = await webActionPermission({ check: run.request.permission, declared: [], control: { name: undefined, kind: "step" }, verb: "check", effect: "observe" });
