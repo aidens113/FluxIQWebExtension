@@ -555,8 +555,12 @@ test("a run that re-authored reports every call it made -- build, checks and re-
   assert.deepEqual(snapshot.reauthor.attempts, [{ attempt: 1, adaptationId: REAUTHOR_ID, calls: 36, callsFrom: "adaptation", inputTokens: 441_137, outputTokens: 10_071, estimatedCostUsd: 0.042481212 }]);
   // The per-phase records a campaign sums are left as they were.
   assert.equal(snapshot.observed.accounting.estimatedCostUsd, 0.04178802, "the build's own accounting is not rewritten");
-  assert.equal(snapshot.repair.observed.calls, 2);
-  assert.deepEqual(published.at(-1), { repair: { calls: 2, interventions: 3, totalEstimatedCostUsd: 0.001247076 + 0.000582996, llmGate: { invoked: true } }, runTotal: { calls: 60, totalEstimatedCostUsd: 0.086099304 } });
+  // The two checks are the judge's, not the playback's repair: what is left is the ladder's unanswered rung, which called nothing.
+  assert.equal(snapshot.repair.observed.calls, 0);
+  assert.deepEqual(published.slice(-2), [
+    { repair: { calls: 0, interventions: 1, totalEstimatedCostUsd: 0, llmGate: { invoked: true } }, runTotal: { calls: 60, totalEstimatedCostUsd: 0.086099304 } },
+    { resultChecks: { calls: 2, totalEstimatedCostUsd: 0.001830072, status: "refuted" }, runTotal: { calls: 60, totalEstimatedCostUsd: 0.086099304 } },
+  ]);
   // The succeeded attempt's count is read from its adaptation, on the run's own Flow.
   assert.deepEqual(reads.filter(read => read.endpoint === "get-flow-adaptation").map(read => read.payload), [{ projectId: "project-1", flowId: "flow-1", adaptationId: REAUTHOR_ID }]);
 });
@@ -640,4 +644,60 @@ test("a build that ended without a Flow over its cost ceiling fails on the budge
   const proposedError = await settleProposed().then(() => undefined, (caught: unknown) => caught);
   assert.ok(isCostBreach(proposedError, spent));
   assert.equal((proposedError as RunnerFailure).cause, undefined);
+});
+
+// run-murwd8le-79e735a8 (Cause 12): a playback that needed no recovery, whose
+// result Core checked twice. The two checks were published as the playback's
+// `repair` (2 calls, "The created Flow's repair attempt finished") although no
+// diagnosis or repair ran. They are now `verification`'s alone: the repair
+// lists recovery only, and the checks settle with an event of their own. The
+// run's spend is the same figure either way.
+const { llmAccounting: _checkedNoAccounting, ...checkedBase } = detail;
+const checkedPlayback: ExistingRunDetail = {
+  ...checkedBase,
+  interventions: [
+    { interventionId: "i-recovery", kind: "diagnosis", requestId: "llm.runtime_diagnosis.a", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
+    { interventionId: "i-verify-1", kind: "diagnosis", requestId: "llm.loop_verification.b", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 1_944, outputTokens: 300, totalTokens: 2_244, estimatedCostUsd: 0.00125 },
+    { interventionId: "i-verify-2", kind: "diagnosis", requestId: "llm.loop_verification.c", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 1_944, outputTokens: 280, totalTokens: 2_224, estimatedCostUsd: 0.00123 },
+  ],
+};
+
+async function settleChecked(playback: ExistingRunDetail, raw: unknown) {
+  const { core, run, written, published, settle } = await settleBuildOnce(proposedBuild);
+  await settle();
+  await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
+  published.length = 0;
+  await run.settleRepair({ getRunDetail: async () => playback, automationStudioCall: async () => raw }, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async (details) => { published.push(details); });
+  const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
+  return { run, snapshot, published };
+}
+
+test("a playback's result checks are not its repair: the repair lists recovery only, the checks get their own event, and the spend is unchanged", async () => {
+  const { run, snapshot, published } = await settleChecked(checkedPlayback, verifiedRunDetail);
+  assert.equal(snapshot.repair.observed.calls, 1, "only the recovery's call is the repair's");
+  assert.equal(snapshot.repair.observed.interventions, 1);
+  assert.deepEqual(snapshot.repair.observed.observedCalls.map((call: { requestId: string }) => call.requestId), ["llm.runtime_diagnosis.a"]);
+  assert.equal(snapshot.repair.observed.totalEstimatedCostUsd, 0.001);
+  assert.deepEqual(snapshot.repair.resultChecks, { calls: 2, totalEstimatedCostUsd: 0.00248, record: "verification" });
+  assert.equal(snapshot.verification.calls, 2, "the checks' own record lists them");
+  // The whole run: build 5 calls $0.02, recovery 1 call $0.001, checks 2 calls $0.00248 -- as before the split.
+  assert.deepEqual(snapshot.runSpend.phases.runtime, { calls: 1, estimatedCostUsd: 0.001 });
+  assert.deepEqual(snapshot.runSpend.phases.judge, { calls: 2, estimatedCostUsd: 0.00248 });
+  assert.equal(snapshot.observed.calls, 8);
+  assert.equal(snapshot.observed.totalEstimatedCostUsd, 0.02348);
+  assert.equal(run.usage.calls, 8);
+  assert.deepEqual(published, [
+    { repair: { calls: 1, interventions: 1, totalEstimatedCostUsd: 0.001, llmGate: { invoked: true } }, runTotal: { calls: 8, totalEstimatedCostUsd: 0.02348 } },
+    { resultChecks: { calls: 2, totalEstimatedCostUsd: 0.00248, status: "unverified" }, runTotal: { calls: 8, totalEstimatedCostUsd: 0.02348 } },
+  ]);
+});
+
+test("a playback that only had its result checked publishes the check and no repair", async () => {
+  const { llmGate: _noGate, ...ungated } = checkedPlayback;
+  const onlyChecked: ExistingRunDetail = { ...ungated, interventions: checkedPlayback.interventions!.slice(1) };
+  const raw = { runDetail: { ...verifiedRunDetail.runDetail, interventions: verifiedRunDetail.runDetail.interventions.slice(1) } };
+  const { snapshot, published } = await settleChecked(onlyChecked, raw);
+  assert.deepEqual({ calls: snapshot.repair.observed.calls, interventions: snapshot.repair.observed.interventions, observedCalls: snapshot.repair.observed.observedCalls, cost: snapshot.repair.observed.totalEstimatedCostUsd }, { calls: 0, interventions: 0, observedCalls: [], cost: 0 });
+  assert.equal(snapshot.observed.totalEstimatedCostUsd, 0.02248);
+  assert.deepEqual(published, [{ resultChecks: { calls: 2, totalEstimatedCostUsd: 0.00248, status: "unverified" }, runTotal: { calls: 7, totalEstimatedCostUsd: 0.02248 } }]);
 });

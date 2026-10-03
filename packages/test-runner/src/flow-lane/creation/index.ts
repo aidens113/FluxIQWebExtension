@@ -17,6 +17,7 @@ export * from "./authored-nodes.js";
 export * from "./own-page.js";
 export * from "./judgement.js";
 export * from "./final-state-facts.js";
+export * from "./oracles.js";
 export * from "./permission-point.js";
 export * from "./lane.js";
 export * from "./snapshot.js";
