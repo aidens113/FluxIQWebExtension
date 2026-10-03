@@ -63,25 +63,25 @@ Related: [language-driven-flow-loop-plan.md](./language-driven-flow-loop-plan.md
 - A Flow input's default is the value the instruction gave (its test value).
 - Zero rows in the test leave a written loop body untested: refused `full_run_required` (`not_reached`).
 
-**t252 progress (2026-10-03, uncommitted in both t252 trees, verified by the lead).**
-- Done: P1a draft contracts (w1: binding forms, render, Flow inputs, `written`/`instance`, `bind`, entry, full-run
-  words), P1c assembly (w2: `$state` survives assembly, `row_binding_outside_loop`, `input_shadowed`), P1b call
-  contracts (w4: `write` on `core.run_node`, write implies add, live call with a form refused
-  `run_node.binding_needs_write`, `outputs` and `draft.written` parsed, policy and `add` texts), P2 domain (w3: write
-  mode, replay row scope from `item`, `outputs.records` on list replays, `$state` pass-through, `web-4` text).
-- Lead validation: Core `npx vitest run` over the 7 directories beside the changes -> 114 files, 1191 tests passed;
-  `pnpm --filter fluxiq check` clean; Core structure audit passed; domain tests beside the changes -> 390/390;
-  `pnpm --filter @fluxiq-web-extension/domain check` rc 0.
-- Pre-existing, not t252: `llm/decision-context/tests/recorded-windows.test.ts` "everything-store-run4" fails on the
-  t252 base `424a70b3` with every t252 file at HEAD; dev's t253 fixes it.
-- **Blocked on the merge.** A hook refuses git history changes from the lead (`git stash` refused: "workers must not
-  change git history"), so dev (Core `58db495f`, downstream `4ee456bf`: lanes A and C) is not merged in. Files both
-  sides changed: Core `flow-draft/full-run-required.ts`, `llm/deepseek/tests/system-prompt-pins.json`; downstream
-  `domain/src/runtime/llm-evidence/node-run/{replay.ts,replay-answer.ts,run.ts,tests/replay.test.ts}`.
-- Not done: P3 (briefs w5-w7 below; they edit lane A/C files), the proof test, P4 docs. P5 and P6 are later tasks.
+**t252 progress (2026-10-03, verified by the lead).** P1/P2 are checkpointed (Core `e4854d20`, downstream
+`c62900cb`); dev with lanes A and C is merged (Core `0d7d3071`, downstream `3ca6194b`). P3 so far is uncommitted in
+the Core tree.
+- Done: P1a, P1b, P1c, P2 (see the ledger); after the merge, `domain/.../written-step.ts` gained lane A's `choice`
+  field. P3: w5 the walker runs a repeat over a list once per row with `item` and resolved `$state`, a while span
+  until its check stops, `passes` on outcomes, `pass`/`of` on observations, `not_reached`, part runs expand spans;
+  w6 the judge sees one line per pass named by the row's screened label and the test's inputs, the step log writes
+  `item` and `outputs` as field names; w8 stored Flow nodes keep `metadata.declaredConsequences`, a rerun of a
+  written step stays written, a rerun holding a binding is refused `rerun_holds_binding`; w9 `nodeOf`
+  (`nodeDescriptions.definition`) reaches the build's gate, the stopped round's test and `core.run_flow`, a written
+  member of an unexpanded span that did not pass is refused `not_reached`, and the judge request's denied-key
+  re-screen covers `passes` and `inputs`.
+- Decisions: a while span whose body is a lasting act runs one pass (the test never does the act); a written member
+  excused because an earlier lasting act was withheld stays excused (the model cannot change it).
+- Not done: w7 (parity with `runAutomationStudioGraph` and the scripted confirm-requests proof), P4 docs.
+- Known, not t252: Core's web app build fails on dev (`apps/web/.../action-card/action-icons.ts` lacks lane C's
+  `recall` kind); `evidence-loop.ts` is at the 800-line limit.
 
-**Next.** The supervisor merges dev into both t252 trees; the lead resolves any conflicts in the six files, re-runs
-the P1/P2 checks, dispatches w5 and w6 in parallel, then w7 (parity and proof), then P4; lane D's merge follows.
+**Next.** Supervisor merges lane D (Core `2da9ce41`, downstream `9fed3b76`) into both trees; then w7, then P4.
 
 **Needs the user.** Nothing blocks. The stored-run permission gap (F7: a stored Flow node keeps no `consequences`
 and a plain run gates nothing per node) predates this work and applies to recorded steps equally; it is recorded as
@@ -464,6 +464,10 @@ downstream tree `C:/Users/osrs_/FluxStuff/fxwork/t252/!FluxIQWebExtension` (D = 
   4. `run-flow-part.ts`: the same walker without the reset; a span expands when its list step is in the range.
   5. R/flow-draft/dry-run.ts: the outcome type carries `passes`; `DRY_RUN_INSTRUCTION` says a repeated step runs
      once per row (D8). Keep lane A's verify-only and end-page behaviour intact.
+  6. Resolve `$state` leaves against `{item: row}` for every span member (the executor reads the bare `item` too),
+     and against `{}` for straight steps, so `$input` takes its test value. A pass with an `item` sends no
+     `produced`. A member's mode is lane A's `automationStudioFlowDraftStepReplayMode(step, lastingActs)` on every
+     pass: a lasting act is a verify call per row, never a press.
 - Owns: R/llm/node-tools/{replay-draft,replay-span (new),dry-run-gate,run-flow-part}.ts, R/flow-draft/dry-run.ts,
   their tests. Must not touch: R/result-verification/*, R/llm/diagnosis-instructions.ts, R/llm/step-log/*, the
   downstream tree.
@@ -493,11 +497,51 @@ downstream tree `C:/Users/osrs_/FluxStuff/fxwork/t252/!FluxIQWebExtension` (D = 
   (node, resolved parameters, item). (2) Proof, provider-free (scripted decisions and judge, a fake tool host for
   `core.run_node` live, write and replay over 8 requests, 3 with 5+ mutual friends): list with a `where` (add), one
   Confirm run live on a kept row (add), `repeat` over the list, complete; the test presses each kept row's Confirm
-  once with that row as `item`, nothing else, the verdict passes, the judge sees 3 passes, the build finishes. A
-  variant writes the Confirm (`write: true`) instead of running it. Use the existing scripted build-test harnesses.
+  once with that row as `item` -- a verify call per row, since confirming declares a lasting class -- and touches no
+  excluded row; the verdict passes, the judge sees 3 passes, the build finishes. Variants: the Confirm written
+  (`write: true`) instead of run; a non-lasting act (consequences []) that is sent as a step call per row; zero kept
+  rows with a written body refused `not_reached`. The written variant's stored Flow node keeps its declared
+  consequences (w8) and the build's gate records list them. Model on `R/llm/node-tools/tests/lasting-acts-build.test.ts`.
 - Owns: new test files beside the walker and the build loop; fixes only with a note in the report.
 - Done: both tests pass and fail when the walker's expansion is disabled; check; audit.
 - Report to: docs/working/general-flow-authoring-plan/reports/t252-w7-parity-and-proof.md
+
+### Brief: t252-w8-stored-consequences-and-rerun
+- Repository: FluxIQ Core (t252 tree). Phase P3, parallel with w5 and w6.
+- Task, failing tests first:
+  1. R/flow-bootstrap/adaptation.ts: each materialised Flow node keeps its plan node's `consequences` as
+     `metadata.declaredConsequences` (absent when the plan node has none), for recorded and written steps alike, so
+     the declaration survives storage. No run-time gate reads it yet (a user decision).
+  2. R/llm/evidence-loop/rerun-request.ts: a rerun of a written step (`step.written`) stays written (the call carries
+     `write: true`); a rerun of a recorded step whose merged parameters hold any binding (`$state`, `$row`, `$input`,
+     `$step`) is refused with a new reason `rerun_holds_binding` (add it to the refusal union in
+     R/flow-draft/amendment.ts, a telling in R/llm/draft-amendment-feedback.ts: "a bound step runs only in the Flow:
+     rerun it with a concrete value for every bound parameter, or write it", and the reason maps in
+     R/flow-bootstrap/evidence-loop-steps.ts and R/activity/wording/draft-edit-refused.ts).
+- Owns: those five files and their tests. Must not touch: R/llm/node-tools/*, R/flow-draft/dry-run.ts,
+  R/result-verification/*, the downstream tree.
+- Done: tests beside the changed files pass; check; audit.
+- Report to: docs/working/general-flow-authoring-plan/reports/t252-w8-stored-consequences-and-rerun.md
+
+### Brief: t252-w9-wiring
+- Repository: FluxIQ Core (t252 tree). Phase P3, after w5, w6, w8. Makes the per-row test live in a build.
+- Task, failing tests first:
+  1. `nodeOf` (w5's `AutomationStudioFlowDraftReplayNodeOf`, R/llm/node-tools/replay-span.ts) reaches every place
+     the walker runs in a build: a loop input `nodeOf` in R/llm/loop-configuration.ts; R/llm/evidence-loop.ts passes
+     it to the dry-run gate and to the tool set (R/llm/node-tools/loop-tools.ts), which hands it to the `core.run_flow`
+     binding (R/llm/node-tools/run-flow.ts) and on to the part run; R/service.ts sets `nodeOf:
+     nodeDescriptions.definition` on the build's loop input (the call with `fullRunRequired: true`) and on the stopped
+     round's `test` gate. A loop-level test: a draft with a list step, a repeated press and `nodeOf` given runs the
+     press once per row in the dry run and in `core.run_flow`.
+  2. R/llm/node-tools/dry-run-gate.ts: a written member of a repeat span that the test ran without expanding (no
+     `passes`, excused as conditional) and that did not pass is refused `not_reached`, as one with `passes: []` is.
+     R/flow-draft/full-run-required.ts: the `not_reached` sentence covers both causes (the list had no items in the
+     test, or the test could not walk its rows) and says what to do for each.
+  3. R/llm/harness/request-evidence-check.ts: the judge request's denied-key re-screen covers the build test's
+     `passes` (each pass's observed and label) and `inputs` (w6's fields in R/result-verification/build-test).
+- Owns: the files named and their tests. Must not touch: R/result-verification/* (read only), the downstream tree.
+- Done: tests beside the changed files pass; `pnpm --filter fluxiq check`; Core structure audit.
+- Report to: docs/working/general-flow-authoring-plan/reports/t252-w9-wiring.md
 
 ## Work Ledger
 
@@ -526,6 +570,22 @@ downstream tree `C:/Users/osrs_/FluxStuff/fxwork/t252/!FluxIQWebExtension` (D = 
   the changes -> 390/390; domain check rc 0. recorded-windows run4 fails on the base with t252 files reverted.
 - Outcome: Partial (P3, proof and P4 not started)
 - Follow-up: dev merge (lanes A, C) by the supervisor; then w5, w6, w7
+
+### 2026-10-03 — t252 P3: loops run per row in the build's test
+- Agent: lane lead t252, workers t252-w5 (walker), w6 (judge view, step log), w8 (stored consequences, rerun), w9
+  (wiring, not_reached, re-screen)
+- Changed: Core R/llm/node-tools (replay-span new, replay-draft, dry-run-gate, run-flow-part, run-flow),
+  R/flow-draft (dry-run, full-run-required, amendment), R/result-verification/build-test (pass-lines, span-rows,
+  test-inputs new; summary, contracts), R/llm (diagnosis-instructions, step-log, loop-configuration, evidence-loop,
+  harness/request-evidence-check, evidence-loop/rerun-request, draft-amendment-feedback), R/flow-bootstrap
+  (adaptation, evidence-loop-steps), R/activity wording, R/service.ts (two call sites), policy pins; downstream
+  written-step.ts (`choice`, after the merge)
+- Validation: downstream domain, extension, test-runner `pnpm --filter <pkg> check` -> rc 0 each against the merged
+  Core; domain 81 test files beside t252 -> 621/621; Core `npx vitest run` over runtime/llm, flow-draft,
+  result-verification -> 183 files, 1721 passed (earlier, with flow-bootstrap, activity, decision-context: 229 files,
+  2717 passed); `pnpm --filter fluxiq check` -> clean; Core audit -> passed (231 warnings, 349 baselined)
+- Outcome: Partial (w7 proof and P4 docs remain)
+- Follow-up: lane D merge by the supervisor, then w7 and P4
 
 ## Open Questions
 

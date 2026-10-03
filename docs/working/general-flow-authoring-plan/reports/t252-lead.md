@@ -2,69 +2,91 @@
 
 ## Outcome
 
-Partial. P1 (Core contracts) and P2 (web domain) are implemented and verified, uncommitted, in both t252 trees.
-P3 (the test walker, the judge view, parity and the scripted proof) is blocked on merging dev into the t252 trees:
-a hook refuses git history changes from the lead, so the merge commit must be the supervisor's.
+Partial, stopped at a safe point for the night (supervisor, 2026-10-03). Both trees compile and pass their narrow
+checks. P1, P2 and P3 (walker, judge view, stored consequences, wiring) are done and verified. Not started: w7 (the
+parity test and the scripted confirm-requests proof) and P4 docs. Nothing is half-done: no worker was mid-edit
+when work stopped.
 
-## What changed and why
+## State of the trees (uncommitted work since the supervisor's checkpoints)
 
-Design: `docs/working/general-flow-authoring-plan.md` (t251, copied here; Current State and briefs updated for t252).
+- **Core** `C:/Users/osrs_/FluxStuff/fxwork/t252/!FluxIQ`, branch `task/t252-general-flow-authoring-impl`, HEAD
+  `0d7d3071` (P1 checkpoint `e4854d20` plus lanes A and C). Uncommitted: P3, 44 paths. R =
+  `packages/fluxiq/src/programs/automation-studio/runtime`.
+  - w5: `R/llm/node-tools/replay-span.ts` (new), `replay-draft.ts`, `dry-run-gate.ts`, `run-flow-part.ts`,
+    `R/flow-draft/dry-run.ts`. New tests `replay-draft-loop.test.ts`, `dry-run-gate-loop.test.ts`; `run-flow-part`
+    and `dry-run` tests extended.
+  - w6: `R/result-verification/build-test/pass-lines.ts`, `span-rows.ts`, `test-inputs.ts` (new), `summary.ts`,
+    `index.ts`, `R/result-verification/contracts.ts`, `R/llm/diagnosis-instructions.ts`, `R/llm/step-log/field-names.ts`
+    (new), `tool-step.ts`, `index.ts`, `R/llm/deepseek/tests/system-prompt-pins.json`.
+  - w8: `R/flow-bootstrap/adaptation.ts` (`metadata.declaredConsequences`), `R/llm/evidence-loop/rerun-request.ts`,
+    `R/flow-draft/amendment.ts` (`rerun_holds_binding`), `R/llm/draft-amendment-feedback.ts`,
+    `R/flow-bootstrap/evidence-loop-steps.ts`, `R/activity/wording/draft-edit-refused.ts`.
+  - w9: `R/llm/loop-configuration.ts`, `R/llm/evidence-loop.ts`, `R/llm/node-tools/run-flow.ts`, `R/service.ts` (two
+    call sites: `nodeOf: nodeDescriptions.definition`), `R/llm/node-tools/dry-run-gate.ts`,
+    `R/flow-draft/full-run-required.ts`, `R/llm/harness/request-evidence-check.ts`; new test
+    `run-flow-rows-in-loop.test.ts`.
+- **Downstream** `C:/Users/osrs_/FluxStuff/fxwork/t252/!FluxIQWebExtension`, same branch, HEAD `3ca6194b` (P2
+  checkpoint `c62900cb` plus lanes A and C). Uncommitted: `domain/src/runtime/llm-evidence/node-run/written-step.ts`
+  (lane A's `choice: undefined`, the only merge break), the design doc (Current State, briefs w4-w9, two ledger
+  entries), `docs/working/README.md` (regenerated), reports w5, w6, w8, w9 and this report.
 
-- **Core** (`fxwork/t252/!FluxIQ`, R = `packages/fluxiq/src/programs/automation-studio/runtime`):
-  - w1, P1a: `R/flow-draft/binding-forms.ts`, `binding-render.ts`, `flow-inputs.ts` (new); `step.ts` (`written`,
-    `instance`; a written step is proposable), `amendment.ts` (`bind`), `entry.ts` (written, forms, inputs line,
-    passes, authored instruction), `full-run-required.ts` (`not_reached`, `write` in the instructions), `index.ts`;
-    `R/llm/draft-amendment-feedback.ts`; reason maps in `R/flow-bootstrap/evidence-loop-steps.ts` and
-    `R/activity/wording/draft-edit-refused.ts`.
-  - w2, P1c: `R/flow-bootstrap/authoring/draft-bindings.ts` (new; `row_binding_outside_loop`, `input_shadowed`),
-    `assemble-draft.ts`, `normalise.ts`, `values.ts` (a `$state` object survives assembly on string and array
-    parameters; before, it became a string or a one-element list), `index.ts`.
-  - w4, P1b: `R/llm/node-tools/replay.ts` (mirrored names; replay calls take `item` and resolved parameters),
-    `run-node.ts` (`write`, description, binding forms), `R/llm/evidence-loop/tool-execution.ts` and `call-record.ts`
-    (`outputs`, `draft.written`), `R/llm/evidence-loop-decision.ts` (write implies add; forms translated for a write;
-    `run_node.binding_needs_write` for a live call; policy and `add` texts), `decision-refusal.ts` and
-    `R/llm/unusable-decision.ts` (named refusal codes and their tellings), `R/llm/harness-options/bootstrap-completion.ts`
-    (`DRAFT_SCRIPT_NOTE`), `R/llm/deepseek/tests/system-prompt-pins.json` (policy pin).
-- **Downstream** (`fxwork/t252/!FluxIQWebExtension`), w3, P2: `domain/src/output-nodes/targets/row-scope.ts` (new,
-  `scopedToRow` moved, stale comment fixed), `native-runtime.ts`; `domain/src/runtime/llm-evidence/node-run/`
-  `written-step.ts`, `node-call.ts` (new), `run.ts` (write mode: checks and handle resolution, no gateway action, no
-  permission request, `core.run_node.written`), `replay.ts` and `verify.ts` (row scope from `item`),
-  `replay-answer.ts` (`outputs.records`), `capture.ts`; `plan-resolution/state-binding.ts` (new, `$state`
-  pass-through); `system-instructions/instructions.ts` (`web-4`).
+## What changed and why (P3)
+
+The build's test now runs a loop as a loop: a `repeat` over a list runs each span member once per row the list
+returned in the test, with that row as `item` and `$state` bindings resolved by the executor's resolver. A lasting
+act becomes one verify call per row, never a press. The judge sees one line per pass, named by the row's screened
+label. Stored nodes keep their declared consequences. The walker is fed node definitions at all three places it runs
+in a build.
 
 ## Commands run and observed results
 
-- Core: `npx vitest run` over flow-draft, flow-bootstrap/authoring, llm/tests, llm/node-tools, llm/evidence-loop,
-  llm/harness-options, llm/deepseek tests -> "Test Files 114 passed (114)", "Tests 1191 passed (1191)".
-- Core: `pnpm --filter fluxiq check` -> clean (build-cache reuse: inputs match the passing stamp).
-- Core: `node scripts/structure-audit.mjs` -> "structure-audit: passed (226 warning(s), 349 baselined)".
-- Core: `recorded-windows.test.ts` "everything-store-run4" -> 1 failed in the t252 tree, and still 1 failed with w2's
-  four files and two new files put back to HEAD (w1 showed the same for its files); passes on main dev `d401eeaa`,
-  which carries t253's fixture fix. Pre-existing on the base `424a70b3`; the merge resolves it.
-- Domain: w3's scratch runner over 49 test files beside the changes (`DOMAIN_TEST_BUILD_LABEL=t252-lead`) ->
-  "# tests 390 # pass 390 # fail 0"; `pnpm --filter @fluxiq-web-extension/domain check` -> rc 0.
-- Downstream audit -> README out of date (new document); `pnpm structure:baseline` -> "structure-audit: passed
-  (160 warning(s), 118 baselined)".
-- `git stash push -u` in the Core tree -> refused by hook: "workers must not change git history".
+- Core libraries: `node scripts/build-cache/cli.mjs contracts:build fluxiq:build client-gateway-websocket:build` ->
+  all three "reuse" (current). `pnpm build` -> the web app step fails on dev's `recall` kind (not t252, below).
+- Downstream against the merged Core: `pnpm --filter @fluxiq-web-extension/domain check`, `.../extension check`,
+  `.../test-runner check` -> first run 1 error, `written-step.ts(115)` missing `choice`; fixed; re-run rc 0, 0, 0.
+- Domain tests beside t252 (81 files, `DOMAIN_TEST_BUILD_LABEL=t252-lead`) -> "# tests 621 # pass 621 # fail 0".
+- Core after the merge, before P3: 9 test directories -> 148 files, 1529 passed, including recorded-windows.
+- Core after w5, w6, w8: 11 directories -> "Test Files 229 passed", "Tests 2717 passed".
+- Core after w9: `npx vitest run` runtime/llm, runtime/flow-draft, runtime/result-verification -> "Test Files 183
+  passed", "Tests 1721 passed". `tests/service-bootstrap/tests/adaptation.test.ts` alone -> 9 passed (it timed out
+  once under w9's parallel load; it is a known load-flaky test).
+- `pnpm --filter fluxiq check` -> clean (stamp reuse). Core `node scripts/structure-audit.mjs` -> "passed (231
+  warning(s), 349 baselined)". Downstream audit -> "passed (162 warning(s), 118 baselined)".
 
 ## Not verified
 
-- P3 entirely: no test yet runs a loop per row, so the walker, `passes`, `not_reached`, the judge view and the step
-  log screening are unbuilt. No parity or proof test yet.
-- Core and domain together end to end; the extension and test-runner typechecks against a rebuilt t252 Core.
-- Whole suites (not run, by rule); no live runs (held by the user).
+- No test yet runs the assembled Flow and the walker side by side (parity), and no scripted build proves the
+  confirm-requests shape end to end. That is w7.
+- The domain's real `outputs.records` and `item` handling against the walker: each side is unit-tested on its own.
+- The domain tests were not re-run after P3. P3 changed only Core, and the downstream typechecks ran before P3, so
+  re-run them after the lane D merge.
+- Full suites and live runs: not run, by rule.
+
+## What is next, in order
+
+1. Supervisor: checkpoint P3, then merge lane D (Core `2da9ce41`, downstream `9fed3b76`). Expect contact in
+   `R/flow-draft/amendment.ts` (single-row twin drop vs `bind` and `rerun_holds_binding`),
+   `R/llm/draft-amendment-feedback.ts`, `R/result-verification/build-test/summary.ts` (rowContextKeys vs w6's pass
+   lines), `R/llm/harness-options/binding.ts`, and downstream `domain/src/runtime/llm-evidence/plan-resolution/*` and
+   `structure/first-item` (vs w3's `state-binding.ts` and the `row-scope.ts` move). `R/llm/evidence-loop.ts` is at
+   the 800-line limit: if lane D adds lines there, it needs a split.
+2. Rebuild Core libraries, re-run the three downstream typechecks, the domain tests beside t252 and the Core
+   directories above.
+3. w7 (brief in the design doc): the parity test and the scripted proof, with its variants (written Confirm,
+   non-lasting act, zero rows refused `not_reached`, declared consequences kept on the stored node).
+4. P4: Core architecture docs for the draft, the test and bindings; the downstream build-loop page;
+   `docs-reference --check` in Core.
 
 ## Open questions or contradictions found
 
-- **Merge needed (supervisor).** In each t252 tree: keep the uncommitted t252 edits (stash, or commit them as a
-  t252 step first), merge dev with a `Task: t252` trailer, restore the edits. Files both sides changed: Core
-  `runtime/flow-draft/full-run-required.ts`, `runtime/llm/deepseek/tests/system-prompt-pins.json` (regenerate the
-  pin from the merged policy text); downstream `domain/src/runtime/llm-evidence/node-run/replay.ts`,
-  `replay-answer.ts`, `run.ts`, `tests/replay.test.ts`. The lead resolves the rest and re-runs the P1/P2 checks.
-- Lane D brings domain-declared `rowContextKeys` and per-item `at`: it will meet w3's move of `scopedToRow` into
-  `targets/row-scope.ts` and w1's `draft-amendment-feedback.ts`; reconcile on "lane D landed".
-- w3: `outputs.records` holds whole page-text rows; w6 must keep them out of the model, the judge and the step log.
-- w4: whether a pass with an `item` still sends `produced`; a `rerun` patch holding a binding skips the needs-write
-  check (decide in w5).
-- `R/flow-draft/amendment.ts` is 552 lines; the `bind` logic could move to its own module.
-- Directory limits: downstream `node-run/` and `node-run/tests/` are at 25 files; Core `R/llm/evidence-loop/` at 25.
+- **Stored-run permission gate (user).** Stored nodes now keep `metadata.declaredConsequences`, but no plain run
+  reads it. Gating stored runs on it would change what every stored Flow does when it runs, so that is the user's
+  call.
+- **Core web app build broken on dev** (not t252): `apps/web/src/features/automation-studio/conversation/components/action-card/action-icons.ts`
+  lacks the `recall` `ActivityActionKind` that lane C added (`383d529a`).
+- Decisions taken (the supervisor may override): a while span whose body is a lasting act runs one pass; a written
+  member excused because an earlier lasting act was withheld stays excused; zero rows give recorded members
+  `passes: []` and refuse only written members.
+- `R/flow-draft/amendment.ts` is large (`bind` could move to its own module). Downstream `node-run/` and
+  `node-run/tests/` are at 25 files, Core `R/llm/evidence-loop/` at 25, and `R/llm/evidence-loop.ts` at 800 lines.
+- P5 must add earlier steps' outputs to the walker's resolution state, for `$step` bindings.
