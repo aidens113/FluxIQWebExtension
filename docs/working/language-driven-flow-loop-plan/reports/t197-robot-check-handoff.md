@@ -151,10 +151,48 @@ Run by the lead on 2026-09-30, after all five workers had finished:
 - One Core run of the full set failed `run-detail-preservation.test.ts` (a 26 s file) once; alone it passed
   3/3. Read as a load timeout, not re-checked further.
 
+## Browser check attempt (w8, 2026-09-30, after the orphan was killed)
+
+- Claimed `lab-slots/ui-1` at 2026-09-30T19:02:40Z. Command: `FLUXIQ_LAB_INSTANCE=ui-1
+  FLUXIQ_TEST_ENV_FILES=none heavy.sh "t197 w8 browser check" pnpm lab run everything-store --target isolated
+  --flow --workflow first-page-earbuds --variant robot-check`, with no stale overrides.
+- **How far it got:** the prelude passed its Core commit, quiet, entries and staleness steps, and rebuilt
+  scenario-lab and the domain host module. It then failed at `extension:build` (LAB_EXIT=1,
+  `environment.missing`, "build step extension:build failed with exit code 1"). No browser opened and no run id
+  was made. There are no screenshots: the capture loop took 0 frames.
+- **Cause, a t197 defect (w6):** the extension's bundle guard refused `node:crypto`, which was "reachable from
+  the browser bundle "background"". The chain was `shared/protocol.ts` -> `domain/src/client` -> Core
+  `nodes/routine/approval.js` -> `runtime/parking/index.js` -> the new `parking/person-needed-tool-calls.js`,
+  which imported `randomUUID` from `node:crypto`. `ask-effect.ts` already warns that the parking barrel
+  reaches the browser. `pnpm check` and the unit tests do not bundle the extension, so none of round 1, w6 or
+  this round's validation caught it.
+- **Fix (Core, uncommitted):** `parking/person-needed-tool-calls.ts` no longer imports `node:crypto`, and its
+  `newAskId` input is now required. The two Node-side callers supply it:
+  - `flow-bootstrap/person-needed.ts` defaults to `person-needed.<uuid>`, so its behaviour is unchanged;
+  - `recovery/runtime-exploration.ts`.
+- The user's order then stopped all Labs, so the run was not relaunched. The slot was cleared (`lab-slots/ui-1`
+  removed), the capture loop and watchers were stopped, and no Playwright Chromium was left running.
+- **Not verified:**
+  - the extension build after the fix (the next Lab prelude runs it);
+  - everything the browser check was meant to show: a self-clearing check waited out, the person-needed ask,
+    and the resume.
+
 ## Ready to commit
 
-Ready to commit: downstream `8e4b7bd3` as it stands plus `domain/src/tests/web-panel-host.test.ts`,
-`docs/architecture/failure-taxonomy.md` and this report; Core `0b3b7960` as it stands (no new Core edits).
+Ready to commit:
+- Downstream: `8e4b7bd3` as it stands, plus `domain/src/tests/web-panel-host.test.ts`,
+  `docs/architecture/failure-taxonomy.md` and this report.
+- Core: `0b3b7960`, plus `runtime/parking/person-needed-tool-calls.ts`, `runtime/flow-bootstrap/person-needed.ts`
+  and `runtime/recovery/runtime-exploration.ts` (the `node:crypto` fix).
+
+Validation after that fix:
+- Core `pnpm --filter fluxiq check` -> CHECK=0.
+- vitest over both recovery person-needed tests, flow-bootstrap, parking and service-bootstrap person-needed ->
+  "Test Files 46 passed (46), Tests 807 passed (807)".
+- Core structure audit -> "passed (199 warning(s), 354 baselined)".
+- The Core dist was not rebuilt after this fix.
+
+Validation from before the `node:crypto` fix:
 Validation (w8, 2026-09-30, after the dev merge):
 - Core `heavy.sh ... pnpm --filter fluxiq check` -> CHECK_EXIT=0; `node scripts/structure-audit.mjs` ->
   "passed (199 warning(s), 354 baselined)".

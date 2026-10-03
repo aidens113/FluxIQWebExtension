@@ -43,6 +43,15 @@ test("a present overlay is read through its closed shadow root: its parts, phase
   assert.ok(cdp.calls.includes("Runtime.releaseObjectGroup"), "the host handle is released");
 });
 
+test("each read keeps the location of the document it was taken in, screened to origin and path", async () => {
+  const sample = await readOverlaySample(fakeCdp(hostState({ href: "http://127.0.0.1:52153/scenarios/s3cret/search?q=napkins&token=abc#top" })), 0, ["s3cret"]);
+  assert.ok(sample.pageUrl?.startsWith("http://127.0.0.1:52153/scenarios/"), sample.pageUrl);
+  assert.ok(!sample.pageUrl?.includes("s3cret"), "a run secret in the path is redacted");
+  assert.ok(!sample.pageUrl?.includes("?") && !sample.pageUrl?.includes("#"), "the query and fragment are dropped");
+  const absent = await readOverlaySample(fakeCdp({ hostCount: 0, documentOrigin: 7, href: "http://127.0.0.1:52153/scenarios/bigbox-retail/" }), 0, []);
+  assert.equal(absent.pageUrl, "http://127.0.0.1:52153/scenarios/bigbox-retail/", "an absent overlay still says which page was read");
+});
+
 test("an overlay faded to nothing, hidden, or off-screen is present but not visible", async () => {
   for (const overrides of [{ opacity: 0 }, { visibility: "hidden" }, { display: "none" }, { inViewport: false }]) {
     const sample = await readOverlaySample(fakeCdp(hostState(overrides)), 0, []);

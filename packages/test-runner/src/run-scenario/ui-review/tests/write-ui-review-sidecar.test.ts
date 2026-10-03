@@ -26,6 +26,8 @@ test("the review is written beside the bundle, never in it, with a summary of ev
     assert.equal(body.summary.moments, 1);
     assert.deepEqual(body.summary.panelSources, ["side-panel"]);
     assert.equal(body.summary.overlay[0].status, "stable");
+    assert.equal(body.summary.overlay[0].pageLoads, 0);
+    assert.equal(body.summary.overlay[0].pageLoadGaps, 0, "the excused gaps are summarised beside every page load");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
