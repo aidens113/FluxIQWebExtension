@@ -31,6 +31,10 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
   judge 2 $0.001936, read 1 $0.000380); Core's step log writes `NNNN-answer-<toolId>` folders for amendments and
   refused repeats (later step numbers shift by them). Left open: `flow-lane.json`'s `instructedConsequences` stays
   null; Core's `judgeAccounting` gives no judge call count.
+- **t256** (Core `75e66057`): the web Adaptations view and inbox rows say applied, held back (plain reason), or
+  waiting for a judged run; summaries carry `judgedApplication`. Rows indexed before it show it once re-saved.
+- **t257** (downstream `702c7dbc`): the Lab's UI review counts every document change as a page load (old count kept
+  as `pageLoadGaps`; murzln6g moment 6: 0 -> 1); samples carry a screened `pageUrl`; pictures carry `takenAt`.
 - Core `880577fc`: the `$0.25` comments in `refuted-result-port.ts` and `repair-authority.ts` name the run ceiling.
 - Session 8d (2026-10-02/03): t244, t246-t250, t253 and lanes A (t174), C (t194), D (t195); see the ledger.
 
@@ -46,17 +50,18 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
 - **t252 general Flow authoring** (`fxwork/t252`, both repositories; design `docs/working/general-flow-authoring-plan.md`
   and report `.../general-flow-authoring-plan/reports/t252-lead.md` in that tree). P1-P3 committed (P3: the build's
   test runs a repeat once per row with the row as `item`, a lasting act is verified per row, never pressed; the judge
-  sees one line per row; stored nodes keep declared consequences). The supervisor merged lane B's tip (lanes A-D) into
-  it: Core 13 conflicts, downstream 4; its lead resolves and verifies, then stops for the supervisor to commit; then
-  w7 (parity test, scripted confirm-requests proof) and P4 docs. Abandon `fxwork/t251` once t252 lands.
+  sees one line per row; stored nodes keep declared consequences). Merge of lane B's tip (lanes A-D) committed (Core
+  `5f0bb788`, downstream `04178c6b`): only a skipped lasting act excuses a per-row step; node-run layer files moved to
+  `node-run/layer/`; Core check 0, node-tools + build-test 275/275, downstream checks 0, domain 725/725. Now: w7
+  (parity test; scripted confirm-requests proof with variants) and P4 docs; then the supervisor merges dev and lands.
+  Abandon `fxwork/t251` once t252 lands.
 - **t254 purse holds at true cost** (`fxwork/t254`; `reports/t254-purse-holds-true-cost.md`). Merge of lane B
   committed (Core `b5533c0c`; unfinished-build 129/129 incl. murzln6g funding, tsc 0, audit passed). Stage 2, the
   supervisor's four decisions: no chat `max_tokens` 600; recovery's ledger at the billed price; judge overshoot in
   phases' accounting; a round stopped by the judging reserve spends it testing and judging the Flow so far.
-- **t256** (`fxwork/t256`, Core-paired): the web Adaptations view and inbox rows say applied / held back (reason) /
-  waiting for a judged run (`reports/t256-w1-web-adaptation-applied.md`); last wording fix in progress.
-- **t257** (`fxwork/t257-ui-review-page-swaps`): a document change with the overlay present counts as a page load;
-  each picture is timed against the samples (`reports/t257-w1-ui-review-page-swaps.md`).
+- **t258** (`fxwork/t258`, Core-paired): `service/datasets/tests/service-wiring.test.ts` "store cannot be opened"
+  fails on dev with a pool-closing AggregateError (a return of t207's family); root cause and fix
+  (`reports/t258-w1-service-wiring-store.md`).
 
 **Binding rules (user, all in force).**
 - **General Flow authoring before any more live runs (2026-10-02 night):** "The model should be ABLE to explore &
