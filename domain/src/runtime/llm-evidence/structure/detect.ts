@@ -146,9 +146,9 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
     target: searchedPage ? undefined : target,
     frameId: element?.frameId,
     frameUrlPath: element?.frameDocument?.path,
-    // Each column's element in the first item is found in the capture the
-    // detection answered with, and named by the handle the model was shown it
-    // by (`./first-item/`).
+    // Each column's element in the first item that has it is found in the
+    // capture the detection answered with, and named by the handle the model
+    // was shown it by (`./first-item/`).
     firstItem: { detected: page, shown: context.returned, frameId: element?.frameId }
   });
   if (!split) recoverable("sensitive_value");

@@ -47,10 +47,14 @@
 // classes every label is a class path that means nothing
 // (`div.x0531l50 > div.x1a4yqcp`), and a model shown seven of them mapped
 // `mutual` to the Confirm button's column (live run 38, `run-muqilf9s-c3211328`,
-// C2). Each field now carries `at`, the handle of its element in the list's
-// first item, as the model was shown it (`./first-item/`), and the packet says
-// once what `at` is. The page view prints that handle's words, so no value and
-// no selector is added. A field whose element cannot be told has no `at`.
+// C2). Each field now carries `at`, the handle of its element in the first
+// item that has the column, as the model was shown it (`./first-item/`), and
+// the packet says once what `at` is. Until round 1002-M only the list's first
+// item was looked in, so a column it lacked had no `at`: the "Request accepted"
+// column only Amara's confirmed card had went unnamed, and the model filtered
+// on the Delete column instead (`run-murwcaj0-40e56557`, R2). The page view
+// prints that handle's words, so no value and no selector is added. A field
+// whose element cannot be told has no `at`.
 
 import {
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
@@ -80,7 +84,7 @@ export type WebLlmStructurePaginationMode = (typeof WEB_LLM_STRUCTURE_PAGINATION
 const RECORD_NOTE = "record is the one item you aimed at, read as a one-row table; name its handle in extractList when the instruction is about that item";
 
 /** What the packet says of `at`, once, when a field carries one: domain text. */
-const AT_NOTE = "a field's at is the handle of that column's element in the first item; its line in the page view shows what the column holds";
+const AT_NOTE = "a field's at is the handle of that column's element in the first item that has it; its line in the page view shows what the column holds. at is that item's own element, so acting on it acts on that item only; to act on the rows a listing keeps, use the control inside one of the rows it keeps";
 
 /** What the packet says of a section's link to more: domain text around the link's closed-phrase label. */
 function continuesNote(label: string): string {
@@ -101,7 +105,7 @@ export type WebLlmStructureField = {
   /** The share of items that have the field, from 0 to 1. Below 1, a record without it carries `null`. */
   coverage: number;
   /**
-   * The page-view handle of the field's element in the first item, as the
+   * The page-view handle of the field's element in the first item that has it, as the
    * model was last shown the page (`./first-item/`). Absent when that element
    * cannot be told or was not shown.
    */
