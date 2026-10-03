@@ -100,7 +100,12 @@ export const RECOVERY_FAULT_BY_CODE: Readonly<Partial<Record<WebAutomationFailur
   [WEB_AUTOMATION_FAILURE_CODES.TRANSPORT_TRANSIENT]: "transport",
   // Named for the totality check, and never absorbed here: see
   // `ABSORBED_ELSEWHERE` below.
-  [WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED]: "rate_limited"
+  [WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED]: "rate_limited",
+  // A target the gate found not shown. Retryable since t193-1002m, because Core
+  // finds the current step by state for it, but this loop meets it first as the
+  // obstruction it always was (`OBSTRUCTION_FAULTS` below), so the word here is
+  // that one and the totality check is all it answers.
+  [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN]: "obstructed_target"
 } as const);
 
 /**
@@ -159,7 +164,10 @@ const OBSTRUCTION_REASONS: readonly string[] = Object.freeze(["covered", "hidden
 const OBSTRUCTION_FAULTS: Readonly<Partial<Record<WebAutomationFailureCode, RecoveryFault>>> = Object.freeze({
   [WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG]: "blocking_dialog",
   [WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED]: "obstructed_target",
-  [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE]: "obstructed_target"
+  [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE]: "obstructed_target",
+  // The gate's `hidden` refusal under its own code (t193-1002m): the code is
+  // the reason word, so it needs no word read off `actual`.
+  [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN]: "obstructed_target"
 } as const);
 
 /** The refusal reason word for a control the page will not let anything use yet. */
@@ -241,7 +249,8 @@ export function faultMayHideBehindLayer(fault: RecoveryFault): boolean {
  *
  * BLOCKED_BY_DIALOG needs no reason word: it is produced in one place, from a
  * `covered` or `hidden` refusal with a dialog standing over the page, so it
- * already means what the reason words mean. ACTION_REJECTED is the code every
+ * already means what the reason words mean. TARGET_NOT_SHOWN needs none either:
+ * it is only ever the gate's `hidden`. ACTION_REJECTED is the code every
  * other refusal shares, so its reason word is what separates a layer over the
  * target from a target that refused on its own account.
  */

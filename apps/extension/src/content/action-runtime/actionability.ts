@@ -4,8 +4,9 @@
 // `disabled` and no `aria-disabled`), and reachable: after scrolling the
 // element into view, the point at its centre must land on the element itself or
 // one of its descendants rather than on an overlay. A refusal names which of
-// the three failed, so the result can report ACTION_REJECTED with a code
-// instead of a generic failure. A `covered` refusal also says what layer the
+// the three failed, so the result can report a closed code instead of a
+// generic failure: `hidden` is TARGET_NOT_SHOWN, Core's `target_not_found`, and
+// `disabled` and `covered` are TARGET_NOT_ACTIONABLE (`results.ts`). A `covered` refusal also says what layer the
 // hit landed in and which controls that layer offers, so whoever reads it
 // knows what has to be answered first.
 //
