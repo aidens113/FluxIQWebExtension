@@ -86,7 +86,9 @@ Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name ol
   "should be an easily configurable variable ... even for test purposes in the lab"; the product's user-facing
   spending limit is separate. Core reads `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default 0.10, max 10, invalid stops
   Core); the Lab passes `--llm-cost-ceiling-usd`, then its env, then `.env`/`.env.local`. The tasks should finish in
-  far fewer than 60 actions.
+  far fewer than 60 actions. **Billed dollars, no output cap (2026-10-03):** "It should be billed at how much it actually costs, and i never
+  told you to add any cap on output. Remove that": the purse charges DeepSeek's actual price (off-peak, cached input),
+  requests send no `max_tokens`, and holds reserve an observed-max reply (t254).
 - **Every run step logged as files (2026-10-01):** exact provider request (no auth header), raw response, parsed
   decision, each tool call and result, the page text, under `test-runs/<run-id>/steps/NNNN-*/` (STEPS).
 - **A build has three phases (2026-09-30):** live exploration authors the draft (no replay); test and judge once the
