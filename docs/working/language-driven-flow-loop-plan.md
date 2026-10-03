@@ -58,7 +58,12 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
 - **t254 purse holds at true cost** (`fxwork/t254`; `reports/t254-purse-holds-true-cost.md`). Merge of lane B
   committed (Core `b5533c0c`; unfinished-build 129/129 incl. murzln6g funding, tsc 0, audit passed). Stage 2, the
   supervisor's four decisions: no chat `max_tokens` 600; recovery's ledger at the billed price; judge overshoot in
-  phases' accounting; a round stopped by the judging reserve spends it testing and judging the Flow so far.
+  phases' accounting; a round stopped by the judging reserve spends it testing and judging the Flow so far. Stage 2
+  done (316 files / 3,447 tests incl. murzln6g, check 0, no `max_tokens` sent anywhere). Stage 3 (supervisor): an
+  unchanged Flow already judged no is not re-judged (ends at cost with those findings); recovery prices each call at
+  the rate in force when it is made.
+- **t259** (`fxwork/t259-flow-lane-instructed-consequences`): `flow-lane.json` carries the instruction's consequences
+  from the same settle step as `live-llm.json` (`reports/t259-w1-flow-lane-instructed.md`).
 - **t258** (`fxwork/t258`, Core-paired): `service/datasets/tests/service-wiring.test.ts` "store cannot be opened"
   fails on dev with a pool-closing AggregateError (a return of t207's family); root cause and fix
   (`reports/t258-w1-service-wiring-store.md`).
