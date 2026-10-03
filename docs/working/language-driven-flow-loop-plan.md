@@ -38,30 +38,27 @@ A-C spent $0. It resumes after t244 lands and the lane trees are re-synced.
 `fluxiqwebextension-8d` lands t244, t246, t247-t250 and re-syncs the lane trees, with a "merging tNNN" / "tNNN done"
 handshake in both repositories; neither starts while the other holds dev.
 
-**Landed by session 8d (2026-10-02 evening), each verified by the supervisor after merging dev in:**
-- **t247.** Core's root `pnpm test` is now `pnpm -r --no-bail test`. `ProjectTree.tsx` is split by job (301 -> 201
-  lines). The Flow settings form's cost default is $0.10, matching Core.
-  - Validation: web vitest over hierarchy and settings, 28/28 files; web `tsc --noEmit` rc 0 before and after merging
-    dev; structure audit passed; Core's finish gate `pnpm check` passed.
-  - Core `d01c1e1c`, downstream `3a299516`.
-- **t248.** The Lab parses a `state_routed` skip, and `steps/` shows "routed to <node> (<direction>)". The run summary
-  counts routed steps. The existing/clone path writes a skip as `skipped`. Adds the bigbox `store-remembered` Lab row.
-  - Validation, on freshly built Core and packages: test-runner `node --test` over flow-lane, lab-runs, run-manifest
-    and existing-* gave 432 pass / 0 fail; scenario-lab bigbox gave 35/0; test-runner and scenario-lab check rc 0;
-    audit passed.
-  - Downstream `52ae5c9e`.
-  - **Open:** Core's run-detail conversion (`service/summaries/conversions.ts`) drops `stateRouting` (no_match /
-    routed / effect_holds). The Lab therefore shows only where a step routed, not what the runtime consulted.
-- **In flight.**
-  - t244: committed. Dev merged in twice, through t193. Two of t193's overlaps fixed in t244's tree: a rerun's
-    put-back steps kept t193's words, and a part run's card names no step number (t195's rule). Waiting on t194.
-  - t246: the worker is profiling service-test setup cost against the original brief.
-  - t249 (new): a runtime patch from the ladder is applied only after the run that trialled it finished whole and
-    its result was judged `answers`, never mid-run on a trial alone, which closes the ladder half of the user's
-    full-judged-run rule. It also adds `stopAfterNodeId` in the executor. Once t244 lands, a recovery-stage part-run
-    tool follows on top of that.
-  - t250 (to open after t248): Core run detail carries `stateRouting` to the Lab; stale "$0.25" comments across Core
-    runtime, and `repairMaxCostUsdPerRun: 0.25` in result-check authorization defaults.
+**Landed by session 8d (2026-10-02 evening), each verified after merging dev in; Core dev `424a70b3`, local downstream
+dev `5b79cda3`:**
+- t247 (Core `pnpm test` is `--no-bail`; ProjectTree split; settings cost default $0.10). t248 (the Lab reads a
+  `state_routed` skip; the existing/clone path writes skips as `skipped`; bigbox store-remembered row).
+- t244 (`core.run_flow` part runs; a build or re-author finishes only on a judged yes about the Flow as it stands).
+  Dev merged through t193 and t194; overlaps fixed: rerun put-back wording, no step numbers on part-run cards, the
+  evidence loop's tool set moved to `node-tools/loop-tools.ts` (801 lines). Validation: 146 touched test files pass;
+  downstream domain/extension/test-runner typecheck against it; Core finish gate passed.
+- t250 (run detail carries `stateRouting`; the Lab's steps/ say what routing consulted; stale $0.25 gone, the repair
+  default follows the ceiling), plus hotfix `bdc459dd`: t250's import closed a module cycle
+  (`unattended-retry-verification` 8/8 failing on dev), now read from `model/run-cost-ceiling`.
+- t246 (project database idle grace 1 s, opens 403 -> 19, four races fixed; downstream service tests close first).
+- t249 (a runtime patch reaches the stored Flow only after the run that tried it ran whole from the start and was
+  judged `answers`; a completed trial is that run; a refuted result's ladder patch is re-run whole and judged;
+  thrown/parked runs settle `run_errored`/`run_parked`; executor `stopAfterNodeId`). Validation: 131 test files pass.
+- Downstream push: lane C's commit `c56b8cfb` had a DeepSeek-shaped fake key; the user approved a fake. The unpushed
+  commits on dev, t194 and t244 were rewritten to `sk-FAKE-test-value-not-a-real-key` (checked not the real key, not
+  key-shaped; test 5/5). **The push was refused by the permission classifier; the user must push downstream dev.**
+- Follow-ups: a recovery-stage part-run tool on `stopAfterNodeId`; the reroute edge mismatch (trial `success` vs
+  durable `failed`); `$0.25` left in `refuted-result-port.ts` and `repair-authority.ts`; web Adaptations view shows
+  no `applied`/`notAppliedReason`.
 
 Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name older work without a branch of its own.
 
@@ -145,15 +142,11 @@ Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name ol
 - `fxwork/t187-bench` and `fxwork/t192-bench`: delete only on a yes.
 
 **Next, in order.**
-1. Land t194 (lane C), then t244 (partial runs, one full judged run; resolves against lanes A-C in its own files),
-   t249 (the ladder's full judged run) and t246, per the two-session handshake. t250 before the live round if it is
-   ready (the Lab's step logs show what state routing consulted).
-2. Re-sync every lane tree to dev (both repositories, rebuild Core libraries and the extension), then release the
-   four held live leads; then the approved `deepseek-v4-pro` comparison (`--llm-model deepseek-v4-pro
+1. Live round 1002-M: the four lanes re-synced to Core `424a70b3` / downstream `5b79cda3` and rebuilt; leads A-D
+   released (brief below). Then the approved `deepseek-v4-pro` comparison (`--llm-model deepseek-v4-pro
    --llm-cost-ceiling-usd 0.30`, one run). Watch for a double act on a backward state route (t243 open item 2).
-3. Open follow-ups: unify `control` and `does`; signatures for recorded Flows
-   (t243 open item 4); a dropped column on a rerun needs the domain's denied keys in the loop (t195 R3); sweep 2,
-   with `pnpm -r --no-bail test` in Core.
+2. Open follow-ups: unify `control` and `does`; signatures for recorded Flows (t243 open item 4); a dropped column on
+   a rerun needs the domain's denied keys in the loop (t195 R3); sweep 2, with `pnpm -r --no-bail test` in Core.
 
 Older history: rung 1 is in `archive/rung1-history-to-2026-09-26.md`. The ledger to 2026-09-30 is in
 `archive/ledger-2026-09-28-to-30.md` and the Work Ledger below.
