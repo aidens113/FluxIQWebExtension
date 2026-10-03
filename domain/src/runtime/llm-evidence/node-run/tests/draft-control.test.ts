@@ -19,6 +19,7 @@ const CLICK = "web.output.dom-click";
 const SNAPSHOT = "web.output.dom-capture_snapshot";
 const NAVIGATE = "web.output.browser-navigate";
 const START = "https://example.test/start";
+const TYPE = "web.output.dom-type";
 
 test("a press's draft statement carries the words of the control it pressed, the outcome's own", async () => {
   const stubbed = stub();
@@ -82,6 +83,58 @@ test("a refused press's draft statement names no control: no outcome said one", 
   assert.equal(failed.draft !== undefined && "interruption" in failed.draft, false);
 });
 
+test("a field named only by its label is named by the words its view line prints, on the outcome, the draft and the node's identity", async () => {
+  // run-murwd8le-79e735a8, steps 0023-0024: the view line read
+  // `t965 field "Quantity" ="3"`, the type's result named no control, the
+  // draft's step said nothing, and the stored node was `{tagName: "input"}`.
+  // Two judges refuted the Flow over that bare input.
+  const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      commands.push({ actionType: command.actionType, parameters: command.parameters as JsonObject });
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: quantityPage() } };
+      return { status: "succeeded", payload: { value: "ok" } };
+    }
+  };
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  const field = shownPageLines(looked.evidence).find((line) => line.kind === "field")!;
+  assert.equal(field.words, "Quantity", field.line);
+  const typed = await runtime.executeTool({ ...PROJECT, callId: "call.type", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: TYPE, parameters: { target: { handle: field.target }, text: "3" }, consequences: [] } });
+  assert.equal(typed.resultCode, "web.action.succeeded", JSON.stringify(typed.evidence).slice(0, 400));
+  assert.equal((typed.evidence as JsonObject).control, "Quantity");
+  assert.equal(typed.draft?.control, "Quantity");
+  // The node the Flow keeps names the field by the signal the page scores a
+  // label by: `label`, never `accessibleName`, which the page computes without
+  // the nearby text and would then read as missing.
+  const kept = (typed.draft?.ranWith?.parameters as JsonObject).element as JsonObject;
+  assert.equal(kept.label, "Quantity");
+  assert.equal("accessibleName" in kept, false);
+  const sent = commands.find((command) => command.actionType === "web.dom.type")!;
+  assert.equal((sent.parameters.element as JsonObject).label, "Quantity");
+});
+
+test("a control the page already names keeps its identity as it was: no label is added beside its name", async () => {
+  const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      commands.push({ actionType: command.actionType, parameters: command.parameters as JsonObject });
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: quantityPage("Units") } };
+      return { status: "succeeded", payload: { value: "ok" } };
+    }
+  };
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  const field = shownPageLines(looked.evidence).find((line) => line.kind === "field")!;
+  const typed = await runtime.executeTool({ ...PROJECT, callId: "call.type", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: TYPE, parameters: { target: { handle: field.target }, text: "3" }, consequences: [] } });
+  assert.equal(typed.draft?.control, "Units");
+  const kept = (typed.draft?.ranWith?.parameters as JsonObject).element as JsonObject;
+  assert.equal(kept.accessibleName, "Units");
+  assert.equal("label" in kept, false);
+});
+
 function stub(options: { failClick?: boolean } = {}) {
   let title = "Fixture";
   const gateway: WebLlmEvidenceGateway = {
@@ -134,5 +187,17 @@ function popupPage(open: boolean): JsonObject {
       ...main
     ],
     evidence: { overlays: { tested: 2, blockedCount: 1, blockers: [{ selector: "#promo", label: "Get $10 off", kind: "promotion", blocks: 1, blocked: ["#add"] }] } }
+  };
+}
+
+/** A product page whose quantity field is named only by the label beside it, or also by an accessible name of its own. */
+function quantityPage(accessibleName?: string): JsonObject {
+  const field: JsonObject = { tagName: "input", selector: "#qty", label: "Quantity", value: "1" };
+  if (accessibleName !== undefined) field.accessibleName = accessibleName;
+  return {
+    url: START,
+    title: "Hub",
+    viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
+    interactiveElements: [field, { tagName: "button", selector: "#add", visibleText: "Add to cart" }]
   };
 }

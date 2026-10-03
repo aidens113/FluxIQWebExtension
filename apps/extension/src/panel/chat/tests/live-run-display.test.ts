@@ -8,9 +8,8 @@
 //   the chat's answer;
 // - U-A1: a press the run failed on read "Done" just above "Run failed"
 //   (`run-muq6lqnw-fdfa7aac`);
-// - U-A2: a merge step's card read "Action · the page", and later "Join paths";
-//   Core now says no step for a merge and leaves it out of "Step N of M"
-//   (UI-3, `run-murwcmx2-a1c6edf7`), so the run below carries none.
+// - U-A2: a merge step's card read "Action · the page", then "Join paths": a
+//   step a person never sees, now not shown at all (t174-w90).
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -113,40 +112,56 @@ test("U-B2: a chat-started build's stop is said once, by the chat's answer, and 
   });
 });
 
-/** A run of two steps, as Core says it: a press that worked and a press that failed and could not be recovered. The merge between them has no step and no place in the count. */
-function failedRun(): unknown[] {
+/**
+ * A run of three steps: a press that worked, a merge, and a press that failed
+ * and could not be recovered. `announcedMerge` is a Core from before t174-w88,
+ * which announced the merge as a step and opened the recovery with a bare
+ * "Recovery started" row; without it, the rows are today's: the merge is not
+ * announced, and the row that opens the recovery settles the failed step with
+ * its failure's code (`activity/step-recovering.ts` in Core).
+ */
+function failedRun(announcedMerge = false): unknown[] {
   const subject = { kind: "run", id: "r1", projectId: "project-1" };
   const event = (sequence: number, fields: Record<string, unknown>) => ({ activityId: "run:r1", sequence, subject, at: new Date(second(sequence)).toISOString(), ...fields });
   const step = (sequence: number, index: number, node: string, definition: string, label?: string) => event(sequence, {
     phase: "running",
-    label: `Running step ${index} of 2`,
-    step: { index, count: 2, nodeId: node, ...(label === undefined ? {} : { label }) },
-    detail: { kind: "step", title: label ?? `Step ${index} of 2`, status: "started", ref: node, text: `Node: ${definition}` }
+    label: `Running step ${index} of 4`,
+    step: { index, count: 4, nodeId: node, ...(label === undefined ? {} : { label }) },
+    detail: { kind: "step", title: label ?? `Step ${index} of 4`, status: "started", ref: node, text: `Node: ${definition}` }
   });
   return [
     event(1, { phase: "running", label: "Run started", detail: { kind: "note", title: "Run started", status: "started", ref: "r1" } }),
     step(2, 1, "n1", "web.output.dom-click", "Reject all"),
-    step(4, 2, "n3", "web.output.dom-click", "Set as my store"),
-    event(5, { phase: "repairing", label: "Recovering from a failed step: Set as my store", detail: { kind: "step", title: "Recovery started", status: "started", ref: "n3" } }),
+    ...(announcedMerge ? [step(3, 2, "n2", "builtin.control.merge")] : []),
+    step(4, 3, "n3", "web.output.dom-click", "Set as my store"),
+    announcedMerge
+      ? event(5, { phase: "repairing", label: "Recovering from a failed step: Set as my store", detail: { kind: "step", title: "Recovery started", status: "started", ref: "n3" } })
+      : event(5, { phase: "repairing", label: "Recovering from a failed step: Set as my store", detail: { kind: "step", title: "Set as my store", status: "failed", ref: "n3", text: "Result: web.action.rate_limited · Node: web.output.dom-click" } }),
     event(6, { phase: "repairing", label: "The quick fixes didn't help", detail: { kind: "thought", title: "The quick fixes didn't help", text: "Trying again didn't fix the step.", status: "succeeded", ref: "n3" } }),
     event(7, { phase: "failed", label: "Run failed", detail: { kind: "step", title: "Run failed", status: "failed" }, final: true })
   ];
 }
 
-test("U-A1: the step a run failed on reads as failed, and the steps it moved past as done", async () => {
-  await mounted(targetCore([]), failedRun(), (root) => {
-    const shown = cards(root);
-    const press = shown.find((card) => card.target.includes("Set as my store"))!;
-    assert.match(press.outcome, /^Didn't work/u, "the failed press never says Done");
-    assert.equal(shown.find((card) => card.target.includes("Reject all"))!.outcome, "Done");
-  });
+test("U-A1: the step a run failed on reads as failed, with why, and the steps it moved past as done", async () => {
+  for (const announcedMerge of [false, true]) {
+    await mounted(targetCore([]), failedRun(announcedMerge), (root) => {
+      const shown = cards(root);
+      const press = shown.find((card) => card.target.includes("Set as my store"))!;
+      assert.match(press.outcome, /^Didn't work/u, "the failed press never says Done");
+      assert.equal(shown.find((card) => card.target.includes("Reject all"))!.outcome, "Done");
+      // D8 (t174-w90): the busy page is said on the card, from the code on the row that settles it.
+      if (!announcedMerge) assert.match(press.outcome, /the page was busy/u);
+      if (!announcedMerge) assert.equal(root.byClass("chat-step-title").some((title) => title.textContent.includes("Recovery started") || title.textContent === "Set as my store"), false, "the row that settles the press is no message");
+    });
+  }
 });
 
-test("U-A2: a run shows a card for each step a person sees, and none for joining paths", async () => {
-  await mounted(targetCore([]), failedRun(), (root) => {
-    const shown = cards(root);
-    assert.equal(shown.some((card) => card.name === "Join paths"), false, `no card for a merge, among ${JSON.stringify(shown)}`);
-    assert.equal(shown.some((card) => card.name === "Action"), false, "no step reads as a bare Action");
-    assert.equal(shown.length, 2, `one card for each of the two steps the count names, among ${JSON.stringify(shown)}`);
-  });
+test("U-A2: a merge step shows no card, whether or not Core announced it, and no step reads as a bare Action", async () => {
+  for (const announcedMerge of [false, true]) {
+    await mounted(targetCore([]), failedRun(announcedMerge), (root) => {
+      assert.equal(cards(root).some((card) => card.name === "Join paths"), false, `no card for joining the paths, among ${JSON.stringify(cards(root))}`);
+      assert.equal(cards(root).some((card) => card.name === "Action"), false, "no step reads as a bare Action");
+      assert.equal(cards(root).length, 2, "the two presses, and nothing for the merge");
+    });
+  }
 });

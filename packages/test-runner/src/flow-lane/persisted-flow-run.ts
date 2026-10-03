@@ -7,7 +7,7 @@ import { extractionReadOf } from "./extraction-read.js";
 import { attemptNodeId, hostTargetResolutionOf, readinessOf, retryOf, type PersistedFlowActionReadiness, type PersistedFlowActionRetry, type PersistedHostTargetResolution } from "./persisted-attempt.js";
 import { FLUXIQ_HTTP_MAX_TIMEOUT_MS, isBoundedHttpFailure, type FluxIQHttpOptions } from "../http-control/index.js";
 import { runActionStatus } from "../run-manifest/index.js";
-import { readHarnessRecovery, type HarnessRecoveryControl } from "./harness-recovery.js";
+import { isResultCheckIntervention, readHarnessRecovery, type HarnessRecoveryControl } from "./harness-recovery.js";
 import { LAB_PROJECT_DOMAIN_ID } from "./lab-project-domain.js";
 import { recoveredByNode } from "./node-recovery.js";
 import { onSkipRoute, skippedAttemptOf, stateRoutedOf, type PersistedFlowActionSkip, type PersistedStateRouted } from "./skipped-attempt.js";
@@ -611,7 +611,8 @@ async function readRunDetail(
   const nodeAttempts = attempts.filter((attempt) => !isResultVerificationAttempt(attempt));
   // In attempt order, one entry per attempt that names a node, so a retried node appears once per attempt.
   const attemptNodeIds = nodeAttempts.flatMap((attempt) => (typeof attempt.nodeId === "string" ? [attempt.nodeId] : []));
-  return { summaryStatus: typeof summary.status === "string" ? summary.status : undefined, actions, attemptNodeIds, harnessActivations: interventions.length, datasets: runDatasetSummaries(detail), durationsByNode: attemptDurationsByNode(nodeAttempts), resultVerification: resultVerificationOf(detail), runDetail: detail };
+  // A post-run result check is filed as an intervention too: a check, not an activation (run-murwd8le-79e735a8, Cause 12).
+  return { summaryStatus: typeof summary.status === "string" ? summary.status : undefined, actions, attemptNodeIds, harnessActivations: interventions.filter((item) => !isResultCheckIntervention(item)).length, datasets: runDatasetSummaries(detail), durationsByNode: attemptDurationsByNode(nodeAttempts), resultVerification: resultVerificationOf(detail), runDetail: detail };
 }
 
 /**
