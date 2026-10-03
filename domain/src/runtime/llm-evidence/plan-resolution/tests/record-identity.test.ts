@@ -127,6 +127,19 @@ test("Millbrook's Set as my store carries Millbrook's card to the page", async (
   assert.deepEqual((element?.context as JsonObject | undefined)?.record, { text: CARD_WORDS.millbrookSupercenter }, "the record survives Core's normalizer and the gateway mapping");
 });
 
+// Live run `run-murwcaj0-40e56557` (J1): a press repeated over a listing is given each kept row, which replaces the
+// card it was built on, so Core leaves that card out of what it tells the judge the step acts on. Core names no web
+// key (AGENTS.md), so the runtime declares which key holds the card, as it declares `deniedEvidenceKeys`.
+test("the runtime declares to Core the key a handle's card travels under, and it is the key the identity writes", async () => {
+  const runtime = runtimeOver(CHOOSER_OPEN);
+  assert.deepEqual(runtime.rowContextKeys, ["record"]);
+  await inspect(runtime);
+  const clicked = await clickParameters(runtime, handleWithin(CHOOSER_OPEN, CARD_WORDS.millbrookSupercenter));
+  const context = (clicked.element as JsonObject | undefined)?.context as JsonObject | undefined;
+  const carried = Object.keys(context ?? {}).filter((key) => runtime.rowContextKeys.includes(key));
+  assert.deepEqual(carried, ["record"], "the declared key is the one the card travels under, and nothing else in the context is");
+});
+
 test("the chooser's chip sits in no card and carries no record", async () => {
   const runtime = runtimeOver(CHOOSER_OPEN);
   await inspect(runtime);

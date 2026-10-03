@@ -17,6 +17,8 @@ export {
   type WebPlanNodeResolution,
   type WebPlanNodeResolutionInput
 } from "./resolve-plan-node";
+// The key a step's argument carries its row under, declared to Core (`rowContextKeys`).
+export { WEB_LLM_ROW_CONTEXT_KEYS } from "./row-context-keys";
 // What a step says its own action would lastingly do, and Core's answer.
 export {
   WEB_PLAN_STEP_ISSUE_CODES,
