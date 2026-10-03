@@ -203,3 +203,127 @@ still show `UU` for the supervisor to add and commit. U = `packages/fluxiq/src/p
 - No full suites, no Lab and no live run.
 - The wider narrow set was not rerun after the one-test fix. Only its directory was.
 - The earlier `service-adaptation` flake noted above was outside this set, and I did not exercise it.
+
+## Stage 2, 2026-10-03
+
+Lead: t254-lead. This stage carries out the supervisor's four decisions on Core b5533c0c. Nothing is staged
+or committed. Three workers ran in parallel, partitioned by file. Their reports are
+`t254-s2-w1-panel-cap.md`, `t254-s2-w2-recovery-pricing.md` and `t254-s2-w3-judge-reserve.md` beside this
+one. I reviewed each diff myself before relying on it. R = `packages/fluxiq/src/programs/automation-studio/runtime`.
+
+### Decisions as implemented
+
+1. **No output cap anywhere** (W1). `R/llm/deepseek/panel-command.ts` no longer sends `max_tokens`. The
+   600 constant is gone; its only use was the request body, so no reserve was needed in its place. A test
+   asserts that the body has no `max_tokens`, and that a 5,000-token reply is accepted and charged.
+   `grep -rnE 'max_tokens\s*:|"max_tokens"|max_completion_tokens'` over `packages/fluxiq/src`, excluding
+   tests, finds nothing (exit 1).
+2. **Recovery prices at the billed rate** (W2). `R/recovery/annotation/run-budget.ts` takes an optional
+   `now` clock (default `Date.now`). It prices its worst-case reservation through the one shared
+   `estimateAutomationStudioDeepSeekCostUsd(…, atMs)`, at the rate in force, all input uncached, as the
+   purse does. Recovery's charges already came from the provider's send-time, cached-input cost. W2's
+   search of src found nothing else priced at peak. One comment in `R/llm/harness/provider.ts` was fixed.
+   Caveat: a recovery resolved off-peak that runs on into a peak window reserves at half the rate. The
+   ledger records that as a breach rather than refusing the call.
+3. **Judge overshoot in the accounting** (W3). The judge call in `phases.ts` is now `judgeAccounted`. It
+   reads the purse's `breaches` and `overshootUsd` across the judge's calls and adds them to the build's
+   `budgetBreaches` and `budgetOvershootUsd` beside the verdict's spend. Test:
+   `U/tests/judge-overshoot.test.ts` (accounting equals the purse's charged figures).
+4. **The judging reserve is spent, never left** (W3). A round that ends `budget`/`cost` with
+   `costRefusal.keptBackUsd > 0`, with a purse and a judge, now has its Flow so far tested from its start.
+   The service hands that test to the judge (`build-judge.ts` `judgedTest()`). It is then checked by the
+   new `acceptStopped`, which is the service's completion check and makes the draft the plan to build. The
+   judge then rules on it through the new `U/reserve-judging.ts`.
+   - A yes about that Flow's signature (the t244 rule) finishes the build.
+   - Any other answer ends `budget_exhausted` at cost. The message carries the judge's finding and advice,
+     the reserve's spend (`judgedUsd`) and "kept as a draft". It never says "not doable", because the cost
+     ending returns before the not-doable check.
+   - An empty or unreplayable draft, an unclean test, or a refused completion check is not judged, and the
+     build ends at cost as before.
+
+   Tests: `U/tests/reserve-judging.test.ts`; `judged-build.test.ts` (2 end-to-end service cases);
+   `build-judge.test.ts`. murzln6g at peak now leads to judging the draft
+   (`murzln6g-repair-funding.test.ts`, 3 tests). The architecture doc `llm-flow-bootstrap.md` is updated.
+
+**Open for the supervisor (from W3):** at peak, murzln6g now re-judges a seed that round 0 already judged
+no (about $0.003). A cheaper rule would end at cost with the earlier findings when the Flow's signature is
+unchanged. I left it as the decision states it: the reserve is spent judging the Flow as it stands.
+
+### Checks (Core tree unless noted)
+
+- Wider narrow vitest, one run through heavy.sh, over llm/{harness, build-purse, tests, deepseek,
+  evidence-loop, step-log, domain-instructions}, flow-bootstrap (all of it), tests/service-bootstrap,
+  tests/recovery-default-limits.test.ts, result-verification, recovery (all of it), conversations,
+  activity, flow-draft and service/flow-bootstrap-commands: **316 files, 3,447 tests passed**. This
+  includes `murzln6g-repair-funding.test.ts` (3).
+- `pnpm --filter fluxiq check`: exit 0.
+- `node scripts/structure-audit.mjs`: "passed (234 warning(s), 349 baselined)". No entry was lowerable, so
+  the baseline was not touched.
+- `node scripts/docs-reference.mjs --check` first reported "stale", because of the new public
+  declarations. I regenerated it ("3040 public declarations"), and `--check` then said "current".
+- Core libraries, through heavy.sh (`cli.mjs contracts:build fluxiq:build client-gateway-websocket:build`):
+  exit 0, with fluxiq rebuilt. Downstream `core-build.mjs` says "current with its source".
+- Downstream tree: `pnpm --filter @fluxiq-web-extension/domain check`: exit 0.
+
+### Not verified
+
+- No live or Lab run, and no full suites.
+- No live DeepSeek panel call.
+- How a real web domain's test of the Flow so far behaves when the judging reserve stops a round.
+- No test runs `annotate.ts` at an off-peak wall clock.
+
+## Stage 3, 2026-10-03
+
+Lead: t254-lead. Two rules settle the stage 2 notes. Nothing is staged or committed. The worker reports are
+`t254-s3-w1-unchanged-not-rejudged.md` and `t254-s3-w2-recovery-per-call-price.md`. I reviewed both diffs.
+R = `packages/fluxiq/src/programs/automation-studio/runtime`; U = `R/flow-bootstrap/unfinished-build`.
+
+1. **No re-judging an unchanged Flow** (W1; `U/phases.ts`, `U/budget-exhausted.ts`).
+   - "Unchanged" means the stopped round's repair seed has the same Flow signature as the test the last
+     `no` judged. That is the verdict's own `flowSignature`, or else that finished round's Flow. It is the
+     comparison `unchanged-complete.ts` already makes. The replay signature was not used, because it leaves
+     out routing.
+   - An unchanged draft runs no test and no judge call. It ends `budget_exhausted` at cost with that
+     judge's findings and advice and "kept as a draft". The message says the reserve "was not spent,
+     because the Flow was unchanged since the judge said it does not do what was asked". It is never "not
+     doable", even when that judge said the result can no longer be had.
+   - A changed draft is tested and judged as in stage 2.
+   - The chat announcement for this case is W1's wording.
+   - Tests: `U/tests/reserve-unchanged.test.ts` (6 cases), and the stage 2 `reserve-judging.test.ts` (5,
+     unchanged). murzln6g at peak now ends at cost with round 0's finding, with no test and no second judge
+     call.
+   - **Open:** only a `no` from a judge in this build counts. An extend or continued-draft build whose Flow
+     an earlier build's judge rejected is still re-judged. Covering that needs `R/service.ts` to pass the
+     earlier verdict in.
+2. **Recovery prices each call when it is made** (W2; `R/recovery/annotation/{run-budget,annotate,exploration}.ts`).
+   - The budget gains `maxEstimatedCostUsdPerCallAt(atMs?)`: the same bounded expression, with the
+     worst-case term priced through the shared `estimateAutomationStudioDeepSeekCostUsd(…, atMs)` at call
+     time.
+   - `annotate.ts` reads it for the diagnosis, re-plan and patch calls, and for the patch-reserve hold.
+     Exploration takes a function and reads it once per decision.
+   - The reservation itself is taken in `R/llm/harness/run.ts`, as the lower of that ceiling and the
+     provider's price at that moment. run.ts was unchanged.
+   - Tests in `run-budget.test.ts` and `exploration.test.ts`: a budget resolved off-peak gives the peak rate
+     for a call at peak, and in the ledger, 0 breaches at the call-time figure against 1 at the old figure.
+   - **Notes:** the resolve-time `maxEstimatedCostUsdPerCall` stays only because
+     `R/tests/recovery-default-limits.test.ts` reads it. The patch-reserve hold is priced when exploration
+     starts; the patch call reserves at its own time.
+
+### Checks (Core tree unless noted)
+
+- `npx vitest run` over U, R/recovery, R/service/flow-bootstrap-commands, R/tests/service-bootstrap,
+  R/tests/recovery-default-limits.test.ts and R/llm/harness, through heavy.sh: **124 files, 1,075 tests
+  passed**. This includes murzln6g-repair-funding (3) and reserve-unchanged (6).
+- `pnpm --filter fluxiq check`: exit 0.
+- `node scripts/structure-audit.mjs`: "passed (234 warning(s), 349 baselined)".
+- `node scripts/docs-reference.mjs --check` first reported "stale", because of the new budget member. I
+  regenerated it, and the check then said "current".
+- Core libraries rebuilt (`cli.mjs contracts:build fluxiq:build client-gateway-websocket:build`, exit 0;
+  `core-build.mjs` says "current").
+- Downstream `pnpm --filter @fluxiq-web-extension/domain check`: exit 0.
+
+### Not verified
+
+- No live or Lab run, and no full suites.
+- No service-level test of the unchanged-draft path.
+- No annotate-level test crosses a peak boundary.
