@@ -47,7 +47,12 @@ export async function readHarnessRecovery(
 ): Promise<RunHarnessRecovery> {
   if (!recoveryRecorded(runDetail)) return conforming({ attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [], ...recoveryRefusal(runDetail), ...refutedResultRoute(runDetail) });
   const detail = await control.getRunDetail(scope.projectId, scope.runId, bounds);
-  const interventions = (detail.interventions ?? []).map((item) => ({ kind: item.kind, validationOk: item.validationOk ?? null, validationCodes: [...(item.validationCodes ?? [])] }));
+  // Core's result checks are filed as interventions too, marked by their source; the parser drops the mark, so it is read from the raw detail by id.
+  const checkIds = resultCheckInterventionIds(runDetail);
+  const parsed = detail.interventions ?? [];
+  const reduced = (item: (typeof parsed)[number]) => ({ kind: item.kind, validationOk: item.validationOk ?? null, validationCodes: [...(item.validationCodes ?? [])] });
+  const interventions = parsed.filter((item) => !checkIds.has(item.interventionId)).map(reduced);
+  const resultChecks = parsed.filter((item) => checkIds.has(item.interventionId)).map(reduced);
   const refusals = targetOverrideRefusalCases(runDetail);
   const runtimePatchAttempts = (detail.runtimePatchAttempts ?? []).map((attempt, index): RunHarnessPatchAttempt => ({
     kind: attempt.kind ?? null,
@@ -72,7 +77,35 @@ export async function readHarnessRecovery(
   // produced something, because then the lists are the answer.
   const produced = runtimePatchAttempts.length + adaptationIds.length + changeProposalIds.length > 0;
   const contextSections = recoveryContextSections(runDetail);
-  return conforming({ attempted, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, ...(produced ? { refusalCode: null, refusalRung: null } : recoveryRefusal(runDetail)), ...(contextSections !== undefined ? { contextSections } : {}), ...refutedResultRoute(runDetail) });
+  return conforming({ attempted, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, ...(produced ? { refusalCode: null, refusalRung: null } : recoveryRefusal(runDetail)), ...(contextSections !== undefined ? { contextSections } : {}), ...refutedResultRoute(runDetail), ...(resultChecks.length > 0 ? { resultChecks } : {}) });
+}
+
+/** The source Core marks a post-run result check's intervention with (`result-verification/verify.ts`). */
+const RESULT_CHECK_SOURCE = "verifyAutomationStudioRunResult";
+
+/**
+ * The ids of the interventions that were Core's result checks, not recovery.
+ * Core files each check as a run intervention whose `metadata.source` names
+ * the verifier; the control client's parser keeps `kind` and drops the
+ * source, so read alone, two checks of a run that needed no recovery were
+ * published as two diagnoses (run-murwd8le-79e735a8, Cause 12).
+ */
+function resultCheckInterventionIds(runDetail: Readonly<Record<string, unknown>>): Set<string> {
+  const ids = new Set<string>();
+  if (!Array.isArray(runDetail.interventions)) return ids;
+  for (const item of runDetail.interventions) {
+    const intervention = plainRecord(item);
+    if (typeof intervention?.interventionId === "string" && isResultCheckIntervention(intervention)) ids.add(intervention.interventionId);
+  }
+  return ids;
+}
+
+/**
+ * Whether one run intervention was Core's post-run result check rather than
+ * the harness acting: a check, never a recovery or a harness activation.
+ */
+export function isResultCheckIntervention(item: unknown): boolean {
+  return plainRecord(plainRecord(item)?.metadata)?.source === RESULT_CHECK_SOURCE;
 }
 
 /**

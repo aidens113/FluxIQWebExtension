@@ -7,6 +7,7 @@ import test from "node:test";
 
 import type { FluxIQSettings } from "../../shared/protocol";
 import { FluxIQConnection } from "../connection";
+import { OverlayTarget } from "../activity/index";
 
 const settings: FluxIQSettings = {
   gatewayUrl: "ws://127.0.0.1:4777/client",
@@ -32,4 +33,12 @@ test("no stored token is not paired", () => {
   const fresh = new FluxIQConnection(settings, { clientId: "client-1" });
   assert.equal(fresh.status().paired, false);
   assert.equal(fresh.isPaired(), false);
+});
+
+/** t174-w86 note 1: the overlay is drawn on every tab in front, so the relay asks the overlay target for all of them. */
+test("the activity relay draws the overlay on the tabs the overlay target resolves", async (t) => {
+  t.mock.method(OverlayTarget.prototype, "resolveAll", async () => [7, 9]);
+  const connection = new FluxIQConnection(settings, { clientId: "client-1" });
+  const deps = (connection as unknown as { activity: { deps: { overlayTabIds?: () => Promise<readonly number[]> } } }).activity.deps;
+  assert.deepEqual(await deps.overlayTabIds?.(), [7, 9]);
 });

@@ -268,3 +268,54 @@ test("a build stopped by a provider outage stops working at once and says why", 
   assert.equal(last.display.outcome, "failed");
   assert.equal(last.display.working, false);
 });
+
+// D7 of the t174 UI review of run-murwd8le-79e735a8: after the person pressed
+// Continue on the robot check, the overlay still said "Waiting for you", and
+// the status repeated the answer ("You pressed Continue.") that the thread's
+// card and the ask already said.
+test("the person answers the check: the waiting headline goes at once, and the answer is not echoed as the status", () => {
+  const h = harness();
+  h.pacer.accept(event({ phase: "thinking", label: "Deciding the next step" }));
+  h.clock.advance(100);
+  const check = { kind: "tool" as const, title: "Using core.run_node", status: "succeeded" as const, ref: "core.run_node", text: "Result: web.intervention.required" };
+  h.pacer.accept(event({ phase: "exploring", label: "Using core.run_node: web.intervention.required", detail: check }));
+  h.clock.advance(100);
+  const ask = "FluxIQ needs you: complete the check on this page, then press Continue.";
+  h.pacer.accept(event({ phase: "waiting_permission", label: ask, detail: { kind: "ask", title: "Robot check", status: "started", ref: "ask-1" } }));
+  assert.equal(h.pacer.display()?.outcome, "waiting");
+  h.clock.advance(100);
+  h.pacer.accept(event({ phase: "repairing", label: "You pressed Continue.", detail: { kind: "ask", title: "Robot check", text: "You pressed Continue.", status: "succeeded", ref: "ask-1", resolution: "answered" } }));
+  const answered = h.shown.at(-1)!;
+  assert.equal(answered.at, 1_300, "at once, inside the detail interval");
+  assert.deepEqual([answered.display.outcome, answered.display.working, answered.display.headline], [null, true, "Fixing your Flow"], "working again, not waiting");
+  assert.equal(answered.display.detail, null, "the answer is said once, by the thread, not again as the status");
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h.pacer.accept(event({ phase: "thinking", label: "Deciding the next step" }));
+  assert.deepEqual([h.pacer.display()?.headline, h.pacer.display()?.outcome], ["Fixing your Flow", null], "the check the person completed no longer holds the headline");
+});
+
+// D10 (step 0068): the chat already said "Judging the Flow" while the status
+// still said the last dry-run step "— done".
+test("a new stage Core announces replaces a finished step's sentence at once", () => {
+  const h = harness();
+  h.pacer.accept(event({ phase: "verifying", label: "Trying the Flow from the start: clicking “Add to cart”", detail: { kind: "tool", title: "Trying the Flow from the start: clicking “Add to cart”", status: "started", ref: "core.run_node" } }));
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS + 500);
+  h.pacer.accept(event({ phase: "verifying", label: "Trying the Flow from the start: clicking “Add to cart” — done", detail: { kind: "tool", title: "Trying the Flow from the start: clicking “Add to cart”", status: "succeeded", ref: "core.run_node", text: "Result: core.replay.replayed" } }));
+  h.clock.advance(10);
+  h.pacer.accept(event({ phase: "verifying", label: "Judging the Flow", detail: { kind: "note", title: "Judging the Flow", text: "The Flow was tested from its start. Judging what the test did against what you asked." } }));
+  assert.equal(h.pacer.display()?.detail, "Judging the Flow", "the newest stage, not the step that finished before it");
+});
+
+// D10 (screenshot 00015): during the cross-check after a passed result check
+// the overlay still said "Fixing your Flow".
+test("a repaired build whose result check passes is no longer headed as a repair", () => {
+  const h = harness();
+  h.pacer.accept(event({ phase: "repairing", label: "Repairing the Flow: the result check refuted its answer (attempt 1 of 2)" }));
+  assert.equal(h.pacer.display()?.headline, "Fixing your Flow");
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h.pacer.accept(event({ phase: "verifying", label: "The result answers the request", detail: { kind: "check", title: "Result check", status: "succeeded", text: "The model judged that the result answers the request." } }));
+  assert.equal(h.pacer.display()?.headline, "Building your Flow");
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h.pacer.accept(event({ phase: "verifying", label: "Couldn't confirm the result answers the request", detail: { kind: "check", title: "Result check", status: "failed" } }));
+  assert.equal(h.pacer.display()?.headline, "Building your Flow", "a failed check alone does not start a repair; Core's repairing event does");
+});

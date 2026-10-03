@@ -61,6 +61,17 @@ test("browser pages, blank tabs and closed tabs are never targets; a closed driv
   assert.equal(await resolver.resolve(), 2, "tab 9 was forgotten when it could not be read");
 });
 
+// Moment 8 and screenshot 00013 of the run-murwd8le-79e735a8 UI review: the
+// test ran in the scenario tab while a result it opened was in front.
+test("every target: the driven tab, and the focused window's front tab when it is another drawable page", async () => {
+  const ITEM = "http://127.0.0.1:51000/scenarios/company-website/item/1";
+  const resolver = target({ 2: SCENARIO, 4: ITEM, 1: EXTENSION }, { driven: () => 2, active: () => 2, activeTabs: [{ id: 4, url: ITEM }, { id: 1, url: EXTENSION }] });
+  assert.deepEqual(await resolver.resolveAll(), [2, 4]);
+  assert.deepEqual(await target({ 2: SCENARIO, 1: EXTENSION }, { driven: () => 2, activeTabs: [{ id: 1, url: EXTENSION }] }).resolveAll(), [2], "an extension page in front gets no overlay");
+  assert.deepEqual(await target({ 2: SCENARIO }, { driven: () => 2, activeTabs: [{ id: 2, url: SCENARIO }] }).resolveAll(), [2], "the driven tab in front is one target");
+  assert.deepEqual(await target({ 3: PANEL }, { activeTabs: [{ id: 3, url: PANEL }] }).resolveAll(), [], "FluxIQ's own panel never");
+});
+
 test("no drawable tab anywhere: no target", async () => {
   assert.equal(await target({ 1: EXTENSION }, { active: () => 1, activeTabs: [{ id: 1, url: EXTENSION }] }).resolve(), undefined);
 });

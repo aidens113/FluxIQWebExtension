@@ -23,6 +23,16 @@
 //
 // The rules:
 //
+// 0. **The left side first, whatever it covers.** The side panel opens on the
+//    right, and in the Lab's emulated viewport it covers the right 400 pixels
+//    of the page without narrowing it (t191 round 1), so a pill on the right
+//    can sit wholly under it: screenshot 00004 of the run-murwd8le-79e735a8 UI
+//    review, where a sticky category column on the left sent the pill to the
+//    right midpoint, out of sight. The status must be readable whether the
+//    panel is open or not, so the rules below choose among the left corners
+//    and the left midpoint only; the right side is searched as well only when
+//    every place on the left, full pill or narrow, lies wholly on fixed parts
+//    of the page (a left rail from top to bottom).
 // 1. A corner is **busy** when any sampled point of the pill's box there lies
 //    on a fixed or sticky part of the page. Ordinary content scrolls away from
 //    under the pill, so it only breaks ties: among clear corners the one over
@@ -72,27 +82,47 @@ const SAMPLE_STEP = 36;
 /** Points are sampled this far inside the box's edge, where a neighbour's anti-aliased border cannot count. */
 const SAMPLE_INSET = 2;
 
-type Cost = { readonly fixed: number; readonly controls: number };
+/** The places on the left side, where the side panel never covers the pill (rule 0). */
+const LEFT_CORNERS: readonly OverlayAnchor[] = ["bottom-left", "top-left"];
+const LEFT_ANCHORS: readonly OverlayAnchor[] = ["bottom-left", "top-left", "left"];
+
+type Cost = { readonly fixed: number; readonly controls: number; readonly points: number };
 
 /** The placement for `input`: a clear corner, the corner already held, or the least-busy place. Always a pill with its words. */
 export function choosePlacement(input: PlacementInput): OverlayPlacement {
+  return leftSideFixed(input) ? placeAmong(input, CORNERS, FALLBACK_ANCHORS) : placeAmong(input, LEFT_CORNERS, LEFT_ANCHORS);
+}
+
+/** Rules 1 to 3 over `corners` and, when every one of them is busy, `places`. */
+function placeAmong(input: PlacementInput, corners: readonly OverlayAnchor[], places: readonly OverlayAnchor[]): OverlayPlacement {
   const { current } = input;
-  if (current?.shape === "pill" && CORNERS.includes(current.anchor) && costAt(input, current.anchor, input.box).fixed === 0) return current;
+  if (current?.shape === "pill" && corners.includes(current.anchor) && costAt(input, current.anchor, input.box).fixed === 0) return current;
   let best: { anchor: OverlayAnchor; controls: number } | undefined;
-  for (const anchor of CORNERS) {
+  for (const anchor of corners) {
     const cost = costAt(input, anchor, input.box);
     if (cost.fixed > 0) continue;
     if (!best || cost.controls < best.controls) best = { anchor, controls: cost.controls };
   }
   if (best) return { shape: "pill", anchor: best.anchor };
-  return leastBusy(input);
+  return leastBusy(input, places);
+}
+
+/** Rule 0: every place on the left, full or narrow, lies wholly on fixed parts of the page. Stops at the first that does not. */
+function leftSideFixed(input: PlacementInput): boolean {
+  for (const shape of ["pill", "narrow"] as const) {
+    for (const anchor of LEFT_ANCHORS) {
+      const cost = costAt(input, anchor, shape === "pill" ? input.box : input.narrow);
+      if (cost.fixed < cost.points) return false;
+    }
+  }
+  return true;
 }
 
 /** Rule 3: every corner is busy, so the place and width that cover the least, the words kept. */
-function leastBusy(input: PlacementInput): OverlayPlacement {
+function leastBusy(input: PlacementInput, places: readonly OverlayAnchor[]): OverlayPlacement {
   const { current } = input;
   let chosen: { placement: OverlayPlacement; rank: readonly number[] } | undefined;
-  for (const anchor of FALLBACK_ANCHORS) {
+  for (const anchor of places) {
     for (const shape of ["pill", "narrow"] as const) {
       const cost = costAt(input, anchor, shape === "pill" ? input.box : input.narrow);
       const held = current?.shape === shape && current.anchor === anchor ? 0 : 1;
@@ -125,14 +155,16 @@ function costAt(input: PlacementInput, anchor: OverlayAnchor, size: PlacementInp
   const rect = rectAt(input, anchor, size);
   let fixed = 0;
   let controls = 0;
+  let points = 0;
   for (const x of samples(rect.left, rect.right)) {
     for (const y of samples(rect.top, rect.bottom)) {
+      points += 1;
       const cover = input.probe(x, y);
       if (cover === "fixed") fixed += 1;
       else if (cover === "control") controls += 1;
     }
   }
-  return { fixed, controls };
+  return { fixed, controls, points };
 }
 
 /** Evenly spaced points from `start` to `end`, both edges included, at most `SAMPLE_STEP` apart. */

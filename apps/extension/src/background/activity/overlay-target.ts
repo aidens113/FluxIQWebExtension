@@ -61,6 +61,23 @@ export class OverlayTarget {
     return undefined;
   }
 
+  /**
+   * Every tab to draw in now: the one `resolve` names, then the focused
+   * window's front tab when it is another drawable page. The automation can
+   * drive one tab while the person looks at another -- a Flow's test replaying
+   * in the scenario tab while a result it opened in a new tab is in front
+   * (screenshot 00013 of the run-murwd8le-79e735a8 UI review) -- and the
+   * status belongs on the page the person is looking at, as well as on the
+   * page being worked.
+   */
+  async resolveAll(): Promise<number[]> {
+    const primary = await this.resolve();
+    const targets = primary === undefined ? [] : [primary];
+    const front = (await this.deps.activeTabs())[0];
+    if (front?.id !== undefined && front.id !== primary && isDrawable(front.url, ownOriginSet(this.deps.ownOrigins()))) targets.push(front.id);
+    return targets;
+  }
+
   private async drawable(tabId: number, own: ReadonlySet<string>): Promise<boolean> {
     try {
       return isDrawable(await this.deps.tabUrl(tabId), own);

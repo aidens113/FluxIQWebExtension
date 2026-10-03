@@ -118,6 +118,17 @@ export type RunHarnessRecovery = {
    * `null` and absent mean what they mean for `resultReauthor`.
    */
   resultRepair?: RunHarnessResultRepair | null;
+  /**
+   * Core's post-run result checks, in Core's order: the interventions it files
+   * with `metadata.source: verifyAutomationStudioRunResult`
+   * (`result-verification/verify.ts`). They judge the run's answer; they are
+   * not recovery, so they are kept out of `interventions` and out of
+   * `attempted`. Read with `interventions` alone, a run that needed no
+   * recovery and was checked twice published two diagnoses and
+   * `attempted: true` (run-murwd8le-79e735a8). **Absent** when Core filed no
+   * check, and in a record written before the member existed.
+   */
+  resultChecks?: RunHarnessIntervention[];
 };
 
 /**

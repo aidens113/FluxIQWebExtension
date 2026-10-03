@@ -23,7 +23,11 @@
 //   step count cannot change faster than the words beside them.
 // - A settling event -- `final`, `failed` or waiting for the person -- changes
 //   the headline or the outcome, so it skips the wait and replaces anything
-//   still waiting.
+//   still waiting. So does a new stage Core announces ("Judging the Flow", a
+//   result check's verdict, the person's answer ending a wait): the status
+//   follows the newest stage, never the step that finished before it.
+// - The person's answer to a wait is not repeated as the detail: the thread
+//   already says it.
 //
 // Pure apart from the injected clock: no browser API, no network.
 
@@ -40,6 +44,12 @@ const MAX_DETAIL = 160;
 
 /** The detail under "Waiting for you: finish the check on the page", in place of the page action's own outcome. */
 const CHECK_DETAIL = "Only a person can get past this page";
+
+/** How a wait ends when the person settled it themselves (Core's `ClientGatewayActivityResolution`). */
+const PERSON_RESOLUTIONS: ReadonlySet<string> = new Set(["answered", "allowed", "declined"]);
+
+/** Core's title on the result check's verdict row (`result-verification/verify.ts`). */
+const RESULT_CHECK_TITLE = "Result check";
 
 export type ActivityPacerOptions = {
   readonly clock: ActivityClock;
@@ -69,7 +79,7 @@ export class ActivityPacer {
   accept(event: ClientGatewayActivity): void {
     const now = this.options.clock.now();
     const next = displayFor(event, this.shown, this.situation.observe(event));
-    if (this.showsAtOnce(next) || now - this.detailChangedAt >= this.intervalMs) {
+    if (this.showsAtOnce(next) || opensStage(event) || now - this.detailChangedAt >= this.intervalMs) {
       this.cancelPending();
       this.show(next, now);
       return;
@@ -120,7 +130,9 @@ function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | nu
     repairing: unit.repairing,
     waitingOn: event.phase === "waiting_permission" ? "answer" : "check"
   });
-  const detail = bounded(unit.checkReportedNow ? CHECK_DETAIL : activityWording(event).sentence);
+  // The person's own answer is said in the thread (the ask and its card); as
+  // the status it would be the third telling of one press (D7).
+  const detail = personAnswered(event) ? null : bounded(unit.checkReportedNow ? CHECK_DETAIL : activityWording(event).sentence);
   const sameUnit = previous !== null && previous.activityId === event.activityId;
   // A run's step events carry the step; the events between them ("Run
   // started", a note) keep the step last said, so the count does not blink out.
@@ -136,6 +148,32 @@ function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | nu
     outcome,
     sequence: event.sequence
   };
+}
+
+/** Core's row closing a wait with what the person did: pressed Continue or Stop, answered, allowed or refused. */
+function personAnswered(event: ClientGatewayActivity): boolean {
+  const detail = event.detail;
+  if (detail?.kind !== "ask" || (detail.status !== "succeeded" && detail.status !== "failed")) return false;
+  return detail.resolution === undefined ? detail.status === "succeeded" : PERSON_RESOLUTIONS.has(detail.resolution);
+}
+
+/**
+ * Core announcing a new stage of the work -- "Judging the Flow", a result
+ * check's verdict, the end of a wait on the person -- rather than one more
+ * step inside it. A stage comes a few times a unit, so it is never what makes
+ * the status flicker, and a person reading the step that finished before it
+ * would be reading what FluxIQ is no longer doing (D10: the status said
+ * "clicking “Add to cart” — done" while the chat said "Judging the Flow").
+ * A `note` with a tool id is Core's bookkeeping, not a stage, and the
+ * completion check's rows, which open and close inside a build's step loop,
+ * are paced like the steps around them.
+ */
+function opensStage(event: ClientGatewayActivity): boolean {
+  const detail = event.detail;
+  if (!detail) return false;
+  if (detail.kind === "note") return !detail.ref;
+  if (detail.kind === "check") return detail.title === RESULT_CHECK_TITLE && detail.status !== "started";
+  return personAnswered(event);
 }
 
 function outcomeOf(event: ClientGatewayActivity): ActivityDisplay["outcome"] {
