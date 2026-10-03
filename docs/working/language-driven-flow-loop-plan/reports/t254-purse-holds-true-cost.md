@@ -147,3 +147,59 @@ New files:
   the reserves from the leaf `llm/build-purse` barrel.
 - The ceiling can now be crossed by the part of one reply beyond its reserve, which the user accepted. It
   is recorded as a breach with an overshoot amount.
+
+## Merge of lane B, 2026-10-03
+
+Lead: t254-lead, stage "merge". The supervisor ran `git merge --no-ff task/t193-live-self-repair` in both trees.
+Downstream merged cleanly. Core had five conflicted files. I resolved them all, and nothing is staged: they
+still show `UU` for the supervisor to add and commit. U = `packages/fluxiq/src/programs/automation-studio/runtime/flow-bootstrap/unfinished-build`.
+
+### Resolution decisions
+
+- `U/phases.ts`: kept lane B's `judgedFixNamed`, which line 444's no-progress rule still calls. Dropped
+  `CallHolds`, because t254's `round-funding.ts` replaces it. No other reference to `CallHolds`,
+  `nextRoundHold` or `holds.*Usd` remains under `packages/fluxiq/src`.
+- `U/tests/judged.test.ts`: kept t254's gate sentence ("judging its Flow takes two judge calls held at up to
+  $0.008, and its first decision at least $0.001 more"). Took lane D's "The Flow so far was kept as a draft",
+  which the merged `budget-exhausted.ts` now produces through `kept-said.ts`.
+- `U/tests/repair-rounds.test.ts`: merged the header comment. It keeps t254's gate description and lane D's
+  "ends the build not finished … never \"not doable\" (t195-w37)".
+- Both `framework-reference.md` files: regenerated with `node scripts/docs-reference.mjs`, not hand-merged.
+- **A semantic conflict git did not flag:** `U/tests/no-progress-ending.test.ts` (lane B, new, auto-merged)
+  failed. Its "opens the one more round only if the purse funds it" case held decisions with no `price` and
+  left $0.02, which was under the old gate's decision-plus-judge at $0.02. Under t254 the purse never learned
+  a rate, so the gate was skipped, and $0.02 funds a round anyway. I restated the case under t254's rule:
+  holds at flash peak with `price`, 750-token reserve, and $0.008 left against a need of $0.0087 (judging
+  pair at the unpriced allowance 2 × $0.0039, plus the $0.0009 decision floor). Lane B's intent is kept: the
+  extra round after a named fix still needs funding. The case also asserts the gate sentence.
+- `.structure-baseline.json`: lowered by `pnpm structure:baseline`, because the audit reported a lowerable
+  entry (`runtime/service.ts` file-lines 4419 -> 4418; 1 lowered, 0 removed).
+
+### Checks (Core tree unless noted)
+
+- `node scripts/docs-reference.mjs`: "Wrote … (3036 public declarations)". Then `--check`: "Deterministic
+  framework reference is current." No conflict markers remain in either file.
+- Combined narrow vitest, one run through heavy.sh: `npx vitest run` over llm/{harness, build-purse, tests,
+  deepseek, evidence-loop, step-log, domain-instructions}, flow-bootstrap/{unfinished-build,
+  generation-failure, instructed-acts, authoring}, tests/service-bootstrap, tests/recovery-default-limits.test.ts,
+  result-verification, recovery/annotation, conversations, activity and flow-draft. Result before the
+  no-progress fix: 245 files, 2,702 passed and 1 failed (the case above).
+- After the fix, `npx vitest run …/unfinished-build`: 17 files, 129 tests passed. That includes
+  `murzln6g-repair-funding.test.ts` (2) and `no-progress-ending.test.ts` (6). The failure was the only one,
+  and it was in this directory, so I did not rerun the wider set.
+- `pnpm --filter fluxiq check`: exit 0, both before and after the test edit.
+- `node scripts/structure-audit.mjs`: "passed (233 warning(s), 349 baselined)", after the baseline update.
+- `grep -rn max_tokens --include=*.ts` under automation-studio, excluding tests: the only request that
+  sends it is `llm/deepseek/panel-command.ts:113`, the chat panel command, which was already an open
+  supervisor decision. The other hits are comments. The build, judge and repair paths send no `max_tokens`.
+- Core libraries, through heavy.sh: `node scripts/build-cache/cli.mjs contracts:build fluxiq:build
+  client-gateway-websocket:build`. fluxiq was rebuilt in 44.9 s; contracts and client-gateway-websocket
+  were reused from their stamps. Exit 0. Downstream `node scripts/check/core-build.mjs` reports "current
+  with its source".
+- Downstream tree: `pnpm --filter @fluxiq-web-extension/domain check`: exit 0. The purse types compile there.
+
+### Not verified
+
+- No full suites, no Lab and no live run.
+- The wider narrow set was not rerun after the one-test fix. Only its directory was.
+- The earlier `service-adaptation` flake noted above was outside this set, and I did not exercise it.
