@@ -35,6 +35,8 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
   waiting for a judged run; summaries carry `judgedApplication`. Rows indexed before it show it once re-saved.
 - **t257** (downstream `702c7dbc`): the Lab's UI review counts every document change as a page load (old count kept
   as `pageLoadGaps`; murzln6g moment 6: 0 -> 1); samples carry a screened `pageUrl`; pictures carry `takenAt`.
+- **t259** (downstream `955630de`): `flow-lane.json` and `live-llm.json` carry the same settled build and
+  `instructedConsequencesFrom` in every ending, a throwing settlement included (235/235, check 0).
 - Core `880577fc`: the `$0.25` comments in `refuted-result-port.ts` and `repair-authority.ts` name the run ceiling.
 - Session 8d (2026-10-02/03): t244, t246-t250, t253 and lanes A (t174), C (t194), D (t195); see the ledger.
 
@@ -62,8 +64,6 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
   done (316 files / 3,447 tests incl. murzln6g, check 0, no `max_tokens` sent anywhere). Stage 3 (supervisor): an
   unchanged Flow already judged no is not re-judged (ends at cost with those findings); recovery prices each call at
   the rate in force when it is made.
-- **t259** (`fxwork/t259-flow-lane-instructed-consequences`): `flow-lane.json` carries the instruction's consequences
-  from the same settle step as `live-llm.json` (`reports/t259-w1-flow-lane-instructed.md`).
 - **t258** (`fxwork/t258`, Core-paired): `service/datasets/tests/service-wiring.test.ts` "store cannot be opened"
   fails on dev with a pool-closing AggregateError (a return of t207's family); root cause and fix
   (`reports/t258-w1-service-wiring-store.md`).
