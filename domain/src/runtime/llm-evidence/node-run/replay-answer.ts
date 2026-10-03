@@ -19,6 +19,7 @@ import type { WebLlmSnapshotBinding } from "../sanitize";
 import type { WebLlmToolRejectionReason } from "../tool-rejection";
 import { screenedText } from "../withheld";
 import type { WebNodeRun } from "./context";
+import { WEB_NODE_REPLAY_READ_ROWS_NOTE, WEB_NODE_REPLAY_UNFILTERED_ROWS_NOTE } from "./rejected-rows";
 
 /**
  * The closed vocabulary a replay answers in.
@@ -191,7 +192,7 @@ export function webNodeReplayReadSaid(payload: JsonValue | undefined, where: unk
 }
 
 /** What a replayed read names of its rows: Core's member, `readRows` (see `webNodeReplayReadRows`). */
-type WebNodeReplayReadRows = { rows?: JsonObject[] | undefined; leftOutOnlyByThis?: JsonObject[] | undefined };
+type WebNodeReplayReadRows = { rows?: JsonObject[] | undefined; leftOutOnlyByThis?: JsonObject[] | undefined; note?: string | undefined };
 
 /** The rows one condition removed by itself. */
 type WebNodeReplayLeftOut = { condition: string; rows: JsonObject[] };
@@ -222,6 +223,15 @@ const ADDRESS = /^(?:[a-z][a-z\d+.-]*:\/\/|\/)/iu;
  * written withheld (`../withheld.ts`). Every row is named: nothing caps a
  * list (user rule, 2026-09-30: no caps among qualifying rows), as nothing caps
  * the playback judge's `leftOutOnlyByThis`.
+ *
+ * **It says how to read them** (t194 w68, run `run-murwcmx2-a1c6edf7` C-E).
+ * The answer also reaches the model that explores, as `core.run_flow`'s last
+ * step, so the rows a condition removed by itself carry the same check an
+ * explored read's `rejectedRowsNote` asks for (`./rejected-rows.ts`), as
+ * `note`; a read whose conditions kept none says its rows are rows they
+ * rejected. The note only adds a sentence: no row is left out for it. Core's
+ * build-test judge is sent `rows` and `leftOutOnlyByThis` only and has its own
+ * instruction (`AS/runtime/result-verification/build-test/read-rows.ts`).
  */
 export function webNodeReplayReadRows(payload: JsonValue | undefined, where: unknown): JsonObject | undefined {
   const summary = isJsonRecord(payload) ? webAutomationExtractionSummaryValue(payload.extraction) : undefined;
@@ -236,9 +246,14 @@ export function webNodeReplayReadRows(payload: JsonValue | undefined, where: unk
     return alone.length ? [present<WebNodeReplayLeftOut>({ condition: named[index]!, rows: alone }) as unknown as JsonObject] : [];
   });
   if (!rows.length && !leftOut.length) return undefined;
+  const notes = [
+    ...(summary.conditions?.unfiltered && rows.length ? [WEB_NODE_REPLAY_UNFILTERED_ROWS_NOTE] : []),
+    ...(leftOut.length ? [WEB_NODE_REPLAY_READ_ROWS_NOTE] : [])
+  ];
   return present<WebNodeReplayReadRows>({
     rows: rows.length ? rows : undefined,
-    leftOutOnlyByThis: leftOut.length ? leftOut : undefined
+    leftOutOnlyByThis: leftOut.length ? leftOut : undefined,
+    note: notes.length ? notes.join(" ") : undefined
   }) as unknown as JsonObject;
 }
 
