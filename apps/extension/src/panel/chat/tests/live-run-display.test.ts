@@ -8,7 +8,9 @@
 //   the chat's answer;
 // - U-A1: a press the run failed on read "Done" just above "Run failed"
 //   (`run-muq6lqnw-fdfa7aac`);
-// - U-A2: a merge step's card read "Action · the page".
+// - U-A2: a merge step's card read "Action · the page", and later "Join paths";
+//   Core now says no step for a merge and leaves it out of "Step N of M"
+//   (UI-3, `run-murwcmx2-a1c6edf7`), so the run below carries none.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -111,21 +113,20 @@ test("U-B2: a chat-started build's stop is said once, by the chat's answer, and 
   });
 });
 
-/** A run of three steps: a press that worked, a merge, and a press that failed and could not be recovered. */
+/** A run of two steps, as Core says it: a press that worked and a press that failed and could not be recovered. The merge between them has no step and no place in the count. */
 function failedRun(): unknown[] {
   const subject = { kind: "run", id: "r1", projectId: "project-1" };
   const event = (sequence: number, fields: Record<string, unknown>) => ({ activityId: "run:r1", sequence, subject, at: new Date(second(sequence)).toISOString(), ...fields });
   const step = (sequence: number, index: number, node: string, definition: string, label?: string) => event(sequence, {
     phase: "running",
-    label: `Running step ${index} of 4`,
-    step: { index, count: 4, nodeId: node, ...(label === undefined ? {} : { label }) },
-    detail: { kind: "step", title: label ?? `Step ${index} of 4`, status: "started", ref: node, text: `Node: ${definition}` }
+    label: `Running step ${index} of 2`,
+    step: { index, count: 2, nodeId: node, ...(label === undefined ? {} : { label }) },
+    detail: { kind: "step", title: label ?? `Step ${index} of 2`, status: "started", ref: node, text: `Node: ${definition}` }
   });
   return [
     event(1, { phase: "running", label: "Run started", detail: { kind: "note", title: "Run started", status: "started", ref: "r1" } }),
     step(2, 1, "n1", "web.output.dom-click", "Reject all"),
-    step(3, 2, "n2", "builtin.control.merge"),
-    step(4, 3, "n3", "web.output.dom-click", "Set as my store"),
+    step(4, 2, "n3", "web.output.dom-click", "Set as my store"),
     event(5, { phase: "repairing", label: "Recovering from a failed step: Set as my store", detail: { kind: "step", title: "Recovery started", status: "started", ref: "n3" } }),
     event(6, { phase: "repairing", label: "The quick fixes didn't help", detail: { kind: "thought", title: "The quick fixes didn't help", text: "Trying again didn't fix the step.", status: "succeeded", ref: "n3" } }),
     event(7, { phase: "failed", label: "Run failed", detail: { kind: "step", title: "Run failed", status: "failed" }, final: true })
@@ -141,11 +142,11 @@ test("U-A1: the step a run failed on reads as failed, and the steps it moved pas
   });
 });
 
-test("U-A2: a merge step's card says it joined the paths, and names no page", async () => {
+test("U-A2: a run shows a card for each step a person sees, and none for joining paths", async () => {
   await mounted(targetCore([]), failedRun(), (root) => {
-    const merge = cards(root).find((card) => card.name === "Join paths");
-    assert.ok(merge, `a card named for joining the paths, among ${JSON.stringify(cards(root))}`);
-    assert.equal(merge.target, "", "a step on the Flow's paths acted on nothing on the page");
-    assert.equal(cards(root).some((card) => card.name === "Action"), false, "no step reads as a bare Action");
+    const shown = cards(root);
+    assert.equal(shown.some((card) => card.name === "Join paths"), false, `no card for a merge, among ${JSON.stringify(shown)}`);
+    assert.equal(shown.some((card) => card.name === "Action"), false, "no step reads as a bare Action");
+    assert.equal(shown.length, 2, `one card for each of the two steps the count names, among ${JSON.stringify(shown)}`);
   });
 });
