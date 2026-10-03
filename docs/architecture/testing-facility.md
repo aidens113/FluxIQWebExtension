@@ -981,7 +981,7 @@ Three reproduce larger application pages and carry no Week 1 corpus row:
 | `member-directory` | Members dashboard whose table carries generated class names, row action menus, an edit dialog, filters, and a bulk remove behind a confirmation. | Primary, variants `restyled` and `member-left`; `filter-members`, variant `sorted-by-activity`; `remove-invitations`, variant `support-drawer`. |
 | `everything-store` | An everything store (fictional Brightaisle) with class names and ids generated per seed, a consent banner, a delayed app banner and notifications modal, a shadow-DOM chat that opens over the buy box, placeholder results, a results tail that loads on scroll, sponsored cards and a sponsored carousel among results, results repeated across pages, a broken Next, prices written twice, `div` pickers, a buy box dead until hydrated, a Save for later that fails once, and a checkout preset to the store's preferences with a payment iframe. Its defences are a search-form honeypot, a 429 rate limit with `Retry-After`, a soft browser check, and a canvas robot check only a person can pass. | Primary (buy a kettle, the playback goal); `add-to-cart`, variant `redesigned-header` (repair); `first-page-earbuds`, variants `deal-wheel` (new popup) and `robot-check` (a hand-off to the person the Lab plays, required, then the workflow's own table; see [the Lab plays the person at a check](#the-lab-plays-the-person-at-a-check)); `plus-under-fifty`, judged only in the created-Flow lane because no recording can pass it. |
 | `crossborder-marketplace` | Cross-border marketplace (a signed-in buyer in Germany; 50 listings, 19 sellers, four warehouses): consent banner, delayed welcome coupons, notification prompt and flash-deal popup, a chat pill over Add to cart, results drawn as skeletons with lazy cards, paid placements mixed in and results repeated across pages, a broken Next, a "verify you are human" check on every third results page, items opening in a new tab, div-built option pickers, a shadow-root store coupon whose first claim fails, framed description and payment picker, a checkout honeypot, a rate-limited feed, per-seed class hashes, per-load ids, and locale-formatted prices and dates. | Primary (three hubs and a coupon in the cart, judged by playback goal), variants `basket-redesign` (repair task) and `flash-deal`; `spain-hubs` (13-record extraction), variant `list-layout`; `place-order` (consequential purchase that must end in a permission request unless the run is permitted to move money). |
-| `bigbox-retail` | ValueRidge, a fictional big-box retailer: consent dialog, delayed email offer with a honeypot field, support widget and store picker in shadow roots lying over the buttons that matter, per-seed generated classes and ids, ads that repeat listings and ignore filters, prices drawn in pieces, a bot check on the third results page cleared by press-and-hold or waiting, a Next arrow that drops the filters, an Add to cart whose first press only wakes the page, a stale cart badge, a sign-in wall, rate-limited pickup times whose spinner clears only on retry, a cross-origin card frame, and new-tab links. | Primary (pickup cart for another store, playback goal), variant `redesigned-buy-box` (repair); `pickup-towels` (nine listings over two filtered pages), variant `list-layout` (existing-Flow edge case); `pickup-order` (consequential guest order). |
+| `bigbox-retail` | ValueRidge, a fictional big-box retailer: consent dialog, delayed email offer with a honeypot field, support widget and store picker in shadow roots lying over the buttons that matter, per-seed generated classes and ids, ads that repeat listings and ignore filters, prices drawn in pieces, a bot check on the third results page cleared by press-and-hold or waiting, a Next arrow that drops the filters, an Add to cart whose first press only wakes the page, a stale cart badge, a sign-in wall, rate-limited pickup times whose spinner clears only on retry, a cross-origin card frame, and new-tab links. | Primary (pickup cart for another store, playback goal), variant `redesigned-buy-box` (repair); variant `store-remembered` (step already done: the site remembers Millbrook, so `choose-millbrook` has no target and the page already shows its result); `pickup-towels` (nine listings over two filtered pages), variant `list-layout` (existing-Flow edge case); `pickup-order` (consequential guest order). |
 | `job-board` | Job board (Rolefinch) whose Apply hands off to an applicant-tracking site (Talentloom): a shadow-DOM consent wall, a delayed job-alert offer, a chat panel that opens over the job pane, a sign-in wall from the fourth job opened, sponsored cards that ignore filters and repeat real results, a fresh posting that shifts pagination between pages, a broken Next, a rate limiter with retry-after, a first save that fails, a pane that stalls until Retry, a stale badge, salaries in several formats and currencies, seed-rotated classes and ids, and a cross-origin application form in a new tab with a US-first location lookup, a pre-ticked talent pool, a honeypot and a person check. Only four oracle read-outs carry test ids. | Primary (save a week of one employer's jobs), variant `overflow-save`; `remote-rust-roles`, variant `no-exact-matches`; `apply-remote-rust-role`, variant `posting-closed` (expected failure `target_not_found`). |
 | `local-classifieds` | Kerbfind Marketplace, a fictional local-classifieds site in the style of the big social-network marketplaces: a cookie dialog that owns the page, a timed notification prompt, a chat window over Make offer, infinite scroll whose one failing batch loads only on Try again, adverts built from the listing card, a listing sent twice across batches, results outside the search straight after the real ones, a shadow-DOM radius picker whose Apply needs a second press, stale counts, a "checking your browser" pause, a contact rate limit, an offer-form honeypot, a cross-origin map frame, and per-seed atomic class names and ids. | Primary (a consequential offer), `bike-search`, variants `list-layout` and `location-check`; `save-dining-tables`, variant `moved-save`. |
 | `auction-marketplace` | Auction marketplace (Hammerline, film cameras) built to be hard: consent banner, delayed app promotion, a chat greeting over the bid button, a bot check on the fourth results page, a watch rate limit and a bid-form honeypot; skeleton cards, per-seed class hashes, per-page ids, advertisements in the results, pages overlapping by two, a Next arrow stuck on page two, a sort button that ignores its first press, a Condition filter that drops the buying format; prices in GBP, EUR (`EUR 1.165,00`) and USD beside a pound estimate; a cross-origin description frame, shadow-DOM watch hearts, new-tab links, a variation picker and div buttons; lookalike 35S/Mark II/350 listings, mislabelled item specifics and duplicate titles. | Primary: a consequential bid, playback goal (needs `--llm-permit move_money`). `watch-endings` (state change read back), variant `watch-redesign` (repair). `kestrel-auctions` (extraction), variants `grid-view` and `feedback-survey` (existing Flow). |
@@ -2837,6 +2837,8 @@ lab-runs/
       NNNN-<kind>/              a model step: decide, judge, repair, chat, ...
       NNNN-tool-<toolId>/       a tool call in the build loop
       NNNN-test-<toolId>/       a test replay of the build
+      NNNN-run-<actionType>/    a created Flow's playback command, written after Core stops
+      NNNN-run-skipped/         a playback step skipped without dispatching a command
         meta.json               written last: a folder holding it is complete
         screenshot.jpg|png      the Lab's picture of the browser after the step,
         screenshot.skipped.txt  or why there is none
@@ -2891,6 +2893,33 @@ How a run fills it:
    gets the verdict, `costUsd` (`snapshots/live-llm.json`
    `observed.totalEstimatedCostUsd`, the figure the spend ledger records),
    `finishedAt` and the step count, and the index is rebuilt.
+
+After Core stops, a created Flow's playback joins the build's steps
+(`lab-runs/write-playback-steps.ts`): each command attempt dispatched in the
+playback's window becomes an `NNNN-run-<actionType>` folder numbered after
+Core's last step, and `steps/index.md` is rewritten. Every runtime step is
+listed, including the ones the run did not perform. A step the run skipped is
+written with `status: "skipped"`, never as failed, with the run detail's
+`skipped` mark in `meta.json` and `result.json`, and with the failure that
+prompted the skip kept as `observed`. A skip comes in one of two shapes.
+`target_absent` is a sometimes-present step, such as a popup, that was not on
+the page. `state_routed` is a step passed over because the page was already
+somewhere else: the run continued at the node matching the page (Core t243),
+and the mark adds `toNodeId` and `direction` (`forward` or `backward`). Its
+summary reads `routed to <node> (<direction>)`, so a debug can see that the
+runtime checked the page. A skip that dispatched no command gets its own
+`NNNN-run-skipped` folder. The writer returns how many steps were skipped and
+how many of those were state-routed. The Flow run's outcome
+(`persisted-flow-run.ts`) has `stateRouted: { forward, backward }` when the run
+routed at least once. The Lab accepts only Core's two closed mark shapes. The
+code must have Core's dotted form and the destination must have a node id's
+form, so page text cannot get into the run folder. An attempt down a skip route
+(`route: "skipped"` or `"state_routed"`) whose Core status is `succeeded` is
+counted as skipped even when its mark is rejected: the mark's detail is lost,
+the skip is not. The existing-Flow and clone targets count steps the same way.
+`existing-fluxiq-control.ts` keeps the skip route and the closed mark on each
+run-detail attempt, and `run-manifest/action-timings.ts` writes such an attempt
+to `run.json` as `skipped`, never `succeeded`.
 
 `index.md` is rebuilt from every `*/*/entry.json` each time a run starts or
 ends. Its columns are Started (local date and time), Lane

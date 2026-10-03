@@ -35,9 +35,8 @@ that answered a popup is optional, F37, F33, F35, web-3). Lane A and lane B both
 line (`control` and `does`); a line shows `control` only when the domain gave no `does`. **Open: unify the two fields.**
 Then t240 (repair rounds bounded by money and measured progress, record counts, C7 and C8), t241 (a repair round
 opens with a look where the test left the page, carrying the Flow's held calls) and t242 (a skip reaches the run
-detail and reads `skipped` in the Lab) merged and pushed (Core `2bc0baac`, downstream `76a9eede`). **Open:** the
-existing/clone target path still reports a skip as `succeeded` (`existing-fluxiq-control.ts`,
-`run-manifest/action-timings.ts`).
+detail and reads `skipped` in the Lab) merged and pushed (Core `2bc0baac`, downstream `76a9eede`). The
+existing/clone path's skip status was closed by t248.
 
 **Sweep 1 (2026-10-02, Core `2bc0baac`, downstream `76a9eede`):** Core `pnpm test` -> 4 failed | 5,979 passed | 1
 skipped (`repair-rerun.test.ts` x2, `service-adaptation/tests/modes.test.ts`, `global-docs.test.ts`), owned by t245;
@@ -60,6 +59,31 @@ dev that sweep 1 never ran (`pnpm -r test` stops at the first failing package): 
 **Two sessions share the dev queue (2026-10-02 evening):** this session lands t193 then t194; session
 `fluxiqwebextension-8d` lands t244 (after t194), t246, t247, t248 and re-syncs the lane trees. Handshake in both
 repositories: "merging tNNN" before, "tNNN done" with the new heads after; neither starts while the other holds dev.
+
+**Landed by session 8d (2026-10-02 evening), each verified by the supervisor after merging dev in:**
+- **t247.** Core's root `pnpm test` is now `pnpm -r --no-bail test`. `ProjectTree.tsx` is split by job (301 -> 201
+  lines). The Flow settings form's cost default is $0.10, matching Core.
+  - Validation: web vitest over hierarchy and settings, 28/28 files; web `tsc --noEmit` rc 0 before and after merging
+    dev; structure audit passed; Core's finish gate `pnpm check` passed.
+  - Core `d01c1e1c`, downstream `3a299516`.
+- **t248.** The Lab parses a `state_routed` skip, and `steps/` shows "routed to <node> (<direction>)". The run summary
+  counts routed steps. The existing/clone path writes a skip as `skipped`. Adds the bigbox `store-remembered` Lab row.
+  - Validation, on freshly built Core and packages: test-runner `node --test` over flow-lane, lab-runs, run-manifest
+    and existing-* gave 432 pass / 0 fail; scenario-lab bigbox gave 35/0; test-runner and scenario-lab check rc 0;
+    audit passed.
+  - Downstream `52ae5c9e`.
+  - **Open:** Core's run-detail conversion (`service/summaries/conversions.ts`) drops `stateRouting` (no_match /
+    routed / effect_holds). The Lab therefore shows only where a step routed, not what the runtime consulted.
+- **In flight.**
+  - t244: committed. Dev merged in twice, through t193. Two of t193's overlaps fixed in t244's tree: a rerun's
+    put-back steps kept t193's words, and a part run's card names no step number (t195's rule). Waiting on t194.
+  - t246: the worker is profiling service-test setup cost against the original brief.
+  - t249 (new): a runtime patch from the ladder is applied only after the run that trialled it finished whole and
+    its result was judged `answers`, never mid-run on a trial alone, which closes the ladder half of the user's
+    full-judged-run rule. It also adds `stopAfterNodeId` in the executor. Once t244 lands, a recovery-stage part-run
+    tool follows on top of that.
+  - t250 (to open after t248): Core run detail carries `stateRouting` to the Lab; stale "$0.25" comments across Core
+    runtime, and `repairMaxCostUsdPerRun: 0.25` in result-check authorization defaults.
 
 Task ids: the task tool numbers branches; labels like PV, CEIL and STEPS name older work without a branch of its own.
 
@@ -148,11 +172,12 @@ build produced a Flow and playback failed (debugs in `debugs/`; run ids and endi
 
 **Next, in order.**
 1. Land t194 (lane C), then t244 (partial runs, one full judged run; resolves against lanes A-C in its own files),
-   t246, t247 and t248, per the two-session handshake.
+   t249 (the ladder's full judged run) and t246, per the two-session handshake. t250 before the live round if it is
+   ready (the Lab's step logs show what state routing consulted).
 2. Re-sync every lane tree to dev (both repositories, rebuild Core libraries and the extension), then release the
    four held live leads; then the approved `deepseek-v4-pro` comparison (`--llm-model deepseek-v4-pro
    --llm-cost-ceiling-usd 0.30`, one run). Watch for a double act on a backward state route (t243 open item 2).
-3. Open follow-ups: unify `control` and `does`; the existing/clone path's skip status; signatures for recorded Flows
+3. Open follow-ups: unify `control` and `does`; signatures for recorded Flows
    (t243 open item 4); a dropped column on a rerun needs the domain's denied keys in the loop (t195 R3); sweep 2,
    with `pnpm -r --no-bail test` in Core.
 

@@ -9,7 +9,7 @@ import { runActionStatus } from "../run-manifest/index.js";
 import { readHarnessRecovery, type HarnessRecoveryControl } from "./harness-recovery.js";
 import { LAB_PROJECT_DOMAIN_ID } from "./lab-project-domain.js";
 import { recoveredByNode } from "./node-recovery.js";
-import { skippedAttemptOf, type PersistedFlowActionSkip } from "./skipped-attempt.js";
+import { onSkipRoute, skippedAttemptOf, stateRoutedOf, type PersistedFlowActionSkip, type PersistedStateRouted } from "./skipped-attempt.js";
 import { readRunDatasets, runDatasetSummaries, type FlowRunDataset, type RunDatasetSummary } from "./run-datasets.js";
 import { readFlowRunRoute, type FlowRunRoute } from "./taken-route.js";
 import { awaitTerminalRunDetail, LIVE_LLM_RUN_WAIT_MS, pendingWork, terminalDetailWaitMs, type PendingWork, type PersistedFlowTerminalWait } from "./terminal-run-wait.js";
@@ -126,7 +126,7 @@ export type PersistedFlowAction = {
    */
   hostTargetResolution?: PersistedHostTargetResolution;
   failure: AutomationStudioFailureRecord | null;
-  /** Set when Core skipped this node rather than ran it, a sometimes-present step observed absent (`skipped-attempt.ts`). */
+  /** Set when Core skipped this node rather than ran it: a sometimes-present step absent, or one routed past by page state (`skipped-attempt.ts`). */
   skipped?: PersistedFlowActionSkip;
   /**
    * True when this attempt failed on something only a person can get past --
@@ -346,6 +346,7 @@ export type PersistedFlowRunOutcome = {
    * attempt landed on a node it names.
    */
   startCandidateIndex?: number;
+  stateRouted?: PersistedStateRouted;
 };
 
 /**
@@ -547,6 +548,7 @@ function outcomeFromDetail(
     route: readFlowRunRoute(detail.runDetail),
     ...(stop ? { stoppedWithoutFailedAttempt: stop } : {}),
     ...(startCandidateIndex === undefined ? {} : { startCandidateIndex }),
+    ...stateRoutedOf(actions),
     ...(unsettled === undefined ? {} : { unsettled }),
   };
 }
@@ -671,7 +673,7 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
     nodeId: attemptNodeId(nodeId),
     attemptIndex,
     // A skipped step did not run: Core writes `succeeded`, which is not what it was.
-    status: skipped ? "skipped" : runActionStatus(attempt.status),
+    status: skipped || (!verification && onSkipRoute(attempt)) ? "skipped" : runActionStatus(attempt.status),
     startedAt: new Date(startedAt).toISOString(),
     ...(finishedAt === undefined ? {} : { durationMs: Math.max(0, Math.round(finishedAt - startedAt)) }),
     // Core's own record, parsed by Core's parser. A record Core would reject is treated as absent.

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveScenarioWorkflow, scenarioPageFactSchedule } from "@fluxiq-web-extension/test-contracts";
 import { shellScript } from "../client/index.js";
-import { bigboxRetailScenario } from "../index.js";
+import { BIGBOX_RETAIL_LIVE_TASKS, bigboxRetailScenario } from "../index.js";
 import { START_FACTS } from "../manifest/index.js";
 import { createBigboxState, mutateBigboxState } from "../state/index.js";
 import { bigboxClasses } from "../theme/index.js";
@@ -92,4 +92,15 @@ test("arming starts the shopper over at the remembered store, so an armed run's 
   const rearmed = apply(dirty, ["remember-pickup-store", {}]);
   assert.deepEqual(rearmed, { ...createBigboxState(), storeId: MILLBROOK_ID });
   assert.deepEqual(START_FACTS.map((fact) => fact.subject), ["mini-cart-store", "mini-cart-summary"]);
+});
+
+// A Flow built from chat on the base site meets the remembered store only at
+// playback, so the live catalog arms the variant after the build (t243 open
+// item 1): the runtime has to route by page state past `choose-millbrook`.
+test("the live catalog builds the pickup cart on the base site and plays it back with the store remembered", () => {
+  const row = BIGBOX_RETAIL_LIVE_TASKS.find((task) => task.id === "bigbox-retail-pickup-cart-store-remembered-after-creation");
+  const base = BIGBOX_RETAIL_LIVE_TASKS.find((task) => task.id === "bigbox-retail-pickup-cart");
+  assert.ok(row && base, "the row is in the catalog");
+  assert.deepEqual({ ...row, id: base.id }, { ...base, variantId: VARIANT_ID, variantArmedAfterBuild: true }, "the same instruction and judge as the base row, armed only for playback");
+  assert.ok(variant(), "the variant it arms exists");
 });

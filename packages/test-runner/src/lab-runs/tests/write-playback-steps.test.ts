@@ -53,7 +53,7 @@ test("each playback attempt in the window becomes a run step after Core's, in di
     replay: attempt("replay", 9000),
   });
   const written = await writePlaybackSteps({ attemptsDirectory, stepsDirectory, since: 1000, until: 5000, redactionLiterals: [] });
-  assert.deepEqual(written, { steps: [46, 47], redacted: 0 });
+  assert.deepEqual(written, { steps: [46, 47], redacted: 0, skipped: 0, stateRouted: 0 });
   assert.deepEqual((await readdir(stepsDirectory)).sort(), ["0045-judge", "0046-run-web.dom.type", "0047-run-web.dom.click", "index.md"]);
   const typed = path.join(stepsDirectory, "0046-run-web.dom.type");
   assert.deepEqual(JSON.parse(await readFile(path.join(typed, "call.json"), "utf8")).parameters, { selector: "#go", text: "3" });
@@ -142,5 +142,42 @@ test("a skip that dispatched nothing (its ready state was judged not shown) is i
 
 test("a run with no command attempts writes nothing and leaves Core's index alone", async (t) => {
   const root = await scratch(t);
-  assert.deepEqual(await writePlaybackSteps({ attemptsDirectory: path.join(root, "absent"), stepsDirectory: path.join(root, "steps"), since: 0, until: 1, redactionLiterals: [] }), { steps: [], redacted: 0 });
+  assert.deepEqual(await writePlaybackSteps({ attemptsDirectory: path.join(root, "absent"), stepsDirectory: path.join(root, "steps"), since: 0, until: 1, redactionLiterals: [] }), { steps: [], redacted: 0, skipped: 0, stateRouted: 0 });
+});
+
+// A step passed over because the page was elsewhere (Core t243 state routing) is
+// a runtime step that consulted the page: written as skipped, saying where the
+// run went and which way, never as the failure its host attempt observed.
+test("a state-routed step is written as skipped with where the run went, never failed, and the playback counts it", async (t) => {
+  const { attemptsDirectory, stepsDirectory } = await setUp(t, {
+    store: attempt("store", 1000, { status: "failed", failure: NOT_FOUND }),
+    search: attempt("search", 3000),
+  });
+  const written = await writePlaybackSteps({
+    attemptsDirectory, stepsDirectory, since: 0, until: 9000, redactionLiterals: [],
+    skippedSteps: [
+      { nodeId: "node.store", startedAt: 900, finishedAt: 1500, reason: "state_routed", code: "web.target.not_found", toNodeId: "node.search", direction: "forward" },
+      { nodeId: "node.cart", startedAt: 4000, finishedAt: 4000, reason: "state_routed", code: "executor.ready_state.not_shown", toNodeId: "node.store", direction: "backward" },
+      { nodeId: "node.popup", startedAt: 5000, finishedAt: 5000, reason: "target_absent", code: "executor.ready_state.not_shown" },
+    ],
+  });
+  assert.deepEqual(written, { steps: [46, 47, 48, 49], redacted: 0, skipped: 3, stateRouted: 2 });
+  const routedMeta = JSON.parse(await readFile(path.join(stepsDirectory, "0046-run-web.dom.click", "meta.json"), "utf8"));
+  assert.equal(routedMeta.status, "skipped");
+  assert.equal(routedMeta.failureCode, null);
+  assert.deepEqual(routedMeta.skipped, { reason: "state_routed", code: "web.target.not_found", nodeId: "node.store", toNodeId: "node.search", direction: "forward" });
+  assert.match(routedMeta.summary, /^skipped \(state_routed, web\.target\.not_found\): routed to node\.search \(forward\)/u);
+  const routedResult = JSON.parse(await readFile(path.join(stepsDirectory, "0046-run-web.dom.click", "result.json"), "utf8"));
+  assert.equal(routedResult.status, "skipped");
+  assert.equal(routedResult.failure, null);
+  assert.equal(routedResult.observed.code, "web.target.not_found", "what the runtime observed before it consulted the page is kept as evidence");
+  const backward = JSON.parse(await readFile(path.join(stepsDirectory, "0048-run-skipped", "meta.json"), "utf8"));
+  assert.equal(backward.status, "skipped");
+  assert.match(backward.summary, /routed to node\.store \(backward\)/u);
+  const absent = JSON.parse(await readFile(path.join(stepsDirectory, "0049-run-skipped", "meta.json"), "utf8"));
+  assert.deepEqual(absent.skipped, { reason: "target_absent", code: "executor.ready_state.not_shown", nodeId: "node.popup" }, "a sometimes-present skip names no destination");
+  assert.doesNotMatch(absent.summary, /routed/u);
+  const index = await readFile(path.join(stepsDirectory, "index.md"), "utf8");
+  assert.match(index, /\| 0046 \| run \| web\.dom\.click \| skipped \(state_routed, web\.target\.not_found\): routed to node\.search \(forward\)/u);
+  assert.doesNotMatch(index, /\| 0046 [^\n]*failed/u);
 });
