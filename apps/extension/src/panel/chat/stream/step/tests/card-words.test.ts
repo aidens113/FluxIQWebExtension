@@ -62,3 +62,24 @@ test("a wait on the person that Core settled says Core's sentence: done with it,
   assert.equal(cardWords(card({ ...robot, outcome: "failed", answer: "Something new happened." }), false).outcome, "Didn't work. Something new happened.", "a way to end Core has no why for yet");
   assert.equal(cardWords(card({ ...robot, answer: "You pressed Continue." }), false).label, "Robot check: Done. You pressed Continue.");
 });
+
+// t174-w85 (run-murwd8le-79e735a8, UI review t174-w81).
+// D1, 00019 and 00021: the judges disagreed, so the result was unverified, and the
+// card read "Check result · Didn't pass" in red on a run that met its task.
+test("a result check Core could not confirm says not confirmed, never didn't pass, and is not marked failed", () => {
+  const unsure = card({ kind: "result_check", target: null, check: true, outcome: "failed", unconfirmed: true, said: "The two checks of this result disagreed." });
+  const words = cardWords(unsure, false);
+  assert.deepEqual([words.state, words.outcome, words.label], ["unconfirmed", "Not confirmed: the two checks of this result disagreed.", "Check result: Not confirmed: the two checks of this result disagreed."]);
+  assert.equal(cardWords({ ...unsure, said: undefined }, false).outcome, "Not confirmed");
+  // A result judged not to answer is still a failure.
+  const { unconfirmed: _unconfirmed, ...refuted } = unsure;
+  assert.deepEqual([cardWords(refuted, false).state, cardWords(refuted, false).outcome], ["failed", "Didn't pass: the two checks of this result disagreed."]);
+});
+
+// D4, 00011 and 00014: every step of the build's test read "Test run · ×".
+test("a test run's step is named by its action and says it was a test", () => {
+  const typed = cardWords(card({ kind: "type", target: '"Voltbay USB-C hub" into Autumn Mega Sale: up to 70% off', testing: true }), false);
+  assert.deepEqual([typed.name, typed.target, typed.label], ["Testing: Type", '"Voltbay USB-C hub" into Autumn Mega Sale: up to 70% off', 'Testing: Type, "Voltbay USB-C hub" into Autumn Mega Sale: up to 70% off: Done']);
+  assert.equal(cardWords(card({ testing: true }), false).name, "Testing: Click");
+  assert.equal(cardWords(card({}), false).name, "Click", "a build's own step is not a test");
+});
