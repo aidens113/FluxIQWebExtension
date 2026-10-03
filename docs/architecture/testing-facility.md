@@ -2910,6 +2910,18 @@ the skip is not. The existing-Flow and clone targets count steps the same way.
 run-detail attempt, and `run-manifest/action-timings.ts` writes such an attempt
 to `run.json` as `skipped`, never `succeeded`.
 
+Every step the runtime consulted the page for also says what it made of it.
+Core's run detail carries `stateRouting` on each such attempt (Core t250), and
+`flow-lane/state-routing-attempt.ts` keeps it only in Core's closed shapes: an
+outcome (`routed`, `effect_holds`, `guard_stopped`, `no_match`, `unobserved` or
+`no_pre_states`), a Core dotted code, and for `guard_stopped` a node id. Each
+such `steps/` row carries the record as `stateRouting` in `meta.json` and
+`result.json`, and its summary ends `the runtime consulted state: <outcome>`.
+A failed step whose routing found no way on stays failed. A routed step adds
+the outcome to its skip. A routing that stopped before any command was
+dispatched gets its own `NNNN-run-state-consulted` folder. Only the Flow lane
+writes `steps/`, so the existing-Flow and clone targets do not carry it.
+
 `index.md` is rebuilt from every `*/*/entry.json` each time a run starts or
 ends. Its columns are Started (local date and time), Lane
 (`FLUXIQ_LAB_LANE`, else `FLUXIQ_LAB_INSTANCE`, else `default`), Task (as the

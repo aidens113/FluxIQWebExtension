@@ -19,6 +19,14 @@
 // run went and which way: "routed to <node> (forward)". That is how a debug sees
 // the runtime consulted the page rather than failed the step.
 //
+// Every step the runtime consulted the page for also says what it made of it
+// (Core t250, the run detail's `stateRouting`): "the runtime consulted state:
+// no_match" on a step that found no way on and failed, `effect_holds` or
+// `routed` on one passed over, `guard_stopped` on one that would have looped.
+// A consultation is matched to the skip of the same attempt, else to the host
+// attempt dispatched inside its span, else written as its own
+// `NNNN-run-state-consulted` folder (a gate that stopped before any dispatch).
+//
 // What is copied is bounded: the command's parameters, the outcome's status,
 // failure record and validation, never the page snapshot the result carries.
 // A typed value the extension marked redacted is not copied; every declared
@@ -49,7 +57,16 @@ export type PlaybackStepsInput = Readonly<{
    * is written as the host reported it.
    */
   skippedSteps?: readonly PlaybackSkippedStep[];
+  /**
+   * The run's state routing consultations, from the run detail's action
+   * attempts that carry Core's `stateRouting` (`flow-lane/state-routing-attempt.ts`):
+   * routed steps and steps whose routing found no way on alike. Epoch ms, Core's clock.
+   */
+  stateRoutingSteps?: readonly PlaybackStateRoutingStep[];
 }>;
+
+/** One attempt whose step could not run, and what the runtime made of the page: closed words, a Core code and a node id. */
+export type PlaybackStateRoutingStep = Readonly<{ nodeId: string | null; startedAt: number; finishedAt: number; outcome: string; code?: string; toNodeId?: string }>;
 
 /** One attempt the run skipped rather than ran, as the run detail records it; a state-routed one also names where the run went, and which way. */
 export type PlaybackSkippedStep = Readonly<{ nodeId: string | null; startedAt: number; finishedAt: number; reason: string; code: string; toNodeId?: string; direction?: "forward" | "backward" }>;
@@ -79,7 +96,8 @@ export async function writePlaybackSteps(input: PlaybackStepsInput): Promise<Pla
       if (attempt && typeof at === "number" && at >= input.since && at <= input.until) attempts.push(attempt);
     }
   }
-  const entries = playbackEntries(attempts, (input.skippedSteps ?? []).filter(skip => skip.startedAt >= input.since && skip.startedAt <= input.until));
+  const inWindow = (step: { startedAt: number }) => step.startedAt >= input.since && step.startedAt <= input.until;
+  const entries = playbackEntries(attempts, (input.skippedSteps ?? []).filter(inWindow), (input.stateRoutingSteps ?? []).filter(inWindow));
   const skipped = entries.filter(entry => entry.skip).length;
   const stateRouted = entries.filter(entry => entry.skip?.reason === "state_routed").length;
   if (entries.length === 0) return { steps: [], redacted: 0, skipped, stateRouted };
@@ -89,7 +107,8 @@ export async function writePlaybackSteps(input: PlaybackStepsInput): Promise<Pla
   let redacted = 0;
   for (const entry of entries) {
     next += 1;
-    const files = entry.attempt ? playbackStepFiles(entry.attempt, next, entry.skip) : undispatchedSkipFiles(entry.skip!, next);
+    const ran = entry.attempt ? playbackStepFiles(entry.attempt, next, entry.skip) : entry.skip ? undispatchedSkipFiles(entry.skip, next) : undispatchedRoutingFiles(entry.routing!, next);
+    const files = entry.routing ? withStateRouting(ran, entry.routing) : ran;
     const folder = path.join(input.stepsDirectory, `${String(next).padStart(4, "0")}-run-${files.segment}`);
     await mkdir(folder);
     let screenedAny = false;
@@ -111,16 +130,21 @@ export async function writePlaybackSteps(input: PlaybackStepsInput): Promise<Pla
   return { steps, redacted, skipped, stateRouted };
 }
 
-type Entry = { at: number; attempt?: Json; skip?: PlaybackSkippedStep };
+type Entry = { at: number; attempt?: Json; skip?: PlaybackSkippedStep; routing?: PlaybackStateRoutingStep };
 
 /**
  * The playback's steps in time order: each host attempt, with the skip it
  * observed when there is one, and each skip that dispatched nothing. A skip
  * claims the first unclaimed attempt that did not succeed, was dispatched
  * inside the skipped attempt's own span, and failed with the code the skip
- * names -- the attempt the run's skip was decided on.
+ * names -- the attempt the run's skip was decided on. A state routing
+ * consultation joins the skip of the same attempt (same node and span), else
+ * the first host attempt dispatched inside its span that no skip or other
+ * consultation holds -- and whose failure code is the consultation's, unless
+ * the readiness gate asked, which is decided before the dispatch -- else it is
+ * a step of its own.
  */
-function playbackEntries(attempts: readonly Json[], skips: readonly PlaybackSkippedStep[]): Entry[] {
+function playbackEntries(attempts: readonly Json[], skips: readonly PlaybackSkippedStep[], routings: readonly PlaybackStateRoutingStep[]): Entry[] {
   const entries: Entry[] = attempts.map(attempt => ({ at: attempt.dispatchedAt as number, attempt }));
   entries.sort((a, b) => a.at - b.at);
   for (const skip of skips) {
@@ -130,8 +154,20 @@ function playbackEntries(attempts: readonly Json[], skips: readonly PlaybackSkip
     if (claimed) claimed.skip = skip;
     else entries.push({ at: skip.startedAt, skip });
   }
+  for (const routing of routings) {
+    const sameAttempt = entries.find(entry => entry.skip && !entry.routing && entry.skip.nodeId === routing.nodeId && entry.skip.startedAt === routing.startedAt && entry.skip.finishedAt === routing.finishedAt);
+    const gateAsked = routing.code === READY_STATE_NOT_SHOWN;
+    const claimed = sameAttempt ?? entries.find(entry => entry.attempt && !entry.skip && !entry.routing
+      && entry.at >= routing.startedAt && entry.at <= routing.finishedAt
+      && (gateAsked || routing.code === undefined || text(record(record(entry.attempt.result)?.failure)?.code) === routing.code));
+    if (claimed) claimed.routing = routing;
+    else entries.push({ at: routing.startedAt, routing });
+  }
   return entries.sort((a, b) => a.at - b.at);
 }
+
+/** The code Core gives a step whose readiness gate did not hold: routing is asked before anything is dispatched. */
+const READY_STATE_NOT_SHOWN = "executor.ready_state.not_shown";
 
 /** One attempt's files, before screening. */
 function playbackStepFiles(attempt: Json, step: number, skip: PlaybackSkippedStep | undefined): StepFiles {
@@ -190,6 +226,31 @@ function undispatchedSkipFiles(skip: PlaybackSkippedStep, step: number): StepFil
       phase: "playback", status: "skipped", resultCode: skip.code, failureCode: null, message: null, skipped, summary: skipSummary(skipped),
     },
   };
+}
+
+/** A consultation with no host attempt and no skip: the step's readiness gate asked, and the run stopped before any dispatch. */
+function undispatchedRoutingFiles(routing: PlaybackStateRoutingStep, step: number): StepFiles {
+  const at = new Date(routing.startedAt).toISOString();
+  const code = routing.code ?? null;
+  return {
+    segment: "state-consulted",
+    valueWithheld: false,
+    call: { nodeId: routing.nodeId, dispatched: false },
+    result: { status: "failed", failure: null },
+    page: undefined,
+    meta: {
+      step, kind: "run", callId: null, toolId: "state-consulted", startedAt: at, finishedAt: new Date(routing.finishedAt).toISOString(), ms: routing.finishedAt - routing.startedAt,
+      phase: "playback", status: "failed", resultCode: code, failureCode: code, message: null, summary: `${code ?? "failed"}: nothing was dispatched${routing.nodeId ? ` at ${routing.nodeId}` : ""}`,
+    },
+  };
+}
+
+/** A step's files with what the runtime made of the page added to its result and meta, and said in its summary. */
+function withStateRouting(files: StepFiles, routing: PlaybackStateRoutingStep): StepFiles {
+  const stateRouting = { outcome: routing.outcome, ...(routing.code === undefined ? {} : { code: routing.code }), ...(routing.toNodeId === undefined ? {} : { toNodeId: routing.toNodeId }) };
+  const said = `the runtime consulted state: ${routing.outcome}${routing.toNodeId ? ` (kept returning to ${routing.toNodeId})` : ""}`;
+  const summary = text(files.meta.summary);
+  return { ...files, result: { ...files.result, stateRouting }, meta: { ...files.meta, stateRouting, summary: summary ? `${summary}; ${said}` : said } };
 }
 
 /** The skip as a step file records it: a state-routed one with its destination and direction, a sometimes-present one without. */

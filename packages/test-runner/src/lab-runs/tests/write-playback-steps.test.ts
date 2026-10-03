@@ -181,3 +181,47 @@ test("a state-routed step is written as skipped with where the run went, never f
   assert.match(index, /\| 0046 \| run \| web\.dom\.click \| skipped \(state_routed, web\.target\.not_found\): routed to node\.search \(forward\)/u);
   assert.doesNotMatch(index, /\| 0046 [^\n]*failed/u);
 });
+
+test("every step the runtime consulted the page for says what it made of it: a failed one, a routed one, and one that dispatched nothing", async (t) => {
+  const { attemptsDirectory, stepsDirectory } = await setUp(t, {
+    store: attempt("store", 1000, { status: "failed", failure: NOT_FOUND }),
+    search: attempt("search", 3000, { status: "failed", failure: NOT_FOUND }),
+    gated: attempt("gated", 6000),
+  });
+  const written = await writePlaybackSteps({
+    attemptsDirectory, stepsDirectory, since: 0, until: 9000, redactionLiterals: [],
+    skippedSteps: [{ nodeId: "node.search", startedAt: 2900, finishedAt: 3500, reason: "state_routed", code: "web.target.not_found", toNodeId: "node.cart", direction: "forward" }],
+    stateRoutingSteps: [
+      { nodeId: "node.store", startedAt: 900, finishedAt: 1500, outcome: "no_match", code: "web.target.not_found" },
+      { nodeId: "node.search", startedAt: 2900, finishedAt: 3500, outcome: "effect_holds" },
+      { nodeId: "node.cart", startedAt: 4000, finishedAt: 4000, outcome: "guard_stopped", code: "executor.ready_state.not_shown", toNodeId: "node.store" },
+      { nodeId: "node.gated", startedAt: 5900, finishedAt: 6500, outcome: "unobserved", code: "executor.ready_state.not_shown" },
+    ],
+  });
+  assert.deepEqual(written, { steps: [46, 47, 48, 49], redacted: 0, skipped: 1, stateRouted: 1 });
+  const failed = JSON.parse(await readFile(path.join(stepsDirectory, "0046-run-web.dom.click", "meta.json"), "utf8"));
+  assert.equal(failed.status, "failed", "a consultation that found no way on does not hide the failure");
+  assert.deepEqual(failed.stateRouting, { outcome: "no_match", code: "web.target.not_found" });
+  assert.match(failed.summary, /^web\.target\.not_found: .*; the runtime consulted state: no_match$/u);
+  const routed = JSON.parse(await readFile(path.join(stepsDirectory, "0047-run-web.dom.click", "meta.json"), "utf8"));
+  assert.equal(routed.status, "skipped");
+  assert.match(routed.summary, /routed to node\.cart \(forward\).*; the runtime consulted state: effect_holds$/u);
+  assert.deepEqual(JSON.parse(await readFile(path.join(stepsDirectory, "0047-run-web.dom.click", "result.json"), "utf8")).stateRouting, { outcome: "effect_holds" });
+  const stopped = JSON.parse(await readFile(path.join(stepsDirectory, "0048-run-state-consulted", "meta.json"), "utf8"));
+  assert.equal(stopped.status, "failed");
+  assert.match(stopped.summary, /the runtime consulted state: guard_stopped \(kept returning to node\.store\)$/u);
+  assert.deepEqual(JSON.parse(await readFile(path.join(stepsDirectory, "0048-run-state-consulted", "call.json"), "utf8")), { nodeId: "node.cart", dispatched: false });
+  const gated = JSON.parse(await readFile(path.join(stepsDirectory, "0049-run-web.dom.click", "meta.json"), "utf8"));
+  assert.equal(gated.status, "ok", "the readiness gate asked before the dispatch, which then ran");
+  assert.match(gated.summary, /; the runtime consulted state: unobserved$/u);
+  const index = await readFile(path.join(stepsDirectory, "index.md"), "utf8");
+  assert.match(index, /\| 0046 [^\n]*the runtime consulted state: no_match/u);
+});
+
+test("a run whose steps all ran writes no consultation", async (t) => {
+  const { attemptsDirectory, stepsDirectory } = await setUp(t, { a: attempt("a", 1000) });
+  await writePlaybackSteps({ attemptsDirectory, stepsDirectory, since: 0, until: 9000, redactionLiterals: [], stateRoutingSteps: [] });
+  const meta = JSON.parse(await readFile(path.join(stepsDirectory, "0046-run-web.dom.click", "meta.json"), "utf8"));
+  assert.equal("stateRouting" in meta, false);
+  assert.doesNotMatch(meta.summary, /consulted/u);
+});
