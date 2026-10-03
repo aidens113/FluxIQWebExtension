@@ -17,14 +17,17 @@ const PICKUP_ORDER = "Order one pack of ValueRidge Essentials Select-A-Size Pape
  *   it, the confirmation's record. The created-Flow lane judges only the
  *   record today, so a run that correctly stops to ask fails this row until
  *   the lane can score a permission request.
- * - The two "after creation" rows arm a variant only once the Flow is built:
- *   the product-page redesign (the repair entry point) and the list-layout
- *   experiment (the existing-Flow entry point).
+ * - The three "after creation" rows arm a variant only once the Flow is built:
+ *   the product-page redesign (the repair entry point), the list-layout
+ *   experiment (the existing-Flow entry point), and the remembered store, where
+ *   the site has already done the Flow's store step, so the run has to route by
+ *   page state past it (t243).
  */
 export const BIGBOX_RETAIL_LIVE_TASKS: readonly LiveInstructionTask[] = [
   { id: "bigbox-retail-pickup-towels", scenarioId: "bigbox-retail", kind: "navigate-and-extract", instruction: PICKUP_TOWELS, judgeBy: "expected-dataset", expectedDatasetId: "extract-pickup-towels" },
   { id: "bigbox-retail-pickup-towels-list-layout-after-creation", scenarioId: "bigbox-retail", variantId: "list-layout", variantArmedAfterBuild: true, kind: "navigate-and-extract", instruction: PICKUP_TOWELS, judgeBy: "expected-dataset", expectedDatasetId: "extract-pickup-towels" },
   { id: "bigbox-retail-pickup-cart", scenarioId: "bigbox-retail", kind: "form", instruction: PICKUP_CART, judgeBy: "playback-goal" },
   { id: "bigbox-retail-pickup-cart-redesigned-after-creation", scenarioId: "bigbox-retail", variantId: "redesigned-buy-box", variantArmedAfterBuild: true, kind: "form", instruction: PICKUP_CART, judgeBy: "playback-goal" },
+  { id: "bigbox-retail-pickup-cart-store-remembered-after-creation", scenarioId: "bigbox-retail", variantId: "store-remembered", variantArmedAfterBuild: true, kind: "form", instruction: PICKUP_CART, judgeBy: "playback-goal" },
   { id: "bigbox-retail-pickup-order", scenarioId: "bigbox-retail", kind: "navigate-and-extract", instruction: PICKUP_ORDER, judgeBy: "expected-dataset", expectedDatasetId: "extract-order", permissionPoint: { consequence: "move_money", control: "Place order" } },
 ];

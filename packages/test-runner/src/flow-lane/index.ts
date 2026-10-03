@@ -20,6 +20,7 @@ export * from "./recovery-attribution.js";
 export * from "./recording-flow-proposal.js";
 export * from "./repair/index.js";
 export * from "./run-datasets.js";
+export * from "./skipped-attempt.js";
 export * from "./taken-route.js";
 export * from "./reset-scenario-lab.js";
 export * from "./run-flow-lane.js";
