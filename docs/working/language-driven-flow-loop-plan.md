@@ -35,6 +35,14 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
   waiting for a judged run; summaries carry `judgedApplication`. Rows indexed before it show it once re-saved.
 - **t257** (downstream `702c7dbc`): the Lab's UI review counts every document change as a page load (old count kept
   as `pageLoadGaps`; murzln6g moment 6: 0 -> 1); samples carry a screened `pageUrl`; pictures carry `takenAt`.
+- **t254 purse at true cost** (Core `e6290d80`, downstream `15b9c4ea`; `reports/t254-purse-holds-true-cost.md`):
+  billed price (off-peak, cached input), only what is sent; no `max_tokens` anywhere (chat panel included); the
+  round gate measures the next round (murzln6g: need $0.0187 -> $0.0077); judge overshoot in the build total; a
+  round stopped by the judging reserve tests and judges the Flow so far (yes finishes; else ends at cost, kept as a
+  draft, never not doable), but an unchanged Flow already judged no runs no test or judge; recovery priced per call
+  at the rate in force. On the merged tree: Core check 0, 195 files / 2,259 tests, build 0, domain/extension 0.
+  Left open: `maxEstimatedCostUsdPerCall` survives only for `R/tests/recovery-default-limits.test.ts`; an extend or
+  continued build whose Flow an earlier build's judge refuted is re-judged (needs `service.ts` to pass the verdict).
 - **t259** (downstream `955630de`): `flow-lane.json` and `live-llm.json` carry the same settled build and
   `instructedConsequencesFrom` in every ending, a throwing settlement included (235/235, check 0).
 - Core `880577fc`: the `$0.25` comments in `refuted-result-port.ts` and `repair-authority.ts` name the run ceiling.
@@ -57,13 +65,6 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
   `node-run/layer/`; Core check 0, node-tools + build-test 275/275, downstream checks 0, domain 725/725. Now: w7
   (parity test; scripted confirm-requests proof with variants) and P4 docs; then the supervisor merges dev and lands.
   Abandon `fxwork/t251` once t252 lands.
-- **t254 purse holds at true cost** (`fxwork/t254`; `reports/t254-purse-holds-true-cost.md`). Merge of lane B
-  committed (Core `b5533c0c`; unfinished-build 129/129 incl. murzln6g funding, tsc 0, audit passed). Stage 2, the
-  supervisor's four decisions: no chat `max_tokens` 600; recovery's ledger at the billed price; judge overshoot in
-  phases' accounting; a round stopped by the judging reserve spends it testing and judging the Flow so far. Stage 2
-  done (316 files / 3,447 tests incl. murzln6g, check 0, no `max_tokens` sent anywhere). Stage 3 (supervisor): an
-  unchanged Flow already judged no is not re-judged (ends at cost with those findings); recovery prices each call at
-  the rate in force when it is made.
 - **t258** (`fxwork/t258`, Core-paired): `service/datasets/tests/service-wiring.test.ts` "store cannot be opened"
   fails on dev with a pool-closing AggregateError (a return of t207's family); root cause and fix
   (`reports/t258-w1-service-wiring-store.md`).
@@ -126,7 +127,7 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
 **Next, in order.**
 1. ~~Lane B: land.~~ Done 2026-10-03.
 2. t252: finish P3; merge lanes D and B into it; verify (the scripted confirm-requests proof must pass); land.
-3. t254: merge dev; verify (murzln6g reproduction, no `max_tokens`, billed pricing); land.
+3. ~~t254: land.~~ Done 2026-10-03.
 4. Sweep 2 in the background (Core `pnpm test` now runs every package).
 5. Re-sync the four lane trees to dev and rebuild; release round 1002-M's leads with fresh briefs; then the approved
    `deepseek-v4-pro` comparison (`--llm-model deepseek-v4-pro --llm-cost-ceiling-usd 0.30`, one run).
