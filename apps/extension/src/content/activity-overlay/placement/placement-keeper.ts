@@ -31,7 +31,7 @@ const FIRST_PLACEMENT: OverlayPlacement = Object.freeze({ shape: "pill", anchor:
 const WATCHED_ATTRIBUTES = ["style", "class", "hidden", "open", "role", "aria-modal"];
 
 export type PlacementKeeperOptions = {
-  /** The sizes to place: the pill's box in its current mode, the dot, and the margin. */
+  /** The sizes to place: the pill's box in its current mode, the narrower pill's, and the margin. */
   readonly sizes: () => Omit<PlacementInput, "probe" | "current" | "viewport">;
   /** Moves the overlay. Called only when the placement changes. */
   readonly place: (placement: OverlayPlacement) => void;

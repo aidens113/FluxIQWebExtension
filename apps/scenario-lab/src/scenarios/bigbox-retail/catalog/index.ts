@@ -10,5 +10,5 @@ export { PAPER_TOWELS } from "./paper-towels.js";
 export { PRODUCTS } from "./products.js";
 export { SITE_ROOT } from "./site-root.js";
 export { storeById } from "./store-by-id.js";
-export { HOME_STORE_ID, STORES } from "./stores.js";
+export { HOME_STORE_ID, PICKUP_CART_STORE_ID, STORES } from "./stores.js";
 export { variantTitle } from "./variant-title.js";

@@ -100,7 +100,8 @@ const GUESSING: WebExtractionColumnLook = { guess: true, among: "detected" };
 type Entry = { at: WebPlanValuePath; entry: unknown; ownKey: string | undefined; column: Column | undefined; written: string };
 
 /** The columns `fields` keeps, every detected one when it is absent. `path` is where `fields` itself is. */
-export function keptWebExtractionColumns(fields: unknown, detected: Detected, path: WebPlanValuePath): WebExtractionColumns {
+export function keptWebExtractionColumns(fields: unknown, measured: Detected, path: WebPlanValuePath): WebExtractionColumns {
+  const detected = unrequired(measured);
   if (fields === undefined) return { ok: true, fields: structuredClone(detected), assumed: [] };
   const entries = writtenEntries(fields, path);
   if (!Array.isArray(entries)) return entries;
@@ -146,6 +147,27 @@ export function keptWebExtractionColumns(fields: unknown, detected: Detected, pa
     if (column.assumed !== undefined) assumed.push(column.assumed);
   }
   return { ok: true, fields: kept, assumed };
+}
+
+/**
+ * The detected columns as a read may keep them: none of them required.
+ *
+ * A detection proposes `required` from the coverage it measured
+ * (`apps/extension/src/content/extraction/infer-fields.ts`), so a column every
+ * item had when it looked is `required: true`. That is a fact about one page at
+ * one moment, not something the plan said, and the page fails the whole read on
+ * a required column one row lacks (`extract-list.ts`, `validationFor`). In
+ * `run-murdouox-c5294247` the build read the friend requests with their Confirm
+ * column and confirmed one; that card lost its Confirm button, and the Flow's
+ * own listing failed `required_fields_missing` when the build's test ran it
+ * again, as it would have on every later run of the person's page. So a column
+ * is required only where the read writes `required: true` (`readColumn`); a row
+ * without any other column is the stated gap the page reports
+ * (`blankFields`, `incompleteRecords`).
+ */
+function unrequired(detected: Detected): Detected {
+  return Object.fromEntries(Object.entries(detected).map(([key, spec]) =>
+    [key, typeof spec === "string" || spec.required !== true ? spec : { ...spec, required: false }]));
 }
 
 /**

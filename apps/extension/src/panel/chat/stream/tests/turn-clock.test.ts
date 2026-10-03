@@ -8,7 +8,7 @@ import type { CoreTurn } from "../../conversation";
 import { createTurnClock } from "../turn-clock";
 
 function turn(turnId: string): CoreTurn {
-  return { turnId, author: "person", text: turnId, ask: null, attachment: false };
+  return { turnId, author: "person", text: turnId, ask: null };
 }
 
 test("history keeps its place and new turns take the time they were first seen", () => {

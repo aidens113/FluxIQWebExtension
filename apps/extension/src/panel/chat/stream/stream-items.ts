@@ -59,7 +59,7 @@ function requestTurns(turns: readonly StampedTurn[], events: readonly ClientGate
     const text = typeof event.request === "string" ? event.request.trim() : "";
     if (!text || asked.has(event.activityId) || said.has(sameWords(text))) continue;
     const turnId = `request:${event.activityId}`;
-    asked.set(event.activityId, { kind: "turn", key: `turn:${turnId}`, at, turn: { turnId, author: "person", text, ask: null, attachment: false, createdAt: at } });
+    asked.set(event.activityId, { kind: "turn", key: `turn:${turnId}`, at, turn: { turnId, author: "person", text, ask: null, createdAt: at } });
   }
   return [...asked.values()];
 }

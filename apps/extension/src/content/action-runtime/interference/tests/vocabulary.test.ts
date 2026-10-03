@@ -20,6 +20,7 @@ import {
   isConsentDeclineLabel,
   isConsentLayerText,
   isDismissalLabel,
+  isPageRequirementText,
   isRateLimitAcknowledgeLabel,
   isRateLimitLayerText,
   isTransientRefusalText
@@ -55,6 +56,47 @@ test("a page saying it was too busy to carry the press out is a busy refusal", (
 
 test("a failure, an item out of stock, or a bare try again is not a busy refusal", () => {
   for (const text of NOT_BUSY_REFUSALS) assert.equal(isTransientRefusalText(text), false, text);
+});
+
+// What a page writes beside a press it will not carry out until it is given
+// something first (`../../rate-limit-notice.ts`): crossborder's item page, its
+// checkout, and the shapes a store or a form writes the same refusal in.
+const REQUIREMENT_REFUSALS = [
+  "Please select a Color.",
+  "Please select a Specification.",
+  "Please enter a quantity.",
+  "Please choose a size",
+  "Please fill in your postcode.",
+  "Please fill out this field.",
+  "Please provide a delivery address.",
+  "Email is required",
+  "This field is required.",
+  "You have reached the purchase limit for this item."
+];
+
+// Never a requirement refusal: stock, price and plain information, which a
+// press that worked may bring as well, and a busy line, which is its own refusal.
+const NOT_REQUIREMENT_REFUSALS = [
+  "Only 30 pieces available.",
+  "30 pieces available",
+  "This combination is sold out.",
+  "Out of stock",
+  "Price: €23.99",
+  "Added to cart!",
+  "Select options",
+  "Required",
+  "Network busy, please try again",
+  "Tax excluded, add at checkout if applicable",
+  "Please wait",
+  "Fields marked * are required"
+];
+
+test("a page saying it needs something before it will do the press is a requirement refusal", () => {
+  for (const text of REQUIREMENT_REFUSALS) assert.equal(isPageRequirementText(text), true, text);
+});
+
+test("stock, price, a confirmation or a busy line is not a requirement refusal", () => {
+  for (const text of NOT_REQUIREMENT_REFUSALS) assert.equal(isPageRequirementText(text), false, text);
 });
 
 const DISMISSALS = [

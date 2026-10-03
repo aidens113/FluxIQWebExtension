@@ -33,6 +33,7 @@ expected failure names.
 | `USER_INTERVENTION_REQUIRED` | `web.intervention.required` | `user_intervention_required` | no | `execution` |
 | `BLOCKED_BY_DIALOG` | `web.action.blocked_by_dialog` | `unexpected_state` | no | `execution` |
 | `RATE_LIMITED` | `web.action.rate_limited` | `action_failed` | yes | `execution` |
+| `REFUSED_BY_PAGE` | `web.action.refused_by_page` | `unexpected_state` | no | `execution` |
 | `BROWSER_PERMISSION_DENIED` | `web.browser.permission_denied` | `blocked_by_capability_or_policy` | no | `dispatch` |
 | `TRANSPORT_TRANSIENT` | `web.transport.transient` | `action_failed` | yes | `execution` |
 | `UNSUPPORTED_TYPE` | `web.action.unsupported_type` | `blocked_by_capability_or_policy` | no | `dispatch` |
@@ -75,8 +76,8 @@ refusal `BLOCKED_BY_DIALOG` nor is cleared by the page-side defence
 refusal that must be resolved before dispatch, unlike `ACTION_REJECTED`, which
 is the actionability decision about a particular target on a drivable page.
 
-`RATE_LIMITED` is the one row that states the act did not happen: its record
-carries `effect: "unacted"`, a field Core's record gained for it. The click verb
+`RATE_LIMITED` and `REFUSED_BY_PAGE` are the rows that state the act did not happen: their records
+carry `effect: "unacted"`, a field Core's record gained for `RATE_LIMITED`. The click verb
 reports it when a press that is not a link opens a notice whose own words say
 the page refused it for going too fast
 (`apps/extension/src/content/action-runtime/rate-limit-notice.ts`), or brings a
@@ -103,6 +104,25 @@ press. The back landing is judged by its address against the one the tab showed
 before the click and by its served status, and `actual` says whether the tab
 was returned, and if not why, beside the status, the landed path without its
 query and the wait.
+
+`REFUSED_BY_PAGE` is the page refusing a press because it needs something
+first, in words it writes into the pressed control's own region (its three
+nearest composed ancestors, shadow roots included): crossborder's Add to cart,
+pressed with no colour chosen, writes "Please select a Color." and adds nothing.
+The click verb's watch (`rate-limit-notice.ts`, through
+`content/action-runtime/written-lines/`) reads each short line the press
+wrote there, rendered and holding no control of its own, against a closed
+phrase list (`interference/vocabulary.ts`: "please select/choose/pick/enter/fill
+in/fill out/provide/specify", "is required", "purchase limit"; never stock,
+price or availability words). It is not retryable and never pressed again: the
+same press is answered the same way until the page has what it asked for, which
+the model or a repair gives it. The record carries none of the page's words;
+the model reads them on the page the refusal carries. Until 2026-10-02 the
+press passed on its hit test, was pressed once more as ignored, and reported
+success with nothing in the cart (`run-muqk4u32-0b36e58f`, t174 F40). In the
+evidence loop both this and a busy or too-fast refusal reach the model as
+`refused_by_page`, with the reason `page_needs_something_first` or
+`page_busy_try_later` (`domain/src/runtime/llm-evidence/action-failure/refusal.ts`).
 
 ## Why The Binding Matters
 

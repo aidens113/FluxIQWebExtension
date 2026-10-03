@@ -139,6 +139,13 @@ export type ContentActionDependencies = {
     notice: RateLimitNotice,
     evidence?: ActionResultEvidence
   ): BrowserActionResult;
+  /** The page refused a press because it needs something first, and said so beside the control: REFUSED_BY_PAGE, not retryable, unacted. */
+  refusedByPage(
+    action: BrowserActionCommand,
+    startedAt: number,
+    notice: RateLimitNotice,
+    evidence?: ActionResultEvidence
+  ): BrowserActionResult;
   /**
    * A press the page answered with a robot check a person must answer:
    * USER_INTERVENTION_REQUIRED, saying the press itself was made.

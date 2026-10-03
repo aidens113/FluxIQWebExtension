@@ -18,6 +18,12 @@
 // Core runs the node again after that wait (`action-runtime/rate-limit-notice.ts`).
 // Until 2026-09-30 such a press passed on its hit test, and a Flow confirming
 // four friend requests on social-network-feed read the refused fourth as done.
+// Or unless the page answers with a line in the control's region saying it
+// needs something first -- "Please select a Color." -- when the press did
+// nothing and fails as `web.action.refused_by_page`, not retryable and never
+// pressed again: the same press is answered the same way until the page has
+// what it asked for. Until 2026-10-02 crossborder's Add to cart was pressed
+// twice and reported done with nothing in the cart (`run-muqk4u32-0b36e58f`).
 // Or unless the page answers the press with a robot check drawn in place
 // (`action-runtime/robot-check/`): one only a person can answer, or one that
 // says it clears by itself and has not within the wait, fails
@@ -159,7 +165,9 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
   const link = navigatingLink(element);
   if (!link) {
     const first = await press(element, report.point, action, deps, startedAt);
-    if (first.refused) return deps.rateLimited(action, startedAt, first.refused, evidence());
+    // Before the ignored-press rule: a page that wrote its refusal outside the
+    // control's section is a press the watch saw no sign of, and is never pressed again.
+    if (first.refused) return refusal(action, deps, startedAt, first.refused, evidence());
     if (first.sighting && first.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, first.sighting, evidence());
     // A robot check that came and went was an answer; so is any sign the watch saw.
     if (first.sighting || !first.answer || !pressAgain(first.answer.seen, 0)) {
@@ -172,7 +180,7 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
       return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting), evidence());
     }
     const second = await press(element, report.point, action, deps, startedAt);
-    if (second.refused) return deps.rateLimited(action, startedAt, second.refused, evidence());
+    if (second.refused) return refusal(action, deps, startedAt, second.refused, evidence());
     if (second.sighting && second.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, second.sighting, evidence());
     if (!second.sighting && second.answer && second.answer.seen.length === 0 && expectsAnswer(element)) {
       return deps.success(action, startedAt, "Element clicked.", ignoredTwiceValidation(report.detail, second.accepted), evidence());
@@ -195,6 +203,15 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
   } finally {
     watch?.stop();
   }
+}
+
+/**
+ * A press the page refused in words: as needing something first, which the
+ * same press cannot change (REFUSED_BY_PAGE, not retryable), or as too fast or
+ * busy, which a press after a wait may (RATE_LIMITED).
+ */
+function refusal(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number, notice: RateLimitNotice, evidence: ActionResultEvidence): BrowserActionResult {
+  return notice.needs ? deps.refusedByPage(action, startedAt, notice, evidence) : deps.rateLimited(action, startedAt, notice, evidence);
 }
 
 /**

@@ -61,6 +61,11 @@ function keptColumns(fields: unknown, detected: Record<string, WebAutomationExtr
   return keptWebExtractionColumns(fields, detected, ["fields"]);
 }
 
+/** A detected column as a read keeps it: the detection's coverage-derived `required` is not carried (`../columns.ts`, `unrequired`). */
+function asKept(spec: WebAutomationExtractField): WebAutomationExtractField {
+  return typeof spec === "string" ? spec : { ...spec, required: false };
+}
+
 function conditions(where: unknown, detected: Record<string, WebAutomationExtractField> = CATALOG, kept: Record<string, WebAutomationExtractField> = {}) {
   return keptWebExtractionConditions(where, { detected, kept }, ["where"]);
 }
@@ -70,7 +75,7 @@ test("a column named in the instruction's own words resolves to the detected one
   const kept = keptColumns({ name: "name", price: "price", rating: "rating" });
   assert.deepEqual(kept, {
     ok: true,
-    fields: { name: CATALOG["product-name"], price: CATALOG["product-price"], rating: CATALOG["product-rating"] },
+    fields: { name: asKept(CATALOG["product-name"]), price: asKept(CATALOG["product-price"]), rating: asKept(CATALOG["product-rating"]) },
     assumed: [
       { path: ["fields", "name"], written: "name", field: "product-name", how: "nearest", score: 0.733, among: "detected" },
       { path: ["fields", "price"], written: "price", field: "product-price", how: "nearest", score: 0.746, among: "detected" },
@@ -83,19 +88,19 @@ test("a column named in the instruction's own words resolves to the detected one
   for (const written of ["productName", "PRODUCT-NAME", "product_name", ".product-name"]) {
     assert.deepEqual(keptColumns({ name: written }), {
       ok: true,
-      fields: { name: CATALOG["product-name"] },
+      fields: { name: asKept(CATALOG["product-name"]) },
       assumed: [{ path: ["fields", "name"], written, field: "product-name", how: "normalized", score: 1, among: "detected" }]
     }, written);
   }
 
   // The key verbatim assumes nothing at all.
-  assert.deepEqual(keptColumns({ name: "product-name" }), { ok: true, fields: { name: CATALOG["product-name"] }, assumed: [] });
+  assert.deepEqual(keptColumns({ name: "product-name" }), { ok: true, fields: { name: asKept(CATALOG["product-name"]) }, assumed: [] });
 
   // A table column is found by a near-miss header as well as by a near-miss key,
   // because the model was shown both. `column:` says the name is a header.
   assert.deepEqual(keptColumns({ cheapest: "column:Prise" }, TABLE), {
     ok: true,
-    fields: { cheapest: TABLE.price },
+    fields: { cheapest: asKept(TABLE.price) },
     assumed: [{ path: ["fields", "cheapest"], written: "column:Prise", field: "price", how: "nearest", score: 0.8, among: "detected" }]
   });
 });
@@ -187,19 +192,19 @@ test("every name written exactly is read before any name is guessed at", () => {
   // The field map written the other way round -- the key names the column, the
   // value the name to keep it under. It is recognised only because the value
   // names no column, so a guess at `price` must not answer first.
-  assert.deepEqual(keptColumns({ "product-price": "price" }), { ok: true, fields: { price: CATALOG["product-price"] }, assumed: [] });
+  assert.deepEqual(keptColumns({ "product-price": "price" }), { ok: true, fields: { price: asKept(CATALOG["product-price"]) }, assumed: [] });
 
   // And a guess never takes a column another name claimed exactly. Written
   // alone, `product-image` resolves to the `src`; beside a name that says `src`
   // outright it resolves to the `alt`, rather than reading one column twice.
   assert.deepEqual(keptColumns({ image: "product-image" }), {
     ok: true,
-    fields: { image: CATALOG["product-image_src"] },
+    fields: { image: asKept(CATALOG["product-image_src"]) },
     assumed: [{ path: ["fields", "image"], written: "product-image", field: "product-image_src", how: "nearest", score: 0.881, among: "detected" }]
   });
   assert.deepEqual(keptColumns({ image: "product-image", source: "product-image_src" }), {
     ok: true,
-    fields: { image: CATALOG["product-image_alt"], source: CATALOG["product-image_src"] },
+    fields: { image: asKept(CATALOG["product-image_alt"]), source: asKept(CATALOG["product-image_src"]) },
     assumed: [{ path: ["fields", "image"], written: "product-image", field: "product-image_alt", how: "nearest", score: 0.881, among: "detected" }]
   });
 });
@@ -258,7 +263,7 @@ const CART = {
 test("a cart read in the instruction's own words resolves each name to the one column of its kind, as a guess", () => {
   const kept = keptColumns({ item: "item", quantity: "quantity", price: "price" }, CART);
   if (!kept.ok) assert.fail(`refused ${JSON.stringify(kept)}`);
-  assert.deepEqual(kept.fields, { item: CART[CART_ITEM], quantity: CART[CART_QUANTITY], price: CART[CART_PRICE] });
+  assert.deepEqual(kept.fields, { item: asKept(CART[CART_ITEM]), quantity: asKept(CART[CART_QUANTITY]), price: asKept(CART[CART_PRICE]) });
   assert.deepEqual(kept.assumed, [
     { path: ["fields", "item"], written: "item", field: CART_ITEM, how: "nearest", score: 0, among: "detected" },
     { path: ["fields", "quantity"], written: "quantity", field: CART_QUANTITY, how: "nearest", score: 0, among: "detected" },
@@ -268,7 +273,7 @@ test("a cart read in the instruction's own words resolves each name to the one c
   // The other words for the same kinds, in any case and with any separator.
   const other = keptColumns({ a: "Product Name", b: "qty", c: "unit_price" }, CART);
   if (!other.ok) assert.fail(`refused ${JSON.stringify(other)}`);
-  assert.deepEqual(other.fields, { a: CART[CART_ITEM], b: CART[CART_QUANTITY], c: CART[CART_PRICE] });
+  assert.deepEqual(other.fields, { a: asKept(CART[CART_ITEM]), b: asKept(CART[CART_QUANTITY]), c: asKept(CART[CART_PRICE]) });
 });
 
 test("a name of a kind two columns have, or none has, is still refused: a kind decides only when it names one column", () => {

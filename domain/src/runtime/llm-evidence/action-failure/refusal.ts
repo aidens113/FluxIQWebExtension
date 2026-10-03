@@ -76,14 +76,22 @@ const BY_FAILURE_CODE: Readonly<Record<string, WebLlmToolRejectionCode>> = Objec
   // `invalid_input` means everywhere else in this domain.
   [WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE]: "invalid_input",
   [WEB_AUTOMATION_FAILURE_CODES.NOT_IMPLEMENTED]: "invalid_input",
-  [WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER]: "invalid_input"
+  [WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER]: "invalid_input",
+  // The press landed and the page refused it in its own words beside the
+  // control. One code for both refusals, because the model's move starts the
+  // same -- read what the page wrote, on the page this refusal carries -- and
+  // the reason says whether to give it something first or only to wait. Both
+  // used to fall through to `action_failed`, which the activity card reads as
+  // "the step wasn't accepted" (t174 F40, run-muqk4u32 step 0021).
+  [WEB_AUTOMATION_FAILURE_CODES.REFUSED_BY_PAGE]: "refused_by_page",
+  [WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED]: "refused_by_page"
 });
 
 /**
  * The reason a code implies on its own, for the codes whose whole meaning is in
  * the code the client sent.
  *
- * Two of the nineteen are deliberately absent and stay bare `action_failed`,
+ * Two of the closed set's codes are deliberately absent and stay bare `action_failed`,
  * because there is nothing truthful to add to them:
  *
  * - `web.action.failed` is by definition "the action failed for a reason no
@@ -102,7 +110,11 @@ const BY_FAILURE_REASON: Readonly<Record<string, WebLlmToolRejectionReason>> = O
   [WEB_AUTOMATION_FAILURE_CODES.TRANSPORT_TRANSIENT]: "channel_to_page_failed",
   [WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE]: "node_not_runnable_here",
   [WEB_AUTOMATION_FAILURE_CODES.NOT_IMPLEMENTED]: "node_not_runnable_here",
-  [WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER]: "parameter_not_readable"
+  [WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER]: "parameter_not_readable",
+  [WEB_AUTOMATION_FAILURE_CODES.REFUSED_BY_PAGE]: "page_needs_something_first",
+  // Core's repeat guard reads "busy" in a reason as "may work later", so the
+  // same press stays open to the model on the same page.
+  [WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED]: "page_busy_try_later"
 });
 
 /**
