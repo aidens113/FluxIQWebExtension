@@ -27,6 +27,12 @@
 // - A take-down (`null`: the person hid the overlay, or the work moved to
 //   another tab) is drawn at once and drops what was waiting; the next status
 //   after it is drawn at once.
+// - Waiting for the person begins and ends at once (the attention mark comes
+//   or goes): the person must see at once that they are needed, and that
+//   their answer was taken. D7 of the run-murwd8le-79e735a8 UI review: Continue
+//   was pressed a moment after the ask appeared, and the overlay went on
+//   saying "Waiting for you" while the dwell held the answer back. Both move
+//   at the person's own pace, so neither can make the overlay flicker.
 //
 // **Why 1600 ms.** More than half of three seconds, so any three seconds of the
 // page show at most two changes of words: three in three seconds is what the
@@ -57,7 +63,7 @@ export class StatusDwell {
 
   /** Shows `view` now, or once the words up have had their dwell; `null` takes the overlay down at once. */
   show(view: ActivityOverlayView | null): void {
-    if (!view || !this.drawn || sameWords(view, this.drawn)) {
+    if (!view || !this.drawn || sameWords(view, this.drawn) || waits(view) !== waits(this.drawn)) {
       this.cancelWaiting();
       this.drawNow(view);
       return;
@@ -92,6 +98,11 @@ export class StatusDwell {
     this.timer = undefined;
     this.waiting = undefined;
   }
+}
+
+/** The view asks the person for something: the overlay's attention mark (`overlay-view.ts`). */
+function waits(view: ActivityOverlayView): boolean {
+  return view.mark === "attention";
 }
 
 /** Whether two views say the same thing: the same headline, detail and step. */

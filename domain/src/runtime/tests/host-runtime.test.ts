@@ -84,6 +84,31 @@ test("a web attempt gets a sanitized state ref sourced from web.dom.capture_snap
   assert.match(JSON.stringify(ref.summary), /Leave at the door/u);
 });
 
+// Core reads `from` off a node's first attempt so a re-author's rerun of that
+// node can put the page back where it started (t194 cause C-D, live run
+// `run-murwcmx2-a1c6edf7`: a rerun of the Flow's list read ran on results page 5).
+// It is the reset token a step's `replay.from` is: `{ location }`, navigated to
+// as written, so it is the page's real address -- never a screened one, whose
+// "(withheld)" would not reach the page -- and it is absent when the address
+// holds anything the packet withholds, so it never carries a secret.
+test("a state ref carries the page's own address as the token a reset navigates to", async () => {
+  const location = "https://shop.test/s?k=wireless+earbuds&page=1#results";
+  const { gateway: seam } = gateway([{ ok: true, status: "succeeded", payload: { status: "succeeded", result: { snapshot: pageSnapshot(location, ["#next"]) } } }]);
+  const ref = await createWebAutomationHostRuntime(seam).captureStateSnapshot!(captureInput(CLICK_NODE_ID));
+
+  assert.deepEqual(ref.from, { location });
+  assert.equal(ref.summary?.location, location);
+});
+
+test("a state ref carries no reset token when the page's address holds something withheld", async () => {
+  for (const url of ["https://shop.test/cart?token=leaked-token", "https://shop.test/account#access_token=abc", "https://user:pass@shop.test/"]) {
+    const { gateway: seam } = gateway([{ ok: true, status: "succeeded", payload: { status: "succeeded", result: { snapshot: pageSnapshot(url, ["#pay"]) } } }]);
+    const ref = await Promise.resolve(createWebAutomationHostRuntime(seam).captureStateSnapshot!(captureInput(CLICK_NODE_ID))).catch(() => undefined);
+    assert.equal(ref?.from, undefined, url);
+    assert.doesNotMatch(JSON.stringify(ref ?? {}), /leaked-token|access_token=abc|user:pass/u, url);
+  }
+});
+
 test("a recorded action, Core's policy node naming web.dom.click, gets a state ref from web.dom.capture_snapshot", async () => {
   const payload = { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/cart", ["#pay"]) } };
   const { gateway: seam, calls } = gateway([{ ok: true, status: "succeeded", payload }]);

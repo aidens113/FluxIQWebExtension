@@ -73,3 +73,22 @@ test("status updates at the background's 1.2 s pace change the words at most twi
     assert.equal(drawn.at(-1), "Line 7", "the last status is drawn");
   });
 });
+
+// D7 of the run-murwd8le-79e735a8 UI review: the person pressed Continue a
+// moment after the ask appeared, and the overlay went on saying "Waiting for
+// you" -- held back by the dwell -- while the panel had moved on.
+test("waiting for the person begins and ends at once: the person is never kept waiting by the dwell", () => {
+  withFakeClock((clock) => {
+    const drawn: Array<ActivityOverlayView | null> = [];
+    const dwell = new StatusDwell((next) => drawn.push(next));
+    dwell.show(view({ detail: "Deciding the next step" }));
+    clock.advance(100);
+    const waiting = view({ mark: "attention", accent: "#f7d354", headline: "Waiting for you: answer in the FluxIQ panel", detail: "FluxIQ needs you: complete the check on this page, then press Continue." });
+    dwell.show(waiting);
+    assert.equal(drawn.at(-1)?.headline, waiting.headline, "the ask is drawn the moment it comes");
+    clock.advance(300);
+    dwell.show(view({ headline: "Fixing your Flow", detail: "" }));
+    assert.equal(drawn.at(-1)?.headline, "Fixing your Flow", "the answer is taken the moment it is given");
+    assert.equal(clock.pending(), 0);
+  });
+});

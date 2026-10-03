@@ -19,6 +19,7 @@ import type { WebLlmSnapshotBinding } from "../sanitize";
 import type { WebLlmToolRejectionReason } from "../tool-rejection";
 import { screenedText } from "../withheld";
 import type { WebNodeRun } from "./context";
+import { WEB_NODE_REPLAY_READ_ROWS_NOTE, WEB_NODE_REPLAY_UNFILTERED_ROWS_NOTE } from "./rejected-rows";
 
 /**
  * The closed vocabulary a replay answers in.
@@ -54,8 +55,17 @@ export type WebNodeVerifyFinding = "missing" | "hidden" | "disabled";
  * Named rather than written inline so both answers -- the bare one and the one
  * with the page -- are the same fields, and a field dropped from one is a
  * compile error rather than a packet the model quietly reasons without.
+ *
+ * `notice` and `changed` are what an exploration press says of the page it
+ * acted on (`./press-effect/`), said of a replayed one too (t174-w82): the
+ * lines a page that refused the step answered with, and the lines a step that
+ * ran changed. Core hands the whole answer to the judge of the build's test as
+ * the step's `observed` (`AS/runtime/result-verification/build-test/observation.ts`);
+ * on `run-murwd8le-79e735a8` that judge was told "the step ran again" of an
+ * Add to cart the page answered "You have reached the purchase limit for this
+ * item.".
  */
-type WebNodeReplayAnswer = { ok: boolean; code: string; said: string; found?: WebNodeVerifyFinding; readRows?: JsonObject };
+type WebNodeReplayAnswer = { ok: boolean; code: string; said: string; found?: WebNodeVerifyFinding; notice?: string[]; changed?: string[]; readRows?: JsonObject };
 
 /**
  * What a replay answer says about itself beyond Core's replay code
@@ -90,8 +100,8 @@ export type WebNodeReplayFacts = {
  * page, which is what `effectApplied` tells Core. They differ only for a
  * checked step, which passed and did nothing.
  */
-export function webNodeReplayAnswer(code: string, said: string, ok = false, about?: WebNodeReplayFacts, acted = ok, readRows?: JsonObject): WebLlmEvidenceToolExecution {
-  return toolExecution(present<WebNodeReplayAnswer>({ ok, code, said, found: undefined, readRows }) as unknown as JsonValue, acted, code, undefined, undefined, about);
+export function webNodeReplayAnswer(code: string, said: string, ok = false, about?: WebNodeReplayFacts, acted = ok, readRows?: JsonObject, changed?: string[]): WebLlmEvidenceToolExecution {
+  return toolExecution(present<WebNodeReplayAnswer>({ ok, code, said, found: undefined, notice: undefined, changed, readRows }) as unknown as JsonValue, acted, code, undefined, undefined, about);
 }
 
 /**
@@ -101,11 +111,13 @@ export function webNodeReplayAnswer(code: string, said: string, ok = false, abou
  * page is missing reads it as the less favourable answer (`./verify.ts`). A
  * cancelled run still throws.
  */
-export async function webNodeReplayPage(run: WebNodeRun): Promise<WebLlmSnapshotBinding | undefined> {
+export async function webNodeReplayPage(run: WebNodeRun, shown = true): Promise<WebLlmSnapshotBinding | undefined> {
   let page: WebLlmSnapshotBinding | undefined;
   try {
     page = run.restamp(await captureEvidence(run.gateway, run.sessionId, run.request, run.request.signal));
-    run.shown(page);
+    // A look a replay only compares -- before and after a step that ran -- is
+    // not shown: an answer that carries no page shows the model nothing.
+    if (shown) run.shown(page);
   } catch (error) {
     if (run.request.signal?.aborted) throw error;
   }
@@ -124,10 +136,10 @@ export async function webNodeReplayPage(run: WebNodeRun): Promise<WebLlmSnapshot
 export function webNodeReplayAnswerOnPage(
   run: WebNodeRun,
   page: WebLlmSnapshotBinding | undefined,
-  answer: { code: string; said: string; acted: boolean; about?: WebNodeReplayFacts | undefined; found?: WebNodeVerifyFinding | undefined; ok?: boolean }
+  answer: { code: string; said: string; acted: boolean; about?: WebNodeReplayFacts | undefined; found?: WebNodeVerifyFinding | undefined; ok?: boolean; notice?: string[] | undefined }
 ): WebLlmEvidenceToolExecution {
-  // An answer on a page did not replay a read, so it names no rows.
-  const verdict: JsonObject = present<WebNodeReplayAnswer>({ ok: answer.ok ?? false, code: answer.code, said: answer.said, found: answer.found, readRows: undefined }) as unknown as JsonObject;
+  // An answer on a page did not replay a read, so it names no rows; the page it carries is what changed.
+  const verdict: JsonObject = present<WebNodeReplayAnswer>({ ok: answer.ok ?? false, code: answer.code, said: answer.said, found: answer.found, notice: answer.notice, changed: undefined, readRows: undefined }) as unknown as JsonObject;
   if (page) {
     // The page, with what the replay made of this step written on the same
     // result: the one shape every other page has (`web-llm-page.v3`), and a
@@ -191,7 +203,7 @@ export function webNodeReplayReadSaid(payload: JsonValue | undefined, where: unk
 }
 
 /** What a replayed read names of its rows: Core's member, `readRows` (see `webNodeReplayReadRows`). */
-type WebNodeReplayReadRows = { rows?: JsonObject[] | undefined; leftOutOnlyByThis?: JsonObject[] | undefined };
+type WebNodeReplayReadRows = { rows?: JsonObject[] | undefined; leftOutOnlyByThis?: JsonObject[] | undefined; note?: string | undefined };
 
 /** The rows one condition removed by itself. */
 type WebNodeReplayLeftOut = { condition: string; rows: JsonObject[] };
@@ -249,6 +261,15 @@ const INDEX_KEY = /^\d+$/u;
  * column; and left out where the tested column is the label's own, since the
  * label already is that value. Core reads the label from the first cell
  * either way, so a Core that predates the second cell still reads the row.
+ *
+ * **It says how to read them** (t194 w68, run `run-murwcmx2-a1c6edf7` C-E).
+ * The answer also reaches the model that explores, as `core.run_flow`'s last
+ * step, so the rows a condition removed by itself carry the same check an
+ * explored read's `rejectedRowsNote` asks for (`./rejected-rows.ts`), as
+ * `note`; a read whose conditions kept none says its rows are rows they
+ * rejected. The note only adds a sentence: no row is left out for it. Core's
+ * build-test judge is sent `rows` and `leftOutOnlyByThis` only and has its own
+ * instruction (`AS/runtime/result-verification/build-test/read-rows.ts`).
  */
 export function webNodeReplayReadRows(payload: JsonValue | undefined, where: unknown, ranWhere?: unknown): JsonObject | undefined {
   const summary = isJsonRecord(payload) ? webAutomationExtractionSummaryValue(payload.extraction) : undefined;
@@ -264,9 +285,14 @@ export function webNodeReplayReadRows(payload: JsonValue | undefined, where: unk
     return alone.length ? [present<WebNodeReplayLeftOut>({ condition: named[index]!, rows: alone }) as unknown as JsonObject] : [];
   });
   if (!rows.length && !leftOut.length) return undefined;
+  const notes = [
+    ...(summary.conditions?.unfiltered && rows.length ? [WEB_NODE_REPLAY_UNFILTERED_ROWS_NOTE] : []),
+    ...(leftOut.length ? [WEB_NODE_REPLAY_READ_ROWS_NOTE] : [])
+  ];
   return present<WebNodeReplayReadRows>({
     rows: rows.length ? rows : undefined,
-    leftOutOnlyByThis: leftOut.length ? leftOut : undefined
+    leftOutOnlyByThis: leftOut.length ? leftOut : undefined,
+    note: notes.length ? notes.join(" ") : undefined
   }) as unknown as JsonObject;
 }
 

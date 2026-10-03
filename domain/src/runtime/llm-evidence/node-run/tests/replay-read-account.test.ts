@@ -15,6 +15,7 @@ import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type W
 import { webNodeReplayStatement } from "../replay";
 import { webNodeReplayReadRows } from "../replay-answer";
 import { WEB_LLM_WITHHELD_TEXT } from "../../withheld";
+import { WEB_NODE_REJECTED_ROWS_CHECK, WEB_NODE_REPLAY_READ_ROWS_NOTE } from "../rejected-rows";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const EXTRACT = "web.output.dom-extract_list";
@@ -164,7 +165,9 @@ test("a replayed read with conditions asks the page for the rows each removed by
     leftOutOnlyByThis: [
       { condition: "price", rows: [{ name: "Soundcrest Air Pro Max", price: "$89.99" }] },
       { condition: "name", rows: [{ name: LUMO }, { name: AURELLE }] }
-    ]
+    ],
+    // How to read the rows a condition removed by itself (t194 w68, below).
+    note: WEB_NODE_REPLAY_READ_ROWS_NOTE
   });
   // The counts line is unchanged.
   assert.match(String((replayed.result.evidence as JsonObject).said), /per condition rejected \(removed alone\): price 1 \(1\), name 3 \(2\)$/u);
@@ -299,3 +302,66 @@ test("a tested value shaped like a secret is written withheld, as a label is", (
     { name: "Priya Nair", mutualFriends: "" }
   ]);
 });
+
+// A replayed read that names rows a condition removed by itself says how to read
+// them, as an explored read does (t194 w68, live run `run-murwcmx2-a1c6edf7`
+// C-E). Step 0044 of that run: `core.run_flow` replayed the list read, and its
+// `readRows.leftOutOnlyByThis` came back to the explorer with no sentence, where
+// the same alone rows through `core.run_node` carry `rejectedRowsNote`
+// (1002-L C1). Every row is still named: the note adds a sentence and removes
+// nothing (user rule: no caps).
+const NOTE_PARAMETERS: JsonObject = { extractList: { item: ".card", fields: fieldMap(), where: WHERE } };
+
+test("a replayed read whose conditions removed rows by themselves carries the note on reading them, and every row", async () => {
+  const kept = Array.from({ length: 30 }, (_, index) => row(`Earbuds ${index}`, "$20.00"));
+  const alone = Array.from({ length: 25 }, (_, index) => row(`Earbuds with Charging Case ${index}`, "$20.00"));
+  const readRows = await replayedReadRows({
+    extracted: kept,
+    extraction: {
+      recordCount: kept.length, pagesRead: 1, itemsSeen: 60, truncated: false, fieldNames: FIELDS, missingFields: [],
+      conditions: { applied: 60, kept: kept.length, rejected: [0, 30], unfiltered: false, alone: [0, 25] },
+      rejectedSamples: [[], [...alone, row("Ear tips", "$99.00")]],
+      rejectedSamplesAlone: [0, 25]
+    }
+  });
+  assert.equal(readRows.note, WEB_NODE_REPLAY_READ_ROWS_NOTE);
+  assert.ok(WEB_NODE_REPLAY_READ_ROWS_NOTE.includes(WEB_NODE_REJECTED_ROWS_CHECK), "the same check an explored read's note asks for");
+  assert.equal((readRows.rows as JsonObject[]).length, 30, "no kept row is cut");
+  const leftOut = readRows.leftOutOnlyByThis as JsonObject[];
+  assert.equal(leftOut.length, 1);
+  assert.equal((leftOut[0]!.rows as JsonObject[]).length, 25, "no alone row is cut");
+});
+
+test("a replayed read whose conditions kept none says its rows are rows they rejected", async () => {
+  const rejected = [row("Earbuds A", "$20.00"), row("Earbuds B", "$20.00")];
+  const readRows = await replayedReadRows({
+    extracted: rejected,
+    extraction: {
+      recordCount: 2, pagesRead: 1, itemsSeen: 2, truncated: false, fieldNames: FIELDS, missingFields: [],
+      conditions: { applied: 2, kept: 0, rejected: [2, 0], unfiltered: true }
+    }
+  });
+  assert.match(String(readRows.note), /kept no row/u);
+  assert.equal((readRows.rows as JsonObject[]).length, 2);
+});
+
+test("a replayed read whose conditions removed nothing by themselves and kept rows carries no note", async () => {
+  const readRows = await replayedReadRows({
+    extracted: [row("Earbuds A", "$20.00")],
+    extraction: {
+      recordCount: 1, pagesRead: 1, itemsSeen: 3, truncated: false, fieldNames: FIELDS, missingFields: [],
+      conditions: { applied: 3, kept: 1, rejected: [1, 1], unfiltered: false, alone: [0, 0] },
+      rejectedSamples: [[row("X", "$90.00")], [row("X", "$90.00")]],
+      rejectedSamplesAlone: [0, 0]
+    }
+  });
+  assert.equal(readRows.note, undefined);
+  assert.deepEqual(readRows, { rows: [{ name: "Earbuds A" }] });
+});
+
+/** Replay the read as `core.run_flow`'s dry run does, against a page that answers with `payload`; its `readRows`. */
+async function replayedReadRows(payload: JsonObject): Promise<JsonObject> {
+  const { result } = await replaySent(payload, NOTE_PARAMETERS);
+  assert.equal(result.resultCode, "core.replay.replayed");
+  return (result.evidence as JsonObject).readRows as JsonObject;
+}

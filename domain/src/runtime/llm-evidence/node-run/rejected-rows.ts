@@ -68,8 +68,24 @@ const EXTRACT_LIST_ACTION = "web.dom.extract_list";
 
 // The parenthesis is live run `run-muqk713g`'s (C1): told to check each alone row, the model still kept a name
 // condition that removed three asked items sold "with" the part the instruction excluded.
+/**
+ * What the model is asked to do with the rows a condition removed by itself,
+ * wherever it is shown them: an explored read's `rowsAlone` (below) and a
+ * replayed read's `readRows.leftOutOnlyByThis` (`./replay-answer.ts`).
+ */
+export const WEB_NODE_REJECTED_ROWS_CHECK = "check each against the instruction, and if any is a row the instruction asks for, that condition is wrong and must change (a row the instruction excludes is one that is the excluded kind of thing, not one whose text only mentions it: an item sold with or including an excluded part is still the item)";
+
 /** The one sentence the model is given beside `rejectedRows`, when some condition removed rows alone. */
-export const WEB_NODE_REJECTED_ROWS_NOTE = "In rejectedRows, each row is its values in the order of fields; a condition's rowsAlone are rows it removed by itself (every other condition kept them): check each against the instruction, and if any is a row the instruction asks for, that condition is wrong and must change (a row the instruction excludes is one that is the excluded kind of thing, not one whose text only mentions it: an item sold with or including an excluded part is still the item); rowsWithOthers lists once each row more than one condition rejected, under the conditions it failed.";
+export const WEB_NODE_REJECTED_ROWS_NOTE = `In rejectedRows, each row is its values in the order of fields; a condition's rowsAlone are rows it removed by itself (every other condition kept them): ${WEB_NODE_REJECTED_ROWS_CHECK}; rowsWithOthers lists once each row more than one condition rejected, under the conditions it failed.`;
+
+// t194 w68 (run `run-murwcmx2-a1c6edf7` C-E): at step 0044 `core.run_flow`'s
+// replay returned the same alone rows as `readRows.leftOutOnlyByThis`, with no
+// sentence, so the explorer was told how to read them on one path only.
+/** The sentence a replayed read's `readRows` carries as `note` when a condition removed rows by itself. */
+export const WEB_NODE_REPLAY_READ_ROWS_NOTE = `In readRows, rows are the rows the step returned, by label; each leftOutOnlyByThis entry names a condition and the rows it removed by itself (every other condition kept them): ${WEB_NODE_REJECTED_ROWS_CHECK}.`;
+
+/** The sentence a replayed read's `readRows` carries as `note` when its conditions kept no row and it answered with rows they rejected. */
+export const WEB_NODE_REPLAY_UNFILTERED_ROWS_NOTE = "The step's conditions kept no row, so readRows.rows are rows they rejected: check each against the instruction, and if any is a row the instruction asks for, a condition that rejected it is wrong and must change.";
 
 /**
  * One condition's rejected rows as they are gathered: `rowsAlone` from a page
