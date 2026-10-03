@@ -69,8 +69,10 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
 | D confirm-requests | `murwcaj0` $0.089, `murz83zy` $0.088 | no Flow: loop clicked one hard-coded row; purse | reorder hint, single-row twin, column `at` per item; row-general Flows (t252) |
 
 **In flight (each agent's state is in its report).**
-- **Lane sync for round 1003:** the four lane trees fast-forwarded to dev (both repositories) and rebuilt as `pnpm task
-  start` builds a tree (Core `buildCore`, then `pnpm build`). Then the round 1003 briefs below are dispatched.
+- **Round 1003, dispatched 2026-10-03:** the four lane trees were fast-forwarded to dev (Core `6beae684`, downstream
+  `45bd6232`) and rebuilt as `pnpm task start` builds a tree (Core `buildCore` 48-102 s, then `pnpm build` 61-144 s,
+  all rc 0). Leads t174/t193/t194/t195-lead-1003 (`lead-xhigh`) run slots 1-4 from the briefs below; reports
+  `reports/<lead>.md` in each lane tree.
 - **Sweep 2** (full suites on dev, background; logs in the supervisor's scratchpad `sweep2/`): Core `pnpm test`, then
   downstream `pnpm check`, `pnpm test`, `pnpm build`. Findings are fixed forward.
 
