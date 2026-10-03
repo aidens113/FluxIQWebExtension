@@ -114,7 +114,7 @@ function wordsOf(event: ClientGatewayActivity): readonly [string, string | null]
     const code = resultCodeOf(event);
     // A row's status says whether the call ended; only an older Core's bare "Using X: code" sentence is read for it.
     const ended = detail?.status ? detail.status !== "started" : code !== undefined;
-    return [toolAction(toolId, event, code), ended ? toolOutcome(detail?.status, code) : null];
+    return [toolAction(toolId, event, code), ended ? testedOutcome(event, code) ?? toolOutcome(detail?.status, code) : null];
   }
   if (event.phase === "thinking" || detail?.kind === "thought") return [thoughtAction(event), null];
   if (detail?.title === "Completion check" || /^(Checking the proposed (result|Flow)|The proposed (result|Flow))/u.test(event.label)) {
@@ -204,6 +204,25 @@ function coreAction(event: ClientGatewayActivity): string | undefined {
 /** A name as it is put in quotes: one space between words, and no quotes of its own. */
 function plainName(text: string): string {
   return text.replace(/\s+/gu, " ").trim().replace(/^["'“”‘’]+|["'“”‘’]+$/gu, "").trim();
+}
+
+/** A test's step the test did not simply do again: checked, already done, or one the Flow passes over (`Excused` in its record). */
+const TESTED_CODE = /^core\.replay\.(verified|present|remembered)$/u;
+const EXCUSED = /(?:^|·\s*)Excused: \S/u;
+
+/**
+ * What a test of the Flow did with a step it did not simply do again, as
+ * Core's sentence says it after its dash ("checked, not pressed", "already
+ * done on the site", "skipped: not there, optional"), which are the words its
+ * card says (Core's `activityActionTested`). Nothing for any other step, or
+ * for an older Core whose sentence said no more than "done". The overlay read
+ * "done" and "that didn't work, trying another way" for these while the card
+ * said otherwise (t193 1002-M, `run-murzln6g-11debe1d`, C10).
+ */
+function testedOutcome(event: ClientGatewayActivity, code: string | undefined): string | undefined {
+  if (!code || !(TESTED_CODE.test(code) || (code.startsWith("core.replay.") && EXCUSED.test(event.detail?.text ?? "")))) return undefined;
+  const said = humanOr(event.label.split(" — ").slice(1).join(" — "), "");
+  return said && said !== OUTCOME_DONE ? said : undefined;
 }
 
 function toolOutcome(status: "started" | "succeeded" | "failed" | undefined, code: string | undefined): string {

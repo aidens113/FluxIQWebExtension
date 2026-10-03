@@ -57,6 +57,7 @@ import type {
   DomSnapshot,
   JsonValue
 } from "../types";
+import type { ActionabilityRejectionCode } from "./actionability";
 import { blockingDialog } from "./blocking-dialog";
 import { noteRefusedControl } from "./recovery";
 import { challengeIn } from "./challenge-evidence";
@@ -207,22 +208,39 @@ const DISABLED_REASON = "disabled";
 
 /**
  * The reasons that are the page's state rather than a refusal anyone decided:
- * the actionability gate's three (`actionability.ts`). They are reported as
- * TARGET_NOT_ACTIONABLE, Core's `unexpected_state`, which a repair may answer;
+ * the actionability gate's three (`actionability.ts`), each with its code.
  * ACTION_REJECTED is kept for what is refused on purpose. Lane A's run 40
  * (t174) failed playback on a button hidden inside a closed chooser, and Core,
  * told `blocked_by_capability_or_policy`, refused the repair as needing a person.
+ *
+ * `disabled` and `covered` are TARGET_NOT_ACTIONABLE, Core's `unexpected_state`,
+ * which a repair may answer. `hidden` is TARGET_NOT_SHOWN, Core's
+ * `target_not_found`: a control nobody can see is a step that is not available,
+ * and Core finds the current step by page state for that category alone. Under
+ * the shared code a chat card's hidden close button went to the recovery ladder
+ * instead (`run-murwdp4f-35f976d2`, t193-1002m R1-C2). Every `hidden` refusal is
+ * the gate's, decided before any verb dispatched.
  */
-const PAGE_STATE_REASONS: ReadonlySet<string> = new Set(["disabled", "hidden", "covered"]);
+const PAGE_STATE_CODES: Readonly<Record<ActionabilityRejectionCode, WebAutomationFailureCode>> = Object.freeze({
+  disabled: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE,
+  covered: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE,
+  hidden: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN
+});
+
+/** The code a refusal's reason word travels under: the page's state where the gate wrote it, otherwise a refusal on purpose. */
+function refusalCode(reason: string): WebAutomationFailureCode {
+  return Object.hasOwn(PAGE_STATE_CODES, reason) ? PAGE_STATE_CODES[reason as ActionabilityRejectionCode] : WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED;
+}
 
 /**
  * An action refused before it ran: the target was disabled, hidden, or covered.
  *
  * `reason` is the verb's own word for the refusal -- `disabled`, `covered`,
  * `hidden`, `not_checkable` -- and it travels in the record's `actual`, not in
- * its code. ACTION_REJECTED is one code, not one per reason: a reason invented
- * at a call site would be outside the closed set, and Core routes on the
- * category, which is the same for every refusal.
+ * its code. The code is one of three, never one per reason: a reason invented
+ * at a call site would be outside the closed set. The gate's own words choose
+ * TARGET_NOT_ACTIONABLE or TARGET_NOT_SHOWN (`PAGE_STATE_CODES`); every other
+ * reason is ACTION_REJECTED.
  *
  * One refusal is not that failure at all, and it is another place a code is
  * decided from the page rather than from the verb: a target the page will not
@@ -261,7 +279,7 @@ export function actionRejected(
     status: "failed",
     validation,
     message: `Action rejected: ${observed}`,
-    failure: refusalRecord(PAGE_STATE_REASONS.has(reason) ? WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE : WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected, actual: `${reason}: ${observed}` }, evidence)
+    failure: refusalRecord(refusalCode(reason), { expected, actual: `${reason}: ${observed}` }, evidence)
   }, evidence);
   // A control the gate refused as disabled: recovery waits at it only while it
   // shows it is changing, so how it looked is noted beside the result -- as a

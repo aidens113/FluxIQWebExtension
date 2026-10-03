@@ -184,3 +184,21 @@ test("nothing the page said rides out on a refusal", () => {
     ["emptyRecords", "itemsSeen", "missingFields", "reason", "recordsRead", "waitStoppedOn"]
   );
 });
+
+test("a target the page has and does not show is still refused to the model as target_not_actionable, whatever its words", () => {
+  // t193-1002m: the gate's `hidden` refusal has its own code, Core's
+  // `target_not_found`, so a Flow run routes by state. Exploration is unchanged:
+  // the model reads the same word it read when the code was
+  // `web.target.not_actionable`, and no reason is invented for it.
+  const code = WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN;
+  for (const failure of [{ code, actual: "hidden: the element's display is none" }, { code, actual: "covered: never written with this code" }, { code }]) {
+    const actual = "actual" in failure ? failure.actual : undefined;
+    const refusal = webActionFailureRefusal({ status: "failed", failure });
+    assert.equal(refusal.code, "target_not_actionable", String(actual));
+    assert.equal(refusal.detail, undefined, String(actual));
+    assert.equal(refusal.personNeeded, undefined);
+  }
+  // Disabled and covered keep their code and their words.
+  assert.equal(webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE, actual: "disabled: the element is disabled" } }).code, "target_not_actionable");
+  assert.equal(webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE, actual: "covered: the point 1,2 landed on div.scrim" } }).code, "target_covered");
+});

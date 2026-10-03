@@ -132,7 +132,8 @@ test("upload: a file input in an inert subtree is refused, because the page has 
     selector: UPLOAD_INPUT,
     upload: { files: [FILE] }
   });
-  expect(reply, reply.message).toMatchObject({ status: "failed", failure: { code: "web.target.not_actionable" } });
+  // An inert control is one the gate calls `hidden`: not shown, Core's `target_not_found` (t193-1002m).
+  expect(reply, reply.message).toMatchObject({ status: "failed", failure: { code: "web.target.not_shown", category: "target_not_found" } });
   expect(actualOf(reply)).toContain("inert");
 });
 

@@ -907,9 +907,10 @@ reaches. There is no `rejected`: no lane can report one, so an expectation
 spelled that way would fail on itself, and manifest validation refuses it. A
 client refusal is declared as `failed`, with `expected.failure` naming the
 refusal: category `unexpected_state`, code `web.target.not_actionable` for a
-target the page would not let be used (hidden, covered, disabled), or category
-`blocked_by_capability_or_policy`, code `web.action.rejected` for one refused on
-purpose.
+target the page would not let be used (covered, disabled); category
+`target_not_found`, code `web.target.not_shown` for one that is there and not
+shown (hidden); or category `blocked_by_capability_or_policy`, code
+`web.action.rejected` for one refused on purpose.
 
 Validation also refuses an `expected.actions` entry, on a workflow or on any of
 its variants, whose type no step of that workflow's recording script can yield
@@ -2975,3 +2976,16 @@ the copied files are the ones the bundle's redaction attestation already
 covers, plus the provider-failure sidecar, which is redacted as it is written.
 What Core writes into `steps/` is Core's responsibility. It logs no header and
 screens every text it writes for credential shapes.
+
+### The UI review's overlay counts
+
+A run's UI review (`packages/test-runner/src/run-scenario/ui-review/`) samples
+the on-page activity overlay about every 200 ms for about 3 s at each moment
+and reads the window as `stable`, `changed` or `flickering` (a revisit, two or
+more presence or visibility toggles, or three or more text changes). Each
+sample records the document it was read from (`performance.timeOrigin`). One
+absent sample whose neighbours were both read, present, from different
+documents is the browser loading a new page, which no product code can bridge:
+it is counted as `pageLoads`, shown in the `[lab] ui review` line, and makes no
+toggle. Any other absence counts as a toggle: two or more samples, one inside
+a single document, or one beside a failed read.

@@ -13,7 +13,7 @@ stage it always carries.
 
 ## The Closed Set
 
-`WEB_AUTOMATION_FAILURE_CODES` names nineteen codes. Read a code from that
+`WEB_AUTOMATION_FAILURE_CODES` names twenty-two codes. Read a code from that
 object rather than writing its string: the key is the name source code and
 this page use, and the value is the code Core stores and a scenario manifest's
 expected failure names.
@@ -22,6 +22,7 @@ expected failure names.
 | --- | --- | --- | --- | --- |
 | `ACTION_REJECTED` | `web.action.rejected` | `blocked_by_capability_or_policy` | no | `execution` |
 | `TARGET_NOT_ACTIONABLE` | `web.target.not_actionable` | `unexpected_state` | no | `execution` |
+| `TARGET_NOT_SHOWN` | `web.target.not_shown` | `target_not_found` | yes | `target_resolution` |
 | `TARGET_NOT_FOUND` | `web.target.not_found` | `target_not_found` | yes | `target_resolution` |
 | `TARGET_AMBIGUOUS` | `web.target.ambiguous` | `target_ambiguous` | no | `target_resolution` |
 | `OUTPUT_NOT_OBSERVED` | `web.validation.output_not_observed` | `output_not_observed` | yes | `verification` |
@@ -186,7 +187,8 @@ identity across bundles, and is compiler-checked at the throw.
 - **Result builders** (`content/action-runtime/results.ts`,
   `runtime/action-results.ts`): `OUTPUT_NOT_OBSERVED` for a failed
   post-condition, `STATE_MISMATCH` for a failed `web.dom.assert`,
-  `TARGET_NOT_ACTIONABLE` for a target the actionability gate refused,
+  `TARGET_NOT_ACTIONABLE` for a target the actionability gate refused as
+  disabled or covered, `TARGET_NOT_SHOWN` for one it refused as hidden,
   `ACTION_REJECTED` for anything refused on purpose, `TIMEOUT`
   for a wait or action that ran out of time, `NOT_IMPLEMENTED` for a
   registered verb that is not built, `AUTH_REQUIRED` where the page itself
@@ -290,14 +292,43 @@ table's own tests they are covered by
 `content/actions/tests/page-identity.test.ts`.
 
 `TARGET_NOT_ACTIONABLE` is one code, not a family: the actionability gate's
-reason (`disabled`, `hidden`, `covered`) is carried in the record's `actual`,
-not in the code. It is the page's state, so its category is `unexpected_state`,
-which Core's repair may answer. `ACTION_REJECTED` (`blocked_by_capability_or_policy`)
+reason (`disabled`, `covered`) is carried in the record's `actual`, not in the
+code. It is the page's state, so its category is `unexpected_state`, which
+Core's repair may answer. `ACTION_REJECTED` (`blocked_by_capability_or_policy`)
 is kept for what is refused on purpose: a sensitive value, a page the extension
 may not touch, a key whose default cannot be faked, a request it cannot carry
 out. Until 2026-10-02 the gate's refusals were `ACTION_REJECTED` too, and Core
 read a button hidden inside a closed chooser as a policy refusal and refused to
 repair the Flow, as needing a person (lane A, t174 run 40).
+
+`TARGET_NOT_SHOWN` is the gate's third reason, `hidden`, under its own code
+since 2026-10-02 (t193-1002m): the target is in the document and not shown --
+`display:none` on it or an ancestor, no box, not rendered, inert, or nowhere in
+the viewport. Its category is `target_not_found`, because for a Flow a control
+nobody can see is a step that is not available, and the user's runtime rule is
+that such a step is found by page state: Core routes by state, or takes a
+sometimes-present step's skip, only for a failed attempt in that category
+(Core `runtime/executor/state-routing/could-not-run.ts`,
+`runtime/executor/step-skip/absent-step.ts`). Under `TARGET_NOT_ACTIONABLE` a
+chat card's close button, hidden until the card opened or after the site
+remembered its dismissal, went to the recovery ladder instead (live run
+`run-murwdp4f-35f976d2`). It is retryable and at `target_resolution` for the
+reasons `TARGET_NOT_FOUND` is: it may be shown once the page settles, every
+`hidden` refusal is decided before a verb dispatched (the record also states
+`effect: "unacted"` when the verb said so), and Core's parser allows that
+category no other stage. The reason word still leads `actual`.
+
+Everything else reads it as it read a hidden `TARGET_NOT_ACTIONABLE`:
+
+- the page-side recovery loop absorbs it as `obstructed_target` and clears what
+  may be over the target before it attempts again
+  (`content/action-runtime/recovery/fault.ts`);
+- the model is told `target_not_actionable`, so exploration is unchanged
+  (`runtime/llm-evidence/action-failure/refusal.ts`);
+- a draft replay answers `core.replay.failed`, never `remembered`: only
+  `TARGET_NOT_FOUND` reads as a control the site stopped serving
+  (`runtime/llm-evidence/node-run/replay.ts`), so a step whose target is hidden
+  inside a container the Flow never opened keeps failing the build's test.
 
 ## A Robot Check Parks, It Does Not End
 
