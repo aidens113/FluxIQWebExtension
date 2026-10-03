@@ -40,6 +40,8 @@ export type OverlaySample = {
    * different values were read from different documents. Absent on a failed read.
    */
   documentOrigin?: number;
+  /** The location of the document the read was taken in, screened as other recorded locations are (`screenLocation`). Absent on a failed read. */
+  pageUrl?: string;
   /** Why this read failed; the other fields are then absent. */
   error?: string;
 };
@@ -57,11 +59,17 @@ export type OverlayChangeCounts = {
   /** Visible flipped between consecutive readable samples, a page load's gap excluded. */
   visibilityToggles: number;
   /**
+   * Every change of document between consecutive readable samples that name
+   * theirs (`documentOrigin`): the tab loaded a new page, whether or not the
+   * overlay was absent across it.
+   */
+  pageLoads: number;
+  /**
    * A single absent sample whose immediate neighbours were both readable, present,
    * and read from different documents: the browser swapping documents, which no
    * product code can bridge. It is counted here and as no toggle of either kind.
    */
-  pageLoads: number;
+  pageLoadGaps: number;
   /** A change back to a text already shown earlier in the window (A, B, A). */
   textRevisits: number;
   distinctTexts: number;
@@ -89,6 +97,12 @@ export type UiReviewCapture = {
   withheld?: string;
   error?: string;
   ms?: number;
+  /** When the capture began. */
+  takenAt?: string;
+  /** The capture's span in ms on its moment's overlay window clock (from `overlay.startedAt`); negative before the first read (`placeCaptureInWindow`). */
+  windowMs?: { from: number; to: number };
+  /** Indices into the moment's overlay samples: the last read begun before the capture and the first begun after it. */
+  overlaySamples?: { lastBefore?: number; firstAfter?: number };
 };
 
 export type UiReviewMoment = { index: number; label: UiReviewLabel; phase: UiReviewPhase; at: string; atMs: number; scenario: UiReviewCapture; panel: UiReviewCapture; overlay: OverlaySampleWindow };
