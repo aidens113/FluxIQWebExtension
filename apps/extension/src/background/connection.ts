@@ -284,6 +284,7 @@ export class FluxIQConnection {
         await chrome.runtime.sendMessage(message);
       },
       automationTabId: () => overlayTarget.resolve(),
+      overlayTabIds: () => overlayTarget.resolveAll(),
       deliverToTab: async (tabId, message) => {
         await ensureContentScript(tabId);
         await sendToTab(tabId, message, 0);

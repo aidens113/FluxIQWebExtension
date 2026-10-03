@@ -2,8 +2,11 @@
 // `server.activity` over the gateway; the relay keeps the latest state, paces
 // it into the one status a person reads (`pacer.ts`), and fans it
 // out: the whole state to the panel pages, and the paced display to the top
-// frame of the tab the automation drives (`overlay-target.ts`), where the
-// overlay draws it.
+// frame of the tab the automation drives and of the tab in front of the person
+// when that is another one (`overlay-target.ts`), where the overlay draws it.
+// A Flow's test can run in one tab while a result it opened sits in front
+// (moment 8 and screenshot 00013 of the run-murwd8le-79e735a8 UI review), and
+// the person must see the status on the page they are looking at.
 //
 // Fan-out is rate-bound (`fan-out-gate.ts`): at most four sends a second to
 // each audience, the last change of a burst always sent, and only to whom it
@@ -64,6 +67,12 @@ export type ActivityRelayDeps = {
   readonly broadcast: (message: { type: typeof ACTIVITY_MESSAGES.changed; state: ExtensionActivityState }) => Promise<void>;
   /** The tab the automation drives, or undefined when there is none the overlay may draw on (`OverlayTarget.resolve`). */
   readonly automationTabId: () => Promise<number | undefined>;
+  /**
+   * Every tab the overlay is drawn in: the driven tab and the tab in front of
+   * the person (`OverlayTarget.resolveAll`). When absent, the overlay is drawn
+   * in `automationTabId` alone.
+   */
+  readonly overlayTabIds?: () => Promise<readonly number[]>;
   /** Makes the tab's top frame ready and hands it the message. May throw. */
   readonly deliverToTab: (tabId: number, message: ActivityContentMessage) => Promise<void>;
   /** A gateway session is ready, so Core can reach this browser. */
@@ -91,8 +100,8 @@ export class ActivityRelay {
   // flight has nothing left to say.
   private delivering = false;
   private redeliver = false;
-  /** The tab the overlay was last sent to, so it is taken down there when the target moves. */
-  private drawnIn: number | undefined;
+  /** The tabs the overlay was last sent to, so it is taken down in any the target leaves. */
+  private drawnIn: ReadonlySet<number> = new Set();
   /** When the display last changed, so a finished status that has had its time is not drawn again on a new page. */
   private displayChangedAt = Number.NEGATIVE_INFINITY;
   private readonly clock: ActivityClock;
@@ -175,15 +184,20 @@ export class ActivityRelay {
     if (display === null) return;
     if (display.outcome === "done" && this.clock.now() - this.displayChangedAt >= ACTIVITY_DONE_VISIBLE_MS) return;
     await this.load();
-    let target: number | undefined;
-    try {
-      target = await this.deps.automationTabId();
-    } catch {
-      /* best-effort: the tab list could not be read, so the new page stays without the overlay until the next change */
-      return;
+    // A tab the overlay is drawn in is answered at once: a navigation there is
+    // the common case, and every lookup before the answer is time the page
+    // shows without the overlay (moment 7 of the run-murwd8le-79e735a8 review).
+    if (!this.drawnIn.has(tabId)) {
+      let targets: readonly number[];
+      try {
+        targets = await this.targets();
+      } catch {
+        /* best-effort: the tab list could not be read, so the new page stays without the overlay until the next change */
+        return;
+      }
+      if (!targets.includes(tabId)) return;
+      this.drawnIn = new Set([...this.drawnIn, tabId]);
     }
-    if (target !== tabId) return;
-    this.drawnIn = tabId;
     await this.send(tabId, this.contentMessage());
   }
 
@@ -226,19 +240,31 @@ export class ActivityRelay {
   }
 
   private async deliverOnce(): Promise<void> {
-    let tabId: number | undefined;
+    let targets: readonly number[];
     try {
-      tabId = await this.deps.automationTabId();
+      targets = await this.targets();
     } catch {
       /* best-effort: the tab list could not be read, so this frame of the status is drawn nowhere */
       return;
     }
     const message = this.contentMessage();
     const previous = this.drawnIn;
-    this.drawnIn = tabId;
-    // The automation moved to another tab: the status left there would go stale.
-    if (previous !== undefined && previous !== tabId) await this.send(previous, { ...message, activity: null, display: null });
-    if (tabId !== undefined) await this.send(tabId, message);
+    this.drawnIn = new Set(targets);
+    // A tab the overlay no longer belongs in is cleared: the status left there
+    // would go stale. The tabs are sent to side by side, so one that never
+    // answers holds back none of the others.
+    const leaving = [...previous].filter((tabId) => !this.drawnIn.has(tabId));
+    await Promise.all([
+      ...leaving.map((tabId) => this.send(tabId, { ...message, activity: null, display: null })),
+      ...targets.map((tabId) => this.send(tabId, message))
+    ]);
+  }
+
+  /** The tabs to draw in now, each once; the driven tab first. */
+  private async targets(): Promise<readonly number[]> {
+    if (this.deps.overlayTabIds) return [...new Set(await this.deps.overlayTabIds())];
+    const tabId = await this.deps.automationTabId();
+    return tabId === undefined ? [] : [tabId];
   }
 
   private contentMessage(): ActivityContentMessage {
