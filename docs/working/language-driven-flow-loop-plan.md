@@ -13,8 +13,8 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ## Current State
 
-**Session 2026-10-03 (resumed after the night handoff). Read this first.** Live runs are held by the user until
-general Flow authoring (t252) lands. Round 1002-M gave the first honest pass: lane A crossborder
+**Session 2026-10-03 (resumed after the night handoff). Read this first.** The user held live runs until general Flow
+authoring (t252) landed; it landed 2026-10-03, so round 1003 is being released. Round 1002-M gave the first honest pass: lane A crossborder
 `run-murwd8le-79e735a8` ($0.0579, built from the chat, judged yes on the Flow as it stood, 4 of 4 facts).
 
 **Dev heads.** Core `d89877d3` and downstream `622eccf8` or later, both pushed (the downstream push the night
@@ -35,6 +35,13 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
   waiting for a judged run; summaries carry `judgedApplication`. Rows indexed before it show it once re-saved.
 - **t257** (downstream `702c7dbc`): the Lab's UI review counts every document change as a page load (old count kept
   as `pageLoadGaps`; murzln6g moment 6: 0 -> 1); samples carry a screened `pageUrl`; pictures carry `takenAt`.
+- **t252 general Flow authoring** (Core `6beae684`, downstream `ed2a317b`; design and report in
+  `docs/working/general-flow-authoring-plan.md` and its `reports/t252-lead.md`): the build may write steps and bind
+  them to `$row`, a Flow input or an earlier output; its test runs a repeat once per row, lasting acts checked and never
+  pressed; the judge sees one line per row; stored nodes keep declared consequences. Proven by a parity test and a
+  scripted confirm-requests build (both fail with per-row expansion off). On the merged tree: Core 375 files / 4,075
+  tests (a recovery test that pinned a 4,000-token input limit now derives it from the budget), domain 1,410/1,410,
+  all checks 0. Abandon `fxwork/t251`.
 - **t254 purse at true cost** (Core `e6290d80`, downstream `15b9c4ea`; `reports/t254-purse-holds-true-cost.md`):
   billed price (off-peak, cached input), only what is sent; no `max_tokens` anywhere (chat panel included); the
   round gate measures the next round (murzln6g: need $0.0187 -> $0.0077); judge overshoot in the build total; a
@@ -62,19 +69,10 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
 | D confirm-requests | `murwcaj0` $0.089, `murz83zy` $0.088 | no Flow: loop clicked one hard-coded row; purse | reorder hint, single-row twin, column `at` per item; row-general Flows (t252) |
 
 **In flight (each agent's state is in its report).**
-- **t252 general Flow authoring** (`fxwork/t252`, both repositories; design `docs/working/general-flow-authoring-plan.md`
-  and report `.../general-flow-authoring-plan/reports/t252-lead.md` in that tree). P1-P3 committed (P3: the build's
-  test runs a repeat once per row with the row as `item`, a lasting act is verified per row, never pressed; the judge
-  sees one line per row; stored nodes keep declared consequences). Merge of lane B's tip (lanes A-D) committed (Core
-  `5f0bb788`, downstream `04178c6b`): only a skipped lasting act excuses a per-row step; node-run layer files moved to
-  `node-run/layer/`. w7 and P4 committed (Core `a585e47d`): the parity test and the scripted confirm-requests proof
-  pass (and fail with per-row loop expansion off); fixes: a `$row` step whose rows could not be read is refused
-  `not_reached`, and one Flow input given two test values is refused (`flow_draft.input_conflict`); docs
-  `flow-authoring.md` (Core) and `build-loop.md` (downstream). Dev merged (Core `43d8dfba`, downstream `cab2d5af`;
-  `service.ts` and `step-log/index.ts` resolved by union). On the merged tree: Core check 0, 375 files / 4,075 tests
-  with 1 failure: `recovery/annotation/tests/iteration-guards.test.ts` gets 23 calls for 26 (passes on dev; t252's
-  longer guidance meets t254's per-call pricing). The t254 lead is fixing it in the t252 tree; then the downstream
-  checks and landing. Abandon `fxwork/t251` once t252 lands.
+- **Lane sync for round 1003:** the four lane trees fast-forwarded to dev (both repositories) and rebuilt as `pnpm task
+  start` builds a tree (Core `buildCore`, then `pnpm build`). Then the round 1003 briefs below are dispatched.
+- **Sweep 2** (full suites on dev, background; logs in the supervisor's scratchpad `sweep2/`): Core `pnpm test`, then
+  downstream `pnpm check`, `pnpm test`, `pnpm build`. Findings are fixed forward.
 
 **Binding rules (user, all in force).**
 - **General Flow authoring before any more live runs (2026-10-02 night):** "The model should be ABLE to explore &
@@ -133,13 +131,13 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
 
 **Next, in order.**
 1. ~~Lane B: land.~~ Done 2026-10-03.
-2. t252: finish P3; merge lanes D and B into it; verify (the scripted confirm-requests proof must pass); land.
-3. ~~t254: land.~~ Done 2026-10-03.
-4. Sweep 2 in the background (Core `pnpm test` now runs every package).
-5. Re-sync the four lane trees to dev and rebuild; release round 1002-M's leads with fresh briefs; then the approved
-   `deepseek-v4-pro` comparison (`--llm-model deepseek-v4-pro --llm-cost-ceiling-usd 0.30`, one run).
+2. ~~t252: land.~~ Done 2026-10-03. 3. ~~t254: land.~~ Done 2026-10-03.
+4. Sweep 2: running; fix forward what it finds.
+5. Lane trees synced and rebuilt; dispatch round 1003 (briefs below), lane A's run then the `deepseek-v4-pro`
+   comparison. Debug every run; merge the lanes' fixes in rounds.
 
-**Open follow-ups (not assigned).** Unify `control` and `does`; signatures for recorded Flows (t243 item 4); a dropped
+**Open follow-ups (not assigned).** A decision refused for its input limit ends exploration as
+`llm_evidence_loop.invalid_decision`, which reads as a bad reply (t254 stage 4). Unify `control` and `does`; signatures for recorded Flows (t243 item 4); a dropped
 column on a rerun needs the domain's denied keys (t195 R3); a recovery-stage part-run tool on `stopAfterNodeId`; the
 reroute edge mismatch (trial `success` vs durable `failed`); `$0.25` left in `refuted-result-port.ts` and
 `repair-authority.ts`; the web Adaptations view shows no `applied`/`notAppliedReason`; scripted judges that run out of
@@ -648,7 +646,7 @@ run (id, cost, stage reached, causes, fixes) and the commit-ready files per fix.
 
 Report to: `reports/<lead>.md` in the lane tree.
 
-#### Briefs: live round 1003 (lanes A-D, `lead-xhigh`; pending: dispatch only after t252 and t254 land)
+#### Briefs: live round 1003 (lanes A-D, `lead-xhigh`; t252 and t254 landed 2026-10-03: ready)
 Common: as 1002-L above, with these changes. The supervisor merges dev into every lane tree (both repositories),
 rebuilds Core libraries and the extension, and confirms the Lab's behind-dev guard admits each tree. What this round must
 show, beyond each lane's own causes:
