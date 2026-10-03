@@ -12,7 +12,9 @@ action does today, [element identity](element-identity.md) for how a target
 becomes an element, [page evidence](page-evidence.md) for what a capture says
 about the page, [the failure taxonomy](failure-taxonomy.md) for how a failure
 is named, [sensitive values](sensitive-values.md) for what never leaves the
-page, and [the automated testing facility](testing-facility.md) for the Lab.
+page, [the build loop](build-loop.md) for the domain's side of writing and
+testing a Flow's steps, and [the automated testing facility](testing-facility.md)
+for the Lab.
 
 ## Package Structure
 

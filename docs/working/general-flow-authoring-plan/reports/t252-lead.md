@@ -203,3 +203,115 @@ and commits. R = Core `packages/fluxiq/src/programs/automation-studio/runtime`, 
   observer's handling of it on a pass call (`<id>.pass.<n>`) was not exercised.
 - `D/node-run/verify.ts`: lane D's `draft.ranWith` on a check now states row-scoped parameters when a pass sends
   `item`. Core's replay ignores a replay answer's `draft`, by reading, not by a test.
+
+## w7 and P4, 2026-10-03
+
+The supervisor committed the lane B merge: Core `5f0bb788`, downstream `04178c6b`. This stage ran in the same trees
+and left everything uncommitted and unstaged. There were three workers, in parallel, on disjoint files:
+- w7a (worker-high): the parity test;
+- w7b (worker-high): the end-to-end proof;
+- w10 (worker): P4 docs.
+
+Briefs were in the dispatch, after the design doc's w7 brief and the coordinator's list. R = Core
+`packages/fluxiq/src/programs/automation-studio/runtime`.
+
+### What landed
+
+1. **Parity** (w7a, `reports/t252-w7a-parity.md`). `R/llm/node-tools/tests/replay-parity.test.ts` (new; the
+   directory now has 24 files) covers one draft: a Flow input, a list, and a repeat holding a row-scoped press and a
+   `$row`-bound step.
+   - The draft runs two ways and must give the same sequence of (node, resolved parameters, `item`):
+     - through the build's real path (assemble, validate, normalise, `canonicalFlowDocument`,
+       `runAutomationStudioGraph` with fake natives);
+     - through the walker with a fake host.
+   - A second case: a lasting press is a per-row `replay: "verify"` on the same row and target.
+   - The assembler's plan-node defaults (`timeoutMs`, `recordOutput: null`, `normalise.ts` `materialiseDefaults`) are
+     dropped from the comparison only while they equal the default.
+2. **Proof** (w7b, `reports/t252-w7b-confirm-requests-proof.md`).
+   `R/tests/service-authoring/tests/confirm-requests-build.test.ts` is new, in a new feature directory, because
+   `R/tests/service-bootstrap/tests` is at its file limit. It runs the whole build through `AutomationStudioService`
+   with a scripted model and judge and a stand-in domain: eight requests, three kept.
+   - **Main case.** List with `where` (add), Confirm run live on a kept row, `repeat`, `bind` `{"$row":"name"}`,
+     complete. Asserted:
+     - the test sent the Confirm 3 times, each `verify` with its kept row as `item` and the bound value resolved to
+       that row's name;
+     - only the exploring press was ever pressed, and no call names an excluded row;
+     - the judge's request shows 3 passes by kept label and no excluded row;
+     - the build is proposed, then applied;
+     - the stored Flow has exactly one For Each over the list, with the Confirm inside it fed `item`;
+     - the Confirm's parameters are `{person: {$state: {path: "item.name"}}}`, and the explored row's name appears
+       nowhere in the Flow;
+     - `metadata.declaredConsequences` is kept.
+   - **Variants:**
+     - written Confirm: nothing pressed, same stored shape, and the plan-time gate record lists its declaration;
+     - non-lasting act: a step replay per row, never verify;
+     - zero kept rows with a written Confirm: refused `full_run_required` / `not_reached` before any judge, and no Flow
+       stored.
+3. **Fix: a row-bound recorded member nothing ever ran** (from w7b's finding).
+   - The gap: without `nodeOf`, or whenever the test cannot read a span's rows, a recorded member bound to `$row` is
+     sent once with no row and fails `core.replay.unresolved_binding`. That failure was excused as a repeat's, so the
+     build proposed a loop body nothing had tested.
+   - The fix: `R/llm/node-tools/dry-run-gate.ts` `notReached` now refuses it as `not_reached`, written or recorded,
+     when the span was not walked. `R/flow-draft/full-run-required.ts` says so in its header and in the model's
+     sentence ("or it takes a value from the item ($row)").
+   - Pinned by 3 tests in `R/llm/node-tools/tests/dry-run-gate-loop.test.ts`:
+     - refused when unwalked;
+     - passes when walked;
+     - an `$input`-only binding stays excused.
+   - Reverting the rule fails 1 of 12.
+4. **Fix: `flow_draft.input_conflict` is built** (from w10's finding). Design D3 and the `flow-inputs.ts` header
+   promised it, but nothing read `conflicts`.
+   - `R/flow-bootstrap/authoring/assemble-draft.ts` now refuses each conflict from
+     `automationStudioFlowDraftInputs(steps).conflicts`, naming both values and the steps, at
+     `draft.steps.<first>`.
+   - The `flow-inputs.ts` header is corrected: the draft never named conflicts.
+   - 2 tests are in `R/flow-bootstrap/authoring/tests/draft-bindings.test.ts`.
+5. **P4 docs** (w10, `reports/t252-w10-docs.md`, then edited by the lead for items 3 and 4 and the proof).
+   - Core: new `docs/architecture/automation-studio/flow-authoring.md` (the draft, written steps, bind, bindings and
+     assembly checks, the walker, excusal, `not_reached`, the unchanged guard, part runs, the judge's view, parity
+     and the proof, consequences, what is not built). It is linked from `llm-flow-bootstrap.md` and
+     `docs/architecture/README.md`.
+   - Downstream: new `docs/architecture/build-loop.md` (live run or write, replay with a row, `outputs.records`,
+     verify per row, left-out rows' tested values, `rowContextKeys`, the web-4 Lists line). It is listed in
+     `repository-layout.md`. Core's page is named by path, because the downstream docs-links rule refuses links that
+     leave the repository.
+   - Both `framework-reference.md` were regenerated: line numbers moved in `full-run-required.ts`.
+
+### Checks (run by the lead after all three workers and both fixes)
+
+| Check | Observed |
+| --- | --- |
+| Core vitest `R/{flow-draft, llm/node-tools, result-verification/build-test, flow-bootstrap, tests/service-authoring, tests/deepseek-bootstrap}` (heavy.sh) | `Test Files 125 passed (125)`, `Tests 1580 passed (1580)` |
+| Walker expansion disabled (`replay-draft.ts` plan forced off), parity + proof | `Tests 5 failed / 1 passed`: both parity cases and the main, written and non-lasting proof cases fail; zero-rows stays refused by the unwalked rule. Restored (`git diff` empty) |
+| Core `pnpm --filter fluxiq check` | rc 0, `fluxiq:check` built |
+| Core `node scripts/structure-audit.mjs`; `--rule docs-links` | `passed (239 warning(s), 349 baselined)`; `passed (0 warning(s), 0 baselined)` |
+| Core `node scripts/docs-reference.mjs --check` | first `stale` (line numbers from item 3); regenerated, then "Deterministic framework reference is current." |
+| Core libraries `contracts:build fluxiq:build client-gateway-websocket:build` | reuse / built / reuse, rc 0 |
+| Core `pnpm --filter @fluxiq/web check`; `apps/web` `vitest run src/features/automation-studio/conversation` | rc 0 (`web:check` built); `Test Files 26 passed (26)`, `Tests 267 passed (267)` |
+| Downstream `pnpm --filter @fluxiq-web-extension/{domain,extension,test-runner} check` | rc 0, 0, 0 (each rebuilt against the new Core dist) |
+| Domain `node-run/tests`, `node-run/press-effect/tests` (scoped runner, label `t252-w7`) | `# tests 207`, `# pass 207`, `# fail 0` |
+| Extension `src/panel/chat/**/tests` + `src/shared/activity/**/tests`, 33 files (the scoped runner with test-extension.mjs's esbuild options, label `t252-w7`) | `# tests 253`, `# pass 253`, `# fail 0` |
+| Downstream `node scripts/structure-audit.mjs` | `structure-audit: passed (163 warning(s), 118 baselined).` |
+
+### Not verified
+
+- The extension build (the bundles), the e2e specs, the extension's other test directories, and full suites: not
+  run.
+- Live runs: not run (held). The proof's stand-in mirrors the web domain's replay and verify contracts; the domain
+  side is unit-tested on its own (`node-run` tests above), not run under the proof.
+- Not covered by the parity test: the Router, while spans, and `$step` (P5, not built).
+- Proof variant (d) ends `flow_bootstrap.provider_transport_unknown` only because the script has no decision after
+  the refusal. It asserts the refusal itself and that nothing is stored.
+
+### For the supervisor
+
+- Changes since `5f0bb788` / `04178c6b`, all unstaged:
+  - Core: `docs/architecture/{README.md, automation-studio/llm-flow-bootstrap.md, automation-studio/flow-authoring.md (new)}`,
+    both `framework-reference.md`, `R/flow-bootstrap/authoring/{assemble-draft.ts, tests/draft-bindings.test.ts}`,
+    `R/flow-draft/{flow-inputs.ts, full-run-required.ts}`,
+    `R/llm/node-tools/{dry-run-gate.ts, tests/dry-run-gate-loop.test.ts, tests/replay-parity.test.ts (new)}`,
+    `R/tests/service-authoring/tests/confirm-requests-build.test.ts (new)`.
+  - Downstream: `docs/architecture/{build-loop.md (new), repository-layout.md}`, reports w7a, w7b, w10 and this
+    section.
+- Still the user's: the stored-run permission gate on `metadata.declaredConsequences`.
+- `recorded-windows` and service-wiring (t207) remain pre-existing and not t252's.
