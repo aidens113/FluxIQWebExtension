@@ -43,6 +43,11 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
   at the rate in force. On the merged tree: Core check 0, 195 files / 2,259 tests, build 0, domain/extension 0.
   Left open: `maxEstimatedCostUsdPerCall` survives only for `R/tests/recovery-default-limits.test.ts`; an extend or
   continued build whose Flow an earlier build's judge refuted is re-judged (needs `service.ts` to pass the verdict).
+- **t258** (Core `f044b596`): a run whose project store is gone ends failed with its own reason, never by throwing.
+  Cause: t249 made every judged end read the run record; now only a run that may promote reads it, and the pool's
+  closing refusal is a typed `AutomationStudioProjectStoreUnavailableError`. 92 files / 588 tests, check 0.
+  Left open: a store that goes away right after the pre-apply `applied: true` record leaves the adaptation saying
+  applied; a database file that fails to open still throws.
 - **t259** (downstream `955630de`): `flow-lane.json` and `live-llm.json` carry the same settled build and
   `instructedConsequencesFrom` in every ending, a throwing settlement included (235/235, check 0).
 - Core `880577fc`: the `$0.25` comments in `refuted-result-port.ts` and `repair-authority.ts` name the run ceiling.
@@ -62,12 +67,14 @@ handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`)
   test runs a repeat once per row with the row as `item`, a lasting act is verified per row, never pressed; the judge
   sees one line per row; stored nodes keep declared consequences). Merge of lane B's tip (lanes A-D) committed (Core
   `5f0bb788`, downstream `04178c6b`): only a skipped lasting act excuses a per-row step; node-run layer files moved to
-  `node-run/layer/`; Core check 0, node-tools + build-test 275/275, downstream checks 0, domain 725/725. Now: w7
-  (parity test; scripted confirm-requests proof with variants) and P4 docs; then the supervisor merges dev and lands.
-  Abandon `fxwork/t251` once t252 lands.
-- **t258** (`fxwork/t258`, Core-paired): `service/datasets/tests/service-wiring.test.ts` "store cannot be opened"
-  fails on dev with a pool-closing AggregateError (a return of t207's family); root cause and fix
-  (`reports/t258-w1-service-wiring-store.md`).
+  `node-run/layer/`. w7 and P4 committed (Core `a585e47d`): the parity test and the scripted confirm-requests proof
+  pass (and fail with per-row loop expansion off); fixes: a `$row` step whose rows could not be read is refused
+  `not_reached`, and one Flow input given two test values is refused (`flow_draft.input_conflict`); docs
+  `flow-authoring.md` (Core) and `build-loop.md` (downstream). Dev merged (Core `43d8dfba`, downstream `cab2d5af`;
+  `service.ts` and `step-log/index.ts` resolved by union). On the merged tree: Core check 0, 375 files / 4,075 tests
+  with 1 failure: `recovery/annotation/tests/iteration-guards.test.ts` gets 23 calls for 26 (passes on dev; t252's
+  longer guidance meets t254's per-call pricing). The t254 lead is fixing it in the t252 tree; then the downstream
+  checks and landing. Abandon `fxwork/t251` once t252 lands.
 
 **Binding rules (user, all in force).**
 - **General Flow authoring before any more live runs (2026-10-02 night):** "The model should be ABLE to explore &
