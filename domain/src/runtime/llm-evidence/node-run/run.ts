@@ -77,6 +77,7 @@ import { webAnsweredLayer, webNodeNoticedDetail, webNodePageChanges, webPressCho
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
 import { webNodeHeldFlow } from "./arrival";
 import { webUnshownAddressRefusal } from "./shown-addresses";
+import { webNodeCallWithDeclarationBeside } from "./nested-consequences";
 import { webMovesThePage, webScopeAnchor, webStartLocationRefusal, WEB_NAVIGATION_ACTION } from "./start-location";
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
@@ -162,7 +163,7 @@ type WebNodeCallRecord = {
 export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> {
   // The opening look of a round that continues a Flow carries the Flow's calls, and runs without them (`./arrival.ts`).
   const continuing = webNodeHeldFlow(run.request);
-  const value = continuing?.look ?? run.request.value;
+  let value = continuing?.look ?? run.request.value;
   // A call Core made rather than the model: the draft being run again before it
   // may be proposed (`./replay.ts`). It goes to the same executor so it passes
   // the same permission gate, and it is answered in Core's closed replay
@@ -195,6 +196,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   // Before anything is captured: a call naming nothing runnable costs the page
   // nothing and is answered from what the catalog says.
   if (!node) return refusal(undefined, "invalid_input", unknownNode(value.node), { call: value });
+  // A declaration written inside `parameters` is the call's, for every reader below (`./nested-consequences.ts`).
+  value = webNodeCallWithDeclarationBeside(value, node);
   const parameters = isJsonRecord(value.parameters) ? value.parameters : undefined;
   const record: WebNodeCallRecord = { actionId: node.definitionId, effect: node.effect, proposes: node.proposes, call: value, parameters: isJsonRecord(value.parameters) ? value.parameters : {} };
   const writing = webNodeWriteAsked(value);

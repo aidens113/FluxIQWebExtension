@@ -56,6 +56,12 @@ const BY_FAILURE_CODE: Readonly<Record<string, WebLlmToolRejectionCode>> = Objec
   [WEB_AUTOMATION_FAILURE_CODES.AUTH_REQUIRED]: "needs_person",
   [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND]: "target_not_found",
   [WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS]: "target_not_found",
+  // A target the page has and does not show. Its code is Core's
+  // `target_not_found` since t193-1002m, so a Flow run finds the current step by
+  // state; the model is told what it was told while the code was
+  // TARGET_NOT_ACTIONABLE, so exploration does not change: the control is
+  // there, and what is in the way of using it is the page's to show.
+  [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN]: "target_not_actionable",
   [WEB_AUTOMATION_FAILURE_CODES.PAGE_CHANGED]: "page_changed",
   [WEB_AUTOMATION_FAILURE_CODES.NAVIGATION_UNEXPECTED]: "page_changed",
   [WEB_AUTOMATION_FAILURE_CODES.TIMEOUT]: "action_timed_out",

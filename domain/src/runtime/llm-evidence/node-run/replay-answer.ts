@@ -214,6 +214,13 @@ type WebNodeReplayLeftOut = { condition: string; rows: JsonObject[] };
 const ADDRESS = /^(?:[a-z][a-z\d+.-]*:\/\/|\/)/iu;
 
 /**
+ * A key a JavaScript object orders before every other, whatever order it was
+ * written in. The label is the first cell of a row record, so a tested column
+ * with such a key would read as the label; its value is not sent.
+ */
+const INDEX_KEY = /^\d+$/u;
+
+/**
  * The rows a replayed list read names beside its line, by label, or nothing for
  * a step that is not one.
  *
@@ -237,6 +244,26 @@ const ADDRESS = /^(?:[a-z][a-z\d+.-]*:\/\/|\/)/iu;
  * list (user rule, 2026-09-30: no caps among qualifying rows), as nothing caps
  * the playback judge's `leftOutOnlyByThis`.
  *
+ * **A left-out row also carries the value its condition tested** (t195-w34),
+ * as a second cell after its label: `{ name: "Jonas Weber", mutualFriends:
+ * "Aisha Khan and 4 other mutual friends" }`. Live run `run-murwcaj0-40e56557`
+ * (cause R6): a regex meant to keep five or more mutual friends dropped Jonas
+ * Weber, who has five, and the judge -- shown his name only -- called the five
+ * left out "exactly the requests with fewer than five mutual friends". The
+ * value is the row's own cell for the column the condition tested, which is
+ * the condition's `field` in `ranWhere`, the `where` the page actually ran:
+ * resolution rewrites a detection key the plan wrote (`div_x0531...`) into the
+ * key the plan keeps that column under (`mutualFriends`,
+ * `../plan-resolution/extraction/conditions.ts`), and the row is keyed by
+ * the latter. A condition over a column the read does not keep tests a value
+ * the row does not carry, so it sends none; so does a call that gives no
+ * `ranWhere`, rather than guess a column from the words the plan wrote. The
+ * cell is whole and screened as a label is; empty where the row had no value
+ * (an `is: "present"` condition rejects exactly those); never from a denied
+ * column; and left out where the tested column is the label's own, since the
+ * label already is that value. Core reads the label from the first cell
+ * either way, so a Core that predates the second cell still reads the row.
+ *
  * **It says how to read them** (t194 w68, run `run-murwcmx2-a1c6edf7` C-E).
  * The answer also reaches the model that explores, as `core.run_flow`'s last
  * step, so the rows a condition removed by itself carry the same check an
@@ -246,7 +273,7 @@ const ADDRESS = /^(?:[a-z][a-z\d+.-]*:\/\/|\/)/iu;
  * build-test judge is sent `rows` and `leftOutOnlyByThis` only and has its own
  * instruction (`AS/runtime/result-verification/build-test/read-rows.ts`).
  */
-export function webNodeReplayReadRows(payload: JsonValue | undefined, where: unknown): JsonObject | undefined {
+export function webNodeReplayReadRows(payload: JsonValue | undefined, where: unknown, ranWhere?: unknown): JsonObject | undefined {
   const summary = isJsonRecord(payload) ? webAutomationExtractionSummaryValue(payload.extraction) : undefined;
   if (!summary || !isJsonRecord(payload)) return undefined;
   const fields = summary.fieldNames;
@@ -254,8 +281,9 @@ export function webNodeReplayReadRows(payload: JsonValue | undefined, where: unk
   const samples = summary.rejectedSamples;
   const leads = summary.rejectedSamplesAlone;
   const named = conditionNames(where, samples?.length ?? 0);
+  const tested = testedColumns(ranWhere, samples?.length ?? 0, fields);
   const leftOut = (samples ?? []).flatMap((sampled, index): JsonObject[] => {
-    const alone = labelled(sampled.slice(0, leads?.[index] ?? 0), fields);
+    const alone = labelled(sampled.slice(0, leads?.[index] ?? 0), fields, tested[index]);
     return alone.length ? [present<WebNodeReplayLeftOut>({ condition: named[index]!, rows: alone }) as unknown as JsonObject] : [];
   });
   if (!rows.length && !leftOut.length) return undefined;
@@ -302,8 +330,12 @@ export function webNodeReplayFlowRows(parameters: JsonObject, payload: JsonValue
   return { records: validated.rows };
 }
 
-/** Each row's label, in order; a row with no value to name it by is left out, as Core leaves it out. */
-function labelled(rows: readonly unknown[], fields: readonly string[]): JsonObject[] {
+/**
+ * Each row's label, in order, with the value `tested` names after it where
+ * there is one (see `webNodeReplayReadRows`); a row with no value to name it by
+ * is left out, as Core leaves it out.
+ */
+function labelled(rows: readonly unknown[], fields: readonly string[], tested?: string): JsonObject[] {
   return rows.flatMap((row): JsonObject[] => {
     if (!isJsonRecord(row)) return [];
     const cells = fields.flatMap((key): Array<[string, string]> => {
@@ -311,7 +343,27 @@ function labelled(rows: readonly unknown[], fields: readonly string[]): JsonObje
       return !webLlmEvidenceKeyIsDenied(key) && typeof value === "string" && value.trim() ? [[key, value.trim()]] : [];
     });
     const chosen = cells.find(([, value]) => /\p{L}/u.test(value) && !ADDRESS.test(value)) ?? cells[0];
-    return chosen ? [{ [chosen[0]]: screenedText(chosen[1]) }] : [];
+    if (!chosen) return [];
+    const label: JsonObject = { [chosen[0]]: screenedText(chosen[1]) };
+    if (tested === undefined || tested === chosen[0]) return [label];
+    const value = row[tested];
+    return [{ ...label, [tested]: typeof value === "string" ? screenedText(value.trim()) : "" }];
+  });
+}
+
+/**
+ * Per condition, the column of the row it tested: its `field` in the `where`
+ * the page ran, where that is one of the read's own columns and not one this
+ * domain denies or that is all digits (`INDEX_KEY`). Nothing for a condition
+ * that reads a value of its own, and nothing at all where `ranWhere` is not
+ * one entry per condition.
+ */
+function testedColumns(ranWhere: unknown, count: number, fields: readonly string[]): Array<string | undefined> {
+  const ran = Array.isArray(ranWhere) && ranWhere.length === count ? ranWhere : [];
+  return Array.from({ length: count }, (_, index) => {
+    const entry = ran[index];
+    const field = isJsonRecord(entry) ? entry.field : undefined;
+    return typeof field === "string" && fields.includes(field) && !webLlmEvidenceKeyIsDenied(field) && !INDEX_KEY.test(field) ? field : undefined;
   });
 }
 

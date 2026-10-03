@@ -10,17 +10,16 @@
 // look after it shows the layer gone. So the step says so (`interruption` on
 // the draft statement, `../run.ts`), and Core makes such a step optional.
 //
-// A layer is what `../layer-element.ts` says it is, and a control is in one
+// A layer is what `../layer/element.ts` says it is, and a control is in one
 // when the capture placed it in an open modal dialog (`inDialog`), when it is
-// the layer itself, or when it belongs to one (`../layer-member.ts`). Said only
+// the layer itself, or when it belongs to one (`../layer/member.ts`). Said only
 // where the two looks are of the same page: a press that took the page
 // elsewhere answered whatever it answered by leaving.
 
 import { canonicalWebLlmTargetHandle } from "../../handle-spelling";
 import type { WebLlmEvidenceElement } from "../../elements";
 import type { WebLlmPageEvidence } from "../../sanitize";
-import { webIsLayer } from "../layer-element";
-import { webInLayer } from "../layer-member";
+import { webInLayer, webIsLayer } from "../layer";
 
 /**
  * Whether the press of `handle` on `before` answered a layer: the control lay

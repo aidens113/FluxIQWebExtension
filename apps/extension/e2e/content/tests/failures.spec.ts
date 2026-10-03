@@ -37,7 +37,7 @@ async function swallowNavigation(page: Page, selector: string): Promise<void> {
 }
 
 test.describe("on failure-surfaces", () => {
-  test("a refused target is TARGET_NOT_ACTIONABLE, one code whatever the page-state reason, with the reason in the record", async ({ openHarness }) => {
+  test("a disabled target is TARGET_NOT_ACTIONABLE, with the reason in the record", async ({ openHarness }) => {
     const harness = await openHarness("failure-surfaces");
     const reply = await harness.runAction({ commandId: "rejected", actionType: "web.dom.click", selector: DISABLED_TARGET });
     expect(reply).toMatchObject({
@@ -51,20 +51,24 @@ test.describe("on failure-surfaces", () => {
         retryable: false,
         stage: "execution",
         expected: "a target that can be clicked",
-        // Disabled, hidden and covered are three reasons for one code. The
-        // reason rides here so nothing is lost by not minting a code for each.
+        // Disabled and covered are two reasons for one code. The reason rides
+        // here so nothing is lost by not minting a code for each.
         actual: "disabled: the element is disabled"
       }
     });
   });
 
-  test("a hidden target is the same code as a disabled one, distinguished only by the reason", async ({ openHarness, page }) => {
+  test("a hidden target is TARGET_NOT_SHOWN, Core's target_not_found, so a Flow run finds the current step by state", async ({ openHarness, page }) => {
     const harness = await openHarness("failure-surfaces");
     await page.locator(DETACH_TARGET).evaluate((element) => { (element as HTMLElement).style.display = "none"; });
     const reply = await harness.runAction({ commandId: "hidden", actionType: "web.dom.click", selector: DETACH_TARGET });
     expect(reply.failure).toMatchObject({
-      category: "unexpected_state",
-      code: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE,
+      // t193-1002m: a step whose target is not shown is a step that is not
+      // available, and Core routes by state only for `target_not_found`.
+      category: "target_not_found",
+      code: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_SHOWN,
+      retryable: true,
+      stage: "target_resolution",
       // The reason still heads the record; the defence's account follows it,
       // because a hidden target is an obstruction the runtime tries to clear
       // before it reports (`action-runtime/recovery/record.ts`).

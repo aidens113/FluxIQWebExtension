@@ -1,9 +1,9 @@
-// Whether an element belongs to a layer (`./layer-element.ts`): the layer is
+// Whether an element belongs to a layer (`./element.ts`): the layer is
 // among its described ancestors (`parent`), or it sits inside the layer's box
 // and the layer does not paint over it -- a layer's own controls answer their
 // own clicks, and the page behind it does not.
 
-import type { WebLlmEvidenceElement } from "../elements";
+import type { WebLlmEvidenceElement } from "../../elements";
 
 /** How far up the `parent` chain a membership is looked for. */
 const MOST_DEPTH = 40;

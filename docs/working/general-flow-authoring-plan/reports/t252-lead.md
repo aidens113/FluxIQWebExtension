@@ -90,3 +90,116 @@ in a build.
 - `R/flow-draft/amendment.ts` is large (`bind` could move to its own module). Downstream `node-run/` and
   `node-run/tests/` are at 25 files, Core `R/llm/evidence-loop/` at 25, and `R/llm/evidence-loop.ts` at 800 lines.
 - P5 must add earlier steps' outputs to the walker's resolution state, for `$step` bindings.
+
+## Merge of lane B, 2026-10-03
+
+The supervisor ran `git merge --no-ff task/t193-live-self-repair` in both t252 trees: lane B plus dev with lanes A, C
+and D. Core MERGE_HEAD is `6da08162` and downstream MERGE_HEAD is `3f0521f9`; the merge base is dev at t194. The lead
+resolved all 17 conflicted files. **Nothing is staged**: the index still marks them `UU`, and the supervisor stages
+and commits. R = Core `packages/fluxiq/src/programs/automation-studio/runtime`, D = downstream
+`domain/src/runtime/llm-evidence`.
+
+### Resolution decisions
+
+1. **`R/flow-draft/amendment.ts`.** The `change` description keeps t252's `bind:` text. Lane D's reorder-first
+   sentence is added before "Drop any other step...". The `through` refusal field and the in-order reading of one
+   decision's amendments auto-merged.
+2. **`R/flow-draft/dry-run.ts`.** The outcome keeps both fields: t252's `passes` and lane B's `excused`. The feedback
+   line carries both `excusedLine` and the pass words. `DRY_RUN_INSTRUCTION` carries both texts, which auto-merged.
+3. **`R/llm/node-tools/replay-draft.ts`.** Lane B's `reasons` map, `excusable` call field and `excused` outcome field
+   are joined to t252's span walker:
+   - `send` takes `excusable`.
+   - A straight step's `excusable` is its conditional reason only while `excused(stepId)` holds, so an expanded span
+     step never gets one. Otherwise it is `"withheld"` behind a checked lasting act.
+   - A span's pass calls carry `excusable: "withheld"` only when `withheldBy` is set.
+   - In `replay-span.ts` `memberOutcome`, a member that did not pass with `withheldBy` set also carries
+     `excused: "withheld"`.
+   - **Rule:** a step the test ran once per row is never excused as one the Flow does not always run. That is t252's
+     verdict rule, now applied to lane B's words too.
+4. **`R/llm/node-tools/dry-run-gate.ts`.** Both sides are kept:
+   - t252's `not_reached` refusal of written steps (`notReached`, `repeatedStepIds`);
+   - lane B's unchanged-replay guard (`unchangedLine`, `sameFailures`, the `unchanged` line).
+
+   `unchangedLine` decides which steps "stood in the way" with the verdict's own exemption, so a failed per-row pass
+   (`passes` set, no `withheldBy`) is named as a step to change.
+5. **`R/result-verification/build-test/summary.ts`.** t252's `shown`/`rowsOf` sit beside lane B's `reasons`. Lane D's
+   `rowContextKeys` target words auto-merged. Lane B's `excusedWords` no longer uses the draft's routing reason for an
+   outcome with `passes`: only `excused` or a withheld effect excuses it. Without this, a repeat that failed per row
+   would have told the judge "repeated: ... may not run at all".
+6. **`R/llm/diagnosis-instructions.ts`.** The build-test instruction is dev's text (lane D's repeated-step sentence
+   and left-out rows' tested values; lane B's two excused-step sentences), with t252's sentences after lane D's
+   (passes, judge each pass against its own row, rows not passed, `buildTest.inputs`).
+   - One t252 clause was dropped: "the step's target words are the row the build acted on".
+   - Lane D's target words for a repeated step name no row ("in each row step N keeps"), so the passes are what name
+     each row now.
+7. **`R/llm/deepseek/tests/system-prompt-pins.json`.**
+   - `loop_verification` is lane B's pin; t252 never changed it.
+   - `loop_verification_build_test` is lane B's pin with its build-test instruction replaced by the merged one.
+   - The pin test confirms both, byte for byte.
+8. **`R/llm/evidence-loop/rerun-request.ts`.** Both header paragraphs are kept: t252's bindings and lane D's rerun of
+   a done act, which is run as a check.
+9. **`R/flow-draft/index.ts`.** Both exports are kept: `excused.ts` and `flow-inputs.ts`.
+10. **Tests.** In `R/flow-draft/tests/amendment.test.ts` and `R/llm/tests/diagnosis-channel.test.ts`, both sides'
+    describe blocks are kept.
+11. **`framework-reference.md` (both copies).** Regenerated with `node scripts/docs-reference.mjs`: "Wrote ... (3065
+    public declarations)". Then `--check`: "Deterministic framework reference is current."
+12. **Downstream.**
+    - `docs/working/README.md`: the incoming side, as briefed.
+    - `D/node-run/replay.ts`: lane B's `readRows(payload, where, ranWhere)` inside t252's
+      `withNodeOutputs(..., flowRows(...))`.
+    - `D/node-run/replay-answer.ts`: t252's `webNodeReplayFlowRows`, then lane B's `labelled(..., tested)` and
+      `testedColumns`.
+    - `D/node-run/verify.ts` imports: `JsonValue` (lane B) and `webAutomationScopedToRow` (t252).
+13. **Unchanged, auto-merged and confirmed by tests:**
+    - lane D's single-row twin drop, reorder hint and `rowContextKeys`;
+    - lane B's `excusable`;
+    - the checked-not-pressed rule (dev's `lastingActs` rule);
+    - lane C's unchanged-complete guard.
+14. **Structure.** `D/node-run/` went to 26 files: t252's 25 plus lane B's `nested-consequences.ts`. The shared-prefix
+    pair `layer-element.ts`/`layer-member.ts` moved to `D/node-run/layer/{element,member,index}.ts` (plain `mv`, not
+    staged). The importers were updated: `covered-target.ts` and `press-effect/answered-layer.ts`. The directory is now
+    at 24 files. `R/llm/evidence-loop.ts` stays at 800 lines (the merge changed 5 lines in place).
+15. **t252's own regression, found by the merge's checks.** `R/tests/deepseek-bootstrap/tests/answerability.test.ts`
+    "converges through the judge's no..." failed with the draft at 4,327 bytes against the stub's 4,000.
+    - Cause: P1 grew `AUTHORED_INSTRUCTION` from 2,086 to 3,240 bytes (write, loop and bind guidance). t252's scoped
+      runs never covered this directory.
+    - It passes on lane B's tip, so the merge did not cause it.
+    - Production has had no draft byte budget since 2026-09-30, so the stub's measuring stick in `harness.ts` was
+      re-calibrated to 5,000, with a comment, and the test's `budget` expectation updated.
+    - **Cost note for the supervisor:** about 1,150 more bytes, roughly 290 tokens, in every authored decision's draft
+      entry, mostly cached.
+16. **Pinning tests** (worker t252-merge-w1, report `reports/t252-merge-w1-combination-tests.md`). One describe each was
+    added in `R/llm/node-tools/tests/replay-draft-loop.test.ts`, `R/result-verification/build-test/tests/excused.test.ts`
+    and `R/llm/node-tools/tests/dry-run-gate-loop.test.ts`, pinning decisions 3, 4 and 5. The lead mutation-checked
+    each:
+    - reverting decision 3 or 5 failed 3 of 34;
+    - reverting decision 4 failed 1 of 9;
+    - the source was restored each time.
+
+### Checks (run by the lead on the resolved trees)
+
+| Check | Observed |
+| --- | --- |
+| Core `npx tsc --noEmit -p .` (packages/fluxiq, heavy.sh) | rc 0 |
+| Core `pnpm --filter fluxiq check` (after the test edits) | rc 0, `fluxiq:check` built |
+| Core `node scripts/structure-audit.mjs` | `structure-audit: passed (239 warning(s), 349 baselined).` |
+| Core `node scripts/docs-reference.mjs --check` | `Deterministic framework reference is current.` |
+| Core vitest `R/{activity,conversations,flow-bootstrap,flow-draft,llm,result-verification,service,tests}` + `src/ui/activity-action`, run concurrently with the check | `Test Files 5 failed / 441 passed (446)`. 3 were 15 s timeouts (adaptive-retry-resume, recorded-gap, instruction-readiness), and all three passed run alone. 1 was t252's own (item 15), now fixed. 1 was pre-existing (below). |
+| The 5 files alone | `Tests 2 failed / 8 passed`: answerability (item 15) and service-wiring |
+| `R/service/datasets/tests/service-wiring.test.ts` "fails the attempt ... store cannot be opened" | **Pre-existing, not t252.** It fails identically on lane B's tip (`fxwork/t193`, `67dcc087`) and on dev `424a70b3` (`fxwork/t250`): `AggregateError: ... project database pool is closing. What the run held for its judged end could not be settled`. Branch `task/t207-store-failure-pool-regression` exists for it. |
+| `R/tests/deepseek-bootstrap` after item 15 | `Test Files 2 passed (2)`, `Tests 11 passed (11)` |
+| Worker files, then `R/llm/node-tools` + `R/result-verification/build-test` | `Tests 34 passed (34)`; `Test Files 31 passed (31)`, `Tests 275 passed (275)` (both rerun by the lead for the first) |
+| Core libraries `node scripts/build-cache/cli.mjs contracts:build fluxiq:build client-gateway-websocket:build` | contracts reuse; `fluxiq:build` built (5257 files); gateway reuse |
+| Downstream `pnpm --filter @fluxiq-web-extension/{domain,extension,test-runner} check` | rc 0, 0, 0; rerun after the `layer/` move: rc 0, 0, 0 |
+| Domain tests beside t252 and the conflicted files (92 files in 11 directories, scoped runner, label `t252-merge`) | `# tests 725`, `# pass 725`, `# fail 0` |
+| After the `layer/` move: `D/node-run/tests` + `D/node-run/press-effect/tests` | `# tests 207`, `# pass 207`, `# fail 0` |
+| Downstream `node scripts/structure-audit.mjs` | 1 violation: `[working-docs] docs/working/README.md is out of date`. That is the incoming README, left for the supervisor to regenerate as briefed. The `node-run/` file-count violation was fixed (item 14). |
+
+### Not verified
+
+- The extension build, the extension tests, Core `apps/web` and full suites: not run, by rule.
+- Live runs: not run (held).
+- The span's `excusable: "withheld"` reaching the chat: Core tests show it on the executor call. The activity
+  observer's handling of it on a pass call (`<id>.pass.<n>`) was not exercised.
+- `D/node-run/verify.ts`: lane D's `draft.ranWith` on a check now states row-scoped parameters when a pass sends
+  `item`. Core's replay ignores a replay answer's `draft`, by reading, not by a test.

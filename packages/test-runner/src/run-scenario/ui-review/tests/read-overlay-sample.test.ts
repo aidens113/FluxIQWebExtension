@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readOverlaySample, type OverlayCdp } from "../index.js";
 
-const hostState = (overrides: Record<string, unknown> = {}) => ({ hostCount: 1, documentVisibility: "visible", rect: { x: 964, y: 620, width: 300, height: 84 }, display: "block", visibility: "visible", opacity: 1, inViewport: true, attributes: { "data-fluxiq-activity": "", "aria-hidden": "true" }, ...overrides });
+const hostState = (overrides: Record<string, unknown> = {}) => ({ hostCount: 1, documentVisibility: "visible", documentOrigin: 1727890000123.5, rect: { x: 964, y: 620, width: 300, height: 84 }, display: "block", visibility: "visible", opacity: 1, inViewport: true, attributes: { "data-fluxiq-activity": "", "aria-hidden": "true" }, ...overrides });
 const text = (value: string) => ({ nodeType: 3, nodeValue: value });
 const element = (nodeName: string, children: unknown[]) => ({ nodeType: 1, nodeName, children });
 // The overlay's card as `DOM.describeNode` with `pierce` returns it: the text lives under the closed shadow root.
@@ -39,6 +39,7 @@ test("a present overlay is read through its closed shadow root: its parts, phase
   assert.equal(sample.step, "2 of 5");
   assert.equal(sample.text, "Building | · 2 of 5 | FluxIQ | Reading code [code] on the page");
   assert.deepEqual(sample.rect, { x: 964, y: 620, width: 300, height: 84 });
+  assert.equal(sample.documentOrigin, 1727890000123.5, "the document it was read from is kept");
   assert.ok(cdp.calls.includes("Runtime.releaseObjectGroup"), "the host handle is released");
 });
 
@@ -51,8 +52,8 @@ test("an overlay faded to nothing, hidden, or off-screen is present but not visi
 });
 
 test("no host is an absent overlay, and a read that fails is a sample carrying its error", async () => {
-  const absent = await readOverlaySample(fakeCdp({ hostCount: 0, documentVisibility: "hidden" }), 0, []);
-  assert.deepEqual(absent, { atMs: 0, hostCount: 0, documentVisibility: "hidden", present: false, visible: false });
+  const absent = await readOverlaySample(fakeCdp({ hostCount: 0, documentVisibility: "hidden", documentOrigin: 42 }), 0, []);
+  assert.deepEqual(absent, { atMs: 0, hostCount: 0, documentVisibility: "hidden", documentOrigin: 42, present: false, visible: false });
   const failing: OverlayCdp = { async send() { throw new Error("Execution context was destroyed while reading s3cret"); } };
   const failed = await readOverlaySample(failing, 200, ["s3cret"]);
   assert.equal(failed.present, false);
