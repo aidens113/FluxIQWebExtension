@@ -21,6 +21,7 @@ Related: [handoff](./claude-work-handoff-2026-10-03.md), [live loop](./language-
 - Core feedback now checks opaque recorded places before suggesting a choice reorder. When the later choice belongs to a different place, it asks for act-claim review instead of moving the choice before the step that may expose its target. Same-place and unknown-place behavior, whole-Flow tests and final judgement remain intact.
 - Supervisor observed 26 Core owning test files / 430 tests, 16 web settings tests and 136 downstream Lab/environment tests pass. Core/web/test-runner package checks and Core/test-runner builds passed. Both final structure audits and git diff --check passed. Paired task integration follows these verified gates.
 - Compiled provider-free subprocess probe using local config printed ordinary runtime default 0.25 / explicit policy 1 / stored default 0.25, versus test runtime default 0.1 / explicit policy 0.1 / stored default 0.25. A 0.30 Lab flag was refused before process/provider startup.
+- Task t261 merged and pushed on both dev branches: downstream 048d42fa and Core 70eeffe6. Downstream task finish observed its structure gate pass; Core used independently observed narrow gates with --skip-checks to avoid a prohibited extra full sweep. Extension task worktree was removed by task finish; Core's committed worktree remains detached. Claude's existing lane trees were untouched.
 
 ## Worker Briefs
 
@@ -43,6 +44,13 @@ Related: [handoff](./claude-work-handoff-2026-10-03.md), [live loop](./language-
 - Report to: downstream docs/working/flow-build-quality-and-lab-budget-plan/reports/authoring-efficiency.md in t261.
 
 ## Work Ledger
+
+### 2026-10-03 — Paired dev integration and push observed
+- Agent: supervisor.
+- Changed: closed task t261 downstream first, then Core; both dev histories now contain the complete scoped fix.
+- Validation: downstream pnpm task finish t261 printed structure audit passed and applied true at 048d42fa; Core pnpm task finish t261 --skip-checks printed applied true at 70eeffe6 after the recorded package/tests/structure gates. git push origin dev exited 0 in Core (6beae684..70eeffe6) and downstream (1d0e9e66..048d42fa). First downstream finish refused a stale generated working index after ledger growth; regenerated index and reran finish successfully.
+- Outcome: Code and implementation documentation pushed to both dev branches. Private .env.local configuration remains ignored; no provider/browser/panel work occurred.
+- Follow-up: live comparison remains pending session panel authorization; use the protocol below without raising the configured Lab ceiling.
 
 ### 2026-10-03 — Final narrow gates passed
 - Agent: supervisor.
