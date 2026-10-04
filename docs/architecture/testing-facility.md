@@ -1264,7 +1264,7 @@ the page and presses Send (`flow-lane/creation/chat/`,
 
 The order of a chat build:
 
-Independent creation first creates and selects a new run-owned project through public authenticated control, before browser launch, pairing and chat/person scopes. It preserves every existing project, draft, conversation, recording and browser profile. Before Send, public extension status must confirm the actual new project. This prevents old project conversation and Flow catalog from turning a new creation test into an improvement request. Ordinary repair/replay keep their existing scope. The screened creation-context snapshot records run/workspace/project/domain, Flow ID when known, outcome and exact saved hash when readable; persistence failures remain failures. This isolation does not substitute a capability or bypass normal chat.
+Independent creation first creates and selects a new run-owned project through public authenticated control, before browser launch, pairing and chat/person scopes. It preserves every existing project, draft, conversation, recording and browser profile. Before Send, the Lab opens the new project through the mounted extension chat and waits for its authorized project-scoped thread list and matching thread tail, including an empty list, to settle. The rendered chat scope must name that project and be ready; browser recording/session status is not chat scope. This prevents old project conversation and Flow catalog from turning a new creation test into an improvement request. Ordinary repair/replay keep their existing scope. The screened creation-context snapshot records run/workspace/project/domain, Flow ID when known, outcome and exact saved hash when readable; persistence failures remain failures. This isolation does not substitute a capability or bypass normal chat.
 
 1. **Present the page.** `prepareFlowPage("build")` leaves the fixture's entry
    point on screen, even for a task whose playback starts blank
@@ -1274,7 +1274,7 @@ Independent creation first creates and selects a new run-owned project through p
    in the person's Secret Keys and re-signs the session. The paired
    extension's chat runs on that unlocked session. Nothing is pinned to a
    Flow, because there is no Flow yet.
-3. **Type and send.** The run selects its project for the paired client.
+3. **Type and send.** The run selects its project for the paired client, opens that project in the mounted chat and waits for actual rendered readiness.
    Then the panel's own composer, controller and background relay carry the
    message to Core's `append-turn`. The panel is driven through
    `extensionViewPanelDriver` from the control tab, which reaches Chrome's

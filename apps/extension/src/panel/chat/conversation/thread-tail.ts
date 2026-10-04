@@ -33,7 +33,7 @@ export type ThreadTail = {
 };
 
 /** Where to read: which thread, in which project, from which anchor. */
-export type ThreadTailTarget = { conversationId: string; projectId: string; anchorTurnId: string | undefined };
+export type ThreadTailTarget = { conversationId: string; projectId: string; anchorTurnId: string | undefined; requireIdentity?: boolean };
 
 /** Reads the end of `target`'s thread. A failed answer comes back as it failed; an unreadable one as `code: "unreadable"`. */
 export async function readThreadTail(request: PanelStore["request"], target: ThreadTailTarget): Promise<PanelResult<ThreadTail>> {
@@ -53,6 +53,7 @@ export async function readThreadTail(request: PanelStore["request"], target: Thr
     const thread = parseThreadPage(result.value.payload?.conversation);
     if (thread === null) return { ok: true, value: { turns: [], anchorTurnId: undefined, complete: true, missing: true } };
     if (thread === undefined) return { ok: false, sentence: "FluxIQ answered with a conversation this panel can't read.", code: UNREADABLE_CODE };
+    if (target.requireIdentity && (thread.conversation.projectId !== target.projectId || thread.conversation.conversationId !== target.conversationId)) return { ok: false, sentence: "FluxIQ answered with a different conversation than this chat requested.", code: UNREADABLE_CODE };
     turns.push(...thread.turns);
     if (turns.length > TURN_WINDOW) {
       anchorTurnId = turns[turns.length - TURN_WINDOW - 1]!.turnId;

@@ -68,7 +68,7 @@ import { cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatu
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
 import { createdFlowChatEntry, ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, keepsRunState, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter } from "./run-scenario/index.js";
-import { assertCreationProjectReady, prepareIndependentCreationProject, writeCreationContext, type CreationContext } from "./run-scenario/chat-build/index.js";
+import { prepareIndependentCreationProject, writeCreationContext, type CreationContext } from "./run-scenario/chat-build/index.js";
 
 /**
  * The blank tab a browser opens on, and where a Flow that must reach its own
@@ -403,7 +403,6 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       // No recording: FluxIQ explores the page the task's variant renders, which the lane presents, and builds the Flow from the instruction.
       if (!paired || !live || !topology.control || !topology.projectId || !topology.authorizationPin) throw new RunnerFailure("environment.missing", "The created-Flow lane needs a paired extension, a live run, and an authenticated isolated Core with an authorization PIN");
       const control = topology.control; const activeTopology = topology; const createdProjectId = topology.projectId;
-      if (creationIdentity) await assertCreationProjectReady(createdProjectId, matches => pollStatus(extensionControl, matches));
       if (creationIdentity) creationIdentity = await writeCreationContext(bundle, { ...creationIdentity, outcome: "building" });
       await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the live instruction task and run it"), details: { taskId: creation.task.id, judgeBy: creation.judgement.judgeBy, variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id), buildEntry } }); if (buildEntry !== "chat") uiReview.phase("build"); // A chat build is under way once its instruction is sent: a moment before that shows the chat before anything was asked (t193 U-B1).
       // The build starts the way a person starts it: the instruction typed into the chat beside the page (`run-scenario/chat-build/`), and FluxIQ's questions answered there.

@@ -10,6 +10,22 @@ import { activityForTarget } from "../target-activity";
 
 const AUTOMATION = { kind: "automation", flowId: "flow-7", name: "Price tracker" } as const;
 
+test("explicit project excludes foreign or unknown activity and waiting asks, preserving unscoped history", () => {
+  const own = activityEvent(1, { activityId: "build:new", subject: { kind: "build", id: "new", projectId: "new", flowId: "new-flow" } });
+  const old = activityEvent(2, { activityId: "build:old", subject: { kind: "build", id: "old", projectId: "old", flowId: "old-flow" } });
+  const unknown = activityEvent(3, { activityId: "build:unknown", subject: { kind: "build", id: "unknown", flowId: "unknown-flow" } });
+  for (const waiting of [old, unknown]) {
+    const state = relayState([own, old, unknown], { display: { ...display(waiting.activityId), outcome: "waiting" } });
+    const scoped = activityForTarget(state, { kind: "project", projectId: "new" }, undefined);
+    assert.deepEqual(scoped.events.map(event => event.activityId), [own.activityId]);
+    assert.equal(scoped.display, null); assert.equal(scoped.answerIn, null);
+    assert.equal(activityForTarget(state, { kind: "latest" }, undefined).events.length, 3);
+  }
+  const state = relayState([own, old], { display: { ...display(own.activityId), outcome: "waiting" } });
+  const scoped = activityForTarget(state, { kind: "latest", projectId: "new" }, undefined);
+  assert.equal(scoped.display?.activityId, own.activityId); assert.equal(scoped.answerIn?.projectId, "new");
+});
+
 function display(activityId: string): ActivityDisplay {
   return { activityId, subjectKind: "run", phase: "running", headline: "Running your Flow", detail: null, step: null, working: true, outcome: null, sequence: 3 };
 }
@@ -69,7 +85,7 @@ test("a run started from the automations tab waits in its own thread: the latest
   const state = relayState([tabRun], { display: waitingOn("run:r1", "run") });
   const shown = activityForTarget(state, { kind: "latest" }, "conv-latest");
   assert.equal(shown.display?.outcome, "waiting");
-  assert.deepEqual(shown.answerIn, { kind: "question", activityId: "run:r1", subjectKind: "run", subjectId: "r1", title: "The run's question" });
+  assert.deepEqual(shown.answerIn, { kind: "question", activityId: "run:r1", subjectKind: "run", subjectId: "r1", title: "The run's question", projectId: "p" });
 });
 
 test("a build started from the latest chat asks in its Flow's thread: the latest chat offers it, the automation's chat holds it", () => {

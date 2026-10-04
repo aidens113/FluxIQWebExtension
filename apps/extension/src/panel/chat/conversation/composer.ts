@@ -95,6 +95,7 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
     if (sendButton.getAttribute("aria-label") !== label) sendButton.setAttribute("aria-label", label);
     sendButton.dataset.sending = sending ? "true" : "false";
     parkedControls.hidden = !parked;
+    box.readOnly = parked;
     adopt.disabled = clear.disabled = !enabled || !current();
   }
 
@@ -156,10 +157,10 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
   return {
     element,
     render(state) {
-      enabled = state.mode !== "offline" && state.mode !== "fallback";
+      enabled = state.mode !== "offline" && state.mode !== "fallback" && (state.scopeState === undefined || state.scopeState === "ready");
       sending = state.sending;
       if (box.disabled !== !enabled) box.disabled = !enabled;
-      const shown = enabled ? placeholder : OFFLINE_PLACEHOLDER;
+      const shown = enabled ? placeholder : state.mode === "offline" ? OFFLINE_PLACEHOLDER : state.scopeState === "loading" ? "Loading the conversation..." : state.scopeState === "error" ? "Chat unavailable" : OFFLINE_PLACEHOLDER;
       if (box.placeholder !== shown) box.placeholder = shown;
       syncButton();
       // A kept draft is sized once the box is on screen.

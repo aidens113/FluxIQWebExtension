@@ -33,9 +33,10 @@ export function askThread(state: ExtensionActivityState): QuestionTarget | undef
   const events = [...state.recent, ...(state.current ? [state.current] : [])].filter((event) => event.activityId === activityId);
   const subject = events[events.length - 1]?.subject;
   if (subject === undefined) return undefined;
+  const scope = typeof subject.projectId === "string" && subject.projectId !== "" ? { projectId: subject.projectId } : {};
   if (subject.kind === "run") {
-    return subject.id ? { kind: "question", activityId, subjectKind: "run", subjectId: subject.id, title: "The run's question" } : undefined;
+    return subject.id ? { kind: "question", activityId, subjectKind: "run", subjectId: subject.id, title: "The run's question", ...scope } : undefined;
   }
   const flowId = events.map((event) => event.subject.flowId).find((id) => typeof id === "string" && id !== "");
-  return flowId === undefined ? undefined : { kind: "question", activityId, subjectKind: "flow", subjectId: flowId, title: "The build's question" };
+  return flowId === undefined ? undefined : { kind: "question", activityId, subjectKind: "flow", subjectId: flowId, title: "The build's question", ...scope };
 }

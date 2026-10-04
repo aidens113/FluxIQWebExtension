@@ -14,6 +14,7 @@ import type { Page } from "@playwright/test";
 import type { CreatedFlowLaneEntry } from "../../flow-lane/index.js";
 import { extensionViewPanelDriver } from "../../extension-chat-check/index.js";
 import { RunnerFailure } from "../../failure.js";
+import { assertCreationProjectReady } from "./creation/index.js";
 import type { PersonAskAnswer, PersonChatAnswerer, PendingPersonAsk } from "../../person-simulation/index.js";
 import type { LivePanelOutcome } from "../browser-session/index.js";
 
@@ -51,12 +52,22 @@ export function createdFlowChatEntry(input: ChatEntryInput): { entry: Extract<Cr
     throw new RunnerFailure("environment.missing", `A created-Flow run starts its build from the extension's chat window, and the chat was not on screen (${input.livePanel.mode}: ${why}). Run it headed without --no-live-panel, or pass --direct-api-build for a test-only run that is never counted as a pass`);
   }
   const panel = extensionViewPanelDriver(input.extensionControl, PANEL_PATH);
+  let prepared = false;
   const entry: Extract<CreatedFlowLaneEntry, { kind: "chat" }> = Object.freeze({
     kind: "chat" as const,
-    authorizeChat: input.authorizeChat,
+    authorizeChat: async () => {
+      prepared = false;
+      await input.authorizeChat();
+      await assertCreationProjectReady(input.scope.projectId, () => panel.selectProject(input.scope.projectId));
+      prepared = true;
+    },
     chat: {
       panelInput: panel.input,
-      type: (text: string) => panel.send(text),
+      type: async (text: string) => {
+        if (!prepared) throw new RunnerFailure("gateway.connection", "The mounted creation chat has not been prepared");
+        await assertCreationProjectReady(input.scope.projectId, () => panel.projectScope());
+        await panel.send(text);
+      },
       shows: () => panel.text(),
       picture: input.picture,
     },

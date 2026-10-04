@@ -31,9 +31,9 @@ export function createContextLine(back: () => void): ContextLine {
   return {
     element,
     update(target) {
-      const hidden = target.kind === "latest";
+      const hidden = target.kind === "latest" && target.projectId === undefined;
       if (element.hidden !== hidden) element.hidden = hidden;
-      const text = target.kind === "automation" ? target.name.trim() || "This automation" : target.kind === "question" ? target.title : "";
+      const text = target.kind === "automation" ? target.name.trim() || "This automation" : target.kind === "question" ? target.title : target.projectId !== undefined ? "Project chat" : "";
       if (name.textContent !== text) name.textContent = text;
       if (name.getAttribute("title") !== text) name.setAttribute("title", text);
       const automation = target.kind === "automation";

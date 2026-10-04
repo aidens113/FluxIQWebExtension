@@ -1,7 +1,7 @@
 # MVP live continuation and Claude handoff
 
 Status: Active
-Status detail: A4/B3 ended before provider calls; scoped chat UI and Lab driver correction in progress. Provider-free headed chat-scope proof precedes any paid retry.
+Status detail: Chat scope and C judge-copy fixes passed independent owner tests/types/audits; runtime builds underway before provider-free headed scope proof and any paid retry.
 Created: 2026-10-03
 Last updated: 2026-10-03
 Owner: Codex senior supervisor
@@ -18,11 +18,11 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 - Persistent B run run-mut5amuc-c617cc21, instance t262-slot-3/workspace t262-b, ended failed/no created Flow at01:36:20.598Z, launcherexit1.51calls/total .074950068/build incl read+judges .074802696 vs .10; split first judges, final draft test unreproducible. Draft ID retained but not replay-ready. Worker observed duplicate cart effects from repeated build tests; no repeat/unrepeat amendment used. Full six-stage debug complete and51turn sequence verified, no relaunch.
 - Checked-retarget investigation confirms old execution proof survives changed arguments after verify-only acceptance. Correction now implemented/frozen: checked candidates separate current configuration from prior performed proof, preserve separate lasting-effect guard, clear following replay marks and avoid invented bind instances. Counted-object parser source provenance protects split lasting acts during tests; plural coupon advisory corrected.
 - Lab .10 scope remains testing only; normal UI default independent. Flash, headed bundled Chromium, actual extension chat. No Pro escalation/guard overrides; A3 run-mut6b2re-d0e475d1 failed1chatcall/.000241638 (flow.improve selected; no creation), B2 run-mut6bevx-d8b7956f failed/.073861872, no additional paid run queued. Slots2/3 reserved until lane work ends; persistent workspaces preserved.
-- Next: implement independent Lab creation project/explicit replay project identity after A3; correct declared-arrival proof after B2, then repeat actual chat creation and zero-provider unchanged-Flow reuse when a usable Flow exists. New source units are now frozen for supervisor verification/build; source freezes remain mandatory during live. D safe route prep read-only. Both newest full debug records and supervisor ending/screenshot checks complete. C live paging13records and D named-route safety integration remain pending. Paused t224 standalone UI review separate.
+- Next: provider-free headed scope proof on retained A4 project, then repeat actual chat creation with independent project and declared-arrival fixes; zero-provider unchanged-Flow reuse only when a usable Flow exists. New source units independently checked/built and now frozen for live; source freezes remain mandatory during live. D safe route prep read-only. Both newest full debug records and supervisor ending/screenshot checks complete. C live paging13records and D named-route safety integration remain pending. Paused t224 standalone UI review separate.
 
 - New guarded runs ended preprovider failed: A4 run-mut7h5k2-26c8252d/root64080 and B3 run-mut7hh6c-901800c5/worker43963 onf9afcb12/Core80116d0e. New creation project identity persisted then failed; zero provider calls/spend, noFlow. New readiness poll after completed pairing could not match extension project. Full six-stage debug and supervisor screenshot/ending review complete; no retry queued.
 
-- Confirmed zero-call setup cause: new readiness gate assumes browser session.projectId reflects selected chat, but panel actually sends shown thread projectId; HTTP selected context has no session/thread notification. Existing relay already supports explicit project override. Next coherent UI/Lab project-scoped thread target+beforeSend readiness, preserving old chats/drafts; no recording/reset/reconnect/forcedcapability workaround. Full A4/B3six-stage debug complete.
+- Confirmed zero-call setup cause: new readiness gate assumes browser session.projectId reflects selected chat, but panel actually sends shown thread projectId; HTTP selected context has no session/thread notification. Existing relay already supports explicit project override. Scoped UI/Lab target, authorized before-Send readiness, activity/question filtering and draft parking now implemented; independent98app/22Labtests,7post-barrel tests,types and both audits passed. Core judge-copy paging51tests/typecheck passed; raw accounting unchanged. Fresh Core/extension/domain/Lab builds complete. Next provider-free headed scope proof, then guarded paid creation; all source frozen, no recording/reset/reconnect/forcedcapability workaround. Full A4/B3six-stage debug complete.
 
 ## Execution Steps
 
@@ -549,3 +549,16 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 - Validation: app worker reports initial five scoped-controller regressions failing before correction; Core worker reports four real judge paging cases failing while five existing tests pass. Worker claims pending supervisor rerun; no browser/provider test started.
 - Outcome: bounded source work active. Neither zero-call setup failure spent on a build; no acceptance or budget claim inferred from compilation.
 - Follow-up: independent tests/types/audits and fresh runtime, then headed provider-free chat-scope proof on retained project/profile; only afterward one guarded actual creation per lane.
+
+### 2026-10-03 - Supervisor scoped correction verification
+- Agent: supervisor.
+- Changed: reviewed scoped controller/thread identity, mounted driver event/readiness, foreign draft and activity ownership; corrected one new controller test import to public background barrel after structure audit rejected direct cross-directory import. Corrected Lab report reproduction URL to encode apostrophes through heavy wrapper; first root loader invocation failed before tests, not a product regression. Core shared paging words split into one-export modules after initial review/type fixture defect.
+- Validation: independent app15files98tests pass, amended controller owner7tests pass; Lab5files22tests pass; Core4files51tests pass after corrections. Root direct extension and Lab tsc --noEmit both exit0; Core check exit0 current matching stamp after worker actual28.472s check. Both audits pass, downstream165warnings/118baselined, Core241/349. Fresh Core package build exit0/30.410s; linked extension/Lab builds and docs-reference regeneration running. No full suite repeated.
+- Outcome: scoped source independently verified; actual headed extension scope and model creation remain unverified. C result-judge projection passed owner tests but13record/52field acceptance remains pending.
+- Follow-up: fresh builds/checkpoint, provider-free headed interactive against retained A4 project, no Send/provider/build action; inspect actual screenshot and ending before paid release.
+
+### 2026-10-03 - Fresh linked runtime ready for provider-free scope proof
+- Agent: supervisor.
+- Validation: extension package build exit0/22.181s, all Chrome/Firefox/e2e targets verified; runner package build exit0/22.401s after linked domain build21.861s. Core docs reference regenerated3083declarations. Prior independent owner tests/types and both audits passed; git diff --check exit0. All source workers complete/frozen, no live process active.
+- Outcome: local coherent source checkpoint ready; not merged or pushed dev, actual browser proof still pending. Source remains frozen through upcoming provider-free/paid live lanes.
+- Follow-up: use predeclared provider-free-chat-scope report and exact retained A4 project; no message/Send/provider operation.

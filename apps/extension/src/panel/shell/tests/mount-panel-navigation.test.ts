@@ -6,8 +6,24 @@ import { statusWith } from "../../tests/status-fixture";
 import { RUNTIME_MESSAGES as M } from "../../../shared/constants";
 import { AUTOMATION_PANEL_MESSAGES as S } from "../../../shared/protocol";
 import { mountPanel } from "../mount-panel";
+import { CHAT_PROJECT_NAVIGATION } from "../../chat/project-navigation";
 
 const settle = async () => { for (let i = 0; i < 25; i++) await Promise.resolve(); };
+
+test("mounted extension-view project event opens actual scoped Chat and authorized empty readiness", async () => mounted(async ({ root, byId, navigate, core }) => {
+  assert.equal(byId("panelScreen-chat").hidden, true);
+  navigate({ projectId: "new-project", instruction: "invalid extra field" });
+  assert.equal(byId("panelScreen-chat").hidden, true);
+  navigate({ projectId: "new-project" });
+  assert.equal(byId("panelScreen-chat").hidden, false);
+  assert.equal(byId("panelScreen-automations").hidden, true);
+  await settle();
+  const chat = root.byClass("chat-panel")[0]!;
+  assert.equal(chat.getAttribute(CHAT_PROJECT_NAVIGATION.projectAttribute), "new-project");
+  assert.equal(chat.getAttribute(CHAT_PROJECT_NAVIGATION.scopeStateAttribute), "ready");
+  assert.equal(byId("conversationInput").disabled, false);
+  assert.ok(core.sent.some(message => message.type === M.panelConversationRead && message.projectId === "new-project"));
+}));
 
 async function mounted(body: (view: Awaited<ReturnType<typeof create>>) => void | Promise<void>) {
   await withFakeDocument(async () => {
@@ -57,8 +73,8 @@ async function mounted(body: (view: Awaited<ReturnType<typeof create>>) => void 
     doc.createElementNS = (_ns, tag) => doc.createElement(tag);
     doc.body = doc.createElement("body"); doc.documentElement = doc.createElement("html"); doc.activeElement = doc.body;
     Object.assign(doc, { hasFocus: () => doc.focused, addEventListener: () => {}, removeEventListener: () => {} });
-    const events = new Map<string, () => void>();
-    globals.window = { addEventListener: (type: string, listener: () => void) => events.set(type, listener), setTimeout, clearTimeout };
+    const events = new Map<string, (event?: Event) => void>();
+    globals.window = { addEventListener: (type: string, listener: (event?: Event) => void) => events.set(type, listener), dispatchEvent: (event: Event) => { events.get(event.type)?.(event); return true; }, setTimeout, clearTimeout };
     try { await body(await create(doc, globals, intervals)); } finally { events.get("pagehide")?.(); await settle(); Object.assign(globals, before); }
   });
 }
@@ -87,7 +103,7 @@ async function create(doc: { body: FakeElement; activeElement: FakeElement; focu
   const tab = byId("panelTab-automations"); tab.focus(); tab.dispatch("click"); await settle();
   const row = root.byClass("automation-row")[0]!;
   assert.ok(row, "actual shell loaded automation rows");
-  return { root, doc, row, core, byId, messages, pendingRun: () => { runs = [{ runId: "r", flowId: "f", status: "completed", adaptationCount: 1 }]; }, refuse: () => { refuseChat = true; }, push: () => { for (const listener of listeners) listener({ type: M.statusChanged, status }); }, refreshRows: async (next: typeof flows) => { flows = next; for (const timer of [...intervals.values()]) if (timer.ms === 30_000) timer.run(); await settle(); } };
+  return { root, doc, row, core, byId, messages, navigate: (detail: unknown) => (globals.window as EventTarget).dispatchEvent(new CustomEvent(CHAT_PROJECT_NAVIGATION.event, { detail })), pendingRun: () => { runs = [{ runId: "r", flowId: "f", status: "completed", adaptationCount: 1 }]; }, refuse: () => { refuseChat = true; }, push: () => { for (const listener of listeners) listener({ type: M.statusChanged, status }); }, refreshRows: async (next: typeof flows) => { flows = next; for (const timer of [...intervals.values()]) if (timer.ms === 30_000) timer.run(); await settle(); } };
 }
 
 test("focused row descendant activation opens target, shows Chat, then focuses enabled composer", async () => mounted(async ({ row, core, byId, doc }) => {

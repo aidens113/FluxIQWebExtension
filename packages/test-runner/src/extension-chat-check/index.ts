@@ -12,6 +12,7 @@ export * from "./firefox/index.js";
 export { openChromeChatSession, type WorkerRequest } from "./open-chrome-session.js";
 export { openFirefoxChatSession } from "./open-firefox-session.js";
 export * from "./prove/index.js";
+export * from "./project-navigation/index.js";
 export { runExtensionChatCheck, type ChatCheckOptions, type ChatCheckResult } from "./run-chat-check.js";
 export { sendChatMessage } from "./send-chat-message.js";
 export { extensionViewPanelDriver, pagePanelDriver, type ChatPanelDriver } from "./panel-driver.js";

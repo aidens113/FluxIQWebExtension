@@ -58,6 +58,7 @@ import { sameThread } from "./same-thread";
 import { createChatOwnerContext, type ChatOwner } from "./owner-context";
 import { activityForTarget, buildChatStream, createTurnClock, type QuestionTarget } from "./stream";
 import type { ChatTarget } from "./target";
+import { CHAT_PROJECT_NAVIGATION, createProjectDraftOwner } from "./project-navigation";
 import {
   createContextLine,
   createEmptyState,
@@ -119,6 +120,7 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
   const targetListeners = new Set<(target: ChatTarget) => void>();
   const owners = createChatOwnerContext(request);
   let owner = owners.capture();
+  const draftOwners = createProjectDraftOwner();
   let controller = makeController(owner);
   let feed = makeFeed(owner);
   let clock = createTurnClock();
@@ -224,15 +226,17 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     controller = makeController(owner); feed = makeFeed(owner);
     shownTarget = { kind: "latest" }; answerIn = null; questionKey = "";
     clock = createTurnClock(); historyTaken = false; seen = undefined; turnOpeners = [];
-    composer.setOwner(owner); composer.setPlaceholder("Message FluxIQ"); context.update(shownTarget); refreshControls(true);
+    composer.setOwner(draftOwners.capture(owner, shownTarget.projectId, latestStatus?.projectId ?? undefined)); composer.setPlaceholder("Message FluxIQ"); context.update(shownTarget); refreshControls(true);
     renderAll();
     if (!initial) for (const listener of [...targetListeners]) listener(shownTarget);
   }
 
   function open(next: ChatTarget, follow = true): void {
+    if (next.projectId === undefined && shownTarget.projectId !== undefined) next = { ...next, projectId: shownTarget.projectId };
     if (sameTarget(next, shownTarget)) return;
     const threadChanges = !sameThread(next, shownTarget);
     shownTarget = next;
+    composer.setOwner(draftOwners.capture(owner, next.projectId, latestStatus?.projectId ?? undefined));
     if (threadChanges) {
       // Another thread: its first read is history again, and nothing of the last one stays.
       clock = createTurnClock();
@@ -279,6 +283,13 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     if (dock.hidden !== fallbackShown) dock.hidden = fallbackShown;
     readNotice.render(state);
     composer.render(state);
+    if (shownTarget.projectId !== undefined) {
+      element.setAttribute(CHAT_PROJECT_NAVIGATION.projectAttribute, state.projectId ?? shownTarget.projectId);
+      element.setAttribute(CHAT_PROJECT_NAVIGATION.scopeStateAttribute, state.scopeState ?? "error");
+    } else {
+      element.removeAttribute(CHAT_PROJECT_NAVIGATION.projectAttribute);
+      element.removeAttribute(CHAT_PROJECT_NAVIGATION.scopeStateAttribute);
+    }
 
     // The first read's unstamped turns are history: they sort before every step message.
     const stamped = clock.stamp(state.turns, historyTaken ? Date.now() : Number.NEGATIVE_INFINITY);
@@ -354,7 +365,7 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
       connected = next;
       const observation = owners.observe(status);
       if (observation.changed) resetOwner(owners.capture(), observation.initial);
-      else composer.setOwner(owner);
+      else composer.setOwner(draftOwners.capture(owner, shownTarget.projectId, latestStatus?.projectId ?? undefined));
       for (const opener of turnOpeners) opener.observe(status);
       controller.setConnected(next && actionsAllowed() && !unsupported);
       if (changed) renderAll();

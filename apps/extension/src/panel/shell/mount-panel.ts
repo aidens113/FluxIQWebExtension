@@ -35,6 +35,7 @@ import type { ExtensionStatus, RecordingState } from "../../shared/protocol";
 import { chooseAutomation, createAutomationsTab } from "../automations";
 import { createActivityFeed, createChatOwnerContext, createChatPanel, type ActivityFeed, type ChatTarget } from "../chat";
 import { createElement } from "../dom";
+import { bindChatProjectNavigation } from "../chat/project-navigation";
 import { createStartView, startGuide } from "../getting-started";
 import { createOpenFluxIQButton } from "../open-fluxiq";
 import { createRecordingControls, createRecordingReview } from "../recording";
@@ -153,6 +154,11 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
     chat.open(target);
     showTarget(chat.target());
   }
+
+  bindChatProjectNavigation(window, projectId => {
+    openInChat({ kind: "project", projectId });
+    dispatch({ type: "tab", tab: "chat" });
+  });
 
   let passiveName: { readonly flowId: string; readonly name: string } | undefined;
   /** The strip follows navigation; passive names already came from its own drawn row. */
