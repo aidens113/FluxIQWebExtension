@@ -1,7 +1,7 @@
 # MVP live continuation and Claude handoff
 
 Status: Active
-Status detail: Resumed MVP implementation and live testing after scoped t261; reconciling Claude lane fixes before a fresh capped run.
+Status detail: Persistent A2 and B both failed under budget; correcting checked-retarget proof and counted-object lasting-action classification before further spending.
 Created: 2026-10-03
 Last updated: 2026-10-03
 Owner: Codex senior supervisor
@@ -11,15 +11,14 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 
 ## Current State
 
-- Work active: user authorized continued MVP implementation, isolated/persistent Lab panel/browser operation and durable Claude handoff. Paired task t262; original Claude trees and user state preserved.
-- Source checkpoints downstream326ad350/Core9f756676. Integrated paired toggle/stale-mark/unique-handle fixes, advisory false-act feedback and exposed paging limits.511 focused tests, touched package checks, Core build and both audits passed before run1. No full suites repeated (two today already).
-- First real-chat headed run run-mut4fvkm-e2fc03e6 finished01:13:04.486Z. Flow created, first whole test/two judges yes, actual playback all4cart facts held.30calls:26explore,1read,2judge,1chat; total .04025919/build .040120068 vs .10; runtime0model calls. Central/evaluation oracle passed; launcherexit1/Corestatusfailed. This is not clean acceptance.
-- Reproduced contradiction: coupon busy/unacted press failed then succeeded retry_node250ms; no remaining action failure/early stop/refutation; Core status stillfailed, Lab code flow_lane.every_failure_recovered, gate refusal llm.gate.known_recovery. Historical recovery selector fixed and independently tested; actual terminal graph cause still unproven. Full run debug authored.
-- First target was disposable isolated: owning cleanup removed Core workspace, preventing later reuse. Evidence survives; no separate reuse claim. Next changed-source build MUST use persistent-isolated named t262-a workspace, then lab replay same saved Flow with no provider and unchanged content hash.
-- Slot2 remains reserved for t262 laneA/instance t262-slot-2; run1 processes exited. .10 applies Lab only, normal UI independent; Flash, realchat, headed Chromium134.0.6998.35, no overrides/Pro escalation.
-- B run2 now debugged: .04965/40calls,27amendments out of38decisions, mistaken quantity row-repeat,2/6coverage and no cart actions. Worker owns explicit unrepeat repair seam/contextual advice, preserving keep+act intentional loops and strict quantity-fault.
-- C paging evidence/default feedback fixed provider-free; live13record acceptance unmeasured. D minimal29file named-route partition ready with known safety gaps; unintegrated, not certified. Do not wholesale-copy dirty lanes.
-- Sources frozen: B unrepeat, Core unresolved-failure selector and screened Lab terminal evidence. Supervisor Core467tests plus Lab86tests, touched types and fresh Core/domain builds passed. Next audit/checkpoint and new persistent A .10, then zero-model same-Flow replay. Debug any failed run before retry; continue B/C/D functional acceptance/repair/reuse. Paused t224 standalone UI review remains separate.
+- Active paired task t262; user authorized continued MVP implementation, isolated/persistent Lab live testing and durable Claude handoff. Original dirty Claude trees/user data preserved. No claim that MVP is complete.
+- Frozen source checkpoints downstream14cd066b/Core42434f42. Integrated toggle/stale-mark/unique-handle fixes, advisory act feedback, paging-bound feedback, explicit unrepeat, unresolved-failure selection and screened terminal evidence. Supervisor observed Core467 focused tests and Lab86 tests pass, touched package checks/builds and both audits. Two full sweeps already today; none repeated.
+- First A run run-mut4fvkm-e2fc03e6: created Flow/all4oracle facts held,30calls/total .04025919/build .040120068; actual Core status failed after healed coupon attempt. Not clean acceptance; exact terminal graph cause unproven because old snapshot omitted metadata. Full six-stage debug now contains30ordered model turns,13attempts and screenshot findings. Disposable workspace removed by owning lifecycle, so no reuse claim.
+- Persistent A2 run run-mut58jbo-fbc8a57a, instance t262-slot-2/workspace t262-a, ended failed/build/no created Flow at01:40:49.238Z, launchexit1.63provider calls/total .079036554/build .078897432 vs .10. Persistent draft retained, not replay-ready; full six-stage debug completed, supervisor verified exact63turn sequence. Both live runs exited, source freeze released for fixes.
+- Persistent B run run-mut5amuc-c617cc21, instance t262-slot-3/workspace t262-b, ended failed/no created Flow at01:36:20.598Z, launcherexit1.51calls/total .074950068/build incl read+judges .074802696 vs .10; split first judges, final draft test unreproducible. Draft ID retained but not replay-ready. Worker observed duplicate cart effects from repeated build tests; no repeat/unrepeat amendment used. Full six-stage debug complete and51turn sequence verified, no relaunch.
+- Checked-retarget investigation confirms old execution proof survives changed arguments after verify-only acceptance. Correction now implemented/frozen: checked candidates separate current configuration from prior performed proof, preserve separate lasting-effect guard, clear following replay marks and avoid invented bind instances. Counted-object parser source provenance protects split lasting acts during tests; plural coupon advisory corrected.
+- Lab .10 scope remains testing only; normal UI default independent. Flash, headed bundled Chromium, actual extension chat. No Pro escalation, guard overrides or further paid run queued. Slots2/3 reserved until lane work ends; persistent workspaces preserved.
+- Next: save paired checkpoint of independently verified fixes; changed-source live acceptance, then zero-provider unchanged-Flow reuse when a Flow exists. Both newest full debug records and supervisor ending/screenshot checks complete. C live paging13records and D named-route safety integration remain pending. Paused t224 standalone UI review separate.
 
 ## Execution Steps
 
@@ -31,6 +30,83 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 6. Continue the next B/C/D functional blocker from the verified inventory. Record pending work explicitly; preserve the paused standalone UI review unless a live-loop defect requires a focused UI fix.
 
 ## Worker Briefs
+
+### Brief: live-b-provenance (resume-cd; no launch before explicit supervisor checkpoint release)
+- Frozen paired t262; source checkpoint IDs supplied by root at release. One paid run only, no retries/overrides/new source. Slot3 remains ownedt262, instance t262-slot-3, persistent workspace t262-b preserved.
+- Required reads: Current State, latest B full debug, lasting-source-provenance and checked-candidate-proof reports, Lab guards. Old B failed full debug complete; changed source verified before release.
+- Task: test split-object protection and authoring quality through headed real extension chat at same.10/Flash. Compare build test replay mode/cart mutation behavior, final size selection, judges/repairs/cost and final definition; no assumed success from synthetic regression.
+- Env: FLUXIQ_LAB_INSTANCE=t262-slot-3, FLUXIQ_TEST_ENV_FILES=none, FLUXIQ_TEST_TARGET=persistent-isolated, FLUXIQ_LLM_RUN_COST_CEILING_USD=.10, npm_config_workspace_concurrency=1.
+- Command same previous B brief: node scripts/lab/run-lab.mjs run bigbox-retail --target persistent-isolated --workspace t262-b --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --llm-task create-flow --instruction-task bigbox-retail-pickup-cart-store-remembered-after-creation --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000 --llm-max-calls 48 --llm-cost-ceiling-usd 0.10. Redirect ignored instance launch-2.log.
+- Owns own reports/live-b-provenance.md, named new run debug and instance-owned ignored artifacts only; no shared docs/source/store edits/envfiles/slot removal/commit/push. Stage1 author expectations BEFORE inspecting new ending.
+- Done: actual ending/full6stage debug on pass or fail, everyorderedmodelturn and actionshape/private refs/timings/judges/persistence/screenshotfindings. Screened reports only, no raw prompt/page values/secrets. Preserve workspace/draft/Flow. No separate replay untilrootcoordinate; no automaticrelaunch.
+- Notify root launchsession/runID/status/spend; guardrejection stop/report, nooverride. Supervisor independently verifies before any acceptance.
+
+
+### Brief: full-debug-a2 (resume-ab)
+- Frozen run evidence/private ignored artifacts read only; source corrections happening elsewhere, no source/runtime/profile/store operations.
+- Required reads: Current State, run-debug-template, existing root debug run-mut58jbo-fbc8a57a, public A instruction/prelaunch expectations and exact ignored turn/tool/test/judge artifacts.
+- Owns existing A2 debug plus reports/full-debug-a2.md only. Preserve root findings; full six stages,63ordered model rows, all test node parameters by shape+private refs, timing/repair/each judge pair/coverage/ending/noFlow persistence limits and screenshot start/mid/end. Stage1 disclose retrospective filling; no raw prompts/page values/credentials in authored docs.
+- Explain35amend decisions versus14core.run_node calls and42repair decisions, why cart action remains absent, checked-retarget inherited proof versus actual plain calls, duplicate/no-change/no_such_step/refusal churn; source cause only when confirmed, no speculation as fact.
+- Done: full template/no-evidence gaps, exact63turn sequence reconciles spend and55builddecisions; inspect all judge pairs, both negative final judges, no paid retry/Flowreuse claim. Root independently verifies screenshots/ending.
+- Must not touch shared docs/source/slots/env/guards/active workers files/commits or launch paid/unpaid browser. Persistent workspace preserved.
+
+
+### Brief: lasting-source-provenance (resume-cd)
+- Paired t262 Core; both live runs exited, source freeze released. User notified generic Core correction needed; permission policy unchanged.
+- Required reads: Current State, lasting-action-classification-design, Core AGENTS, exact owners below and safe B worker confirmation.
+- Task: Fail-first split counted-object lasting-act attribution and counted-host full-test regression. Preserve parser-owned original source clause alongside per-object display quotes and use grounded provenance to match cached instruction consequence quote. Avoid classifying unrelated/narrowly quoted sibling by shared verb; keep object IDs/coverage/choice replay and no-read behavior. No page words/cart-specific Core inference/new provider call or permission restriction.
+- Owns Core runtime flow-bootstrap/instructed-acts/{contracts.ts,instruction-acts.ts,tests/instruction-acts.test.ts}; flow-bootstrap/{action-permissions.ts,tests/action-permissions.test.ts}; llm/node-tools/tests/lasting-acts-build.test.ts. Request exact new module/barrel/test if cohesive matcher extraction warranted; no verify-only/step/rerun-check edits (another worker owns those).
+- Done: failing-before counted-object membership+actual mutation-count tests, positive/negative provenance boundaries, unchanged ordinary persisted execution and existing lazy cached read. Four owning test command in design through heavy wrapper; no full suite/build/provider/live.
+- Own report only reports/lasting-source-provenance.md under downstream continuation. No shared docs/commit/push/runtime state. Confirm actual cached read evidence versus broad instruction serialization before calling B exact cause proved.
+
+
+### Brief: checked-candidate-proof (resume-live-prep; prepare only until supervisor releases source freeze)
+- Paired t262 Core; this crosses generic Core draft evidence ownership. Downstream runtime contract unchanged in first phase.
+- Required reads: Current State, reports/checked-retarget-evidence-design.md, Core AGENTS and exact named owners.
+- Task: Reproduce stale proof after checked retarget; represent accepted replacement as checked candidate, retain old performed proof tied to old configuration, preserve separate historical lasting-effect guard across subsequent reruns. Verify is no action; never set written=true from verify. Keep candidate proposable and emit truthful entry/feedback. Refused check remains unchanged; ordinary explicit calls/permissions unchanged.
+- Owns Core runtime llm/node-tools/{rerun-check.ts,tests/rerun-check.test.ts}; flow-draft/{step.ts,tests/step.test.ts,entry.ts,tests/entry.test.ts,verify-only.ts}; llm/node-tools/tests/{lasting-acts,dry-run-gate-loop,replay-draft-acts}.test.ts. No other source without exact release.
+- Done: failing-before tests for retarget proof, second rerun never duplicating lasting effect, refusal/explicit-call behavior, checked candidate entry/proposability, written contract and bound values where owners support. Narrow six-owner vitest command from design, no full suite. Request missing owner if actual integration requires it.
+- Report own docs/working/mvp-live-continuation-2026-10-03/reports/checked-candidate-proof.md downstream only. Never shared docs/commits/push/live/store/env.
+- Source freeze remains: prepare read-only and report readiness. DO NOT edit source or run tests/builds until root explicitly releases after A2 exits.
+
+
+### Brief: lasting-action-classification-design (resume-cd)
+- Frozen t262 read-only investigation while A2 remains active; no source/tests/build/provider/store/browser operations.
+- Required reads: Current State, checked-retarget design, Core lasting classification/replay-mode/draft-test owners and downstream registered cart action consequence mappings. B worker screened ending is evidence, not a verified implementation conclusion.
+- Owns only reports/lasting-action-classification-design.md under this continuation.
+- Determine why B full draft tests execute cart adds in step mode; distinguish instructed wording from declared consequence, propose minimal generic correction, meaningful failing-before tests and exact file partition. Confirm source path versus assumptions. No new restriction or budget increase.
+
+
+### Brief: checked-retarget-evidence-design (resume-cd)
+- Repository: frozen t262 Core/downstream read-only; old A retarget report and activeA2 metadata read only if necessary, no runtime store/profile access.
+- Task: Design narrow correction for checked rerun replacing arguments while inheriting prior mutate/effectApplied/act evidence. Core rerun decision checks prior step before new target; a verify-only call is not a new act. Distinguish same action proof from a retarget without speculative execution or duplicating lasting actions.
+- Required reads: Current State, core-toggle-integration retarget finding, Core llm/node-tools/rerun-check.ts and tests, relevant domain node-run verification and stable handle contracts. No broad source discovery.
+- Owns: own report docs/working/mvp-live-continuation-2026-10-03/reports/checked-retarget-evidence-design.md only.
+- Done: exact existing mutation/proof path and meaningful failing-before fixture, generic ownership/host seam alternatives, minimal exact file partition/dependencies and safest semantics. Prior-input equality cannot prove semantic target identity; domain-authenticated identity may do so. Candidate argument changes must not be misrepresented as execution; do not add page ranking/truncation, speculative autoaction or new permission restrictions. Explain interaction with write:true, wholeFlow tests, bindings and already-performed lasting actions. Mark unproven assumptions.
+- Must not touch: source/shared docs/active stores/old trees/env/guards/slots; no provider/panel/commits or validation builds while live.
+
+
+### Brief: full-debug-a-run1 (resume-live-prep)
+- Repository: frozen t262 source/read-only ignored firstA artifacts; writes one assigned debug plus own report.
+- Task: Complete first run-mut4fvkm-e2fc03e6 six-stage full-debug template, retaining supervisor findings and uncertainty. Do not change source or inspect active runtime profiles/stores.
+- Required reads: Current State, run-debug-template.md, existing assigned debug, authored A instruction/task source and prelaunch expectations, per-turn metadata/decision/tool/test/judge artifacts as needed. Never emit/commit prompts/raw page values/secrets.
+- Owns: docs/working/language-driven-flow-loop-plan/debugs/run-mut4fvkm-e2fc03e6.md; own report docs/working/mvp-live-continuation-2026-10-03/reports/full-debug-a-run1.md only.
+- Done: all template fields addressed; one screened row per model turn in exact order, no summarizing turns; action/parameter shape plus ignored artifact reference (private exact values remain there). Node-by-node replay timings/rungs, authored IDs/parameter-shape refs,4fact comparisons by IDs/held counts, judges/repair/persistence and UI screenshot review, exact source causes and NO EVIDENCE instrumentation gaps (actual terminal graph trace/edges omitted). Stage1 uses expectations authored before launch and public task source; disclose retrospective filling rather than implying run occurred after worker wrote it.
+- No new livepass/status override/reuse claim; actual graph cause unproven, firstworkspace disposed. Explain model churn, choice misclaims and whether claimSaid feedback appeared/affected decisions. Keep useful supervisor narrative; source checkpoint paths and original evidence retained.
+- Must not touch: shareddocs/source/activeA2orBprivateworkspace/env/guards/slots; no provider/panel/commits.
+
+
+### Brief: live-b-persistent (resume-ab)
+- Repository: frozen t262 downstream/Core; supervisor checkpoints14cd066b/42434f42, source unchanged during all live lanes.
+- Task: ONE supervised headed real-chat B pickup build after authored run2 debug and unrepeat fix. Supervisor exclusively claimed empty slot3 for t262-slot-3. Persistent workspace t262-b; preserve it and saved Flow.
+- Required reads: Current State, B run2debug, explicit-repeat-removal report, terminal-run-evidence persistent command; lab waste guards. No guard overrides, no automatic relaunch, no higher budget/Pro.
+- Owns: instance t262-slot-3 run artifacts/logs and own report docs/working/mvp-live-continuation-2026-10-03/reports/live-b-persistent.md; authored new run debug under language-driven-flow-loop-plan/debugs/<runId>.md only. Never shared docs/source/old trees.
+- Public env: FLUXIQ_LAB_INSTANCE=t262-slot-3, FLUXIQ_TEST_ENV_FILES=none, FLUXIQ_TEST_TARGET=persistent-isolated, FLUXIQ_LLM_RUN_COST_CEILING_USD=0.10, npm_config_workspace_concurrency=1.
+- Command: node scripts/lab/run-lab.mjs run bigbox-retail --target persistent-isolated --workspace t262-b --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --llm-task create-flow --instruction-task bigbox-retail-pickup-cart-store-remembered-after-creation --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000 --llm-max-calls 48 --llm-cost-ceiling-usd 0.10.
+- Redirect launch output to ignored instance log; emit only screened status/calls/cost/IDs, no prompts/page data/secrets. No direct API/no-live-panel; browser launcher headed by default. Stop and report guard/provider-balance failures; no edits/overrides.
+- Done: inspect actual entry/eval/Flow snapshot, all expected facts, terminal evidence, saved Flow ID, build/total/runtime spend, decision/test/judge/repaircounts, screenshot/UI and browser/build/environment; authored full ending/debug even on pass. Report honest cleanpass vs oracle/product mismatch. NO separate replay until root coordinates; preserve workspace/provider state and slot marker.
+- Tell supervisor launchsession/runID immediately and progress at material milestones; supervisor independently verifies before accepting. Never commit/push.
+
 
 ### Brief: terminal-run-evidence (resume-cd)
 - Repository: t262 downstream; Core conversion source read-only reference.
@@ -225,3 +301,36 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 - Validation: relocated runnercheck exit0(11.720seconds), domainbuildstamp reused; structureaudit passed165warnings118baselined; fresh current-source terminal bundles86/86pass. Process inventory empty Node/Chrome/Edge/Firefox; exclusive slot2owner still t262/t262-slot-2. Corecheckpoint42434f42/buildcurrent.
 - Outcome: paired runtime source frozen, all narrow gates passed; next live command persistent-isolated/workspacet262-a, Flash/.10 realchat. Exact command/replay in terminal-run-evidence report. No override, no freshsourcewrites during live.
 - Follow-up: supervise run2, retainworkspace/Flow/trace; inspect all4facts/terminalreason/provider accounting, then exactFlow replay.
+
+### 2026-10-03 - Second live lane released on frozen source
+- Agent: supervisor.
+- Changed: empty slot3 exclusively claimed t262 laneB, instance t262-slot-3/workspace t262-b; bounded one-run worker brief above. Source frozen while A/B live run concurrently, each own ports/profile/instance.
+- Validation: B priorfailedrundebug complete; unrepeat151worker tests included in supervisor467Coreunion/types/build, terminal86owner tests/types/audits passed. Slot3exclusivewxcreate succeeded; no other marker touched.
+- Outcome: B live release authorized inside continued MVP testing/.10Labonly; no result yet.
+- Follow-up: inspect both endings and independently verify; debug before any source edit/retry.
+
+- Active persistentA run run-mut58jbo-fbc8a57a (session37152) started01:29:55.675Z; persistentB run run-mut5amuc-c617cc21 (workersession13190) started separately. Source checkpoints14cd066b/42434f42 remain frozen. Both preparing topology at last observation; provider results pending.
+
+- 2026-10-03 resumed-live update: A2 still running51calls/.067511202; B failed51calls/.074950068 under .10 with duplicate cart effects. No further spending queued. Full firstA debug verified worker report received; source frozen. Read-only retarget design completed; lasting-action classification investigation assigned.
+
+- 2026-10-03 A2 ended failed/build/no created Flow at01:40:49.238Z, launch37152exit1.63calls/total .079036554/build .078897432 vs .10,0ceiling breaches. Persistent draft Flow retained, not replay-ready. Both live lanes stopped; source freeze released for disjoint checked-candidate and lasting-source-provenance corrections. No paid relaunch queued.
+
+- Supervisor reproduced plural coupon false-positive advisory before fix (1failed/14passed), added explicit coupon/voucher plural vocabulary, then40owner tests passed. No broader morphology/permission/coverage changes. A2 initial ending/debug and final screenshot reviewed;63calls/42repair decisions/6judges, unusable Flow despite under .10. Full ordered debug pending.
+
+- checked-candidate-proof exact owner release: Core runtime/llm/evidence-loop.ts checked-rerun settlement only to clear following replay marks; llm/node-tools/dry-run-gate.ts candidate-aware zero-row/not_reached only. Existing released loop tests own coverage. Worker reproduced stale proof beforefix1failed/9passed. Entry preserves private historical args, exposing screened provenance only.
+
+- checked-candidate-proof additional exact release: Core flow-draft/amendment.ts candidate-aware failed guard and bind instance capture only; tests/amendment.test.ts bind/optional regressions. Candidate must accept normal held amendments and never fabricate an executed instance. No written mark or unrelated amendment change.
+
+- A2 evidence distinction: worker found actual ordinary rerun cart presses0176/0191, while final draft/test0250 cart claim targets an origin choice with verify. Earlier site effects are not the final authored Flow. Root final screenshot supports missing-final-action judge wording only, not an empty cart claim; full debug reconciles this.
+
+- Supervisor independent B debug verification: all51model rows in exactsequence1..51; final panel screenshot inspected, honest unfinished17-step/test-failed state. Root verified actual snapshot under .10/noFlow. Cart-specific final acceptance remains unmeasured; reports do not substitute for runtime oracle. Full firstA30sequence independently verified.
+
+- Supervisor independently observed18owner files/383tests pass and Corecheckexit0 (31.715s). Final wording refinement excludes equivalence between current claims and prior action; focused owner recheck required after this final edit. Core runtime build41968 active. Linked domain check was issued too early concurrently with required Core rebuild and correctly refused stale dist; no code failure inferred. Rerun serially after fresh build. Worker-owned process29550 cannot be polled from supervisor tool session, so its12pass claim will be independently checked.
+
+- Supervisor integration observed: Core383tests/18files pass, Corecheck31.715s pass, final wording12owner tests pass, fresh Corebuild33.868s pass, generatedreference3080declarations, linked domaincheck21.645s pass against freshdist. Extensioncheck22538 passed26.398s; indexes/audits/checkpoint next. A2debug exact63turns/all6stages independently counted; final screenshot reviewed. No accepted Flow/reuse claim or further paid launch yet.
+
+- Structure audit: downstreampassed165warnings/118baseline; Corefailed3rules: loop804lines, two nonbarrel imports in rerun-checktest, and two ledgerentries missing exact Validation bullet. Ledger fixed; source owner requested to keep checked proof/invalidation responsibility in rerun-check helper with explicit draftSteps parameter, restoring loop800 without a baseline increase, and use flow-draft barrel imports. Narrow tests/check/build must refresh after source correction before launch.
+
+- Supervisor final artifact verification: A2 ordinary reruns0176/0191 actual resultstatus succeeded/pageChangedtrue/cart-control match, final0250 verify/verified has no cart-control proof. B0088/0094/0143/0149 all replaystep/emptydeclaration/oktrue/replayed independently observed. Root clarified no_such_step feedback: add amendment includes existing step, new action uses offered tool_call with addtrue/act; no automatic execution/schema change/restriction. This targets A35amendment churn and4invented-step refusals; savings unmeasured until live. Existing feedback owner16121 and finaltypecheck active.
+
+- Final supervisor gates after structural helper/feedback changes: rerun-check12tests pass, feedback30tests pass, Corecheck21.313s pass, Corebuild32.246s pass, docsreference3080declarations regenerated, linked domain16.815s and extension27.817s pass against freshCore, Coreaudit240warnings/349baseline and downstreamaudit165warnings/118baseline pass. Slot2/3 owner files independently confirmedt262. No full suites or baseline increases. Paired local checkpoint and next ONEchanged-source perlane live release next; no source edits whilelive.

@@ -21,8 +21,8 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 | Lane | Latest reconciled ending | Current action |
 | --- | --- | --- |
-| A resumed t262 | run-mut4fvkm-e2fc03e6 created Flow,4/4oracle held,30calls/.04025919 total/.040120068 build; Corestatusfailed | [New run debug](./language-driven-flow-loop-plan/debugs/run-mut4fvkm-e2fc03e6.md): healed coupon busy fault supplied to terminal gate; actual terminal cause unproven. Fix historical failure selection, retain terminal evidence, next persistent build then saved-Flow replay. |
-| B t193 | run-mustzxhi-2e2cda87 failed/no Flow,40calls/.049652802 | [Run2 debug](./language-driven-flow-loop-plan/debugs/run-mustzxhi-2e2cda87.md):27/38decisions ineffective amendments; quantity row-repeat cannot be directly cleared. Explicit unrepeat/contextual feedback prepared in t262; owning151tests worker pass, supervisor union pending. |
+| A resumed t262 | Persistent run-mut58jbo-fbc8a57a failed/build/no accepted Flow,63calls/.079036554 total/.078897432 build | [Latest debug](./language-driven-flow-loop-plan/debugs/run-mut58jbo-fbc8a57a.md):42repair decisions and6judges; earlier cart reruns happened but final definition lacked cart action. Checked-retarget proof correction in progress; full per-turn debug assigned. Earlier firstA all4factsheld/Corefailed remains separately qualified. |
+| B resumed t262 | Persistent run-mut5amuc-c617cc21 failed/build/no accepted Flow,51calls/.074950068 total/.074802696 build | [Latest six-stage debug](./language-driven-flow-loop-plan/debugs/run-mut5amuc-c617cc21.md): split judges, final size replay failure, duplicate cart additions in build tests. Counted-object instruction source provenance correction worker114tests pass; supervisor union pending. Prior unrepeat fix present but unused this run. |
 | C t194 | run-mustvzvg-99695308 failed/no Flow, $0.053622012 | Paging-bound placement fix prepared; detected one-page bound hidden from model. t262 exposes numeric bound/explicit nested override and honest page-limit feedback; preserves existing bounded default. |
 | D t195 | run-musr9pv3-f4bf6256 failed/unfinished | w50 route enforcement exists in source despite stale w49 report; completed integration/validation not proven. Row-scoped checks, repeat repairs and route work need serial reconciliation. |
 
@@ -36,12 +36,12 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 - General authoring t252 is integrated: row/input bindings and per-row tests exist. Earlier-output binding remains P5 (step_binding_not_yet); do not infer it from the merge title.
 - Explicitly named routes are preserved; otherwise a stable shorter start is allowed. No new action restriction beyond existing permission contracts. Money/delete/send-publish and robot-check rules remain in force.
 - No output cap, page-view ranking or truncation to save money; observe billed cost and no-progress evidence. Core remains domain neutral; browser/Lab behavior stays downstream.
-- Four live slots maximum, exclusive ownership per lane, instance/run-owned ports and artifacts. Use free slot2 for t262 only after final ownership/process check; preserve existing slot1/4 markers.
+- Four live slots maximum, exclusive ownership per lane, instance/run-owned ports and artifacts. Slots2/3 reserved for t262 A/B, owning persistent instances/workspaces preserved after both exits; preserve existing slot1/4 markers.
 - Two full sweeps already ran today. Use narrow tests/checks/audits and necessary affected runtime builds. Supervisor alone commits/integrates/pushes; worker reports require independent verification.
 
 **Next, in order.**
 1. Finish t262 reviewed units and regressions; Core source freezes before rebuilding exports, then downstream checks/builds. Document every finding and exact validation as it occurs.
-2. Next changed-source Flash A run at.10 on persistent-isolated named t262-a, then no-provider lab replay saved Flow; source freeze/checks precede run. Inspect final draft/test/judgements, complete terminal metadata, screenshots,4facts, unchanged content hash and phase spend.
+2. Complete A2/B full debug and checked-candidate/lasting-source-provenance fixes, independently verify then checkpoint. Next changed-source Flash A/B runs at.10 use preserved persistent-isolated named workspaces; no-provider lab replay follows only an accepted saved Flow. Source freeze/checks precede runs. Inspect final draft/test/judgements, complete terminal metadata, screenshots,4facts, unchanged content hash and phase spend.
 3. Debug any failure, repair its cause and rerun only changed source. After creation/playback succeeds, preserve the actual Flow and prove deterministic reuse and repair/persistence where reachable.
 4. Reconcile B/C/D blockers serially by source ownership. Keep standalone t224 UI review paused; fix live-loop UI defects when required.
 
