@@ -232,7 +232,7 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
   assert.deepEqual(record, {
     outcome: "failed",
     adaptationId: null,
-    providerCalls: 5,
+    providerCalls: null,
     loopProviderCalls: 5,
     providerInvocation: "attempted",
     accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 7_000, outputTokens: 700, totalTokens: 7_700, estimatedCostUsd: 0.004 },
@@ -293,7 +293,8 @@ test("a build Core stopped to ask a person is a permission request naming the mi
     missing: ["delete"],
     instructed: [],
   });
-  assert.equal(record.providerCalls, 2);
+  assert.equal(record.providerCalls, null, "this legacy diagnostic publishes loop decisions, not an actual build aggregate");
+  assert.equal(record.loopProviderCalls, 2);
   assert.equal(record.adaptationId, null);
   // Core built nothing, so there is no proposal to read back.
   assert.equal(core.calls.includes("get-adaptation"), false);

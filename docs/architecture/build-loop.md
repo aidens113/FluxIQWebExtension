@@ -98,6 +98,13 @@ answers `verified`, `present` (the effect is already in place on the step's own
 page), `unreproducible` or `failed`. So the test of a loop that confirms each
 kept request presses no Confirm.
 
+An accepted missing or withdrawn target also returns the current resolved
+`draft.ranWith` declaration, including its normalized parameters and declared
+consequences. Core can therefore keep that checked candidate runnable without
+borrowing an earlier action's arguments. Declined or unresolved checks provide
+no accepted declaration. Returning `present` applies no action and establishes
+no historical execution proof; whole-Flow testing remains required.
+
 ## What The Judge Is Told About Rows
 
 - **Left-out rows' tested values.** A replayed list read also answers `readRows`

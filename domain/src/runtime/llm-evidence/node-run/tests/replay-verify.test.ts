@@ -26,6 +26,8 @@ const SAVE = { replay: "verify", node: CLICK, parameters: { selector: "#save", e
 
 type AssertAnswer = { status: string; failure?: { code: string; actual?: string } };
 const NOT_THERE: readonly AssertAnswer[] = [{ status: "timed_out", failure: { code: "web.action.timeout" } }, { status: "failed", failure: { code: "web.target.not_found" } }];
+const ENCLOSED: AssertAnswer = { status: "failed", failure: { code: "web.validation.state_mismatch", actual: "enclosed: it is present inside a closed container, so it is not visible" } };
+const WITHDRAWN: AssertAnswer = { status: "failed", failure: { code: "web.validation.state_mismatch", actual: "it is present but not visible" } };
 
 test("a verify is a replay call of its own kind", () => {
   assert.equal(webNodeReplayCall({ replay: "verify" }), "verify");
@@ -84,6 +86,53 @@ test("a passing check of a handle-written argument states what it resolved to, s
   assert.deepEqual(ranWith?.consequences, []);
 });
 
+for (const [name, visible] of [["missing", NOT_THERE[1]!], ["withdrawn", WITHDRAWN]] as const) {
+  test(`an accepted ${name} check retains the current handle's normalized runnable declaration without acting`, async () => {
+    const stubbed = stub({ visible });
+    const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+    const looked = await runtime.executeTool({ ...PROJECT, callId: "look.current", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+    const handle = shownPageLines(looked.evidence).find((line) => line.words?.includes("Move to cart"))!.target;
+    const checked = await runtime.executeTool({
+      ...PROJECT, callId: "rerun.current", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+      value: { replay: "verify", node: CLICK, parameters: { target: { handle } }, consequences: ["modify_existing"], from: { location: CART } }
+    });
+    assert.equal(checked.resultCode, "core.replay.present");
+    assert.equal(checked.effectApplied, false);
+    assert.equal((checked.evidence as JsonObject).ok, true);
+    const ranWith = checked.draft?.ranWith as JsonObject | undefined;
+    assert.equal(ranWith?.node, CLICK);
+    assert.deepEqual(ranWith?.consequences, ["modify_existing"]);
+    const parameters = ranWith?.parameters as JsonObject | undefined;
+    assert.equal(parameters?.selector, "#other");
+    assert.equal("target" in (parameters ?? {}), false);
+    assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.click"), false);
+  });
+}
+
+test("a declined or unresolved current check supplies no accepted runnable declaration", async () => {
+  for (const [visible, from, parameters] of [
+    [NOT_THERE[1]!, { location: "https://example.test/elsewhere" }, undefined],
+    [WITHDRAWN, { location: "https://example.test/elsewhere" }, undefined],
+    [ENCLOSED, { location: CART }, undefined],
+    [undefined, { location: CART }, { target: { handle: "not-an-observed-handle" } }],
+    [undefined, { location: CART }, null]
+  ] as const) {
+    const stubbed = stub(visible ? { visible } : {});
+    const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+    const looked = await runtime.executeTool({ ...PROJECT, callId: "look.current", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+    const handle = shownPageLines(looked.evidence).find((line) => line.words?.includes("Move to cart"))!.target;
+    const checked = await runtime.executeTool({
+      ...PROJECT, callId: "rerun.declined", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+      value: { replay: "verify", node: CLICK, parameters: parameters === undefined ? { target: { handle } } : parameters, consequences: ["modify_existing"], from }
+    });
+    assert.notEqual(checked.resultCode, "core.replay.present");
+    assert.notEqual(checked.resultCode, "core.replay.verified");
+    assert.equal(checked.draft, undefined);
+    assert.equal(checked.effectApplied, false);
+    assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.click"), false);
+  }
+});
+
 test("a verify whose target is gone from the page the step acted on says its effect is already in place, and passes", async () => {
   for (const missing of NOT_THERE) {
     const stubbed = stub({ visible: missing });
@@ -133,9 +182,6 @@ test("a verify whose target is there but disabled or hidden fails, and says whic
 // it, and the check answered `present` on the step's own page. The page now
 // says what hid a target it judged not shown
 // (`apps/extension/src/content/action-runtime/assertion-evaluation.ts`).
-const ENCLOSED: AssertAnswer = { status: "failed", failure: { code: "web.validation.state_mismatch", actual: "enclosed: it is present inside a closed container, so it is not visible" } };
-const WITHDRAWN: AssertAnswer = { status: "failed", failure: { code: "web.validation.state_mismatch", actual: "it is present but not visible" } };
-
 test("a verify whose target is there inside a closed container fails as hidden, on the very page it acted on", async () => {
   const stubbed = stub({ visible: ENCLOSED });
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);

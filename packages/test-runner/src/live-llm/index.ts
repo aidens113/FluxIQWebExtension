@@ -4,6 +4,7 @@
 export { authorizeFlowLiveLlmExecution, type LiveLlmAuthorization, type LiveLlmAuthorizationControl } from "./authorize-flow.js";
 export { assertLiveLlmBudgetHeld, assertLiveLlmProviderWasReached, liveLlmBudgetBreaches } from "./budget.js";
 export { budgetOverProductFailure } from "./budget-over-product-failure.js";
+export { labBuildCallLimitEnvironment } from "./call-limit-env.js";
 export { liveLlmBuildCostCeilingUsd } from "./build-cost-ceiling.js";
 export { liveLlmBuildUsage } from "./build-usage.js";
 export { liveLlmCoreDefaultModel } from "./core-default-model.js";

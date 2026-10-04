@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION } from "@fluxiq-web-extension/test-contracts";
 import type { RunAllocation } from "../allocation.js";
 import { PROVIDER_SECRET_ENVIRONMENT_VARIABLES, buildFluxIQEnvironment, buildScenarioEnvironment, webPanelHostModulePath, withoutProviderSecrets } from "../environment.js";
+import { LiveLlmRun, planLiveLlmExecution } from "../live-llm/index.js";
 
 const allocation: RunAllocation = {
   runId: "run-a", runRoot: path.resolve("runs/run-a"), fluxiqRoot: path.resolve("runs/run-a/fluxiq-root"),
@@ -77,4 +79,53 @@ test("resolves the web panel host from the domain package's one declaration", as
   assert.equal(buildFluxIQEnvironment(allocation, paths, {}).FLUXIQ_HOST_MODULE, hostModule);
   const explicit = path.resolve("runs/other-host.mjs");
   assert.equal(buildFluxIQEnvironment(allocation, { ...paths, hostModulePath: explicit }, {}).FLUXIQ_HOST_MODULE, explicit);
+});
+
+test("a resolved Lab build allowance reaches its child independently of argv and inherited settings", () => {
+  const paths = { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core", buildCallLimit: 3 };
+  const env = buildFluxIQEnvironment(allocation, paths, { FLUXIQ_LLM_BUILD_CALL_LIMIT: "999", FLUXIQ_LLM_BUILD_CALL_LIMIT_SCOPE: "test" }, ["node", "runner", "--llm-max-calls", "48"]);
+  assert.equal(env.FLUXIQ_LLM_BUILD_CALL_LIMIT, "3");
+  assert.equal(env.FLUXIQ_LLM_BUILD_CALL_LIMIT_SCOPE, "test");
+});
+
+test("a run without a resolved build allowance drops inherited call admission scope", () => {
+  const paths = { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core" };
+  const env = buildFluxIQEnvironment(allocation, paths, { FLUXIQ_LLM_BUILD_CALL_LIMIT: "999", FLUXIQ_LLM_BUILD_CALL_LIMIT_SCOPE: "test" }, []);
+  assert.equal("FLUXIQ_LLM_BUILD_CALL_LIMIT" in env, false);
+  assert.equal("FLUXIQ_LLM_BUILD_CALL_LIMIT_SCOPE" in env, false);
+});
+
+test("an invalid explicit build allowance is refused before constructing a Core child", () => {
+  for (const buildCallLimit of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    const paths = { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core", buildCallLimit };
+    assert.throws(() => buildFluxIQEnvironment(allocation, paths, {}, []), /build.*call|call.*limit/i);
+  }
+});
+
+test("a new-flow chat's resolved authorization reaches Core before there is a Flow to configure", async () => {
+  const run = new LiveLlmRun(planLiveLlmExecution({
+    schemaVersion: LLM_LAB_SCHEMA_VERSION, profileId: "new-chat", mode: "live",
+    provider: "deepseek", model: DEFAULT_LLM_MODEL, task: "create-flow",
+    scenarioNetworkPolicy: "loopback-only", providerEgressPolicy: "core-trusted-provider-only",
+    externalSideEffects: false, approvalMode: "manual", retainRawPrompts: false,
+    retainRawResponses: false, maxConcurrentRuns: 1,
+    budget: { ...DEFAULT_LLM_LAB_BUDGET, maxCallsPerRun: 3, maxEstimatedCostUsd: 0.1 },
+  }, 0.1), { name: "DEEPSEEK_API_KEY", source: "test", value: "synthetic-test-key" });
+  const env = buildFluxIQEnvironment(allocation, {
+    repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core",
+    buildCallLimit: run.authorizedBuildCallLimit,
+  }, {}, ["node", "runner", "--llm-max-calls", "48"]);
+  assert.equal(env.FLUXIQ_LLM_BUILD_CALL_LIMIT, "3");
+  assert.equal(env.FLUXIQ_LLM_BUILD_CALL_LIMIT_SCOPE, "test");
+  const keyCalls: string[] = [];
+  await run.chatBuildAuthorizer({
+    async reauthenticate() {},
+    async secretKeysCall(endpoint, payload) {
+      keyCalls.push(endpoint);
+      return endpoint === "snapshot" ? { keys: [] }
+        : { id: "test-key", name: payload.name, kind: "llm", provider: "DeepSeek", scope: "global", enabled: true };
+    },
+    async automationStudioCall() { throw new Error("A new chat must not configure a nonexistent Flow"); },
+  }, { projectId: "test-project", authorizationPassword: "synthetic-password" })();
+  assert.deepEqual(keyCalls, ["snapshot", "create-key"]);
 });

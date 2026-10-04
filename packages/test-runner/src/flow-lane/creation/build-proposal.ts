@@ -503,8 +503,9 @@ export function createdFlowBuildFromDiagnostic(value: unknown, durationMs: numbe
     // Core's parser admits a request only on its own ending, and that ending only with one.
     outcome: diagnostic.permissionRequest ? "permission_required" : "failed",
     adaptationId: null,
-    providerCalls: diagnostic.providerInvocation === "not_attempted" ? 0 : loop?.decisionCount ?? null,
-    loopProviderCalls: diagnostic.providerInvocation === "not_attempted" ? 0 : loop?.decisionCount ?? null,
+    // A current unsent request does not erase earlier calls; legacy loop counts cannot establish the build aggregate.
+    providerCalls: diagnostic.totalProviderCallCount ?? (diagnostic.providerInvocation === "not_attempted" && !loop?.decisionCount ? 0 : null),
+    loopProviderCalls: loop?.decisionCount ?? (diagnostic.providerInvocation === "not_attempted" ? 0 : null),
     providerInvocation: diagnostic.providerInvocation,
     accounting: diagnostic.accounting ? accountingOf(diagnostic.accounting) : null,
     evidenceLoop: loop ? { decisionCount: loop.decisionCount, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary((steps ?? []).map((step) => step.toolId)), steps: steps ?? null, ...(loop.incompleteDraft ? { incompleteDraft: Object.freeze({ revision: loop.incompleteDraft.revision, steps: loop.incompleteDraft.steps }) } : {}) } : null,
