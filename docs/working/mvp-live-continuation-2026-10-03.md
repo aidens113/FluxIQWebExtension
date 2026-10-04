@@ -1,7 +1,7 @@
 # MVP live continuation and Claude handoff
 
 Status: Active
-Status detail: Provider-free headed scoped-chat proof passed/ended cleanly; preparing one guarded A/B creation each on frozen verified source.
+Status detail: A5/B4 full six-stage debug complete; bounded repair investigations released. No paid retry until source regressions, narrow gates and frozen builds pass.
 Created: 2026-10-03
 Last updated: 2026-10-03
 Owner: Codex senior supervisor
@@ -18,13 +18,15 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 - Persistent B run run-mut5amuc-c617cc21, instance t262-slot-3/workspace t262-b, ended failed/no created Flow at01:36:20.598Z, launcherexit1.51calls/total .074950068/build incl read+judges .074802696 vs .10; split first judges, final draft test unreproducible. Draft ID retained but not replay-ready. Worker observed duplicate cart effects from repeated build tests; no repeat/unrepeat amendment used. Full six-stage debug complete and51turn sequence verified, no relaunch.
 - Checked-retarget investigation confirms old execution proof survives changed arguments after verify-only acceptance. Correction now implemented/frozen: checked candidates separate current configuration from prior performed proof, preserve separate lasting-effect guard, clear following replay marks and avoid invented bind instances. Counted-object parser source provenance protects split lasting acts during tests; plural coupon advisory corrected.
 - Lab .10 scope remains testing only; normal UI default independent. Flash, headed bundled Chromium, actual extension chat. No Pro escalation/guard overrides; A3 run-mut6b2re-d0e475d1 failed1chatcall/.000241638 (flow.improve selected; no creation), B2 run-mut6bevx-d8b7956f failed/.073861872, no additional paid run queued. Slots2/3 reserved until lane work ends; persistent workspaces preserved.
-- Next: provider-free headed scope proof on retained A4 project, then repeat actual chat creation with independent project and declared-arrival fixes; zero-provider unchanged-Flow reuse only when a usable Flow exists. New source units independently checked/built and now frozen for live; source freezes remain mandatory during live. D safe route prep read-only. Both newest full debug records and supervisor ending/screenshot checks complete. C live paging13records and D named-route safety integration remain pending. Paused t224 standalone UI review separate.
+- Next: repair the A5/B4 source regressions with file-partitioned workers, independently validate affected owner tests/types/audits and rebuild/freeze before another guarded actual chat creation. Zero-provider unchanged-Flow reuse only when a usable accepted Flow exists. New source units independently checked/built and now frozen for live; source freezes remain mandatory during live. D safe route prep read-only. Both newest full debug records and supervisor ending/screenshot checks complete. C live paging13records and D named-route safety integration remain pending. Paused t224 standalone UI review separate.
 
 - New guarded runs ended preprovider failed: A4 run-mut7h5k2-26c8252d/root64080 and B3 run-mut7hh6c-901800c5/worker43963 onf9afcb12/Core80116d0e. New creation project identity persisted then failed; zero provider calls/spend, noFlow. New readiness poll after completed pairing could not match extension project. Full six-stage debug and supervisor screenshot/ending review complete; no retry queued.
 
 - Confirmed zero-call setup cause: new readiness gate assumes browser session.projectId reflects selected chat, but panel actually sends shown thread projectId; HTTP selected context has no session/thread notification. Existing relay already supports explicit project override. Scoped UI/Lab target, authorized before-Send readiness, activity/question filtering and draft parking now implemented; independent98app/22Labtests,7post-barrel tests,types and both audits passed. Core judge-copy paging51tests/typecheck passed; raw accounting unchanged. Fresh Core/extension/domain/Lab builds complete. Next provider-free headed scope proof, then guarded paid creation; all source frozen, no recording/reset/reconnect/forcedcapability workaround. Full A4/B3six-stage debug complete.
 
-- Provider-free interactive63612/run interactive-mut8j4z6-fe0ec156 ended exit0, actual scoped Chrome side-panel proof PASS after ordinary Settings replaced stale endpoint/preserved trusted pairing. Ready/usable empty project and0conversations/0Flows independently observed; no message/provider operation requested. Full ending in reports/provider-free-chat-scope.md. Source408ec3da/Core5c893a98 frozen; slots2/3 persistent data retained. Next A5/B4 guarded one-run releases, no automatic retry. Local checkpoints not merged/pushed dev.
+- Provider-free interactive63612/run interactive-mut8j4z6-fe0ec156 ended exit0, actual scoped Chrome side-panel proof PASS after ordinary Settings replaced stale endpoint/preserved trusted pairing. Ready/usable empty project and0conversations/0Flows independently observed; no message/provider operation requested. Full ending in reports/provider-free-chat-scope.md. Source408ec3da/Core5c893a98 frozen; slots2/3 persistent data retained. A5/B4nowendedfailed47calls/.05805762 and67calls/.092695098 total; no acceptedFlow. Full six-stage debug and supervisor ending review complete; bounded source investigation released, no retry. Local checkpoints not merged/pushed dev.
+
+- Latest A5/B4normalchat/newproject setup passed; flowbuilding failed: A5retainedboundclicknode whenrepairrequestedtyping, B4search/targetrepairspentremainingbuildpurse. Rootending/screenshot checks complete; checked action identity, known parser-field location loss and retained-binding rerun feedback are the current bounded investigations; exact new source regressions pending. No Pro/budgetraise/retry/keyremove.
 
 ## Execution Steps
 
@@ -36,6 +38,38 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 6. Continue the next B/C/D functional blocker from the verified inventory. Record pending work explicitly; preserve the paused standalone UI review unless a live-loop defect requires a focused UI fix.
 
 ## Worker Briefs
+
+### Brief: checked-node-identity (resume-ab)
+- Read Current State and own completed A5 debug, Core AGENTS. Work in paired t262 Core. Supervisor reviewed normalized0060 typing check versus0069 click playback; stored public export remains unavailable, do not invent it.
+- Investigate current checked rerun node identity through llm/node-tools/rerun-check.ts, run-node.ts, flow-draft/step.ts and authoritative reduction/assembly seam; at most8 source files before requesting expansion.
+- Own rerun-check.ts and nearest tests only initially. Establish fail-first regression for changed node with checked acceptance, preserve priorExecution/lasting guard/current candidate not-performed, current tool versus action identity and resolved argument authority.
+- If authoritative parsed draft supplies replacement action metadata, use that contract; never infer generic node identity from raw arbitrary input or grant new execution. Ask expansion before another owner edit.
+- Run narrow owner tests; no whole suite/build/provider/browser/runtime/data/key/env/guard/commit/shared docs. Own reports/checked-node-identity.md with exact cause, edits, tests and gaps.
+
+### Brief: unusable-field-feedback (resume-cd)
+- Read Current State/own B4 full debug and Core AGENTS. Seven calls used response.decision.write rather than response.decision.input.write; existing schema correct, feedback omits location.
+- Inspect runtime/llm/harness/{provider-result,run}.ts, unusable-decision.ts, evidence-loop.ts and existing nearest tests; at most8 initial source owners.
+- Own harness/provider-result.ts, harness/run.ts, unusable-decision.ts and nearest tests. Propose exact typed diagnostic-to-model seam before editing evidence-loop.ts (reserved other lane).
+- Preserve strict schema and permission authority; provide screened known grammar paths/correction only, never raw values/arbitrary provider key names/denied evidence. Do not add permissive decision.write acceptance.
+- Fail-first test actual schema failure and returned feedback; verify no host call, normal valid write location unchanged and unsafe paths absent.
+- No full suites/build/paid runs/runtime/data/key/env/guard/commit/shared docs. Own reports/unusable-field-feedback.md; request bounded expansion if required.
+
+### Brief: retained-rerun-feedback (resume-live-prep)
+- Read Current State/own c-rerun-feedback-preflight and Core AGENTS. Implement the preflight bounded owner plan; identify existing service/model fixture before service edit.
+- Own llm/rerun-arguments directory plus tests, evidence-loop/{rerun-input,rerun-request,index}.ts, decision-handlers/{amendment,types}.ts, draft-amendment-feedback.ts, loop-configuration.ts, evidence-loop.ts settlement only, service.ts single deniedEvidenceKeys forwarding expression and named nearest tests.
+- Preserve screened path-only metadata/no raw or denied values, typed current attempt acceptance versus failure, candidate not-performed and separate lasting guard; omit metadata with absent authority, distinguish absent from empty declaration.
+- Correct ineffective write:true advice for existing bound reruns; no conversion/autoexecute/dropbinding. Keep changes_nothing read wording conservative without inventing returned rows.
+- Existing evidence-loop owner25 files; no loose helper. Do not edit unusable-decision/harness or rerun-check source (other workers). Root integrates any required evidence-loop diagnostic wiring serially.
+- Fail-first real-loop and narrow helpers/owner tests; no full suites/build/provider/browser/runtime/data/key/env/guard/commit/shared docs. Own reports/retained-rerun-feedback.md.
+
+
+### Brief: c-rerun-feedback-preflight (resume-live-prep; read-only while live)
+- Read Current State and own next-c-live-readiness unit2. A5/B4sourcefrozen/live; no source/tests/build/provider/browser/keys/env/workspace/slot/guard/commit/shared docs. Core AGENTS applies.
+- Inspect current paired Core runtime/llm/evidence-loop/{rerun-input,rerun-request,index}.ts, decision-handlers/{amendment,types}.ts, draft-amendment-feedback.ts, nearest named tests and historical w85 report/diff only. Existing checkedCandidate/lasting guard changes must be preserved. Initial8sourceowners maximum; ask bounded expansion.
+- Own reports/c-rerun-feedback-preflight.md. Return exact current failure-settlement seam for keeping malformed keys while patch writes nested path; safe metadata path-only/no raw selector/resolved values/denied-key leaks; typed held metadata not unsafe historicalintersection/cast; success/candidate rerun must not emit refused-note.
+- Trace conditional changes_nothing failed/refused read wording that claims returned rows; preserve actual repeat/no-progress refusal and permission/proof authority, no extra automatic execution/providercall/planlowering/defaultbudget changes.
+- Return exact minimal owner partition and meaningful fail-first real loop tests, barrel/oneexport/25file budget risks, existing historicalproofedges notsafe tocopy. Preparation only, no implementationrelease; root independently reviews and may release afterallliveend/full6stage debug.
+
 
 ### Brief: full-debug-a-scoped-chat (resume-ab; evidence read-only)
 - Read Current State, own scoped-view report, latest A4debug, root reports/live-a-scoped-chat.md Stage1 predeclared and full run-debug-template. Source408ec3da/Core5c893a98 frozen after provider-free scope proof endedexit0/pass; root owns one upcoming A5 launcher. No source/build/tests/provider/browser/workspace/key/env/guard/slot/commit/shared-doc mutation.
@@ -587,3 +621,27 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 - Validation: interactive63612 endedexit0; scoped action after ordinary endpoint Settings correction returned actual matching project/ready/usable composer. Native owning Chrome134sidepanel screenshot privately inspected empty Project chat/no old work. Authenticated public reads0conversations/0Flows; no model/task/Flow operation requested. Interactive mode lacks a billing ledger; no fabricated spend figures. Full six-stage provider-free report saved.
 - Outcome: shared scope blocker browser-verified; source frozen for one guarded A5/B4 creation each, old data preserved. Not overall MVP acceptance or dev push.
 - Follow-up: predeclared A5/B4 Stage1 + full6stage debugs, exact provider/node/judge/oracle/cost and accepted savedFlow provider-free reuse.
+
+### 2026-10-03 - Scoped A5 live launch and B4 release
+- Agent: supervisor owns A28546; resume-ab evidence-only; resume-cd owns bounded B4launcher/debug.
+- Changed: exactlyone A5launch run-mut8rxuc-06cc941e at2026-10-04T03:08:59.800Z, slot2/t262-a/launch-5.log; B4exactlyone release toslot3/t262-b/launch-4.log after provider-free63612exit0/pass. Live HEADf32b7dc8 docs-only atop source408ec3da/Core5c893a98. All source frozen, no library rebuild/credentialremove/replay duringcreation.
+- Validation: owning slot2t262 and source/check/build gates observed; Aguardnotrejected and initial actual chat/node/decision artifacts present. No ending/oracle/judge/cost acceptance yet. Root predeclared A5andworkerB4Stage1 before newartifacts.
+- Outcome: actual guarded live loop active; Lab .10 only/normal UI independent. Full6stage debug required onPASSorFAIL, no automaticretry/override/Pro.
+- Follow-up: inspect everyordered turn/node/test/judge/finaldefinition/identity/oracle/screenshot and actualcost/ending; accepted usableFlow alonepermits later exactproject/hash zero-provider two independentreuses.
+
+### 2026-10-03 - A5/B4 ending independently reconciled
+- Agent: supervisor; resume-ab/A full debug and resume-cd/B full debug.
+- Validation: A5launcher28546exit1, centralfailed03:12:07.200Z,47calls/.05805762 total. B4workerobserved41725exit1, rootcentral/evaluation/summary independentlyfailed03:13:10.154Z,67calls/.092695098 total, performance.budget. Bothcreation-context failed/hashnull with actualnewproject/unfinisheddraftIDs; no acceptedcreatedFlow or replay. Rootprivatelyinspected actualendingpanel/scenario screenshots forboth. A wrongquantity/ship-origin/cart remains whilecouponcollected; Bcorrectstoreseen butsearch repair remained; no finaloracle/judgepass claimed.
+- Changed: no source/providerretry/keyremoval/guardoverride. Fullorderedprovider/node/test/currentdefinition/debug tables still undercompletion. Aartifactevidence requestedtypingnode versusretainedexecutableclicknode; exactdecisiongrammar/sourcecause stillunproven. ReadonlyCpreflight confirmed misleading write:true advice forboundnonwrittenrerun plus retainedbindings; no silent permission/binding relaxation.
+- Outcome: actualUIscopesucceeded and Labceilingheld, but flowquality/MVPacceptance failed. Sourcefreezecontinues untilfullsixstagedebugcomplete and targetedregressionbrief released.
+- Follow-up: finish/verify exact47+67turns/alltests/repair/identity/cost/screenshots; repair underlying node/rerun/retained-input feedback contract before another paidlaunch. Provider-free reusableFlow acceptance unavailable.
+
+### 2026-10-03 ? full debug reviewed and bounded repair release
+- Supervisor read completed A5/B4 six-stage records against independently inspected endings, screenshots, normalized candidate/type versus playback/click calls, raw cost totals and project/hash metadata. A5 .058057620/47 calls; B4 .092695098/67 calls; neither accepted, no reuse. Full stored A executable export is a remaining evidence gap.
+- Source freeze released only for three file-partitioned briefs above; no paid launch/build release. Parser location loss is evidenced, checked replacement identity requires authoritative contract diagnosis, retained-key/write advice defects confirmed by preflight. C/D functional live acceptance remains pending.
+- Validation: prior independent ending/artifact review plus completed worker ledgers; worker claims are not source regression verification. Narrow fail-first tests and root integration remain required. No dev merge/push.
+
+### Brief: bound-target-plan-resolution (supervisor investigation)
+- Own readonly downstream plan-resolution/resolve-plan-node and Core harness-options/plan-parameter-resolution plus authoring value/binding mapping investigation; no shared worker owner edits.
+- B4 final input target {$input,test:{handle}} normalizes into state binding. Domain currently resolves only top-level handle slot and rejects nested handle as misplaced. Prove actual representation/owner contract with a fail-first resolution fixture before implementation; no suppression of unresolved-handle/persistence/permission gates, no invented execution proof.
+- Determine runtime-valid preservation of dynamic target binding, fallback resolution, frame/element identity and permission semantics. Existing raw handle must never persist; do not simply remove binding or default to old selector. Record conclusion here/own report before release.
