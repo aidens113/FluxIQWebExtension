@@ -132,4 +132,3 @@ but no stored-run gate reads it; that change is the user's decision.
 ### Bounded extraction feedback
 
 Detected list evidence includes selector-free paginationBound (maxPages or maxScrolls). Omitting paginate, or passing true, retains the detected bound; it does not request every page. Explicit extractList.paginate.maxPages or maxScrolls changes that bound. Defaults remain bounded. A page_limit report names the reader's actual clamped bound and the nested amendment needed to read further; truncation is still incomplete evidence, never proof that the list ended.
-

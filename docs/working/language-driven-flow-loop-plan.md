@@ -49,6 +49,8 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ---
 
+- Resumed A run run-mut4fvkm-e2fc03e6 completed: all4oracle held,30calls/.04025919 total/.040120068 build under.10; actual Core status failed after recovered coupon busy press, launcherexit1. Full debug exists; generic status defect investigation active. Disposable workspace removed by owning lifecycle: later reuse unproven; next build must use persistent-isolated then lab replay.
+
 ## The 2026-09-30 Audit And Its Fixes
 
 Four read-only audits (worker-high), from about 54 debugs, the lane reports and the run bundles, after the user stopped all

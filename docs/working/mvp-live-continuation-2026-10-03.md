@@ -11,18 +11,15 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 
 ## Current State
 
-- User explicitly resumed MVP implementation/live testing and requires Claude-quality durable records. This supersedes the earlier t261 note that panel authorization was pending: isolated Lab panel/browser operation is authorized for this session.
-- Paired task t262 starts from downstream dev 88c58d82 and Core dev f6ef9f48. t261's Lab-only $0.10 ceiling is integrated; ordinary UI settings remain independent. No Pro comparison or higher Lab ceiling.
-- Claude's t174/t193/t194/t195 trees are preserved. Round-1003 reports and source changes must be reconciled before accepting their results or rerunning.
-- Process inventory found no node.exe/chrome.exe/msedge.exe/firefox.exe Lab processes; only unrelated nxnode/WebView processes. Existing slot directories/ledger remain intact. Workers inspect ownership metadata without deleting guards or profiles.
-- Today already had two full sweeps. Use narrow owning tests, touched package checks, builds needed for changed runtime, and structure audits only.
-- Supervisor owns source integration, working documents, verification, commits/pushes and live run. Workers initially inspect/report only; source partitions are released explicitly after review.
-- Task provisioning completed (pnpm task start exit 0); local ignored .env.local copied by owning lifecycle with $0.10 setting intact.
-- Metadata reconciliation found A run 3 ended failed: run-musuq910-0e2ae903, $0.048319884, finish 2026-10-03T20:41:11.339Z. Its lead's in-progress row is stale and no authored debug exists yet. Debug this ending before any fresh launch, even with a fresh instance.
-- Initial coherent integration candidate is A's paired toggle cancellation / stale test marks / stable handles. Preserve t261 choice-order/budget fixes. Other A/B judgement/per-act changes require later serial reconciliation.
-- A run3 authored debug is complete: no retained cart press, false a1 coverage on Spain, retargeted verify-only reruns and judge disagreement; stopped for no progress, not budget. Four test rounds and 15 repair decisions were wasted. Source integration alone is not a live pass.
-- Core toggle/stale-mark unit is frozen; worker observed 140 tests pass and added a failing-before safety regression. Pair cancellation now preserves intervening kept actions/exported reads. Supervisor ported domain emission/stable handles and independently observed 35 focused tests pass; combined Core/domain checks await the act-claim unit freeze.
-- C/D source reconciliation corrects old handoff: D runtime named-route enforcement exists (w50) but validation is not proven. C's missing paging bound/override feedback is being corrected in a disjoint downstream partition, with bounded default retained.
+- Work active: user authorized continued MVP implementation, isolated/persistent Lab panel/browser operation and durable Claude handoff. Paired task t262; original Claude trees and user state preserved.
+- Source checkpoints downstream326ad350/Core9f756676. Integrated paired toggle/stale-mark/unique-handle fixes, advisory false-act feedback and exposed paging limits.511 focused tests, touched package checks, Core build and both audits passed before run1. No full suites repeated (two today already).
+- First real-chat headed run run-mut4fvkm-e2fc03e6 finished01:13:04.486Z. Flow created, first whole test/two judges yes, actual playback all4cart facts held.30calls:26explore,1read,2judge,1chat; total .04025919/build .040120068 vs .10; runtime0model calls. Central/evaluation oracle passed; launcherexit1/Corestatusfailed. This is not clean acceptance.
+- Reproduced contradiction: coupon busy/unacted press failed then succeeded retry_node250ms; no remaining action failure/early stop/refutation; Core status stillfailed, Lab code flow_lane.every_failure_recovered, gate refusal llm.gate.known_recovery. Root generic status investigation assigned, source not yet released. Full run debug authored.
+- First target was disposable isolated: owning cleanup removed Core workspace, preventing later reuse. Evidence survives; no separate reuse claim. Next changed-source build MUST use persistent-isolated named t262-a workspace, then lab replay same saved Flow with no provider and unchanged content hash.
+- Slot2 remains reserved for t262 laneA/instance t262-slot-2; run1 processes exited. .10 applies Lab only, normal UI independent; Flash, realchat, headed Chromium134.0.6998.35, no overrides/Pro escalation.
+- B run2 now debugged: .04965/40calls,27amendments out of38decisions, mistaken quantity row-repeat,2/6coverage and no cart actions. Worker owns explicit unrepeat repair seam/contextual advice, preserving keep+act intentional loops and strict quantity-fault.
+- C paging evidence/default feedback fixed provider-free; live13record acceptance unmeasured. D minimal29file named-route partition ready with known safety gaps; unintegrated, not certified. Do not wholesale-copy dirty lanes.
+- Next: fix/reproduce final-status defect and B unrepeat; freeze/check/build/audit, new persistent A .10 run, then zero-model same-Flow replay. Debug any failed run before retry; continue B/C/D functional acceptance/repair/reuse. Paused t224 standalone UI review remains separate.
 
 ## Execution Steps
 
@@ -34,6 +31,62 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 6. Continue the next B/C/D functional blocker from the verified inventory. Record pending work explicitly; preserve the paused standalone UI review unless a live-loop defect requires a focused UI fix.
 
 ## Worker Briefs
+
+### Brief: terminal-run-evidence (resume-cd)
+- Repository: t262 downstream; Core conversion source read-only reference.
+- Task: Preserve screened terminal Core metadata in Lab snapshots so every_failure_recovered can be debugged after owning cleanup. Correct additive unvisited counting for recovered historical failures without altering status/verdict/oracles.
+- Required reads: Current State/newAdebug, Core runtime/service/summaries/conversions.ts terminal fields, persisted-flow-run.ts stopWithoutFailedAttempt and existing recoveredByNode.
+- Owns: packages/test-runner/src/flow-lane/{terminal-evidence.ts(new),index.ts,persisted-flow-run.ts,run-flow-lane.ts,creation/snapshot.ts,tests/terminal-evidence.test.ts(new),tests/persisted-flow-run.test.ts,tests/run-flow-lane.test.ts,creation/tests/lane.test.ts}; own report only.
+- Must not touch: Core/sourceothers/shared docs/env/old trees/runtime; no provider/panel/commits.
+- Done: optional terminal evidence carries closed/allowlisted terminalFailureReason, opaque currentNodeId, messagePresent boolean only (NO raw free-text trace message). Unknown reason explicitly withheld/unrecognized, never echoed; missing metadata remains absent/null. Recovered-aware unvisited diagnosis uses last attempts, ignores healed fault only, keeps genuine unrecoveredfailure semantics. Existing failedstatus unchanged. Fail-first run1-shaped tests and focused owners pass, source frozen.
+- Report: docs/working/mvp-live-continuation-2026-10-03/reports/terminal-run-evidence.md. Include next persistent-isolated t262-a command and no-provider replay command without secrets; first disposableFlow cannot be reused.
+
+
+### Brief: unresolved-recovery-attempt (resume-live-prep)
+- Repository: t262 Core.
+- Task: Reproduce and fix historical healed failure being supplied to terminal recovery. Introduce focused generic selector that ignores failure/unknown superseded by a later successful attempt of same node; wire current two service callbacks and annotation fallback. Preserve actual terminal status, genuine unresolved failures, unknown attempts and refuted-result recovery.
+- Required reads: this Current State, recovered-run-status findings, exact callback/annotation owners and their tests. No status override or history deletion.
+- Owns: runtime/recovery/unresolved-failed-attempt.ts (new), recovery/index.ts, recovery/tests/unresolved-failed-attempt.test.ts (new); runtime/service.ts (two failure-select callbacks/import only); recovery/annotation/annotate.ts (fallback-selection only). Also released recovery/annotation/tests/ladder-fixes.test.ts for real no-failed-attempt boundary regression. Request any further files.
+- Must not touch: flow-draft/amendment/feedback/quantity owner, other source/shared docs/env/old trees/runtime; no provider/panel/commits.
+- Done: failing-before healed same-node vs unresolved later node cases; last failed attempt of a node remains unresolved when a later failure follows success; unknown remains unless actually succeeded. Selection does not declare Flow successful. Regression at recovery boundary shows healed coupon not known_recovery cause and no unnecessary provider call for no unresolved attempt. Focused owner tests pass, source frozen.
+- Report: docs/working/mvp-live-continuation-2026-10-03/reports/unresolved-recovery-attempt.md. Record real terminal cause unproven until Lab retains metadata/next persistent run.
+
+
+### Brief: explicit-repeat-removal (resume-ab)
+- Repository: t262 Core; old B source read-only evidence.
+- Task: Fix B debug's quantity-repeat repair dead end. Add explicit unrepeat amendment while preserving keep and keep+act semantics; no-change feedback should point to actual checklist/choice rather than prescribe row loops for every act.
+- Required reads: this Current State, authored B run2 debug, existing amendment/parser/feedback and owner tests. Keep quantity-fault strict.
+- Owns: Core runtime/flow-draft/amendment.ts, flow-draft/tests/{amendment,routing}.test.ts; llm/draft-amendment-feedback.ts, llm/tests/draft-amendment-feedback.test.ts; llm/evidence-loop-decision.ts and llm/evidence-loop/tests/authored-draft.test.ts ONLY if parser support is needed; flow-bootstrap/instructed-acts/quantity-fault.ts and tests/object-binding.test.ts ONLY for precise unrepeat advice and owning regression.
+- Must not touch: other source, Core final-status/retry/harness files, shared docs, old trees/env/runtime; no provider/panel/commits. Request extra-file release if required.
+- Done: failing-before quantity-repeat removal repro; strict unrepeat operation only removes repeat routing, leaves other routing/acts/steps intact, invalidates stale evidence from changed step onward; keep+act preserves intentional loops; context-free act_already_named no blanket row-repeat advice. Missing cart acts still todo. Narrow owner tests pass and source frozen before supervisor checks/live.
+- Report: downstream docs/working/mvp-live-continuation-2026-10-03/reports/explicit-repeat-removal.md. Include exact files/commands/failing-first, not live claims.
+
+
+### Brief: recovered-run-status (resume-live-prep)
+- Repository: t262 Core; downstream source/read-only new run artifacts as needed.
+- Task: Trace A run-mut4fvkm-e2fc03e6 status failed although one web.action.rate_limited unacted press failure was followed by succeeded retry_node and all final oracles held; harness not attempted/refused llm.gate.known_recovery. Distinguish summary/Core executor from Lab parsing.
+- Required reads: this Current State; current generic runtime retry/final-status owner and its tests; only necessary screened new run metadata. No raw page/prompt/secrets in output.
+- Owns: own report docs/working/mvp-live-continuation-2026-10-03/reports/recovered-run-status.md downstream; source read-only until exact minimal release from supervisor.
+- Must not touch: shared docs, source, previous lanes, runtime/env/guards/profiles; no provider/panel/commits.
+- Done: actual code cause with exact source/test files and failing-before regression proposal; explain recovered failed attempt vs terminal action/verification failures, preserve genuine failed statuses. No lab verdict override or weakening oracle.
+
+
+### Brief: debug-b-run2 (resume-ab)
+- Repository: t262 downstream; read-only t193 reports and ignored artifacts.
+- Task: Debug run-mustzxhi-2e2cda87 before retry; reconcile latest B pickup failure, decision/test/judge phases and screened screenshots, identify smallest remaining source blocker relative to t262.
+- Required reads: this Current State, resume-ab inventory, newest B lead/debug reports, run metadata and only necessary source named by failure.
+- Owns: docs/working/language-driven-flow-loop-plan/debugs/run-mustzxhi-2e2cda87.md and own report docs/working/mvp-live-continuation-2026-10-03/reports/debug-b-run2.md.
+- Must not touch: source/shared docs/old trees/env/slots/guards/ledger/profiles; no provider/panel/commits.
+- Done: actual ending, calls/spend/stages/cause, screenshot-backed findings, concrete remaining module/test proposal; disclose gaps. No raw page data/secrets in authored record.
+
+### Brief: next-d-route-integration (resume-cd)
+- Repository: t262 and old t195 paired source read-only; downstream own report only.
+- Task: Reconcile coherent D w50 named-route source/tests against frozen t262. Identify exact minimal file partition, safety dependencies and overlap with t262 toggle/stale marks; no implementation yet.
+- Required reads: this Current State, resume-cd inventory, D named-route report/source and owning tests only.
+- Owns: docs/working/mvp-live-continuation-2026-10-03/reports/next-d-route-integration.md.
+- Must not touch: source/shared docs/old trees/private runtime/env; no provider/panel/commits.
+- Done: bounded implementation brief with exact files/contract/tests and unresolved conflicts, distinguishing dirty-source presence from verified integration.
+
 
 ### Brief: act-claim-feedback (resume-live-prep after debug)
 - Repository: t262 Core; old A claim-doubt/kind-words are read-only evidence.
@@ -127,3 +180,21 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 - Validation: Core fluxiq build exit0 (35.215 seconds). Downstream domain check exit0 (18.194 seconds); extension check exit0 (39.380 seconds). Supervisor node --test on all named final paging bundles: domain54/54 and extension37/37, exit0. node scripts/structure-audit.mjs passed:165 warnings,118 baselined. No full suite repeated.
 - Outcome: paired source frozen and runtime checks green; live run next.
 - Follow-up: preserve checkpoint, claim slot2 exclusively; launch one real-chat add-to-cart case with .10 test-scoped ceiling.
+
+### 2026-10-03 - First resumed A live run started
+- Agent: supervisor.
+- Changed: slot2 exclusively owned by task t262, instance t262-slot-2; launch real extension-chat crossborder-marketplace-hub-to-cart with Flash and .10 ceiling. Exact command in resume-live-prep report; no direct API, no panel omission, no overrides.
+- Validation: runtime build prelude finished68.768 seconds, ancestry/quiet/entries/source and downstream freshness checks passed. Run run-mut4fvkm-e2fc03e6 started2026-10-04T01:07:38.524Z; isolated panel production compilation passed37.6 seconds, validity checking ongoing. Ignored launch log and central evidence retained. No provider calls or assertions yet.
+- Outcome: live setup in progress, not a live pass.
+- Follow-up: supervise ending; inspect oracle/cost/screenshots and write run debug before retry.
+
+### 2026-10-03 - Live A oracle pass reveals recovered-status defect
+- Agent: supervisor.
+- Validation: run-mut4fvkm-e2fc03e6 finished01:13:04.486Z; launcher exit1 despite central/evaluation oracle passed. Created Flow4b9ead90-7b90-4a62-b069-77e51df03df2 via buildEntry chat; build170.442 seconds.30 calls:26explore,1read,2judge,1chat; build .040120068, total .04025919, .10 ceiling,0 breach; runtime0provider. All4fact held. Two judges answersRequest yes. Screenshot inspected during exploration: wrong temporary choices; actual persisted playback final oracle corrected all.
+- Defect: Core status failed after rate_limited unacted coupon press followed by succeeded retry_node (250ms).13 attempts: one failed subsequently recovered, two skipped optional controls,10 succeeded; no final failure/early stop/refutation. Harness not attempted; refusal llm.gate.known_recovery. Lab reported flow_lane.every_failure_recovered. Not a clean end-to-end pass yet.
+- Follow-up: author full run debug/screenshot review; trace/reproduce generic status defect; fix narrowly then provider-free same-Flow reuse. No second paid run yet.
+
+- Screenshot clarification: final00022 shows coupon busy/retry-success and correct product choices, followed by a failed Add-to-cart card/Run failed overlay. Previous attribution of busy to cart was preliminary and corrected; generic status cause still under investigation.
+- Persistence limitation: first command used disposable isolated target, whose owning cleanup deleted its Core workspace. Saved definition evidence remains in authoredNodes, but later same-workspace reuse is impossible for this run. Next live build must use persistent-isolated with named t262 workspace and later lab replay; no same-Flow reuse claim for run1.
+
+- Repeat-brief path corrected: quantity regressions are in existing instructed-acts/tests/object-binding.test.ts, released instead of nonexistent quantity-fault.test.ts.
