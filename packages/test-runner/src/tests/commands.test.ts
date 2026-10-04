@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+
+test("saved replay binds explicit project identity without changing legacy replay", () => {
+  assert.deepEqual(parseLabCommand(["replay", "basic-form", "--workspace", "saved", "--project", "project.created", "--flow", "flow.saved"]), {
+    command: "replay", scenarioId: "basic-form", workspace: "saved", projectId: "project.created", flowId: "flow.saved",
+  });
+  assert.throws(() => parseLabCommand(["replay", "basic-form", "--workspace", "saved", "--project", " ", "--flow", "flow.saved"]), /project/);
+  assert.throws(() => parseLabCommand(["replay", "basic-form", "--workspace", "saved", "--project", "p1", "--project", "p2", "--flow", "flow.saved"]), /only be specified once/);
+});
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_ESTIMATED_COST_USD } from "@fluxiq-web-extension/test-contracts";
 import { expandMatrix, parseLabCommand } from "../commands.js";
 

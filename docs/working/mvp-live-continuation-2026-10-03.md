@@ -1,7 +1,7 @@
 # MVP live continuation and Claude handoff
 
 Status: Active
-Status detail: Verified candidate/provenance fixes checkpointed; A3 stopped at chat routing; B2 also failed under Lab-only .10; full debug and next scoped fixes in progress.
+Status detail: New Lab scope, declared-arrival and normal continuation units implemented; supervisor194tests plus9after extraction/types/audit passed; fresh linked runtime build and Lab verification precede next live run.
 Created: 2026-10-03
 Last updated: 2026-10-03
 Owner: Codex senior supervisor
@@ -18,7 +18,7 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 - Persistent B run run-mut5amuc-c617cc21, instance t262-slot-3/workspace t262-b, ended failed/no created Flow at01:36:20.598Z, launcherexit1.51calls/total .074950068/build incl read+judges .074802696 vs .10; split first judges, final draft test unreproducible. Draft ID retained but not replay-ready. Worker observed duplicate cart effects from repeated build tests; no repeat/unrepeat amendment used. Full six-stage debug complete and51turn sequence verified, no relaunch.
 - Checked-retarget investigation confirms old execution proof survives changed arguments after verify-only acceptance. Correction now implemented/frozen: checked candidates separate current configuration from prior performed proof, preserve separate lasting-effect guard, clear following replay marks and avoid invented bind instances. Counted-object parser source provenance protects split lasting acts during tests; plural coupon advisory corrected.
 - Lab .10 scope remains testing only; normal UI default independent. Flash, headed bundled Chromium, actual extension chat. No Pro escalation/guard overrides; A3 run-mut6b2re-d0e475d1 failed1chatcall/.000241638 (flow.improve selected; no creation), B2 run-mut6bevx-d8b7956f failed/.073861872, no additional paid run queued. Slots2/3 reserved until lane work ends; persistent workspaces preserved.
-- Next: implement independent Lab creation project/explicit replay project identity after A3; correct declared-arrival proof after B2, then repeat actual chat creation and zero-provider unchanged-Flow reuse when a usable Flow exists. Sources remain frozen during live; D safe route prep read-only. Both newest full debug records and supervisor ending/screenshot checks complete. C live paging13records and D named-route safety integration remain pending. Paused t224 standalone UI review separate.
+- Next: implement independent Lab creation project/explicit replay project identity after A3; correct declared-arrival proof after B2, then repeat actual chat creation and zero-provider unchanged-Flow reuse when a usable Flow exists. New source units are now frozen for supervisor verification/build; source freezes remain mandatory during live. D safe route prep read-only. Both newest full debug records and supervisor ending/screenshot checks complete. C live paging13records and D named-route safety integration remain pending. Paused t224 standalone UI review separate.
 
 ## Execution Steps
 
@@ -30,6 +30,25 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 6. Continue the next B/C/D functional blocker from the verified inventory. Record pending work explicitly; preserve the paused standalone UI review unless a live-loop defect requires a focused UI fix.
 
 ## Worker Briefs
+
+### Brief: live-b-arrival (resume-cd; prepare only until checkpoint release)
+- One guarded paid B run only after explicit root release of new source checkpoints. Slots3 t262, instance t262-slot-3, persistent workspace t262-b preserved. No retry/override/reset/provider escalation.
+- Read Current State, B2 full debug, independent-creation-project/declared-arrival-proof/normal-continuation reports, run-debug-template. Stage1 expectations authored BEFORE launch/new artifacts; own reports/live-b-arrival.md and named full new debug only.
+- Actual headed extension chat, Flash, Lab-only .10. Same command as B provenance brief, redirect ignored slot3/launch-3.log. New code selects NEWrun-ownedproject beforebrowser and confirms actual extension project beforeSend, preserves every old project/draft/thread/profile. Do not force capability/directbuild.
+- Env instance t262-slot-3; TEST_ENV_FILESnone; TEST_TARGETpersistent-isolated; LLM_RUN_COST_CEILING_USD.10; npm_config_workspace_concurrency1. Same scenario bigbox-retail/task bigbox-retail-pickup-cart-store-remembered-after-creation; live model/profile/budgets unchanged.
+- Judge actual store/product/size/quantity/fulfillment/originalitem preservation. Verify quantity click no false step_only_arrives, lasting build tests verify-only/candidates notperformed. Inspect creation-context actual project/Flow/hash evenfailure, final executable definition/tests/alljudges/repair/runtime/persistence/screenshots/phase totalcost. No acceptance from targeted fix alone.
+- Complete all6debug stages with everyordered provider row/node/testtiming/private refs and no-evidence gaps on PASSorFAIL. Notify root session/runID/ending safe counts/codes/spend. Actual replay separately root-coordinated onlywhen acceptedFlow; no credentialremoval yet.
+- No source/shareddocs/librarybuild/envfile/profile/store/slot/guard/commit/push mutation. Sourcefreeze duringlive absolute. Root independently verifies reported checks/ending. If guardrejection STOP/reportnooverride. Prepare now, no paid launch until root supplies checkpoint/release.
+
+
+### Brief: normal-continuation-guidance (resume-cd; disjoint implementation)
+- Read Current State and own unfinished-draft-continuation-design. No service.ts edit: arrival worker owns it now; supervisor serially owns identical-goal idempotency and incomplete-draft test after arrival unit releases.
+- Own Core runtime conversations/commands/explore.ts, conversations/instructions/prompt.ts, commands/tests/extension-chat.test.ts, instructions/tests/prompt.test.ts only. Architecture shared docs supervisor-owned. Read new prompt test owner and relevant public barrels as needed, no broad discovery.
+- Clarify existing explore for continue/finish unfinished creation, omit unchanged instruction/use saved goal; genuinely changed goal supplied explicitly and old evidence may not remain compatible. Genuine nonblank improve stays extend with apply confirmation. Newautomation stays createHere, only recommend actually offered capabilities. No name-only task success inference/forced capability/fallback/permission/default-budget change.
+- Fail-first prompt contract, actual registry/service continuation fixture (omitted goal) preserving oneFlow/seededrevision/no extra improvementinstruction/test+judge-beforeapply/no pending-permission application; preserve existing improve yes/no. Explicit unchanged supplied-goal test may remain failed until supervisor idempotency unit, report that dependency honestly rather than workaround.
+- No service/draft/checklist/arrival owners/incomplete-draft.test edits. No paid/live/provider/browser/build/fullsuite/store/env/slot/guard/shared docs/commit actions. Narrow three/four owning tests via heavywrapper only.
+- Own reports/normal-continuation-guidance.md with exact edits/failbefore/passafter and remaining dependency/live model routing unverified. Ask exact owner expansion first. This is source release only for disjoint guidance/test paths.
+
 
 ### Brief: unfinished-draft-continuation-design (resume-cd; read-only)
 - No active live run; other workers own Lab context and Core arrival classifiers. Do not edit overlapping source or launch tests/provider/runtime.
@@ -421,3 +440,30 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 ### 2026-10-03 - Independent B2 evidence reconciliation
 - Supervisor matched all53 authored provider rows to exact ignored metadata folder sequence. Five cart build-test results independently confirmed core.replay.verified/oktrue; final failed build/status/cost and screenshot already inspected. No complete Flow/reuse claim. Observed page subtotals scrubbed from authored debug/report. Result said is human text, so no invented nested effectApplied parse claim.
 - Validation: exact provider sequence53/53; budget total .073861872/build .073644534; complete six-stage failed-run debug preserved.
+
+### 2026-10-03 - Independent creation regressions reproduced
+- Worker resume-ab reports four owning testfiles39tests,6failed/33passed before implementation: fresh scope/failure identity and explicit replay override/no fallback/empty project/CLI option. Public selection readiness owner read approved; no runtime/provider operation.
+- Validation: worker output claim only; supervisor independent source/test verification follows completed unit. Core declared-arrival fail-first fixture in progress.
+
+### 2026-10-03 - Normal UI continuation split safely by file
+- Existing explore supports eligible unfinished creation; identical saved goal currently rewrites updatedAt and invalidates execution digest. Guidance/test worker released disjoint from arrival unit; supervisor owns service idempotency serially after arrival source release. No generic compatibility relaxation/new capability.
+- Validation: bounded17owner read-only design complete; source regressions/live routing not yet verified.
+
+### 2026-10-03 - Serial identical-goal instruction preservation
+- Arrival worker explicitly released service.ts after final three propagation contexts. Supervisor now owns saveFlowGenerationInstruction idempotency and tests/service-bootstrap/tests/incomplete-draft.test.ts only; guidance worker disjoint. Existing canonical active goal returns unchanged when every effective field matches, changed/disabled goals retain normal write behavior and digest checks remain exact.
+- Validation: worker arrival173tests/10files reported passing; supervisor verification pending. Idempotent save regression will run failing-before prior to source correction.
+
+### 2026-10-03 - Independent validation and structural integration
+- Validation: supervisor combined13owners194tests passed. Identical-goal fail-first1failed/3passed on updatedAt; after correction4passed with unchanged digest/core.resumed and changed/disabled goal controls. Core typecheck initially found incomplete command test context, worker corrected full typed context; rerun passed. Downstream audit passed165warnings118baseline. Core audit found tests directory26files, large service growth4lines and old direct fixture import.
+- Changed: supervisor extracted generation-goal validation/persistence into focused service/flow-bootstrap-commands/save-goal.ts plus barrel, keeping public method as delegation and shrinking service. Fixture barrel relocated to service-bootstrap/index.ts, quantity/confirm fixture imports synchronized; no baseline increases. Revalidating affected owners/types/audit before runtime build/live. Lab creation owners coherently grouped under chat-build/creation; new public readiness verified beforeSend.
+
+### 2026-10-03 - Supervisor narrow integration gates
+- Validation: Core194tests/13owners passed; after goal extraction/fixture barrel move9tests/3affectedowners passed. Core final typecheck passed22.548s; audit passed241warnings349baseline. structure:baseline lowered service.ts4418to4401, no increases. Core package runtime build underway; no full sweep/provider/live operation. Downstream new project/readiness/replay worker41tests and types claimed pass; root independent checks still pending.
+- Follow-up: fresh Core runtime then linked downstream package checks/test-runner build/owning41tests/audits; checkpoint coherent source and guarded actual A/B chat runs. Model routing/quantity correctness/full Flow/reuse unverified.
+
+### 2026-10-03 - Fresh linked runtime and package gates
+- Validation: supervisor fresh Corebuild33.768s/docsreference3080declarations; domainbuild16.721s; Coretypes22.548s, domaincheck19.066s, extensioncheck30.330s, test-runnercheck16.661s passed. Both structure audits passed, baseline service lowered4418to4401. Lab runtime build/independent41test run next. No full sweep repeated/no paid run active.
+
+### 2026-10-03 - Next live source unit independently verified
+- Validation: supervisor Lab compiled owning5files41tests passed; test-runner runtimebuild26.697s; freshCorebuild33.768s/domainbuild16.721s and Core/domain/extension/Lab types passed. Core combined194tests plus9affected after extraction passed. Both audits pass; service baseline lowered17lines, no increase. gitdiffcheck passed. No full suite repeated.
+- Outcome: New Lab project/readiness/creation identity/explicit replay scope, declared-arrival classifier and normal continuation guidance/idempotency ready for guarded live acceptance. Source unit checkpointed locally, not merged/pusheddev until coherent live result/debug integration.

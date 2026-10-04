@@ -34,6 +34,7 @@ import { removeCoreProviderKeys, type CoreProviderKeyRemoval } from "./core-prov
 import { providerCredentialVariables } from "./provider-credential-variables.js";
 import { openReplayBrowser, type ReplayBrowser } from "./replay-browser.js";
 import { savedNavigationOrigins } from "./saved-navigation-origins.js";
+import { selectReplayProject } from "./project-selection.js";
 
 export type SavedFlowReplayOptions = {
   repositoryRoot: string;
@@ -42,6 +43,8 @@ export type SavedFlowReplayOptions = {
   scenarioId: string;
   /** The saved Flow, by the id Core gave it when the build created it. */
   flowId: string;
+  /** Actual project recorded by creation; omitted only for legacy workspace-default Flows. */
+  projectId?: string;
   /** The instruction task the Flow was built for, which says how its result is judged; the scenario's first task when absent. */
   taskId?: string;
   seed?: number;
@@ -140,14 +143,14 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
       ...(labPaths.hostPrebuilt ? { prepareHost: false } : {}), bootstrapIdentity: true,
       ...(credentials ? { credentials: { username: credentials.username, password: credentials.password, ...(credentials.authorizationPin ? { pin: credentials.authorizationPin } : {}), ...(credentials.totp ? { totp: credentials.totp } : {}) } } : {}),
     });
-    const { control, projectId, authorizationPassword, scenarioOrigin } = topology;
-    if (!control || !projectId || !authorizationPassword) throw new RunnerFailure("environment.missing", "The persistent workspace's Core did not authenticate, so its saved Flows cannot be read");
+    const { control, authorizationPassword, scenarioOrigin } = topology;
+    if (!control || !topology.projectId || !authorizationPassword) throw new RunnerFailure("environment.missing", "The persistent workspace's Core did not authenticate, so its saved Flows cannot be read");
+    state.projectId = options.projectId ?? topology.projectId;
+    const projectId = await selectReplayProject(control, { defaultProjectId: topology.projectId, flowId: options.flowId, ...(options.projectId === undefined ? {} : { projectId: options.projectId }) });
+    topology = { ...topology, projectId };
     state.projectId = projectId;
     state.scenarioOrigin = scenarioOrigin;
     state.scenarioPortRetained = (topology.allocation as Partial<PersistentRunAllocation>).scenarioPortRetained ?? null;
-    if (!(await control.listFlowSummaries(projectId)).some(summary => summary.flowId === options.flowId)) {
-      throw new RunnerFailure("fixture.invalid", `The workspace's project holds no Flow ${options.flowId}`);
-    }
     state.hashBefore = (await control.getExactFlow(projectId, options.flowId)).contentHash;
     state.keys = await removeCoreProviderKeys(control, { password: authorizationPassword, ...(topology.authorizationPin ? { pin: topology.authorizationPin } : {}) });
 

@@ -604,7 +604,7 @@ that built it is judged.
 # Build: a live create-flow run on the persistent target (the only target that keeps the Flow).
 FLUXIQ_TEST_ENV_FILES=none FLUXIQ_TEST_TARGET=persistent-isolated FLUXIQ_TEST_PERSISTENT_WORKSPACE=<name> pnpm lab:campaign <task-id>
 # Replay: no provider key in the environment.
-FLUXIQ_TEST_ENV_FILES=none pnpm lab replay <scenario> --workspace <name> --flow <flow-id> --instruction-task <task-id>
+FLUXIQ_TEST_ENV_FILES=none pnpm lab replay <scenario> --workspace <name> --project <project-id> --flow <flow-id> --instruction-task <task-id>
 ```
 
 A replay makes "no model" true rather than observing it:
@@ -629,7 +629,9 @@ the run's action types and statuses, the extraction measurements
 count and SHA-256, so two replays can be shown to have stored the same rows in
 the same order. It holds counts, ids, origins and digests, never page content.
 
-The flow id is the one the build's `snapshots/flow-lane.json` names. A build
+The actual project and Flow IDs come from the build's screened `snapshots/creation-context.json`; independent chat creation uses a new run-owned project inside the preserved workspace. Pass `--project` for that project. Replay selects and checks that exact scope before lookup or browser launch, with no name search or default fallback on an explicit mismatch. Omitting the option retains legacy workspace-default behavior. The identity snapshot is written before selection/Send and on ending; a failed draft ID alone does not establish a reusable Flow.
+
+The flow id is also named by the build's `snapshots/flow-lane.json`. A build
 whose run failed after the Flow was applied still saved it; its id is then in
 the workspace's project, which `lab replay` checks before it starts anything.
 
@@ -1261,6 +1263,8 @@ the page and presses Send (`flow-lane/creation/chat/`,
 `run-scenario/chat-build/`).
 
 The order of a chat build:
+
+Independent creation first creates and selects a new run-owned project through public authenticated control, before browser launch, pairing and chat/person scopes. It preserves every existing project, draft, conversation, recording and browser profile. Before Send, public extension status must confirm the actual new project. This prevents old project conversation and Flow catalog from turning a new creation test into an improvement request. Ordinary repair/replay keep their existing scope. The screened creation-context snapshot records run/workspace/project/domain, Flow ID when known, outcome and exact saved hash when readable; persistence failures remain failures. This isolation does not substitute a capability or bypass normal chat.
 
 1. **Present the page.** `prepareFlowPage("build")` leaves the fixture's entry
    point on screen, even for a task whose playback starts blank

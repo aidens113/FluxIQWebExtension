@@ -2,7 +2,7 @@
 
 ## Current State
 
-Read-only diagnosis; no source/test/build/provider/runtime/store/profile/guard operations. Own report only. Initial eight source owners plus five explicitly released fault/comparison/test owners and five caller contexts inspected. Two final adapter contexts requested to verify the proposed synchronized Core-only partition. Actual executed-action diagnosis is complete; implementation is not authorized by this report.
+Read-only diagnosis; no source/test/build/provider/runtime/store/profile/guard operations. Own report only. Initial eight source owners plus five explicitly released fault/comparison/test owners and five caller contexts inspected. Both final adapters inspected and synchronized nine-source Core partition confirmed. Actual executed-action diagnosis is complete; implementation is not authorized by this report.
 
 Confirmed B2 defect: a real successful increment action retaining an unrelated old navigation `url` is classified as `step_only_arrives` by generic Core value scanning. This is distinct from an unsuccessful action or an idempotent setter rejected for `effectApplied=false`. Six quantity repair increments actually succeeded with `effectApplied=true` and `pageChanged=true`; a blanket no-effect-success patch is unsupported.
 
@@ -35,7 +35,7 @@ Use the existing declared arrival identity `AutomationStudioLlmEvidenceRuntimeBi
 
 Preserve other reachability location comparisons: do not globally rewrite `location-agreement.ts`, which is also used by plan-level reachability. Narrow the step classifier to the actual declared arrival action and its declared parameter, using resolved input first. A click carrying a leftover location is not arrival. A true declared arrival remains arrival even with opaque/non-URL location spelling, and true arrival cannot satisfy a quantity/add choice merely by a claim. Without a declared arrival identity, location text alone must not become authoritative action classification; decide compatibility for legacy callers explicitly.
 
-Synchronize all classification consumers: arrival restoration, completion/checklist and the build-test judge's checklist must use the same declaration. Current helper call-site inventory (filenames only) names `reachability/start-step.ts`, instructed-acts/check.ts/checklist.ts, `llm/harness-options/draft-acts.ts`, result-verification/build-test/summary.ts and service.ts. Final exact propagation partition awaits released caller snippets; do not fix only the visible checklist or silently diverge from completion restoration.
+Synchronize all classification consumers: arrival restoration, completion/checklist and the build-test judge's checklist must use the same declaration. Current helper call-site inventory (filenames only) names `reachability/start-step.ts`, instructed-acts/check.ts/checklist.ts, `llm/harness-options/draft-acts.ts`, result-verification/build-test/summary.ts and service.ts. Exact propagation is confirmed below; completion restoration and judge/classification consumers must agree.
 
 Host proposes/effectApplied semantics, actual permission gates, replay/testing, written/candidate proof and original lasting history remain unchanged. An arrival-identity fix removes the false advisory fault; it does not demonstrate the model selected the wanted numeric quantity or that the resulting full Flow passes.
 
@@ -59,7 +59,7 @@ Initial incorrect quantity claim and later successful increments are separate co
 - `llm/harness-options/draft-acts.ts` reconstructs the model's checklist per decision from instruction/start, so its input must carry arrival and forward it.
 - `result-verification/build-test/summary.ts` independently reconstructs both checklist and check for the judge. Its input must carry arrival and forward it to both.
 - `service.ts` already passes full runtime `binding` into `checkAutomationStudioFlowBootstrapCompletion`. It must forward existing `this.llmEvidenceRuntime?.runsNodes?.arrival` to draft-acts at1590, stopped checklist at1621 and build-judge at1571; do not add a new reader, provider request or action.
-- Service currently supplies startLocation but no arrival to build-judge. The two requested final adapter reads are `llm/harness-options/bootstrap-completion.ts` and `service/flow-bootstrap-commands/build-judge.ts`, specifically inputs and restoration/check/summary call contexts. Expected propagation can be named now, but their internal edges must be confirmed before editing.
+- Both adapters confirmed: bootstrap-completion narrows binding to resolvePlanNodeParameters, so its Pick must also include runsNodes and forward declared arrival into restoration. Its completion permission check stays unchanged; it does not perform the advisory instructed-act classification. Build-judge adds arrival to its input and forwards into summary, whose checklist/check both receive it.
 
 ## Exact coherent proposed fix partition
 
@@ -71,7 +71,7 @@ flow-bootstrap/reachability/start-step.ts                  same declaration for 
 flow-bootstrap/instructed-acts/check.ts                    same declaration for check
 flow-bootstrap/instructed-acts/checklist.ts                same declaration for checklist
 llm/harness-options/draft-acts.ts                          forward to model checklist
-llm/harness-options/bootstrap-completion.ts                derive from existing binding; forward to restore/check
+llm/harness-options/bootstrap-completion.ts                derive from existing binding; forward to restore
 service/flow-bootstrap-commands/build-judge.ts             forward to summary
 result-verification/build-test/summary.ts                  same declaration for judge checklist/check
 service.ts                                                existing runtime declaration to model/stopped/judge

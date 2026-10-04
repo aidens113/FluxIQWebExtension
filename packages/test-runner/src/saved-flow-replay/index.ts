@@ -3,6 +3,7 @@
 // merely that it ran once. `lab replay` is the command.
 export * from "./core-provider-keys.js";
 export * from "./provider-credential-variables.js";
+export * from "./project-selection.js";
 export * from "./replay-browser.js";
 export * from "./replay-saved-flow.js";
 export * from "./saved-navigation-origins.js";

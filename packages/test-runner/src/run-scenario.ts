@@ -68,6 +68,7 @@ import { cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatu
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
 import { createdFlowChatEntry, ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, keepsRunState, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter } from "./run-scenario/index.js";
+import { assertCreationProjectReady, prepareIndependentCreationProject, writeCreationContext, type CreationContext } from "./run-scenario/chat-build/index.js";
 
 /**
  * The blank tab a browser opens on, and where a Flow that must reach its own
@@ -156,6 +157,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   const labRun = live ? await LabRunRecord.open({ environment, runId, startedAt, scenarioId: scenario.id, work: creation?.task.id ?? live.describeRepair().task, workflowId: options.workflowId, variantId: options.variantId, bundlePath: path.resolve(options.runsDirectory, runId), repositoryRoot: options.repositoryRoot }) : undefined;
   if (live && labRun?.stepsDirectory) live.readStepLogFrom(labRun.stepsDirectory); // The run's totals count every provider call Core logs there (`live-llm/step-log-spend.ts`).
   let topology: RunningTopology | undefined;
+  let creationIdentity: CreationContext | undefined;
   let context: BrowserContext | undefined;
   let extensionPage: Page | undefined;
   let scenarioPage: Page | undefined;
@@ -266,6 +268,11 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       await bundle.writeStructured("snapshots/clone-package.json", cloneState.clonePackage);
       await bundle.writeStructured("snapshots/clone-import.json", { projectId: cloneState.destination.projectId, flowId: cloneState.destination.flowId, contentHash: cloneState.destination.contentHash, clonePackageHash: cloneState.clonePackageHash, attested: cloneState.destination.attested });
     }
+    topology = await prepareIndependentCreationProject(topology, {
+      independent: creation !== undefined && buildEntry === "chat", runId,
+      workspace: target.mode === "persistent-isolated" ? target.workspace : null, domainId: LAB_PROJECT_DOMAIN_ID,
+      writeIdentity: async identity => { creationIdentity = await writeCreationContext(bundle, identity); },
+    });
     const launched = await launchBrowser(topology, extensionPath);
     ({ context, browserVersion } = launched); await startTrace.attach(context); // The extension start, timestamped, for extension-start.local.json.
     periodicCapture.start(); labRun?.watchSteps(() => screenshotAdapter.capture(evidenceEvent(runId, scenario.id, undefined, "checkpoint", "The page after a step"))); // A picture into each page step's folder, by the same capture.
@@ -396,6 +403,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       // No recording: FluxIQ explores the page the task's variant renders, which the lane presents, and builds the Flow from the instruction.
       if (!paired || !live || !topology.control || !topology.projectId || !topology.authorizationPin) throw new RunnerFailure("environment.missing", "The created-Flow lane needs a paired extension, a live run, and an authenticated isolated Core with an authorization PIN");
       const control = topology.control; const activeTopology = topology; const createdProjectId = topology.projectId;
+      if (creationIdentity) await assertCreationProjectReady(createdProjectId, matches => pollStatus(extensionControl, matches));
+      if (creationIdentity) creationIdentity = await writeCreationContext(bundle, { ...creationIdentity, outcome: "building" });
       await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the live instruction task and run it"), details: { taskId: creation.task.id, judgeBy: creation.judgement.judgeBy, variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id), buildEntry } }); if (buildEntry !== "chat") uiReview.phase("build"); // A chat build is under way once its instruction is sent: a moment before that shows the chat before anything was asked (t193 U-B1).
       // The build starts the way a person starts it: the instruction typed into the chat beside the page (`run-scenario/chat-build/`), and FluxIQ's questions answered there.
       const chat = buildEntry === "chat" ? createdFlowChatEntry({ extensionControl, livePanel, core: control, scope: { projectId: createdProjectId, domainId: LAB_PROJECT_DOMAIN_ID }, authorizeChat: live.chatBuildAuthorizer(control, activeTopology), picture: moment => { if (moment === "sent") uiReview.phase("build"); return capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "checkpoint", `The extension's chat: instruction ${moment}`), details: { chat: moment } }).then(() => undefined, /* best-effort: a picture never decides the run */ () => undefined); } }) : undefined;
@@ -411,8 +420,19 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         authorizeRun: live.repairAuthorizer(control, activeTopology),
         // Core's post-run result checks are not a repair: they settle with their own words (`resultChecks`), and only recovery is called one (Cause 12, run-murwd8le-79e735a8).
         settleRun: flowRunId => live.settleRepair(control, { projectId: createdProjectId, runId: flowRunId }, bundle, details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "resultChecks" in details ? "The created Flow's result was checked" : "The created Flow's repair attempt finished"), details })),
-        recordIncompleteEvidence: incomplete => bundle.writeStructured("snapshots/flow-lane.json", incomplete),
+        recordIncompleteEvidence: async incomplete => {
+          if (creationIdentity) {
+            creationIdentity = await writeCreationContext(bundle, { ...creationIdentity, flowId: incomplete.flowId, outcome: "failed", savedFlowHash: null });
+            // Read a hash only after proposal application was reviewed; keep the known ID if that read fails.
+            if (incomplete.flowId && incomplete.review) creationIdentity = await writeCreationContext(bundle, { ...creationIdentity, savedFlowHash: (await control.getExactFlow(createdProjectId, incomplete.flowId)).contentHash });
+          }
+          await bundle.writeStructured("snapshots/flow-lane.json", incomplete);
+        },
         ...flowRunHooks<CreatedFlowLaneEvidence>(activeTopology, async evidence => {
+          if (creationIdentity) {
+            creationIdentity = await writeCreationContext(bundle, { ...creationIdentity, flowId: evidence.flowId, outcome: "created", savedFlowHash: null });
+            creationIdentity = await writeCreationContext(bundle, { ...creationIdentity, savedFlowHash: (await control.getExactFlow(createdProjectId, evidence.flowId)).contentHash });
+          }
           // Every fact's observed value is page text, held or not, published by the rule `snapshots/extraction-mismatches.json` follows: withheld where the scenario declares a secret.
           await bundle.writeStructured("snapshots/flow-lane.json", createdFlowLaneSnapshot(scenario.secrets?.length ? { ...evidence, oracles: withholdObservedFactValues(evidence.oracles) } : evidence));
           await writeFlowExtractionMismatches(bundle, scenario, evidence.extraction);
@@ -553,6 +573,10 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     await capture.trigger(failureEvent).catch(() => undefined); await uiReview.finish("failure");
   } finally {
     setFacilityStage("scenario.cleanup");
+    if (creationIdentity) {
+      try { creationIdentity = await writeCreationContext(bundle, { ...creationIdentity, outcome: verdict === "passed" ? "created" : "failed" }); }
+      catch { verdict = "failed"; failureCategory ??= "recording.persistence"; failureMessage ??= "The creation identity ending could not be persisted"; }
+    }
     await periodicCapture.stop({ finalCapture: verdict !== "passed" }); // A passed run's `final` event already pictured its end.
     await labRun?.stopWatching(); // Before the browser closes.
     stepRunner?.dispose();
