@@ -2,6 +2,8 @@
 
 Status: Stage 1 prepared before future run artifacts; no launch authorized. Worker resume-cd, 2026-10-03 local. Brief: live-b-repair-preparation. Paired source checkpoints and final supervisor gates pending; previous checkpoints are historical evidence, not a launch release.
 
+Release update: supervisor explicitly authorized ONE guarded B5 creation on frozen downstream9ff18e28/Core115f67e9 after independently observed narrow tests/types/audits and fresh linked builds passed. Read-only HEAD preflight matches both IDs; slot3 owner is checked before launch and launch-5.log must be absent. Use ignored test-runs/instances/t262-slot-3/launch-5.log, preserving earlier logs. Root launches A6 concurrently; source frozen. No saved reuse until both end and explicit supervisor release. Stage 1 below remains the prelaunch declaration.
+
 ## Stage 1 — instruction and expected chain
 
 Public authored task, verbatim:
@@ -59,3 +61,23 @@ Read coordinator Current State/exact brief, completed B4 debug run-mut8t1fk-e14f
 Owned bound-target unit:75 focused tests pass and supervisor independently confirmed75; types/build integration remains supervisor-owned. Parser report records67 pre-integration passes/one excluded real-loop case; final serial wiring and independent integrated gates are supervisor-owned and not asserted here. Other quantity/lasting/identity/rerun/accounting units require supervisor final union/type/audit/build confirmation before release. No future checkpoint, run ID, cost, screenshot or acceptance invented.
 
 Stage 1 authored before any future paid artifact inspection. Worker performed preparation reads and this own report write only: no source, tests, builds, providers, browser/process/environment, slot, workspace/data, credentials, guards, shared documents, commits or pushes. Ready for supervisor review; launch remains pending explicit release.
+
+## Authorized launch ledger
+
+Supervisor released B5 once on downstream9ff18e28/Core115f67e9, with independent final narrow gates and fresh builds observed. Read-only preflight confirmed paired HEADs, reserved slot3 taskt262/laneB/instance t262-slot-3, absent launch-5.log and no STOP file in bounded slot/test-runs discovery. Executed exact prepared command once, session99304, ignored launch-5.log. Actual staging run run-mutac2q6-fc6b0875; still active at this update. Owning Lab prelude13.147s reused linked/domain/host/test-runner inputs and rebuilt extension instance through ordinary Lab prelude. No worker build command, guard override, retry, saved reuse, credential removal or source/shared-doc mutation. Cost/ending/oracles pending actual artifacts.
+
+## Ending and full debug
+
+B5 session99304 ended exit1. Summary2026-10-04T03:52:38.868Z–03:59:08.174Z, evaluation389087ms. Lab failed/performance.budget/build/flowCreatedfalse; Core build proposed/failure null; historical creation outcome failed/savedFlowHashnull. FirstFailure sequence25 contains call/48/60 markers and no cost marker. Actual build providerCalls60/loop55, total61calls/.076020432; maxBuild .075922524/.1, budgetBreaches0/overCeiling0. Do not equate aggregate call failure with .10 dollar exhaustion.
+
+61 ordered central paid calls:chat1 .000097908,explore31 .039557916,read1 .000196758,repair24 .033482550,judges4 .002685300. Phase accounting sum matches .076020432; build/accounting excludingchat matches .075922524. Central input1,156,512/output7,638, combinedcomputed1,164,150. All priced calls counted; individual records still show unrecorded5, not a reason to reduce paid total.
+
+Full debug `docs/working/language-driven-flow-loop-plan/debugs/run-mutac2q6-fc6b0875.md` contains61providerrows,81actualtool/testrows,30amendmentanswers,16draftobservations, actualjudgediagnostics and8privatelyviewed start/mid/final screenshots across17UI moments.26captureevents/duplicates0. Final requested store/napkin variant visible, cart incomplete; exact quantity/product/original-item runtime oracle unreached. Judges initially no then yes; panel reports proposed/created while also warning undeclared modify_existing. CrossCheck declaredcreate_new/instructedmodify_existing+create_new/undeclaredmodify_existing, actions97/declaredNothing84. No accepted runtime/oracle/reuse claim.
+
+Four actual tool calls0057/0063/0098/0115 carry input.write:true and return statuswritten/inFlowtrue; this writes configuration without browser action. Quantity draftstep9 written is not quantity-effect proof. Final cart-add tests0144/0166/0170 use replayverify; no duplicate-add claim solely from success. Outer decision.write and misplaced/step_only_arrives tool/test codes absent; parser/boundtarget fixes not live-exercised by this run.
+
+Supervisor separately supplied provider-free authenticated public Flow/topology captures after creation ended. Parent persisted Flow6abd10d8-76d2-49f4-92c8-8cf31f68da0b exists with zero rootnodes/hash2b20bdeb43497fec180f5250c6891bf925e7b36414b36f34c1ab37d07945d1b8; primary subflow.bootstrap.b82bd795f946a9df.main graph flow.6abd10d8-76d2-49f4-92c8-8cf31f68da0b.bootstrap.b82bd795f946a9df.main.graph/hash ed0291525c32dca85150aa94a86453dbad7b5dc6ad732910be1bf2b2d4974bdb contains14outputnodes+2merge nodes. Full debug records exact definitionId/parameter/binding/consequence shapes without rawvalues. Historical nullhash capture remains unchanged. Public persistence is proved; request fulfillment/runtime oracle is not. No saved playback or unchanged reuse.
+
+Confirmed Lab source path: live-llm/budget.ts aggregate usage.calls against plan.maxCalls/declared.maxCallsPerRun; live-llm-run.ts settleBuild→settleObserved writes snapshot then throws assertLiveLlmBudgetHeld before lane runtime; live-llm-plan.ts derives iterating maxCalls from declared48. Bbuild60 rejected after proposal despite .10 held. Core phase-budget comparison remains next bounded investigation, not proved here. No raising/override.
+
+Supervisor independently verified all61priced rows/81attempts/exactcost, FOURjudges no/no thenyes/yes, public definition and finalimages. Full six-stage report/debug now frozen. Source freeze remains until root release. No worker source/build/tests/provider retry/env/key/guard/store/profile/shared-doc/commit changes.

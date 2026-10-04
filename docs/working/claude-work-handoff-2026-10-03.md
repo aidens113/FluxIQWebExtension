@@ -11,7 +11,7 @@ Related: [working index](./README.md), [live loop](./language-driven-flow-loop-p
 
 ## Current State
 
-**Active continuation:** paired task t262, latest source408ec3da/Core5c893a98 plus local debug checkpoints066d57ee/Core4349568c. A5/B4 failed under the .10 Lab cap; full six-stage evidence is complete. Current file-partitioned identity/parser/rerun/bound-target repairs and exact validation/next-run gates live in [MVP continuation](./mvp-live-continuation-2026-10-03.md). This document?s original audit/measurements below remain historical. No accepted saved Flow or deterministic reuse yet; no t262 dev push.
+**Active continuation:** paired t262 source downstream9ff18e28/Core115f67e9, root200 Core tests/types/audits and fresh linked builds passed. A6 failed69priced/.092008164; B5 Coreproposed61priced/.076020432 but Labfailed authorized48callgate before runtime. Both totals below Lab.10. Full six-stage latest debug independently verified; root public provider-free read confirmed B persisted primary graph16nodes, not accepted runtime/reuse. Exact new-chat callauthority and live quality blockers under investigation. [MVP continuation](./mvp-live-continuation-2026-10-03.md) owns every current gate/brief/result; intake audit below historical. No t262 devpush.
 
 - Subsequent execution is active in paired task t262. This document is the historical intake audit; [MVP live continuation](./mvp-live-continuation-2026-10-03.md) owns current source checkpoints, full run debugs, implementation briefs, exact validation and Claude resume order. Both latest live lanes failed under Lab .10 and their documented causes are being corrected; no MVP completion/reuse claim.
 
