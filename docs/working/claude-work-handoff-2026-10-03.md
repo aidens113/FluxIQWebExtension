@@ -1,7 +1,7 @@
 # Claude work handoff and testing plan
 
 Status: Complete
-Status detail: Read-only handoff and ordered implementation/live-testing plan recorded; execution is not started and paused UI work remains paused.
+Status detail: Historical intake complete; MVP implementation/live validation continues in paired task t262. Paused standalone UI work remains paused.
 Created: 2026-10-03
 Last updated: 2026-10-03
 Owner: Codex senior supervisor
@@ -11,7 +11,11 @@ Related: [working index](./README.md), [live loop](./language-driven-flow-loop-p
 
 ## Current State
 
-- User requested reading all working documents, reconstructing Claude's work, and listing the plan including live testing. This handoff is complete; the implementation phases below are recommendations for subsequent work.
+**Execution has continued.** Resume the authoritative continuation at `C:/Users/osrs_/FluxStuff/fxwork/t262/!FluxIQWebExtension/docs/working/mvp-live-continuation-2026-10-03.md`, not the historical intake below. The worktree path is plain text because repository documentation links must remain inside their repository. Local paired task branch is `task/t262-mvp-live-continuation` under `C:/Users/osrs_/FluxStuff/fxwork/t262/` with both repositories. Latest gated source checkpoints: downstream `476b52d7`, Core `0ecdec16`; source is committed locally, not yet merged/pushed. All phase ownership, exact commands, independently observed checks, full live debugs and next steps are written there. The following intake describes the earlier t260 snapshot.
+
+A7/B6 were live tested and failed at $.050186646/$.067162080, below the Lab-only $.10 ceiling. Their complete six-stage debugs were independently reviewed. Subsequent saved-candidate repair, ambiguity feedback, preserved-key provider-disabled replay and deadline cost-evidence fixes passed focused checks; actual scripted public-service repair/refusal and disabled native execution were observed. A8/B7 tasks are predeclared for the next gated release. Accepted browser cart/oracle/persistence and two unchanged provider-free reuses remain pending. Ordinary UI budget defaults remain independent. Claude's dirty lane trees and paused t224 remain preserved.
+
+- User requested reading all working documents, reconstructing Claude's work, and listing the plan including live testing. Historical intake is complete; execution now continues in the linked authoritative t262 document. The phases below preserve that intake context.
 - Intake downstream dev was clean at `8836e281`, Core dev at `6beae684`; both matched their local origin/dev refs (no network refresh). This documentation unit is task t260.
 - Claude had integrated general authoring t252, true-cost purse t254, complete run records t255/t259, adaptation UI t256, UI sampling t257, and store-failure handling t258, then dispatched live round 1003.
 - Newer lane reports are in dirty paired worktrees t174/t193/t194/t195. Their fixes are not yet on dev. A lists run 3 in progress; C's newer worker debug closes run 2 as failed despite its older lead report only recording a start. Actual running processes were not inspected.
