@@ -1,7 +1,7 @@
 # MVP live continuation and Claude handoff
 
 Status: Active
-Status detail: Persistent A2 and B both failed under budget; correcting checked-retarget proof and counted-object lasting-action classification before further spending.
+Status detail: Verified candidate/provenance fixes checkpointed; A3 stopped at chat routing; B2 also failed under Lab-only .10; full debug and next scoped fixes in progress.
 Created: 2026-10-03
 Last updated: 2026-10-03
 Owner: Codex senior supervisor
@@ -12,13 +12,13 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 ## Current State
 
 - Active paired task t262; user authorized continued MVP implementation, isolated/persistent Lab live testing and durable Claude handoff. Original dirty Claude trees/user data preserved. No claim that MVP is complete.
-- Frozen source checkpoints downstream14cd066b/Core42434f42. Integrated toggle/stale-mark/unique-handle fixes, advisory act feedback, paging-bound feedback, explicit unrepeat, unresolved-failure selection and screened terminal evidence. Supervisor observed Core467 focused tests and Lab86 tests pass, touched package checks/builds and both audits. Two full sweeps already today; none repeated.
+- Frozen live source checkpoints downstream7b5a3aa1/Core97e279de. Integrated toggle/stale-mark/unique-handle fixes, advisory act feedback, paging-bound feedback, explicit unrepeat, unresolved-failure selection and screened terminal evidence. Prior selector/terminal unit Core467/Lab86 passed; latest independent candidate/provenance union383tests plus final helper12/feedback30, touched package checks/freshCorebuild and both audits passed. Two full sweeps already today; none repeated.
 - First A run run-mut4fvkm-e2fc03e6: created Flow/all4oracle facts held,30calls/total .04025919/build .040120068; actual Core status failed after healed coupon attempt. Not clean acceptance; exact terminal graph cause unproven because old snapshot omitted metadata. Full six-stage debug now contains30ordered model turns,13attempts and screenshot findings. Disposable workspace removed by owning lifecycle, so no reuse claim.
 - Persistent A2 run run-mut58jbo-fbc8a57a, instance t262-slot-2/workspace t262-a, ended failed/build/no created Flow at01:40:49.238Z, launchexit1.63provider calls/total .079036554/build .078897432 vs .10. Persistent draft retained, not replay-ready; full six-stage debug completed, supervisor verified exact63turn sequence. Both live runs exited, source freeze released for fixes.
 - Persistent B run run-mut5amuc-c617cc21, instance t262-slot-3/workspace t262-b, ended failed/no created Flow at01:36:20.598Z, launcherexit1.51calls/total .074950068/build incl read+judges .074802696 vs .10; split first judges, final draft test unreproducible. Draft ID retained but not replay-ready. Worker observed duplicate cart effects from repeated build tests; no repeat/unrepeat amendment used. Full six-stage debug complete and51turn sequence verified, no relaunch.
 - Checked-retarget investigation confirms old execution proof survives changed arguments after verify-only acceptance. Correction now implemented/frozen: checked candidates separate current configuration from prior performed proof, preserve separate lasting-effect guard, clear following replay marks and avoid invented bind instances. Counted-object parser source provenance protects split lasting acts during tests; plural coupon advisory corrected.
-- Lab .10 scope remains testing only; normal UI default independent. Flash, headed bundled Chromium, actual extension chat. No Pro escalation, guard overrides or further paid run queued. Slots2/3 reserved until lane work ends; persistent workspaces preserved.
-- Next: save paired checkpoint of independently verified fixes; changed-source live acceptance, then zero-provider unchanged-Flow reuse when a Flow exists. Both newest full debug records and supervisor ending/screenshot checks complete. C live paging13records and D named-route safety integration remain pending. Paused t224 standalone UI review separate.
+- Lab .10 scope remains testing only; normal UI default independent. Flash, headed bundled Chromium, actual extension chat. No Pro escalation/guard overrides; A3 run-mut6b2re-d0e475d1 failed1chatcall/.000241638 (flow.improve selected; no creation), B2 run-mut6bevx-d8b7956f failed/.073861872, no additional paid run queued. Slots2/3 reserved until lane work ends; persistent workspaces preserved.
+- Next: implement independent Lab creation project/explicit replay project identity after A3; correct declared-arrival proof after B2, then repeat actual chat creation and zero-provider unchanged-Flow reuse when a usable Flow exists. Sources remain frozen during live; D safe route prep read-only. Both newest full debug records and supervisor ending/screenshot checks complete. C live paging13records and D named-route safety integration remain pending. Paused t224 standalone UI review separate.
 
 ## Execution Steps
 
@@ -30,6 +30,63 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 6. Continue the next B/C/D functional blocker from the verified inventory. Record pending work explicitly; preserve the paused standalone UI review unless a live-loop defect requires a focused UI fix.
 
 ## Worker Briefs
+
+### Brief: unfinished-draft-continuation-design (resume-cd; read-only)
+- No active live run; other workers own Lab context and Core arrival classifiers. Do not edit overlapping source or launch tests/provider/runtime.
+- Read Current State, persistent-chat-creation-context report, A3 full debug and exact Core target-policy/improve dispatch/chat capability guidance owners named in report. Initial at most8source files; request expansion. Core AGENTS applies.
+- Own reports/unfinished-draft-continuation-design.md only. Identify why normal UI says build again continues draft yet improve.extend refuses unfinished target. Design truthful generic continuation eligibility and preserved nonblank improve/apply confirmation, never force Lab capability or change permission/budget defaults.
+- Return exact minimal file partition, fail-before service/UI fixtures, contract impact and unproven state distinctions. Old draft must not be discarded/reset, unrelated projects/chats unchanged. Public opaque contracts, no web-specific generic Core special case.
+- No source/shared docs/store/profile/env/slots/build/tests/browser/provider/commits. This design is not implementation release or broad UI review resumption.
+
+
+### Brief: declared-arrival-proof (resume-live-prep; implementation)
+- Both live lanes stopped; Core source release for this coherent unit after final two adapter reads. Read Current State, own quantity-action-proof-design report, Core AGENTS and named owners. No domain/action permissions/provider policy changes.
+- Fix only actual declared arrival classification via existing binding.runsNodes.arrival node/parameter. Require opaque action identity, read only declared parameter with resolved input precedence; absent declaration does not infer arrival from arbitrary strings. Preserve location-agreement other consumers. No URL/cart/browser heuristic in Core.
+- Own exactly nine source owners in design: reachability/{step-goes-to-location,start-step}, instructed-acts/{check,checklist}, llm/harness-options/{draft-acts,bootstrap-completion}, service/flow-bootstrap-commands/build-judge, result-verification/build-test/summary, service.ts matching propagation contexts only. Existing public arrival type, no new tool-result proof/field.
+- Approved exact read-only support fixtures.ts and confirm-requests-build.test.ts; new runtime/tests/service-bootstrap/tests/index.ts fixture barrel permitted, no fixtures edits.
+- Own nearest tests listed in design, including new runtime/tests/service-authoring/tests/quantity-arrival-build.test.ts. Update true-arrival fixtures to explicit declaration; request exact other fixture owner before editing. Must propagate identically to restoration, model checklist, stopped checklist, completion check and judge summary.
+- Fail-first succeeded nonarrival increment with stale matching location must not be step_only_arrives; real declared arrival still is, wrong parameter/absent declaration/opaque location/resolved precedence boundaries. Meaningful actual service-host model and judge fixture required, not helper-only. Preserve failed/permission-denied/candidate/lasting verify/no-effect/repeat behavior.
+- Run narrow design command through heavy wrapper only. No whole suite/build/live/provider/store/env/guards/slots/shared doc/commit. Report exact before/after outputs and compatibility contract/unverified live claims in own reports/declared-arrival-proof.md downstream.
+- Request scope if needed rather than silently reading/editing broadly. Root independently reviews/tests/types/audits/builds and releases changed-source live run. New classifier correction alone is not requested-quantity acceptance.
+
+
+### Brief: independent-creation-project (resume-ab; implementation)
+- Both live lanes stopped; source freeze released for this bounded downstream-only unit. Root owns integration/verification; preserve every existing project/Flow/thread/profile/workspace.
+- Read Current State, own persistent-chat-creation-context report, downstream AGENTS and exact owners below. No broad discovery/Core edits.
+- Implement NEW run-owned project via public createProject/select for independent create-flow runs, before browser/pairing/chat/person/lane scope capture. Replace effective topology.projectId coherently. Ordinary repair/replay/noncreation retain their existing project. No forced capability/directbuild/store reset.
+- Source ownership: packages/test-runner/src/run-scenario/chat-build/{creation-project.ts,index.ts,tests/creation-project.test.ts}, run-scenario.ts; packages/test-runner/src/{commands.ts,tests/commands.test.ts,cli.ts}; saved-flow-replay/{replay-saved-flow.ts,tests/project-selection.test.ts}. Read existing isolated-flow-importer.ts/coordinator.ts/existing-flow-run.ts as needed, do not edit without exact request.
+- Approved cohesive additional owners: run-scenario/chat-build/{creation-context.ts,tests/creation-context.test.ts}; saved-flow-replay/{project-selection.ts,index.ts}, existing approved project-selection.test.ts. Durable identity writer and explicit scope helper remain narrowly owned.
+- Add explicit optional replay --project actualID, legacy default only if absent. Bind selected project before browser/lookup/run; reject explicit mismatch with no name search/default fallback. Preserve provider-free replay contract.
+- Emit ignored creation-context.json through owning bundle writer before Send/after ending: run/workspace/project/domain/Flow|null/outcome/saved hash when usable. Identity must survive failures; never raw recorded data/secrets. Request exact extra owner if needed; do not stuff unrelated helpers into run-scenario.
+- Fail-first meaningful tests for fresh project preceding scopes, old project/data preserved, failure identity, noncreation unchanged and explicit replay project/mismatch. Run only owning tests/types through heavy slot when necessary, no full suite/build/provider/browser.
+- Own report reports/independent-creation-project.md; record exact edits/failing-before/passing-after commands and unverified live behavior. No shared docs/commit/push/env/store/profile/slot/guard changes or paid retry.
+- Done means source+regressions ready for supervisor review, not live acceptance. Separate normal UI failed-draft continuation remains pending.
+
+
+### Brief: quantity-action-proof-design (resume-live-prep; read-only)
+- Both latest live lanes ended; no source edits/tests/build/provider/runtime changes in this diagnostic brief.
+- Required reads: Current State, B2 worker screened ending and ignored quantity-related exact decisions/toolresults from run-mut6bevx-d8b7956f as needed; Core draft step/proposability/amendment/checklist quantity-fault owners and downstream action-result/node-run result owners. Initial at most8source files; request expansion.
+- Owns reports/quantity-action-proof-design.md only. Diagnose quantity never-set/fulltest failure and rerun changes_nothing; distinguish model never authored setter, wrongcontrol/binding, successful idempotent setter returning effectAppliedfalse, actual action failure and duplicate/refused requests. Do not infer these from UI summary alone.
+- Done: confirmed exact failed paths versus assumptions, minimal Core/domain owner partition and meaningful fail-before fixtures if product bug, using safe counts/codes/shapes/private refs. Host proposes/effectApplied semantics must remain truthful; do not simply treat every no-effect as success or bypass permission/replay tests. No cart-specific Core inference, automatic actions, page truncation or outputcap.
+- Must not touch source/shareddocs/profiles/stores/env/guards/slots/builds/tests/provider/commits; reportonly, no paidretry. ExistingDroute report remains futureplan, not implementationauthority.
+
+
+### Brief: persistent-chat-creation-context (resume-ab; read-only while B2 active)
+- Frozen paired t262, no source/test/build/runtime/store/profile mutations. New A3ended after1chatcall/.000241638, lab.chat_ran_other_capability flow.improve; screenshot says preprovider flow_bootstrap.blank_target_required.
+- Required reads: Current State, root live-a-candidate Stage1 report, run-debug-template, exact A3ignored chat/ending/screenshot artifacts; current Lab creation chat/session driver and Core capability/context/target policy owners only as needed. Begin with at most8sourcefiles; ask exact expansion if insufficient.
+- Owns new debugs/run-mut6b2re-d0e475d1.md (full6stages/1orderedturn/noFlow/no tests/no runtime/no reuse), own reports/persistent-chat-creation-context.md only. Preserve actual prelaunch expectations and disclose posthoc completion.
+- Diagnose why retained persistent context routes same request to improve and why blank_target_required stops it. Distinguish legitimate normalUI continuing old draft from Lab test requiring independent create. Recommend reversible isolated fresh conversation/blank target preparation using owning public API/extensionUI; preserve all existing drafts/recordings/projects/profiles. Never solve by destructive resets or forced directAPI build.
+- Done: confirmed routing/target/selection source path, minimal exact file fix partition and meaningful regression, or actual product defect versus Lab setup. Full onecall debug and safe parameter refs/ending/UI/cost. No raw provider prompt/page values/secrets in authored docs.
+- Must not edit source/shared docs/guards/slots/env/profile/store or launch. B2source freeze stays untilrootrelease. No paidretry.
+
+
+### Brief: next-d-safe-route-design (resume-live-prep; read-only while A3/B2 active)
+- Paired t262 source frozen; old Claude D tree read-only evidence, no copying or mutation.
+- Required reads: Current State, reports/next-d-route-integration.md, listed exact old D route owners and tests needed to resolve documented safety gaps. Do not read entire dirty tree/MVP planning/background.
+- Owns only reports/next-d-safe-route-design.md. Task identify smallest coherent named-route unit, Core/downstream ownership and fail-before fixtures for failed instruction read, intermediate drop bypass and broad companion withholding. Reject URL/DOM semantics in generic Core; distinguish explicit named-route obligations from permitted shorter starts. No speculative known-broken import.
+- Done: exact minimal executable file partition, existing public seams, critical source causes and tests to run AFTER live ends; initial no-more-than8source files, request exact expansion if insufficient. Mark unproven facts.
+- Must not touch source/shared docs/store/profiles/env/slots/builds/tests/provider/panel/commits; live source freeze absolute. Existing 29file report is inventory, not authorization to import all29.
+
 
 ### Brief: live-b-provenance (resume-cd; no launch before explicit supervisor checkpoint release)
 - Frozen paired t262; source checkpoint IDs supplied by root at release. One paid run only, no retries/overrides/new source. Slot3 remains ownedt262, instance t262-slot-3, persistent workspace t262-b preserved.
@@ -334,3 +391,33 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 - Supervisor final artifact verification: A2 ordinary reruns0176/0191 actual resultstatus succeeded/pageChangedtrue/cart-control match, final0250 verify/verified has no cart-control proof. B0088/0094/0143/0149 all replaystep/emptydeclaration/oktrue/replayed independently observed. Root clarified no_such_step feedback: add amendment includes existing step, new action uses offered tool_call with addtrue/act; no automatic execution/schema change/restriction. This targets A35amendment churn and4invented-step refusals; savings unmeasured until live. Existing feedback owner16121 and finaltypecheck active.
 
 - Final supervisor gates after structural helper/feedback changes: rerun-check12tests pass, feedback30tests pass, Corecheck21.313s pass, Corebuild32.246s pass, docsreference3080declarations regenerated, linked domain16.815s and extension27.817s pass against freshCore, Coreaudit240warnings/349baseline and downstreamaudit165warnings/118baseline pass. Slot2/3 owner files independently confirmedt262. No full suites or baseline increases. Paired local checkpoint and next ONEchanged-source perlane live release next; no source edits whilelive.
+
+- Paired checkpoint saved locally: downstream7b5a3aa1/Core97e279de, no dev merge/push yet; user MVP/live goal remains active. New A/B expectations authored BEFORE new artifacts, same .10/Flash. Both source trees frozen for next live lanes, docs-only updates allowed. Persistent slots2/3 and workspaces preserved; one launch each, no automatic retry.
+
+- New live launch invocations: A3root79824/ignoredlaunch-3.log and B2worker55342/ignoredlaunch-2.log, both one-shot persistent .10/Flash; IDs pending setup. Source checkpoints7b5a3aa1/97e279de fixed. D next safe partition read-only prep assigned while live; no tests/source writes.
+
+- Live IDs now established: A3 run-mut6b2re-d0e475d1/root79824; B2 run-mut6bevx-d8b7956f/worker55342. Frozen pairedsource7b5a3aa1/97e279de; separate persistentworkspaces/instances. No further launch or source change queued while active.
+
+- D read-only brief exact expansion approved: current Core llm/loop-configuration.ts and llm/harness-options/binding.ts (AutomationStudioLlmEvidenceRuntimeBinding), downstream domain/src/runtime/llm-evidence/tools.ts binding implementation. Declared runsNodes.arrival already names navigation node+parameter. No other source reads/mutations/tests/builds while B active.
+- A3 run-mut6b2re-d0e475d1 ended failed02:01:50.451Z, launch79824exit1, exactly1chatcall/.000241638; lab.chat_ran_other_capability chose flow.improve, no creationbuild/FlowID/runtime. This is persistent chat context/setup/routing issue, not validation of new build fixes. Screenshot reviewed; full1turn debug and exact setup investigation next. B2 still active; source freeze remains. No paid retry.
+
+- persistent-chat-creation-context read-only exact8file expansion approved: Core runtime/conversations/instructions/{prompt,respond}.ts, conversations/commands/improve.ts, conversations/conversations.ts, flow-bootstrap/extend.ts (targetrefusalowner); extension panel/chat/conversation/{thread-requests,core-thread,controller}.ts. A3 actualchat7messages (system+5prior+newuser), identical prior/current request and oldfaileddraftcontext; provider selected improve with displayedname instead of opaqueID. Full profile/store mutations prohibited while Bactive.
+
+- Persistent chat investigation confirmed Core allows Flowname resolution; improve legitimately uses extend and rejects blank failed draft without existing router/subflow. Lab picks latest open subjectchat and does not prepare independent conversation; public explicit conversationId preserves old threads while creating new one. Final4read expansion approved: Core conversations/instructions/invocation.ts, api/contracts/conversation.ts, runtime/conversations/store.ts; downstream creation/lane.ts. No source edits whileBactive. NormalUI failed-draft continuation remains separate from independent Lab creation; do not hide it by changing ordinary default policy.
+
+- B2 run-mut6bevx-d8b7956f endedfailed02:06:22.932Z, worker55342exit1/noacceptedFlow, incomplete13steps. Total .073861872/build .073644534 under.10; no override. Full53turn phase reconciliation/debug inprogress. Both newest live lanes nowstopped; no paid retryqueued. New quantity-proof root-cause brief reportonly; independent creation context needs freshproject/explicitnewflow rather than assuming newthread alone isolates oldFlowlist.
+
+- Persistent creation-context final exact read expansion: test-runner coordinator.ts/http-control/index.ts/existing-flow-run.ts approved, plus root-found isolated-flow-importer.ts and run-scenario.ts creation/topology ranges. Existing publiccreateProject/selectcontext alreadyusedbyclone. Prefer downstreamrun-owned project for independentcreation over genericfreshconversationflag; preserveworkspace/profiles/oldprojects and carryactualprojectID into savedFlowreplay. No implementation beforeexactbrief.
+
+- Creation-context final exact2reads approved: test-runner commands.ts and saved-flow-replay/replay-saved-flow.ts. Independent create will use run-owned newproject via existing publicAPI beforebrowserlaunch; actual projectID must be retained and explicitreplayproject provided, never guessed/defaultedwrong.
+- Quantity diagnosis exact5reads approved: Core reachability/location-agreement.ts; instructed-acts/{standing,step-fault}.ts; reachability/tests/step-goes-to-location.test.ts and instructed-acts/tests/checklist.test.ts. B2six+ reruns actuallysucceeded/effecttrue/pageChangedtrue; no idempotentfalse rejection established. Investigate arbitraryvalue arrival heuristic and declaredarrivalidentity instead, no webnodename inCore.
+
+- Quantity classification final caller read expansion approved: Core reachability/start-step.ts, instructed-acts/check.ts, llm/harness-options/draft-acts.ts, result-verification/build-test/summary.ts and service.ts ONLY matching restore/checklist/check/summarize call contexts. Confirmed substringlocationheuristic on strayurl runs beforequantitylogic; declare arrival identity consistently for model/judge/completion, preserve locationagreement otherconsumers. Both latestliveended, still reportonlyuntil exactimplementationbrief.
+
+### 2026-10-03 - Next source corrections released after both live endings
+- A3 failed at chat routing; B2 failed build under .10. No paid run active/queued. Lab independent creation project and Core declared-arrival evidence units partitioned in written briefs.
+- Validation: supervisor confirmed B2 full debug contains53 contiguous model rows; actual final screenshot/status/cost inspected. No functional pass/reuse claim. Worker reports and persistent data preserved.
+
+### 2026-10-03 - Independent B2 evidence reconciliation
+- Supervisor matched all53 authored provider rows to exact ignored metadata folder sequence. Five cart build-test results independently confirmed core.replay.verified/oktrue; final failed build/status/cost and screenshot already inspected. No complete Flow/reuse claim. Observed page subtotals scrubbed from authored debug/report. Result said is human text, so no invented nested effectApplied parse claim.
+- Validation: exact provider sequence53/53; budget total .073861872/build .073644534; complete six-stage failed-run debug preserved.

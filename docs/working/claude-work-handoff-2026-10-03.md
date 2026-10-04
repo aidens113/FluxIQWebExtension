@@ -11,6 +11,8 @@ Related: [working index](./README.md), [live loop](./language-driven-flow-loop-p
 
 ## Current State
 
+- Subsequent execution is active in paired task t262. This document is the historical intake audit; [MVP live continuation](./mvp-live-continuation-2026-10-03.md) owns current source checkpoints, full run debugs, implementation briefs, exact validation and Claude resume order. Both latest live lanes failed under Lab .10 and their documented causes are being corrected; no MVP completion/reuse claim.
+
 - User requested reading all working documents, reconstructing Claude's work, and listing the plan including live testing. This handoff is complete; the implementation phases below are recommendations for subsequent work.
 - Intake downstream dev was clean at `8836e281`, Core dev at `6beae684`; both matched their local origin/dev refs (no network refresh). This documentation unit is task t260.
 - Claude had integrated general authoring t252, true-cost purse t254, complete run records t255/t259, adaptation UI t256, UI sampling t257, and store-failure handling t258, then dispatched live round 1003.

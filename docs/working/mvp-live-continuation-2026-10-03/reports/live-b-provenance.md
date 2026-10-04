@@ -1,7 +1,7 @@
 # B provenance live validation — worker report
 
 ## Current State
-**Prepared only; no launch authorized yet.** Awaiting supervisor's exact paired source checkpoint IDs and explicit launch release. One paid run maximum after release; no automatic retry, replay, guard override or source change. Stage1 below was authored before inspecting any new run artifacts or ending.
+**One released launch completed, failed:** run-mut6bevx-d8b7956f, downstream7b5a3aa1/Core97e279de. Complete six-stage debug authored; source and persistent workspace preserved. Stage1 was prepared before release. One paid run maximum after release; no automatic retry, replay, guard override or source change. Stage1 below was authored before inspecting any new run artifacts or ending.
 
 ## Stage 1 — predeclared expectation
 Scenario bigbox-retail; task bigbox-retail-pickup-cart-store-remembered-after-creation; persistent workspace t262-b; instance t262-slot-3; slot3 remains supervisor-owned t262.
@@ -53,8 +53,19 @@ Redirect all launcher output to ignored `test-runs/instances/t262-slot-3/launch-
 ## Evidence collection after released launch
 Notify supervisor of session and run ID promptly. Capture safe ending/status/cost rather than raw provider/page/credential data. Complete a new named six-stage run debug on pass or fail with one ordered row for every model call (including instruction read/judges), argument shapes and exact ignored private references, full-test node modes/durations/results, final comparisons, repair, persistence and screenshot start/mid/end review. Mark NO EVIDENCE gaps; neither compilation nor a screenshot alone proves browser behavior.
 
-Latest baseline: previous B run-mut5amuc-c617cc21 failed after51calls/total.074950068, build.074802696, no created Flow; four full-test cart additions used replay:step with [], cart ended10items/$140.74, final failed size step250Count,5/6coverage. The actual instructed-read response missed reconstructed a2/a3 quote containment; internal cached store was not independently inspected. Persistent old draft remains preserved.
+Latest baseline: previous B run-mut5amuc-c617cc21 failed after51calls/total.074950068, build.074802696, no created Flow; four full-test cart additions used replay:step with [], cart ended10items/[observed subtotal withheld], final failed size step250Count,5/6coverage. The actual instructed-read response missed reconstructed a2/a3 quote containment; internal cached store was not independently inspected. Persistent old draft remains preserved.
 
 ## Launch ledger
 - Prepared Stage1; no new run ID/session/source checkpoint released yet.
 - No provider call, browser launch, process/environment mutation, source/shared doc/store change, commit or push by worker during preparation.
+- Supervisor explicitly released one launch at checkpoints downstream7b5a3aa1/Core97e279de. Read-only preflight confirms both HEADs, slot3t262/B owner, and STOP-balance absent. Output path confirmed test-runs/instances/t262-slot-3/launch-2.log. Invocation follows once; no retry/replay.
+
+- Launched once in session55342; new run ID run-mut6bevx-d8b7956f appeared in staging. Launcher remains active; status/spend/createdFlow pending. Source remains frozen; no retry/replay.
+
+## Ending and validation
+- Session55342 exited1, run finished02:06:22.690Z (summary02:06:22.932Z),373.177s. Failed/build/lab.chat_build_failed, no created Flow. Incomplete draft13keptsteps; contextFlowID preserved but not accepted/replay-ready.
+- Central53ordered provider turns: chat1/explore31/read1/repair18/judge2. Loop49decisions. Snapshot profile reports49records/calls, retained as a discrepancy rather than silently equated with central count. All53 costs total.073861872; build.073644534 includes read+judges, chatdifference.000217338. BudgetBreaches0; spendbelow.10.
+- Five cart test calls0079/0099/0103/0157/0161 all verify/core.replay.verified/effectApplied=false across3fulltests. Targeted lasting protection held; checked towel candidate step16/a2 marked performed:false/changed:no. Neither is full functional acceptance.
+- Both judges0104/0105 answered no/patchNeededtrue. Quantitya2.quantity remains step_only_arrives on mixed dom-click configuration with url/consequences/target parameter shape. Repeated no-change/unchanged reruns stop repair; final screenshotcart2/[observed subtotal withheld] vs4/$43.39, requested napkin/store/pickup visible. No final per-SKU oracle/runtimeplayback/acceptedrepair/reuse.
+- Full debug: docs/working/language-driven-flow-loop-plan/debugs/run-mut6bevx-d8b7956f.md;53turn rows,21draft rows,41test rows including modes/effects/durations/private refs, both judges/repair/ending, start/mid/end screenshots. Sidecar16moments,0capturefailures. No raw page/prompt/locator values authored.
+- No retries/replay/source edits/extra library rebuilds, no profile/store mutation/reset/slot removal. Owning launcher handled the one run. Supervisor independent verification remains required before any targeted acceptance.
