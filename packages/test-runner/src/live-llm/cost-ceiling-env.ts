@@ -2,19 +2,19 @@
 // configurable variable (the user, 2026-10-01: "the $0.1 ceiling should be an
 // easily configurable variable ... even for test purposes in the lab").
 //
-// Core reads `FLUXIQ_LLM_RUN_COST_CEILING_USD` when it loads (default $0.10;
-// a bad value stops it at start). The Lab passes the value it finds, in this
-// order: the run's `--llm-cost-ceiling-usd` flag, the Lab's own environment,
-// then `.env` and `.env.local` in the checkout -- the same files the provider
-// key is read from (`scripts/lab/pair/provider-key.mjs`). Unset everywhere,
-// nothing is passed and Core uses its default. This is the developer's and the
-// Lab's knob; the product's spending limit is a separate user-facing setting.
+// The configured amount comes from the Lab environment, then .env/.env.local,
+// or the $0.10 test default. A run flag can only lower it. Core consumes it
+// only with the explicit test scope below; normal user UI defaults are separate.
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_SCOPE_ENV, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation-studio";
 
 /** The variable Core reads (`fluxiq/automation-studio` `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV`). */
 export const LAB_COST_CEILING_ENV = "FLUXIQ_LLM_RUN_COST_CEILING_USD";
+
+/** Opt in only the Core child process owned by this Lab run. */
+export const LAB_COST_CEILING_SCOPE_ENV = AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_SCOPE_ENV;
 
 /** The flag that sets it for one run. */
 export const LAB_COST_CEILING_FLAG = "--llm-cost-ceiling-usd";
@@ -33,25 +33,33 @@ function dotenvValue(text: string, name: string): string | undefined {
 }
 
 /**
- * The ceiling to pass to Core, as Core will read it, or `undefined` when none is
- * configured: the flag, then the environment, then `.env` and `.env.local`
- * under `repositoryRoot` (a later file wins, as the provider key does).
+ * One test-scoped ceiling for Core and the Lab plan. The environment wins over
+ * checkout files; .env.local wins over .env. The default is $0.10. A flag may
+ * lower that configured amount, but may never bypass it with a higher amount.
  */
-export function labCostCeilingValue(repositoryRoot: string, args: readonly string[] = process.argv, env: NodeJS.ProcessEnv = process.env): string | undefined {
+export function labCostCeilingValue(repositoryRoot: string, args: readonly string[] = process.argv, env: NodeJS.ProcessEnv = process.env): string {
   const at = args.indexOf(LAB_COST_CEILING_FLAG);
   if (at >= 0) {
     const flagged = args[at + 1];
     if (flagged === undefined || flagged.startsWith("--")) throw new Error(`${LAB_COST_CEILING_FLAG} needs an amount in US dollars, such as 0.10`);
-    return flagged;
   }
   const set = env[LAB_COST_CEILING_ENV];
-  if (set !== undefined && set.trim() !== "") return set;
-  let found: string | undefined;
-  for (const file of FILES) {
-    const full = path.join(repositoryRoot, file);
-    if (!existsSync(full)) continue;
-    const value = dotenvValue(readFileSync(full, "utf8"), LAB_COST_CEILING_ENV);
-    if (value !== undefined && value.trim() !== "") found = value;
+  let found = set !== undefined && set.trim() !== "" ? set : undefined;
+  if (found === undefined) {
+    for (const file of FILES) {
+      const full = path.join(repositoryRoot, file);
+      if (!existsSync(full)) continue;
+      const value = dotenvValue(readFileSync(full, "utf8"), LAB_COST_CEILING_ENV);
+      if (value !== undefined && value.trim() !== "") found = value;
+    }
   }
-  return found;
+  const scoped = (value?: string) => resolveAutomationStudioLlmRunCostCeilingUsd({
+    [LAB_COST_CEILING_SCOPE_ENV]: "test",
+    ...(value === undefined ? {} : { [LAB_COST_CEILING_ENV]: value })
+  });
+  const configured = scoped(found);
+  if (at < 0) return String(configured);
+  const requested = scoped(args[at + 1]);
+  if (requested > configured) throw new Error(`${LAB_COST_CEILING_FLAG} cannot raise the configured Lab ceiling of $${configured.toFixed(2)}. Change ${LAB_COST_CEILING_ENV} in the Lab environment or checkout env file to configure a different ceiling.`);
+  return String(requested);
 }

@@ -9,10 +9,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
-import { AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_DEFAULT_USD } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD } from "fluxiq/automation-studio";
 import type { RunAllocation } from "../../allocation.js";
 import { buildFluxIQEnvironment } from "../../environment.js";
-import { beginLiveLlmRun, LAB_COST_CEILING_ENV, LAB_COST_CEILING_FLAG } from "../index.js";
+import { beginLiveLlmRun, LAB_COST_CEILING_ENV, LAB_COST_CEILING_SCOPE_ENV, LAB_COST_CEILING_FLAG } from "../index.js";
 
 const allocation: RunAllocation = {
   runId: "run-a", runRoot: path.resolve("runs/run-a"), fluxiqRoot: path.resolve("runs/run-a/fluxiq-root"),
@@ -42,6 +42,7 @@ async function bothSides(repositoryRoot: string, args: readonly string[], enviro
     profile, repositoryRoot, environment: { DEEPSEEK_API_KEY: "test-provider-credential-value" }, flowLane: true, targetMode: "isolated",
     costCeilingSources: { args, environment },
   });
+  assert.equal(core[LAB_COST_CEILING_SCOPE_ENV], "test");
   return { core: core[LAB_COST_CEILING_ENV], plan: run.describe().authorized.maxTotalEstimatedCostUsd };
 }
 
@@ -56,7 +57,12 @@ test("a ceiling from the checkout's .env.local reaches both Core's environment a
   assert.deepEqual(await bothSides(root, ["node", "lab"], {}), { core: "0.07", plan: 0.07 });
 });
 
-test("with no ceiling configured Core gets none and the Lab plans Core's default", async (t) => {
+test("with no ceiling configured the Lab still explicitly scopes Core to the test default", async (t) => {
   const root = await checkout(t);
-  assert.deepEqual(await bothSides(root, ["node", "lab"], {}), { core: undefined, plan: AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_DEFAULT_USD });
+  assert.deepEqual(await bothSides(root, ["node", "lab"], {}), { core: "0.1", plan: AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD });
+});
+
+test("a higher per-run override is refused before Core starts or the Lab plans provider work", async (t) => {
+  const root = await checkout(t, `${LAB_COST_CEILING_ENV}=0.10\n`);
+  await assert.rejects(bothSides(root, ["node", "lab", LAB_COST_CEILING_FLAG, "0.30"], {}), /cannot raise the configured Lab ceiling/u);
 });
