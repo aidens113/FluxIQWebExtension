@@ -132,3 +132,19 @@ but no stored-run gate reads it; that change is the user's decision.
 ### Bounded extraction feedback
 
 Detected list evidence includes selector-free paginationBound (maxPages or maxScrolls). Omitting paginate, or passing true, retains the detected bound; it does not request every page. Explicit extractList.paginate.maxPages or maxScrolls changes that bound. Defaults remain bounded. A page_limit report names the reader's actual clamped bound and the nested amendment needed to read further; truncation is still incomplete evidence, never proof that the list ended.
+
+### Bound target test values
+
+A target Flow input may retain the executor state binding while its concrete
+test handle is resolved: target.$state keeps its path, and its fallback becomes
+the observed adapted target with selector and element identity. The handle
+never reaches persistence. A supplied runtime target replaces that fallback;
+resolution adds no fixed global selector or element identity to shadow it.
+
+Only the exact target binding grammar with a concrete handle fallback is
+recognized here. Existing control, scope, uniqueness, frame, declaration and
+permission checks still apply to the concrete test value. Permission receives
+a separate view of the observed fallback identity. Agreeing duplicate target
+references are folded into the dynamic target; conflicting locator/identity
+slots are refused. This does not add support for nested handle bindings in
+selector or element slots, or infer execution proof from resolution.

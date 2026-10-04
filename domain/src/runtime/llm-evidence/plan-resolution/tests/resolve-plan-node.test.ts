@@ -21,8 +21,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { AutomationStudioActionConsequence } from "fluxiq/automation-studio";
+import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
+import { resolveAutomationNodeParameterValues } from "fluxiq/automation-studio/nodes";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../../../output-nodes";
+import { outputTargetFromPayload } from "../../../../output-nodes/targets";
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
@@ -527,4 +530,109 @@ test("a child frame's element names its frame, and a node naming another frame i
   assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "t2" }, browserFrameId: 3 }), refusedAt("web.handle.frame_mismatch", "browserFrameId"));
   assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "t2" }, browserFrameId: 0 }), refusedAt("web.handle.frame_mismatch", "browserFrameId"));
   assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t1" }, browserFrameId: 7 }), refusedAt("web.handle.frame_mismatch", "browserFrameId"));
+});
+
+// B4: a Flow input retains a concrete opaque test handle in its state fallback.
+// Resolution must preserve the runtime binding while replacing only that fallback.
+test("a bound target resolves its test fallback without persisting a handle or freezing the Flow input", async () => {
+  const actions:string[]=[];
+  const runtime=runtimeOver(()=>({url:FORM_URL,elements:[nameField,submit]}), action=>actions.push(action));
+  await inspect(runtime);actions.length=0;
+  const target={$state:{path:"chosenControl",fallback:{handle:"t2"}}};
+  assert.deepEqual(await resolve(runtime,CLICK_NODE,{target}),{status:"resolved",parameters:{target:{$state:{path:"chosenControl",fallback:{selector:"#submit",element:SUBMIT_IDENTITY}}}}});
+  assert.deepEqual(actions,[],"plan resolution does not dispatch a live action");
+});
+
+test("a bound target honors an alternate runtime control through actual Core normalization without old global identity", async () => {
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameField, submit] }));
+  await inspect(runtime);
+  const result = await resolve(runtime, CLICK_NODE, { target: { $state: { path: "chosenControl", fallback: { handle: "t2" } } } });
+  assert.equal(result.status, "resolved");
+  if (result.status !== "resolved") return;
+  const alternate = { selector: "#alternate", element: { tagName: "button", visibleText: "Alternate", selector: "#alternate" } };
+  for (const [state, expected] of [[{}, SUBMIT_IDENTITY], [{ chosenControl: alternate }, alternate.element]] as const) {
+    const resolved = resolveAutomationNodeParameterValues(result.parameters, state);
+    assert.deepEqual(resolved.missingPaths, []);
+    assert.equal("selector" in resolved.values, false);
+    assert.equal("element" in resolved.values, false);
+    const normalized = normalizeAutomationStudioElementTarget(resolved.values.target, { source: "runtime" });
+    assert.ok(normalized);
+    const dispatched = outputTargetFromPayload({ ...resolved.values, target: normalized as unknown as JsonObject });
+    assert.deepEqual(dispatched?.element, expected);
+    assert.equal(dispatched?.selector, expected.selector);
+  }
+  assert.equal(JSON.stringify(result).includes('"handle"'), false);
+});
+
+test("a bound target preserves agreement with other observed target slots and refuses disagreement or conflicting literals", async () => {
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameField, submit] }));
+  await inspect(runtime);
+  const target = { $state: { path: "chosenControl", fallback: { handle: "t2" } } };
+  const expected = { status: "resolved", parameters: { target: { $state: { path: "chosenControl", fallback: { selector: "#submit", element: SUBMIT_IDENTITY } } } } };
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target, selector: { handle: "t2" }, element: { handle: "t2" } }), expected);
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target, selector: "#submit", element: {
+    selector: "#submit", visibleText: "Submit", tagName: "button"
+  } }), expected, "agreeing literal identity key order is immaterial");
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target, selector: { handle: "t1" } }), refusedAt("web.handle.ambiguous", "target"));
+  assert.equal((await resolve(runtime, CLICK_NODE, { target, selector: "#unrelated" })).status, "refused");
+  assert.equal((await resolve(runtime, CLICK_NODE, { target, element: { tagName: "button", visibleText: "Other", selector: "#other" } })).status, "refused");
+});
+
+test("bound target grammar does not authorize malformed or foreign nested handles or unsupported bound selector and element slots", async () => {
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameField, submit] }));
+  await inspect(runtime);
+  const fallback = { handle: "t2" };
+  for (const target of [
+    { $state: { path: "", fallback } }, { $state: { path: 7, fallback } },
+    { $state: { path: "chosenControl", fallback, extra: true } },
+    { $state: { path: "chosenControl", fallback }, extra: true },
+    { $state: { path: "chosenControl", fallback: { ...fallback, extra: { handle: "t1" } } } },
+    { $state: { path: "chosenControl", fallback: { nested: fallback } } }
+  ]) assert.equal((await resolve(runtime, CLICK_NODE, { target })).status, "refused");
+  for (const slot of ["selector", "element", "text"]) {
+    const result = await resolve(runtime, CLICK_NODE, { [slot]: { $state: { path: "chosenControl", fallback } } });
+    assert.equal(result.status, "refused");
+  }
+  assert.equal((await resolve(runtime, CLICK_NODE, { target: { $state: { path: "chosenControl", fallback: { handle: "t999" } } } })).status, "refused");
+  assert.equal((await resolve(runtime, SELECT_NODE, { target: { $state: { path: "chosenControl", fallback } }, value: "1" })).status, "refused");
+  assert.equal((await resolve(runtime, CLICK_NODE, { target: { $state: { path: "chosenControl", fallback } }, foreign: { handle: "t1" } })).status, "refused");
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target: { $state: { path: "chosenControl" } } }), { status: "unchanged" });
+  assert.deepEqual(resolveAutomationNodeParameterValues({ target: { $state: { path: "chosenControl" } } }, {}), {
+    values: {}, missingPaths: ["chosenControl"]
+  });
+});
+
+test("a bound target cannot use another project or Flow's handle or a stale captured page", async () => {
+  let page: Page = { url: FORM_URL, elements: [nameField, submit] };
+  const runtime = runtimeOver(() => page);
+  await inspect(runtime);
+  const target = { $state: { path: "chosenControl", fallback: { handle: "t2" } } };
+  for (const scope of [{ flowId: "flow.other" }, { projectId: "project.other" }]) {
+    const result = await resolve(runtime, CLICK_NODE, { target }, scope);
+    assert.equal(result.status, "refused");
+    assert.ok(result.status === "refused" && result.issueCodes.includes("web.handle.unknown"));
+  }
+  for (let index = 0; index < 8; index += 1) {
+    page = { url: `https://example.test/other/${index}`, elements: [submit] };
+    await inspect(runtime);
+  }
+  const stale = await resolve(runtime, CLICK_NODE, { target });
+  assert.equal(stale.status, "refused");
+  assert.ok(stale.status === "refused" && stale.issueCodes.includes("web.handle.stale"));
+});
+
+test("a bound child-frame target retains observed frame authority and refuses conflicting or malformed declarations", async () => {
+  const framed: JsonObject = { tagName: "button", selector: "frame[7] >> #submit", visibleText: "Submit", attributes: {
+    "data-fluxiq-frame-id": "7", "data-fluxiq-frame-url": "https://example.test/embed/form?private=fixture"
+  } };
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameField, framed] }));
+  await inspect(runtime);
+  const target = { $state: { path: "chosenControl", fallback: { handle: "t2" } } };
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target }), { status: "resolved", parameters: {
+    target: { $state: { path: "chosenControl", fallback: { selector: "#submit", element: SUBMIT_IDENTITY } } },
+    browserFrameId: 7, browserFrameUrlPath: "/embed/form"
+  } });
+  for (const frame of [0, 3, "7", -1]) assert.equal((await resolve(runtime, CLICK_NODE, { target, browserFrameId: frame })).status, "refused");
+  assert.equal((await resolve(runtime, CLICK_NODE, { target, browserFrameUrlPath: "/other" })).status, "refused");
+  assert.equal((await resolve(runtime, CLICK_NODE, { target, selector: { handle: "t1" } })).status, "refused");
 });

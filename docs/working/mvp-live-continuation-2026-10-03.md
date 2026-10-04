@@ -11,8 +11,10 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 
 ## Current State
 
+- Immediate gate cleared: supervisor observed Core200/200 tests across14 owners, package typecheck and structure audit PASS after cycle-free helper correction. Actual service/model fixture passed without expectation or import-order workaround. Fresh linked builds and checkpoints pending; no paid retry active.
+
 - Active paired task t262; user authorized continued MVP implementation, isolated/persistent Lab live testing and durable Claude handoff. Original dirty Claude trees/user data preserved. No claim that MVP is complete.
-- Last live source checkpoints downstreamf9afcb12/Core80116d0e; source freeze released for the bounded downstream chat-scope correction. new Lab project/readiness/replay identity and Core declared-arrival/continuation units verified. Integrated toggle/stale-mark/unique-handle fixes, advisory act feedback, paging-bound feedback, explicit unrepeat, unresolved-failure selection and screened terminal evidence. Prior selector/terminal unit Core467/Lab86 passed; latest independent candidate/provenance union383tests plus final helper12/feedback30, touched package checks/freshCorebuild and both audits passed. Two full sweeps already today; none repeated.
+- Latest live source checkpoints downstream408ec3da/Core5c893a98 (live HEADf32b7dc8 docs-only). Complete debug checkpoints066d57ee/Core4349568c. Source freeze released only for bounded identity/parser/rerun/boundtarget/usage repairs; no new paid launch. new Lab project/readiness/replay identity and Core declared-arrival/continuation units verified. Integrated toggle/stale-mark/unique-handle fixes, advisory act feedback, paging-bound feedback, explicit unrepeat, unresolved-failure selection and screened terminal evidence. Prior selector/terminal unit Core467/Lab86 passed; latest independent candidate/provenance union383tests plus final helper12/feedback30, touched package checks/freshCorebuild and both audits passed. Two full sweeps already today; none repeated.
 - First A run run-mut4fvkm-e2fc03e6: created Flow/all4oracle facts held,30calls/total .04025919/build .040120068; actual Core status failed after healed coupon attempt. Not clean acceptance; exact terminal graph cause unproven because old snapshot omitted metadata. Full six-stage debug now contains30ordered model turns,13attempts and screenshot findings. Disposable workspace removed by owning lifecycle, so no reuse claim.
 - Persistent A2 run run-mut58jbo-fbc8a57a, instance t262-slot-2/workspace t262-a, ended failed/build/no created Flow at01:40:49.238Z, launchexit1.63provider calls/total .079036554/build .078897432 vs .10. Persistent draft retained, not replay-ready; full six-stage debug completed, supervisor verified exact63turn sequence. Both live runs exited, source freeze released for fixes.
 - Persistent B run run-mut5amuc-c617cc21, instance t262-slot-3/workspace t262-b, ended failed/no created Flow at01:36:20.598Z, launcherexit1.51calls/total .074950068/build incl read+judges .074802696 vs .10; split first judges, final draft test unreproducible. Draft ID retained but not replay-ready. Worker observed duplicate cart effects from repeated build tests; no repeat/unrepeat amendment used. Full six-stage debug complete and51turn sequence verified, no relaunch.
@@ -22,9 +24,9 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 
 - New guarded runs ended preprovider failed: A4 run-mut7h5k2-26c8252d/root64080 and B3 run-mut7hh6c-901800c5/worker43963 onf9afcb12/Core80116d0e. New creation project identity persisted then failed; zero provider calls/spend, noFlow. New readiness poll after completed pairing could not match extension project. Full six-stage debug and supervisor screenshot/ending review complete; no retry queued.
 
-- Confirmed zero-call setup cause: new readiness gate assumes browser session.projectId reflects selected chat, but panel actually sends shown thread projectId; HTTP selected context has no session/thread notification. Existing relay already supports explicit project override. Scoped UI/Lab target, authorized before-Send readiness, activity/question filtering and draft parking now implemented; independent98app/22Labtests,7post-barrel tests,types and both audits passed. Core judge-copy paging51tests/typecheck passed; raw accounting unchanged. Fresh Core/extension/domain/Lab builds complete. Next provider-free headed scope proof, then guarded paid creation; all source frozen, no recording/reset/reconnect/forcedcapability workaround. Full A4/B3six-stage debug complete.
+- Confirmed zero-call setup cause: new readiness gate assumes browser session.projectId reflects selected chat, but panel actually sends shown thread projectId; HTTP selected context has no session/thread notification. Existing relay already supports explicit project override. Scoped UI/Lab target, authorized before-Send readiness, activity/question filtering and draft parking now implemented; independent98app/22Labtests,7post-barrel tests,types and both audits passed. Core judge-copy paging51tests/typecheck passed; raw accounting unchanged. Fresh Core/extension/domain/Lab builds passed before A5/B4. Provider-free scope proof and both paid endings complete; current bounded repair source under implementation, no recording/reset/reconnect/forcedcapability workaround. Full A4/B3six-stage debug complete.
 
-- Provider-free interactive63612/run interactive-mut8j4z6-fe0ec156 ended exit0, actual scoped Chrome side-panel proof PASS after ordinary Settings replaced stale endpoint/preserved trusted pairing. Ready/usable empty project and0conversations/0Flows independently observed; no message/provider operation requested. Full ending in reports/provider-free-chat-scope.md. Source408ec3da/Core5c893a98 frozen; slots2/3 persistent data retained. A5/B4nowendedfailed47calls/.05805762 and67calls/.092695098 total; no acceptedFlow. Full six-stage debug and supervisor ending review complete; bounded source investigation released, no retry. Local checkpoints not merged/pushed dev.
+- Provider-free interactive63612/run interactive-mut8j4z6-fe0ec156 ended exit0, actual scoped Chrome side-panel proof PASS after ordinary Settings replaced stale endpoint/preserved trusted pairing. Ready/usable empty project and0conversations/0Flows independently observed; no message/provider operation requested. Full ending in reports/provider-free-chat-scope.md. A5/B4ran source408ec3da/Core5c893a98; slots2/3 persistent data retained. A5/B4nowendedfailed47calls/.05805762 and67calls/.092695098 total; no acceptedFlow. Full six-stage debug and supervisor ending review complete; bounded source investigation released, no retry. Local checkpoints not merged/pushed dev.
 
 - Latest A5/B4normalchat/newproject setup passed; flowbuilding failed: A5retainedboundclicknode whenrepairrequestedtyping, B4search/targetrepairspentremainingbuildpurse. Rootending/screenshot checks complete; checked action identity, known parser-field location loss and retained-binding rerun feedback are the current bounded investigations; exact new source regressions pending. No Pro/budgetraise/retry/keyremove.
 
@@ -38,6 +40,38 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 6. Continue the next B/C/D functional blocker from the verified inventory. Record pending work explicitly; preserve the paused standalone UI review unless a live-loop defect requires a focused UI fix.
 
 ## Worker Briefs
+
+### Brief: shared-screening-export-order (resume-ab; readonly)
+- Read Current State/own usage report; actual service regression pinned TypeError service1572/notes0 after sharedclassifier move and helperextraction. Retained worker owns service/buildJudge/activity callee diagnosis; do not read/edit those owners here.
+- Read only runtime/loop-limits/index.ts, movedsecret-named-key.ts, recovery/repair-context/{secret-named-key,index,parameter-screen}.ts and your failed-decision helperbarrels/imports; max8owners. Trace shared classifier introduction of return imports/static values and initialization ordering, no guessed import reorder workaround.
+- Own reports/shared-screening-export-order.md, report exact potential cycle/public export authority and minimal dependency-safe correction if confirmed; no source/test/build/provider/runtime/data/env/key/guard/shared-doc/commit mutation.
+- No failure claim from mere graph; service worker provides exactmissingcallee. Preserve classifier singleimplementation/compatibility, boundaryrules and all previous usage/field/proof behavior.
+
+
+### Brief: live-b-repair-preparation (resume-cd; no launch)
+- Read Current State, own completed B4 full debug/bound-target/parser reports and run-debug-template. All current source fixes require root final narrow union/types/audits/builds/frozen paired checkpoints before launch.
+- Own reports/live-b-repair.md Stage1 predeclaration only now: same public pickup task/scenario, persistent t262-b/slot3/instance t262-slot-3, fresh authorized independent project, actual mounted ready ordinary chat/composer, original data preserved.
+- Pin improvements to verify: no outerwrite unusable churn, resolved boundtarget fallback preservedruntimeinput/permission/frame, quantityactualwrite notarrival, lasting tests no duplicateadds, checked actionmetadata matches executabledefinition, truthful pricedfailed-callaccounting and .10test-only cap.
+- Plan full six-stage ending every provider/node/test/replay/timing/identity/hash/repair/judgement/oracles/screens; save exact unchangedFlow2provider-free reuses only after acceptedFlow and bothcreationlanesended. No unfinishedFlow replay.
+- Prepare exact existingcommand once; no environment/browser/process/build/provider/slot/key/data/guard/shareddoc/commit mutation until root explicit launch release. Current source/version fields pending, not invented.
+
+
+### Brief: b4-cost-accounting (resume-ab; readonly after identity freeze)
+- Read Current State/own identity report and B4 full debug cost discrepancy section. Preserve all active source worker owners; readonly investigation, no tests/build/provider/runtime/state/env/guard/commit/shared-doc edits.
+- Locate actual Lab phase-account/runSpend summary projection, central provider meta pricing and Core unusable provider usage accounting (max8 source owners initially); distinguish raw billed total from phase summary and active perBuild purse versus legacy declared metadata.
+- B4 raw total .092695098; phases build.0834753/chat.000173172/read.000178392 sum .083826864; difference .008868234. Seven unusable costs .009046626. Pin code behind discrepancy or state unproven; no arithmetic-adjusted fiction.
+- Own reports/b4-cost-accounting.md exact source owners/minimal regression plan, active ceiling behavior and potential truthful phase reporting correction. No source edit release until root reviews.
+
+
+### Brief: bound-target-resolution (resume-cd; after parser report freeze)
+- Read Current State/root bound-target-plan-resolution ledger, own B4 debug and downstream AGENTS. Work t262 downstream, Core readonly public binding contract. Root fail-first already authored owning resolve-plan-node.test.ts; exact B4 codes reproduced, source unchanged.
+- Own domain/src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts plus focused bound-target helper/barrel if required and nearest tests. Read output-nodes/targets/targets.ts, definitions.ts, plan-resolution/step-permission.ts, Core public nodes/parameter-bindings.ts and current Core plan resolution reader; no Core edits. Maximum8 initial source reads then request expansion.
+- Before source edit report exact runtime-valid preserved target/selector/element binding shape, fallback resolution, dynamic input authority, concrete fallback permission/control identity and frame semantics. No raw handle may persist; no static selector replacing input, no stale recorded identity overriding runtime target, no inventing performed proof, no widening permissions.
+- Handle only authoritative supported state-binding grammar, strict unknown/malformed/misplaced/stale/ambiguous/crossframe/wrong-control refusal remains. Avoid resolving arbitrary nested handles as accepted slots. Preserve derived frame authority and duplicate-slot agreement.
+- Root expectation target binding fallback {selector,element} is proposed valid existing adapted-target shape; verify owning dispatch contract before accepting. Do not attach fixed global element that vetoes supplied runtime target.
+- Meaningful tests resolution/no action, retained dynamic path/fallback nohandle, alternate runtime target, selector/element slots if supported, missing/stale/wrong-control/malformed/foreign nested ref, declared permission allowed/refused and frame semantics. Root fail-first expected output may change only with documented owner contract reason.
+- Narrow tests only in-memory Node hook then direct domain types after all Core owners freeze (root owns linked build). No whole suites/build/provider/browser/runtime/data/key/env/guard/commit/shared docs. Own reports/bound-target-resolution.md.
+
 
 ### Brief: checked-node-identity (resume-ab)
 - Read Current State and own completed A5 debug, Core AGENTS. Work in paired t262 Core. Supervisor reviewed normalized0060 typing check versus0069 click playback; stored public export remains unavailable, do not invent it.
@@ -642,6 +676,90 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 - Validation: prior independent ending/artifact review plus completed worker ledgers; worker claims are not source regression verification. Narrow fail-first tests and root integration remain required. No dev merge/push.
 
 ### Brief: bound-target-plan-resolution (supervisor investigation)
+- Validation: not validated at dispatch; source-only investigation, later fail-first and independent75PASS ledger entries record actual commands/results.
 - Own readonly downstream plan-resolution/resolve-plan-node and Core harness-options/plan-parameter-resolution plus authoring value/binding mapping investigation; no shared worker owner edits.
 - B4 final input target {$input,test:{handle}} normalizes into state binding. Domain currently resolves only top-level handle slot and rejects nested handle as misplaced. Prove actual representation/owner contract with a fail-first resolution fixture before implementation; no suppression of unresolved-handle/persistence/permission gates, no invented execution proof.
 - Determine runtime-valid preservation of dynamic target binding, fallback resolution, frame/element identity and permission semantics. Existing raw handle must never persist; do not simply remove binding or default to old selector. Record conclusion here/own report before release.
+
+### 2026-10-03 ? bound-target failure reproduced independently
+- Supervisor added owning domain resolve-plan-node test for a supported Flow input state binding whose fallback is an observed target handle. Actual result reproduces B4 exact web.handle.misplaced / expected.selector.handle_location / misplaced:target.0.1; no live action or provider call.
+- Required behavior: retain runtime input path, replace only concrete test fallback with runtime-valid adapted target/identity, preserve unresolved-handle/persistence/frame/control/permission checks. Do not replace the binding with a fixed selector or retain raw handles. Exact resolution owner design still under review; source unchanged.
+- Validation: t262-bound-target-failfirst in-memory Node test hook via heavy wrapper:1 expected failure/0 pass, exit1. Fixture contains authored public test controls only. Existing domain suite not repeated.
+
+### 2026-10-03 ? serial parser-feedback integration and source review
+- Reviewed checked-node source against strict parsed execution metadata, ordinary callRecord and canonical node writer. Worker18tests pass after4fail-first identity failures; root independent union/types pending all source freeze. Architecture now states action/tool metadata authority and retained original proof.
+- Integrated parser lane optional closed fieldIssues through evidence-loop import/refuseDecision/catch after retained-feedback lane froze its settlement edits. Seven B4 outer write errors now have schema-supported path correction; arbitrary private key/value reflection stays withheld. Worker67tests pass/1actual-loop pending; root must run both full owner files without the exclusion.
+- Downstream bound-target fail-first reproduces exact misplaced target.0.1; worker design review approved dispatch/normalizer/permission/frame reads before edits. Cost raw total already includes residual unattributed spend; phase heuristic and missing unusable usage feed under readonly source tracing, actual purse settles paid malformed output.
+- Validation: source review and integration only, no new successful test claim, no build/live release. Current task remains active; no dev push/accepted Flow/reuse.
+
+### Brief: unusable-decision-usage (resume-ab; serial after accounting report)
+- Validation: not validated at dispatch; source design then fail-first expected, worker72PASS and root pending integration recorded in later entries/report.
+- Full readonly accounting report first. Source shows active purse settles provider usage even when malformed JSON/schema output rejected, but unusable-decision error drops result.usage and loop catch only sees reply usage. Raw Lab total already includes residual; fix upstream usage reporting, not summary arithmetic.
+- Own Core runtime/llm/unusable-decision.ts and evidence-loop.ts import/catch/refusal accounting only, plus nearest tests/unusable-decision.test.ts. Parser fieldIssues source frozen and root integrated; retained lane evidence-loop settlement frozen, do not overwrite either.
+- Add fail-first actual harness/factory?loop accounting test for priced unexpected-field rejected decision; count its paid usage exactly once despite no host call. Preserve fieldIssues, unreadable reply accounting fallback, stalled/end paths, permissions/current no-progress and actual purse.
+- Send exact typed result.usage?error.usage?catch design before source edit. No synthetic unreadable reply account, no raw messages/prompt/private key reflection, no defaultbudget/cap change. Scope retains ordinary .25 independent vs Lab .10 test scope.
+- Narrow owner tests and report actual failures/passes; root union/types later allfreeze. No build/fullsuite/provider/runtime/state mutation. Own reports/b4-cost-accounting.md append implementation when released.
+
+### 2026-10-03 ? B4 accounting cause and bound-target design release
+- Accounting source trace: actual purse settles parsed paid usage before malformed output refusal, independent from lower Core reporting aggregate. Unusable error loses result.usage when no unreadable reply exists; seven .009046626 paid calls omitted upstream. Lab rawtotal truth retained under unattributed residual; phase split heuristic misclassified read membership. Narrow upstream usage fixture/design release above, no arithmetic patch.
+- Boundtarget design checked existing Core normalizer/downstream dispatch. Exact target statebinding retains adapted target fallback {selector,element}; dynamic supplied input wins. Resolve concrete fallback for permission/control/frame authority separately; no fixed global identity. Existing duplicate slot agreement remains; agreeingresolvedstaticreferences must not freeze runtimeboundtarget, mismatches refused. Worker implementation released with narrow tests/permission fixture; selector/element boundhandle authority not expanded.
+- Validation: root exact boundtarget fail-first already reproduced; source design review only. Root independent integrated tests/types/audits still pending; no next live launch.
+
+### 2026-10-03 ? review follow-ups while narrow fixes run
+- Root caught retained-path metadata losing restated-container authority when stripping node.parameters; worker added direct misplaced maxPages/nested correction regression in addition to historical extractList.maxPages case. Untouched outer call fields stay excluded. Current-attempt feedback fixtures retain actual proposable-step/same-state authority rather than relaxing production guards.
+- Usage serial fix released with existing numeric screening helper optional partial-account mode; normal helper callers retain outputTokens requirement, rejected parsed replies may carry truthful cost-only known usage without invented counts. Existing25-file tests owner kept below800 instead of baseline increase.
+- Validation: source reviews and worker fail-first findings only; root final union/types/audits/frozen runtime builds and changed-source live still pending.
+
+### 2026-10-03 ? bound-target implementation reviewed
+- Worker implemented target-only exact state grammar with observed fallback resolution, separate concrete permission identity, duplicate-slot agreement and frame conflict validation. Root reviewed actual diff against approved adapted-target/permission contract; dynamic target remains bound with no global stale identity, unsupported arbitrary nested handles not accepted.
+- Worker focused checks75passed across4owner/dispatch files after5fail-first/1pass. Root independent rerun/types still pending all Core owners freeze. Authored build-loop architecture updated; no live acceptance inferred.
+- Validation: source review plus worker claim only at this stage; no build/provider launch.
+
+### 2026-10-03 ? independent bound-target validation and usage review
+- Supervisor reran exact4domain owner/dispatch files via trailing-slash-normalized in-memory Node22 hook/heavy b1:75dots/exit0 observed. This independently verifies target fallback/input preservation, actual Core normalization/alternate target, duplicate-slot/frame refusals and real permission naming; browser behavior still pending.
+- Reviewed usage diff: optional numeric screening partial mode defaults preserve old output-count requirement, error fourth argument retains compatibility and immutable numeric account, catch prefers explicitusage thenreplyfallback once before disposition split, trace includes same chosen usage. Worker72owner tests pass; root combined Core checks pending retained-feedback probe restoration/finalfreeze.
+- Validation: independent downstream75PASS; source review only for Core usage/identity/parser; no broad fullsuite, build/provider live release yet.
+
+### 2026-10-03 ? downstream audit corrected and passed
+- Initial structure audit failed only two root brief headings placed in Work Ledger without Validation bullets. Added honest dispatch not-validated markers and regenerated owning working index.
+- Validation: supervisor structure-audit passed165warnings/118baseline, exit0; no source exemption/baseline change. Exact independent domain75passed already recorded.
+
+### 2026-10-03 ? supervisor combined checks and bounded corrections
+- Core12-file union17745 exited1:183PASS/1FAIL of184. Sole failure used nonexistent priorExecution.performed field; actual original proof is effectApplied:true+lasting:true. Worker correcting assertion only; no production relaxation. Actual parser-feedback/model forwarding/service denied-note cases passed independently.
+- Domain direct source typecheck failed TS2345 on indexed identity argument possibly undefined. Supervisor widened private comparator input type and explicitly refuses undefined comparisons; corrected direct tsc --noEmit exited0. Owner tests rerun pending this edit.
+- Core audit35916 failed2new violations: loop806lines and llm?recovery secret helper importcycle. Released AB cohesive failed-decision usage selector extraction via childdirectory/barrels, and retained-feedback worker shared original secret helper/test move to loop-limits with recovery compatibility reexport. No duplicated regex, baseline increase or source gate bypass.
+- Validation: exact failed outcomes and subsequent domaintypePASS observed; Core union/audit reruns pending coordinated source freeze. No builds/live release/dev push.
+
+### 2026-10-03 ? post-type owner rerun and final source freeze coordination
+- Supervisor changed private identity comparator to accept indexed possibly undefined input and reject undefined explicitly; direct domaintsc passed. Reran changed resolution owner via same normalized in-memory hook/heavy:21dots/exit0 observed. Previous independent4-owner75PASS remains, and this new owner result validates the subsequent edit.
+- Retained feedback source/tests now frozen after actual-loop proof expectation correction,20helper/screening/parameter owner passes and21rerun owner passes claimed. Shared classifier now lives loop-limits with old recovery compatibility reexport; root independent aggregate/extra classifier/screen tests pending. AB cohesive failed-decision delivery extraction is last source gate before final union/types/audit/build.
+- Validation: independent domain21PASS and directtypesPASS; no new Core success claim yet. Next liveB Stage1 authored by worker before any future artifact; no launch release.
+
+### 2026-10-03 ? second integration gates and exact follow-ups
+- Final14-owner Coreunion22131 ended199PASS/1FAIL of200. Corrected priorExecution case passed; service model fixture now stopped pre_provider_validation_failed rather than its declared scripted transport ending. Worker investigating exact underlying code/stage before any expectation change; do not mask by accepting both categories.
+- Core typecheck99432 failed: new feedback helper imported nonexported evidence type; new parser test context omitted three required schema/completion fields and explicitly passed undefined optional fieldIssues twice. Released exactexisting context-window type import and valid typedfixture/conditionalspread corrections, no productiontypeweakening.
+- Coreaudit65443 only3newdepth failures from childfailed-decision folder10segments. Move cohesive folder to llm feature root9segments, synchronizebarrels/imports/removeoldfolder; root earlier release overlooked depth and corrected placement. No baselineincrease.
+- Validation: independent failures observed, allsessionsclosed before sourceeditrelease. Retained screening/helper cycle now removed; final source/types/tests/audit/build/live gates still pending.
+
+### 2026-10-03 ? remaining service boundary diagnostic pinned
+- AB source extraction/type fixtures now frozen: failed-decision helpers at llm feature root,798coordinator lines, exact context-window type and real decision-schema fixture builders; worker72PASS again. Root final types/audit still pending service probe restoration.
+- Actual service fixture standalone reproduces pre_provider_validation_failed with closed issueCodes thrown.TypeError/thrown.at:runtime.service.ts:1572, notesSeen0. This is an actual runtime boundary failure before provider feedback, not permission/secret evidence to waive. Worker approved exact buildJudge.roundStarted/activity observer/loop callee typeof and bounded export/import reads; no import-order workaround or weakened expectation. Temporary diagnostic-only fixture line will be restored before final root gates.
+- Validation: narrow standalone failure inspected; no new acceptedFlow/build/live release. Next safe action is fix exact undefined/invalid boundary, revalidate qualified service/model note forwarding, then root types/audits and necessary fresh linked runtime builds.
+
+### 2026-10-03 ? exact service regression cause and cycle-free release
+- Worker safe callee probe confirmed buildJudge.roundStarted and observer are functions but llmbarrel runAutomationStudioLlmEvidenceLoop is undefined. Export/init graph tied new helper?full llmbarrel?mainloop return import; classifier leaf itself import-free. Probes restored, expected ending remains unchanged.
+- Released three source owner correction: usage selector takes already narrowed typed error via type-only dependency; coordinator retains enabled/instance guard; feedback delivery receives authoritative existing toolId constant from coordinator. No duplicated constant, fixture import-order workaround, export shuffle, permission/accounting changes.
+- Validation: exact TypeError/callee/graph source evidence only;72owner plus actual service1fixture must verify causal recovery, then root complete narrow integration gates. No runtimebuild/live release yet.
+
+### Supervisor final Core repair gates (2026-10-03)
+
+- Confirmed changed action metadata uses validated host declaration; paid unusable usage is selected once, with existing purse authority unchanged; extracted feedback helpers no longer runtime-import the full llm barrel.
+- Independently observed 200/200 tests across14 owners, fluxiq package typecheck and Core structure audit PASS. This includes the actual service/model-facing retained-path fixture. Worker72 and causal1 corroborated, not substituted for supervisor verification.
+- Fresh affected Core build/reference generation followed by linked downstream checks/builds underway. No provider/browser operation or paid retry while gates pending.
+- Validation: root sessions87908/72932 exited0; audit exited0. Full suites not repeated; source frozen.
+
+### Paired repair checkpoint readiness (2026-10-03)
+
+- Root observed Core200 tests/types/audit and fresh affected runtime build/reference generation PASS; downstream domain source/test check PASS after explicit fixture non-null assertion, focused four-file Node owner tests exit0, structure audit PASS, fresh domain/host/extension/Lab runtime builds PASS. Full sweeps not repeated.
+- A6 and B5 Stage1 written before future artifacts, same public tasks/Flash/Lab .10, fresh authorized projects on preserved persistent workspaces. Expected checked action metadata, grammar guidance, retained safe binding feedback, dynamic target authority and truthful paid usage pinned.
+- Validation: final checks observed by supervisor, all validation sessions closed; source frozen. Paired local checkpoints prepared; dev merge/push withheld pending actual functional acceptance.
