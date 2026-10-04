@@ -4,7 +4,7 @@ import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKEN
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_DEFAULT_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_SCOPE_ENV, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation-studio";
 import { liveLlmBuildCostCeilingUsd } from "../build-cost-ceiling.js";
 import type { PersistedFlowLlmExecution } from "../../flow-lane/index.js";
 import { planLiveLlmExecution, type LiveLlmPurpose } from "../live-llm-plan.js";
@@ -182,11 +182,11 @@ test("the build's ceiling is Core's resolved value, and the Lab contract's bound
   const nowhere = await mkdtemp(path.join(os.tmpdir(), "fluxiq-plan-ceiling-"));
   t.after(() => rm(nowhere, { recursive: true, force: true }));
   // Given the environment Core loaded with, the Lab resolves Core's own value.
-  assert.equal(liveLlmBuildCostCeilingUsd(nowhere, [], process.env), AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD);
+  assert.equal(liveLlmBuildCostCeilingUsd(nowhere, [], process.env), resolveAutomationStudioLlmRunCostCeilingUsd({ ...process.env, [AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_SCOPE_ENV]: "test" }));
   // Through Core's own resolver: its default when nothing is set, the same
   // number for a set value, and the same refusal for an unusable one.
-  assert.equal(liveLlmBuildCostCeilingUsd(nowhere, [], {}), AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_DEFAULT_USD);
-  assert.equal(liveLlmBuildCostCeilingUsd(nowhere, [], { [AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV]: "0.07" }), resolveAutomationStudioLlmRunCostCeilingUsd({ [AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV]: "0.07" }));
+  assert.equal(liveLlmBuildCostCeilingUsd(nowhere, [], {}), AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD);
+  assert.equal(liveLlmBuildCostCeilingUsd(nowhere, [], { [AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV]: "0.07" }), resolveAutomationStudioLlmRunCostCeilingUsd({ [AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_SCOPE_ENV]: "test", [AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV]: "0.07" }));
   assert.throws(() => liveLlmBuildCostCeilingUsd(nowhere, ["--llm-cost-ceiling-usd", "abc"], {}), /FLUXIQ_LLM_RUN_COST_CEILING_USD/u);
   // The contract package depends only on Core's public contracts, so it bounds
   // the typed option with a mirror of Core's largest configurable ceiling; a

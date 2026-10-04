@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { RunAllocation } from "./allocation.js";
-import { LAB_COST_CEILING_ENV, LAB_DEFAULT_MODEL_ENV, labCostCeilingValue, labDefaultModelValue } from "./live-llm/index.js";
+import { LAB_COST_CEILING_ENV, LAB_COST_CEILING_SCOPE_ENV, LAB_DEFAULT_MODEL_ENV, labCostCeilingValue, labDefaultModelValue } from "./live-llm/index.js";
 
 /**
  * Provider credentials belong to the test driver. Child processes receive an
@@ -84,8 +84,8 @@ export function webPanelHostModulePath(repositoryRoot: string): string {
  */
 export function buildFluxIQEnvironment(allocation: RunAllocation, paths: TopologyPaths, base: NodeJS.ProcessEnv = process.env, args: readonly string[] = process.argv): NodeJS.ProcessEnv {
   const hostModulePath = paths.hostModulePath ?? webPanelHostModulePath(paths.repositoryRoot);
-  // The per-build cost ceiling, from the run's flag, the environment or .env.local (`./live-llm/cost-ceiling-env.ts`);
-  // the Lab's plan reads the same sources (`liveLlmBuildCostCeilingUsd`), so Core and the Lab hold a build to one number.
+  // The Lab-only ceiling, configured by environment/env files and only lowered by a run flag.
+  // Explicit test scope applies it to this child; ordinary user UI defaults stay independent.
   const costCeiling = labCostCeilingValue(paths.repositoryRoot, args, base);
   // Core's default model, from the run's --llm-model only; refused here when Core would refuse it at start.
   const defaultModel = labDefaultModelValue(args);
@@ -93,7 +93,8 @@ export function buildFluxIQEnvironment(allocation: RunAllocation, paths: Topolog
   return {
     FLUXIQ_BUILD_PROGRESS_TRACE: "1",
     ...inherited,
-    ...(costCeiling === undefined ? {} : { [LAB_COST_CEILING_ENV]: costCeiling }),
+    [LAB_COST_CEILING_ENV]: costCeiling,
+    [LAB_COST_CEILING_SCOPE_ENV]: "test",
     ...(defaultModel === undefined ? {} : { [LAB_DEFAULT_MODEL_ENV]: defaultModel }),
     ...(paths.stepLogDirectory ? { FLUXIQ_LLM_STEP_LOG_DIR: paths.stepLogDirectory } : {}),
     PORT: String(allocation.webPort),

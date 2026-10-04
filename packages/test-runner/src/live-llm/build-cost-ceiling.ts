@@ -2,8 +2,8 @@
 // count: Core's per-build ceiling, `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default
 // $0.10, the user's rule; it was a fixed $0.25).
 //
-// The Lab passes that variable to every Core it starts from the run's
-// `--llm-cost-ceiling-usd` flag, its own environment, or `.env`/`.env.local`
+// The Lab passes that variable, with explicit test scope, to every Core it
+// starts from its own environment or `.env`/`.env.local`. A run flag only lowers it
 // (`./cost-ceiling-env.ts`). The Lab's plan, its post-run check and its spend
 // reports must hold a build to the very same number, so this reads the same
 // sources in the same order and resolves the value through Core's own
@@ -15,15 +15,14 @@
 // count.
 
 import { AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation-studio";
-import { labCostCeilingValue } from "./cost-ceiling-env.js";
+import { LAB_COST_CEILING_SCOPE_ENV, labCostCeilingValue } from "./cost-ceiling-env.js";
 
 /**
  * The per-build cost ceiling, in US dollars, that the Core started for this run
- * resolves: from `args`' `--llm-cost-ceiling-usd`, then `env`, then `.env` and
- * `.env.local` under `repositoryRoot`, else Core's default. Throws as Core does
- * on a value that is not a usable amount.
+ * resolves: env, then .env/.env.local, else $0.10. The run flag only lowers it.
+ * Core's ordinary user defaults are independent. Invalid or raised amounts fail.
  */
 export function liveLlmBuildCostCeilingUsd(repositoryRoot: string, args: readonly string[] = process.argv, env: NodeJS.ProcessEnv = process.env): number {
   const value = labCostCeilingValue(repositoryRoot, args, env);
-  return resolveAutomationStudioLlmRunCostCeilingUsd(value === undefined ? {} : { [AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV]: value });
+  return resolveAutomationStudioLlmRunCostCeilingUsd({ [LAB_COST_CEILING_SCOPE_ENV]: "test", [AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV]: value });
 }

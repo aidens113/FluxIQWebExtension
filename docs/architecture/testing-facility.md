@@ -2771,21 +2771,22 @@ repository does.
 
 #### The per-build cost ceiling
 
-The most one build, one recovery run or one re-author build may be estimated to
-spend is Core's run cost ceiling, `FLUXIQ_LLM_RUN_COST_CEILING_USD`, in US
-dollars: $0.10 when unset (the user's rule, 2026-10-01; it was a fixed $0.25).
-Core reads it once when it loads and refuses to start on a value that is not a
-positive amount of at most $10. It is the developer's and the Lab's knob, for
-trying a run under a different ceiling ("an easily configurable variable ...
-even for test purposes in the lab"); it is not the product's spending control,
-which is a separate user-facing setting.
+The Lab's build/recovery ceiling is `FLUXIQ_LLM_RUN_COST_CEILING_USD`, in US
+dollars: $0.10 when unset. The user clarified on 2026-10-03 that this is only
+a Testing Lab control. The Lab explicitly passes the resolved amount and
+`FLUXIQ_LLM_RUN_COST_CEILING_SCOPE=test` to its owned Core child. Core validates
+the amount before provider work. An ordinary user UI process ignores this
+test-only variable, even if its env file contains it; normal Flow defaults
+remain $0.25 and explicit user budgets remain effective within server bounds.
 
 The Lab passes it to every Core it starts
 (`packages/test-runner/src/live-llm/cost-ceiling-env.ts`, used by
-`buildFluxIQEnvironment`), taking the first it finds of: the run's
-`--llm-cost-ceiling-usd <usd>` flag, the Lab's own environment, then `.env` and
-`.env.local` in the checkout (a later file wins, as the provider key does).
-Set nowhere, nothing is passed and Core uses its default. `--llm-max-cost-usd`
+`buildFluxIQEnvironment`), taking the first it finds of the Lab's own
+environment, then `.env` and `.env.local` in the checkout (a later file wins).
+Set nowhere, the Lab passes $0.10 explicitly. `--llm-cost-ceiling-usd <usd>`
+may lower that configured amount; a higher value is refused before launching
+Core or resolving a provider key. Change the configuration variable itself
+to change the Lab ceiling. `--llm-max-cost-usd`
 remains the run's own limit and may only lower the ceiling; the Lab contract
 bounds it by Core's largest configurable ceiling, $10
 (`LLM_LAB_MAX_ESTIMATED_COST_USD`, pinned to
@@ -2794,9 +2795,9 @@ ceiling itself.
 
 The Lab's plan, its post-run check (each call's cost and each build's total)
 and its spend reports use the same value Core gets:
-`liveLlmBuildCostCeilingUsd(repositoryRoot)` reads the flag, the environment
-and the files in the same order and resolves the value through Core's own
-`resolveAutomationStudioLlmRunCostCeilingUsd`, so a value Core would refuse at
+`liveLlmBuildCostCeilingUsd(repositoryRoot)` reads the same configuration and
+lowering flag and resolves the value through Core's own
+`resolveAutomationStudioLlmRunCostCeilingUsd` with explicit test scope, so a value Core would refuse at
 start is refused by the Lab too. The Lab's tests derive every amount from that
 value (`live-llm/tests/lab-ceiling.ts`) rather than from a written number.
 
@@ -2836,8 +2837,9 @@ The live campaign always hands each run its `--llm-model` (default
 the same model Core would use unset.
 
 `deepseek-v4-pro` costs about four and a half times as much per token, so the
-same per-build ceiling buys fewer calls; raise it with `--llm-cost-ceiling-usd`
-when the comparison needs equal room.
+same per-build ceiling buys fewer calls. A comparison requiring more room
+must explicitly change `FLUXIQ_LLM_RUN_COST_CEILING_USD` in the Lab environment
+or checkout env file; `--llm-cost-ceiling-usd` can only lower that ceiling.
 
 ## Per-step logs and the central run folder
 
