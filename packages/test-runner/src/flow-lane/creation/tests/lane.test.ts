@@ -681,3 +681,21 @@ test("a settlement that throws still hands the lane the build it filled from the
   assert.deepEqual(chat.incomplete[0]?.build?.instructedConsequences, MURZLN6G_READ);
   assert.equal(chat.incomplete[0]?.instructedConsequencesFrom, "step_log");
 });
+
+test("created-lane snapshots preserve terminal evidence without copying Core's trace message", async () => {
+  const core = fakeCreationCore();
+  const original = core.control.automationStudioCall;
+  core.control.automationStudioCall = async (...args) => {
+    const payload = await original(...args);
+    if (args[0] !== "get-flow-run-detail") return payload;
+    const record = payload as { runDetail: Record<string, unknown> };
+    return { ...record, runDetail: { ...record.runDetail, metadata: { currentNodeId: "node.extract", terminalFailureReason: "Run failed after recovery was selected.", message: "private recorded page text" } } };
+  };
+  const { run } = await runLane(core);
+  const outcome = await run;
+  const snapshot = createdFlowLaneSnapshot(outcome) as ReturnType<typeof createdFlowLaneSnapshot> & { terminalEvidence?: unknown };
+  assert.equal(snapshot.status, "succeeded", "terminal evidence never overrides status or oracles");
+  assert.equal(snapshot.oracleVerdict, "passed");
+  assert.deepEqual(snapshot.terminalEvidence, { terminalFailureReason: "recovery.selected", currentNodeId: "node.extract", messagePresent: true });
+  assert.equal(JSON.stringify(snapshot).includes("private recorded page text"), false);
+});

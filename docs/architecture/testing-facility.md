@@ -3003,3 +3003,9 @@ the last read begun before the capture and the first begun after it). A
 picture without the overlay whose neighbouring samples say absent was taken
 before it appeared; one whose neighbours both say present and visible is a
 rendering defect.
+
+### Terminal Flow evidence after runtime cleanup
+
+Flow-lane snapshots optionally retain terminalEvidence beside the existing status, failure history and oracle result. It contains a closed category for recognized generic Core terminal reasons, a screened opaque current node ID, and a message-present flag. Core terminalFailureReason is free text, so unrecognized text is explicitly withheld and the raw trace message is never copied. Missing metadata remains absent or null. These fields explain an execution result without changing its verdict.
+
+A healed historical failed attempt does not mask the additive unvisited-action diagnostic: the diagnostic uses the node last-attempt recovery grouping, while a genuinely unresolved failure still excludes it. Core status and oracle facts remain independent. Use persistent-isolated when later diagnosis or saved-Flow reuse is required; disposable isolated cleanup removes its Core workspace after the run. A separate lab replay verifies unchanged content hash, no provider access and the task oracle.

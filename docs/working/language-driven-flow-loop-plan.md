@@ -15,14 +15,14 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 **Resumed 2026-10-03 by Codex; user requires continued MVP implementation, live testing and durable Claude handoff.** Active execution memory and worker briefs are in [MVP live continuation](./mvp-live-continuation-2026-10-03.md). The prior session snapshot is preserved in [archive](./language-driven-flow-loop-plan/archive/2026-10-03-pre-codex-resume-current-state.md); it is historical, including the Pro comparison and in-progress endings.
 
-**Integrated dev.** Downstream 88c58d82; Core f6ef9f48, both pushed. t261 separates the Lab-only env ceiling from ordinary UI defaults, refuses CLI budget raises and fixes wrong-page choice reorder advice. Source/provider-free validation passed 582 affected tests and touched checks/audits; actual live cost savings remain unmeasured.
+**Integrated dev.** Downstream 88c58d82; Core f6ef9f48, both pushed. t261 separates the Lab-only env ceiling from ordinary UI defaults, refuses CLI budget raises and fixes wrong-page choice reorder advice. Source/provider-free validation passed 582 affected tests and touched checks/audits; t262 first live build measured .040120068 under the Lab .10 ceiling, with actual terminal-status qualification still open.
 
 **Active unit.** Paired task t262-mvp-live-continuation under fxwork/t262. Isolated Lab-owned panel/browser testing is authorized by the user's resumed request. Claude's dirty A-D trees are preserved; reviewed source units are ported into t262 without whole-tree copying. Process inventory found no active Node/Chrome/Edge/Firefox Lab processes. Existing guards/markers/profiles remain intact.
 
 | Lane | Latest reconciled ending | Current action |
 | --- | --- | --- |
-| A t174 | run-musuq910-0e2ae903 failed/no Flow; 41 calls, $0.048319884 total, $0.048180762 build against .10 | [New authored debug](./language-driven-flow-loop-plan/debugs/run-musuq910-0e2ae903.md): false cart act on Spain, no retained Add-to-cart, checked rerun did not press, judges split. Integrating paired toggle/stale-mark/handle fixes with additional cancellation safety, and advisory act-claim feedback before a fresh run. |
-| B t193 | run-mustzxhi-2e2cda87 failed/no Flow, 40 calls | Lead report lagged run2. Full source inventory in continuation resume-ab report; debug missing, not eligible for blind retry. |
+| A resumed t262 | run-mut4fvkm-e2fc03e6 created Flow,4/4oracle held,30calls/.04025919 total/.040120068 build; Corestatusfailed | [New run debug](./language-driven-flow-loop-plan/debugs/run-mut4fvkm-e2fc03e6.md): healed coupon busy fault supplied to terminal gate; actual terminal cause unproven. Fix historical failure selection, retain terminal evidence, next persistent build then saved-Flow replay. |
+| B t193 | run-mustzxhi-2e2cda87 failed/no Flow,40calls/.049652802 | [Run2 debug](./language-driven-flow-loop-plan/debugs/run-mustzxhi-2e2cda87.md):27/38decisions ineffective amendments; quantity row-repeat cannot be directly cleared. Explicit unrepeat/contextual feedback prepared in t262; owning151tests worker pass, supervisor union pending. |
 | C t194 | run-mustvzvg-99695308 failed/no Flow, $0.053622012 | Paging-bound placement fix prepared; detected one-page bound hidden from model. t262 exposes numeric bound/explicit nested override and honest page-limit feedback; preserves existing bounded default. |
 | D t195 | run-musr9pv3-f4bf6256 failed/unfinished | w50 route enforcement exists in source despite stale w49 report; completed integration/validation not proven. Row-scoped checks, repeat repairs and route work need serial reconciliation. |
 
@@ -41,7 +41,7 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 **Next, in order.**
 1. Finish t262 reviewed units and regressions; Core source freezes before rebuilding exports, then downstream checks/builds. Document every finding and exact validation as it occurs.
-2. One capped Flash lane-A run; inspect final draft/test/judgements, screenshots, playback and all four oracle facts. Log all calls, repairs, tests, phase spend and elapsed time.
+2. Next changed-source Flash A run at.10 on persistent-isolated named t262-a, then no-provider lab replay saved Flow; source freeze/checks precede run. Inspect final draft/test/judgements, complete terminal metadata, screenshots,4facts, unchanged content hash and phase spend.
 3. Debug any failure, repair its cause and rerun only changed source. After creation/playback succeeds, preserve the actual Flow and prove deterministic reuse and repair/persistence where reachable.
 4. Reconcile B/C/D blockers serially by source ownership. Keep standalone t224 UI review paused; fix live-loop UI defects when required.
 

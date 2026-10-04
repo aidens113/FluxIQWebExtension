@@ -14,12 +14,12 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 - Work active: user authorized continued MVP implementation, isolated/persistent Lab panel/browser operation and durable Claude handoff. Paired task t262; original Claude trees and user state preserved.
 - Source checkpoints downstream326ad350/Core9f756676. Integrated paired toggle/stale-mark/unique-handle fixes, advisory false-act feedback and exposed paging limits.511 focused tests, touched package checks, Core build and both audits passed before run1. No full suites repeated (two today already).
 - First real-chat headed run run-mut4fvkm-e2fc03e6 finished01:13:04.486Z. Flow created, first whole test/two judges yes, actual playback all4cart facts held.30calls:26explore,1read,2judge,1chat; total .04025919/build .040120068 vs .10; runtime0model calls. Central/evaluation oracle passed; launcherexit1/Corestatusfailed. This is not clean acceptance.
-- Reproduced contradiction: coupon busy/unacted press failed then succeeded retry_node250ms; no remaining action failure/early stop/refutation; Core status stillfailed, Lab code flow_lane.every_failure_recovered, gate refusal llm.gate.known_recovery. Root generic status investigation assigned, source not yet released. Full run debug authored.
+- Reproduced contradiction: coupon busy/unacted press failed then succeeded retry_node250ms; no remaining action failure/early stop/refutation; Core status stillfailed, Lab code flow_lane.every_failure_recovered, gate refusal llm.gate.known_recovery. Historical recovery selector fixed and independently tested; actual terminal graph cause still unproven. Full run debug authored.
 - First target was disposable isolated: owning cleanup removed Core workspace, preventing later reuse. Evidence survives; no separate reuse claim. Next changed-source build MUST use persistent-isolated named t262-a workspace, then lab replay same saved Flow with no provider and unchanged content hash.
 - Slot2 remains reserved for t262 laneA/instance t262-slot-2; run1 processes exited. .10 applies Lab only, normal UI independent; Flash, realchat, headed Chromium134.0.6998.35, no overrides/Pro escalation.
 - B run2 now debugged: .04965/40calls,27amendments out of38decisions, mistaken quantity row-repeat,2/6coverage and no cart actions. Worker owns explicit unrepeat repair seam/contextual advice, preserving keep+act intentional loops and strict quantity-fault.
 - C paging evidence/default feedback fixed provider-free; live13record acceptance unmeasured. D minimal29file named-route partition ready with known safety gaps; unintegrated, not certified. Do not wholesale-copy dirty lanes.
-- Next: fix/reproduce final-status defect and B unrepeat; freeze/check/build/audit, new persistent A .10 run, then zero-model same-Flow replay. Debug any failed run before retry; continue B/C/D functional acceptance/repair/reuse. Paused t224 standalone UI review remains separate.
+- Sources frozen: B unrepeat, Core unresolved-failure selector and screened Lab terminal evidence. Supervisor Core467tests plus Lab86tests, touched types and fresh Core/domain builds passed. Next audit/checkpoint and new persistent A .10, then zero-model same-Flow replay. Debug any failed run before retry; continue B/C/D functional acceptance/repair/reuse. Paused t224 standalone UI review remains separate.
 
 ## Execution Steps
 
@@ -36,7 +36,7 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 - Repository: t262 downstream; Core conversion source read-only reference.
 - Task: Preserve screened terminal Core metadata in Lab snapshots so every_failure_recovered can be debugged after owning cleanup. Correct additive unvisited counting for recovered historical failures without altering status/verdict/oracles.
 - Required reads: Current State/newAdebug, Core runtime/service/summaries/conversions.ts terminal fields, persisted-flow-run.ts stopWithoutFailedAttempt and existing recoveredByNode.
-- Owns: packages/test-runner/src/flow-lane/{terminal-evidence.ts(new),index.ts,persisted-flow-run.ts,run-flow-lane.ts,creation/snapshot.ts,tests/terminal-evidence.test.ts(new),tests/persisted-flow-run.test.ts,tests/run-flow-lane.test.ts,creation/tests/lane.test.ts}; own report only.
+- Owns: packages/test-runner/src/flow-lane/{terminal-evidence.ts(new),stopped-without-failed-attempt.ts(new),index.ts,persisted-flow-run.ts,run-flow-lane.ts,creation/snapshot.ts,tests/terminal-evidence.test.ts(new),tests/persisted-flow-run.test.ts,tests/run-flow-lane.test.ts,creation/tests/lane.test.ts}; own report only.
 - Must not touch: Core/sourceothers/shared docs/env/old trees/runtime; no provider/panel/commits.
 - Done: optional terminal evidence carries closed/allowlisted terminalFailureReason, opaque currentNodeId, messagePresent boolean only (NO raw free-text trace message). Unknown reason explicitly withheld/unrecognized, never echoed; missing metadata remains absent/null. Recovered-aware unvisited diagnosis uses last attempts, ignores healed fault only, keeps genuine unrecoveredfailure semantics. Existing failedstatus unchanged. Fail-first run1-shaped tests and focused owners pass, source frozen.
 - Report: docs/working/mvp-live-continuation-2026-10-03/reports/terminal-run-evidence.md. Include next persistent-isolated t262-a command and no-provider replay command without secrets; first disposableFlow cannot be reused.
@@ -198,3 +198,30 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 - Persistence limitation: first command used disposable isolated target, whose owning cleanup deleted its Core workspace. Saved definition evidence remains in authoredNodes, but later same-workspace reuse is impossible for this run. Next live build must use persistent-isolated with named t262 workspace and later lab replay; no same-Flow reuse claim for run1.
 
 - Repeat-brief path corrected: quantity regressions are in existing instructed-acts/tests/object-binding.test.ts, released instead of nonexistent quantity-fault.test.ts.
+
+### 2026-10-03 - Supervisor second source union
+- Agent: supervisor.
+- Validation: Core named20file union467tests passed, package check32.239seconds and build34.913seconds exit0. docs reference regenerated3080public declarations, Core audit passed240warnings349baselined. Domain check27.735seconds/extensioncheck34.684seconds passed against fresh Core. Core checkpoint42434f42.
+- Outcome: B explicit unrepeat and recovered-failure selection verified provider-free; actual oldAterminal cause remains open. Downstream terminal diagnostic source/tests still in progress, no new live launch.
+- Follow-up: final Lab source freeze/checks/build/audit; persistentA at.10 then no-model sameFlow replay/private terminal trace diagnosis.
+
+- Terminal evidence extra file release: flow-lane/stopped-without-failed-attempt.ts extracts the existing coherent stop diagnostic from persisted-flow-run.ts803lines; no baseline increase or status override. Worker86owner tests reported pass before this extraction; supervisor checks after freeze.
+
+### 2026-10-03 - Terminal evidence independently verified
+- Agent: supervisor.
+- Changed: screened terminal reason/opaque node/message-present projection; healed-aware unvisited diagnosis, focused helper extraction783lines. Architecture facility updated.
+- Validation: TestRunner check exit0(14.691seconds), owning domain build exit0(9.611seconds). Supervisor node --test four absolute final .mjs owners from packages/test-runner cwd passed86/86 exit0. First supervisor attempt from repository cwd concurrently with domain clean produced3 module-load/test failures(31/34); rerun after domain rebuild with package cwd passed86. No product failure inferred from that setup error. Core467tests, all touched types/builds previously passed.
+- Outcome: frozen candidate ready for structure audit/checkpoint then persistent live run; no change to actual status/verdict/oracles.
+- Follow-up: one new persistentA run targetpersistent-isolated/workspacet262-a with.10; retainFlow and separately replay provider-free.
+
+### 2026-10-03 - Terminal module structure correction
+- Agent: supervisor.
+- Validation: node scripts/structure-audit.mjs failed directory-files:flow-lane27source files exceeds25. Grouped two coherent terminal diagnostic modules in terminal/ with barrel and moved focused test beside owner, preserving other tests. Fresh esbuild current-source bundles plus node --test fourowners86/86 passed, exit0. No baseline increase or logic change.
+- Outcome: source structure corrected; narrow runner typecheck/audit pending rerun.
+- Follow-up: pass gates,checkpoint, persistentliveA; no paid launch while gates pending.
+
+### 2026-10-03 - Persistent live launch gates passed
+- Agent: supervisor.
+- Validation: relocated runnercheck exit0(11.720seconds), domainbuildstamp reused; structureaudit passed165warnings118baselined; fresh current-source terminal bundles86/86pass. Process inventory empty Node/Chrome/Edge/Firefox; exclusive slot2owner still t262/t262-slot-2. Corecheckpoint42434f42/buildcurrent.
+- Outcome: paired runtime source frozen, all narrow gates passed; next live command persistent-isolated/workspacet262-a, Flash/.10 realchat. Exact command/replay in terminal-run-evidence report. No override, no freshsourcewrites during live.
+- Follow-up: supervise run2, retainworkspace/Flow/trace; inspect all4facts/terminalreason/provider accounting, then exactFlow replay.

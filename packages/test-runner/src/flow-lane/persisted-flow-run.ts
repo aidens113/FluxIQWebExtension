@@ -10,6 +10,7 @@ import { runActionStatus } from "../run-manifest/index.js";
 import { isResultCheckIntervention, readHarnessRecovery, type HarnessRecoveryControl } from "./harness-recovery.js";
 import { LAB_PROJECT_DOMAIN_ID } from "./lab-project-domain.js";
 import { recoveredByNode } from "./node-recovery.js";
+import { terminalRunEvidenceOf, stopWithoutFailedAttempt } from "./terminal/index.js";
 import { onSkipRoute, skippedAttemptOf, stateRoutedOf, type PersistedFlowActionSkip, type PersistedStateRouted } from "./skipped-attempt.js";
 import { stateRoutingAttemptOf, type PersistedStateRouting } from "./state-routing-attempt.js";
 import { readRunDatasets, runDatasetSummaries, type FlowRunDataset, type RunDatasetSummary } from "./run-datasets.js";
@@ -326,12 +327,14 @@ export type PersistedFlowRunOutcome = {
   /** Which route the run's Router took and each rule's reason; `null` for a run no Router decided. */
   route: FlowRunRoute | null;
   /**
-   * Set only when Core failed the run, every attempt succeeded, and at least one
+   * Set only when Core failed the run, each attempted node ended well, and at least one
    * of the Flow's action nodes was never attempted: the run stopped early rather
    * than failing an action. Absent otherwise, and absent when no action map was
    * given, because then the Flow's action nodes are unknown.
    */
   stoppedWithoutFailedAttempt?: FlowStopWithoutFailedAttempt;
+  /** Closed terminal categories, opaque node id and trace-message presence; never Core's free text. */
+  terminalEvidence?: NonNullable<ReturnType<typeof terminalRunEvidenceOf>>;
   /**
    * What Core had still not written about this run when the wait for it ran
    * out, or absent when everything the wait asked for arrived.
@@ -538,6 +541,7 @@ function outcomeFromDetail(
   const recoveredFailures = actions.flatMap((action, index) => (action.failure !== null && recovered[index] === true ? [action.failure] : []));
   const status = runStatus(detail.summaryStatus ?? sessionStatus);
   const stop = stopWithoutFailedAttempt(status, actions, new Set(detail.attemptNodeIds), actionTypes);
+  const terminalEvidence = terminalRunEvidenceOf(detail.runDetail);
   // The attempts are in Core's `order`, so the first one on a node the recording's order names is where the run started.
   const startNodeId = detail.attemptNodeIds.find((nodeId) => candidateOrder?.has(nodeId) === true);
   const startCandidateIndex = startNodeId === undefined ? undefined : candidateOrder?.get(startNodeId);
@@ -555,6 +559,7 @@ function outcomeFromDetail(
     extractionDurationsByNode: detail.durationsByNode,
     route: readFlowRunRoute(detail.runDetail),
     ...(stop ? { stoppedWithoutFailedAttempt: stop } : {}),
+    ...(terminalEvidence ? { terminalEvidence } : {}),
     ...(startCandidateIndex === undefined ? {} : { startCandidateIndex }),
     ...stateRoutedOf(actions),
     ...(unsettled === undefined ? {} : { unsettled }),
@@ -570,25 +575,6 @@ function outcomeFromDetail(
 function liveRunSettlement(execution: PersistedFlowLlmExecution | undefined): Pick<PersistedFlowTerminalWait, "awaitVerdict" | "awaitRecovery"> {
   if (!execution) return {};
   return { awaitVerdict: true, awaitRecovery: execution.intent !== "verify_result" };
-}
-
-/**
- * `FlowStopWithoutFailedAttempt` for a failed run whose every attempt
- * succeeded, over the action nodes `actionTypes` names. An attempt in any other
- * status, `cancelled` or `unknown` included, is not a clean stop, so this
- * claims nothing for it.
- */
-function stopWithoutFailedAttempt(
-  status: PersistedFlowRunOutcome["status"],
-  actions: readonly PersistedFlowAction[],
-  attemptedNodeIds: ReadonlySet<string>,
-  actionTypes: ReadonlyMap<string, string> | undefined,
-): FlowStopWithoutFailedAttempt | undefined {
-  if (status !== "failed" || !actionTypes?.size || !actions.every((action) => action.status === "succeeded" || action.status === "skipped")) return undefined;
-  const actionNodeIds = [...actionTypes.keys()];
-  const attemptedActions = actionNodeIds.filter((nodeId) => attemptedNodeIds.has(nodeId)).length;
-  const unvisitedActions = actionNodeIds.length - attemptedActions;
-  return unvisitedActions > 0 ? { attemptedActions, unvisitedActions } : undefined;
 }
 
 async function readRunDetail(

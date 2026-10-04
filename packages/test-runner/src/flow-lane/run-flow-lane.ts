@@ -429,6 +429,7 @@ export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
     recording: { recordingId: evidence.recording.recordingId, entryCount: evidence.recording.entryCount, secondWait: { entriesAppendedAfterFirstPoll: evidence.recording.entriesAppendedWhileWaiting, waitMs: evidence.recording.waitedMs, polls: evidence.recording.polls } },
     proposalId: evidence.proposal.proposalId, mapperId: evidence.proposal.mapperId, candidateCount: evidence.proposal.candidateCount, proposalIssues: [...evidence.proposal.issues],
     flowId: evidence.flowId, runtimeRunId: evidence.run.runId, status: evidence.run.status,
+    terminalEvidence: evidence.run.terminalEvidence ?? null,
     // The failure that decided the run, and beside it every fault the ladder
     // absorbed -- so a recovered miss is readable as recovered rather than
     // disappearing from the record along with the run's headline.
