@@ -1,6 +1,6 @@
 # A8/B7 focused quality retry: predeclared Stage 1
 
-Status: Planned; not launched. Authored before any future artifacts.
+Status: Released for exactly one creation per lane; not yet launched. Authored before any future artifacts.
 Owner: Codex senior supervisor. Task: paired t262.
 
 ## Current State
@@ -9,8 +9,8 @@ A7/B6 complete six-stage debugs independently reviewed as failed builds. All
 priced questions, actual execution modes/effects/timing, current judge packets,
 public empty definitions, final native screenshots and stopped sessions were
 verified. Changed source is reviewed and narrowly tested; fresh runtime bundles,
-final audits and paired checkpoints remain required before exactly one next
-launch per lane. Exact current checkpoint hashes are recorded before launch.
+final audits and paired checkpoints have passed before exactly one next
+launch per lane. Exact gated current checkpoints are downstream476b52d77f68211a0698478feb7e3bf2ec38e630 and Core0ecdec167fde37051c10ecb90e6e7dc3e206503f, both task/t262-mvp-live-continuation. Main dev doc-only pointerb6768b7f introduces no source difference.
 
 ## Why changed source merits a measured retry
 

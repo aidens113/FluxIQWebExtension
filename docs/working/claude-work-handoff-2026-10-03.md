@@ -1,7 +1,7 @@
 # Claude work handoff and testing plan
 
 Status: Complete
-Status detail: Read-only handoff and ordered implementation/live-testing plan recorded; execution is not started and paused UI work remains paused.
+Status detail: Historical intake handoff complete; MVP implementation/live testing active in paired t262; standalone UI work remains paused.
 Created: 2026-10-03
 Last updated: 2026-10-03
 Owner: Codex senior supervisor
@@ -11,9 +11,7 @@ Related: [working index](./README.md), [live loop](./language-driven-flow-loop-p
 
 ## Current State
 
-**Active continuation:** paired t262 current source frozen and independently validated:532 distinct Core tests/25owners,15 actual domain runtime tests,69compiled Lab tests/6owners, touched types/audits and fresh linked builds pass. Prior paid source9ff18e28/115f67e9; final paired checkpoints next. A6/B5 full six-stage debugs independently verified, both failed acceptance below Lab.10. Scoped before-send48call admission/actual failure counts, PRESENT metadata and transient-only reauthor retry are implemented. A7/B6 Stage1 prepared, same Flash/.10/48; live release follows checkpoints. C4 public fixture setup needs no newexport but actual regression/implementation remains pending. Key-preserving provider-free reuse needs explicit all-role provider admission; old replay helper deletes keys and cannot be invoked unchanged. [MVP continuation](./mvp-live-continuation-2026-10-03.md) owns authoritative Current State, exact file briefs, every failed/passing gate, archives and next acceptance work. No t262 devpush or MVP/reuse completion claim; intake audit below is historical.
-
-- Subsequent execution is active in paired task t262. This document is the historical intake audit; [MVP live continuation](./mvp-live-continuation-2026-10-03.md) owns current source checkpoints, full run debugs, implementation briefs, exact validation and Claude resume order. Both latest live lanes failed under Lab .10 and their documented causes are being corrected; no MVP completion/reuse claim.
+**Active continuation:** [MVP live continuation](./mvp-live-continuation-2026-10-03.md) owns authoritative Current State, written file partitions, exact validation, full ending debugs and Claude resume order. Paired source checkpoints downstream476b52d7/Core0ecdec16. A8 initial creation/runtime accepted at45priced/$0.056566776, four exact DOM facts and saved10nodegraph; two unchanged provider-disabled reuses passed with explicit zero calls/interventions, stored key preserved and complete graph/router/subflow unchanged. B7 failed45priced/$0.060199992/no executablegraph; current binding affordance fix and actual saved-row repair regression are next. All runtime sessions stopped; source editing resumes under written briefs. Flash/Lab .10/48 unchanged; normal UI defaults independent. C paging/row repair, D route protection, $step/P5 and broader MVP remain incomplete. Main dev documentation pointerb6768b7f pushed; t262 product checkpoints local/unmerged/unpushed. Intake audit below is historical.
 
 - User requested reading all working documents, reconstructing Claude's work, and listing the plan including live testing. This handoff is complete; the implementation phases below are recommendations for subsequent work.
 - Intake downstream dev was clean at `8836e281`, Core dev at `6beae684`; both matched their local origin/dev refs (no network refresh). This documentation unit is task t260.
