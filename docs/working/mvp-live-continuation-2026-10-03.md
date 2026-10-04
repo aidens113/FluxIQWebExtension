@@ -1,7 +1,7 @@
 # MVP live continuation and Claude handoff
 
 Status: Active
-Status detail: Chat scope and C judge-copy fixes passed independent owner tests/types/audits; runtime builds underway before provider-free headed scope proof and any paid retry.
+Status detail: Provider-free headed scoped-chat proof passed/ended cleanly; preparing one guarded A/B creation each on frozen verified source.
 Created: 2026-10-03
 Last updated: 2026-10-03
 Owner: Codex senior supervisor
@@ -24,6 +24,8 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 
 - Confirmed zero-call setup cause: new readiness gate assumes browser session.projectId reflects selected chat, but panel actually sends shown thread projectId; HTTP selected context has no session/thread notification. Existing relay already supports explicit project override. Scoped UI/Lab target, authorized before-Send readiness, activity/question filtering and draft parking now implemented; independent98app/22Labtests,7post-barrel tests,types and both audits passed. Core judge-copy paging51tests/typecheck passed; raw accounting unchanged. Fresh Core/extension/domain/Lab builds complete. Next provider-free headed scope proof, then guarded paid creation; all source frozen, no recording/reset/reconnect/forcedcapability workaround. Full A4/B3six-stage debug complete.
 
+- Provider-free interactive63612/run interactive-mut8j4z6-fe0ec156 ended exit0, actual scoped Chrome side-panel proof PASS after ordinary Settings replaced stale endpoint/preserved trusted pairing. Ready/usable empty project and0conversations/0Flows independently observed; no message/provider operation requested. Full ending in reports/provider-free-chat-scope.md. Source408ec3da/Core5c893a98 frozen; slots2/3 persistent data retained. Next A5/B4 guarded one-run releases, no automatic retry. Local checkpoints not merged/pushed dev.
+
 ## Execution Steps
 
 1. Inventory newest A/B and C/D reports, dirty source/test changes, last run endings and integration overlaps. Reconcile partial fixes; do not blindly copy whole trees.
@@ -34,6 +36,23 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 6. Continue the next B/C/D functional blocker from the verified inventory. Record pending work explicitly; preserve the paused standalone UI review unless a live-loop defect requires a focused UI fix.
 
 ## Worker Briefs
+
+### Brief: full-debug-a-scoped-chat (resume-ab; evidence read-only)
+- Read Current State, own scoped-view report, latest A4debug, root reports/live-a-scoped-chat.md Stage1 predeclared and full run-debug-template. Source408ec3da/Core5c893a98 frozen after provider-free scope proof endedexit0/pass; root owns one upcoming A5 launcher. No source/build/tests/provider/browser/workspace/key/env/guard/slot/commit/shared-doc mutation.
+- Own reports/full-debug-a-scoped-chat.md and named new A5 fullsixstage debug only after runID. Root owns A launcher/session; never poll its process or start/stop runtime. Root provides runID/ending.
+- Preserve Stage1 predeclaration; everyordered chat/read/judge/explore/repair model row, allnode/test/replay modes/timing/private refs, finalexecutabledefinition/coverage/tests/judges/repair/oracle/terminal status/creation-context projectFlowhash and phase+totalcost/screenshots/no-evidence gaps. No rawpage/prompt/selectorvalues/tokens/credentials authored. Public originaltask permitted.
+- Cart act distinct executable step, requested options/quantity/coupon, no purchase, all4authoredfacts and actual successful wholeFlow/judges/ending required; candidate/prior proof notperformed, lasting buildtests do not duplicate. Failed draft not reusable; acceptedFlow replay separate rootcoordinated afterallcreationends.
+- Complete full6stages onPASSorFAIL, no automaticretry/override/modelescalation/keyremove/replay. Safe updates only, worker report notverifieduntilrootindependentrows/cost/screenshot/ending.
+
+
+### Brief: live-b-scoped-chat (resume-cd; prepare only until release)
+- Read Current State, own B3 debug and project-chat-lab-driver report, run-debug-template. Source downstream408ec3da/Core5c893a98 frozen; root owns provider-free interactive63612 now. No source/build/tests/browser/provider/workspace/key/env/guard/slot/commit/shared-doc mutation.
+- Own reports/live-b-scoped-chat.md Stage1 BEFORE any new paid artifact; prepare exact B4 public task/expected chain/all6stage evidence requirements/source gates/launch-4.log command from prior live-b-arrival brief, but corrected actual mounted chat scope, not getStatusproject. Preserve slot3/t262-b profile/data. No launch yet.
+- Expected B requested pickup store, two correct towel packs and one correct napkin pack, preserve original cart, no checkout; actual wholeFlow/judges/terminal status plus remembered-store playback. Quantity increments use declared-arrival proof; cart buildtests verify-only/candidate-notperformed, no duplicate cart side effects. Actual NEWrun-owned project and final saved Flow/hash captured.
+- Flash lab-create-flow unchanged legacy token/call controls, .10 process+explicit Lab ceiling, ordinary UI independent. No capability force/directAPI/override/Pro/reset/automaticretry. Root confirms provider-free scope proof ended/pass before paidrelease.
+- After explicit root source checkpoint/release ONLY one guarded headed normalextensionchat B launch; own launcher ending and full6stage debug onPASSorFAIL, everyordered provider turn and node/test/replay mode/time, screenshots/oracle/finaldefinition/judges/repair/cost/identity. Preserve allartifacts, do not remove credentials/replay while creationlanesactive.
+- Accepted reusable Flow permits separate root-coordinated exactproject/Flow/hash provider-free two unchanged reuses. Failed draft ID is not acceptance. Sourcefreezeabsolute duringlive; safe statusupdates only. Root independently verifies workerclaims.
+
 
 ### Brief: c-judge-paging-evidence (resume-live-prep; Core implementation)
 - Read Current State and own next-c-live-readiness proposed unit1; Core AGENTS applies. A4/B3 stopped, no live source freeze active. This release is ONLY generic read-account projection, independent from downstream project/chat changes.
@@ -562,3 +581,9 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 - Validation: extension package build exit0/22.181s, all Chrome/Firefox/e2e targets verified; runner package build exit0/22.401s after linked domain build21.861s. Core docs reference regenerated3083declarations. Prior independent owner tests/types and both audits passed; git diff --check exit0. All source workers complete/frozen, no live process active.
 - Outcome: local coherent source checkpoint ready; not merged or pushed dev, actual browser proof still pending. Source remains frozen through upcoming provider-free/paid live lanes.
 - Follow-up: use predeclared provider-free-chat-scope report and exact retained A4 project; no message/Send/provider operation.
+
+### 2026-10-03 - Provider-free actual chat scope verified
+- Agent: supervisor.
+- Validation: interactive63612 endedexit0; scoped action after ordinary endpoint Settings correction returned actual matching project/ready/usable composer. Native owning Chrome134sidepanel screenshot privately inspected empty Project chat/no old work. Authenticated public reads0conversations/0Flows; no model/task/Flow operation requested. Interactive mode lacks a billing ledger; no fabricated spend figures. Full six-stage provider-free report saved.
+- Outcome: shared scope blocker browser-verified; source frozen for one guarded A5/B4 creation each, old data preserved. Not overall MVP acceptance or dev push.
+- Follow-up: predeclared A5/B4 Stage1 + full6stage debugs, exact provider/node/judge/oracle/cost and accepted savedFlow provider-free reuse.
