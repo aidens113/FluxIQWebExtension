@@ -337,6 +337,7 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "page_moved_since_packet",
   "handle_no_longer_on_page",
   "handle_names_several_now",
+  "target_ambiguous",
   "handle_in_wrong_parameter",
   "handle_in_another_frame",
   "handle_wrong_kind_of_control",

@@ -1,7 +1,7 @@
 # MVP live continuation and Claude handoff
 
 Status: Active
-Status detail: Changed source independently validated; paired checkpoint and A7/B6 live release next. A6/B5 fully debugged; no accepted runtime/reuse yet.
+Status detail: A7/B6 independently debugged failures; focused quality fixes/types/runtime builds/audits verified. A8/B7 predeclared, checkpoint pending; no accepted live reuse.
 Created: 2026-10-03
 Last updated: 2026-10-03
 Owner: Codex senior supervisor
@@ -15,36 +15,180 @@ This section is authoritative; briefs define file ownership, and the ledger/arch
 
 **Scope.** Continue MVP implementation, actual extension-chat live testing and complete Claude handoff. Paired task t262 lives under C:/Users/osrs_/FluxStuff/fxwork/t262/ on task/t262-mvp-live-continuation in both repositories. Supervisor integrates/commits/pushes. Claude's dirty t174/t193/t194/t195 and paused t224 remain preserved. MVP acceptance is incomplete.
 
-**Source and final narrow gates.** Last paid source was downstream9ff18e28/Core115f67e9; documentation checkpoints39686bf6/4b34571b. Current changed source is frozen and fully validated, paired local checkpoints next. Supervisor independently verified532 distinct Core tests across25 owners, Core package types, both structure audits,15 actual domain runtime owner tests and69 compiled Lab tests across6 owners. Core/runtime references and fresh domain/host/Chrome-Firefox-e2e extension/Lab builds and domain/Lab types passed. The first concurrent extension build was unstamped while domain outputs changed; stable rerun passed/stamped. Core service genuinely shrank4401 to4400; baseline lowered, never raised. Two full sweeps already October3; no more full suites. Prior pushed dev downstream88c58d82/Coref6ef9f48; t262 not merged/pushed while functional acceptance is unresolved.
+**Source and final narrow gates.** Last validated local checkpoints downstream2ef458a1/Coree8c89bbd; last paid source was downstream9ff18e28/Core115f67e9. Supervisor independently verified532 distinct Core tests across25 owners, Core package types, both structure audits,15 actual domain runtime owner tests and69 compiled Lab tests across6 owners. Core/runtime references and fresh domain/host/Chrome-Firefox-e2e extension/Lab builds and domain/Lab types passed. The first concurrent extension build was unstamped while domain outputs changed; stable rerun passed/stamped. Core service genuinely shrank4401 to4400; baseline lowered, never raised. Two full sweeps already October3; no more full suites. Prior pushed dev downstream88c58d82/Coref6ef9f48; t262 not merged/pushed while functional acceptance is unresolved.
 
 **Budget contract.** Lab-only env ceiling is $0.10, with explicit test scope in owned children. Ordinary UI defaults/explicit user policies remain independent. Resolved Lab plan48 now reaches Core before startup/new-chat Send, through call-limit-env.ts and optional topology buildCallLimit. One purse admits logical reader/decision/repair/judge questions before sending, reserves judges and prevents concurrent oversend. Internal HTTP retries are one question; explicit unsent releases a slot. Calls/dollars have separate refusals/endings. No stronger model, budget/call raise, guard override, token/output cap, ranking/truncation or key removal.
 
 **Implemented this unit.** Scoped logical-call admission; additive actual failure totalProviderCallCount separate from loop decisions/legacy unknown aggregate; typed calls-refused judge wording and actual settled delta preserving paid usage/first yes; cohesive generation-catch classification/count decorator; accepted missing/withdrawn PRESENT retains resolved current ranWith without acting/borrowing old proof; automatic reauthor retry only canonical transient request failures, keeping public retryability/remaining purse/attempt append. Corrected cost-only fixture types and narrow owning-barrel cycle. All meaningful failures and exact checks are in reports/ledger.
 
-**Latest live evidence.** Both A6/B5 paid launchers and both public inspection sessions are stopped. Slots2/3 remain t262 A/B, persistent workspaces t262-a/b preserved; slots1/4 unchanged.
+**Latest live evidence.** A7/B6 paid launchers and public inspection sessions are stopped. Slots2/3 remain t262 A/B, persistent workspaces t262-a/b preserved; slots1/4 unchanged. New source is uncommitted on the paired task, with bounded owners below; the paid runs used the last validated paired checkpoints. No new paid retry is released.
 
 | Lane | Actual ending | Verified evidence | Still missing |
 | --- | --- | --- | --- |
 | A6 run-mutacf69-8ee50096 | Failed69priced/$0.092008164 | Complete six-stage debug independently matched69questions/77attempts/cost; Core budget/full-run refusal; public parent0nodes/0subflows. | Whole-test success, judges, exact4oracles, executable topology/runtime/reuse. |
 | B5 run-mutac2q6-fc6b0875 | Core proposed61priced/$0.076020432; Lab48call gate failed | Complete six-stage debug independently matched61questions/81attempts/cost;4judges no/no then yes/yes; public16nodegraph persisted. | Exact cart runtime oracles, accepted terminal/hash and reuse. |
+| A7 run-mutcb2ic-b3682a77 | Failed43priced/$0.050186646; no progress after2repairs | Root exit1; actual42build/35decisions,6judges; public0nodes/0subflows. | Accepted build/runtime/oracles/reuse. |
+| B6 run-mutcbgbx-812e88c5 | Failed47priced/$0.067162080; call allowance bounded | Worker exit1/root CLI stopped; actual46build/45decisions/no judges; public0nodes/0subflows. | Accepted build/runtime/oracles/reuse. |
 
 A project60fef7a2-3da3-47fd-8cd3-a3c1fda59fc2/Flowflow.e7824998-e347-463c-922f-10dcb4b430df is unfinished. B project1fdd196f-e558-4d44-92e9-dd4584b79e74/Flowflow.6abd10d8-76d2-49f4-92c8-8cf31f68da0b has draft topology. Historical accepted hashes remain null; later public hashes prove storage only. Never replay unfinished Flow.
 
 **Quality causes.** A's reproduced metadata omission is fixed; repeated cart search was model navigation misuse, no broad host heuristic justified. B final judges received byte-identical current test/endView packets; root independently confirmed their hash/test ran/14steps/endView. Authored declarations match saved arrays; no host omission reproduced. VERIFIED ability/checklist/two yes judges cannot replace exact runtime cart oracles. No permission or lasting-effect gate relaxation.
 
-**Active owners.** resume-ab prepared B6 Stage1, awaits explicit frozen paired checkpoint/one-launch release; owns B report/full debug only. resume-cd completed readonly C4 public fixture setup: existing APIs suffice; actual combined test is unimplemented. resume-live-prep completed readonly key-preserving reuse analysis: old replay helper deletes keys, and deterministic recovery mode alone can still permit an end-result judge; explicit all-role admission remains a compatibility dependency. Neither is authorized to edit or run runtime while source is frozen. Supervisor owns A7 launch and integration.
+**Active owners.** All source/test workers frozen. Root independently verified223Core tests/15owners (constructor6/C4 144/deadline53/guidance19/public disabled execution1),29web/2owners,20domain/3owners and24Lab/4owners. Core/web/domain/Lab types passed; fresh Core public outputs and3088public reference declarations regenerated. Source review and actual adapter positive/refusals independently observed. Runtime bundles/final audits/checkpoints now underway before next paid A8/B7 release. resume-live-prep D grounded waypoint contract report complete readonly; D source not yet integrated.
+
+**Supervisor integration.** Replay disables constructor wiring before spawn, preserves every stored key identity and requires explicit known zero accounting. Verification timeout now preserves actual completed paid intervention and refuses synthetic zero/replay certification for unsettled checks, independently53tests. Actual public FluxIQ disabled constructor saved native run independently verifies no network/key release, retained nonempty encrypted key/session and explicit terminal zero. Actual domain six cases verify scheduled repair/reset/order and missing-provenance/binding/permission/lasting refusal without unauthorized mutation. These are scripted fixtures, not accepted A/B/browser/row-repeat/reuse proof. Current changes are uncommitted; source freeze holds for final runtime gates and live runs. Normal UI budgets/default-enabled admission independent. No paid retry/model/cap/guard override/key deletion/merge/push released yet.
 
 **Next, in order.**
 
-1. Save paired coherent local checkpoints with these docs, regenerate indexes and keep runtime source immutable.
-2. Transition to live validation; release exactly one A7 and B6 changed-source actual-chat run with same Flash/$0.10/48. Stage1 is already written in reports/live-call-admission-retry-stage-1.md and B worker report; no new artifacts read yet.
-3. On every ending stop through owning lifecycle, observe exit and complete all six debug stages. Independently inspect worker results; no repeat on unchanged failing source.
+1. A7/B6 ended within limits; complete all six debug stages and independently review every priced question/test/cost/failure. No repeat on unchanged failing source.
+2. Public captures completed: A7 emptyparent hash22562c995cb5602e97c5601e87739952a0bd2b409590e79c9d00e663f242bfe4; B6 emptyparent hash11bc3638e54bcce9041470fa9feaa37c159e858c2afc3badc0ecfdba2e6d4fc3. Both0subflows/0graphs; no unfinished replay. Inspection strictstop acknowledgments observed, launcher62315/93943 exit1, both server and fixture ports independently stopped; unexpected exit recorded without falsely claiming0.
+3. A7 current/original proof is truthful; actual child guidance exists, conservative decomposition has no shipping child and full parent task retains origin. No required host bug found; no nonexistent child example/auto-remapping/blind retry. B6 ambiguity now has distinct truthful model-facing reason, independently14tests pass. Finish actual C4 negatives, observed disabled runtime zero and verification-deadline paid/pending preservation before full narrow linked gates/checkpoints and next justified live release.
 4. Only accepted usable Flow can proceed to exact runtime/oracle/persistence checks and two unchanged provider-free reuses after both creation lanes stop. First settle explicit provider-disabled execution that preserves stored keys; never invoke the older key-removing replay helper.
-5. Continue C4 actual saved-service/real-adapter scheduled-candidate regression and implementation, C exact13orderedrecords/52fields/allpages, D grounded ordered waypoint/step route work and remaining MVP bindings. C5 is implemented/verified; C4/D/$step/P5 remain pending. Standalone t224 UI remains paused.
+5. C4 scheduled-candidate positive is implemented and independently verified; finish actual negatives/row-mapping coverage, then continue C exact13orderedrecords/52fields/allpages, D grounded ordered waypoint/step route work and remaining MVP bindings. C5 is implemented/verified; C4/D/$step/P5 remain pending. Standalone t224 UI remains paused.
 
 **Evidence.** [A6 debug](./language-driven-flow-loop-plan/debugs/run-mutacf69-8ee50096.md), [B5 debug](./language-driven-flow-loop-plan/debugs/run-mutac2q6-fc6b0875.md), [call admission](./mvp-live-continuation-2026-10-03/reports/core-lab-call-admission.md), [C5 retry](./mvp-live-continuation-2026-10-03/reports/c5-local-transient-retry.md), [A metadata](./mvp-live-continuation-2026-10-03/reports/a6-present-runnable-metadata.md), [B causality](./mvp-live-continuation-2026-10-03/reports/b5-judge-consequence-causality.md), [C4 fixture](./mvp-live-continuation-2026-10-03/reports/c4-carried-candidate-fixture-preflight.md), [Stage1](./mvp-live-continuation-2026-10-03/reports/live-call-admission-retry-stage-1.md). Full older memory is preserved in [archive](./mvp-live-continuation-2026-10-03/archive/2026-10-03-through-a6-b5.md). Raw prompts/page data/selectors/credentials/browser state remain ignored.
 
 ## Worker Briefs
+
+### Brief: d-grounded-waypoint-contract (resume-live-prep)
+
+- Read Current State and reports/next-d-safe-route-design.md, next-d-route-integration.md. Own reports/d-grounded-waypoint-contract.md only. All source readonly; no tests/build/types/audit/provider/live/state/key/shared docs/git.
+- Design the missing generic ordered waypoint?actual draft step provenance relation before D implementation. Old global URL scan/fail-open unknown reader/blanket companion withholding must not be ported. Existing declared runsNodes.arrival identifies starts only, not intermediate obligations.
+- Initial five current Core owners: flow-bootstrap/plan/contracts.ts relevant context types, flow-draft/step.ts provenance/claims, flow-draft/act-claim.ts exact claim semantics, action-permissions/instructed.ts reader contract, llm/decision-handlers/amendment.ts applied edits/refusal structure. Discover exact presence via rg first; ask bounded expansion if needed.
+- Required design: grounded ordered user quote/digest/IDs; explicit model intentions separate from actual performed/current checked proof; configuration/retarget invalidation; strict named/open/unavailable classification; selective related edits while unrelated detours remain editable. No browser/URL keywords in Core, no inferred performed waypoint from model claim, no relaxed permission/lasting gates.
+- Name smallest executable file partitions and fail-first fixtures proving intermediate drop, failed/ungrounded reader, selective companion edits, explicit open shortening and unchanged lazy zero-call path. Shared instruction reader/purse remains one call; no new paid loop/cap changes.
+- Report exact existing seams versus genuinely new API/contract necessity and downstream evidence ownership. This is design, not source completion or D live acceptance. Root approves source separately after current integration checkpoints.
+
+### Brief: provider-disabled-public-run-regression (resume-ab)
+
+- Read Current State and reports/{provider-admission-construction,provider-disabled-public-accounting}.md. Own Core framework/tests/model-provider-disabled-run.test.ts (new nearest owner), focused same-tests support if necessary and downstream report provider-disabled-public-run-regression.md only.
+- Inspect four initial owners: existing framework/tests/model-provider-admission.test.ts, global programs/_shared/runtime.ts relevant false wiring, actual public framework creation/service access, existing native-runtime/service test helper discovered by rg. Request exact additional helper if setup requires; no broad reads.
+- Prove actual ordinary saved Flow/native action through public FluxIQ construction false and original AutomationStudio service. Underlying fake transport dispatch observer/key-release spies installed BEFORE construction; stored keys/service/auth lifecycle preserved. Assert explicit terminal public detail zero provider calls/pending/tokens, no provider dispatch/key release and no fabricated model judge acceptance. Use authored temporary test storage only, fake provider transport never paid network.
+- No internal service replacement, mocked service that never executes, custom zero metadata, direct durable-store rewrite or bypassed output/schema/permission. Actual accepted A/B/browser reuse is separate; this fixture proves generic disabled host execution only.
+- Source is test-only; constructor/source production untouched. Named exact test through heavy wrapper, no builds/types/audits/whole suites/live/provider credential/state/key/shared docs/git. Existing C4 Core source outputs frozen; deadline tests own other files.
+- Return actual executed boundary/measurement and honest gaps or exact setup blocker; freeze source for root independent type/test review. No definitive zero inferred from absent usage or enabled configuration.
+
+### Brief: verification-deadline-accounting-fix (resume-live-prep)
+
+- Root independently reproduced47owning tests45PASS/2meaningfulFAIL, four assertions: dispatched pending call falsely publishes ZERO_GATE/records replay; completed paid first intervention lost when confirmation stalls. Production release justified.
+- Own exact Core result-verification/{run-outcome,verify,zero-provider-run}.ts, narrowly cohesive private observation helper/barrel if necessary, already owned nearest tests/support, and report verification-deadline-accounting-fix.md. Generic provider-retry/call.ts and harness/run.ts bounded readonly authority review first; request exact source addition if actual dispatch hook needed. No service/framework/C4/downstream/shared docs/git changes.
+- Capture current verification lifetime before bounded task; retain each genuinely completed paid intervention before next check, preserve it across timeout/abort/throw. Prevent fallback from certifying zero or qualifying replay when invocation is pending/unknown/attempted. Completed authoritative noModel/no-dispatch branch remains usable; missing historical accounting stays unknown.
+- Prefer smallest truthful closed settlement, including unknown where totals cannot be measured. No fabricated zero/paid totals, configuration-derived receipt, count of askOnce/harness as network dispatch or verification-local counter mislabeled whole-run total. Real dispatch/pending observer if needed must use actual provider authority/provenance without replacing provider identity or retry/budget semantics.
+- Keep actual paid first usage, status/policy/check schedule/key storage/permission/whole-Flow judgment unchanged. Unsent preflight does not invent requests. Freeze late observer tasks on terminal snapshot; late completion cannot rewrite public run/replay qualification.
+- Meaningful owner regressions: pending first, paid first/pending second, no-provider positive, unsent preflight, zero/no paid fabricated, late writes; narrow named owners only through heavy wrapper. No package types/build/audit/full/live/browser/user key/state actions. Root owns integration and actual public execution/postfix against fresh outputs.
+- Return exact source/provenance schema, observed tests and source-freeze. Request extra producer/support owner before reading/editing if necessary. Remaining runtime-wide total gaps reported honestly.
+
+### Brief: verification-deadline-accounting-regression (resume-live-prep)
+
+- Read Current State and own provider-disabled-public-accounting report. Root authorizes regression tests only first, then separate justified production release. Own report verification-deadline-accounting-regression.md.
+- Own Core result-verification/tests/{run-outcome,zero-provider-run}.test.ts and exact owning run-outcome-harness.ts support if needed. Initially readonly production run-outcome.ts/verify.ts/zero-provider-run.ts and actual provider-retry/call.ts boundary/provenance. No framework/service/gateway/C4/downstream fixture/shared docs/git changes.
+- Reproduce bounded check dispatch then pending at deadline and paid first check then pending confirmation. Real owning orchestration/caller/provider boundary must execute with fake transport, no paid network. Assert public saved detail cannot claim definitive zero/calls0/pending0/askedNoModel after attempted call, and settled first call evidence persists. Don't fabricate gate/provider receipts or count harness entries as requests.
+- Meaningful fail-first before production; distinguish fixture/runtime setup failures. Also definite no-provider/no-dispatch completed branch remains zero, unsent refusal doesn't invent call. Preserve policy/status/schedule/key/storage/permission/late-task write safeguards; actual model budget unchanged.
+- Only exact named owner Vitest through heavy wrapper; no types/build/audit/full suite/live/browser/provider credential/state/key/shared docs/git. Existing authored fake test stores are permitted. Ask exact supporting owner expansion if needed.
+- Freeze/report observed actual failure and smallest cohesive measurement partition. Root separately releases production fix and independently verifies final tests/types/public behavior. Default-enabled deadline hazard is separate from disabled noModel branch.
+
+### Brief: c4-real-adapter-negative-fixtures (resume-cd)
+
+- Read Current State and own C4 reports. Root independently observed combined positive actual-service regression1/1PASS against fresh public Core build; Core144 owner tests/types and both audits passed. Source constructor/web fixture type correction is root-owned, no overlap.
+- Own ONLY downstream domain/src/runtime/tests/carried-service-repair.test.ts plus narrowly cohesive support under same tests owner if necessary and report c4-real-adapter-negative-fixtures.md. No Core production/tests/shared docs/git.
+- Add actual public-service/domain-adapter cases for missing declaration or captured start refusal, unresolved binding and permission denial without unauthorized action, lasting verification without mutation/historical proof. Prefer fixture parameters/public save APIs; no private Core imports, fabricated performed/state evidence, blanket optionality or assertion weakening.
+- Existing combined positive remains unchanged semantically. Claims must distinguish attempted rejected output from actual mutation. Copy/edit correspondence already Core owner tested; don't forge public shape to fake private authority. New row-mapping case only if clean actual adapter repeat setup fits; otherwise document pending.
+- Named single esbuild bundle plus Node owner through heavy wrapper against already fresh public Core dist; no package types/build/audit/whole tests/paid/browser/state/key/commits. Keep directory budgets; support remains in owning tests. Preserve authored temporary fixture data only.
+- Return independently reviewable observed coverage/limitations, exact tests/failures, frozen source. Root package gates wait your freeze; no acceptance/reuse/browser claim from scripted fixture.
+
+### Brief: a7-authoring-guidance-gap (resume-ab)
+
+- Read Current State and reports/a7-retargeted-effect-causality.md. Own reports/a7-authoring-guidance-gap.md only; readonly source, no tests/build/provider/live/shared docs/git/state/key operations.
+- Determine whether actual authoring instructions explain selecting a specific child act instead of claiming its lasting parent clause, and distinguish retargeted current unperformed verification from original performed proof. A7 shipping choice claimed parent lasting add-to-cart act; retargeted cart stayed unperformed and judges correctly refused.
+- Initial exact Core owners: llm/stages/instructions.ts, flow-draft/act-claim.ts, flow-draft/entry.ts, llm/draft-amendment-feedback.ts and actual instruction producer that incorporates those sections (locate via rg). At most five reads; request exact expansion if needed.
+- Return existing precise guidance or smallest generic instruction/example gap with a meaningful regression plan. Do not claim missing guidance merely because model ignored it. No browser-specific heuristics, act-ID auto-remapping, permission/lasting relaxation, fabricated performed proof, cap/model raise or suggested blind retry.
+- This is diagnosis for a justified next A quality change; source release separately by root. No new paid A retry solely because unrelated C4/ambiguity changed.
+
+### Brief: provider-disabled-public-accounting (resume-live-prep)
+
+- Read Current State and own constructor report. Own reports/provider-disabled-public-accounting.md only; source readonly, no shared docs/git/runtime/live/provider/state/key actions.
+- Settle whether an ordinary deterministic run under disabled public constructor publishes explicit providerCallCount=0 or complete zero model accounting, as the new Lab strict replay requires. Missing metadata must remain unknown, never synthesize zero from absence.
+- Initial readonly owners: framework constructor, programs/_shared/runtime.ts, actual AutomationStudioService run detail producer (discover exact section), downstream existing-fluxiq-control run detail parser, saved-flow-replay/provider/free-accounting.ts. At most five files; request exact extra producer if necessary.
+- Report public call chain and smallest compatible measurement seam if explicit zero unavailable. Do not implement a service change, bypass standing judgement or fabricate a run. Construction tests alone are not execution proof. Root owns any actual runtime regression/source release.
+- Return exact owner paths and authoritative public shapes, honest gaps; no broad types/build/audit/full tests while C4 source mutable.
+
+### Brief: c4-scheduled-carried-candidate (resume-cd)
+
+- Read Current State/own C4 fixture reports and Core boundary/code structure instructions. Root independently reproduced actual-service fixture missing reset/full_run_required after valid checked replacement. Core source release now; framework admission owner frozen, root package gates defer until this unit freezes.
+- Own Core runtime/flow-draft/step.ts, new cohesive scheduled-candidate owner/barrel/tests, llm/node-tools/draft-from-flow.ts, flow-draft/dry-run.ts, llm/node-tools/{dry-run-gate,replay,replay-span,replay-draft}.ts ONLY necessary branches and nearest tests; existing new downstream runtime/tests/carried-service-repair.test.ts/testsupport and own report c4-scheduled-carried-candidate.md. No service.ts/framework/other workers/shared docs/git.
+- Preserve persisted declaredConsequences INCLUDING explicit[] and real captured FIRST start. Separate typed scheduled candidate from ranWith/checkedCandidate/priorExecution. It represents an unperformed unchanged persisted configuration, not evidence an action ran. Retain source-node/current-configuration correspondence and deterministic registered output authority.
+- Fresh full-test scheduling may replay only eligible unchanged saved candidate through ordinary reset/binding/output/permission adapter. Missing declaration/start, edited/copied/stale config or unmapped action cannot execute; do not seed old arguments as ranWith, mark historical performed or let copied step borrow correspondence. Lasting scheduled node verifies without mutation/history fabrication.
+- Actual fixture repair touches only faulty type; untouched carried click must freshly execute before checked bound replacement and accepting judge. Preserve fallback/row mapping and existing instruction/lasting/no-progress/whole-test acceptance gates. No browser concepts in Core or new public exports without dependency evidence.
+- Additional approved Core owner: exact trusted LoopSeedSteps clone branch in loop-configuration.ts and nearest seed fixture, transferring module-private correspondence only through this legitimate internal copy. Readonly catalog outputAction contract and actual nodeOf producer; no service edits.
+- Meaningful nearest Core tests eligibility + missing start/declaration + edit/copy + binding/permission/refusal + lasting no mutation. Extend combined fixture negative cases only where actual adapter/setup permits honest proof. Existing row mapping remains pending unless actual case added and run.
+- Only named owner tests via heavy wrapper; no Core build/packagecheck/reference/audit/whole suite/live/provider/state/key operations while source mutable. Downstream public combined postfix requires root fresh Core build after source freezes; ask root rather than building it yourself.
+- Return exact failures/source diff/owner tests and frozen signal. Root independently reviews/types/audits/builds and actual public adapter postfix before accepting C4. No live retry/unfinished replay/budget or model raise.
+
+### Brief: ambiguity-feedback-projection (resume-ab)
+
+- Read Current State/own B6 causal report. Root releases domain action-failure refusal mapping/types/barrel/nearest tests and node-run replay-answer projection only if needed. Own report ambiguity-feedback-projection.md. Discover exact touched union owner first; all other source readonly, no extension/Core/gateway wire changes.
+- Preserve raw TARGET_AMBIGUOUS as distinct closed model-facing target_ambiguous, separate from TARGET_NOT_FOUND. Existing strict refusal and missing-target remembered/unreproducible paths unchanged. Expose only closed lower failure code/known numeric resolution counts if already available; no raw selectors/page/candidate/exception messages.
+- Meaningful fail-first actual replay wrapper: ambiguous result remains failed/no action and differs from genuine missing target (same/different location rules). No guessed raw historical B6 code: classify that run only as source-derived inference. Neither path gains permission/optional/PRESENT success from this patch.
+- Scope test to actual domain wrapper/type mapping, retain existing root metadata/PRESENT/identity gates. Named single owners bundled via esbuild/Node through heavy wrapper, no package types/build/Corebuild/audit/live/runtime/data/key/shared-doc/git actions. Root gates after all writers freeze.
+- Return source diff and fail-first/pass counts; this improves failed-target diagnosis, not a claim that the old wrong-product cart now passes.
+
+### Brief: b6-repeated-target-causality (resume-ab)
+
+- Read Current State and own complete B6 debug. Own reports/b6-repeated-target-causality.md only; readonly source/artifact investigation, no edits/tests/build/runtime/provider/state/key/shared-doc/git actions.
+- Both full tests fail displayed3/11/13 (finaldraft4/15/23), target_not_found. Trace original actual link/control call and normalized saved arguments/start token versus each failure; distinguish wrong/missing page, changed selector/fingerprint, correct remembered-store absence and omitted reaching dependencies. Exact product/fulfillment mismatch also remains a task failure.
+- Initial five owners: domain/runtime/llm-evidence/node-run/{replay,dom-run,missing-target}.ts (discover exact names first), domain/runtime/llm-evidence/targets owning resolver located via rg, Core runtime/llm/node-tools/replay-span.ts. Ask exact replacement/expansion if needed, do not read broadly.
+- Return precise actual causal values screened to IDs/shapes/public enums and smallest meaningful regression/source partition. Missing target is not automatically a host defect; no global URL scan/action heuristic, blanketPRESENT, forced optionality, lasting/permission relaxation, stale proof, cap/model raise or invented acceptance.
+- Root independently reviews complete debug while this runs. No retry until new justified source/tests/checkpoints and full prior debug review.
+
+### Brief: c4-actual-service-fixture (resume-cd)
+
+- Read Current State and own two C4 preflight reports. Root releases downstream domain/src/runtime/tests/carried-service-repair.test.ts and focused typed support/barrel under that tests owner only; own reports/c4-actual-service-fixture.md. No Core/source production/shared docs/commit/live/state/key edits.
+- Build the actual public AutomationStudioService/native library/IO/host capture/evidence adapter fixture described in public preflight. Import only public fluxiq packages; no Core internal tests/source. Scripted authored page state is acceptable but real adapter/native dispatch and normal target/policy validation must execute.
+- Ordinary saved execution produces real first-attempt captured start and wrong binding-bearing output; scripted judge refutes, ordinary extend repair changes ONLY faulty downstream step, then completion. Do NOT proactively rerun untouched carried click or fabricate ranWith/priorExecution/stateRefs/proof.
+- Regression asserts fresh reset/untouched click/repaired bound action in order before accepting judge, resolved fallback/row mapping/output and persistence; before current C4 implementation expect full-run refusal. Separate current structural gap from setup/type/script-provider defects; do not weaken assertion to pass.
+- Negative cases declaration/start missing, changed/copied candidate, permission refusal zero actions, unresolved binding refusal, lasting verify zero mutation/no historical proof. Stage cases incrementally if initial public setup blocked; report actual coverage honestly.
+- Named new owner only: use existing esbuild to bundle this single entry into domain/.test-build-scratch/t262-c4-actual-service/ with public packages external, then node --test that entry, through heavy wrapper. No whole domain test script/package check/build/Core build/audit while source mutable. Ask exact setup/API read expansion if brief genuinely insufficient.
+- Return compiled meaningful FAIL before C4 fix with exact actual call trace or genuine public setup blocker. Root verifies failure before separately releasing Core scheduled-candidate implementation. No claim of browser DOM semantics or saved provider-free live reuse from fixture.
+
+### Supervisor partition: provider-free Lab replay
+
+- Own test-runner environment/coordinator explicit modelProvidersEnabled child option, inherited-value stripping, nearest tests; saved-flow-replay/replay-saved-flow.ts and focused provider-preservation/strict-accounting modules/barrels/tests. No Core construction owner overlap.
+- Remove only destructive saved-replay caller; preserve all stored key identities through readonly private before/after snapshots. Reject missing/contradictory public provider accounting, any calls/interventions/harness, key/hash changes. Core default-enabled construction gate is worker dependency.
+- Meaningful environment fail-first and focused preservation/accounting tests precede independent touched types/audit/build gates. Actual accepted saved Flow/two unchanged reuses still pending; no unfinished replay or inferred zero from missing usage.
+
+### Brief: provider-admission-construction (resume-live-prep)
+
+- Read Current State, own corrected A7 report, reports/provider-free-host-activation-preflight.md and Core AGENTS Repository Boundary. Both paid/public sessions stopped; root authorizes this bounded Core source unit. Own report reports/provider-admission-construction.md only; no shared docs/commits/push/live/runtime/state/key operations.
+- Own Core framework/index.ts public FluxIQOptions and constructor forwarding; programs/_shared/runtime.ts factory three provider bindings; apps/web/src/lib/fluxiq.ts before both create/reload paths; focused web activation parser/barrel and nearest framework/global-runtime/web tests only. No service.ts or domain/Lab files.
+- Add optional public modelProvidersEnabled:boolean option, omitted enabled, propagated to existing global runtime. Disabled construction must omit standing result-check resolver, session-key execution resolver and panel model/key resolver before any provider-key release/request. Original SecretKeys/Identity/AutomationStudioService/storage/native/runtime/API/gateway/unlocked-session registration preserved. No replacement service/key removal/result-policy mutation.
+- Web strict FLUXIQ_MODEL_PROVIDERS_ENABLED parser: absent enabled, true/false only; invalid refuses before construction. Resolve once and forward to BOTH FluxIQ.create paths and reload. Generic framework/factory must not know Lab/browser concepts. Existing callers/default behavior compatible.
+- Meaningful fail-first nearest tests actual factory wiring zero across three resolver/model factories and key-release/request spies when disabled; enabled/default still bind; public FluxIQ forwards explicit false; web inferred-domain second create/reload also false and invalid never constructs. Do not claim lifetime immutability against trusted later manual provider binding or runtime zero from config alone.
+- Run named nearest tests only through shared heavy wrapper; no Core package check/build/reference/web full build/audit while source mutable. Root integrates Lab activation/key-preservation/strict accounting and independently gates/builds after worker freezes. Respect structure/one-export/barrels; no baseline increase.
+- Return exact source diff, fail-first/pass counts, compatibility and remaining runtime/accounting gaps. A7/B6 complete debug/root review precede any future paid retry; same Flash/.10/48 remains.
+
+### Brief: a7-retargeted-effect-causality (resume-cd)
+
+- Read Current State and A7 full-debug report/current run debug. Own only reports/a7-retargeted-effect-causality.md. Root paid and inspection sessions are stopped; no new live retry. Readonly investigation, no source/shared-doc/test/build/runtime/provider/state/key/commit actions.
+- Exact evidence: A7 final step11 is cart checkedCandidate verified/performedfalse; priorExecution performedtrue/callId rerun.12 is actually0055 shipping selection. Cart retargeted0058 never physically pressed; judges correctly refute cart. Shipping can be remembered/verified while current terminal option differs. Do not relax lasting protection or reuse old performed proof for new input.
+- Initially read six exact owners: Core runtime/flow-draft/{entry,verify-only}.ts; llm/node-tools/rerun-check.ts; llm/draft-amendment-feedback.ts; downstream domain/runtime/llm-evidence/node-run/verify.ts and replay.ts (verify exact existence via rg first).
+- Trace existing candidate/original proof and feedback: does current retarget correctly invalidate effect identity and explain fresh authorized execution? Does shipping PRESENT imply selected state or only missing/withdrawn control? Compare actual new artifacts privately; no raw values copied.
+- Return precise reproduced host defect or model-only misuse, smallest cohesive owner/test partition with meaningful fail-first fixture. No proposed clause may grant more permission, invent performed action, suppress judge/oracles, raise cap or add web-specific heuristic to Core. Ask exact read expansion for unresolved producer/consumer. Root approves source separately.
+
+### Brief: provider-free-host-activation-preflight (resume-cd)
+
+- Read Current State and reports/provider-free-reuse-preserving-keys.md. Own only reports/provider-free-host-activation-preflight.md; all source/shared docs/runtime immutable while A7/B6 runs.
+- Read at most six exact bootstrap owners after rg discovery to settle how explicit generic all-role provider admission could reach global runtime BEFORE service/key/model wiring. Existing host hook receives constructed FluxIQ; session-only refusal is insufficient.
+- Return actual public construction/initialization call chain, smallest owner partition and compatibility assessment, or prove an existing all-role override. No implementation, tests/build/provider/browser/panel/state/env/key/commit operations.
+- Ordinary UI defaults enabled; Lab alone opts out. Preserve original service/auth/storage/key lifecycle/result policies; block session/standing/chat before key reveal/request. No new env/API asserted until actual public boundary verified.
+- This is preparatory evidence only, not zero-provider/reuse acceptance. Two unchanged saved reuses still require accepted usable Flow and both creation lanes stopped.
+
+### Brief: full-debug-a7-call-admission (resume-live-prep)
+
+- Read Current State, predeclared reports/live-call-admission-retry-stage-1.md and six-stage run-debug-template. Copy predeclared Stage1 into own report before new artifacts.
+- Own only reports/full-debug-a7-call-admission.md and eventual new A7 debugs/run-ID.md. Supervisor owns session59935/slot2 launch-7.log and all runtime. Frozen downstream2ef458a1/Coree8c89bbd; Flash/.10/48, preserved t262-a and explicit paired Core branch.
+- Readonly private new-run evidence; no source/shared-doc/test/build/runtime/browser/provider/key/state/env/commit actions. Never expose raw prompts/selectors/page values/opaque secrets.
+- Complete six stages for every ending: every ordered priced question/phase/decision/input shape/result/timing/usage; every actual tool/test mode/effect/duration; public definition versus draft, judges/oracles/persistence/screens/accounting/gaps. Root later supplies public capture if needed.
+- Send measured progress, exact run ID and private screenshot paths for root independent review. Missing evidence labeled NO EVIDENCE. No retry or unfinished replay. Return causes/owner partition and acceptance gaps; source freeze holds until both live lanes stop.
 
 ### Brief: provider-free-reuse-preserving-keys (resume-live-prep)
 
@@ -171,86 +315,93 @@ A project60fef7a2-3da3-47fd-8cd3-a3c1fda59fc2/Flowflow.e7824998-e347-463c-922f-1
 
 Prior source integration and exact failed/passing gates are preserved in [call admission integration archive](./mvp-live-continuation-2026-10-03/archive/2026-10-03-call-admission-integration.md); older A6/B5 history remains in the earlier archive. Recent twelve entries retained below.
 
-### Core Lab call admission preparation release (2026-10-03)
+Earlier entries are also preserved in [C4 first-gates archive](./mvp-live-continuation-2026-10-03/archive/2026-10-03-through-c4-first-gates.md).
 
-- Wrote exact Core owner partition excluding active C5 file; released final diagnostic producer/schema preflight and fail-first construction. Source edits wait for root agreed typed adapter/aggregate contract. Supervisor owns downstream explicit resolved plan propagation and failed reader. Normal UI remains unscoped, no implied48.
-- Validation: existing A/Bdebug/sourcepreflight verified; no newtest/provider/sourceedit claim.
+Earlier entries also preserved in [C4 public-postfix archive](./mvp-live-continuation-2026-10-03/archive/2026-10-03-through-c4-public-postfix.md).
 
-### C5 fail-first and A metadata seam (2026-10-03)
+### Independent post-debug and replay boundary checks (2026-10-03)
 
-- C5 first owner run:23tests,17pass,1meaningful fail (retryable iteration ending caused2generates instead of1),5fixture-construction failures. Worker correcting typed actual progress accounting/FlowInstruction before implementation. Do not treat fixture errors as product regressions or claim green.
-- A readonly source proof: domain node-run/verify resolves current ranWith; accepted missing-target present branch goes through missing-target helper and omits draft.ranWith. Core checked rerun correctly deletes absent current declaration; final step7 cannot_run_again follows. Exact accepted-versusfailed missing-target contract final preflight before scoped fix. No stale arguments/gate relaxation/autoexecution.
-- Search links and repeated-search note delivery verified; A repeated cart looks are model navigation misuse, not demonstrated absent host affordances. No ranking/truncation/threshold symptom patch.
-- Validation: source/artifact correlations observed; new wrapper causal fixture and C5 complete fail-first pending. All runtime/provider processes closed, no paid retry.
+- Root independently matched every A7/B6 priced ID (43/47) and every actual tool/test ID (71/71) to the completed debug documents. Private central metadata sums match exact costs .050186646/.067162080 and input/output703048/5976 and1078468/4451. Ordered table timing/cost review conducted; remaining judge-packet/root semantic review still required before paid release.
+- Root reran ambiguity owners:14/14PASS,2122.1718ms, exit0; reviewed typed reason and actual truthful model-facing verdict production changes. Compiler/live integration remains pending C4 freeze.
+- Final Lab compiler exit0 observed after actual coordinator spawn-boundary assertion added; compiled coordinator owner7/7PASS,4278.8343ms. Explicit false reaches actual Core child env; no live process/provider request involved.
+- Authored downstream testing-facility and Core program-layout docs now explain preserved keys, default-enabled constructor admission and separate required measured zero usage. No accepted reuse or new paid launch claimed.
 
-### Call admission contract and A wrapper source release (2026-10-03)
+- Validation: Root Node-hook --test two ambiguity owners14/14PASS exit0; node --test packages/test-runner/dist/tests/coordinator-existing.test.js7/7PASS exit0; final Lab tsc exit0. Python readonly central ID/cost summation matched43/47 priced and71/71 attempts.
 
-- Corecallunit released to resume-live-prep aftertypedcontractreview: dedicated FLUXIQ_LLM_BUILD_CALL_LIMIT and _SCOPE=test, optionalpublicreader/constantseachownmodel/build-call-limitfile, no unscoped/default48. Rootdownstream owns explicitresolvedplan propagation and failedreader. Commonpurselogicalsettle/release/count/judgereserve, closed callsrefusal, additiveROOTdiagnostic.totalProviderCallCount nonnegative-safeint; focuseddecorator optionalonlyknowncount. InternalHTTPretryonequestion, nofakepaidcharge.
-- Aworker exact2file verify/PRESENTproducer fix released afteractualruntimefixtureseamconfirmed. Nearesttests prove missing/withdrawnmetadata failfirst; existingCoreconsumerproof tests rootcombinedverification, no invalidcrossrepointernalimport.
-- C5 correctedfailfirst23cases now6meaningfulfail/17pass; localtypedpredicateedited, narrowowner+servicecompatibility running sourcepaused. No passclaimedyet.
-- Validation: allthree briefs partitiondisjointowners; rootnoheavyvalidation whileworkersediting. No newruntime/provider/live.
+### A7 judge packet and accounting provenance review (2026-10-03)
 
-### Downstream admission fail-first / C5 compatibility release (2026-10-03)
+- Root matched all43/47 ordered priced table rows to actual central cost and milliseconds, including equivalent scientific/decimal formatting; no discrepancies. All six A7 judge answers are no/stillAchievableyes, each pair receives identical current resultSummary with buildTest/endView.
+- Root independently reproduced all three documented canonical hashes using Python json.dumps(resultSummary, sort_keys=True), default ASCII/whitespace, UTF8 encoding, no trailing newline:12b052e44c9984249df2746f972665de9613febfc66ffda4727bff29c52acb01 /3b06068c132c4adaaa265341427e183e2cbdfbaab24cc748cfbedef746fb55ce /35288045dc162873af7688adfa6a4a0c5a05540eabedafcddde721860f263d64. Alternative compact encodings yield different hashes and are not evidence of packet mismatch.
+- Provider accounting readonly trace found existing legacy zero-gate generation from absent metadata/interventions; disabled noModel path has no static dispatch, but a default-enabled verification deadline can lose attempted-call evidence. Actual execution regression and reliable dispatch/settlement capture remain required before claiming trustworthy measured zero.
+- A7 prompt already includes parent/child guidance and truthful candidate/prior warnings. Relevant shipping child availability is under bounded decomposition investigation; no fabricated act-ID example or blind paid retry released.
 
-- Root environment fail-first reproduced3causes: resolved3notforwarded/inherited999wins; no-planinheritedscopeleaks; invalidexplicitboundnotrefused. Existing4tests pass. Sourceadapterpropagation now scoped toexplicit resolvedplan, publicCoreconstants agreed.
-- C5worker31cases30pass/1oldfixtureexpectsredundantretrycostbound. Released exact repair-purse-chain.test.ts assertionupdate: oneactualreauthorattempt/.09spent/.01left under.10, no fabricatedcostrefusal. Existingpublicretryable/charge/record unchanged.
-- Validation: alltestsprovider-free; no runtime/live/build/rootcombinedgate whileworkersediting.
+- Validation: Root Python UTF8 central metadata/table reconciliation43/47 ordered cost/ms rows:0mismatches; json.dumps(resultSummary, sort_keys=True) canonical hashes match all three documented A7 pairs, all six no/stillAchievableyes. Accounting runtime regression not validated.
 
-### Focused fixes frozen; explicit downstream propagation underway (2026-10-03)
+### C4 integrated source review and first narrow gates (2026-10-03)
 
-- C5worker final31/31 owner+servicecompatibility pass; source3Core files frozen. Aworker actualproducer15/15 pass after2meaningfulfail-first cases; verify.ts/test frozen. Root independentunion/type checks await callworkerCorefreeze to avoid validating a changingtree.
-- Root downstream explicit plan getter?run-scenario?TopologyOptions?TopologyPaths?child-scopedadapter saved; inheritedcallcap/scope dropped withoutplan, invalidpositiveinteger refused. Three environmental fail-first cases recorded; publicCoreexports/build pending before post-fixruntimechecks. Existing Labpostgate intact. liveclass kept within800line budget.
-- Validation: worker passes are claims pendingroot; no paid/browser/build/rootcombinedchecks whileCoreediting.
+- Root reviewed private WeakMap correspondence, captured start/declaration retention, legitimate seed-copy transfer, unchanged configuration checks and registered fixed-output admission. No candidate carries historical performed/ranWith/produced proof; ordinary fallback/mapping/permission/lasting verification retained.
+- Core package check first failed one new fixture type import; worker corrected via existing public replay-input contract without new export. Root renewed package check PASS. First audits found only missing ledger validation bullets (corrected here) and downstream new fixture root directory26>25. Worker relocates only new combined fixture to runtime/tests, nearest common adapter/host ancestor; no baseline increase.
+- Root fresh Core build and independent144 owner checks running; actual public combined postfix follows build. No new paid release, saved reuse or push.
+- Validation: root pnpm --filter fluxiq check first exit1 TS2724; final session66763 exit0. Core audit candidate structure passed, docs1violation; downstream audit directory/docs2violations before corrections. Build/owner results pending observation.
 
-### Supervisor independent producer review (2026-10-03)
+### C4 real public-service postfix independently passed (2026-10-03)
 
-- Independently read minimal A PRESENT producer diff and meaningful accepted/declined tests. Both missing and withdrawn accepted results retain already-resolved current ranWith; no press, old proof, permission/frame or Core acceptance change. Root nearest actual runtime owner tests15/15 PASS.
-- C5 source diff reviewed: only canonical request transients permit automatic second generate; public retryable, charge, append, adaptation guard and remaining purse preserved. Root combined tests/types pending Core call sourcefreeze.
-- Core reserve-judging exact expansion released for typed calls-bound summary/announcement, keeping all clean-test/signature/accept/judge gates. B5 readonly causal brief released; source frozen until bounded root approval.
-- New downstream failure aggregate regression file authored before reader fix: actual reader/judge total, legacy unknown aggregate and current unsent refusal with prior settled calls. Wait for public Core build before fail-first.
-- Validation: root A Node owner test exited0/dot15, label t262 root present verification; no paid/browser/provider run, no full sweep.
+- Root renewed Core package types PASS and independently reran all8 C4 owner files144/144PASS. Fresh public Core build exit0,5389generated files stamped; no tracked build output.
+- Root bundled relocated runtime/tests/carried-service-repair.test.ts against fresh public Core exports and observed actual combined regression1/1PASS. Native/real-domain trace: saved opener?wrong bound value; repair fresh reset?untouched saved opener?right bound replacement before acceptance, then actual corrected execution. Terminal succeeded, persistence checked. No fabricated performed proof or proactive untouched rerun used to get past gate.
+- This proves scripted page/native/domain repair, not live browser DOM, new repeat-row repair, actual adapter negative cases or accepted A/B/reuse. New negative fixtures and trustworthy deadline accounting remain next, no paid retry.
+- Validation: root C4 Vitest8owners144/144PASS8.45s; Core pnpm --filter fluxiq build exit0; single esbuild bundle exit0; node --test domain/.test-build-scratch/t262-c4-actual-service/carried-service-repair.test.mjs1/1PASS,7309.6132ms total/5624.2331ms owner. Web types/renewed audits independently observed separately.
 
-### Independent scoped call and retry integration gate (2026-10-03)
+### Narrow integration passed and next actual execution regressions (2026-10-03)
 
-- Supervisor15Core owner files/219tests PASS, including C5 retry/real repair purse/service, call config/purse/harness/real build failure, phases/reserve, diagnostics and PRESENT consumers. No functional live acceptance claim.
-- Core package typecheck FAILED: five old cost-only fixture consumers and actual result-verification/build-test/judge.ts refusedSaid assume every purse refusal has dollar fields. Source expansion released in exact written downstream brief; typed calls reason must not fabricate dollar data. All root sessions closed before fix.
-- Validation: owner session93082 exit0/29s, typecheck87579 exit1/27.449s. Narrow correction only; no full sweep/build/provider/live run.
+- Root independently observed both structure audits PASS after ledger/file-placement corrections, Core type/build and web type PASS. Web parser now accepts readonly string/undefined environment map; no runtime behavior changed. First web tests-only ProcessEnv augmentation failure and attempted weak type correction are recorded, final index-signature type passes.
+- New Core accounting and disabled-public-run regressions and downstream actual adapter negatives have written file partitions; no production deadline change released yet. Main Current State now names these owners and clearly separates actual C4 positive from remaining browser/row/reuse proof.
+- Validation: Core audit passed243warnings/349baseline; downstream audit passed165warnings/118baseline. Core package check final exit0, public build exit0; web first check exit1 required NODE_ENV in test env, weak optional-field attempt exit1 TS2559, final pnpm --filter @fluxiq/web check session40550 exit0. No full suites or new paid run.
 
-### B causality and C carried-repair fixture review (2026-10-03)
+### Verification-deadline accounting defect independently reproduced (2026-10-03)
 
-- B readonly report complete: final judges received current endView and explicit withheld/VERIFIED distinctions; declaration arrays match model-authored arrays, no producer drop. No actionable host defect reproduced; passing judges still do not establish exact cart oracles. Root causal source/test review remains necessary before broader source changes.
-- C4 readonly preflight complete: existing service fixtures intercept replay without actual web dispatch. Combined saved-service/real-adapter fixture and public captured-start seam are not yet established. No fabricated performed fields or claimed browser proof; separate contracts alone cannot prove integrated repair.
-- Actual calls-refused judge regression first exposed old dollar-only TypeError, then unsent intervention counted as one call. Root approved authoritative purse-delta count only on typed calls-refusal branch, preserving paid usage and yesStood; new zero-send and first-yes/unsent-confirmation regressions required.
-- Validation: both readonly reports/sourcefrozen; Core narrowed compatibility fix active, no paid/live/provider or broad sweep.
+- Root actual owning orchestration/fake provider transport reproduced pending call false ZERO_GATE and false deterministic replay qualification; paid first refutation followed by pending confirmation loses completed intervention and publishes calls0/pending0. Transport dispatch count is actual provider.runTask, not harness entry.
+- Root releases scoped verification lifetime/intervention retention/affirmative zero settlement fix; provider authority hook additions require explicit exact owner release. Keep unknown pending facts truthful, paid usage retained, normal policy/status and late-write prevention.
+- Validation: root heavy-wrapper pnpm --filter fluxiq exec vitest run exact run-outcome.test.ts and zero-provider-run.test.ts:47tests45PASS/2FAIL,12.41s, exit1. Four expected assertions reproduce product defect; unsent preflight/no-provider/late-write controls pass. No paid network or user state touched.
 
-### Corrected call consumer gates verified (2026-10-03)
+### A7/B6 complete debug supervisor review (2026-10-03)
 
-- Root independently observed corrected Core package typecheck PASS and additional9owner files/311tests PASS. Combined with first15/219, this unit has530tests/24distinctCore owners verified; includes round-trip, original purse, exhaustion, judge and five corrected cost fixtures.
-- Actual calls-refused judge has zero sends/zero calls; first paid yes with unsent confirmation keeps yes and exact one settled question, original token/cost totals intact. Legacy dollar behavior retained. Source reviewed, all root checks closed. Authored Core/downstream call contract and retry/PRESENT docs updated; stale normal-versus-Lab ceiling wording corrected.
-- Validation: sessions73743/8186 exit0, types27.2s, owners9.15s. Root downstream propagation/aggregate fail-first awaits fresh Core public build; no paid/live/provider/full sweep.
+- Root independently matched all90 priced rows, costs/tokens/order/ms,142 actual tool/test timing/result/mode/effect rows, all six current A7 judge packets/answers/hashes, public empty saved definitions and final native screenshots. Mode spelling/case normalization: A execute/True versus B ordinary/true; absent effect is NO_EVIDENCE, not physical success. Earlier first-match table script selected question rows referencing tools; corrected exact artifact first-column lookup proves no debug discrepancy.
+- Both complete six-stage documents now supervisor reviewed as failed builds. A retarget/current proof and B source-derived ambiguity/targeting causes remain truthful. No accepted topology/hash/runtime/oracles/reuse, no blind repeat. Current paid source remains2ef458a1/e8c89bbd; new bounded fixes still uncommitted.
+- Validation: readonly central Python reconciliation A43/.050186646/703048+5976 and B47/.067162080/1078468+4451; every71attempt per run exact first-column code/ms/mode/effect matches,0discrepancies. Canonical A packet hashes independently reproduced. Public API/images/stopped sessions observed in earlier ledger/report.
 
-### Structure gate and focused catch extraction (2026-10-03)
+### Generic preparatory-step clarification (2026-10-03)
 
-- Fresh Core public build PASS31.696s; structure audit FAILED service4406 exceeds4401baseline and six C5 test imports bypass barrels. No budget baseline increased.
-- Root released cohesive outer generation-failure classification/count decoration extraction into its existing owner; service must shrink genuinely. Root owns mechanical C5 test barrel imports. All prior tests/types remain observed, new source gates pending.
-- Validation: build62664 exited0; audit2violations observed; no paid/browser/provider run. Downstream aggregate fail-first can use fresh public contract while isolated Core source helper is edited (dist unchanged).
+- Root source-only clarification in Core flow-draft/entry.ts: use a listed child ID for its setting; when no child is advertised, add necessary preparation without act; never invent an ID or attach the parent act to preparation. Parent claim remains on its own act step. No parser/candidate/permission/lasting/judge/oracle semantics changed.
+- Existing parent-child/current-prior guidance was delivered in A7 and full origin quote retained; no underlying host omission proved. This is bounded teaching of existing legal add/act semantics, not proof of model adherence or a guaranteed cart remedy. No new mirror-only test added; existing delivered-entry owner verifies surrounding behavior.
+- Validation: root heavy-wrapper pnpm --filter fluxiq exec vitest run src/programs/automation-studio/runtime/flow-draft/tests/entry.test.ts19/19PASS2.21s,exit0. Fresh public outputs and final integration gates will be regenerated after all current writers freeze, before paid release.
 
-### Aggregate reader and final structural corrections (2026-10-03)
+### Deadline accounting source review and compatibility (2026-10-03)
 
-- Root observed new downstream actual aggregate fail-first3/3FAIL (5vs7,5vsunknown,0vsprior7), then4owner files/60tests PASS after minimal reader correction and legacy expectation update. Explicit resolved plan reaches child before new-chat key install; no nonexistent Flow settings call.
-- Core catch extraction genuinely shrinks service4400 below4401baseline; auditPASS. New helper test used misspelled closed code, caught by types; root corrected canonical provider_transport_unknown. C5 test barrel correction exposed runtimecycle; root narrowed production failure import to generation-failure owning barrel. Final4owner files/33tests PASS.
-- Downstream audit found new helper third build- prefix and two test imports bypassing barrel. Root renamed its new adapter call-limit-env.ts, exported it through live-llm barrel and corrected test imports. No baseline increase or broad file move. A7/B6 Stage1 authored before any future artifact; source/runtime gates still required.
-- Validation: prior Core530tests remain observed; corrected latest33testsPASS after cycle failure, final type/audit/runtimebuild gates pending. No paid/live/provider/full sweep.
+- Worker froze coherent five-production/two-test unit, nearest53PASS claim. Root independently reviewed collector lifetime, early actual first/second intervention retention, terminal closure and bounded.settled affirmative zero gating. No dispatch counter/provider wrapper or invented pending/whole-run totals added.
+- Root actual47test fail-first already observed. Independent final53owner run underway. Pending first now must have unknown gate/no replay; paid first receipt retained without second cost fabrication; late tasks cannot append after terminal closure. Completed noModel remains explicit zero.
+- Compatibility: existing public zero-provider helper additive third proof defaults false; two-argument callers now receive unknown, narrowing prior unsafe inference. Original main policies/budgets/service/provider/key lifecycle retained. New optional completed-intervention callback is additive; authored docs/reference update required.
+- Validation: root production diff reviewed; worker53PASS/session91548 is not supervisor verification until root run observed. Actual disabled public constructor execution and real adapter negatives still active. No new paid release or build/type/audit while those test owners mutable.
 
-### Final source narrow gates pass (2026-10-03)
+### Independent deadline and public disabled execution gates (2026-10-03)
 
-- Root final Core package typecheck PASS21.828s after correcting canonical test code. Narrow owner import breaks reproduced circular failure;4files/33tests PASS. Both structure audits PASS: Core243warnings/349baseline, downstream165/118. Service4400 belowold4401 budget; baseline lowering required, never increase.
-- Latest source frozen; fresh final Core runtime/reference and linked domain/host/Lab/extension builds and downstream source/test types still precede paired checkpoints/A7/B6 launch. Stage1 is recorded in reports/live-call-admission-retry-stage-1.md.
-- Validation: type3762, owner51981 and audit59942/67154 exit0; prior530Core and60downstream owner tests remain observed, new generation-catch2 separately verified. No paid/provider/browser/full suite.
+- Root independently reran deadline/zero/repair owners53/53PASS after meaningful45/2 fail-first; reviewed source and compatibility. Public original FluxIQ false constructor executes saved native Flow once, retains nonempty encrypted fixture key/unlocked session/original service identities, publishes explicit zero ledger and makes no observed fetch/release/authorization request. Root independently observed1/1PASS; this is generic execution, not A/B/browser reuse.
+- Core final package type first caught optional validation.issues access in new unsent-preflight fixture. Root corrected optional access without weakening expected true issue assertion; final Core type PASS. Actual C4 six-owner cases worker frozen; fresh Core public build/root combined/type/audit gates underway.
+- Validation: root deadline3owners53PASS12.29s exit0; public framework saved-run1PASS21.13s/2.478s execution exit0. Core pnpm --filter fluxiq check first exit1 TS2532, final exit0 after issues?.some. No whole suites, provider network or user key/state operations.
 
-### Fresh linked runtime and prelaunch memory verified (2026-10-03)
+### Fresh-output actual adapter integration and remaining fixture types (2026-10-03)
 
-- Root observed final Core runtime build29.629s/references3088decls, domain source/test types20.989s/build21.664s, host1.237s, Lab types14.758s/build22.719s and stable extension13.605s PASS. Initial concurrent extension build was unstamped while domain outputs changed; stable sequential dependency rerun passed/stamped.
-- Final compiled Lab6owners/69tests PASS after barrel/helper moves, including topology lifecycle cases; domain actual runtime15tests remain observed. C4 public setup report complete with existing public APIs/no extraexport, combined test not implemented. Reuse report complete: key-deleting helper unsafe under current instruction, deterministic recovery alone does not suppress standing result verification; explicit all-role admission pending after creation runs.
-- Downstream ledger23entries compacted: full previous source-integration memory archived with corrected relative links, recent12retained. Current State rewritten around actual verified source/gates and exact next live/Claude resume work; A7/B6 Stage1 predeclared.
-- Validation: all root builds/checks/tests exited0; source immutable, no new paid/provider/browser run yet. Paired local checkpoints before explicit one-launch release; devpush withheld pending functional acceptance.
+- Root fresh integrated Core public build PASS5397generated files; actual combined adapter regression6/6PASS against that output: positive repair; missing declaration/start zero repair actions; valid unresolved saved binding no opener dispatch/zero physical mutations; declined permission and lasting verify each consult actual permission port, zero gateway mutations/models.
+- Domain package source/test typecheck finds four fixture-only types (optional dispatch metadata, two optional node parameters, asynchronous harness narrowing). Worker exact corrections released; assertions/native paths unchanged. Web typecheck passed; reference docs regenerated by owning script3088public declarations.
+- Validation: root single-entry bundle exit0/64ms; node --test current actual fixture6PASS12198.1499ms exit0. Core build exit0/30.492s, web check94824 exit0; domain check47782 exit1 with four exact fixture diagnostics; docs-reference45146 exit0/3088declarations. Package types/audit/runtime bundles/checkpoints remain before any paid launch.
+
+### Final replay and typed adapter checks (2026-10-03)
+
+- Fresh emitted Lab environment/coordinator/key-preservation/strict-accounting four owners independently24/24PASS. Current replay preserves all key identities and requires explicit known zero accounting; constructor activation reaches actual Core child. No real saved A/B reuse exists.
+- Worker corrected actual fixture public optional metadata bridge, literal control keys and closure narrowing; root re-bundled final six-case owner. Final domain types and six-case results independently observed after source freeze. Runtime bundles/audits/checkpoints before next actual browser release.
+- Validation: final Lab tsc94913 exit0; root compiled Node4owners24PASS3627.5405ms exit0; final single-entry bundle57ms exit0. Final domain check7833 exit0/14.299s; actual six-case fixture52147 sixPASS12423.514ms exit0. No paid run or full suite.
+
+### Focused quality unit ready for paired source checkpoints (2026-10-03)
+
+- Supervisor verified all touched package types and named owner tests, fresh Core/domain/host/Chrome-Firefox-e2e extension/Lab runtime bundles and both structure audits. All source frozen; A8/B7 Stage1 authored before future artifacts. No source edits during paid lanes; full ending/debug review before another change/retry.
+- New quality unit is key-preserving provider-disabled replay, genuine saved-candidate scheduling, truthful ambiguous target feedback, deadline paid-receipt retention/unknown settlement and bounded preparatory-act guidance. Public contract compatibility and actual fixture/browser limitations documented. D ordered waypoint design ready but unimplemented; actual row-repeat repair remains pending.
+- Validation: Core223tests15owners/web29tests2owners/domain20tests3owners/Lab24tests4owners independently PASS; Core/web/domain/Lab types PASS; Core5397files/domain861files/host1file/extension80files/Lab1628files fresh/stamped, references3088declarations. Both audits PASS243/165warnings349/118baselines, no baseline raise. git diff --check exit0. No whole suite or new paid launch.

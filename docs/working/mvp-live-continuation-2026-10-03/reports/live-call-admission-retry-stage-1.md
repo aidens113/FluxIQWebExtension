@@ -1,9 +1,11 @@
 # A7/B6 scoped call-admission retry: predeclared Stage 1
 
-Status: Planned; not launched. Written before reading any future run artifacts.
+Status: Complete historical A7/B6 predeclaration; both launches ended failed and are independently debugged. Original expected tasks/commands below are retained.
 Owner: Codex senior supervisor. Task: paired t262.
 
 ## Current State
+
+Historical prelaunch declaration, not current readiness. See live-quality-retry-stage-1.md for the next predeclared A8/B7 tasks; current source/review lives in the main continuation document.
 
 A6/B5 full six-stage debugs are complete and independently verified. Both
 failed functional acceptance. Changed source corrects new-chat Lab call

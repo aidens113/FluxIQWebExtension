@@ -111,6 +111,7 @@ const BY_FAILURE_CODE: Readonly<Record<string, WebLlmToolRejectionCode>> = Objec
  * hold -- the code already says the whole of it.
  */
 const BY_FAILURE_REASON: Readonly<Record<string, WebLlmToolRejectionReason>> = Object.freeze({
+  [WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS]: "target_ambiguous",
   [WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH]: "state_not_as_asserted",
   [WEB_AUTOMATION_FAILURE_CODES.BROWSER_PERMISSION_DENIED]: "page_not_scriptable",
   [WEB_AUTOMATION_FAILURE_CODES.TRANSPORT_TRANSIENT]: "channel_to_page_failed",

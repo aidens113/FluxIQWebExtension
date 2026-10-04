@@ -13,6 +13,8 @@ import { acquireWorkspaceOperationLock, type WorkspaceOperationLock } from "./wo
 import { loadOrCreatePersistentIdentity } from "./persistent-identity.js";
 
 export type TopologyOptions = {
+  /** Host construction admission, disabled only by explicit provider-free replay. */
+  modelProvidersEnabled?: boolean;
   repositoryRoot: string;
   fluxiqRepositoryRoot: string;
   runsDirectory?: string;
@@ -138,7 +140,7 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
 
     supervisor.start(coreWebServerProcessSpec({
       name: "fluxiq-web", build: coreWebBuild, port: allocation.webPort,
-      env: buildFluxIQEnvironment(allocation, { repositoryRoot, fluxiqRepositoryRoot, hostModulePath, ...(options.buildCallLimit === undefined ? {} : { buildCallLimit: options.buildCallLimit }), ...(options.stepLogDirectory ? { stepLogDirectory: options.stepLogDirectory } : {}) }),
+      env: buildFluxIQEnvironment(allocation, { repositoryRoot, fluxiqRepositoryRoot, hostModulePath, ...(options.modelProvidersEnabled === undefined ? {} : { modelProvidersEnabled: options.modelProvidersEnabled }), ...(options.buildCallLimit === undefined ? {} : { buildCallLimit: options.buildCallLimit }), ...(options.stepLogDirectory ? { stepLogDirectory: options.stepLogDirectory } : {}) }),
       logPath: processLogPath(allocation.logsDir, "core"),
     }));
     const fluxiqOrigin = `http://127.0.0.1:${allocation.webPort}`;

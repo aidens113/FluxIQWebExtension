@@ -15,6 +15,21 @@ const allocation: RunAllocation = {
   scenarioPort: 31001, webPort: 31002, gatewayPort: 31003, controllerToken: "controller_token_1234567890",
 };
 
+test("provider-free replay explicitly disables model wiring before its Core child starts", () => {
+  const paths = { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core", modelProvidersEnabled: false };
+  const child = buildFluxIQEnvironment(allocation, paths, { FLUXIQ_MODEL_PROVIDERS_ENABLED: "true" }, []);
+  assert.equal(child.FLUXIQ_MODEL_PROVIDERS_ENABLED, "false");
+});
+
+test("ordinary creation cannot inherit a provider-disabled host from another run", () => {
+  const paths = { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core" };
+  const child = buildFluxIQEnvironment(allocation, paths, { FLUXIQ_MODEL_PROVIDERS_ENABLED: "false" }, []);
+  assert.equal(child.FLUXIQ_MODEL_PROVIDERS_ENABLED, undefined);
+  const explicitPaths = { ...paths, modelProvidersEnabled: true };
+  const explicit = buildFluxIQEnvironment(allocation, explicitPaths, { FLUXIQ_MODEL_PROVIDERS_ENABLED: "false" }, []);
+  assert.equal(explicit.FLUXIQ_MODEL_PROVIDERS_ENABLED, "true");
+});
+
 test("constructs isolated scenario and FluxIQ environments", () => {
   const scenario = buildScenarioEnvironment(allocation, 42, { INHERITED: "yes" });
   assert.deepEqual({ token: scenario.SCENARIO_LAB_RUN_TOKEN, port: scenario.SCENARIO_LAB_PORT, seed: scenario.SCENARIO_LAB_SEED }, {

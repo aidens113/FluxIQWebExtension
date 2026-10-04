@@ -23,6 +23,19 @@ import { webActionFailureRefusal } from "../refusal";
 /** The words the page put in its own comparison text, none of which may reach a refusal. */
 const PAGE_WORDS = ["Tidewell", "sage green", ".product-row td", "Brightaisle"] as const;
 
+test("target ambiguity retains a closed distinct reason without exposing the failure's page text", () => {
+  const ambiguous = webActionFailureRefusal({
+    status: "failed",
+    failure: { code: WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS, actual: PAGE_WORDS.join(" ") }
+  });
+  assert.equal(ambiguous.code, "target_not_found");
+  assert.equal(ambiguous.detail?.reason, "target_ambiguous");
+  assert.equal(WEB_LLM_TOOL_REJECTION_REASONS.some((reason: string) => reason === "target_ambiguous"), true);
+  for (const privateText of PAGE_WORDS) assert.equal(JSON.stringify(ambiguous).includes(privateText), false);
+  const missing = webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND } });
+  assert.deepEqual(missing, { code: "target_not_found", detail: undefined });
+});
+
 type Summary = Record<string, unknown>;
 
 /** A well-formed extraction summary: the shape `actions/extraction/summary.ts` copies. */

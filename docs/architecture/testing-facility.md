@@ -607,16 +607,30 @@ FLUXIQ_TEST_ENV_FILES=none FLUXIQ_TEST_TARGET=persistent-isolated FLUXIQ_TEST_PE
 FLUXIQ_TEST_ENV_FILES=none pnpm lab replay <scenario> --workspace <name> --project <project-id> --flow <flow-id> --instruction-task <task-id>
 ```
 
-A replay makes "no model" true rather than observing it:
+A replay disables model wiring before starting its owned Core host:
 
 - it refuses to start when its own environment holds any provider credential
-  variable (`PROVIDER_SECRET_ENVIRONMENT_VARIABLES`), naming the variable;
-- it deletes every `llm` Secret Key the workspace's Core holds -- a live build
-  installed one there -- and fails if one survives;
-- it runs the Flow with no `runIntent`, so `runPersistedFlow` asks Core for
-  `adaptiveMode: "deterministic"`, the run carries no model caller, and Core's
-  provider resolver returns no provider at all (Core
-  `programs/_shared/runtime.ts`, `bindLlmExecutionProvider`).
+  variable (`PROVIDER_SECRET_ENVIRONMENT_VARIABLES`);
+- it explicitly passes `modelProvidersEnabled: false` to the owned topology.
+  The child receives `FLUXIQ_MODEL_PROVIDERS_ENABLED=false` before either web
+  host `FluxIQ.create` path. Core omits standing result-check, session-key
+  execution and chat model/key bindings at construction; ordinary callers
+  retain the default enabled behavior;
+- it preserves all stored Secret Keys. Private readonly snapshots compare
+  every key identity and kind before and after the run, including failures.
+  Only counts and the preservation verdict enter the screened report;
+- it requests deterministic execution with no `runIntent`. This controls
+  adaptive execution separately from constructor admission.
+
+Missing provider accounting remains unknown. Core verification deadline
+fallback preserves completed check receipts and cannot certify zero from an
+unsettled check or qualify that run as provider-free replay. An explicit public zero count or
+complete zero ledger is required, and contradictory counts, paid usage, call
+rows, interventions or harness activations reject reuse. Disabled configuration
+alone cannot establish measured zero-provider execution. The constructor gate
+controls initial host wiring; trusted code can still explicitly bind a provider
+later. An accepted usable Flow and its exact task oracles are prerequisites;
+an unfinished build is never replay evidence.
 
 It then requires Core's own record of the run to show zero provider calls, zero
 interventions and zero harness activations, the saved Flow's content hash to be
