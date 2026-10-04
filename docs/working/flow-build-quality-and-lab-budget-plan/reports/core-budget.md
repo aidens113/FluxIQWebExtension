@@ -45,7 +45,7 @@ Scope expansions were explicitly approved by supervisor: owning recovery source 
 - Core focused initial six files:37 passed.
 - Web settings round-trip test:16 passed, only existing react-test-renderer deprecation warnings.
 - Core package `pnpm --filter fluxiq check`: passed,28.5seconds.
-- Initial affected budget directories:132 passed20failed, exposing old universal-clamp assumptions and absent-recovery fallback bug. Retry after fixes:158passed2failed (one own assertion typo fixed, one old fixture corrected). Final combined focused run pending.
+- Initial affected budget directories:132 passed20failed, exposing old universal-clamp assumptions and absent-recovery fallback bug. Retry after fixes:158passed2failed (one own assertion typo fixed, one old fixture corrected). Final combined focused result is recorded below.
 - PowerShell refuses pnpm.ps1 under system execution policy; used pnpm.cmd initially. Subsequent test/check commands use authorized build-slots/heavy.sh through Git Bash. No full suites, provider calls, browser/panel operations or paid Lab runs.
 
 ### Final focused result
@@ -61,4 +61,3 @@ pnpm --filter fluxiq check
 The web focused command passed16tests. Core typecheck passed. Web touched package typecheck is running. Source is frozen and ready for supervisor independent verification.
 
 Web package typecheck duplicate stopped gracefully with Ctrl+C at supervisor request; supervisor already owns web check71753. This worker does not claim web typecheck success. Core typecheck and216 focused tests remain verified. Final source frozen; status completed, awaiting supervisor independent verification.
-
