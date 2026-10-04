@@ -55,6 +55,21 @@
 // (`rebound` below). It is matched only where that is unambiguous; anything
 // else is a new control with a new number, as before.
 //
+// **Across a reload that rewrites a selector's shape.** A page that mints its
+// element ids on every load -- the way a front-end framework does -- gives the
+// extension an id it quotes in a selector on one load (`#fb1x9kq2 > div > div`)
+// and judges machine-made, and so climbs past, on the next (`main > div > div`).
+// That is not a position moving: the selector's shape changed, so its loose
+// address changed with it, and every tier missed. Live, 7-in-1 was `t985` on
+// one load of the item page and `t1194` on the next; a rerun puts its page back
+// by reloading it and then sends the handle the model read before the reload,
+// and two reruns of that step were refused `handle_not_in_packet`
+// (`run-musq0b1m-0472cfa0`, Cause 4). So, last, an element is matched by what
+// a reload does not rewrite at all -- its page, frame, record, tag and words --
+// where exactly one element of the capture and exactly one number of the Flow
+// have them, and that number's control is not still standing at its own
+// address (`rebound`, tier 4).
+//
 // Handles were spelled `target.N` until t223, which is how the runs above
 // recorded them.
 //
@@ -115,9 +130,17 @@ export type WebLlmStableTargetHandles = {
 type FlowHandles = {
   byAddress: Map<string, number>;
   spent: number;
-  seen: Map<number, { loose: string; words: string }>;
+  seen: Map<number, Seen>;
   byLoose: Map<string, number[]>;
 };
+
+/**
+ * What a number's control last looked like where neither positions nor the
+ * selector count: `loose` is its address without positions, `words` its words,
+ * and `place` its page, frame, record and tag -- the address a reload that
+ * rewrites the selector leaves alone (`placesOf`).
+ */
+type Seen = { loose: string; words: string; place: string };
 
 function emptyFlow(): FlowHandles {
   return { byAddress: new Map<string, number>(), spent: 0, seen: new Map(), byLoose: new Map() };
@@ -155,19 +178,23 @@ export function createWebLlmStableTargetHandles(): WebLlmStableTargetHandles {
       const order = renderedFirst(binding);
       const loose = looseAddressesOf(binding);
       const words = binding.evidence.elements.map(identityWords);
-      const numbers = rebound(flow, order, addresses, loose, words);
+      const places = placesOf(binding);
+      const numbers = rebound(flow, order, addresses, loose, words, places);
       const assigned: string[] = [];
       for (const index of order) {
         let number = numbers[index];
         if (number === undefined) {
           flow.spent += 1;
           number = flow.spent;
-          const given = flow.byLoose.get(loose[index] as string) ?? [];
-          given.push(number);
-          flow.byLoose.set(loose[index] as string, given);
         }
+        // A number found again under a rewritten selector (tier 4) is filed
+        // under its new loose address too, so the next capture of that shape
+        // finds it by the tiers before.
+        const given = flow.byLoose.get(loose[index] as string) ?? [];
+        if (!given.includes(number)) given.push(number);
+        flow.byLoose.set(loose[index] as string, given);
         flow.byAddress.set(addresses[index] as string, number);
-        flow.seen.set(number, { loose: loose[index] as string, words: words[index] as string });
+        flow.seen.set(number, { loose: loose[index] as string, words: words[index] as string, place: places[index] as string });
         assigned[index] = `t${number}`;
       }
       return rewrite(binding, assigned);
@@ -227,7 +254,7 @@ function addressesOf(binding: WebLlmSnapshotBinding): string[] {
 
 /**
  * The number each element already has in this Flow, where it has one, or
- * `undefined` for a control the Flow has not seen. Four tiers, each over what
+ * `undefined` for a control the Flow has not seen. Five tiers, each over what
  * the one before left unmatched, and no number is given to two elements:
  *
  * 1. Its exact address, where the control remembered under that address has
@@ -241,9 +268,15 @@ function addressesOf(binding: WebLlmSnapshotBinding): string[] {
  *    given under it: a button whose label changed after a press ("Add to
  *    cart" to "Added") keeps its number. A list whose items changed is not
  *    paired up by count -- sixteen new results are not the sixteen old ones.
- * 4. Nothing: a control the page added, or one this cannot tell apart.
+ * 4. Its place and its words, the selector left out entirely, where exactly
+ *    one element of this capture has them, exactly one unclaimed number was
+ *    last seen with them, and that number's control is not standing at its own
+ *    old address on some other element: a reload that rewrote the selector's
+ *    shape (see the header). Words are required -- a wordless control is told
+ *    apart only by where it is -- and two look-alikes are left unmatched.
+ * 5. Nothing: a control the page added, or one this cannot tell apart.
  */
-function rebound(flow: FlowHandles, order: readonly number[], addresses: readonly string[], loose: readonly string[], words: readonly string[]): Array<number | undefined> {
+function rebound(flow: FlowHandles, order: readonly number[], addresses: readonly string[], loose: readonly string[], words: readonly string[], places: readonly string[]): Array<number | undefined> {
   const numbers: Array<number | undefined> = [];
   const claimed = new Set<number>();
   const take = (index: number, number: number): void => {
@@ -263,7 +296,49 @@ function rebound(flow: FlowHandles, order: readonly number[], addresses: readonl
   pairInOrder(order.filter((index) => numbers[index] === undefined), (index) => loose[index] as string,
     (key) => (flow.byLoose.get(key) ?? []).filter((number) => !claimed.has(number)),
     true, take);
+  reboundByPlace(flow, order, addresses, words, places, numbers, claimed, take);
   return numbers;
+}
+
+/**
+ * Tier 4 of `rebound`: an element whose selector changed shape, found by its
+ * place and words alone, only where nothing else could have them.
+ */
+function reboundByPlace(
+  flow: FlowHandles,
+  order: readonly number[],
+  addresses: readonly string[],
+  words: readonly string[],
+  places: readonly string[],
+  numbers: ReadonlyArray<number | undefined>,
+  claimed: ReadonlySet<number>,
+  take: (index: number, number: number) => void
+): void {
+  const keyOf = (index: number): string | undefined => (words[index] ? `${places[index]}\0${words[index]}` : undefined);
+  // Over the whole capture, matched or not: a look-alike already matched still makes the key ambiguous.
+  const inCapture = new Map<string, number>();
+  for (const index of order) {
+    const key = keyOf(index);
+    if (key !== undefined) inCapture.set(key, (inCapture.get(key) ?? 0) + 1);
+  }
+  const unmatched = order.filter((index) => numbers[index] === undefined && inCapture.get(keyOf(index) ?? "") === 1);
+  if (!unmatched.length) return;
+  // Which element of this capture stands at each number's own old address.
+  const standingAt = new Map<number, number>();
+  for (const index of order) {
+    const known = flow.byAddress.get(addresses[index] as string);
+    if (known !== undefined) standingAt.set(known, index);
+  }
+  const lastSeen = new Map<string, number[]>();
+  for (const [number, seen] of flow.seen) {
+    if (claimed.has(number) || !seen.words) continue;
+    const key = `${seen.place}\0${seen.words}`;
+    lastSeen.set(key, [...(lastSeen.get(key) ?? []), number]);
+  }
+  for (const index of unmatched) {
+    const candidates = (lastSeen.get(keyOf(index) as string) ?? []).filter((number) => !claimed.has(number) && (standingAt.get(number) ?? index) === index);
+    if (candidates.length === 1) take(index, candidates[0] as number);
+  }
 }
 
 /** Pairs each group's elements with its candidate numbers, lowest first; with `single`, only a group of one element and one number. */
@@ -304,6 +379,19 @@ function looseAddressesOf(binding: WebLlmSnapshotBinding): string[] {
     const record = binding.records.get(element.target) ?? "";
     const base = [location, String(element.frameId ?? 0), selector, hosts, record, element.tag].join("\0");
     return createHash("sha256").update(base).digest("base64url");
+  });
+}
+
+/**
+ * Each element's place: the page, the frame, the record it sits in and its tag
+ * -- its address with the selector left out, which a reload that rewrites the
+ * selector does not touch. Matched only together with its words (tier 4).
+ */
+function placesOf(binding: WebLlmSnapshotBinding): string[] {
+  const location = binding.evidence.location;
+  return binding.evidence.elements.map((element) => {
+    const record = binding.records.get(element.target) ?? "";
+    return createHash("sha256").update([location, String(element.frameId ?? 0), record, element.tag].join("\0")).digest("base64url");
   });
 }
 

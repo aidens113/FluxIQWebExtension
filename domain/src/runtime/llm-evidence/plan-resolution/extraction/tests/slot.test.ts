@@ -460,3 +460,20 @@ test("a dedupe that is not one, or a sort key naming no column, is refused where
     assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT), JSON.stringify(extractList));
   }
 });
+
+test("true keeps the detected one-page bound while an explicit nested bound reads five pages", async () => {
+  const capture = structuredClone(CATALOG);
+  if (!capture.structure.ok) throw new Error("catalog detection failed");
+  capture.structure.proposal.pagination = { ...NEXT, maxPages: 1 };
+  const runtime = runtimeOver(capture);
+  const shown = await detect(runtime);
+  assert.deepEqual((shown as WebLlmRepeatingStructure & { paginationBound?: object }).paginationBound, { maxPages: 1 });
+  for (const paginate of [true, undefined]) {
+    const written: JsonObject = { handle: shown.extraction, fields: { name: "product-name" } };
+    if (paginate !== undefined) written.paginate = paginate;
+    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: written }),
+      resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name }, paginate: { ...NEXT, maxPages: 1 } }));
+  }
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: { name: "product-name" }, paginate: { maxPages: 5 } } }),
+    resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name }, paginate: { ...NEXT, maxPages: 5 } }));
+});

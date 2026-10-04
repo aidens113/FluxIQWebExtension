@@ -38,6 +38,35 @@ test("a press's draft statement carries the words of the control it pressed, the
   assert.equal("control" in ((pressed.draft?.ranWith?.parameters ?? {}) as JsonObject), false);
   // "Not now" here stands on the page itself, in no layer: it answered no interruption.
   assert.equal("interruption" in (pressed.draft ?? {}), false);
+  // "Not now" is chosen neither before nor after: the press flipped no choice.
+  assert.equal("toggle" in (pressed.draft ?? {}), false);
+});
+
+// Live runs `run-murwd8le-79e735a8` and `run-musp8nz1-dbd3905a` pressed Space
+// Grey, already marked, off and then on again, and shipped both presses. The
+// draft statement now names the control a press flipped and which way, so Core
+// can take such a pair out of the Flow (`AS/runtime/flow-draft/reversal.ts`).
+test("a press that un-chose the marked option it pressed says so on its draft statement, under the handle the call named", async () => {
+  let marked = true;
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: swatchPage(marked) } };
+      if (command.actionType === "web.dom.click") marked = !marked;
+      return { status: "succeeded", payload: { value: "ok" } };
+    }
+  };
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  const grey = shownPageLines(looked.evidence).find((line) => line.kind !== undefined && line.words === "Space Grey")!.target;
+  const input = { node: CLICK, parameters: { target: { handle: grey } }, consequences: [] };
+  const pressed = await runtime.executeTool({ ...PROJECT, callId: "call.grey.off", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: input });
+  assert.equal(pressed.resultCode, "web.action.succeeded", JSON.stringify(pressed.evidence).slice(0, 400));
+  assert.deepEqual(pressed.draft?.toggle, { key: grey, to: "off" });
+  assert.equal(pressed.draft?.toggle?.key, input.parameters.target.handle);
+  // Pressed again, it chose it: the other half of the pair.
+  const again = await runtime.executeTool({ ...PROJECT, callId: "call.grey.on", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: input });
+  assert.deepEqual(again.draft?.toggle, { key: grey, to: "on" });
 });
 
 test("a press that closed the popup it stood in says so on its draft statement: the step answered an interruption", async () => {
@@ -156,6 +185,23 @@ function page(title: string): JsonObject {
     interactiveElements: [
       { tagName: "button", selector: "#add", visibleText: "Add to cart" },
       { tagName: "button", selector: "#dismiss", visibleText: "Not now" }
+    ]
+  };
+}
+
+/** A product page whose Space Grey swatch is drawn apart from its sibling while chosen. */
+function swatchPage(marked: boolean): JsonObject {
+  const grey: JsonObject = { tagName: "div", selector: "#swatch-grey", visibleText: "Space Grey", cursor: "pointer" };
+  if (marked) grey.setApart = true;
+  return {
+    url: START,
+    title: "Hub",
+    viewport: { width: 1000, height: 1000, scrollX: 0, scrollY: 0 },
+    interactiveElements: [
+      { tagName: "span", selector: "#color-label", visibleText: "Color:" },
+      grey,
+      { tagName: "div", selector: "#swatch-silver", visibleText: "Silver", cursor: "pointer" },
+      { tagName: "button", selector: "#add", visibleText: "Add to cart" }
     ]
   };
 }

@@ -465,3 +465,72 @@ test("a button whose label a press changed keeps its handle, but a list whose it
   const newItems = handlesOf(after, ["Voltbay One", "Soundcore X", "Aria Mini"]);
   for (const handle of newItems) assert.equal(oldItems.includes(handle), false, `${handle} was another product's`);
 });
+
+// A reload that rewrites a control's selector (t174-w115, `run-musq0b1m-0472cfa0`
+// Cause 4). The crossborder store mints a fresh element id on every load
+// (`rotatingId`), and the extension quotes it in a selector only on the loads
+// where it does not look machine-made. So one reload addressed the
+// Specification chips structurally and the next as `#fb… > div > div`: the
+// loose address changed with the selector, every tier missed, and 7-in-1 was
+// `t985` on one load and `t1194` on the next. A rerun puts the page back by
+// reloading it, then sends the handle the model read before the reload, so
+// steps 0063 and 0067 were refused `handle_not_in_packet` and 0073 hit by luck.
+
+const ITEM_URL = "https://shop.example/item/1005008123450";
+
+/** The item page's Specification group, addressed structurally or through a minted id. */
+function specificationGroup(prefix: string): JsonObject[] {
+  return [
+    { tagName: "div", selector: `${prefix} > div:nth-of-type(1)`, visibleText: "Specification:" },
+    ...["4-in-1", "7-in-1", "10-in-1"].map((spec, index) => ({ tagName: "div", selector: `${prefix} > div:nth-of-type(2) > div:nth-of-type(${index + 1})`, visibleText: spec, hasClickHandler: true }))
+  ];
+}
+
+const ITEM_PAGE = (prefix: string): JsonObject[] => [
+  { tagName: "a", selector: "header > a", visibleText: "farbazaar", attributes: { href: "/" } },
+  ...specificationGroup(prefix),
+  { tagName: "div", selector: "main > div:nth-of-type(4) > div", visibleText: "Add to cart", hasClickHandler: true }
+];
+
+const SPECS = ["Specification:", "4-in-1", "7-in-1", "10-in-1"];
+
+test("a reload that addresses a control through a new minted id keeps its handle, and so does the reload after it", async () => {
+  let elements = ITEM_PAGE("main > div:nth-of-type(3)");
+  const runtime = runtimeOver(() => ({ url: ITEM_URL, elements }));
+  const before = handlesOf(await inspect(runtime), [...SPECS, "Add to cart"]);
+
+  elements = ITEM_PAGE("#fb1x9kq2");
+  const reloaded = await inspect(runtime);
+  assert.deepEqual(handlesOf(reloaded, [...SPECS, "Add to cart"]), before, "every control keeps the handle the model read before the reload");
+  assert.equal(await selectorFor(runtime, before[2]!), "#fb1x9kq2 > div:nth-of-type(2) > div:nth-of-type(2)", "and 7-in-1's handle resolves to where it is now");
+
+  elements = ITEM_PAGE("main > div:nth-of-type(3)");
+  assert.deepEqual(handlesOf(await inspect(runtime), [...SPECS, "Add to cart"]), before, "the next reload, addressed as the first was, keeps them too");
+  elements = ITEM_PAGE("#fb3mw0zt");
+  assert.deepEqual(handlesOf(await inspect(runtime), [...SPECS, "Add to cart"]), before, "and so does one through yet another id");
+});
+
+test("a control is matched by its words across a rewritten selector only where one element and one number have them", async () => {
+  // Two "Remove" buttons with no record: nothing says which is which once the
+  // selectors change shape, so neither inherits a number.
+  const removeAt = (prefix: string): JsonObject[] => [1, 2].map((row) => ({ tagName: "button", selector: `${prefix} > div:nth-of-type(${row}) > button`, visibleText: "Remove" }));
+  let elements: JsonObject[] = removeAt("main > section");
+  const runtime = runtimeOver(() => ({ url: ITEM_URL, elements }));
+  const before = (await inspect(runtime)).filter((line) => line.name === "Remove").map((line) => line.target);
+  assert.equal(before.length, 2);
+  elements = removeAt("#fbq2k8m1");
+  const after = (await inspect(runtime)).filter((line) => line.name === "Remove").map((line) => line.target);
+  for (const handle of after) assert.equal(before.includes(handle), false, `${handle} was given to one of two look-alikes`);
+});
+
+test("a number whose control is still at its own address is never handed to a look-alike elsewhere", async () => {
+  // "Add to cart" stays where it was; a second "Add to cart" turns up on a
+  // rewritten selector. The first keeps its number and the second gets its own.
+  let elements: JsonObject[] = [{ tagName: "button", selector: "main > button", visibleText: "Add to cart" }];
+  const runtime = runtimeOver(() => ({ url: ITEM_URL, elements }));
+  const [add] = handlesOf(await inspect(runtime), ["Add to cart"]);
+  elements = [{ tagName: "button", selector: "main > button", visibleText: "Added" }, { tagName: "button", selector: "#fb0aa9x3 > button", visibleText: "Add to cart" }];
+  const after = await inspect(runtime);
+  assert.deepEqual(handlesOf(after, ["Added"]), [add], "the pressed button keeps its number under its new label");
+  assert.notEqual(handlesOf(after, ["Add to cart"])[0], add, "the look-alike on the rewritten selector is another control");
+});

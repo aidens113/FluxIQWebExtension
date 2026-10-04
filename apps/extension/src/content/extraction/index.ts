@@ -28,3 +28,6 @@ export { inferListFromElement } from "./infer-list";
 // And without a pick: the domain's authoring runtime asks `capture_snapshot`
 // to detect a structure around an element it names, or the page's largest.
 export { detectStructure, detectStructureWhenPresent } from "./detect-structure";
+
+// Read feedback uses the same clamped bound as the reader.
+export { paginationBound } from "./pagination";

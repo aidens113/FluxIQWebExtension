@@ -233,6 +233,20 @@ export type WebLlmEvidenceToolExecution = {
      * step by; absent on every call that ran or was refused.
      */
     written?: true;
+    /**
+     * The press flipped whether the control it pressed is chosen
+     * (`./node-run/press-effect/toggle.ts`): `key` is the control's canonical
+     * handle, the name the model already wrote in `input`, and `to` is `on`
+     * when the press chose it and `off` when it un-chose it. Said only by a
+     * press that did not move the page, on the same location both sides, with
+     * the handle's line on both and a chosen token (`marked`, `selected`,
+     * `checked`) on exactly one. Core takes a press out of the Flow with a
+     * later one that flips the same key back (`AS/runtime/flow-draft/reversal.ts`):
+     * live runs `run-murwd8le-79e735a8` and `run-musp8nz1-dbd3905a` shipped
+     * Space Grey off and on again. Core's key list for a statement is exact,
+     * so Core must learn `toggle` before this side sends it.
+     */
+    toggle?: { key: string; to: "on" | "off" };
   };
 };
 

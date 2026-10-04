@@ -20,6 +20,9 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 - Task provisioning completed (pnpm task start exit 0); local ignored .env.local copied by owning lifecycle with $0.10 setting intact.
 - Metadata reconciliation found A run 3 ended failed: run-musuq910-0e2ae903, $0.048319884, finish 2026-10-03T20:41:11.339Z. Its lead's in-progress row is stale and no authored debug exists yet. Debug this ending before any fresh launch, even with a fresh instance.
 - Initial coherent integration candidate is A's paired toggle cancellation / stale test marks / stable handles. Preserve t261 choice-order/budget fixes. Other A/B judgement/per-act changes require later serial reconciliation.
+- A run3 authored debug is complete: no retained cart press, false a1 coverage on Spain, retargeted verify-only reruns and judge disagreement; stopped for no progress, not budget. Four test rounds and 15 repair decisions were wasted. Source integration alone is not a live pass.
+- Core toggle/stale-mark unit is frozen; worker observed 140 tests pass and added a failing-before safety regression. Pair cancellation now preserves intervening kept actions/exported reads. Supervisor ported domain emission/stable handles and independently observed 35 focused tests pass; combined Core/domain checks await the act-claim unit freeze.
+- C/D source reconciliation corrects old handoff: D runtime named-route enforcement exists (w50) but validation is not proven. C's missing paging bound/override feedback is being corrected in a disjoint downstream partition, with bounded default retained.
 
 ## Execution Steps
 
@@ -31,6 +34,33 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 6. Continue the next B/C/D functional blocker from the verified inventory. Record pending work explicitly; preserve the paused standalone UI review unless a live-loop defect requires a focused UI fix.
 
 ## Worker Briefs
+
+### Brief: act-claim-feedback (resume-live-prep after debug)
+- Repository: t262 Core; old A claim-doubt/kind-words are read-only evidence.
+- Task: Reproduce run3 false cart-act coverage on Spain, then add conservative informational mismatch feedback to the model/judge checklist. Existing A doubt handles navigation only; same-place wrong-control claim needs coverage. Preserve whole-Flow judge authority, claims and t261 page-aware choice advice; no new completion/action refusal or auto-execution.
+- Required reads: this Current State, authored run3 debug, current checklist/check/contracts and owning tests, A claim-doubt/kind-words source as reference.
+- Owns (may edit): Core runtime/flow-bootstrap/instructed-acts/{claim-doubt.ts,kind-words.ts,index.ts,checklist.ts,check.ts,tests/claim-doubt.test.ts,tests/checklist.test.ts}; own downstream report.
+- Must not touch: other files/flow-draft/choice-order/budgets/service/docs, old trees, private/runtime data; no provider/panel/commits.
+- Definition of done: failing-before regression for explicit add_to claim on Spain control; precise advisory claimSaid without changing done/todo/claims; legitimate Add-to-cart recognized through existing act-kind vocabulary, blank controls and set/open choices avoid misleading warnings. Retargeted checked rerun remains nonexecuting; feedback tells the model to review the actual control/action and author a distinct required act if needed, rather than expecting rerun to add a step.
+- Report to: docs/working/mvp-live-continuation-2026-10-03/reports/act-claim-feedback.md.
+
+### Brief: pagination-bound-feedback (resume-cd)
+- Repository: t262 downstream.
+- Task: Fix the model-visible paging-bound omission underlying C's one-page read. Show the detected numeric bound and exact nested override path; document absent/true vs paginate:{maxPages:N}; page_limit feedback must name the actual bound. Preserve existing bounded defaults rather than silently expanding exploration.
+- Required reads: this Current State, resume-cd report's focused partition; owning sources/tests.
+- Owns (may edit): domain/src/runtime/llm-evidence/{tools.ts,tests/tools.test.ts,structure/packet.ts,structure/tests/detect.test.ts,plan-resolution/extraction/tests/slot.test.ts}; apps/extension/src/content/actions/{extract-list.ts,tests/extract-list-paging-account.test.ts}; apps/extension/src/content/extraction/index.ts (export existing paginationBound only); own report.
+- Must not touch: other source/docs, node-run/run.ts,capture.ts,stable-handles,press-effect, Core, old trees, private/runtime data; no paid/provider/panel/commits.
+- Definition of done: regression shows detected1/true as bounded incomplete and explicit nested maxPages5 as override5; source feedback consistent and screened, narrow owning tests pass. Request additional file release before editing it; no extraction/live success claim.
+- Report to: docs/working/mvp-live-continuation-2026-10-03/reports/pagination-bound-feedback.md.
+
+### Brief: debug-a-run3 (resume-live-prep)
+- Repository: t262 downstream; read-only prior t174 authored reports and ignored run artifacts.
+- Task: Debug run-musuq910-0e2ae903 before another paid launch. Explain why 41 calls/$0.048319884 produced no Flow; inspect curated decision/test/judge/error metadata and screenshots, link fixes already prepared versus newly needed.
+- Required reads: this Current State; resume-live-prep report; A round-1003 lead; run entry/summary/evaluation and live-llm/flow-lane/step meta records as needed. View screenshots with view_image; never dump raw prompts/pages/private state.
+- Owns (may edit): docs/working/language-driven-flow-loop-plan/debugs/run-musuq910-0e2ae903.md and docs/working/mvp-live-continuation-2026-10-03/reports/debug-a-run3.md in t262.
+- Must not touch: source/shared docs/old trees/env/ledger/guards/slots/profiles; no paid/provider/panel/commits.
+- Definition of done: complete ending/cause analysis, decision and test counts, actual per-build spend, screenshot-backed UI findings, specific additional blocker/repro recommendations. Mark uncertainty; no source-pass claim.
+- Report to: docs/working/mvp-live-continuation-2026-10-03/reports/debug-a-run3.md.
 
 ### Brief: core-toggle-integration (release to resume-ab after inventory)
 - Repository: t262 Core; read-only t174 Core source as implementation evidence.
@@ -70,9 +100,30 @@ Related: [live loop](./language-driven-flow-loop-plan.md), [prior handoff](./cla
 
 ## Work Ledger
 
+### 2026-10-03 — Run3 debug and coherent source review
+- Agent: supervisor with resume-ab, resume-cd and resume-live-prep.
+- Changed: authored run3 debug and worker inventories; ported reviewed domain toggle/stable-handle unit; Core worker ported strict toggle/stale-mark unit and corrected unsafe cancellation across intervening executable steps. Refreshed authoritative live-loop Current State, preserving its previous snapshot in archive.
+- Validation: supervisor named esbuild test bundles followed by node --test printed 35 tests / 35 pass / 0 fail for stable handles, draft controls and press choice/toggle. Worker focused Core vitest printed 7 files / 140 tests pass (supervisor union pending). Run3 metadata/phase-accounting and two screenshot views establish failed/no Flow, 41 calls, .048319884 total and .048180762 build; no new provider run yet.
+- Outcome: Real missing-cart cause documented and active feedback regression released; prior stale in-progress and missing D-runtime claims corrected. Original lane trees/guards/profiles untouched.
+- Follow-up: finish advisory claim and paging feedback, freeze source, independently check the paired unit, then execute one supervised live run.
+
 ### 2026-10-03 — Resumed authorized MVP loop
 - Agent: supervisor.
 - Changed: isolated paired task t262, this continuation/briefs and paired Core memory.
 - Validation: git worktree list and git status --short confirmed main dev clean and old lane trees present; Get-CimInstance process-name inventory found no live Node/Chrome/Edge/Firefox Lab process. pnpm task start mvp-live-continuation --worktree --core is provisioning; product/live checks not validated yet.
 - Outcome: Active work resumed, including isolated live panel/browser testing; budget stays $0.10.
 - Follow-up: reconcile lane changes, prepare guarded run, integrate narrowly, then live test and repair/reuse.
+
+### 2026-10-03 ? Frozen paired integration checks
+- Agent: supervisor.
+- Changed: all three bounded source briefs frozen; current architecture records toggle cancellation, stale-mark invalidation and numeric pagination feedback.
+- Validation: Core heavy-wrapper pnpm --filter fluxiq exec vitest run on instructed-acts/tests plus reversal, entry, amendment, dry-run, authored-draft, step-place and rerun-check: 14 files / 384 tests passed, exit0. Core heavy-wrapper pnpm --filter fluxiq check: exit0, 32.678 seconds. Domain toggle/stable-handle named bundles: 35/35 passed. Core build and downstream package checks/live verification pending.
+- Outcome: provider-free combined Core behavior observed; no paid-run success asserted.
+- Follow-up: build fresh Core, independently run paging owners and downstream typechecks/audits; claim slot2 and launch one real-chat A run at .10.
+
+
+### 2026-10-03 - Runtime ready for live validation
+- Agent: supervisor.
+- Validation: Core fluxiq build exit0 (35.215 seconds). Downstream domain check exit0 (18.194 seconds); extension check exit0 (39.380 seconds). Supervisor node --test on all named final paging bundles: domain54/54 and extension37/37, exit0. node scripts/structure-audit.mjs passed:165 warnings,118 baselined. No full suite repeated.
+- Outcome: paired source frozen and runtime checks green; live run next.
+- Follow-up: preserve checkpoint, claim slot2 exclusively; launch one real-chat add-to-cart case with .10 test-scoped ceiling.

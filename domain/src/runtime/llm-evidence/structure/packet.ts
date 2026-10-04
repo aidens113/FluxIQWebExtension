@@ -144,6 +144,8 @@ export type WebLlmRepeatingStructure = {
   itemCount: number;
   fields: WebLlmStructureField[];
   pagination: WebLlmStructurePaginationMode;
+  /** The detected read bound: absent/true paginate keeps it, not an all-pages promise. No control or page value is exposed. */
+  paginationBound?: { maxPages: number } | { maxScrolls: number };
   /** How sure the detection is, from 0 to 1. */
   confidence: number;
   /** The one item the target belongs to, when it lies outside the list above. */
@@ -196,6 +198,7 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     ? undefined
     : boundList(input, input.recordHandle, record, recordReadable, boundPagination(record.pagination, false), true);
 
+  const paginate = boundPagination(proposal.pagination, infiniteScroll);
   const packet = present<WebLlmRepeatingStructure>({
     schemaVersion: WEB_LLM_STRUCTURE_SCHEMA_VERSION,
     trust: "untrusted-page-evidence",
@@ -205,6 +208,7 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     itemCount: proposal.itemCount,
     fields: readable.map((field) => field.shown),
     pagination: paginationMode(proposal.pagination, infiniteScroll),
+    paginationBound: paginate === undefined ? undefined : paginate.mode === "scroll" ? { maxScrolls: paginate.maxScrolls } : { maxPages: paginate.maxPages },
     confidence: proposal.confidence,
     record: recordBinding === undefined ? undefined : {
       handle: recordBinding.handle,
@@ -215,7 +219,6 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     continues: continuesOf(input.detection.continues),
     atNote: [...readable, ...(recordBinding === undefined ? [] : recordReadable)].some((field) => field.shown.at !== undefined) ? AT_NOTE : undefined
   });
-  const paginate = boundPagination(proposal.pagination, infiniteScroll);
   // A primary proposal of one item with no way to continue is a record by
   // construction: a list needs a run of three or a record pair, so only the
   // label/value receipt and a lone record are sent with one item.

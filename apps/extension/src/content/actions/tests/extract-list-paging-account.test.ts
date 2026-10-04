@@ -10,7 +10,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { webAutomationActionResultPayload } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_EXTRACT_MAX_PAGES, webAutomationActionResultPayload } from "@fluxiq-web-extension/domain/client";
 import { extractListAction } from "../extract-list";
 import type { ActionResultEvidence } from "../../action-runtime";
 import type { ListExtractionOutcome } from "../../extraction";
@@ -25,7 +25,7 @@ const COMMAND: BrowserActionCommand = {
 
 type Seen = { validation: BrowserActionValidation; evidence: ActionResultEvidence | undefined };
 
-async function run(outcome: ListExtractionOutcome): Promise<Seen> {
+async function run(outcome: ListExtractionOutcome, command: BrowserActionCommand = COMMAND): Promise<Seen> {
   let seen: Seen | undefined;
   const built = (status: BrowserActionResult["status"]): BrowserActionResult => ({
     commandId: COMMAND.commandId,
@@ -48,7 +48,7 @@ async function run(outcome: ListExtractionOutcome): Promise<Seen> {
     },
     failure: () => built("failed")
   } as unknown as ContentActionDependencies;
-  await extractListAction(COMMAND, deps, 0);
+  await extractListAction(command, deps, 0);
   if (!seen) throw new Error("the verb built no result");
   return seen;
 }
@@ -133,4 +133,30 @@ test("the rows a page-by-page read left out as repeats of an earlier page ride o
   // A read that did not count them sends nothing, never a zero it did not count.
   const uncounted = await run(outcome({}));
   assert.equal("earlierPageRepeats" in ((uncounted.evidence as { extraction?: object }).extraction ?? {}), false);
+});
+
+test("a one-page truncated read names its bound and exact nested override; an ended list does not", async () => {
+  const command: BrowserActionCommand = { ...COMMAND, extractList: { ...COMMAND.extractList!, paginate: { next: ".next", maxPages: 1 } } };
+  const incomplete = await run(outcome({ pagesRead: 1, truncated: true, paginationStop: "page_limit" }), command);
+  assert.match(actual(incomplete), /extractList\.paginate\.maxPages = 1/u);
+  assert.match(actual(incomplete), /incomplete/u);
+  assert.match(actual(incomplete), /paginate: \{maxPages: N\}/u);
+  const ended = await run(outcome({ pagesRead: 1, paginationStop: "control_disabled" }), command);
+  assert.doesNotMatch(actual(ended), /incomplete|raise|paging stopped/u);
+});
+
+test("scroll truncation names the actual clamped scroll bound and nested scroll override", async () => {
+  const command: BrowserActionCommand = { ...COMMAND, extractList: { ...COMMAND.extractList!, paginate: { mode: "scroll", maxScrolls: 3 } } };
+  const incomplete = await run(outcome({ pagesRead: 4, truncated: true, paginationStop: "page_limit" }), command);
+  assert.match(actual(incomplete), /extractList\.paginate\.maxScrolls = 3/u);
+  assert.match(actual(incomplete), /paginate: \{maxScrolls: N\}/u);
+  assert.doesNotMatch(actual(incomplete), /paginate\.maxPages/u);
+});
+
+test("page-limit feedback uses the reader's clamped bound rather than an oversized requested number", async () => {
+  const command: BrowserActionCommand = { ...COMMAND, extractList: { ...COMMAND.extractList!, paginate: { next: ".next", maxPages: 100_000 } } };
+  const incomplete = await run(outcome({ pagesRead: WEB_AUTOMATION_EXTRACT_MAX_PAGES, truncated: true, paginationStop: "page_limit" }), command);
+  assert.ok(actual(incomplete).includes(`extractList.paginate.maxPages = ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}`));
+  assert.doesNotMatch(actual(incomplete), /100000/u);
+  assert.match(actual(incomplete), /input: \{extractList: \{paginate: \{maxPages: N\}\}\}/u);
 });

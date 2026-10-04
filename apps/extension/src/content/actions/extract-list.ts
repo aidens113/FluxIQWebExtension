@@ -60,6 +60,7 @@
 
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation, WebAutomationExtractListRequest } from "../types";
 import type { ContentActionDependencies } from "./types";
+import { paginationBound } from "../extraction";
 
 type Outcome = Awaited<ReturnType<ContentActionDependencies["extractList"]>>;
 type ExtractionSummary = NonNullable<BrowserActionResult["extraction"]>;
@@ -85,10 +86,10 @@ export async function extractListAction(action: BrowserActionCommand, deps: Cont
       return deps.timedOut(action, startedAt, `Timed out extracting the list after ${count(outcome.pagesRead, "page")}.`, {
         status: "failed",
         expected,
-        actual: `${readSummary(outcome)}; the time ran out before the list ended`
+        actual: `${readSummary(outcome, request.paginate)}; the time ran out before the list ended`
       }, evidence);
     }
-    return deps.success(action, startedAt, "List extracted.", validationFor(outcome, minItems, expected), evidence);
+    return deps.success(action, startedAt, "List extracted.", validationFor(outcome, minItems, expected, request.paginate), evidence);
   } catch (error) {
     return deps.failure(action, error, startedAt);
   }
@@ -195,17 +196,17 @@ function conditionsOf(report: NonNullable<Outcome["conditions"]>): NonNullable<E
  * the columns and `incompleteRecords` counts the rows, so the answer is wide,
  * visibly imperfect, and repairable -- which is what the loop converges on.
  */
-function validationFor(outcome: Outcome, minItems: number, expected: string): BrowserActionValidation {
+function validationFor(outcome: Outcome, minItems: number, expected: string, paginate: WebAutomationExtractListRequest["paginate"]): BrowserActionValidation {
   const gap = recordGap(outcome);
   if (outcome.records.length >= minItems && outcome.missingFields.length === 0 && !everyRecordEmpty(outcome)) {
-    return { status: "passed", expected, actual: `${readSummary(outcome)}; ${gap ?? "every declared field present"}` };
+    return { status: "passed", expected, actual: `${readSummary(outcome, paginate)}; ${gap ?? "every declared field present"}` };
   }
   const shortfalls = [
     ...(outcome.records.length < minItems ? [`fewer than the ${minItems} required`] : []),
     ...(outcome.missingFields.length > 0 ? [`required fields missing from some records: ${outcome.missingFields.join(", ")}`] : []),
     ...(gap ? [gap] : [])
   ];
-  return { status: "failed", expected, actual: `${readSummary(outcome)}; ${shortfalls.join("; ")}` };
+  return { status: "failed", expected, actual: `${readSummary(outcome, paginate)}; ${shortfalls.join("; ")}` };
 }
 
 /** Whether rows came back and not one declared field of any of them read anything (see the header). */
@@ -269,8 +270,8 @@ function recordGap(outcome: Outcome): string | undefined {
  * whole run before anyone could see which of two things had gone wrong
  * (`run-mug3tnti-9ab80b85`).
  */
-function readSummary(outcome: Outcome): string {
-  const read = `${count(outcome.records.length, "record")} from ${count(outcome.pagesRead, "page")}${outcome.truncated ? ", truncated" : ""}${faultAccount(outcome)}${pagingAccount(outcome)}`;
+function readSummary(outcome: Outcome, paginate: WebAutomationExtractListRequest["paginate"]): string {
+  const read = `${count(outcome.records.length, "record")} from ${count(outcome.pagesRead, "page")}${outcome.truncated ? ", truncated" : ""}${faultAccount(outcome)}${pagingAccount(outcome, paginate)}`;
   if (outcome.listPresence === "never_appeared") {
     return `${read}; the item selector named nothing on the page, so the list never appeared${waitAccount(outcome.listWait)} -- change the selector rather than the fields or the conditions`;
   }
@@ -326,7 +327,7 @@ function faultAccount(outcome: Outcome): string {
  * one page with no control in sight is far likelier to be pointing at the wrong
  * element than at a list of one page.
  */
-function pagingAccount(outcome: Outcome): string {
+function pagingAccount(outcome: Outcome, paginate: WebAutomationExtractListRequest["paginate"]): string {
   const stop = outcome.paginationStop;
   if (stop === undefined) return "";
   const refused = outcome.refusedStatus;
@@ -339,6 +340,10 @@ function pagingAccount(outcome: Outcome): string {
   if (!firstPageMiss && (ORDINARY_END.has(stop) || stop === "deadline" || (stop === "page_fault" && outcome.pageFault))) return "";
   if (firstPageMiss) {
     return "; paging stopped on the first page because the pagination control named nothing there -- check the control's selector, unless the list has only one page";
+  }
+  if (stop === "page_limit" && paginate !== undefined) {
+    const key = paginate.mode === "scroll" ? "maxScrolls" : "maxPages";
+    return `; paging stopped because extractList.paginate.${key} = ${paginationBound(paginate)} was reached while the list went on; the read is incomplete -- rerun with input: {extractList: {paginate: {${key}: N}}} to read more`;
   }
   return `; paging stopped because ${PAGING_STOPPED[stop]}`;
 }
@@ -356,7 +361,7 @@ const PAGING_STOPPED: Record<NonNullable<Outcome["paginationStop"]> | "rate_limi
   scrolled_to_end: "scrolling to the bottom brought nothing new, which is the list ending",
   list_vanished: "the page the control led to showed none of the list and no way on -- a rate limit, a check page or an error, not the list ending -- so the read is incomplete",
   rate_limited: "the server kept refusing the next page as too many requests -- the list goes on past these records, so the read is incomplete",
-  page_limit: "the page bound (maxPages, or maxScrolls for a scroll read) was reached while the list went on -- raise it to read more",
+  page_limit: "the paging bound was reached while the list went on; the read is incomplete -- rerun with input: {extractList: {paginate: {maxPages: N}}}, or maxScrolls for a feed, to read more",
   item_limit: "maxItems was reached while the list went on -- raise it to read more",
   deadline: "the command's timeout ran out",
   list_unchanged: "the page ignored its pagination control: pressing it, and going to the address it links to, left the list unchanged",
