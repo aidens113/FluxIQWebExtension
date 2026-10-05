@@ -1,0 +1,58 @@
+# t265 extension UI integration — lead report
+
+Status: Done
+Tree: `C:/Users/osrs_/FluxStuff/fxwork/t265/!FluxIQWebExtension` (branch `task/t265-extension-ui-integration`, at `bdda64b1`; Core sibling at `1fbfa5ef`, built and current).
+Baseline: `pnpm.cmd --filter @fluxiq-web-extension/extension check` in t265 before any edit -> exit 0 (2m33s).
+
+## Sources
+
+Lane trees (read-only, base `45bd6232`): t174 (A9), t193 (F7, F9), t194 (w83, w76 pacer part), t195 (D2).
+Of the files this unit touches, t262 changed only `panel/chat/conversation/{composer,controller}.ts` (scoped chat: `scopeState`, parked `readOnly`); every other lane hunk applies to files equal to the lanes' base.
+
+## Decisions
+
+1. **One clear-on-send: C w83's design (t194), with one hardening from A9.**
+   - Composer: the words leave the box the moment they are sent; a failed send puts them back only if the box is still untouched (no newer typing, fill, or owner change). F7 (t193) and w83 (t194) chose this rule independently. A9 (t174) instead prepended the failed words to anything typed since, which merges two messages into one draft.
+   - The composer's own send-error notice goes; the failed message stays in the thread as the person's turn, with the send error shown on it (w83: `core-thread.ts`, `thread-view.ts`, `message-view.ts`, `chat.css`). A9 removed the failed message from the thread and left the error in the composer, so the person loses where the message went.
+   - The local turn is replaced by Core's once a read holds a person turn that was not there at send (w83). Hardening from A9: after a successful send's refresh whose read succeeded, the local turn is dropped, so it can never linger when Core's turn is not recognised.
+   - Kept from t262: the scoped-chat `scopeState` gating of send/answer and the composer's scope placeholders and parked `readOnly`.
+2. **`status-dwell.ts` is deleted (A9), and B's overlay-lag fix agrees.** A9 makes the background pacer the one pace (interval 1.2 s -> 1.6 s, so any 3 s shows at most two changes) and the overlay draws each display as it arrives, which removes the up-to-a-second lag between overlay and panel. B's lag fix lived in two places: the pacer (a model thought neither starts the interval nor displaces a waiting action; display marked `kind: "thought"`) and the overlay (a thought display keeps the action line already up, so it cannot occupy the dwell). Without the dwell the second cause is gone; both B parts are kept, the overlay part as `model-prose.ts`/`actionOnly`.
+3. **Deferred to after t264 S2 (Core A5/F6/w80/w81):** A9's `wording.ts` hunk that imports `activityActionFailureReason` from `fluxiq/ui` (not exported on Core `dev`; Core lane A's `ui/activity-action/index.ts` adds it) and the test expectations that depend on it (`shared/activity/tests/wording.test.ts` replay-reason lines, `stream/step/tests/card-words.test.ts`, `view/tests/action-card-view.test.ts` replay line); t194's `card-words.ts` `lowerFirst` and its `action-card-view.test.ts` refusal line (w80/w81). `card-words.ts` and `action-card.ts` are left to t264 S2.
+
+## Worker briefs
+
+All: tree above, LF line endings, never touch lane trees or `fxwork/t262`, no commits, no Lab/browser/provider call. Lane change to a file: `git -C C:/Users/osrs_/FluxStuff/fxwork/<lane>/!FluxIQWebExtension diff -- <path>` (+ untracked files). Tests: `node <scratchpad>/t262-gate/run-subset.mjs apps/extension <label> <files>` from the tree root, then `node --test` on the printed bundles.
+
+- **t265-background** (worker-high): owns `apps/extension/src/background/activity/**`, `background/panel/**`, `background/connection.ts`, `shared/activity/**`. A9 (pacer, headline, wording, activity-display, minus the deferred hunk), F9 (send-start, send-answer, activity-relay, index, panel-control, connection, model-thought, display `kind`, pacer thoughts), w76/w83 pacer + unit-situation (hold the meaningful line while deciding; drop the step count during a Flow repair), D2 headline + `headline.test.ts`. Report: `reports/t265/background.md`.
+- **t265-panel-chat** (worker): owns `apps/extension/src/panel/chat/**` except `stream/step/{card-words,action-card}.ts` and `stream/step/tests/card-words.test.ts`, `view/tests/action-card-view.test.ts`. Decision 1 in composer/controller/core-thread/thread-view/message-view/chat.css; A9 scroll-follower; tests. Report: `reports/t265/panel-chat.md`.
+- **t265-overlay** (worker, after background): owns `apps/extension/src/content/activity-overlay/**`, `docs/architecture/extension-client.md`. A9 dwell removal, F7 overlay (model prose, placement over media, status pill, content-message `kind`); the doc for every unit as landed. Report: `reports/t265/overlay.md`.
+
+## Progress
+
+- t265-background and t265-panel-chat ran in parallel (disjoint files); t265-overlay ran after, since it consumes `ActivityDisplay.kind`. Worker reports: `reports/t265/{background,panel-chat,overlay}.md`.
+- **Lead finding, cross-worker regression.** `panel/shell/tests/mount-panel-navigation.test.ts` "list rename synchronizes open chat labels..." failed in t265 (`scrollTop` 1200, expected 140) and passed on clean `dev` (11/11). The cause is A9's scroll follower: only the person's input (wheel, touch, scroll key, scroll-bar drag) ends following now, and that test set `scrollTop` with no input. The lead applied the same one-line fixture change the panel worker made in `navigation-focus.test.ts` (`scroller.dispatch("wheel")` before `"scroll"`). This is the only edit outside the brief's owned list.
+- Pacer test expectations changed to resolve contradictions between lanes. There are 4, each with its reason in `background.md`. The main one: a run that only retries a failed step is "Running your Flow" (A9), not "Fixing your Flow" (t194/D2), so "Couldn't fix your Flow" for a run now needs a real Core repair row. t194's U9 fixtures were rewritten to the shape Core actually sends (the reason is never titled "Deciding the next step").
+- Clear-on-send hardening, as landed: the panel's local turn is dropped by any good read that starts after Core accepted the send, which is slightly wider than the read of the send's own refresh.
+- Deferred, per decision 3: A9's `activityActionFailureReason` wording hunk and its wording/card-words/action-card-view test expectations, and t194's `card-words.ts` `lowerFirst` with its action-card-view line. They land with or after t264 S2 (Core A5 exports the function). `card-words.ts` and `action-card.ts` are untouched.
+
+## Validation (lead-run, t265 tree, after all three workers)
+
+- `git status`: 46 files modified or deleted and 10 added, all under the owned paths plus the one shell test. No CRLF in any changed or new file. `grep -rn "status-dwell\|StatusDwell\|STATUS_DWELL" apps/extension/src docs/architecture`: no match.
+- `run-subset.mjs <abs apps/extension> t265-lead <all 270 test files under src/{background,content,panel,shared}>`, then `node --test --test-concurrency=4 ".test-build-scratch/t265-lead/**/*.test.mjs"`: `# tests 2177 # pass 2177 # fail 0`, exit 0. The log is in the scratchpad at `t265-lead-tests.log`.
+- `pnpm.cmd --filter @fluxiq-web-extension/extension check`: exit 0. This was a build-cache stamp reuse keyed on the current inputs, written by the overlay worker's run after the last edit.
+- `pnpm.cmd --filter @fluxiq-web-extension/extension build`: exit 0; firefox and e2e-chromium each "verified 22 files".
+- `node scripts/structure-audit.mjs`: passed (168 warnings, 118 baselined). New advisories: `pacer.test.ts` at 557 lines; `connection.ts` at 35 methods (F9's `activitySending`).
+
+## Live checks still owed (no Lab, browser or provider run was made)
+
+- **Stale "— done" / pace (A9):** any 3 s of status shows at most two detail changes; the overlay moves in step with the panel's status row; no line ends "— done"; a step's line replaces "Deciding the next step" the moment its card appears; a retry reads "Running your Flow · The page was busy, trying again".
+- **Overlay hold / lag (A9, F7):** the overlay changes when the panel does, never most of a second behind.
+- **Model prose in overlay (F7/F9):** the model's reason or refusal never appears as status on the page or the panel line; an action after a thought is not delayed.
+- **Overlay over media (F7):** on a page with a fixed bar or a hero image or video, the pill docks past the bar or picks the least-busy edge, and still has text.
+- **"Starting…" from send (F9):** it appears on page and panel as the message is sent, and is replaced by Core's first activity; it goes away on a failed send.
+- **Composer kept text / failed send (A9, F7, w83):** the words leave the box on send and appear at once as the person's turn; a failed send leaves that turn in the thread with its error; the words come back to the box only if the person has not typed since.
+- **Chat stopped following (A9):** through a build's ending and a hand-off question, the chat stays at the bottom unless the person scrolled up.
+- **Repair status (w76):** no "Step N of M" during a result-repair re-author; the count returns with the re-run.
+- **"Build failed" (D2):** a creation build that fails mid-repair reads "Build failed"; a run whose repair fails reads "Couldn't fix your Flow"; a run that only retried and failed reads "Run failed".
+
+Status: Done (no commits; the supervisor integrates).

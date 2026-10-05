@@ -42,6 +42,7 @@ import {
   waitForTabReady
 } from "./automation-tab";
 import { tabRequestForAction } from "./command-options";
+import { fluxiqOpenedTabs } from "./fluxiq-opened-tabs";
 import { compareNavigatedUrl } from "./navigation-outcome";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
 
@@ -162,6 +163,9 @@ async function openTab(action: BrowserActionCommand, startedAt: number, request:
       failure: workerActionFailedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, "a new tab", "a tab with no id")
     });
   }
+  // A Flow's own tab-open is FluxIQ's tab, so a dry run's reset closes it
+  // (`fluxiq-opened-tabs.ts`); the tab driven before it is where it came from.
+  fluxiqOpenedTabs.note(tabId, currentAutomationTabId());
   setAutomationTab(tabId);
   if (request.url !== undefined) await waitForTabReady(tabId);
   const landed = await readTabUrl(tabId);
@@ -234,6 +238,7 @@ async function closeTab(action: BrowserActionCommand, startedAt: number, request
   const closingAutomationTab = tabId === currentAutomationTabId();
   await chrome.tabs.remove(tabId);
   forgetAutomationTab(tabId);
+  fluxiqOpenedTabs.forget(tabId);
   const expected = `tab ${tabId} closed`;
   if (await tabIsOpen(tabId)) {
     const actual = `tab ${tabId} is still open`;

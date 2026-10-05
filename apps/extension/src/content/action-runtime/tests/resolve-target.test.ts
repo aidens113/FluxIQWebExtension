@@ -391,3 +391,157 @@ test("a point on a control with no twin still resolves by the point", (t) => {
   assert.equal(resolved.element, only);
   assert.equal(resolved.resolution.strategy, "coordinates");
 });
+
+// t195: a repeat pass's row decides which copy of a repeated control resolves.
+//
+// Inside a For Each the domain writes the pass's row into
+// `element.context.record` as `values` (`webAutomationScopedToRow`), while the
+// recorded selector still names the build's own card. `identity/tests/record.test.ts`
+// proves the rule on one candidate at a time; these rows prove it end to end
+// through the resolver, which is the path both the Flow's click and -- since
+// `run-musp474o-e0ed7432`, where a row-scoped check judged the template card's
+// Confirm on every pass -- a row-scoped assert take. The selector's one answer
+// is in another record, so it is refused; the pass's own card's control is
+// what resolves, and a card holding no such control resolves nothing rather
+// than falling back to the template card's.
+//
+// The DOM is a stub, as everywhere in this file: it answers what the resolver,
+// the record rule and the candidate fingerprint read of an element.
+
+type InviteChild = Element | string;
+
+/** A text node, as the record rule walks one. */
+function inviteText(value: string): Node {
+  return { nodeType: 3, nodeValue: value, textContent: value, childNodes: [] } as unknown as Node;
+}
+
+/** An element answering the record rule, the visibility gate and the candidate fingerprint. */
+function inviteElement(tag: string, attributes: Record<string, string>, children: InviteChild[] = []): Element {
+  const childNodes = children.map((child) => (typeof child === "string" ? inviteText(child) : (child as unknown as Node)));
+  const elementChildren = childNodes.filter((node) => node.nodeType === 1) as unknown as Element[];
+  const matchesOne = (part: string): boolean => {
+    if (!part.startsWith("[")) return part === tag;
+    const [name, quoted] = part.slice(1, -1).split("=");
+    if (!name || attributes[name] === undefined) return false;
+    return quoted === undefined || attributes[name] === quoted.replace(/"/gu, "");
+  };
+  const element = {
+    localName: tag,
+    tagName: tag.toUpperCase(),
+    nodeType: 1,
+    id: "",
+    isConnected: true,
+    parentElement: null as Element | null,
+    childNodes,
+    children: elementChildren,
+    firstChild: childNodes[0] ?? null,
+    shadowRoot: null,
+    classList: (attributes.class ?? "").split(" ").filter(Boolean),
+    ownerDocument: { defaultView: { getComputedStyle: () => ({ display: "block", visibility: "visible" }) } },
+    getBoundingClientRect: () => ({ x: 0, y: 0, top: 10, bottom: 42, left: 0, right: 120, width: 120, height: 32 }),
+    getAttribute: (name: string) => attributes[name] ?? null,
+    getAttributeNames: () => Object.keys(attributes),
+    hasAttribute: (name: string) => name in attributes,
+    matches: (selector: string) => selector.split(",").some((part) => matchesOne(part.trim())),
+    closest(selector: string): Element | null {
+      for (let current: Element | null = element as unknown as Element; current; current = current.parentElement) {
+        if (current.matches(selector)) return current;
+      }
+      return null;
+    },
+    querySelectorAll(selector: string): Element[] {
+      const all = elementChildren.flatMap((child) => [child, ...child.querySelectorAll("*")]);
+      return selector === "*" ? all : all.filter((candidate) => candidate.matches(selector));
+    },
+    get textContent(): string {
+      return childNodes.map((node) => node.textContent ?? "").join("");
+    }
+  };
+  for (const child of elementChildren) (child as unknown as { parentElement: Element }).parentElement = element as unknown as Element;
+  return element as unknown as Element;
+}
+
+/** The recorded selector: the first card's Confirm, which is the card the build was made on. */
+const INVITE_CONFIRM = "li.invite:nth-of-type(1) > button.confirm";
+
+/** Three invitation cards: two still holding a Confirm, and Lena Park's, already accepted, holding none. */
+function installInvitePage(t: TestContext): { jonah: Element; amara: Element } {
+  const card = (name: string, title: string, confirm: boolean) => {
+    const button = confirm ? inviteElement("button", { class: "confirm" }, ["Confirm"]) : undefined;
+    const li = inviteElement("li", { class: "invite" }, [
+      inviteElement("span", { class: "name" }, [name]),
+      inviteElement("span", { class: "title" }, [title]),
+      button ?? inviteElement("span", { class: "status" }, ["Accepted"])
+    ]);
+    return { li, button };
+  };
+  const jonah = card("Jonah Weiss", "Data Engineer", true);
+  const amara = card("Amara Osei", "Product Designer", true);
+  const lena = card("Lena Park", "Recruiter", false);
+  inviteElement("ul", { class: "invites" }, [jonah.li, amara.li, lena.li]);
+  const buttons = [jonah.button!, amara.button!];
+  const installed: Record<string, unknown> = {
+    document: {
+      querySelector: (selector: string): Element | null => (selector === INVITE_CONFIRM ? jonah.button! : null),
+      querySelectorAll: (selector: string): Element[] => {
+        if (selector === INVITE_CONFIRM) return [jonah.button!];
+        if (selector === "button" || selector.includes("[contenteditable]")) return buttons;
+        return [];
+      },
+      getElementById: (): Element | null => null,
+      addEventListener: (): void => {},
+      removeEventListener: (): void => {},
+      activeElement: null
+    },
+    window: { innerHeight: 720, scrollX: 0, scrollY: 0, addEventListener: (): void => {}, removeEventListener: (): void => {} },
+    HTMLElement: class {},
+    HTMLInputElement: class {},
+    HTMLSelectElement: class {},
+    HTMLTextAreaElement: class {}
+  };
+  for (const [name, value] of Object.entries(installed)) {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, name);
+    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+    t.after(() => {
+      if (previous) Object.defineProperty(globalThis, name, previous);
+      else delete (globalThis as Record<string, unknown>)[name];
+    });
+  }
+  return { jonah: jonah.button!, amara: amara.button! };
+}
+
+/** A pass of the repeated Confirm, scoped to the row whose values it carries. */
+function confirmForRow(values: string[]): BrowserActionCommand {
+  return clickCommand({
+    selector: INVITE_CONFIRM,
+    element: {
+      selector: INVITE_CONFIRM, tagName: "button", implicitRole: "button", classNames: ["confirm"],
+      visibleText: "Confirm", accessibleName: "Confirm",
+      context: { record: { values } }
+    }
+  } as Partial<BrowserActionCommand>);
+}
+
+test("a recorded selector naming one card's control resolves the pass's own card's control instead", (t) => {
+  const { jonah, amara } = installInvitePage(t);
+
+  const resolved = resolveTarget(confirmForRow(["Amara Osei", "Product Designer"]));
+
+  assert.equal(resolved.element, amara, "the pass's row decides which Confirm, not the recorded position");
+  assert.notEqual(resolved.element, jonah);
+  // The control: with no row named, the recorded selector's card is the answer,
+  // so the row above was decided by the values and not by the stub.
+  const unscoped = resolveTarget(confirmForRow([]));
+  assert.equal(unscoped.element, jonah);
+  assert.equal(unscoped.resolution.strategy, "selector");
+});
+
+test("a pass whose card holds no such control resolves nothing, never the recorded card's control", (t) => {
+  installInvitePage(t);
+
+  assert.throws(() => resolveTarget(confirmForRow(["Lena Park", "Recruiter"])), (error: unknown) => {
+    assert.equal((error as { failure?: { code?: string } }).failure?.code, "web.target.not_found");
+    assert.match(String(error), /in another record/u, "the selector's answer was refused by the record rule");
+    return true;
+  });
+});

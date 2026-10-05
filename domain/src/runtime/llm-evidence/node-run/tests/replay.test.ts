@@ -21,6 +21,7 @@ const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const CLICK = "web.output.dom-click";
 const EXTRACT_LIST = "web.output.dom-extract_list";
 const SNAPSHOT = "web.output.dom-capture_snapshot";
+const NAVIGATE = "web.output.browser-navigate";
 const START = "https://example.test/start";
 const PERMITTED = async () => ({ permitted: true as const });
 
@@ -48,8 +49,22 @@ test("a reset goes to the recorded location, through the navigate the Flow uses"
   assert.equal(reset.resultCode, "core.replay.replayed");
   assert.equal(reset.effectApplied, true);
   const navigated = stubbed.commands.find((command) => command.actionType === "web.browser.navigate");
-  // With the room to wait out a check that clears by itself, as every navigation has (`actions/check-wait.ts`).
-  assert.deepEqual(navigated?.parameters, { url: START, checkWaitMs: 15_000 });
+  // With the room to wait out a check that clears by itself, as every navigation has (`actions/check-wait.ts`),
+  // and asking the browser to close the tabs FluxIQ's own clicks opened, so
+  // each test of a build does not leave one more behind (t174-w104, cause 15).
+  assert.deepEqual(navigated?.parameters, { url: START, closeOpenedTabs: true, checkWaitMs: 15_000 });
+});
+
+test("only the reset asks for opened tabs to be closed: a Flow's own navigate, replayed, does not", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  await runtime.executeTool({
+    ...PROJECT, callId: "dryrun.1.1", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: NAVIGATE, parameters: { url: START }, consequences: [] }
+  });
+  const navigated = stubbed.commands.find((command) => command.actionType === "web.browser.navigate");
+  assert.equal(navigated?.parameters.url, START);
+  assert.equal(Object.hasOwn(navigated?.parameters ?? {}, "closeOpenedTabs"), false);
 });
 
 test("a reset with no usable location refuses, so nothing is replayed from the wrong place", async () => {
@@ -298,13 +313,13 @@ function answeringStub(failure: { code: string } | undefined, answer: string) {
   return { gateway };
 }
 
-function stub(options: { clickFailure?: { code?: string }; payload?: JsonObject } = {}) {
+function stub(options: { clickFailure?: { code?: string }; payload?: JsonObject; elements?: JsonObject[]; truncated?: true } = {}) {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
       commands.push({ actionType: command.actionType, parameters: command.parameters });
-      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page() } };
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page(options.elements, options.truncated) } };
       if (command.actionType === "web.dom.click" && options.clickFailure) {
         const code = options.clickFailure.code;
         return code === undefined ? { status: "failed", error: "no" } : { status: "failed", failure: { code }, error: "no" };
@@ -315,11 +330,53 @@ function stub(options: { clickFailure?: { code?: string }; payload?: JsonObject 
   return { gateway, commands };
 }
 
-function page(): JsonObject {
-  return {
+function page(elements: JsonObject[] = [{ tagName: "button", selector: "#go", visibleText: "Go" }], truncated?: true): JsonObject {
+  const snapshot: JsonObject = {
     url: START,
     title: "Fixture",
     viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
-    interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }]
+    interactiveElements: elements
   };
+  if (truncated) snapshot.truncated = true;
+  return snapshot;
 }
+
+// t174-w104, cause 7 of `run-musp8nz1-dbd3905a`: each build-test step that
+// answered `remembered` (0035, 0038, 0043) first waited 5.1-6.9 s for its
+// target, 17.2 s of a 36.6 s test. The page read taken before the press
+// already says the target is gone, so the step answers without pressing.
+
+test("a replayed press whose target the page read before it does not show, on the page it acted on, is remembered without pressing", async () => {
+  const stubbed = stub({ clickFailure: { code: "web.target.not_found" }, elements: [{ tagName: "span", selector: "#done", visibleText: "Collected" }] });
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const answered = await runtime.executeTool({
+    ...PROJECT, callId: "dryrun.1.12", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: CLICK, parameters: { selector: "#go", element: { tagName: "button", visibleText: "Get coupons" } }, consequences: [], from: { location: START } }
+  });
+  assert.equal(answered.resultCode, "core.replay.remembered");
+  assert.equal((answered.evidence as JsonObject).ok, true);
+  assert.equal(answered.effectApplied, false);
+  // No press went out, so the node's own wait for its target was never spent.
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.click"), false);
+});
+
+test("a replayed press is still sent when the page read could hold its target, or is not the page it acted on", async () => {
+  const cases: Array<{ why: string; elements: JsonObject[]; parameters: JsonObject; from: JsonObject; truncated?: boolean }> = [
+    { why: "same words under another selector", elements: [{ tagName: "button", selector: "#coupon", visibleText: "Get coupons" }], parameters: { selector: "#go", element: { tagName: "button", visibleText: "Get coupons" } }, from: { location: START } },
+    { why: "an identity with no words to compare", elements: [{ tagName: "span", selector: "#done", visibleText: "Collected" }], parameters: { selector: "#go", element: { tagName: "button" } }, from: { location: START } },
+    { why: "no selector to compare", elements: [{ tagName: "span", selector: "#done", visibleText: "Collected" }], parameters: { element: { tagName: "button", visibleText: "Get coupons" } }, from: { location: START } },
+    { why: "another page", elements: [{ tagName: "span", selector: "#done", visibleText: "Collected" }], parameters: { selector: "#go" }, from: { location: "https://example.test/elsewhere" } },
+    { why: "a read cut short", elements: [{ tagName: "span", selector: "#done", visibleText: "Collected" }], parameters: { selector: "#go" }, from: { location: START }, truncated: true }
+  ];
+  for (const entry of cases) {
+    const options: Parameters<typeof stub>[0] = { clickFailure: { code: "web.target.not_found" }, elements: entry.elements };
+    if (entry.truncated) options.truncated = true;
+    const stubbed = stub(options);
+    const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+    await runtime.executeTool({
+      ...PROJECT, callId: "dryrun.1.12", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+      value: { replay: "step", node: CLICK, parameters: entry.parameters, consequences: [], from: entry.from }
+    });
+    assert.equal(stubbed.commands.filter((command) => command.actionType === "web.dom.click").length, 1, entry.why);
+  }
+});

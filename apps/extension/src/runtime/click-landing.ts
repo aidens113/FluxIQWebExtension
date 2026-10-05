@@ -101,6 +101,7 @@ import type { BrowserActionCommand, BrowserActionResult } from "../shared/protoc
 import type { WorkerActionOutcome } from "./action-results";
 import { boundWorkerValidation, navigationChallengeFailure, navigationUnexpectedFailure, workerActionResult } from "./action-results";
 import { forgetAutomationTab, readTabTitle, readTabUrl, setAutomationTab, waitForTabReady } from "./automation-tab";
+import { fluxiqOpenedTabs } from "./fluxiq-opened-tabs";
 import { watchOpenedTab } from "./opened-tab";
 import { readLandedPage, type FrameSender, type LandedPageReading } from "./landed-challenge";
 import { landedPath } from "./quoted-path";
@@ -252,6 +253,9 @@ async function driveOpenedTab(
   pressed: PressedPage
 ): Promise<BrowserActionResult> {
   setAutomationTab(tabs.openedTabId);
+  // FluxIQ's own tab, so a dry run's reset closes it rather than pressing the
+  // link again from it and leaving one more behind (`fluxiq-opened-tabs.ts`).
+  fluxiqOpenedTabs.note(tabs.openedTabId, tabs.sourceTabId);
   await waitForTabReady(tabs.openedTabId);
   const landed = await readTabUrl(tabs.openedTabId);
   const path = landedPath(landed ?? "");
@@ -289,6 +293,8 @@ async function closeOpenedTab(tabs: OpenedTab, pressedUrl: string | undefined): 
   setAutomationTab(tabs.sourceTabId);
   try {
     await chrome.tabs.remove(tabs.openedTabId);
+    // Still recorded when it would not close, so a reset tries it again.
+    fluxiqOpenedTabs.forget(tabs.openedTabId);
   } catch (error) {
     const detail = error instanceof Error ? error.message.trim() : "";
     return { kind: "not_returned", why: `the new tab it opened could not be closed${detail ? ` (${detail})` : ""}, though the run drives the tab it was pressed in again`, stayed: false };

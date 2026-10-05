@@ -37,7 +37,17 @@
 //
 // The reset never clears site data and never logs the person out (decision
 // D1): a navigation is all it is, so what the site remembers stays remembered,
-// which is why a step whose effect lasts is checked rather than run again.
+// which is why a step whose effect lasts is checked rather than run again. It
+// does ask the browser to close the tabs FluxIQ's own clicks opened, and to
+// drive the tab they were opened from, so a test that follows a link into a new
+// tab does not leave that tab behind for the next one
+// (`../../../client/close-opened-tabs-parameter.ts`, t174-w104).
+//
+// A replayed press whose target the page read before it does not show, on the
+// page the step acted on, answers `remembered` without pressing: the press
+// would only wait out the node's own target wait and come back not found
+// (cause 7 of `run-musp8nz1-dbd3905a`: 17.2 s of a 36.6 s test). Anything that
+// read could be wrong about sends the press as before (`targetAbsentBefore`).
 //
 // **The gate is asked on every replayed step, with the step's own
 // declaration.** A replay is an act on a real page and is no more exempt from
@@ -53,6 +63,7 @@
 // replay asks the page for as a Flow's playback does (t194 w55).
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
+import { WEB_AUTOMATION_CLOSE_OPENED_TABS_PARAMETER } from "../../../client";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import { webAutomationExtractListAloneRowsAsked, webAutomationScopedToRow } from "../../../output-nodes";
 import { webActionFailureRefusal, webActionNeedsPerson } from "../action-failure";
@@ -60,6 +71,7 @@ import { assertActive, toolMetadata, withNodeOutputs, withPersonNeeded, type Web
 import { present } from "../present";
 import { webActionPermission } from "../permission";
 import { resolveWebPlanNode } from "../plan-resolution";
+import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webLlmHandleRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
 import { webRunnableNode } from "./catalog";
@@ -239,7 +251,8 @@ async function resetPage(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> 
     // so there is no catalog id to publish, only why it was not allowed.
     return answer(REPLAY_RESULT_CODES.resetFailed, "the reset was not permitted", false, { resultReason: permissionReason(permission), nodeId: undefined, assumed: undefined });
   }
-  const result = await run.gateway.executeAction(run.sessionId, { actionType: RESET_ACTION, parameters: { url: location }, metadata: toolMetadata(run.request) });
+  const parameters = { url: location, [WEB_AUTOMATION_CLOSE_OPENED_TABS_PARAMETER]: true };
+  const result = await run.gateway.executeAction(run.sessionId, { actionType: RESET_ACTION, parameters, metadata: toolMetadata(run.request) });
   assertActive(run.request.signal);
   if (result.status === "succeeded") return answer(REPLAY_RESULT_CODES.replayed, "the page was put back", true);
   const failed = answer(REPLAY_RESULT_CODES.resetFailed, "the page could not be put back");
@@ -325,6 +338,9 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // that ran can say what it changed. Not shown to the model; only compared.
   const inPlace = node.effect === "mutate" && !webMovesThePage(node);
   const before = inPlace ? await replayPage(run, false) : undefined;
+  if (before !== undefined && targetAbsentBefore(before, ran, run.request.value)) {
+    return await webNodeReplayMissingTarget(run, "step", { resultReason: undefined, nodeId: node.definitionId, assumed }, "target_not_found");
+  }
   const result = await run.gateway.executeAction(run.sessionId, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) });
   assertActive(run.request.signal);
   if (result.status !== "succeeded") {
@@ -396,6 +412,41 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
 async function failedOnPage(run: WebNodeRun, said: string, about: WebNodeReplayFacts, before: Parameters<typeof webNodePageNotice>[0]): Promise<WebLlmEvidenceToolExecution> {
   const page = await replayPage(run);
   return answerOnPage(run, page, { code: REPLAY_RESULT_CODES.failed, said, acted: true, about, notice: webNodePageNotice(before, page) });
+}
+
+/**
+ * Whether the page read before a replayed press shows, beyond doubt this
+ * domain can see, that the press's target is gone from the page the step acted
+ * on.
+ *
+ * Every condition leans towards pressing, because pressing is today's answer
+ * and costs only the wait: the read must be whole (`truncated` false), stand at
+ * the location the step recorded, carry a selector no element of the read has,
+ * and, where the step's identity names its words, show no element with those
+ * words -- the extension finds a control by its identity when the selector has
+ * moved (`content/action-runtime/resolve-target.ts`), so the same words under
+ * another selector may still be the target. A step with no identity, an
+ * identity with no words, or a step with no selector, is pressed: with no words
+ * to rule the target out by, a read that names selectors differently (a shadow
+ * host, a list that moved) would answer `remembered` for a target still there,
+ * and the test would pass a step it never pressed.
+ */
+function targetAbsentBefore(before: WebLlmSnapshotBinding, parameters: JsonObject, value: JsonObject): boolean {
+  const from = isJsonRecord(value.from) ? value.from : undefined;
+  if (before.evidence.truncated || typeof from?.location !== "string" || before.evidence.location !== from.location) return false;
+  const selector = parameters.selector;
+  if (typeof selector !== "string" || selector === "" || [...before.selectors.values()].includes(selector)) return false;
+  if (!isJsonRecord(parameters.element)) return false;
+  const identity = parameters.element;
+  const words = [identity.visibleText, identity.accessibleName, identity.label].filter((entry): entry is string => typeof entry === "string").map(spoken).filter((entry) => entry !== "");
+  if (words.length === 0) return false;
+  return !before.evidence.elements.some((element) =>
+    [element.name, element.label, element.text, element.ownText, element.readable].some((shown) => typeof shown === "string" && words.includes(spoken(shown))));
+}
+
+/** Words as compared: case and spacing aside. */
+function spoken(words: string): string {
+  return words.replace(/\s+/gu, " ").trim().toLowerCase();
 }
 
 /** How many rows a reading node's payload holds: the longest list it carries. */

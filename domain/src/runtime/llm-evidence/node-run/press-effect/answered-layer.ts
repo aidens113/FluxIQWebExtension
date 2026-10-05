@@ -15,6 +15,12 @@
 // the layer itself, or when it belongs to one (`../layer/member.ts`). Said only
 // where the two looks are of the same page: a press that took the page
 // elsewhere answered whatever it answered by leaving.
+//
+// A layer this build opened itself is not one (t193, C17): a press that opened
+// the store chooser and a press inside it that chose a store and closed it are
+// two steps of the Flow, not an answer to an interruption. Which layers a press
+// of the build opened is the build's memory (`../own-layers/memory.ts`), handed in as
+// `own`; a layer it names does not count here.
 
 import { canonicalWebLlmTargetHandle } from "../../handle-spelling";
 import type { WebLlmEvidenceElement } from "../../elements";
@@ -25,17 +31,19 @@ import { webInLayer, webIsLayer } from "../layer";
  * Whether the press of `handle` on `before` answered a layer: the control lay
  * in one there, and on `after` -- the same page -- that layer is gone or no
  * longer stands in front of it. False wherever either look, or the handle, is
- * missing.
+ * missing. A layer `own` names -- one a press of this build opened -- is not
+ * counted: closing it answered nothing that stood in the Flow's way.
  */
 export function webAnsweredLayer(
   before: WebLlmPageEvidence | undefined,
   after: WebLlmPageEvidence | undefined,
-  handle: string | undefined
+  handle: string | undefined,
+  own: (layer: string) => boolean = () => false
 ): boolean {
   const target = canonicalWebLlmTargetHandle(handle);
   if (before === undefined || after === undefined || target === undefined) return false;
   if (before.location !== after.location) return false;
-  const layers = layersHolding(before, target);
+  const layers = layersHolding(before, target).filter((layer) => !own(layer));
   if (layers.length === 0) return false;
   const afterByHandle = new Map(after.elements.map((element) => [element.target, element] as const));
   return layers.some((layer) => !webIsLayer(afterByHandle.get(layer)));

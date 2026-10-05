@@ -7,5 +7,6 @@ export type { WebNodeRun } from "./context";
 export { createWebNodeArrivals, type WebNodeArrivals } from "./arrival";
 export { WEB_NAVIGATION_ACTION } from "./start-location";
 export { createWebNodeShownAddresses, type WebNodeShownAddresses } from "./shown-addresses";
+export { createWebNodeOwnLayers, type WebNodeOwnLayers } from "./own-layers";
 export { replayWebOutputNode, webNodeRecordCount, webNodeReplayCall, webNodeReplayStatement, WEB_LLM_REPLAY_KEY, type WebNodeReplayStatement } from "./replay";
 export { webLlmCallWords, type WebLlmCallWords } from "./call-words";
