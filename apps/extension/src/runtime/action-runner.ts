@@ -12,6 +12,7 @@ import {
 import {
   consumeSnapshotReadiness,
   currentAutomationTabId,
+  latestOpenAutomationTab,
   noteSnapshotReadiness,
   readTabTitle,
   readTabUrl,
@@ -23,7 +24,8 @@ import {
 import { runBrowserDownloadAction } from "./browser-download";
 import { runBrowserTabAction } from "./browser-tab";
 import { sendClickCheckingLanding } from "./click-landing";
-import { frameIdForAction, frameUrlPathForAction, opensNewTab, tabIdForAction } from "./command-options";
+import { closesOpenedTabs, frameIdForAction, frameUrlPathForAction, opensNewTab, tabIdForAction } from "./command-options";
+import { fluxiqOpenedTabs } from "./fluxiq-opened-tabs";
 import { waitForFrameChoice } from "./frame-address";
 import { sendExtractListAcrossDocuments } from "./extract-list-continuation";
 import { readLandedPage, type LandedPageReading } from "./landed-challenge";
@@ -103,7 +105,14 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   // The resolution drives the tab when the action is a navigation, and reports
   // what that drive did: the only evidence there is that the navigation was
   // any work at all.
-  const { tabId, drive } = await resolveAutomationTab(await tabRequestFor(action, request, isNavigation));
+  // A dry run's reset first closes the tabs FluxIQ opened, and drives the tab
+  // they were opened from when one of them was in front (`fluxiq-opened-tabs.ts`).
+  const runOn = isNavigation && closesOpenedTabs(action) ? await afterClosingOpenedTabs(request) : request;
+  const drivenBefore = currentAutomationTabId();
+  const tabRequest = await tabRequestFor(action, runOn, isNavigation);
+  const { tabId, drive } = await resolveAutomationTab(tabRequest);
+  // A Flow's new-tab navigate opened this tab, so it is FluxIQ's to close.
+  if (tabRequest?.forceNew === true && drive?.opened === true) fluxiqOpenedTabs.note(tabId, drivenBefore);
   const frameId = frameIdForAction(action);
 
   const unsupportedReason = await unsupportedPageReasonFor(action, request, tabId, isNavigation);
@@ -202,6 +211,23 @@ async function tabRequestFor(
   if (namedTabId !== undefined) tabRequest.requestedTabId = namedTabId;
   else if (request.activeTabId !== undefined) tabRequest.requestedTabId = request.activeTabId;
   return tabRequest;
+}
+
+/**
+ * The request a reset runs on once the tabs FluxIQ opened are closed. The
+ * command router read the tab in front before the action ran, and that was
+ * usually the last click's item tab, now closed: the reset then drives the tab
+ * that tab was opened from, else the tab driven before it. A tab in front that
+ * was not closed -- a person's own -- is driven as before.
+ */
+async function afterClosingOpenedTabs(request: BrowserActionRunRequest): Promise<BrowserActionRunRequest> {
+  const { closed, returnTo } = await fluxiqOpenedTabs.closeAll();
+  if (request.activeTabId === undefined || !closed.includes(request.activeTabId)) return request;
+  const instead = returnTo ?? await latestOpenAutomationTab();
+  const runOn: BrowserActionRunRequest = { ...request };
+  if (instead === undefined) delete runOn.activeTabId;
+  else runOn.activeTabId = instead;
+  return runOn;
 }
 
 /**

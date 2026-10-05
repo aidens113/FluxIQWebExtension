@@ -18,6 +18,7 @@ import { OriginPace, PAGE_LOAD_PACE_SETTINGS } from "../../background/page-pace"
 import type { BrowserActionCommand, BrowserActionResult } from "../../shared/protocol";
 import { currentAutomationTabId, forgetAutomationTab, setAutomationTab } from "../automation-tab";
 import { sendClickCheckingLanding } from "../click-landing";
+import { fluxiqOpenedTabs } from "../fluxiq-opened-tabs";
 import type { LandedTabAccess } from "../landed-check-wait";
 
 const CLICKED_TAB = 41;
@@ -113,7 +114,9 @@ function installBrowser(t: TestContext, statuses: Record<number, number | undefi
   t.after(() => {
     delete (globalThis as { chrome?: unknown }).chrome;
     forgetAutomationTab();
+    fluxiqOpenedTabs.forget(OPENED_TAB);
   });
+  fluxiqOpenedTabs.forget(OPENED_TAB);
   forgetAutomationTab();
   setAutomationTab(CLICKED_TAB);
   return browser;
@@ -183,4 +186,19 @@ test("a robot check in the new tab is the person's to answer", async (t) => {
   const result = await pressCard(browser, CLICKED_TAB, PERSON_ONLY_CHECK);
   assert.equal(result.failure?.code, "web.intervention.required");
   assert.equal(currentAutomationTabId(), OPENED_TAB, "the person answers the check where it stands");
+});
+
+// t174-w104: a tab a click opened is recorded as FluxIQ's, with the tab it was
+// opened from, so a dry run's reset can close it (`fluxiq-opened-tabs.ts`).
+test("a tab a click opened is recorded as FluxIQ's, with the tab it was opened from", async (t) => {
+  const browser = installBrowser(t, { [OPENED_TAB]: 200 });
+  await pressCard(browser, CLICKED_TAB);
+  assert.deepEqual(fluxiqOpenedTabs.recorded(), [{ tabId: OPENED_TAB, sourceTabId: CLICKED_TAB }]);
+});
+
+test("a tab a click opened and closed again on a refused landing is no longer recorded", async (t) => {
+  const browser = installBrowser(t, { [OPENED_TAB]: 429 });
+  await pressCard(browser, CLICKED_TAB, NO_CHECK, new OriginPace(PAGE_LOAD_PACE_SETTINGS, () => 1_000_000));
+  assert.deepEqual(browser.removed, [OPENED_TAB]);
+  assert.deepEqual(fluxiqOpenedTabs.recorded(), []);
 });

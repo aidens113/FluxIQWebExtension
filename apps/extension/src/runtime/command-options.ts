@@ -8,7 +8,7 @@
 // malformed value rather than coercing it, so a bad parameter fails the action
 // instead of silently retargeting it at another tab or frame.
 
-import { webAutomationUrlPath } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_CLOSE_OPENED_TABS_PARAMETER, webAutomationUrlPath } from "@fluxiq-web-extension/domain/client";
 import type {
   BrowserActionCommand,
   WebAutomationDownloadRequest,
@@ -63,6 +63,16 @@ export function tabIdForAction(action: BrowserActionCommand): number | undefined
 /** `web.browser.navigate`: open a new tab instead of reusing the automation tab. */
 export function opensNewTab(action: BrowserActionCommand): boolean {
   return action.newTab ?? booleanAt(optionsOf(action), "newTab") ?? false;
+}
+
+/**
+ * `web.browser.navigate` sent as a dry run's reset: close the tabs FluxIQ
+ * opened before driving the page (`fluxiq-opened-tabs.ts`). Only the reset
+ * sends it (`domain/src/client/close-opened-tabs-parameter.ts`); it has no
+ * typed field, because no Flow may author it.
+ */
+export function closesOpenedTabs(action: BrowserActionCommand): boolean {
+  return booleanAt(optionsOf(action), WEB_AUTOMATION_CLOSE_OPENED_TABS_PARAMETER) ?? false;
 }
 
 /**
