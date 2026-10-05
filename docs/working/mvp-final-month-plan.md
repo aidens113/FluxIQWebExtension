@@ -277,6 +277,14 @@ Source of every port: Claude's uncommitted lane trees, read-only: `C:/Users/osrs
 - Outcome: Accepted (t263); Partial (sweep).
 - Follow-up: land t263; t266 for the Core fallout; rebuild Core dist and finish the downstream half of the sweep.
 
+### 2026-10-05 — t265, t266, t268 landed; t264 S1 committed
+- Agent: supervisor with t265-extension-ui (lead), t266-suite-fallout, t268-extraction-ui, t268-deep-link, t264-core-chain (lead).
+- Changed: t265 `80bc6447` (A9, B F7, B F9, C w83, C w76 pacer, D D2; `status-dwell.ts` removed), merge `d72c8866`; t266 Core `55045117` (seven tests to t262/t261 contracts), Core merge `de8eb8e5`; t268 extension `56d99be4` (extraction caret, accessible preview table, refresh feedback), Core `c49a1663` (deep link to a Flow's adaptation), merges `5437a163` / Core `cc722f4e`; t264 S1 Core `9975ce6d` (instruction authority) on its task branch. All pushed.
+- Why: Phase 0 integration; first Phase 4 units that did not need t264's files.
+- Validation: t265 changed extension tests rebundled (21 files, deleted files excluded) -> `# tests 234 # pass 234 # fail 0`; `extension check` 0, `extension build` 0, audit passed. t266 `npx vitest run <7 files>` -> 7 files, 58 tests passed; `fluxiq:check` 0; Core finish `pnpm check` passed. t264 S1 vitest on 4 changed files plus `flow-bootstrap/instructed-acts` and `tests/service-authoring` -> 14 files, 301 passed; `fluxiq:check` 0; Core audit 0. t268 deep-link test -> 6/6 with the fix, 4 failed / 2 passed with the old hook stashed; `web:check` 0. t268 extraction tests (17 files) -> 170/170; `extension check` 0; Core finish `pnpm check` passed. The extraction worker briefly started the extension's content e2e specs by a bare `node --test` and stopped them; no browser process remained.
+- Outcome: Accepted
+- Follow-up: t264 S2-S4, t267 S1-S5; then Phase 1 live rounds on the integrated source.
+
 ## Open Questions
 
 - Is demonstrate/record an MVP acceptance requirement after the 2026-09-22 scope ruling? Owner: user. Default taken: supported, unmeasured, one smoke proof.
