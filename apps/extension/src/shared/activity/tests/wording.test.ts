@@ -194,7 +194,8 @@ test("a dry run reads as trying the Flow from the start, and a step that did not
   assert.equal(started.sentence, label);
   assert.equal(started.outcome, null, "a started call whose sentence has a colon has not ended");
   const changed = activityWording(named({ phase: "verifying", title: "Clicking “Get a free quote”", label: `${label} — didn't work the same way again`, status: "succeeded", text: "Result: core.replay.unreproducible · Node: web.output.dom-click" }));
-  assert.equal(changed.sentence, `${label} — it didn't work the same way again`);
+  // Core's reason for the code (`fluxiq/ui` `activityActionFailureReason`), as the step's card says it (t174-lead-1003).
+  assert.equal(changed.sentence, `${label} — the page wasn't in the same state when the test got there`);
   assert.equal(activityWording(named({ phase: "verifying", title: "Running a step", label: "Trying the Flow from the start: running a step — done", status: "succeeded", text: "Result: core.replay.replayed" })).sentence, "Trying the Flow from the start: running a step — done");
 });
 
@@ -211,7 +212,8 @@ test("a dry run step the test only checked, found already done, or passed over s
   assert.equal(said("already done on the site", "Result: core.replay.remembered · Node: web.output.dom-click"), `${label} — already done on the site`);
   assert.equal(said("skipped: not there, optional", "Result: core.replay.failed · Excused: interruption · Node: web.output.dom-click"), `${label} — skipped: not there, optional`);
   // A step that did not hold and is not excused reads as before.
-  assert.equal(said("didn't work the same way again", "Result: core.replay.unreproducible · Node: web.output.dom-click"), `${label} — it didn't work the same way again`);
+  assert.equal(said("didn't work the same way again", "Result: core.replay.unreproducible · Node: web.output.dom-click"), `${label} — the page wasn't in the same state when the test got there`);
+  assert.equal(said("didn't work the same way again", "Result: core.replay.changed · Node: web.output.dom-click"), `${label} — it did nothing this time, where it did something before`);
   // An older Core, whose sentence said only "done", is read as it was.
   assert.equal(said("done", "Result: core.replay.verified · Node: web.output.dom-click"), `${label} — done`);
 });
