@@ -231,3 +231,130 @@ reports (this one, `t264-s2-w1..w4-*.md`).
 - Gaps: no test asserts `steps` on the gate's unchanged-again and replay-refused refusals (only `full_run_required`
   end to end); the `service.ts` `readRecord` wiring has no test of its own; no live, Lab, browser or provider run.
 - `docs/reference/framework-reference.md` stays stale (pre-existing on dev), for the docs-last step.
+
+Committed by the supervisor: Core `84117643`, downstream `ce1e8903`; then `dev` merged into both t264 trees (Core
+`e223e765`, downstream `1529e5c3`: t263, t265, t266 sweep fixes, t268), Core rebuilt; the supervisor's post-merge run
+of the previously failing files plus `activity`, `result-verification`, `tests/service-bootstrap`: 77 files, 668 passed,
+0 failed.
+
+## Stage S3 — judge and ending
+
+Status: done, verified by the lead, uncommitted (2026-10-05). Base: Core `e223e765`, downstream `1529e5c3`. Ready for
+the supervisor to commit on `task/t264-core-integration-chain`: 55 Core files, downstream `shared/activity/wording.ts` +
+test, and four reports (this one, `t264-s3-w5..w7-*.md`). The pre-existing sweep failures are
+fixed on this base (t266), so every failure in S3 runs is new or must be explained.
+
+### Facts and decisions (lead)
+
+- Since the lane base, dev changed in S3's areas only `build-test/{judge,summary}.ts` (+ judge test),
+  `unfinished-build/{phases,reserve-judging,round-ending}.ts` and their tests (t262), and `conversations/commands/
+  explore.ts`, `conversations/instructions/prompt.ts` (+ tests). Lane hunks elsewhere apply onto unchanged content.
+- Units and their reports: A3a = t174 `reports/t174-w106.md`; A w118 = `t174-w118.md`; A6 = `t174-w105.md`; B F2 =
+  t193 `1003-w3-replayed-press-observed`; B F3 = `1003-w4-judge-softened-progress`; B F4/F10 = `1003-w9-unfinished-
+  ending-words` (+ `1003-w10` leftovers); D C2 = t195 `w42-judge-stopped-round`; D C4 = `w44-ending-ui`; D w48 =
+  `w48-ending-words`.
+- A3b (optional-only, choice-order) goes to S4: its files (`flow-bootstrap/instructed-acts/*`,
+  `llm/harness-options/bootstrap-completion.ts`, `flow-draft/act-claim.ts`) are S4's authoring files (D w47, B F5).
+- t195's `llm/deepseek/tests/request-body.test.ts`, `tests/deepseek-bootstrap/tests/observation.ts`,
+  `tests/service-bootstrap/tests/extend.test.ts` and its `service.ts` hunk belong to w47/w49/w50, not S3.
+- `conversations/commands/run-flow.ts`: only A6's one wording line (t267 will make it send `runIntent`; supervisor).
+- A9's `apps/extension/src/shared/activity/wording.ts` hunk (t265 now in the tree) is t264's for this purpose.
+
+### Plan (serial)
+
+- W5 (`worker-high`): A3a + B F2 merged by hand (`build-test/{change-lines,observation,summary,index}`, diagnosis
+  instructions, pins), B F3 (`build-test/judge.ts` onto t262, `unfinished-build/{judgement,progress,contracts}` F3
+  parts).
+- W6 (`worker-high`): D C2 onto t262's reserve judging and A w118 finishing verdict; sole owner of
+  `unfinished-build/phases.ts` (every lane's phases hunk), `reserve-judging.ts`, `finishing-verdict.ts`, `contracts.ts`
+  w118 part, `service.ts` `buildJudged` in place.
+- W7 (`worker-high`): one ending-wording owner: B F4/F10, D w48, D C4, A6 (`unfinished-build/{not-finished,not-done,
+  not-doable,budget-exhausted,replies-unreadable,ending-fit}`, `conversations/**`), and A9's extension wording hunk.
+
+### W5 (A3a + B F2 + B F3) — verified by the lead
+
+- Worker report: `t264-s3-w5-judge-evidence.md`. A3a and F2 merged in `build-test/{change-lines (new),observation,
+  summary}.ts`: B's route and screen, A's cap (3 lines of 160 characters, the step's own control first) and A's
+  "exploration state predates the test" sentence. F3: `oneCallSaidYes` in `judge.ts` onto t262; the
+  `judge_no_longer_refutes` progress measure in `unfinished-build/{contracts,judgement,progress}.ts`.
+- Two rules in neither lane, accepted by the lead: lines where a text now reads otherwise (`was "<old>"`) rank second,
+  so the cap keeps the quantity a "+" set (B's defect); the domain's own `and N more changes` line is counted in
+  `changedNotShown`, not shown. Both shapes exist in the domain (`node-run/press-effect/page-changes.ts:60,109`).
+- Judge instruction, sentence-level diff checked: one sentence widened (`observed` includes a replayed step's
+  change), two added (state predates the test; how to read `observed.changed`); pins updated to match.
+- Left for later: A's Cause 5 parts of `summary.ts`/`summary.test.ts` (A3b, S4); B's `not-finished.ts` wording for a
+  no-then-split pair (W7).
+- Lead runs: `npx vitest run` on `R/result-verification R/flow-bootstrap/unfinished-build R/llm/tests
+  R/llm/deepseek/tests R/tests/service-bootstrap/tests R/tests/deepseek-bootstrap R/tests/service-authoring/tests` ->
+  exit 0, `Test Files 115 passed (115)`, `Tests 1126 passed (1126)` (`t264-s3/w5-vitest.log`); `fluxiq:check` 0; Core
+  structure audit 0; 17 changed files, 0 with CR.
+
+### W6 (D C2 + A w118 Core) — verified by the lead
+
+- Worker report: `t264-s3-w6-stopped-round-and-finishing-verdict.md`. C2 rebuilt on t262's reserve:
+  `automationStudioFlowBootstrapJudgeAtReserve` takes `stopped: "cost" | "calls" | "short"` (t262's `bound` mapping
+  kept: a call refusal with `keptBackCalls` is `calls`); a round that stopped short with a clean, changed Flow is now
+  judged (`shortJudged`, not when the Flow is unchanged since a judged no), and a judged no from it feeds `judgedNo`
+  and phase 3's rules. t262's own phases and reserve-judging tests are untouched and pass. C2's test failed 4/6 with C2
+  switched off (worker). w118: `finishing-verdict.ts` (digests, not raw signatures), `finished` carries `finishing`,
+  `service.ts` writes `detail.buildJudged` on the `created` audit event (in place, 4400 lines); the build-trace hunks
+  of lane A's `service.ts` were already landed by W2 (3 references present).
+- New value for S5: `finishing.judgedAt` can be `"stopped_short"`; lane A's test-runner `build-proposal.ts` (A10, S5)
+  must accept it.
+- Lead runs: `npx vitest run` on `R/flow-bootstrap R/result-verification R/tests/service-bootstrap/tests
+  R/tests/deepseek-bootstrap R/tests/service-authoring/tests R/service` -> exit 0, `Test Files 197 passed (197)`,
+  `Tests 2139 passed | 1 skipped (2140)` (the skip is `loop-budget-cost-ending.test.ts:75`'s conditional `skipIf`);
+  `fluxiq:check` 0; Core audit 0; 25 changed files, 0 with CR.
+
+### W7 (B F4/F10, D w48, D C4, A6, A9 wording) — checked by the lead
+
+- Worker report: `t264-s3-w7-ending-wording.md` (final sentence for every ending, a before/after for every chat
+  line, each conflict and its choice). One ending author: lane D's plain words for the not-finished opening, list and
+  tried sentence; lane B's distinctions for the judge clause (covers W5's no-then-split leftover), its doubt sentence,
+  never-cut fitting (`ending-fit.ts`, new) and said-once progress sentence; create-here "The Flow "<name>" keeps your
+  instruction." Two repeated clauses neither lane fixed (budget and not-doable endings) fixed and tested.
+- A6 ported onto dev's `explore.ts`; `conversations/commands/run-flow.ts` diff is exactly one line (`announce:
+  ... "Running "<name>" now. I'll say here how it went."`). A9: `X/shared/activity/wording.ts` and its test now equal
+  lane A's files byte for byte (CR stripped); the only change is `activityActionFailureReason(code) ??
+  OUTCOME_NOT_REPEATED` for `core.replay.(changed|unreproducible)`.
+- C2 fallout found by W7: dev's `conversations/commands/tests/extension-chat.test.ts` "continues a kept creation ..."
+  (t262 `80116d0e`) failed after W6, because its first build now stops short with a clean Flow and is judged, and the
+  fixture judge said yes. W7 scripts that build's judge to say no (`scriptJudge(["no","no"])`); the continuation
+  assertions are unchanged. Lead: legitimate (the test's premise, an unfinished first build, now needs a no). W6's
+  wider behaviour (a short-stopped round 0 with no earlier judge is judged too, from the reserve kept from the start)
+  is accepted: it matches the rule that a build finishes only on a judged whole-Flow run. My W6 rerun had not covered
+  `conversations/`; the broad run below closes that gap.
+- Left open by W7: internal words still in the budget ending ("over N decisions") and unreadable-replies ending ("the
+  model's replies", "over one live round"), pinned in `tests/deepseek-bootstrap/tests/exploration.test.ts:120`,
+  `tests/service-bootstrap/tests/unreadable-replies.test.ts:103-104`, `tests/service-bootstrap/tests/
+  unfinished-build.test.ts:148`, `activity/build.ts:58`; lane B D12 repair heading "Building on the Flow" (not an
+  ending); `kept-said.ts` "kept as a draft, not put into the Flow" still awkward; `not-done.ts` exports 11 values
+  (advisory 8).
+- Lead checks: 55 Core and 6 downstream changed files, 0 with CR (node count).
+
+### Stage S3 lead validation (final tree, logs in scratchpad `t264-s3/`)
+
+- `npx vitest run src/programs/automation-studio src/ui` (`packages/fluxiq`; the whole automation-studio program,
+  run because C2 changes when a build finishes) -> exit 0, `Test Files 702 passed (702)`, `Tests 6730 passed | 1
+  skipped (6731)`, 285 s (`s3-broad-vitest.log`). The skip is `loop-budget-cost-ending.test.ts:75`'s conditional
+  `skipIf`.
+- `fluxiq:check` 0; Core `structure-audit:check` 0; `service.ts` 4400 lines; `phases.ts` 716 lines (budget 800).
+- Downstream: extension check 0 (`core-build: ... current with its source`); domain check 0; `node
+  scripts/structure-audit.mjs` 0 ("passed (170 warning(s), 118 baselined)"); 21 extension test files under
+  `shared/activity`, `panel/chat/stream/step`, `panel/chat/view`, `background/activity` bundled and run -> `# tests 165
+  # pass 165 # fail 0`.
+- Line endings: 55 Core and 6 downstream changed/new files, 0 with CR.
+- Not verified: no live, Lab, browser or provider run; the real judge still returns no confidence or advice, so
+  w118's record fields are tested with scripted values only.
+
+### Carried forward from S3
+
+- To S4: A3b (optional-only, choice-order, claim-doubt parts of `summary.ts` Cause 5) with D w47 on
+  `bootstrap-completion.ts`; lane D w41/w46 hunks noted by W6; lane B D12 repair heading "Building on the Flow"
+  (`phases.ts` + `phases.test`) if S4's owner of `phases.ts` takes it.
+- To S5: test-runner `build-proposal.ts` must accept `judgedAt: "stopped_short"` (A10); w118's downstream chat-record
+  `said` and `judged` fields.
+- Wording debt (pinned in tests outside S3's ownership): budget ending "over N decisions", unreadable-replies ending
+  "the model's replies"/"over one live round" (`exploration.test.ts:120`, `unreadable-replies.test.ts:103-104`,
+  `unfinished-build.test.ts:148`, `activity/build.ts:58`); `kept-said.ts` "kept as a draft, not put into the Flow";
+  stale `judgedTest` doc comment in `service/flow-bootstrap-commands/build-judge.ts` (reserve case only).
