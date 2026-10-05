@@ -1,7 +1,7 @@
 # t267 adaptation-loop unblock — lead report
 
-Status: Stages S1 (committed by the supervisor) and S2 done; S2 handed back uncommitted for the supervisor to verify and commit; S3-S5 not started.
-Tree: `C:/Users/osrs_/FluxStuff/fxwork/t267/!FluxIQWebExtension` (branch `task/t267-adaptation-loop-unblock`); Core sibling `fxwork/t267/!FluxIQ` (same branch, from `de8eb8e5`): unchanged in S1, changed in S2.
+Status: S1 and S2 committed by the supervisor (S2: Core `81e41266`, reports `6f05099b`). S3 is done as far as this brief's files reach, and handed back uncommitted. Two Core changes outside this brief are described, not made (S3, "Changes needed outside this brief"); S3's extension change must not reach `dev` before them. S4 and S5 are not started.
+Tree: `C:/Users/osrs_/FluxStuff/fxwork/t267/!FluxIQWebExtension` (branch `task/t267-adaptation-loop-unblock`); Core sibling `fxwork/t267/!FluxIQ` (same branch, from `de8eb8e5`): unchanged in S1, changed in S2 and S3.
 Brief: `t267-adaptation-unblock` in `../mvp-final-month-plan.md`; blockers numbered as in [the audit](./adaptation-loop-audit.md) "Ranked blockers".
 
 ## Stage S1 — Lab: blockers 2 and 3, A8-class catalog row
@@ -180,3 +180,129 @@ After `resultVerification` `answers`, the adaptation must be `applied`, with a `
 
 - Core `R/tests/live-patch-target-override.test.ts` is at 791 of 800 lines; its next addition needs a split first.
 - `R/live-patch.ts` is 667 lines and `R/training-modes.ts` 453.
+
+## Stage S3 — blocker 1 (the Automations Run carries a caller) and item 24's Automations row
+
+### Findings (lead, from source)
+
+**1. A run with a caller is judged on every run (item 23), and the rule is in my file.**
+- `resolveAutomationStudioResultCheckProvider` (`R/service/runtime-adaptation/result-check.ts:159-177` before S3) resolved the caller's provider first and returned it whatever the schedule decided. The service wires the caller's provider whenever `llmExecution` is present (`R/service.ts:2536-2540`).
+- `run-outcome.ts:529` then asks the model for every finished run that is not settled by Core's own counts: one call, or two when the first says `does not answer`.
+- So once the extension's Run carries a caller, every routine run, a learned and succeeding one included, would bill a result check to the person's key. That breaks MVP item 23, whose recorded proof standard is zero calls.
+- The schedule itself (`R/result-check-schedule/decide.ts`; defaults: the first 3 runs after any graph change, then exponentially fewer) would still check the first three runs after a learned repair. A landed repair bumps the graph revision and restarts the window. So "the caller pays when the schedule picks the run" is not enough for item 23.
+- The rule I chose: a routine run's caller pays only for checks that judge a repair (`afterRepair`, `afterRefutation`). Routine sampling is paid only by a standing result-check authorization, which the person configures (`R/result-check-authorization`).
+- Explicit model runs (the Lab, the web panel's Diagnose and Repair) keep "the caller judges every run". The Lab's wrong-answer re-author route depends on that: a wrong answer is found only by a check.
+
+**2. Nothing in this brief's files can tell a routine run from an explicit one.**
+- `runRuntimeSession`'s input (`R/service.ts:2487-2504`) has no field for it, and the service passes neither the intent nor any flag to `resolveAutomationStudioResultCheckProvider`.
+- Only the resume retry re-decides the check as "repaired" (`R/service.ts:2686`, `:2739`). A re-author's re-run (the `rerunRepairedFlow` port, `R/service.ts:2542-2544`) keeps the decision taken when the run started.
+- Under "caller pays only for repair checks", a routine run re-authored after a failed step would therefore not be judged. Under S4's rule (apply a re-author only on a judged `answers`), it would then never be applied.
+- Both gaps are in `R/service.ts` (t264).
+
+**3. Core's web route refuses the extension's model run, and pins its runs deterministic (missed by the audit).**
+- `narrowRunRuntimeSession` (`!FluxIQ/apps/web/src/lib/program-route.ts:206-221`) refuses a paired token's `run-runtime-session` that carries `runIntent`.
+- It also pins a token run with no mode to `adaptiveMode: "no_llm_intervention"`. So today the extension's Automations Run cannot invoke a model at all, caller or not.
+- If the extension sends `runIntent` before that rule changes, every Automations Run is refused with "A paired client's run may not carry runIntent."
+- This brief forbids Core `apps/web/**`.
+
+**4. Facts.** `learned` counted every adaptation the run created (`createdAdaptationIds.length`, else the summary's `adaptationCount`), applied or not (`facts.ts:37` before S3).
+
+### What changed (verified)
+
+Core (`A` = `packages/fluxiq/src/programs/automation-studio`), worker t267-s3-core ([report](./t267/s3-core.md)):
+- `A/api/handlers/runtime-execution.ts`: with a `runIntent`, the caller is `service.conversations.callerFor(request.actor)`, the same mapping `conversations.ts:194` uses.
+  - A paired client (`client-gateway:` session) runs under its person's unlocked session.
+  - With no unlocked session (`keyLocked`), the Flow runs without `llmExecution`, deterministically as before, rather than being refused.
+  - A person's own session is unchanged.
+- `A/runtime/service/runtime-adaptation/result-check.ts`: `resolveAutomationStudioResultCheckProvider` gains `callerPays?: "every_run" | "repair_checks"` (type `AutomationStudioResultCheckCallerPays`).
+  - Absent is today's behaviour.
+  - `repair_checks` uses the caller's provider only for `afterRepair` and `afterRefutation`; any other check falls through to the standing authorization, and the caller's provider is not even resolved.
+  - Nothing passes `repair_checks` yet (see below).
+- Tests: `A/api/handlers/tests/runtime-execution.test.ts` (paired with unlocked session, paired and locked, person unchanged) and `A/runtime/service/runtime-adaptation/tests/result-check.test.ts`. The worker saw both fail first (2 of 8; 1 of 19).
+- Lead fix: `A/api/handlers/tests/llm-generation.test.ts` and `llm-permission.test.ts` drive the same handler with mock services that had no `conversations`, and 4 of their tests threw. The worker had not run them. Their mocks now answer `callerFor` with Core's own `automationStudioConversationEffectiveCaller` (a person's session passes through).
+
+Extension, worker t267-s3-extension ([report](./t267/s3-extension.md)):
+- `apps/extension/src/background/automation-relay/automation-relay.ts`: `runAutomation` sends `{ projectId, flowId, runIntent: "explore_and_adapt" }`. `testGeneratedAutomation` stays `{ projectId, flowId }`, because a test of a just-generated Flow must not be repaired.
+- `apps/extension/src/panel/automations/facts.ts`: `learned` is the number of the run's adaptations Core reports `applied`. It is 0 when Core said nothing durable changed, and undefined when only creation was reported.
+- `controller.ts`: the detail poll keys on the run's adaptations, not on `learned`.
+- Comments in `apps/extension/src/shared/protocol.ts` and the table and contract sentence in `docs/architecture/extension-client.md` now describe the new contract. The extension worker saw the relay and facts tests fail first (9/1, 5/2).
+- Lead fix: with `learned` counting only applied changes, `summary-copy.ts`'s "Checking the change..." and "The change didn't hold up, so future runs stay the same" could never appear. An applied change always sets `futureRunsUpdated`, so a pending or rejected change would have said nothing.
+  - New fact `changesTried`: the run's adaptations, applied or not, which is what `learned` used to be (`facts.ts`, `types.ts`).
+  - `summary-copy.ts` keeps both lines, gated on `changesTried`, with no new wording. "Learned N" now always means applied.
+  - The controller's poll reads `changesTried`.
+  - Tests: `summary-copy.test.ts` (new cases) and `facts.test.ts` (`changesTried`, and the silent-summary shape).
+
+### Changes needed outside this brief (not made; exact)
+
+Land C1 and C2 with, or before, S3's extension change. Until C1, every Automations Run is refused with a 403. Until C2, every routine extension run with a caller bills a result check.
+
+**C1, Core `apps/web/src/lib/program-route.ts` (excluded by this brief), `narrowRunRuntimeSession`:**
+- Remove `"runIntent"` from the refused-field list.
+- Before the `adaptiveMode` pinning, add:
+  ```ts
+  // The extension's Automations Run (t267): a saved Flow the person runs may be
+  // repaired with their own key when the page changed -- that intent only, under
+  // the Flow's own mode. A lasting consequence is still asked act by act, and
+  // the key is the person's unlocked one (`commands/caller.ts`), never the token's.
+  if ("runIntent" in body) {
+    if (body.runIntent !== "explore_and_adapt") return forbidden("A paired client's run may carry only the explore_and_adapt intent.");
+    if ("adaptiveMode" in body) return forbidden("A paired client's run that names an intent may not also carry adaptiveMode.");
+    return { ok: true, payload: body };
+  }
+  ```
+- Amend the file header's least-privilege sentence ("no token call carries an LLM grant or reaches an LLM") and the `PAIRED_CLIENT_RUN_MODES` comment, the way `commands/caller.ts` records the chat's deliberate exception.
+- Tests: `apps/web/src/lib/tests/program-route.test.ts` (`:148` drop `runIntent` from the refused loop; `:158` expect the new refusal for an unknown intent; add an accepted `explore_and_adapt` with no `adaptiveMode` pinned, and refusals for `diagnose_and_adapt` and for `runIntent` plus `adaptiveMode`). Also `apps/web/src/app/api/programs/[programId]/[endpoint]/tests/route.test.ts:289-293`: same request; the expected error becomes the new sentence, still not echoing the value.
+- Validation: those two files, `node scripts/build-cache/cli.mjs web:check`, the Core structure audit.
+
+**C2, Core `R/service.ts` (t264):**
+1. Add to `runRuntimeSession`'s input (`:2487-2504`):
+   ```ts
+   /** Which of this run's result checks its caller pays for (`resolveAutomationStudioResultCheckProvider`). Absent is every run. */
+   resultCheckCallerPays?: AutomationStudioResultCheckCallerPays;
+   ```
+   In the result ports' `resolveProvider` call (`:2536-2541`), pass:
+   ```ts
+   ...(input.resultCheckCallerPays ? { callerPays: input.resultCheckCallerPays } : {}),
+   ```
+2. In the `rerunRepairedFlow` port (`:2542-2544`), when the re-run returns a session, re-decide the check as the resume path does (`:2686`):
+   ```ts
+   if (rerun?.session) runResultCheck = automationStudioRepairedRunResultCheck({ context: adaptationContext, check: runResultCheck, nowMs: Date.now() });
+   ```
+   This applies the schedule's own rule ("a run that repaired itself and re-ran is checked whatever the sequence says", `decide.ts:11-16`) to the re-author's re-run. That re-run is then judged, with the caller's key on a routine run, which S4's judged apply needs.
+3. Then, in my handler `A/api/handlers/runtime-execution.ts`, set `resultCheckCallerPays: "repair_checks"` when `caller.paired`. It is not written now because the service type has no such field.
+4. Tests: a paired routine run whose result passes makes no result-check call outside a repair. A routine run repaired by resume or by re-author is judged with the caller's key. An explicit (person-session) run is judged every run, as today.
+
+### Validation (lead-run, t267 trees, final state)
+
+- Core `npx vitest run` in `packages/fluxiq`:
+  - `A/api/handlers/tests/{llm-generation,llm-permission,runtime-execution,conversations}.test.ts` and `A/runtime/service/runtime-adaptation/tests/result-check.test.ts`: `Tests 66 passed (66)`. The first run, before the mock fix, was 62 passed / 4 failed.
+  - `A/runtime/conversations/commands/tests/{execute,port}.test.ts`: `19 passed (19)`.
+  - Core web `apps/web/src/lib/tests/program-route.test.ts` and `.../[endpoint]/tests/route.test.ts`: `52 passed (52)` (unchanged files, run as a baseline for C1).
+- Core: `fluxiq:check` exit 0; structure audit `passed (247 warning(s), 349 baselined)`; `pnpm.cmd docs:check` "Deterministic framework reference is current."; `pnpm.cmd build` exit 0.
+- Extension: the workers' runner (`scratchpad/t267-s3-ext/run-subset-ext.mjs`) on every `apps/extension/src/panel/automations/tests/*.test.ts`, plus `background/automation-relay/tests/automation-relay.test.ts` and `panel/shell/tests/mount-panel-navigation.test.ts`, then `node --test`: `# tests 122 # pass 122 # fail 0`. The first run had 121/1: the silent-summary shape, fixed above.
+- `pnpm.cmd --filter @fluxiq-web-extension/extension check` exit 0 and `... extension build` exit 0, against the rebuilt Core. `... domain check` exit 0. Downstream structure audit `passed (169 warning(s), 118 baselined)`. Scratch build directories deleted.
+
+### Blocker state after S3
+
+| # | Blocker | State |
+| --- | --- | --- |
+| 1 | Product runs carry no caller | Automations path implemented in this brief's files (handler, relay). Blocked by C1 (token rule) to work at all, and by C2 to keep item 23. The chat's "run it" (`R/conversations/commands/run-flow.ts`, t264) still sends no `runIntent`. |
+| 2, 3 | Lab playback mode; repair lane | Fixed (S1, committed) |
+| 4 | Trial evidence on built Flows | Fixed for target overrides (S2, committed) |
+| 5 | Re-author applied before judged | Open (S4); depends on C2.2 for routine runs |
+| item 24 | Automations row | "Learned N" counts only applied adaptations; tried but unkept changes still read "Checking the change..." or "didn't hold up". The chat still says nothing about learning (`run-flow.ts`, t264). |
+
+### Live checks still owed (after C1 and C2)
+
+On a saved instruction-built Flow whose page was redesigned, press Run in the extension's Automations tab with the person's AI key unlocked:
+- The run detail shows an `llmGate` invocation under the person's session, a repair, and a judged `answers`.
+- The row reads "Learned 1 new page variation" and "Future runs updated".
+- A second Run makes 0 provider calls: no repair is needed, and the caller does not pay for the routine result check.
+- With the key locked, the same Run is deterministic and fails as before. The answer does not yet say the model was skipped: UX follow-up, Phase 4.
+
+### Not verified (S3)
+
+- Nothing ran live or in a browser.
+- The token route's acceptance of `runIntent` (C1, not made).
+- The `repair_checks` path end to end (C2, not made).
+- The full Core and extension suites (narrow checks only).

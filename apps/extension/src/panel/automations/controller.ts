@@ -153,14 +153,14 @@ export function createAutomationsController(
     return rows.length === 0 ? "empty" : "list";
   }
 
-  // A detail is worth asking for once, and again only while what the run
-  // learned is still being checked.
+  // A detail is worth asking for once, and again only while the run's
+  // adaptations are still being checked.
   function needsDetail(run: RunSummary): boolean {
     if (detailUnsupported) return false;
     if (!detailsAsked.has(run.runId)) return true;
     if (!details.has(run.runId)) return false;
     const facts = factsOf(run);
-    return (facts.learned ?? 0) > 0 && facts.validated === undefined && facts.futureRunsUpdated !== true;
+    return (facts.changesTried ?? 0) > 0 && facts.validated === undefined && facts.futureRunsUpdated !== true;
   }
 
 

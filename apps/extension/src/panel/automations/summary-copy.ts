@@ -16,11 +16,13 @@ export function runSummaryLines(facts: RunFacts): string[] {
   else if (facts.outcome === "stopped") lines.push("Stopped");
 
   if (facts.aiActivations !== undefined) lines.push(activations(facts.aiActivations));
+  // "Learned" is only what was applied; a change the run tried and has not kept
+  // is still being checked, or did not hold.
   if (facts.learned !== undefined && facts.learned > 0) {
     lines.push(`Learned ${facts.learned} new page variation${facts.learned === 1 ? "" : "s"}`);
     if (facts.futureRunsUpdated === true) lines.push("Future runs updated");
-    else if (facts.validated === undefined) lines.push("Checking the change...");
-    else if (facts.validated === false) lines.push("The change didn't hold up, so future runs stay the same");
+  } else if (facts.changesTried !== undefined && facts.changesTried > 0 && facts.futureRunsUpdated !== true) {
+    lines.push(facts.validated === false ? "The change didn't hold up, so future runs stay the same" : "Checking the change...");
   } else if (facts.futureRunsUpdated === true) {
     lines.push("Future runs updated");
   }

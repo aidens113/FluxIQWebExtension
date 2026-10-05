@@ -231,7 +231,8 @@ panel's message:
 | Message | Core endpoint and request |
 | --- | --- |
 | `listAutomations` | `list-flow-summaries` `{ projectId }`, then `list-flow-runs` `{ projectId, sort: "updated", direction: "desc", limit: 50 }`; answers `{ flows, runs }` |
-| `runAutomation`, `testGeneratedAutomation` | `run-runtime-session` `{ projectId, flowId }` |
+| `runAutomation` | `run-runtime-session` `{ projectId, flowId, runIntent: "explore_and_adapt" }`: a saved automation the person runs may be repaired with their own model key when the page changed |
+| `testGeneratedAutomation` | `run-runtime-session` `{ projectId, flowId }`: a test of a Flow just generated from a recording runs as generated, since repairing it would hide what the recording got wrong |
 | `runDetail` | `get-flow-run-detail` `{ projectId, runId, compact: true }`, then `list-flow-adaptations` for its Flow; answers `{ runDetail, adaptations }` |
 | `exportDataset` | `export-run-dataset` `{ projectId, runId, datasetId, format }` |
 | `modelReadiness` | `secret-keys` `snapshot` `{}`; answers `{ keys }`, each key's `kind`, `provider` and `enabled` only |
@@ -241,8 +242,8 @@ panel's message:
 
 Core accepts the token on these endpoints only with the same narrowed requests
 (Core's `docs/architecture/automation-studio/client-gateway.md`), so a run from
-the panel never carries an inline Flow, run inputs, an LLM run intent or external
-side effects. The step index and the last stopped recording live in the worker,
+the panel never carries an inline Flow, run inputs or external side effects, and
+its only run intent is `explore_and_adapt` on `runAutomation`. The step index and the last stopped recording live in the worker,
 so neither survives a worker restart; the relay then says the step can no longer
 be removed.
 
