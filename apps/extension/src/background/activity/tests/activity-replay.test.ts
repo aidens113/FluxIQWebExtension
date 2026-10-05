@@ -18,12 +18,17 @@ import test from "node:test";
 import { ACTIVITY_MESSAGES, activityWording, type ActivityContentMessage } from "../../../shared/activity/index";
 import { ACTIVITY_PHASE_APPEARANCE, activityOverlayView } from "../../../content/activity-overlay/index";
 import { ActivityRelay } from "../activity-relay";
+import { ACTIVITY_FAN_OUT_INTERVAL_MS } from "../fan-out-gate";
+import { ACTIVITY_DETAIL_INTERVAL_MS } from "../pacer";
 import { buildTraceEvents, type TimedActivity } from "./build-trace-events";
 import { FakeClock } from "./fake-clock";
 import { T174_BUILD_TRACE } from "./fixtures/t174-build-trace";
 
 /** A dotted id such as `core.run_node` or `web.action.succeeded`: never in visible text. */
 const RAW_ID = /\b[a-z]+\.[a-z_]+/u;
+
+/** The status while a decision is being made, which a step starting replaces at once. */
+const DECIDING: ReadonlySet<string> = new Set(["Deciding the next step", "Thinking about the next step"]);
 
 type Change = { at: number };
 type Rate = { total: number; meanPerSecond: number; maxInAnySecond: number };
@@ -54,6 +59,32 @@ function changesOf<T>(renders: ReadonlyArray<{ at: number; value: T }>, text: (v
 const events: TimedActivity[] = buildTraceEvents(T174_BUILD_TRACE);
 const start = events[0]!.at;
 const end = events.at(-1)!.at;
+
+/** The event of `sequence` in the trace. */
+function eventOf(sequence: number | undefined) {
+  return events.find(({ event }) => event.sequence === sequence)?.event;
+}
+
+/**
+ * The display folded in up to `sequence` came from a step starting. A step
+ * that ended well reads as it did when it started (D6), so a display sent a
+ * moment later may carry the sequence of the row that ended the step: it is
+ * walked back to the start.
+ */
+function startsStep(sequence: number | undefined): boolean {
+  let index = events.findIndex(({ event }) => event.sequence === sequence);
+  const title = events[index]?.event.detail?.title;
+  const sameStep = (at: number) => events[at]?.event.detail?.kind === "tool" && events[at]!.event.detail!.title === title;
+  while (index > 0 && events[index]!.event.detail?.status !== "started" && sameStep(index) && sameStep(index - 1)) index -= 1;
+  const event = events[index]?.event;
+  return event?.detail?.kind === "tool" && event.detail.status === "started";
+}
+
+/** The display of `sequence` came from Core's row opening a decision, whatever line it held. */
+function fromDecision(sequence: number | undefined): boolean {
+  const event = eventOf(sequence);
+  return event?.detail?.kind === "thought" && event.detail.status === "started";
+}
 
 /** (a) t185: the overlay drew every event it was sent. */
 function t185Renders() {
@@ -125,16 +156,31 @@ test("measurement: the t185 behaviour against the pacer, and the pacer's bound",
   // build, once when it settles.
   assert.equal(afterHeadline.total, 2);
   assert.deepEqual([...new Set(after.map((render) => render.value.display?.headline))], ["Building your Flow", "Flow ready"]);
-  // The detail changes at most once per 1.2 s, so never twice in one second
-  // except when a settling event, which is never held back, follows a change.
+  // The detail changes at most once per interval, so never twice in one second
+  // except when a settling event, or a step starting after "Deciding the next
+  // step" (D7), neither of which is held back, follows a change.
   assert.ok(afterDetail.maxInAnySecond <= 2, `detail changes in one second: ${afterDetail.maxInAnySecond}`);
   assert.ok(afterSends.maxInAnySecond <= 4, `page sends in one second: ${afterSends.maxInAnySecond}`);
-  // Between two detail changes there are always 1.2 s, except before the
-  // settling event, which is shown the moment it arrives.
-  const detailTimes = changesOf(after, (message) => message.display?.detail ?? "").map((change) => change.at);
-  const gaps = detailTimes.slice(1).map((at, index) => at - detailTimes[index]!);
-  t.diagnostic(`paced detail: shortest gap ${Math.min(...gaps.slice(0, -1))} ms between working sentences; last gap (to the settle) ${gaps.at(-1)} ms`);
-  assert.ok(gaps.slice(0, -1).every((gap) => gap >= 1_200), "no two working sentences closer than 1.2 s");
+  // Between two detail changes there is always the interval, except before
+  // the settling event and a step that ends a decision, each shown the moment
+  // it arrives.
+  // A decision holds the line before it (U9), so a step shown at once after
+  // one is known as the pacer knows it -- a step starting while the display
+  // up came from Core's row opening a decision -- not by the line it replaced.
+  const details: Array<{ at: number; detail: string; afterDecision: boolean }> = [];
+  let upFrom: number | undefined;
+  for (const render of after) {
+    const detail = render.value.display?.detail ?? "";
+    const sequence = render.value.display?.sequence;
+    if (details.at(-1)?.detail !== detail) details.push({ at: render.at, detail, afterDecision: startsStep(sequence) && fromDecision(upFrom) });
+    upFrom = sequence;
+  }
+  const held = details.slice(1, -1).filter((change, index) => !DECIDING.has(details[index]!.detail) && !change.afterDecision);
+  const gaps = held.map((change) => change.at - details[details.indexOf(change) - 1]!.at);
+  t.diagnostic(`paced detail: shortest gap ${Math.min(...gaps)} ms between paced working sentences; ${details.length - 2 - held.length} steps shown at once after a decision`);
+  // Measured at the page, so a send the page gate held back can shorten the gap after it by up to one gate interval.
+  const floor = ACTIVITY_DETAIL_INTERVAL_MS - ACTIVITY_FAN_OUT_INTERVAL_MS;
+  assert.ok(gaps.every((gap) => gap >= floor), `no two paced working sentences closer than ${floor} ms`);
   assert.ok(afterDetail.total < beforeDetail.total, "fewer sentences reach the page than Core sent");
   // Every word that reached the page, and every line the overlay drew from it, is a person's words.
   for (const { value } of after) {

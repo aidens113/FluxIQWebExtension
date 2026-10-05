@@ -64,10 +64,11 @@ test("a press with consequences: null is refused as a declaration missing, and i
     ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
     value: { node: CLICK, parameters: { target: { handle } }, consequences: null }
   });
-  const evidence = refused.evidence as JsonObject & { code: string; detail: { reason: string } };
+  const evidence = refused.evidence as JsonObject & { code: string; detail: { reason: string; missing?: string[] } };
   assert.equal(evidence.code, "invalid_input");
   // The same answer as a press that left the key out: what to write, not that it was unreadable.
   assert.equal(evidence.detail.reason, "missing_input_keys");
+  assert.deepEqual(evidence.detail.missing, ["consequences"]);
   assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.click"), false);
   // And the refused call is not written back carrying the null either.
   assert.equal(Object.hasOwn(refused.draft?.input ?? {}, "consequences"), false);
@@ -141,9 +142,10 @@ test("a press declaring nothing anywhere is still refused missing_input_keys", a
     ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
     value: { node: CLICK, parameters: { target: { handle } } }
   });
-  const evidence = refused.evidence as JsonObject & { code: string; detail: { reason: string } };
+  const evidence = refused.evidence as JsonObject & { code: string; detail: { reason: string; missing?: string[] } };
   assert.equal(evidence.code, "invalid_input");
   assert.equal(evidence.detail.reason, "missing_input_keys");
+  assert.deepEqual(evidence.detail.missing, ["consequences"]);
   assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.click"), false);
 });
 

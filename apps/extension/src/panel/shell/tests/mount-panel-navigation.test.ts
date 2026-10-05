@@ -166,7 +166,7 @@ test("list rename synchronizes open chat labels without read/history/draft/selec
   const box = byId("conversationInput"); box.value = "Keep this draft";
   Object.assign(box, { selectionStart: 3, selectionEnd: 8 }); box.focus();
   const scroller = root.byClass("chat-scroll")[0]!;
-  scroller.scrollHeight = 1200; scroller.clientHeight = 200; scroller.scrollTop = 140; scroller.dispatch("scroll");
+  scroller.scrollHeight = 1200; scroller.clientHeight = 200; scroller.scrollTop = 140; scroller.dispatch("wheel"); scroller.dispatch("scroll");
   const message = root.byClass("chat-msg")[0]!;
   const calls = core.sent.length;
   const focusCalls = doc.focusCalls.length;

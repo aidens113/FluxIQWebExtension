@@ -285,3 +285,67 @@ test("a selector recorded inside a shadow root is asked with its host chain, fro
     assert.equal((asked[0] as { selector?: unknown }).selector, command.selector);
   }
 });
+
+// t195, live run `run-musp474o-e0ed7432`: the build's test checked a repeated
+// Confirm once per kept row, and every pass answered "visible and enabled" --
+// including the pass for a row whose Confirm was already gone. The domain
+// scopes each pass to its row by writing the row's `values` into
+// `element.context.record`, but the verb handed the evaluator the bare recorded
+// selector, which names the build's own card, so the record gate never ran and
+// the check judged a different control from the one the Flow presses. A
+// row-scoped assert now resolves its target the way the click does.
+
+/** The verb's dependencies with the evaluator's target and every `resolveTarget` call captured. */
+function capturing(resolve: (command: BrowserActionCommand) => unknown): { deps: ContentActionDependencies; asked: unknown[]; resolved: BrowserActionCommand[] } {
+  const asked: unknown[] = [];
+  const resolved: BrowserActionCommand[] = [];
+  const base = dependencies(true, "", "");
+  const deps = {
+    ...base,
+    evaluateAssertion: (request: unknown, target: unknown) => { asked.push(target); return base.evaluateAssertion(request as never, target as never); },
+    resolveTarget: (command: BrowserActionCommand) => { resolved.push(command); return resolve(command); },
+    describeElement: () => ({ tagName: "button" })
+  } as unknown as ContentActionDependencies;
+  return { deps, asked, resolved };
+}
+
+const CONFIRM_SELECTOR = "li.invite:nth-of-type(1) > button.confirm";
+const ROW_ELEMENT = { tagName: "button", selector: CONFIRM_SELECTOR, context: { record: { values: ["Amara Osei", "Product Designer"] } } };
+
+test("a row-scoped check resolves its target through the record gate, never the bare recorded selector", async () => {
+  const confirm = { tagName: "BUTTON" } as unknown as Element;
+  const resolution = { strategy: "scored-candidate", candidateCount: 1 } as const;
+  for (const command of [
+    { ...action, selector: CONFIRM_SELECTOR, assert: { kind: "visible" as const }, element: ROW_ELEMENT },
+    { ...action, selector: CONFIRM_SELECTOR, assert: { kind: "visible" as const }, options: { element: ROW_ELEMENT } }
+  ]) {
+    const { deps, asked, resolved } = capturing(() => ({ element: confirm, resolution }));
+    const result = await assertAction(command as BrowserActionCommand, deps, 100);
+    assert.equal(resolved.length, 1, "the check must resolve the row's control as the Flow's click does");
+    assert.equal(resolved[0], command);
+    assert.deepEqual(asked[0], { element: confirm });
+    assert.deepEqual(result.status, "succeeded");
+  }
+});
+
+test("a row-scoped check whose row holds no such control is asked of nothing, which waits in vain", async () => {
+  const command = { ...action, selector: CONFIRM_SELECTOR, assert: { kind: "visible" as const }, element: ROW_ELEMENT } as BrowserActionCommand;
+  const { deps, asked, resolved } = capturing(() => { throw new Error("No target resolved"); });
+  await assertAction(command, deps, 100);
+  assert.equal(resolved.length, 1);
+  assert.deepEqual(asked[0], {}, "a refused row must not fall back to the recorded selector");
+});
+
+test("an unscoped selector check still hands the selector over and never resolves", async () => {
+  const unscoped = [
+    { ...action, assert: { kind: "visible" as const } },
+    { ...action, assert: { kind: "visible" as const }, element: { tagName: "button", context: { record: { key: "usr_a91", keyAttribute: "data-member-id" } } } },
+    { ...action, assert: { kind: "visible" as const }, element: { tagName: "button", context: { record: { values: [] } } } }
+  ];
+  for (const command of unscoped) {
+    const { deps, asked, resolved } = capturing(() => { throw new Error("must not resolve"); });
+    await assertAction(command as BrowserActionCommand, deps, 100);
+    assert.equal(resolved.length, 0);
+    assert.equal((asked[0] as { selector?: unknown }).selector, action.selector);
+  }
+});

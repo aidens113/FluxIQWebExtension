@@ -30,7 +30,8 @@ test("a build is headed 'Building your Flow' for as long as it works, whatever C
     h.pacer.accept(event({ phase, label }));
   }
   assert.deepEqual(new Set(h.shown.map((entry) => entry.display.headline)), new Set(["Building your Flow"]));
-  assert.deepEqual(h.details(), ["Reading your request", "Thinking about the next step", "Trying a step on the page", "Checking the Flow does what you asked"], "in a person's words, never a tool id");
+  // The decision being made holds "Reading your request" (U9), so it is not a change of its own.
+  assert.deepEqual(h.details(), ["Reading your request", "Trying a step on the page", "Checking the Flow does what you asked"], "in a person's words, never a tool id");
   assert.equal(h.pacer.display()?.working, true);
   assert.equal(h.pacer.display()?.outcome, null);
 });
@@ -75,7 +76,7 @@ test("a sentence after a quiet interval shows at once", () => {
   const h = harness();
   h.pacer.accept(event({ phase: "building", label: "Reading your request" }));
   h.clock.advance(5_000);
-  h.pacer.accept(event({ phase: "thinking", label: "Deciding the next step" }));
+  h.pacer.accept(event({ phase: "exploring", label: "Clicking “Search”" }));
   assert.equal(h.shown.length, 2);
   assert.equal(h.shown[1]!.at, 6_000);
 });
@@ -143,6 +144,43 @@ test("a run's step comes from its step events, is kept between them, and goes wh
   assert.equal(h.pacer.display()?.step, null);
 });
 
+// U2 of t194 (`run-musp39u8-9ac026ab`, moments 22-34): the run's result was
+// refuted after its 5 steps and a re-author repaired the Flow for four
+// minutes, while the overlay and the panel said "Fixing your Flow · Step 5 of
+// 5" the whole time. The re-author is not on any step of the run.
+test("a run's step count does not outlive its steps into a repair of the Flow, and comes back with the re-run's steps", () => {
+  const h = harness();
+  h.pacer.accept(event({ phase: "running", label: "Running step 5 of 5: Reading the list", step: { index: 5, count: 5, nodeId: "n5" } }, "run"));
+  assert.deepEqual(h.pacer.display()?.step, { index: 5, count: 5 });
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h.pacer.accept(event({ phase: "verifying", label: "The result doesn't answer the request", detail: { kind: "check", title: "Result check", status: "failed" } }, "run"));
+  assert.deepEqual(h.pacer.display()?.step, { index: 5, count: 5 }, "the check is still about the run's own steps");
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h.pacer.accept(event({ phase: "repairing", label: "Repairing the Flow: the result check refuted its answer (attempt 1 of 3)", detail: { kind: "step", title: "Result repair started", status: "started", ref: "n5" } }, "run"));
+  assert.deepEqual([h.pacer.display()?.headline, h.pacer.display()?.step], ["Fixing your Flow", null], "at once, with the repair's own headline");
+  for (const [phase, label] of [["thinking", "Deciding the next step"], ["exploring", "Rerunning the search step (step 7) live"], ["verifying", "Checking the Flow does what you asked"]] as const) {
+    h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+    h.pacer.accept(event({ phase, label }, "run"));
+    assert.equal(h.pacer.display()?.step, null, `no step while the repair works: ${label}`);
+  }
+  assert.ok(h.shown.slice(2).every((entry) => entry.display.step === null), "never shown, not even for one change");
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h.pacer.accept(event({ phase: "running", label: "Running step 1 of 6: Opening the store", step: { index: 1, count: 6, nodeId: "m1" } }, "run"));
+  assert.deepEqual([h.pacer.display()?.headline, h.pacer.display()?.step], ["Running your Flow", { index: 1, count: 6 }], "the repaired Flow's re-run counts its own steps");
+});
+
+test("a run recovering from a failed step keeps that step's number", () => {
+  const h = harness();
+  h.pacer.accept(event({ phase: "running", label: "Running step 3 of 5: Open the cart", step: { index: 3, count: 5, nodeId: "n3" } }, "run"));
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h.pacer.accept(event({ phase: "repairing", label: "Recovering from a failed step: Open the cart", detail: { kind: "step", title: "Open the cart", status: "failed", ref: "n3" } }, "run"));
+  // Pressing the failed step again is still running the Flow (D12 of the t174 review, `run-retry.ts`).
+  assert.deepEqual([h.pacer.display()?.headline, h.pacer.display()?.step], ["Running your Flow", { index: 3, count: 5 }]);
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h.pacer.accept(event({ phase: "repairing", label: "Working out what went wrong", detail: { kind: "thought", title: "Working out what went wrong", text: "The cart link moved to the header.", status: "succeeded" } }, "run"));
+  assert.deepEqual([h.pacer.display()?.headline, h.pacer.display()?.step], ["Fixing your Flow", { index: 3, count: 5 }], "a repair of that one step is still on it");
+});
+
 test("fast steps are paced like any other sentence", () => {
   const h = harness();
   h.pacer.accept(event({ phase: "running", label: "Run started" }, "run"));
@@ -191,7 +229,7 @@ test("the headline is never repeated as the detail", () => {
   for (const entry of h.shown) assert.notEqual(entry.display.detail?.toLowerCase(), entry.display.headline.toLowerCase());
 });
 
-test("a repair gets its own headline at once, keeps it while the repair works, and a failed repair says so", () => {
+test("a build's repair gets its own headline at once, keeps it while the repair works, and a build that fails in it says the build failed", () => {
   const h = harness();
   h.pacer.accept(event({ phase: "building", label: "Reading your request" }));
   h.clock.advance(100);
@@ -205,18 +243,107 @@ test("a repair gets its own headline at once, keeps it while the repair works, a
   }
   assert.deepEqual(new Set(h.shown.slice(1).map((entry) => entry.display.headline)), new Set(["Fixing your Flow"]), "distinct from building for the whole repair");
   h.pacer.accept(event({ phase: "failed", label: "Build failed", final: true }));
-  assert.deepEqual([h.pacer.display()?.headline, h.pacer.display()?.outcome], ["Couldn't fix your Flow", "failed"]);
+  // No Flow existed to fix: the build failed (t195 `run-musp474o-e0ed7432`, 12-failure-scenario).
+  assert.deepEqual([h.pacer.display()?.headline, h.pacer.display()?.outcome], ["Build failed", "failed"]);
 });
 
-test("a run that recovers goes back to running when it reports its next step", () => {
+test("a run whose repair fails says it could not fix the Flow; one that only retried a step says the run failed", () => {
+  const h = harness();
+  h.pacer.accept(event({ phase: "running", label: "Running step 3 of 5: Open the cart", step: { index: 3, count: 5 } }, "run", "r9"));
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h.pacer.accept(event({ phase: "repairing", label: "Recovering from a failed step: Open the cart" }, "run", "r9"));
+  // Core working out a repair of the step, not only pressing it again (D12 of the t174 review).
+  h.pacer.accept(event({ phase: "repairing", label: "Working out what went wrong", detail: { kind: "thought", title: "Working out what went wrong", text: "The cart link moved to the header.", status: "succeeded" } }, "run", "r9"));
+  h.pacer.accept(event({ phase: "failed", label: "Run failed", final: true }, "run", "r9"));
+  assert.deepEqual([h.pacer.display()?.headline, h.pacer.display()?.outcome], ["Couldn't fix your Flow", "failed"]);
+  const retried = harness();
+  retried.pacer.accept(event({ phase: "running", label: "Running step 3 of 5: Open the cart", step: { index: 3, count: 5 } }, "run", "r10"));
+  retried.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  retried.pacer.accept(event({ phase: "repairing", label: "Recovering from a failed step: Open the cart" }, "run", "r10"));
+  retried.pacer.accept(event({ phase: "failed", label: "Run failed", final: true }, "run", "r10"));
+  assert.deepEqual([retried.pacer.display()?.headline, retried.pacer.display()?.outcome], ["Run failed", "failed"], "nothing in the Flow was being fixed");
+});
+
+test("a run whose step is really being repaired is headed 'Fixing your Flow', and goes back to running at its next step", () => {
   const h = harness();
   h.pacer.accept(event({ phase: "running", label: "Running step 3 of 5: Open the cart", step: { index: 3, count: 5 } }, "run"));
   h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
   h.pacer.accept(event({ phase: "repairing", label: "Recovering from a failed step: Open the cart" }, "run"));
-  assert.equal(h.pacer.display()?.headline, "Fixing your Flow");
+  assert.equal(h.pacer.display()?.headline, "Running your Flow", "a failed step alone is not a repair");
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h.pacer.accept(event({ phase: "repairing", label: "Working out what went wrong", detail: { kind: "thought", title: "Working out what went wrong", text: "The cart link moved to the header.", status: "succeeded" } }, "run"));
+  assert.equal(h.pacer.display()?.headline, "Fixing your Flow", "Core repairing the step is");
   h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
   h.pacer.accept(event({ phase: "running", label: "Running step 3 of 5: Open the cart", step: { index: 3, count: 5 } }, "run"));
   assert.equal(h.pacer.display()?.headline, "Running your Flow");
+});
+
+// D12 of the t174 UI review of run-musp8nz1-dbd3905a (moment 8): the page said
+// it was busy, the run pressed again, and the overlay switched to "Fixing your
+// Flow · Fixing a step that didn't work" while the chat rightly said "Trying the
+// step again". Nothing in the Flow was being fixed.
+test("a run retrying a step the page was too busy for stays 'Running your Flow' and says why it tries again", () => {
+  const h = harness();
+  const step = { index: 10, count: 12, nodeId: "n10", label: "Get coupons" };
+  h.pacer.accept(event({ phase: "running", label: "Running step 10 of 12: Clicking “Get coupons”", step, detail: { kind: "step", title: "Clicking “Get coupons”", status: "started", ref: "n10" } }, "run"));
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h.pacer.accept(event({ phase: "repairing", label: "Recovering from a failed step: Get coupons", detail: { kind: "step", title: "Clicking “Get coupons”", status: "failed", ref: "n10", text: "Result: web.action.rate_limited · Node: web.output.dom-click" } }, "run"));
+  h.clock.advance(50);
+  h.pacer.accept(event({ phase: "repairing", label: "Trying the step again", detail: { kind: "thought", title: "Trying the step again", text: "The step didn't work, and a step like this often works on a second try, so FluxIQ is trying it once more.", status: "succeeded", ref: "n10" } }, "run"));
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  const retrying = h.pacer.display()!;
+  assert.deepEqual([retrying.headline, retrying.detail, retrying.step], ["Running your Flow", "The page was busy, trying again", { index: 10, count: 12 }]);
+  assert.ok(h.shown.every((entry) => entry.display.headline === "Running your Flow"), h.shown.map((entry) => entry.display.headline).join(", "));
+  // A failure no code explains still reads as a retry, not a repair.
+  const h2 = harness();
+  h2.pacer.accept(event({ phase: "running", label: "Running step 2 of 3: Clicking “Next”", step: { index: 2, count: 3 } }, "run", "r2"));
+  h2.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h2.pacer.accept(event({ phase: "repairing", label: "Recovering from a failed step: Next", detail: { kind: "step", title: "Step failed", status: "failed", ref: "n2" } }, "run", "r2"));
+  assert.deepEqual([h2.pacer.display()?.headline, h2.pacer.display()?.detail], ["Running your Flow", "That step didn't work, trying again"]);
+});
+
+// D6 of the same review (00008, moments 3 and 6): the status said "clicking
+// “Voltbay…” — done" while the next step's card was already working.
+test("a step that finished well never leaves '— done' up: the status keeps naming the work until the next step replaces it", () => {
+  const h = harness();
+  const tool = (title: string, status: "started" | "succeeded", code?: string) =>
+    event({ phase: "verifying", label: status === "succeeded" ? `${title} — done` : title, detail: { kind: "tool", title, status, ref: "core.run_node", ...(code ? { text: `Result: ${code}` } : {}) } });
+  h.pacer.accept(tool("Trying the Flow from the start: clicking “Voltbay”", "started"));
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS + 100);
+  h.pacer.accept(tool("Trying the Flow from the start: clicking “Voltbay”", "succeeded", "core.replay.replayed"));
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS + 100);
+  h.pacer.accept(tool("Trying the Flow from the start: clicking “Reject non-essential”", "started"));
+  h.clock.advance(5_000);
+  for (const entry of h.shown) assert.doesNotMatch(entry.display.detail ?? "", /— done$/u);
+  assert.equal(h.pacer.display()?.detail, "Trying the Flow from the start: clicking “Reject non-essential”");
+});
+
+// D7 of the same review (moment 3, 00006): the status said "Deciding the next
+// step" while the step the decision chose already had its card working.
+test("a step that starts after the decision shows at once, never 'Deciding the next step' beside its working card", () => {
+  const h = harness();
+  h.pacer.accept(event({ phase: "thinking", label: "Deciding the next step", detail: { kind: "thought", title: "Deciding the next step", status: "started" } }));
+  h.clock.advance(300);
+  h.pacer.accept(event({ phase: "exploring", label: "Clicking “Get coupons”", detail: { kind: "tool", title: "Clicking “Get coupons”", status: "started", ref: "core.run_node" } }));
+  assert.equal(h.pacer.display()?.detail, "Clicking “Get coupons”");
+  assert.equal(h.shown.at(-1)?.at, 1_300, "not held back by the pace");
+});
+
+// D7: the overlay held each line for its own 1.6 s dwell on top of this pace,
+// so it lagged the panel's status row, which draws the display as it comes.
+// One pace for both: any three seconds show at most two paced changes.
+test("any three seconds of steady work show at most two changes, the guarantee the overlay used to add on its own", () => {
+  const h = harness();
+  for (let index = 0; index < 60; index += 1) {
+    h.pacer.accept(event({ phase: index % 2 ? "thinking" : "exploring", label: `Sentence ${index + 1}` }));
+    h.clock.advance(100);
+  }
+  const times = h.shown.map((entry) => entry.at);
+  for (const [index, at] of times.entries()) {
+    const inWindow = times.filter((other) => other > at && other <= at + 3_000).length;
+    assert.ok(inWindow <= 2, `${inWindow + 1} changes within 3 s from ${at} ms: ${times.join(", ")}`);
+    if (index > 0) assert.ok(at - times[index - 1]! >= 1_500, `${at - times[index - 1]!} ms between two changes`);
+  }
 });
 
 test("a page that only a person can get past: the headline says so plainly, until the page lets FluxIQ through", () => {
@@ -318,4 +445,113 @@ test("a repaired build whose result check passes is no longer headed as a repair
   h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
   h.pacer.accept(event({ phase: "verifying", label: "Couldn't confirm the result answers the request", detail: { kind: "check", title: "Result check", status: "failed" } }));
   assert.equal(h.pacer.display()?.headline, "Building your Flow", "a failed check alone does not start a repair; Core's repairing event does");
+});
+
+// U3 of t194: the overlay said "Couldn't fix your Flow | Run failed" and
+// nothing more. Core's last row now says what came back and why; the status
+// shows it whole, as the chat does.
+test("a failed run's status says what came back and why it failed, beside the repair's headline", () => {
+  const h = harness();
+  const sentence = "It returned 13 rows, but the check found they don't answer what you asked, and the fix ran out of room before it finished.";
+  h.pacer.accept(event({ phase: "repairing", label: "Repairing the Flow: the result check refuted its answer (attempt 1 of 3)", detail: { kind: "step", title: "Result repair started", status: "started" } }, "run"));
+  h.pacer.accept(event({ phase: "failed", label: `Run failed: ${sentence}`, final: true, detail: { kind: "step", title: "Run failed", status: "failed", text: sentence } }, "run"));
+  assert.deepEqual([h.pacer.display()?.headline, h.pacer.display()?.detail, h.pacer.display()?.outcome], ["Couldn't fix your Flow", `Run failed: ${sentence}`, "failed"]);
+});
+
+// U9 of the run-musp39u8-9ac026ab UI review (moments 7, 27, 28): through a
+// re-author the status alternated about once a second between "Deciding the
+// next step" and the model's one-line summary of its last decision. Each
+// decision opens with a reasonless "Deciding the next step" row and closes
+// with its reason, so a pacer showing both flashed between them for minutes.
+// The last meaningful line is held while the next decision is made. Core says
+// the reason as a thought titled with what the model chose (Core's
+// `runtime/activity/observer.ts`): the model's words, which the chat tells and
+// the status never shows (D6 of the run-musp4h2f-72e8ed99 review).
+const deciding = (kind: "build" | "run" = "build") => event({ phase: "thinking", label: "Deciding the next step", detail: { kind: "thought", title: "Deciding the next step", status: "started" } }, kind);
+const decided = (title: string, text: string, kind: "build" | "run" = "build") => event({ phase: "building", label: title, detail: { kind: "thought", title, text, status: "succeeded" } }, kind);
+const stepStarts = (title: string, kind: "build" | "run" = "build") => event({ phase: "exploring", label: title, detail: { kind: "tool", title, status: "started", ref: "core.run_node" } }, kind);
+
+test("U9: a decision being made holds the last meaningful line instead of flashing 'Deciding the next step'", () => {
+  const h = harness();
+  const repair = "Repairing the Flow: the result check refuted its answer (attempt 1 of 3)";
+  h.pacer.accept(event({ phase: "repairing", label: repair, detail: { kind: "step", title: "Result repair started", status: "started" } }, "run"));
+  const first = "Adding the search-results listing step with filters, then a repeat to read every page.";
+  const second = "Rerunning the search step live so the Flow reaches the results page.";
+  for (const [title, text] of [["Amending the draft Flow", first], ["Clicking “Search”", second], ["Amending the draft Flow", first]] as const) {
+    h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+    h.pacer.accept(deciding("run"));
+    assert.equal(h.pacer.display()?.detail, h.shown.at(-1)!.display.detail);
+    assert.notEqual(h.pacer.display()?.detail, "Deciding the next step", "held while the next decision is made");
+    h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+    h.pacer.accept(decided(title, text, "run"));
+    if (title.startsWith("Clicking")) {
+      h.clock.advance(100);
+      h.pacer.accept(stepStarts(title, "run"));
+    }
+  }
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h.pacer.accept(deciding("run"));
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  assert.deepEqual(h.details(), [repair, "Clicking “Search”"], "the stage, then the step it ran, held through every decision: never the flash, never the model's reasons");
+  assert.ok(h.shown.every((entry) => entry.display.headline === "Fixing your Flow"));
+});
+
+test("U9: 'Deciding the next step' shows when nothing meaningful is up, and never overtakes a line still waiting for its turn", () => {
+  const h = harness();
+  h.pacer.accept(deciding());
+  assert.equal(h.pacer.display()?.detail, "Deciding the next step", "the first line of a unit says what it is doing");
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h.pacer.accept(stepStarts("Clicking “Search”"));
+  h.clock.advance(100);
+  h.pacer.accept(stepStarts("Clicking “Next page”"));
+  h.clock.advance(100);
+  h.pacer.accept(decided("Reading the list", "Reading the results list next."));
+  h.clock.advance(100);
+  h.pacer.accept(deciding());
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  assert.deepEqual(h.details(), ["Deciding the next step", "Clicking “Search”", "Clicking “Next page”"], "the waiting line still reaches the screen, and the reason never does");
+});
+
+// D6 and D13 of the run-musp4h2f-72e8ed99 UI review: the status showed a
+// refused edit's prose and the model's reason for its next press, and a
+// thought counted as a change of the detail, so the action after it waited up
+// to an interval. A thought is said in the chat; the status keeps the action.
+const reasonRow = (text: string, title = "Clicking “Set as my store”") => ({ kind: "thought" as const, title, text, status: "succeeded" as const });
+
+test("a model's thought or refusal is never the detail, and does not count as a change of it", () => {
+  const h = harness();
+  h.pacer.accept(event({ phase: "exploring", label: "Clicking “Change store”", detail: { kind: "tool", title: "Clicking “Change store”", status: "started", ref: "core.run_node" } }));
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS + 300);
+  h.pacer.accept(event({ phase: "exploring", label: "Clicking “Set as my store”", detail: reasonRow("Store chooser is open; I'll press “Set as my store” for Millbrook.") }));
+  h.clock.advance(50);
+  h.pacer.accept(event({ phase: "building", label: "Didn't change the Flow", detail: reasonRow("That step has no such value to make vary; so this was not done: adding the pape…", "Didn't change the Flow") }));
+  assert.equal(h.pacer.display()?.detail, "Clicking “Change store”", "the action line stays");
+  assert.equal(h.pacer.display()?.kind, "thought", "the display says its newest event was a thought");
+  assert.ok(h.details().every((detail) => !/Store chooser|no such value/u.test(detail ?? "")), `no prose ever shown: ${JSON.stringify(h.details())}`);
+  h.clock.advance(50);
+  h.pacer.accept(event({ phase: "exploring", label: "Clicking “Set as my store”", detail: { kind: "tool", title: "Clicking “Set as my store”", status: "started", ref: "core.run_node" } }));
+  assert.equal(h.shown.at(-1)?.display.detail, "Clicking “Set as my store”", "the action shows at once: the thoughts did not restart the interval");
+  assert.equal(h.shown.at(-1)?.at, 1_000 + ACTIVITY_DETAIL_INTERVAL_MS + 400);
+  assert.equal(h.pacer.display()?.kind, "action");
+});
+
+test("a thought while an action waits for the interval leaves that action waiting, and it still shows", () => {
+  const h = harness();
+  h.pacer.accept(event({ phase: "exploring", label: "Clicking “A”" }));
+  h.clock.advance(100);
+  h.pacer.accept(event({ phase: "exploring", label: "Clicking “B”" }));
+  h.clock.advance(100);
+  h.pacer.accept(event({ phase: "exploring", label: "Clicking “C”", detail: reasonRow("Because C is next.", "Clicking “C”") }));
+  h.clock.advanceTo(1_000 + ACTIVITY_DETAIL_INTERVAL_MS);
+  assert.deepEqual(h.details(), ["Clicking “A”", "Clicking “B”"]);
+});
+
+test("a unit of work whose first event is a thought shows its headline with no detail; Core's deciding row is still the action", () => {
+  const h = harness();
+  h.pacer.accept(event({ phase: "thinking", label: "Clicking “Go”", detail: reasonRow("The form is behind it.", "Clicking “Go”") }, "build", "fresh"));
+  assert.deepEqual([h.pacer.display()?.headline, h.pacer.display()?.detail, h.pacer.display()?.working], ["Building your Flow", null, true]);
+  h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  const outage = "The AI model provider did not answer this request. Asking it again; the build stops if it keeps not answering.";
+  h.pacer.accept(event({ phase: "thinking", label: "The AI model provider did not answer", detail: { kind: "thought", title: "Deciding the next step", status: "failed", text: outage } }, "build", "fresh"));
+  assert.equal(h.pacer.display()?.detail, outage, "Core's own sentence about its deciding row is status");
 });

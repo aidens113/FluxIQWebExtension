@@ -120,9 +120,22 @@ type ResolvedAssertionTarget = {
  * this verb reports a resolution on some results and not others: a claim about
  * a selector resolved nothing, and a claim whose target could not be resolved
  * measured nothing worth reporting either.
+ *
+ * A check scoped to one row is the exception to the selector rule. Inside a
+ * repeat the domain writes the pass's row into `element.context.record` as
+ * `values` (`webAutomationScopedToRow`), and the Flow's own click resolves
+ * through `resolveTarget`, whose record gate admits only a control inside a
+ * record holding every value. The recorded selector names the build's own row,
+ * so handing it over bare checked a different control from the one the Flow
+ * presses: in live run `run-musp474o-e0ed7432` every pass of a repeated Confirm
+ * check answered "visible and enabled", including the pass for a row whose
+ * Confirm was already gone, because each asked about the template card. So a
+ * row-scoped check resolves exactly as the click does, and a row holding no such
+ * control leaves an empty target -- "nothing matched", a wait in vain -- rather
+ * than falling back to the selector that names another row.
  */
 function assertionTarget(action: BrowserActionCommand, deps: ContentActionDependencies): ResolvedAssertionTarget {
-  if (action.selector) return { target: { selector: action.selector, shadowHosts: recordedShadowHosts(action) } };
+  if (action.selector && !scopedToRow(action)) return { target: { selector: action.selector, shadowHosts: recordedShadowHosts(action) } };
   try {
     const resolved = deps.resolveTarget(action);
     return { target: { element: resolved.element }, resolution: resolved.resolution };
@@ -143,6 +156,21 @@ function recordedShadowHosts(action: BrowserActionCommand): readonly string[] | 
     if (Array.isArray(hosts) && hosts.length && hosts.every((host) => typeof host === "string")) return hosts as string[];
   }
   return undefined;
+}
+
+/**
+ * Whether the recorded target carries a repeat pass's row: `context.record.values`
+ * as a non-empty list, from either place the resolver reads a recorded target.
+ * Only the domain's row scoping writes `values`, so a recording's own record --
+ * a key or its text -- leaves a check on the selector as before.
+ */
+function scopedToRow(action: BrowserActionCommand): boolean {
+  return [action.element, action.options?.element].some((element) => {
+    const context = element && typeof element === "object" ? (element as { context?: unknown }).context : undefined;
+    const record = context && typeof context === "object" ? (context as { record?: unknown }).record : undefined;
+    const values = record && typeof record === "object" ? (record as { values?: unknown }).values : undefined;
+    return Array.isArray(values) && values.length > 0;
+  });
 }
 
 /**

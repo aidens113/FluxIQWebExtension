@@ -235,7 +235,8 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *
  * The input the call wrote (`invalid_input`):
  * - `unexpected_input_keys` and `missing_input_keys`: the call's keys are not
- *   the tool's. `instead` names the keys the tool takes.
+ *   the tool's. `instead` names the keys the tool takes; for `missing_input_keys`,
+ *   `missing` names the keys the call left out.
  * - `malformed_handle`: the target is not a handle this domain issues. Copy one
  *   exactly as a packet shows it, `t` and a number.
  * - `not_a_number`, `not_a_url`, `value_not_text`: a value is not of the kind

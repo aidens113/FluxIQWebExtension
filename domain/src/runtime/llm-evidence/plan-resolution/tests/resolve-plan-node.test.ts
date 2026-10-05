@@ -425,6 +425,8 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
     "web.handle.extraction_required",
     "web.handle.wrong_control",
     EXTRACTION_HINT,
+    "web.handle.expected.extract_list.paginate.maxPages",
+    "web.handle.expected.extract_list.paginate.maxScrolls",
     TARGET_HINT,
     USE_CLICK,
     USE_SELECT

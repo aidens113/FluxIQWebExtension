@@ -188,6 +188,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   // is an address shown and, told a start location, the build's arrival.
   if (!continuing && run.request.startLocation !== undefined) run.arrivals.opening(buildOf(run), run.request.callId);
   if (!continuing) run.addresses.opening(buildOf(run), run.request.callId);
+  if (!continuing) run.layers.opening(buildOf(run), run.request.callId);
   for (const address of continuing?.addresses ?? []) {
     run.addresses.held(buildOf(run), address, run.request.startLocation);
     if (run.request.startLocation !== undefined) run.arrivals.arrive(buildOf(run));
@@ -309,7 +310,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // "missing" is the refusal that tells the model what to write instead.
     if (node.effect === "mutate" && (value.consequences === undefined || value.consequences === null)) {
       return refusal(undefined, "invalid_input", rejectionDetail({
-        reason: "missing_input_keys", target: undefined, instead: CALL_KEYS, missing: undefined, requestId: undefined
+        reason: "missing_input_keys", target: undefined, instead: CALL_KEYS, missing: ["consequences"], requestId: undefined
       }), record);
     }
     // A written step does nothing, so nobody is asked; it is held to its declaration and the node's parameters instead.
@@ -412,6 +413,13 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // Arriving from nowhere changed the page by definition: there was none. A
     // page that could not be read was not compared, so it is not said.
     const changed = after === undefined ? undefined : current === undefined || JSON.stringify(after.evidence) !== JSON.stringify(current.evidence);
+    // Whether the press answered a layer that stood in front of the page, one
+    // this build did not open itself (`./press-effect/answered-layer.ts`,
+    // `./own-layers/memory.ts`); then, whichever layers this press opened are the
+    // build's own from here on. Never a look, a navigation or a read.
+    const pressedOnPage = node.effect === "mutate" && !webMovesThePage(node);
+    const interruption = pressedOnPage && webAnsweredLayer(current?.evidence, after?.evidence, firstHandle(written), (layer) => run.layers.owns(buildOf(run), layer));
+    if (pressedOnPage) run.layers.pressed(buildOf(run), current?.evidence, after?.evidence);
     // The page, with what the node did to it written on the same result rather
     // than around it. One shape, the one every other page has: the compact
     // view's `page` text, where every handle the model may use is printed.
@@ -486,10 +494,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // cart (`run-muqiho5c-e830ce01`). Absent where it acted on no control.
         control: outcome.control,
         // The press answered a layer that stood in front of the page and was
-        // gone after it (`./press-effect/answered-layer.ts`): Core makes such a
-        // step optional, so a playback that meets no such layer skips it.
-        // Absent otherwise, and never on a look, a navigation or a read.
-        interruption: node.effect === "mutate" && !webMovesThePage(node) && webAnsweredLayer(current?.evidence, after?.evidence, firstHandle(written)) ? true : undefined,
+        // gone after it, one this build's own press did not open
+        // (`./press-effect/answered-layer.ts`): Core makes such a step
+        // optional, so a playback that meets no such layer skips it. Absent
+        // otherwise, and never on a look, a navigation or a read.
+        interruption: interruption ? true : undefined,
         written: undefined,
         // The press flipped whether its control is chosen, under the control's handle: Core
         // takes it out with a later press that flips it back (`./press-effect/toggle.ts`).

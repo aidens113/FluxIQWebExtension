@@ -8,6 +8,12 @@
 // `pageChanged`, and the store chooser it was for never opened. Refused, the
 // call carries the page with the layer in it, and says which handles cover the
 // control, so the next call deals with the layer and then presses again.
+//
+// A consent layer is closed by answering it, so its closers are the answers
+// that consent to nothing -- "Reject non-essential", "Necessary only", a "×"
+// -- named first, and never an accept-all (cause 9 of `run-musq0b1m-0472cfa0`:
+// a cookie layer named no closer, and the model pressed "Accept all"). This
+// is information only: the model may still press any control a person could.
 
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import type { WebLlmEvidenceElement } from "../elements";
@@ -23,13 +29,21 @@ export type WebCoveredTarget = {
   covers: string[];
   /**
    * The controls inside the first cover that close it, by handle: a "×", a
-   * "No thanks", a "Close" (`CLOSE_WORDS`). Empty when none reads as closing.
+   * "No thanks", a "Close" (`CLOSE_WORDS`); on a consent layer, its
+   * least-consent answers first ("Reject non-essential", `LEAST_CONSENT_WORDS`)
+   * and nothing that consents (`CONSENT_WORDS`). Empty when none reads as closing.
    */
   closers: string[];
 };
 
 /** The words a control that closes a layer is named with, at the start of its name. */
 const CLOSE_WORDS = /^\s*(?:×|✕|✖|x|close|dismiss|no,? thanks|not now|maybe later|skip|cancel|continue shopping|got it)(?![a-z])/iu;
+
+/** The words a consent layer's answer that consents to nothing starts with. */
+const LEAST_CONSENT_WORDS = /^\s*(?:reject|decline|refuse|deny|disagree|(?:only |strictly )?(?:necessary|essential|required)(?: cookies)? only|(?:use |allow )?only (?:strictly )?(?:necessary|essential|required)|continue without (?:accepting|agreeing))(?![a-z])/iu;
+
+/** The words of a consent layer's control that consents to something: never offered as its closer. */
+const CONSENT_WORDS = /^\s*(?:accept|agree|allow|ok(?:ay)?|got it|i understand|continue|yes)(?![a-z])/iu;
 
 /** The most closers named, so a layer full of buttons does not fill the refusal. */
 const MAX_CLOSERS = 3;
@@ -54,11 +68,16 @@ export function webCoveredTarget(page: WebLlmPageEvidence, written: string | und
  */
 function closersOf(page: WebLlmPageEvidence, cover: string): string[] {
   const byHandle = new Map(page.elements.map((element) => [element.target, element] as const));
-  return page.elements
-    .filter((element) => element.target !== cover && pressable(element) && webInLayer(byHandle, element, cover))
-    .filter((element) => CLOSE_WORDS.test(element.name ?? element.text ?? "") || CLOSE_WORDS.test(element.label ?? ""))
-    .slice(0, MAX_CLOSERS)
-    .map((element) => element.target);
+  const layer = byHandle.get(cover);
+  const own = page.elements.filter((element) => element.target !== cover && pressable(element) && webInLayer(byHandle, element, cover));
+  const reads = (element: WebLlmEvidenceElement, words: RegExp): boolean => words.test(element.name ?? element.text ?? "") || words.test(element.label ?? "");
+  const closing = (element: WebLlmEvidenceElement): boolean => reads(element, CLOSE_WORDS);
+  if (layer?.kind !== "consent" && layer?.isDialog?.kind !== "consent") {
+    return own.filter(closing).slice(0, MAX_CLOSERS).map((element) => element.target);
+  }
+  const declining = own.filter((element) => reads(element, LEAST_CONSENT_WORDS));
+  const plain = own.filter((element) => closing(element) && !reads(element, CONSENT_WORDS) && !declining.includes(element));
+  return [...declining, ...plain].slice(0, MAX_CLOSERS).map((element) => element.target);
 }
 
 /** Whether a person would press it: a button or link, or something the page listens to or points at. */

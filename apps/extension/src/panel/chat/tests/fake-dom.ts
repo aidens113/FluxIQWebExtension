@@ -145,7 +145,11 @@ export async function withFakeDocument(body: () => void | Promise<void>): Promis
     createElementNS: (_namespace: string, tag: string) => new FakeElement(tag),
     createTextNode: (text: string) => new FakeText(text),
     visibilityState: "visible",
-    activeElement: null
+    activeElement: null,
+    // A real document takes listeners: the scroll follower listens on it for
+    // the person's keys and for a scroll-bar drag released outside the stream.
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined
   };
   try {
     await body();

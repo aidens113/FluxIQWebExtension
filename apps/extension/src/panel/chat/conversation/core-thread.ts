@@ -34,6 +34,11 @@ export type CoreTurn = {
   ask: CoreAsk | null;
   /** When Core wrote it, in ms since the epoch, on Core's clock: the clock its live activity is stamped with. */
   createdAt?: number;
+  /**
+   * Never from Core: set by this panel on the person's message it is still
+   * sending, or could not send (`controller.ts`), and says why it did not go.
+   */
+  sendError?: string | undefined;
 };
 
 /** A page of a thread, as `get-conversation` answers it. */
