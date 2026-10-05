@@ -31,8 +31,11 @@ export type ExtractionPanelElements = {
   paginateLabel: HTMLElement;
   /** "Pages": which pages the extraction reads, said in words whether or not more pages were found. */
   pagesNote: HTMLElement;
+  /** The sample table, named "Extraction preview" and marked busy while a new sample is being read. */
+  previewTable: HTMLElement;
   previewHead: HTMLTableRowElement;
   previewBody: HTMLElement;
+  /** Says what the sample is -- current, being refreshed, or left over from a failed read -- as a polite status. */
   previewNote: HTMLElement;
   confirmButton: HTMLButtonElement;
   cancelButton: HTMLButtonElement;
@@ -72,9 +75,13 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
   const paginateLabel = createElement("span", { id: "extractionPaginateLabel", text: "Read every page" });
   const paginateRow = createElement("label", { id: "extractionPaginateRow", className: "extraction-paginate", hidden: true }, [paginate, paginateLabel]);
   const pagesNote = createElement("span", { id: "extractionPagesNote" });
-  const previewNote = createElement("span", { id: "extractionPreviewNote" });
+  const previewNote = createElement("span", { id: "extractionPreviewNote", attrs: { role: "status", "aria-live": "polite", "aria-atomic": "true" } });
   const previewHead = createElement("tr", { id: "extractionPreviewHead" });
   const previewBody = createElement("tbody", { id: "extractionPreviewBody" });
+  const previewTable = createElement("table", { id: "extractionPreviewTable", className: "extraction-preview", attrs: { "aria-label": "Extraction preview", "aria-busy": "false" } }, [
+    createElement("thead", {}, [previewHead]),
+    previewBody
+  ]);
 
   const body = createElement("div", { id: "extractionBody", className: "extraction-body", hidden: true }, [
     createElement("label", { className: "field" }, [createElement("span", { text: "Dataset name" }), label]),
@@ -84,9 +91,7 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
     sectionHeading("Pages", pagesNote),
     paginateRow,
     sectionHeading("Preview", previewNote),
-    createElement("div", { className: "extraction-preview-scroll" }, [
-      createElement("table", { className: "extraction-preview" }, [createElement("thead", {}, [previewHead]), previewBody])
-    ])
+    createElement("div", { className: "extraction-preview-scroll" }, [previewTable])
   ]);
 
   const cancelButton = createElement("button", { id: "extractionCancelButton", className: "small-button", text: "Cancel", attrs: { type: "button" } });
@@ -131,6 +136,7 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
     paginate,
     paginateLabel,
     pagesNote,
+    previewTable,
     previewHead,
     previewBody,
     previewNote,
