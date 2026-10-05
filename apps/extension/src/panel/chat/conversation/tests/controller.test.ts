@@ -327,3 +327,36 @@ test("other relay codes are retried beside the thread, not the fallback", async 
   assert.equal(controller.state().readError, undefined);
   assert.deepEqual(time.pending(), [READ_RETRY.delaysMs[0]]);
 });
+
+// D10 of the t174 UI review of run-musp8nz1-dbd3905a (00002, moment 2): while
+// "Sending your message" showed, the instruction sat in the composer and the
+// thread had no bubble for it. The message is in the thread the moment it is
+// sent, once; a send that fails keeps it there, saying why (t265 decision 1).
+test("a message being sent is in the thread at once, once, and stays saying why if the send fails", async () => {
+  const core = fakeCore(2);
+  const states: Array<ReturnType<ReturnType<typeof createConversationController>["state"]>> = [];
+  let controller!: ReturnType<typeof createConversationController>;
+  controller = createConversationController((message) => core.request(message), () => states.push(controller.state()), manualClock().clock);
+  controller.setConnected(true);
+  await controller.refresh();
+  states.length = 0;
+  const sending = controller.send("  Put three hubs in the cart  ");
+  const first = controller.state();
+  assert.equal(first.sending, true);
+  assert.deepEqual(first.turns.map((turn) => [turn.author, turn.text]).at(-1), ["person", "Put three hubs in the cart"], "the person's message is in the thread before FluxIQ has answered");
+  assert.equal(await sending, true);
+  for (const state of states) {
+    const mine = state.turns.filter((turn) => turn.author === "person" && turn.text === "Put three hubs in the cart");
+    assert.ok(mine.length <= 1, `never shown twice: ${JSON.stringify(state.turns.map((turn) => turn.turnId))}`);
+    assert.equal(mine.length, 1, "and never missing while it is on its way");
+  }
+  assert.deepEqual(controller.state().turns.map((turn) => turn.text), ["message 1", "message 2", "Put three hubs in the cart", "Working on: Put three hubs in the cart"]);
+  assert.ok(!controller.state().turns.some((turn) => turn.turnId.startsWith("local-send:")), "Core's own turn replaced it");
+
+  core.failNext.set(RUNTIME_MESSAGES.panelConversationSend, UNREACHABLE);
+  const failing = controller.send("This one fails");
+  assert.equal(controller.state().turns.at(-1)?.text, "This one fails");
+  assert.equal(await failing, false);
+  const failed = controller.state().turns.filter((turn) => turn.text === "This one fails");
+  assert.deepEqual(failed.map((turn) => [turn.author, turn.sendError]), [["person", "Couldn't send that. Try again."]], "a message that did not go stays in the thread, once, saying why");
+});

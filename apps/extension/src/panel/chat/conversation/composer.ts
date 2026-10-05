@@ -5,8 +5,13 @@
 //   - Enter sends, Shift+Enter adds a line, and nothing sends while an input
 //     method is composing (`composerKeyAction`).
 //   - Send is disabled while the box is empty or a message is on its way. The
-//     box itself stays usable while sending, so typing and focus carry on;
-//     the words leave it only once FluxIQ has them, and stay on failure.
+//     box itself stays usable while sending, so typing and focus carry on.
+//   - The words leave the box the moment they are sent: the controller shows
+//     them as the person's turn at once (U5 of the run-musp39u8-9ac026ab UI
+//     review: they sat here, with no bubble, while FluxIQ took the send). A
+//     send that fails says so on that turn, not here, and the words come back
+//     to the box to send again -- unless the person has typed, filled or
+//     changed chats since, which is kept.
 //   - The unsent draft is kept (`draftStorage`), so a closed popup keeps it.
 //   - Not connected, the box is disabled and says "Connect to FluxIQ first".
 //   - `fill` puts an example prompt in the box for the person to edit or
@@ -54,12 +59,11 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
     className: "composer-send",
     attrs: { type: "button", "aria-label": "Send", title: "Send (Enter)" }
   }, [arrowIcon()]);
-  const notice = createElement("p", { className: "notice", hidden: true, attrs: { role: "status" } });
   const parkedNotice = createElement("p", { className: "notice", text: "Review this draft before sending it in this chat.", attrs: { role: "status" } });
   let adopt = createElement("button", { className: "button", text: "Use draft here", attrs: { type: "button" } });
   let clear = createElement("button", { className: "button", text: "Clear draft", attrs: { type: "button" } });
   const parkedControls = createElement("div", { className: "composer-draft-review", hidden: true }, [parkedNotice, adopt, clear]);
-  const element = createElement("div", { className: "composer" }, [createElement("div", { className: "composer-field" }, [box, sendButton]), notice, parkedControls]);
+  const element = createElement("div", { className: "composer" }, [createElement("div", { className: "composer-field" }, [box, sendButton]), parkedControls]);
   let enabled = false;
   let sending = false;
   let composing = false;
@@ -101,20 +105,31 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
 
   function submit(): void {
     if (!enabled || sending || operation !== undefined || parked || !current() || box.value.trim() === "") return;
-    const submittedRevision = editRevision;
+    const words = box.value;
     const submittedOwner = owner;
-    const submitted = {}; operation = submitted; syncButton();
-    let result: Promise<boolean>;
-    try { result = send(box.value); } catch { result = Promise.resolve(false); }
-    void result.then((sent) => {
+    const submitted = {}; operation = submitted;
+    // Out of the box at once: the thread shows them as the person's turn.
+    editRevision += 1;
+    const sentRevision = editRevision;
+    box.value = "";
+    draftOwner = owner?.identity ?? null;
+    persist();
+    fit();
+    syncButton();
+    const settle = (sent: boolean): void => {
       if (operation === submitted) { operation = undefined; syncButton(); }
-      if (!sent || submittedOwner !== owner || !current() || submittedRevision !== editRevision) return;
-      box.value = "";
+      // Not sent: the words come back to send again, unless the box has moved
+      // on since -- newer words, an example filled in, or another chat's owner.
+      if (sent || submittedOwner !== owner || !current() || sentRevision !== editRevision || box.value !== "") return;
+      box.value = words;
       draftOwner = owner?.identity ?? null;
       persist();
       fit();
       syncButton();
-    }).catch(/* best-effort: restore retry controls after completion failure; controller owns send feedback */ () => { if (operation === submitted) { operation = undefined; syncButton(); } });
+    };
+    let result: Promise<boolean>;
+    try { result = send(words); } catch { result = Promise.resolve(false); }
+    void result.then(settle).catch(/* best-effort: a rejected send is a failed one; the controller owns send feedback */ () => settle(false));
   }
 
   sendButton.addEventListener("click", () => {
@@ -165,9 +180,6 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
       syncButton();
       // A kept draft is sized once the box is on screen.
       if (box.style.height === "" && box.value !== "") fit();
-      const error = state.sendError ?? "";
-      if (notice.textContent !== error) notice.textContent = error;
-      if (notice.hidden !== (state.sendError === undefined)) notice.hidden = state.sendError === undefined;
     },
     focus() {
       box.focus();

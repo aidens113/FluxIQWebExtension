@@ -68,6 +68,8 @@
   line-height: 1.55;
 }
 .chat-bubble-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* A message the panel could not send: said on the turn, under its words. */
+.chat-send-error { margin: 4px 0 0; font-size: 0.86em; color: var(--danger-text); }
 
 /* FluxIQ: full width, no bubble, formatted. */
 .chat-msg[data-author="fluxiq"] { display: grid; gap: 8px; }

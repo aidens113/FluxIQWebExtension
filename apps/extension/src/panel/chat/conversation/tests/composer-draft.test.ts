@@ -34,6 +34,8 @@ for (const scenario of ["unchanged", "edited", "retyped", "filled", "failed", "c
         send.dispatch("click");
         composer.render({ ...ready, sending: true });
         assert.equal(box.disabled, false);
+        assert.equal(box.value, "", "the box empties the moment the message is sent, as a chat does");
+        assert.equal(values.get("fluxiq.ui.conversationDraft") ?? "", "", "the sent words are no longer the kept draft");
         if (scenario === "edited" || scenario === "composition") { box.value = "newer words"; box.dispatch("input"); }
         if (scenario === "retyped") {
           box.value = "changed"; box.dispatch("input");
@@ -48,7 +50,8 @@ for (const scenario of ["unchanged", "edited", "retyped", "filled", "failed", "c
         assert.equal(values.get("fluxiq.ui.conversationDraft") ?? "", expected);
         assert.deepEqual(calls, ["submitted"], "typing/fill/composition never sends automatically");
         assert.equal(send.disabled, expected === "");
-        if (scenario === "failed") assert.equal(root.byClass("notice")[0]!.hidden, false);
+        // The failure is said on the person's turn in the stream (U5), not a second time here.
+        if (scenario === "failed") assert.equal(root.descendants().filter((node) => node.textContent === "Try again").length, 0);
       });
     } finally {
       if (previous) Object.defineProperty(globalThis, "localStorage", previous);
@@ -56,3 +59,38 @@ for (const scenario of ["unchanged", "edited", "retyped", "filled", "failed", "c
     }
   });
 }
+
+// D10 of the t174 UI review (run-musp8nz1-dbd3905a): A9 put failed words back
+// ahead of newer typing. One rule instead (t265 decision 1): the failed words
+// come back only to an untouched box, so two messages never merge into one
+// draft; the failed message stays in the thread, saying why, to copy from.
+test("a send that fails keeps what was typed meanwhile, and never merges the two", async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const values = new Map<string, string>();
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+    removeItem: (key: string) => values.delete(key)
+  } });
+  try {
+    await withFakeDocument(async () => {
+      let finish!: (sent: boolean) => void;
+      const composer = createComposer(() => new Promise((resolve) => { finish = resolve; }));
+      composer.render(ready);
+      const root = fake(composer.element);
+      const box = root.descendants().find((node) => node.id === "conversationInput")!;
+      composer.fill("submitted");
+      root.descendants().find((node) => node.id === "conversationSendButton")!.dispatch("click");
+      assert.equal(box.value, "");
+      box.value = "and more"; box.dispatch("input");
+      finish(false);
+      await Promise.resolve();
+      await Promise.resolve();
+      assert.equal(box.value, "and more", "the newer words stay as typed");
+      assert.equal(values.get("fluxiq.ui.conversationDraft"), "and more");
+    });
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "localStorage", previous);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  }
+});

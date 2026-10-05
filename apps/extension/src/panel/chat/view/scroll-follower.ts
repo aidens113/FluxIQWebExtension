@@ -4,22 +4,38 @@
 // grows below a reader never pulls them down, and "Jump to latest" shows for
 // as long as they are away from the bottom.
 //
-// Only a scroll that moved the view (its `scrollTop` differs from the last
-// one the follower wrote or saw) and left it off the bottom ends following.
-// A scroll event also fires for the follower's own `scrollTop` write, and
-// content can grow between that write and the event's dispatch, so "off the
-// bottom" alone is not the person leaving: with the view where the follower
-// put it, it is content that grew, and the follower goes back down. Content that grows in place (a card's status changing, a line
-// replaced) is followed through a ResizeObserver on the scrolled content.
+// Only the person ends following: a scroll that left the view off the bottom
+// while they were turning the wheel, touching, pressing a scroll key or
+// dragging the scroll bar. Every other scroll is the browser's. It fires for
+// the follower's own `scrollTop` write (and content can grow before that
+// event is dispatched), and Chrome's scroll anchoring moves the view on its
+// own when content above the top line changes size: a card above shrinking
+// while the newest grows keeps the content's height, so no ResizeObserver
+// fires, and anchoring moves the view up off the bottom. Treating that as the
+// person parked the chat above the hand-off question and the build's ending
+// (D16, run musq0b1m). After a scroll that is not the person's, a follower
+// goes back down. Content that grows in place (a card's status changing, a
+// line replaced) is followed through a ResizeObserver on the scrolled content.
 
 import { isAtBottom } from "./scroll-follow";
+
+/** How long after a wheel turn, touch or scroll key a scroll is still the person's (a smooth scroll runs on), in ms. */
+export const PERSON_SCROLL_MS = 1_000;
+
+// Keys that scroll a view; the same keys typed into a field do not.
+const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
+
+type Listen = (type: string, listener: (event: Event) => void, options?: { passive?: boolean }) => void;
 
 /** What the follower needs of the scrolled element. */
 export type ScrollHost = {
   scrollTop: number;
   readonly scrollHeight: number;
   readonly clientHeight: number;
-  addEventListener(type: "scroll", listener: () => void, options?: { passive?: boolean }): void;
+  /** Hears "scroll" and the person's input: "wheel", "touchmove", "keydown", "pointerdown", "pointerup", "pointercancel". */
+  addEventListener: Listen;
+  /** Where key presses and a drag's release outside the view are heard, when there is one. */
+  readonly ownerDocument?: { addEventListener: Listen } | null;
 };
 
 export type ScrollFollower = {
@@ -54,12 +70,40 @@ export function createScrollFollower(host: ScrollHost, showJump: (show: boolean)
     if (following) toBottom();
     setJump(!following && !isAtBottom(host));
   };
+  // The person's own input, which alone can end following.
+  let personAt = Number.NEGATIVE_INFINITY;
+  let dragging = false;
+  const person = (): boolean => dragging || Date.now() - personAt <= PERSON_SCROLL_MS;
+  const touched = (): void => { personAt = Date.now(); };
+  const key = (event: Event): void => {
+    const target = event.target as { tagName?: string; isContentEditable?: boolean } | null | undefined;
+    const typing = target?.isContentEditable === true || target?.tagName === "TEXTAREA" || target?.tagName === "INPUT" || target?.tagName === "SELECT";
+    if (!typing && SCROLL_KEYS.has((event as { key?: string }).key ?? "")) touched();
+  };
+  const released = (): void => {
+    if (!dragging) return;
+    dragging = false;
+    touched();
+  };
+  host.addEventListener("wheel", touched, { passive: true });
+  host.addEventListener("touchmove", touched, { passive: true });
+  host.addEventListener("keydown", key);
+  // The scroll bar is the scrolled element's own; a press on what it holds (a card's button) is not scrolling.
+  host.addEventListener("pointerdown", (event) => { if (event.target === (host as unknown)) dragging = true; }, { passive: true });
+  host.addEventListener("pointerup", released, { passive: true });
+  host.addEventListener("pointercancel", released, { passive: true });
+  const page = host.ownerDocument;
+  if (page) {
+    page.addEventListener("keydown", key);
+    page.addEventListener("pointerup", released, { passive: true });
+    page.addEventListener("pointercancel", released, { passive: true });
+  }
   host.addEventListener("scroll", () => {
     const top = host.scrollTop;
     const moved = Math.abs(top - lastTop) >= 1;
     lastTop = top;
     if (isAtBottom(host)) following = true;
-    else if (moved) following = false;
+    else if (moved && person()) following = false;
     else if (following) toBottom();
     setJump(!following);
   }, { passive: true });

@@ -113,3 +113,17 @@ test("an answer carrying Core's record of the command it ran shows no attachment
     assert.doesNotMatch(answer.textContent, /attached/u);
   });
 });
+
+// U5 of the run-musp39u8-9ac026ab UI review: a send that fails says so on the person's own turn.
+test("U5: a person's turn that could not be sent says so under its bubble", async () => {
+  await withFakeDocument(() => {
+    const view = createThreadView();
+    const failed: CoreTurn = { ...turn("local-send:1", "person", "Find earbuds"), sendError: "Couldn't send that. Try again." };
+    view.render(buildChatStream([{ turn: failed, at: eventTime(0) }], []), null, controls);
+    const entry = fake(view.element).children[0]!;
+    assert.equal(entry.byClass("chat-bubble-text")[0]!.textContent, "Find earbuds");
+    assert.equal(entry.byClass("chat-send-error")[0]!.textContent, "Couldn't send that. Try again.");
+    view.render(buildChatStream([{ turn: { ...failed, sendError: undefined }, at: eventTime(0) }], []), null, controls);
+    assert.equal(fake(view.element).children[0]!.byClass("chat-send-error").length, 0, "gone once it is on its way again");
+  });
+});

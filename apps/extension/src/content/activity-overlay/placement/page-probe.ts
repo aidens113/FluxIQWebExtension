@@ -14,6 +14,10 @@
 //   beneath it is not looked at, since the backdrop covers it too.
 // - **control** -- an ordinary link, button or field in the page's flow. It
 //   scrolls, so it only breaks ties between clear corners.
+// - **content** -- something in the page's flow a person reads: an image, a
+//   video, a canvas, an SVG drawing, an embedded frame, or an element whose
+//   own text is not blank. A box that only holds other boxes (a gallery's
+//   background, a layout column) is not content.
 //
 // The extension's own UI is never an obstacle (`isExtensionUiNode`), and the
 // overlay is `pointer-events: none`, so the hit test passes through it.
@@ -74,7 +78,7 @@ export function pageProbe(): (x: number, y: number) => PointCover {
       if (layer === "fixed") return "fixed";
       if (layer === "backdrop") break;
     }
-    return control ? "control" : null;
+    return control ? "control" : isContent(hit) ? "content" : null;
   };
 
   return (x, y) => {
@@ -106,6 +110,17 @@ function parentOf(element: Element): Element | undefined {
   // By duck type: a shadow root is the one root node with a host.
   const root = element.getRootNode() as Partial<ShadowRoot>;
   return root.host ?? undefined;
+}
+
+const MEDIA_SELECTOR = "img, picture, video, canvas, svg, iframe, object, embed";
+
+/** Content a person reads: media (or a part of an SVG drawing), or an element with its own non-blank text. */
+function isContent(element: Element): boolean {
+  if (element.matches(MEDIA_SELECTOR) || element.closest("svg")) return true;
+  for (const child of element.childNodes) {
+    if (child.nodeType === 3 && (child.textContent ?? "").trim() !== "") return true;
+  }
+  return false;
 }
 
 /** A box that stays over the content: fixed, sticky, or a dialog. */

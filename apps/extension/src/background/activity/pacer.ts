@@ -19,8 +19,44 @@
 //   newest is shown. Nothing is dropped for good -- the last sentence always
 //   reaches the screen -- so a stale one is never left showing. A sentence
 //   that only repeats the headline is dropped (`isHeadlineEcho`).
+// - This is the only pace. The panel's status row and the page overlay both
+//   draw this display as it comes, so they say the same thing at the same
+//   moment (D7 of the t174 UI review of run-musp8nz1-dbd3905a: the overlay
+//   kept a dwell of its own and lagged the panel by most of a second). The
+//   interval is long enough that any three seconds of paced changes show at
+//   most two, which is what the Lab's UI review reads as steady.
+// - A step that finished well is said by its action alone, never "— done":
+//   the chat's card says Done, and the status must not still say "— done"
+//   once the next step is under way (D6 of that review).
+// - A decision being made ("Deciding the next step", Core's reasonless row
+//   that opens every decision) does not replace a meaningful line: the last
+//   one -- the step it ran, the stage it is in -- is held until something of
+//   the work's own replaces it. Showing each opening row flashed the status
+//   about once a second for a whole re-author (U9 of the run-musp39u8-9ac026ab
+//   UI review). It shows only when nothing meaningful is up yet.
+// - A step that starts after a decision shows at once: the status never says
+//   "Deciding the next step", or the line held through the decision, beside
+//   the card of the step the decision chose (D7 of the t174 review). A
+//   decision takes the model's time, so this cannot make it flicker.
+// - The model's words -- its reason for a step, a refused edit, a recovery
+//   choice (`isModelThought`) -- are never the detail. The chat tells them;
+//   the status keeps the unit's last action line, phase and step, and the
+//   display is marked `kind: "thought"`. Such an event is not a change of the
+//   detail: it neither starts the interval nor takes the place of an action
+//   still waiting for it, so the action after a thought is not held back (D6
+//   and D13 of the run-musp4h2f-72e8ed99 UI review). It still settles,
+//   headlines and opens a unit of work like any other event, and it still
+//   passes through `UnitSituation` and `RunRetry`.
+// - A run that presses a failed step again is still running the Flow, not
+//   fixing it: Core's recovery ladder keeps the headline "Running your Flow"
+//   and the detail says why it tries again ("The page was busy, trying
+//   again"), through the recovery choice that follows it, which is a thought
+//   (D12 of the t174 review). Only Core working out a repair heads it "Fixing
+//   your Flow" (`run-retry.ts`).
 // - `phase` and `step` move with `detail`, so the colour, the mark and the
-//   step count cannot change faster than the words beside them.
+//   step count cannot change faster than the words beside them. A repair of
+//   the Flow itself is on no step of the run, so the count does not carry
+//   into it (`unit-situation.ts`).
 // - A settling event -- `final`, `failed` or waiting for the person -- changes
 //   the headline or the outcome, so it skips the wait and replaces anything
 //   still waiting. So does a new stage Core announces ("Judging the Flow", a
@@ -31,13 +67,19 @@
 //
 // Pure apart from the injected clock: no browser API, no network.
 
-import { activityWording, isHeadlineEcho, type ActivityDisplay, type ClientGatewayActivity } from "../../shared/activity/index";
+import { activityWording, isHeadlineEcho, isModelThought, type ActivityDisplay, type ClientGatewayActivity } from "../../shared/activity/index";
 import type { ActivityClock, ActivityTimer } from "./clock";
 import { activityHeadline } from "./headline";
+import { RunRetry, type RetryState } from "./run-retry";
 import { UnitSituation, type UnitState } from "./unit-situation";
 
-/** The shortest time between two changes of `detail`. */
-export const ACTIVITY_DETAIL_INTERVAL_MS = 1_200;
+/**
+ * The shortest time between two paced changes of `detail`: more than half of
+ * three seconds, so any three seconds show at most two. The overlay used to add
+ * this on its own (a 1.6 s dwell over a 1.2 s pace); one pace for both surfaces
+ * keeps them in step (D7).
+ */
+export const ACTIVITY_DETAIL_INTERVAL_MS = 1_600;
 
 /** The most characters of Core's sentence kept. Core already truncates; this bounds a misbehaving sender. */
 const MAX_DETAIL = 160;
@@ -48,8 +90,17 @@ const CHECK_DETAIL = "Only a person can get past this page";
 /** How a wait ends when the person settled it themselves (Core's `ClientGatewayActivityResolution`). */
 const PERSON_RESOLUTIONS: ReadonlySet<string> = new Set(["answered", "allowed", "declined"]);
 
+/**
+ * What `activityWording` says for a decision not yet explained: Core's row
+ * opening a decision, and the phase's wording for a Core that sends no detail.
+ */
+const UNDECIDED_SENTENCES: ReadonlySet<string> = new Set(["Deciding the next step", "Thinking about the next step"]);
+
 /** Core's title on the result check's verdict row (`result-verification/verify.ts`). */
 const RESULT_CHECK_TITLE = "Result check";
+
+/** `activityWording`'s outcome for a step that worked. */
+const OUTCOME_DONE = "done";
 
 export type ActivityPacerOptions = {
   readonly clock: ActivityClock;
@@ -62,6 +113,10 @@ export class ActivityPacer {
   private shown: ActivityDisplay | null = null;
   private pending: ActivityDisplay | undefined;
   private readonly situation = new UnitSituation();
+  private readonly retry = new RunRetry();
+  /** The shown display came from a decision still being made, whatever line it holds. */
+  private shownDeciding = false;
+  private pendingDeciding = false;
   private timer: ActivityTimer | undefined;
   private detailChangedAt = Number.NEGATIVE_INFINITY;
   private readonly intervalMs: number;
@@ -78,19 +133,54 @@ export class ActivityPacer {
   /** Takes one event, already known to be newer than every one before it. */
   accept(event: ClientGatewayActivity): void {
     const now = this.options.clock.now();
-    const next = displayFor(event, this.shown, this.situation.observe(event));
-    if (this.showsAtOnce(next) || opensStage(event) || now - this.detailChangedAt >= this.intervalMs) {
-      this.cancelPending();
-      this.show(next, now);
+    // Every event passes through both, thoughts included, so a repair, a
+    // check or a retry that a thought begins or ends still counts.
+    const unit = this.situation.observe(event);
+    const retry = this.retry.observe(event, subjectKindOf(event));
+    const latest = this.pending ?? this.shown;
+    if (isModelThought(event)) {
+      this.acceptThought(thoughtDisplayFor(event, latest, unit, retry), now);
       return;
     }
-    this.pending = next;
-    this.timer ??= this.options.clock.setTimeout(() => this.showPending(), this.detailChangedAt + this.intervalMs - now);
+    const next = holdMeaningfulLine(event, displayFor(event, this.shown, unit, retry), latest);
+    const atOnce = opensStage(event) || (this.shownDeciding && startsStep(event));
+    this.offer(next, isDeciding(event), atOnce, now);
   }
 
   /** Stops a waiting change; the display keeps what it last showed. */
   dispose(): void {
     this.cancelPending();
+  }
+
+  /**
+   * One of the model's thoughts, as `next`: the action line it would show next
+   * (an action still waiting for the interval, else the one up) with what the
+   * thought says of the work itself. A change of headline or outcome shows at
+   * once, carrying any waiting action with it; a thought that leaves the line
+   * as it is is folded in quietly, and a waiting action keeps its place and
+   * its turn. Only a run's retry line coming or going changes the detail on a
+   * thought, and that change is paced like any other.
+   */
+  private acceptThought(next: ActivityDisplay, now: number): void {
+    const latest = this.pending ?? this.shown;
+    const deciding = this.pending !== undefined ? this.pendingDeciding : this.shownDeciding;
+    if (!this.showsAtOnce(next) && latest !== null && next.detail === latest.detail) {
+      if (this.pending === undefined) this.show(next, now, deciding);
+      return;
+    }
+    this.offer(next, deciding, false, now);
+  }
+
+  /** Shows `next` now when it may skip the pace, else holds it for the interval's end. */
+  private offer(next: ActivityDisplay, deciding: boolean, atOnce: boolean, now: number): void {
+    if (atOnce || this.showsAtOnce(next) || now - this.detailChangedAt >= this.intervalMs) {
+      this.cancelPending();
+      this.show(next, now, deciding);
+      return;
+    }
+    this.pending = next;
+    this.pendingDeciding = deciding;
+    this.timer ??= this.options.clock.setTimeout(() => this.showPending(), this.detailChangedAt + this.intervalMs - now);
   }
 
   /** A new unit of work, or a new headline or outcome for this one (a repair, a check, settling, resuming): it shows now. */
@@ -103,7 +193,7 @@ export class ActivityPacer {
     this.timer = undefined;
     const next = this.pending;
     this.pending = undefined;
-    if (next) this.show(next, this.options.clock.now());
+    if (next) this.show(next, this.options.clock.now(), this.pendingDeciding);
   }
 
   private cancelPending(): void {
@@ -112,31 +202,35 @@ export class ActivityPacer {
     this.pending = undefined;
   }
 
-  private show(next: ActivityDisplay, now: number): void {
+  private show(next: ActivityDisplay, now: number, deciding: boolean): void {
     const previous = this.shown;
     this.shown = next;
+    this.shownDeciding = deciding;
     if (previous === null || next.detail !== previous.detail) this.detailChangedAt = now;
     if (previous === null || visiblyDiffers(previous, next)) this.options.onChange(next);
   }
 }
 
-function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | null, unit: UnitState): ActivityDisplay {
+function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | null, unit: UnitState, retry: RetryState): ActivityDisplay {
   const subjectKind = subjectKindOf(event);
   // A check only the person can answer holds the work until the page lets it
   // through; Core's own settling and waiting events still say what they say.
   const outcome = outcomeOf(event) ?? (unit.check ? "waiting" : null);
   const working = outcome === null;
   const headline = activityHeadline(subjectKind, outcome, {
-    repairing: unit.repairing,
+    // A run pressing a failed step again is not a repair (D12).
+    repairing: unit.repairing && retry.repairing,
     waitingOn: event.phase === "waiting_permission" ? "answer" : "check"
   });
   // The person's own answer is said in the thread (the ask and its card); as
   // the status it would be the third telling of one press (D7).
-  const detail = personAnswered(event) ? null : bounded(unit.checkReportedNow ? CHECK_DETAIL : activityWording(event).sentence);
+  const detail = personAnswered(event) ? null : bounded(unit.checkReportedNow ? CHECK_DETAIL : retry.line ?? statusSentence(event));
   const sameUnit = previous !== null && previous.activityId === event.activityId;
   // A run's step events carry the step; the events between them ("Run
-  // started", a note) keep the step last said, so the count does not blink out.
-  const step = working ? stepOf(event.step) ?? (sameUnit ? previous.step : null) : null;
+  // started", a note) keep the step last said, so the count does not blink out
+  // -- but not into a repair of the Flow itself, which is on no step of the
+  // run (U2 of t194: "Step 5 of 5" for a four-minute re-author).
+  const step = working ? stepOf(event.step) ?? (sameUnit && !unit.rebuilding ? previous.step : null) : null;
   return {
     activityId: event.activityId,
     subjectKind,
@@ -146,8 +240,68 @@ function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | nu
     step,
     working,
     outcome,
-    sequence: event.sequence
+    sequence: event.sequence,
+    kind: "action"
   };
+}
+
+/**
+ * The display for one of the model's thoughts: the unit's headline, working
+ * state and outcome from the event, and the detail, phase and step of `base`,
+ * the action line it keeps -- or none, when the thought opens the unit. A
+ * run's retry line is FluxIQ's own status, not the model's words: a recovery
+ * choice keeps it up, and the thought that ends the retry takes it down.
+ */
+function thoughtDisplayFor(event: ClientGatewayActivity, base: ActivityDisplay | null | undefined, unit: UnitState, retry: RetryState): ActivityDisplay {
+  const own = displayFor(event, null, unit, retry);
+  const kept = base && base.activityId === event.activityId ? base : null;
+  const keptLine = kept && kept.detail !== retry.ended ? kept.detail : null;
+  const line = retry.line ?? keptLine;
+  return {
+    ...own,
+    phase: kept?.phase ?? own.phase,
+    detail: line !== null && !isHeadlineEcho(own.headline, line) ? line : null,
+    step: own.working ? (kept && !unit.rebuilding ? kept.step : null) ?? own.step : null,
+    kind: "thought"
+  };
+}
+
+/**
+ * `next`, keeping `latest`'s line when `event` is only a decision being made
+ * and `latest` -- the newest display, shown or still waiting for its turn --
+ * already says something meaningful about the same work under the same
+ * headline. The step is `next`'s own, so a repair still drops the run's count.
+ */
+function holdMeaningfulLine(event: ClientGatewayActivity, next: ActivityDisplay, latest: ActivityDisplay | null | undefined): ActivityDisplay {
+  if (!latest || !decisionUnderWay(event) || next.detail === null || !UNDECIDED_SENTENCES.has(next.detail)) return next;
+  if (latest.activityId !== next.activityId || !latest.working || !next.working || latest.headline !== next.headline) return next;
+  if (latest.detail === null || UNDECIDED_SENTENCES.has(latest.detail)) return next;
+  return { ...next, detail: latest.detail, phase: latest.phase };
+}
+
+/** A decision Core has opened and not yet explained: a thought row with no reason, or a bare thinking event. */
+function decisionUnderWay(event: ClientGatewayActivity): boolean {
+  const detail = event.detail;
+  if (detail === undefined) return event.phase === "thinking";
+  return detail.kind === "thought" && (detail.text?.trim() ?? "") === "" && detail.status !== "failed";
+}
+
+/** A decision still being made: Core's "Deciding the next step" row, or a thinking event with no row. */
+function isDeciding(event: ClientGatewayActivity): boolean {
+  const detail = event.detail;
+  return detail === undefined ? event.phase === "thinking" : detail.kind === "thought" && detail.status === "started";
+}
+
+/** A page step starting: the event that puts a working card in the chat. */
+function startsStep(event: ClientGatewayActivity): boolean {
+  return event.detail?.kind === "tool" && event.detail.status === "started";
+}
+
+/** What the status says of `event`: its words, and a step that finished well by its action alone (D6). */
+function statusSentence(event: ClientGatewayActivity): string {
+  const wording = activityWording(event);
+  const finishedWell = event.detail?.kind === "tool" && event.detail.status === "succeeded" && wording.outcome === OUTCOME_DONE;
+  return finishedWell ? wording.action : wording.sentence;
 }
 
 /** Core's row closing a wait with what the person did: pressed Continue or Stop, answered, allowed or refused. */

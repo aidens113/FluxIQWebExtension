@@ -5,10 +5,20 @@
 // Three situations change it besides the work settling (U8 and U9 of the t174
 // live lane's UI review):
 //
-// - **Repair.** Once Core starts repairing the Flow -- a run recovering from a
-//   failed step, a build re-authoring an answer its check refuted -- the work
-//   reads "Fixing your Flow", not "Building your Flow", and a repair that ends
-//   in failure reads "Couldn't fix your Flow".
+// - **Repair.** Once Core starts repairing the Flow -- a run working out a fix
+//   for a failed step, a build re-authoring an answer its check refuted -- the
+//   work reads "Fixing your Flow", not "Building your Flow". A run that only
+//   presses a failed step again (the page was busy) is not repairing anything
+//   and keeps "Running your Flow" (D12 of the t174 UI review of
+//   run-musp8nz1-dbd3905a; the pacer tells the two apart, `run-retry.ts`).
+//   A run whose repair ends in failure reads "Couldn't fix your Flow": the run
+//   had a Flow, and it could not be fixed. A build that fails reads "Build
+//   failed" whether or not it was repairing: its repair re-authors the Flow
+//   the build is making, so a creation that ends unfinished had no Flow to fix
+//   (t195 live run `run-musp474o-e0ed7432`, 12-failure-scenario). The subject
+//   kind is what tells the two apart; Core's activity does not say whether a
+//   build creates a Flow or extends one, so an extending build that fails
+//   reads "Build failed" too.
 // - **A check only the person can answer.** When a page action reports that
 //   the page asks for what only a person can give (a robot check, a code
 //   prompt), the headline says so plainly: "Waiting for you: finish the check
@@ -49,12 +59,13 @@ const WAITING: Readonly<Record<ActivityWaitReason, string>> = Object.freeze({
 });
 
 const REPAIRING = "Fixing your Flow";
+/** Only a run's failed repair: a build that fails in its repair says the build failed. */
 const REPAIR_FAILED = "Couldn't fix your Flow";
 
 /** The headline for a unit of work of `kind`, working (`outcome` null) or settled, in `situation`. */
 export function activityHeadline(kind: ActivityDisplay["subjectKind"], outcome: ActivityDisplay["outcome"], situation: ActivityHeadlineSituation = {}): string {
   if (outcome === "waiting") return WAITING[situation.waitingOn ?? "answer"];
   if (outcome === "done") return DONE[kind];
-  if (outcome === "failed") return situation.repairing ? REPAIR_FAILED : FAILED[kind];
+  if (outcome === "failed") return kind === "run" && situation.repairing ? REPAIR_FAILED : FAILED[kind];
   return situation.repairing ? REPAIRING : WORKING[kind];
 }

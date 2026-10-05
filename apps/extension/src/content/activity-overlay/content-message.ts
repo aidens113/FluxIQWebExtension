@@ -17,6 +17,7 @@ import {
 const PREFERENCES: ReadonlySet<unknown> = new Set<ActivityOverlayPreference>(["expanded", "collapsed", "hidden"]);
 const SUBJECT_KINDS: ReadonlySet<unknown> = new Set<ActivityDisplay["subjectKind"]>(["build", "run"]);
 const OUTCOMES: ReadonlySet<unknown> = new Set<ActivityDisplay["outcome"]>(["done", "failed", "waiting", null]);
+const KINDS: ReadonlySet<unknown> = new Set<ActivityDisplay["kind"]>(["action", "thought", "starting", undefined]);
 
 /** The activity message `message` is, or `undefined` when it is some other message or not a well-formed one. */
 export function activityContentMessage(message: unknown): ActivityContentMessage | undefined {
@@ -44,7 +45,7 @@ function isActivity(value: unknown): value is ClientGatewayActivity {
   return typeof activity.phase === "string" && typeof activity.label === "string";
 }
 
-/** Every field the overlay draws from, checked: a display is the background's own shape, so nothing in it is optional. */
+/** Every field the overlay draws from, checked: a display is the background's own shape, so nothing in it is optional but `kind`, which reads as `action` when absent. */
 function isDisplay(value: unknown): value is ActivityDisplay {
   if (!value || typeof value !== "object") return false;
   const display = value as Partial<Record<keyof ActivityDisplay, unknown>>;
@@ -56,7 +57,8 @@ function isDisplay(value: unknown): value is ActivityDisplay {
     && (display.step === null || isStep(display.step))
     && typeof display.working === "boolean"
     && OUTCOMES.has(display.outcome)
-    && typeof display.sequence === "number";
+    && typeof display.sequence === "number"
+    && KINDS.has(display.kind);
 }
 
 function isStep(value: unknown): value is NonNullable<ActivityDisplay["step"]> {

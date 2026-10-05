@@ -429,6 +429,11 @@ export class FluxIQConnection {
     return this.activity.setOverlay(overlay);
   }
 
+  /** Runs one send of the person's message under the starting status (`activity/send-start.ts`). */
+  activitySending<T>(send: () => Promise<T>): Promise<T> {
+    return this.activity.sending(send);
+  }
+
   handleTabUpdated(tab: chrome.tabs.Tab): Promise<void> {
     return this.page.handleTabUpdate(tab);
   }

@@ -61,8 +61,13 @@ const OUTCOME_DONE = "done";
 const OUTCOME_NOT_FOUND = "couldn't find it on the page";
 const OUTCOME_RETRY = "that didn't work, trying another way";
 const OUTCOME_NOT_REPEATED = "it didn't work the same way again";
-/** Core's words for a passed completion check: the plan is sound, and the dry run that follows can still refuse it. */
-const OUTCOME_PLAN_OK = "the plan checks out, it still has to run cleanly";
+/**
+ * Core's newer words for a passed completion check: what the Flow does matches
+ * the request, and the test from the start that follows can still refuse it.
+ * Said without Core's own "plan" (D3 of the t174 UI review of
+ * run-musp8nz1-dbd3905a: "the plan checks out, it still has to run cleanly").
+ */
+const OUTCOME_PLAN_OK = "looks right, testing it next";
 
 /** What a page step does, told by words in its node id or label. First match wins. */
 const NODE_ACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
@@ -180,7 +185,11 @@ function toolAction(toolId: string, event: ClientGatewayActivity, code: string |
     for (const [pattern, action] of NODE_ACTIONS) {
       if (!pattern.test(hint)) continue;
       const name = label ? plainName(label) : "";
-      if (action === "Clicking on the page" && name && !RAW_ID.test(name)) return /^(click|press|tap)\b/iu.test(name) ? capitalised(name) : `Clicking “${name}”`;
+      if (!name || RAW_ID.test(name)) return action;
+      if (action === "Clicking on the page") return /^(click|press|tap)\b/iu.test(name) ? capitalised(name) : `Clicking “${name}”`;
+      // A typing step names its field as a click names its control (D5 of the
+      // run-musp8nz1-dbd3905a review: a typing step said nothing of where).
+      if (action === "Typing into the page") return /^(type|fill|enter|input|write)\b/iu.test(name) ? capitalised(name) : `Typing into “${name}”`;
       return action;
     }
   }

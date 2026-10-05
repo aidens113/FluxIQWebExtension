@@ -15,10 +15,10 @@ const VIEWPORT = { width: 1280, height: 720 };
 const BOX = { width: 384, height: 66 };
 const NARROW = { width: 280, height: 66 };
 
-/** A page of fixed boxes over ordinary controls; a later fixed box is on top, and fixed is always over a control. */
-function page(fixed: Rect[], controls: Rect[] = []): (x: number, y: number) => PointCover {
+/** A page of fixed boxes over ordinary controls and content (text, images); fixed is on top, then controls, then content. */
+function page(fixed: Rect[], controls: Rect[] = [], content: Rect[] = []): (x: number, y: number) => PointCover {
   const inside = (rect: Rect, x: number, y: number) => x >= rect.left && x < rect.left + rect.width && y >= rect.top && y < rect.top + rect.height;
-  return (x, y) => (fixed.some((rect) => inside(rect, x, y)) ? "fixed" : controls.some((rect) => inside(rect, x, y)) ? "control" : null);
+  return (x, y) => (fixed.some((rect) => inside(rect, x, y)) ? "fixed" : controls.some((rect) => inside(rect, x, y)) ? "control" : content.some((rect) => inside(rect, x, y)) ? "content" : null);
 }
 
 function place(probe: PlacementInput["probe"], current?: OverlayPlacement): OverlayPlacement {
@@ -84,10 +84,16 @@ test("every corner busy: the pill, text and all, at the least-busy edge -- never
   assert.deepEqual(place(page([COOKIE_BANNER, STICKY_HEADER])), { shape: "pill", anchor: "left" }, "the side midpoint is the only place clear of the header and the banner");
 });
 
+/** Bands too deep to dock past within the reach: a tall header and a tall banner. */
+const DEEP_HEADER: Rect = { left: 0, top: 0, width: 1280, height: 220 };
+const DEEP_BANNER: Rect = { left: 0, top: 480, width: 1280, height: 240 };
+
 test("every corner busy and the full pill over a fixed card: the narrower pill, where it covers nothing fixed", () => {
   const sideCard: Rect = { left: 300, top: 300, width: 300, height: 120 };
   const rightRail: Rect = { left: 1180, top: 0, width: 100, height: 720 };
-  assert.deepEqual(place(page([COOKIE_BANNER, STICKY_HEADER, sideCard, rightRail])), { shape: "narrow", anchor: "left" });
+  assert.deepEqual(place(page([DEEP_BANNER, DEEP_HEADER, sideCard, rightRail])), { shape: "narrow", anchor: "left" });
+  const docked = place(page([COOKIE_BANNER, STICKY_HEADER, sideCard, rightRail]));
+  assert.deepEqual({ shape: docked.shape, anchor: docked.anchor }, { shape: "pill", anchor: "bottom-left" }, "a full pill docked above a shallow banner beats the narrow one");
 });
 
 test("every place busy: the pill goes where the least of it is fixed, and keeps its text", () => {
@@ -99,7 +105,7 @@ test("every place busy: the pill goes where the least of it is fixed, and keeps 
 });
 
 test("a fallback place already held is kept while no place is less busy", () => {
-  const busy = page([COOKIE_BANNER, STICKY_HEADER, { left: 300, top: 300, width: 300, height: 120 }, { left: 1180, top: 0, width: 100, height: 720 }]);
+  const busy = page([DEEP_BANNER, DEEP_HEADER, { left: 300, top: 300, width: 300, height: 120 }, { left: 1180, top: 0, width: 100, height: 720 }]);
   const held: OverlayPlacement = { shape: "narrow", anchor: "left" };
   assert.deepEqual(place(busy, held), held);
 });
@@ -107,6 +113,38 @@ test("a fallback place already held is kept while no place is less busy", () => 
 test("a fallback pill comes back to a corner once one clears", () => {
   assert.deepEqual(place(page([]), { shape: "narrow", anchor: "left" }), { shape: "pill", anchor: "bottom-left" });
   assert.deepEqual(place(page([]), { shape: "pill", anchor: "left" }), { shape: "pill", anchor: "bottom-left" });
+});
+
+// D5 of the run-musp4h2f-72e8ed99 UI review: on every product page of
+// bigbox-retail a sticky header (0-93) and a fixed Add to cart bar (630-705)
+// made both left corners busy, and the left midpoint put the pill on the
+// product image (x 198-651, y 80-523). The page's free band between the image
+// and the bar is where it covers nothing a person reads.
+const PRODUCT_HEADER: Rect = { left: 0, top: 0, width: 1240, height: 93 };
+const ADD_TO_CART_BAR: Rect = { left: 0, top: 630, width: 1264, height: 75 };
+const PRODUCT_IMAGE: Rect = { left: 198, top: 80, width: 453, height: 443 };
+const PRODUCT_PAGE_VIEWPORT = { width: 1264, height: 705 };
+
+test("every corner busy and the midpoint over the product image: the pill docks above the fixed bar, clear of the image", () => {
+  const placement = choosePlacement({ viewport: PRODUCT_PAGE_VIEWPORT, box: BOX, narrow: NARROW, margin: 16, probe: page([PRODUCT_HEADER, ADD_TO_CART_BAR], [], [PRODUCT_IMAGE]) });
+  assert.equal(placement.shape, "pill");
+  assert.equal(placement.anchor, "bottom-left");
+  const bottom = PRODUCT_PAGE_VIEWPORT.height - 16 - (placement.offset ?? 0);
+  assert.ok(bottom <= ADD_TO_CART_BAR.top, `the pill ends above the bar: bottom ${bottom}`);
+  assert.ok(bottom - BOX.height >= PRODUCT_IMAGE.top + PRODUCT_IMAGE.height, `and starts below the image: top ${bottom - BOX.height}`);
+  assert.ok(ADD_TO_CART_BAR.top - bottom <= 24, `docked against the bar, not floating: gap ${ADD_TO_CART_BAR.top - bottom}`);
+  assert.deepEqual(anchorStyle(placement.anchor, 16, BOX.height, placement.offset), { left: "16px", right: "auto", top: "auto", bottom: `${16 + (placement.offset ?? 0)}px` });
+});
+
+test("a docked place already held is kept while it stays clear", () => {
+  const probe = page([PRODUCT_HEADER, ADD_TO_CART_BAR], [], [PRODUCT_IMAGE]);
+  const first = choosePlacement({ viewport: PRODUCT_PAGE_VIEWPORT, box: BOX, narrow: NARROW, margin: 16, probe });
+  assert.deepEqual(choosePlacement({ viewport: PRODUCT_PAGE_VIEWPORT, box: BOX, narrow: NARROW, margin: 16, probe, current: first }), first);
+});
+
+test("among clear corners, the one over the least readable content wins", () => {
+  const bottomText: Rect = { left: 0, top: 560, width: 600, height: 160 };
+  assert.deepEqual(place(page([], [], [bottomText])), { shape: "pill", anchor: "top-left" });
 });
 
 test("the anchor's offsets pin two edges and free the other two", () => {

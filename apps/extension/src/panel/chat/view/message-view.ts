@@ -1,6 +1,7 @@
 // One turn of the conversation, the way a chat shows it:
 //
-//   the person    a bubble on the right, their words as typed
+//   the person    a bubble on the right, their words as typed; a message
+//                 the panel could not send says why under them
 //   FluxIQ        full width on the left, no bubble: its words formatted
 //                 (`parseAssistantText`) and a question's answer controls
 //
@@ -43,6 +44,8 @@ export function createMessageView(author: string): MessageView {
       const parts: HTMLElement[] = person
         ? [createElement("p", { className: "chat-bubble-text", text: turn.text })]
         : renderTextBlocks(parseAssistantText(turn.text));
+      // A message this panel could not send says so on the turn itself.
+      if (turn.sendError !== undefined) parts.push(createElement("p", { className: "chat-send-error", text: turn.sendError, attrs: { role: "alert" } }));
       if (turn.ask !== null) parts.push(askControls(turn.ask, ask));
       placeChildren(content, parts);
     }

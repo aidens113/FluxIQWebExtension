@@ -330,6 +330,23 @@ relay:
   left out. The pacer and the overlay are untouched by it;
 - folds the events into one paced **display** (`ActivityPacer`, below), which
   is what the overlay and the chat's live line draw;
+- puts up a **starting status** the moment the person sends a message
+  (`ActivityRelay.sending`, `background/activity/send-start.ts`; D14 of the
+  `run-musp4h2f-72e8ed99` UI review, where the overlay was off the page for
+  the second between the send and Core's first activity, in 7 of 16 samples
+  at the first build moment). Every `panelConversationSend` that carries a
+  message, not one with `kind: "open"`, runs through it
+  (`background/panel/panel-control.ts`). While a gateway session is live, and
+  unless work is already running or waiting on the person, the display
+  becomes "Starting…" (working, no detail, `kind: "starting"`) on the page and
+  in the panels as the send leaves, after the stored overlay preference is
+  read. Core's first activity replaces it, whether it comes before or after
+  Core's answer. It is taken down, leaving no display, when the send fails or
+  throws, when Core's answer does not say `response.execution.status:
+  "started"` (`sendStartedWork`: Core answered in words, or the command
+  finished or failed inside the answer), or when no activity followed within
+  `STARTING_HOLD_MS` (20 s). The answer is handed back to the panel unchanged.
+  The content script has no timer for it;
 - broadcasts `{ type: "fluxiq.activity.changed", state }` to the extension's
   pages when the event list, the display or the overlay preference changed;
 - sends `{ type: "fluxiq.activity.overlay", activity, display, overlay,
@@ -368,8 +385,21 @@ pacer keeps what Core says and changes how often it is said:
 - `headline` names the unit of work and changes only when the work, its
   situation or its outcome does (`background/activity/headline.ts`): "Building
   your Flow" or "Running your Flow" while it works; "Fixing your Flow" from
-  Core's first `repairing` event (for a run, until it reports its next step;
-  for a build, until it settles) and "Couldn't fix your Flow" if it then fails;
+  Core's first repair (for a run, until it reports its next step; for a
+  build, until it settles) and, for a run only, "Couldn't fix your Flow"
+  if it then fails (a build that fails while repairing reads "Build failed":
+  its repair re-authors the Flow it is making, so there was no Flow to fix;
+  t195 run `run-musp474o-e0ed7432`). Every `repairing` event of a build is a
+  repair. A run's is one only once Core works out a fix ("Working out what
+  went wrong", "Deciding how to repair the step"): its recovery ladder
+  ("Recovering from a failed step", then "Trying the step again" and the
+  like) presses the same step again and changes no Flow, so the headline
+  stays "Running your Flow", the detail says why it tries again ("The page
+  was busy, trying again") through the recovery choice that follows, and a
+  run that only retried and then failed reads "Run failed"
+  (`background/activity/run-retry.ts`; D12 of the t174 UI review of
+  `run-musp8nz1-dbd3905a`, where the overlay said "Fixing your Flow" while
+  the chat said "Trying the step again");
   "Waiting for you: finish the check on the page" while a page action's result
   is `web.intervention.required` (a robot check or code prompt only a person
   can answer), until a later page action succeeds; "Waiting for you: answer in
@@ -381,23 +411,56 @@ pacer keeps what Core says and changes how often it is said:
   tool event is the only signal, and a run's step that meets one reports only
   a failed step;
 - `detail` is Core's latest sentence in a person's words
-  (`shared/activity/wording.ts`), changed at most once per 1,200 ms. The
-  first change after a quiet interval shows at once; later ones wait for the
-  interval's end, where only the newest shows, so no stale sentence is left up.
+  (`shared/activity/wording.ts`), changed at most once per 1.6 s
+  (`ACTIVITY_DETAIL_INTERVAL_MS`, more than half of three seconds, so any
+  three seconds show at most two). The first change after a quiet interval
+  shows at once; later ones wait for the interval's end, where only the newest
+  shows, so no stale sentence is left up. A step that starts while the status
+  is still a decision being made ("Deciding the next step") shows at once, so
+  the status never says "Deciding" beside that step's working card.
   A sentence that only repeats the headline ("Run finished" under "Run
   finished", "Building the Flow" under "Building your Flow") is null instead
   (`isHeadlineEcho`);
 - `phase` and `step` belong to the event the detail came from, so they change
   no faster than it does. A run's step is kept between its step events and
-  cleared when it settles;
+  cleared when it settles. A repair of the Flow itself ("Result repair
+  started", "Repairing the Flow…") is on no step of the run, so the count is
+  dropped until the re-run reports its own steps (`unit-situation.ts`; U2 of
+  t194, "Step 5 of 5" for a four-minute re-author);
+- the model's words are never the detail (`isModelThought`,
+  `shared/activity/model-thought.ts`): a `thought` row with text -- the
+  model's reason for its next step, a refused edit with its own summary as
+  the thing not done, a recovery choice -- keeps the unit's last action line,
+  phase and step, and marks the display `kind: "thought"`. Such an event
+  neither starts the interval nor takes the place of an action still waiting
+  for it, so the action after a thought shows on time. A run's retry line is
+  FluxIQ's own status, not the model's words: a recovery choice keeps it up,
+  and a thought that changes it is paced like an action. Core's own deciding
+  row ("Deciding the next step") is status, and its sentence when the model
+  provider did not answer is shown; but a decision being made does not
+  replace a meaningful line: the step it ran or the stage it is in is held
+  through the decision, and "Deciding the next step" shows only when nothing
+  meaningful is up (U9 of the `run-musp39u8-9ac026ab` UI review, where each
+  decision's opening row flashed the status about once a second through a
+  re-author). The chat tells the thoughts as
+  messages. D6 and D13 of the `run-musp4h2f-72e8ed99` UI review: the overlay
+  showed "That step has no such value to make vary; … so this was not done:
+  adding the pape…", and a thought held the next action back by up to 1.2 s;
+- `kind` says what the newest event folded in was: `action`, `thought`, or
+  `starting` for the starting status; absent reads as `action`. Readers key on
+  it, never on the raw event that rides beside the display, because the
+  page's rate gate can carry a newer event than the one the display was built
+  from;
 - a `final`, `failed` or `waiting_permission` event, a new unit of work, a
   repair or check beginning or ending, and work resuming after a wait change
   the headline or the outcome, so they skip the interval.
 
 Replayed at its real timing, the same t174 build gives 2 headline changes and
-128 detail changes, never two working sentences less than 1.2 s apart
-(`background/activity/tests/activity-replay.test.ts`, whose fixture holds the
-run's 259 trace lines).
+108 detail changes, at most two in any second, and never two paced working
+sentences closer than the interval less the relay's 250 ms fan-out gate
+(shortest seen 1,357 ms; the steps shown at once after a decision are the
+exception) (`background/activity/tests/activity-replay.test.ts`, whose fixture
+holds the run's 259 trace lines).
 
 **Which tab** (`OverlayTarget`): the first ordinary web page (`http:`, `https:`
 or `file:`) not on one of FluxIQ's own origins -- `coreApiUrl`, the gateway's
@@ -417,7 +480,12 @@ state }`, and both are accepted only from the side panel or the popup
 what is drawn on it. An unknown preference is refused as `invalid_request`.
 
 **The on-page overlay** (`content/activity-overlay/`) draws the paced display
-in the top frame of that tab, never the raw event: a `<fluxiq-activity-overlay>`
+in the top frame of that tab, never the raw event. It says the unit of work
+and the current action only: a display marked `kind: "thought"` keeps the
+action line already up for that unit (`model-prose.ts`), so the model's words
+never reach the page whatever the background sent, and the starting status is
+drawn like any other display. It is on the page whenever FluxIQ works, from
+the person's send to the work settling. It is a `<fluxiq-activity-overlay>`
 host on `document.documentElement` with a closed shadow root styled through the
 CSSOM and no `innerHTML`. `expanded` is a 384 by 66 pixel card: a mark, a
 14-pixel headline, "Step N of M" (just "Step N" when N passes M) while a run
@@ -439,13 +507,23 @@ samples the pill's box at each corner, one point about every 36 pixels, and
 stepping into open shadow roots): a `fixed` or `sticky` box or a dialog makes
 the corner busy -- a cookie banner, a chat widget, a sticky header, a cart bar
 -- while a fixed box covering 60% or more of the viewport is a modal's backdrop
-and hides nothing the person needs, and ordinary links and buttons only break
-ties. Corners are tried bottom-left, top-left, bottom-right, top-right (the
+and hides nothing the person needs. Ordinary links and buttons, and content a
+person reads (an image, a video, a canvas, an SVG drawing, an embedded frame,
+or an element with its own text), only break ties: among clear corners the
+one over the least content and controls wins. Corners are tried bottom-left, top-left, bottom-right, top-right (the
 side panel covers the right of the Lab's emulated viewport without narrowing
 it, t191 round 1), and a corner the overlay holds is kept while it stays
-clear. When every corner is busy it stays a pill with its words, at the
+clear. When every corner is busy, each corner is also tried **docked**: moved
+in from its top or bottom edge (`offset`) to one margin past the fixed band
+that makes it busy -- above a fixed Add to cart bar, below a sticky header --
+never more than 40% of the viewport's height from its edge and past at most
+three bands. It then stays a pill with its words, at the corner, docked
 corner or side midpoint, full width or narrower (288 or 224 px), that covers
-the fewest fixed points, keeping the place it holds on a tie; it never becomes
+the fewest fixed points; then one that covers no content and no control; then
+the full pill; then the place it holds; so on a product page with a sticky
+header and a fixed cart bar it sits in the free band above the bar, not on the
+product image the left midpoint would cover (D5 of the `run-musp4h2f-72e8ed99`
+UI review). It never becomes
 a text-less dot, because a status the person cannot read is no status (a feed
 with a sticky header and fixed bottom bars made the dot the common case, t195
 `run-murdouox-c5294247`, U3). A long line ends in an ellipsis. `PlacementKeeper`
@@ -460,13 +538,14 @@ reach the page. Its `data-fluxiq-activity` marker keeps it out of the recorder,
 DOM snapshots, evidence blockers and the interference checks
 (`isExtensionUiNode`). Only "done" fades, after `ACTIVITY_DONE_VISIBLE_MS`
 (6 s): a failure stays until new work starts or the person hides the overlay,
-and waiting for the person never fades. A second timer keeps the words
-readable: different words replace the ones up only once those have been up
-for `STATUS_DWELL_MS` (1.6 s, `status-dwell.ts`), so any three seconds show at
-most two changes of words, the bound the Lab's UI review reads as stable; the
-newest waiting status wins, the last is always drawn, and a take-down or a
-change of mode alone applies at once. Both timers change nothing but the
-display.
+and waiting for the person never fades. The overlay holds no words back of
+its own: it draws each display as it arrives, so it and the chat's live line
+show the same words at the same moment. Readability comes from the one pace
+in the background (`ACTIVITY_DETAIL_INTERVAL_MS`, 1.6 s), which keeps any
+three seconds to at most two changes of words, the bound the Lab's UI review
+reads as stable. (A separate 1.6 s overlay dwell over a 1.2 s pace was
+removed in t174-w109: it put the overlay behind the panel's status row.) The
+done timer changes nothing but the display.
 
 Measured in a headed Chromium on company-website (t191-overlay2 probe, fake
 gateway, no Core): after the automation navigated, the new document's overlay
@@ -564,15 +643,40 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   answer it led to.
 - The live line is always last. It shows the paced display only: the
   headline, the step, and Core's latest sentence ("Thinking about the next
-  step" while Core decides, which adds no message). While the work waits for
+  step" while Core decides, which adds no message), never the model's words,
+  which are the stream's messages. From a send until Core's first activity it
+  reads "Starting…", the background's starting status, or "Sending your
+  message" when no session is live to carry activity. While the work waits for
   the person it says what Core asked, and "Show the question" opens the thread
   holding the question when it is not on screen.
 - New content is followed only while the person is at the bottom of the
-  stream; scrolled up, it stays put and "Jump to latest" shows.
+  stream; scrolled up, it stays put and "Jump to latest" shows. Only the
+  person ends following (`view/scroll-follower.ts`): a scroll that leaves the
+  bottom while they turn the wheel, touch, press a scroll key or drag the
+  scroll bar. A scroll the browser makes on its own goes back to the bottom:
+  Chrome's scroll anchoring moves the view up when a card above the view
+  shrinks while the newest grows (the content's height unchanged, so no
+  ResizeObserver fires), and before t174-w117 that parked the chat above the
+  hand-off question and the build's ending with nobody touching it (D16).
 
 The composer sends typed instructions through `panelConversationSend`. The
-thread is re-read 300 ms after an event that names a conversation or ends the
-work. The 4 s poll stays as the fallback.
+box and its kept draft empty the moment the message is sent
+(`panel/chat/conversation/composer.ts`), and the message shows at once in the
+stream as the person's turn, a local one the controller adds
+(`conversation/controller.ts`), so a first message never shows the welcome
+screen. If the send fails, that turn stays in the thread with the error under
+it ("Couldn't send that. Try again."; the composer shows no error of its own),
+and the words come back to the box only when nothing has touched it since:
+the same owner, still current, no edit, the box still empty; newer words, an
+example filled in, or another chat's owner always win, and the two are never
+merged. A send that ends in a fallback card drops the local turn, since the
+card says why. Once Core takes the send, the local turn gives way to Core's
+own: at the first good read that holds a person turn not there at the send,
+and in any case at the first good read started after Core accepted it, so it
+never lingers or doubles. While the send is on its way the background shows
+the starting status on the page and in the live line (Live Activity, above).
+The thread is re-read 300 ms after an event that names a conversation or ends
+the work. The 4 s poll stays as the fallback.
 
 Chat can also hold an explicit project scope, independently of the browser recording session. Its list/get/send/answer requests use that project through the existing authenticated conversation relay. Switching projects clears the displayed thread and ignores late reads for the old target; an empty authorized thread list is ready for the first message. Send stays disabled while that scope loads or fails. Question/back navigation preserves the selected project, and activity from another project is excluded. An unsent draft from another project remains behind the existing adoption controls.
 
@@ -1741,8 +1845,10 @@ metadata. Foreign or unowned legacy text remains visible and requires explicit
 Use draft here or Clear draft; typing and examples never silently adopt it.
 Matching owned text restores without repeated review. Writes install the atomic
 versioned record before removing the literal legacy key, and an empty record
-prevents legacy resurrection. Owner/edit leases prevent accepted old sends from
-clearing newer or adopted text. This convenience owns no durable project data.
+prevents legacy resurrection. A send empties the box and the draft at once;
+owner/edit leases prevent a failed old send from restoring its words over newer
+or adopted text, or into another owner's box. This convenience owns no durable
+project data.
 
 Automation metadata and controls use a local owner revision for confirmed
 gateway/Core address, client, project and pairing context. Missing optional

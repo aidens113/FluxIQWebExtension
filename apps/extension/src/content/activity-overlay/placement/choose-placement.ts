@@ -50,15 +50,32 @@
 //    controls scrolling past do not move it (rule 2); then the fewest
 //    controls; then `FALLBACK_ANCHORS` order. The narrow pill keeps
 //    the same lines; a line that does not fit ends in an ellipsis.
+// 4. **Nothing a person reads is covered while a place clear of it exists.**
+//    The probe also reports **content**: an image, a video, a canvas, text.
+//    Among clear corners the one over the least content and controls wins.
+//    When every corner is busy, each corner is also tried **docked**: moved
+//    in from its edge (`offset`) to one margin past the fixed band that makes
+//    it busy -- above a fixed Add to cart bar, below a sticky header -- never
+//    further from its edge than `DOCK_REACH` of the viewport. In rule 3's
+//    ranking, a place over no content and no control comes right after the
+//    fixed count. D5 of the run-musp4h2f-72e8ed99 UI review: on every product
+//    page the header and the bar made both left corners busy, and the left
+//    midpoint put the pill on the product image, while the free band above
+//    the bar covered nothing.
 
 /** A place on the viewport's edge the overlay is pinned to. */
 export type OverlayAnchor = "bottom-left" | "top-left" | "bottom-right" | "top-right" | "left" | "right";
 
-/** Where the overlay is, and whether it is the full pill or the narrower one a busy page leaves room for. Both carry the words. */
-export type OverlayPlacement = { readonly shape: "pill" | "narrow"; readonly anchor: OverlayAnchor };
+/**
+ * Where the overlay is, and whether it is the full pill or the narrower one a
+ * busy page leaves room for. Both carry the words. `offset`, set only on a
+ * docked corner (rule 4), is how many pixels further in from its top or bottom
+ * edge it sits.
+ */
+export type OverlayPlacement = { readonly shape: "pill" | "narrow"; readonly anchor: OverlayAnchor; readonly offset?: number };
 
-/** What lies under one point: a fixed or sticky part of the page, an ordinary control, or nothing in the way. */
-export type PointCover = "fixed" | "control" | null;
+/** What lies under one point: a fixed or sticky part of the page, an ordinary control, content a person reads (text, an image), or nothing. */
+export type PointCover = "fixed" | "control" | "content" | null;
 
 export type PlacementInput = {
   /** The viewport's client area, scrollbars excluded. */
@@ -85,8 +102,15 @@ const SAMPLE_INSET = 2;
 /** The places on the left side, where the side panel never covers the pill (rule 0). */
 const LEFT_CORNERS: readonly OverlayAnchor[] = ["bottom-left", "top-left"];
 const LEFT_ANCHORS: readonly OverlayAnchor[] = ["bottom-left", "top-left", "left"];
+/** A docked corner's far edge stays within this share of the viewport's height from its own edge (rule 4). */
+const DOCK_REACH = 0.4;
+/** How many fixed bands, one past another, a docked corner steps past. */
+const DOCK_STEPS = 3;
+/** The step, in pixels, of the scan for a fixed band's inner edge. */
+const EDGE_STEP = 2;
 
-type Cost = { readonly fixed: number; readonly controls: number; readonly points: number };
+type Cost = { readonly fixed: number; readonly controls: number; readonly content: number; readonly points: number };
+type Size = PlacementInput["box"];
 
 /** The placement for `input`: a clear corner, the corner already held, or the least-busy place. Always a pill with its words. */
 export function choosePlacement(input: PlacementInput): OverlayPlacement {
@@ -97,14 +121,15 @@ export function choosePlacement(input: PlacementInput): OverlayPlacement {
 function placeAmong(input: PlacementInput, corners: readonly OverlayAnchor[], places: readonly OverlayAnchor[]): OverlayPlacement {
   const { current } = input;
   if (current?.shape === "pill" && corners.includes(current.anchor) && costAt(input, current.anchor, input.box).fixed === 0) return current;
-  let best: { anchor: OverlayAnchor; controls: number } | undefined;
+  let best: { anchor: OverlayAnchor; covered: number } | undefined;
   for (const anchor of corners) {
     const cost = costAt(input, anchor, input.box);
     if (cost.fixed > 0) continue;
-    if (!best || cost.controls < best.controls) best = { anchor, controls: cost.controls };
+    const covered = cost.controls + cost.content;
+    if (!best || covered < best.covered) best = { anchor, covered };
   }
   if (best) return { shape: "pill", anchor: best.anchor };
-  return leastBusy(input, places);
+  return leastBusy(input, places, corners);
 }
 
 /** Rule 0: every place on the left, full or narrow, lies wholly on fixed parts of the page. Stops at the first that does not. */
@@ -118,19 +143,67 @@ function leftSideFixed(input: PlacementInput): boolean {
   return true;
 }
 
-/** Rule 3: every corner is busy, so the place and width that cover the least, the words kept. */
-function leastBusy(input: PlacementInput, places: readonly OverlayAnchor[]): OverlayPlacement {
+/** Rules 3 and 4: every corner is busy, so the place and width that cover the least, the words kept. */
+function leastBusy(input: PlacementInput, places: readonly OverlayAnchor[], corners: readonly OverlayAnchor[]): OverlayPlacement {
   const { current } = input;
   let chosen: { placement: OverlayPlacement; rank: readonly number[] } | undefined;
+  const consider = (placement: OverlayPlacement, cost: Cost): void => {
+    const held = current?.shape === placement.shape && current.anchor === placement.anchor && (current.offset ?? 0) === (placement.offset ?? 0) ? 0 : 1;
+    const covered = cost.controls + cost.content;
+    const rank = [cost.fixed, covered > 0 ? 1 : 0, placement.shape === "pill" ? 0 : 1, held, covered];
+    if (!chosen || before(rank, chosen.rank)) chosen = { placement, rank };
+  };
   for (const anchor of places) {
+    for (const shape of ["pill", "narrow"] as const) consider({ shape, anchor }, costAt(input, anchor, sizeOf(input, shape)));
+  }
+  for (const anchor of corners) {
     for (const shape of ["pill", "narrow"] as const) {
-      const cost = costAt(input, anchor, shape === "pill" ? input.box : input.narrow);
-      const held = current?.shape === shape && current.anchor === anchor ? 0 : 1;
-      const rank = [cost.fixed, shape === "pill" ? 0 : 1, held, cost.controls];
-      if (!chosen || before(rank, chosen.rank)) chosen = { placement: { shape, anchor }, rank };
+      const size = sizeOf(input, shape);
+      const offset = dockOffset(input, anchor, size);
+      if (offset !== undefined) consider({ shape, anchor, offset }, costAt(input, anchor, size, offset));
     }
   }
   return chosen?.placement ?? { shape: "pill", anchor: "bottom-left" };
+}
+
+function sizeOf(input: PlacementInput, shape: OverlayPlacement["shape"]): Size {
+  return shape === "pill" ? input.box : input.narrow;
+}
+
+/**
+ * Rule 4: how far in from its edge the corner's box must move to sit one
+ * margin past every fixed band it overlaps, or `undefined` when the corner is
+ * clear already, or clearing it takes the box past `DOCK_REACH`.
+ */
+function dockOffset(input: PlacementInput, anchor: OverlayAnchor, size: Size): number | undefined {
+  const fromBottom = anchor.startsWith("bottom");
+  if (!fromBottom && !anchor.startsWith("top")) return undefined;
+  const { viewport } = input;
+  let offset = 0;
+  for (let step = 0; step <= DOCK_STEPS; step += 1) {
+    const rect = rectAt(input, anchor, size, offset);
+    let edge: number | undefined;
+    for (const y of samples(rect.top, rect.bottom)) {
+      for (const x of samples(rect.left, rect.right)) {
+        if (input.probe(x, y) !== "fixed") continue;
+        const inner = bandEdge(input, x, y, fromBottom ? -EDGE_STEP : EDGE_STEP);
+        edge = edge === undefined ? inner : fromBottom ? Math.min(edge, inner) : Math.max(edge, inner);
+      }
+    }
+    if (edge === undefined) return offset === 0 ? undefined : offset;
+    if (step === DOCK_STEPS) return undefined;
+    // Bottom: the box's bottom one margin above the band; top: its top one margin below it.
+    offset = Math.ceil(fromBottom ? viewport.height - edge : edge);
+    if (input.margin + offset + size.height > viewport.height * DOCK_REACH) return undefined;
+  }
+  return undefined;
+}
+
+/** From a fixed point, the first `y` stepping by `dy` that is not fixed: the band's inner edge. */
+function bandEdge(input: PlacementInput, x: number, y: number, dy: number): number {
+  let at = y;
+  while (at > 0 && at < input.viewport.height && input.probe(x, at) === "fixed") at += dy;
+  return at;
 }
 
 /** Whether `left` ranks strictly ahead of `right`, compared term by term. */
@@ -141,20 +214,21 @@ function before(left: readonly number[], right: readonly number[]): boolean {
   return false;
 }
 
-/** The box `size` pinned at `anchor`, in viewport coordinates, clipped to the viewport. */
-function rectAt(input: PlacementInput, anchor: OverlayAnchor, size: PlacementInput["box"]): { left: number; top: number; right: number; bottom: number } {
+/** The box `size` pinned at `anchor`, `offset` further in from its top or bottom edge, in viewport coordinates, clipped to the viewport. */
+function rectAt(input: PlacementInput, anchor: OverlayAnchor, size: Size, offset = 0): { left: number; top: number; right: number; bottom: number } {
   const { viewport, margin } = input;
   const width = Math.min(size.width, Math.max(0, viewport.width - 2 * margin));
   const height = Math.min(size.height, Math.max(0, viewport.height - 2 * margin));
   const left = anchor.endsWith("right") || anchor === "right" ? viewport.width - margin - width : margin;
-  const top = anchor.startsWith("top") ? margin : anchor.startsWith("bottom") ? viewport.height - margin - height : (viewport.height - height) / 2;
+  const top = anchor.startsWith("top") ? margin + offset : anchor.startsWith("bottom") ? viewport.height - margin - offset - height : (viewport.height - height) / 2;
   return { left, top, right: left + width, bottom: top + height };
 }
 
-function costAt(input: PlacementInput, anchor: OverlayAnchor, size: PlacementInput["box"]): Cost {
-  const rect = rectAt(input, anchor, size);
+function costAt(input: PlacementInput, anchor: OverlayAnchor, size: Size, offset = 0): Cost {
+  const rect = rectAt(input, anchor, size, offset);
   let fixed = 0;
   let controls = 0;
+  let content = 0;
   let points = 0;
   for (const x of samples(rect.left, rect.right)) {
     for (const y of samples(rect.top, rect.bottom)) {
@@ -162,9 +236,10 @@ function costAt(input: PlacementInput, anchor: OverlayAnchor, size: PlacementInp
       const cover = input.probe(x, y);
       if (cover === "fixed") fixed += 1;
       else if (cover === "control") controls += 1;
+      else if (cover === "content") content += 1;
     }
   }
-  return { fixed, controls, points };
+  return { fixed, controls, content, points };
 }
 
 /** Evenly spaced points from `start` to `end`, both edges included, at most `SAMPLE_STEP` apart. */

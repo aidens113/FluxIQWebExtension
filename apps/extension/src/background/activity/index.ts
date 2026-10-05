@@ -4,6 +4,8 @@ export { ACTIVITY_DETAIL_INTERVAL_MS, ActivityPacer, type ActivityPacerOptions }
 export { ActivityRelay, PAGE_SEND_TIMEOUT_MS, type ActivityRelayDeps } from "./activity-relay";
 export { ACTIVITY_FAN_OUT_INTERVAL_MS, FanOutGate } from "./fan-out-gate";
 export { isActivityOverlayPreference } from "./is-activity-overlay-preference";
+export { sendStartedWork } from "./send-answer";
+export { SendStart, STARTING_HEADLINE, STARTING_HOLD_MS, type StartingOverride } from "./send-start";
 export { OverlayTarget, type OverlayTabCandidate, type OverlayTargetDeps } from "./overlay-target";
 export { overlayPreferenceStorage } from "./overlay-preference-storage";
 export { UnitHistory } from "./unit-history";
