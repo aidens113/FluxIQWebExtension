@@ -56,3 +56,22 @@ test("nothing is said without both pages, a handle, or on a page that moved else
   assert.equal(webAnsweredLayer(before, page(PAGE), undefined), false);
   assert.equal(webAnsweredLayer(before, page(PAGE, "https://shop.test/cart"), "t2"), false);
 });
+
+// t193, C17 (`run-musp4h2f-72e8ed99`): a layer the build opened itself is a
+// step of the Flow, not an interruption. Which layers it opened is handed in.
+const CHOOSER: FixtureElement[] = [
+  { tag: "div", target: "t20", text: "Stores near Carden Falls", frontLayer: true, box: { x: 0, y: 0, width: 400, height: 300 } },
+  { tag: "button", target: "t21", text: "Set as my store", parent: "t20", box: { x: 10, y: 100, width: 100, height: 20 } }
+];
+
+test("a press inside a layer this build opened, which closed it, answered no layer", () => {
+  const own = (layer: string): boolean => layer === "t20";
+  assert.equal(webAnsweredLayer(page([...CHOOSER, ...PAGE]), page(PAGE), "t21", own), false);
+  // Not knowing the build opened it, the same press reads as an interruption.
+  assert.equal(webAnsweredLayer(page([...CHOOSER, ...PAGE]), page(PAGE), "t21"), true);
+});
+
+test("a consent wall the build did not open, answered, is still an interruption whatever else the build opened", () => {
+  const own = (layer: string): boolean => layer === "t20";
+  assert.equal(webAnsweredLayer(page([...CONSENT, ...PAGE]), page(PAGE), "t2", own), true);
+});

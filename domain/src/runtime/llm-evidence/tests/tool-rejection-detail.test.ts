@@ -166,9 +166,10 @@ test("a call whose keys are not the tool's is told the keys the tool takes", asy
 
   const short = await runtime.executeTool({ ...BASE, callId: "call.short", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } } } });
   // A node that acts must say what acting would lastingly do. A call that says
-  // nothing is refused rather than read as saying it causes nothing, and it is
-  // told all three keys rather than only the one it left out.
-  assert.deepEqual(detailOf(short), { reason: "missing_input_keys", instead: ["node", "parameters", "consequences"] });
+  // nothing is refused rather than read as saying it causes nothing. It is told
+  // all three keys, and which one it left out (t194-w75: live run musp39u8's
+  // reruns with input {} could not tell which key was missing).
+  assert.deepEqual(detailOf(short), { reason: "missing_input_keys", instead: ["node", "parameters", "consequences"], missing: ["consequences"] });
 });
 
 /**
