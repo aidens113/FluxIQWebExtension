@@ -27,6 +27,7 @@
 // Pure: no browser API, no clock. Nothing here matches `RAW_ID`.
 
 import type { ClientGatewayActivity, ClientGatewayActivityPhase } from "@fluxiq/client-gateway-websocket";
+import { activityActionFailureReason } from "fluxiq/ui";
 
 export type ActivityWording = {
   /** What is being done: "Opening the page", "Thinking about the next step". */
@@ -236,7 +237,10 @@ function testedOutcome(event: ClientGatewayActivity, code: string | undefined): 
 
 function toolOutcome(status: "started" | "succeeded" | "failed" | undefined, code: string | undefined): string {
   if (code) {
-    if (/^core\.replay\.(changed|unreproducible)/u.test(code)) return OUTCOME_NOT_REPEATED;
+    // Core's reason for the code, as the step's card says it, so the status line
+    // and the card cannot disagree (t174-lead-1003); the old words for a code
+    // Core has none for.
+    if (/^core\.replay\.(changed|unreproducible)/u.test(code)) return activityActionFailureReason(code) ?? OUTCOME_NOT_REPEATED;
     if (/not_found|unobserved|missing|no_match|not_visible|absent|not_detected|none_found|empty/u.test(code)) return OUTCOME_NOT_FOUND;
     if (/rejected|failed|error|timeout|timed_out|refused|denied|invalid|blocked|aborted/u.test(code)) return OUTCOME_RETRY;
     return OUTCOME_DONE;
