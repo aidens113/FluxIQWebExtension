@@ -39,30 +39,33 @@ export type TargetActivity = {
 export function activityForTarget(state: ExtensionActivityState, target: ChatTarget, conversationId: string | undefined): TargetActivity {
   const display = state.display ?? null;
   const own = target.kind === "question" ? target.activityId : undefined;
-  const story = state.history ?? state.recent;
+  const inScope = (event: ClientGatewayActivity): boolean => target.projectId === undefined || event.subject.projectId === target.projectId;
+  const story = (state.history ?? state.recent).filter(inScope);
   const elsewhere = new Set(
     conversationId === undefined
       ? []
-      : [...story, ...state.recent]
+      : [...story, ...state.recent.filter(inScope)]
         .filter((event) => event.conversationId !== undefined && event.conversationId !== conversationId && event.activityId !== own)
         .map((event) => event.activityId)
   );
   const belongs = (event: ClientGatewayActivity): boolean => {
+    if (!inScope(event)) return false;
     if (elsewhere.has(event.activityId)) return false;
-    if (target.kind === "latest") return true;
+    if (target.kind === "latest" || target.kind === "project") return true;
     if (conversationId !== undefined && event.conversationId === conversationId) return true;
     return target.kind === "automation" ? event.subject.flowId === target.flowId : event.activityId === target.activityId;
   };
   const events = story.filter(belongs);
   const asked = askThread(state);
-  const answerIn = asked !== undefined && !asksHere(target, asked) ? asked : null;
+  const answerIn = asked !== undefined && (target.projectId === undefined || asked.projectId === target.projectId) && !asksHere(target, asked) ? asked : null;
   const shown = display !== null
-    && (display.outcome === "waiting" || (target.kind === "latest" && elsewhere.size === 0) || [...events, ...state.recent].some((event) => event.activityId === display.activityId && belongs(event)));
+    && (target.projectId === undefined || [...story, ...state.recent, ...(state.current ? [state.current] : [])].some(event => event.activityId === display.activityId && inScope(event)))
+    && (display.outcome === "waiting" || ((target.kind === "latest" || target.kind === "project") && elsewhere.size === 0) || [...events, ...state.recent].some((event) => event.activityId === display.activityId && belongs(event)));
   return { events, display: shown ? display : null, answerIn };
 }
 
 /** True when `target`'s thread is the one `asked` names. */
 function asksHere(target: ChatTarget, asked: QuestionTarget): boolean {
   if (target.kind === "automation") return asked.subjectKind === "flow" && asked.subjectId === target.flowId;
-  return sameThread(target, asked);
+  return sameThread(target, target.projectId === undefined ? { ...asked, projectId: undefined } : asked);
 }

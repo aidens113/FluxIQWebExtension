@@ -1,7 +1,7 @@
 # Language-Driven Flow Loop
 
 Status: Active
-Status detail: Handoff 2026-10-03: live runs held until general Flow authoring (t252) lands; round 1002-M gave lane A's first honest pass; lanes A, C, D and t244-t250, t253 on dev; lane B mid-merge; t252 and t254 in flight; downstream push waits on the user.
+Status detail: Codex resumed MVP implementation/live testing in paired t262; round-1003 endings reconciled and focused blockers being integrated.
 Created: 2026-09-24
 Last updated: 2026-10-03
 Owner: Senior supervisor agent
@@ -13,151 +13,43 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ## Current State
 
-**Session 2026-10-03 (resumed after the night handoff). Read this first.** The user held live runs until general Flow
-authoring (t252) landed; it landed 2026-10-03, so round 1003 is being released. Round 1002-M gave the first honest pass: lane A crossborder
-`run-murwd8le-79e735a8` ($0.0579, built from the chat, judged yes on the Flow as it stood, 4 of 4 facts).
+**Resumed 2026-10-03 by Codex; user requires continued MVP implementation, live testing and durable Claude handoff.** Active execution memory and worker briefs are in [MVP live continuation](./mvp-live-continuation-2026-10-03.md). The prior session snapshot is preserved in [archive](./language-driven-flow-loop-plan/archive/2026-10-03-pre-codex-resume-current-state.md); it is historical, including the Pro comparison and in-progress endings.
 
-**Dev heads.** Core `d89877d3` and downstream `622eccf8` or later, both pushed (the downstream push the night
-handoff left to the user went through from the supervisor: `04a5e3ce..3b1655b8`).
+**Integrated dev.** Downstream 88c58d82; Core f6ef9f48, both pushed. t261 separates the Lab-only env ceiling from ordinary UI defaults, refuses CLI budget raises and fixes wrong-page choice reorder advice. Source/provider-free validation passed 582 affected tests and touched checks/audits; t262 first live build measured .040120068 under the Lab .10 ceiling, with actual terminal-status qualification still open.
 
-**Landed this session, each verified by the supervisor on the merged tree (ledger below):**
-- **Lane B (t193) round 1002-M** (Core `8b952335`, downstream `db9260c8`). Combination decisions:
-  `reports/t193-lead-1002M.md`, "Merge of dev, 2026-10-03"; verification: `reports/t193-w-merge-verify.md`. On dev:
-  Core check 0, domain check 0, audit passed; the extension check gave 10 false TS errors against a Core dist older
-  than the merge, rc 0 after `pnpm --filter fluxiq build`. Closed mechanically (`c14e3560`): the domain and extension
-  `check` scripts run `scripts/check/core-build.mjs` first, which refuses a stale Core build by name.
-- **t255 run records** (Core `d89877d3`, downstream `622eccf8`): the Lab writes FluxIQ's whole ending;
-  `live-llm.json` books the judge and the consequence read apart from the build (murzln6g: build 30 calls $0.086255,
-  judge 2 $0.001936, read 1 $0.000380); Core's step log writes `NNNN-answer-<toolId>` folders for amendments and
-  refused repeats (later step numbers shift by them). Left open: `flow-lane.json`'s `instructedConsequences` stays
-  null; Core's `judgeAccounting` gives no judge call count.
-- **t256** (Core `75e66057`): the web Adaptations view and inbox rows say applied, held back (plain reason), or
-  waiting for a judged run; summaries carry `judgedApplication`. Rows indexed before it show it once re-saved.
-- **t257** (downstream `702c7dbc`): the Lab's UI review counts every document change as a page load (old count kept
-  as `pageLoadGaps`; murzln6g moment 6: 0 -> 1); samples carry a screened `pageUrl`; pictures carry `takenAt`.
-- **t252 general Flow authoring** (Core `6beae684`, downstream `ed2a317b`; design and report in
-  `docs/working/general-flow-authoring-plan.md` and its `reports/t252-lead.md`): the build may write steps and bind
-  them to `$row`, a Flow input or an earlier output; its test runs a repeat once per row, lasting acts checked and never
-  pressed; the judge sees one line per row; stored nodes keep declared consequences. Proven by a parity test and a
-  scripted confirm-requests build (both fail with per-row expansion off). On the merged tree: Core 375 files / 4,075
-  tests (a recovery test that pinned a 4,000-token input limit now derives it from the budget), domain 1,410/1,410,
-  all checks 0. Abandon `fxwork/t251`.
-- **t254 purse at true cost** (Core `e6290d80`, downstream `15b9c4ea`; `reports/t254-purse-holds-true-cost.md`):
-  billed price (off-peak, cached input), only what is sent; no `max_tokens` anywhere (chat panel included); the
-  round gate measures the next round (murzln6g: need $0.0187 -> $0.0077); judge overshoot in the build total; a
-  round stopped by the judging reserve tests and judges the Flow so far (yes finishes; else ends at cost, kept as a
-  draft, never not doable), but an unchanged Flow already judged no runs no test or judge; recovery priced per call
-  at the rate in force. On the merged tree: Core check 0, 195 files / 2,259 tests, build 0, domain/extension 0.
-  Left open: `maxEstimatedCostUsdPerCall` survives only for `R/tests/recovery-default-limits.test.ts`; an extend or
-  continued build whose Flow an earlier build's judge refuted is re-judged (needs `service.ts` to pass the verdict).
-- **t258** (Core `f044b596`): a run whose project store is gone ends failed with its own reason, never by throwing.
-  Cause: t249 made every judged end read the run record; now only a run that may promote reads it, and the pool's
-  closing refusal is a typed `AutomationStudioProjectStoreUnavailableError`. 92 files / 588 tests, check 0.
-  Left open: a store that goes away right after the pre-apply `applied: true` record leaves the adaptation saying
-  applied; a database file that fails to open still throws.
-- **t259** (downstream `955630de`): `flow-lane.json` and `live-llm.json` carry the same settled build and
-  `instructedConsequencesFrom` in every ending, a throwing settlement included (235/235, check 0).
-- Core `880577fc`: the `$0.25` comments in `refuted-result-port.ts` and `repair-authority.ts` name the run ceiling.
-- Session 8d (2026-10-02/03): t244, t246-t250, t253 and lanes A (t174), C (t194), D (t195); see the ledger.
+**Active unit.** Paired task t262-mvp-live-continuation under fxwork/t262. Isolated Lab-owned panel/browser testing is authorized by the user's resumed request. Claude's dirty A-D trees are preserved; reviewed source units are ported into t262 without whole-tree copying. Process inventory found no active Node/Chrome/Edge/Firefox Lab processes. Existing guards/markers/profiles remain intact.
 
-**Round 1002-M (step logs under `C:/Users/osrs_/FluxStuff/lab-runs/2026-10-02/<run>/`).**
-| Lane | Runs | Ending | Fixed since |
-| --- | --- | --- | --- |
-| A crossborder | `murwd8le` $0.058 | pass | 14 of 16 causes: tests no longer re-press lasting acts, judges see the end page, cards |
-| B bigbox | `murwdp4f` $0.087, `murzln6g` $0.089 | no Flow: purse; judged no with $0.011 left | 10 causes (landed); purse at true cost (t254) |
-| C earbuds | `murwcmx2` $0.098 | built, playback refuted (10 of 13), re-author `not_doable` untested | rerun from start pages, unmeasured round never not_doable, confirming judge call |
-| D confirm-requests | `murwcaj0` $0.089, `murz83zy` $0.088 | no Flow: loop clicked one hard-coded row; purse | reorder hint, single-row twin, column `at` per item; row-general Flows (t252) |
+| Lane | Latest reconciled ending | Current action |
+| --- | --- | --- |
+| A resumed t262 | A6 run-mutacf69-8ee50096 failed, 69 priced calls/$0.092008164; no accepted Flow/runtime/judges | Full six-stage debug independently verified. Current PRESENT producer root15tests pass; scoped call admission root530tests/types pass, final catch extraction/structure/build gates pending. A7 Stage1 precedes new artifacts; no launch yet. |
+| B resumed t262 | B5 run-mutac2q6-fc6b0875 Core proposed, 61 priced calls/$0.076020432; Lab48call gate blocked runtime | Full six-stage debug independently verified. Four judges no/no then yes/yes; persisted16node graph is storage only. Readonly causality found supplied current evidence and model-authored declarations, no host omission. B6 must reach exact cart runtime oracles; source/fresh-build gates before launch. |
+| C t194 / t262 preparation | Historical run-mustvzvg-99695308 failed/noFlow $0.053622012 | Judgepaging/retained feedback verified. C5 transient-only automatic retry root31cases pass. C4 separate scheduled candidate remains pending; existing service replay stubs cannot prove real adapter dispatch, combined public fixture seam needed. No C launch. |
+| D t195 / t262 preparation | Historical run-musr9pv3-f4bf6256 failed/unfinished | Safe-route design reconciled; broad old unit unsafe to copy. Explicit ordered waypoint/step relation and bounded evidence authority remain pending. No current D launch. |
 
-**In flight (each agent's state is in its report).**
-- **Round 1003, dispatched 2026-10-03:** the four lane trees were fast-forwarded to dev (Core `6beae684`, downstream
-  `45bd6232`) and rebuilt as `pnpm task start` builds a tree (Core `buildCore` 48-102 s, then `pnpm build` 61-144 s,
-  all rc 0). Leads t174/t193/t194/t195-lead-1003 (`lead-xhigh`) run slots 1-4 from the briefs below; reports
-  `reports/<lead>.md` in each lane tree.
-- **Sweep 2, green** (full suites on dev after t252, Core `6beae684`, downstream `45bd6232`): Core `pnpm test` rc 0
-  (contracts 55/55, gateway 10/10, fluxiq 720 files / 6,733 passed + 1 skipped, apps/web 354 files / 2,904); downstream
-  `pnpm check` rc 0 (scripts 556 passed, 1 skipped; audit passed), `pnpm test` rc 0 (test-runner 1,862/1,862 among
-  others), `pnpm build` rc 0. The second and last full sweep allowed today.
+**Run facts, not claims.** A run3 was not cost-exhausted: no-progress repairs ended it with about .052 left. It already used A's prepared round-1003 changes; importing those alone cannot establish a fix. Historical Flash success run-musp8nz1-dbd3905a was 4/4 facts at $0.024166530/20 calls. Pro run-musq0b1m-0472cfa0 cost $0.212718924 with an old .30 override; no new Pro comparison is authorized by this continuation.
 
-**Binding rules (user, all in force).**
-- **Shorter start, unless the person names the route (2026-10-03):** a Flow may start at the stable address where the
-  work begins and drop the steps that only travelled there; "if the user explicitly instructs bot to go the long way
-  to achieve goal that is respected". An instruction that names how to get there keeps those steps.
-- **General Flow authoring before any more live runs (2026-10-02 night):** "The model should be ABLE to explore &
-  'record'/test different node configurations, but it should also be able/encouraged to build dynamic & smart flows
-  from what its gathered without going through every iteration"; "implement that feature first before any mroe live
-  runs". Recorded steps stay valid; the model may also lift a recorded step into a row/input/output binding or write
-  one, and is encouraged to generalise repetitive work.
-- **Billed dollars, no output cap (2026-10-03):** "It should be billed at how much it actually costs, and i never told
-  you to add any cap on output. Remove that." Never add a reply cap to save purse.
-- **Cost ceiling $0.10 per Flow, one variable (2026-10-01):** `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default 0.10, max 10,
-  invalid stops Core); the Lab passes `--llm-cost-ceiling-usd`, then its env, then `.env`/`.env.local`; the product's
-  spending limit is separate.
-- **Live builds start from the real extension chat (2026-10-01):** a direct API request is never a pass.
-- **The compact page view (2026-09-30):** visible-text and interactive elements only, least format, `find_on_page`
-  over text and every attribute, `describe` for one element; every visible control gets a line. No caps or ranking
-  among qualifying elements; a request too big for the window fails loudly.
-- **No action restrictions beyond permissions (2026-10-01):** only money, delete and send/publish ask the person;
-  secret screening stays; covered marks, layers and unknown addresses are information, never refusals.
-- **No repeated failing actions (2026-10-01):** one general guard refuses an identical retry on an unchanged page.
-- **Every run step logged as files (2026-10-01)** under `test-runs/<run-id>/steps/NNNN-*/`.
-- **A build has three phases (2026-09-30):** exploration authors the draft; test and judge once the model says ready;
-  repair, finish, or "not doable" only if there is absolutely no way, with the reason.
-- **A Flow run routes by page state, not build order, globally in Core (2026-10-01/02);** looping back to one step
-  without progress enough times fails.
-- **Partial test runs, one full judged run (2026-10-02):** a build or repair finishes only after a whole-Flow run from
-  its start was judged successful on the Flow as it finally stands (t244 for builds, t249 for runtime patches).
-- **Live runs:** four slots, one per lane; headed only; only the ten realistic scenarios; started by a live agent for a
-  reason; stop at the first balance failure; a permission stop is never a pass; a failure is a product or Lab defect,
-  never machine load; every debug reviews the UI from screenshots. A live round waits for every agreed change, and lane
-  trees are synced to dev and rebuilt first (the Lab's behind-dev guard enforces it).
-- **Validation cadence (2026-10-01):** merges take narrow checks; full suites at most twice a day, in the background.
-- **Chat cards are never generic (2026-10-01):** each card says what it inspects or does, on what.
-- **Process.** Lanes iterate on their own branches; the supervisor merges in rounds and alone commits, merges or
-  pushes; leads and workers cannot run git history commands (hook), so the supervisor checkpoints and merges for them.
-  Heavy commands go through `build-slots/heavy.sh`. No LLM call grants.
-
-**Decisions made (supervisor; the user may override).**
-- Robot checks are never pressed or solved (t197). Money, delete and send/publish ask every time (F10).
-- D1, extended by lanes B and D: the build's test and its reruns check a lasting act instead of doing it again.
-- `recovery-default-limits` is superseded: with no output cap the purse cannot be a strict bound before a call; holds
-  reserve twice the observed maximum reply and an overshoot (part of one reply) is recorded (t254).
-- A build-finishing judge yes is confirmed by a second call; a silent or refused confirming call leaves the yes
-  standing (lane C, `yesStood`).
-- The web domain declares the keys a step carries its row under (`rowContextKeys`); Core names no web key (lane D).
-- A Flow's creation has one $0.10 purse; each run's recovery has its own ceiling (offered to merge; unchanged).
-
-**Waiting on the user.**
-- Removing 41 landed task worktrees (t184-t238 except the lanes, t224 and t251; each has no commit off dev in either
-  repository) with `pnpm task abandon <id>`: the auto-mode classifier refused it as interfering with workloads.
-  `abandon` refuses any branch with unlanded commits and never touches the remote.
-- t252: stored Flow nodes now keep their declared consequences, but a plain stored run does not check them; turning
-  that check on changes what every stored Flow does at run time.
-- Removing the remaining pre-action refusals (the classifier refused the edit as a security weakening).
-- Workers committing on their own task branches (needs the brain's `hooks/worker-git-guard.mjs`).
-- `fxwork/t187-bench` and `fxwork/t192-bench`: delete only on a yes.
+**Binding operating rules.**
+- Lab creation/recovery purse is $0.10 via FLUXIQ_LLM_RUN_COST_CEILING_USD, activated only in Lab-owned Core children with test scope. Environment/env files configure it; CLI may lower only. Ordinary user UI defaults/policies remain independent. No budget raise to conceal poor authoring.
+- Builds start through real extension chat, headed; no direct API result counts as acceptance. Use the ten realistic scenarios, isolated run state, one supervised launch for a reason, and screenshots in every debug.
+- Each failure is debugged before a changed-source retry; preserve balance/loop/debug/unchanged/behind-dev guards. No agent-created overrides. Stop on empty balance.
+- A build/repair finishes only after a whole-Flow run from its start is judged successful on the final Flow. Partial tests and model completion wording are insufficient. Lasting actions are checked during replay, never duplicated merely for a test.
+- General authoring t252 is integrated: row/input bindings and per-row tests exist. Earlier-output binding remains P5 (step_binding_not_yet); do not infer it from the merge title.
+- Explicitly named routes are preserved; otherwise a stable shorter start is allowed. No new action restriction beyond existing permission contracts. Money/delete/send-publish and robot-check rules remain in force.
+- No output cap, page-view ranking or truncation to save money; observe billed cost and no-progress evidence. Core remains domain neutral; browser/Lab behavior stays downstream.
+- Four live slots maximum, exclusive ownership per lane, instance/run-owned ports and artifacts. Slots2/3 reserved for t262 A/B, owning persistent instances/workspaces preserved after both exits; preserve existing slot1/4 markers.
+- Two full sweeps already ran today. Use narrow tests/checks/audits and necessary affected runtime builds. Supervisor alone commits/integrates/pushes; worker reports require independent verification.
 
 **Next, in order.**
-1. ~~Lane B: land.~~ Done 2026-10-03.
-2. ~~t252: land.~~ Done 2026-10-03. 3. ~~t254: land.~~ Done 2026-10-03.
-4. ~~Sweep 2.~~ Green 2026-10-03; no more full sweeps today.
-5. Lane trees synced and rebuilt; dispatch round 1003 (briefs below), lane A's run then the `deepseek-v4-pro`
-   comparison. Debug every run; merge the lanes' fixes in rounds.
+1. Finish t262 reviewed units and regressions; Core source freezes before rebuilding exports, then downstream checks/builds. Document every finding and exact validation as it occurs.
+2. A2/B full debug and checked-candidate/lasting-source-provenance fixes verified/checkpointed. A3/B2 source corrections independently verified; A4/B3 exposed recording-session versus actual chat scope mismatch before any provider call. Scoped correction independently checked/built; provider-free headed scope proof passed/exit0. A5/B4 then reached real creation but failed within .10; finish their full six-stage debug and underlying repair-contract diagnosis before another changed-source launch. Next changed-source Flash A/B runs at.10 use preserved persistent-isolated named workspaces; no-provider lab replay follows only an accepted saved Flow. Source freeze/checks precede runs. Inspect final draft/test/judgements, complete terminal metadata, screenshots,4facts, unchanged content hash and phase spend.
+3. Debug any failure, repair its cause and rerun only changed source. After creation/playback succeeds, preserve the actual Flow and prove deterministic reuse and repair/persistence where reachable.
+4. Reconcile B/C/D blockers serially by source ownership. Keep standalone t224 UI review paused; fix live-loop UI defects when required.
 
-**Open follow-ups (not assigned).** A decision refused for its input limit ends exploration as
-`llm_evidence_loop.invalid_decision`, which reads as a bad reply (t254 stage 4). Unify `control` and `does`; signatures for recorded Flows (t243 item 4); a dropped
-column on a rerun needs the domain's denied keys (t195 R3); a recovery-stage part-run tool on `stopAfterNodeId`; the
-reroute edge mismatch (trial `success` vs durable `failed`); `$0.25` left in `refuted-result-port.ts` and
-`repair-authority.ts`; the web Adaptations view shows no `applied`/`notAppliedReason`; scripted judges that run out of
-answers should fail the test, not stand in for a confirmation; a step's `replay.from` is the screened address, so a
-reset can go to a "(withheld)" URL (lane C); a not-finished build keeps the creation purse open (lane D,
-`built-loop.ts:30`); a stored Flow node drops `consequences` (t252); lane A's open causes 2, 6, 10, 11, 15 and UI D6,
-D9; load-flaky Core tests (`subflow`, `service-recordings/proposals`, `cancel-runtime-session`, `runs`) and the Lab's
-`unbuilt.test.mjs`; a click landing on a 429 page is `navigation_unexpected`.
-
-Older history: rung 1 is in `archive/rung1-history-to-2026-09-26.md`; the ledger to 2026-10-01 is in `archive/` and
-the Work Ledger below.
+**Still separate or pending.** Stored-node consequence execution semantics, earlier-output P5, old store/continued-verdict defects, broad UI/release qualification and old cleanup approvals remain outside an honest lane-A pass. Do not delete old task worktrees/remote branches or user profiles. Prior approval-dependent cleanup/security changes are preserved in the archive; this continuation does not authorize them.
 
 ---
+
+- Resumed A run run-mut4fvkm-e2fc03e6 completed: all4oracle held,30calls/.04025919 total/.040120068 build under.10; actual Core status failed after recovered coupon busy press, launcherexit1. Full debug exists; generic status defect investigation active. Disposable workspace removed by owning lifecycle: later reuse unproven; next build must use persistent-isolated then lab replay.
 
 ## The 2026-09-30 Audit And Its Fixes
 

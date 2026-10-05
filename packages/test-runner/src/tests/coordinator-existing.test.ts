@@ -169,7 +169,7 @@ test("an isolated startup failure hands every process log to the caller before r
   let copied: Record<string, string> | undefined;
   try {
     await assert.rejects(startTopology({
-      repositoryRoot, fluxiqRepositoryRoot, runsDirectory, coreWebBuildCacheRoot: path.join(visibleRunsDirectory, ".core-web-build"), runId: "failed-run", target: { mode: "isolated" }, prepareHost: false, scenarioEntrypoint, hostModulePath,
+      repositoryRoot, fluxiqRepositoryRoot, runsDirectory, coreWebBuildCacheRoot: path.join(visibleRunsDirectory, ".core-web-build"), runId: "failed-run", target: { mode: "isolated" }, prepareHost: false, scenarioEntrypoint, hostModulePath, modelProvidersEnabled: false,
       copyStartupFailureLogs: async logsDirectory => {
         copied = {};
         for (const name of (await readdir(logsDirectory)).sort()) copied[name] = await readFile(path.join(logsDirectory, name), "utf8");
@@ -193,6 +193,7 @@ test("an isolated startup failure hands every process log to the caller before r
     assert.ok(core, "Core was started");
     assert.deepEqual(core.args, ["start", "--hostname", "127.0.0.1", "--port", core.options.env?.PORT], "Core serves the build on the run's own port");
     assert.equal(core.options.cwd, build.webDirectory);
+    assert.equal(core.options.env?.FLUXIQ_MODEL_PROVIDERS_ENABLED, "false", "explicit replay admission reaches the actual Core process before spawn");
     assert.equal(core.options.env?.FLUXIQ_ROOT, path.join(runsDirectory, "failed-run", "fluxiq-root"), "the per-run environment is unchanged");
   } finally {
     await supervisor.cleanup().catch(() => undefined);

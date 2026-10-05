@@ -744,3 +744,23 @@ test("a Flow that outlasted its request is read back for the bound its own node 
   // this facility allows.
   assert.equal(twenty.clock.value, TERMINAL_DETAIL_MAX_WAIT_MS);
 });
+
+test("a failed run whose coupon fault healed retains terminal evidence and exposes unvisited actions without changing status", async () => {
+  const failure = { category: "action_failed", code: "web.action.rate_limited", retryable: true };
+  const detail = { summary: { runId: "run.one", status: "failed" }, metadata: { currentNodeId: "node.coupon", terminalFailureReason: "Maximum step count exceeded: 500.", message: "private trace detail" }, actionAttempts: [attempt({ nodeId: "node.coupon", status: "failed", failure }), attempt({ attemptId: "attempt.two", nodeId: "node.coupon", order: 1, status: "succeeded" })] };
+  const { client } = control({}, detail);
+  const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", actionTypes: new Map([["node.coupon", "web.dom.click"], ["node.cart", "web.dom.click"]]) });
+  assert.equal(outcome.status, "failed");
+  assert.equal(outcome.failure, null);
+  assert.equal(outcome.recoveredFailures?.length, 1);
+  assert.deepEqual(outcome.stoppedWithoutFailedAttempt, { attemptedActions: 1, unvisitedActions: 1 });
+  assert.deepEqual((outcome as unknown as { terminalEvidence?: unknown }).terminalEvidence, { terminalFailureReason: "graph.maximum_steps_exceeded", currentNodeId: "node.coupon", messagePresent: true });
+  assert.equal(JSON.stringify(outcome).includes("private trace detail"), false);
+
+  // A later failure after success is unresolved: historical success does not heal it.
+  const unresolved = control({}, { ...detail, actionAttempts: [...detail.actionAttempts, attempt({ attemptId: "attempt.three", nodeId: "node.coupon", order: 2, status: "failed", failure })] });
+  const failed = await executeRecordedFlowRun(unresolved.client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", actionTypes: new Map([["node.coupon", "web.dom.click"], ["node.cart", "web.dom.click"]]) });
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.failure?.code, "web.action.rate_limited");
+  assert.equal(failed.stoppedWithoutFailedAttempt, undefined);
+});

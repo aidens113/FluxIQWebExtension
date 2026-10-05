@@ -27,3 +27,5 @@ export * from "./taken-route.js";
 export * from "./reset-scenario-lab.js";
 export * from "./run-flow-lane.js";
 export * from "./creation/index.js";
+
+export * from "./terminal/index.js";

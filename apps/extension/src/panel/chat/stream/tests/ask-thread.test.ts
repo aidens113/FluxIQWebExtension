@@ -25,7 +25,8 @@ test("a run asks in its own thread, subject run and its id", () => {
     activityId: "run:r1",
     subjectKind: "run",
     subjectId: "r1",
-    title: "The run's question"
+    title: "The run's question",
+    projectId: "p"
   });
 });
 
@@ -35,7 +36,8 @@ test("a build asks in its Flow's thread, not in the chat it was started from", (
     activityId: "build:b1",
     subjectKind: "flow",
     subjectId: "flow-7",
-    title: "The build's question"
+    title: "The build's question",
+    projectId: "p"
   });
 });
 

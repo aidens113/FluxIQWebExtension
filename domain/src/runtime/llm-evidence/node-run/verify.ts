@@ -161,14 +161,14 @@ export async function verifyWebOutputNode(run: WebNodeRun): Promise<WebLlmEviden
     // Nothing matched within the window: a wait in vain, which is how the
     // assertion reports a subject that never appeared.
     if (result.status === "timed_out" || code === WEB_AUTOMATION_FAILURE_CODES.TIMEOUT || code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND) {
-      return await webNodeReplayMissingTarget(run, "verify", facts("handle_no_longer_on_page"));
+      return acceptedPresent(await webNodeReplayMissingTarget(run, "verify", facts("handle_no_longer_on_page")), ranWith);
     }
     // The target was found and judged: it is there and not as a press needs it.
     if (code === WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH) {
       const hidden = check.kind === "visible" ? webNodeHiddenTarget(result) : undefined;
       // Withdrawn itself, with everything around it shown: read as a target
       // that is gone, by the same page test.
-      if (hidden === "itself") return await webNodeReplayMissingTarget(run, "verify", facts("state_not_as_asserted"), undefined, "withdrawn");
+      if (hidden === "itself") return acceptedPresent(await webNodeReplayMissingTarget(run, "verify", facts("state_not_as_asserted"), undefined, "withdrawn"), ranWith);
       const said = hidden === "enclosed"
         ? "the step's target is on the page inside a closed container that no step before it opens; it was not run"
         : `the step's target is on the page and ${check.fails}; it was not run`;
@@ -192,6 +192,13 @@ export async function verifyWebOutputNode(run: WebNodeRun): Promise<WebLlmEviden
 function passed(code: string, said: string, about: WebNodeReplayFacts, ranWith?: JsonObject): WebLlmEvidenceToolExecution {
   const answered = webNodeReplayAnswer(code, said, true, about, false);
   return ranWith ? { ...answered, draft: { ranWith } } : answered;
+}
+
+/** An accepted missing target still needs the current resolved declaration; an unreproducible check supplies none. */
+function acceptedPresent(answered: WebLlmEvidenceToolExecution, ranWith: JsonObject | undefined): WebLlmEvidenceToolExecution {
+  return answered.resultCode === WEB_NODE_REPLAY_RESULT_CODES.present && ranWith
+    ? { ...answered, draft: { ranWith } }
+    : answered;
 }
 
 /** One library call as the Flow keeps it: the node, its resolved parameters and its declaration when it carried one (as `./run.ts` writes it). */

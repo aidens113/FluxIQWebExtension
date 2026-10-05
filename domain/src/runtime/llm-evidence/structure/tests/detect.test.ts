@@ -44,7 +44,7 @@ const SCOPE: { projectId: string; flowId: string } = { projectId: "project.one",
 /** Every key the model-facing packet may carry, at any depth. Anything else is a leak. */
 const PACKET_KEYS = new Set([
   "schemaVersion", "trust", "location", "extraction", "target", "itemCount", "fields", "pagination", "confidence",
-  "key", "label", "kind", "coverage", "at", "atNote"
+  "key", "label", "kind", "coverage", "at", "atNote", "paginationBound", "maxPages", "maxScrolls"
 ]);
 
 const EXPECTED_PAGINATION: Record<CapturedDetectionName, WebLlmStructurePaginationMode> = {
@@ -636,4 +636,38 @@ test("the production binding offers detection only to a client that declares it"
   await assert.rejects(detect(bound!), /does not declare repeating-structure detection/u);
   capabilities = [actions, { id: WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID, kind: "snapshot" }];
   assert.equal((await detect(bound!)).resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
+});
+
+// C run mustvzvg mistook paginate:true for all pages: its retained bound was 1.
+test("a detected paging bound is visible without exposing its control or widening the read", async () => {
+  const page = captured("product-catalog-largest");
+  const structure = proposalOf(page.structure as WebAutomationStructureDetection);
+  structure.proposal.pagination = { next: "[data-testid=private-next]", maxPages: 1 };
+  const { gateway } = fakeGateway(() => page);
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const result = await detect(runtime);
+  const packet = result.evidence as WebLlmRepeatingStructure & { paginationBound?: { maxPages?: number } };
+  assert.deepEqual(packet.paginationBound, { maxPages: 1 });
+  assertNothingAddressable(packet, structure);
+  const kept = runtime.resolveExtractionHandle({ ...SCOPE, handle: packet.extraction });
+  assert.equal(kept.ok, true);
+  if (kept.ok) assert.deepEqual(kept.binding.extractList.paginate, structure.proposal.pagination);
+
+  structure.proposal.pagination = { mode: "scroll", maxScrolls: 4 };
+  const scrolled = (await detect(runtime)).evidence as WebLlmRepeatingStructure & { paginationBound?: { maxScrolls?: number } };
+  assert.deepEqual(scrolled.paginationBound, { maxScrolls: 4 });
+  structure.proposal.pagination = undefined;
+  assert.equal("paginationBound" in ((await detect(runtime)).evidence as object), false);
+});
+
+test("an inferred scroll feed exposes the same numeric bound its retained read uses", async () => {
+  const page = captured("infinite-feed-largest");
+  const structure = proposalOf(page.structure as WebAutomationStructureDetection);
+  structure.proposal.pagination = undefined;
+  structure.infiniteScroll = true;
+  const { gateway } = fakeGateway(() => page);
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const packet = (await detect(runtime)).evidence as WebLlmRepeatingStructure;
+  assert.deepEqual(packet.paginationBound, { maxScrolls: WEB_AUTOMATION_EXTRACT_MAX_PAGES });
+  assertNothingAddressable(packet, structure);
 });

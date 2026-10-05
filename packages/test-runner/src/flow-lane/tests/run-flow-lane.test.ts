@@ -33,7 +33,7 @@ import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
  * attempt the run detail reports. `flowReads` lists every read of the approved
  * Flow's structure, in order.
  */
-function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number; graphNodes?: readonly unknown[]; lostCandidates?: number; attempt?: Record<string, unknown>; runStatus?: string; datasets?: ReadonlyArray<{ datasetId: string; nodeIds: string[]; rows: Array<Record<string, unknown>> }>; recovery?: { raw: Record<string, unknown>; parsed: HarnessRecoveryDetail } }) {
+function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number; graphNodes?: readonly unknown[]; lostCandidates?: number; attempt?: Record<string, unknown>; runStatus?: string; terminalMetadata?: Record<string, unknown>; datasets?: ReadonlyArray<{ datasetId: string; nodeIds: string[]; rows: Array<Record<string, unknown>> }>; recovery?: { raw: Record<string, unknown>; parsed: HarnessRecoveryDetail } }) {
   const clock = { value: 0 };
   const proposalRequestedAt: number[] = [];
   const reviewedProposals: string[] = [];
@@ -88,7 +88,7 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number;
       if (endpoint === "get-flow-run-detail") {
         const attempt = { attemptId: "attempt.one", nodeId: "node.one", definitionId: "builtin.policy.action", order: 1, status: "succeeded", startedAt: 10, finishedAt: 20, ...options.attempt };
         const datasets = (options.datasets ?? []).map(({ datasetId, nodeIds, rows }) => ({ runId: "run.one", datasetId, nodeIds, recordCount: rows.length, truncated: false, invalidCount: 0 }));
-        return { runDetail: { summary: { runId: "run.one", status: options.runStatus ?? "succeeded" }, actionAttempts: [attempt], interventions: [], ...(datasets.length ? { datasets } : {}), ...options.recovery?.raw } };
+        return { runDetail: { summary: { runId: "run.one", status: options.runStatus ?? "succeeded" }, actionAttempts: [attempt], interventions: [], ...(options.terminalMetadata ? { metadata: options.terminalMetadata } : {}), ...(datasets.length ? { datasets } : {}), ...options.recovery?.raw } };
       }
       if (endpoint === "get-run-dataset-page") {
         const stored = (options.datasets ?? []).find((dataset) => dataset.datasetId === payload.datasetId);
@@ -593,4 +593,15 @@ test("the lane publishes what Core's recovery did, and a run that needed none sa
   assert.deepEqual(flowLaneSnapshot(quietEvidence[0]!).harnessRecovery, none);
   assert.deepEqual(quietEvidence[0]?.observation.harnessRecovery, none);
   assert.equal(quietEvidence[0]?.observation.reportedVerdict, "passed");
+});
+
+test("recorded-lane snapshots retain screened terminal metadata even when the run fails", async () => {
+  const evidence: FlowLaneEvidence[] = [];
+  await assert.rejects(() => runLane(fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, runStatus: "failed", graphNodes: [{ id: "node.two", parameterValues: { outputId: "web.dom.click" } }], terminalMetadata: { currentNodeId: "node.one", terminalFailureReason: "unrecognized private terminal text", message: "Bearer private token" } }), evidence));
+  assert.equal(evidence.length, 1);
+  const snapshot = flowLaneSnapshot(evidence[0]!) as ReturnType<typeof flowLaneSnapshot> & { terminalEvidence?: unknown };
+  assert.equal(snapshot.status, "failed");
+  assert.deepEqual(snapshot.terminalEvidence, { terminalFailureReason: "withheld_unrecognized", currentNodeId: "node.one", messagePresent: true });
+  assert.equal(JSON.stringify(snapshot).includes("private terminal text"), false);
+  assert.equal(JSON.stringify(snapshot).includes("Bearer private token"), false);
 });

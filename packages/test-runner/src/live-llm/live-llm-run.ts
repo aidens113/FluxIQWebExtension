@@ -161,6 +161,7 @@ export class LiveLlmRun {
   private declaredCalls: DeclaredProviderCalls | null = null;
 
   constructor(private readonly plan: LiveLlmPlan, private readonly credential: LiveLlmProviderCredential) {}
+  get authorizedBuildCallLimit(): number { return this.plan.maxCalls; }
 
   /**
    * Where Core logs this run's model and tool steps (`FLUXIQ_LLM_STEP_LOG_DIR`).
@@ -222,10 +223,9 @@ export class LiveLlmRun {
   /**
    * The created-Flow lane's chat build hook: puts the run's key in the
    * person's Secret Keys, so the build the extension's chat starts -- on the
-   * person's own unlocked session -- can reach the provider. Nothing is pinned
-   * to a Flow: the chat creates and builds its Flow inside one Core command, on
-   * Core's own limits for a new Flow, and the build is held to this run's caps
-   * when it is settled.
+   * person's own unlocked session -- can reach the provider. The owning topology
+   * has already supplied its resolved Lab allowance to Core before startup;
+   * settlement independently checks the build against the same authorization.
    */
   chatBuildAuthorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): () => Promise<void> {
     return async () => {

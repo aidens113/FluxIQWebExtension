@@ -1,7 +1,10 @@
 import type { Page } from "@playwright/test";
+import { navigateChatProject } from "./project-navigation/index.js";
 
 const COMPOSER = 'textarea[aria-label="Message to FluxIQ"]';
 const SEND = 'button[aria-label="Send"]';
+
+export type ChatProjectScope = { projectId: string | null; scopeState: "loading" | "ready" | "error" | null; composerAvailable: boolean; composerEnabled: boolean };
 
 /**
  * The chat as a person uses it: type a message and send it, read what the
@@ -17,6 +20,9 @@ export type ChatPanelDriver = {
   input: "trusted" | "view-dom";
   /** The panel's page when Playwright drives it, for a screenshot of the panel alone. */
   page?: Page;
+  /** Setup navigation only; sends no turn and waits for the actual scoped thread read. */
+  selectProject(projectId: string, timeoutMs?: number): Promise<ChatProjectScope>;
+  projectScope(): Promise<ChatProjectScope>;
   send(text: string): Promise<void>;
   /** True once the panel shows `text`, false if it did not within `timeoutMs`. */
   shows(text: string, timeoutMs: number): Promise<boolean>;
@@ -27,9 +33,12 @@ export type ChatPanelDriver = {
 
 /** A panel page Playwright drives: the Firefox popup, or any panel page Playwright was handed. */
 export function pagePanelDriver(page: Page): ChatPanelDriver {
+  const scope = () => page.evaluate(inProjectView, { action: "read" as const }) as Promise<ChatProjectScope>;
   return {
     input: "trusted",
     page,
+    selectProject: (projectId, timeoutMs) => navigateChatProject(projectId, () => page.evaluate(inProjectView, { action: "navigate" as const, projectId }), scope, timeoutMs),
+    projectScope: scope,
     async send(text) {
       const box = page.locator(COMPOSER);
       await box.waitFor({ state: "visible", timeout: 30_000 });
@@ -59,8 +68,11 @@ export function pagePanelDriver(page: Page): ChatPanelDriver {
  */
 export function extensionViewPanelDriver(control: Page, panelPath: string): ChatPanelDriver {
   const run = <T>(action: string, argument: string) => control.evaluate(inView, { panelPath, action, argument, composer: COMPOSER, sendSelector: SEND }) as Promise<T>;
+  const scope = () => control.evaluate(inProjectView, { panelPath, action: "read" as const }) as Promise<ChatProjectScope>;
   return {
     input: "view-dom",
+    selectProject: (projectId, timeoutMs) => navigateChatProject(projectId, () => control.evaluate(inProjectView, { panelPath, action: "navigate" as const, projectId }), scope, timeoutMs),
+    projectScope: scope,
     async send(text) {
       const deadline = Date.now() + 30_000;
       for (;;) {
@@ -88,6 +100,29 @@ export function extensionViewPanelDriver(control: Page, panelPath: string): Chat
       }
     },
     text: () => run<string>("text", ""),
+  };
+}
+
+/** Self-contained because Playwright serializes it into the actual extension view. */
+function inProjectView({ panelPath, action, projectId }: { panelPath?: string; action: "navigate" | "read"; projectId?: string }): ChatProjectScope | null {
+  const current = globalThis as unknown as Window & { chrome: { extension: { getViews(): Window[] } }; CustomEvent: typeof CustomEvent };
+  const panel = panelPath === undefined ? current : current.chrome.extension.getViews().find(view => view !== current && view.location.pathname === `/${panelPath}`);
+  if (!panel) throw new Error("The mounted chat project view is unavailable");
+  if (action === "navigate") {
+    if (!projectId || projectId.length > 256 || /[\s\u0000-\u001f\u007f]/u.test(projectId)) throw new Error("Chat project identifier is invalid");
+    panel.dispatchEvent(new (panel as Window & { CustomEvent: typeof CustomEvent }).CustomEvent("fluxiq:chat-project", { detail: { projectId } }));
+    return null;
+  }
+  const chat = panel.document.querySelector('[aria-label="Chat with FluxIQ"]');
+  if (!chat) throw new Error("The mounted chat project receiver is unavailable");
+  const state = chat.getAttribute("data-fluxiq-chat-scope-state");
+  const box = chat.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message to FluxIQ"]');
+  const parkedDraft = chat.querySelector<HTMLElement>(".composer-draft-review");
+  return {
+    projectId: chat.getAttribute("data-fluxiq-chat-project"),
+    scopeState: state === "loading" || state === "ready" || state === "error" ? state : null,
+    composerAvailable: box !== null,
+    composerEnabled: box !== null && !box.disabled && !box.readOnly && (parkedDraft === null || parkedDraft.hidden),
   };
 }
 

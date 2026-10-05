@@ -67,7 +67,7 @@ export type WebNodeVerifyFinding = "missing" | "hidden" | "disabled";
  * Add to cart the page answered "You have reached the purchase limit for this
  * item.".
  */
-type WebNodeReplayAnswer = { ok: boolean; code: string; said: string; found?: WebNodeVerifyFinding; notice?: string[]; changed?: string[]; readRows?: JsonObject };
+type WebNodeReplayAnswer = { ok: boolean; code: string; said: string; reason?: WebLlmToolRejectionReason; found?: WebNodeVerifyFinding; notice?: string[]; changed?: string[]; readRows?: JsonObject };
 
 /**
  * What a replay answer says about itself beyond Core's replay code
@@ -103,7 +103,12 @@ export type WebNodeReplayFacts = {
  * checked step, which passed and did nothing.
  */
 export function webNodeReplayAnswer(code: string, said: string, ok = false, about?: WebNodeReplayFacts, acted = ok, readRows?: JsonObject, changed?: string[]): WebLlmEvidenceToolExecution {
-  return toolExecution(present<WebNodeReplayAnswer>({ ok, code, said, found: undefined, notice: undefined, changed, readRows }) as unknown as JsonValue, acted, code, undefined, undefined, about);
+  return toolExecution(present<WebNodeReplayAnswer>({ ok, code, said: replaySaid(said, about), reason: about?.resultReason, found: undefined, notice: undefined, changed, readRows }) as unknown as JsonValue, acted, code, undefined, undefined, about);
+}
+
+/** Ambiguous matches stay failed and must not be described as an absent control. */
+function replaySaid(said: string, about: WebNodeReplayFacts | undefined): string {
+  return about?.resultReason === "target_ambiguous" ? "the target matched several controls; the step did not run (target_ambiguous)" : said;
 }
 
 /**
@@ -141,7 +146,7 @@ export function webNodeReplayAnswerOnPage(
   answer: { code: string; said: string; acted: boolean; about?: WebNodeReplayFacts | undefined; found?: WebNodeVerifyFinding | undefined; ok?: boolean; notice?: string[] | undefined }
 ): WebLlmEvidenceToolExecution {
   // An answer on a page did not replay a read, so it names no rows; the page it carries is what changed.
-  const verdict: JsonObject = present<WebNodeReplayAnswer>({ ok: answer.ok ?? false, code: answer.code, said: answer.said, found: answer.found, notice: answer.notice, changed: undefined, readRows: undefined }) as unknown as JsonObject;
+  const verdict: JsonObject = present<WebNodeReplayAnswer>({ ok: answer.ok ?? false, code: answer.code, said: replaySaid(answer.said, answer.about), reason: answer.about?.resultReason, found: answer.found, notice: answer.notice, changed: undefined, readRows: undefined }) as unknown as JsonObject;
   if (page) {
     // The page, with what the replay made of this step written on the same
     // result: the one shape every other page has (`web-llm-page.v3`), and a

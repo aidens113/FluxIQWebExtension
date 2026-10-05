@@ -50,6 +50,7 @@ export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
     ownPage: evidence.ownPage,
     runtimeRunId: evidence.run.runId,
     status: evidence.run.status,
+    terminalEvidence: evidence.run.terminalEvidence ?? null,
     // Core's own word for whether the result was judged, and how it came out.
     // Without it a bundle records a `succeeded` run and nothing that says
     // whether anyone checked what it produced.

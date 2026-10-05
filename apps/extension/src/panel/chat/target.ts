@@ -12,6 +12,7 @@
  *               the thread in the context line.
  */
 export type ChatTarget =
-  | { kind: "latest" }
-  | { kind: "automation"; flowId: string; name: string }
-  | { kind: "question"; activityId: string; subjectKind: "flow" | "run"; subjectId: string; title: string };
+  | { kind: "latest"; projectId?: string | undefined }
+  | { kind: "project"; projectId: string }
+  | { kind: "automation"; flowId: string; name: string; projectId?: string | undefined }
+  | { kind: "question"; activityId: string; subjectKind: "flow" | "run"; subjectId: string; title: string; projectId?: string | undefined };

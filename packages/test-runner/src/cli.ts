@@ -47,7 +47,7 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
     if (command.command === "replay") {
       const target = resolveTargetConfiguration({ cliTarget: "persistent-isolated", cliWorkspace: command.workspace, env: resolvedEnvironment });
       if (target.mode !== "persistent-isolated") throw new Error("replay runs on the persistent workspace the Flow was saved in");
-      const result = await replaySavedFlow({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, flowId: command.flowId, ...(command.instructionTaskId ? { taskId: command.instructionTaskId } : {}), ...(command.seed === undefined ? {} : { seed: command.seed }), target, environment: resolvedEnvironment, credentialSources: [env, resolvedEnvironment] });
+      const result = await replaySavedFlow({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, flowId: command.flowId, ...(command.projectId === undefined ? {} : { projectId: command.projectId }), ...(command.instructionTaskId ? { taskId: command.instructionTaskId } : {}), ...(command.seed === undefined ? {} : { seed: command.seed }), target, environment: resolvedEnvironment, credentialSources: [env, resolvedEnvironment] });
       process.stdout.write(`${JSON.stringify(result)}\n`); return result.verdict === "passed" ? 0 : 1;
     }
     if (command.command === "inspect") { process.stdout.write(`${JSON.stringify(await inspectRun(runsDirectory, command.runId))}\n`); return 0; }

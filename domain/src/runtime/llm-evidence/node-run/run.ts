@@ -73,7 +73,7 @@ import { webCoveredTarget } from "./covered-target";
 import type { WebNodeRun } from "./context";
 import type { WebNodeOutcome } from "./outcome";
 import { webLabelledIdentity, webObservedControl } from "./observed-control";
-import { webAnsweredLayer, webNodeNoticedDetail, webNodePageChanges, webPressChoice } from "./press-effect";
+import { webAnsweredLayer, webNodeNoticedDetail, webNodePageChanges, webPressChoice, webPressToggle } from "./press-effect";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
 import { webNodeHeldFlow } from "./arrival";
 import { webUnshownAddressRefusal } from "./shown-addresses";
@@ -223,7 +223,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
-        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined }),
+        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined }),
         // A look that worked refuses nothing, so it says neither why it refused
         // nor which node it would have named: the draft statement beside it
         // already carries `actionId`, and a successful call is not the row a
@@ -490,7 +490,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // step optional, so a playback that meets no such layer skips it.
         // Absent otherwise, and never on a look, a navigation or a read.
         interruption: node.effect === "mutate" && !webMovesThePage(node) && webAnsweredLayer(current?.evidence, after?.evidence, firstHandle(written)) ? true : undefined,
-        written: undefined
+        written: undefined,
+        // The press flipped whether its control is chosen, under the control's handle: Core
+        // takes it out with a later press that flips it back (`./press-effect/toggle.ts`).
+        toggle: webPressToggle(node, current, after, firstHandle(written))
       }),
       // The node ran and nothing was refused, so neither of the refusal fields
       // is said: the draft statement above already names the node under
@@ -557,6 +560,7 @@ function refusal(
     control: undefined,
     interruption: undefined,
     written: undefined,
+    toggle: undefined,
     // Whether a call of this kind belongs in a result, which is a property of
     // the node and not of this attempt. That it did not work is said by
     // `effectApplied: false`, and the two are held apart so a failed step stays
@@ -597,7 +601,7 @@ function refusal(
 function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
   const input = record.standing?.input ?? safeCall(record.call ?? {}, record.parameters ?? {});
   if (!record.acted || record.standing === undefined) {
-    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined });
+    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined });
   }
   return present<WebNodeDraftStatement>({
     actionId: record.actionId,
@@ -608,7 +612,8 @@ function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
     replay: record.standing.replay,
     control: record.standing.control,
     interruption: undefined,
-    written: undefined
+    written: undefined,
+    toggle: undefined
   });
 }
 

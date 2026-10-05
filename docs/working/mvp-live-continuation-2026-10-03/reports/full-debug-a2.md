@@ -1,0 +1,19 @@
+# A2 full debug completion
+
+Worker resume-ab, 2026-10-03. Status: bounded read-only evidence debug complete; failed live build, no acceptance claim.
+
+Updated the existing [A2 debug](../../language-driven-flow-loop-plan/debugs/run-mut58jbo-fbc8a57a.md), preserving supervisor reproduction, cost, ending, persistence and uncertainty. Added the full six-stage template: all 63 ordered provider turns; 16 draft entries and 13 judged graph nodes with parameter shapes/exact private refs; all 55 timed full-test calls; an additional 88-row Core node-tool trace separating ordinary actions, deterministic spans and verify checks; all three judge pairs; start/mid/end screenshot review; explicit instrumentation gaps.
+
+Reconciled 55 build decisions: 13 exploration and 42 repair. They comprise 35 amendment decisions, 14 explicit model `core.run_node` decisions, three inspection-tool decisions and three completions. Instruction read, six judges and chat account for the other eight provider turns. Total tokens were 1,097,735 input/8,010 output. Total spend $0.079036554; build inclusive read/judges $0.078897432, below Lab-only $0.10. No cost-limit increase or ordinary-UI change.
+
+The absent cart action is a **final-definition** failure. Final draft step 11/a1 and final tested node 0250 target Spain and use `replay=verify`; the final graph has no Add-to-cart control. Both final judges say no (confidence 0.9/0.72), as do both earlier pairs. Named checklist intent and a successful check do not establish execution of the requested lasting action.
+
+The historical trace is more nuanced: ordinary reruns 0176 and 0191 report `status=succeeded`, Add-to-cart control, pageChanged=true and cart-change evidence. They originated amendments 0174/0189 rather than the 14 explicit model node calls. Therefore it would be incorrect to say no cart control ever ran. Later retargets did not retain that distinct action in the final Flow, and prior effects do not validate its final definition. Terminal screenshot shows a nonzero cart badge and wrong origin; complete per-item cart correctness remains unverified.
+
+Churn is evidenced by 35 amendment decisions and repeated refusal reasons: act_already_named 14, no_such_step 4, not_a_kept_step 6, run_by_the_loop 2, did_not_work 4, changes_nothing 2, already_so 3. Reruns also generate deterministic reset/span/check calls, which explains why the central tool trace is much larger than the direct model-call count. Four repair rounds repeatedly revisit placement, colour/origin and existing claims; none yields an accepted final cart step.
+
+Confirmed source issue is the independently traced checked-retarget provenance path in [design report](checked-retarget-evidence-design.md): a checked replacement can retain old performed evidence. This debug distinguishes that source finding from causal assumptions. Exact origin-check fallback/recovery-rung cause and the best amendment-feedback remedy require further owning-source diagnosis; no selector-equivalence or new execution is inferred from `verified`/`present`.
+
+Limits recorded explicitly: no accepted proposal/saved-Flow playback/reuse; no complete final cart SKU/options/origin/quantity facts or acceptance oracle; no per-rung retry ledger; no all-turn context eviction or complete conversation-retention audit. Stage 1 is retrospective for this worker, using the public authored instruction and supervisor expectation. Private target/page/prompt values remain only in ignored artifacts, with exact references in the debug.
+
+Only the existing debug and this report changed. No source, runtime, store, profile, environment, guards, provider, launches, slots, shared documents, commits or cleanup touched. Persistent draft `flow.3f11f84c-8eef-4433-8474-6f0d22e08112` and workspace t262-a remain preserved. Supervisor must independently verify evidence and follow-up implementation; no new live run performed.

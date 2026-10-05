@@ -604,19 +604,33 @@ that built it is judged.
 # Build: a live create-flow run on the persistent target (the only target that keeps the Flow).
 FLUXIQ_TEST_ENV_FILES=none FLUXIQ_TEST_TARGET=persistent-isolated FLUXIQ_TEST_PERSISTENT_WORKSPACE=<name> pnpm lab:campaign <task-id>
 # Replay: no provider key in the environment.
-FLUXIQ_TEST_ENV_FILES=none pnpm lab replay <scenario> --workspace <name> --flow <flow-id> --instruction-task <task-id>
+FLUXIQ_TEST_ENV_FILES=none pnpm lab replay <scenario> --workspace <name> --project <project-id> --flow <flow-id> --instruction-task <task-id>
 ```
 
-A replay makes "no model" true rather than observing it:
+A replay disables model wiring before starting its owned Core host:
 
 - it refuses to start when its own environment holds any provider credential
-  variable (`PROVIDER_SECRET_ENVIRONMENT_VARIABLES`), naming the variable;
-- it deletes every `llm` Secret Key the workspace's Core holds -- a live build
-  installed one there -- and fails if one survives;
-- it runs the Flow with no `runIntent`, so `runPersistedFlow` asks Core for
-  `adaptiveMode: "deterministic"`, the run carries no model caller, and Core's
-  provider resolver returns no provider at all (Core
-  `programs/_shared/runtime.ts`, `bindLlmExecutionProvider`).
+  variable (`PROVIDER_SECRET_ENVIRONMENT_VARIABLES`);
+- it explicitly passes `modelProvidersEnabled: false` to the owned topology.
+  The child receives `FLUXIQ_MODEL_PROVIDERS_ENABLED=false` before either web
+  host `FluxIQ.create` path. Core omits standing result-check, session-key
+  execution and chat model/key bindings at construction; ordinary callers
+  retain the default enabled behavior;
+- it preserves all stored Secret Keys. Private readonly snapshots compare
+  every key identity and kind before and after the run, including failures.
+  Only counts and the preservation verdict enter the screened report;
+- it requests deterministic execution with no `runIntent`. This controls
+  adaptive execution separately from constructor admission.
+
+Missing provider accounting remains unknown. Core verification deadline
+fallback preserves completed check receipts and cannot certify zero from an
+unsettled check or qualify that run as provider-free replay. An explicit public zero count or
+complete zero ledger is required, and contradictory counts, paid usage, call
+rows, interventions or harness activations reject reuse. Disabled configuration
+alone cannot establish measured zero-provider execution. The constructor gate
+controls initial host wiring; trusted code can still explicitly bind a provider
+later. An accepted usable Flow and its exact task oracles are prerequisites;
+an unfinished build is never replay evidence.
 
 It then requires Core's own record of the run to show zero provider calls, zero
 interventions and zero harness activations, the saved Flow's content hash to be
@@ -629,7 +643,9 @@ the run's action types and statuses, the extraction measurements
 count and SHA-256, so two replays can be shown to have stored the same rows in
 the same order. It holds counts, ids, origins and digests, never page content.
 
-The flow id is the one the build's `snapshots/flow-lane.json` names. A build
+The actual project and Flow IDs come from the build's screened `snapshots/creation-context.json`; independent chat creation uses a new run-owned project inside the preserved workspace. Pass `--project` for that project. Replay selects and checks that exact scope before lookup or browser launch, with no name search or default fallback on an explicit mismatch. Omitting the option retains legacy workspace-default behavior. The identity snapshot is written before selection/Send and on ending; a failed draft ID alone does not establish a reusable Flow.
+
+The flow id is also named by the build's `snapshots/flow-lane.json`. A build
 whose run failed after the Flow was applied still saved it; its id is then in
 the workspace's project, which `lab replay` checks before it starts anything.
 
@@ -1262,6 +1278,8 @@ the page and presses Send (`flow-lane/creation/chat/`,
 
 The order of a chat build:
 
+Independent creation first creates and selects a new run-owned project through public authenticated control, before browser launch, pairing and chat/person scopes. It preserves every existing project, draft, conversation, recording and browser profile. Before Send, the Lab opens the new project through the mounted extension chat and waits for its authorized project-scoped thread list and matching thread tail, including an empty list, to settle. The rendered chat scope must name that project and be ready; browser recording/session status is not chat scope. This prevents old project conversation and Flow catalog from turning a new creation test into an improvement request. Ordinary repair/replay keep their existing scope. The screened creation-context snapshot records run/workspace/project/domain, Flow ID when known, outcome and exact saved hash when readable; persistence failures remain failures. This isolation does not substitute a capability or bypass normal chat.
+
 1. **Present the page.** `prepareFlowPage("build")` leaves the fixture's entry
    point on screen, even for a task whose playback starts blank
    (`flowStartPage({ startedFromChat })`). The chat tells Core the page the
@@ -1270,7 +1288,7 @@ The order of a chat build:
    in the person's Secret Keys and re-signs the session. The paired
    extension's chat runs on that unlocked session. Nothing is pinned to a
    Flow, because there is no Flow yet.
-3. **Type and send.** The run selects its project for the paired client.
+3. **Type and send.** The run selects its project for the paired client, opens that project in the mounted chat and waits for actual rendered readiness.
    Then the panel's own composer, controller and background relay carry the
    message to Core's `append-turn`. The panel is driven through
    `extensionViewPanelDriver` from the control tab, which reaches Chrome's
@@ -2686,7 +2704,7 @@ Live-provider testing is an explicit opt-in lane and is not part of ordinary det
 
 The default Lab allowance is the model's whole context window: 992,000 input tokens, 8,000 output tokens and 1,000,000 total tokens per request (`DEFAULT_LLM_LAB_BUDGET`), with a 30-second timeout and Core's per-build estimated-cost ceiling (`FLUXIQ_LLM_RUN_COST_CEILING_USD`, default $0.10; see "Live-run waste guards"), which a run's options may only lower (each call inherits that ceiling). Validation rejects any request total above 1,000,000 tokens (`LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST`, mirroring Core's DeepSeek model limits). That number is what the model can read, not a budget: on 2026-09-30 the user ordered that no limit hide page information from the model, and a request over the window fails loudly rather than being trimmed. The allowance used to be 8,000/2,000/10,000 under a 50,000-token ceiling, then 48,000/8,000/56,000 under Core's 64,000-token ceiling, and each made a real page impossible to describe. A live run permits no retries.
 
-Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core run intent `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The live campaign (`scripts/lab/live-campaign`) passes no `--llm-max-run-tokens`: with whole-page requests a build may use more than a million tokens across its calls, and a run budget it outgrew would fail the run as `performance.budget` only after the money was spent, so what bounds a campaign run is its per-build spend ceiling, its call count and Core's stall guard. The spend ceiling is per build, whatever the build's call count, and it has one definition: Core's `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD`, resolved from `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default $0.10, was a fixed $0.25 until 2026-10-01), which the Lab resolves for each run with `liveLlmBuildCostCeilingUsd` (`packages/test-runner/src/live-llm/build-cost-ceiling.ts`): the same sources it passes Core, through Core's own resolver, so the plan and Core hold a build to one number. `--llm-max-cost-usd` is the whole build's ceiling, not a per-call figure: it may only lower Core's ceiling, is never multiplied by the call count, and the live campaign passes none. The ceiling is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings, so Core's loop budget holds the build, the run's recovery and each re-author build to it, each on its own. The Lab's post-run check holds each settled phase to it again, and every live run reports its spend per build against it: `snapshots/live-llm.json` `observed.perBuild`, the campaign row's `perBuildSpend` with the summary's `buildsOverCeiling`, and the spend ledger's `buildCeilingUsd`, `maxBuildCostUsd` and `buildsOverCeiling`. There is no spend budget across runs. The model is the Flow's `llmModel` setting.
+Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core run intent `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The live campaign (`scripts/lab/live-campaign`) passes no `--llm-max-run-tokens`: with whole-page requests a build may use more than a million tokens across its calls, and a run budget it outgrew would fail the run as `performance.budget` only after the money was spent, so what bounds a campaign run is its per-build spend ceiling, its call count and Core's stall guard. The spend ceiling is per build, whatever the build's call count, and it has one definition: Core's scoped ceiling resolver, activated by `FLUXIQ_LLM_RUN_COST_CEILING_SCOPE=test` and resolved from the Lab's `FLUXIQ_LLM_RUN_COST_CEILING_USD` (Lab default $0.10; ordinary user UI remains $0.25 and ignores the test variable), which the Lab resolves for each run with `liveLlmBuildCostCeilingUsd` (`packages/test-runner/src/live-llm/build-cost-ceiling.ts`): the same sources it passes Core, through Core's own resolver, so the plan and Core hold a build to one number. `--llm-max-cost-usd` is the whole build's ceiling, not a per-call figure: it may only lower Core's ceiling, is never multiplied by the call count, and the live campaign passes none. The ceiling is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings, so Core's loop budget holds the build, the run's recovery and each re-author build to it, each on its own. The Lab's post-run check holds each settled phase to it again, and every live run reports its spend per build against it: `snapshots/live-llm.json` `observed.perBuild`, the campaign row's `perBuildSpend` with the summary's `buildsOverCeiling`, and the spend ledger's `buildCeilingUsd`, `maxBuildCostUsd` and `buildsOverCeiling`. There is no spend budget across runs. The model is the Flow's `llmModel` setting.
 
 **Model calls need no grant.** Core resolves the provider from the caller's own unlocked Secret Keys session. The Lab installs the key, saves the Flow's LLM settings and spend ceiling, and then sends its build (`generate-flow-bootstrap-adaptation`) or run (`run-runtime-session` with a `runIntent`). The one thing the operator still allows is a consequence: `--llm-permit` names the classes (`move_money`, `delete`, `send_or_publish`, `modify_existing`, `create_new`) the run's actions may cause, and the Lab sends them as `permittedConsequences` on the build and the run only when it names any. Absent, a consequential act stops and asks a person (`permission_required`). A created-Flow build started from the extension's chat carries no permit at all, so `--llm-permit` is refused for it, and the Lab's person answers the question in the chat instead ("The build is started from the extension's chat window" above). `snapshots/live-llm.json` records the plan's `authorized` bounds and its `permittedConsequences`.
 
@@ -2800,6 +2818,23 @@ lowering flag and resolves the value through Core's own
 `resolveAutomationStudioLlmRunCostCeilingUsd` with explicit test scope, so a value Core would refuse at
 start is refused by the Lab too. The Lab's tests derive every amount from that
 value (`live-llm/tests/lab-ceiling.ts`) rather than from a written number.
+
+#### The resolved build-call allowance
+
+Before starting an owned Core process, a live run passes its resolved
+`LiveLlmPlan.maxCalls` as `TopologyOptions.buildCallLimit`. The environment
+adapter supplies `FLUXIQ_LLM_BUILD_CALL_LIMIT` with
+`FLUXIQ_LLM_BUILD_CALL_LIMIT_SCOPE=test`, using Core's public constants.
+It does not reparse argv or configure a new Flow after its chat build finishes.
+An unplanned run drops inherited allowance and scope; an invalid explicit
+allowance is refused. Ordinary UI receives no new default call cap.
+
+Core's shared creation purse admits logical questions before sending them,
+including reader, decisions, repair rounds and judges, with the judge pair
+reserved. Internal HTTP retries count as the same logical question. The Lab's
+post-build assertion remains an independent check. Failed-build diagnostics
+can carry actual root `totalProviderCallCount`; loop decisions are a separate
+count, and legacy absence does not establish the aggregate.
 
 #### The default model
 
@@ -3003,3 +3038,9 @@ the last read begun before the capture and the first begun after it). A
 picture without the overlay whose neighbouring samples say absent was taken
 before it appeared; one whose neighbours both say present and visible is a
 rendering defect.
+
+### Terminal Flow evidence after runtime cleanup
+
+Flow-lane snapshots optionally retain terminalEvidence beside the existing status, failure history and oracle result. It contains a closed category for recognized generic Core terminal reasons, a screened opaque current node ID, and a message-present flag. Core terminalFailureReason is free text, so unrecognized text is explicitly withheld and the raw trace message is never copied. Missing metadata remains absent or null. These fields explain an execution result without changing its verdict.
+
+A healed historical failed attempt does not mask the additive unvisited-action diagnostic: the diagnostic uses the node last-attempt recovery grouping, while a genuinely unresolved failure still excludes it. Core status and oracle facts remain independent. Use persistent-isolated when later diagnosis or saved-Flow reuse is required; disposable isolated cleanup removes its Core workspace after the run. A separate lab replay verifies unchanged content hash, no provider access and the task oracle.

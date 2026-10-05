@@ -42,6 +42,47 @@ const CLICK = "web.output.dom-click";
 const START = "https://example.test/start";
 const PERMITTED = async () => ({ permitted: true as const });
 
+test("actual replay reports ambiguity truthfully at either location without another acting command", async () => {
+  for (const from of [START, "https://example.test/other"]) {
+    const actions: string[] = [];
+    const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFailingClickWith(
+      "web.target.ambiguous", "PRIVATE_CANDIDATE .private-selector PRIVATE_EXCEPTION", actions
+    ));
+    const replayed = await runtime.executeTool({
+      ...PROJECT, callId: "dryrun.ambiguous", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+      value: { replay: "step", node: CLICK, parameters: { selector: "#go" }, consequences: [], from: { location: from } }
+    });
+    assert.equal(replayed.resultCode, "core.replay.failed");
+    assert.equal(replayed.effectApplied, false);
+    assert.equal(replayed.resultReason, "target_ambiguous");
+    const answer = replayed.evidence as JsonObject;
+    assert.equal(answer.ok, false);
+    assert.equal(answer.reason, "target_ambiguous");
+    assert.match(String(answer.said), /target_ambiguous/);
+    assert.doesNotMatch(String(answer.said), /target_not_found/);
+    for (const privateText of ["PRIVATE_CANDIDATE", ".private-selector", "PRIVATE_EXCEPTION"]) {
+      assert.equal(JSON.stringify(replayed).includes(privateText), false);
+    }
+    assert.deepEqual(actions, ["web.dom.click"]);
+  }
+});
+
+for (const [from, expected] of [[START, "core.replay.remembered"], ["https://example.test/other", "core.replay.unreproducible"]] as const) {
+  test(`genuine missing target retains ${expected} without ambiguity or another action`, async () => {
+    const actions: string[] = [];
+    const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFailingClickWith("web.target.not_found", undefined, actions));
+    const replayed = await runtime.executeTool({
+      ...PROJECT, callId: "dryrun.missing", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+      value: { replay: "step", node: CLICK, parameters: { selector: "#go" }, consequences: [], from: { location: from } }
+    });
+    assert.equal(replayed.resultCode, expected);
+    assert.equal(replayed.effectApplied, false);
+    assert.equal((replayed.evidence as JsonObject).reason, undefined);
+    assert.notEqual(replayed.resultReason, "target_ambiguous");
+    assert.deepEqual(actions, ["web.dom.click"]);
+  });
+}
+
 test("a replayed step whose target is now ambiguous is failed, not unreproducible", async () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFailingClickWith("web.target.ambiguous"));
   const replayed = await runtime.executeTool({
@@ -71,12 +112,13 @@ test("a replayed step whose target is absent stays unreproducible", async () => 
   assert.equal(replayed.resultCode, "core.replay.unreproducible");
 });
 
-function gatewayFailingClickWith(code: string, actual?: string): WebLlmEvidenceGateway {
+function gatewayFailingClickWith(code: string, actual?: string, actions?: string[]): WebLlmEvidenceGateway {
   const failure = actual === undefined ? { code } : { code, actual };
   return {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
       if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page() } };
+      actions?.push(command.actionType);
       if (command.actionType === "web.dom.click") return { status: "failed", failure, error: "no" };
       return { status: "succeeded", payload: { value: "ok" } };
     }

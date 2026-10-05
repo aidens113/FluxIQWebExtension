@@ -16,6 +16,28 @@ test("parses the closed interactive action vocabulary", () => {
   assert.deepEqual(parseInteractiveAction({ action: "extension-action", actionType: "web.dom.click", selector: "#submit" }), { action: "extension-action", actionType: "web.dom.click", selector: "#submit" });
 });
 
+test("chat-project is extension-only setup with a closed payload and bounded timeout", () => {
+  assert.deepEqual(parseInteractiveAction({ action: "chat-project", surface: "extension", projectId: "project.new", timeoutMs: 100 }), { action: "chat-project", surface: "extension", projectId: "project.new", timeoutMs: 100 });
+  for (const extra of [{ projectId: " " }, { surface: "panel" }, { surface: "scenario" }, { text: "never send" }, { capabilityId: "flow.createHere" }, { timeoutMs: 10001 }]) {
+    assert.throws(() => parseInteractiveAction({ action: "chat-project", surface: "extension", projectId: "project.new", ...extra }));
+  }
+});
+
+test("chat-project dispatch uses the same mounted UI driver and never sends a turn or leaks text", async () => {
+  const actions: string[] = [];
+  const extension = { evaluate: async (_fn: unknown, args: { action: string; projectId?: string }) => {
+    actions.push(args.action);
+    assert.equal(args.projectId === undefined || args.projectId === "project.new", true);
+    return args.action === "navigate" ? null : { projectId: "project.new", scopeState: "ready", composerAvailable: true, composerEnabled: true, privatePage: "do not return this" };
+  } } as unknown as Page;
+  const action = parseInteractiveAction({ action: "chat-project", surface: "extension", projectId: "project.new", timeoutMs: 100 });
+  assert.notEqual(action.action, "stop");
+  if (action.action === "stop") throw new Error("Unexpected stop");
+  const result = await executeInteractiveAction(action, { extension }, { extension: "chrome-extension://synthetic" }, "unused", 1);
+  assert.deepEqual(actions, ["navigate", "read"]);
+  assert.deepEqual(result, { action: "chat-project", surface: "extension", projectId: "project.new", scopeState: "ready", composerAvailable: true, composerEnabled: true });
+});
+
 test("rejects arbitrary code, extra fields, oversized waits, and malformed surfaces", () => {
   assert.throws(() => parseInteractiveAction({ action: "evaluate", surface: "panel", script: "document.cookie" }), /not allowlisted/);
   assert.throws(() => parseInteractiveAction({ action: "click", surface: "panel", selector: "button", value: "unexpected" }), /unsupported field/);

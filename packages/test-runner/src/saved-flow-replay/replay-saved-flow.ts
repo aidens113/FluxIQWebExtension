@@ -8,12 +8,9 @@
 // starts a fresh Core and browser, runs the saved Flow exactly as saved, and
 // judges its result the way the task that built it is judged.
 //
-// "No model" is made true rather than observed. The replay refuses to start
-// when its own process holds a provider credential, removes every model
-// provider key Core holds before the run, and runs with no `runIntent`, so
-// Core runs it `deterministic` and resolves no provider at all. It then reads
-// Core's own accounting of the run and requires zero calls and zero
-// interventions.
+// The replay disables Core's factory-installed model wiring before startup,
+// preserves every stored key, and runs with no model recovery intent. It also
+// requires explicit zero provider accounting; absent accounting is unknown.
 
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -30,10 +27,11 @@ import { liveLlmObservedUsage } from "../live-llm/index.js";
 import { assertExpectedFacts, playwrightScenarioFactProbe } from "../scenario-assertions.js";
 import { loadScenarioManifest } from "../scenarios.js";
 import type { FluxIQTargetConfiguration } from "../target-config.js";
-import { removeCoreProviderKeys, type CoreProviderKeyRemoval } from "./core-provider-keys.js";
+import { providerFreeReplayFailures, replayKeyIdentities, replayKeyPreservation } from "./provider/index.js";
 import { providerCredentialVariables } from "./provider-credential-variables.js";
 import { openReplayBrowser, type ReplayBrowser } from "./replay-browser.js";
 import { savedNavigationOrigins } from "./saved-navigation-origins.js";
+import { selectReplayProject } from "./project-selection.js";
 
 export type SavedFlowReplayOptions = {
   repositoryRoot: string;
@@ -42,6 +40,8 @@ export type SavedFlowReplayOptions = {
   scenarioId: string;
   /** The saved Flow, by the id Core gave it when the build created it. */
   flowId: string;
+  /** Actual project recorded by creation; omitted only for legacy workspace-default Flows. */
+  projectId?: string;
   /** The instruction task the Flow was built for, which says how its result is judged; the scenario's first task when absent. */
   taskId?: string;
   seed?: number;
@@ -56,8 +56,10 @@ export type SavedFlowReplayOptions = {
 export type ReplayModelAccounting = Readonly<{
   /** Credential variables in the replay process's environment, by name. Always empty: the replay refuses otherwise. */
   environmentCredentialVariables: readonly string[];
-  coreProviderKeys: CoreProviderKeyRemoval | null;
-  /** Always `null`: the run carries no `runIntent`, so Core starts it `deterministic` and asks no model. */
+  coreProviderKeys: ReturnType<typeof replayKeyPreservation> | null;
+  /** Factory model wiring is disabled before the owning Core starts. */
+  modelProvidersEnabled: false;
+  /** No adaptive model recovery is requested; host admission also excludes standing judges. */
   runIntent: null;
   /** The run detail's `providerCallCount`, as Core published it; `null` where it published none. */
   coreProviderCallCount: number | null;
@@ -100,7 +102,7 @@ export type SavedFlowReplayResult = Readonly<{
 type ReplayState = {
   projectId: string | null; hashBefore: string | null; hashAfter: string | null;
   task: SavedFlowReplayResult["task"]; scenarioOrigin: string | null; scenarioPortRetained: boolean | null;
-  origins: string[]; servedAtSavedAddress: boolean | null; keys: CoreProviderKeyRemoval | null;
+  origins: string[]; servedAtSavedAddress: boolean | null; keys: ReturnType<typeof replayKeyPreservation> | null;
   run: PersistedFlowRunOutcome | null; usage: ReturnType<typeof liveLlmObservedUsage> | null; coreProviderCallCount: number | null;
   extraction: Record<string, unknown>[] | null; playbackGoalHeld: boolean | null; error: SavedFlowReplayResult["error"];
 };
@@ -123,6 +125,7 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
   const state: ReplayState = { projectId: null, hashBefore: null, hashAfter: null, task: null, scenarioOrigin: null, scenarioPortRetained: null, origins: [], servedAtSavedAddress: null, keys: null, run: null, usage: null, coreProviderCallCount: null, extraction: null, playbackGoalHeld: null, error: null };
   let topology: RunningTopology | undefined;
   let browser: ReplayBrowser | undefined;
+  let keysBefore: readonly string[] | undefined;
   try {
     const labPaths = resolveLabPaths(options.repositoryRoot, options.environment);
     const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);
@@ -137,19 +140,19 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
       runsDirectory: options.runsDirectory, runId: replayId,
       seed: options.seed ?? scenario.seed, target: options.target,
       scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath,
-      ...(labPaths.hostPrebuilt ? { prepareHost: false } : {}), bootstrapIdentity: true,
+      ...(labPaths.hostPrebuilt ? { prepareHost: false } : {}), bootstrapIdentity: true, modelProvidersEnabled: false,
       ...(credentials ? { credentials: { username: credentials.username, password: credentials.password, ...(credentials.authorizationPin ? { pin: credentials.authorizationPin } : {}), ...(credentials.totp ? { totp: credentials.totp } : {}) } } : {}),
     });
-    const { control, projectId, authorizationPassword, scenarioOrigin } = topology;
-    if (!control || !projectId || !authorizationPassword) throw new RunnerFailure("environment.missing", "The persistent workspace's Core did not authenticate, so its saved Flows cannot be read");
+    const { control, authorizationPassword, scenarioOrigin } = topology;
+    if (!control || !topology.projectId || !authorizationPassword) throw new RunnerFailure("environment.missing", "The persistent workspace's Core did not authenticate, so its saved Flows cannot be read");
+    state.projectId = options.projectId ?? topology.projectId;
+    const projectId = await selectReplayProject(control, { defaultProjectId: topology.projectId, flowId: options.flowId, ...(options.projectId === undefined ? {} : { projectId: options.projectId }) });
+    topology = { ...topology, projectId };
     state.projectId = projectId;
     state.scenarioOrigin = scenarioOrigin;
     state.scenarioPortRetained = (topology.allocation as Partial<PersistentRunAllocation>).scenarioPortRetained ?? null;
-    if (!(await control.listFlowSummaries(projectId)).some(summary => summary.flowId === options.flowId)) {
-      throw new RunnerFailure("fixture.invalid", `The workspace's project holds no Flow ${options.flowId}`);
-    }
     state.hashBefore = (await control.getExactFlow(projectId, options.flowId)).contentHash;
-    state.keys = await removeCoreProviderKeys(control, { password: authorizationPassword, ...(topology.authorizationPin ? { pin: topology.authorizationPin } : {}) });
+    keysBefore = await replayKeyIdentities(control);
 
     const nodes = await readFlowNodes(control, { projectId, flowId: options.flowId });
     const actionTypes = createdFlowActionTypes(nodes, options.flowId);
@@ -173,6 +176,7 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
     const detail = await control.getRunDetail(projectId, run.runId);
     state.usage = liveLlmObservedUsage(detail);
     state.coreProviderCallCount = detail.providerCallCount ?? null;
+    reasons.push(...providerFreeReplayFailures(detail, run.harnessActivations));
     if (judgement.judgeBy === "expected-dataset") {
       const extraction = judgeCreatedFlowDataset({ workflow, stepId: judgement.stepId, run, actionTypes, scenarioOrigin });
       state.extraction = extraction.measurements.map(measurement => ({ ...measurement }));
@@ -192,6 +196,12 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
     state.error = { category: classifyRunnerFailure(error), message: error instanceof Error ? error.message : String(error) };
     reasons.push("the replay did not complete");
   } finally {
+    if (topology?.control && keysBefore) {
+      try {
+        state.keys = replayKeyPreservation(keysBefore, await replayKeyIdentities(topology.control));
+        if (!state.keys.preserved) reasons.push("The stored Secret Key identities changed during the replay");
+      } catch { reasons.push("The stored Secret Key identities could not be checked after the replay"); }
+    }
     // Cleanup never replaces the replay's result: that is what the caller needs, and a failed close leaves only this invocation's session behind.
     await browser?.close().catch(/* best-effort: the result is already decided */ () => undefined);
     await topology?.close().catch(/* best-effort: the result is already decided */ () => undefined);
@@ -213,8 +223,8 @@ function resultOf(input: { replayId: string; resultPath: string; options: SavedF
     task: state.task,
     address: { scenarioOrigin: state.scenarioOrigin, scenarioPortRetained: state.scenarioPortRetained, savedNavigationOrigins: state.origins, servedAtSavedAddress: state.servedAtSavedAddress },
     model: {
-      environmentCredentialVariables: input.environmentCredentialVariables, coreProviderKeys: state.keys, runIntent: null,
-      coreProviderCallCount: state.coreProviderCallCount, accountedCalls: usage?.accounting?.calls ?? null, calls: usage?.calls ?? null, interventions: usage?.interventions ?? null,
+      environmentCredentialVariables: input.environmentCredentialVariables, coreProviderKeys: state.keys, modelProvidersEnabled: false as const, runIntent: null,
+      coreProviderCallCount: state.coreProviderCallCount, accountedCalls: usage?.accounting?.calls ?? null, calls: state.coreProviderCallCount !== null || usage?.accounting ? usage?.calls ?? null : null, interventions: usage?.interventions ?? null,
       harnessActivations: run?.harnessActivations ?? null, llmGate: usage?.gate ?? null, resultVerification: run?.resultVerification ?? null,
     },
     run: run ? {

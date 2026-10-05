@@ -9,17 +9,15 @@
 // may press a chosen option, and on some pages that is the step -- so the
 // result says what it did, ahead of the change list, where it is read first.
 //
-// "Chosen" is what the view prints for it (`../../page-view/element/state-tokens.ts`):
-// `marked` (drawn apart from its siblings), `selected` (`aria-selected`) and
-// `checked`. Read from the view's line facts on both sides, by the handle the
-// press named, so the words are the ones the model was shown.
+// Whether the control was chosen on each side is read once, in
+// `./chosen-state.ts`, which the draft statement's `toggle` reads too
+// (`./toggle.ts`), so the sentence and the statement never disagree. The words
+// are the ones the model was shown on the control's own view line.
 
 import type { WebLlmSnapshotBinding } from "../../sanitize";
-import { quotedWords, webLlmLineFacts, type WebLlmLineFact } from "../../page-view";
+import { quotedWords } from "../../page-view";
 import type { WebRunnableNode } from "../catalog";
-import { webMovesThePage } from "../start-location";
-
-const CHOSEN: readonly string[] = ["marked", "selected", "checked"];
+import { webPressChosenState } from "./chosen-state";
 
 /**
  * The sentence for a press that un-chose -- or chose -- the control it pressed,
@@ -32,22 +30,9 @@ export function webPressChoice(
   after: WebLlmSnapshotBinding | undefined,
   handle: string | undefined
 ): string | undefined {
-  if (node.effect !== "mutate" || webMovesThePage(node) || handle === undefined) return undefined;
-  if (before === undefined || after === undefined || before.evidence.location !== after.evidence.location) return undefined;
-  const was = lineOf(before, handle);
-  const now = lineOf(after, handle);
-  if (was === undefined || now === undefined) return undefined;
-  const chosenBefore = chosen(was);
-  if (chosenBefore === chosen(now)) return undefined;
-  const words = was.words ?? now.words;
-  const named = words === undefined ? (was.kind ?? "the control") : quotedWords(words);
-  return chosenBefore ? `This press un-chose ${named}: it was chosen before.` : `This press chose ${named}: it was not chosen before.`;
-}
-
-function lineOf(page: WebLlmSnapshotBinding, handle: string): WebLlmLineFact | undefined {
-  return webLlmLineFacts(page.evidence).find((line) => line.handle === handle);
-}
-
-function chosen(line: WebLlmLineFact): boolean {
-  return line.tokens.some((token) => CHOSEN.includes(token));
+  const state = webPressChosenState(node, before, after, handle);
+  if (state === undefined || state.chosenBefore === state.chosenAfter) return undefined;
+  const words = state.was.words ?? state.now.words;
+  const named = words === undefined ? (state.was.kind ?? "the control") : quotedWords(words);
+  return state.chosenBefore ? `This press un-chose ${named}: it was chosen before.` : `This press chose ${named}: it was not chosen before.`;
 }

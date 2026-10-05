@@ -40,6 +40,7 @@ const PROJECT_SUBJECT = "project";
 /** The request that finds `target`'s thread. */
 export function threadListRequest(target: ChatTarget): PanelMessage {
   const request: PanelMessage = { type: RUNTIME_MESSAGES.panelConversationRead, kind: "list", status: "open", limit: 1 };
+  if (target.projectId !== undefined) request.projectId = target.projectId;
   if (target.kind === "automation") {
     request.subjectKind = FLOW_SUBJECT;
     request.subjectId = target.flowId;
@@ -55,6 +56,10 @@ export function threadListRequest(target: ChatTarget): PanelMessage {
 /** The request that sends `text` to `target`: into `shown` when there is one, or into a thread opened for it. */
 export function threadSendRequest(target: ChatTarget, shown: ShownThread | undefined, text: string): PanelMessage {
   const request: PanelMessage = { type: RUNTIME_MESSAGES.panelConversationSend, text, conversationId: shown?.conversationId, projectId: shown?.projectId };
+  if (target.projectId !== undefined) {
+    request.projectId = target.projectId;
+    if (shown === undefined && (target.kind === "project" || target.kind === "latest")) { request.subjectKind = PROJECT_SUBJECT; request.subjectId = target.projectId; }
+  }
   if (target.kind === "automation") {
     request.onScreen = { flowId: target.flowId };
     if (shown === undefined) {

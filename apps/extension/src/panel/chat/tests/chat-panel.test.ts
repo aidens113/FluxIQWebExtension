@@ -116,7 +116,7 @@ test("an automation's chat shows only that automation's live work", async () => 
     const core = twoThreads();
     const at = (second: number) => new Date(Date.UTC(2026, 8, 30, 12, 0, second)).toISOString();
     const other = { activityId: "run:r2", sequence: 1, subject: { kind: "run", id: "r2", projectId: "p", flowId: "flow-8" }, phase: "running", label: "x", at: at(1), detail: { kind: "step", title: "Open the other site", status: "started" } };
-    const mine = { activityId: "run:r1", sequence: 2, subject: { kind: "run", id: "r1", projectId: "p", flowId: "flow-7" }, phase: "running", label: "y", at: at(2), detail: { kind: "step", title: "Open the price page", status: "started" } };
+    const mine = { activityId: "run:r1", sequence: 2, subject: { kind: "run", id: "r1", projectId: "project-1", flowId: "flow-7" }, phase: "running", label: "y", at: at(2), detail: { kind: "step", title: "Open the price page", status: "started" } };
     const state = { current: mine, display: null, recent: [other, mine], overlay: "expanded", live: true };
     const request = async <T>(message: PanelMessage): Promise<PanelResult<T>> =>
       message.type === ACTIVITY_MESSAGES.read ? { ok: true, value: { ok: true, state } as T } : core.request<T>(message);
@@ -170,7 +170,7 @@ test("a run waiting on the person in a thread not on screen shows in the latest 
       { conversationId: "conv-latest", subjectKind: "project", subjectId: "project-1", turns: [{ turnId: "l1", author: "person", text: "Find cheap lamps" }] }
     ]);
     const at = new Date(Date.UTC(2026, 8, 30, 12, 0, 5)).toISOString();
-    const waiting = { activityId: "run:r1", sequence: 5, subject: { kind: "run", id: "r1", projectId: "p", flowId: "flow-7" }, phase: "waiting_permission", label: ask, at, detail: { kind: "ask", title: "Asked the person to complete a check", status: "started", ref: "ask-1" } };
+    const waiting = { activityId: "run:r1", sequence: 5, subject: { kind: "run", id: "r1", projectId: "project-1", flowId: "flow-7" }, phase: "waiting_permission", label: ask, at, detail: { kind: "ask", title: "Asked the person to complete a check", status: "started", ref: "ask-1" } };
     const display = { activityId: "run:r1", subjectKind: "run", phase: "waiting_permission", headline: "Waiting for you: answer in the FluxIQ panel", detail: ask, step: null, working: false, outcome: "waiting", sequence: 5 };
     const state = { current: waiting, display, recent: [waiting], overlay: "expanded", live: true };
     const request = async <T>(message: PanelMessage): Promise<PanelResult<T>> =>
@@ -194,7 +194,7 @@ test("a run waiting on the person in a thread not on screen shows in the latest 
       assert.equal(action.textContent, "Show the question");
 
       action.dispatch("click");
-      assert.deepEqual(chat.target(), { kind: "question", activityId: "run:r1", subjectKind: "run", subjectId: "r1", title: "The run's question" });
+      assert.deepEqual(chat.target(), { kind: "question", activityId: "run:r1", subjectKind: "run", subjectId: "r1", title: "The run's question", projectId: "project-1" });
       assert.equal(root.byClass("chat-context")[0]!.hidden, false);
       assert.equal(root.byClass("chat-context-name")[0]!.textContent, "The run's question");
       assert.equal(root.byClass("chat-context-kind")[0]!.hidden, true);
@@ -214,7 +214,7 @@ test("a run waiting on the person in a thread not on screen shows in the latest 
       assert.deepEqual(answered.map((message) => [message.askId, message.kind, message.value]), [["ask-1", "choice", "done"]]);
 
       root.byClass("chat-context-back")[0]!.dispatch("click");
-      assert.deepEqual(chat.target(), { kind: "latest" });
+      assert.deepEqual(chat.target(), { kind: "latest", projectId: "project-1" });
       await settle();
       assert.deepEqual(words(root), ["Find cheap lamps"]);
     } finally {

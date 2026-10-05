@@ -327,7 +327,7 @@ function lowerCase(value: JsonValue | undefined): string | undefined {
 }
 
 type Scope = { projectId: string; flowId: string };
-type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined };
+type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string };
 /** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control instead when one does. */
 type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath; fits?: WebPlanHandleIssueCode | undefined };
 type NodeOutcome =
@@ -373,11 +373,17 @@ export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stor
   // the request names the control the model was shown rather than a handle.
   if (input.gatedByCaller) return answered(resolved, assumed);
   const acting = actingStep(input.nodeDefinitionId, outcome.status === "resolved" ? outcome.parameters : input.parameters);
+  const concrete = boundTargetState(acting.parameters.target);
+  // The permission asks about the observed test control. Its identity stays
+  // only in that view, never beside the runtime binding on the retained node.
+  const permissionParameters: JsonObject = {};
+  for (const [key, value] of Object.entries(acting.parameters)) permissionParameters[key] = value;
+  if (concrete && isJsonRecord(concrete.fallback.element)) permissionParameters.element = concrete.fallback.element as JsonObject;
   const permission = await webPlanStepPermission({
     nodeDefinitionId: acting.nodeDefinitionId,
     declared: input.declaredConsequences,
     check: input.permission,
-    parameters: acting.parameters
+    parameters: permissionParameters
   });
   // A step nobody declared, and a step nobody permitted, both resolved their
   // names first, so both still report what they assumed: the guess happened
@@ -437,6 +443,20 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
       }
       continue;
     }
+    if (key === "target" && isTargetSlot(key, nodeDefinitionId) && isJsonRecord(value)
+      && Object.hasOwn(value, "$state") && webPlanHandlesIn(value).length > 0) {
+      const state = boundTargetState(value);
+      if (!state || !isHandleObject(state.fallback)) {
+        refusals.push({ code: "web.handle.malformed", kind: "target", path: [key] });
+        continue;
+      }
+      const outcome = resolveTarget(state.fallback, scope, stores.targets);
+      if (typeof outcome !== "string") replaced.set(key, {
+        value: outcome.value, frameId: outcome.frameId, frameUrlPath: outcome.frameUrlPath, element: outcome.element, statePath: state.path
+      });
+      else refusals.push({ code: outcome, kind: outcome === "web.handle.misplaced" ? "extraction" : "target", path: [key, "$state", "fallback"] });
+      continue;
+    }
     if (isTargetSlot(key, nodeDefinitionId) && isHandleObject(value)) {
       const outcome = resolveTarget(value, scope, stores.targets);
       if (typeof outcome !== "string") replaced.set(key, outcome);
@@ -459,8 +479,18 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
     return resolved ? [{ slot, resolved }] : [];
   });
   const element = named[0]?.resolved;
+  const bound = replaced.get("target")?.statePath !== undefined ? replaced.get("target") : undefined;
   const disagreeing = named.find(({ resolved }) => resolved.value !== element?.value || (resolved.frameId ?? 0) !== (element?.frameId ?? 0));
   if (disagreeing) return { status: "refused", refusals: [{ code: "web.handle.ambiguous", kind: "target", path: [disagreeing.slot] }] };
+  if (bound) {
+    // A literal conflicting locator/identity is not silently thrown away.
+    for (const slot of ["selector", "element"] as const) {
+      if (!Object.hasOwn(parameters, slot) || replaced.has(slot)) continue;
+      const agrees = slot === "selector" ? parameters[slot] === bound.value
+        : sameTargetIdentity(parameters[slot], bound.element);
+      if (!agrees) return { status: "refused", refusals: [{ code: "web.handle.ambiguous", kind: "target", path: [slot] }] };
+    }
+  }
   const firstNamed = named[0];
   if (firstNamed && actsOnTheWrongControl(nodeDefinitionId, element?.element)) {
     return { status: "refused", refusals: [{ code: "web.handle.wrong_control", kind: "target", path: [firstNamed.slot], fits: fittingNodeCode(element?.element) }] };
@@ -468,26 +498,58 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
 
   const frameId = handleFrame([...replaced.values()]);
   const declared = declaredFrame(parameters.browserFrameId);
-  if (frameId === "mixed" || (declared !== undefined && declared !== (frameId ?? 0))) {
+  if (frameId === "mixed" || (declared !== undefined && declared !== (frameId ?? 0))
+    || (bound && parameters.browserFrameId !== undefined && declared === undefined)) {
     return { status: "refused", refusals: [{ code: "web.handle.frame_mismatch", kind: undefined, path: frameId === "mixed" ? [] : ["browserFrameId"] }] };
+  }
+  const frameUrlPath = webAutomationUrlPath([...replaced.values()].find((entry) => entry.frameUrlPath !== undefined)?.frameUrlPath);
+  if (bound && parameters.browserFrameUrlPath !== undefined
+    && (frameUrlPath === undefined || parameters.browserFrameUrlPath !== frameUrlPath)) {
+    return { status: "refused", refusals: [{ code: "web.handle.frame_mismatch", kind: undefined, path: ["browserFrameUrlPath"] }] };
   }
 
   const resolved: JsonObject = {};
   for (const [key, value] of Object.entries(parameters)) {
+    if (bound && (TARGET_SLOTS as readonly string[]).includes(key)) continue;
     // A `target` handle was where the element was named, not an adapted target
     // to keep; an `element` handle is written as the identity below.
     if ((key === "target" || key === "element") && replaced.has(key)) continue;
     resolved[key] = replaced.get(key)?.value ?? value;
   }
-  if (element) resolved.selector = element.value;
+  if (bound?.statePath !== undefined) {
+    const fallback: JsonObject = { selector: bound.value };
+    if (bound.element) fallback.element = bound.element;
+    resolved.target = { $state: { path: bound.statePath, fallback } };
+  }
+  else if (element) resolved.selector = element.value;
   const identity = element?.element;
-  if (identity !== undefined && ELEMENT_NODE_IDS.has(nodeDefinitionId)) resolved.element = identity;
+  if (!bound && identity !== undefined && ELEMENT_NODE_IDS.has(nodeDefinitionId)) resolved.element = identity;
   if (frameId !== undefined && frameId !== 0) {
     resolved.browserFrameId = frameId;
-    const frameUrlPath = webAutomationUrlPath([...replaced.values()].find((entry) => entry.frameUrlPath !== undefined)?.frameUrlPath);
     if (frameUrlPath !== undefined) resolved.browserFrameUrlPath = frameUrlPath;
   }
   return { status: "resolved", parameters: resolved, assumed };
+}
+
+/** Exact supported state grammar; the public Core guard also accepts extras. */
+function boundTargetState(value: JsonValue | undefined): { path: string; fallback: JsonObject } | undefined {
+  if (!isJsonRecord(value) || Object.keys(value).length !== 1 || !isJsonRecord(value.$state)) return undefined;
+  const state = value.$state;
+  if (Object.keys(state).some((key) => key !== "path" && key !== "fallback")
+    || typeof state.path !== "string" || state.path.trim() === "" || !isJsonRecord(state.fallback)) return undefined;
+  return { path: state.path, fallback: state.fallback as JsonObject };
+}
+
+/** Object key order cannot turn an agreeing explicit identity into a conflict. */
+function sameTargetIdentity(left: JsonValue | undefined, right: JsonValue | undefined): boolean {
+  if (left === undefined || right === undefined) return false;
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right)) return Array.isArray(left) && Array.isArray(right)
+    && left.length === right.length && left.every((value, index) => sameTargetIdentity(value, right[index]));
+  if (!isJsonRecord(left) || !isJsonRecord(right)) return false;
+  const keys = Object.keys(left);
+  return keys.length === Object.keys(right).length
+    && keys.every((key) => Object.hasOwn(right, key) && sameTargetIdentity(left[key] as JsonValue, right[key] as JsonValue));
 }
 
 /** Core's Run Output node: a web output's payload resolved as that output's own node, and a handle anywhere else misplaced. */

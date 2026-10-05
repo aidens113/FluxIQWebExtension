@@ -130,6 +130,29 @@ async function resolveUnder(gate: AutomationStudioActionPermissionGate, runtime:
 
 const PRESS_SCHEDULE: JsonObject = { target: { handle: "t2" } };
 
+test("a bound target uses its concrete observed fallback for permission but keeps only the dynamic target in the accepted plan", async () => {
+  const target = { $state: { path: "chosenControl", fallback: { handle: "t2" } } };
+  const denied = gateHolding([]);
+  const refusal = await resolveUnder(denied, await explored(denied), { target }, ["delete"]);
+  assert.equal(refusal.ok, false);
+  assert.equal(denied.request?.control.name, "Schedule post");
+  assert.equal(denied.request?.control.kind, "button");
+  assert.deepEqual(denied.request?.missing, ["delete"]);
+  const allowed = gateHolding(["delete"]);
+  const accepted = await resolveUnder(allowed, await explored(allowed), { target }, ["delete"]);
+  assert.equal(accepted.ok, true);
+  assert.equal(allowed.request, undefined);
+  if (!accepted.ok) return;
+  const parameters = accepted.plan.subflows[0]!.nodes[1]!.parameters;
+  assert.ok(parameters);
+  assert.equal("selector" in parameters, false);
+  assert.equal("element" in parameters, false);
+  assert.equal(JSON.stringify(parameters).includes('"handle"'), false);
+  assert.deepEqual(parameters.target, { $state: { path: "chosenControl", fallback: {
+    selector: "#schedule", element: { tagName: "button", visibleText: "Schedule post", selector: "#schedule" }
+  } } });
+});
+
 test("a step that presses and says nothing about it never builds", async () => {
   const gate = gateHolding([]);
   const resolved = await resolveUnder(gate, await explored(gate), PRESS_SCHEDULE);

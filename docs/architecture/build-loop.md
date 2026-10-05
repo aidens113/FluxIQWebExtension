@@ -3,7 +3,7 @@
 What the web domain does when a FluxIQ build runs, writes and tests the steps of
 a Flow: a live run against a written step, a replay sent with a loop's row, the
 rows a replayed list read hands the test, and the check of a lasting act.
-Current-state design (t252, 2026-10-03), verified against source. Core owns the
+Current-state design (t252/t262, 2026-10-03), verified against source. Core owns the
 draft, the binding forms, the walker that runs a loop once per row, and the
 verdict; they are in FluxIQ Core's
 `docs/architecture/automation-studio/flow-authoring.md` (in the sibling
@@ -40,6 +40,25 @@ A `write` that is not a boolean is refused `unexpected_input_keys`. A written
 look is answered as an ordinary look. Bindings are supported at parameter-leaf
 level only: a `$state` inside an `extractList` `where` condition value is not
 supported: the extraction's condition readers do not resolve bindings.
+
+## Choice Changes And Stable Handles
+
+A live press that changes a control's chosen state on the same page sends
+`draft.toggle: {key, to}` through `capture.ts`: the canonical target handle
+and `on` or `off`. The shared `node-run/press-effect/chosen-state.ts` reader
+compares the control's own `marked`, `selected` or `checked` tokens before and
+after; `choice.ts` produces the explanatory sentence and `toggle.ts` produces
+the structured statement. Navigation, missing evidence, unchanged controls
+and written steps send no toggle. Core accepts this field explicitly and
+uses it to recognize cancelling presses; the domain does not edit the draft.
+
+`stable-handles.ts` preserves an unambiguous control's handle across a reload
+that rewrites its selector shape by matching page, frame, record, tag and
+identity words after the existing address tiers. Both capture and remembered
+candidate must be unique. Wordless controls, duplicate labels and a candidate
+still standing at another old address do not use this fallback. This prevents
+a rerun from losing an otherwise identifiable control while keeping
+ambiguous targets distinct.
 
 ## Replay With A Row
 
@@ -79,6 +98,13 @@ answers `verified`, `present` (the effect is already in place on the step's own
 page), `unreproducible` or `failed`. So the test of a loop that confirms each
 kept request presses no Confirm.
 
+An accepted missing or withdrawn target also returns the current resolved
+`draft.ranWith` declaration, including its normalized parameters and declared
+consequences. Core can therefore keep that checked candidate runnable without
+borrowing an earlier action's arguments. Declined or unresolved checks provide
+no accepted declaration. Returning `present` applies no action and establishes
+no historical execution proof; whole-Flow testing remains required.
+
 ## What The Judge Is Told About Rows
 
 - **Left-out rows' tested values.** A replayed list read also answers `readRows`
@@ -109,3 +135,23 @@ runs or rows (`{"$input": name}`, `{"$row": field}`).
 `$step` bindings and declared Flow inputs (`interface.inputs`) are Core's P5;
 row anchors are P6. Stored Flow nodes keep `metadata.declaredConsequences`,
 but no stored-run gate reads it; that change is the user's decision.
+
+### Bounded extraction feedback
+
+Detected list evidence includes selector-free paginationBound (maxPages or maxScrolls). Omitting paginate, or passing true, retains the detected bound; it does not request every page. Explicit extractList.paginate.maxPages or maxScrolls changes that bound. Defaults remain bounded. A page_limit report names the reader's actual clamped bound and the nested amendment needed to read further; truncation is still incomplete evidence, never proof that the list ended.
+
+### Bound target test values
+
+A target Flow input may retain the executor state binding while its concrete
+test handle is resolved: target.$state keeps its path, and its fallback becomes
+the observed adapted target with selector and element identity. The handle
+never reaches persistence. A supplied runtime target replaces that fallback;
+resolution adds no fixed global selector or element identity to shadow it.
+
+Only the exact target binding grammar with a concrete handle fallback is
+recognized here. Existing control, scope, uniqueness, frame, declaration and
+permission checks still apply to the concrete test value. Permission receives
+a separate view of the observed fallback identity. Agreeing duplicate target
+references are folded into the dynamic target; conflicting locator/identity
+slots are refused. This does not add support for nested handle bindings in
+selector or element slots, or infer execution proof from resolution.

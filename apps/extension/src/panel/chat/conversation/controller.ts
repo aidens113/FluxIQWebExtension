@@ -62,6 +62,10 @@ export type ConversationState = {
   turns: readonly CoreTurn[];
   /** The thread on screen, once there is one. */
   conversationId?: string | undefined;
+  /** Explicit chat scope, independent of the browser's recording session. */
+  projectId?: string | undefined;
+  /** Ready follows an authorized scoped read, including an empty project thread. */
+  scopeState?: "loading" | "ready" | "error" | undefined;
   /** Set only once reading has kept failing: what failed, and why. */
   readError?: string | undefined;
   /** A read is on its way. */
@@ -117,6 +121,7 @@ export function createConversationController(request: PanelStore["request"], onC
   let generation = 0;
   let connected = false;
   let loaded = false;
+  let scopeState: "loading" | "ready" | "error" = "loading";
   let shown: Shown | undefined;
   let anchorTurnId: string | undefined;
   let turns: readonly CoreTurn[] = [];
@@ -145,6 +150,7 @@ export function createConversationController(request: PanelStore["request"], onC
 
   /** A read failed at `step`: retry quietly, and show the notice only once it has lasted. */
   function readFailed(step: ThreadReadStep, result: Extract<PanelResult<unknown>, { ok: false }>): void {
+    scopeState = "error";
     if (result.unsupported || result.code === "refused") return failed(result, "", () => undefined);
     const at = clock.now();
     failing = { since: failing?.since ?? at, count: (failing?.count ?? 0) + 1 };
@@ -182,6 +188,7 @@ export function createConversationController(request: PanelStore["request"], onC
     if (!Array.isArray(list)) return readFailed("list", UNREADABLE_LIST);
     const latest = list.length === 0 ? undefined : parseConversation(list[0]);
     if (list.length > 0 && latest === undefined) return readFailed("list", UNREADABLE_LIST);
+    if (target.projectId !== undefined && latest !== undefined && latest.projectId !== target.projectId) return readFailed("list", UNREADABLE_LIST);
     if (latest === undefined) return settle(undefined, undefined, []);
     const same = shown?.conversationId === latest.conversationId;
     if (same && shown?.revision === latest.revision) return settle(shown, anchorTurnId, turns);
@@ -189,11 +196,12 @@ export function createConversationController(request: PanelStore["request"], onC
     const tail = await readThreadTail(safeRequest, {
       conversationId: latest.conversationId,
       projectId: latest.projectId,
+      requireIdentity: target.projectId !== undefined,
       anchorTurnId: same ? anchorTurnId : undefined
     });
     if (asked !== generation) return;
     if (!tail.ok) return readFailed("thread", tail);
-    if (tail.value.missing) return settle(undefined, undefined, []);
+    if (tail.value.missing) return target.projectId !== undefined ? readFailed("thread", UNREADABLE_LIST) : settle(undefined, undefined, []);
     // An incomplete read leaves the revision unknown, so the next one carries on.
     settle({ ...latest, revision: tail.value.complete ? latest.revision : undefined }, tail.value.anchorTurnId, tail.value.turns);
   }
@@ -203,6 +211,7 @@ export function createConversationController(request: PanelStore["request"], onC
     anchorTurnId = nextAnchor;
     turns = nextTurns;
     loaded = true;
+    scopeState = "ready";
     clearReadFailure();
     const pending = new Set(nextTurns.flatMap((turn) => (turn.ask?.status === "pending" ? [turn.ask.askId] : [])));
     for (const askId of [...answerErrors.keys()]) if (!pending.has(askId)) answerErrors.delete(askId);
@@ -222,6 +231,7 @@ export function createConversationController(request: PanelStore["request"], onC
       anchorTurnId = undefined;
       turns = [];
       loaded = false;
+      scopeState = "loading";
       clearReadFailure();
       sendError = undefined;
       answering.clear();
@@ -240,6 +250,8 @@ export function createConversationController(request: PanelStore["request"], onC
         fallbackReason: fallback,
         turns,
         conversationId: shown?.conversationId,
+        projectId: target.projectId !== undefined ? target.projectId : undefined,
+        scopeState: target.projectId !== undefined ? (!connected || fallback !== undefined ? "error" : scopeState) : undefined,
         readError,
         reading: inFlight !== undefined,
         sending,
@@ -253,6 +265,7 @@ export function createConversationController(request: PanelStore["request"], onC
       connected = next;
       generation += 1;
       if (!next) {
+        scopeState = "loading";
         if (fallback === "refused") fallback = undefined;
         clearReadFailure();
         sendError = undefined;
@@ -290,6 +303,7 @@ export function createConversationController(request: PanelStore["request"], onC
     async send(text) {
       const body = text.trim();
       if (body === "" || sending || !readable()) return false;
+      if (target.projectId !== undefined && scopeState !== "ready") return false;
       sending = true;
       sendError = undefined;
       onChange();
@@ -308,6 +322,9 @@ export function createConversationController(request: PanelStore["request"], onC
         return false;
       }
       const opened = parseConversation(result.value.payload?.conversation);
+      if (target.projectId !== undefined && opened !== undefined && opened.projectId !== target.projectId) {
+        scopeState = "error"; sending = false; sendError = SEND_FAILED; onChange(); return false;
+      }
       if (opened !== undefined && opened.conversationId !== shown?.conversationId) {
         // A first message opened a thread: show that one from its start.
         shown = { ...opened, revision: undefined };
@@ -328,6 +345,7 @@ export function createConversationController(request: PanelStore["request"], onC
       return true;
     },
     async answer(askId, kind, value) {
+      if (target.projectId !== undefined && scopeState !== "ready") return;
       if (answering.has(askId) || !readable() || !shown || !turns.some((turn) => turn.ask?.askId === askId && turn.ask.status === "pending")) return;
       const asked = generation;
       const operation = {};

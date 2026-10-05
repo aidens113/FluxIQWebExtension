@@ -16,6 +16,7 @@ import type { FluxIQTargetConfiguration } from "./target-config.js";
 import { selectOptionByKeyboard } from "./trusted-input/index.js";
 import { scenarioLabOriginProof } from "./lab-control/index.js";
 import { openLivePanel } from "./run-scenario/browser-session/index.js";
+import { extensionViewPanelDriver } from "./extension-chat-check/index.js";
 
 const MAX_ACTIONS = 500;
 const MAX_LINE_BYTES = 16_384;
@@ -33,6 +34,7 @@ const SENSITIVE_CONTROL_SELECTOR = [
 export type InteractiveSurface = "scenario" | "panel" | "extension";
 export type InteractiveSecretEnvironmentName = "FLUXIQ_TEST_PASSWORD" | "FLUXIQ_TEST_PIN" | "FLUXIQ_TEST_TOTP" | "DEEPSEEK_API_KEY";
 export type InteractiveAction =
+  | { id?: string; action: "chat-project"; surface: "extension"; projectId: string; timeoutMs?: number }
   | { id?: string; action: "extension-action"; actionType: InteractiveExtensionActionType; selector?: string; text?: string; value?: string; key?: string; timeoutMs?: number }
   | { id?: string; action: "navigate"; surface: InteractiveSurface; path: string }
   | { id?: string; action: "click"; surface: InteractiveSurface; selector: string }
@@ -69,6 +71,14 @@ export function parseInteractiveAction(input: unknown): InteractiveAction {
   const action = text(value.action, "action", 32);
   const id = value.id === undefined ? {} : { id: text(value.id, "id", 100) };
   if (action === "stop") { exactKeys(value, ["id", "action"]); return { ...id, action }; }
+  if (action === "chat-project") {
+    exactKeys(value, ["id", "action", "surface", "projectId", "timeoutMs"]);
+    if (value.surface !== "extension") throw new Error("chat-project surface must be extension");
+    const projectId = text(value.projectId, "projectId", 256);
+    if (/[\s\u0000-\u001f\u007f]/u.test(projectId)) throw new Error("projectId must be a bounded opaque identifier");
+    const timeoutMs = value.timeoutMs === undefined ? undefined : boundedInteger(value.timeoutMs, "timeoutMs", 1, MAX_WAIT_MS);
+    return { ...id, action, surface: "extension", projectId, ...(timeoutMs === undefined ? {} : { timeoutMs }) };
+  }
   if (action === "extension-action") {
     exactKeys(value, ["id", "action", "actionType", "selector", "text", "value", "key", "timeoutMs"]);
     const actionType = extensionActionType(value.actionType);
@@ -116,6 +126,11 @@ export function parseInteractiveAction(input: unknown): InteractiveAction {
 
 export async function executeInteractiveAction(action: Exclude<InteractiveAction, { action: "stop" }>, pages: InteractivePages, origins: Partial<Record<InteractiveSurface, string>>, artifactsDirectory: string, sequence: number, secretEnvironment: NodeJS.ProcessEnv = {}): Promise<Record<string, unknown>> {
   if (action.action === "extension-action") return executeExtensionAction(action, pages, sequence);
+  if (action.action === "chat-project") {
+    if (!pages.extension) throw new Error("extension chat surface is unavailable");
+    const scope = await extensionViewPanelDriver(pages.extension, "sidepanel/index.html").selectProject(action.projectId, action.timeoutMs ?? MAX_WAIT_MS);
+    return { action: action.action, surface: action.surface, ...scope };
+  }
   const page = pages[action.surface];
   const origin = origins[action.surface];
   if (!page || !origin) throw new Error("selected interactive surface is unavailable");

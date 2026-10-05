@@ -159,6 +159,11 @@ test("binds from the production host seam and selects the sole trusted web clien
   // And it says what the node does when conditions reject everything, since a
   // model that read an empty answer as an empty page would repair nothing.
   assert.match(detectDescription, /returns what it read and says so in its report/u);
+  // A detected pager may propose only one page; true/omission keep that bound.
+  assert.match(detectDescription, /paginationBound/u);
+  assert.match(detectDescription, /absent or true keeps the detected bound/u);
+  assert.match(detectDescription, /paginate: \{maxPages: N\}/u);
+  assert.match(detectDescription, /paginate: \{maxScrolls: N\}/u);
   const validationEvidence = sanitizeWebLlmSnapshot({
     url: "https://example.test/form",
     title: "Form",

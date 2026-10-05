@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV } from "fluxiq/automation-studio";
 import type { RunAllocation } from "./allocation.js";
-import { LAB_COST_CEILING_ENV, LAB_COST_CEILING_SCOPE_ENV, LAB_DEFAULT_MODEL_ENV, labCostCeilingValue, labDefaultModelValue } from "./live-llm/index.js";
+import { LAB_COST_CEILING_ENV, LAB_COST_CEILING_SCOPE_ENV, LAB_DEFAULT_MODEL_ENV, labBuildCallLimitEnvironment, labCostCeilingValue, labDefaultModelValue } from "./live-llm/index.js";
 
 /**
  * Provider credentials belong to the test driver. Child processes receive an
@@ -28,6 +29,10 @@ export type TopologyPaths = {
   repositoryRoot: string;
   fluxiqRepositoryRoot: string;
   hostModulePath?: string;
+  /** The resolved live plan, supplied before startup; absent for an unplanned run. */
+  buildCallLimit?: number;
+  /** Explicit construction admission; saved replay disables all factory model wiring. */
+  modelProvidersEnabled?: boolean;
   /**
    * Where Core writes one folder per model and tool step of the run, as
    * `FLUXIQ_LLM_STEP_LOG_DIR` (`runtime/llm/step-log/` in Core). A live LLM run
@@ -89,12 +94,15 @@ export function buildFluxIQEnvironment(allocation: RunAllocation, paths: Topolog
   const costCeiling = labCostCeilingValue(paths.repositoryRoot, args, base);
   // Core's default model, from the run's --llm-model only; refused here when Core would refuse it at start.
   const defaultModel = labDefaultModelValue(args);
-  const { FLUXIQ_LLM_STEP_LOG_DIR: _inheritedStepLogDirectory, [LAB_DEFAULT_MODEL_ENV]: _inheritedDefaultModel, ...inherited } = withoutProviderSecrets(base);
+  if (paths.modelProvidersEnabled !== undefined && typeof paths.modelProvidersEnabled !== "boolean") throw new Error("modelProvidersEnabled must be an explicit boolean");
+  const { FLUXIQ_MODEL_PROVIDERS_ENABLED: _inheritedModelAdmission, FLUXIQ_LLM_STEP_LOG_DIR: _inheritedStepLogDirectory, [LAB_DEFAULT_MODEL_ENV]: _inheritedDefaultModel, [AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV]: _inheritedCallLimit, [AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV]: _inheritedCallScope, ...inherited } = withoutProviderSecrets(base);
   return {
     FLUXIQ_BUILD_PROGRESS_TRACE: "1",
     ...inherited,
     [LAB_COST_CEILING_ENV]: costCeiling,
     [LAB_COST_CEILING_SCOPE_ENV]: "test",
+    ...labBuildCallLimitEnvironment(paths.buildCallLimit),
+    ...(paths.modelProvidersEnabled === undefined ? {} : { FLUXIQ_MODEL_PROVIDERS_ENABLED: String(paths.modelProvidersEnabled) }),
     ...(defaultModel === undefined ? {} : { [LAB_DEFAULT_MODEL_ENV]: defaultModel }),
     ...(paths.stepLogDirectory ? { FLUXIQ_LLM_STEP_LOG_DIR: paths.stepLogDirectory } : {}),
     PORT: String(allocation.webPort),

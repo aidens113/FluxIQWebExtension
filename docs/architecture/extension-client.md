@@ -574,6 +574,10 @@ The composer sends typed instructions through `panelConversationSend`. The
 thread is re-read 300 ms after an event that names a conversation or ends the
 work. The 4 s poll stays as the fallback.
 
+Chat can also hold an explicit project scope, independently of the browser recording session. Its list/get/send/answer requests use that project through the existing authenticated conversation relay. Switching projects clears the displayed thread and ignores late reads for the old target; an empty authorized thread list is ready for the first message. Send stays disabled while that scope loads or fails. Question/back navigation preserves the selected project, and activity from another project is excluded. An unsent draft from another project remains behind the existing adoption controls.
+
+The mounted extension view accepts the bounded project-only navigation event fluxiq:chat-project with exactly { projectId }. It opens the ordinary chat tab and exposes data-fluxiq-chat-project plus data-fluxiq-chat-scope-state (loading, ready, error) for setup validation. Ready follows a successful authorized thread read; the event itself grants no permissions and executes no model capability. The Lab uses this same view and the ordinary composer.
+
 **The chat builds and runs automations** (t198). The background relay
 (`background/panel/conversation-relay.ts`) adds two things to every message:
 
