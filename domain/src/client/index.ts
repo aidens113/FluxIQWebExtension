@@ -15,3 +15,4 @@ export * from "../recording/state";
 export * from "../recording/web-state";
 export * from "./capabilities";
 export * from "./gateway-mapping";
+export * from "./close-opened-tabs-parameter";

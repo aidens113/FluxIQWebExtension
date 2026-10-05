@@ -37,7 +37,9 @@
 // pagination is read. A pagination the model wrote itself names controls it
 // was never shown, so it can only mean "keep reading": the detected one is read,
 // with the model's own `maxPages` or `maxScrolls` whatever mode it named
-// (`keptPagination`); with nothing detected it is refused. A literal `item`
+// (`keptPagination`); with nothing detected it is refused. A `maxPages` or
+// `maxScrolls` written beside `paginate` rather than inside it is read inside
+// it where the read pages (`liftedBounds`). A literal `item`
 // beside a handle is replaced by the detected one for the same reason.
 //
 // Anything that does not name one detected list is refused with the code that
@@ -89,11 +91,28 @@ export type WebExtractionSlotResolution =
     frameUrlPath: string | undefined;
     assumed: WebExtractionColumnAssumption[];
   }
-  /** `path` is where inside the value it was refused. */
-  | { status: "refused"; issue: WebExtractionSlotIssue; path: WebPlanValuePath };
+  /**
+   * `path` is where inside the value it was refused. `also` is the second
+   * position when the refusal is two written values that disagree, and
+   * `expected` the shape the refused key belongs in when it has one.
+   */
+  | { status: "refused"; issue: WebExtractionSlotIssue; path: WebPlanValuePath; also?: WebPlanValuePath; expected?: (typeof BOUND_INSIDE_PAGINATE)[PagingBound] };
 
 const LIST_KEYS: ReadonlySet<string> = new Set(["handle", "location", "item", "fields", "columns", "where", "dedupe", "sort", "paginate", "minItems", "maxItems"]);
 const REFERENCE_KEYS: ReadonlySet<string> = new Set(["handle", "location"]);
+/**
+ * The keys of `paginate` that say only how far to read, and so mean the same
+ * thing written beside it (`liftedBounds`), each with the shape hint a read
+ * that does not page is refused with. The others name controls or a mode,
+ * which beside `paginate` could as well be a mistake about something else, so
+ * they stay refused as unknown keys.
+ */
+const BOUND_INSIDE_PAGINATE = {
+  maxPages: "web.handle.expected.extract_list.paginate.maxPages",
+  maxScrolls: "web.handle.expected.extract_list.paginate.maxScrolls"
+} as const;
+type PagingBound = keyof typeof BOUND_INSIDE_PAGINATE;
+const PAGING_BOUNDS = Object.keys(BOUND_INSIDE_PAGINATE) as PagingBound[];
 
 type Reference = { handle: unknown; location: unknown; path: WebPlanValuePath };
 type Refused = Extract<WebExtractionSlotResolution, { status: "refused" }>;
@@ -105,7 +124,7 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   if (references.length === 0) return handles[0] ? refused("web.handle.misplaced", handles[0].path) : { status: "literal" };
   const stray = handles.find((found) => !references.some((reference) => samePath(reference.path, found.path)));
   if (stray) return refused("web.handle.misplaced", stray.path);
-  const unknownKey = Object.keys(value).find((key) => !LIST_KEYS.has(key));
+  const unknownKey = Object.keys(value).find((key) => !LIST_KEYS.has(key) && !Object.hasOwn(BOUND_INSIDE_PAGINATE, key));
   if (unknownKey !== undefined) return refused("web.handle.malformed", [unknownKey]);
   if (value.location !== undefined && !Object.hasOwn(value, "handle")) return refused("web.handle.malformed", ["location"]);
   if (value.fields !== undefined && value.columns !== undefined) return refused("web.handle.malformed", ["columns"]);
@@ -133,7 +152,9 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
     ? undefined
     : keptWebExtractionConditions(value.where, { detected: binding.extractList.fields, kept: columns.fields }, ["where"]);
   if (where !== undefined && !where.ok) return refused(where.issue, where.path);
-  const paginate = keptPagination(value.paginate, binding);
+  const lifted = liftedBounds(value, binding);
+  if ("issue" in lifted) return lifted;
+  const paginate = keptPagination(lifted.paginate, binding);
   if (paginate === "malformed") return refused("web.handle.malformed", ["paginate"]);
 
   const request: JsonObject = { item: binding.extractList.item, fields: columns.fields as unknown as JsonObject };
@@ -215,6 +236,35 @@ function namedHandle(references: Reference[]): { handle: string; path: WebPlanVa
     named ??= { handle: reference.handle, path: reference.path };
   }
   return named ?? refused("web.handle.malformed", []);
+}
+
+/**
+ * The `paginate` the plan means, with a page or scroll bound written beside it
+ * moved inside it; or why it cannot be.
+ *
+ * Live run `run-mustvzvg-99695308` (steps 0057, 0060) wrote `maxPages: 10`
+ * beside `paginate: {next: ...}` and was refused as an unknown key, though a
+ * read that pages has exactly one place a page count can go. So where the read
+ * pages -- `paginate` written as an object, or absent or `true` over a detected
+ * pagination -- the bound is read there, and the resolved request carries it
+ * only inside `paginate`, which is the shape the Flow keeps. The same value
+ * written in both places says it once; two different values are refused at both
+ * positions, since which was meant is not this resolver's to pick. A read that
+ * does not page (`paginate: false`, or nothing detected) has nowhere for it, and
+ * is refused saying it belongs inside `paginate`.
+ */
+function liftedBounds(value: Record<string, unknown>, binding: WebLlmExtractionBinding): { paginate: unknown } | Refused {
+  const written = PAGING_BOUNDS.filter((key) => Object.hasOwn(value, key));
+  const first = written[0];
+  if (first === undefined) return { paginate: value.paginate };
+  const pages = isJsonRecord(value.paginate) || ((value.paginate === undefined || value.paginate === true) && binding.extractList.paginate !== undefined);
+  if (!pages) return { status: "refused", issue: "web.handle.malformed", path: [first], expected: BOUND_INSIDE_PAGINATE[first] };
+  const paginate: Record<string, unknown> = isJsonRecord(value.paginate) ? { ...value.paginate } : {};
+  for (const key of written) {
+    if (Object.hasOwn(paginate, key) && paginate[key] !== value[key]) return { status: "refused", issue: "web.handle.malformed", path: [key], also: ["paginate", key] };
+    paginate[key] = value[key];
+  }
+  return { paginate };
 }
 
 /**

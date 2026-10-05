@@ -117,6 +117,11 @@ export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   "web.handle.wrong_control",
   // The extraction node's `extractList` as `{ handle, fields?, paginate? }`, as its description spells out.
   "web.handle.expected.extract_list.handle_fields_paginate",
+  // Beside a page or scroll bound written next to `paginate` on a read that
+  // does not page: the bound goes inside `paginate`, and only a read that pages
+  // has one (`extraction/slot.ts`, `liftedBounds`; `run-mustvzvg-99695308`).
+  "web.handle.expected.extract_list.paginate.maxPages",
+  "web.handle.expected.extract_list.paginate.maxScrolls",
   // An element node's `selector` as `{ handle, location? }`.
   "web.handle.expected.selector.handle_location",
   // Beside `web.handle.wrong_control`: the node that does act on the control
@@ -328,7 +333,7 @@ function lowerCase(value: JsonValue | undefined): string | undefined {
 
 type Scope = { projectId: string; flowId: string };
 type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string };
-/** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control instead when one does. */
+/** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control -- or the shape that fits the key -- instead when one does. */
 type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath; fits?: WebPlanHandleIssueCode | undefined };
 type NodeOutcome =
   | { status: "unchanged" }
@@ -434,7 +439,11 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
         for (const entry of slot.assumed) {
           assumed.push({ path: [key, ...entry.path], written: entry.written, field: entry.field, how: entry.how, score: entry.score });
         }
-      } else if (slot.status === "refused") refusals.push({ code: slot.issue, kind: "extraction", path: [key, ...slot.path] });
+      } else if (slot.status === "refused") {
+        refusals.push({ code: slot.issue, kind: "extraction", path: [key, ...slot.path], fits: slot.expected });
+        // Two written values that disagree are both named, so the model sees which two.
+        if (slot.also !== undefined) refusals.push({ code: slot.issue, kind: "extraction", path: [key, ...slot.also] });
+      }
       else {
         const frameId = declaredFrame(parameters.browserFrameId);
         const own = webPlanOwnExtractionList(value, frameId, scope, stores.extractions);

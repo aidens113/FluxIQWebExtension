@@ -3,13 +3,14 @@
 //
 // Its own file because both the run (`./run.ts`) and the replay
 // (`./replay.ts`) take it, and because each memory a build keeps across calls
-// (`./arrival.ts`, `./shown-addresses.ts`) arrives here rather than as another
-// parameter of the run.
+// (`./arrival.ts`, `./shown-addresses.ts`, `./own-layers/memory.ts`) arrives
+// here rather than as another parameter of the run.
 
 import type { WebLlmEvidenceGateway, WebLlmEvidenceToolRequest } from "../capture";
 import type { WebPlanHandleStores } from "../plan-resolution";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import type { WebNodeArrivals } from "./arrival";
+import type { WebNodeOwnLayers } from "./own-layers";
 import type { WebNodeShownAddresses } from "./shown-addresses";
 
 export type WebNodeRun = {
@@ -35,4 +36,6 @@ export type WebNodeRun = {
   arrivals: WebNodeArrivals;
   /** Where this build has been shown it can go, which is where it may navigate (`./shown-addresses.ts`). */
   addresses: WebNodeShownAddresses;
+  /** The layers a press of this build opened, which closing is a step of the Flow and not an interruption (`./own-layers/memory.ts`). */
+  layers: WebNodeOwnLayers;
 };

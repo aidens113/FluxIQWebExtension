@@ -40,6 +40,7 @@ const CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
 const CATALOG = CAPTURED_DETECTIONS["product-catalog-largest"];
 const EXTRACTION_HINT = "web.handle.expected.extract_list.handle_fields_paginate";
 const TARGET_HINT = "web.handle.expected.selector.handle_location";
+const MAX_PAGES_INSIDE_PAGINATE = "web.handle.expected.extract_list.paginate.maxPages";
 
 const CARD = '[data-testid="product-card"]';
 const testId = (id: string) => `[data-testid="${id}"]`;
@@ -218,6 +219,43 @@ test("the handle keeps every detected column and the detected pagination unless 
     status: "resolved",
     parameters: { extractList: { item: CARD, fields: { title: CARD_FIELDS.name, name: CARD_FIELDS.name }, minItems: 0, maxItems: 8 }, timeoutMs: 20_000 }
   });
+});
+
+test("a page bound written beside paginate instead of inside it bounds the read's paging, and only where it can mean nothing else", async () => {
+  // Live run `run-mustvzvg-99695308` (steps 0057, 0060): the model reran a list
+  // read with `maxPages: 10` beside `paginate: {next: "a[rel=next]"}` and was
+  // refused `web.handle.malformed:extractList.maxPages`. A read that pages has
+  // one place a page count can go, so it is read there, and the Flow keeps it
+  // there: the resolved request carries `paginate.maxPages` and no top-level key.
+  const runtime = runtimeOver(CATALOG);
+  const { extraction } = await detect(runtime);
+  const fields = { name: "product-name" };
+  const read = { item: CARD, fields: { name: CARD_FIELDS.name } };
+  assert.deepEqual(
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields, paginate: { next: "a[rel=next]" }, minItems: 0, maxPages: 10 } }),
+    resolvedList({ ...read, paginate: { ...NEXT, maxPages: 10 }, minItems: 0 })
+  );
+  // The same value written in both places says it once; the detected pagination, read when nothing is written, is bounded the same way.
+  for (const paginate of [{ next: "a[rel=next]", maxPages: 10 }, true, undefined]) {
+    const extractList: JsonObject = { handle: extraction, fields, maxPages: 10 };
+    if (paginate !== undefined) extractList.paginate = paginate;
+    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), resolvedList({ ...read, paginate: { ...NEXT, maxPages: 10 } }), JSON.stringify(paginate));
+  }
+  // Two different page counts are not one: refused, naming both.
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields, paginate: { next: "a[rel=next]", maxPages: 3 }, maxPages: 10 } }), {
+    status: "refused",
+    issueCodes: ["web.handle.malformed", EXTRACTION_HINT, "web.handle.malformed:extractList.maxPages", "web.handle.malformed:extractList.paginate.maxPages"]
+  });
+  // A read that does not page has nowhere for a page count: refused, saying it belongs inside paginate.
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields, paginate: false, maxPages: 10 } }), {
+    status: "refused",
+    issueCodes: ["web.handle.malformed", EXTRACTION_HINT, MAX_PAGES_INSIDE_PAGINATE, "web.handle.malformed:extractList.maxPages"]
+  });
+  // A scroll count beside paginate is the same mistake on a feed.
+  const feed = runtimeOver(CAPTURED_DETECTIONS["infinite-feed-largest"]);
+  const posts = await detect(feed);
+  const scrolled = await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: { mode: "scroll" }, maxScrolls: 4 } });
+  assert.deepEqual(scrolled.status === "resolved" ? (scrolled.parameters.extractList as JsonObject).paginate : scrolled, { mode: "scroll", maxScrolls: 4 });
 });
 
 test("the list may be named with the location its evidence reported, at the item, or at each field", async () => {

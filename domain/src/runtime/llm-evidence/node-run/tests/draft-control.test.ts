@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
-import { shownPageLines } from "../../page-view/tests/shown-page-lines";
+import { shownHandle, shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const CLICK = "web.output.dom-click";
@@ -246,4 +246,101 @@ function quantityPage(accessibleName?: string): JsonObject {
     viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
     interactiveElements: [field, { tagName: "button", selector: "#add", visibleText: "Add to cart" }]
   };
+}
+
+// A layer the build's own press opened is a step of the Flow, not an
+// interruption (t193, C17). `run-musp4h2f-72e8ed99`: the build pressed
+// "Pickup or delivery? Carden Falls Supercenter", which opened the store
+// chooser, then "Set as my store" on Millbrook inside it; the page reloaded at
+// the same location with the chooser gone, and the store switch was drafted
+// `interruption: true`, which Core makes optional. A consent wall or a chat
+// card the build did not open is still an interruption.
+
+test("a press inside the store chooser this build's own press opened is a step of the Flow, not an interruption", async () => {
+  const store = storeStub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(store.gateway);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  const opener = await press(runtime, "call.open", shownHandle(looked.evidence, "Pickup or delivery? Carden Falls Supercenter"));
+  assert.equal(opener.resultCode, "web.action.succeeded", JSON.stringify(opener.evidence).slice(0, 400));
+  assert.equal("interruption" in (opener.draft ?? {}), false);
+  const setAt = shownHandle(opener.evidence, "Set as my store");
+  const set = await press(runtime, "call.set", setAt);
+  assert.equal(set.resultCode, "web.action.succeeded", JSON.stringify(set.evidence).slice(0, 400));
+  assert.equal(store.chosen(), "Millbrook");
+  // The chooser is gone after the press and the page is where it was: before
+  // this memory, that read as an answered layer.
+  assert.equal("interruption" in (set.draft ?? {}), false);
+  // Handles survive the reload: the chooser opened again is numbered as it
+  // was, so a memory keyed by handle still names it. The layer itself prints
+  // no line, so its control -- numbered the same way, by location, selector
+  // and record (`../../stable-handles.ts`) -- stands for it.
+  const reopened = await press(runtime, "call.reopen", shownHandle(set.evidence, "Pickup or delivery? Millbrook Crossing Supercenter"));
+  assert.equal(shownHandle(reopened.evidence, "Set as my store"), setAt);
+});
+
+test("a consent wall present from the first look, answered, is still an interruption", async () => {
+  const store = storeStub({ consent: true });
+  const runtime = createWebAutomationLlmEvidenceRuntime(store.gateway);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  const rejected = await press(runtime, "call.reject", shownHandle(looked.evidence, "Reject all"));
+  assert.equal(rejected.resultCode, "web.action.succeeded", JSON.stringify(rejected.evidence).slice(0, 400));
+  assert.equal(rejected.draft?.interruption, true);
+});
+
+test("a chat card that appeared on its own, not after this build's press, is still an interruption", async () => {
+  const store = storeStub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(store.gateway);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  const added = await press(runtime, "call.add", shownHandle(looked.evidence, "Add to cart"));
+  assert.equal(added.resultCode, "web.action.succeeded");
+  // On a timer, after the look that followed the press.
+  store.openChat();
+  const again = await runtime.executeTool({ ...PROJECT, callId: "call.look2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  const closed = await press(runtime, "call.close", shownHandle(again.evidence, "Close chat"));
+  assert.equal(closed.resultCode, "web.action.succeeded", JSON.stringify(closed.evidence).slice(0, 400));
+  assert.equal(closed.draft?.interruption, true);
+});
+
+function press(runtime: ReturnType<typeof createWebAutomationLlmEvidenceRuntime>, callId: string, handle: string) {
+  return runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle } }, consequences: [] } });
+}
+
+/** A store page whose store button opens a chooser; "Set as my store" picks Millbrook and reloads the page without it. */
+function storeStub(options: { consent?: boolean } = {}) {
+  const state = { chooser: false, store: "Carden Falls Supercenter", chat: false, consent: options.consent === true };
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: storePage(state) } };
+      if (command.actionType === "web.dom.click") {
+        const selector = command.parameters.selector;
+        if (selector === "#fulfillment") state.chooser = true;
+        if (selector === "#chooser > button") { state.chooser = false; state.store = "Millbrook Crossing Supercenter"; }
+        if (selector === "#chat > button") state.chat = false;
+        if (selector === "#consent > button") state.consent = false;
+      }
+      return { status: "succeeded", payload: { value: "ok" } };
+    }
+  };
+  return {
+    gateway,
+    chosen: () => state.store.split(" ")[0],
+    openChat: () => { state.chat = true; }
+  };
+}
+
+function storePage(state: { chooser: boolean; store: string; chat: boolean; consent: boolean }): JsonObject {
+  const elements: JsonObject[] = [
+    { tagName: "button", selector: "#fulfillment", visibleText: `Pickup or delivery? ${state.store}` },
+    { tagName: "button", selector: "#add", visibleText: "Add to cart" }
+  ];
+  // A layer's controls name it by its place in the list, as the capture writes `parent`.
+  const layer = (selector: string, words: string, button: string): void => {
+    const at = elements.length;
+    elements.push({ tagName: "div", selector, accessibleName: words, frontLayer: true }, { tagName: "button", selector: `${selector} > button`, visibleText: button, parent: at });
+  };
+  if (state.chooser) layer("#chooser", "Stores near Carden Falls", "Set as my store");
+  if (state.chat) layer("#chat", "Chat with us", "Close chat");
+  if (state.consent) layer("#consent", "We value your privacy", "Reject all");
+  return { url: START, title: "Store", viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 }, interactiveElements: elements };
 }
