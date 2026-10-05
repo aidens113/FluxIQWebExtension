@@ -133,6 +133,67 @@ Run the 4.10 thirteen-step script and the 26-item acceptance test on a clean pro
 - Definition of done: each command's exit code and summary line (pass/fail counts) in the report, with the log path; failures diagnosed (pre-existing on dev vs introduced by t262).
 - Report to: `docs/working/mvp-final-month-plan/reports/t262-gate.md`
 
+### Shared rules for the Phase 0 lane-port briefs below
+
+Source of every port: Claude's uncommitted lane trees, read-only: `C:/Users/osrs_/FluxStuff/fxwork/t174` (A), `t193` (B), `t194` (C), `t195` (D), each with `!FluxIQWebExtension` and `!FluxIQ`; their base is downstream `45bd6232` / Core `6beae684`. Get a lane's change to a file with `git -C <lane tree> diff -- <path>` (plus untracked new files). The unit IDs (A1, F11, w86, ...) are defined in `docs/working/mvp-final-month-plan/reports/lane-tree-reconcile.md`; read your units' rows there. Apply each change onto your task tree (current `dev`, which includes Codex's t262), resolving conflicts toward t262's design where the report says so. Never copy a lane file wholesale over a file t262 changed. LF line endings. Never touch the lane trees or `fxwork/t262`. Validate with the owning tests (`R` = `packages/fluxiq/src/programs/automation-studio/runtime` in Core): Core `npx vitest run <files>` in `packages/fluxiq`; domain/extension test files through the bundling runner at `C:/Users/osrs_/AppData/Local/Temp/claude/c--Users-osrs--FluxStuff--FluxIQWebExtension/0308f367-bc34-4266-8bc3-8790a8827c7a/scratchpad/t262-gate/run-subset.mjs` (usage in its header; use your own label) then `node --test`; plus the touched packages' typecheck (`pnpm.cmd --filter <pkg> check`, Core `node scripts/build-cache/cli.mjs fluxiq:check`; rebuild Core with `pnpm.cmd build` in the Core tree before downstream checks when Core changed). No Lab, browser or provider call. No commits.
+
+### Brief: t263-core
+- Repository: Core worktree `C:/Users/osrs_/FluxStuff/fxwork/t263/!FluxIQ` (branch `task/t263-lane-only-ports`).
+- Task: Port A1 (Flow cost limit bound, t174), B F11 (draft signature includes acts and `ranWith`, t193), D C3 (pass and row in step log, t195). Keep F11 compatible with a later draft key that hashes the Flow signature.
+- Owns (may edit): `R/../api/handlers/llm-execution-settings.ts` + its test; `R/llm/evidence-loop/amendment-memory.ts`; `R/llm/tests/stalled-amendments-replay.test.ts` (or wherever F11's test lives); `R/llm/node-tools/replay-span.ts`; `R/llm/step-log/scope.ts`, `R/llm/step-log/tool-step.ts` and their tests.
+- Must not touch: every other Core file; the downstream tree.
+- Definition of done: each unit's failing-first test (where the lane had one) passes; changed Core test files pass; `fluxiq:check` exit 0.
+- Report to: `docs/working/mvp-final-month-plan/reports/t263-core.md`
+
+### Brief: t263-domain
+- Repository: `C:/Users/osrs_/FluxStuff/fxwork/t263/!FluxIQWebExtension`.
+- Task: Port A8 consent closer (t174), C w86 `maxPages` beside `paginate` lifted (t194; small rework on `resolve-plan-node.ts`, which t262 changed), C w75 one missing key (t194; `domain/.../tool-rejection.ts` part only, not the Lab recorder), B F8 own layers are not interruptions (t193; merge onto t262's toggle hunk in `node-run/run.ts`).
+- Owns (may edit): under `domain/src/runtime/llm-evidence/`: `node-run/covered-target.ts`, `plan-resolution/extraction/slot.ts`, `plan-resolution/resolve-plan-node.ts`, `tool-rejection.ts`, `node-run/own-layers/*` (new), `press-effect/answered-layer.ts`, `node-run/run.ts`, `node-run/context.ts`, `node-run/index.ts`, `tools.ts`, and those files' tests.
+- Must not touch: `node-run/replay.ts`, `domain/src/client/*`, every extension file, every Core file.
+- Definition of done: changed domain tests pass; `domain check` exit 0; `domain build` exit 0.
+- Report to: `docs/working/mvp-final-month-plan/reports/t263-domain.md`
+
+### Brief: t263-tabs-assert
+- Repository: `C:/Users/osrs_/FluxStuff/fxwork/t263/!FluxIQWebExtension`.
+- Task: Port A7 replay tab cleanup and remembered waits (t174: only tabs FluxIQ opened are closed) and D1 row-scoped check (t195: a per-row assert checks the current row, not the template card).
+- Owns (may edit): `domain/src/client/close-opened-tabs-parameter.ts` (new), `domain/src/client/index.ts`, `domain/src/runtime/llm-evidence/node-run/replay.ts` + test; `apps/extension/src/runtime/{fluxiq-opened-tabs (new),action-runner,browser-tab,click-landing,command-options}.ts` + tests (paths as in t174); `apps/extension/src/content/actions/assert.ts` + test; `apps/extension/src/content/action-runtime/tests/resolve-target.test.ts`; `docs/architecture/web-capabilities.md`.
+- Must not touch: every file `t263-domain` owns; every Core file.
+- Definition of done: changed domain and extension tests pass; `domain check` and `extension check` exit 0; `extension build` exit 0. Record that A7 still needs browser proof in a live run.
+- Report to: `docs/working/mvp-final-month-plan/reports/t263-tabs-assert.md`
+
+### Brief: t264-core-chain (lead)
+- Repository: `C:/Users/osrs_/FluxStuff/fxwork/t264/` (both trees, branch `task/t264-core-integration-chain`). Owner of Core `R/flow-draft/**`, `R/llm/**` (except files t263-core owns), `R/activity/**`, `R/flow-bootstrap/**`, `R/result-verification/**`, `R/service/instruction-authority.ts`, `R/action-permissions/**`, `R/conversations/**`, `R/service.ts`, Core `src/ui/activity-action/**`, `R/recovery/refuted-result/**`, plus the downstream `packages/test-runner` and `packages/test-contracts` files of A10/C w82, for the duration of this task.
+- Task: Integrate the serial Core units of the lane trees in this order, one stage per hand-back (stop and return after each stage so the supervisor commits it): S1 instruction authority (A4, B F1's kind fallback, onto t262's source-grounded split acts). S2 activity and refusal wording (B F6 move first, then A5 re-applied into the moved files, then C w80/w81/w84 and C w76's Core part). S3 judge and ending (A3a with B F2 merged by hand, B F3, D C2 onto t262's reserve judging, then one ending-wording owner for B F4/F10, D w48, D C4, A's finishing verdict, A6 chat wording). S4 Core authoring (B F5/F10, D C1, D w45 on t262's `unrepeat` (drop `always`), D w47 routing words, C w79 with D w46 inside the `evidence-loop.ts` 800-line budget, C w78). S5 Lab records (A10, C w82 rework). A3b optional-only and choice-order: rework onto dev's choice-order inside S3 or S4, wherever its files fall. Drop C w72, D w49/w50 and the A3b claim-doubt edits; superseded by t262.
+- Required reads: the shared rules above; the reconcile report's lane tables, cross-lane conflict list and recommended order; `fxwork/t262/!FluxIQWebExtension/docs/working/mvp-live-continuation-2026-10-03/reports/resume-ab.md` and `resume-cd.md`.
+- Must not touch: files owned by t263-* and t265-* briefs; the extension `apps/extension/**` tree except C w76/w80 card words if S2 needs them (coordinate in the report instead).
+- Definition of done per stage: every ported unit has its owning tests passing in the stage's tree, `fluxiq:check` exit 0, Core structure audit exit 0, downstream typechecks that import changed Core contracts exit 0, Core rebuilt. Per stage, the report lists units ported, dropped, reworked, and exact commands with results.
+- Report to: `docs/working/mvp-final-month-plan/reports/t264-core-chain.md`
+
+### Brief: t265-extension-ui (lead)
+- Repository: `C:/Users/osrs_/FluxStuff/fxwork/t265/!FluxIQWebExtension` (branch `task/t265-extension-ui-integration`).
+- Task: Integrate the extension UI units as one owner: A9 (stale "— done", overlay hold, composer kept text, chat stopped following; includes t174's deletion of `status-dwell.ts`, kept only if B's overlay-lag fix agrees), B F7 (composer and overlay: overlay over media, model prose in overlay, overlay lag), B F9 ("Starting…" from send; display kind), C w83 (composer, overlay flicker), C w76's pacer part (repair status), D D2 ("Build failed" ending headline). Pick one clear-on-send implementation across A9/F7/w83 and say why.
+- Owns (may edit): `apps/extension/src/background/activity/**`, `apps/extension/src/background/panel/**`, `apps/extension/src/background/connection.ts`, `apps/extension/src/content/activity-overlay/**`, `apps/extension/src/panel/chat/**` (except `stream/step/card-words.ts` and `stream/step/action-card.ts` if t264 S2 needs them — note it in the report), `apps/extension/src/shared/activity/**`, `docs/architecture/extension-client.md`.
+- Must not touch: every Core file; every domain file; files t263-tabs-assert owns.
+- Definition of done: changed extension tests pass; `extension check` and `extension build` exit 0; the report lists each UI defect with the source change and what a live run must look at to confirm it.
+- Report to: `docs/working/mvp-final-month-plan/reports/t265-extension-ui.md`
+
+### Brief: sweep-2026-10-05
+- Repository: both main checkouts (`C:/Users/osrs_/FluxStuff/!FluxIQWebExtension` and `C:/Users/osrs_/FluxStuff/!FluxIQ`), on `dev` with t262 merged.
+- Task: The day's first full sweep. Core: `pnpm.cmd check`, then `pnpm.cmd test`. Downstream: `pnpm.cmd check`, `pnpm.cmd test`, `pnpm.cmd build`. Low concurrency (`npm_config_workspace_concurrency=1`). Each command's full output to its own log under the scratchpad `sweep-2026-10-05/` directory.
+- Owns (may edit): those logs; `docs/working/mvp-final-month-plan/reports/sweep-2026-10-05.md`.
+- Must not touch: every source, test, doc or config file; no git writes; no Lab, browser or provider call.
+- Definition of done: exit code and pass/fail counts per command; every failure named with file and test, and classified from source as introduced by t262, pre-existing, or environmental (with the evidence).
+- Report to: `docs/working/mvp-final-month-plan/reports/sweep-2026-10-05.md`
+
+### Brief: t266-suite-fallout
+- Repository: Core worktree of task t266 (path given at dispatch), branch `task/t266-t262-suite-fallout`.
+- Task: The 2026-10-05 sweep found 18 Core tests failing deterministically after t262 landed, in tests t262 did not touch (Codex's gate ran only changed test files). For each, decide from source and t262's commits whether the test asserts superseded behaviour (update the test to t262's intended contract: one purse for every model question, `totalProviderCallCount` on failures, transient-only reauthor retry, calls-bound reserve) or t262 broke real behaviour (fix the source). Also classify `instruction-readiness` (15 s timeout twice) by running it alone. Failing files, under `packages/fluxiq/src/programs/automation-studio/runtime/`: `service/runtime-adaptation/tests/refuted-result-port.test.ts` (6), `tests/service-bootstrap/tests/accounting.test.ts` (6), `tests/service-bootstrap/tests/generation.test.ts` (1), `tests/service-bootstrap/tests/judged-build.test.ts` (2), `llm/evidence-loop/tests/repeat-guard.test.ts` (1), `tests/recovery-default-limits.test.ts` (1), `tests/service-flows/tests/instruction-readiness.test.ts` (timeout). Details: `docs/working/mvp-final-month-plan/reports/sweep-2026-10-05.md`.
+- Required reads: this document's Current State; the sweep report; `git log -p` of the t262 Core commits touching each subject.
+- Owns (may edit): the seven test files above; a source file only when the cause is a real regression and the file is not owned by `t264-core-chain` (if it is, stop and describe the fix in the report instead).
+- Must not touch: every other file; the t264 and t265 trees.
+- Definition of done: all seven files pass when run together (`npx vitest run <files>` in `packages/fluxiq`), and twice in a row; `fluxiq:check` exit 0; the report states per test which contract it now asserts and why.
+- Report to: `docs/working/mvp-final-month-plan/reports/t266-suite-fallout.md`
+
 ## Work Ledger
 
 ### 2026-10-05 — Intake started
@@ -158,6 +219,14 @@ Run the 4.10 thirteen-step script and the 26-item acceptance test on a clean pro
 - Validation: gate logs (scratchpad `t262-gate/`) -> Core vitest 65 files 939/939, web 29/29, domain changed tests fail 0, extension changed tests fail 0, test-runner changed tests fail 0, Core build/structure audit/fluxiq:check/web:check exit 0; `pnpm.cmd --filter @fluxiq-web-extension/extension check` -> TS2741 in `target-activity.test.ts(16,67)` before the fix, exit 0 after; that file rebundled -> `# tests 11 # pass 11 # fail 0`; Core `structure-audit:check` on merged dev -> exit 0; downstream `node scripts/structure-audit.mjs` on merged dev -> passed after index regeneration.
 - Outcome: Accepted
 - Follow-up: one background full sweep on dev (none has run on t262's source); Phase 0 step 2.
+
+### 2026-10-05 — Sweep 1 of the day; lane-only ports verified
+- Agent: supervisor with sweep-2026-10-05, t263-core, t263-domain and t263-tabs-assert workers.
+- Changed: t263 commits `67b95113` (Core: A1, F11, C3), `747668f0` (domain: A8, w86, w75, F8), `f4d7a876` (A7, D1); merged-worktree cleanup (45 merged task worktrees abandoned through `pnpm task abandon`).
+- Why: Phase 0 steps 2 and 4.
+- Validation: sweep logs -> Core `pnpm check` exit 0; Core `pnpm test` exit 1 with 18 deterministic failures in 7 files (assigned to t266) and 10 load flakes passing on rerun; downstream `check` exit 1 only on the index made stale by the supervisor's uncommitted edit; downstream `test`/`build` stopped on the main Core checkout's stale dist (to rerun after a rebuild). t263: Core `npx vitest run` on the four changed files plus `replay-draft.test.ts` -> 5 files, 45 tests passed; Core `structure-audit:check` exit 0; after `pnpm build` in t263 Core, `domain check` exit 0, `extension check` exit 0, `node scripts/structure-audit.mjs` passed; changed tests rebundled -> domain 103/103, extension 36/36.
+- Outcome: Accepted (t263); Partial (sweep).
+- Follow-up: land t263; t266 for the Core fallout; rebuild Core dist and finish the downstream half of the sweep.
 
 ## Open Questions
 
