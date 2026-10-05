@@ -294,6 +294,14 @@ Source of every port: Claude's uncommitted lane trees, read-only: `C:/Users/osrs
 - Outcome: Accepted
 - Follow-up: t264 S2-S4, t267 S1-S5; then Phase 1 live rounds on the integrated source.
 
+### 2026-10-05 — t267 S1-S2 and t264 S2 committed on their task branches
+- Agent: supervisor with t267-adaptation-unblock (lead) and t264-core-chain (lead).
+- Changed: t267 `4fce48eb` (S1: Lab playback no longer forces manual approval, per run or saved on the Flow; repair lane counts goal-only re-author repairs; A8-class basket-redesign task), Core `81e41266` (S2: a judged whole-Flow run is the evidence a target override worked; A8's ten nodes declare nothing a trial can check). t264 Core `84117643` / downstream `ce1e8903` (S2: refusal cards, build trace, run endings, card words); dev merged into both t264 trees.
+- Why: Phase 2 blockers 2-4; Phase 0 Core chain.
+- Validation: t267 S1 test-runner rebuilt, five dist test files -> 96/96; test-runner check 0; audit passed. t267 S2 six changed Core test files -> 105/105; adaptation suites (33 files) -> 294/294; `fluxiq:check` 0; Core audit 0. t264 S2 broad run (593 files, 6021 tests) -> only the 17 t266 failures; extension stream/step tests -> 60/60; `extension check` 0. After merging dev into t264 and rebuilding Core: 77 files, 668 passed, 0 failed; domain and extension check 0; audit passed.
+- Outcome: Accepted (stages on task branches; not yet on dev)
+- Follow-up: t264 S3, t267 S3.
+
 ## Open Questions
 
 - Is demonstrate/record an MVP acceptance requirement after the 2026-09-22 scope ruling? Owner: user. Default taken: supported, unmeasured, one smoke proof.
