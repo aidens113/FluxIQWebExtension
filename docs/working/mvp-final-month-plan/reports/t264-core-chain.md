@@ -109,3 +109,125 @@ Status: done, verified by the lead, uncommitted (2026-10-05). Ready for the supe
 
 See the dispatch text; report at `docs/working/mvp-final-month-plan/reports/t264-s1-instruction-authority.md` in this
 tree.
+
+Committed by the supervisor: Core `9975ce6d`, downstream reports `0c07fad1` (supervisor reran the S1 tests: 14
+files, 301 passed; `fluxiq:check` 0; Core audit 0).
+
+## Stage S2 — activity and refusal wording (B F6, then A5, then C w80/w81/w84/w76)
+
+Status: done, verified by the lead, uncommitted (2026-10-05). Base: Core `9975ce6d`, downstream `0c07fad1`. Ready for the
+supervisor to commit on `task/t264-core-integration-chain`: Core source and docs, downstream extension card files and five
+reports (this one, `t264-s2-w1..w4-*.md`).
+
+### Facts (lead)
+
+- The S2 activity/UI files are unchanged on dev since the lane base `6beae684`, except
+  `R/llm/decision-handlers/amendment.ts`, `R/llm/draft-amendment-feedback.ts`, `R/service.ts` and
+  `R/service/flow-bootstrap-commands/build-judge.ts` (t262). So the three lanes conflict only with one another.
+- `R/service.ts` is 4400 lines, exactly its ratcheted `fileLines` budget: every S2 edit there is in place.
+- Core `docs/reference/framework-reference.md` is already stale on Core dev `3c47ed7d` (`node scripts/docs-reference.mjs
+  --check` -> "is stale", exit 1) and in t264. It is generated, so no S2 worker regenerates it; it belongs to the
+  docs-last step.
+- F6 (t193 w6: C13 refusal cards, C14 the model's sentence is only what was tried, D8 card targets keep their end,
+  D10 build wording on a split judge's card) includes `R/result-verification/unsettled/*` (moved there by t193 w10).
+  The reconcile filed that under F4, but D10 needs it, so it lands in S2 with F6.
+- t265's deferred hunks: A9's `apps/extension/src/shared/activity/wording.ts` hunk importing
+  `activityActionFailureReason` (exported by A5's `src/ui/activity-action`) with its wording/card-words/action-card-view
+  test lines; t194's `card-words.ts` `lowerFirst` with its action-card-view line. `card-words.ts`, `action-card.ts`,
+  `stream/step/tests/card-words.test.ts` and `view/tests/action-card-view.test.ts` are t264's in S2 (supervisor
+  2026-10-05). `shared/activity/wording.ts` and its test remain t265's file (uncommitted there), so t264 does not edit
+  them; the Core export lands here and the wording hunk waits for t265 to land.
+- `stream/step/tests/messages.test.ts` is t265's (it appends a test near line 427); F6's D8 expectation is one hunk at
+  line 367, non-overlapping, so W1 ports that hunk only.
+
+### Plan (serial; each worker owns the files its unit touches; next worker starts after the lead verifies)
+
+- W1 (`worker-high`): F6, Core + extension card files.
+- W2 (`worker-high`): A5 into the moved files: w108 D2/D4/D5/D9, w116 D3/D18, the build trace (w116 item 7) and R3
+  `told` (answer step + decision handler), the `src/ui/activity-action` failure-reason export. Not in S2: w118 finishing
+  verdict and `buildJudged` (S3, ending-wording owner); w108 Cause 6 `notRunYet` in `draft-amendment-feedback.ts` (S4,
+  authoring owner of that file).
+- W3 (`worker-high`): C w80/w81 (refused completion, check card words), w84 (answer folder for no-tool decisions,
+  Core part), w76 Core part (`run-ending.ts`, `run.ts`, `service.ts` `readRecord`), t194's `card-words.ts` `lowerFirst`,
+  and the extension test lines of A9's deferred hunk that live in t264-owned files.
+
+### W1 (F6) — verified by the lead
+
+- Worker report: `t264-s2-w1-refusal-cards.md`. 28 Core and 4 downstream files. Every file equals its t193 lane copy
+  (legitimate: unchanged on dev since the lane base) except `U/activity-action/record.ts` (comment path to the moved
+  `decision-answer/draft-edit.ts`) and `U/activity-action/refusal-words.ts` (drops `count_not_a_repeat`, a reason
+  t264's refusal union does not have). No importer outside the owned files referenced the deleted modules (grep of
+  `packages/` src). All 34 changed files LF (counted with node; `git ls-files --eol` agrees).
+- Lead runs: `npx vitest run` on `R/activity R/result-verification U/activity-action R/flow-bootstrap/unfinished-build`
+  -> exit 0, `Test Files 76 passed (76)`, `Tests 809 passed (809)` (`t264-s2/w1-core-vitest.log`); `fluxiq:check` 0;
+  extension `stream/step/tests/*` + `view/tests/*` bundled and run -> `# tests 53 # pass 53 # fail 0`; extension check 0.
+
+### W2 (A5) — verified by the lead
+
+- Worker report: `t264-s2-w2-core-wording.md`. Ported/adapted: w108 D2, D5, D9; w116 D3, D15, D17, D21, R3 `told`,
+  build trace. Superseded by F6: w108 D4 and w116 D18's "Changed the Flow" line (F6 gives every edit its own card).
+- Hand merges checked: `R/llm/decision-handlers/amendment.ts` keeps t262's rerun split and adds the lane's `told`
+  hunk unchanged; `R/service.ts` stays at 4400 lines (build and apply wrapped in `automationStudioLlmBuildTrace.timed`
+  in place; the added comment sits after the closing brace). The build trace prints only step names, durations and
+  code-shaped values, and only with `FLUXIQ_BUILD_PROGRESS_TRACE=1`.
+- Lead runs: `npx vitest run` on `R/activity U/activity-action R/llm/step-log R/llm/decision-handlers
+  R/llm/evidence-progress R/llm/evidence-loop R/service/flow-bootstrap-commands R/result-verification
+  R/tests/service-bootstrap/tests R/tests/deepseek-bootstrap` -> exit 1, `Test Files 4 failed | 125 passed (129)`,
+  `Tests 10 failed | 1158 passed (1168)`; the 10 are accounting 6, generation 1, judged-build 2 and
+  `evidence-loop/tests/repeat-guard.test.ts` 1, all in the dev sweep with the same names and messages (t266 owns them).
+  `fluxiq:check` 0; Core structure audit 0; extension check 0 ("Core's build ... is current with its source").
+- Extension fallout of D21 (lead run of `stream/step`, `view`, `shared/activity`, `background/activity` tests: `# tests
+  135 # pass 133 # fail 2`): `card-words.test.ts` "a test step says what the test did with it..." and
+  `action-card-view.test.ts` "a card for each kind...", both t264-owned since this stage; W3 updates them. t265's
+  `shared/activity` tests pass.
+
+### W3 (C w76/w80/w81/w84) and W4 (its wiring) — verified by the lead
+
+- W3 report `t264-s2-w3-completion-check-run-ending.md` (Partial: three items needed files outside its brief, all
+  t264-owned); W4 report `t264-s2-w4-wiring-and-tried-words.md` finished them.
+- Ported: w76 Core (`activity/run.ts` "Run failed: <sentence>", new `wording/run-ending.ts`, `service.ts` `readRecord`
+  in place); w81 (`result-verification/check-words.ts`, row count first on the check card, merged with F6's build
+  sentence); w80 (completion refused by a test is said as "sent back ... N steps need fixing" through the observer and,
+  in traced builds, through `progress-trace.ts`'s `testRefused` hook; the gate's refusals carry non-enumerable `steps`;
+  `core.decision_check` answered as "Deciding the next step — didn't work" in F6's card scheme; reason screen U4 merged
+  after A5's D3/D15 screen; "tried, not ran" refusal words in `U/activity-action/refusal-words.ts`); w84 (answer folder
+  for unusable and answered-from-memory decisions, merged with A5's `told` in one `result.json` builder; recorder wired
+  in `evidence-loop.ts`, 2 lines in place, still 798 lines); t194's `card-words.ts` `lowerFirst`; t174's and t194's
+  lines in `card-words.test.ts` and `action-card-view.test.ts` (the two D21 failures fixed).
+- Not ported: `decision-refusal.ts` (its only hunk is w78, S4); C's U7 title/prose for the deleted
+  `draft-edit-refused.ts` (superseded by F6's card); w72/w73/w74/w85 (superseded by t262); w82 (S5); t194's
+  `messages.test.ts` U3 test (t265 already carries it).
+- Lead checks of the narrow hunks: `dry-run-gate.ts` adds only `refusal()`/`refusedSteps()` and three call sites (no
+  w72 seeding: 0 added lines mention carried/scheduledCandidate/seed); `progress-trace.ts` adds no reauthor/try trace;
+  `evidence-loop.ts` `2 insertions(+), 2 deletions(-)`, 798 lines.
+
+### Stage S2 lead validation (final tree, logs in scratchpad `t264-s2/`)
+
+- `npx vitest run` (`packages/fluxiq`) on `R/activity U/activity-action R/result-verification R/llm/step-log
+  R/llm/decision-handlers R/llm/evidence-progress R/llm/evidence-loop R/llm/node-tools R/service/flow-bootstrap-commands
+  R/flow-bootstrap/unfinished-build R/tests/service-bootstrap/tests R/tests/service-authoring/tests
+  R/tests/deepseek-bootstrap R/tests/service-flows` -> exit 1, `Test Files 4 failed | 189 passed (193)`, `Tests 10
+  failed | 1634 passed (1644)` (`final-core-vitest.log`). The 10 (accounting 6, generation 1, judged-build 2,
+  repeat-guard 1) compared with the dev sweep by failing-test name and assertion message: `diff` of the two sorted lists
+  -> identical. t266 owns them.
+- Extension: 25 test files under `panel/chat/stream/step`, `panel/chat/view`, `panel/chat/conversation`,
+  `shared/activity`, `background/activity` bundled (`run-subset.mjs`, exit 0) and run with `node --test` -> `# tests 222
+  # pass 222 # fail 0`.
+- `fluxiq:check` 0; Core `structure-audit:check` 0; extension check 0 (`core-build: ... current with its source`, so
+  Core was rebuilt after the last source change); domain check 0; downstream `node scripts/structure-audit.mjs` 0
+  ("passed (165 warning(s), 118 baselined)").
+- Line endings: 66 Core and 10 downstream changed/new files, 0 with CR (counted with node). Note: this checkout uses
+  `core.autocrlf=true`, so untouched files are CRLF on disk and edited ones are LF; the index is LF either way.
+- `activityActionFailureReason` is exported from `fluxiq/ui` (`src/ui/activity-action/index.ts:6`, re-exported by
+  `src/ui/index.ts`, present in the built `dist/ui/activity-action/index.d.ts`).
+
+### Carried forward from S2
+
+- A9's `apps/extension/src/shared/activity/wording.ts` hunk and its `shared/activity/tests/wording.test.ts` lines:
+  t265 owns the file (uncommitted there). It can land once t265 is on `dev` and `dev` is merged into t264; the Core
+  export it needs is here.
+- To S3: w118 finishing verdict and `buildJudged`. To S4: w108 Cause 6 `notRunYet`; w78 `decision-refusal.ts`.
+- `R/result-verification/check-words.ts` is not exported from the barrel (lane C did not either); no consumer needs it.
+- Gaps: no test asserts `steps` on the gate's unchanged-again and replay-refused refusals (only `full_run_required`
+  end to end); the `service.ts` `readRecord` wiring has no test of its own; no live, Lab, browser or provider run.
+- `docs/reference/framework-reference.md` stays stale (pre-existing on dev), for the docs-last step.

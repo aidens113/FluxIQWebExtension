@@ -73,7 +73,8 @@ test("a card for each kind: Core's icon in an aria-hidden mark, Core's name, the
     assert.deepEqual(read("type"), [undefined, "Didn't work: the field was covered by a banner.", "failed", "Type: Didn't work: the field was covered by a banner."]);
     assert.deepEqual(read("read"), ["Listings", "Done", "done", "Read list, Listings: Done"]);
     assert.deepEqual(read("navigate"), [undefined, "Done", "done", "Open page: Done"]);
-    assert.deepEqual(read("test"), [undefined, "Didn't work: it didn't work the same way again", "failed", "Test run: Didn't work: it didn't work the same way again"]);
+    // A replay code Core has no particular reason for (`ui/activity-action/failure-reason.ts`, t174-w116, D21).
+    assert.deepEqual(read("test"), [undefined, "Didn't work: it didn't do the same when the test tried it again", "failed", "Test run: Didn't work: it didn't do the same when the test tried it again"]);
     // t193 (run-muqiojz4-04a7a8fc, 00019): a real run's result check read "Test run · Working on it".
     assert.deepEqual(read("result_check"), [undefined, "Passed: the result was judged to answer the request.", "done", "Check result: Passed: the result was judged to answer the request."]);
     assert.deepEqual(read("person_check"), [undefined, "Waiting for you", "waiting", "Robot check: Waiting for you"], "a wait Core has not settled still waits while its work is under way");
@@ -208,6 +209,6 @@ test("a navigate card names its page, and a refusal says its own reason", async 
     ];
     view.render(buildChatStream([], events), null, controls, "run-1");
     const labels = cards(fake(view.element)).map((card) => card.getAttribute("aria-label"));
-    assert.deepEqual(labels, ["Open page, /ip/valueridge-napkins: Done", "Repair, Add to cart: Didn't work: it didn't name a control from the page"]);
+    assert.deepEqual(labels, ["Open page, /ip/valueridge-napkins: Done", "Repair, Add to cart: Didn't work: FluxIQ didn't send it, since it named no control from the page"]);
   });
 });

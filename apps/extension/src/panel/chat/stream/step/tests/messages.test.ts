@@ -367,7 +367,9 @@ test("a build's test step reads as testing its action, with what it typed", () =
   const cards = stepMessages(events, 100).flatMap((message) => message.actions);
   assert.equal(cards.length, 1);
   const words = cardWords(cards[0]!, false);
-  assert.deepEqual([words.name, words.target, words.outcome], ["Testing: Type", '"Voltbay USB-C hub" into Autumn Mega Sale: up to 70% off', "Done"]);
+  // What it typed; the field, too long to fit beside it, is in the card's label (t193 1003 D8).
+  assert.deepEqual([words.name, words.target, words.outcome], ["Testing: Type", '"Voltbay USB-C hub"', "Done"]);
+  assert.match(words.label, /into Autumn Mega Sale: up to 70% off: Done$/u);
 });
 
 // t174-w90 D8 (run-murwd8le-79e735a8, 00018): the playback card "Click · Get coupons" read

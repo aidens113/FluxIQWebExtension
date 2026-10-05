@@ -12,8 +12,10 @@
 // sentence about any other action (`said`) is kept only when it is in words;
 // a line that names an id or a result code ("Result: web.click.succeeded ·
 // Node: web.output.dom-click") is not words. Core's marks that a step was part
-// of a test run (`testing`) and that a result check could not confirm the
-// result (`unconfirmed`) are carried as Core gave them.
+// of a test run (`testing`), that a result check could not confirm the
+// result (`unconfirmed`), and that Core declined a decision before doing it
+// (`refused`: a call refused as a repeat, an edit refused in whole or in
+// part, with Core's plain reason) are carried as Core gave them.
 
 import { activityActionOf, type ActivityAction } from "fluxiq/ui";
 import type { ClientGatewayActivity } from "../../../../shared/activity/index";
@@ -52,6 +54,8 @@ export function actionCard(event: ClientGatewayActivity, key: string): ActionCar
     ...(action.tested === undefined ? {} : { tested: action.tested }),
     ...(action.testing ? { testing: true as const } : {}),
     ...(action.unconfirmed ? { unconfirmed: true as const } : {}),
+    // What Core declined of a decision, and why (Core's `activityActionOf`, t193 1003 C13).
+    ...(action.refused === undefined ? {} : { refused: action.refused }),
     key,
     said: asked ? undefined : sentence,
     answer: asked && detail.resolution !== undefined ? sentence : undefined,

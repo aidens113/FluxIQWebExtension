@@ -80,7 +80,9 @@ test("a result check Core could not confirm says not confirmed, never didn't pas
 // D4, 00011 and 00014: every step of the build's test read "Test run · ×".
 test("a test run's step is named by its action and says it was a test", () => {
   const typed = cardWords(card({ kind: "type", target: '"Voltbay USB-C hub" into Autumn Mega Sale: up to 70% off', testing: true }), false);
-  assert.deepEqual([typed.name, typed.target, typed.label], ["Testing: Type", '"Voltbay USB-C hub" into Autumn Mega Sale: up to 70% off', 'Testing: Type, "Voltbay USB-C hub" into Autumn Mega Sale: up to 70% off: Done']);
+  assert.deepEqual([typed.name, typed.label], ["Testing: Type", 'Testing: Type, "Voltbay USB-C hub" into Autumn Mega Sale: up to 70% off: Done']);
+  // Shown with what it typed, leaving out a field too long to fit beside it (t193 1003 D8); the accessible name keeps every word.
+  assert.equal(typed.target, '"Voltbay USB-C hub"');
   assert.equal(cardWords(card({ testing: true }), false).name, "Testing: Click");
   assert.equal(cardWords(card({}), false).name, "Click", "a build's own step is not a test");
 });
@@ -103,5 +105,58 @@ test("a test step says what the test did with it: done again, checked, already d
   assert.equal(words(2, "Result: core.replay.verified · Node: web.output.dom-click").outcome, "Checked, not pressed");
   assert.equal(words(3, "Result: core.replay.remembered · Node: web.output.dom-click").outcome, "Already done on the site");
   assert.equal(words(4, "Result: core.replay.replayed · Node: web.output.dom-click").outcome, "Done");
-  assert.equal(words(5, "Result: core.replay.failed · Node: web.output.dom-click").outcome, "Didn't work: it didn't work the same way again");
+  // Core's reason for a replay that failed (`ui/activity-action/failure-reason.ts`, t174-w116, D21): the result
+  // said once, with what happened, not "Didn't work: it didn't work the same way again".
+  assert.equal(words(5, "Result: core.replay.failed · Node: web.output.dom-click").outcome, "Didn't work: it couldn't run when the test tried it again");
+});
+
+// t193 1003 (`run-musp4h2f-72e8ed99`, C13/C14): an edit Core refused, and a call refused as a
+// repeat, were a header and prose with no card, ending "so this was not done: <the model's
+// summary>". Each is now a card under its decision: what was asked, "Not done", Core's reason.
+test("a decision Core declined says not done and why, never didn't work, and an edit done in part says so", () => {
+  const refused = cardWords(card({ kind: "draft", target: null, outcome: "failed", why: "that step is already in the Flow", refused: { all: true, because: "that step is already in the Flow" } }), false);
+  assert.deepEqual(refused, { state: "refused", name: "Edit the Flow", target: null, outcome: "Not done: that step is already in the Flow", label: "Edit the Flow: Not done: that step is already in the Flow" });
+  const part = cardWords(card({ kind: "draft", target: null, outcome: "done", refused: { all: false, because: "that step already does that" } }), false);
+  assert.deepEqual([part.state, part.outcome], ["done", "Only partly done: that step already does that"]);
+
+  const row = (seq: number, title: string, status: "succeeded" | "failed", text?: string, ref = "core.flow_draft"): ClientGatewayActivity => ({
+    activityId: "build:b", sequence: seq, subject: { kind: "build", id: "b", projectId: "p" }, at: "2026-10-03T18:05:00.000Z", phase: "building",
+    label: `${title} — not done`, detail: { kind: "tool", title, status, ref, ...(text === undefined ? {} : { text }) }
+  });
+  const words = (event: ClientGatewayActivity) => cardWords(actionCard(event, `action:build:b#${event.sequence}`)!, false);
+  const edit = words(row(1, "Editing the Flow", "failed", "Result: llm_evidence_loop.draft_amendments_refused · Reason: already_in_flow,already_out"));
+  assert.deepEqual([edit.state, edit.name, edit.outcome], ["refused", "Edit the Flow", "Not done: that step is already in the Flow; and that step is already out of the Flow"]);
+  const rerun = words(row(2, "Running the step again", "failed", "Result: llm_evidence_loop.repeat_refused · Reason: changed_nothing"));
+  assert.deepEqual([rerun.name, rerun.target, rerun.outcome], ["Edit the Flow", "run the step again", "Not done: it was already tried exactly this way and changed nothing"]);
+  const press = words({ ...row(3, "Clicking “Add to cart”", "failed", "Result: llm_evidence_loop.repeat_refused · Reason: failed · Node: web.output.dom-click", "core.run_node"), phase: "exploring" });
+  assert.deepEqual([press.state, press.name, press.target, press.outcome], ["refused", "Click", "Add to cart", "Not done: it was already tried exactly this way and did not work"]);
+  assert.deepEqual([words(row(4, "Editing the Flow", "succeeded")).state, words(row(4, "Editing the Flow", "succeeded")).outcome], ["done", "Done"]);
+  for (const said of [edit, rerun, press]) assert.doesNotMatch(said.label, /so this was not done|llm_evidence_loop|already_in_flow/u);
+});
+
+// t193 1003 D8 (`run-musp4h2f-72e8ed99`, 12/16-mid-build-panel): two test cards read "Testing: Click ·
+// ValueRidge Everyday Di…", cut before the words that told the 3-Pack from the single pack.
+test("a long target is cut from the middle, so the words that tell two cards apart stay visible", () => {
+  const pack = cardWords(card({ target: "ValueRidge Everyday Dinner Napkins 250 Count (3-Pack)", testing: true }), false);
+  const single = cardWords(card({ target: "ValueRidge Everyday Dinner Napkins 250 Count", testing: true }), false);
+  assert.notEqual(pack.target, single.target);
+  for (const [words, end] of [[pack, "(3-Pack)"], [single, "250 Count"]] as const) {
+    assert.ok(words.target!.endsWith(end), words.target!);
+    assert.ok(words.target!.startsWith("ValueRidge"), words.target!);
+    assert.ok(words.target!.includes("…"), words.target!);
+    assert.ok(words.name.length + words.target!.length <= 36, words.target!);
+  }
+  // The accessible name keeps every word.
+  assert.equal(pack.label, "Testing: Click, ValueRidge Everyday Dinner Napkins 250 Count (3-Pack): Done");
+  // A target that fits is left whole, and a word too long to split is cut inside it, keeping its end.
+  assert.equal(cardWords(card({ target: "Add to cart", testing: true }), false).target, "Add to cart");
+  const path = cardWords(card({ kind: "navigate", target: "/scenarios/bigbox/store/product/valueridge-dinner-napkins-250", testing: true }), false).target!;
+  assert.ok(path.endsWith("napkins-250"), path);
+  assert.ok(path.startsWith("/sc"), path);
+  assert.ok("Testing: Open page".length + path.length <= 36, path);
+  // A typing step keeps the words it typed, cut from the middle, ahead of the field it typed into.
+  const typed = cardWords(card({ kind: "type", target: '"ValueRidge Everyday Dinner Napkins 250 Count" into Search', testing: true }), false).target!;
+  assert.ok(typed.startsWith('"ValueRidge') && typed.endsWith('Count"') && typed.includes("…"), typed);
+  assert.ok("Testing: Type".length + typed.length <= 36, typed);
+  assert.equal(cardWords(card({ kind: "type", target: '"Napkins 250 Count" into Search' }), false).target, '"Napkins 250 Count" into Search', "a typed target that fits keeps its field");
 });
