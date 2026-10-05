@@ -367,8 +367,13 @@ test("a create-flow run repairs the Flow it built with explore_and_adapt, and se
   await settle();
   const execution = await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   assert.deepEqual(execution, { intent: "explore_and_adapt", permittedConsequences: [] });
-  // The playback's settings are the build's own: asking for the repair widens no limit.
-  assert.deepEqual(core.settingsRequests[1]?.flow.metadata, core.settingsRequests[0]?.flow.metadata);
+  // The playback's settings are the build's own: asking for the repair widens no limit. Only the mode
+  // differs: the build stays `manual_approval`, and the playback runs `fully_adaptive`, so Core may
+  // promote, resume and judge its repair rather than hold it as a proposal (t267 S1).
+  const { adaptationMode: buildMode, ...buildSettings } = core.settingsRequests[0]?.flow.metadata ?? {};
+  const { adaptationMode: playbackMode, ...playbackSettings } = core.settingsRequests[1]?.flow.metadata ?? {};
+  assert.deepEqual(playbackSettings, buildSettings);
+  assert.deepEqual([buildMode, playbackMode], ["manual_approval", "fully_adaptive"]);
 
   await run.settleRepair({ getRunDetail: async () => detail, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) }, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async (details) => { published.push(details); });
   const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;

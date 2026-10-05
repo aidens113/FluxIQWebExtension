@@ -64,6 +64,19 @@ export type PersistedFlowLlmExecution = {
   permittedConsequences: readonly LlmActionConsequence[];
 };
 
+export type LiveFlowAdaptationMode = "fully_adaptive" | "manual_approval";
+
+/**
+ * The mode a live intent holds its Flow to, as the stored `adaptationMode`
+ * (`live-llm/flow-settings.ts`) and the run's `adaptiveMode` override. Only
+ * `explore_and_adapt` runs `fully_adaptive`, so Core may promote, resume and
+ * judge its repair; Core reads a `manual_approval` Flow as manual proposals,
+ * which keeps a diagnosis (and a build) from applying itself.
+ */
+export function liveFlowAdaptationModeOf(intent: PersistedFlowLlmExecution["intent"] | "build_and_adapt"): LiveFlowAdaptationMode {
+  return intent === "explore_and_adapt" ? "fully_adaptive" : "manual_approval";
+}
+
 /** The `run-runtime-session` fields a live run adds: its intent, and its permitted consequences when there are any. */
 export function persistedFlowLlmRunFields(execution: PersistedFlowLlmExecution): Record<string, unknown> {
   return {
@@ -472,7 +485,8 @@ export async function executeRecordedFlowRun(
  * list of fields and `existing-fluxiq-control.ts` belongs to another unit of
  * work while this one is open. The payload is the one that method sends for a
  * live run, plus `newRunId`; once that file is free, `newRunId` belongs in
- * its `runPersistedFlow` and this function should go.
+ * its `runPersistedFlow` and this function should go. An `explore_and_adapt`
+ * run sends no `adaptiveMode`, so it runs under the Flow's stored mode.
  */
 async function runLiveFlow(
   control: PersistedFlowRunControl,
@@ -481,7 +495,8 @@ async function runLiveFlow(
 ): Promise<{ runId: string; status: string }> {
   const payload = asRecord(await control.automationStudioCall("run-runtime-session", {
     projectId: input.projectId, flowId: input.flowId, newRunId: input.newRunId, inputs: input.inputs,
-    adaptiveMode: "manual_approval", authorizedExternalSideEffects: false,
+    ...(liveFlowAdaptationModeOf(input.llmExecution.intent) === "manual_approval" ? { adaptiveMode: "manual_approval" } : {}),
+    authorizedExternalSideEffects: false,
     ...persistedFlowLlmRunFields(input.llmExecution),
   }, bounds), "run runtime payload");
   const session = asRecord(payload.runtimeSession, "runtimeSession");
