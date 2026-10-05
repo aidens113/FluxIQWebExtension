@@ -218,6 +218,31 @@ Source of every port: Claude's uncommitted lane trees, read-only: `C:/Users/osrs
 - Definition of done: one section per unit with the design, file partition, tests and live check; a recommended build order with which units can run in parallel.
 - Report to: `docs/working/mvp-final-month-plan/reports/ux-mvp-design.md`
 
+### Brief: t267-adaptation-unblock (lead)
+- Repository: both, task t267 trees `C:/Users/osrs_/FluxStuff/fxwork/t267/` (branch `task/t267-adaptation-loop-unblock`).
+- Task: Remove what stops the adaptation loop, per the [audit](./mvp-final-month-plan/reports/adaptation-loop-audit.md) ("Ranked blockers"), in stages, returning after each for the supervisor to commit. S1 Lab: blocker 2 (created-Flow playback sends no forced `manual_approval` for `explore_and_adapt`; keep it for `diagnose_and_adapt`) and blocker 3 (repair lane accepts an applied `resultReauthor` with no datasets as a goal-only replay; confirm the failed-step route writes that marker), each with a test; add the catalog row `crossborder-marketplace-hub-to-cart-basket-redesign-after-creation` (variant `basket-redesign`, `variantArmedAfterBuild: true`). S2 blocker 4: read the A8 saved Flow's node definitions in the `fxwork/t262` lane tree's Lab workspace (never quote page data) to settle whether instruction-built nodes declare verifiable evidence; if not, implement the audit's fix so a judged whole run is the evidence a target override worked (`live-patch.ts`, `training-modes.ts`, `service/adaptations/adaptive-retry.ts`), with tests. S3 blocker 1, Automations path: Core `api/handlers/runtime-execution.ts` resolves a paired client's caller as `api/handlers/conversations.ts` does, and extension `background/automation-relay/automation-relay.ts` sends `runIntent: "explore_and_adapt"`; first establish whether that makes routine runs bill a scheduled result check (`service.ts:2534-2540`) and keep item 23 true (a learned run makes no unnecessary model calls) — if the fix needs `service.ts`, describe it and stop. Item 24's Automations row counts only applied adaptations (`panel/automations/facts.ts`). S4 blocker 5: a re-authored Flow is applied only after its re-run is judged `answers` (`service/runtime-adaptation/{reauthor-build,step-failure-port,refuted-result-port}.ts`). S5 (after t264 S2 lands, the supervisor will say): A10 and C w82 Lab records from t264's former S5, including C w74's `try`/trace rework onto t262.
+- Required reads: shared rules above; the audit; `docs/architecture/testing-facility.md` sections on the flow lane and repair lane.
+- Owns (may edit): `packages/test-runner/src/flow-lane/**`, `packages/test-runner/src/live-llm/**`, `packages/test-runner/src/lab-runs/**`, `packages/test-runner/src/run-scenario.ts`, `packages/test-runner/src/run-scenario/ui-review/**`, `packages/test-contracts/src/evaluation.ts`, `scripts/lab/live-campaign/**`, `apps/scenario-lab/src/scenarios/crossborder-marketplace/live-tasks.ts`, `apps/extension/src/background/automation-relay/**`, `apps/extension/src/panel/automations/facts.ts` (+ tests); Core `api/handlers/runtime-execution.ts`, `runtime/live-patch.ts`, `runtime/training-modes.ts`, `runtime/service/adaptations/**`, `runtime/service/runtime-adaptation/**` (+ tests), and the architecture docs for these.
+- Must not touch: every file t264 owns (Core `R/service.ts`, `R/conversations/**`, `R/llm/**`, `R/flow-draft/**`, `R/activity/**`, `R/flow-bootstrap/**`, `R/result-verification/**`, `R/recovery/refuted-result/**`); `apps/extension/src/panel/extraction/**`; Core `apps/web/**`.
+- Definition of done per stage: owning tests pass, touched package typechecks exit 0, both structure audits pass, Core rebuilt before downstream checks; report lists each blocker's state and the exact proof command for the Phase 2 live run.
+- Report to: `docs/working/mvp-final-month-plan/reports/t267-adaptation-unblock.md`
+
+### Brief: t268-extraction-ui
+- Repository: `C:/Users/osrs_/FluxStuff/fxwork/t268/!FluxIQWebExtension` (branch `task/t268-ux-early-units`).
+- Task: Implement Unit 6 of the [UX design](./mvp-final-month-plan/reports/ux-mvp-design.md) (t224's held extraction units: caret and preview table, then preview feedback), exactly as that section specifies, with tests.
+- Owns (may edit): `apps/extension/src/panel/extraction/**`.
+- Must not touch: every other file.
+- Definition of done: changed extension tests pass (bundling runner, own label); `extension check` and `extension build` exit 0; structure audit passes; the report lists the live check for each unit.
+- Report to: `docs/working/mvp-final-month-plan/reports/t268-extraction-ui.md`
+
+### Brief: t268-deep-link
+- Repository: Core `C:/Users/osrs_/FluxStuff/fxwork/t268/!FluxIQ` (branch `task/t268-ux-early-units`).
+- Task: Implement the Core deep-link half of Unit 5 of the UX design (Open in FluxIQ lands on the right Flow and can show its adaptation), with tests.
+- Owns (may edit): Core `apps/web/src/**` files that Unit 5's design names for the deep link (`useAutomationDeepLinkRuntime.ts` and its session wiring) and their tests.
+- Must not touch: every `packages/fluxiq/**` file; every downstream file.
+- Definition of done: the changed web tests pass; `node scripts/build-cache/cli.mjs web:check` exit 0; Core structure audit exit 0.
+- Report to: `docs/working/mvp-final-month-plan/reports/t268-deep-link.md`
+
 ## Work Ledger
 
 ### 2026-10-05 — Intake started
