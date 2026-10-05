@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ActivityDisplay } from "../../../../shared/activity/index";
+import type { ActivityDisplay, ClientGatewayActivity } from "../../../../shared/activity/index";
 import { activityEvent, relayState } from "../../tests/activity-fixture";
 import { activityForTarget } from "../target-activity";
 
@@ -13,7 +13,9 @@ const AUTOMATION = { kind: "automation", flowId: "flow-7", name: "Price tracker"
 test("explicit project excludes foreign or unknown activity and waiting asks, preserving unscoped history", () => {
   const own = activityEvent(1, { activityId: "build:new", subject: { kind: "build", id: "new", projectId: "new", flowId: "new-flow" } });
   const old = activityEvent(2, { activityId: "build:old", subject: { kind: "build", id: "old", projectId: "old", flowId: "old-flow" } });
-  const unknown = activityEvent(3, { activityId: "build:unknown", subject: { kind: "build", id: "unknown", flowId: "unknown-flow" } });
+  // Raw wire activity from a Core that predates project scoping carries no
+  // projectId; the contract now requires one, so the case is typed as such.
+  const unknown = activityEvent(3, { activityId: "build:unknown", subject: { kind: "build", id: "unknown", flowId: "unknown-flow" } as ClientGatewayActivity["subject"] });
   for (const waiting of [old, unknown]) {
     const state = relayState([own, old, unknown], { display: { ...display(waiting.activityId), outcome: "waiting" } });
     const scoped = activityForTarget(state, { kind: "project", projectId: "new" }, undefined);
