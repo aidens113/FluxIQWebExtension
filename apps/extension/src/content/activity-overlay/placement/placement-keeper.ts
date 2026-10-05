@@ -98,7 +98,7 @@ export class PlacementKeeper {
   private check(): void {
     this.lastCheckAt = Date.now();
     const next = measurable() ? choosePlacement({ ...this.options.sizes(), viewport: viewport(), probe: pageProbe(), current: this.current }) : this.placement();
-    if (this.current && next.shape === this.current.shape && next.anchor === this.current.anchor) return;
+    if (this.current && next.shape === this.current.shape && next.anchor === this.current.anchor && (next.offset ?? 0) === (this.current.offset ?? 0)) return;
     this.current = next;
     this.options.place(next);
   }

@@ -20,6 +20,7 @@ import {
 } from "../../../shared/activity/index";
 import { ActivityRelay, PAGE_SEND_TIMEOUT_MS, type ActivityRelayDeps } from "../activity-relay";
 import { OverlayTarget } from "../overlay-target";
+import { ACTIVITY_DETAIL_INTERVAL_MS } from "../pacer";
 import { FakeClock } from "./fake-clock";
 
 function activity(sequence: number, overrides: Partial<ClientGatewayActivity> = {}): ClientGatewayActivity {
@@ -33,6 +34,9 @@ function activity(sequence: number, overrides: Partial<ClientGatewayActivity> = 
     ...overrides
   };
 }
+
+/** Longer than the pacer's interval, so the next event is not held back. */
+const PACED_MS = ACTIVITY_DETAIL_INTERVAL_MS + 100;
 
 /** Lets every promise the relay started settle. */
 async function settle(): Promise<void> {
@@ -219,7 +223,7 @@ test("a panel send that never settles does not hold the page back", async () => 
   const h = harness({ broadcast: () => new Promise<void>(() => undefined) });
   await h.relay.accept(activity(1));
   await settle();
-  h.clock.advance(1_300);
+  h.clock.advance(PACED_MS);
   await h.relay.accept(activity(2));
   await settle();
   h.clock.advance(300);
@@ -253,7 +257,7 @@ test("when the automation moves to another tab, the overlay is taken down in the
   await h.relay.accept(activity(1));
   await settle();
   tab = 9;
-  h.clock.advance(1_300);
+  h.clock.advance(PACED_MS);
   await h.relay.accept(activity(2));
   await settle();
   assert.deepEqual(h.delivered.map((entry) => [entry.tabId, entry.message.display?.detail ?? null]), [[7, "Running step 1"], [7, null], [9, "Running step 2"]]);
@@ -271,7 +275,7 @@ test("displays that change during a slow delivery are coalesced: the page gets t
   await h.relay.accept(activity(1));
   await settle();
   for (const sequence of [2, 3]) {
-    h.clock.advance(1_300);
+    h.clock.advance(PACED_MS);
     await h.relay.accept(activity(sequence));
     await settle();
   }
@@ -338,7 +342,7 @@ test("a page send that never settles is given up, so the next display still reac
   });
   await h.relay.accept(activity(1));
   await settle();
-  h.clock.advance(1_300);
+  h.clock.advance(PACED_MS);
   await h.relay.accept(activity(2));
   await settle();
   assert.deepEqual(seen, ["Running step 1"], "held while the first send is in flight");
@@ -434,7 +438,7 @@ test("the overlay is drawn in every tab it is meant for -- the driven tab and th
   assert.deepEqual(h.delivered.map((entry) => [entry.tabId, entry.message.display?.detail ?? null]), [[7, "Running step 1"], [9, "Running step 1"]]);
   h.delivered.length = 0;
   tabs = [9];
-  h.clock.advance(1_300);
+  h.clock.advance(PACED_MS);
   await h.relay.accept(activity(2));
   await settle();
   assert.deepEqual(h.delivered.map((entry) => [entry.tabId, entry.message.display?.detail ?? null]), [[7, null], [9, "Running step 2"]]);
@@ -466,7 +470,7 @@ test("a change of phase on the same tab never takes the overlay down", async () 
   const h = harness();
   await h.relay.accept(activity(1, { phase: "thinking", label: "Deciding the next step" }));
   for (const [sequence, phase, label] of [[2, "exploring", "Clicking “Add to cart”"], [3, "repairing", "Fixing a step"], [4, "verifying", "Judging the Flow"], [5, "thinking", "Deciding the next step"]] as const) {
-    h.clock.advance(1_300);
+    h.clock.advance(PACED_MS);
     await h.relay.accept(activity(sequence, { phase, label }));
     await settle();
   }

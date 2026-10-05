@@ -41,7 +41,8 @@ export function panelControlDeps(connection: FluxIQConnection, status: () => Pro
     },
     activity: {
       read: () => connection.activityState(),
-      setOverlay: (overlay) => connection.setActivityOverlay(overlay)
+      setOverlay: (overlay) => connection.setActivityOverlay(overlay),
+      sending: (send) => connection.activitySending(send)
     }
   };
 }

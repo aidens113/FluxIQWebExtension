@@ -14,6 +14,11 @@
 // before anything is touched. The activity requests spend no token, but the
 // overlay preference is the panel's control over what is drawn on the page
 // under test, so the page does not get to set it.
+//
+// A message the person sends passes through the activity relay's `sending`,
+// which puts the starting status on the page as it leaves and takes it down
+// when Core answers without starting work (`activity/send-start.ts`). Opening
+// a thread alone is not a message and does not.
 
 import { ACTIVITY_MESSAGES, type ActivityOverlayPreference, type ExtensionActivityState } from "../../shared/activity/index";
 import { RUNTIME_MESSAGES } from "../../shared/constants";
@@ -43,6 +48,8 @@ export type PanelControlDeps = {
   readonly activity: {
     readonly read: () => Promise<ExtensionActivityState>;
     readonly setOverlay: (overlay: ActivityOverlayPreference) => Promise<ExtensionActivityState>;
+    /** Runs one send of the person's message under the starting status (`ActivityRelay.sending`). Absent: the send runs alone. */
+    readonly sending?: <T>(send: () => Promise<T>) => Promise<T>;
   };
 };
 
@@ -92,5 +99,8 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
     return { ok: true, state: await deps.activity.setOverlay(message.overlay) };
   }
   if (message.type === RUNTIME_MESSAGES.panelStopRun) return stopRun(message as Partial<PanelStopRunRequest>, deps.relay);
+  if (message.type === RUNTIME_MESSAGES.panelConversationSend && message.kind !== "open" && deps.activity.sending) {
+    return deps.activity.sending(() => relayConversation(message, deps.relay));
+  }
   return relayConversation(message, deps.relay);
 }

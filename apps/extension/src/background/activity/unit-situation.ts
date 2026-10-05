@@ -19,6 +19,13 @@
 //   and a repaired result the check accepted is no longer being fixed (D10 of
 //   the t174 UI review of run-murwd8le-79e735a8: "Fixing your Flow" stayed up
 //   through the cross-check that followed a passed check).
+// - A repair of the Flow itself -- a re-author after the result check refuted
+//   a run's answer, Core's "Repairing the Flow" row ("Result repair started")
+//   -- is on no step of the run, so the run's step count does not carry into
+//   it (U2 of t194, run-musp39u8-9ac026ab: "Fixing your Flow · Step 5 of 5"
+//   for the whole four-minute re-author). It lasts until the run reports its
+//   next step, which is the repaired Flow's re-run counting its own steps. A
+//   run recovering from one failed step is still on that step and keeps it.
 // - A check needs the person when a page action's result code is the
 //   extension's `web.intervention.required` (`domain/src/runtime/failure/
 //   codes.ts`: the page asks for what only a person can give -- a robot check,
@@ -36,6 +43,8 @@ const INTERVENTION_CODE = /\bweb\.intervention\.[a-z_.]+|\buser_intervention_req
 
 export type UnitState = {
   readonly repairing: boolean;
+  /** Core is repairing the Flow itself, not one step of the run: no run step is current. */
+  readonly rebuilding: boolean;
   readonly check: boolean;
   /** This very event is the one that reported the check. */
   readonly checkReportedNow: boolean;
@@ -44,6 +53,7 @@ export type UnitState = {
 export class UnitSituation {
   private activityId: string | undefined;
   private repairing = false;
+  private rebuilding = false;
   private check = false;
 
   /** Folds `event` in and answers the unit's state after it. */
@@ -51,16 +61,27 @@ export class UnitSituation {
     if (event.activityId !== this.activityId) {
       this.activityId = event.activityId;
       this.repairing = false;
+      this.rebuilding = false;
       this.check = false;
     }
     if (event.phase === "repairing") this.repairing = true;
+    if (repairsTheFlow(event)) this.rebuilding = true;
     const runMovedOn = event.phase === "running" && event.step !== undefined;
     if (runMovedOn || resultCheckPassed(event)) this.repairing = false;
+    if (runMovedOn) this.rebuilding = false;
     const reported = asksForPerson(event);
     if (reported) this.check = true;
     else if (runMovedOn || pageActionSucceeded(event) || isSettledAsk(event)) this.check = false;
-    return { repairing: this.repairing, check: this.check, checkReportedNow: reported };
+    return { repairing: this.repairing, rebuilding: this.rebuilding, check: this.check, checkReportedNow: reported };
   }
+}
+
+/** Core's title on the row that opens a repair of a refuted answer (`recovery/refuted-result/repair.ts`). */
+const RESULT_REPAIR_TITLE = "Result repair started";
+
+/** Core opening a repair of the Flow itself: its "Repairing the Flow" row, never a run's "Recovering from a failed step". */
+function repairsTheFlow(event: ClientGatewayActivity): boolean {
+  return event.phase === "repairing" && (event.detail?.title === RESULT_REPAIR_TITLE || /^Repairing the Flow/u.test(event.label));
 }
 
 /** The event's page action reported that only a person can get past the page. */

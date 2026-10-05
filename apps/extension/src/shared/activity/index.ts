@@ -4,6 +4,7 @@ export { ACTIVITY_DONE_VISIBLE_MS } from "./done-visible.js";
 export { isHeadlineEcho } from "./headline-echo.js";
 export { ACTIVITY_HISTORY_LIMITS } from "./history-limits.js";
 export { isInternalStep } from "./internal-step.js";
+export { isModelThought } from "./model-thought.js";
 export { activityWording, type ActivityWording } from "./wording.js";
 export {
   ACTIVITY_RECENT_LIMIT,

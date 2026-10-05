@@ -14,9 +14,13 @@ test("at the bottom means within the slack of the very end", () => {
   assert.equal(isAtBottom({ scrollTop: 0, scrollHeight: 300, clientHeight: 400 }), true, "content shorter than the view");
 });
 
-// A browser clamps `scrollTop` to the bottom; so does this host.
-function host(): ScrollHost & { scroll(to: number): void; grow(by: number): void; bottom(): number } {
-  let listener: (() => void) | undefined;
+// A browser clamps `scrollTop` to the bottom; so does this host. `scroll` is
+// the person scrolling (a wheel turn, then the scroll it causes); `shift` is
+// the browser moving the view on its own (scroll anchoring, a clamp), with no
+// input from the person.
+function host(): ScrollHost & { scroll(to: number): void; shift(to: number): void; grow(by: number): void; bottom(): number } {
+  const listeners = new Map<string, Array<(event: Event) => void>>();
+  const fire = (type: string, event: object = {}) => { for (const next of listeners.get(type) ?? []) next(event as Event); };
   let top = 0;
   const made = {
     get scrollTop() {
@@ -27,12 +31,17 @@ function host(): ScrollHost & { scroll(to: number): void; grow(by: number): void
     },
     scrollHeight: 400,
     clientHeight: 400,
-    addEventListener(_type: "scroll", next: () => void) {
-      listener = next;
+    addEventListener(type: string, next: (event: Event) => void) {
+      listeners.set(type, [...(listeners.get(type) ?? []), next]);
     },
     scroll(to: number) {
+      fire("wheel", { deltaY: to - top });
       made.scrollTop = to;
-      listener?.();
+      fire("scroll");
+    },
+    shift(to: number) {
+      made.scrollTop = to;
+      fire("scroll");
     },
     grow(by: number) {
       made.scrollHeight += by;
@@ -95,7 +104,7 @@ test("content that grows after the follower scrolled does not let go: the late s
   // A card lands before the follower's own scroll event is dispatched; the
   // event then reports the view off the bottom though nothing moved up.
   view.grow(300);
-  view.scroll(settled);
+  view.shift(settled);
   assert.equal(follower.following(), true);
   assert.deepEqual(jumps, []);
   view.grow(100);
@@ -141,7 +150,7 @@ test("the person scrolling up stops following, is never pulled down, and Jump to
   assert.deepEqual(jumps, [true]);
   const reading = view.scrollTop;
   view.grow(300);
-  view.scroll(reading);
+  view.shift(reading);
   follower.contentChanged();
   assert.equal(view.scrollTop, reading, "a reader is never pulled down");
   assert.equal(follower.following(), false);
@@ -149,4 +158,59 @@ test("the person scrolling up stops following, is never pulled down, and Jump to
   assert.equal(view.scrollTop, view.bottom());
   assert.equal(follower.following(), true);
   assert.deepEqual(jumps, [true, false]);
+});
+
+// D16 (run musq0b1m): with nobody touching the panel the chat stopped
+// following and stayed parked above the hand-off question and the build's
+// ending. A layout change that keeps the content's height (a card above the
+// view shrinks while the newest grows) fires no ResizeObserver, and Chrome's
+// scroll anchoring moves the view up to keep the top line in place: a scroll
+// that moved the view and left it off the bottom, with no person behind it.
+test("the browser moving the view up on its own never ends following: only the person scrolling does", () => {
+  const view = host();
+  const jumps: boolean[] = [];
+  const follower = createScrollFollower(view, (show) => jumps.push(show));
+  view.grow(14_000);
+  follower.contentChanged();
+  // Measured in Chromium: anchoring moved scrollTop 14346 -> 14278 at the same height.
+  view.shift(view.bottom() - 68);
+  assert.equal(follower.following(), true, "scroll anchoring is not the person scrolling up");
+  assert.equal(view.scrollTop, view.bottom(), "and the view goes back to the bottom");
+  assert.deepEqual(jumps, []);
+  view.grow(200);
+  follower.contentChanged();
+  assert.equal(view.scrollTop, view.bottom(), "the hand-off question that lands next is on screen");
+  // The person's own scroll up still ends following at once.
+  view.scroll(view.bottom() - 68);
+  assert.equal(follower.following(), false);
+  assert.deepEqual(jumps, [true]);
+});
+
+test("dragging the scroll bar or a scroll key counts as the person; a click inside a card does not", () => {
+  const listeners = new Map<string, Array<(event: Event) => void>>();
+  const fire = (type: string, event: object = {}) => { for (const next of listeners.get(type) ?? []) next(event as Event); };
+  let top = 0;
+  const view: ScrollHost = {
+    get scrollTop() { return top; },
+    set scrollTop(to: number) { top = Math.max(0, Math.min(to, 2000 - 400)); },
+    scrollHeight: 2000,
+    clientHeight: 400,
+    addEventListener(type: string, next: (event: Event) => void) { listeners.set(type, [...(listeners.get(type) ?? []), next]); }
+  };
+  const follower = createScrollFollower(view, () => undefined);
+  follower.followNow();
+  // A click on a button inside the conversation, then the browser moves the view.
+  fire("pointerdown", { target: {} });
+  view.scrollTop = 1000; fire("scroll");
+  assert.equal(follower.following(), true, "a click on content is not scrolling");
+  assert.equal(view.scrollTop, 1600);
+  // The scroll bar belongs to the scrolled element itself.
+  fire("pointerdown", { target: view });
+  view.scrollTop = 900; fire("scroll");
+  assert.equal(follower.following(), false, "dragging the scroll bar up is the person");
+  follower.followNow();
+  fire("pointerup", {});
+  fire("keydown", { key: "PageUp" });
+  view.scrollTop = 1200; fire("scroll");
+  assert.equal(follower.following(), false, "PageUp is the person");
 });

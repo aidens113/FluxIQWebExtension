@@ -427,3 +427,17 @@ test("a playback through a Merge shows no Join paths card, even from a Core that
   assert.equal(messages.flatMap((message) => message.actions).some((card) => card.kind === "join"), false);
   assert.deepEqual(messages[0]!.actions.map((card) => card.outcome), ["done"], "the step before the merge still ends as done");
 });
+
+// U3 of t194 (`run-musp39u8-9ac026ab`, 35-failure-panel.png): the run ended
+// on a bare "Run failed" after its result was refuted and a repair could not
+// finish. Core's last row now says what came back and why
+// (`runtime/activity/run.ts`), and the chat shows it under "Run failed".
+test("a failed run's last message says what came back and why it failed", () => {
+  const sentence = "It returned 13 rows, but the check found they don't answer what you asked, and the fix ran out of room before it finished.";
+  const run = { activityId: "run:r1", subject: { kind: "run" as const, id: "r1", projectId: "project-1" } };
+  const messages = stepMessages([
+    activityEvent(1, { ...run, phase: "running", label: "Running step 5 of 5: Reading the list", step: { index: 5, count: 5, nodeId: "n5" }, detail: { kind: "step", title: "Reading the list", status: "started", ref: "n5" } }),
+    activityEvent(2, { ...run, phase: "failed", label: `Run failed: ${sentence}`, final: true, detail: { kind: "step", title: "Run failed", status: "failed", text: sentence } })
+  ], 10);
+  assert.deepEqual(said(messages).at(-1), ["Run failed", sentence, null]);
+});

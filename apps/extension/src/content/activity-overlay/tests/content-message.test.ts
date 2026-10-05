@@ -68,3 +68,10 @@ test("other messages and malformed ones are not activity messages", () => {
     assert.equal(activityContentMessage({ type: content, activity, display: broken, overlay: "expanded" }), undefined, JSON.stringify(broken));
   }
 });
+
+test("a display's kind is read when it is one the background sends, and a display with any other kind is not drawn", () => {
+  for (const kind of ["action", "thought", "starting"] as const) {
+    assert.equal(activityContentMessage({ type: ACTIVITY_MESSAGES.content, activity: null, display: { ...display, kind }, overlay: "expanded" })?.display?.kind, kind);
+  }
+  assert.equal(activityContentMessage({ type: ACTIVITY_MESSAGES.content, activity: null, display: { ...display, kind: "prose" }, overlay: "expanded" }), undefined);
+});

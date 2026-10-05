@@ -242,3 +242,30 @@ test("an overlay preference that is not one of the three is refused without bein
     assert.deepEqual(h.overlays, []);
   }
 });
+
+// D14 of the run-musp4h2f-72e8ed99 UI review: the person's message passes
+// through the activity relay's `sending`, which puts the starting status on
+// the page as it leaves. Opening a thread alone is not a message.
+test("a message the person sends runs under the activity's starting status; opening a thread and a refused sender do not", async () => {
+  installChrome();
+  const h = harness();
+  const sends: string[] = [];
+  const deps: PanelControlDeps = {
+    ...h.deps,
+    activity: {
+      ...h.deps.activity,
+      sending: async (send) => {
+        sends.push("start");
+        const answer = await send();
+        sends.push("answered");
+        return answer;
+      }
+    }
+  };
+  const sent = await handlePanelControl({ type: RUNTIME_MESSAGES.panelConversationSend, text: "Find a store", conversationId: "c1", projectId: "project-1" }, sidepanel, deps);
+  assert.deepEqual(sent, { handled: true, response: { ok: true, payload: { from: "append-turn" } } }, "the relay's answer is handed back unchanged");
+  assert.deepEqual(sends, ["start", "answered"]);
+  await handlePanelControl({ type: RUNTIME_MESSAGES.panelConversationSend, kind: "open", projectId: "project-1" }, sidepanel, deps);
+  await handlePanelControl({ type: RUNTIME_MESSAGES.panelConversationSend, text: "Find a store", conversationId: "c1" }, { id: "extension-id", url: "https://shop.test/", tab: { id: 4 } } as chrome.runtime.MessageSender, deps);
+  assert.deepEqual(sends, ["start", "answered"], "only the one message went under the starting status");
+});

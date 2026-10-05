@@ -28,7 +28,8 @@
 // - **It covers as little as it can, and always says what FluxIQ is doing.**
 //   It sits in a corner where no fixed part of the page is -- no cookie
 //   banner, chat widget, sticky bar or dialog -- and when every corner has one
-//   it takes the least-busy place on the viewport's edge, narrower if that
+//   it takes the least-busy place on the viewport's edge or docked just past
+//   a fixed bar, clear of text and images where it can be, narrower if that
 //   covers less, its lines kept and ending in an ellipsis when they do not
 //   fit (`placement/`). It is never a text-less dot: the person reads the
 //   status on the page whenever FluxIQ works, side panel open or not (U3 of
@@ -168,7 +169,7 @@ export class StatusPill {
     const nodes = this.nodes;
     if (!nodes) return;
     const size = SHAPE_SIZE[this.mode()][placement.shape];
-    for (const [property, value] of Object.entries(anchorStyle(placement.anchor, EDGE_MARGIN, size.height))) nodes.host.style.setProperty(property, value, "important");
+    for (const [property, value] of Object.entries(anchorStyle(placement.anchor, EDGE_MARGIN, size.height, placement.offset))) nodes.host.style.setProperty(property, value, "important");
     if (this.shown) this.drawShape(nodes);
   }
 

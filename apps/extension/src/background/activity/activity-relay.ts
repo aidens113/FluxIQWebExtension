@@ -37,11 +37,20 @@
 // gate, and not behind a delivery still in flight to the old document. The
 // overlay then draws without an entry animation (`status-pill.ts`), so the
 // only gap a person or the Lab's sampler sees is the browser's own reload.
+//
+// The person's own send is the other gap. A message the panel sends passes
+// through `sending`, which puts "Starting…" on the page and in the panels the
+// moment it leaves, holds it until Core's first activity replaces it, and
+// takes it down when the send fails or Core answers without starting work
+// (`send-start.ts`, D14 of the run-musp4h2f-72e8ed99 UI review). Everything
+// that reads the display -- the panels' state, the page's message, a new
+// document's answer -- reads it through `display()`, so all of them agree.
 
 import {
   ACTIVITY_MESSAGES,
   ACTIVITY_RECENT_LIMIT,
   type ActivityContentMessage,
+  type ActivityDisplay,
   type ActivityOverlayPreference,
   type ClientGatewayActivity,
   type ExtensionActivityState,
@@ -50,6 +59,8 @@ import {
 import { systemActivityClock, type ActivityClock } from "./clock";
 import { ActivityPacer } from "./pacer";
 import { FanOutGate } from "./fan-out-gate";
+import { sendStartedWork } from "./send-answer";
+import { SendStart } from "./send-start";
 import { UnitHistory } from "./unit-history";
 
 /** The top frame's id in every tab; the overlay lives only there. */
@@ -89,6 +100,8 @@ export class ActivityRelay {
   private lastSequence = Number.NEGATIVE_INFINITY;
   private loaded: Promise<void> | undefined;
   private readonly pacer: ActivityPacer;
+  /** The starting status between a send and Core's first activity. */
+  private readonly start: SendStart;
   // One gate per audience, so the panels' traffic -- every event changes the
   // list they show -- never delays a display change on its way to the page.
   private readonly panelGate: FanOutGate;
@@ -116,12 +129,16 @@ export class ActivityRelay {
         this.displayChanged();
       }
     });
+    this.start = new SendStart(clock, () => {
+      this.displayChangedAt = clock.now();
+      this.displayChanged();
+    });
     this.panelGate = new FanOutGate(clock, () => this.broadcastIfStale());
     this.pageGate = new FanOutGate(clock, () => void this.deliver());
   }
 
   state(): ExtensionActivityState {
-    return { current: this.current, display: this.pacer.display(), recent: [...this.recent], history: this.history.events(), overlay: this.overlay, live: this.deps.live() };
+    return { current: this.current, display: this.display(), recent: [...this.recent], history: this.history.events(), overlay: this.overlay, live: this.deps.live() };
   }
 
   /** The state with the stored overlay preference read, for a panel asking now. */
@@ -144,9 +161,49 @@ export class ActivityRelay {
     // Marked before the pacer runs, so a display change it makes goes out in
     // the same send as the event list rather than one interval later.
     this.panelStale = true;
+    // Core's first activity after a send replaces the starting status, even
+    // when the pacer's own display did not change with it.
+    const replacedStart = this.start.coreSpoke();
     this.pacer.accept(activity);
+    if (replacedStart) {
+      this.displayChangedAt = this.clock.now();
+      this.displayChanged();
+    }
     if (this.panelStale) this.panelGate.request();
     return true;
+  }
+
+  /**
+   * Sends one of the person's messages with `send`, and hands its answer back
+   * unchanged (a rejection too). While a live session can carry Core's
+   * activity, the starting status goes up as the send leaves, unless work is
+   * already running or waiting on the person; it comes down when the send
+   * fails, when Core answers without starting work, or when Core's first
+   * activity replaces it (`send-start.ts`).
+   */
+  async sending<T>(send: () => Promise<T>): Promise<T> {
+    const answering = (async () => send())();
+    let started: ActivityDisplay | undefined;
+    if (this.deps.live()) {
+      // The stored preference first: a person who hid the overlay is not shown it for the start.
+      await this.load();
+      started = this.start.putUp(this.display());
+    }
+    let answer: T;
+    try {
+      answer = await answering;
+    } catch (error) {
+      this.start.takeDown(started);
+      throw error;
+    }
+    if (!sendStartedWork(answer)) this.start.takeDown(started);
+    return answer;
+  }
+
+  /** What a person sees now: the starting status while it applies, else the pacer's display. */
+  private display(): ActivityDisplay | null {
+    const override = this.start.current();
+    return override ? override.display : this.pacer.display();
   }
 
   /**
@@ -180,7 +237,7 @@ export class ActivityRelay {
    */
   async noteContentReady(tabId: number | undefined, frameId: number | undefined): Promise<void> {
     if (tabId === undefined || (frameId ?? TOP_FRAME_ID) !== TOP_FRAME_ID) return;
-    const display = this.pacer.display();
+    const display = this.display();
     if (display === null) return;
     if (display.outcome === "done" && this.clock.now() - this.displayChangedAt >= ACTIVITY_DONE_VISIBLE_MS) return;
     await this.load();
@@ -271,7 +328,7 @@ export class ActivityRelay {
     return {
       type: ACTIVITY_MESSAGES.content,
       activity: this.current,
-      display: this.pacer.display(),
+      display: this.display(),
       overlay: this.overlay,
       topFrameOnly: true
     };

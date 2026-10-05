@@ -55,7 +55,10 @@ test("core.run_node is named by the node it runs, when the event says which", ()
     [{ index: 1, count: 3, nodeId: "nav.start" }, "Opening the page"],
     [{ index: 1, count: 3, nodeId: "open-home" }, "Opening the page"],
     [{ index: 1, count: 3, nodeId: "click.voltbay-item" }, "Clicking on the page"],
-    [{ index: 1, count: 3, nodeId: "n7", label: "Type the product name" }, "Typing into the page"],
+    // D5 of the t174 UI review of run-musp8nz1-dbd3905a: a typing step names its field, as a click names its control.
+    [{ index: 1, count: 3, nodeId: "n7", label: "Type the product name" }, "Type the product name"],
+    [{ index: 1, count: 3, nodeId: "type.quantity", label: "Quantity" }, "Typing into “Quantity”"],
+    [{ index: 1, count: 3, nodeId: "type.quantity" }, "Typing into the page"],
     [{ index: 1, count: 3, nodeId: "n7", label: "Add to cart" }, "Trying a step on the page"],
     [{ index: 1, count: 3, nodeId: "click.add", label: "Add to cart" }, "Clicking “Add to cart”"],
     [{ index: 1, count: 3, nodeId: "n8", label: "Click the Buy button" }, "Click the Buy button"],
@@ -222,10 +225,13 @@ test("Core's bookkeeping calls are marked internal, and nothing else is", () => 
   assert.equal(activityWording(tool("core.run_node", "started")).internal, false);
 });
 
-test("a passed completion check says only that the plan checks out", () => {
+// D3 of the t174 UI review of run-musp8nz1-dbd3905a: "the plan checks out, it
+// still has to run cleanly" is Core's bookkeeping ("the plan"), not a person's words.
+test("a passed completion check says, in plain words, that the Flow looks right and is tested next", () => {
   const check = (status: "started" | "succeeded" | "failed", label: string) => activityWording(event({ phase: "verifying", label, detail: { kind: "check", title: "Completion check", status } })).sentence;
   assert.equal(check("started", "Checking the proposed Flow"), "Checking the Flow does what you asked");
-  assert.equal(check("succeeded", "The proposed Flow’s plan checks out; it still has to run cleanly"), "Checking the Flow does what you asked — the plan checks out, it still has to run cleanly");
+  assert.equal(check("succeeded", "The proposed Flow’s plan checks out; it still has to run cleanly"), "Checking the Flow does what you asked — looks right, testing it next");
+  assert.doesNotMatch(check("succeeded", "The proposed Flow’s plan checks out; it still has to run cleanly"), /\bplan\b|run cleanly/u);
   assert.equal(check("failed", "The proposed Flow was sent back to be fixed"), "Checking the Flow does what you asked — not yet, trying another way");
   assert.equal(activityWording(event({ phase: "verifying", label: "The proposed Flow was sent back to be fixed" })).outcome, "not yet, trying another way");
 });

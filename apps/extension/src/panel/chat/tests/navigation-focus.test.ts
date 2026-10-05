@@ -92,7 +92,7 @@ test("fallback-hidden composer hands Back to the visible named container", async
 
 test("passive name updates empty copy/controller metadata without read/draft/selection/focus/scroll changes", async () => mounted(async ({ chat, root, box, core, doc }) => {
   const scroller = root.byClass("chat-scroll")[0]!;
-  scroller.scrollHeight = 900; scroller.clientHeight = 200; scroller.scrollTop = 80; scroller.dispatch("scroll");
+  scroller.scrollHeight = 900; scroller.clientHeight = 200; scroller.scrollTop = 80; scroller.dispatch("wheel"); scroller.dispatch("scroll");
   box.value = "Unsent draft"; Object.assign(box, { selectionStart: 2, selectionEnd: 7 }); box.focus();
   const calls = core.sent.length;
   const focusCalls = doc.calls.length;
@@ -117,7 +117,7 @@ test("passive name updates empty copy/controller metadata without read/draft/sel
 test("no-op/old-flow names are fenced; explicit open still follows", async () => mounted(({ chat, root, core, doc }) => {
   let changes = 0; chat.onTargetChange(() => changes++);
   const scroller = root.byClass("chat-scroll")[0]!;
-  scroller.scrollHeight = 1000; scroller.clientHeight = 200; scroller.scrollTop = 90; scroller.dispatch("scroll");
+  scroller.scrollHeight = 1000; scroller.clientHeight = 200; scroller.scrollTop = 90; scroller.dispatch("wheel"); scroller.dispatch("scroll");
   const calls = core.sent.length;
   const focusCalls = doc.calls.length;
   chat.updateAutomationName({ flowId: "f", name: "Orders" });
@@ -143,7 +143,7 @@ test("passive rename preserves generation so the pending same-flow read still la
   chat.open({ kind: "automation", flowId: "pending", name: "Before" });
   box.value = "Still typing"; box.focus();
   const scroller = root.byClass("chat-scroll")[0]!;
-  scroller.scrollHeight = 1000; scroller.clientHeight = 200; scroller.scrollTop = 70; scroller.dispatch("scroll");
+  scroller.scrollHeight = 1000; scroller.clientHeight = 200; scroller.scrollTop = 70; scroller.dispatch("wheel"); scroller.dispatch("scroll");
   const calls = core.sent.length;
   const focusCalls = doc.calls.length;
   chat.updateAutomationName({ flowId: "pending", name: "After" });

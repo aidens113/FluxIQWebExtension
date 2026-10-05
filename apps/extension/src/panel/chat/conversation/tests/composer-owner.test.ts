@@ -19,12 +19,24 @@ test("different owner parks draft; edits and fill never adopt; explicit adoption
   box.value = "edited parked draft"; box.dispatch("input"); composer.fill("filled parked draft"); send.dispatch("click"); assert.deepEqual(calls, []); assert.equal(send.disabled, true);
   root.descendants().find((node) => node.textContent === "Use draft here")!.dispatch("click"); assert.equal(send.disabled, false); send.dispatch("click"); await Promise.resolve(); assert.deepEqual(calls, ["filled parked draft"]); assert.equal(box.value, "");
 }));
-test("accepted old-owner send cannot clear adopted identical text or release a new pending send", async () => isolated(async () => {
+// The words leave the box at once (U5), so the old owner's late answer -- sent or failed -- must neither put them
+// back into the new owner's box nor release the new owner's own send.
+test("an old-owner send's late answer cannot refill the new owner's box or release its pending send", async () => isolated(async () => {
   const finishes: Array<(sent: boolean) => void> = []; const composer = createComposer(() => new Promise((resolve) => finishes.push(resolve))); const a = owner("a"); composer.setOwner(a); composer.render(ready); composer.fill("same text");
   const root = fake(composer.element), box = root.descendants().find((node) => node.id === "conversationInput")!, send = root.descendants().find((node) => node.id === "conversationSendButton")!;
-  send.dispatch("click"); composer.setOwner(owner("b")); composer.render(ready); root.descendants().find((node) => node.textContent === "Use draft here")!.dispatch("click"); send.dispatch("click");
-  finishes[0]!(true); await Promise.resolve(); assert.equal(box.value, "same text"); assert.equal(send.disabled, true); assert.equal(draftStorage().readOwned().owner, "b");
-  finishes[1]!(true); await Promise.resolve(); assert.equal(box.value, ""); assert.equal(send.disabled, true);
+  send.dispatch("click"); assert.equal(box.value, ""); composer.setOwner(owner("b")); composer.render(ready); composer.fill("same text"); send.dispatch("click"); assert.equal(box.value, "");
+  finishes[0]!(false); await Promise.resolve(); assert.equal(box.value, "", "a's failed send does not refill b's box"); assert.equal(draftStorage().readOwned().owner, "b");
+  composer.fill("next words"); assert.equal(send.disabled, true, "b's own send is still on its way");
+  finishes[1]!(true); await Promise.resolve(); assert.equal(box.value, "next words"); assert.equal(send.disabled, false);
+}));
+test("a send empties the box and the kept draft at once; the new owner's own failed send restores into its own box", async () => isolated(async () => {
+  const finishes: Array<(sent: boolean) => void> = []; const calls: string[] = []; const composer = createComposer((text) => { calls.push(text); return new Promise((resolve) => finishes.push(resolve)); }); const a = owner("a"); composer.setOwner(a); composer.render(ready); composer.fill("same text");
+  const root = fake(composer.element), box = root.descendants().find((node) => node.id === "conversationInput")!, send = root.descendants().find((node) => node.id === "conversationSendButton")!;
+  send.dispatch("click"); assert.equal(box.value, ""); assert.deepEqual(draftStorage().readOwned(), { text: "", owner: "a" });
+  composer.setOwner(owner("b")); composer.render(ready); assert.equal(root.byClass("composer-draft-review")[0]!.hidden, true);
+  composer.fill("b words"); send.dispatch("click"); assert.equal(box.value, ""); assert.deepEqual(calls, ["same text", "b words"]);
+  finishes[0]!(false); await Promise.resolve(); assert.equal(box.value, ""); assert.equal(send.disabled, true, "b's send is still on its way");
+  finishes[1]!(false); await Promise.resolve(); assert.equal(box.value, "b words"); assert.deepEqual(draftStorage().readOwned(), { text: "b words", owner: "b" });
 }));
 test("current matching owner restores without repeated review; legacy and foreign drafts require adoption", async () => isolated(async () => {
   draftStorage().writeOwned("restored text", "a"); const first = createComposer(async () => true); first.setOwner(owner("a")); first.render(ready); assert.equal(fake(first.element).byClass("composer-draft-review")[0]!.hidden, true);

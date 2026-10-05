@@ -4,8 +4,19 @@
 // The conversation belongs to FluxIQ Core (UI audit, section 4, principle 6).
 // This holds only what is on screen -- the end of the target's open thread,
 // as Core last answered it -- plus whether a send or an answer is in flight.
-// There are no local turns, ids, model calls or merging: after a send or an
-// answer the thread is read again and what Core says replaces what was shown.
+// There are no model calls or merging: after a send or an answer the thread
+// is read again and what Core says replaces what was shown.
+//
+// The one local turn is the message being sent (U5 of the
+// run-musp39u8-9ac026ab UI review: it sat in the composer, with no bubble, for
+// as long as FluxIQ took to answer the send). From the moment it is sent,
+// `turns` ends with it as a person turn of this panel's own (`local-send:` id)
+// until a read of Core's thread holds a person turn it had not held at send,
+// or, failing that recognition, until the first good read after the send went
+// through. A send that fails keeps it, with `sendError` saying why on the turn
+// itself, until the person sends again, the target changes or the connection
+// drops. A send refused before it starts (an empty body, another on its way, a
+// scoped chat not ready) makes no turn.
 //
 // Which thread: the target's (`thread-requests.ts`): the project's own open
 // thread, or the open thread about one automation. A read happens when the card is
@@ -111,6 +122,12 @@ const UNREADABLE_LIST: Extract<PanelResult<unknown>, { ok: false }> = {
 const SEND_FAILED = "Couldn't send that. Try again.";
 const ANSWER_FAILED = "Couldn't send your answer. Try again.";
 
+/**
+ * The person's message on its way or not sent, the turns Core held when it was
+ * sent, and, once Core took it, how many reads had started by then.
+ */
+type Outgoing = { turn: CoreTurn; known: ReadonlySet<string>; deliveredAfterRead?: number };
+
 type Shown = { conversationId: string; projectId: string; revision: number | undefined };
 
 /** Creates the controller. `onChange` is called after every change to `state()`. */
@@ -128,6 +145,11 @@ export function createConversationController(request: PanelStore["request"], onC
   let readError: string | undefined;
   let sending = false;
   let sendError: string | undefined;
+  // The message on its way or not sent, shown as the person's turn.
+  let outgoing: Outgoing | undefined;
+  let outgoingCount = 0;
+  // Reads started; reads run one at a time, so the newest is the one settling.
+  let readsStarted = 0;
   const answering = new Map<string, object>();
   const answerErrors = new Map<string, string>();
   let inFlight: Promise<void> | undefined;
@@ -181,6 +203,7 @@ export function createConversationController(request: PanelStore["request"], onC
 
   async function readOnce(): Promise<void> {
     const asked = generation;
+    readsStarted += 1;
     const listed = await safeRequest<{ payload?: { conversations?: unknown } }>(threadListRequest(target));
     if (asked !== generation) return;
     if (!listed.ok) return readFailed("list", listed);
@@ -212,9 +235,23 @@ export function createConversationController(request: PanelStore["request"], onC
     turns = nextTurns;
     loaded = true;
     scopeState = "ready";
+    // Core's own record of the message replaces the panel's, once a read holds
+    // it; and any good read begun after Core took the message replaces it even
+    // when Core's turn was not recognised, so it can never linger.
+    if (outgoing !== undefined && outgoing.turn.sendError === undefined) {
+      const known = outgoing.known;
+      const delivered = outgoing.deliveredAfterRead;
+      if ((delivered !== undefined && readsStarted > delivered) || nextTurns.some((turn) => turn.author === "person" && !known.has(turn.turnId))) outgoing = undefined;
+    }
     clearReadFailure();
     const pending = new Set(nextTurns.flatMap((turn) => (turn.ask?.status === "pending" ? [turn.ask.askId] : [])));
     for (const askId of [...answerErrors.keys()]) if (!pending.has(askId)) answerErrors.delete(askId);
+  }
+
+  /** A send that did not go keeps its turn, saying why; a fallback says it for the whole card instead. */
+  function keepFailed(mine: Outgoing): void {
+    if (outgoing !== mine) return;
+    outgoing = sendError === undefined ? undefined : { ...mine, turn: { ...mine.turn, sendError } };
   }
 
   function readable(): boolean {
@@ -234,21 +271,23 @@ export function createConversationController(request: PanelStore["request"], onC
       scopeState = "loading";
       clearReadFailure();
       sendError = undefined;
+      outgoing = undefined;
       answering.clear();
       answerErrors.clear();
       onChange();
       void controller.refresh();
     },
     state() {
+      const shownTurns = outgoing === undefined ? turns : [...turns, outgoing.turn];
       const mode: ConversationMode = !connected ? "offline"
         : fallback !== undefined ? "fallback"
-          : turns.length > 0 ? "thread"
+          : shownTurns.length > 0 ? "thread"
             : loaded && readError === undefined ? "empty"
               : "loading";
       return {
         mode,
         fallbackReason: fallback,
-        turns,
+        turns: shownTurns,
         conversationId: shown?.conversationId,
         projectId: target.projectId !== undefined ? target.projectId : undefined,
         scopeState: target.projectId !== undefined ? (!connected || fallback !== undefined ? "error" : scopeState) : undefined,
@@ -269,6 +308,7 @@ export function createConversationController(request: PanelStore["request"], onC
         if (fallback === "refused") fallback = undefined;
         clearReadFailure();
         sendError = undefined;
+        outgoing = undefined;
         answering.clear();
         answerErrors.clear();
       }
@@ -306,24 +346,29 @@ export function createConversationController(request: PanelStore["request"], onC
       if (target.projectId !== undefined && scopeState !== "ready") return false;
       sending = true;
       sendError = undefined;
+      outgoingCount += 1;
+      const mine: Outgoing = { turn: { turnId: `local-send:${outgoingCount}`, author: "person", text: body, ask: null }, known: new Set(turns.map((turn) => turn.turnId)) };
+      outgoing = mine;
       onChange();
       const asked = generation;
       const result = await safeRequest<{ payload?: { conversation?: unknown } }>(threadSendRequest(target, shown, body));
       if (asked !== generation) {
         // The person moved to another thread meanwhile; the message went to the one it was written in.
         sending = false;
+        if (outgoing === mine) outgoing = undefined;
         onChange();
         return result.ok;
       }
       if (!result.ok) {
         sending = false;
         failed(result, SEND_FAILED, (sentence) => (sendError = sentence));
+        keepFailed(mine);
         onChange();
         return false;
       }
       const opened = parseConversation(result.value.payload?.conversation);
       if (target.projectId !== undefined && opened !== undefined && opened.projectId !== target.projectId) {
-        scopeState = "error"; sending = false; sendError = SEND_FAILED; onChange(); return false;
+        scopeState = "error"; sending = false; sendError = SEND_FAILED; keepFailed(mine); onChange(); return false;
       }
       if (opened !== undefined && opened.conversationId !== shown?.conversationId) {
         // A first message opened a thread: show that one from its start.
@@ -339,6 +384,8 @@ export function createConversationController(request: PanelStore["request"], onC
       // of the build the message had just started, in every chat-driven Lab
       // run (`run-muq3ubys-4b4dbf5b`, `run-muq5vb5w-b50aaab7`,
       // `run-muq6mlom-2ae53681`).
+      // Core has it: the next good read begun from here replaces the panel's turn (`settle`).
+      if (outgoing === mine) outgoing = { ...mine, deliveredAfterRead: readsStarted };
       await controller.refresh();
       sending = false;
       onChange();
