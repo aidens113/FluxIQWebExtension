@@ -1,6 +1,6 @@
 # t267 adaptation-loop unblock — lead report
 
-Status: S1 and S2 committed by the supervisor (S2: Core `81e41266`, reports `6f05099b`). S3 is done as far as this brief's files reach, and handed back uncommitted. Two Core changes outside this brief are described, not made (S3, "Changes needed outside this brief"); S3's extension change must not reach `dev` before them. S4 and S5 are not started.
+Status: S1, S2 and S3 committed by the supervisor (S3: Core `85758d09`). C1 is done, uncommitted. C2 waits for t264 to land on `dev`, and S4 and S5 wait on C2 and on t264. S3's extension change still must not reach `dev` before C2.
 Tree: `C:/Users/osrs_/FluxStuff/fxwork/t267/!FluxIQWebExtension` (branch `task/t267-adaptation-loop-unblock`); Core sibling `fxwork/t267/!FluxIQ` (same branch, from `de8eb8e5`): unchanged in S1, changed in S2 and S3.
 Brief: `t267-adaptation-unblock` in `../mvp-final-month-plan.md`; blockers numbered as in [the audit](./adaptation-loop-audit.md) "Ranked blockers".
 
@@ -236,7 +236,7 @@ Extension, worker t267-s3-extension ([report](./t267/s3-extension.md)):
 
 Land C1 and C2 with, or before, S3's extension change. Until C1, every Automations Run is refused with a 403. Until C2, every routine extension run with a caller bills a result check.
 
-**C1, Core `apps/web/src/lib/program-route.ts` (excluded by this brief), `narrowRunRuntimeSession`:**
+**C1, Core `apps/web/src/lib/program-route.ts`, `narrowRunRuntimeSession` (done after S3, when the supervisor gave this brief that file; see "C1 (done)" below):**
 - Remove `"runIntent"` from the refused-field list.
 - Before the `adaptiveMode` pinning, add:
   ```ts
@@ -286,7 +286,7 @@ Land C1 and C2 with, or before, S3's extension change. Until C1, every Automatio
 
 | # | Blocker | State |
 | --- | --- | --- |
-| 1 | Product runs carry no caller | Automations path implemented in this brief's files (handler, relay). Blocked by C1 (token rule) to work at all, and by C2 to keep item 23. The chat's "run it" (`R/conversations/commands/run-flow.ts`, t264) still sends no `runIntent`. |
+| 1 | Product runs carry no caller | Automations path implemented in this brief's files (handler, relay). The token rule now admits it (C1). Still blocked by C2 to keep item 23. The chat's "run it" (`R/conversations/commands/run-flow.ts`, t264) still sends no `runIntent`. |
 | 2, 3 | Lab playback mode; repair lane | Fixed (S1, committed) |
 | 4 | Trial evidence on built Flows | Fixed for target overrides (S2, committed) |
 | 5 | Re-author applied before judged | Open (S4); depends on C2.2 for routine runs |
@@ -303,6 +303,34 @@ On a saved instruction-built Flow whose page was redesigned, press Run in the ex
 ### Not verified (S3)
 
 - Nothing ran live or in a browser.
-- The token route's acceptance of `runIntent` (C1, not made).
 - The `repair_checks` path end to end (C2, not made).
 - The full Core and extension suites (narrow checks only).
+
+## C1 (done) — the token rule admits the Automations Run's repair intent
+
+The supervisor gave this brief Core `apps/web/src/lib/program-route.ts` and its tests after S3.
+
+**Changed** (Core `fxwork/t267/!FluxIQ`; all four files kept CRLF in this working copy; the index is LF):
+- `apps/web/src/lib/program-route.ts`: `PAIRED_CLIENT_RUN_INTENT = "explore_and_adapt"`. `narrowRunRuntimeSession` no longer refuses `runIntent` outright.
+  - A run carrying it must name exactly that intent: "A paired client's run may carry only the explore_and_adapt intent."
+  - It may name no `adaptiveMode`: "A paired client's run that names an intent may not also carry adaptiveMode."
+  - It passes through unpinned, so it runs under the Flow's own mode.
+  - Every other refusal applies first and unchanged: `flow`, `inputs`, `permittedConsequences`, `dryRunLlm`, `useReusableContext`, and side effects other than `false`.
+  - A run without an intent is pinned to `no_llm_intervention` as before.
+  - The least-privilege comments now name this as a deliberate exception, the way `commands/caller.ts` names the chat's.
+- `apps/web/src/lib/tests/program-route.test.ts`:
+  - `runIntent` is gone from the refused-field loop.
+  - A new test accepts `explore_and_adapt` alone and refuses the other four intents, `""`, `1` and `null`.
+  - It also refuses `explore_and_adapt` beside any `adaptiveMode`, and keeps every other refusal with the intent present.
+- `apps/web/src/app/api/programs/[programId]/[endpoint]/tests/route.test.ts:289-293`: the same unknown-intent request is still a 403 before any handler, with the new sentence, and still does not echo the value.
+- `docs/architecture/automation-studio/client-gateway.md`: the token-narrowing list states the exception.
+
+**Validation (lead-run):**
+- Fail-first: the new expectations against the old rule gave `Tests 2 failed | 51 passed (53)`. After the change, `Tests 53 passed (53)`.
+- In `apps/web`, under the web app's own vitest config, 7 files gave `Test Files 7 passed (7)`, `Tests 114 passed (114)`:
+  - the two files above;
+  - `features/automation-studio/{conversation/capabilities/tests/{coverage,dispatch},conversation/tests/instruction-commands,live/commands/tests/domain-commands,runtime/tests/runtime-views}`.
+  - From the repo root, `runtime-views.test.tsx` fails with "React is not defined": that is the root config's JSX setup, not this change.
+- `node scripts/build-cache/cli.mjs web:check` exit 0. Core structure audit `passed (247 warning(s), 349 baselined)`. `pnpm.cmd docs:check` "Deterministic framework reference is current."
+
+**Not verified:** a live token run from the extension. That is the "Live checks still owed" item above, after C2.
