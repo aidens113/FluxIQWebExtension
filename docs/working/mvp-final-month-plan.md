@@ -243,6 +243,15 @@ Source of every port: Claude's uncommitted lane trees, read-only: `C:/Users/osrs
 - Definition of done: the changed web tests pass; `node scripts/build-cache/cli.mjs web:check` exit 0; Core structure audit exit 0.
 - Report to: `docs/working/mvp-final-month-plan/reports/t268-deep-link.md`
 
+### Brief: t269-creation-blockers (lead; dispatch after t264 lands)
+- Repository: both, task t269 trees under `C:/Users/osrs_/FluxStuff/fxwork/t269/`.
+- Task: Remove the Phase 1 creation blockers in stages, returning after each for the supervisor to commit. Codex's design reports are under `docs/working/mvp-live-continuation-2026-10-03/reports/`; Codex's unfinished source is on `wip/t262-uncommitted` (downstream `1d6baa6f`, Core `c5521e86`) — reuse it, never merge it whole. S1 B7 binding affordances (`b7-binding-feedback-causality.md`): a screened bindable-path projection beside the shown tool input, derived only from public values that exist at the same path in `ranWith ?? input`, never private selector/element identities; truthful `bind_new_key` feedback that points at those paths. Start with `bindable/tests/paths.test.ts` failing first; fix the WIP's missing import. S2 C1 pagination (`pagination-bound-feedback.md`): establish on current dev whether `paginate: true` still reads one page silently; if so, make the meaning explicit and honest. S3 C4 saved-row repair (`c4-row-repair-preflight.md`, `c4-*`): run the WIP fixture `domain/src/runtime/tests/carried-row-service-repair.test.ts` first and record the actual failure; then reconstruct for-each repeat metadata and `$row` bindings when a saved Flow is seeded for repair, keeping row identity, two correct rows and an untouched decoy. S4 D phase 1 (`d-grounded-waypoint-contract.md`, `d-shared-reader-preflight.md`, `next-d-safe-route-design.md`): one shared lazy instruction read; named/open/unavailable route states; valid permissions kept when a route is invalid; never port the old URL scan, fail-open or blanket withholding. S5 P5 `$step` earlier-output binding (`p5-binding-preflight.md`, WIP `p5-earlier-output-contract.md`): stable deferred step identity across positional `sN` keys, resolving only real outputs of strictly prior steps.
+- Required reads: shared rules above; the named reports.
+- Owns (may edit): Core `R/flow-draft/**`, `R/llm/**`, `R/flow-bootstrap/**`, `R/action-permissions/**`, `R/service/instruction-authority.ts`, `R/nodes/parameter-bindings.ts`, `R/executor/**` (P5 only), and tests; downstream `domain/src/runtime/**` and tests; architecture docs for these.
+- Must not touch: files t267 owns.
+- Definition of done per stage: fail-first tests then passing, owning tests green, `fluxiq:check` and touched downstream typechecks exit 0, both audits pass, Core rebuilt; the report names the live run that must prove the stage (B, C or D lane).
+- Report to: `docs/working/mvp-final-month-plan/reports/t269-creation-blockers.md`
+
 ## Work Ledger
 
 ### 2026-10-05 — Intake started
