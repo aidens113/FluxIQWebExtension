@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Intake and schedule complete; Phase 0 (land Codex's t262, then Claude's round-1003 lane units, onto dev) is next and not started.
+Status detail: Phase 0 in progress: Codex's t262 landed on dev in both repositories 2026-10-05; Claude's round-1003 lane units are next.
 Created: 2026-10-05
 Last updated: 2026-10-05
 Owner: Senior supervisor agent
@@ -17,7 +17,8 @@ Deadline 2026-11-10 (36 days from 2026-10-05). Feature freeze 2026-10-29.
 
 **Where the code is (verified 2026-10-05).**
 
-- `dev` equals `origin/dev` in both repositories (downstream `b6768b7f`, Core `f6ef9f48`). Nothing on `dev` is unpushed. `origin/main` is at `d88ed2fb` (2026-09-24), 761 commits behind `dev`; moving it needs the user's approval each time.
+- **t262 landed 2026-10-05**: downstream merge `20404503`, Core merge `1fbfa5ef`, both pushed with this update. The supervisor fixed one gate failure first (`e0cd0cd7`: an extension test fixture that did not compile). Codex's unfinished work is preserved, not landed, on `wip/t262-uncommitted` in both repositories (downstream `1d6baa6f`, Core `c5521e86`): the broken B7 bindable fix, the C4 fail-first fixture, the partial P5 report. The `fxwork/t262` trees are kept as the A/B lane trees (they hold the A8 saved Flow project and profiles).
+- Before t262: `dev` equaled `origin/dev` in both repositories (downstream `b6768b7f`, Core `f6ef9f48`). `origin/main` is at `d88ed2fb` (2026-09-24), 761 commits behind `dev`; moving it needs the user's approval each time.
 - **Codex's t262** (`task/t262-mvp-live-continuation`, worktrees `fxwork/t262/`) holds 16 downstream commits (7 source) and 14 Core commits (9 source), on no remote. The last source commits `476b52d7` / Core `0ecdec16` passed Codex's recorded narrow gate; the two later commits are docs. `git merge-tree` against `dev`: Core clean; downstream conflicts only in `docs/working/README.md` and `claude-work-handoff-2026-10-03.md`. Its uncommitted Core B7 binding fix is broken (`llm/draft-amendment-feedback.ts:191` calls `automationStudioFlowDraftBindablePaths` with no import; `flow-draft/bindable/tests/` does not exist), verified by the supervisor. Its uncommitted C4 row fixture is a fail-first test with no recorded result. Details: [t262 audit](./mvp-final-month-plan/reports/t262-audit.md).
 - **Claude's round-1003 lane trees** t174 (A), t193 (B), t194 (C), t195 (D) hold large uncommitted fixes on both sides on the old base `45bd6232` / Core `6beae684`. t262 already ported or reworked much of A and C. Three design forks resolve to t262's side (repeat removal `unrepeat`, scheduled-candidate carried steps, source-grounded split acts). The lane reports are stale: A run 3 and B run 2 failed on the full fix sets. Per-unit integration order: [lane reconcile](./mvp-final-month-plan/reports/lane-tree-reconcile.md).
 - `task/t224-codex-ui-ux-review` has one doc commit on `origin` not on `dev`; its UI work is paused by the user.
@@ -36,7 +37,7 @@ Deadline 2026-11-10 (36 days from 2026-10-05). Feature freeze 2026-10-29.
 4. Item 24 ("Simple Mode shows it learned") is read as the extension chat and Automations row, since the chat replaced Simple Mode.
 5. The Week 2 exit gate is retired into Phase 2's chained adaptation proof.
 
-**Next.** Phase 0, step 1: land t262. See the schedule below.
+**Next.** Phase 0, step 2: lane-only units on their own task branch; in parallel, the serial Core integration chain under one lead and the extension UI unit under another. Each unit is committed by the supervisor as soon as it is verified, so no tree accumulates uncommitted work again.
 
 ## Schedule to 2026-11-10
 
@@ -123,6 +124,15 @@ Run the 4.10 thirteen-step script and the 26-item acceptance test on a clean pro
 - Definition of done: one table covering all 26 items plus Week 3/4 rows, a short list of the five largest gaps by user-visible impact, and any item where documents contradict each other.
 - Report to: `docs/working/mvp-final-month-plan/reports/mvp-gap-map.md`
 
+### Brief: t262-gate
+- Repository: both, in `C:/Users/osrs_/FluxStuff/fxwork/t262/` (`!FluxIQ` and `!FluxIQWebExtension`), branch `task/t262-mvp-live-continuation` (downstream at merge `6fe7f942`, which brought only docs from dev).
+- Task: Run the narrow integration gate for t262 and record raw output. Core first: `pnpm build` at the Core root (rebuilds contracts, fluxiq, client-gateway-websocket, web outputs); `node scripts/build-cache/cli.mjs structure-audit:check`; `node scripts/build-cache/cli.mjs --parallel fluxiq:check web:check`; then vitest for exactly the test files changed versus Core dev (`git diff --name-only dev...HEAD | grep -E '/tests/.*\.test\.ts$'`), run per package (`packages/fluxiq`, `apps/web`). Downstream next: `pnpm --filter @fluxiq-web-extension/domain build`; `domain check`; `extension check`; test-runner typecheck; `node scripts/structure-audit.mjs`; then the test files changed versus dev in domain, extension and test-runner, using labelled test builds (`DOMAIN_TEST_BUILD_LABEL=t262`, `EXTENSION_TEST_BUILD_LABEL=t262`; see `docs/architecture/repository-layout.md` "Test Build Labels" for running a subset), and `pnpm --filter @fluxiq-web-extension/extension build`. Low concurrency. No Lab, browser or provider call.
+- Required reads: this document's Current State; `docs/architecture/repository-layout.md` sections on commands and test build labels.
+- Owns (may edit): log files under `C:/Users/osrs_/AppData/Local/Temp/claude/c--Users-osrs--FluxStuff--FluxIQWebExtension/0308f367-bc34-4266-8bc3-8790a8827c7a/scratchpad/t262-gate/` (one per command, named `NN-<command>.log`), and `docs/working/mvp-final-month-plan/reports/t262-gate.md`.
+- Must not touch: every source, test, doc and config file in both t262 trees; no git writes. If a check fails, diagnose the cause from source and record it; do not fix.
+- Definition of done: each command's exit code and summary line (pass/fail counts) in the report, with the log path; failures diagnosed (pre-existing on dev vs introduced by t262).
+- Report to: `docs/working/mvp-final-month-plan/reports/t262-gate.md`
+
 ## Work Ledger
 
 ### 2026-10-05 — Intake started
@@ -141,8 +151,15 @@ Run the 4.10 thirteen-step script and the 26-item acceptance test on a clean pro
 - Outcome: Accepted as a plan; no product change.
 - Follow-up: Phase 0 step 1, land t262.
 
+### 2026-10-05 — t262 landed on dev
+- Agent: supervisor with t262-gate worker.
+- Changed: t262 WIP moved to `wip/t262-uncommitted` (both repos); `dev` merged into t262 (`6fe7f942`, docs conflicts resolved to t262's side, index regenerated); fixture fix `e0cd0cd7`; merges `20404503` downstream and `1fbfa5ef` Core.
+- Why: Codex's gated work existed only locally; every later unit builds on it.
+- Validation: gate logs (scratchpad `t262-gate/`) -> Core vitest 65 files 939/939, web 29/29, domain changed tests fail 0, extension changed tests fail 0, test-runner changed tests fail 0, Core build/structure audit/fluxiq:check/web:check exit 0; `pnpm.cmd --filter @fluxiq-web-extension/extension check` -> TS2741 in `target-activity.test.ts(16,67)` before the fix, exit 0 after; that file rebundled -> `# tests 11 # pass 11 # fail 0`; Core `structure-audit:check` on merged dev -> exit 0; downstream `node scripts/structure-audit.mjs` on merged dev -> passed after index regeneration.
+- Outcome: Accepted
+- Follow-up: one background full sweep on dev (none has run on t262's source); Phase 0 step 2.
+
 ## Open Questions
 
-- Should Codex stop editing t262 now that Claude supervises? Owner: user. Default taken: yes, one supervisor.
 - Is demonstrate/record an MVP acceptance requirement after the 2026-09-22 scope ruling? Owner: user. Default taken: supported, unmeasured, one smoke proof.
 - Who runs the Phase 6 release-candidate script as the "person unfamiliar with FluxIQ"? Owner: user.
