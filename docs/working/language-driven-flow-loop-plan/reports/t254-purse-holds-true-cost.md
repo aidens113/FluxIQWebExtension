@@ -327,3 +327,58 @@ R = `packages/fluxiq/src/programs/automation-studio/runtime`; U = `R/flow-bootst
 - No live or Lab run, and no full suites.
 - No service-level test of the unchanged-draft path.
 - No annotate-level test crosses a peak boundary.
+
+## Stage 4 (in t252), 2026-10-03
+
+Lead: t254-lead. Tree `fxwork/t252/!FluxIQ`, branch `task/t252-general-flow-authoring-impl`, at
+43d8dfba (dev, with t254, merged in). Nothing is staged or committed. One file changed:
+`R/recovery/annotation/tests/iteration-guards.test.ts`.
+
+### Cause
+
+"holds an explore_and_adapt recovery to the run's budget" stopped at 23 calls (21 exploration) instead of 26.
+No budget guard stopped it: `budgetCodes` was empty, and every request reserved exactly CEILING/26
+($0.003846). Price, share and reservation, the stage 3 per-call pricing and P1 all played no part.
+
+- **What stopped it:** a temporary log in `exploration.ts` (reverted; `git status` shows only the test
+  changed) showed the 22nd decision refused unsent with `llm_budget.input_limit_exceeded` and
+  `llm_budget.request_total_exceeded`: "an estimated 4045 input tokens (12134 bytes), over its 4000-token
+  input limit".
+- **Why only on t252:** the exploration's decision request grows with each look's evidence. The test pinned
+  `tokenLimits.maxInputTokens: 4_000`. On dev the 24 decisions fit just under it. t252's ~290 extra tokens
+  of evidence-decision guidance push the 22nd decision over.
+
+### Decision
+
+The product is right. A request larger than its declared per-call window cannot be sent, and the window is
+not the run's ceiling. The test's arithmetic assumed the old prompt size.
+
+The rewritten test derives its window from the budget:
+- The share is CEILING / declared calls.
+- `maxInputTokens` is the largest input whose worst case at peak, with the 1,000-token reply, stays within
+  the share. Both are priced through the shared `estimateAutomationStudioDeepSeekCostUsd`, which gives
+  about 8,820 tokens.
+- The premise "one call at the window's limits costs no more than its share" is asserted, not assumed.
+- The expectations read the declared count (`calls: declaredCalls`, `explorationCalls: declaredCalls - 2`)
+  and the share, so nothing depends on prompt length.
+
+What the test is for is kept: the run's $0.10 ceiling bounds the recovery (spend between 80% and 100% of
+it), every call reserves its share rather than the resolver's $2, and a spent training budget does not stop
+it.
+
+**Noted, not changed:** a decision refused for its window ends the exploration as
+`llm_evidence_loop.invalid_decision`, which reads as a bad reply rather than an oversized request. Worth a
+separate look.
+
+### Checks (t252 tree)
+
+- `npx vitest run …/recovery/annotation/tests/iteration-guards.test.ts`: 8/8 passed.
+- `npx vitest run` over R/recovery, R/llm/harness and R/flow-bootstrap (which includes unfinished-build),
+  through heavy.sh: **148 files, 1,884 tests passed**.
+- `pnpm --filter fluxiq check`: exit 0.
+- `node scripts/structure-audit.mjs`: "passed (240 warning(s), 349 baselined)".
+
+### Not verified
+
+- No live run, and no full suites.
+- I did not rebuild the Core libraries in t252 (only a test changed).

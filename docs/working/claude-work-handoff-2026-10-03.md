@@ -11,6 +11,8 @@ Related: [working index](./README.md), [live loop](./language-driven-flow-loop-p
 
 ## Current State
 
+**Superseded for planning (2026-10-05):** the schedule to the MVP deadline is [MVP final month plan](./mvp-final-month-plan.md); t262 landed on dev there.
+
 **Active continuation:** [MVP live continuation](./mvp-live-continuation-2026-10-03.md) owns authoritative Current State, written file partitions, exact validation, full ending debugs and Claude resume order. Paired source checkpoints downstream476b52d7/Core0ecdec16. A8 initial creation/runtime accepted at45priced/$0.056566776, four exact DOM facts and saved10nodegraph; two unchanged provider-disabled reuses passed with explicit zero calls/interventions, stored key preserved and complete graph/router/subflow unchanged. B7 failed45priced/$0.060199992/no executablegraph; current binding affordance fix and actual saved-row repair regression are next. All runtime sessions stopped; source editing resumes under written briefs. Flash/Lab .10/48 unchanged; normal UI defaults independent. C paging/row repair, D route protection, $step/P5 and broader MVP remain incomplete. Main dev documentation pointerb6768b7f pushed; t262 product checkpoints local/unmerged/unpushed. Intake audit below is historical.
 
 - User requested reading all working documents, reconstructing Claude's work, and listing the plan including live testing. This handoff is complete; the implementation phases below are recommendations for subsequent work.
