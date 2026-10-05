@@ -134,7 +134,15 @@ export function createExtractionReadRecovery(
     state() {
       const ticket = [...failures.values()].filter(ticket => ticket.epoch === hooks.epoch() && ticket.identity === hooks.identity()).at(-1);
       const pending = ticket?.stage === "session" ? sessionRead !== undefined : ticket?.stage === "preview" ? previewRead !== undefined : pick !== undefined;
-      return { ticket, pending: pending || hooks.busy() };
+      // The preview's own observation, for the note beside the sample: a read for
+      // the columns shown now is in flight, or the last one for them failed. Both
+      // are fenced to the current selection, so an older selection's read can
+      // neither mark the new sample pending nor call it stale.
+      const previewPending = previewRead !== undefined && activePreview(previewRead);
+      const failedPreview = failures.get("preview");
+      const previewFailed = failedPreview !== undefined && failedPreview.epoch === hooks.epoch() && failedPreview.identity === hooks.identity()
+        && failedPreview.selection === keyOf(hooks.selection());
+      return { ticket, pending: pending || hooks.busy(), previewPending, previewFailed };
     },
     async retry(ticket: ExtractionRecoveryTicket): Promise<void> {
       if (ticket.epoch !== hooks.epoch() || ticket.identity !== hooks.identity() || failures.get(ticket.stage) !== ticket || hooks.busy()) return;

@@ -96,6 +96,8 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
   const refusalOwner = {};
   let retryButton: HTMLButtonElement | undefined;
   let retryTicket: ExtractionRecoveryTicket | undefined;
+  // How many sample rows the table holds now; the preview note describes them.
+  let previewShown = 0;
   const dialog = createExtractionDialogFocus(els.panel, {
     initial: () => draft && !busy ? els.label : els.status,
     returnTo: () => !els.openButton.disabled && !els.openButton.closest("[hidden]") && els.openButton.getClientRects().length > 0 ? els.openButton : document.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? undefined,
@@ -115,7 +117,8 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
 
   function drawRecovery(): void {
     dialog.render(() => {
-      const { ticket, pending } = recovery.state();
+      const { ticket, pending, previewPending, previewFailed } = recovery.state();
+      drawPreviewNote(els, draft, previewShown, previewPending, previewFailed);
       if (ticket !== retryTicket) {
         retryButton?.remove(); retryButton = undefined; retryTicket = ticket;
         if (ticket) {
@@ -243,6 +246,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
         els.fields.replaceChildren();
         els.previewHead.replaceChildren();
         els.previewBody.replaceChildren();
+        previewShown = 0;
         return;
       }
       if (els.label.value !== draft.label) els.label.value = draft.label;
@@ -260,7 +264,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
       })));
       for (const control of els.body.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>("input, select, button")) control.disabled = busy;
       renderPagination(els, draft);
-      renderPreview(els, draft, rows);
+      previewShown = renderExtractionPreview(els.previewHead, els.previewBody, extractionPreviewColumns(draft), rows);
     });
     drawRecovery();
   }
@@ -378,17 +382,35 @@ function renderPagination(els: ExtractionPanelElements, draft: ExtractionDraft):
   els.paginateLabel.textContent = paginationLabel(draft.pagination);
 }
 
-function renderPreview(els: ExtractionPanelElements, draft: ExtractionDraft, rows: readonly ExtractionPreviewRow[]): void {
-  const columns = extractionPreviewColumns(draft);
-  const shown = renderExtractionPreview(els.previewHead, els.previewBody, columns, rows);
-  const hidden = draft.fields.length - columns.length;
-  const sample = shown === 0
-    ? "No preview was read for these columns."
-    : `Showing ${shown} of ${draft.itemCount} ${draft.itemCount === 1 ? "item" : "items"}.`;
+/**
+ * The note beside the sample, which says whether the rows under it are current.
+ *
+ * Every recovery change reaches this (through `drawRecovery`), not only table
+ * redraws, because the automatic re-read after a column edit changes no rows
+ * until it settles: without it the note would show the old count as current
+ * while the new read is still pending. The note is a polite status, and is only
+ * rewritten when its words change, so a redraw is not announced twice.
+ */
+function drawPreviewNote(els: ExtractionPanelElements, draft: ExtractionDraft | undefined, shown: number, pending: boolean, failed: boolean): void {
+  const text = draft === undefined ? "" : previewSentence(draft, shown, pending, failed);
+  if (els.previewNote.textContent !== text) els.previewNote.textContent = text;
+  els.previewTable.setAttribute("aria-busy", String(draft !== undefined && pending));
+}
+
+function previewSentence(draft: ExtractionDraft, shown: number, pending: boolean, failed: boolean): string {
+  const rows = `${shown} ${shown === 1 ? "row" : "rows"} below ${shown === 1 ? "is" : "are"} from the last read.`;
+  const sample = pending
+    ? shown === 0 ? "Refreshing preview..." : `Refreshing preview... The ${rows}`
+    : failed
+      ? shown === 0 ? "The preview was not refreshed, so no sample is shown for these columns." : `The preview was not refreshed. The ${rows}`
+      : shown === 0
+        ? "No preview was read for these columns."
+        : `Showing ${shown} of ${draft.itemCount} ${draft.itemCount === 1 ? "item" : "items"}.`;
+  const hidden = draft.fields.length - extractionPreviewColumns(draft).length;
   const withheld = hidden === 0
     ? ""
     : ` ${hidden} ${hidden === 1 ? "column is" : "columns are"} not previewed: an excluded column is never read, and one changed since the preview was taken is re-read when the extraction runs.`;
-  els.previewNote.textContent = `${sample}${withheld}`;
+  return `${sample}${withheld}`;
 }
 
 function summaryLabel(draft: ExtractionDraft): string {

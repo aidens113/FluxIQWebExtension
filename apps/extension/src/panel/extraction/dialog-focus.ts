@@ -82,7 +82,7 @@ export function createExtractionDialogFocus(panel: HTMLElement, hooks: {
     const field = inside ? active.closest<HTMLElement>(".extraction-field") : null;
     const order = field ? Array.from(panel.querySelectorAll<HTMLElement>(".extraction-field")).map((row) => row.dataset.field) : [];
     const key = field?.dataset.field;
-    const selection = active ? [active.selectionStart, active.selectionEnd, active.selectionDirection] as const : undefined;
+    const selection = active && textLike(active) ? [active.selectionStart, active.selectionEnd, active.selectionDirection] as const : undefined;
     work();
     if (!inside || !active || !ownsFocus()) return;
     // Preserve deliberate focus changes; only repair focus lost by this redraw.
@@ -94,6 +94,11 @@ export function createExtractionDialogFocus(panel: HTMLElement, hooks: {
     if (replacement) target = Array.from(replacement.querySelectorAll<HTMLElement>("input, select, button, [tabindex]"))
       .find((element) => element.tagName === active.tagName && element.className === active.className
         && (active.type !== "radio" || (element as HTMLInputElement).value === active.value));
+    // The caret belongs to the control it was captured from. Only the redrawn
+    // copy of that same control inherits it; a neighbouring field or the
+    // initial control receives focus with its own selection untouched, so a
+    // removed column's caret can never land inside another column's name.
+    const matched = target !== undefined && enabled(target) ? target : undefined;
     if (!target && key) {
       const index = order.indexOf(key);
       const nextKey = order.slice(index + 1).find((id) => fields.some((row) => row.dataset.field === id))
@@ -102,9 +107,14 @@ export function createExtractionDialogFocus(panel: HTMLElement, hooks: {
     }
     if (!target || !enabled(target)) target = hooks.initial();
     focus(target);
-    if (target.tagName === "INPUT" && ["text", "search", "url", "tel", "password"].includes((target as HTMLInputElement).type) && selection && typeof selection[0] === "number" && typeof selection[1] === "number") {
-      (target as HTMLInputElement).setSelectionRange(selection[0], selection[1], selection[2] ?? undefined);
+    if (matched === target && textLike(target) && selection && typeof selection[0] === "number" && typeof selection[1] === "number") {
+      target.setSelectionRange(selection[0], selection[1], selection[2] ?? undefined);
     }
   }
   return { open, close, render };
+}
+
+/** A control whose selection range is its own text caret. Anything else has no selection to carry. */
+function textLike(element: HTMLElement): element is HTMLInputElement {
+  return element.tagName === "INPUT" && ["text", "search", "url", "tel", "password"].includes((element as HTMLInputElement).type);
 }

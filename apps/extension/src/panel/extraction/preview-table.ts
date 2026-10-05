@@ -13,6 +13,13 @@ import type { ExtractionFieldRow } from "./view-model";
 /** How many rows are drawn. The session holds at most 20; a panel this narrow shows a sample, not a table. */
 const VISIBLE_ROWS = 5;
 
+/**
+ * What an empty cell says. A missing key, `null` and `""` all draw the same,
+ * because the preview cannot tell them apart; words rather than a dash so a
+ * screen reader says something a person understands.
+ */
+const EMPTY_CELL = "No value";
+
 /** Draws `rows` under `columns` and answers how many rows were drawn. */
 export function renderExtractionPreview(
   head: HTMLTableRowElement,
@@ -40,7 +47,7 @@ function bodyRow(columns: readonly ExtractionFieldRow[], row: ExtractionPreviewR
     const value = row[column.sourceKey] ?? null;
     if (value === null || value === "") {
       cell.classList.add("extraction-preview-empty");
-      cell.textContent = "--";
+      cell.textContent = EMPTY_CELL;
     } else {
       cell.textContent = value;
     }
