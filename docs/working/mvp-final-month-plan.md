@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Phase 0 in progress: Codex's t262 landed on dev in both repositories 2026-10-05; Claude's round-1003 lane units are next.
+Status detail: Phase 0 in progress (t262, t263, t265, t266, t268 on dev; t264 and t267 on task branches); Phase 1b (recording as evidence, new realistic-site tests) added by the user, gated on A-D passing live.
 Created: 2026-10-05
 Last updated: 2026-10-05
 Owner: Senior supervisor agent
@@ -32,7 +32,7 @@ Deadline 2026-11-10 (36 days from 2026-10-05). Feature freeze 2026-10-29.
 **Decisions taken by default (the user may override).**
 
 1. Codex's t262 lands as-is (committed checkpoints only) and Claude supervises from here; Codex should not keep editing t262 in parallel.
-2. Demonstrate/record (acceptance item 4) stays a supported, unmeasured path, per the user's 2026-09-22 scope; it gets one smoke proof in Phase 5 and no development.
+2. **Replaced by the user, 2026-10-05:** recording becomes evidence for the model beside mandatory written instructions, never a script replayed blindly, and gets its own build-out and tests in Phase 1b, which starts only after A-D all pass live.
 3. Acceptance item 10 is met by Stop plus a live "take over / hand back" pause at a step boundary, built in Phase 4; no general mid-action pause.
 4. Item 24 ("Simple Mode shows it learned") is read as the extension chat and Automations row, since the chat replaced Simple Mode.
 5. The Week 2 exit gate is retired into Phase 2's chained adaptation proof.
@@ -67,6 +67,14 @@ Exit: one `dev` in each repository holding all of t262 and every kept lane unit,
 5. Four lanes run in parallel, A-D on slots 1-4. A re-proves on the integrated tree.
 
 Exit: each of A, B, C, D passes live twice consecutively from the extension chat with exact oracles, then replays with zero provider calls.
+
+### Phase 1b — New realistic-site tests and recording as evidence (user, 2026-10-05; only after Phase 1's exit)
+
+Gate: every planned live test (A, B, C, D) has passed. Nothing in this phase starts before that.
+
+1. New live tests only on the ten realistic scenario sites, mainly language-only instructions, chosen to cover what A-D do not (other sites, other task shapes).
+2. Build out recording as evidence: the person records an action on the site and must also write the instruction; the build reads the recording as one piece of evidence beside the instruction and the live page, and may diverge from it. A recording without an instruction is refused or asked about. The Flow must never copy a recorded mistake blindly.
+3. Recording-plus-instruction tests on the realistic sites, including recordings with deliberate slips (a wrong click undone, a detour) that the built Flow must not reproduce, judged by the same exact oracles.
 
 ### Phase 2 — The adaptation loop, live (Mon 10-12 to Fri 10-23) — the MVP thesis
 
