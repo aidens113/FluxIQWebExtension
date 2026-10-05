@@ -249,3 +249,26 @@ test("a recording-lane run publishes the recording lane's observation, and an un
   assert.equal(selectLaneObservation({ evaluated: false, flowLane: false, published: undefined, automationFailureExpected: null, recordingLane: recordingFallback }), undefined);
   assert.equal(selectLaneObservation({ evaluated: false, flowLane: true, published: undefined, automationFailureExpected: null, recordingLane: recordingFallback }), undefined);
 });
+
+// `run-musq0b1m-0472cfa0`: the build proposed a Flow and its proposal was
+// applied, then playback's settings save failed; the lane published nothing,
+// and the run read `flowCreated: false` ("Flow created: no") for a Flow that
+// existed. A lane that stopped after building says so through its record.
+test("a Flow-lane run that stopped after its Flow was built and applied reads flowCreated true, and nothing else", () => {
+  const select = (stoppedLane: Parameters<typeof selectLaneObservation>[0]["stoppedLane"]) => selectLaneObservation({
+    evaluated: true, flowLane: true, published: undefined, automationFailureExpected: null, stoppedLane,
+    recordingLane: () => { throw new Error("a Flow-lane run never reads the recording lane"); },
+  });
+  const applied = { flowId: "flow.a98557a0", build: { outcome: "proposed" }, review: { adaptationId: "adaptation.bootstrap.bf30", appliedMutationCount: 2 } };
+  const built = select(applied);
+  assert.equal(built?.flowCreated, true);
+  assert.equal(built?.reportedVerdict, null, "no Flow ran, so FluxIQ reported nothing");
+  assert.deepEqual(built?.actions, []);
+  assertRunEvaluation({ ...evaluationFrom(built!), verdict: "failed", failureCategory: "facility.contract", invariants: [{ id: "flow.played-back", passed: false, expected: "the created Flow ran", actual: "Core refused the playback settings", evidenceSequences: [] }] });
+  for (const [why, stopped] of Object.entries({
+    "no lane record": undefined,
+    "no Flow": { ...applied, flowId: null },
+    "a build that proposed nothing": { ...applied, build: { outcome: "failed" } },
+    "a proposal never applied": { ...applied, review: null },
+  })) assert.equal(select(stopped)?.flowCreated, false, why);
+});

@@ -25,6 +25,7 @@ import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usag
 import { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
 import { readLiveLlmReauthor, type LiveLlmReauthorRecord } from "./reauthor-record.js";
 import { liveLlmRunSpend, type LiveLlmRunSpend } from "./run-spend.js";
+import { stepLogObservedCalls } from "./call-rows.js";
 import { readLiveLlmStepLogInstructed } from "./step-log-instructed.js";
 import { readLiveLlmStepLogSpend, type LiveLlmStepLogSpend } from "./step-log-spend.js";
 import type { ProviderFailureRequestBounds } from "../provider-failure/index.js";
@@ -650,13 +651,13 @@ export class LiveLlmRun {
    * `observed.calls` and `observed.totalEstimatedCostUsd` are the whole run's
    * (`run-spend.ts`), because they are the figures every reader of this file
    * takes as what the run cost -- the machine's spend ledger among them. The
-   * rest of `observed` is still the phase it was settled from, `observed.phases`
-   * and `runSpend` break the total down, and `build`, `repair` and
-   * `verification` keep each phase's own record as before.
+   * rest of `observed` is the settled phase's, but its rows are the step log's,
+   * one per call (`call-rows.ts`); `observed.phases` and `runSpend` break the
+   * total down, and `build`, `repair` and `verification` keep each phase's own.
    */
   private async writeSnapshot(bundle: LiveLlmRunBundle, observed: LiveLlmObservedUsage | null, extra: Record<string, unknown>, repairObserved?: LiveLlmObservedUsage): Promise<void> {
     if (this.stepLogDirectory) this.stepLog = await readLiveLlmStepLogSpend(this.stepLogDirectory);
-    const spend = this.spend(repairObserved ?? this.repairObserved);
+    const spend = this.spend(repairObserved ?? this.repairObserved), stepCalls = observed ? await stepLogObservedCalls(this.stepLogDirectory, observed, spend.calls) : undefined;
     await bundle.writeStructured("snapshots/live-llm.json", {
       schemaVersion: "0.1",
       profileId: this.plan.profileId,
@@ -683,7 +684,7 @@ export class LiveLlmRun {
       // than inferred from the zero beside it. `null` for the ordinary run,
       // which is held to reaching a provider (`declared-provider-calls.ts`).
       expectedProviderCalls: this.declaredCalls,
-      observed: observed ? { ...observed, calls: spend.calls, totalEstimatedCostUsd: spend.totalEstimatedCostUsd, phases: spend.phases, perBuild: spend.perBuild } : null,
+      observed: observed ? { ...observed, ...stepCalls, calls: spend.calls, totalEstimatedCostUsd: spend.totalEstimatedCostUsd, phases: spend.phases, perBuild: spend.perBuild } : null,
       // Every call the run made, by phase, written even when the phase this
       // snapshot settled from could not be read.
       runSpend: spend,

@@ -51,7 +51,7 @@ async function build(options: FakeCreationCoreOptions = {}, wait: { deadlineMs?:
 
 test("the build saves the instruction, then authorizes, selects the context and explores, as the web panel does", async () => {
   const { core, authorized, record } = await build();
-  assert.deepEqual(core.calls, ["save-flow-generation-instruction", "authorize", "select-context", "generate", "get-adaptation"]);
+  assert.deepEqual(core.calls, ["save-flow-generation-instruction", "authorize", "select-context", "generate", "get-adaptation", "get-flow-adaptation"]);
   assert.deepEqual(core.instructionRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION }]);
   assert.deepEqual(authorized, [FLOW_ID]);
   // No start location was named, so the request carries none and Core builds
@@ -73,6 +73,8 @@ test("the build saves the instruction, then authorizes, selects the context and 
     declaredConsequences: null,
     consequenceCrossCheck: null,
     permissionRequest: null,
+    // Core recorded no judged yes on this proposal: a build given no judge.
+    judged: null,
   });
   assert.equal(JSON.stringify(record).includes("Scrape"), false, "the record holds no instruction text");
 });
@@ -244,6 +246,7 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
     declaredConsequences: null,
     consequenceCrossCheck: null,
     permissionRequest: null,
+    judged: null,
   });
   // A refusal before any request is a build that made no call.
   const early = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic: { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", retryable: false, providerInvocation: "not_attempted", providerResponse: "not_received" } } } });
@@ -500,4 +503,36 @@ test("the build tells Core where the Flow starts, when the run named a start loc
     // permits something.
     permittedConsequences: ["send_or_publish"],
   }]);
+});
+
+// Live run run-musp8nz1-dbd3905a (cause R2): that the build finished on a judged
+// yes about the standing Flow was provable only from core.log order. Core now
+// records that yes on the proposal's created audit event, and the build record
+// carries it. Advice beside the yes is unconfirmed (run-murwd8le, cause 10) and
+// the judge's free text, so the record keeps only that it was given.
+const DIGEST = `sha256:${"a".repeat(64)}`;
+const WRONG_ADVICE = "Remove or reorder step 11";
+
+test("a proposed build carries the judged yes Core recorded on its proposal, with a yes's advice as unconfirmed and never its words", async () => {
+  const { record } = await build({ buildJudged: { verdict: "yes", round: 1, judgedAt: "finished_round", flowSignature: DIGEST, standingFlowSignature: DIGEST, matchesStandingFlow: true, confidence: 0.9, unconfirmed: { advice: WRONG_ADVICE, patchNeeded: true } } });
+  assert.deepEqual(record.judged, { verdict: "yes", round: 1, judgedAt: "finished_round", flowSignature: DIGEST, standingFlowSignature: DIGEST, matchesStandingFlow: true, confidence: 0.9, unconfirmed: { adviceGiven: true, patchNeeded: true } });
+  assert.equal(JSON.stringify(record).includes(WRONG_ADVICE), false, "the judge's advice is not copied");
+  assert.equal(record.outcome, "proposed", "the record of a verdict changes nothing about the build's outcome");
+});
+
+test("every judgedAt Core writes is read, with no confidence or advice where Core recorded none", async () => {
+  for (const judgedAt of ["finished_round", "judging_reserve", "stopped_short"] as const) {
+    const { record } = await build({ buildJudged: { verdict: "yes", round: 2, judgedAt, flowSignature: null, standingFlowSignature: DIGEST, matchesStandingFlow: false } });
+    assert.deepEqual(record.judged, { verdict: "yes", round: 2, judgedAt, flowSignature: null, standingFlowSignature: DIGEST, matchesStandingFlow: false, confidence: null, unconfirmed: null }, judgedAt);
+  }
+  const patchOnly = await build({ buildJudged: { verdict: "yes", round: 0, judgedAt: "stopped_short", flowSignature: DIGEST, standingFlowSignature: DIGEST, matchesStandingFlow: true, unconfirmed: { patchNeeded: false } } });
+  assert.deepEqual(patchOnly.record.judged?.unconfirmed, { adviceGiven: false, patchNeeded: false });
+});
+
+test("a judged yes not in Core's shape is no record, and a refused build has none", async () => {
+  for (const buildJudged of [{ verdict: "no" }, { verdict: "yes", round: 0, judgedAt: "finished_round", flowSignature: "raw signature", standingFlowSignature: DIGEST, matchesStandingFlow: true }, { verdict: "yes", round: -1, judgedAt: "finished_round", flowSignature: null, standingFlowSignature: DIGEST, matchesStandingFlow: false }, { verdict: "yes", round: 0, judgedAt: "somewhere_else", flowSignature: null, standingFlowSignature: DIGEST, matchesStandingFlow: true }]) {
+    assert.equal((await build({ buildJudged })).record.judged, null);
+  }
+  const refused = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic: { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation", retryable: true, providerInvocation: "attempted", providerResponse: "received" } } } });
+  assert.equal(refused.record.judged, null);
 });

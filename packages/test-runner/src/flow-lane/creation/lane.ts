@@ -90,7 +90,13 @@ function holdSettledBuild(progress: CreatedFlowLaneProgress, settled: CreatedFlo
   progress.instructedConsequencesFrom = settled.instructedConsequencesFrom;
 }
 
-/** What starting the build left: the Flow, its build, the change put into it when the chat applied it, and FluxIQ's own words about it. */
+/**
+ * What starting the build left: the Flow, its build, the change put into it
+ * when the chat applied it, and FluxIQ's own words about it. A chat build's
+ * words are on its record as well (`build.chat.said`, every ending), so
+ * `flow-lane.json` keeps them on a created ending, where they used to be taken
+ * only for the failure messages below (run-musp8nz1-dbd3905a, cause R1).
+ */
 type StartedBuild = { flowId: string | null; build: CreatedFlowBuild; buildPermitted: readonly string[]; applied: CreatedFlowReview | null; said: string | null; settlement?: unknown };
 
 export type CreatedFlowLaneInput = {

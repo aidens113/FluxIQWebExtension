@@ -609,7 +609,7 @@ test("a run that re-authored reports every call it made -- build, checks and re-
     read: null,
   });
   assert.deepEqual(snapshot.observed.phases, snapshot.runSpend.phases);
-  assert.deepEqual(snapshot.reauthor.attempts, [{ attempt: 1, adaptationId: REAUTHOR_ID, calls: 36, callsFrom: "adaptation", inputTokens: 441_137, outputTokens: 10_071, estimatedCostUsd: 0.042481212 }]);
+  assert.deepEqual(snapshot.reauthor.attempts, [{ attempt: 1, try: null, adaptationId: REAUTHOR_ID, calls: 36, callsFrom: "adaptation", inputTokens: 441_137, outputTokens: 10_071, estimatedCostUsd: 0.042481212, ending: null }]);
   // The per-phase records a campaign sums are left as they were.
   assert.equal(snapshot.observed.accounting.estimatedCostUsd, 0.04178802, "the build's own accounting is not rewritten");
   // The two checks are the judge's, not the playback's repair: what is left is the ladder's unanswered rung, which called nothing.

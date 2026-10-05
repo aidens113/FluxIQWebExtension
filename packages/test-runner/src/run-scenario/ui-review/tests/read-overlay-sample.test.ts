@@ -69,3 +69,52 @@ test("no host is an absent overlay, and a read that fails is a sample carrying i
   assert.ok(failed.error?.includes("Execution context was destroyed"));
   assert.ok(!failed.error?.includes("s3cret"), "the run's secrets are screened out of the error");
 });
+
+// A tab that loads a new document between the two reads: the box read sees the old document, the host is then gone,
+// and the origin read after the failure sees the new one (run-musp8nz1 moment 2, D13).
+function navigatingCdp(after: { documentOrigin: number; href: string } | "unreadable"): OverlayCdp & { calls: string[] } {
+  const calls: string[] = [];
+  let stateReads = 0;
+  return {
+    calls,
+    async send(method: string, params?: Record<string, unknown>) {
+      calls.push(method);
+      if (method === "Runtime.evaluate" && params?.returnByValue) {
+        stateReads += 1;
+        if (stateReads === 1) return { result: { value: hostState({ href: "http://127.0.0.1:58504/scenarios/crossborder-marketplace/" }) } };
+        if (after === "unreadable") throw new Error("Execution context was destroyed.");
+        return { result: { value: after } };
+      }
+      if (method === "Runtime.evaluate") return { result: {} };
+      return {};
+    },
+  };
+}
+
+test("a read that fails because the host went away re-reads the document, so a navigation is not lost (D13)", async () => {
+  const sample = await readOverlaySample(navigatingCdp({ documentOrigin: 1727890009999.25, href: "http://127.0.0.1:58504/scenarios/crossborder-marketplace/item/1?x=1" }), 3003, []);
+  assert.equal(sample.error, "the overlay host went away between two reads");
+  assert.equal(sample.navigationSuspected, true, "a host that went away between two reads is what a navigation looks like");
+  assert.equal(sample.documentOrigin, 1727890009999.25, "the document the tab holds after the failure is named");
+  assert.equal(sample.pageUrl, "http://127.0.0.1:58504/scenarios/crossborder-marketplace/item/1");
+  const unreadable = await readOverlaySample(navigatingCdp("unreadable"), 3003, []);
+  assert.equal(unreadable.navigationSuspected, true);
+  assert.equal(unreadable.documentOrigin, undefined, "a document that cannot be read is not guessed");
+  assert.equal(unreadable.documentError, "Execution context was destroyed.", "and why it could not be read is kept");
+});
+
+test("overlay text keeps a fixture path and a location's path, and still screens secrets, codes and opaque strings (D14)", async () => {
+  const node = { nodeType: 1, nodeName: "FLUXIQ-ACTIVITY-OVERLAY", children: [], shadowRoots: [{ nodeType: 11, nodeName: "#document-fragment", children: [element("DIV", [
+    element("SPAN", [text("Running your Flow")]),
+    element("SPAN", [text("Running step 1 of 12: Opening “/scenarios/crossborder-marketplace/item/1005008123450”")]),
+    element("SPAN", [text("Opening “http://127.0.0.1:58504/scenarios/crossborder-marketplace/search?q=hub&token=abc#top”")]),
+    element("SPAN", [text("Opening “/account/s3cret/orders” with code 482913 and key AbCdEfGhIjKlMnOpQrStUvWxYz0123456789")]),
+  ])] }] };
+  const sample = await readOverlaySample(fakeCdp(hostState(), node), 0, ["s3cret"]);
+  assert.deepEqual(sample.textParts, [
+    "Running your Flow",
+    "Running step 1 of 12: Opening “/scenarios/crossborder-marketplace/item/1005008123450”",
+    "Opening “http://127.0.0.1:58504/scenarios/crossborder-marketplace/search”",
+    "Opening “/account/[REDACTED]/orders” with code [code] and key [long]",
+  ]);
+});

@@ -142,6 +142,12 @@ export function flowLaneObservation(input: {
  * `evaluated` is false on the existing and clone targets, which run a
  * pre-existing Flow on no evaluation lane and publish nothing. The recording
  * lane's observation is built only when it is the answer.
+ *
+ * `stoppedLane` is the created-Flow lane's record of where it stopped
+ * (`snapshots/flow-lane.json`, `CreatedFlowLaneIncomplete`). A lane that
+ * stopped after its build proposed a Flow and the proposal was applied did
+ * create one, though nothing ran: `run-musq0b1m-0472cfa0` failed on playback's
+ * settings save and read "Flow created: no" for a Flow that existed.
  */
 export function selectLaneObservation(input: {
   evaluated: boolean;
@@ -149,10 +155,13 @@ export function selectLaneObservation(input: {
   published: RunLaneObservation | undefined;
   automationFailureExpected: ExpectedFailure | null;
   recordingLane: () => RunLaneObservation;
+  stoppedLane?: { flowId: string | null; build: { outcome: string } | null; review: unknown } | undefined;
 }): RunLaneObservation | undefined {
   if (input.published) return input.published;
   if (!input.evaluated) return undefined;
-  if (input.flowLane) return flowLaneObservation({ flowCreated: false, oracleVerdict: null, run: undefined, automationFailureExpected: input.automationFailureExpected });
+  const stopped = input.stoppedLane;
+  const flowCreated = stopped !== undefined && stopped.flowId !== null && stopped.build?.outcome === "proposed" && stopped.review != null;
+  if (input.flowLane) return flowLaneObservation({ flowCreated, oracleVerdict: null, run: undefined, automationFailureExpected: input.automationFailureExpected });
   return input.recordingLane();
 }
 

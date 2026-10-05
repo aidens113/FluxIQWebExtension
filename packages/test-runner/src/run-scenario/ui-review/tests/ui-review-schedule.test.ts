@@ -28,7 +28,7 @@ test("each phase takes one moment of its label, in order; a build or a Flow run 
   timers.tick(); await schedule.idle();
   await schedule.enter("end");
   assert.equal(timers.active(), 0);
-  assert.deepEqual(taken, ["start", "mid-build", "mid-build", "mid-build", "flow-run", "flow-run", "end"]);
+  assert.deepEqual(taken, ["start", "mid-build", "mid-build", "mid-build", "before-flow-run", "flow-run", "end"], "a Flow run's own moment is taken before any step ran (D20)");
 });
 
 test("a tick that finds a moment still being taken is skipped and counted, not queued", async () => {

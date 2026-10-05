@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_LLM_MODEL, LLM_LAB_MAX_CALLS_PER_RUN } from "@fluxiq-web-extension/test-contracts";
 import { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
+import { RunnerFailure } from "../failure.js";
 import type { PersistedFlowLlmExecution } from "../flow-lane/index.js";
 
 const origin = "https://panel.example.test";
@@ -480,4 +481,24 @@ test("run detail keeps a skipped attempt's closed mark and its skip route, and d
   assert.equal(second?.route, "skipped");
   assert.equal(second && "skipped" in second, false);
   assert.equal(third && ("route" in third || "skipped" in third), false);
+});
+
+// `run-musq0b1m-0472cfa0`: Core refused the run's own Flow settings with a 400
+// ("LLM estimated-cost limit is invalid.") and the campaign read it as an
+// installation fault, `environment.missing`. A 400 is Core refusing a value the
+// Lab sent, so it is the facility's contract with Core that failed.
+test("a 400 refusal of a value the Lab sent is a facility contract failure naming the endpoint and Core's words", async (t) => {
+  const client = await mockedClient(t, url => endpoint(url) === "update-flow-settings"
+    ? json({ ok: false, error: "LLM estimated-cost limit is invalid." }, 400)
+    : json({ ok: false, error: "Core is down." }, 503));
+  await assert.rejects(() => client.automationStudioCall("update-flow-settings", { flowId: "flow.main" }), (error: unknown) => {
+    assert.ok(error instanceof RunnerFailure);
+    assert.equal(error.category, "facility.contract");
+    assert.match(error.message, /update-flow-settings/u);
+    assert.match(error.message, /LLM estimated-cost limit is invalid\./u);
+    assert.deepEqual(error.details, { path: "/api/programs/automation-studio/update-flow-settings", status: 400, reason: "LLM estimated-cost limit is invalid." });
+    return true;
+  });
+  // Any other refusal is not the Lab's value at fault, and keeps its category.
+  await assert.rejects(() => client.automationStudioCall("get-flow", {}), (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing");
 });

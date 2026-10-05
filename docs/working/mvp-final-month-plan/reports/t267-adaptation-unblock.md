@@ -1,6 +1,6 @@
 # t267 adaptation-loop unblock — lead report
 
-Status: S1, S2 and S3 committed by the supervisor (S3: Core `85758d09`). C1 is done, uncommitted. C2 waits for t264 to land on `dev`, and S4 and S5 wait on C2 and on t264. S3's extension change still must not reach `dev` before C2.
+Status: S1, S2, S3 and C1 committed by the supervisor (C1: Core `33566b00`). S5 (Lab records) is done, uncommitted, downstream files only. C2 and S4 wait for t264's last stage to land on `dev`. S3's extension change still must not reach `dev` before C2.
 Tree: `C:/Users/osrs_/FluxStuff/fxwork/t267/!FluxIQWebExtension` (branch `task/t267-adaptation-loop-unblock`); Core sibling `fxwork/t267/!FluxIQ` (same branch, from `de8eb8e5`): unchanged in S1, changed in S2 and S3.
 Brief: `t267-adaptation-unblock` in `../mvp-final-month-plan.md`; blockers numbered as in [the audit](./adaptation-loop-audit.md) "Ranked blockers".
 
@@ -334,3 +334,59 @@ The supervisor gave this brief Core `apps/web/src/lib/program-route.ts` and its 
 - `node scripts/build-cache/cli.mjs web:check` exit 0. Core structure audit `passed (247 warning(s), 349 baselined)`. `pnpm.cmd docs:check` "Deterministic framework reference is current."
 
 **Not verified:** a live token run from the extension. That is the "Live checks still owed" item above, after C2.
+
+## Stage S5 — Lab records: A10 (t174), C w82 (t194), C w74's `try` reworked onto t262
+
+Downstream only. The sources are lanes A and C's uncommitted trees (base `45bd6232`, read with `--ignore-cr-at-eol`). Since that base, dev had changed only `flow-lane/creation/{build-proposal,tests/build-proposal.test,tests/lane.test}.ts`, `live-llm/{live-llm-run,index,tests/live-llm-run.test}.ts` and `run-scenario.ts`; those were merged by hand. `run-scenario/ui-review/**` was unchanged on dev.
+
+### Worker briefs (foreground, parallel, disjoint files)
+
+| Brief | Agent | Files (`T` = `packages/test-runner/src`) | Report |
+| --- | --- | --- | --- |
+| t267-s5-playback-ui | worker | `T/lab-runs/write-playback-steps.ts`, `T/run-scenario/ui-review/**` (+ tests, new `screen-overlay-text.ts`, `tests/choose-scenario-tab.test.ts`) | [s5-playback-ui](./t267/s5-playback-ui.md) |
+| t267-s5-records | worker | `T/live-llm/{call-rows (new),live-llm-run,reauthor-record,index}.ts`, `T/existing-fluxiq-control.ts`, `packages/test-contracts/src/evaluation.ts`, `scripts/lab/live-campaign/row/reported-spend.mjs` (+ tests) | [s5-records](./t267/s5-records.md) |
+| t267-s5-creation | worker-high | `T/flow-lane/creation/{build-proposal,lane,chat/build-from-chat,chat/chat-record}.ts`, `T/flow-lane/lane-observation.ts`, `T/run-scenario.ts` (+ tests) | [s5-creation](./t267/s5-creation.md) |
+
+### What landed
+
+- **A10.**
+  - `said` on every chat ending.
+  - `judged` (`CreatedFlowBuildJudged`) read from Core's `buildJudged` on the proposal's `created` audit event. It accepts every `judgedAt` Core writes, including t264's `stopped_short`. `unconfirmed` keeps only `{ adviceGiven, patchNeeded }`, never the judge's advice words: lane A copied the words, and this is the digest-only rule t264's finishing verdict follows.
+  - `stoppedLane`: a lane that stopped after its applied proposal reads `flowCreated: true`.
+  - Fixture tabs are closed before playback.
+  - A Core 400 is filed as the new `facility.contract` category (test-contracts and `existing-fluxiq-control.ts`).
+  - `observed.observedCalls` has one row per step-log call (`call-rows.ts`).
+  - A campaign row's cost is the run's whole spend (`spendSource: "run"`).
+  - Playback step folders are numbered in time order among Core's steps.
+  - UI review: `pageLoads` from failed reads, `navigationSuspected`, `probablePageLoads`, `openTabs` and tab counts, `screenOverlayText`, and the `before-flow-run` moment.
+- **C w82.**
+  - A list read's counts appear as `result.read` and in its playback step summary.
+  - Re-author builds carry `ending` in Core's closed vocabulary, reconciled with the current `build-ending.ts`: `bound` only on `budget_exhausted`, `noRoute` only where Core allows it.
+  - `callsFrom: "loop_decisions"`.
+- **C w74, reworked.** t262's Core writes no `try`. The Lab derives it: an entry is try 2 when the entry before it is a try 1 with the same brief record and the same `attempt`, and that build failed without an adaptation at `provider_request` with `retryable: true`. That failure is the only one Core rebuilds (`reauthor-build.ts` `automaticRequestRetry`). `instructionId` alone does not distinguish a rebuild, because each route uses one constant id. Both routes write `brief`.
+- **Not ported.** Lane A's `T/demo-operation-status.ts` has no hunk, and its `runnerFailureCodes` is a curated subset for the demo-preparation status (it already omits `fixture.invalid` and `extension.*`), not an exhaustive list, so `facility.contract` is not added there.
+
+### Lead fixes after the workers returned
+
+1. `T/live-llm/live-llm-run.ts` reached 802 lines (limit 800), and the downstream structure audit failed. I tightened the doc comment back to its three lines and folded the step-log read into the existing `const spend` statement, which is lane A's own form: now 800 lines.
+2. The records worker dropped lane A's two `T/run-evaluation/tests/runner-wiring.test.ts` tests because their code lived in another worker's file. That code has now landed, so I ported both. The `stoppedLane` test's anchor is adapted to dev's longer `recordIncompleteEvidence` body: the record is kept first, before anything that can throw.
+3. `T/flow-lane/tests/lane-observation.test.ts` used `runtime.behavior` because `facility.contract` did not exist when that worker ran. It now asserts `facility.contract`, as lane A had it.
+4. `docs/architecture/testing-facility.md`: lane A's A10 paragraphs, adjusted to what landed (`stopped_short`; digest-only `unconfirmed`, with no advice quoted). New paragraphs cover the re-author record (`callsFrom`, `ending`, derived `try`) and a list read's counts. Lane C had no doc diff. Every name cited was checked against the ported code.
+
+### Validation (lead-run, final state)
+
+- `pnpm.cmd --filter @fluxiq-web-extension/test-runner build` exit 0, then `node --test` on the `dist/` build of every changed or new test file plus all of `live-llm/tests`, `lab-runs/tests`, `run-scenario/ui-review/tests`, `flow-lane/{tests,repair/tests,creation/tests,creation/chat/tests}`: 72 files, `# tests 651 # pass 651 # fail 0`.
+  - That includes `runner-wiring.test.ts`. It and the `lab-runs` tests cannot be bundled by the scratch `run-subset.mjs`: it chokes on Playwright's `chromium-bidi`, and its output sits one level too deep for `runnerSource()`.
+  - The creation worker's one `runner-wiring` failure ("fixture.invalid comes back as environment.missing") was that layout; it does not reproduce from `dist/`.
+- `pnpm.cmd --filter @fluxiq-web-extension/test-runner check` exit 0. `... test-contracts check` exit 0, and `... test-contracts test` `# tests 161 # pass 161`.
+- `node --test scripts/lab/live-campaign/row/tests/*.test.mjs`: `# tests 35 # pass 35`.
+- Downstream structure audit `passed (170 warning(s), 118 baselined)`. Scratch build directories removed. No CR in the doc.
+
+### Not verified (S5)
+
+- No live Lab run, so none of the new records were seen in a real bundle.
+- The full test-runner suite was not run (narrow checks only).
+
+### Notes
+
+- To test `packages/test-runner` files that import Playwright or read sources by path, build `dist/` (`pnpm.cmd --filter @fluxiq-web-extension/test-runner build`) and run `node --test dist/...`. The scratch bundler is unreliable for them.

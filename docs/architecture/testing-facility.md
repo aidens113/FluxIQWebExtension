@@ -1266,7 +1266,22 @@ build and review records, Flow id and shape, whether the Flow reached its own
 page, the runtime run and action evidence, extraction judgement, and any
 partial progress available when the lane stopped. A failed build or run does
 not erase the preceding stages by replacing the artifact with an all-or-nothing
-success record.
+success record. A lane that stopped after its build proposed a Flow and the
+proposal was applied still created that Flow, so its `evaluation.json` reads
+`flowCreated: true` though nothing ran (`selectLaneObservation`'s
+`stoppedLane`; `run-musq0b1m-0472cfa0` read "Flow created: no" for a Flow that
+existed).
+
+Before playback the runner closes every fixture tab other than the one playback
+drives -- the tabs the exploration and the build's tests opened, on the
+fixture's origin or blank -- and never the extension's own pages, so a Flow
+starts with only its own tab open (`run-scenario.ts` `prepareFlowPage`).
+
+A 400 from Core on an Automation Studio call is Core refusing a value the Lab
+sent, and fails the run as `facility.contract`, naming the endpoint and Core's
+sentence (`existing-fluxiq-control.ts`). It was filed as `environment.missing`,
+so a campaign read the run's "LLM estimated-cost limit is invalid." on its own
+Flow settings as an installation fault (`run-musq0b1m-0472cfa0`).
 
 #### The build is started from the extension's chat window
 
@@ -1317,8 +1332,27 @@ Independent creation first creates and selects a new run-owned project through p
 Every ending is a build record carrying `chat` (`CreatedFlowChatRecord`):
 places in the thread, `became` (`build`, `no_build` or `other_capability`),
 `ending` (`created`, `awaiting_permission`, `failed` or `no_result`), counts of
-asks, and `readWithoutModel`. `snapshots/flow-lane.json` names
+asks, `readWithoutModel`, and `said`: FluxIQ's own last words about the
+instruction, whole, on every ending (`null` only when no answer or result
+arrived). A created ending used to keep its kind and timing but not the words
+(`run-musp8nz1-dbd3905a`, cause R1). `snapshots/flow-lane.json` names
 `buildEntry: "chat"`.
+
+A build that left a proposal also carries `judged` (`CreatedFlowBuildJudged`):
+the judged `yes` the build finished on, as Core records it on the proposal's
+`created` audit event (`buildJudged`, Core's
+`flow-bootstrap/unfinished-build/finishing-verdict.ts`). It holds the round,
+`judgedAt` (`finished_round`, `judging_reserve`, or `stopped_short` for a round
+that stopped short with a clean, changed Flow and was judged), sha256 digests of
+the judged test's Flow signature and of the Flow the build finished with,
+`matchesStandingFlow`, the judge's `confidence` where Core recorded one, and
+`unconfirmed`: only whether the judge gave advice beside its yes
+(`adviceGiven`) and its `patchNeeded`, never the advice's words. That advice is
+unconfirmed and never a repair directive; in `run-murwd8le-79e735a8` (cause 10)
+a yes advised removing a step that the Flow needed. `judged` is `null` on a
+build with no judge, a refused build, or a Core older than the record. Before
+it, "finished on a judged yes about the standing Flow" was provable only from
+`core.log` order (cause R2).
 
 A chat that built nothing fails as "FluxIQ's chat did not build a Flow ...; it
 said: ...", in FluxIQ's own words. The build settlement's "reached no
@@ -1697,6 +1731,43 @@ records leave out, from the run's own step log (`steps/*/meta.json`,
 `chat` phase, and the calls of a re-author Core recorded a cost for and no
 count. Anything else the log saw is added as `unattributed`, never subtracted
 (`run-muqk713g-d08ad3dc`: 17 counted of 35 calls before this).
+
+The same log gives `live-llm.json` its per-call rows: `observed.observedCalls`
+is one row per provider call in `steps/`, each with the request id, task kind,
+stage, provider, model, tokens and cost its `meta.json` names
+(`live-llm/call-rows.ts`). A row takes the prompt version and validation
+verdict from Core's own per-call line for the same request id, since the step
+log writes neither; a Core line whose request id the log lacks is kept after the
+log's rows. The rows used to be the settled phase's alone: for a created Flow the
+build's decision rows, all without identity, and no row for the chat, the
+instruction reading or the judges (`run-musq0b1m-0472cfa0`: 27 null rows, 4
+calls missing). A campaign row reports the run's whole spend,
+`runSpend.totalEstimatedCostUsd`, as `Cost USD (reported)` with `spendSource:
+"run"` (`scripts/lab/live-campaign/row/reported-spend.mjs`); the build's own
+figure left out the chat's call ($0.211519044 of $0.212718924 in that run).
+
+`live-llm.json`'s `reauthor` record lists every re-author build Core recorded on
+the run (`metadata.resultReauthor.attempts[]`, `live-llm/reauthor-record.ts`).
+Each build says where its `calls` came from:
+- `loop`: the build loop's provider call count.
+- `loop_decisions`: a failed build's decision count, one paid call each, where
+  the loop kept no call count.
+- `adaptation`: the succeeded build's adaptation.
+
+A failed build's `ending` is Core's build ending in closed words and counts
+only (`flow-bootstrap/generation-failure/build-ending.ts`): its kind, the
+`bound` of a `budget_exhausted` ending, rounds, decisions, steps, whether the
+Flow was tested, each round's stop, and the no-route kind where Core allows one.
+Never its message or what was not done.
+
+`try` is 1 for the first build on a brief and 2 for Core's one automatic
+rebuild, which happens only after a named transient provider failure (t262).
+Core writes no try number, so the Lab derives it. An entry is try 2 when the
+entry before it is a try 1 with the same brief record and the same `attempt`,
+and that build failed without an adaptation at `provider_request` with
+`retryable: true`. An entry with no brief has `try: null`.
+`run-musp39u8-9ac026ab` booked both of its builds as `calls: null` and kept
+neither ending.
 
 ### When Core is still writing a run
 
@@ -2982,8 +3053,17 @@ How a run fills it:
 
 After Core stops, a created Flow's playback joins the build's steps
 (`lab-runs/write-playback-steps.ts`): each command attempt dispatched in the
-playback's window becomes an `NNNN-run-<actionType>` folder numbered after
-Core's last step, and `steps/index.md` is rewritten. Every runtime step is
+playback's window becomes an `NNNN-run-<actionType>` folder numbered at its own
+time among Core's steps, and `steps/index.md` is rewritten. A Core step that
+started after a playback step -- the post-run check of its result -- moves
+after it, its folder and its `meta.json` `step` both, so the folders read in
+time order (`run-musp8nz1-dbd3905a`: the check was 0048 before the playback it
+checked, 0049-0061). A list read (`web.dom.extract_list`) also says what it
+read, as `result.read` and in its summary. That covers its records, pages,
+items seen, empty records, whether a cap cut it short, why paging stopped,
+what its conditions kept and the rows it returned, in counts and closed words
+only, never a row or a field (`run-musp39u8-9ac026ab` wrote `validation: null`
+and nothing else). Every runtime step is
 listed, including the ones the run did not perform. A step the run skipped is
 written with `status: "skipped"`, never as failed, with the run detail's
 `skipped` mark in `meta.json` and `result.json`, and with the failure that
@@ -3048,14 +3128,44 @@ and reads the window as `stable`, `changed` or `flickering` (a revisit, two or
 more presence or visibility toggles, or three or more text changes). Each
 sample records the document it was read from (`performance.timeOrigin`) and
 that document's location as `pageUrl`, screened to origin and path like every
-other recorded location. Every change of document between consecutive readable
-samples is a page load, counted as `pageLoads` whether or not the overlay was
-absent across it. One absent sample whose neighbours were both read, present,
-from different documents is that load's gap, which no product code can bridge:
-it is counted as `pageLoadGaps` as well and makes no toggle. Both counts are
-shown in the `[lab] ui review` line and the review's summary. Any other
-absence counts as a toggle: two or more samples, one inside a single document,
-or one beside a failed read.
+other recorded location. Every change of document between consecutive samples
+that name theirs is a page load, counted as `pageLoads` whether or not the
+overlay was absent across it. One absent sample whose neighbours were both
+read, present, from different documents is that load's gap, which no product
+code can bridge: it is counted as `pageLoadGaps` as well and makes no toggle.
+Any other absence counts as a toggle: two or more samples, one inside a single
+document, or one beside a failed read.
+
+A read that fails the way a navigation makes it fail (the overlay host went
+away between two reads, or the page's execution context was destroyed) is
+marked `navigationSuspected`, and the tab's document is read once more, so the
+failed sample names the document the tab holds after it, or says in
+`documentError` why it could not. A failed read still makes no toggle, but the
+document it names counts toward `pageLoads`, so a navigation that ends a window
+in a failed read is no longer lost (run-musp8nz1 moment 2). A window that ends
+in such a failure with nothing after it naming a new document, or a later read
+of the same one, counts one `probablePageLoads`, kept apart from `pageLoads`.
+All three counts are shown in the `[lab] ui review` line and the review's
+summary.
+
+The overlay's text and attributes are screened by `screenOverlayText`:
+- A URL the overlay names keeps its origin and path, and a bare path is kept
+  whole, as `screenLocation` keeps a recorded location, never a query or
+  fragment.
+- Secrets, token patterns and six-digit codes are screened everywhere.
+- Any other 32-character opaque run becomes `[long]`. Before this, a fixture
+  path in "Opening “…”" became `[long]` too (run-musp8nz1 moment 7).
+
+Each scenario picture lists every tab open in the browser as `openTabs`:
+screened locations, in the browser's order, each with whether it was in front.
+They come from the extension's `chrome.tabs.query({})`, or from the run's pages,
+with front `unknown`, when that cannot be read. `frontTabs` still lists the
+tabs in front, and the summary gives each moment's tab count.
+
+A moment taken on entering a Flow run is labelled `before-flow-run`, since the
+run is reported while it is still being prepared and can fail before any step
+plays (run-musq0b1m moment 14). The periodic moments taken while it is still in
+progress are `flow-run`.
 
 Each picture records when it was taken against its moment's overlay samples:
 `takenAt`, `windowMs` (the capture's span in milliseconds from the window's

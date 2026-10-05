@@ -142,6 +142,12 @@ export type ExistingNodeDefinition = {
 /** Core's answer to a Flow bootstrap generation, kept whole on failure because Core's diagnostic travels in `payload`. */
 export type FlowBootstrapGenerationEnvelope = { status: number; ok: boolean; payload: unknown };
 
+/** A 400 is Core refusing a value the Lab sent: the facility's contract with Core failed, not the environment (`run-musq0b1m-0472cfa0`). */
+function contractRefusal(error: unknown): never {
+  if (error instanceof RunnerFailure && error.details?.status === 400) throw new RunnerFailure("facility.contract", `Core refused a value the Lab sent: ${error.message}`, { cause: error, details: error.details });
+  throw error;
+}
+
 export class ExistingFluxIQControlClient extends FluxIQControlClient {
   private providerFailures: ProviderFailureLog | undefined;
 
@@ -158,7 +164,7 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
   async automationStudioCall(endpoint: string, payload: JsonRecord = {}, bounds: FluxIQHttpOptions = {}, domainId?: string): Promise<unknown> {
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(endpoint)) throw new Error("Automation Studio endpoint is malformed");
     const suffix = domainId ? `?domainId=${encodeURIComponent(domainId)}` : "";
-    const envelope = record(await this.request(`/api/programs/automation-studio/${endpoint}${suffix}`, payload, "environment.missing", "POST", bounds), `${endpoint} response`);
+    const envelope = record(await this.request(`/api/programs/automation-studio/${endpoint}${suffix}`, payload, "environment.missing", "POST", bounds).catch(contractRefusal), `${endpoint} response`);
     if (envelope.ok !== true) throw new RunnerFailure("environment.missing", `Automation Studio call failed: ${endpoint}`);
     return envelope.payload;
   }

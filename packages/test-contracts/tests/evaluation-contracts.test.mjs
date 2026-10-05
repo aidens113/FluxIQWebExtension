@@ -300,6 +300,8 @@ test("the automation failure and the test-rig failure use separate taxonomies", 
   const rigFailure = { ...flowRun(), verdict: "failed", invariants: [{ id: "gateway-up", passed: false, expected: "connected", actual: "refused", evidenceSequences: [] }] };
   assert.deepEqual(issuesOf({ ...rigFailure, failureCategory: "target_not_found" }), ["$.failureCategory"]);
   assert.equal(validateRunEvaluation({ ...rigFailure, failureCategory: "gateway.connection" }).valid, true);
+  // Core refusing, as a 400, a value the Lab sent (`run-musq0b1m-0472cfa0`).
+  assert.equal(validateRunEvaluation({ ...rigFailure, failureCategory: "facility.contract" }).valid, true);
   rejects({ ...flowRun(), automationFailureReported: { category: "timeout", code: "" } }, "empty failure code");
   rejects({ ...flowRun(), automationFailureReported: { category: "timeout", detail: "x" } }, "unknown failure property");
 });

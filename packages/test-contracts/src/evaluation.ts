@@ -14,9 +14,14 @@ export const CANDIDATE_COMPARISON_SCHEMA_VERSION = "0.1" as const;
  * trustworthy run (fixture, environment, process, extension, gateway,
  * recording, evidence). It never describes how the automation failed; that is
  * `RunEvaluation.automationFailureReported`, in Core's failure taxonomy.
+ *
+ * `facility.contract` is Core refusing, as a 400, a value the Lab itself sent
+ * -- the Lab and Core disagree on a control contract. It is neither a missing
+ * environment nor the product's behaviour (`run-musq0b1m-0472cfa0`: Core's
+ * "LLM estimated-cost limit is invalid." on the run's own Flow settings).
  */
 export const failureCategories = [
-  "fixture.invalid", "environment.missing", "process.startup", "extension.install", "extension.worker",
+  "fixture.invalid", "environment.missing", "facility.contract", "process.startup", "extension.install", "extension.worker",
   "gateway.connection", "gateway.pairing", "recording.contract", "recording.persistence", "action.dispatch",
   "action.targeting", "runtime.behavior", "visual.mismatch", "performance.budget", "security.redaction",
   "test.flaky", "unknown",
