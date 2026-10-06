@@ -1,10 +1,10 @@
 # t273-creation-wiring: creation blockers that needed t264's files
 
-Lead: t273-creation-wiring (lead). Date: 2026-10-05. Trees: `fxwork/t273/!FluxIQ` (Core, branch `task/t273-creation-wiring`) and `fxwork/t273/!FluxIQWebExtension` (downstream; only this report changed). S1 was committed by the supervisor (Core f83eeb5a). Stages: S1 B7 binding affordances (done); S2 D phase 2 (done, below); S3 P5 wiring not started.
+Lead: t273-creation-wiring (lead). Date: 2026-10-05. Trees: `fxwork/t273/!FluxIQ` (Core, branch `task/t273-creation-wiring`) and `fxwork/t273/!FluxIQWebExtension` (downstream; only this report changed). S1 was committed by the supervisor (Core f83eeb5a). Stages: S1 B7 binding affordances (done); S2 D phase 2 (done, below); S3 P5 wiring, run it, stale check (done, below).
 
 ## Current State
 
-S1 is committed. S2 is done and validated in Core and waits for the supervisor to commit it and apply the two-line service.ts seam (see S2 outcome). S3 is waiting.
+S1 and S2 are committed (S2 333ea0bf; service.ts seam applied by the supervisor in d81ce169). S3 is done and validated in Core, uncommitted (see S3 outcome); t273 is then complete.
 
 ## S1 — B7 binding affordances
 
@@ -253,3 +253,143 @@ Results with the probe applied:
 - no deeper first step;
 - either a completion refused naming the missing place, or one accepted with all three places covered in order;
 - the chat showing any route refusal as "sent back".
+
+## S3 — P5 `$step` wiring, the chat's "run it", the stale re-run check
+
+### Findings and decisions (lead)
+
+- **P5.** t270's call sites still stand, but the amendment code moved to `R/flow-draft/amendment/bind.ts`.
+  - A `$step` that bind refuses keeps the closed `bind_malformed` reason with t270's new text. No `bind_step_*` reasons are added, so the activity and UI refusal-word maps stay untouched.
+- **"Run it" did not inherit C2.** The chat port calls as the person's unlocked session: `A/api/handlers/conversations.ts:274` sets `sessionId: caller.sessionId`. So `runtime-execution.ts` sees `paired: false` and never sets `resultCheckCallerPays`.
+  - Sending `runIntent` alone would bill every routine result check of an extension chat run to the person's key, which breaks MVP item 23.
+  - Fix, mirroring t267's rule: the command context carries `paired`; `run-flow.ts` asks for `resultCheckCallerPays: "repair_checks"` when paired; the handler accepts that one value, since a caller may only choose to pay less.
+  - This needs two `A/api/handlers` files beyond the granted ownership. The edits are small and flagged here.
+- **Stale re-run check (t267's gap).** The re-author re-run is verified with `input.resultCheck` as copied before `service.ts` re-decided it as a repair (`service.ts` ~2545, `run-outcome.ts` ~358-366 and ~426-429).
+  - The `rerunRepairedFlow` port returns the re-decided check.
+  - The re-run is verified with it.
+
+### Brief: t273-s3-w4-step-decision-path
+- Repository: Core `fxwork/t273/!FluxIQ`, R = `packages/fluxiq/src/programs/automation-studio/runtime`.
+- Task: make a model's `$step` in a written `core.run_node` call and in a rerun accepted end to end, per `docs/working/mvp-final-month-plan/reports/t270-p5-step-binding.md` (downstream tree), "Specified for t264-owned files", items 1-4, 7 (the `unusable-decision.ts` text) and 8:
+  - `R/llm/evidence-loop-decision.ts`: parse and issue codes take an optional `AutomationStudioFlowDraftBindingContext`, passed to `readNodeCall`.
+  - `R/llm/evidence-loop.ts`: one call site, `{ steps: draftSteps, nodeOf: input.nodeOf }` while drafting, no `at`. The file is at 798/800 lines; do not grow it.
+  - `R/llm/evidence-loop/decision-refusal.ts`: the same context.
+  - `R/llm/evidence-loop/rerun-request.ts` `writtenInput`: `{ steps, at: step.position }`.
+  - `R/llm/unusable-decision.ts`: the text.
+  - `R/llm/node-tools/run-node.ts` `PARAMETERS_DESCRIPTION`: the sentence.
+  - Update the tests that pin `$step` as refused: `R/llm/evidence-loop/tests/authored-draft.test.ts` (~572) and `rerun-request.test.ts` (~239).
+  - Add one end-to-end test in a new `R/tests/earlier-output/tests/loop.test.ts`: a loop run in which the model writes a `core.run_node` call whose parameter is `{"$step": n, "output": ...}` reading an earlier step's real output. It is accepted, stored as the step binding, and resolves in the build's test (use the existing `replay.test.ts` and `stored-flow.test.ts` support beside it). A future, self or withdrawn step is refused with its `run_node.binding_refused.step_*` code.
+- Owns: the six source files above, their nearest tests, and the new `loop.test.ts`.
+- Must not touch: `R/flow-draft/**`, `R/llm/draft-amendment-feedback.ts`, `R/llm/node-tools/draft-from-flow.ts`, `R/conversations/**`, `R/result-verification/**`, `R/service.ts`, `A/**`.
+- Definition of done: fail-first is recorded; `npx vitest run` on `R/llm` and `R/tests/earlier-output` passes; `fluxiq:check` exits 0 (report, rather than fix, a failure that is only in another worker's file).
+- Report to: `docs/working/mvp-final-month-plan/reports/t273-s3-w4-step-decision-path.md`.
+
+### Brief: t273-s3-w5-step-draft-path
+- Repository: as above.
+- Task: the draft side of P5, per t270's report items 5, 6 and 7 (the `draft-amendment-feedback.ts` text) and its paragraph for `draft-from-flow.ts`:
+  - `R/flow-draft/amendment/bind.ts`: translate with `{ steps, at: step.position }` (plus `nodeOf` if available); a `step_*` refusal stays `bind_malformed` with its parameter.
+  - `R/flow-draft/entry.ts`: `automationStudioFlowDraftRenderBindings(step.input, all)`, so a `$step` binding shows the current position, or `null` once its source is gone.
+  - `R/llm/draft-amendment-feedback.ts` `bind_malformed`: t270's sentence. Remove "cannot be bound yet".
+  - `R/llm/node-tools/draft-from-flow.ts`: on re-seed, translate `$node.<key>.<rest>` to `$step.<seed id>.<rest>` with `rewriteAutomationNodeStatePaths` and `automationNodeOutputReference`, mapping the key through the unique `metadata.bootstrapSymbolicKey`. An unmapped key is left as written, so assembly refuses it.
+  - Update the tests that pin `$step` as refused: `R/flow-draft/amendment/tests/apply.test.ts` and `R/llm/tests/draft-amendment-feedback.test.ts` (~254).
+- Fail-first tests:
+  - a bind of `{"$step": 1, "output": ...}` on step 2 is applied and stored;
+  - a bind on self or a later step is `bind_malformed`;
+  - the entry shows the current position after a reorder;
+  - re-seeding a saved Flow with a `$node` reference yields a `$step` binding that assembles back to the same `$node`.
+- Owns: those four source files and their nearest tests.
+- Must not touch: every other file (w4 and w6 run concurrently).
+- Definition of done: as w4, with `R/flow-draft`, `R/llm/node-tools` and `R/llm/tests/draft-amendment-feedback.test.ts` passing.
+- Report to: `.../reports/t273-s3-w5-step-draft-path.md`.
+
+### Brief: t273-s3-w6-run-it-and-learned
+- Repository: as above; A = `packages/fluxiq/src/programs/automation-studio/api`.
+- Task:
+  - (1) Billing.
+    - `R/conversations/commands/command.ts`: `AutomationStudioConversationCommandContext` gains `paired: boolean`.
+    - `A/api/handlers/conversations.ts` `commandContext` sets it from `caller.paired`. Fix any context builders in tests.
+    - `A/api/handlers/runtime-execution.ts` accepts an optional payload `resultCheckCallerPays`, whose only valid value is `"repair_checks"`; any other value is refused with a plain error. It applies only when `llmExecution` is set and combines with the paired rule: either one gives `repair_checks`.
+  - (2) `R/conversations/commands/run-flow.ts` sends `runIntent: "explore_and_adapt"`, plus `resultCheckCallerPays: "repair_checks"` when `context.paired`.
+  - (3) After a run that ended without failing, when `createdAdaptationIds` is non-empty, read each with `get-flow-adaptation`. The summary says plainly what was learned:
+    - name the change by its `patch` kind and `appliedTo` in plain words, for example "it now finds the control it presses a different way" or "it re-wrote the steps that read the results";
+    - say that the next run starts with it when `durableBehaviorChanged` is true (applied), or that it waits for the person's review otherwise;
+    - never quote `diagnosis`, page text or selectors;
+    - with no adaptations, keep today's wording.
+    - Use one focused new module beside `run-flow.ts` for the wording if it is more than a few lines.
+  - (4) Stale check.
+    - The `rerunRepairedFlow` port result (its type in `R/result-verification/`) gains an optional `resultCheck`.
+    - `R/service.ts` ~2545 returns the re-decided `runResultCheck` in it.
+    - `R/result-verification/run-outcome.ts` verifies the re-run with `rerun.resultCheck ?? input.resultCheck` at both call sites (~358-366 and ~426-429).
+- Fail-first tests:
+  - `run-flow`: intent, the paired flag, and the learned sentence for applied, pending and none;
+  - the handler accepts `repair_checks` and refuses another value;
+  - a chat run from a paired caller makes no routine result-check call (reuse the setup in `R/tests/service-adaptation/tests/caller-paid-result-check.test.ts`);
+  - a re-author re-run records the repaired check's code.
+- Owns: the files named in (1)-(4) and their nearest tests.
+- Must not touch: `R/llm/**`, `R/flow-draft/**`.
+- Definition of done: as w4, with `R/conversations`, `A/api/handlers` tests, `R/result-verification` and `R/tests/service-adaptation` passing.
+- Report to: `.../reports/t273-s3-w6-run-it-and-learned.md`.
+
+### S3 outcome (lead, after integrating w4-w6)
+
+**Done in Core and validated; uncommitted.** Worker reports: `t273-s3-w4-step-decision-path.md`, `t273-s3-w5-step-draft-path.md`, `t273-s3-w6-run-it-and-learned.md`. The lead re-ran every claim below.
+
+**What landed:**
+
+- **P5, a model's `$step` end to end.** Each path that writes a step now passes the draft to the binding translation, and the model is taught the form:
+  - the written `core.run_node` call, the decision refusal and a rerun (w4);
+  - `amend_draft bind`, the draft display at current positions, the `bind_malformed` text, and `$node`→`$step` on re-seed in `draft-from-flow.ts` (w5);
+  - the `run-node.ts` and `unusable-decision.ts` sentences.
+  - New end-to-end test: `R/tests/earlier-output/tests/loop.test.ts`.
+- **"Run it"** sends `runIntent: "explore_and_adapt"`.
+  - **C2 did not hold for this path**, so the billing is fixed: the chat port calls as the person's unlocked session, which the endpoint cannot tell from a person's own session. The command context now carries `paired`; a paired chat asks for `resultCheckCallerPays: "repair_checks"`; the endpoint accepts only that value. A test shows a paired chat run makes no routine result-check call.
+  - **MVP item 24.** After a run that did not fail, it says what it learned, from Core's closed change kinds only, and whether the next run starts with it or it waits for review.
+- **The stale re-run check code** (t267's gap). The `rerunRepairedFlow` port returns the re-decided check, and `run-outcome.ts` verifies the re-run with it at both sites (`R/service.ts` changed by one line, still 4,399).
+
+**Lead fixes while integrating:**
+
+1. **A kept re-author was reported as nothing learned** (flagged by w6).
+   - Cause: a re-author is a Flow Bootstrap adaptation, so it is not in `createdAdaptationIds`.
+   - Fix: the run endpoint's answer gains a closed `reauthored: "applied" | "not_applied"`, read from the re-author marker's own settled fields (`A/api/handlers/runtime-execution.ts`, `reauthoredOf`). "Run it" words it neutrally, because both the refuted-answer route and the failed-step route write that marker.
+   - Fail-first: 3 failed | 19 passed, then 22/22.
+2. **`$step` beside a reorder bound the wrong step** (flagged by w5).
+   - Bind read `n` against positions after the decision's own reorder.
+   - Fail-first: the bind stored `$step.d2.records` instead of `$step.d1.records`, another earlier step with the same output, which assembly would have accepted.
+   - Fix: `AutomationStudioFlowDraftBindingContext` gains `stepAt`, and `bind.ts` gets the decision's shown numbering from `apply.ts`. The test passes, and `R/flow-draft` plus related tests give 310/310.
+3. **Docs.** Core `flow-authoring.md` P5 paragraph (wired, the shown numbering, taken sources, re-seed) and `client-gateway.md` (a "run it" bullet: billing, learned wording, re-author). Both framework references regenerated.
+
+**Ownership note.** w6 edited `A/api/handlers/{conversations,runtime-execution}.ts` beyond the granted files, as the lead's brief directed. Both edits are small and needed for the billing fix.
+
+**Validation (final source):**
+
+- Fail-first:
+  - w4: 6 failed | 98 passed, plus the new tests;
+  - w5: 4 failed | 153 passed;
+  - w6: 13 failed | 37 passed;
+  - lead: 3 failed | 19 passed, and the shown-numbering case 1 failed.
+- `npx vitest run` over `R/flow-draft R/llm R/flow-bootstrap R/conversations R/result-verification R/tests/{earlier-output,service-adaptation,refuted-result,service-bootstrap,service-authoring,deepseek-bootstrap} R/executor A/handlers` (in `packages/fluxiq`): Test Files 426 passed (426), Tests 4309 passed (4309).
+- Core:
+  - `fluxiq:check` exit 0;
+  - `structure-audit` "passed (258 warning(s), 349 baselined)";
+  - `docs-reference --check` exit 0 after regeneration;
+  - `pnpm.cmd build` exit 0.
+- Downstream:
+  - domain check exit 0 ("current with its source");
+  - audit "passed (170 warning(s), 118 baselined)";
+  - `run-subset.mjs domain t273-s3` carried-row, carried-service and draft-control tests: 18/18.
+
+**Not verified or open:**
+
+- No live run.
+- A web-panel chat "run it" now asks for the model and pays every result check with the person's key, matching that person's own Run. Only the extension (paired) is repair-checks-only.
+- A written call may read a `taken` source step; assembly refuses it if that step never joins the Flow.
+- The amendment path has no `nodeOf`, so an undeclared output is caught at assembly.
+- Whether an applied adaptation already reads `status: "applied"` when the run endpoint answers is untested live.
+- `web.dom.extract` declares no data output (t270), so "read one value, type it later" also needs a downstream output port.
+
+**Live runs that prove S3:**
+
+- P5: a B- or D-lane build whose instruction needs a value read on one page and typed on another, once a domain node declares that output.
+- "Run it" and item 24: `bigbox-retail-pickup-cart-redesigned-after-creation` (target override) and `social-network-feed-group-post-regrouped-after-creation` (re-author), each run from the extension chat with "run it".
+  - The chat names the change and says the next run starts with it.
+  - A second "run it" makes zero model calls.
