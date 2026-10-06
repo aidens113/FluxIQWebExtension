@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Phase 0 in progress: Codex's t262 landed on dev in both repositories 2026-10-05; Claude's round-1003 lane units are next.
+Status detail: Phase 0 in progress (t262, t263, t265, t266, t268 on dev; t264 and t267 on task branches); Phase 1b (recording as evidence, new realistic-site tests) added by the user, gated on A-D passing live.
 Created: 2026-10-05
 Last updated: 2026-10-05
 Owner: Senior supervisor agent
@@ -32,7 +32,7 @@ Deadline 2026-11-10 (36 days from 2026-10-05). Feature freeze 2026-10-29.
 **Decisions taken by default (the user may override).**
 
 1. Codex's t262 lands as-is (committed checkpoints only) and Claude supervises from here; Codex should not keep editing t262 in parallel.
-2. Demonstrate/record (acceptance item 4) stays a supported, unmeasured path, per the user's 2026-09-22 scope; it gets one smoke proof in Phase 5 and no development.
+2. **Replaced by the user, 2026-10-05:** recording becomes evidence for the model beside mandatory written instructions, never a script replayed blindly, and gets its own build-out and tests in Phase 1b, which starts only after A-D all pass live.
 3. Acceptance item 10 is met by Stop plus a live "take over / hand back" pause at a step boundary, built in Phase 4; no general mid-action pause.
 4. Item 24 ("Simple Mode shows it learned") is read as the extension chat and Automations row, since the chat replaced Simple Mode.
 5. The Week 2 exit gate is retired into Phase 2's chained adaptation proof.
@@ -67,6 +67,14 @@ Exit: one `dev` in each repository holding all of t262 and every kept lane unit,
 5. Four lanes run in parallel, A-D on slots 1-4. A re-proves on the integrated tree.
 
 Exit: each of A, B, C, D passes live twice consecutively from the extension chat with exact oracles, then replays with zero provider calls.
+
+### Phase 1b — New realistic-site tests and recording as evidence (user, 2026-10-05; only after Phase 1's exit)
+
+Gate: every planned live test (A, B, C, D) has passed. Nothing in this phase starts before that.
+
+1. New live tests only on the ten realistic scenario sites, mainly language-only instructions, chosen to cover what A-D do not (other sites, other task shapes).
+2. Build out recording as evidence: the person records an action on the site and must also write the instruction; the build reads the recording as one piece of evidence beside the instruction and the live page, and may diverge from it. A recording without an instruction is refused or asked about. The Flow must never copy a recorded mistake blindly.
+3. Recording-plus-instruction tests on the realistic sites, including recordings with deliberate slips (a wrong click undone, a detour) that the built Flow must not reproduce, judged by the same exact oracles.
 
 ### Phase 2 — The adaptation loop, live (Mon 10-12 to Fri 10-23) — the MVP thesis
 
@@ -252,6 +260,15 @@ Source of every port: Claude's uncommitted lane trees, read-only: `C:/Users/osrs
 - Definition of done per stage: fail-first tests then passing, owning tests green, `fluxiq:check` and touched downstream typechecks exit 0, both audits pass, Core rebuilt; the report names the live run that must prove the stage (B, C or D lane).
 - Report to: `docs/working/mvp-final-month-plan/reports/t269-creation-blockers.md`
 
+### Parallel split of t269 (2026-10-05, supervisor): four tasks now, B7 after t264 S4
+
+t264 S4 is editing `R/flow-draft/{amendment,entry,routing,step,act-claim,index}.ts`, `R/flow-draft/amendment/`, `R/llm/{evidence-loop.ts,evidence-loop-decision.ts,draft-amendment-feedback.ts,unusable-decision.ts}`, `R/llm/evidence-loop/**`, `R/llm/decision-handlers/**`, `R/llm/deepseek/**`, `R/llm/harness-options/**`, `R/llm/repeat-guard/**`, `R/llm/node-tools/run-flow-part.ts`, `R/flow-bootstrap/{authoring/draft-routing.ts,authoring/instruction-record-columns.ts,evidence-loop-steps.ts,instructed-acts/**,unfinished-build/**}`, `R/recovery/refuted-result/**`, `R/result-verification/build-test/**`, `src/ui/activity-action/**`. **No t269-t272 worker may edit those files**; if a fix needs one, describe the exact change in the report and stop that part. Each task below has its own worktree pair. Run Core `pnpm.cmd build` in your own Core tree before downstream checks. Reports go to `docs/working/mvp-final-month-plan/reports/<label>.md` in your own task tree.
+
+- **t269-c4-row-repair** (`fxwork/t269`): C4 per the t269 brief S3. Owns `R/llm/node-tools/**` except `run-flow-part.ts`, `replay-span.ts`, `replay-draft.ts`, `run-node.ts`; `R/flow-draft/scheduled-candidate/**`; `R/service/runtime-adaptation/**` only for seeding a saved Flow for repair; downstream `domain/src/runtime/tests/carried-row-service-repair.test.ts` (take it from `wip/t262-uncommitted` `1d6baa6f`) and `domain/src/runtime/**` files the fixture needs. Fail-first: run the fixture first and record the actual failure.
+- **t270-p5-step-binding** (`fxwork/t270`): P5 per the t269 brief S5. Owns `R/flow-draft/binding-forms.ts` and other `R/flow-draft/bind*` files, `R/llm/node-tools/{replay-span,replay-draft,run-node}.ts`, `R/flow-bootstrap/authoring/assemble-draft.ts`, `R/nodes/parameter-bindings.ts`, `R/executor/**`, and tests. Start from `wip/t262-uncommitted` `p5-earlier-output-contract.md` and `p5-binding-preflight.md`.
+- **t271-d-route-states** (`fxwork/t271`): D phase 1 per the t269 brief S4. Owns `R/action-permissions/**`, `R/service/instruction-authority.ts`, `R/flow-bootstrap/action-permissions.ts`, new files beside them, and tests. Model-facing wording in `R/llm/deepseek/request-body.ts` or the draft display in `R/flow-draft/entry.ts` is t264's: specify it, do not write it.
+- **t272-c1-pagination** (`fxwork/t272`): C1 per the t269 brief S2. Owns `domain/src/runtime/llm-evidence/plan-resolution/**`, `apps/extension/src/content/actions/extract-list*` and paging files beside them, and tests. Core extraction contracts only if C1 needs them and they are outside the t264 list.
+
 ## Work Ledger
 
 ### 2026-10-05 — Intake started
@@ -293,6 +310,22 @@ Source of every port: Claude's uncommitted lane trees, read-only: `C:/Users/osrs
 - Validation: t265 changed extension tests rebundled (21 files, deleted files excluded) -> `# tests 234 # pass 234 # fail 0`; `extension check` 0, `extension build` 0, audit passed. t266 `npx vitest run <7 files>` -> 7 files, 58 tests passed; `fluxiq:check` 0; Core finish `pnpm check` passed. t264 S1 vitest on 4 changed files plus `flow-bootstrap/instructed-acts` and `tests/service-authoring` -> 14 files, 301 passed; `fluxiq:check` 0; Core audit 0. t268 deep-link test -> 6/6 with the fix, 4 failed / 2 passed with the old hook stashed; `web:check` 0. t268 extraction tests (17 files) -> 170/170; `extension check` 0; Core finish `pnpm check` passed. The extraction worker briefly started the extension's content e2e specs by a bare `node --test` and stopped them; no browser process remained.
 - Outcome: Accepted
 - Follow-up: t264 S2-S4, t267 S1-S5; then Phase 1 live rounds on the integrated source.
+
+### 2026-10-05 — t267 S1-S2 and t264 S2 committed on their task branches
+- Agent: supervisor with t267-adaptation-unblock (lead) and t264-core-chain (lead).
+- Changed: t267 `4fce48eb` (S1: Lab playback no longer forces manual approval, per run or saved on the Flow; repair lane counts goal-only re-author repairs; A8-class basket-redesign task), Core `81e41266` (S2: a judged whole-Flow run is the evidence a target override worked; A8's ten nodes declare nothing a trial can check). t264 Core `84117643` / downstream `ce1e8903` (S2: refusal cards, build trace, run endings, card words); dev merged into both t264 trees.
+- Why: Phase 2 blockers 2-4; Phase 0 Core chain.
+- Validation: t267 S1 test-runner rebuilt, five dist test files -> 96/96; test-runner check 0; audit passed. t267 S2 six changed Core test files -> 105/105; adaptation suites (33 files) -> 294/294; `fluxiq:check` 0; Core audit 0. t264 S2 broad run (593 files, 6021 tests) -> only the 17 t266 failures; extension stream/step tests -> 60/60; `extension check` 0. After merging dev into t264 and rebuilding Core: 77 files, 668 passed, 0 failed; domain and extension check 0; audit passed.
+- Outcome: Accepted (stages on task branches; not yet on dev)
+- Follow-up: t264 S3, t267 S3.
+
+### 2026-10-05 — Creation blockers in parallel: C1, C4, D phase 1, P5 landed; t264 S1-S3 and t267 S3/C1/S5
+- Agent: supervisor with t269-c4-row-repair, t270-p5-step-binding, t271-d-route-states, t272-c1-pagination, t264 (lead), t267 (lead).
+- Changed: t264 S1-S3 merged to dev (both repos). t272 C1 (`9c0c97e6`: paginate true reads every page to 50; tool description 1764 chars). t271 D phase 1 (Core `7eb25da4`: shared instruction read, route states; nothing enforces yet). t269 C4 (Core `f0556b02`: seeded for-each loops, plan-aware node ids, one line in service.ts by the supervisor). t270 P5 (Core `6b93f185`: `$step` binding built; call sites in t264's files still refuse it). t267 S3 (Run carries its caller; "Learned N" counts kept changes), C1 (paired run may ask explore_and_adapt), S5 (Lab records) on its branch.
+- Why: the user asked why work was slow; the creation blockers were split by file and run in parallel instead of waiting for t264.
+- Validation: t272 rebundled domain 77/77, extension 38/38, domain check 0; t271 21 files 236/236, fluxiq:check 0; t269 Core 87 files 702/702 with the service.ts line, row fixtures 7/7, domain check 0; t270 after merging dev 210 files 2448/2448, fluxiq:check 0, domain check 0; t264 S3 702 files 6730/6730 (1 skipped); t267 S5 test-runner dist 1946/1946, test-contracts 161/161; t267 C1 web 53/53 (2 failed with the old rule). Every finish: structure audit passed; Core finish `pnpm check` passed.
+- Outcome: Accepted
+- Follow-up: after t264 S4: one owner for B7, D phase 2 wiring (`request-body.ts`, `entry.ts`) and P5 wiring (t270 report lists the five files); t267 C2 (service.ts result-check caller pays) and S4 (judged re-author apply); then live A-D.
 
 ## Open Questions
 
