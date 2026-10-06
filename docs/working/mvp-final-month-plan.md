@@ -360,6 +360,14 @@ t264 S4 is editing `R/flow-draft/{amendment,entry,routing,step,act-claim,index}.
 - Outcome: Partial (no lane passes yet)
 - Follow-up: C-2..C-5 (judges blind to stored records, re-author advising refused reruns, false judge advice discarding an exact answer, judges passing left-out matching rows) being fixed in t274 without live runs; then all lanes resync and relaunch together. UI findings queued: edit card says nothing of what changed; ending chat shows raw ids and cut quotes; overlay says "Couldn't fix your Flow" on a creation build; old thread flash; identical "Checked, not pressed" cards without whose row; loopback named "the start page"; read cards without counts; overlay text cut mid-word; refusals shown as work.
 
+### 2026-10-06 — Round 1 complete: B's oracle held but its check refuted it; judge fixes for B and C landed
+- Agent: supervisor with live leads B and C, and t276 (lead).
+- Changed: B `run-muw5zv4m-52d83027` failed (runtime.behavior) with the exact oracle held: playback built the right pickup cart (5/5 facts, store remembered by page state) but both post-run judges said no from status rows and a stale end view; a re-author then failed. Cost $0.118709 (build $0.0445, re-author $0.0725). Fix Core `7087e9ec` (judges see each step's state change; plain cart ending; state-routed step wording). C-2..C-5 fix Core `d7cb90ca` (would-be-stored records, left-out rows matching the request, checked evidence in every no, carried steps run as saved). The verification instruction now carries B's, C's and D's sentences together (merged by the supervisor, pins regenerated). t276 UI fixes verified and landing.
+- Why: no lane passed round 1; the recurring cause is judges that cannot see what a run did.
+- Validation: B fix 101 files 831/831; after merging dev into t262 and regenerating pins: 249 files 2797/2797. C fixes: lead 393 files 4287; after merging B's fix: 450 files 4881/4881; fluxiq:check 0; reference current; audits pass.
+- Outcome: Partial
+- Follow-up: land t276; sync and rebuild every lane tree; live round 2 for A-D. Open: a re-author cannot conclude "nothing to change" when the post-run check is wrong (B); the recovery ladder's structured repair input drops `checked` (C).
+
 ## Open Questions
 
 - Is demonstrate/record an MVP acceptance requirement after the 2026-09-22 scope ruling? Owner: user. Default taken: supported, unmeasured, one smoke proof.
