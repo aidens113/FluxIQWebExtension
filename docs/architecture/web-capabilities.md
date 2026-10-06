@@ -200,9 +200,14 @@ instead of "it does not deduplicate" (live run `run-muqk713g`, cause C4).
   replay step that did not capture).
 - **The dry run's calls** (`domain/src/runtime/llm-evidence/node-run/replay.ts`,
   `verify.ts`, `replay-answer.ts`) come only in a build's judgement phase: once
-  the model says the Flow is ready and Core's completion check accepts it, and
-  again after each repair. Nothing replays the draft while the build explores,
-  and a continued build carries on from wherever the page stands. `reset` is a
+  the model says the Flow is ready and Core's completion check accepts it,
+  again after each repair, and at the end of a round that stopped short or was
+  stopped to keep its judging money, whose Flow Core tests from its start and,
+  when that test ran clean, judges (Core's
+  `docs/architecture/automation-studio/llm-flow-bootstrap.md`). While the
+  build explores, only a part run the model asks for (`core.run_flow`) sends
+  these calls, on the page as it stands with no `reset`, and a continued build
+  carries on from wherever the page stands. `reset` is a
   navigation to where the first step found the page and nothing more: it never
   clears site data and never logs the person out. It carries
   `closeOpenedTabs: true` (`domain/src/client/close-opened-tabs-parameter.ts`;
@@ -223,7 +228,10 @@ instead of "it does not deduplicate" (live run `run-muqk713g`, cause C4).
   found by its identity (cause 7 of the same run: three such steps spent
   17.2 s of a 36.6 s test waiting out their target wait).
   `verify` is sent instead of `step` for a changing step that declares any
-  consequence but none, and dispatches only `web.dom.assert` checks (visible,
+  consequence but none or claims one of the person's lasting acts (by kind, so
+  an add or a Confirm is checked whatever it declared; see
+  [the build loop](build-loop.md#lasting-acts-are-checked-per-row)), and
+  dispatches only `web.dom.assert` checks (visible,
   then enabled) on the step's resolved target: `core.replay.verified` when it
   could run now, `core.replay.present` when the target is gone from the very
   page the step acted on (its recorded location, which Core sends back as

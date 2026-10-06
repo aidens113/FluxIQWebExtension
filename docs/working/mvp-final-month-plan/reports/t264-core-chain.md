@@ -358,3 +358,183 @@ fixed on this base (t266), so every failure in S3 runs is new or must be explain
   "the model's replies"/"over one live round" (`exploration.test.ts:120`, `unreadable-replies.test.ts:103-104`,
   `unfinished-build.test.ts:148`, `activity/build.ts:58`); `kept-said.ts` "kept as a draft, not put into the Flow";
   stale `judgedTest` doc comment in `service/flow-bootstrap-commands/build-judge.ts` (reserve case only).
+
+Committed by the supervisor: Core `5613270d`, downstream `d71d4b82` (supervisor rerun: automation-studio + ui 702 files,
+6730 passed, 1 skipped; checks 0; shared/activity 20/20).
+
+## Stage S4 — Core authoring (last stage), then docs
+
+Status: done, verified by the lead, uncommitted (2026-10-05). Base: Core `5613270d`, downstream `d71d4b82`. Ready for the
+supervisor to commit: about 100 Core paths (source, tests, docs, both regenerated references), three downstream
+architecture docs, and seven reports (this one, `t264-s4-w8..w12-*.md`, `t264-docs-last.md`). S5 (Lab records) moved to t267;
+`R/service/runtime-adaptation/**` is t267's and is not touched. t269 (B7 binding etc.) starts after t264 lands.
+
+### Facts (lead)
+
+- t262 changed most S4 files since the lane base: `flow-draft/{amendment,entry,step,dry-run,verify-only}.ts`,
+  `llm/{draft-amendment-feedback,evidence-loop,evidence-loop-decision,unusable-decision}.ts`,
+  `llm/decision-handlers/amendment.ts`, `llm/evidence-loop/rerun-request.ts`, `flow-bootstrap/instructed-acts/*`,
+  `harness-options/{bootstrap-completion,draft-acts}.ts`. Every unit is a hand merge.
+- Budgets (800 lines): `flow-draft/amendment.ts` 602 (B adds ~128, D ~215 incl. hunks to drop), `llm/evidence-loop.ts`
+  798, `llm/evidence-loop-decision.ts` 645. `amendment.ts` will need a split by responsibility (Core code-structure
+  rules: a focused module or directory, never extract-and-drop).
+- Excluded as superseded: t174 A2 (`reversal.ts`, toggle), t174 claim-doubt/kind-words, t194 w72/w73/w74/w85, t195
+  w49/w50 (route enforcement), t195 `always` change (t262's `unrepeat` stays).
+
+### Plan (serial; each worker owns its unit's files; next starts after the lead verifies)
+
+- W8: B F5/F10 (t193 w5 amendment answers, moved act told) + A5 w108 Cause 6 `notRunYet`.
+- W9: D C1 (t195 w41 stable rerun numbers) + D w45 (repeat revalidation on `unrepeat`, shown-number semantics);
+  owns the `amendment.ts` split.
+- W10: D w47 (routing words; start-location note reworked against t262's declared arrival) + A3b (optional-only,
+  choice-order onto dev's, A's Cause 5 `summary.ts` parts).
+- W11: C w79 + D w46 (repeat guard, `draft-key.ts`, `evidence-loop.ts` within 800) + C w78 (brief advice, rerun needs
+  input).
+- W12: leftover ending words if their pins are reachable; docs-last: regenerate both `framework-reference.md` copies
+  (`pnpm.cmd docs:reference`), check Core and downstream architecture docs against the landed behaviour of S1-S4.
+
+### W8 (B F5/F10 + A5 Cause 6) — verified by the lead
+
+- Worker report: `t264-s4-w8-amendment-answers.md`. Ported onto t262: truthful bind answers, refusals with `next`,
+  moved act told as information (`automationStudioLlmEvidenceClaimWrittenAct` in `decision-handlers/amendment.ts`;
+  the `evidence-loop.ts` hunk equals lane B's exactly, 798 -> 796 lines); `notRunYet` ends with the checklist sentence
+  when one is given. B's `once` and `count_not_a_repeat` superseded by t262's `unrepeat`. `amendment.ts` 658 lines.
+- Left out by W8: lane B's one-sentence narrowing of the decision instruction ("only a value a step typed, or a read's
+  condition, is bound ... a press's control or option is never bound"), because its pin is in
+  `llm/deepseek/tests/system-prompt-pins.json`. Assigned to W11 (owner of `evidence-loop-decision.ts`).
+- Lead runs: `npx vitest run --minWorkers=1 --maxWorkers=4` on `R/flow-draft R/llm R/flow-bootstrap
+  R/tests/service-authoring/tests R/tests/service-bootstrap/tests R/tests/deepseek-bootstrap R/conversations` -> exit 0,
+  `Test Files 302 passed (302)`, `Tests 3138 passed (3138)`; `fluxiq:check` 0; Core audit 0; 13 files, 0 with CR.
+
+### W9 (D C1 + D w45) — verified and completed by the lead
+
+- Worker report: `t264-s4-w9-rerun-numbers-and-repeats.md` (Partial: two stale fixtures outside its brief).
+  `flow-draft/amendment.ts` split into `flow-draft/amendment/` (12 modules + barrel, largest `apply.ts` 233 lines;
+  every old export kept, checked by comparing export names of `HEAD:amendment.ts` with the new modules: none missing).
+  C1: a rerun keeps the replaced step's number; the replaced attempt moves to the end with `replacedBy` and amending it
+  is refused `not_a_kept_step`. w45: numbers in one decision read against the draft as shown; after a move every repeat
+  that can no longer run is taken off (`repeat_taken_off`, with words in `refusal-words.ts`). Dropped: `always`, w45's
+  first-step sentence, every w49/w50 hunk. `evidence-loop.ts` 796 lines.
+- Lead edits (lane D's two fixture edits, which follow from C1): `tests/service-bootstrap/tests/extend.test.ts`
+  `RERUN_CARRIED = [rerun(1), rerun(2)]` with its comment; `tests/deepseek-bootstrap/tests/observation.ts` exempts a
+  step with `replacedBy` from `withoutInput`. Both normalized to LF. Those two files -> `Test Files 2 passed`, `Tests 8
+  passed`.
+- W9 ran `git mv` (outside its brief) and unstaged it; lead check: `git diff --cached --name-only` -> empty.
+- Lead runs: `npx vitest run --minWorkers=1 --maxWorkers=4` on `R/flow-draft R/llm R/flow-bootstrap R/activity
+  U/activity-action R/tests/service-authoring/tests R/tests/service-bootstrap/tests R/tests/deepseek-bootstrap
+  R/conversations` -> exit 0, `Test Files 332 passed (332)`, `Tests 3544 passed (3544)`; `fluxiq:check` 0; Core audit
+  0 (fresh run).
+- Left for W12: comments still naming `flow-draft/amendment.ts` in `flow-bootstrap/instructed-acts/choice-order.ts:20`,
+  `llm/evidence-loop/trace.ts:98`, `service/flow-bootstrap-commands/evidence-trace.ts:162` (+ any others);
+  `llm/evidence-loop/held-amendments.ts` gives a held amendment's `repeat_taken_off` the wrong step number (edge case,
+  W9 report); answerability draft-entry budget margin is 71 bytes (4,929 of 5,000).
+
+### W10 (D w47 + A3b) — verified by the lead, one lead edit
+
+- Worker report: `t264-s4-w10-routing-words-and-optional-only.md`. w47: routing refusals in words
+  (`draft-routing.ts`, `{"change":"always"}` replaced by t262's `unrepeat`), carried to the model by
+  `bootstrap-completion.ts`; the read note; the start note (step 1 may be rerun to the stable deeper address where the
+  work begins) checked against t262's declared arrival, with the completion test declaring the arrival binding. A3b:
+  new `instructed-acts/optional-only.ts` (an act's only step is not left optional; a completion refusal
+  `bootstrap.instructed_act_only_optional`), dev's `choice-order.ts` code unchanged (dev already covers lane A's main
+  case), A's Cause 5 lines in `build-test/summary.ts`. Lane A's fixture `run-musq0b1m-draft.ts` not created (the test
+  uses four inline placeholder steps; no site URL, title or banner text).
+- Lead decisions on W10's questions: optional-only as a completion gate is accepted (lane A's design; it restricts no
+  action). `withRoutingSentence` kept. The missing code in `issue-feedback.ts` `AUTHORED_CODES` and
+  `unfinished-build/not-done.ts` `BLOCKED_WORDS` goes to W12.
+- Lead edit: W10 had dropped, with w49/w50, the start note's opening clause "Unless the person's instruction says how
+  to get there (pages, menus or links to go through: then follow that route and keep its steps), ...". That clause is
+  prompt wording only (no route detection), and without it the note would invite skipping a route the person named,
+  against the user's rule. Restored in `llm/deepseek/request-body.ts` with a comment saying lane D's detection is not
+  ported, and pinned by two new assertions in `deepseek/tests/request-body.test.ts`. `R/llm/deepseek` -> `Test Files 9
+  passed`, `Tests 106 passed`.
+- Lead runs (after the edit): `npx vitest run --minWorkers=1 --maxWorkers=4` on `R/flow-bootstrap R/llm R/flow-draft
+  R/result-verification R/tests/service-authoring/tests R/tests/service-bootstrap/tests R/tests/deepseek-bootstrap
+  R/conversations R/activity` -> exit 0, `Test Files 354 passed (354)`, `Tests 3705 passed (3705)`; `fluxiq:check` 0;
+  Core audit 0; nothing staged; 60 changed files, 0 with CR.
+
+### W11 (C w79 + D w46, C w78, B's bind sentence) — verified by the lead
+
+- Worker report: `t264-s4-w11-repeat-guard-and-brief-advice.md`. One repeat guard: w79 (a handle refusal is lifted
+  after a new look) and w46 (`repeat-guard/draft-key.ts`, keyed on the Flow signature, which holds the acts and
+  `ranWith` B F11 added to the amendment memory). w78: a repair brief no longer hands the model false advice; an
+  `amend_draft` whose rerun carries no input is refused `llm_evidence_loop.rerun_needs_input`. B's sentence: the
+  decision instruction now says only a typed value or a read's condition is bound, never a press's control or option
+  (sentence-level diff equals lane B's; only the `evidence_tool_decision` pin changed).
+- Lead check: no w72 seeding in `evidence-loop-decision.ts` (the one "carried" match is a doc line about a rerun that
+  carried no input). Sizes: `evidence-loop.ts` 796, `evidence-loop-decision.ts` 668, `llm/tests/unusable-decision.test.ts`
+  797 (W11 compacted ported lines to stay under 800; W12 splits it instead).
+- Lead runs: `npx vitest run --minWorkers=1 --maxWorkers=4` on `R/llm R/flow-bootstrap R/flow-draft R/recovery
+  R/activity R/conversations R/result-verification R/tests/service-authoring/tests R/tests/service-bootstrap/tests
+  R/tests/deepseek-bootstrap R/tests/refuted-result` -> exit 0, `Test Files 404 passed (404)`, `Tests 4267 passed
+  (4267)`; `fluxiq:check` 0; Core audit 0; nothing staged; 76 changed files, 0 with CR.
+
+### W12 (leftovers) — verified by the lead
+
+- Worker report: `t264-s4-w12-leftovers.md` (before/after for every changed sentence). Done: the optional-only code
+  in `plan/issue-feedback.ts` `AUTHORED_CODES` and `unfinished-build/not-done.ts` `BLOCKED_WORDS` (each with a
+  failing-first test); plain ending words (kept sentence "The steps I found so far were kept as a draft, so building
+  again carries on from them."; budget ending uses the shared tried sentence, no "over N decisions"; unreadable replies
+  "the replies it got back could not be read", no "over one live round"; headline "Build stopped: the replies it got
+  back could not be read"), all pins updated (incl. two in `judged-build.test.ts`); `held-amendments.ts` keeps a
+  `repeat_taken_off`'s own step, numbers mapped back to the model's (failing-first: got 3, expected 2); lane B's two
+  bind assertions; the four stale `amendment.ts` comment paths and the `judgedTest` doc comment.
+- Not done, lead decision: splitting `llm/tests/unusable-decision.test.ts` (797 lines). `llm/tests/` and
+  `llm/evidence-loop/tests/` are both at the 25-file directory limit, and the cases test `llm/unusable-decision.ts`,
+  so another folder would break test placement. The file stays at 797 of 800 lines; regrouping `llm/tests/` by prefix
+  is a separate structural unit.
+- `plan/issue-feedback.ts` is stored `-text` with CRLF (two literal control bytes in a regex on dev): lead check `git
+  ls-files --eol` -> `i/-text w/-text`; `git diff --numstat` -> `4 0`; CR count 203 -> 207 (the 4 new lines follow the
+  file's own convention).
+- Open (W12): other held refusals (e.g. `over_not_before`) may still give `over`/`through` in renumbered numbers; the
+  budget ending's opening still says "model calls".
+- Lead runs: `npx vitest run --minWorkers=1 --maxWorkers=4` on `R/llm R/flow-bootstrap R/flow-draft R/activity
+  R/conversations R/result-verification R/recovery R/tests/service-authoring/tests R/tests/service-bootstrap/tests
+  R/tests/deepseek-bootstrap R/tests/refuted-result R/service/flow-bootstrap-commands` -> exit 0, `Test Files 410
+  passed (410)`, `Tests 4322 passed (4322)`; `fluxiq:check` 0; Core audit 0; nothing staged; 105 other changed files,
+  0 with CR. Core `node scripts/structure-audit.mjs --rule docs-links` -> passed.
+
+### Docs-last (W13) and one lead source fix
+
+- Worker report: `t264-docs-last.md` (about 25 doc fixes, each with file:line and reason). Core
+  `docs/architecture/automation-studio/{llm-flow-bootstrap,flow-authoring,client-gateway}.md` and downstream
+  `docs/architecture/{build-loop,extension-client,web-capabilities}.md` now describe the landed S1-S4 behaviour (lasting-act
+  rule, refusal cards and "Edit the Flow", ending sentences, rerun numbering, optional-only, the start note's
+  named-route clause, the build trace). Both `framework-reference.md` copies regenerated by `pnpm.cmd docs:reference`.
+- W13 found a false model-facing sentence (pre-t264, commit `ed35dfa1`): `unfinished-build/unchanged-complete.ts`
+  told the model "a round that changes nothing ends the build as not doable", but such a round ends
+  `notFinished: { kind: "repeated_unchanged" }` (`phases.ts:534`). Lead edit: "... ends the build unfinished." plus a
+  header comment, and its pin in `tests/unchanged-complete.test.ts`. `unfinished-build` tests -> `Test Files 24
+  passed`, `Tests 186 passed`. References regenerated again after this edit.
+- Left alone (pre-existing): Core `docs/architecture/package-boundaries.md:320-321` names two files that do not exist.
+
+### Stage S4 final lead validation (logs in scratchpad `t264-s4/`)
+
+- `npx vitest run --minWorkers=1 --maxWorkers=4 src/programs/automation-studio src/ui` (`packages/fluxiq`) -> exit 0,
+  `Test Files 705 passed (705)`, `Tests 6808 passed | 1 skipped (6809)`, 443 s (`final-broad.log`; started after the
+  last source edit).
+- `fluxiq:check` 0; Core `structure-audit:check` 0 (fresh run); `pnpm.cmd docs:check` 0 ("Deterministic framework
+  reference is current."); Core `pnpm.cmd build` 0 after the last source edit.
+- Downstream: domain check 0 and extension check 0, both with `core-build: ... current with its source`; `node
+  scripts/structure-audit.mjs` 0 ("passed (170 warning(s), 118 baselined)"); 21 extension test files under
+  `shared/activity`, `panel/chat/stream/step`, `panel/chat/view`, `background/activity` -> `# tests 165 # pass 165 # fail
+  0`.
+- Tree: nothing staged; no path under `R/service/runtime-adaptation/**` changed; 109 Core files (all but the `-text`
+  `plan/issue-feedback.ts`) and 10 downstream files, 0 with CR. Budgets: `service.ts` 4400 (ratchet), `evidence-loop.ts`
+  796, `evidence-loop-decision.ts` 668, `phases.ts` 716, `llm/tests/unusable-decision.test.ts` 797 (of 800).
+- Not verified: no live, Lab, browser or provider run for any S4 unit. The S4 behaviours that need live proof: rerun
+  numbering and repeat take-off as the model sees them (D lane), moved-act told and bind answers (B lane), the
+  optional-only completion refusal and choice order (A lane), the repeat guard on unchanged drafts (C/D lanes).
+
+### Carried forward from t264 (for the supervisor's plan)
+
+- `llm/tests/` and `llm/evidence-loop/tests/` are both at the 25-file directory limit; `unusable-decision.test.ts` is at
+  797 of 800 lines. Regrouping `llm/tests/` by prefix is a separate structural unit.
+- Held refusals other than `repeat_taken_off` (e.g. `over_not_before`) may name `over`/`through` in renumbered numbers
+  (`llm/evidence-loop/held-amendments.ts`).
+- The budget ending's opening still says "model calls"; `not-done.ts` exports 11 values (advisory 8).
+- The start note's named-route clause is wording only: lane D's route detection (w49/w50) is not ported and waits for
+  t262's D waypoint design (t269 or later).
+- W6's `finishing.judgedAt: "stopped_short"` must be accepted by the test-runner `build-proposal.ts` reader (t267, which
+  now owns S5's Lab records).
+- Answerability draft-entry budget margin: 71 bytes (4,929 of 5,000) after C1's replaced-attempt line.

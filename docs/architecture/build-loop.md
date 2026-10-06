@@ -3,7 +3,7 @@
 What the web domain does when a FluxIQ build runs, writes and tests the steps of
 a Flow: a live run against a written step, a replay sent with a loop's row, the
 rows a replayed list read hands the test, and the check of a lasting act.
-Current-state design (t252/t262, 2026-10-03), verified against source. Core owns the
+Current-state design (t252/t262, 2026-10-03; t264, 2026-10-05), verified against source. Core owns the
 draft, the binding forms, the walker that runs a loop once per row, and the
 verdict; they are in FluxIQ Core's
 `docs/architecture/automation-studio/flow-authoring.md` (in the sibling
@@ -90,8 +90,13 @@ Core carries `outputs` and never shows it to the model or the judge.
 
 ## Lasting Acts Are Checked Per Row
 
-Core sends a step with a declared lasting consequence, or one doing an act of
-the person's, as `replay: "verify"` on every pass. `verify.ts` resolves the
+Core sends a step with a declared lasting consequence, or one claiming a
+lasting act of the person's, as `replay: "verify"` on every pass. An act is
+lasting by its kind (an add, save, claim, move or submit, so a Confirm is
+checked even when it declared `consequences: []`), by a quote of Core's read of
+the instruction, or by that read's per-act answer; a setting or an open it
+neither quotes nor answers as lasting runs again (Core's
+`flow-authoring.md`, "Lasting Acts And Excusal"). `verify.ts` resolves the
 row-scoped parameters and asks the page, through `web.dom.assert`, whether the
 target is there, visible and enabled, and dispatches nothing that acts. It
 answers `verified`, `present` (the effect is already in place on the step's own
@@ -120,6 +125,15 @@ no historical execution proof; whole-Flow testing remains required.
   `runtime/llm-evidence/tools.ts` beside `deniedEvidenceKeys`). Core leaves
   those keys out of a repeated step's target words, because the row it was
   built on is only its template.
+- **What a replayed press changed.** A changing step the test ran again
+  answers, as an explored one does, the lines of its own page that changed
+  (`node-run/press-effect/page-changes.ts`: a state gained or lost, or a text
+  that now reads otherwise, `was "<old>"`, then `and N more changes`) and any
+  notice the page showed (`press-effect/notice.ts`). Core passes them to the
+  judge as that step's `observed`, at most three lines of 160 characters, the
+  step's own control first and a changed text second, counting the rest and
+  the domain's `and N more changes` line as not shown (Core's
+  `llm-flow-bootstrap.md`, `build-test/change-lines.ts`).
 
 ## The Model's Instructions
 
@@ -129,6 +143,22 @@ says repetitive work is a loop: list the items with a `where` that keeps only
 the ones to act on, act once on one kept item or write the act (`write true`),
 state `repeat`, never act on every item; and bind a value that changes between
 runs or rows (`{"$input": name}`, `{"$row": field}`).
+
+Core adds its own notes beside these. Its start-location note says the Flow's
+first step may go straight to a stable deeper address on the same site where
+the work begins, unless the person's instruction names how to get there (pages,
+menus or links to go through), when that route is followed and its steps kept.
+That clause is prompt wording only; nothing detects a named route (Core's
+`llm-flow-bootstrap.md`, "The Flow may start where the work does").
+
+## Tracing A Build
+
+With `FLUXIQ_BUILD_PROGRESS_TRACE=1` in Core's environment, Core prints one
+content-free `[FluxIQ build-trace]` line per seam of a build: the loop's calls
+and decisions, a dry run's own call ids, a completion its test sent back, and
+the build, its judge and the proposal's apply with their durations. Step names,
+durations, verdict words and codes only, never page text (Core's
+`llm-flow-bootstrap.md`).
 
 ## Not Built
 
