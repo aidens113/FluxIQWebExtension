@@ -217,13 +217,17 @@ export class ActivityPacer {
 }
 
 function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | null, unit: UnitState, retry: RetryState): ActivityDisplay {
-  const subjectKind = subjectKindOf(event);
+  // A settling row names the work it ends, which outweighs the subject
+  // (`ending-kind.ts`), and the unit keeps that name for every row after it:
+  // a thought after a build's ending took the run's headline again, "Couldn't
+  // fix your Flow | Build stopped: a budget ran out" (run-mux74k5q-1c3c2127).
+  const settledAs = previous !== null && previous.activityId === event.activityId && (previous.outcome === "failed" || previous.outcome === "done") ? previous.subjectKind : undefined;
+  const subjectKind = endingKindOf(event) ?? settledAs ?? subjectKindOf(event);
   // A check only the person can answer holds the work until the page lets it
   // through; Core's own settling and waiting events still say what they say.
   const outcome = outcomeOf(event) ?? (unit.check ? "waiting" : null);
   const working = outcome === null;
-  // A settling row names the work it ends, which outweighs the subject (`ending-kind.ts`).
-  const headline = activityHeadline(endingKindOf(event) ?? subjectKind, outcome, {
+  const headline = activityHeadline(subjectKind, outcome, {
     // A run pressing a failed step again is not a repair (D12).
     repairing: unit.repairing && retry.repairing,
     waitingOn: event.phase === "waiting_permission" ? "answer" : "check"
@@ -259,8 +263,8 @@ function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | nu
  * choice keeps it up, and the thought that ends the retry takes it down.
  */
 function thoughtDisplayFor(event: ClientGatewayActivity, base: ActivityDisplay | null | undefined, unit: UnitState, retry: RetryState): ActivityDisplay {
-  const own = displayFor(event, null, unit, retry);
   const kept = base && base.activityId === event.activityId ? base : null;
+  const own = displayFor(event, kept, unit, retry);
   const keptLine = kept && kept.detail !== retry.ended ? kept.detail : null;
   const line = retry.line ?? keptLine;
   return {

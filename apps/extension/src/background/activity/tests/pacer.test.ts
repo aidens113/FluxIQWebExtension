@@ -478,6 +478,25 @@ test("a settling row in Core's words for a build's ending heads the status as th
   assert.equal(run.pacer.display()?.headline, "Couldn't fix your Flow");
 });
 
+// W27 of the week review, run-mux74k5q-1c3c2127 (last two moments): a creation build's overlay
+// still ended "Couldn't fix your Flow | Build stopped: a budget ran out" after the guard above.
+// A row after the build's ending in the same unit -- a model thought keeps the action line --
+// took its headline from the event's subject again. The unit keeps the kind its ending named.
+test("rows after a build's ending in the same unit keep the build's failure as the headline", () => {
+  for (const phase of ["failed", "thinking"] as const) {
+    const h = harness();
+    h.pacer.accept(event({ phase: "repairing", label: "Repairing the Flow: the result check refuted its answer (attempt 1 of 2)", detail: { kind: "step", title: "Result repair started", status: "started" } }, "run", "r9"));
+    const title = "Build stopped: a budget ran out";
+    h.pacer.accept(event({ phase: "failed", label: title, final: true, detail: { kind: "step", title, status: "failed" } }, "run", "r9"));
+    assert.equal(h.pacer.display()?.headline, "Build failed");
+    h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+    h.pacer.accept(event({ phase, label: "I'll re-read the page", detail: { kind: "thought", title: "Re-reading the page", text: "I'll re-read the page to find the quantity field.", status: "succeeded" } }, "run", "r9"));
+    h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+    assert.notEqual(h.pacer.display()?.headline, "Couldn't fix your Flow", phase);
+    assert.ok(h.shown.every((entry) => entry.display.headline !== "Couldn't fix your Flow"), `${phase}: ${JSON.stringify(h.shown.map((entry) => entry.display.headline))}`);
+  }
+});
+
 // U3 of t194: the overlay said "Couldn't fix your Flow | Run failed" and
 // nothing more. Core's last row now says what came back and why; the status
 // shows it whole, as the chat does.
