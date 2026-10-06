@@ -271,6 +271,14 @@ t264 S4 is editing `R/flow-draft/{amendment,entry,routing,step,act-claim,index}.
 - Definition of done: the lane passes twice live with exact oracles and replays twice with zero calls; or a precise blocker the lane cannot fix alone.
 - Report to: `docs/working/mvp-final-month-plan/reports/live-<lane>.md` in the lane tree.
 
+### Brief: t276-live-ui-fixes (lead)
+- Repository: both, task t276 trees under `C:/Users/osrs_/FluxStuff/fxwork/t276/`.
+- Task: Fix the UI defects live round 1 found (each lane's debug and `live-*-ui-review.md` on dev give screenshots and step folders): (1) the "Edit the Flow · Done" card says what changed (step added/moved/removed, in plain words); (2) the build ending in the chat never shows raw ids ("(t958)", s8, s11), never cuts a quote mid-sentence, never repeats a sentence (Core `flow-bootstrap/unfinished-build/not-finished.ts` ~77 and ~153, and the ending composer); (3) the overlay and headline never say "Couldn't fix your Flow" during a creation build; (4) the start panel does not flash an old thread with raw codes; (5) "Checked, not pressed" cards say whose row ("Confirm · Jonas — checked, not pressed"); (6) a navigate to a loopback address is not called "the start page" unless it is the Flow's start (`activity/wording/action.ts` `pageName`); (7) read cards show their counts; (8) overlay text is never cut mid-word; (9) refused decisions are shown as refusals, never as work done; (10) "Look · Sponsored"-style internal labels read as plain words. Fail-first tests per item.
+- Owns (may edit): extension `apps/extension/src/{background/activity,background/panel,content/activity-overlay,panel/chat,panel/shell,shared/activity}/**`; Core `R/activity/**`, `src/ui/activity-action/**`, `R/flow-bootstrap/unfinished-build/**`, `R/conversations/**`; their tests; `docs/architecture/extension-client.md`.
+- Must not touch: Core `R/result-verification/**`, `R/llm/**`, `R/flow-draft/**`, `R/recovery/**`, `R/service/runtime-adaptation/**` (lane C's fix is running there); every lane tree.
+- Definition of done: changed tests pass; extension check/build, domain check, `fluxiq:check`, both audits exit 0; Core rebuilt; the report lists, per item, what the next live run's UI review must see.
+- Report to: `docs/working/mvp-final-month-plan/reports/t276-live-ui-fixes.md` in the t276 downstream tree.
+
 ## Work Ledger
 
 ### 2026-10-05 — Intake started
