@@ -122,6 +122,12 @@ export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   // has one (`extraction/slot.ts`, `liftedBounds`; `run-mustvzvg-99695308`).
   "web.handle.expected.extract_list.paginate.maxPages",
   "web.handle.expected.extract_list.paginate.maxScrolls",
+  // Beside a `paginate` written over a list that was detected with no
+  // pagination: the list cannot page on that handle, and the handle to page
+  // with is one detected on the page the step starts on -- not the last page
+  // of the list, where Next is drawn disabled (`extraction/slot.ts`,
+  // `keptPagination`; `run-muwansvz-a2b4a987`).
+  "web.handle.expected.extract_list.paginate.no_pager_detected.detect_on_step_start_page",
   // An element node's `selector` as `{ handle, location? }`.
   "web.handle.expected.selector.handle_location",
   // Beside `web.handle.wrong_control`: the node that does act on the control

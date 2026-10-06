@@ -240,7 +240,7 @@ test("a call that read no page reports no state", async () => {
   });
   assert.equal(went.effectApplied, true);
   assert.equal(went.stateDigests?.before, undefined);
-  assert.match(went.stateDigests?.after ?? "", /^web-state\.v3:/u);
+  assert.match(went.stateDigests?.after ?? "", /^web-state\.v4:/u);
 });
 
 /**
@@ -340,11 +340,11 @@ for (const decision of DECISIONS) {
 
       assert.equal(spent, protocol === "digests-around-calls" ? decision.captures.old : decision.captures.now, protocol);
       if (decision.digests === "both") {
-        assert.match(result.stateDigests?.before ?? "", /^web-state\.v3:/u, protocol);
-        assert.match(result.stateDigests?.after ?? "", /^web-state\.v3:/u, protocol);
+        assert.match(result.stateDigests?.before ?? "", /^web-state\.v4:/u, protocol);
+        assert.match(result.stateDigests?.after ?? "", /^web-state\.v4:/u, protocol);
       } else if (decision.digests === "after") {
         assert.equal(result.stateDigests?.before, undefined, protocol);
-        assert.match(result.stateDigests?.after ?? "", /^web-state\.v3:/u, protocol);
+        assert.match(result.stateDigests?.after ?? "", /^web-state\.v4:/u, protocol);
       } else {
         assert.equal(result.stateDigests, undefined, protocol);
       }
