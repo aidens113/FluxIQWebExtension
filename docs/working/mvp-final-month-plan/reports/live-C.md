@@ -201,3 +201,58 @@ Not verified:
   the rows only through the failure record's expected text.
 - A pre-existing module cycle (llm/evidence-loop <-> result-verification) leaves the judge `not_judged` if a test
   imports evidence-loop first. These changes add no edge to it, and production entry points are unaffected.
+
+## Round 2 — expectations (written 2026-10-06T06:24Z, before the dry run and the launch)
+
+Tree: ext `624c7a70` = dev, Core `9fd634d3` = dev (C-1 `5e368d1d` and C-2..C-5 `d7cb90ca`, lane B per-step changes, lane A
+and D fixes, t276 UI). Instance `t274-slot-1`, workspace `t274-c` (it holds round 1's Flow; the chat build creates
+a new run-owned project).
+
+- Actions and oracle: unchanged from round 1. One filtered list read over every page (5), sponsored and non-Plus
+  out, printed rating >= 4.0, price < $50.00, ear tips and the lone charging case out, pairs "with Wireless Charging
+  Case" in, dedupe by url, page order, columns name/price/rating/url. Oracle `extract-plus-under-fifty`: **exactly
+  13 records in order (B0PXHP88KT, B0R257NR7U, B0P8ZF57AC, B0J5MCMBAY, B0VNKJTVCD, B07Z1RZGJG, B00BJX53AC, B09HZLEPLS,
+  B0HKSZ2BM6, B0G68DZTDB, B0X473P78X, B02UB6NJWC, B016CBKJ2R), 52 string fields matched in place, all pages**; final
+  state not challenged, cart "2". Pass = Lab verdict `passed` (oracle held and Core's result check not refuting).
+- What the round-1 fixes should show:
+  - C-1: an exploratory read the model runs without `add` never joins the Flow (one read in the proposed Flow, or
+    only reads the model added).
+  - C-3: the build-test judge's request carries `buildTest.stores` with the rows the Flow would store; the check
+    card reads "N rows would be stored", never "no rows came back".
+  - C-2: if a name condition leaves out the charging-case pairs, the judge's summary carries
+    `leftOutNamingTheItem` (the 3 pairs, not the two accessories) and a yes that does not name them becomes a no
+    with those rows in the repair.
+  - C-5: a refutation carries `repair.checked` lines, and a re-author brief shows them.
+  - C-4: if a re-author runs, its brief orders no rerun of unchanged carried steps; carried Merge passes through.
+- Look-alike wrong answers: 10/13 (charging-case pairs dropped), 3 (page 1 only), 14+ (boundary repeat), 30 (an
+  unfiltered read stored beside the filtered one), sponsored rows kept.
+- UI checkpoints as round 1, plus t276's fixes: read cards with counts, detect card naming the list, no internal
+  words, overlay cut at a word, "Sending your message" gone, ending names result and blocker, test card says what
+  would be stored.
+
+## Round 2 — `run-muwansvz-a2b4a987`: failed
+
+- Cost: 22 calls, $0.079061508, one build under the $0.10 ceiling. No Flow was proposed: the build stopped at its
+  spending limit. No playback, the oracle was not reached (`oracleVerdict: null`), no replays. Not relaunched.
+- Round 0 added a list read with no conditions and no dedupe (82 rows from 5 pages). The build-test judge said no,
+  citing `buildTest.stores` ("would write 82 rows ... 6 labels repeated"), so C-3 works live. C-2, C-4 and C-5 were
+  not exercised: no condition left rows out, there was no result check, and no re-author ran.
+- Cause (R2-1): the repair round opened on results page 5, where the test left the page. Detection there proposed
+  no pagination, because the last page draws Next as disabled text. The new handle therefore carried none, and the
+  domain refused every paging rerun on it as `malformed` (six reruns, two refused completes) until the purse ran
+  out.
+- Fix, left uncommitted (downstream): `apps/extension/src/content/extraction/detect-pagination.ts` (`lastPageNext`:
+  a pager Next drawn disabled is proposed as `next`) and its test in
+  `apps/extension/src/content/extraction/tests/detect-pagination.test.ts` ("run muwansvz"). The test failed before
+  the fix with `actual undefined, expected 'next'` and passes after it, including the page-one round trip.
+- Validation:
+  - that test file alone: 16/16 pass;
+  - `EXTENSION_TEST_BUILD_LABEL=lane-c node scripts/test-extension.mjs`: 2493 pass, 0 fail;
+  - `npx tsc -p tsconfig.json --noEmit` (apps/extension): exit 0.
+- Proposed, not done:
+  - R2-2: the refusal names its reason (`domain/.../extraction/slot.ts`);
+  - R2-4: a repair round opens on the blamed step's start page;
+  - R2-U: the check card's count for a no, the ending's dollar bookkeeping, "Step 8", and the judge's text cut at
+    "(e.g.".
+- Debug: `docs/working/language-driven-flow-loop-plan/debugs/run-muwansvz-a2b4a987.md`. UI review:
+  `live-C-r2-ui-review.md`.

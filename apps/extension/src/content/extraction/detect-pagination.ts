@@ -111,8 +111,9 @@ export function detectPagination(run: readonly Element[], container: Element): W
   for (let depth = 0; level && depth < MAX_ANCESTOR_LEVELS; depth += 1, level = level.parentElement) {
     const controls = Array.from(level.querySelectorAll(CONTROL_SELECTOR))
       .filter((control) => !run.some((item) => item === control || item.contains(control)));
-    if (controls.length === 0) continue;
-    const next = controls.find((control) => kindOf(control) === "next");
+    const ended = lastPageNext(level, run);
+    if (controls.length === 0 && !ended) continue;
+    const next = controls.find((control) => kindOf(control) === "next") ?? ended;
     if (next) return { mode: "next", next: selectorFor(next), maxPages: PROPOSED_MAX_PAGES };
     const loadMore = controls.find((control) => kindOf(control) === "loadMore");
     if (loadMore) return { mode: "loadMore", control: selectorFor(loadMore), maxPages: PROPOSED_MAX_PAGES };
@@ -121,6 +122,23 @@ export function detectPagination(run: readonly Element[], container: Element): W
     if (pages) return { mode: "numbered", pages: pages.selector, maxPages: PROPOSED_MAX_PAGES };
   }
   return undefined;
+}
+
+/**
+ * A pager's Next drawn as disabled text, as a pager draws it on its last page:
+ * the list ending, not a list with no pager. Live run `run-muwansvz-a2b4a987`
+ * (lane C, round 2): its repair looked at the page the build's test left, the
+ * store's last results page, where Next is a disabled `span` and the numbers
+ * share the Previous link's tag and class, so detection proposed no pagination
+ * at all. The handle it minted carried none, and every rerun of the read that
+ * paged was refused as malformed until the build's money ran out. Read with the
+ * same strict label as a `next` read's own fallback (`isPagerNext`), so a
+ * disabled "Next day delivery" is not one; and on any other page the read finds
+ * the pager's live Next by that label (`nextControlOnPage`).
+ */
+function lastPageNext(level: Element, run: readonly Element[]): Element | undefined {
+  return Array.from(level.querySelectorAll('[aria-disabled="true"]'))
+    .find((control) => !run.some((item) => item === control || item.contains(control)) && isPagerNext(control));
 }
 
 function kindOf(control: Element): PaginationControlKind | undefined {

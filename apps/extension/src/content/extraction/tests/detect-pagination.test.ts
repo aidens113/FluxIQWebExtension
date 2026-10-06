@@ -241,3 +241,58 @@ test("a pager offering a labelled Next beside its numbers is proposed as Next", 
     stood.restore();
   }
 });
+
+// Live run `run-muwansvz-a2b4a987` (lane C, round 2): the repair round looked at
+// the page its build test left, the store's last results page, and detection
+// there proposed no pagination -- its Next is plain text marked disabled, and
+// its numbers share the Previous link's tag and class, so no selector names the
+// numbers alone. The handle that look minted carried no pagination, and every
+// rerun of the read with `paginate: {...}` over it was refused as malformed for
+// the rest of the build. A pager drawing its Next disabled on its last page is
+// the list ending, not no pager (`PAGER_CONTROL_SELECTOR` says so for a read),
+// and a read from page one follows that pager's Next by its label.
+test("run muwansvz: the store's last results page, its Next drawn as disabled text, is proposed as a list paged by Next", () => withElementNames(() => {
+  const { list, cards } = results();
+  const link = (label: string, href: string, text: string) => pageEl("a", { class: "pageLink", href, "aria-label": label }, text);
+  const next = pageEl("span", { class: "pageDisabled", "aria-disabled": "true" }, "Next");
+  const nav = pageEl("nav", { class: "pagination", role: "navigation", "aria-label": "pagination" }, [
+    link("Go to previous page, page 4", "?k=e&page=4", "Previous"),
+    link("Go to page 1", "?k=e", "1"),
+    link("Go to page 2", "?k=e&page=2", "2"),
+    link("Go to page 3", "?k=e&page=3", "3"),
+    link("Go to page 4", "?k=e&page=4", "4"),
+    pageEl("span", { class: "pageCurrent", "aria-current": "page", "aria-label": "Current page, page 5" }, "5"),
+    next
+  ]);
+  const body = pageEl("body", {}, [pageEl("main", {}, [pageEl("div", {}, [list, nav])])]);
+  const stood = page(body);
+  let proposed = "";
+  try {
+    const proposal = proposedOn(cards, list);
+    assert.equal(proposal?.mode, "next", JSON.stringify(proposal));
+    proposed = (proposal as { next: string }).next;
+    assert.deepEqual(named(proposed), [next]);
+    assert.equal(proposal?.maxPages, PROPOSED_MAX_PAGES);
+  } finally {
+    stood.restore();
+  }
+  // Page one of the same pager: Previous is the disabled text and Next a link.
+  // A read starting there with the proposal finds that live Next by its label.
+  const first = results();
+  const live = link("Go to next page, page 2", "?k=e&page=2", "Next");
+  const firstNav = pageEl("nav", { class: "pagination", role: "navigation", "aria-label": "pagination" }, [
+    pageEl("span", { class: "pageDisabled", "aria-disabled": "true" }, "Previous"),
+    pageEl("span", { class: "pageCurrent", "aria-current": "page", "aria-label": "Current page, page 1" }, "1"),
+    link("Go to page 2", "?k=e&page=2", "2"),
+    link("Go to page 3", "?k=e&page=3", "3"),
+    link("Go to page 5", "?k=e&page=5", "5"),
+    live
+  ]);
+  const pageOne = page(pageEl("body", {}, [pageEl("main", {}, [pageEl("div", {}, [first.list, firstNav])])]));
+  try {
+    const authored = (named(proposed)[0] ?? null) as Element | null;
+    assert.equal(nextControlOnPage(authored, pageElements(first.cards))?.control, live as unknown as Element);
+  } finally {
+    pageOne.restore();
+  }
+}));
