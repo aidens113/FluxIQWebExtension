@@ -34,6 +34,7 @@
 // shown as before, by its label.
 
 import type { WebAutomationExtractionProposal, WebAutomationExtractionProposalFieldSpec } from "../../../../extraction";
+import type { WebLlmEvidenceElement } from "../../elements";
 import type { WebLlmSnapshotBinding } from "../../sanitize";
 import { screenedPageText } from "../../withheld";
 import { webLlmSelectedWithin } from "./chain";
@@ -66,6 +67,24 @@ export function webLlmFirstItemHandles(proposal: WebAutomationExtractionProposal
     const node = columnElement(tree, items, field.spec);
     const handle = node === undefined ? undefined : shownHandle(node);
     if (handle !== undefined) found.set(field.key, handle);
+  }
+  return found;
+}
+
+/**
+ * Each field key with its element in the first item that has it, in the
+ * detection's own capture: what a column's sample and readable label are read
+ * from (`../field-sample.ts`). Needs no page shown, since nothing is named by a
+ * handle; a column whose element cannot be told is left out.
+ */
+export function webLlmFirstItemElements(proposal: WebAutomationExtractionProposal, detected: WebLlmSnapshotBinding): ReadonlyMap<string, WebLlmEvidenceElement> {
+  const found = new Map<string, WebLlmEvidenceElement>();
+  const tree = webLlmPageTree(detected);
+  const items = listItems(tree, proposal);
+  if (items.length === 0) return found;
+  for (const field of proposal.fields) {
+    const node = columnElement(tree, items, field.spec);
+    if (node !== undefined) found.set(field.key, node.element);
   }
   return found;
 }
