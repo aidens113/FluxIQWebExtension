@@ -99,7 +99,17 @@ export type WebExtractionSlotResolution =
    * position when the refusal is two written values that disagree, and
    * `expected` the shape the refused key belongs in when it has one.
    */
-  | { status: "refused"; issue: WebExtractionSlotIssue; path: WebPlanValuePath; also?: WebPlanValuePath; expected?: (typeof BOUND_INSIDE_PAGINATE)[PagingBound] };
+  | { status: "refused"; issue: WebExtractionSlotIssue; path: WebPlanValuePath; also?: WebPlanValuePath; expected?: WebExtractionSlotHint };
+
+/**
+ * Said beside a `paginate` refused because the list it names was detected with
+ * no pagination at all: the handle cannot page, and the way out is a handle
+ * detected on the page the step starts on (`keptPagination`).
+ */
+const NO_PAGER_DETECTED = "web.handle.expected.extract_list.paginate.no_pager_detected.detect_on_step_start_page";
+
+/** The shape hints a slot refusal may carry beside its reason. */
+type WebExtractionSlotHint = (typeof BOUND_INSIDE_PAGINATE)[PagingBound] | typeof NO_PAGER_DETECTED;
 
 const LIST_KEYS: ReadonlySet<string> = new Set(["handle", "location", "item", "fields", "columns", "where", "dedupe", "sort", "paginate", "minItems", "maxItems"]);
 const REFERENCE_KEYS: ReadonlySet<string> = new Set(["handle", "location"]);
@@ -159,6 +169,7 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   if ("issue" in lifted) return lifted;
   const paginate = keptPagination(lifted.paginate, binding);
   if (paginate === "malformed") return refused("web.handle.malformed", ["paginate"]);
+  if (paginate === "no_pager_detected") return { status: "refused", issue: "web.handle.malformed", path: ["paginate"], expected: NO_PAGER_DETECTED };
 
   const request: JsonObject = { item: binding.extractList.item, fields: columns.fields as unknown as JsonObject };
   // An empty clause resolves to no conditions, and the request carries no
@@ -289,13 +300,24 @@ function liftedBounds(value: Record<string, unknown>, binding: WebLlmExtractionB
  * scroll count both say how far to read, so a plan whose mode is not the
  * detected one may give either, and the detected mode's own key wins when it
  * gives both.
+ *
+ * A pagination written over a list detected with none is `no_pager_detected`
+ * rather than a bare `malformed`, because the plan is not what is wrong: the
+ * handle is. Live run `run-muwansvz-a2b4a987` (lane C, decisions 0031-0048):
+ * the repair round opened on the last results page, where Next is drawn
+ * disabled, and the detect there issued a handle with no pagination. Six
+ * paging reruns on it were refused `web.handle.malformed:extractList.paginate`
+ * with nothing saying why, and the model kept the handle each time. The
+ * refusal now says the list was detected with no pager and that a handle
+ * detected on the page the step starts on is the one to page with.
  */
-function keptPagination(paginate: unknown, binding: WebLlmExtractionBinding): WebAutomationExtractListPagination | undefined | "malformed" {
+function keptPagination(paginate: unknown, binding: WebLlmExtractionBinding): WebAutomationExtractListPagination | undefined | "malformed" | "no_pager_detected" {
   const detected = binding.extractList.paginate;
   if (paginate === false) return undefined;
   if (paginate === undefined) return detected;
   if (paginate === true) return detected === undefined ? undefined : everyPage(detected);
-  if (!isJsonRecord(paginate) || detected === undefined) return "malformed";
+  if (!isJsonRecord(paginate)) return "malformed";
+  if (detected === undefined) return "no_pager_detected";
   const bounded = structuredClone(detected);
   const bound = bounded.mode === "scroll" ? paginate.maxScrolls ?? paginate.maxPages : paginate.maxPages ?? paginate.maxScrolls;
   if (bound === undefined) return everyPage(detected);

@@ -41,6 +41,7 @@ const CATALOG = CAPTURED_DETECTIONS["product-catalog-largest"];
 const EXTRACTION_HINT = "web.handle.expected.extract_list.handle_fields_paginate";
 const TARGET_HINT = "web.handle.expected.selector.handle_location";
 const MAX_PAGES_INSIDE_PAGINATE = "web.handle.expected.extract_list.paginate.maxPages";
+const NO_PAGER_DETECTED = "web.handle.expected.extract_list.paginate.no_pager_detected.detect_on_step_start_page";
 
 const CARD = '[data-testid="product-card"]';
 const testId = (id: string) => `[data-testid="${id}"]`;
@@ -547,4 +548,39 @@ test("absent keeps the detected one-page bound, true reads to the domain's bound
   }
   assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: { name: "product-name" }, paginate: { maxPages: 5 } } }),
     resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name }, paginate: { ...NEXT, maxPages: 5 } }));
+});
+
+test("a paging read over a list detected with no pagination is refused saying so, and naming the way out", async () => {
+  // Live run `run-muwansvz-a2b4a987` (lane C, decisions 0031-0048): the repair
+  // round opened on results page 5, the last, where Next is drawn disabled; the
+  // detect there issued `extraction.3` with `pagination: "none"`, and six reruns
+  // writing `paginate: {next, maxPages: 5}` on it were refused
+  // `web.handle.malformed:extractList.paginate` with nothing saying why. The
+  // refusal now names it: the list was detected with no pagination, and the
+  // handle to page with is one detected on the page the step starts on.
+  const capture = structuredClone(CATALOG);
+  if (!capture.structure.ok) throw new Error("catalog detection failed");
+  delete (capture.structure.proposal as { pagination?: unknown }).pagination;
+  const runtime = runtimeOver(capture);
+  const shown = await detect(runtime);
+  assert.equal(shown.pagination, "none");
+  const fields = { name: "product-name" };
+  for (const paginate of [{ next: "a.next", maxPages: 5 }, { mode: "numbered" }, {}]) {
+    assert.deepEqual(
+      await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields, paginate } }),
+      { status: "refused", issueCodes: ["web.handle.malformed", EXTRACTION_HINT, NO_PAGER_DETECTED, "web.handle.malformed:extractList.paginate"] },
+      JSON.stringify(paginate)
+    );
+  }
+  // A bound past the cap over a list that does page is still the plain malformed bound, with no word about detection.
+  const paged = runtimeOver(CATALOG);
+  const listed = await detect(paged);
+  assert.deepEqual(await resolve(paged, EXTRACT_LIST_NODE, { extractList: { handle: listed.extraction, fields, paginate: { maxPages: WEB_AUTOMATION_EXTRACT_MAX_PAGES + 1 } } }),
+    refusedAt("web.handle.malformed", "extractList.paginate", EXTRACTION_HINT));
+  // Not paging, or asking for the detected pagination, still resolves on the unpaged handle.
+  for (const paginate of [false, undefined]) {
+    const written: JsonObject = { handle: shown.extraction, fields };
+    if (paginate !== undefined) written.paginate = paginate;
+    assert.equal((await resolve(runtime, EXTRACT_LIST_NODE, { extractList: written })).status, "resolved", String(paginate));
+  }
 });

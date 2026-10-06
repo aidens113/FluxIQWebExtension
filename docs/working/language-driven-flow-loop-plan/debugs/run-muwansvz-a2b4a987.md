@@ -182,5 +182,5 @@ build-test pair would then have judged its name exclusion ("earbuds", "charging 
 
 | Stage | What could not be answered | File that drops it |
 | --- | --- | --- |
-| 6 | The second build-test judge's verdict line was not found in its response text as `answersRequest`; only the first judge's was | Core judge step log / Lab parse (not investigated) |
+| 6 | ~~The second build-test judge's verdict line was not found~~ Not a defect (supervisor, 2026-10-06): `steps/0027-judge/response.txt` ends with `answersRequest: no`, the same as 0026; both judges said no | none |
 | 2 | The refusal names `extractList.paginate` as malformed without the binding's detected pagination, so finding the cause needed the detect result and the domain source | downstream `slot.ts` refusal detail |
