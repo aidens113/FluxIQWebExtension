@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Integration done except t267 (adaptation unblock) and t273 (B7, D enforcement, P5 wiring), both running; live A-D tests follow, then Phase 1b.
+Status detail: All planned fixes are on dev; sweep 2 and lane rebuilds running; live A-D next, then Phase 1b.
 Created: 2026-10-05
 Last updated: 2026-10-05
 Owner: Senior supervisor agent
@@ -17,7 +17,7 @@ Deadline 2026-11-10. Feature freeze 2026-10-29. Updated 2026-10-05 evening.
 
 **On dev and pushed (both repositories), 2026-10-05.** Codex's t262 (call admission, provider-free replay, A8 accepted); t263 lane-only ports; t264 the whole round-1003 Core chain (instruction authority, refusal cards and wording, judge and ending, authoring, docs); t265 extension UI; t266 test fallout; t268 extraction preview and the Flow/adaptation deep link; t269 C4 saved-row repair; t270 P5 `$step` (built, not yet reachable by the model); t271 D route states (read, not enforced); t272 C1 paginate-true reads every page. Last verification of the combined Core: 712 automation-studio/ui files, 6904 passed, 0 failed; downstream domain, extension and test-runner checks 0; both audits pass. Sweep 1 of the day ran before most of this; sweep 2 is owed on the current dev.
 
-**In flight.** t267 (lead): adaptation unblock; S1 Lab no forced manual approval, S2 judged run as target-override evidence, S3 Run asks for a repairing run and "Learned N" counts kept changes, C1 token route allows it, S5 Lab records are committed on its branch; C2 (routine runs stop billing a result check) and S4 (a re-authored Flow is applied only after its re-run is judged) are running; t267 lands on dev as a whole after S4, because its Run change must not ship before C2. t273 (lead): S1 B7 binding affordances running; then S2 D route enforcement and S3 P5 wiring.
+**Integration complete (2026-10-05 20:45).** t267 adaptation unblock (Lab lets an adaptation persist; judged whole run as target-override evidence; extension Run and chat "run it" ask for a repairing run; routine runs bill no result check; a re-authored Flow is applied only once its re-run is judged; "Learned N" counts kept changes; the chat says what was learned) and t273 creation wiring (B7 binding affordances; D named routes shown, worded and enforced; P5 `$step` end to end) are on dev in both repositories. Combined Core: 727 automation-studio/ui files, 7079 passed, 0 failed; Core and web typechecks, audits and reference checks pass; downstream domain, extension and test-runner checks 0. Sweep 2 of the day is running; lane trees t262 (A/B), t274 (C), t275 (D) are synced to dev and rebuilding. Live A-D starts when the sweep is green.
 
 **Preserved, not landed.** `wip/t262-uncommitted` (Codex's B7/C4/P5 drafts, pushed); `wip/t174..t195-uncommitted` (Claude's lane trees, local) — every fix in them is ported or deliberately dropped. Lane evidence (seven debugs, all lane and worker reports) is on dev. `task/t224-codex-ui-ux-review` stays paused. Worktrees: dev, t224, t262 (A/B lane tree holding A8's saved Flow and profiles), t267, t273.
 
@@ -328,6 +328,13 @@ t264 S4 is editing `R/flow-draft/{amendment,entry,routing,step,act-claim,index}.
 - Validation: t272 rebundled domain 77/77, extension 38/38, domain check 0; t271 21 files 236/236, fluxiq:check 0; t269 Core 87 files 702/702 with the service.ts line, row fixtures 7/7, domain check 0; t270 after merging dev 210 files 2448/2448, fluxiq:check 0, domain check 0; t264 S3 702 files 6730/6730 (1 skipped); t267 S5 test-runner dist 1946/1946, test-contracts 161/161; t267 C1 web 53/53 (2 failed with the old rule). Every finish: structure audit passed; Core finish `pnpm check` passed.
 - Outcome: Accepted
 - Follow-up: after t264 S4: one owner for B7, D phase 2 wiring (`request-body.ts`, `entry.ts`) and P5 wiring (t270 report lists the five files); t267 C2 (service.ts result-check caller pays) and S4 (judged re-author apply); then live A-D.
+
+### 2026-10-05 — t267 and t273 landed; integration complete
+- Agent: supervisor with t267 and t273 (leads).
+- Changed: t267 C2/S4 (Core `fa8640ff`) and the whole task merged; t273 S1 B7 (`f83eeb5a`), S2 D route enforcement (`333ea0bf`, service wiring `d81ce169` by the supervisor), S3 P5 wiring and chat run-it (`77a331cb`) merged. Lane trees t174/t193/t194/t195 snapshotted to local `wip/<lane>-uncommitted` and retired; their evidence committed (`642d0089`).
+- Validation: t267 C2/S4 94 files 614/614, fluxiq:check 0, downstream checks 0. t273 after merging t267 and wiring service.ts: 725 files 7048/7048; after S3: 727 files 7079/7079 (1 skipped), fluxiq:check 0, web:check 0, audits pass, reference current, domain/extension/test-runner checks 0. Every finish: structure audit passed; Core finish `pnpm check` passed.
+- Outcome: Accepted
+- Follow-up: sweep 2; live A-D.
 
 ## Open Questions
 
