@@ -474,6 +474,13 @@ Each lane tree (both repos) was fast-forwarded to `dev` (Core `6567edac`, downst
 - Outcome: Accepted (digest, whereToFix); D in progress
 - Follow-up: land D; land t277 UI; sync and rebuild t275 and t277's merges into every lane tree; launch round 3 off-peak.
 
+### 2026-10-06 — Lane D round-3 fixes landed (D2-1, D2-2); sweep running
+- Agent: worker r3-d-reach (two follow-ups), verified and merged by the supervisor.
+- Changed: Core `92d692fa` + `a3690810` (merge `1727c422`): an amend decision whose drop or exploratory removes the last way to a kept step's page is put back and refused `strands_a_step`, naming the stranded step; a step newly left after one that does not reach its page is reported as its own `unreached` field (answer code `llm_evidence_loop.draft_step_unreached`), never a refusal, so status, history, repeat counting and the `same_amendment` key ignore it. `src/ui/activity-action/refusal-words.ts` gains `strands_a_step` (its exhaustive map requires it). Downstream `e50d99c2` (merge `fdb7f010`): a list read whose list never appeared, on a page other than the one it read, answers `unreproducible`; on its own page it still fails. Pushed. Lane trees t262, t274, t275 fast-forwarded to dev and rebuilding. Full sweep of dev before D running in worktree t279.
+- Validation: (supervisor) t275 `npx vitest run .../flow-draft .../llm/tests/draft-amendment-feedback.test.ts .../llm/{decision-handlers,decision-context,evidence-loop,repeat-guard} .../flow-bootstrap/tests/evidence-loop-steps.test.ts src/ui/activity-action/tests` -> 78 files, 921 passed; on merged dev: Core `fluxiq:check` passed, Core audit passed, Core libraries rebuilt, `domain check` passed, downstream audit passed, domain `node-run/tests/replay*.test.ts` -> `# tests 64 # pass 64 # fail 0`.
+- Outcome: Accepted
+- Follow-up: a note produced while held amendments settle after a rerun is dropped (`evidence-loop/held-amendments.ts` `settle()` returns only applied and refused); never miscounted, not told. t277's merge will touch `refusal-words.ts` too.
+
 ## Open Questions
 
 - Is demonstrate/record an MVP acceptance requirement after the 2026-09-22 scope ruling? Owner: user. Default taken: supported, unmeasured, one smoke proof.
