@@ -319,6 +319,14 @@ t264 S4 is editing `R/flow-draft/{amendment,entry,routing,step,act-claim,index}.
 - Outcome: Accepted (stages on task branches; not yet on dev)
 - Follow-up: t264 S3, t267 S3.
 
+### 2026-10-05 — Creation blockers in parallel: C1, C4, D phase 1, P5 landed; t264 S1-S3 and t267 S3/C1/S5
+- Agent: supervisor with t269-c4-row-repair, t270-p5-step-binding, t271-d-route-states, t272-c1-pagination, t264 (lead), t267 (lead).
+- Changed: t264 S1-S3 merged to dev (both repos). t272 C1 (`9c0c97e6`: paginate true reads every page to 50; tool description 1764 chars). t271 D phase 1 (Core `7eb25da4`: shared instruction read, route states; nothing enforces yet). t269 C4 (Core `f0556b02`: seeded for-each loops, plan-aware node ids, one line in service.ts by the supervisor). t270 P5 (Core `6b93f185`: `$step` binding built; call sites in t264's files still refuse it). t267 S3 (Run carries its caller; "Learned N" counts kept changes), C1 (paired run may ask explore_and_adapt), S5 (Lab records) on its branch.
+- Why: the user asked why work was slow; the creation blockers were split by file and run in parallel instead of waiting for t264.
+- Validation: t272 rebundled domain 77/77, extension 38/38, domain check 0; t271 21 files 236/236, fluxiq:check 0; t269 Core 87 files 702/702 with the service.ts line, row fixtures 7/7, domain check 0; t270 after merging dev 210 files 2448/2448, fluxiq:check 0, domain check 0; t264 S3 702 files 6730/6730 (1 skipped); t267 S5 test-runner dist 1946/1946, test-contracts 161/161; t267 C1 web 53/53 (2 failed with the old rule). Every finish: structure audit passed; Core finish `pnpm check` passed.
+- Outcome: Accepted
+- Follow-up: after t264 S4: one owner for B7, D phase 2 wiring (`request-body.ts`, `entry.ts`) and P5 wiring (t270 report lists the five files); t267 C2 (service.ts result-check caller pays) and S4 (judged re-author apply); then live A-D.
+
 ## Open Questions
 
 - Is demonstrate/record an MVP acceptance requirement after the 2026-09-22 scope ruling? Owner: user. Default taken: supported, unmeasured, one smoke proof.
