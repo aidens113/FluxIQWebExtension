@@ -1,7 +1,7 @@
 # t267 adaptation-loop unblock — lead report
 
-Status: S1, S2, S3 and C1 committed by the supervisor (C1: Core `33566b00`). S5 (Lab records) is done, uncommitted, downstream files only. C2 and S4 wait for t264's last stage to land on `dev`. S3's extension change still must not reach `dev` before C2.
-Tree: `C:/Users/osrs_/FluxStuff/fxwork/t267/!FluxIQWebExtension` (branch `task/t267-adaptation-loop-unblock`); Core sibling `fxwork/t267/!FluxIQ` (same branch, from `de8eb8e5`): unchanged in S1, changed in S2 and S3.
+Status: S1-S5 and C1 committed by the supervisor (S5: `30c0b76c`). C2 and S4 are done, uncommitted, Core only; with them t267 is complete and can merge to `dev`, and S3's extension Run change ships with C2.
+Tree: `C:/Users/osrs_/FluxStuff/fxwork/t267/!FluxIQWebExtension` (branch `task/t267-adaptation-loop-unblock`); Core sibling `fxwork/t267/!FluxIQ` (same branch; `dev` incl. t264 merged in): changed in S2, S3, C1, C2 and S4.
 Brief: `t267-adaptation-unblock` in `../mvp-final-month-plan.md`; blockers numbered as in [the audit](./adaptation-loop-audit.md) "Ranked blockers".
 
 ## Stage S1 — Lab: blockers 2 and 3, A8-class catalog row
@@ -390,3 +390,62 @@ Downstream only. The sources are lanes A and C's uncommitted trees (base `45bd62
 ### Notes
 
 - To test `packages/test-runner` files that import Playwright or read sources by path, build `dist/` (`pnpm.cmd --filter @fluxiq-web-extension/test-runner build`) and run `node --test dist/...`. The scratch bundler is unreliable for them.
+
+## C2 — routine Runs pay only for the checks that judge a repair (MVP item 23)
+
+Done after t264 landed. The supervisor gave this brief Core `R/service.ts` exclusively. Worker t267-c2-result-check-payer (worker-high), [report](./t267/c2-result-check-payer.md).
+- `R/service.ts`, folded into existing lines; it stays within the 4,400-line ratchet and adds no class method:
+  - `runRuntimeSession` takes `resultCheckCallerPays` and passes it as `callerPays` to `resolveAutomationStudioResultCheckProvider`.
+  - The `rerunRepairedFlow` port re-decides the check as repaired (`automationStudioRepairedRunResultCheck`), as the resume retry does.
+- `A/api/handlers/runtime-execution.ts` sends `resultCheckCallerPays: "repair_checks"` for a paired caller with `llmExecution`. A person's own session pays for every check, as before.
+- Tests (each failed before the change): the handler test; new `R/tests/service-adaptation/tests/caller-paid-result-check.test.ts` (a routine paired run that succeeds makes no result-check call; the same run without the option is judged by the caller; a resumed repair is judged with the caller's key); new `caller-paid-reauthor-check.test.ts` (a re-authored re-run is judged with the caller's key).
+- Known gap, outside this brief: the recorded `resultCheck` code on a re-author's re-run still shows the run's original decision, though the caller pays for it as a repair check. Fixing it needs `R/result-verification/run-outcome.ts`.
+
+## S4 — a re-authored Flow is kept only after its re-run is judged `answers` (blocker 5)
+
+Worker t267-s4-judged-reauthor (worker-high), [report](./t267/s4-judged-reauthor.md), plus the lead's fix below.
+
+### Design and why
+
+The alternative of applying, re-running and reverting was ruled out: `revertFlowBootstrapAdaptation` refuses extend mode (`R/service.ts:3574-3575`), and every re-author is an extend. So the edit is held instead.
+- Both routes approve the edit and hold it: validated, not applied. The marker records `held: true` (`R/recovery/refuted-result/reauthor.ts`, new `held-reauthor.ts`).
+- `automationStudioRefutedResultFlowWasReauthored` is true for held edits, so both routes still re-run.
+- The re-run from the start runs the held edit's graph as an unapplied candidate (`R/service/runtime-adaptation/held-candidate.ts`, `repair-rerun.ts`). An extend reuses the router id and overwrites the primary subflow's graph under the same ids (`R/flow-bootstrap/adaptation.ts:161-200`), so a held topology that is exactly the selected subflow runs alone.
+- Any other topology is applied first, as before, and the marker records `appliedBeforeJudged`.
+- The run's judged end settles it (`R/service/runtime-adaptation/judged-reauthor.ts`, called from `service.ts`'s `judged` closure). The edit is applied through Flow Bootstrap review only when the final session `succeeded` with a performed `answers` verdict and its pass ran the held edit; the marker then says `applied: true`, which is what the S1 repair lane reads.
+- A later attempt in the same run first rejects an earlier held edit and marks it `superseded`. Otherwise its build would be refused (`flow_bootstrap.pending_adaptation_exists`).
+
+### Lead fix after the worker
+
+The worker left a held edit that was not kept `validated`, and asked for a decision. A validated Flow Bootstrap adaptation is pending, and a pending one refuses every later build of the Flow, including the next run's re-author and the person's own build. So the settle now rejects every held edit it does not apply.
+- **Reasons rejected:** `refuted`, `run_failed`, `not_judged`, `not_rerun`, `run_cancelled`, `run_parked`, `apply_failed`, `store_unavailable`, `superseded`. A refused rejection is recorded as the code `rejectRefused`, never Core's words.
+- **Refuted runs are now read.** A refuted run whose re-run never happened was skipped by the early return, so its held edit stayed pending.
+- **A run that throws now settles.** `service.ts`'s `settleAfterThrow`, folded, rejects its held edits as `run_errored`.
+
+Tests were written fail-first: 15 failed against the worker's settle, all 21 pass after. They are `R/service/runtime-adaptation/tests/judged-reauthor.test.ts` (the rejection of each case, a refuted run with no re-run, a thrown run, a refused rejection) and the service-level `R/tests/service-adaptation/tests/judged-reauthor.test.ts` (refuted and failed re-runs now leave every held edit `rejected`). The Core migration note in `docs/architecture/package-boundaries.md` is corrected to match.
+
+### Validation (lead-run, final state)
+
+- In `packages/fluxiq`, `npx vitest run` on `R/recovery/refuted-result`, `R/service/runtime-adaptation`, `R/service/adaptations`, `R/tests/service-adaptation`, `R/tests/service-bootstrap`, `R/result-verification`, `R/tests/refuted-result` and the `runtime-execution`, `llm-generation` and `llm-permission` handler tests, twice: `Test Files 107 passed (107)`, `Tests 855 passed (855)` both times. The worker saw two 15 s load timeouts in one of three runs, in files that do not re-author; neither recurred here.
+- `fluxiq:check` exit 0. `pnpm.cmd docs:check` reports the reference current (regenerated). `pnpm.cmd build` exit 0.
+- `R/service.ts` is 4,399 lines. The audit then offered to lower the `file-lines` baseline, so `node scripts/structure-audit.mjs --update` recorded 4400 -> 4399 (`.structure-baseline.json`, that entry only). The audit passed afterwards: `passed (255 warning(s), 349 baselined)`.
+- Downstream, against the rebuilt Core: `domain`, `test-runner` and `extension` checks exit 0. From the test-runner's `dist/`, `flow-lane/repair/tests/*`, `flow-lane/tests/harness-recovery`, `live-llm/tests/{reauthor-record,live-llm-run}` gave `# tests 92 # pass 92` (the Lab readers of the re-author marker).
+
+### Blocker state at the end of t267
+
+| # | Blocker | State |
+| --- | --- | --- |
+| 1 | Product runs carry no caller | Automations Run: fixed in source (handler caller, relay intent, token rule C1, caller pays only repair checks C2). The chat's "run it" (`R/conversations/commands/run-flow.ts`) is still not done; no live task owns that file now. |
+| 2 | Lab playback forced `manual_approval` | Fixed (S1) |
+| 3 | Repair lane passed a re-author with 0 replays | Fixed (S1) |
+| 4 | Trial evidence on instruction-built Flows | Fixed for target overrides (S2) |
+| 5 | Re-authored Flow applied before judged | Fixed (S4): held, run unapplied, applied only on a judged `answers`, rejected otherwise |
+| item 24 | Automations row | "Learned N" counts applied only (S3); the chat still says nothing about learning |
+
+### Not verified (C2, S4)
+
+- Nothing ran live. The Phase 2 proof commands are in S1's section. For a re-author proof, use social-feed with `--llm-permit send_or_publish`. Its run detail should show `resultReauthor.held: true`, `heldReauthorAdaptationId` on the re-run, and `applied: true` only after `answers`.
+- The fallback path (a held topology that cannot run alone, applied first) is unit-tested only.
+- A Core process that dies mid-run leaves a held edit validated and pending until a person rejects it.
+- The Lab's `RunHarnessResultReauthor` does not yet publish `held` or `notAppliedReason`; the bundle's `decision-trace.json` keeps the raw marker.
+- Full suites were not run (narrow checks only).
