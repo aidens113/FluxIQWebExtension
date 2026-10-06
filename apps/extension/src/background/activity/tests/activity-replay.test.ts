@@ -239,9 +239,11 @@ test("every event of the real build reads in a person's words, and the whole bui
     "Looking for the list of items — done",
     "Deciding the next step",
     "Trying a step on the page",
-    "Trying a step on the page — couldn't find it on the page",
     "Trying a step on the page — done",
-    "Trying a step on the page — that didn't work, trying another way",
+    // Both of the build's rejected calls were declined unsent (R2-U-6): `not_at_start_location` says no more,
+    // `target_unobserved` says what the step named (Core's words, t277).
+    "Trying a step on the page — not tried",
+    "Trying a step on the page — not tried: the step named something it hadn't seen on the page",
     "Trying the Flow out — done"
   ].sort());
 });

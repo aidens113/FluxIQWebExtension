@@ -86,8 +86,9 @@ test("result codes become a short outcome, never the code", () => {
     ["web.action.succeeded", "succeeded", "done"],
     ["web.structure.detected", "succeeded", "done"],
     ["core.replay.replayed", "succeeded", "done"],
-    ["web.action.rejected.not_at_start_location", "succeeded", "that didn't work, trying another way"],
-    ["web.action.rejected.target_unobserved", "succeeded", "couldn't find it on the page"],
+    ["web.action.rejected.not_at_start_location", "succeeded", "not tried"],
+    ["web.action.rejected.target_unobserved", "succeeded", "not tried: the step named something it hadn't seen on the page"],
+    ["web.action.rejected.target_covered", "succeeded", "not tried: a popup or banner on the page was covering it"],
     ["web.action.target_not_found", "succeeded", "couldn't find it on the page"],
     ["web.structure.not_detected", "succeeded", "couldn't find it on the page"],
     ["web.action.timeout", "succeeded", "that didn't work, trying another way"],
@@ -112,7 +113,7 @@ test("the draft tool's end reads as the Flow updated", () => {
 
 test("an event that carries only Core's sentence is read from it", () => {
   assert.equal(activityWording(event({ phase: "exploring", label: "Using core.run_node" })).sentence, "Trying a step on the page");
-  assert.equal(activityWording(event({ phase: "exploring", label: "Using web.detect_repeating_structure: web.action.rejected.target_unobserved" })).sentence, "Looking for the list of items — couldn't find it on the page");
+  assert.equal(activityWording(event({ phase: "exploring", label: "Using web.detect_repeating_structure: web.action.rejected.target_unobserved" })).sentence, "Looking for the list of items — not tried: the step named something it hadn't seen on the page");
   assert.equal(activityWording(event({ phase: "building", label: "Amending the draft Flow" })).sentence, "Updating the Flow");
   assert.equal(activityWording(event({ phase: "thinking", label: "Deciding the next step" })).sentence, "Thinking about the next step");
 });
@@ -184,7 +185,7 @@ test("Core's own words for a call are used as they come, with the outcome read f
   const ended = activityWording(named({ phase: "exploring", title: "Opening a page", label: "Opening a page — done", status: "succeeded", text: "Result: web.action.succeeded · Node: web.output.browser-navigate" }));
   assert.equal(ended.sentence, "Opening a page — done");
   const refused = activityWording(named({ phase: "exploring", title: "Clicking on the page", label: "Clicking on the page — didn't work", status: "succeeded", text: "Result: web.action.rejected.target_unobserved · Node: web.output.dom-click" }));
-  assert.equal(refused.sentence, "Clicking on the page — couldn't find it on the page");
+  assert.equal(refused.sentence, "Clicking on the page — not tried: the step named something it hadn't seen on the page");
   for (const wording of [started, ended, refused]) assertHuman(wording, wording.sentence);
 });
 
@@ -250,4 +251,32 @@ test("U6: a control's name is quoted once, with one space between words", () => 
   assert.equal(click("  “Add   to cart” "), "Clicking “Add to cart”");
   assert.equal(click("\"Get a free quote\""), "Clicking “Get a free quote”");
   assert.equal(click("Clicker game"), "Clicking “Clicker game”");
+});
+
+// R2-U-6 (run-muwansvz-a2b4a987, moment 07; steps 0034, 0039, 0046): the
+// overlay said "— couldn't find it on the page" for a read Core refused before
+// sending it (`web.action.rejected.target_unobserved`, reason
+// `malformed_handle`), while the list was on screen. A rejected call was never
+// tried on the page, so it never says the page lacked anything: it says it was
+// not tried and, when the row carries the reason, why.
+test("a call Core rejected before sending it says it was not tried, and why when the row says, never that it wasn't on the page", () => {
+  const read = "Trying again: reading the list of “name, price, rating and 3 more”";
+  const rejected = (title: string, label: string, text: string) => activityWording(named({ phase: "repairing", title, label: `${label} — didn't work`, status: "succeeded", text }));
+  const list = rejected("Reading the list of “name, price, rating and 3 more”", read, "Result: web.action.rejected.target_unobserved · Reason: malformed_handle · Node: web.output.dom-extract_list");
+  assert.equal(list.sentence, `${read} — not tried: the step didn't say which list to read`);
+  const click = rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.rejected.target_unobserved · Reason: target_not_a_handle · Node: web.output.dom-click");
+  assert.equal(click.sentence, "Clicking “Add to cart” — not tried: the step didn't say which control on the page to use");
+  const older = rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.rejected.target_unobserved · Reason: handle_from_older_view · Node: web.output.dom-click");
+  assert.equal(older.sentence, "Clicking “Add to cart” — not tried: FluxIQ was looking at an older view of the page");
+  const bare = rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.rejected.target_unobserved · Node: web.output.dom-click");
+  assert.equal(bare.sentence, "Clicking “Add to cart” — not tried: the step named something it hadn't seen on the page");
+  // A repeat whose first refusal Core did not see says it is the same as before (t277 lead).
+  const again = rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.rejected.target_unobserved · Reason: answered_the_same_again · Node: web.output.dom-click");
+  assert.equal(again.sentence, "Clicking “Add to cart” — not tried, for the same reason as the time before");
+  for (const wording of [list, click, older, bare, again]) {
+    assert.doesNotMatch(wording.sentence, /couldn't find|wasn't on the page|trying another way/u);
+    assertHuman(wording, wording.sentence);
+  }
+  // A call that ran and missed its target still says so.
+  assert.equal(rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.target_not_found · Node: web.output.dom-click").outcome, "couldn't find it on the page");
 });

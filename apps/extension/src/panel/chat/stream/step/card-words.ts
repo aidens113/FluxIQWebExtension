@@ -16,10 +16,13 @@
 //            single pack alike (t193 1003, D8). The view cuts at the end
 //            when it must, so this keeps the head of the card within what a
 //            narrow panel shows. Every cut falls where a word ends, never
-//            inside one ("Hybr…"), and a list Core names as "name, price,
-//            rating and 3 more" names fewer of its items and counts the rest
-//            ("name, price and 4 more") rather than leaving a gap inside it
-//            (U-13 of the run-muw60j7c-bb7c9a62 UI review). A path with no
+//            inside one ("Hybr…"). A list Core names as "name, price, rating
+//            and 3 more" is never cut or renamed: renamed to fit, one list
+//            read "name, price and 4 more" on its card, "name and 5 more" on
+//            its test card and "name, price, rating and 3 more" on the
+//            overlay (R2-U-8 of the run-muwansvz-a2b4a987 UI review). It is
+//            shown as Core gave it, and `whole` tells the view to wrap it
+//            when it is longer than the head holds. A path with no
 //            spaces is cut where one of its parts ends ("…napkins-250"); one
 //            word with nowhere to cut is left whole for the view
 //   outcome  "Working on it" and "Waiting for you" only while it is the
@@ -43,9 +46,10 @@
 //            never "Didn't work", since nothing was tried and failed (t193
 //            1003, C13), and never "Done" or "Working on it", whatever outcome
 //            the card carries: a refusal is no work (U-8 of the
-//            run-muw60j7c-bb7c9a62 UI review). Identical refusals in a row are
-//            one card that says how many ("Not done (3 times): ...",
-//            `messages.ts`); nothing for an action that never said it ended
+//            run-muw60j7c-bb7c9a62 UI review). Identical refusals and
+//            failures repeated with nothing new between them are one card
+//            that says how many ("Not done (3 times): ...", "Didn't work (3
+//            times): ...", `card-repeats.ts`); nothing for an action that never said it ended
 //            once the work moved on
 //   label    all three in one line, for the card's accessible name, with the
 //            whole target
@@ -64,6 +68,8 @@ export type CardWords = {
   state: "working" | "waiting" | "done" | "failed" | "unconfirmed" | "refused" | "settled";
   name: string;
   target: string | null;
+  /** The target is shown whole though the head holds less of it (Core's name for a list): the view wraps it, never cuts it. */
+  whole: boolean;
   outcome: string | null;
   label: string;
 };
@@ -84,7 +90,9 @@ export function cardWords(card: ActionCard, current: boolean): CardWords {
   const target = card.target;
   const [state, outcome] = outcomeOf(card, current);
   const label = [target === null ? name : `${name}, ${target}`, outcome].filter((part) => part !== null).join(": ");
-  return { state, name, target: target === null ? null : shortened(target, Math.max(MIN_TARGET_ROOM, HEAD_ROOM - name.length)), outcome, label };
+  const room = Math.max(MIN_TARGET_ROOM, HEAD_ROOM - name.length);
+  const list = target !== null && LIST.test(target);
+  return { state, name, target: target === null ? null : list ? target : shortened(target, room), whole: list && target.length > room, outcome, label };
 }
 
 function outcomeOf(card: ActionCard, current: boolean): [CardWords["state"], string | null] {
@@ -106,8 +114,8 @@ function outcomeOf(card: ActionCard, current: boolean): [CardWords["state"], str
       return ["done", card.check ? joined("Passed", card.said) : joined("Done", resultOf(card))];
     case "failed":
       if (card.unconfirmed) return ["unconfirmed", joined("Not confirmed", card.said)];
-      if (card.why === null && card.answer !== undefined) return ["failed", `Didn't work. ${card.answer}`];
-      return ["failed", joined(card.check ? "Didn't pass" : "Didn't work", card.why ?? card.said)];
+      if (card.why === null && card.answer !== undefined) return ["failed", `${counted("Didn't work", card.times)}. ${card.answer}`];
+      return ["failed", joined(counted(card.check ? "Didn't pass" : "Didn't work", card.times), card.why ?? card.said)];
   }
 }
 
@@ -116,7 +124,7 @@ function resultOf(card: ActionCard): string | undefined {
   return card.result?.trim() || undefined;
 }
 
-/** "Not done (3 times)" for a card standing for several identical refusals. */
+/** "Not done (3 times)", "Didn't work (3 times)" for a card standing for several identical ones (`card-repeats.ts`). */
 function counted(head: string, times: number | undefined): string {
   return times !== undefined && times > 1 ? `${head} (${times} times)` : head;
 }
@@ -125,6 +133,9 @@ function counted(head: string, times: number | undefined): string {
 const TYPED = /^"(.*)" into (.+)$/su;
 /** The least room the words typed keep before the field is left out. */
 const MIN_TYPED_ROOM = 12;
+
+/** Core's name for a list of more items than it names: "name, price, rating and 3 more". Shown as Core gave it. */
+const LIST = /^.+ and \d+ more$/u;
 
 /**
  * A target within `room` characters. Words typed into a field are what tell
@@ -135,33 +146,11 @@ const MIN_TYPED_ROOM = 12;
  */
 function shortened(text: string, room: number): string {
   if (text.length <= room) return text;
-  const list = shorterList(text, room);
-  if (list !== undefined) return list;
   const typed = TYPED.exec(text);
   if (!typed) return cutMiddle(text, room);
   const into = ` into ${typed[2]!}`;
   const withField = room - 2 - into.length;
   return withField >= MIN_TYPED_ROOM ? `"${cutMiddle(typed[1]!, withField)}"${into}` : `"${cutMiddle(typed[1]!, room - 2)}"`;
-}
-
-/** Core's name for a list of more items than it names: "name, price, rating and 3 more". */
-const LIST = /^(.+) and (\d+) more$/u;
-
-/**
- * A list Core named within `room` characters, naming fewer of its items and
- * counting the rest: "name, price and 4 more". Undefined for a target that is
- * no such list, or whose first item alone does not fit.
- */
-function shorterList(text: string, room: number): string | undefined {
-  const list = LIST.exec(text);
-  if (!list) return undefined;
-  const named = list[1]!.split(", ");
-  const more = Number(list[2]);
-  for (let kept = named.length - 1; kept >= 1; kept -= 1) {
-    const said = `${named.slice(0, kept).join(", ")} and ${more + named.length - kept} more`;
-    if (said.length <= room) return said;
-  }
-  return undefined;
 }
 
 /** Where a word with no spaces may be cut: before each of its separators ("/", "-", "_", "."). */

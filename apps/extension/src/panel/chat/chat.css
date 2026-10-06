@@ -172,6 +172,8 @@
 .chat-card-head { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 13.5px; line-height: 1.4; }
 .chat-card-name { flex: 0 0 auto; font-weight: 650; }
 .chat-card-target { min-width: 0; overflow: hidden; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
+/* Core's name for a list is shown whole: wrapped at its spaces, never cut (R2-U-8). */
+.chat-card-target[data-whole="true"] { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: normal; }
 /* The dot is decoration: the alternative text keeps it out of the card's accessible text. */
 .chat-card-target::before { content: "·"; content: "·" / ""; margin-right: 6px; color: var(--muted); }
 .chat-card-outcome { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; line-height: 1.45; }

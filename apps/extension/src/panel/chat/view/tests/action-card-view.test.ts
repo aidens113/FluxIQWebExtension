@@ -212,3 +212,23 @@ test("a navigate card names its page, and a refusal says its own reason", async 
     assert.deepEqual(labels, ["Open page, /ip/valueridge-napkins: Done", "Repair, Add to cart: Didn't work: FluxIQ didn't send it, as the step didn't say which control on the page to use"]);
   });
 });
+
+// R2-U-8 (run-muwansvz-a2b4a987): the card renamed a list to fit its head ("name, price and 4
+// more") while the overlay said Core's "name, price, rating and 3 more". The card shows Core's
+// name unchanged and, when it is longer than the head holds, marks it whole: the stylesheet
+// wraps such a target at its spaces instead of cutting it with an ellipsis.
+test("a list's name is shown as Core gave it, marked whole when it is longer than the card's head", async () => {
+  await withFakeDocument(() => {
+    const view = createThreadView();
+    const LIST = "name, price, rating and 3 more";
+    const events = [
+      event(1, "verifying", { kind: "tool", title: `Reading the list of “${LIST}”`, ref: "core.run_node", status: "succeeded", text: "Result: core.replay.replayed · Rows: 82 · Node: web.output.dom-extract_list" }),
+      event(2, "exploring", { kind: "tool", title: "Clicking “Get a free quote”", ref: "core.run_node", status: "succeeded", text: record("web.click.succeeded", "web.output.dom-click") })
+    ];
+    view.render(buildChatStream([], events), null, controls, null);
+    const [read, click] = cards(fake(view.element));
+    assert.equal(text(read!, "chat-card-target"), LIST);
+    assert.equal(read!.byClass("chat-card-target")[0]!.getAttribute("data-whole"), "true");
+    assert.equal(click!.byClass("chat-card-target")[0]!.getAttribute("data-whole"), "false");
+  });
+});

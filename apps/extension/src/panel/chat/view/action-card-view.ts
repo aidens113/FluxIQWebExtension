@@ -5,6 +5,10 @@
 //   ( icon )  Click · Get a free quote
 //             Didn't work: it wasn't on the page
 //
+// A target is one line, cut at the end by the stylesheet as a last resort,
+// except one the words mark `whole` (Core's name for a list, which is never
+// cut or renamed: R2-U-8), which wraps at its spaces.
+//
 // The card is a labelled group: its accessible name says the kind, the
 // target and the outcome, and the icon is hidden. The element lives as long
 // as the card; an update changes only the words and marks that changed (the
@@ -50,6 +54,8 @@ export function createActionCardView(): ActionCardView {
       setText(name, words.name);
       setText(target, words.target ?? "");
       setHidden(target, words.target === null);
+      // A target shown whole wraps at its spaces rather than being cut (`chat.css`).
+      setAttr(target, "data-whole", words.whole ? "true" : "false");
       setText(outcome, words.outcome ?? "");
       setHidden(outcome, words.outcome === null);
     }

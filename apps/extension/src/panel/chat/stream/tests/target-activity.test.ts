@@ -141,3 +141,22 @@ test("the chat's events are the relay's history when it keeps one, filtered the 
   assert.deepEqual(activityForTarget(state, AUTOMATION, undefined).events, [early]);
   assert.deepEqual(activityForTarget(relayState([late]), { kind: "latest" }, undefined).events, [late]);
 });
+
+// R2-U-5 (run-muwansvz-a2b4a987, moment 02): the panel said "Sending your
+// message" for ~1.6 s while the overlay said "Starting…". The starting status
+// the relay puts up as a send leaves (`background/activity/send-start.ts`) is
+// no event of Core's, so a project's chat, which shows only a display some
+// event of its project carries, never showed it.
+test("the starting status a send puts up shows in every chat, a project's too, until Core's first activity replaces it", () => {
+  const starting: ActivityDisplay = { activityId: "starting:1", subjectKind: "build", phase: "thinking", headline: "Starting…", detail: null, step: null, working: true, outcome: null, sequence: 0, kind: "starting" };
+  const earlier = activityEvent(1, { activityId: "build:old", subject: { kind: "build", id: "old", projectId: "p", flowId: "flow-7" }, conversationId: "conv-other" });
+  const state = relayState([earlier], { display: starting });
+  for (const [target, conversationId] of [
+    [{ kind: "project", projectId: "p" }, undefined],
+    [{ kind: "latest", projectId: "p" }, "conv-latest"],
+    [{ kind: "latest" }, "conv-latest"],
+    [AUTOMATION, "conv-flow"]
+  ] as const) {
+    assert.equal(activityForTarget(state, target, conversationId).display?.headline, "Starting…", JSON.stringify(target));
+  }
+});

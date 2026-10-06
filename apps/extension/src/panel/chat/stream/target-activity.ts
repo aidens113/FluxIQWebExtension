@@ -20,6 +20,13 @@
 // every chat says so. When the question is not in the thread on screen,
 // `answerIn` names the thread that holds it (`askThread`), and the live line
 // offers to open it.
+//
+// The starting status (`kind: "starting"`) is the person's own send, which
+// the relay puts up the moment it leaves and Core's first activity replaces
+// (`background/activity/send-start.ts`). No event of Core's carries it, so a
+// rule that asks for one never shows it: a project's chat said "Sending your
+// message" for the second and a half the overlay said "Starting…" (R2-U-5,
+// `run-muwansvz-a2b4a987`, moment 02). It shows in every chat.
 
 import type { ActivityDisplay, ClientGatewayActivity, ExtensionActivityState } from "../../../shared/activity/index";
 import { sameThread } from "../same-thread";
@@ -58,9 +65,10 @@ export function activityForTarget(state: ExtensionActivityState, target: ChatTar
   const events = story.filter(belongs);
   const asked = askThread(state);
   const answerIn = asked !== undefined && (target.projectId === undefined || asked.projectId === target.projectId) && !asksHere(target, asked) ? asked : null;
-  const shown = display !== null
+  const carried = (): boolean => display !== null
     && (target.projectId === undefined || [...story, ...state.recent, ...(state.current ? [state.current] : [])].some(event => event.activityId === display.activityId && inScope(event)))
     && (display.outcome === "waiting" || ((target.kind === "latest" || target.kind === "project") && elsewhere.size === 0) || [...events, ...state.recent].some((event) => event.activityId === display.activityId && belongs(event)));
+  const shown = display !== null && (display.kind === "starting" || carried());
   return { events, display: shown ? display : null, answerIn };
 }
 

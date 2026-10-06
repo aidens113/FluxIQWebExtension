@@ -54,8 +54,8 @@
 // answer") and adds nothing. The rules match the Core panel's
 // (`apps/web/.../conversation/activity/steps/messages.ts` in FluxIQ Core).
 //
-// A refusal right after the same refusal is no new card: the card before it
-// counts it (`refusal-repeats.ts`).
+// A card that did nothing and repeats one shown since anything new happened
+// is no new card: the card it repeats counts it (`card-repeats.ts`).
 //
 // Keys come from the event that opened a message (`step:activityId#sequence`)
 // or a card (`action:activityId#sequence`), so each keeps its element for as
@@ -65,7 +65,7 @@
 import { activityActionKey } from "fluxiq/ui";
 import { isInternalStep, type ClientGatewayActivity } from "../../../../shared/activity/index";
 import { actionCard, type ActionCard } from "./action-card";
-import { foldRepeatedRefusals } from "./refusal-repeats";
+import { foldRepeatedCards } from "./card-repeats";
 import { stepWords } from "./words";
 
 type ActivityDetail = NonNullable<ClientGatewayActivity["detail"]>;
@@ -328,8 +328,8 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
     add(event, detail, detail.kind, at, null);
   }
 
-  // Identical refusals in a row are one card that counts them (U-8, `refusal-repeats.ts`).
-  const folded = foldRepeatedRefusals(drafts);
+  // Repeated refusals and failures are one card each that counts them (U-8, R2-U-7, `card-repeats.ts`).
+  const folded = foldRepeatedCards(drafts);
   const kept = limit > 0 ? folded.slice(-limit) : [];
   const newest = new Map<string, StepMessage>();
   for (const draft of kept) newest.set(draft.activityId, draft);
