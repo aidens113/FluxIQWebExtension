@@ -358,6 +358,19 @@ test("a run's result check is one card that settles, and an unconfirmed verdict 
   assert.deepEqual([words.name, words.state, words.outcome], ["Check result", "unconfirmed", "Not confirmed: the result could not be confirmed."]);
 });
 
+// t277 (R2-U-1 of the run-muwansvz-a2b4a987 UI review): "e.g." in Core's sentence read as a
+// dotted id ("e.g"), so the whole sentence was dropped and the card said a bare verdict.
+test("a check's sentence holding an abbreviation such as e.g. is still shown; a dotted id is not", () => {
+  const run = { activityId: "run-1", subject: { kind: "run" as const, id: "run-1", projectId: "project-1" } };
+  const verdict = (text: string) => [
+    activityEvent(1, { ...run, phase: "verifying", label: "Checking the result answers the request", detail: { kind: "check", title: "Result check started", status: "started" } }),
+    activityEvent(2, { ...run, phase: "verifying", label: ACTIVITY_RESULT_CHECK_LABELS.unconfirmed, detail: { kind: "check", title: "Result check", status: "failed", text } })
+  ];
+  const outcome = (text: string) => cardWords(stepMessages(verdict(text), 100).flatMap((message) => message.actions)[0]!, false).outcome;
+  assert.equal(outcome("Some rows may be ads (e.g. the first one), so it is not confirmed."), "Not confirmed: some rows may be ads (e.g. the first one), so it is not confirmed.");
+  assert.equal(outcome("It ran web.output.dom-extract once."), "Not confirmed");
+});
+
 // t174-w85 D4 (00014): a test step read "Test run · Autumn Mega Sale: up to 70…".
 test("a build's test step reads as testing its action, with what it typed", () => {
   const events = [
@@ -490,4 +503,49 @@ test("a list read's card says how many rows it kept, and an edit's card what it 
   ], 100);
   const cards = messages.flatMap((message) => message.actions);
   assert.deepEqual(cards.map((card) => cardWords(card, false).outcome), ["Done: 4 rows", "Done: removed \"Add to cart\""]);
+});
+
+// R2-U-7 (run-muwansvz-a2b4a987, moment 07; steps 0033-0046): each refused
+// rerun of the list read added an "Edit the Flow · run the step again / Not
+// done" card and the rerun itself a "Read list / Didn't work" card, so the
+// chat alternated the two, one pair per attempt. A cycle of identical cards
+// with nothing new between them is one card each, counting its repeats.
+test("a repeating cycle of identical cards with nothing new between them is one card each, counting them", () => {
+  const LIST = "Trying again: reading the list of “name, price, rating and 3 more”";
+  const read = (sequence: number, status: "started" | "succeeded") => activityEvent(sequence, {
+    phase: "repairing",
+    label: status === "started" ? LIST : `${LIST} — didn't work`,
+    detail: { kind: "tool", title: LIST, status, ref: "core.run_node", ...(status === "started" ? {} : { text: "Result: web.action.rejected.target_unobserved · Reason: malformed_handle · Node: web.output.dom-extract_list" }) }
+  });
+  const rerun = (sequence: number) => activityEvent(sequence, {
+    phase: "building",
+    label: "Running the step again — not done",
+    detail: { kind: "tool", title: "Running the step again", status: "failed", ref: "core.flow_draft", text: "Result: llm_evidence_loop.repeat_refused · Reason: changed_nothing" }
+  });
+  const outcomes = (messages: StepMessage[]) => messages.flatMap((message) => message.actions.map((card) => cardWords(card, false).outcome));
+  // read, refused, read, refused, refused, read, refused -- a decision being made (no words) before each.
+  let sequence = 0;
+  const next = () => (sequence += 1);
+  const attempt = () => [decide(next()), read(next(), "started"), read(next(), "succeeded")];
+  const refused = () => [decide(next()), rerun(next())];
+  const events = [...attempt(), ...refused(), ...attempt(), ...refused(), ...refused(), ...attempt(), ...refused()];
+  const messages = stepMessages(events, 100);
+  const shown = outcomes(messages);
+  assert.equal(shown.length, 2, `one card each: ${JSON.stringify(shown)}`);
+  assert.match(shown[0]!, /^Didn't work \(3 times\): /u);
+  assert.equal(shown[1], "Not done (4 times): it was already tried exactly this way and changed nothing");
+  assert.equal(messages.at(-1)!.latest, true);
+
+  // Something new after a cycle -- a card that did work, or words of FluxIQ's -- starts counting afresh after it.
+  const worked = activityEvent(next(), { phase: "building", detail: { kind: "tool", title: "Editing the Flow", status: "succeeded", ref: "core.flow_draft", text: "Changed: removed \"Add to cart\"" } });
+  const after = outcomes(stepMessages([...events, worked, ...attempt(), ...refused()], 100));
+  assert.deepEqual(after.slice(2).map((outcome) => outcome?.replace(/:.*$/su, "")), ["Done", "Didn't work", "Not done"]);
+  const spoken = outcomes(stepMessages([...events, thought(next(), "Reading the list", "The handle was wrong, so I name the list again."), ...attempt()], 100));
+  assert.equal(spoken.length, 3);
+  // A new card after a cycle repeated starts a new one, so the order stays true: A B A C A is A(2) B C A.
+  const other = (at: number) => activityEvent(at, { phase: "repairing", detail: { kind: "tool", title: "Clicking “Next”", status: "succeeded", ref: "core.run_node", text: "Result: web.action.rejected.target_covered · Node: web.output.dom-click" } });
+  const mixed = outcomes(stepMessages([...attempt(), ...refused(), ...attempt(), other(next()), ...attempt()], 100));
+  assert.equal(mixed.length, 4, JSON.stringify(mixed));
+  assert.match(mixed[0]!, /^Didn't work \(2 times\): /u);
+  assert.match(mixed[3]!, /^Didn't work: /u);
 });

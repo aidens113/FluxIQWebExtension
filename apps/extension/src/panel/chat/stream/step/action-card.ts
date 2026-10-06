@@ -31,12 +31,17 @@ export type ActionCard = ActivityAction & {
   answer: string | undefined;
   /** True for a result check, which passes or does not rather than working or not. */
   check: boolean;
-  /** How many identical refusals in a row this card stands for (`messages.ts`); absent for one. */
+  /** How many identical cards that did nothing this card stands for (`card-repeats.ts`); absent for one. */
   times?: number;
 };
 
-/** A dotted id such as `web.output.dom-click` or `core.run_node`, anywhere in a sentence. */
-const DOTTED_ID = /\b[a-z][\w-]*(?:\.[\w-]+)+\b/iu;
+/**
+ * A dotted id such as `web.output.dom-click` or `core.run_node`, anywhere in a
+ * sentence: every part at least two characters, so an abbreviation ("e.g.",
+ * "i.e.") is not one. "e.g" dropped a result check's whole sentence and its
+ * card read a bare verdict (t277, R2-U-1 of `run-muwansvz-a2b4a987`).
+ */
+const DOTTED_ID = /\b[a-z][\w-]+(?:\.[\w-]{2,})+\b/iu;
 
 /** The card for `event`, keyed `key`; null for an event that is no action (a thought, a note, a status). */
 export function actionCard(event: ClientGatewayActivity, key: string): ActionCard | null {

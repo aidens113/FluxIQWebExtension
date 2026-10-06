@@ -366,7 +366,16 @@ relay:
   `ACTIVITY_DONE_VISIBLE_MS` (6 s) is not re-drawn, since the person already
   saw it fade; a failure is re-drawn on every page. The content script ignores
   a display older than the one it drew for the same unit of work, so the two
-  sends cannot cross.
+  sends cannot cross. What is left is the browser's own load: the new
+  document has no overlay until its content script has announced itself and
+  the answer has come back. In the `run-muwansvz-a2b4a987` and
+  `run-muw60j7c-bb7c9a62` reviews every first sample of a new document taken
+  59 ms or more after its time origin had the overlay; the absent ones were
+  taken 7, 23 and -2 ms in (R2-U-11). The answer goes through
+  `deliverToTab`, which pings the frame (`ensureContentScript`) before
+  sending; a frame that has just announced itself needs no ping, so answering
+  it with `sendToTab` alone (`background/connection.ts`) would save one round
+  trip.
 
 Each audience has its own rate gate (`FanOutGate`): at most one send per
 250 ms, the first change after a quiet interval at once and the last change of
@@ -437,7 +446,15 @@ pacer keeps what Core says and changes how often it is said:
   again is said with Core's reason for its replay code
   (`activityActionFailureReason` from `fluxiq/ui`: "the page wasn't in the
   same state when the test got there", "it did nothing this time, where it did
-  something before"), else "it didn't work the same way again";
+  something before"), else "it didn't work the same way again". A call
+  FluxIQ declined to send (`web.action.rejected.*`) is "not tried", never a
+  page miss, with why when the row carries the caller's reason (`Reason:` in
+  its record): Core's words for it less their "FluxIQ didn't send it, as", a
+  list read naming a list ("not tried: the step didn't say which list to
+  read"), or the code's own last words when they are not a page miss ("not
+  tried: a popup or banner on the page was covering it")
+  (`shared/activity/not-tried.ts`; R2-U-6 of `run-muwansvz-a2b4a987`, where
+  "couldn't find it on the page" was said of a list in plain sight);
 - `phase` and `step` belong to the event the detail came from, so they change
   no faster than it does. A run's step is kept between its step events and
   cleared when it settles. A repair of the Flow itself ("Result repair
@@ -629,10 +646,14 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     quote". An action on the page that named no control says "the page"; a
     test run, an edit to the Flow, a wait, a robot check or a permission
     names no target. A long target is cut from the middle where words end,
-    never inside one; a list Core names as "name, price, rating and 3 more"
-    names fewer items and counts the rest ("name, price and 4 more"); a path
-    is cut where one of its parts ends ("…napkins-250"), and one word with
-    nowhere to cut is left to the view (U-13 of `run-muw60j7c-bb7c9a62`).
+    never inside one; a path is cut where one of its parts ends
+    ("…napkins-250"), and one word with nowhere to cut is left to the view
+    (U-13 of `run-muw60j7c-bb7c9a62`). A list Core names as "name, price,
+    rating and 3 more" is shown as Core gave it, never cut or renamed, so the
+    card, the test card and the overlay name it alike (R2-U-8 of
+    `run-muwansvz-a2b4a987`: renamed to fit, one list had three names); when
+    it is longer than the head holds, the card marks it `data-whole="true"`
+    and the stylesheet wraps it at its spaces.
   - **Outcome line** (`stream/step/card-words.ts`). "Done", or "Done: 13 rows
     from 5 pages" when the card carries what the action came to (`result`,
     Core's `ActivityAction.result`; a test step shows its own words, a dash,
@@ -648,11 +669,18 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     words added to the model's sentence: "Not done: <Core's reason>", or
     "Only partly done: ..." for an edit some of which landed, with a neutral
     mark, never "Didn't work", since nothing was tried and failed, and never
-    "Done" or "Working on it" whatever outcome the card carries. A refusal
-    right after the same refusal (same unit, kind, target and reason, no words
-    between) is folded into the card before it, which says how many times:
-    "Not done (3 times): ..." (`stream/step/refusal-repeats.ts`; U-8 of
-    `run-muw60j7c-bb7c9a62`, three identical refusal cards in a row). The
+    "Done" or "Working on it" whatever outcome the card carries. A card that
+    did nothing -- a decision declined in whole, an action that didn't work --
+    and repeats one shown since anything new happened (same unit, kind,
+    target, test mark and words) is folded into that card, which says how many
+    times: "Not done (3 times): ...", "Didn't work (3 times): ..."
+    (`stream/step/card-repeats.ts`). Words of FluxIQ's or a card that did
+    anything are new and start the count afresh, as does a card new to the
+    stretch after one of its cards repeated, so A B A B A B reads A (3 times)
+    and B (3 times), and A B A C A reads A (2 times), B, C, A (U-8 of
+    `run-muw60j7c-bb7c9a62`, three identical refusal cards in a row; R2-U-7 of
+    `run-muwansvz-a2b4a987`, a refused rerun and a rerun Core did not send
+    alternating, one pair per attempt). The
     reasons are Core's (`ACTIVITY_ACTION_REFUSAL_WORDS` in `fluxiq/ui`), at
     most two, never a code (Core's
     `docs/architecture/automation-studio/client-gateway.md`, "Per-step
@@ -695,7 +723,12 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   step" while Core decides, which adds no message), never the model's words,
   which are the stream's messages. From a send until Core's first activity it
   reads "Starting…", the background's starting status, or "Sending your
-  message" when no session is live to carry activity. While the work waits for
+  message" when no session is live to carry activity. The starting status is
+  no event of Core's, so it shows in every chat, a project's and an
+  automation's too (`stream/target-activity.ts`): a project's chat, which
+  shows only a display some event of its project carries, said "Sending your
+  message" while the overlay said "Starting…" (R2-U-5 of
+  `run-muwansvz-a2b4a987`). While the work waits for
   the person it says what Core asked, and "Show the question" opens the thread
   holding the question when it is not on screen.
 - New content is followed only while the person is at the bottom of the

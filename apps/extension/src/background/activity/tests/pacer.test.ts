@@ -220,7 +220,7 @@ test("a long sentence is bounded where a word ends, never inside one", () => {
 test("no tool id or result code ever reaches the detail", () => {
   const h = harness();
   h.pacer.accept(event({ phase: "exploring", label: "Using core.run_node: web.action.rejected.not_at_start_location", detail: { kind: "tool", title: "Using core.run_node", status: "succeeded", ref: "core.run_node", text: "Result: web.action.rejected.not_at_start_location" } }));
-  assert.equal(h.pacer.display()?.detail, "Trying a step on the page — that didn't work, trying another way");
+  assert.equal(h.pacer.display()?.detail, "Trying a step on the page — not tried");
   assert.doesNotMatch(h.pacer.display()?.detail ?? "", /\b[a-z]+\.[a-z_]+/u);
 });
 

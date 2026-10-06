@@ -12,7 +12,9 @@
 //   ("Deciding the next step"), and once made by the model's own stated reason
 //   for it; the completion check by what it checks;
 // - a tool's result code becomes a short outcome ("done", "couldn't find it
-//   on the page", "that didn't work, trying another way");
+//   on the page", "that didn't work, trying another way"); a call FluxIQ
+//   declined to send (`web.action.rejected.*`) is "not tried", with why when
+//   the row says (`not-tried.ts`), never a page miss;
 // - Core's own sentence is kept when it is already human ("Running step 2 of
 //   5: Open search", "Saved 12 records"), and replaced by the phase's plain
 //   wording when it carries an id.
@@ -28,6 +30,7 @@
 
 import type { ClientGatewayActivity, ClientGatewayActivityPhase } from "@fluxiq/client-gateway-websocket";
 import { activityActionFailureReason } from "fluxiq/ui";
+import { notTriedOutcome } from "./not-tried";
 
 export type ActivityWording = {
   /** What is being done: "Opening the page", "Thinking about the next step". */
@@ -120,7 +123,10 @@ function wordsOf(event: ClientGatewayActivity): readonly [string, string | null]
     const code = resultCodeOf(event);
     // A row's status says whether the call ended; only an older Core's bare "Using X: code" sentence is read for it.
     const ended = detail?.status ? detail.status !== "started" : code !== undefined;
-    return [toolAction(toolId, event, code), ended ? testedOutcome(event, code) ?? toolOutcome(detail?.status, code) : null];
+    const action = toolAction(toolId, event, code);
+    // A call FluxIQ declined to send was not tried, whatever its code's last words say of the page (R2-U-6).
+    const declined = code === undefined ? undefined : notTriedOutcome(code, detail?.text, action);
+    return [action, ended ? testedOutcome(event, code) ?? declined ?? toolOutcome(detail?.status, code) : null];
   }
   if (event.phase === "thinking" || detail?.kind === "thought") return [thoughtAction(event), null];
   if (detail?.title === "Completion check" || /^(Checking the proposed (result|Flow)|The proposed (result|Flow))/u.test(event.label)) {

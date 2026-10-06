@@ -15,11 +15,12 @@ function card(fields: Partial<ActionCard>): ActionCard {
 }
 
 test("the name, the target and the outcome, on one accessible line", () => {
-  assert.deepEqual(cardWords(card({}), false), { state: "done", name: "Click", target: "Get a free quote", outcome: "Done", label: "Click, Get a free quote: Done" });
+  assert.deepEqual(cardWords(card({}), false), { state: "done", name: "Click", target: "Get a free quote", whole: false, outcome: "Done", label: "Click, Get a free quote: Done" });
   assert.deepEqual(cardWords(card({ outcome: "failed", why: "it wasn't on the page" }), false), {
     state: "failed",
     name: "Click",
     target: "Get a free quote",
+    whole: false,
     outcome: "Didn't work: it wasn't on the page",
     label: "Click, Get a free quote: Didn't work: it wasn't on the page"
   });
@@ -115,7 +116,7 @@ test("a test step says what the test did with it: done again, checked, already d
 // summary>". Each is now a card under its decision: what was asked, "Not done", Core's reason.
 test("a decision Core declined says not done and why, never didn't work, and an edit done in part says so", () => {
   const refused = cardWords(card({ kind: "draft", target: null, outcome: "failed", why: "that step is already in the Flow", refused: { all: true, because: "that step is already in the Flow" } }), false);
-  assert.deepEqual(refused, { state: "refused", name: "Edit the Flow", target: null, outcome: "Not done: that step is already in the Flow", label: "Edit the Flow: Not done: that step is already in the Flow" });
+  assert.deepEqual(refused, { state: "refused", name: "Edit the Flow", target: null, whole: false, outcome: "Not done: that step is already in the Flow", label: "Edit the Flow: Not done: that step is already in the Flow" });
   const part = cardWords(card({ kind: "draft", target: null, outcome: "done", refused: { all: false, because: "that step already does that" } }), false);
   assert.deepEqual([part.state, part.outcome], ["done", "Only partly done: that step already does that"]);
 
@@ -164,10 +165,17 @@ test("a long target is cut from the middle, so the words that tell two cards apa
 
 // U-13 of the run-muw60j7c-bb7c9a62 UI review: "Read list · name, ... rating and 3 more" elided
 // inside the list, and "Look · Sponsored ⓘ ... Earbuds, Hybr..." cut a word.
-test("a long target keeps whole words: a list names fewer of its items and counts the rest, and no word is cut", () => {
-  assert.equal(cardWords(card({ kind: "read", target: "name, price, rating and 3 more" }), false).target, "name, price and 4 more");
-  assert.equal(cardWords(card({ kind: "read", target: "name, price, rating and 3 more", testing: true }), false).target, "name and 5 more");
-  assert.equal(cardWords(card({ kind: "read", target: "name, price and rating" }), false).target, "name, price and rating", "a list that fits is left whole");
+// R2-U-8 of the run-muwansvz-a2b4a987 UI review: renamed to fit, one list had three names --
+// "name, price and 4 more", "name and 5 more" (test card) and the overlay's "name, price,
+// rating and 3 more". Core's name for a list is shown as Core gave it, whole: the view wraps it.
+test("a long target keeps whole words: a list keeps Core's name, whole, and no word is cut", () => {
+  for (const testing of [false, true]) {
+    const list = cardWords(card({ kind: "read", target: "name, price, rating and 3 more", ...(testing ? { testing: true as const } : {}) }), false);
+    assert.equal(list.target, "name, price, rating and 3 more", `testing: ${testing}`);
+    assert.equal(list.whole, true, "longer than the head holds, so the view shows it whole rather than cut");
+  }
+  const fits = cardWords(card({ kind: "read", target: "name, price and rating" }), false);
+  assert.deepEqual([fits.target, fits.whole], ["name, price and rating", false], "a list that fits is left as it is");
   const words = "Sponsored Pulsebud Earbuds Hybridnoisecancellingwirelessbuds";
   const look = cardWords(card({ kind: "look", target: words }), false).target!;
   assert.equal(look, "Sponsored Pulsebud Earbuds…");
