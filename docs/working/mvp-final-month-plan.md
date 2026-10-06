@@ -331,6 +331,25 @@ Each lane tree (both repos) was fast-forwarded to `dev` (Core `6567edac`, downst
 - Definition of done: fail-first then passing; every test file in `state-digest/tests/` and any test that pins digests pass; `domain check` 0; downstream structure audit 0; `domain build` 0.
 - Report to: `fxwork/t262/!FluxIQWebExtension/docs/working/mvp-final-month-plan/reports/r3-frame-digest.md`
 
+### Shared rules for the week-review briefs (2026-10-06, the user asked for a full report)
+The user wants to know what exactly failed most over 2026-09-29..2026-10-06, the biggest friction points and time wasters for the FluxIQ extension, what stops the model from succeeding, and what is fixed and what is not. Read-only: no source, test or doc edits except your own report; no build, test, Lab, browser or provider command; never touch any fxwork tree except to read run folders. Repositories: this one (`C:/Users/osrs_/FluxStuff/!FluxIQWebExtension`, dev) and Core (`C:/Users/osrs_/FluxStuff/!FluxIQ`, dev). Every cause goes in one table: cause in plain words; theme (one of: model guidance/prompt; loop bookkeeping and guards; judges and verification; list reading, extraction and detection; page state, routing and navigation; permissions and consequential acts; budget, cost and purse; Lab, harness and infrastructure; extension UI; agent process); runs affected (ids); dollars where known; status (`fixed` with the commit hash you found in `git log` of either repo, `partly`, or `open`) and the evidence path. Merge duplicates of one cause across runs into one row with a count. Never quote page data, tokens or secrets. Report under `docs/working/mvp-final-month-plan/reports/week-review/`.
+
+### Brief: week-review-numbers (worker)
+- Task: The numbers. From `C:/Users/osrs_/FluxStuff/lab-slots/spend-ledger.jsonl` and the run folders' `evaluation.json` / `run.json` / `snapshots/live-llm.json` under `C:/Users/osrs_/FluxStuff/fxwork/*/!FluxIQWebExtension/test-runs/instances/*/` and this checkout's `test-runs/`, for runs in the window: count of live runs per day and per scenario, verdict and failure category, passes, cost (total, on failed runs, per scenario), provider calls, builds over the ceiling, runs with no Flow produced, replays. Name the 09-30 relaunch-loop incident's runs and cost. Say which numbers you could not establish and why.
+- Report to: `docs/working/mvp-final-month-plan/reports/week-review/numbers.md`
+
+### Brief: week-review-causes-early (worker)
+- Task: Every run debug under `docs/working/language-driven-flow-loop-plan/debugs/` added 2026-09-29 or 2026-09-30 (`git log --since=2026-09-29 --until=2026-09-30T23:59 --diff-filter=A --name-only -- docs/working/language-driven-flow-loop-plan/debugs`): read each one's cause table and conclusion and fill the shared table; for each cause, check `git log` in both repos for the fix and give the hash or `open`. Auto-generated stubs from the relaunch loop count as runs but have no causes; say how many.
+- Report to: `docs/working/mvp-final-month-plan/reports/week-review/causes-early.md`
+
+### Brief: week-review-causes-late (worker)
+- Task: The same for debugs added 2026-10-01..2026-10-06, plus the lane reports `docs/working/mvp-final-month-plan/reports/live-*.md` and Codex's `docs/working/mvp-live-continuation-2026-10-03/reports/` (resume-ab, resume-cd and the live run reports). Include the round-3 debugs in the lane trees not yet on dev: `C:/Users/osrs_/FluxStuff/fxwork/t262/!FluxIQWebExtension/docs/working/language-driven-flow-loop-plan/debugs/` and `fxwork/t274/...` (files newer than dev's).
+- Report to: `docs/working/mvp-final-month-plan/reports/week-review/causes-late.md`
+
+### Brief: week-review-friction (worker)
+- Task: Process and product friction. (1) From the Work Ledgers dated 2026-09-29..2026-10-06 in `docs/working/{language-driven-flow-loop-plan,mvp-today-plan,mvp-live-continuation-2026-10-03,mvp-final-month-plan,agent-git-workflow-plan,automated-testing-facility-plan,week2-exit-plan,live-activity-chat-plan,codex-tasks-2026-09-30}.md`: the time wasters in how the work ran (integration delays, unmerged lane trees, stale builds, suite durations, worktree trouble, guard refusals, relaunch loops, peak pricing, two supervisors, reverted or redone work), each with dates and evidence. (2) From `docs/working/manual-panel-test-findings.md` and `docs/working/codex-ui-ux-review-2026-09-30.md` and the live UI reviews (`docs/working/mvp-final-month-plan/reports/*ui-review*.md`, `t276-live-ui-fixes.md`, `t277-*.md`): what a person using the extension hits most, fixed or open.
+- Report to: `docs/working/mvp-final-month-plan/reports/week-review/friction.md`
+
 ### Brief: t280-node-definitions (worker-high)
 - Repository: Core, task t280 tree `C:/Users/osrs_/FluxStuff/fxwork/t280/!FluxIQ` (branch `task/t280-node-definitions`).
 - Task: The build prompt tells the model to call `core.describe_nodes` before a node's first use, but across 23 recent live runs it did so in 2 (lane C only); lane D ran `web.output.dom-extract_list` 10-16 times per build without ever reading its definition (e.g. `run-mux6nxst-c9bca37c`, `run-muwao5n4-44977b2a`). Make a node's definition reach the model without relying on it to ask. Measure first: the size of each definition `describe_nodes` returns, and what a decision request carries today (`R/llm/harness/context-packet.ts`, `R/llm/deepseek/request-body.ts`). Then implement the cheapest deterministic path, for example: a node run whose definition is not yet in `describedNodes` is added there with that run (succeeded or refused), and a refused parameter set names the definition; optionally pre-describe the read node when the detection tool issues a list handle. Never cost the model an extra decision for a run that would have succeeded. Update the prompt words ("Before first running a node, ask core.describe_nodes ...") to match what Core now does.
@@ -522,6 +541,14 @@ Each lane tree (both repos) was fast-forwarded to `dev` (Core `6567edac`, downst
 - Validation: not validated yet; each lane's run id, cost and verdict follow when its lead returns.
 - Outcome: In progress
 - Follow-up: verify each lead's debug and fix; merge between runs; round 4 only off-peak.
+
+### 2026-10-06 — Round 3 lane D result; read-list direction from the user; week review started
+- Agent: supervisor; live lead D; workers t280, read-list-collect-design (lead), t279 (extended), four week-review workers.
+- Changed: D `run-mux6nxst-c9bca37c` ($0.060085, 49 calls counted against 48): Core proposed a Flow and the judge said yes, but the Lab failed it `performance.budget`, and the Flow is wrong (its table comes from the read before the presses). D3-1 (a refused-unsent instruction reading counted as a call) fixed: Core `5ef566ac`, merged `bd3cf1b4`, evidence `b544215e` / `655a1306`, pushed. D3-5 (a lone unconfirmed yes at the judging reserve finishes a build) and D3-2 (no way to a read after the act) sent back to D's lead, no run. Found from the run folders: across 23 recent runs the model called `core.describe_nodes` in 2 (lane C only); detection names list fields by hashed class chains with no sample value, which is most of D's 11 read-list runs. User's direction (memory `read-list-no-pagination-collect-then-postprocess`): read list never paginates; every read-list run's rows collect into the run's dataset; post-processing dedupes by default. C and D leads told to hold after their in-flight runs.
+- Why: the user watched the round and saw repeated read-list failures.
+- Validation: (supervisor) t275 `npx vitest run .../service/tests/instruction-authority.test.ts` -> 22 passed; merged Core dev `fluxiq:check` passed; downstream audit passed. Run-folder tallies: `ls steps | grep describe_nodes` per run (2 of 23 non-zero); D's `call.json` for 0020-0109 shows hashed field keys and `recordCount` 8/3/4.
+- Outcome: Partial
+- Follow-up: D3-5, D3-2; t280 node definitions; t279 field samples; read-list design back to the user; the week report.
 
 ## Open Questions
 
