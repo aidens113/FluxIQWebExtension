@@ -420,7 +420,13 @@ pacer keeps what Core says and changes how often it is said:
   the status never says "Deciding" beside that step's working card.
   A sentence that only repeats the headline ("Run finished" under "Run
   finished", "Building the Flow" under "Building your Flow") is null instead
-  (`isHeadlineEcho`);
+  (`isHeadlineEcho`); a run its result check failed ends on Core's "Run
+  failed: <what came back, why that failed it, and how the repair ended>",
+  which is not an echo and stays up. A test step that did not do the same
+  again is said with Core's reason for its replay code
+  (`activityActionFailureReason` from `fluxiq/ui`: "the page wasn't in the
+  same state when the test got there", "it did nothing this time, where it did
+  something before"), else "it didn't work the same way again";
 - `phase` and `step` belong to the event the detail came from, so they change
   no faster than it does. A run's step is kept between its step events and
   cleared when it settles. A repair of the Flow itself ("Result repair
@@ -429,8 +435,8 @@ pacer keeps what Core says and changes how often it is said:
   t194, "Step 5 of 5" for a four-minute re-author);
 - the model's words are never the detail (`isModelThought`,
   `shared/activity/model-thought.ts`): a `thought` row with text -- the
-  model's reason for its next step, a refused edit with its own summary as
-  the thing not done, a recovery choice -- keeps the unit's last action line,
+  model's reason for its next step, said as what was tried, or a recovery
+  choice -- keeps the unit's last action line,
   phase and step, and marks the display `kind: "thought"`. Such an event
   neither starts the interval nor takes the place of an action still waiting
   for it, so the action after a thought shows on time. A run's retry line is
@@ -607,7 +613,18 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     wasn't on the page" (Core's reason, else its sentence in words); a check
     reads "Passed" or "Didn't pass" with its verdict. A wait on the person
     that Core settled reads its sentence: "Done. You pressed Continue.",
-    "Didn't work: you pressed Stop". "Working on it" shows only on the
+    "Didn't work: you pressed Stop". A step of a build's test that was not
+    simply done again reads Core's words for what it did ("Checked, not
+    pressed", "Already done on the site", "Skipped: not there, optional"). A
+    decision Core declined before doing it -- a refused edit to the Flow, a
+    call refused as a repeat -- is its own card under that decision, never
+    words added to the model's sentence: "Not done: <Core's reason>", or
+    "Only partly done: ..." for an edit some of which landed, with a neutral
+    mark, never "Didn't work", since nothing was tried and failed. The
+    reasons are Core's (`ACTIVITY_ACTION_REFUSAL_WORDS` in `fluxiq/ui`), at
+    most two, never a code (Core's
+    `docs/architecture/automation-studio/client-gateway.md`, "Per-step
+    activity and resolved asks"). "Working on it" shows only on the
     action of the moment, the newest card of the unit of work that is running
     or waiting on the person; "Waiting for you" shows on every card of that
     unit still waiting on the person. An action that never said it ended
@@ -697,7 +714,14 @@ The mounted extension view accepts the bounded project-only navigation event flu
 Core runs a chosen capability for the paired person's project, on that person's
 unlocked model key, and answers `response.execution`. For a build or a run
 that is `started`. The result arrives later as a thread turn, and progress
-arrives as activity stamped with the thread's id. An automation's own chat is
+arrives as activity stamped with the thread's id. Every word of those turns is
+Core's: its first reply says in plain words what will happen and names the
+page by its site ("I'll make you a new automation for this, working out its
+steps by trying them on <site>. ..."); a build that does not finish ends with
+one of Core's endings, in plain words with no "decision" or "round" in it, then a
+line saying what the Flow keeps (such as `The Flow "<name>" keeps your
+instruction.`). The chat shows them as they come (Core's `client-gateway.md`
+and `llm-flow-bootstrap.md`, "The words of every unfinished ending"). An automation's own chat is
 `panelConversationSend` with `kind: "open"`, `subjectKind: "flow"` and the
 Flow's id. There, "run it" means that Flow. Core's side is described in
 FluxIQ Core's `docs/architecture/automation-studio/client-gateway.md`
