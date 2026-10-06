@@ -271,6 +271,14 @@ t264 S4 is editing `R/flow-draft/{amendment,entry,routing,step,act-claim,index}.
 - Definition of done: the lane passes twice live with exact oracles and replays twice with zero calls; or a precise blocker the lane cannot fix alone.
 - Report to: `docs/working/mvp-final-month-plan/reports/live-<lane>.md` in the lane tree.
 
+### Brief: t276-live-ui-fixes (lead)
+- Repository: both, task t276 trees under `C:/Users/osrs_/FluxStuff/fxwork/t276/`.
+- Task: Fix the UI defects live round 1 found (each lane's debug and `live-*-ui-review.md` on dev give screenshots and step folders): (1) the "Edit the Flow · Done" card says what changed (step added/moved/removed, in plain words); (2) the build ending in the chat never shows raw ids ("(t958)", s8, s11), never cuts a quote mid-sentence, never repeats a sentence (Core `flow-bootstrap/unfinished-build/not-finished.ts` ~77 and ~153, and the ending composer); (3) the overlay and headline never say "Couldn't fix your Flow" during a creation build; (4) the start panel does not flash an old thread with raw codes; (5) "Checked, not pressed" cards say whose row ("Confirm · Jonas — checked, not pressed"); (6) a navigate to a loopback address is not called "the start page" unless it is the Flow's start (`activity/wording/action.ts` `pageName`); (7) read cards show their counts; (8) overlay text is never cut mid-word; (9) refused decisions are shown as refusals, never as work done; (10) "Look · Sponsored"-style internal labels read as plain words. Fail-first tests per item.
+- Owns (may edit): extension `apps/extension/src/{background/activity,background/panel,content/activity-overlay,panel/chat,panel/shell,shared/activity}/**`; Core `R/activity/**`, `src/ui/activity-action/**`, `R/flow-bootstrap/unfinished-build/**`, `R/conversations/**`; their tests; `docs/architecture/extension-client.md`.
+- Must not touch: Core `R/result-verification/**`, `R/llm/**`, `R/flow-draft/**`, `R/recovery/**`, `R/service/runtime-adaptation/**` (lane C's fix is running there); every lane tree.
+- Definition of done: changed tests pass; extension check/build, domain check, `fluxiq:check`, both audits exit 0; Core rebuilt; the report lists, per item, what the next live run's UI review must see.
+- Report to: `docs/working/mvp-final-month-plan/reports/t276-live-ui-fixes.md` in the t276 downstream tree.
+
 ## Work Ledger
 
 ### 2026-10-05 — Intake started
@@ -343,6 +351,14 @@ t264 S4 is editing `R/flow-draft/{amendment,entry,routing,step,act-claim,index}.
 - Validation: sweep 2 on dev (logs in scratchpad `sweep2-2026-10-05/`): Core `pnpm build` 0, `pnpm check` 0, `pnpm test` 0 (fluxiq 780 files 7464 passed 1 skipped; web 356 files 2924 passed; contracts 55; gateway 10); downstream `pnpm check` 0, `pnpm test` 0 (every package `# fail 0`, e.g. 2475, 1946, 1459, 627 passed), `pnpm build` 0. First fully green full sweep since t262 landed.
 - Outcome: Accepted
 - Follow-up: live results per lane; fixes merged between runs.
+
+### 2026-10-05/06 — Live round 1 on the integrated source: A, C, D failed with causes found
+- Agent: supervisor with live leads A, C, D (B still debugging).
+- Changed: A `run-muw60unq-591e23bd` failed ($0.045303, 36 calls, no Flow): "shipped from Spain" had no choice id, so the Spain press and Add to cart fought over act a1; fix Core `32b4e37c` (origin choice). D `run-muw6144a-e56f945d` failed ($0.053701, 44 calls, no Flow): round 1's Flow was right, but a build test does not press lasting Confirm, so the final read showed one accepted row and the judge refused the right Flow; fix Core `eb672178` (afterWithheld, judge told). C `run-muw60j7c-bb7c9a62` failed ($0.0814, 54 calls; 30 records stored vs 13): an observe-only read was pulled into the Flow by the opener walk; fix Core `5e368d1d`. All merged to dev with debugs and reports.
+- Why: Phase 1 live round.
+- Validation: A fix: instructed-acts, action-permissions, lasting-acts-build, instruction-authority, service-authoring -> 23 files 436/436. D fix: result-verification, deepseek tests, unfinished-build, service-bootstrap, lasting-acts-build -> 89 files 762/762. C fix: flow-draft + llm -> 180 files 1818/1818. Combined on dev: 319 files 3516/3516; fluxiq:check 0; audits pass.
+- Outcome: Partial (no lane passes yet)
+- Follow-up: C-2..C-5 (judges blind to stored records, re-author advising refused reruns, false judge advice discarding an exact answer, judges passing left-out matching rows) being fixed in t274 without live runs; then all lanes resync and relaunch together. UI findings queued: edit card says nothing of what changed; ending chat shows raw ids and cut quotes; overlay says "Couldn't fix your Flow" on a creation build; old thread flash; identical "Checked, not pressed" cards without whose row; loopback named "the start page"; read cards without counts; overlay text cut mid-word; refusals shown as work.
 
 ## Open Questions
 
