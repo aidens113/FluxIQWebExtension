@@ -136,9 +136,10 @@ test("each detected column carries the handle the page view gave its element in 
   // A column the first item does not have is pointed at in the first item that has it (t195, below).
   assert.equal(packet.fields.find((shownField) => shownField.key === "new_badge")?.at, shownHandle(shown, "New"));
   assert.equal(typeof packet.atNote, "string");
-  // Still no value and no selector (D3).
+  // Still no selector (D3). A value only as one column's sample from the first item (`../field-sample.ts`): never the second item's.
   const wire = JSON.stringify(packet);
-  for (const words of ["1 mutual friend", "Tom Becker", "Confirm", "nth-of-type", ":scope", CONTAINER]) assert.equal(wire.includes(words), false, `the packet does not quote ${words}`);
+  for (const words of ["Amara Osei", "23 mutual friends", "nth-of-type", ":scope", CONTAINER]) assert.equal(wire.includes(words), false, `the packet does not quote ${words}`);
+  assert.equal(mutual?.sample, "1 mutual friend");
 });
 
 test("the handle is the one the model was shown, not the detection capture's own numbering", async () => {
@@ -156,7 +157,8 @@ test("with no page shown, no column is pointed at, and the packet reads as it di
   const unseen = await detect(runtimeOver(() => requestsPage(false)));
   assert.deepEqual(atOf(unseen), {});
   assert.equal(unseen.atNote, undefined);
-  assert.deepEqual(unseen.fields.map((shownField) => Object.keys(shownField)), unseen.fields.map(() => ["key", "label", "kind", "coverage"]));
+  // A column's sample is read from the detection's own capture, so it needs no page shown; only `at` does.
+  assert.deepEqual(unseen.fields.map((shownField) => Object.keys(shownField).filter((key) => key !== "sample")), unseen.fields.map(() => ["key", "label", "kind", "coverage"]));
 });
 
 test("a detection on another page than the one shown points at nothing", async () => {

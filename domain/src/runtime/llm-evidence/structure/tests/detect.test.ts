@@ -43,7 +43,7 @@ const SCOPE: { projectId: string; flowId: string } = { projectId: "project.one",
 
 /** Every key the model-facing packet may carry, at any depth. Anything else is a leak. */
 const PACKET_KEYS = new Set([
-  "schemaVersion", "trust", "location", "extraction", "target", "itemCount", "fields", "pagination", "confidence",
+  "schemaVersion", "trust", "location", "extraction", "target", "list", "sample", "itemCount", "fields", "pagination", "confidence",
   "key", "label", "kind", "coverage", "at", "atNote", "paginationBound", "maxPages", "maxScrolls"
 ]);
 

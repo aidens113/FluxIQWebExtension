@@ -50,6 +50,14 @@ export type WebNodeOutcome = {
   control?: string;
   /** What a reading node read, whole but for its secrets (`./read-result.ts`). */
   read?: JsonValue;
-  /** Whether a successful run of this node is a step of the Flow. */
-  inFlow: boolean;
+  /**
+   * On a node that ran: this node's successful run is a kind of step a Flow
+   * holds and can be added (`add` true when it runs, or `amend_draft` add). It
+   * is in the Flow only once added, as the draft entry shows. Until live run
+   * `run-mux6nxst-c9bca37c` (D3-2) this was `inFlow`, and a read that ran
+   * returned `inFlow: true` and was left `taken`, never added.
+   */
+  addable?: boolean;
+  /** Only on a written step (`write` true), which writing adds to the Flow (`./written-step.ts`). */
+  inFlow?: true;
 };

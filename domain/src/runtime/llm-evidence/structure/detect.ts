@@ -83,6 +83,7 @@ import { WEB_LLM_STRUCTURE_RESULT_CODE } from "../vocabulary";
 import { webAutomationUrlPath } from "../../../output-nodes";
 import type { WebLlmEvidenceElement } from "../elements";
 import type { WebLlmExtractionHandles } from "./handles";
+import { webLlmStructureListName } from "./list-name";
 import { splitDetectedStructure } from "./packet";
 import { webLlmStructureRefusal } from "./refusal";
 
@@ -144,6 +145,8 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
     recordHandle,
     location: page.evidence.location,
     target: searchedPage ? undefined : target,
+    // What the page calls the list, read in the capture the detection answered with (`./list-name.ts`, R2-U-9).
+    list: webLlmStructureListName(page, detection.proposal.container),
     frameId: element?.frameId,
     frameUrlPath: element?.frameDocument?.path,
     // Each column's element in the first item that has it is found in the

@@ -278,3 +278,76 @@ New on this source, each checked in the debug:
   `structure-audit:check` -> `passed (264 warning(s), 349 baselined)`; Core `pnpm.cmd build` exit 0 (21:43 UTC).
 - Stopped on the supervisor's order: no second launch. Debug
   `docs/working/language-driven-flow-loop-plan/debugs/run-mux6nxst-c9bca37c.md`.
+
+### 2026-10-06 — round 3 fixes D3-5 and D3-2 (supervisor follow-up; no paid run)
+
+D3-1 was verified and merged by the supervisor (Core `5ef566ac`, evidence `b544215e`); both t275 trees were at dev.
+Two workers in parallel, disjoint files (reports `reports/r3-d3-5-judge-pair.md`, `reports/r3-d3-2-read-after-act.md`).
+
+- **D3-5** (worker-high). Core `R/result-verification/agreement.ts`: with `confirmAnswer`, a first yes whose second
+  call never came back usable (`basis: "model_unavailable"`, which covers refused by the purse, not sent, or failed)
+  is `model_unconfirmed`, not a pass. A second `unknown` or silent reply still leaves the yes standing (measured
+  flips). `R/llm/build-purse/purse.ts` `judgingFits()` (+ `call-allowance.ts` `canHoldAll`): whether the whole
+  kept-back judging still fits on calls and cost. `R/flow-bootstrap/unfinished-build/reserve-judging.ts`: under a purse
+  where it does not fit, nothing is judged (`not_judged`, neither `accept` nor the judge asked), so a reserve-stopped
+  round ends at its budget unjudged. Fallout outside the named files: `build-test/judge.ts` comments only (its logic
+  already maps a refused, unconfirmed yes to `not_judged` with the spend returned); `build-test/tests/judge.test.ts`
+  and `tests/agreement.test.ts` cases that pinned the old rule were rewritten.
+- **D3-2** (worker). Core `R/llm/draft-amendment-feedback.ts`: a `changes_nothing` rerun of a listing that a later
+  act already repeats over now gets this `next`: "Step N already repeats over step L, so the loop is in place:
+  rerunning step L only replaces it and never adds a step after step N. A read of the rows after the act is a new
+  step: with the act done on the page, run the read there as a new call ("core.run_node" with add true) so it is
+  added after step N, with a where keeping the rows the instruction asks for -- or write it with write true."
+  Downstream `node-run/outcome.ts`: a node that ran says `addable` (a kind of step a Flow can hold, in it only once
+  added); only a written step says `inFlow: true`. Writers `node-run/run.ts` (two lines) and `written-step.ts`
+  (`addable: undefined`, required by `present<>`) updated.
+- Lead verification (both trees `fxwork/t275`):
+  - Fail-first, re-run by the lead with only the fixed sources set back to HEAD (copies, no git stash):
+    - Core, the 5 changed test files: `Test Files 5 failed (5)`, `Tests 7 failed | 116 passed (123)`, every failure
+      a new or rewritten test.
+    - Downstream `node-run/tests/run.test.ts`: `not ok 10 - a node run's result says it is addable, never that it is
+      in the Flow; a written step says it is`, `# pass 15 # fail 1`.
+    - Fixed files restored byte-identical (`cmp`).
+  - After: Core `npx vitest run` over `result-verification/tests`, `result-verification/build-test/tests`,
+    `llm/build-purse/tests`, `flow-bootstrap/unfinished-build/tests`, `llm/tests/draft-amendment-feedback.test.ts`,
+    `llm/decision-handlers/tests` and `service/tests/instruction-authority.test.ts` gave `Test Files 67 passed (67)`,
+    `Tests 638 passed (638)`.
+  - Core gates: `fluxiq:check` exit 0; Core `structure-audit:check` `passed (265 warning(s), 349 baselined)` (the new
+    advisory is `judge.test.ts` at 405 lines); Core `pnpm.cmd build` exit 0.
+  - Downstream: `run-subset` + `node --test` on `node-run/tests/run.test.ts`, `unwritten-consequences.test.ts` and
+    `observed-state/tests/observed-state-keys.test.ts` gave `# tests 26 # pass 26 # fail 0`;
+    `pnpm.cmd --filter @fluxiq-web-extension/domain check` exit 0; `node scripts/structure-audit.mjs`
+    `passed (171 warning(s), 118 baselined)`.
+- Open, outside these owned files: `unfinished-build/phases.ts` still announces "judging it with what was kept back
+  for judging" (and runs the free test) when `judgingFits()` is false, and opens a round whose judging pair no longer
+  fits. Better: have `round-funding.ts` `nextRound()` require `judgingFits()` plus one decision call, so the round is
+  not opened. The unsettled "build" card words ("Since neither confirmed it") read slightly off for "yes, then no
+  answer" (`result-verification/unsettled/unsettled-words.ts`).
+- Uncommitted. No Lab, browser or provider call.
+
+### 2026-10-06 — D3-5 follow-up: no round without room for its judging pair (supervisor follow-up; no paid run)
+
+D3-5 and D3-2 were merged to dev by the supervisor (Core `ee7ba0f3`, downstream `60df38ae`). Both t275 trees match
+dev's content (`git diff HEAD dev` empty). The `git merge --ff-only dev` asked for was blocked by the worker hook,
+so the branch pointers are still one merge commit behind dev.
+
+- Core `R/flow-bootstrap/unfinished-build/round-funding.ts`: the funding gains `callsFit()`, which is true only when
+  the call allowance holds the round's first decision plus, with a judge, the judging pair (`1 + 2` calls).
+  `phases.ts` `exhaustedForNextRound` ends the build with bound `calls` instead of opening such a round.
+- `phases.ts` at a reserve stop: `pairFits = input.purse?.judgingFits() ?? true`. When it is false, the round is not
+  `atReserve` (no judged test, no judge call) and is not `shortJudged`. The chat no longer says "judging it with what
+  was kept back"; it says "The build reached its <allowance|spending limit> before the Flow was finished, with too
+  little left to judge the Flow whole, so it is not tested or judged again." (label "Too little left to judge").
+- Core `R/llm/build-purse/purse.ts`: new `callsFit(calls)` (the call-allowance check, public).
+- Tests, extending `unfinished-build/tests/reserve-unchanged.test.ts` (folder at 25 files):
+  - "opens no round whose judging pair and first decision the call allowance cannot hold": maxCalls 4, round 0 spends
+    1 decision and a 2-call pair.
+  - "at a reserve stop where the pair no longer fits ...": $0.099 spent against a $0.008 pair hold.
+- Validation (lead, `fxwork/t275/!FluxIQ`):
+  - Fail-first: before the source change, `npx vitest run .../reserve-unchanged.test.ts` gave `2 failed | 6 passed
+    (8)`: round 1 was opened (`[0, 1]`, expected `[0]`), and round 1 was judged.
+  - After: 8/8. `npx vitest run` over `unfinished-build/tests`, `llm/build-purse` and `tests/service-bootstrap/tests`
+    gave `51 passed (51)`, `360 passed (360)`. A second run, with `service-authoring` `build-call-admission` and
+    `confirm-requests-build` added, gave `53 passed (53)`, `365 passed (365)`.
+  - `fluxiq:check` exit 0; Core audit `passed (265 warning(s), 349 baselined)`; Core `pnpm.cmd build` exit 0.
+- Uncommitted. No Lab, browser or provider call.

@@ -1,7 +1,12 @@
 // A detected repeating structure, as the model is shown it: an opaque
 // extraction handle, and for each field a key, a label, what kind of read it is
 // and how many items have it -- with how many items there are and how the list
-// continues. No selector and no value, ever (D3).
+// continues. No selector, ever (D3). Until 2026-10-06 no value either; each
+// column now carries one short screened sample from the first item that has
+// it, and a readable label where the page's is a generated class path
+// (`./field-sample.ts`, live run `run-mux6nxst-c9bca37c`), because a model shown
+// only class paths read the list over and over to learn its columns. No other
+// value: never a form control's, never more than one per column.
 //
 // The page's detection arrives holding selectors; this module splits it in two,
 // as `sanitize.ts` splits a snapshot. The packet goes to the model. The binding
@@ -65,7 +70,9 @@ import {
 import type { WebAutomationExtractionProposal, WebAutomationStructureDetection } from "../../../extraction";
 import { present } from "../present";
 import { screenedPageText } from "../withheld";
-import { webLlmFirstItemHandles, type WebLlmFirstItemPages } from "./first-item";
+import type { WebLlmEvidenceElement } from "../elements";
+import { webLlmShownColumn } from "./field-sample";
+import { webLlmFirstItemElements, webLlmFirstItemHandles, type WebLlmFirstItemPages } from "./first-item";
 import type { WebLlmExtractionBinding } from "./handles";
 
 export const WEB_LLM_STRUCTURE_SCHEMA_VERSION = "web-llm-structure.v1" as const;
@@ -98,7 +105,8 @@ export type WebLlmStructureField = {
    * What the column is called: a test id, a column header, an attribute name,
    * or an icon badge's accessible name when every item that has the badge gives
    * it the same one (`apps/extension/src/content/extraction/badge-name.ts`).
-   * Page structure, never a value read inside an item.
+   * Page structure; where that is a generated class path, what the element is
+   * and its sample instead (`link: 'Tom Becker'`, `./field-sample.ts`).
    */
   label: string;
   kind: WebAutomationExtractFieldKind;
@@ -110,6 +118,12 @@ export type WebLlmStructureField = {
    * cannot be told or was not shown.
    */
   at?: string;
+  /**
+   * The field's value in the first item that has it, screened, one line and
+   * short (`./field-sample.ts`). Absent for a form control's value, a withheld
+   * one, or an element that cannot be told.
+   */
+  sample?: string;
 };
 
 /** The run's own section linking to more of it, outside its items and its pagination. */
@@ -141,6 +155,13 @@ export type WebLlmRepeatingStructure = {
   extraction: string;
   /** The observed target the detection started from, when the call named one. */
   target?: string;
+  /**
+   * What the page calls the list, when it says so: the container's accessible
+   * name, a table's caption, or the heading straight before it (`./list-name.ts`).
+   * Page structure, screened, never a value read inside an item. The chat names
+   * the detection by it (R2-U-9).
+   */
+  list?: string;
   itemCount: number;
   fields: WebLlmStructureField[];
   pagination: WebLlmStructurePaginationMode;
@@ -173,6 +194,8 @@ export type WebLlmStructurePacketInput = {
   recordHandle: string | undefined;
   location: string;
   target: string | undefined;
+  /** What the page calls the list (`./list-name.ts`); absent when it gives no name. */
+  list?: string | undefined;
   frameId: number | undefined;
   /** The pathname of the child frame's document the list was detected in (`./handles.ts`). */
   frameUrlPath: string | undefined;
@@ -205,6 +228,7 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     location: input.location,
     extraction: input.handle,
     target: input.target,
+    list: input.list,
     itemCount: proposal.itemCount,
     fields: readable.map((field) => field.shown),
     pagination: paginationMode(proposal.pagination, infiniteScroll),
@@ -240,9 +264,14 @@ function continuesOf(continues: DetectedStructure["continues"]): WebLlmStructure
  */
 function readableFields(proposal: WebAutomationExtractionProposal, firstItem: WebLlmFirstItemPages | undefined): ReadableField[] {
   const at = firstItem === undefined ? new Map<string, string>() : webLlmFirstItemHandles(proposal, firstItem);
+  // Each column's element in the first item that has it, in the detection's own capture: its sample and readable label (`./field-sample.ts`).
+  const elements = firstItem === undefined ? new Map<string, WebLlmEvidenceElement>() : webLlmFirstItemElements(proposal, firstItem.detected);
   return proposal.fields
     .filter((field) => field.spec.handling !== "exclude")
-    .map((field) => ({ key: field.key, spec: field.spec, shown: shownField(field.key, field.label, field.spec.kind, field.coverage, at.get(field.key)) }));
+    .map((field) => {
+      const column = webLlmShownColumn(screenedPageText(field.label) ?? field.key, elements.get(field.key), field.spec);
+      return { key: field.key, spec: field.spec, shown: shownField(field.key, column.label, field.spec.kind, field.coverage, at.get(field.key), column.sample) };
+    });
 }
 
 /** The binding one handle keeps: the proposal's item, the readable fields under the keys shown, and its pagination. */
@@ -278,7 +307,7 @@ function boundList(
   });
 }
 
-function shownField(key: string, label: string, kind: WebAutomationExtractFieldKind, coverage: number, at: string | undefined): WebLlmStructureField {
+function shownField(key: string, label: string, kind: WebAutomationExtractFieldKind, coverage: number, at: string | undefined, sample: string | undefined): WebLlmStructureField {
   return present<WebLlmStructureField>({
     key,
     // A label is page structure, but it is still page text: one line,
@@ -286,7 +315,8 @@ function shownField(key: string, label: string, kind: WebAutomationExtractFieldK
     label: screenedPageText(label) ?? key,
     kind,
     coverage: Math.round(coverage * 100) / 100,
-    at
+    at,
+    sample
   });
 }
 
