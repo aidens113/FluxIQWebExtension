@@ -437,6 +437,13 @@ Each lane tree (both repos) was fast-forwarded to `dev` (Core `6567edac`, downst
 - Outcome: Accepted
 - Follow-up: the detached t278 Core worktree is left for `pnpm task prune`.
 
+### 2026-10-06 — Lane C round-3 fixes landed (R2-2, R2-4)
+- Agent: worker r3-c-paging; verified and merged by the supervisor.
+- Changed: downstream `2d6dc2e3` (`plan-resolution/extraction/slot.ts`, `resolve-plan-node.ts`): a `paginate` object over a list detected with no pager is refused with hint `web.handle.expected.extract_list.paginate.no_pager_detected.detect_on_step_start_page`. Core `863bb0ba` (`flow-bootstrap/unfinished-build/{contracts,judgement}.ts`): the judgement value carries `whereToFix`, one sentence per step to fix (failed steps of a failed test; a judged-no Flow's reads) naming where it starts and saying to look and detect there. Merged: Core `17683119`, downstream `1a4b9eee`; pushed.
+- Validation (supervisor): Core `npx vitest run .../unfinished-build/tests` -> 25 files, 203 passed; domain `slot`, `resolve-plan-node`, `tool-rejection-detail` tests -> `# tests 49 # pass 49 # fail 0`; t274 `fluxiq:check` and `domain check` stamped current; on merged Core dev `fluxiq:check` and `structure-audit:check` passed; downstream structure audit passed. Worker's own wider run: Core 58 files 446 passed; domain 110/110.
+- Outcome: Accepted
+- Follow-up: `resume.ts` should point at `judgement.whereToFix` ("look and detect there, not on the page the test left"); it is in r3-a-loop's area, applied after A lands. Left as is: `paginate: true` over a pager-less handle still reads one page silently (rare now that R2-1 detects a disabled Next). `whereToFix` also names excused `unreproducible` steps (advice only).
+
 ## Open Questions
 
 - Is demonstrate/record an MVP acceptance requirement after the 2026-09-22 scope ruling? Owner: user. Default taken: supported, unmeasured, one smoke proof.
