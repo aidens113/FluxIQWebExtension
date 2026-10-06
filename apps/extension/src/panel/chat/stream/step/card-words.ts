@@ -20,7 +20,9 @@
 //            and 3 more" is never cut or renamed: renamed to fit, one list
 //            read "name, price and 4 more" on its card, "name and 5 more" on
 //            its test card and "name, price, rating and 3 more" on the
-//            overlay (R2-U-8 of the run-muwansvz-a2b4a987 UI review). It is
+//            overlay (R2-U-8 of the run-muwansvz-a2b4a987 UI review). A
+//            read's target is that name whatever its shape, so "name and
+//            mutualFriends" is kept whole too (U-R3-1, run-mux6nxst). It is
 //            shown as Core gave it, and `whole` tells the view to wrap it
 //            when it is longer than the head holds. A path with no
 //            spaces is cut where one of its parts ends ("…napkins-250"); one
@@ -91,7 +93,10 @@ export function cardWords(card: ActionCard, current: boolean): CardWords {
   const [state, outcome] = outcomeOf(card, current);
   const label = [target === null ? name : `${name}, ${target}`, outcome].filter((part) => part !== null).join(": ");
   const room = Math.max(MIN_TARGET_ROOM, HEAD_ROOM - name.length);
-  const list = target !== null && LIST.test(target);
+  // A read's target is Core's name for its list, whatever its shape: a list of two fields is
+  // named by both ("name and mutualFriends"), and cut, its test card read "Testing: Read list ·
+  // name and…" (U-R3-1 of run-mux6nxst-c9bca37c).
+  const list = target !== null && (card.kind === "read" || LIST.test(target));
   return { state, name, target: target === null ? null : list ? target : shortened(target, room), whole: list && target.length > room, outcome, label };
 }
 
@@ -109,9 +114,10 @@ function outcomeOf(card: ActionCard, current: boolean): [CardWords["state"], str
       // `cancelled` when the work stops first), never the work moving on.
       return ["waiting", "Waiting for you"];
     case "done":
-      if (card.answer !== undefined) return ["done", `Done. ${card.answer}`];
-      if (card.tested !== undefined) return ["done", resultOf(card) === undefined ? card.tested : `${card.tested} — ${resultOf(card)}`];
-      return ["done", card.check ? joined("Passed", card.said) : joined("Done", resultOf(card))];
+      // Identical successful cards in a row are one that counts them (`card-repeats.ts`): "Done (5 times)".
+      if (card.answer !== undefined) return ["done", `${counted("Done", card.times)}. ${card.answer}`];
+      if (card.tested !== undefined) return ["done", resultOf(card) === undefined ? counted(card.tested, card.times) : `${counted(card.tested, card.times)} — ${resultOf(card)}`];
+      return ["done", card.check ? joined(counted("Passed", card.times), card.said) : joined(counted("Done", card.times), resultOf(card))];
     case "failed":
       if (card.unconfirmed) return ["unconfirmed", joined("Not confirmed", card.said)];
       if (card.why === null && card.answer !== undefined) return ["failed", `${counted("Didn't work", card.times)}. ${card.answer}`];
