@@ -156,3 +156,63 @@ Each item gives what happens today and what it must do instead.
 
 - No test checks that `evidence-loop-steps.ts` keeps a step carrying the new reasons. Only the source file was allowed, so I added none.
 - Items 3-11 are unchanged. Until they are fixed, a `left_unreached` note is still counted as a refusal in the row, the history, the step log and the activity card.
+
+## Second follow-up (supervisor): the note comes out of the refusal list at its source
+
+This section supersedes the first follow-up's list of 11 readers. `left_unreached` no longer exists anywhere. The base is the t275 branch after the supervisor's commits and dev merge (Core `d2296f55`), which includes lane A's loop fix. Nothing is committed.
+
+### What changed
+
+- **`flow-draft/amendment/types.ts`**
+  - `left_unreached` is removed from the reason union.
+  - The refusal no longer carries `after` or `reachedBy`.
+  - New exported type `AutomationStudioFlowDraftUnreachedStep = { step, after, reachedBy }`, documented as not a refusal.
+  - `strands_a_step` stays.
+- **`strand-check.ts`**: returns `{ refused, takenBack, unreached }`, where `refused` holds only `strands_a_step`.
+- **`apply.ts`**: returns `unreached` as its own field beside `applied`, `refused` and `moved`, only when there is any.
+- **Lists of reasons**: `left_unreached` is removed from the `flow-bootstrap/evidence-loop-steps.ts` allow list and from `src/ui/activity-action/refusal-words.ts`. `strands_a_step` stays in both. Nothing else under `src/ui/**` was touched.
+- **`llm/draft-amendment-feedback.ts`**
+  - New input `unreached`. The answer carries `unreached: [{ step, after, reachedBy, note }]` beside `refused`, the same way `moved` is carried.
+  - New instruction line: "unreached is not a refusal...".
+  - An answer whose only news is `unreached` is `ok: true` with code `llm_evidence_loop.draft_step_unreached`, mirroring the moved-only answer.
+  - The `NOT_REFUSALS` set is gone. `repeat_taken_off` is handled as it was before.
+- **`llm/decision-handlers/types.ts`**: `AutomationStudioLlmEvidenceRerunHeld` gains `unreached`.
+- **`llm/decision-handlers/amendment.ts`**
+  - `amended.unreached` is passed to `tell(...)`. It is told when it is the only news, and it is carried on `held` when amendments wait for a rerun.
+  - It never enters `refused`, so none of these see it: `refusedCount`, the row's `amendmentsRefused`, the history `refusals`, `repeatedOnly`, `amendmentMemory.refusals`, the `same_amendment` key, or the held refusals.
+  - Lane A's paths are unchanged otherwise.
+
+The 11 readers from the first follow-up now never see the note. An applied decision whose only news is a note has no `amendmentsRefused` on its trace row, so:
+
+- `step-log/answer-step.ts` reads it `applied`;
+- the activity readers (`draft-edit.ts`, `edit-words.ts`, `draft-edit-card.ts`) read it as landed;
+- `decision-context/group.ts` reads its history row as `other`/`applied`;
+- the evidence trace carries nothing for it.
+
+### Tests
+
+- **New `llm/decision-handlers/tests/unreached-told.test.ts`**: runs the 0025 shape through the real loop with host `replay.from`. The draft is home, friends and requests (added), then the listing run and added at step 2.
+  - The model's answer is `ok`, `draft_step_unreached`, `refused: []`, `applied: 1`.
+  - The `unreached` note names steps 4, 1 and 3.
+  - The instruction does not say "changed nothing".
+  - The amend row is `draft_amended`, `amended: 1`, with no `amendmentsRefused`.
+- **`reach.test.ts`**: the 0025 case now expects `refused: []` and `unreached: [{ step: 5, after: 1, reachedBy: [4] }]`.
+- **`draft-amendment-feedback.test.ts`**: `left_unreached` is removed from the exhaustive `everyReason` map, and the two note tests now pass `unreached`.
+  - An answer with only the note is `ok`, with empty `reasons` and no "changed nothing".
+  - The note also stands beside a `no_such_step` refusal in the same answer.
+
+### Commands run and observed results
+
+- **Fail-first:** with `decision-handlers/amendment.ts` temporarily restored to HEAD, `npx vitest run .../decision-handlers/tests/unreached-told.test.ts` printed `AssertionError: expected undefined to match object { ok: true, …(4) }` and `1 failed (1)`. The file was then restored.
+- **Tests, run twice:** `npx vitest run R/flow-draft/ R/llm/tests/draft-amendment-feedback.test.ts R/llm/decision-handlers R/llm/decision-context R/llm/evidence-loop R/llm/repeat-guard R/flow-bootstrap/tests/evidence-loop-steps.test.ts src/ui/activity-action/tests` printed `Test Files 78 passed (78)` and `Tests 921 passed (921)` both times. This run includes lane A's tests.
+- `fluxiq:check`: exit 0.
+- Core `structure-audit:check`: `passed (263 warning(s), 349 baselined)`.
+- Core `pnpm.cmd build`: exit 0.
+- `domain check`: exit 0, against the rebuilt Core.
+- `grep -rn left_unreached packages/fluxiq/src`: no matches.
+
+### Not verified (second follow-up)
+
+- **Notes from held amendments are lost.** An `unreached` note produced while held amendments are settled is dropped, because `evidence-loop/held-amendments.ts` `settle()` (not mine) returns only `applied` and `refused` from each per-amendment apply. Such a note is never counted as a refusal, but it is also never told. Telling it needs `settle()` to return `unreached`, renumbered to the numbers the model wrote, as `takenOffAsWritten` does for taken-off repeats.
+- **The step-log verdict was not exercised directly**, because it needs a log directory in env. It is derived from the row's `amendmentsRefused`, which is now absent for a note.
+- No live run.
