@@ -88,7 +88,7 @@ test("a dataset task is built, settled, applied, run on a freshly presented page
   assert.deepEqual(core.calls, [
     "create-flow", "get-flow", "list-flow-subflows", "get-flow-router",
     "prepare",
-    "save-flow-generation-instruction", "authorize", "select-context", "generate", "get-adaptation",
+    "save-flow-generation-instruction", "authorize", "select-context", "generate", "get-adaptation", "get-flow-adaptation",
     "settle",
     "approve", "apply",
     "get-flow", "list-flow-subflows", "get-flow",
@@ -574,8 +574,8 @@ test("a build started from the extension's chat runs and is judged like any othe
 });
 
 /** A fake Core with a chat in front of it: the typed instruction makes, builds and applies the Flow, as Core's chat command does. */
-function chatCore(): { core: ReturnType<typeof fakeCreationCore>; entry: CreatedFlowLaneEntry; typed: string[] } {
-  const core = fakeCreationCore({ adaptationStatus: "applied" });
+function chatCore(options: FakeCreationCoreOptions = {}): { core: ReturnType<typeof fakeCreationCore>; entry: CreatedFlowLaneEntry; typed: string[] } {
+  const core = fakeCreationCore({ adaptationStatus: "applied", ...options });
   const base = core.control;
   const turns: Array<Record<string, unknown>> = [];
   let made = false;
@@ -698,4 +698,25 @@ test("created-lane snapshots preserve terminal evidence without copying Core's t
   assert.equal(snapshot.oracleVerdict, "passed");
   assert.deepEqual(snapshot.terminalEvidence, { terminalFailureReason: "recovery.selected", currentNodeId: "node.extract", messagePresent: true });
   assert.equal(JSON.stringify(snapshot).includes("private recorded page text"), false);
+});
+
+// Live run run-musp8nz1-dbd3905a: on a created ending flow-lane.json kept the
+// ending's kind and timing but not FluxIQ's words (cause R1), and not the judged
+// yes the build finished on (cause R2), which was then provable only from
+// core.log order. Both are on the build the lane publishes now.
+test("a created chat build publishes FluxIQ's ending words and the judged yes it finished on, in flow-lane.json's build", async () => {
+  const digest = `sha256:${"b".repeat(64)}`;
+  const { core, entry } = chatCore({ buildJudged: { verdict: "yes", round: 0, judgedAt: "finished_round", flowSignature: digest, standingFlowSignature: digest, matchesStandingFlow: true, confidence: 0.9 } });
+  const outcome = await (await runLane(core, { entry })).run;
+  const snapshot = JSON.parse(JSON.stringify(createdFlowLaneSnapshot(outcome))) as { build: CreatedFlowBuild };
+  assert.equal(snapshot.build.chat?.ending, "created");
+  assert.equal(snapshot.build.chat?.said, 'Created the Flow "x".');
+  assert.deepEqual(snapshot.build.judged, { verdict: "yes", round: 0, judgedAt: "finished_round", flowSignature: digest, standingFlowSignature: digest, matchesStandingFlow: true, confidence: 0.9, unconfirmed: null });
+});
+
+test("a chat build whose settlement refused keeps FluxIQ's ending words on the incomplete flow-lane.json", async () => {
+  const { core, entry } = chatCore();
+  const { run, incomplete } = await runLane(core, { entry, settle: async (build) => { throw withSettledBuild(new RunnerFailure("runtime.behavior", "Live LLM run reached no provider"), { build, instructedConsequencesFrom: null }); } });
+  await assert.rejects(run, /reached no provider/u);
+  assert.equal(incomplete[0]?.build?.chat?.said, 'Created the Flow "x".');
 });

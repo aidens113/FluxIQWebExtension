@@ -1,8 +1,8 @@
 /**
  * How a Flow build started from the extension's chat window went, as the build
- * record keeps it: identifiers, places in the thread, closed words and counts.
- * Never what the person typed or what FluxIQ answered -- the words stay in the
- * thread, and the one sentence a failure needs travels on the failure itself.
+ * record keeps it: identifiers, places in the thread, closed words and counts,
+ * and FluxIQ's own last words about the instruction (`said`). Never what the
+ * person typed.
  *
  * - `conversationId`: the chat thread the extension opened in Core and sent
  *   the instruction to.
@@ -20,6 +20,12 @@
  *   `failed` for any other result, `no_result` when none arrived in time.
  * - `asks`: the questions the thread carried, by kind.
  * - `secondsToEnding`: from the instruction being sent to the build's result.
+ * - `said`: FluxIQ's own last word about the instruction in the thread, whole
+ *   -- the build's result turn, or its answer when it started no build --
+ *   on every ending; `null` only when neither arrived. It used to travel on a
+ *   failure only, so a created ending kept no record of what FluxIQ told the
+ *   person (live run `run-musp8nz1-dbd3905a`, cause R1). The evidence bundle
+ *   screens what it writes for secrets, as it does every failure message.
  */
 export type CreatedFlowChatRecord = Readonly<{
   conversationId: string;
@@ -33,4 +39,5 @@ export type CreatedFlowChatRecord = Readonly<{
   ending: "created" | "awaiting_permission" | "failed" | "no_result";
   asks: Readonly<{ permission: number; personCheck: number; other: number }>;
   secondsToEnding: number | null;
+  said: string | null;
 }>;

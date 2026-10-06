@@ -66,6 +66,34 @@ test("the run id is reported the moment Core names it, before anything reads the
   assert.deepEqual(live.calls, ["select"]);
 });
 
+// A created Flow's playback (`explore_and_adapt`) runs under the Flow's own
+// mode, which the live settings store as `fully_adaptive`; a `manual_approval`
+// override would hold its repair to manual proposals that never apply.
+test("an explore_and_adapt live run sends no adaptiveMode override, and every other intent sends manual_approval", async () => {
+  const stop = new RunnerFailure("runtime.behavior", "stop after the request");
+  const sentFor = async (intent: "diagnosis_only" | "diagnose_and_adapt" | "explore_and_adapt" | "verify_result") => {
+    const sent: Record<string, unknown>[] = [];
+    const { client } = control({
+      automationStudioCall: async (endpoint: string, payload: Record<string, unknown>) => {
+        if (endpoint === "run-runtime-session") sent.push(payload);
+        throw stop;
+      },
+    });
+    await assert.rejects(executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", llmExecution: { intent, permittedConsequences: [] } }), /stop after the request/u);
+    assert.equal(sent.length, 1);
+    return sent[0]!;
+  };
+  const explore = await sentFor("explore_and_adapt");
+  assert.equal("adaptiveMode" in explore, false);
+  assert.equal(explore.runIntent, "explore_and_adapt");
+  assert.equal(explore.authorizedExternalSideEffects, false);
+  for (const intent of ["diagnose_and_adapt", "diagnosis_only", "verify_result"] as const) {
+    const sent = await sentFor(intent);
+    assert.equal(sent.adaptiveMode, "manual_approval", intent);
+    assert.equal(sent.authorizedExternalSideEffects, false);
+  }
+});
+
 // 2026-09-18: a created Flow's playback is judged by the model, so one
 // request runs the Flow and waits for the model's verdict. It outlasted the
 // 30-second bound in four units; the id came only in the reply, so nothing

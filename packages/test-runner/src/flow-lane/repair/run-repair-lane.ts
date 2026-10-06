@@ -19,6 +19,13 @@
 // lane judged no declared repair, so this one judges it before anything is
 // applied, as `runFlowLane` does for a recorded Flow: a proposal that is
 // missing or names the wrong control is never approved onto the Flow.
+//
+// A re-author Core made and applied inside the run takes it too. Core reaches
+// one by two routes -- a wrong answer, and a failed step the patch ladder could
+// not adapt -- and both leave the same run marker (`resultRepairOf`). It leaves
+// no proposal, so nothing is approved; its replays reproduce the rows the run
+// stored when it stored any, and a run that stored none, such as a form task, is
+// replayed on its goal alone.
 
 import type { ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
@@ -45,8 +52,8 @@ export type LiveRepairLaneInput = {
   live?: LiveRepairRun;
   /**
    * The Flow the lane built and the run it made, which names what the recovery
-   * saved. `extracted` is what that run stored, which a wrong-answer repair's
-   * replays must reproduce (`resultRepairOf`).
+   * saved. `extracted` is what that run stored, which a re-author's replays
+   * must reproduce when it holds at least one dataset (`resultRepairOf`).
    */
   lane: { flowId: string; run: Pick<PersistedFlowRunOutcome, "harnessRecovery"> & Partial<Pick<PersistedFlowRunOutcome, "extracted">> };
   /**
@@ -127,7 +134,7 @@ export async function runLiveRepairLane(
     task: described.task,
     purpose: described.purpose,
     recovery: resultRepair ? { ...input.lane.run.harnessRecovery, adaptationIds: [...new Set([...input.lane.run.harnessRecovery.adaptationIds, resultRepair.adaptationId])] } : input.lane.run.harnessRecovery,
-    ...(resultRepair ? { expectedDatasets: resultRepair.datasets } : {}),
+    ...(resultRepair?.datasets ? { expectedDatasets: resultRepair.datasets } : {}),
     replays: input.replays,
     inputs: { ...rebuiltInputs(input, nodes), scenarioId: input.scenarioId, facilityRunId: input.facilityRunId },
     // The reset comes first, as it does in the Flow lane: it would otherwise discard the arm.
@@ -148,22 +155,28 @@ export async function runLiveRepairLane(
 }
 
 /**
- * The wrong-answer repair the run made, when Core's re-author built an edit and
- * applied it inside the run: its adaptation, and the datasets the repaired run
- * stored, which the lane that built the Flow has already judged.
+ * The re-author Core made and applied inside the run: its adaptation, and the
+ * datasets the repaired run stored, which the lane that built the Flow has
+ * already judged.
  *
- * Core applies that edit itself, re-runs the same run id and judges the answer
- * again (Core `recovery/refuted-result/`), so it leaves no proposal for this
- * lane to approve. Without this the lane found no proposal, replayed nothing
- * and passed -- a repair that had never been replayed read as a proven one.
- * The adaptation is `applied` already, which the application step counts as
- * done; what is left to prove is that the Flow now returns that answer with no
- * model, every time.
+ * Core re-authors a Flow by two routes, a wrong answer and a failed step the
+ * patch ladder made no adaptation for, and both record the same marker
+ * (`resultReauthor`, Core `recovery/refuted-result/`): it applies the edit
+ * itself and re-runs the same run id, so it leaves no proposal for this lane to
+ * approve. Without this the lane found no proposal, replayed nothing and passed
+ * -- a repair that had never been replayed read as a proven one. The
+ * adaptation is `applied` already, which the application step counts as done;
+ * what is left to prove is that the Flow now holds with no model, every time.
+ *
+ * `datasets` is present only when the run stored at least one dataset, and
+ * then each replay must reproduce it. A run that stored none -- a form task, or
+ * a run with no extraction recorded -- is not a dataset repair: its replays are
+ * judged on zero provider calls, the run succeeding and the fixture goal.
  */
-function resultRepairOf(run: LiveRepairLaneInput["lane"]["run"]): { adaptationId: string; datasets: NonNullable<LiveRepairLaneInput["lane"]["run"]["extracted"]> } | undefined {
+function resultRepairOf(run: LiveRepairLaneInput["lane"]["run"]): { adaptationId: string; datasets?: NonNullable<LiveRepairLaneInput["lane"]["run"]["extracted"]> } | undefined {
   const reauthor = run.harnessRecovery.resultReauthor;
-  if (reauthor?.applied !== true || !reauthor.adaptationId || !run.extracted) return undefined;
-  return { adaptationId: reauthor.adaptationId, datasets: run.extracted };
+  if (reauthor?.applied !== true || !reauthor.adaptationId) return undefined;
+  return { adaptationId: reauthor.adaptationId, ...(run.extracted && run.extracted.length > 0 ? { datasets: run.extracted } : {}) };
 }
 
 /**

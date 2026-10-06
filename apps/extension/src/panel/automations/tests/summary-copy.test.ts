@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { runSummaryLines } from "../summary-copy";
+import type { RunFacts } from "../types";
 
 test("the plan's example reads as written", () => {
   assert.deepEqual(
@@ -33,16 +34,25 @@ test("AI activations", () => {
   assert.deepEqual(runSummaryLines({ aiActivations: 3 }), ["AI activated 3 times"]);
 });
 
-test("learning: plural, still being checked, not kept, and future runs only when known true", () => {
-  assert.deepEqual(runSummaryLines({ learned: 2 }), ["Learned 2 new page variations", "Checking the change..."]);
-  assert.deepEqual(runSummaryLines({ learned: 1, validated: true }), ["Learned 1 new page variation"]);
-  assert.deepEqual(runSummaryLines({ learned: 1, validated: true, futureRunsUpdated: false }), ["Learned 1 new page variation"]);
-  assert.deepEqual(runSummaryLines({ learned: 1, validated: false }), ["Learned 1 new page variation", "The change didn't hold up, so future runs stay the same"]);
+test("learning: only applied changes are learned, and future runs only when known true", () => {
+  assert.deepEqual(runSummaryLines({ learned: 2, changesTried: 2, futureRunsUpdated: true }), ["Learned 2 new page variations", "Future runs updated"]);
+  assert.deepEqual(runSummaryLines({ learned: 1 }), ["Learned 1 new page variation"]);
   assert.deepEqual(runSummaryLines({ learned: 0 }), []);
   assert.deepEqual(runSummaryLines({ futureRunsUpdated: true }), ["Future runs updated"]);
 });
 
+// A change the run tried and Core has not applied is never "learned" (item 24):
+// it is still being checked, or it did not hold.
+test("a change tried and not applied is being checked, or did not hold", () => {
+  assert.deepEqual(runSummaryLines({ learned: 0, changesTried: 2 }), ["Checking the change..."]);
+  assert.deepEqual(runSummaryLines({ changesTried: 1, validated: true }), ["Checking the change..."], "passed its trial, not yet kept");
+  assert.deepEqual(runSummaryLines({ learned: 0, changesTried: 1, validated: false }), ["The change didn't hold up, so future runs stay the same"]);
+  assert.deepEqual(runSummaryLines({ changesTried: 0 }), []);
+});
+
 test("no line carries an id, selector or trace", () => {
-  const lines = runSummaryLines({ outcome: "completed", durationMs: 1, aiActivations: 2, learned: 3 });
-  for (const line of lines) assert.doesNotMatch(line, /[#[\]{}<>=_]|run-|flow-|adapt/i);
+  const runs: RunFacts[] = [{ outcome: "completed", durationMs: 1, aiActivations: 2, learned: 3, futureRunsUpdated: true }, { changesTried: 2 }, { changesTried: 1, validated: false }];
+  for (const facts of runs) {
+    for (const line of runSummaryLines(facts)) assert.doesNotMatch(line, /[#[\]{}<>=_]|run-|flow-|adapt/i);
+  }
 });

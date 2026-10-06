@@ -7,7 +7,11 @@
 // (run-muqiho5c-e830ce01: twelve commands, none in `steps/`). After the run each
 // attempt dispatched in the playback's window becomes one `NNNN-run-<actionType>`
 // folder holding `call.json`, `result.json`, `page.txt` when the failure carried
-// a page view, and `meta.json` last, numbered after Core's own steps.
+// a page view, and `meta.json` last, numbered at its own time among Core's
+// steps: a Core step that started after a playback step (the post-run check of
+// its result) moves after it, folder and `meta.json` `step` both, so the folders
+// read in time order (run-musp8nz1-dbd3905a: the check 0048 at 18:07:03 came
+// before the playback 0049-0061 it checked, 18:06:34-18:07:01).
 //
 // A step the run skipped -- a sometimes-present popup or banner observed absent
 // -- is the page's state, not a failure, so it is written as `skipped`: the host
@@ -27,14 +31,23 @@
 // attempt dispatched inside its span, else written as its own
 // `NNNN-run-state-consulted` folder (a gate that stopped before any dispatch).
 //
+// A list read (`web.dom.extract_list`) also says what it read: its summary's
+// counts -- records, pages, items seen, empty records, whether a cap cut it,
+// why paging stopped, what its conditions kept -- and how many rows it
+// returned, as `result.read` and in the summary. Run `run-musp39u8-9ac026ab`'s
+// read wrote `validation: null` and nothing else, so its counts were only in
+// `flow-lane.json`. Counts and closed words only: no row, field value or field
+// name is copied.
+//
 // What is copied is bounded: the command's parameters, the outcome's status,
 // failure record and validation, never the page snapshot the result carries.
 // A typed value the extension marked redacted is not copied; every declared
 // redaction literal and every credential shape Core's step log screens for is
 // replaced in every file.
 
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { RUN_EXTRACTION_PAGINATION_STOP } from "@fluxiq-web-extension/test-contracts";
 import { pathExists } from "./path-exists.js";
 import { rewriteStepsIndex } from "./rewrite-steps-index.js";
 
@@ -102,11 +115,11 @@ export async function writePlaybackSteps(input: PlaybackStepsInput): Promise<Pla
   const stateRouted = entries.filter(entry => entry.skip?.reason === "state_routed").length;
   if (entries.length === 0) return { steps: [], redacted: 0, skipped, stateRouted };
   await mkdir(input.stepsDirectory, { recursive: true });
-  let next = await highestStep(input.stepsDirectory);
+  const numbers = await numberInTimeOrder(input.stepsDirectory, entries);
   const steps: number[] = [];
   let redacted = 0;
-  for (const entry of entries) {
-    next += 1;
+  for (const [index, entry] of entries.entries()) {
+    const next = numbers[index]!;
     const ran = entry.attempt ? playbackStepFiles(entry.attempt, next, entry.skip) : entry.skip ? undispatchedSkipFiles(entry.skip, next) : undispatchedRoutingFiles(entry.routing!, next);
     const files = entry.routing ? withStateRouting(ran, entry.routing) : ran;
     const folder = path.join(input.stepsDirectory, `${String(next).padStart(4, "0")}-run-${files.segment}`);
@@ -187,6 +200,8 @@ function playbackStepFiles(attempt: Json, step: number, skip: PlaybackSkippedSte
   const code = text(failure?.code) ?? null;
   const failureRecord = failure ? { category: failure.category, code, retryable: failure.retryable, stage: failure.stage, expected: failure.expected, actual: failure.actual, effect: failure.effect } : null;
   const skipped = skip ? skipMark(skip) : undefined;
+  const read = listRead(outcome);
+  const said = failed ? `${code ?? "failed"}: ${message ?? "no message"}` : (message ?? "succeeded");
   return {
     segment: actionType.replace(/[^A-Za-z0-9._-]/gu, "_").slice(0, 120),
     valueWithheld,
@@ -197,6 +212,7 @@ function playbackStepFiles(attempt: Json, step: number, skip: PlaybackSkippedSte
       ...(skipped ? { skipped, failure: null, observed: failureRecord } : { failure: failureRecord }),
       validation: validation ? { status: validation.status, ...(valueWithheld ? { redacted: true } : { expected: validation.expected, actual: validation.actual }) } : null,
       url: outcome?.url ?? null, title: outcome?.title ?? null,
+      ...(read ? { read } : {}),
     },
     page: text(record(record(result.metadata)?.failureEvidence)?.page),
     meta: {
@@ -206,10 +222,48 @@ function playbackStepFiles(attempt: Json, step: number, skip: PlaybackSkippedSte
       ms: startedAt !== undefined && finishedAt !== undefined ? finishedAt - startedAt : null,
       ...(skipped
         ? { phase: "playback", status: "skipped", resultCode: code, failureCode: null, message, skipped, summary: skipSummary(skipped) }
-        : { phase: "playback", status: failed ? "failed" : "ok", resultCode: code, failureCode: code, message, summary: failed ? `${code ?? "failed"}: ${message ?? "no message"}` : (message ?? "succeeded") }),
+        : { phase: "playback", status: failed ? "failed" : "ok", resultCode: code, failureCode: code, message, summary: read ? `${said} ${readSummary(read)}` : said }),
     },
   };
 }
+
+/** What a list read said about itself: counts and closed words, never a row. */
+type ListRead = { records: number; pages: number; itemsSeen: number | null; emptyRecords: number | null; truncated: boolean | null; stop: string | null; conditionsKept: number | null; rowsReturned: number | null };
+
+const count = (value: unknown): number | null => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+const STOPS: readonly string[] = RUN_EXTRACTION_PAGINATION_STOP;
+
+/**
+ * The read's counts, from the action result's `extraction` summary beside its
+ * `extracted` rows. Looked for at the two depths Core looks
+ * (`service/summaries/extraction-summary.ts`): the client's payload as it is,
+ * or wrapped by the domain's gateway dispatcher as `{ status, message, result }`.
+ * A summary without its record and page counts is no read; a stop word this
+ * package does not know is `unknown`, as the published contract has it.
+ */
+function listRead(outcome: Json | undefined): ListRead | undefined {
+  const dispatched = record(outcome?.result) ?? outcome;
+  const summary = record(dispatched?.extraction);
+  const records = count(summary?.recordCount);
+  const pages = count(summary?.pagesRead);
+  if (!summary || records === null || pages === null) return undefined;
+  const stop = typeof summary.paginationStop === "string" ? (STOPS.includes(summary.paginationStop) ? summary.paginationStop : "unknown") : null;
+  return {
+    records,
+    pages,
+    itemsSeen: count(summary.itemsSeen),
+    emptyRecords: count(summary.emptyRecords),
+    truncated: typeof summary.truncated === "boolean" ? summary.truncated : null,
+    stop,
+    conditionsKept: count(record(summary.conditions)?.kept),
+    rowsReturned: Array.isArray(dispatched?.extracted) ? dispatched.extracted.length : null,
+  };
+}
+
+const readSummary = (read: ListRead): string => {
+  const detail = [read.itemsSeen === null ? undefined : `${read.itemsSeen} items seen`, read.stop === null ? undefined : `stopped on ${read.stop}`, read.truncated ? "cut short by a cap" : undefined].filter(Boolean).join(", ");
+  return `${read.records} records over ${read.pages} pages${detail ? ` (${detail})` : ""}${read.rowsReturned === null ? "" : `; ${read.rowsReturned} rows returned`}`;
+};
 
 /** A skip with no host attempt: Core judged the step's ready state not shown and dispatched nothing. */
 function undispatchedSkipFiles(skip: PlaybackSkippedStep, step: number): StepFiles {
@@ -271,11 +325,45 @@ function screen(content: string, literals: readonly string[]): string {
 
 const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
 
-async function highestStep(directory: string): Promise<number> {
-  let highest = 0;
-  for (const entry of await readdir(directory)) {
-    const number = STEP_FOLDER.exec(entry)?.[1];
-    if (number !== undefined) highest = Math.max(highest, Number(number));
+/**
+ * The number each entry is written at, its steps in time order among the
+ * folders already there: each takes the place of the first existing folder
+ * that started after it, and that folder and every one after it move up. A
+ * folder whose meta gives no start time stays where it is. Core has stopped
+ * when this runs, so nothing else is numbering the folders.
+ */
+async function numberInTimeOrder(directory: string, entries: readonly Entry[]): Promise<number[]> {
+  const existing: { name: string; number: number; at: number | undefined }[] = [];
+  for (const name of await readdir(directory)) {
+    const number = STEP_FOLDER.exec(name)?.[1];
+    if (number === undefined) continue;
+    const started = text((await readJson(path.join(directory, name, "meta.json")))?.startedAt);
+    const at = started === undefined ? undefined : Date.parse(started);
+    existing.push({ name, number: Number(number), at: at !== undefined && Number.isFinite(at) ? at : undefined });
   }
-  return highest;
+  existing.sort((a, b) => a.number - b.number);
+  const numbers: number[] = [];
+  const moves: { name: string; from: number; to: number }[] = [];
+  let current = 0;
+  let next = 0;
+  for (const folder of existing) {
+    while (next < entries.length && folder.at !== undefined && entries[next]!.at < folder.at) numbers.push(current += 1), next += 1;
+    const to = Math.max(folder.number, current + 1);
+    if (to !== folder.number) moves.push({ name: folder.name, from: folder.number, to });
+    current = to;
+  }
+  while (next < entries.length) numbers.push(current += 1), next += 1;
+  // Highest first, so a folder never moves onto a number one still holds.
+  for (const move of moves.reverse()) {
+    const moved = `${String(move.to).padStart(4, "0")}${move.name.slice(move.name.indexOf("-"))}`;
+    await rename(path.join(directory, move.name), path.join(directory, moved));
+    const meta = await readJson(path.join(directory, moved, "meta.json"));
+    if (meta && typeof meta.step === "number") await writeFile(path.join(directory, moved, "meta.json"), json({ ...meta, step: move.to }), "utf8");
+  }
+  return numbers;
+}
+
+async function readJson(file: string): Promise<Json | undefined> {
+  try { return record(JSON.parse(await readFile(file, "utf8"))); }
+  catch (error) { if ((error as NodeJS.ErrnoException | null)?.code === "ENOENT" || error instanceof SyntaxError) return undefined; throw error; }
 }

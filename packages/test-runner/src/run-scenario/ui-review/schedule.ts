@@ -13,16 +13,28 @@ export type UiReviewScheduleOptions = {
 
 const DEFAULT_PERIOD_MS = 20_000;
 const DEFAULT_MAX_MOMENTS = 60;
-const LABEL: Readonly<Record<UiReviewPhase, UiReviewLabel>> = { start: "start", build: "mid-build", "flow-run": "flow-run", end: "end", failure: "failure" };
+/** The label of the moment taken on entering a phase. */
+const ENTRY_LABEL: Readonly<Record<UiReviewPhase, UiReviewLabel>> = { start: "start", build: "mid-build", "flow-run": "before-flow-run", end: "end", failure: "failure" };
+/** The label of a periodic moment, taken while a phase is still in progress. */
+const PERIODIC_LABEL: Readonly<Record<"build" | "flow-run", UiReviewLabel>> = { build: "mid-build", "flow-run": "flow-run" };
 
 /**
  * When a run's UI review takes a moment.
  *
  * Every phase the spine reports is one moment, taken as soon as the moments
  * before it are done: `start`, a build (`mid-build`), a Flow run
- * (`flow-run`), and the terminal `end` or `failure`. While a build or a Flow
- * run is the current phase, one more moment of that phase's label is taken
- * every `periodMs`; a tick that finds a moment still in flight is skipped and
+ * (`before-flow-run`), and the terminal `end` or `failure`. While a build or a
+ * Flow run is the current phase, one more moment is taken every `periodMs`,
+ * `mid-build` or `flow-run`.
+ *
+ * A Flow run's own moment is not `flow-run`: the spine reports that phase
+ * while it prepares the run (`run-scenario.ts`, before the run's settings are
+ * even sent), so that moment shows what came before any step played. In
+ * run-musq0b1m the run was refused at its settings and the moment labelled
+ * `flow-run` showed a Flow that never ran (D20). A periodic moment is taken
+ * only while the run is still the current phase, a full period later.
+ *
+ * A periodic tick that finds a moment still in flight is skipped and
  * counted rather than queued, so a slow browser cannot build a backlog.
  * After a terminal phase nothing more is taken.
  *
@@ -58,7 +70,7 @@ export class UiReviewSchedule {
     if (this.terminal) return this.idle();
     this.clearTimer();
     this.currentPhase = phase;
-    const moment = this.enqueue(LABEL[phase], phase);
+    const moment = this.enqueue(ENTRY_LABEL[phase], phase);
     if (phase === "build" || phase === "flow-run") this.timer = this.timers.setInterval(() => this.tick(phase), this.periodMs);
     return moment;
   }
@@ -72,11 +84,11 @@ export class UiReviewSchedule {
     if (!this.terminal) this.currentPhase = "end";
   }
 
-  private tick(phase: UiReviewPhase): void {
+  private tick(phase: "build" | "flow-run"): void {
     if (this.currentPhase !== phase) return;
     if (this.inFlight > 0) { this.skippedTicks += 1; return; }
     if (this.queued >= this.maxMoments) { this.clearTimer(); return; }
-    void this.enqueue(LABEL[phase], phase);
+    void this.enqueue(PERIODIC_LABEL[phase], phase);
   }
 
   private enqueue(label: UiReviewLabel, phase: UiReviewPhase): Promise<void> {

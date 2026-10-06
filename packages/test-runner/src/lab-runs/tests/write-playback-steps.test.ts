@@ -225,3 +225,59 @@ test("a run whose steps all ran writes no consultation", async (t) => {
   assert.equal("stateRouting" in meta, false);
   assert.doesNotMatch(meta.summary, /consulted/u);
 });
+
+// `run-musp8nz1-dbd3905a`: Core wrote the playback's post-run check as 0048
+// (18:07:03) while the playback ran 18:06:34-18:07:01, and the playback, written
+// after Core stopped, came out as 0049-0061 -- after the check of its result.
+// The playback is numbered at its own time, and Core's later steps move after it.
+test("playback steps are numbered in time order: a Core step that started after them moves after them", async (t) => {
+  const { attemptsDirectory, stepsDirectory } = await setUp(t, { a: attempt("a", 1000), b: attempt("b", 2000) });
+  await mkdir(path.join(stepsDirectory, "0046-decide"));
+  await writeFile(path.join(stepsDirectory, "0046-decide", "meta.json"), JSON.stringify({ step: 46, kind: "decide", startedAt: new Date(500).toISOString(), summary: "the build's last decision" }));
+  await mkdir(path.join(stepsDirectory, "0047-judge"));
+  await writeFile(path.join(stepsDirectory, "0047-judge", "meta.json"), JSON.stringify({ step: 47, kind: "judge", startedAt: new Date(6000).toISOString(), summary: "the post-run check" }));
+  await writeFile(path.join(stepsDirectory, "0047-judge", "request.txt"), "kept");
+  const written = await writePlaybackSteps({ attemptsDirectory, stepsDirectory, since: 1000, until: 5000, redactionLiterals: [] });
+  assert.deepEqual(written.steps, [47, 48]);
+  assert.deepEqual((await readdir(stepsDirectory)).sort(), ["0045-judge", "0046-decide", "0047-run-web.dom.click", "0048-run-web.dom.click", "0049-judge", "index.md"]);
+  assert.equal(JSON.parse(await readFile(path.join(stepsDirectory, "0049-judge", "meta.json"), "utf8")).step, 49, "the moved step's meta says its new number");
+  assert.equal(await readFile(path.join(stepsDirectory, "0049-judge", "request.txt"), "utf8"), "kept", "and keeps everything else in its folder");
+  assert.deepEqual((await readFile(path.join(stepsDirectory, "index.md"), "utf8")).split("\n").slice(-3, -1).map(row => row.split(" | ").slice(0, 2).join(" | ")), ["| 0048 | run", "| 0049 | judge"]);
+});
+
+// The shape run-musp39u8-9ac026ab's playback read left in its command attempt:
+// the read's summary beside the rows it returned. Its step folder recorded
+// `validation: null` and nothing else; the counts were only in flow-lane.json.
+test("a list read's step carries the read's counts and the count of rows it returned, never a row's values", async (t) => {
+  const read = attempt("read", 1000, { actionType: "web.dom.extract_list" });
+  const rows = Array.from({ length: 13 }, (_, index) => ({ name: `Private Earbud ${index}`, price: "$29.99", rating: "4.5", url: `https://shop.example/p/${index}` }));
+  Object.assign(read.attempt.result.payload.result, {
+    extracted: rows,
+    extraction: { recordCount: 13, pagesRead: 5, truncated: false, fieldNames: ["name", "price", "rating", "url"], missingFields: [], itemsSeen: 94, emptyRecords: 0, conditions: { applied: 94, kept: 15, rejected: [20, 37, 34, 40, 2], unfiltered: false }, paginationStop: "control_disabled" },
+  });
+  read.attempt.result.message = "List extracted.";
+  // The gateway dispatcher's wrapping, `{ status, message, result }`, is read at the same depth Core reads it.
+  const wrapped = attempt("wrapped", 2000, { actionType: "web.dom.extract_list" });
+  Object.assign(wrapped.attempt.result.payload.result, { result: { extracted: [{ name: "Private Earbud" }], extraction: { recordCount: 1, pagesRead: 1, truncated: true, fieldNames: ["name"], missingFields: [], paginationStop: "a word from a newer producer" } } });
+  const { attemptsDirectory, stepsDirectory } = await setUp(t, { read, wrapped });
+  await writePlaybackSteps({ attemptsDirectory, stepsDirectory, since: 0, until: 5000, redactionLiterals: [] });
+  const folder = path.join(stepsDirectory, "0046-run-web.dom.extract_list");
+  const result = JSON.parse(await readFile(path.join(folder, "result.json"), "utf8"));
+  assert.deepEqual(result.read, { records: 13, pages: 5, itemsSeen: 94, emptyRecords: 0, truncated: false, stop: "control_disabled", conditionsKept: 15, rowsReturned: 13 });
+  const meta = JSON.parse(await readFile(path.join(folder, "meta.json"), "utf8"));
+  assert.equal(meta.summary, "List extracted. 13 records over 5 pages (94 items seen, stopped on control_disabled); 13 rows returned");
+  const other = JSON.parse(await readFile(path.join(stepsDirectory, "0047-run-web.dom.extract_list", "result.json"), "utf8"));
+  assert.deepEqual(other.read, { records: 1, pages: 1, itemsSeen: null, emptyRecords: null, truncated: true, stop: "unknown", conditionsKept: null, rowsReturned: 1 });
+  for (const name of ["result.json", "meta.json", "call.json"]) {
+    for (const dir of ["0046-run-web.dom.extract_list", "0047-run-web.dom.extract_list"]) {
+      assert.equal((await readFile(path.join(stepsDirectory, dir, name), "utf8")).includes("Private Earbud"), false, `${dir}/${name} holds no row value`);
+    }
+  }
+});
+
+test("a step that is not a list read carries no read record", async (t) => {
+  const { attemptsDirectory, stepsDirectory } = await setUp(t, { a: attempt("a", 1000) });
+  await writePlaybackSteps({ attemptsDirectory, stepsDirectory, since: 0, until: 5000, redactionLiterals: [] });
+  const result = JSON.parse(await readFile(path.join(stepsDirectory, "0046-run-web.dom.click", "result.json"), "utf8"));
+  assert.equal("read" in result, false);
+});

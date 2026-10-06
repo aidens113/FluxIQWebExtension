@@ -98,7 +98,7 @@ export class UiReviewRecorder {
     const timed = async (capture: () => Promise<UiReviewCapture>) => { const from = Date.now(); const result = await capture(); return { result, span: { from, to: Date.now() } satisfies CaptureSpan }; };
     const [taken, overlay] = await Promise.all([
       (async () => ({
-        scenario: await timed(() => captureScenarioTab({ page: chosen.page, ...(chosen.documentVisibility === undefined ? {} : { documentVisibility: chosen.documentVisibility }), inFront: chosen.inFront, frontTabs: chosen.frontTabs, path: path.join(paths.directory, name("scenario")), file: `${paths.directoryName}/${name("scenario")}`, secrets, timeoutMs })),
+        scenario: await timed(() => captureScenarioTab({ page: chosen.page, ...(chosen.documentVisibility === undefined ? {} : { documentVisibility: chosen.documentVisibility }), inFront: chosen.inFront, frontTabs: chosen.frontTabs, openTabs: chosen.openTabs, path: path.join(paths.directory, name("scenario")), file: `${paths.directoryName}/${name("scenario")}`, secrets, timeoutMs })),
         panel: await timed(() => captureExtensionPanel({ context: session.context, controlPage: session.controlPage, path: path.join(paths.directory, name("panel")), file: `${paths.directoryName}/${name("panel")}`, secrets, timeoutMs })),
       }))(),
       this.sampleOverlay(session.context, chosen.page),
@@ -107,7 +107,7 @@ export class UiReviewRecorder {
     const moment: UiReviewMoment = { index, label, phase, at: new Date().toISOString(), atMs, scenario: pictures.scenario, panel: pictures.panel, overlay };
     this.moments.push(moment);
     const counts = overlay.counts;
-    this.log(`[lab] ui review #${index} ${label}: scenario ${pictures.scenario.file ?? pictures.scenario.withheld ?? pictures.scenario.error}${pictures.scenario.windowMs ? ` (taken ${pictures.scenario.windowMs.from}-${pictures.scenario.windowMs.to} ms into the overlay window)` : ""}; panel (${pictures.panel.source}) ${pictures.panel.file ?? pictures.panel.withheld ?? pictures.panel.error}; overlay ${counts.status}, ${counts.visibleSamples}/${counts.samples} visible, ${counts.textChanges} text change(s), ${counts.presenceToggles} presence toggle(s), ${counts.pageLoads} page load(s), ${counts.pageLoadGaps} of them with the overlay gone`);
+    this.log(`[lab] ui review #${index} ${label}: scenario ${pictures.scenario.file ?? pictures.scenario.withheld ?? pictures.scenario.error}${pictures.scenario.windowMs ? ` (taken from ${pictures.scenario.windowMs.from} ms to ${pictures.scenario.windowMs.to} ms of the overlay window)` : ""}; panel (${pictures.panel.source}) ${pictures.panel.file ?? pictures.panel.withheld ?? pictures.panel.error}; overlay ${counts.status}, ${counts.visibleSamples}/${counts.samples} visible, ${counts.textChanges} text change(s), ${counts.presenceToggles} presence toggle(s), ${counts.pageLoads} page load(s), ${counts.pageLoadGaps} of them with the overlay gone${counts.probablePageLoads > 0 ? `, ${counts.probablePageLoads} probable page load cut off by the window's end` : ""}; ${pictures.scenario.openTabs?.length ?? "?"} tab(s) open`);
   }
 
   private async sampleOverlay(context: BrowserContext, page: Page): Promise<OverlaySampleWindow> {

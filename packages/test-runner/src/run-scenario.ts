@@ -190,6 +190,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   // The extension's count of the executable actions it recorded, read before Stop and compared with Core's.
   let extensionActionCount: unknown;
   let flowObservation: RunLaneObservation | undefined;
+  let stoppedLane: Parameters<typeof selectLaneObservation>[0]["stoppedLane"]; // The created lane's record when it stopped unpublished: a Flow it built and applied is still a created Flow.
   // What each `extract` step of the recording script read, by step id, and
   // `undefined` until the lane starts running the script at all.
   //
@@ -298,6 +299,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     const flowRunHooks = <E extends { observation: RunLaneObservation; run: PersistedFlowRunOutcome }>(activeTopology: RunningTopology, publish: (evidence: E) => Promise<void>) => ({
       prepareFlowPage: async (moment?: "build" | "playback") => {
         if (moment === "playback") playbackWindow = { since: Date.now() };
+        // Playback drives `page` alone: the tabs the exploration and the build's tests opened are closed, never the extension's own pages.
+        if (moment === "playback") for (const other of context!.pages().filter(other => other !== page && other !== extensionControl && (isScenarioUrl(other.url()) || other.url() === BLANK_TAB_URL))) await other.close();
         // A task whose variant is armed after the build has FluxIQ explore the unarmed page, and its Flow meet the variant:
         // the site changes after the Flow was made. The fixture starts unarmed, so the build's page is simply not armed,
         // and the armed facts are not checked against a page that was not armed.
@@ -420,6 +423,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         // Core's post-run result checks are not a repair: they settle with their own words (`resultChecks`), and only recovery is called one (Cause 12, run-murwd8le-79e735a8).
         settleRun: flowRunId => live.settleRepair(control, { projectId: createdProjectId, runId: flowRunId }, bundle, details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "resultChecks" in details ? "The created Flow's result was checked" : "The created Flow's repair attempt finished"), details })),
         recordIncompleteEvidence: async incomplete => {
+          stoppedLane = incomplete; // First, so a failed hash read below still leaves the lane's record for the observation.
           if (creationIdentity) {
             creationIdentity = await writeCreationContext(bundle, { ...creationIdentity, flowId: incomplete.flowId, outcome: "failed", savedFlowHash: null });
             // Read a hash only after proposal application was reviewed; keep the known ID if that read fails.
@@ -716,7 +720,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     const observation = selectLaneObservation({
       evaluated: target.mode === "isolated" || target.mode === "persistent-isolated",
       flowLane,
-      published: flowObservation,
+      published: flowObservation, stoppedLane,
       automationFailureExpected: flowWorkflow.expected.failure ?? null,
       recordingLane: () => recordingLaneProbeObservation({
         // A run the facility failed reports no automation result, which the evaluation contract refuses beside one: the probe's

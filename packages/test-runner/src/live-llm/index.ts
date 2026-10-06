@@ -15,7 +15,7 @@ export { runLaneWithLiveLlmSettlement, type LiveLlmLaneSettlement } from "./lane
 export { planLiveLlmExecution, type LiveLlmPlan, type LiveLlmPurpose } from "./live-llm-plan.js";
 export { beginLiveLlmRun, LiveLlmRun, type LiveLlmRunBundle, type LiveLlmRunCredentials } from "./live-llm-run.js";
 export { liveLlmObservedUsage, type LiveLlmObservedCall, type LiveLlmObservedUsage } from "./observed-usage.js";
-export { readLiveLlmReauthor, type LiveLlmReauthorAttempt, type LiveLlmReauthorCallsSource, type LiveLlmReauthorRecord } from "./reauthor-record.js";
+export { readLiveLlmReauthor, type LiveLlmReauthorAttempt, type LiveLlmReauthorCallsSource, type LiveLlmReauthorEnding, type LiveLlmReauthorRecord } from "./reauthor-record.js";
 export { liveLlmRunSpend, type LiveLlmBuildSpend, type LiveLlmJudgeCalls, type LiveLlmPerBuildSpend, type LiveLlmRunSpend, type LiveLlmSpendPhase, type LiveLlmStepLogReconciliation } from "./run-spend.js";
 export { readLiveLlmStepLogInstructed, type LiveLlmStepLogInstructed } from "./step-log-instructed.js";
 export { readLiveLlmStepLogSpend, type LiveLlmStepLogKind, type LiveLlmStepLogSpend } from "./step-log-spend.js";

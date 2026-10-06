@@ -35,6 +35,10 @@ const PROPOSAL_POLL_MS = 1_000;
 /** The shape of a Core or domain identifier, such as `web.recovery.inspect` or `web.action.rejected.no_progress`. */
 const VOCABULARY_ID = /^[a-z][a-z0-9_-]*(?:[.:][a-z0-9_-]+)*$/u;
 const MAX_VOCABULARY_ID_LENGTH = 96;
+/** How Core records a Flow signature on a judged yes: a digest, never the signature, which holds every step's input and target. */
+const SIGNATURE_DIGEST = /^sha256:[0-9a-f]{64}$/u;
+/** Every `judgedAt` Core writes on `buildJudged` (`AutomationStudioFlowBootstrapFinishingVerdict`). */
+const JUDGED_AT: ReadonlySet<string> = new Set(["finished_round", "judging_reserve", "stopped_short"]);
 /** An error's class or system code (`TypeError`, `ECONNRESET`, `UND_ERR_CONNECT_TIMEOUT`): no whitespace, so no sentence. */
 const THROW_CODE = /^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/u;
 /**
@@ -219,6 +223,11 @@ export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | nu
  *   lasting consequence nobody allowed (`flow_bootstrap.permission_required`):
  *   what the action was, the control as the model was shown it, and which
  *   classes were missing. Core's own payload for the person, cut to those.
+ * - `judged`: the judged `yes` the build finished on, as Core recorded it on
+ *   the proposal (`CreatedFlowBuildJudged`); `null` on a build that left a
+ *   proposal Core recorded none on -- a build given no judge, or a Core older
+ *   than the record -- and on a build that left no proposal. Absent only from a
+ *   record made before the field.
  */
 export type CreatedFlowBuild = Readonly<{
   outcome: "proposed" | "permission_required" | "failed";
@@ -250,6 +259,7 @@ export type CreatedFlowBuild = Readonly<{
   permissionRequest: CreatedFlowPermissionRequest | null;
   /** The evidence loop's own decisions, where `providerCalls` is every call the build made. */
   loopProviderCalls: number | null;
+  judged?: CreatedFlowBuildJudged | null;
   /**
    * Present when the build was started the way a person starts one: the task's
    * instruction typed into the extension's chat window (`chat/`). Absent for a
@@ -257,6 +267,41 @@ export type CreatedFlowBuild = Readonly<{
    * and never counted as a pass (`--direct-api-build`).
    */
   chat?: CreatedFlowChatRecord;
+}>;
+
+/**
+ * The judged `yes` a build finished on, as Core records it on the proposal's
+ * `created` audit event (`buildJudged`, Core's
+ * `flow-bootstrap/unfinished-build/finishing-verdict.ts`). Live run
+ * `run-musp8nz1-dbd3905a` (cause R2) could prove that its build finished on a
+ * judged yes about the standing Flow only from the order of `core.log` lines.
+ *
+ * - `round`: the round whose Flow was judged, 0 for the exploration.
+ * - `judgedAt`: `finished_round` when the model said the Flow was ready and its
+ *   test was judged; `judging_reserve` when a round the judging reserve stopped
+ *   was tested and judged with that reserve; `stopped_short` when a round that
+ *   stopped short of a completion had its changed Flow tested and judged.
+ * - `flowSignature` and `standingFlowSignature`: digests (`sha256:` and hex) of
+ *   the Flow signature of the test the judge read, `null` when it named none,
+ *   and of the Flow the build finished with. `matchesStandingFlow` says whether
+ *   they are the same Flow.
+ * - `confidence`: the judge's, `null` where Core recorded none.
+ * - `unconfirmed`: whether the judge gave advice beside its yes, and the
+ *   `patchNeeded` it gave, where it gave either; `null` where it gave neither.
+ *   **Unconfirmed, never a repair directive**: the build did not act on it, and
+ *   in live run `run-murwd8le-79e735a8` (cause 10) such advice was wrong. The
+ *   advice itself is the model's free text, so the record keeps only that it
+ *   was given; its words stay in Core's audit event.
+ */
+export type CreatedFlowBuildJudged = Readonly<{
+  verdict: "yes";
+  round: number;
+  judgedAt: "finished_round" | "judging_reserve" | "stopped_short";
+  flowSignature: string | null;
+  standingFlowSignature: string;
+  matchesStandingFlow: boolean;
+  confidence: number | null;
+  unconfirmed: Readonly<{ adviceGiven: boolean; patchNeeded: boolean | null }> | null;
 }>;
 
 /** One action the build declared to the gate, as the build record keeps it: codes, a verb, and the control as Core allowed it to be named. */
@@ -386,7 +431,7 @@ export type CreatedFlowBuildRead = Readonly<{ build: CreatedFlowBuild; status: s
  * new Flow (`create-here.ts` in Core). Any other state is a refusal.
  */
 export async function readCreatedFlowBuild(
-  control: Pick<CreatedFlowBuildControl, "getFlowAdaptation">,
+  control: Pick<CreatedFlowBuildControl, "getFlowAdaptation" | "automationStudioCall">,
   input: { projectId: string; flowId: string },
   adaptationId: string,
   read: { recoveredAfterTimeout: boolean; durationMs: number; statuses: readonly string[] },
@@ -410,6 +455,7 @@ export async function readCreatedFlowBuild(
     declaredConsequences: consequences ? Object.freeze(consequences.declared.map(declaredActionOf)) : null,
     consequenceCrossCheck: consequences?.crossCheck ? crossCheckOf(consequences.crossCheck) : null,
     permissionRequest: request ? permissionRequestOf(request) : null,
+    judged: await createdFlowBuildJudged(control, input, adaptationId),
   };
   const problem = !read.statuses.includes(detail.status) || detail.adaptationKind !== "flow_bootstrap" ? "lab.proposal_not_pending_bootstrap"
     : !loop ? "lab.proposal_without_evidence_audit"
@@ -424,6 +470,47 @@ export async function readCreatedFlowBuild(
   // not an HTTP status.
   if (request) return Object.freeze({ ...found, build: Object.freeze({ ...base, outcome: "permission_required" as const, failure: { code: "flow_bootstrap.permission_required", stage: "review", httpStatus: null } }) });
   return Object.freeze({ ...found, build: Object.freeze({ ...base, outcome: "proposed" as const, failure: null }) });
+}
+
+/**
+ * The judged yes Core recorded on the proposal's `created` audit event, read
+ * from the adaptation as Core answers it: `metadata.phase9.auditEvents`, the
+ * same event the evidence loop's counts are read from, by the endpoint that
+ * proposal was just read through. `null` when Core recorded none or answered
+ * no record in its shape; a read that fails fails like the read before it.
+ */
+async function createdFlowBuildJudged(control: Pick<CreatedFlowBuildControl, "automationStudioCall">, input: { projectId: string; flowId: string }, adaptationId: string): Promise<CreatedFlowBuildJudged | null> {
+  const answer = await control.automationStudioCall("get-flow-adaptation", { projectId: input.projectId, flowId: input.flowId, adaptationId });
+  const adaptation = isRecord(answer) && isRecord(answer.adaptation) ? answer.adaptation : undefined;
+  const phase9 = isRecord(adaptation?.metadata) && isRecord(adaptation.metadata.phase9) ? adaptation.metadata.phase9 : undefined;
+  const created = Array.isArray(phase9?.auditEvents) ? phase9.auditEvents.find((event): event is Record<string, unknown> => isRecord(event) && event.eventType === "created") : undefined;
+  return createdFlowBuildJudgedOf(isRecord(created?.detail) ? created.detail.buildJudged : undefined);
+}
+
+/** Core's `buildJudged`, held to its shape: a value that is not one is no record. */
+export function createdFlowBuildJudgedOf(value: unknown): CreatedFlowBuildJudged | null {
+  if (!isRecord(value) || value.verdict !== "yes") return null;
+  const { round, judgedAt, flowSignature, standingFlowSignature, matchesStandingFlow, confidence, unconfirmed } = value;
+  if (!Number.isSafeInteger(round) || (round as number) < 0) return null;
+  if (!JUDGED_AT.has(judgedAt as string)) return null;
+  if (!(flowSignature === null || isSignatureDigest(flowSignature)) || !isSignatureDigest(standingFlowSignature) || typeof matchesStandingFlow !== "boolean") return null;
+  // That advice was given, never its words: they are the judge's free text.
+  const adviceGiven = isRecord(unconfirmed) && typeof unconfirmed.advice === "string" && unconfirmed.advice.trim() !== "";
+  const patchNeeded = isRecord(unconfirmed) && typeof unconfirmed.patchNeeded === "boolean" ? unconfirmed.patchNeeded : null;
+  return Object.freeze({
+    verdict: "yes",
+    round: round as number,
+    judgedAt: judgedAt as CreatedFlowBuildJudged["judgedAt"],
+    flowSignature,
+    standingFlowSignature,
+    matchesStandingFlow,
+    confidence: typeof confidence === "number" && Number.isFinite(confidence) && confidence >= 0 && confidence <= 1 ? confidence : null,
+    unconfirmed: !adviceGiven && patchNeeded === null ? null : Object.freeze({ adviceGiven, patchNeeded }),
+  });
+}
+
+function isSignatureDigest(value: unknown): value is string {
+  return typeof value === "string" && SIGNATURE_DIGEST.test(value);
 }
 
 /** One gate record as the build keeps it: Core's own strings, nothing interpreted. */
@@ -519,6 +606,8 @@ export function createdFlowBuildFromDiagnostic(value: unknown, durationMs: numbe
     declaredConsequences: null,
     consequenceCrossCheck: null,
     permissionRequest: diagnostic.permissionRequest ? permissionRequestOf(diagnostic.permissionRequest) : null,
+    // A refused build left no proposal, so no finishing verdict.
+    judged: null,
   });
 }
 
@@ -538,7 +627,7 @@ export function failedCreatedFlowBuild(failure: NonNullable<CreatedFlowBuild["fa
 }
 
 function failed(failure: NonNullable<CreatedFlowBuild["failure"]>, providerInvocation: CreatedFlowBuild["providerInvocation"], durationMs: number): CreatedFlowBuild {
-  return Object.freeze({ outcome: "failed", adaptationId: null, providerCalls: null, loopProviderCalls: null, providerInvocation, accounting: null, evidenceLoop: null, failure, recoveredAfterTimeout: false, durationMs, instructedConsequences: null, declaredConsequences: null, consequenceCrossCheck: null, permissionRequest: null });
+  return Object.freeze({ outcome: "failed", adaptationId: null, providerCalls: null, loopProviderCalls: null, providerInvocation, accounting: null, evidenceLoop: null, failure, recoveredAfterTimeout: false, durationMs, instructedConsequences: null, declaredConsequences: null, consequenceCrossCheck: null, permissionRequest: null, judged: null });
 }
 
 function accountingOf(value: { provider?: string; model?: string; inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCostUsd?: number; budgetBreaches?: number }): CreatedFlowBuildAccounting {

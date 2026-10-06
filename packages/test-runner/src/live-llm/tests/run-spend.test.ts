@@ -53,7 +53,7 @@ test("a run with nothing settled spends nothing, and a build alone is its own to
 function reauthor(costs: number[]): LiveLlmReauthorRecord {
   return {
     source: "run-detail",
-    attempts: costs.map((estimatedCostUsd, index) => ({ attempt: index + 1, adaptationId: null, calls: 10, callsFrom: "loop", inputTokens: 1, outputTokens: 1, estimatedCostUsd })),
+    attempts: costs.map((estimatedCostUsd, index) => ({ attempt: index + 1, try: null, adaptationId: null, calls: 10, callsFrom: "loop", inputTokens: 1, outputTokens: 1, estimatedCostUsd, ending: null })),
     calls: costs.length * 10,
     uncountedAttempts: 0,
     totalEstimatedCostUsd: Number(costs.reduce((sum, cost) => sum + cost, 0).toFixed(9)),
@@ -95,7 +95,7 @@ test("a build over the per-build ceiling is reported as over it, never folded in
 test("the run's step log fills the calls Core did not count, and adds the chat call, without counting any call twice", () => {
   const uncountedReauthor: LiveLlmReauthorRecord = {
     source: "run-detail",
-    attempts: [{ attempt: 1, adaptationId: null, calls: null, callsFrom: "not_recorded", inputTokens: 418_087, outputTokens: 3_452, estimatedCostUsd: 0.061567476 }],
+    attempts: [{ attempt: 1, try: null, adaptationId: null, calls: null, callsFrom: "not_recorded", inputTokens: 418_087, outputTokens: 3_452, estimatedCostUsd: 0.061567476, ending: null }],
     calls: 0,
     uncountedAttempts: 1,
     totalEstimatedCostUsd: 0.061567476,

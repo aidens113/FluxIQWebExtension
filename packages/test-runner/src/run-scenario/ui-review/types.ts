@@ -1,7 +1,12 @@
 // The shapes a run's UI review is kept in (`recorder.ts` says why the review exists).
 
-/** Where in a run a moment was taken. */
-export type UiReviewLabel = "start" | "mid-build" | "flow-run" | "end" | "failure";
+/**
+ * Where in a run a moment was taken. A Flow run's own moment is
+ * `before-flow-run`: the spine reports the phase while it is still preparing
+ * the run, and a run can fail before any step plays (run-musq0b1m), so only
+ * the periodic moments taken while the run is still in progress are `flow-run`.
+ */
+export type UiReviewLabel = "start" | "mid-build" | "before-flow-run" | "flow-run" | "end" | "failure";
 
 /** What the run is doing, as the spine's hooks report it. `end` and `failure` are terminal. */
 export type UiReviewPhase = "start" | "build" | "flow-run" | "end" | "failure";
@@ -42,8 +47,15 @@ export type OverlaySample = {
   documentOrigin?: number;
   /** The location of the document the read was taken in, screened as other recorded locations are (`screenLocation`). Absent on a failed read. */
   pageUrl?: string;
-  /** Why this read failed; the other fields are then absent. */
+  /** Why this read failed; the overlay fields are then absent, and `documentOrigin` and `pageUrl` name the document re-read after the failure, when it could be. */
   error?: string;
+  /**
+   * The read failed the way a navigation makes it fail: the host went away
+   * between two reads, or the page's execution context was destroyed.
+   */
+  navigationSuspected?: true;
+  /** Why the document could not be re-read after a `navigationSuspected` failure; `documentOrigin` is then absent. */
+  documentError?: string;
 };
 
 /** What a window of samples shows. */
@@ -70,6 +82,12 @@ export type OverlayChangeCounts = {
    * product code can bridge. It is counted here and as no toggle of either kind.
    */
   pageLoadGaps: number;
+  /**
+   * The window ends in a failed read that `navigationSuspected`, with no later
+   * read naming a new document: a load that probably began and that nothing in
+   * the window could prove. At most one per window, and never in `pageLoads`.
+   */
+  probablePageLoads: number;
   /** A change back to a text already shown earlier in the window (A, B, A). */
   textRevisits: number;
   distinctTexts: number;
@@ -91,6 +109,8 @@ export type UiReviewCapture = {
   inFront?: boolean | "unknown";
   /** Scenario tab only: the screened locations of every tab the browser had in front. */
   frontTabs?: string[];
+  /** Scenario tab only: every tab open in the browser, in the browser's order, screened, and whether it was in front (`unknown` when the browser's tabs could not be read). */
+  openTabs?: { location: string; inFront: boolean | "unknown" }[];
   /** How many regions were blacked out (the panel's pairing code). */
   masked?: number;
   /** The picture was not kept, and why. */
