@@ -23,7 +23,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { AutomationStudioActionConsequence } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import { webAutomationExtractListRequestValue } from "../../../../../actions/extraction";
+import { WEB_AUTOMATION_EXTRACT_MAX_PAGES, webAutomationExtractListRequestValue } from "../../../../../actions/extraction";
 import { webAutomationOutputNodeId } from "../../../../../output-nodes";
 import { webAutomationDerivedRecordOutput, webAutomationExtractListIssues } from "../../../../../output-nodes/extract-list";
 import {
@@ -196,13 +196,15 @@ test("the handle keeps every detected column and the detected pagination unless 
   // Until 2026-10-01 a bound under another mode was dropped for the detected one, and detection
   // now proposes one page: a plan that saw Guildline's numbered pager and asked for five pages
   // read one, truncated (t194-w27 G2).
+  // Asking to page with no bound reads to the domain's bound (C1, the next test).
+  const everyPage = { ...NEXT, maxPages: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
   const rows: Array<[JsonValue, JsonObject]> = [
-    [true, NEXT],
-    [{ mode: "next", next: "a.next" }, NEXT],
+    [true, everyPage],
+    [{ mode: "next", next: "a.next" }, everyPage],
     [{ mode: "next", next: "a.next", maxPages: 2 }, { ...NEXT, maxPages: 2 }],
     [{ maxPages: 1 }, { ...NEXT, maxPages: 1 }],
     [{ mode: "numbered", pages: "button.page", maxPages: 2 }, { ...NEXT, maxPages: 2 }],
-    [{ mode: "numbered", pages: "button.page" }, NEXT],
+    [{ mode: "numbered", pages: "button.page" }, everyPage],
     // A scroll count says how far to read as a page count does.
     [{ mode: "scroll", maxScrolls: 2 }, { ...NEXT, maxPages: 2 }],
     [{ mode: "numbered", maxPages: 4, maxScrolls: 2 }, { ...NEXT, maxPages: 4 }]
@@ -335,6 +337,37 @@ test("a table's columns may be named by header, and a feed's by attribute, with 
   const scrolled = await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: { mode: "next", maxPages: 4 } } });
   assert.deepEqual(scrolled.status === "resolved" ? (scrolled.parameters.extractList as JsonObject).paginate : scrolled, { mode: "scroll", maxScrolls: 4 });
   assert.deepEqual(await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: { mode: "numbered", maxPages: 51 } } }), refusedAt("web.handle.malformed", "extractList.paginate", EXTRACTION_HINT));
+});
+
+test("paginate: true, or a pagination without a bound, reads every page up to the domain's bound; absent keeps the page the detection proposed", async () => {
+  // Live run `run-mustvzvg-99695308` (lane C, steps 0015-0028): the model asked
+  // to "extract all rows across pages" with `paginate: true`, and every read
+  // took one page, because `true` kept the detection's proposal and detection
+  // proposes one page (`detect-pagination.ts` `PROPOSED_MAX_PAGES = 1`). Five
+  // reruns rewrote filters instead of the bound (C1).
+  const proposedOnePage = structuredClone(CATALOG) as CapturedDetection;
+  if (!proposedOnePage.structure.ok) throw new Error("the catalog capture detected nothing");
+  proposedOnePage.structure.proposal.pagination = { mode: "next", next: testId("pagination-next"), maxPages: 1 };
+  const runtime = runtimeOver(proposedOnePage);
+  const { extraction } = await detect(runtime);
+  const fields = { name: "product-name" };
+  const read = { item: CARD, fields: { name: CARD_FIELDS.name } };
+  // The domain's parse drops the default `mode: "next"` (`extraction/pagination.ts`).
+  const everyPage = { next: testId("pagination-next"), maxPages: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
+  for (const paginate of [true, { next: "a[rel=next]" }, { mode: "numbered", pages: "button.page" }] as JsonValue[]) {
+    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields, paginate } }), resolvedList({ ...read, paginate: everyPage }), JSON.stringify(paginate));
+  }
+  // Absent is not an ask to page: a "first page" instruction leaves it out, and reads the one page proposed.
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields } }), resolvedList({ ...read, paginate: { ...everyPage, maxPages: 1 } }));
+  // An explicit bound is still the plan's own, and false still reads the page shown.
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields, paginate: { maxPages: 2 } } }), resolvedList({ ...read, paginate: { ...everyPage, maxPages: 2 } }));
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields, paginate: false } }), resolvedList(read));
+
+  // A feed's `true` scrolls up to the same bound.
+  const feed = runtimeOver(CAPTURED_DETECTIONS["infinite-feed-largest"]);
+  const posts = await detect(feed);
+  const scrolled = await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: true } });
+  assert.deepEqual(scrolled.status === "resolved" ? (scrolled.parameters.extractList as JsonObject).paginate : scrolled, { mode: "scroll", maxScrolls: WEB_AUTOMATION_EXTRACT_MAX_PAGES });
 });
 
 test("a Run Output node naming a web output resolves its payload as that output's own node would", async () => {
@@ -499,18 +532,18 @@ test("a dedupe that is not one, or a sort key naming no column, is refused where
   }
 });
 
-test("true keeps the detected one-page bound while an explicit nested bound reads five pages", async () => {
+test("absent keeps the detected one-page bound, true reads to the domain's bound, and an explicit nested bound reads five pages", async () => {
   const capture = structuredClone(CATALOG);
   if (!capture.structure.ok) throw new Error("catalog detection failed");
   capture.structure.proposal.pagination = { ...NEXT, maxPages: 1 };
   const runtime = runtimeOver(capture);
   const shown = await detect(runtime);
   assert.deepEqual((shown as WebLlmRepeatingStructure & { paginationBound?: object }).paginationBound, { maxPages: 1 });
-  for (const paginate of [true, undefined]) {
+  for (const [paginate, maxPages] of [[true, WEB_AUTOMATION_EXTRACT_MAX_PAGES], [undefined, 1]] as const) {
     const written: JsonObject = { handle: shown.extraction, fields: { name: "product-name" } };
     if (paginate !== undefined) written.paginate = paginate;
     assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: written }),
-      resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name }, paginate: { ...NEXT, maxPages: 1 } }));
+      resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name }, paginate: { ...NEXT, maxPages } }), String(paginate));
   }
   assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: { name: "product-name" }, paginate: { maxPages: 5 } } }),
     resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name }, paginate: { ...NEXT, maxPages: 5 } }));
