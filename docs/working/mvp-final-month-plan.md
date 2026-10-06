@@ -344,6 +344,14 @@ t264 S4 is editing `R/flow-draft/{amendment,entry,routing,step,act-claim,index}.
 - Outcome: Accepted
 - Follow-up: live results per lane; fixes merged between runs.
 
+### 2026-10-05/06 — Live round 1 on the integrated source: A, C, D failed with causes found
+- Agent: supervisor with live leads A, C, D (B still debugging).
+- Changed: A `run-muw60unq-591e23bd` failed ($0.045303, 36 calls, no Flow): "shipped from Spain" had no choice id, so the Spain press and Add to cart fought over act a1; fix Core `32b4e37c` (origin choice). D `run-muw6144a-e56f945d` failed ($0.053701, 44 calls, no Flow): round 1's Flow was right, but a build test does not press lasting Confirm, so the final read showed one accepted row and the judge refused the right Flow; fix Core `eb672178` (afterWithheld, judge told). C `run-muw60j7c-bb7c9a62` failed ($0.0814, 54 calls; 30 records stored vs 13): an observe-only read was pulled into the Flow by the opener walk; fix Core `5e368d1d`. All merged to dev with debugs and reports.
+- Why: Phase 1 live round.
+- Validation: A fix: instructed-acts, action-permissions, lasting-acts-build, instruction-authority, service-authoring -> 23 files 436/436. D fix: result-verification, deepseek tests, unfinished-build, service-bootstrap, lasting-acts-build -> 89 files 762/762. C fix: flow-draft + llm -> 180 files 1818/1818. Combined on dev: 319 files 3516/3516; fluxiq:check 0; audits pass.
+- Outcome: Partial (no lane passes yet)
+- Follow-up: C-2..C-5 (judges blind to stored records, re-author advising refused reruns, false judge advice discarding an exact answer, judges passing left-out matching rows) being fixed in t274 without live runs; then all lanes resync and relaunch together. UI findings queued: edit card says nothing of what changed; ending chat shows raw ids and cut quotes; overlay says "Couldn't fix your Flow" on a creation build; old thread flash; identical "Checked, not pressed" cards without whose row; loopback named "the start page"; read cards without counts; overlay text cut mid-word; refusals shown as work.
+
 ## Open Questions
 
 - Is demonstrate/record an MVP acceptance requirement after the 2026-09-22 scope ruling? Owner: user. Default taken: supported, unmeasured, one smoke proof.
