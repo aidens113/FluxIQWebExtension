@@ -324,3 +324,30 @@ Two workers in parallel, disjoint files (reports `reports/r3-d3-5-judge-pair.md`
   not opened. The unsettled "build" card words ("Since neither confirmed it") read slightly off for "yes, then no
   answer" (`result-verification/unsettled/unsettled-words.ts`).
 - Uncommitted. No Lab, browser or provider call.
+
+### 2026-10-06 — D3-5 follow-up: no round without room for its judging pair (supervisor follow-up; no paid run)
+
+D3-5 and D3-2 were merged to dev by the supervisor (Core `ee7ba0f3`, downstream `60df38ae`). Both t275 trees match
+dev's content (`git diff HEAD dev` empty). The `git merge --ff-only dev` asked for was blocked by the worker hook,
+so the branch pointers are still one merge commit behind dev.
+
+- Core `R/flow-bootstrap/unfinished-build/round-funding.ts`: the funding gains `callsFit()`, which is true only when
+  the call allowance holds the round's first decision plus, with a judge, the judging pair (`1 + 2` calls).
+  `phases.ts` `exhaustedForNextRound` ends the build with bound `calls` instead of opening such a round.
+- `phases.ts` at a reserve stop: `pairFits = input.purse?.judgingFits() ?? true`. When it is false, the round is not
+  `atReserve` (no judged test, no judge call) and is not `shortJudged`. The chat no longer says "judging it with what
+  was kept back"; it says "The build reached its <allowance|spending limit> before the Flow was finished, with too
+  little left to judge the Flow whole, so it is not tested or judged again." (label "Too little left to judge").
+- Core `R/llm/build-purse/purse.ts`: new `callsFit(calls)` (the call-allowance check, public).
+- Tests, extending `unfinished-build/tests/reserve-unchanged.test.ts` (folder at 25 files):
+  - "opens no round whose judging pair and first decision the call allowance cannot hold": maxCalls 4, round 0 spends
+    1 decision and a 2-call pair.
+  - "at a reserve stop where the pair no longer fits ...": $0.099 spent against a $0.008 pair hold.
+- Validation (lead, `fxwork/t275/!FluxIQ`):
+  - Fail-first: before the source change, `npx vitest run .../reserve-unchanged.test.ts` gave `2 failed | 6 passed
+    (8)`: round 1 was opened (`[0, 1]`, expected `[0]`), and round 1 was judged.
+  - After: 8/8. `npx vitest run` over `unfinished-build/tests`, `llm/build-purse` and `tests/service-bootstrap/tests`
+    gave `51 passed (51)`, `360 passed (360)`. A second run, with `service-authoring` `build-call-admission` and
+    `confirm-requests-build` added, gave `53 passed (53)`, `365 passed (365)`.
+  - `fluxiq:check` exit 0; Core audit `passed (265 warning(s), 349 baselined)`; Core `pnpm.cmd build` exit 0.
+- Uncommitted. No Lab, browser or provider call.
