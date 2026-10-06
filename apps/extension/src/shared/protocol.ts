@@ -272,14 +272,14 @@ export type PanelRelayResponse<TPayload = unknown> =
  *
  * Core accepts the token on these endpoints only with a narrowed request
  * (`apps/web/src/lib/program-route.ts` in FluxIQ Core): a run names a saved
- * Flow and never an inline document, an LLM intent or external
- * side effects; a proposal is generated directly, never LLM-assisted; the
+ * Flow and never an inline document or external side effects, and may carry
+ * only the `explore_and_adapt` intent (`runAutomation`); a proposal is generated directly, never LLM-assisted; the
  * AI-key snapshot answers each key's kind, provider and enabled flag only.
  */
 export const AUTOMATION_PANEL_MESSAGES = {
   /** `list-flow-summaries`, then `list-flow-runs` (`sort: "updated"`, `direction: "desc"`). Answers `{ flows, runs }`. */
   listAutomations: RUNTIME_MESSAGES.panelListAutomations,
-  /** `run-runtime-session` with `{ projectId, flowId }` and nothing else. */
+  /** `run-runtime-session` with `{ projectId, flowId, runIntent: "explore_and_adapt" }` and nothing else, so a changed page can be repaired with the person's own key. */
   runAutomation: RUNTIME_MESSAGES.panelRunAutomation,
   /** `get-flow-run-detail` (`compact: true`), then `list-flow-adaptations` for the run's Flow. Answers `{ runDetail, adaptations }`. */
   runDetail: RUNTIME_MESSAGES.panelRunDetail,
@@ -289,7 +289,7 @@ export const AUTOMATION_PANEL_MESSAGES = {
   modelReadiness: RUNTIME_MESSAGES.panelModelReadiness,
   /** `generate-recording-proposal` (`mode: "direct"`) for the recording this browser stopped last. */
   generateFromRecording: RUNTIME_MESSAGES.panelGenerateFromRecording,
-  /** `run-runtime-session` for the proposal's Flow, as `runAutomation`. */
+  /** `run-runtime-session` with `{ projectId, flowId }` for the proposal's Flow: no run intent, so the test is not repaired. */
   testGeneratedAutomation: RUNTIME_MESSAGES.panelTestGeneratedAutomation,
   /** `review-recording-flow-proposal` with `decision: "approved"`. */
   saveGeneratedAutomation: RUNTIME_MESSAGES.panelSaveGeneratedAutomation,

@@ -40,6 +40,8 @@ export type FakeCreationCoreOptions = {
   datasets?: ReadonlyArray<{ datasetId: string; nodeIds: string[]; rows: Array<Record<string, unknown>> }>;
   /** The asks on the Flow's own thread, as `get-conversation` returns them on turns. */
   flowThreadAsks?: ReadonlyArray<Record<string, unknown>>;
+  /** The judged yes Core recorded on the proposal's created audit event (`buildJudged`), as `get-flow-adaptation` returns it raw; absent, none. */
+  buildJudged?: unknown;
 };
 
 export function fakeCreationCore(options: FakeCreationCoreOptions = {}) {
@@ -77,6 +79,7 @@ export function fakeCreationCore(options: FakeCreationCoreOptions = {}) {
       if (endpoint === "get-flow-router") return { router: applied ? { routerId: "router.one" } : null };
       if (endpoint === "list-conversations") return { conversations: [{ conversationId: "conversation.flow", pendingAskCount: 0, subject: { kind: "flow", id: FLOW_ID } }] };
       if (endpoint === "get-conversation") return { conversation: { turns: (options.flowThreadAsks ?? []).map((ask, index) => ({ turnId: `turn.${index}`, ask })), hasMore: false } };
+      if (endpoint === "get-flow-adaptation") return { adaptation: { adaptationId: ADAPTATION_ID, metadata: { phase9: { auditEvents: [{ eventType: "created", detail: options.buildJudged === undefined ? {} : { buildJudged: options.buildJudged } }] } } } };
       if (endpoint === "save-flow-generation-instruction") {
         instructionRequests.push(payload);
         return { instruction: { instructionId: "instruction.one", status: options.instructionStatus ?? "active" } };

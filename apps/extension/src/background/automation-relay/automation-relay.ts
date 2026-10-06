@@ -56,8 +56,15 @@ async function respond(type: string, message: AutomationPanelRequest, deps: Auto
   switch (type) {
     case AUTOMATION_PANEL_MESSAGES.listAutomations:
       return listAutomations(projectId, deps);
-    case AUTOMATION_PANEL_MESSAGES.runAutomation:
+    case AUTOMATION_PANEL_MESSAGES.runAutomation: {
+      // A saved automation the person runs may be repaired with their own model
+      // key when the page has changed since it was built.
+      const flowId = text(message.flowId);
+      return flowId ? deps.call("run-runtime-session", { projectId, flowId, runIntent: "explore_and_adapt" }) : missing("flowId");
+    }
     case AUTOMATION_PANEL_MESSAGES.testGeneratedAutomation: {
+      // A test of a Flow just generated from a recording runs as generated:
+      // repairing it would hide what the recording got wrong.
       const flowId = text(message.flowId);
       return flowId ? deps.call("run-runtime-session", { projectId, flowId }) : missing("flowId");
     }

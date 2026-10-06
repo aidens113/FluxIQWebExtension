@@ -1,10 +1,11 @@
 import type { Page } from "@playwright/test";
 import { screenText } from "../extension-start-trace/index.js";
+import type { OpenTab } from "./choose-scenario-tab.js";
 import { screenLocation } from "./screen-location.js";
 import type { UiReviewCapture } from "./types.js";
 import { withTimeout } from "./with-timeout.js";
 
-export type ScenarioTabCaptureInput = { page: Page; documentVisibility?: string; inFront?: boolean | "unknown"; frontTabs?: readonly string[]; path: string; file: string; secrets: readonly string[]; timeoutMs: number };
+export type ScenarioTabCaptureInput = { page: Page; documentVisibility?: string; inFront?: boolean | "unknown"; frontTabs?: readonly string[]; openTabs?: readonly OpenTab[]; path: string; file: string; secrets: readonly string[]; timeoutMs: number };
 
 // The page's rendered text and the values of fields that show theirs (never a password field, which paints dots). Read-only.
 const shownText = () => {
@@ -30,7 +31,7 @@ const shownText = () => {
  */
 export async function captureScenarioTab(input: ScenarioTabCaptureInput): Promise<UiReviewCapture> {
   const started = Date.now();
-  const base: UiReviewCapture = { source: "scenario-tab", location: screenLocation(input.page.url(), input.secrets), ...(input.documentVisibility === undefined ? {} : { documentVisibility: input.documentVisibility }), ...(input.inFront === undefined ? {} : { inFront: input.inFront }), ...(input.frontTabs ? { frontTabs: input.frontTabs.map(url => url.startsWith("unreadable:") ? screenText(url, input.secrets) : screenLocation(url, input.secrets)) } : {}) };
+  const base: UiReviewCapture = { source: "scenario-tab", location: screenLocation(input.page.url(), input.secrets), ...(input.documentVisibility === undefined ? {} : { documentVisibility: input.documentVisibility }), ...(input.inFront === undefined ? {} : { inFront: input.inFront }), ...(input.frontTabs ? { frontTabs: input.frontTabs.map(url => url.startsWith("unreadable:") ? screenText(url, input.secrets) : screenLocation(url, input.secrets)) } : {}), ...(input.openTabs ? { openTabs: input.openTabs.map(tab => ({ location: screenLocation(tab.url, input.secrets), inFront: tab.inFront })) } : {}) };
   try {
     const text = await withTimeout(input.page.evaluate(shownText), input.timeoutMs, "the scenario tab's text");
     if (input.secrets.some(secret => secret.length > 0 && text.includes(secret))) return { ...base, withheld: "a run secret is shown on the page", ms: Date.now() - started };

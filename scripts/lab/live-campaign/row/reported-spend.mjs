@@ -12,16 +12,30 @@
  * refused before diagnosis spent nothing, adds nothing, and leaves the row
  * reading exactly as a row without one.
  *
- * `source` is `build`, `build+repair`, `per-call`, `no calls` (a record of zero
+ * `source` is `run` (the run's whole spend, below), `build`, `build+repair`, `per-call`, `no calls` (a record of zero
  * calls, so zero is the true spend), `not recorded` (a record exists and holds
  * no figure: the tokens and cost are `null`, never 0), or `null` when the run
  * left no live-llm record at all.
  */
 export function reportedSpend(liveLlm, flowLane) {
   const build = liveLlm?.build ?? (flowLane?.lane === "created-flow" ? flowLane.build : null);
-  if (build) return withRepair(buildSpend(build), liveLlm?.repair?.observed);
+  if (build) return withRunSpend(withRepair(buildSpend(build), liveLlm?.repair?.observed), liveLlm?.runSpend);
   if (!liveLlm) return { source: null, tokens: null, costUsd: null, callsWithoutReportedTokens: 0 };
-  return perCallSpend(liveLlm.observed);
+  return withRunSpend(perCallSpend(liveLlm.observed), liveLlm.runSpend);
+}
+
+/**
+ * The run's whole spend in place of the phases' sum, when the run recorded it
+ * (`live-llm.json` `runSpend.totalEstimatedCostUsd`, `run-spend.ts`): every
+ * call the run paid for, the chat's own interpreter call and the build's judge
+ * and reading among them, which no build or repair record holds. The row
+ * reported only the build's $0.211519044 of a run that spent $0.212718924
+ * (`run-musq0b1m-0472cfa0`). `source` reads `run` then; the tokens stay the
+ * phases', since the run's spend counts money and calls, not tokens.
+ */
+function withRunSpend(spend, runSpend) {
+  const total = number(runSpend?.totalEstimatedCostUsd);
+  return total === null ? spend : { ...spend, source: "run", costUsd: total };
 }
 
 function buildSpend(build) {

@@ -44,6 +44,8 @@ function fakeChat(options: FakeChatOptions) {
   };
   const control: CreatedFlowChatControl = {
     async automationStudioCall(endpoint, payload, _bounds, domainId) {
+      // The proposal read raw for the judged yes Core recorded on it, as `getFlowAdaptation` reads it: no domain. This Core recorded none.
+      if (endpoint === "get-flow-adaptation") return { adaptation: { adaptationId: ADAPTATION, metadata: { phase9: { auditEvents: [{ eventType: "created", detail: {} }] } } } };
       assert.equal(domainId, "web-automation", "every read is held to the project's domain");
       assert.equal(payload.projectId, PROJECT);
       // A Subflow is listed as a Flow of its own; it must never count as the Flow the chat made.
@@ -103,7 +105,7 @@ test("a job typed into the chat becomes the Flow the chat built and applied, rea
   assert.equal(made.build.adaptationId, ADAPTATION);
   assert.equal(made.build.providerCalls, 6);
   assert.equal(made.build.accounting?.estimatedCostUsd, 0.02, "what the build spent is read from the proposal it left");
-  assert.deepEqual({ ...made.build.chat, secondsToEnding: undefined }, { conversationId: "conversation.chat", panelInput: "view-dom", personTurn: 1, answerTurn: 2, resultTurn: 3, readWithoutModel: false, became: "build", ending: "created", asks: { permission: 0, personCheck: 0, other: 0 }, secondsToEnding: undefined });
+  assert.deepEqual({ ...made.build.chat, secondsToEnding: undefined }, { conversationId: "conversation.chat", panelInput: "view-dom", personTurn: 1, answerTurn: 2, resultTurn: 3, readWithoutModel: false, became: "build", ending: "created", asks: { permission: 0, personCheck: 0, other: 0 }, secondsToEnding: undefined, said: 'Created the Flow "Find every pair", explored the site, and put the steps it worked out into the Flow.' });
   assert.deepEqual(pictures, ["sent", "answered", "ended"]);
 });
 
@@ -193,4 +195,26 @@ test("a failed build's spend is read from what Core kept of it, and the failure 
   assert.equal(made.build.accounting?.inputTokens, 1_801_798);
   assert.deepEqual(made.build.failure, { code: "lab.chat_build_failed", stage: "chat", httpStatus: null, issueCodes: ["flow_bootstrap.provider_output_padding_truncated"] });
   assert.equal(made.build.chat?.ending, "failed");
+});
+
+// Live run run-musp8nz1-dbd3905a (cause R1): FluxIQ's ending words were taken
+// whole but used only in the lane's failure messages, so a created ending kept
+// no record of what FluxIQ told the person. They are on the chat record now,
+// on every ending, and so in flow-lane.json's build.chat.
+test("FluxIQ's ending words are on the chat record on every ending, created or not", async () => {
+  const endings: Array<[FakeChatOptions, RegExp | null]> = [
+    [{ answer: "build", ending: "created" }, /^Created the Flow "Find every pair"/u],
+    [{ answer: "build", ending: "failed", failedSaid: MURZLN6G_ENDING }, /was not judged to do what you asked\. The Flow so far was kept/u],
+    [{ answer: "build", ending: "awaiting_permission" }, /stopped because the build failed/u],
+    [{ answer: "reply" }, /could not tell what you wanted/u],
+    [{ answer: "other-capability" }, /^There is no Flow to run\.$/u],
+    [{ answer: "build", ending: "never" }, null],
+  ];
+  for (const [options, words] of endings) {
+    const { control, chat, wait } = fakeChat(options);
+    const made = await buildCreatedFlowFromChat(control, chat, SCOPE, { ...wait, deadlineMs: 5_000 });
+    assert.equal(made.build.chat?.said ?? null, made.said, `${options.answer}/${options.ending ?? "-"}: the record holds what the stage said`);
+    if (words === null) assert.equal(made.build.chat?.said, null, "no result arrived, so nothing was said");
+    else assert.match(made.build.chat?.said ?? "", words);
+  }
 });

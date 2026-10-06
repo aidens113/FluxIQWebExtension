@@ -38,3 +38,17 @@ test("a Flow run's per-call spend and an absent record read as before", () => {
   assert.deepEqual(reportedSpend({ observed: { calls: 0, observedCalls: [] } }, null), { source: "no calls", tokens: 0, costUsd: 0, callsWithoutReportedTokens: 0 });
   assert.deepEqual(reportedSpend(null, null), { source: null, tokens: null, costUsd: null, callsWithoutReportedTokens: 0 });
 });
+
+// `run-musq0b1m-0472cfa0`: the row reported the build's $0.211519044 while the
+// run spent $0.212718924 -- the chat's own call is in no build record. The run's
+// whole spend (`live-llm.json` `runSpend`) is what the row reports when it is there.
+test("a row reports the run's whole spend, the chat's call included, when the run recorded it", () => {
+  const proBuild = { accounting: { provider: "deepseek", model: "deepseek-v4-pro", inputTokens: 571116, outputTokens: 4059, totalTokens: 575175, estimatedCostUsd: 0.211519044 } };
+  const runSpend = { calls: 31, totalEstimatedCostUsd: 0.212718924, phases: { build: { calls: 27, estimatedCostUsd: 0.203830792 }, chat: { calls: 1, estimatedCostUsd: 0.00119988 } } };
+  assert.deepEqual(reportedSpend({ build: proBuild, runSpend }, null), { source: "run", tokens: 575175, costUsd: 0.212718924, callsWithoutReportedTokens: null });
+  // A Flow run's per-call record, and a repair beside a build, are both inside the run's spend too.
+  assert.equal(reportedSpend({ observed: { calls: 2, observedCalls: repairCalls }, runSpend: { totalEstimatedCostUsd: 0.0051 } }, null).costUsd, 0.0051);
+  assert.equal(reportedSpend({ build, repair: { observed: { calls: 2, observedCalls: repairCalls } }, runSpend: { totalEstimatedCostUsd: 0.0316 } }, null).costUsd, 0.0316);
+  // A record without one reads as before.
+  assert.equal(reportedSpend({ build, runSpend: null }, null).costUsd, 0.027027);
+});

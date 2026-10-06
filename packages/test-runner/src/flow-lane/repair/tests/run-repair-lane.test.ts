@@ -267,3 +267,33 @@ test("a wrong-answer repair whose replay returns other rows is not deterministic
   );
   assert.deepEqual(fake.written[0]?.value.replays.map((replay: { datasetsReproduced: boolean | null }) => replay.datasetsReproduced), [true, false]);
 });
+
+// A failed step Core re-authored on a form task: the same run marker as a
+// wrong answer, but the run stored no rows, so there is no dataset to
+// reproduce. Each replay is judged on its goal alone.
+for (const [label, extracted] of [["stored no rows", []], ["records no extraction", undefined]] as const) {
+  test(`a failed-step re-author of a Flow that ${label} is replayed goal-only, without the model`, async (t) => {
+    const fake = lane({ replays: 2, recovery: RESULT_REPAIRED });
+    t.after(fake.restore);
+    const run = { harnessRecovery: RESULT_REPAIRED, ...(extracted === undefined ? {} : { extracted: [...extracted] }) };
+    const proof = await runLiveRepairLane(fake.control, { ...fake.input, lane: { flowId: "flow-1", run } });
+    assert.ok(proof);
+    assert.deepEqual(proof.adaptationIds, [REAUTHORED]);
+    assert.equal(proof.application.outcome, "applied");
+    assert.deepEqual(proof.replays.map((replay) => [replay.outcome, replay.providerCalls, replay.goalPassed, replay.datasetsReproduced]), [["ran", 0, true, null], ["ran", 0, true, null]]);
+    assert.deepEqual(fake.reset, [1, 2]);
+    assert.equal(fake.endpoints.filter((endpoint) => endpoint.startsWith("review-flow-adaptation")).length, 0, "nothing is approved or applied again");
+    assert.equal(fake.published[0]?.repair, "result_reauthor");
+  });
+}
+
+test("a goal-only re-author replay that misses the fixture goal fails the run", async (t) => {
+  const fake = lane({ replays: 1, recovery: RESULT_REPAIRED, goal: false });
+  t.after(fake.restore);
+  await assert.rejects(
+    runLiveRepairLane(fake.control, { ...fake.input, lane: { flowId: "flow-1", run: { harnessRecovery: RESULT_REPAIRED, extracted: [] } } }),
+    (error: unknown) => error instanceof RunnerFailure && /did not hold: 1 of 1 replay\(s\) did not reach the fixture's expected final state/u.test(error.message),
+  );
+  assert.equal(fake.written[0]?.value.replays[0]?.datasetsReproduced, null);
+  assert.equal(fake.published[0]?.repair, "result_reauthor");
+});

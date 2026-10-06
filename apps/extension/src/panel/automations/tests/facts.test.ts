@@ -21,7 +21,7 @@ test("nothing is guessed when the summary is silent", () => {
   const facts = runFacts({ run: { runId: "r", flowId: "f", status: "" } });
   assert.deepEqual(facts, {
     outcome: undefined, durationMs: undefined, aiUsed: undefined, aiActivations: undefined,
-    learned: undefined, validated: undefined, futureRunsUpdated: undefined
+    learned: undefined, changesTried: undefined, validated: undefined, futureRunsUpdated: undefined
   });
   assert.equal(runFacts({ run: { ...base, finishedAt: 0 } }).durationMs, undefined, "a finish before the start is not a duration");
 });
@@ -34,9 +34,28 @@ test("AI use is the intervention count", () => {
   );
 });
 
-test("learned prefers the run reply's created adaptations over the summary's count", () => {
-  assert.equal(runFacts({ run: { ...base, adaptationCount: 4 } }).learned, 4);
-  assert.equal(runFacts({ run: { ...base, adaptationCount: 4 }, createdAdaptationIds: ["a1"] }).learned, 1);
+test("learned counts only the run's adaptations Core reports applied", () => {
+  const statuses = (entries: [string, string][]) => new Map(entries);
+  const created = { run: { ...base, adaptationCount: 4 }, createdAdaptationIds: ["a1", "a2", "a3", "a4"] };
+  assert.equal(runFacts({ ...created, adaptationStatuses: statuses([["a1", "applied"], ["a2", "validated"], ["a3", "proposed"], ["a4", "testing"]]) }).learned, 1);
+  assert.equal(runFacts({ ...created, adaptationStatuses: statuses([["a1", "applied"], ["a4", "applied"], ["other", "applied"]]) }).learned, 2, "another run's adaptation is not counted");
+  assert.equal(runFacts({ ...created, adaptationStatuses: statuses([["a2", "validated"], ["a3", "proposed"], ["a4", "testing"]]) }).learned, 0);
+  assert.equal(runFacts({ run: base, adaptationIds: ["x"], adaptationStatuses: statuses([["x", "applied"]]) }).learned, 1, "the detail's ids stand in for the reply's");
+});
+
+test("learned is 0 when nothing durable changed, and unknown when only creation was reported", () => {
+  assert.equal(runFacts({ run: base, createdAdaptationIds: ["a1"], durableBehaviorChanged: false }).learned, 0);
+  assert.equal(runFacts({ run: { ...base, adaptationCount: 4 }, durableBehaviorChanged: false }).learned, 0);
+  assert.equal(runFacts({ run: base, createdAdaptationIds: ["a1"] }).learned, undefined, "created is not applied");
+  assert.equal(runFacts({ run: base, createdAdaptationIds: ["a1"], durableBehaviorChanged: true }).learned, undefined);
+  assert.equal(runFacts({ run: { ...base, adaptationCount: 4 } }).learned, undefined, "the summary's created count is not learned");
+});
+
+test("changes tried count every adaptation the run made, applied or not", () => {
+  assert.equal(runFacts({ run: { ...base, adaptationCount: 4 } }).changesTried, 4);
+  assert.equal(runFacts({ run: { ...base, adaptationCount: 4 }, createdAdaptationIds: ["a1"] }).changesTried, 1, "the reply's ids before the summary's count");
+  assert.equal(runFacts({ run: base, adaptationIds: ["x", "y"] }).changesTried, 2);
+  assert.equal(runFacts({ run: base }).changesTried, undefined);
 });
 
 test("validated and future runs follow the adaptations' statuses", () => {

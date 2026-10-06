@@ -447,3 +447,24 @@ test("the runner hands a permission stop to the evaluation and the printed resul
   assert.ok(source.includes("llm: live?.usage, bundlePath: bundle.stagingPath, permissionStop })"), "evaluation.json records the stop");
   assert.ok(source.includes('...(permissionStop ? { permissionStop: { verdict: "stopped_for_permission" as const, ...permissionStop } } : {})'), "the printed result names the verdict");
 });
+
+// `run-musp8nz1-dbd3905a`: playback started on the start page with every tab
+// the exploration and the build's tests had opened still open, so a Flow could
+// start beside pages it never reached. Before playback the runner closes every
+// fixture tab but the one playback drives, and never the extension's own pages.
+test("the runner closes every other fixture tab before playback, and leaves the extension's pages open", async () => {
+  const source = await runnerSource();
+  const close = source.indexOf('if (moment === "playback") for (const other of context!.pages().filter(other => other !== page && other !== extensionControl && (isScenarioUrl(other.url()) || other.url() === BLANK_TAB_URL))) await other.close();');
+  assert.ok(close > 0, "the runner closes the other fixture tabs at playback");
+  assert.ok(close < source.indexOf("const startPage = flowStartPage({"), "before the page playback starts on is prepared");
+});
+
+// `run-musq0b1m-0472cfa0`: a lane that stopped after its Flow was built and
+// applied published no observation, and the run read `flowCreated: false`.
+test("the runner hands the created lane's stopped record to the observation, so a built Flow reads as created", async () => {
+  const source = await runnerSource();
+  const kept = source.indexOf("recordIncompleteEvidence: async incomplete => {\n          stoppedLane = incomplete;");
+  assert.ok(kept > 0, "the stopped lane's record is kept, before anything that can throw");
+  assert.ok(kept < source.indexOf('await bundle.writeStructured("snapshots/flow-lane.json", incomplete);', kept), "and before the lane's record is written");
+  assert.ok(source.includes("published: flowObservation, stoppedLane,"), "and handed to the observation");
+});

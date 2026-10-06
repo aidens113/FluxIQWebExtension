@@ -997,7 +997,7 @@ Three reproduce larger application pages and carry no Week 1 corpus row:
 | `admin-console` | CRM console with a virtualised customer list that scrolls inside its own pane, client-side routing, inline editing of a record, and a settings switch inside a web component's shadow root. | Primary, variant `read-only`; `extract-customer-list`, variant `short-book`; `browse-to-customer`; `switch-settings-tab`, variant `light-dom-toggle`. |
 | `member-directory` | Members dashboard whose table carries generated class names, row action menus, an edit dialog, filters, and a bulk remove behind a confirmation. | Primary, variants `restyled` and `member-left`; `filter-members`, variant `sorted-by-activity`; `remove-invitations`, variant `support-drawer`. |
 | `everything-store` | An everything store (fictional Brightaisle) with class names and ids generated per seed, a consent banner, a delayed app banner and notifications modal, a shadow-DOM chat that opens over the buy box, placeholder results, a results tail that loads on scroll, sponsored cards and a sponsored carousel among results, results repeated across pages, a broken Next, prices written twice, `div` pickers, a buy box dead until hydrated, a Save for later that fails once, and a checkout preset to the store's preferences with a payment iframe. Its defences are a search-form honeypot, a 429 rate limit with `Retry-After`, a soft browser check, and a canvas robot check only a person can pass. | Primary (buy a kettle, the playback goal); `add-to-cart`, variant `redesigned-header` (repair); `first-page-earbuds`, variants `deal-wheel` (new popup) and `robot-check` (a hand-off to the person the Lab plays, required, then the workflow's own table; see [the Lab plays the person at a check](#the-lab-plays-the-person-at-a-check)); `plus-under-fifty`, judged only in the created-Flow lane because no recording can pass it. |
-| `crossborder-marketplace` | Cross-border marketplace (a signed-in buyer in Germany; 50 listings, 19 sellers, four warehouses): consent banner, delayed welcome coupons, notification prompt and flash-deal popup, a chat pill over Add to cart, results drawn as skeletons with lazy cards, paid placements mixed in and results repeated across pages, a broken Next, a "verify you are human" check on every third results page, items opening in a new tab, div-built option pickers, a shadow-root store coupon whose first claim fails, framed description and payment picker, a checkout honeypot, a rate-limited feed, per-seed class hashes, per-load ids, and locale-formatted prices and dates. | Primary (three hubs and a coupon in the cart, judged by playback goal), variants `basket-redesign` (repair task) and `flash-deal`; `spain-hubs` (13-record extraction), variant `list-layout`; `place-order` (consequential purchase that must end in a permission request unless the run is permitted to move money). |
+| `crossborder-marketplace` | Cross-border marketplace (a signed-in buyer in Germany; 50 listings, 19 sellers, four warehouses): consent banner, delayed welcome coupons, notification prompt and flash-deal popup, a chat pill over Add to cart, results drawn as skeletons with lazy cards, paid placements mixed in and results repeated across pages, a broken Next, a "verify you are human" check on every third results page, items opening in a new tab, div-built option pickers, a shadow-root store coupon whose first claim fails, framed description and payment picker, a checkout honeypot, a rate-limited feed, per-seed class hashes, per-load ids, and locale-formatted prices and dates. | Primary (three hubs and a coupon in the cart, judged by playback goal), variants `basket-redesign` (the recorded repair task, and the created-Flow target-override proof `crossborder-marketplace-hub-to-cart-basket-redesign-after-creation`, armed only for playback) and `flash-deal`; `spain-hubs` (13-record extraction), variant `list-layout`; `place-order` (consequential purchase that must end in a permission request unless the run is permitted to move money). |
 | `bigbox-retail` | ValueRidge, a fictional big-box retailer: consent dialog, delayed email offer with a honeypot field, support widget and store picker in shadow roots lying over the buttons that matter, per-seed generated classes and ids, ads that repeat listings and ignore filters, prices drawn in pieces, a bot check on the third results page cleared by press-and-hold or waiting, a Next arrow that drops the filters, an Add to cart whose first press only wakes the page, a stale cart badge, a sign-in wall, rate-limited pickup times whose spinner clears only on retry, a cross-origin card frame, and new-tab links. | Primary (pickup cart for another store, playback goal), variant `redesigned-buy-box` (repair); variant `store-remembered` (step already done: the site remembers Millbrook, so `choose-millbrook` has no target and the page already shows its result); `pickup-towels` (nine listings over two filtered pages), variant `list-layout` (existing-Flow edge case); `pickup-order` (consequential guest order). |
 | `job-board` | Job board (Rolefinch) whose Apply hands off to an applicant-tracking site (Talentloom): a shadow-DOM consent wall, a delayed job-alert offer, a chat panel that opens over the job pane, a sign-in wall from the fourth job opened, sponsored cards that ignore filters and repeat real results, a fresh posting that shifts pagination between pages, a broken Next, a rate limiter with retry-after, a first save that fails, a pane that stalls until Retry, a stale badge, salaries in several formats and currencies, seed-rotated classes and ids, and a cross-origin application form in a new tab with a US-first location lookup, a pre-ticked talent pool, a honeypot and a person check. Only four oracle read-outs carry test ids. | Primary (save a week of one employer's jobs), variant `overflow-save`; `remote-rust-roles`, variant `no-exact-matches`; `apply-remote-rust-role`, variant `posting-closed` (expected failure `target_not_found`). |
 | `local-classifieds` | Kerbfind Marketplace, a fictional local-classifieds site in the style of the big social-network marketplaces: a cookie dialog that owns the page, a timed notification prompt, a chat window over Make offer, infinite scroll whose one failing batch loads only on Try again, adverts built from the listing card, a listing sent twice across batches, results outside the search straight after the real ones, a shadow-DOM radius picker whose Apply needs a second press, stale counts, a "checking your browser" pause, a contact rate limit, an offer-form honeypot, a cross-origin map frame, and per-seed atomic class names and ids. | Primary (a consequential offer), `bike-search`, variants `list-layout` and `location-check`; `save-dining-tables`, variant `moved-save`. |
@@ -1266,7 +1266,22 @@ build and review records, Flow id and shape, whether the Flow reached its own
 page, the runtime run and action evidence, extraction judgement, and any
 partial progress available when the lane stopped. A failed build or run does
 not erase the preceding stages by replacing the artifact with an all-or-nothing
-success record.
+success record. A lane that stopped after its build proposed a Flow and the
+proposal was applied still created that Flow, so its `evaluation.json` reads
+`flowCreated: true` though nothing ran (`selectLaneObservation`'s
+`stoppedLane`; `run-musq0b1m-0472cfa0` read "Flow created: no" for a Flow that
+existed).
+
+Before playback the runner closes every fixture tab other than the one playback
+drives -- the tabs the exploration and the build's tests opened, on the
+fixture's origin or blank -- and never the extension's own pages, so a Flow
+starts with only its own tab open (`run-scenario.ts` `prepareFlowPage`).
+
+A 400 from Core on an Automation Studio call is Core refusing a value the Lab
+sent, and fails the run as `facility.contract`, naming the endpoint and Core's
+sentence (`existing-fluxiq-control.ts`). It was filed as `environment.missing`,
+so a campaign read the run's "LLM estimated-cost limit is invalid." on its own
+Flow settings as an installation fault (`run-musq0b1m-0472cfa0`).
 
 #### The build is started from the extension's chat window
 
@@ -1317,8 +1332,27 @@ Independent creation first creates and selects a new run-owned project through p
 Every ending is a build record carrying `chat` (`CreatedFlowChatRecord`):
 places in the thread, `became` (`build`, `no_build` or `other_capability`),
 `ending` (`created`, `awaiting_permission`, `failed` or `no_result`), counts of
-asks, and `readWithoutModel`. `snapshots/flow-lane.json` names
+asks, `readWithoutModel`, and `said`: FluxIQ's own last words about the
+instruction, whole, on every ending (`null` only when no answer or result
+arrived). A created ending used to keep its kind and timing but not the words
+(`run-musp8nz1-dbd3905a`, cause R1). `snapshots/flow-lane.json` names
 `buildEntry: "chat"`.
+
+A build that left a proposal also carries `judged` (`CreatedFlowBuildJudged`):
+the judged `yes` the build finished on, as Core records it on the proposal's
+`created` audit event (`buildJudged`, Core's
+`flow-bootstrap/unfinished-build/finishing-verdict.ts`). It holds the round,
+`judgedAt` (`finished_round`, `judging_reserve`, or `stopped_short` for a round
+that stopped short with a clean, changed Flow and was judged), sha256 digests of
+the judged test's Flow signature and of the Flow the build finished with,
+`matchesStandingFlow`, the judge's `confidence` where Core recorded one, and
+`unconfirmed`: only whether the judge gave advice beside its yes
+(`adviceGiven`) and its `patchNeeded`, never the advice's words. That advice is
+unconfirmed and never a repair directive; in `run-murwd8le-79e735a8` (cause 10)
+a yes advised removing a step that the Flow needed. `judged` is `null` on a
+build with no judge, a refused build, or a Core older than the record. Before
+it, "finished on a judged yes about the standing Flow" was provable only from
+`core.log` order (cause R2).
 
 A chat that built nothing fails as "FluxIQ's chat did not build a Flow ...; it
 said: ...", in FluxIQ's own words. The build settlement's "reached no
@@ -1433,6 +1467,32 @@ In `snapshots/live-llm.json` they appear as `repair.resultChecks`
 result was checked". Spend totals are unchanged. Before this change, a run
 that needed no repair reported its two result checks as two diagnoses and a
 "repair attempt".
+
+### How the created Flow's playback adapts
+
+A created Flow's playback runs with Core run intent `explore_and_adapt`, and
+the Lab holds it to the product's own adaptation mode, `fully_adaptive`, in
+both places Core reads one: the Flow's stored `adaptationMode`, written with
+its LLM settings (`live-llm/flow-settings.ts`), and the run request, which
+then carries no `adaptiveMode` override (`flow-lane/persisted-flow-run.ts`).
+One rule decides both (`liveFlowAdaptationModeOf`). Core reads a stored
+`manual_approval` as manual proposals even without an override, so either one
+alone would hold every repair as a proposal: no automatic promotion, no resume
+from the trial, no apply after a judged whole run. Until t267 both said
+`manual_approval`, so no Lab run before it could show a repair continuing the
+run or persisting itself. Every other intent and purpose (`--llm-task adapt`
+or `diagnose`, a result check, a build) keeps `manual_approval`, which keeps a
+diagnosis or a build from applying itself. A recorded Flow's `--llm-task
+repair` is `explore_and_adapt` too, and runs under the same rule.
+
+`--replays N` then proves whatever the run left. An adaptation Core already
+applied counts as applied and is not reviewed again. A re-author Core built
+and applied inside the run, after a wrong answer or after a failed step the
+patch ladder could not adapt, leaves the same `resultReauthor` marker and no
+proposal, and is replayed directly. Its replays must reproduce the rows the
+run stored when it stored any; a run that stored none, such as a form task,
+is replayed on its goal alone, with zero provider calls
+(`flow-lane/repair/run-repair-lane.ts`).
 
 ### What a list read says about itself
 
@@ -1671,6 +1731,43 @@ records leave out, from the run's own step log (`steps/*/meta.json`,
 `chat` phase, and the calls of a re-author Core recorded a cost for and no
 count. Anything else the log saw is added as `unattributed`, never subtracted
 (`run-muqk713g-d08ad3dc`: 17 counted of 35 calls before this).
+
+The same log gives `live-llm.json` its per-call rows: `observed.observedCalls`
+is one row per provider call in `steps/`, each with the request id, task kind,
+stage, provider, model, tokens and cost its `meta.json` names
+(`live-llm/call-rows.ts`). A row takes the prompt version and validation
+verdict from Core's own per-call line for the same request id, since the step
+log writes neither; a Core line whose request id the log lacks is kept after the
+log's rows. The rows used to be the settled phase's alone: for a created Flow the
+build's decision rows, all without identity, and no row for the chat, the
+instruction reading or the judges (`run-musq0b1m-0472cfa0`: 27 null rows, 4
+calls missing). A campaign row reports the run's whole spend,
+`runSpend.totalEstimatedCostUsd`, as `Cost USD (reported)` with `spendSource:
+"run"` (`scripts/lab/live-campaign/row/reported-spend.mjs`); the build's own
+figure left out the chat's call ($0.211519044 of $0.212718924 in that run).
+
+`live-llm.json`'s `reauthor` record lists every re-author build Core recorded on
+the run (`metadata.resultReauthor.attempts[]`, `live-llm/reauthor-record.ts`).
+Each build says where its `calls` came from:
+- `loop`: the build loop's provider call count.
+- `loop_decisions`: a failed build's decision count, one paid call each, where
+  the loop kept no call count.
+- `adaptation`: the succeeded build's adaptation.
+
+A failed build's `ending` is Core's build ending in closed words and counts
+only (`flow-bootstrap/generation-failure/build-ending.ts`): its kind, the
+`bound` of a `budget_exhausted` ending, rounds, decisions, steps, whether the
+Flow was tested, each round's stop, and the no-route kind where Core allows one.
+Never its message or what was not done.
+
+`try` is 1 for the first build on a brief and 2 for Core's one automatic
+rebuild, which happens only after a named transient provider failure (t262).
+Core writes no try number, so the Lab derives it. An entry is try 2 when the
+entry before it is a try 1 with the same brief record and the same `attempt`,
+and that build failed without an adaptation at `provider_request` with
+`retryable: true`. An entry with no brief has `try: null`.
+`run-musp39u8-9ac026ab` booked both of its builds as `calls: null` and kept
+neither ending.
 
 ### When Core is still writing a run
 
@@ -2956,8 +3053,17 @@ How a run fills it:
 
 After Core stops, a created Flow's playback joins the build's steps
 (`lab-runs/write-playback-steps.ts`): each command attempt dispatched in the
-playback's window becomes an `NNNN-run-<actionType>` folder numbered after
-Core's last step, and `steps/index.md` is rewritten. Every runtime step is
+playback's window becomes an `NNNN-run-<actionType>` folder numbered at its own
+time among Core's steps, and `steps/index.md` is rewritten. A Core step that
+started after a playback step -- the post-run check of its result -- moves
+after it, its folder and its `meta.json` `step` both, so the folders read in
+time order (`run-musp8nz1-dbd3905a`: the check was 0048 before the playback it
+checked, 0049-0061). A list read (`web.dom.extract_list`) also says what it
+read, as `result.read` and in its summary. That covers its records, pages,
+items seen, empty records, whether a cap cut it short, why paging stopped,
+what its conditions kept and the rows it returned, in counts and closed words
+only, never a row or a field (`run-musp39u8-9ac026ab` wrote `validation: null`
+and nothing else). Every runtime step is
 listed, including the ones the run did not perform. A step the run skipped is
 written with `status: "skipped"`, never as failed, with the run detail's
 `skipped` mark in `meta.json` and `result.json`, and with the failure that
@@ -3022,14 +3128,44 @@ and reads the window as `stable`, `changed` or `flickering` (a revisit, two or
 more presence or visibility toggles, or three or more text changes). Each
 sample records the document it was read from (`performance.timeOrigin`) and
 that document's location as `pageUrl`, screened to origin and path like every
-other recorded location. Every change of document between consecutive readable
-samples is a page load, counted as `pageLoads` whether or not the overlay was
-absent across it. One absent sample whose neighbours were both read, present,
-from different documents is that load's gap, which no product code can bridge:
-it is counted as `pageLoadGaps` as well and makes no toggle. Both counts are
-shown in the `[lab] ui review` line and the review's summary. Any other
-absence counts as a toggle: two or more samples, one inside a single document,
-or one beside a failed read.
+other recorded location. Every change of document between consecutive samples
+that name theirs is a page load, counted as `pageLoads` whether or not the
+overlay was absent across it. One absent sample whose neighbours were both
+read, present, from different documents is that load's gap, which no product
+code can bridge: it is counted as `pageLoadGaps` as well and makes no toggle.
+Any other absence counts as a toggle: two or more samples, one inside a single
+document, or one beside a failed read.
+
+A read that fails the way a navigation makes it fail (the overlay host went
+away between two reads, or the page's execution context was destroyed) is
+marked `navigationSuspected`, and the tab's document is read once more, so the
+failed sample names the document the tab holds after it, or says in
+`documentError` why it could not. A failed read still makes no toggle, but the
+document it names counts toward `pageLoads`, so a navigation that ends a window
+in a failed read is no longer lost (run-musp8nz1 moment 2). A window that ends
+in such a failure with nothing after it naming a new document, or a later read
+of the same one, counts one `probablePageLoads`, kept apart from `pageLoads`.
+All three counts are shown in the `[lab] ui review` line and the review's
+summary.
+
+The overlay's text and attributes are screened by `screenOverlayText`:
+- A URL the overlay names keeps its origin and path, and a bare path is kept
+  whole, as `screenLocation` keeps a recorded location, never a query or
+  fragment.
+- Secrets, token patterns and six-digit codes are screened everywhere.
+- Any other 32-character opaque run becomes `[long]`. Before this, a fixture
+  path in "Opening “…”" became `[long]` too (run-musp8nz1 moment 7).
+
+Each scenario picture lists every tab open in the browser as `openTabs`:
+screened locations, in the browser's order, each with whether it was in front.
+They come from the extension's `chrome.tabs.query({})`, or from the run's pages,
+with front `unknown`, when that cannot be read. `frontTabs` still lists the
+tabs in front, and the summary gives each moment's tab count.
+
+A moment taken on entering a Flow run is labelled `before-flow-run`, since the
+run is reported while it is still being prepared and can fail before any step
+plays (run-musq0b1m moment 14). The periodic moments taken while it is still in
+progress are `flow-run`.
 
 Each picture records when it was taken against its moment's overlay samples:
 `takenAt`, `windowMs` (the capture's span in milliseconds from the window's

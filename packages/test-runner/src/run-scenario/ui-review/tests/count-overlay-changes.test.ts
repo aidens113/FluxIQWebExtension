@@ -8,7 +8,7 @@ const failed = (atMs: number): OverlaySample => ({ atMs, present: false, hostCou
 
 test("an overlay that shows one status throughout is stable", () => {
   const counts = countOverlayChanges([0, 200, 400, 600].map(at => shown(at, "BUILDING | Reading the page")));
-  assert.deepEqual(counts, { samples: 4, readFailures: 0, presentSamples: 4, visibleSamples: 4, textChanges: 0, presenceToggles: 0, visibilityToggles: 0, textRevisits: 0, distinctTexts: 1, pageLoads: 0, pageLoadGaps: 0, status: "stable" });
+  assert.deepEqual(counts, { samples: 4, readFailures: 0, presentSamples: 4, visibleSamples: 4, textChanges: 0, presenceToggles: 0, visibilityToggles: 0, textRevisits: 0, distinctTexts: 1, pageLoads: 0, pageLoadGaps: 0, probablePageLoads: 0, status: "stable" });
 });
 
 test("no overlay in any sample is absent, not stable", () => {
@@ -121,4 +121,30 @@ test("each document change is a page load, a failed read and a sample that names
   assert.equal(counts.pageLoads, 2);
   assert.equal(counts.pageLoadGaps, 0);
   assert.equal(counts.readFailures, 1);
+});
+
+const of = (sample: OverlaySample, documentOrigin: number): OverlaySample => ({ ...sample, documentOrigin });
+const hostGone = (atMs: number, documentOrigin?: number): OverlaySample => ({ atMs, present: false, hostCount: 0, visible: false, error: "the overlay host went away between two reads", navigationSuspected: true, ...(documentOrigin === undefined ? {} : { documentOrigin }) });
+
+test("a window that ends in a failed read naming a new document counts that page load (D13)", () => {
+  const counts = countOverlayChanges([of(shown(0, "Building"), 1), of(shown(2604, "Building | Opening where the Flow starts"), 1), hostGone(3003, 2)]);
+  assert.equal(counts.readFailures, 1);
+  assert.equal(counts.pageLoads, 1, "the origin re-read after the failure is a new document");
+  assert.equal(counts.probablePageLoads, 0);
+  assert.equal(counts.presenceToggles, 0, "a failed read is still no toggle");
+});
+
+test("a window that ends in a navigation-shaped failure with no readable document counts a probable page load, said apart (D13)", () => {
+  const unread = countOverlayChanges([of(shown(0, "A"), 1), of(shown(200, "A"), 1), hostGone(400)]);
+  assert.equal(unread.pageLoads, 0, "nothing proves the load");
+  assert.equal(unread.probablePageLoads, 1);
+  const sameDocument = countOverlayChanges([of(shown(0, "A"), 1), hostGone(200, 1)]);
+  assert.equal(sameDocument.probablePageLoads, 1, "a re-read that still sees the old document may have read it before the swap");
+  const settled = countOverlayChanges([of(shown(0, "A"), 1), hostGone(200), of(gone(400), 1)]);
+  assert.equal(settled.probablePageLoads, 0, "a later read of the same document says the host went away without a load");
+  assert.equal(settled.pageLoads, 0);
+  const loaded = countOverlayChanges([of(shown(0, "A"), 1), hostGone(200), of(shown(400, "A"), 2)]);
+  assert.deepEqual([loaded.pageLoads, loaded.probablePageLoads], [1, 0], "a later read of a new document is the load itself, counted once");
+  const plainFailure = countOverlayChanges([of(shown(0, "A"), 1), failed(200)]);
+  assert.equal(plainFailure.probablePageLoads, 0, "a timeout says nothing about a navigation");
 });
