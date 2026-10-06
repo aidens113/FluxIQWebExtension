@@ -5,8 +5,9 @@
 // `detect.ts` is the tool, `packet.ts` splits what the page detected into the
 // model's half and the handle's half, `handles.ts` keeps the handle's half
 // behind `resolveExtractionHandle`, and `refusal.ts` says which of the four
-// things "no repeating structure" means happened. Only `refusal.ts` is not
-// re-exported: nothing outside this directory refuses a detection.
+// things "no repeating structure" means happened. `list-name.ts` reads what the
+// page calls the list, for the packet's `list`. Neither of those two is
+// re-exported: nothing outside this directory refuses a detection or names one.
 
 export { detectRepeatingStructure, type WebLlmStructureDetectionContext } from "./detect";
 export {

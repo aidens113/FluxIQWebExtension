@@ -44,3 +44,45 @@ then stop and return. No relaunch.
   panel briefly shows an old thread with raw codes. Per-step cards, icons,
   overlay visibility and the robot-check card are good.
 - Replays: not run (no accepted Flow). Stopped here, as briefed.
+
+## Round 3 (2026-10-06, 21:17-21:58 UTC, off-peak)
+
+Tree `fxwork/t262` (downstream f224b38a, docs-only behind dev 7880abda; Core e1551fa3 = Core dev), both trees
+clean at start; slot 2, instance `t262-slot-2`, workspace `t262-a`. Source fingerprint `sha256:6475d56e...` for
+both runs (no source edited by this lane).
+
+- Dry-runs (21:18): campaign printed the one spawned command; Lab `--dry-run` `status ready`, `providerCallCount 0`,
+  created-flow, buildEntry chat, persistent-isolated, deepseek-flash, maxCalls 48, maxEstimatedCostUsd 0.1,
+  permittedConsequences [], same 219-character instruction.
+- **Run 1 `run-mux6n7m4-8273e7a0`: passed.** 32 calls, $0.040481 (build $0.038386). All four oracle facts held:
+  `Cart (3)`, `Orders to be shipped (0)`, Voltbay Official Store line with Space Grey, 7-in-1, Ships from Spain, × 3,
+  and the store coupon collected; result check confirmed; 0 harness activations. The loop fix (N1) was seen working:
+  no identical amend/rerun re-sent; refused rows carry their codes in the decision history. Debug:
+  `docs/working/language-driven-flow-loop-plan/debugs/run-mux6n7m4-8273e7a0.md`.
+- Replays of run 1's Flow: `replay-mux70ks8-42b807a0` and `replay-mux72fiq-dbf45610`, both passed with 0 calls,
+  0 interventions, 0 harness activations, hash `cc95809e...` unchanged, goal held.
+- **F1 (latent; the pass leans on it).** The kept Space Grey press (s11) is a toggle recorded while the colour was
+  un-chosen. On a fresh page it would un-choose Space Grey, but its title-named target is never found after a reload,
+  so the build test calls it `remembered` and playback routes past it. Read-only trace by a worker-high:
+  `reports/live-a-r3-f1.md` (resolver: `element-finder.ts` name match only by aria-label/name,
+  `candidates.ts:118-121`; build: Core `flow-draft/reversal.ts:62-63`). Fix proposals there; not applied.
+- **Run 2 (the second independent live pass) `run-mux74k5q-1c3c2127`: failed** `runtime.behavior`, no Flow, 47
+  calls, $0.071043 (build $0.070953), stopped at the 48-call allowance. Cause chain in its debug
+  (`debugs/run-mux74k5q-1c3c2127.md`):
+  C1, Core `flow-draft/amendment/apply.ts:225` + `llm/node-tools/draft-step.ts`: an `add` with
+  `settings.target` retargeted the ran Spain press to the quantity field and claimed `a1.quantity` and `a1` on it;
+  C2, `llm/node-tools/rerun-check.ts` `checked()` + `flow-draft/verify-only.ts`: every rerun of that step was a check
+  that ran nothing, and a "taken" check kept `actionId` dom-click under a dom-type input, so `complete` was refused
+  `bootstrap.unknown_parameter` twice; C3, `llm/repeat-guard/outcomes.ts`: the check that never ran was recorded
+  as a failed attempt, so the model's direct quantity call was refused twice and part one ended
+  `unusable_decisions`.
+- **Not fixed in the tree:** lane B had uncommitted Core source edits in `fxwork/t262/!FluxIQ`
+  (`flow-bootstrap/instructed-acts/{check,checklist,claim-doubt,contracts,standing}.ts`, a test,
+  `unfinished-build/not-done.ts`) when run 2 failed, so by the brief this lane edited no source. Fixes and failing
+  tests (C1a, C3, C2, C1b) are tabled in run 2's debug; C1b overlaps lane B's `claim-doubt.ts`.
+- UI review against `reports/t277-r3-ui.md`. Seen fixed: per-step cards with outcomes, edit cards that say what
+  changed, R2-U-7 fold ("Not done (2 times)"), plain words, a whole ending on a pass. Still open: R2-U-5 (no overlay
+  until ~4.7 s after the send; panel "Sending your message"), "Couldn't fix your Flow" on the overlay at a creation
+  build's end, the act quote cut mid-word ("shipped f..."), "no rows would be stored" on a cart task, a toggle that
+  un-chose shown as "Done", a failed build's ending that overstates ("6 of the 6 things ... ran, or could run").
+- Spend this round: $0.111524 over two live runs; replays $0.
