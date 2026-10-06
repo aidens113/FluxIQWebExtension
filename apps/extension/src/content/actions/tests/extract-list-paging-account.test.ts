@@ -158,5 +158,23 @@ test("page-limit feedback uses the reader's clamped bound rather than an oversiz
   const incomplete = await run(outcome({ pagesRead: WEB_AUTOMATION_EXTRACT_MAX_PAGES, truncated: true, paginationStop: "page_limit" }), command);
   assert.ok(actual(incomplete).includes(`extractList.paginate.maxPages = ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}`));
   assert.doesNotMatch(actual(incomplete), /100000/u);
-  assert.match(actual(incomplete), /input: \{extractList: \{paginate: \{maxPages: N\}\}\}/u);
+});
+
+// `paginate: true` now reads up to the domain's bound (C1, `run-mustvzvg-99695308`).
+// A read stopped there cannot be told to raise it -- a larger bound is refused
+// -- so it says the bound is the most one read may take, and how to get the rest.
+test("a read stopped at the domain's own bound says so, and does not offer a larger bound it would refuse", async () => {
+  for (const paginate of [{ next: ".next", maxPages: WEB_AUTOMATION_EXTRACT_MAX_PAGES }, { mode: "scroll", maxScrolls: WEB_AUTOMATION_EXTRACT_MAX_PAGES }] as const) {
+    const command: BrowserActionCommand = { ...COMMAND, extractList: { ...COMMAND.extractList!, paginate } };
+    const incomplete = await run(outcome({ pagesRead: WEB_AUTOMATION_EXTRACT_MAX_PAGES, truncated: true, paginationStop: "page_limit" }), command);
+    const key = "mode" in paginate ? "maxScrolls" : "maxPages";
+    assert.ok(actual(incomplete).includes(`extractList.paginate.${key} = ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}`), actual(incomplete));
+    assert.match(actual(incomplete), /the most one read may take/u);
+    assert.match(actual(incomplete), /incomplete/u);
+    assert.doesNotMatch(actual(incomplete), /: N\}|to read more/u);
+  }
+  // Below the domain's bound the exact nested override is still offered.
+  const command: BrowserActionCommand = { ...COMMAND, extractList: { ...COMMAND.extractList!, paginate: { next: ".next", maxPages: WEB_AUTOMATION_EXTRACT_MAX_PAGES - 1 } } };
+  const below = await run(outcome({ pagesRead: WEB_AUTOMATION_EXTRACT_MAX_PAGES - 1, truncated: true, paginationStop: "page_limit" }), command);
+  assert.match(actual(below), /input: \{extractList: \{paginate: \{maxPages: N\}\}\}/u);
 });
