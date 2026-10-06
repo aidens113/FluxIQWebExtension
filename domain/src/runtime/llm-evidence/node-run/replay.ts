@@ -367,9 +367,13 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // A press the page refused in words of its own (`refused_by_page`, busy
     // included, whose reason Core reads as "may work later") fails as it always
     // did, and quotes those words, as the exploration refusal does.
+    // A list read whose list never appeared is told apart by where the page
+    // stands, as a missing control is (`listNeverAppeared`).
     const answered = result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND
       ? await webNodeReplayMissingTarget(run, "step", about, failure)
-      : await failedOnPage(run, `the step did not run (${failure})`, about, failure === "refused_by_page" ? before : undefined);
+      : about.resultReason === "list_never_appeared"
+        ? await listNeverAppeared(run, about, failure)
+        : await failedOnPage(run, `the step did not run (${failure})`, about, failure === "refused_by_page" ? before : undefined);
     // A replayed step that landed on a robot check did not fail on its own
     // account: a person has to clear the check. Still `core.replay.failed`,
     // which is Core's closed vocabulary, and marked so Core can ask rather than
@@ -412,6 +416,35 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
 async function failedOnPage(run: WebNodeRun, said: string, about: WebNodeReplayFacts, before: Parameters<typeof webNodePageNotice>[0]): Promise<WebLlmEvidenceToolExecution> {
   const page = await replayPage(run);
   return answerOnPage(run, page, { code: REPLAY_RESULT_CODES.failed, said, acted: true, about, notice: webNodePageNotice(before, page) });
+}
+
+/**
+ * A replayed list read whose list never appeared: `unreproducible` when the
+ * page stands somewhere other than the page the read read, as a missing
+ * control is (`./missing-target.ts`), and `failed` on its own page or where
+ * either page is unknown, exactly as before.
+ *
+ * Live run `run-muwao5n4-44977b2a` (lane D, D2-2): an amend decision dropped
+ * both navigations to the requests page, the test ran the request listing on
+ * the home feed, and the answer `failed` told the model to correct the read's
+ * argument -- where the fault was the steps before it, which no longer reach
+ * the page it read. On its own page a list that never appeared is the read's
+ * own fault, and it fails. Never `remembered`: a read changes nothing a site
+ * could remember.
+ */
+async function listNeverAppeared(run: WebNodeRun, about: WebNodeReplayFacts, failure: string): Promise<WebLlmEvidenceToolExecution> {
+  const page = await replayPage(run);
+  const from = isJsonRecord(run.request.value.from) ? run.request.value.from : undefined;
+  const readOn = typeof from?.location === "string" && from.location !== "" ? from.location : undefined;
+  if (page !== undefined && readOn !== undefined && page.evidence.location !== readOn) {
+    return answerOnPage(run, page, {
+      code: REPLAY_RESULT_CODES.unreproducible,
+      said: `the step did not run (${failure}): its list never appeared, and this is not the page it read, so the steps before it no longer reach that page`,
+      acted: true,
+      about
+    });
+  }
+  return answerOnPage(run, page, { code: REPLAY_RESULT_CODES.failed, said: `the step did not run (${failure})`, acted: true, about, notice: webNodePageNotice(undefined, page) });
 }
 
 /**
