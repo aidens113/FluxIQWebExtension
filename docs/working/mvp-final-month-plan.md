@@ -574,6 +574,14 @@ The user wants to know what exactly failed most over 2026-09-29..2026-10-06, the
 - Outcome: Partial (one lane pass; no lane twice)
 - Follow-up: A's t281 fixes; D's round-funding follow-up; read-list S1/S2/S4+S5 then S3; round 4 off-peak for A/B once t281 lands, C/D after the read-list stages and their live proof plan.
 
+### 2026-10-06 — User: fix every open item of the week report; A run-2 causes and D round-funding landed
+- Agent: supervisor; leads t281 (A), D (t275), t285-t289 dispatched; t282-t284 running.
+- Changed: the user ordered every open item in `reports/week-review/report.md` fixed now; five workstreams t285 (act claims), t286 (judges and repair), t287 (refusal churn), t288 (UI), t289 (Lab and process) dispatched beside t281 and the read-list stages (briefs above). D round-funding (Core `ebc15c7c`, merge `22207d8b`): a round opens only when its first decision and the whole judge pair fit. A run-2 causes (Core `5e4dcf8a`, downstream `393b940f`, merges `b181f4bc` / `8bfa6e2e`): an amendment rewriting a ran step's settings is refused (`settings_rewrite_run`); a check that ran nothing neither replaces a step nor counts as a failed attempt; one half of a toggle pair dropped is reversed; a title-named swatch is re-found after a reload and a replayed toggle reports whether its control is shown. All pushed. Live round 4 held until t285-t287 land (their causes sank A run 2, B and D).
+- Why: the user's order; memory `live-runs-wait-for-all-agreed-changes`.
+- Validation: (supervisor) D round-funding on t275: `.../unfinished-build/tests .../llm/build-purse .../tests/service-bootstrap/tests` -> 50 files passed, 1 load timeout (`service-bootstrap/tests/adaptation.test.ts`), which passed alone 9/9 (tests 6 s, collect 58 s); `fluxiq:check` passed. A on merged t281: `npx vitest run` over flow-draft, node-tools, repeat-guard, evidence-loop, decision-handlers, draft-amendment-feedback, evidence-loop-steps, unfinished-build, ui/activity-action -> 124 files, 1365 passed; domain `node-run/tests` `# tests 206 # pass 206 # fail 0`; `fluxiq:check`, Core audit, domain and extension checks, downstream audit passed. A's lead reports content specs `large-page-resolution:94` and `shadow-root-controls:109` failing on dev's resolver too (pre-existing, open).
+- Outcome: Accepted (landed parts); fix-everything in progress
+- Follow-up: land each workstream group as it returns; t281 W15 add-on; the two pre-existing content-spec failures; round 4 once t285-t287 land, off-peak only.
+
 ## Open Questions
 
 - Is demonstrate/record an MVP acceptance requirement after the 2026-09-22 scope ruling? Owner: user. Default taken: supported, unmeasured, one smoke proof.
