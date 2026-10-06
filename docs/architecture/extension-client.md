@@ -390,8 +390,17 @@ pacer keeps what Core says and changes how often it is said:
   build, until it settles) and, for a run only, "Couldn't fix your Flow"
   if it then fails (a build that fails while repairing reads "Build failed":
   its repair re-authors the Flow it is making, so there was no Flow to fix;
-  t195 run `run-musp474o-e0ed7432`). Every `repairing` event of a build is a
-  repair. A run's is one only once Core works out a fix ("Working out what
+  t195 run `run-musp474o-e0ed7432`). The kind that picks a settled headline
+  is the settling row's own name for the work it ends when it gives one --
+  "Build failed", "Build stopped: ...", "Not doable: ...", "Build finished"
+  end a build; "Run failed", "Run cancelled", "Run finished" a run -- and
+  the event's subject otherwise (`background/activity/ending-kind.ts`): live
+  round 1's run A still ended a creation build on "Couldn't fix your Flow ·
+  Build stopped: the Flow is not finished yet", and why that row read as a
+  run's is not established (t276). Core's activity does not say whether a
+  build creates a Flow or extends one, so a creation build re-authoring its
+  first Flow after its test was refuted also reads "Fixing your Flow".
+  Every `repairing` event of a build is a repair. A run's is one only once Core works out a fix ("Working out what
   went wrong", "Deciding how to repair the step"): its recovery ladder
   ("Recovering from a failed step", then "Trying the step again" and the
   like) presses the same step again and changes no Flow, so the headline
@@ -414,7 +423,8 @@ pacer keeps what Core says and changes how often it is said:
 - `detail` is Core's latest sentence in a person's words
   (`shared/activity/wording.ts`), changed at most once per 1.6 s
   (`ACTIVITY_DETAIL_INTERVAL_MS`, more than half of three seconds, so any
-  three seconds show at most two). The first change after a quiet interval
+  three seconds show at most two), and at most 160 characters, cut where a
+  word ends (`shared/activity/cut-at-word.ts`). The first change after a quiet interval
   shows at once; later ones wait for the interval's end, where only the newest
   shows, so no stale sentence is left up. A step that starts while the status
   is still a decision being made ("Deciding the next step") shows at once, so
@@ -533,7 +543,14 @@ product image the left midpoint would cover (D5 of the `run-musp4h2f-72e8ed99`
 UI review). It never becomes
 a text-less dot, because a status the person cannot read is no status (a feed
 with a sticky header and fixed bottom bars made the dot the common case, t195
-`run-murdouox-c5294247`, U3). A long line ends in an ellipsis. `PlacementKeeper`
+`run-murdouox-c5294247`, U3). A line too long for the card is measured in its
+own font (an `OffscreenCanvas`) against its line's width and cut after the
+last whole word that fits, then an ellipsis, closing a quote the cut left
+open ("into “Search…”"); it is measured again when the card changes width
+(`fit-line.ts`, `text-measure.ts`). The browser's own ellipsis cut inside
+words ("Search Bri…", "trying another w…", U-4 of the
+`run-muw60j7c-bb7c9a62` UI review) and is only the backstop where nothing can
+be measured. `PlacementKeeper`
 re-checks on resize, scroll and page DOM changes (its own UI's mutations are
 skipped), at most once per 800 ms; a check only reads, and the host moves --
 one write -- only when the answer changes. A page whose banner lives in a
@@ -574,7 +591,9 @@ shows Core's thread (the latest, one automation's, or the thread a build or a
 run asked its question in) and FluxIQ's work in one stream, like a chat app:
 
 - The person's turns are bubbles on the right; FluxIQ's answers are
-  full-width formatted text. A question's turn carries its choices as buttons
+  full-width formatted text, never showing a bracket that holds only Core's
+  codes ("(flow_bootstrap.blank_target_required)": `format/raw-codes.ts`, U1
+  of `run-muw60unq-591e23bd`). A question's turn carries its choices as buttons
   (`conversation/ask-copy.ts`): the person-needed ask shows "Continue" and
   "Stop", which send `choice` with `person_done` or `person_stop`.
 - **What the person asked a build is their message** (`stream/stream-items.ts`),
@@ -609,8 +628,15 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   - **Head line.** The kind's name and what it acted on: "Click · Get a free
     quote". An action on the page that named no control says "the page"; a
     test run, an edit to the Flow, a wait, a robot check or a permission
-    names no target.
-  - **Outcome line** (`stream/step/card-words.ts`). "Done"; "Didn't work: it
+    names no target. A long target is cut from the middle where words end,
+    never inside one; a list Core names as "name, price, rating and 3 more"
+    names fewer items and counts the rest ("name, price and 4 more"); a path
+    is cut where one of its parts ends ("…napkins-250"), and one word with
+    nowhere to cut is left to the view (U-13 of `run-muw60j7c-bb7c9a62`).
+  - **Outcome line** (`stream/step/card-words.ts`). "Done", or "Done: 13 rows
+    from 5 pages" when the card carries what the action came to (`result`,
+    Core's `ActivityAction.result`; a test step shows its own words, a dash,
+    then the result); "Didn't work: it
     wasn't on the page" (Core's reason, else its sentence in words); a check
     reads "Passed" or "Didn't pass" with its verdict. A wait on the person
     that Core settled reads its sentence: "Done. You pressed Continue.",
@@ -621,7 +647,12 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     call refused as a repeat -- is its own card under that decision, never
     words added to the model's sentence: "Not done: <Core's reason>", or
     "Only partly done: ..." for an edit some of which landed, with a neutral
-    mark, never "Didn't work", since nothing was tried and failed. The
+    mark, never "Didn't work", since nothing was tried and failed, and never
+    "Done" or "Working on it" whatever outcome the card carries. A refusal
+    right after the same refusal (same unit, kind, target and reason, no words
+    between) is folded into the card before it, which says how many times:
+    "Not done (3 times): ..." (`stream/step/refusal-repeats.ts`; U-8 of
+    `run-muw60j7c-bb7c9a62`, three identical refusal cards in a row). The
     reasons are Core's (`ACTIVITY_ACTION_REFUSAL_WORDS` in `fluxiq/ui`), at
     most two, never a code (Core's
     `docs/architecture/automation-studio/client-gateway.md`, "Per-step

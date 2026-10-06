@@ -16,9 +16,13 @@
 //   failed" whether or not it was repairing: its repair re-authors the Flow
 //   the build is making, so a creation that ends unfinished had no Flow to fix
 //   (t195 live run `run-musp474o-e0ed7432`, 12-failure-scenario). The subject
-//   kind is what tells the two apart; Core's activity does not say whether a
-//   build creates a Flow or extends one, so an extending build that fails
-//   reads "Build failed" too.
+//   kind is what tells the two apart -- the settling row's own words for the
+//   work it ends when they name it, else the event's subject (`ending-kind.ts`:
+//   live round 1's run A still ended a creation build on "Couldn't fix your
+//   Flow"). Core's activity does not say whether a build creates a Flow or
+//   extends one, so an extending build that fails reads "Build failed" too,
+//   and a creation build re-authoring its first Flow after its test was
+//   refuted reads "Fixing your Flow": nothing Core sends tells the two apart.
 // - **A check only the person can answer.** When a page action reports that
 //   the page asks for what only a person can give (a robot check, a code
 //   prompt), the headline says so plainly: "Waiting for you: finish the check

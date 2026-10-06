@@ -11,8 +11,13 @@
 //   `words`             inline code
 //   [label](target)     "label (target)", as text: the panel opens no links
 //
+// A bracket holding only Core's codes ("(flow_bootstrap.blank_target_required)")
+// is left out of the text (`raw-codes.ts`); inline code is shown as written.
+//
 // A single line break inside a paragraph is kept, because Core writes one
 // where it means one.
+
+import { withoutRawCodes } from "./raw-codes";
 
 /** A run of text inside a block. */
 export type TextRun = { kind: "text" | "strong" | "code"; text: string };
@@ -129,5 +134,9 @@ export function parseRuns(text: string): TextRun[] {
     push("text", text[index]!);
     index += 1;
   }
-  return runs;
+  return runs.flatMap((run) => {
+    if (run.kind !== "text") return [run];
+    const words = withoutRawCodes(run.text);
+    return words === "" ? [] : [{ kind: "text" as const, text: words }];
+  });
 }

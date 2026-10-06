@@ -206,6 +206,17 @@ test("whitespace is collapsed, an empty sentence reads as its phase, and a long 
   assert.equal(h3.pacer.display()?.detail?.length, 160);
 });
 
+// U-4 of the run-muw60j7c-bb7c9a62 UI review: the status was cut inside a word.
+test("a long sentence is bounded where a word ends, never inside one", () => {
+  const h = harness();
+  const words = Array.from({ length: 40 }, (_, index) => `word${index}`).join(" ");
+  h.pacer.accept(event({ phase: "repairing", label: words }));
+  const detail = h.pacer.display()!.detail!;
+  assert.ok(detail.length <= 160, detail);
+  assert.ok(detail.endsWith("…"), detail);
+  assert.ok(words.startsWith(`${detail.slice(0, -1)} `), `"${detail}" ends inside a word`);
+});
+
 test("no tool id or result code ever reaches the detail", () => {
   const h = harness();
   h.pacer.accept(event({ phase: "exploring", label: "Using core.run_node: web.action.rejected.not_at_start_location", detail: { kind: "tool", title: "Using core.run_node", status: "succeeded", ref: "core.run_node", text: "Result: web.action.rejected.not_at_start_location" } }));
@@ -445,6 +456,26 @@ test("a repaired build whose result check passes is no longer headed as a repair
   h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
   h.pacer.accept(event({ phase: "verifying", label: "Couldn't confirm the result answers the request", detail: { kind: "check", title: "Result check", status: "failed" } }));
   assert.equal(h.pacer.display()?.headline, "Building your Flow", "a failed check alone does not start a repair; Core's repairing event does");
+});
+
+// t276 item 3, U4 of run-muw60unq-591e23bd: a creation build's overlay ended "Couldn't fix your
+// Flow · Build stopped: the Flow is not finished yet". "Couldn't fix" belongs to a run's failed
+// repair; a row that says the build stopped, failed or was not doable ends a build, whatever
+// unit of work it arrived in.
+test("a settling row in Core's words for a build's ending heads the status as the build's failure, never as a failed repair", () => {
+  for (const title of ["Build stopped: the Flow is not finished yet", "Not doable: this Flow could not be built", "Build failed"]) {
+    const h = harness();
+    h.pacer.accept(event({ phase: "repairing", label: "Repairing the Flow: the result check refuted its answer (attempt 1 of 2)", detail: { kind: "step", title: "Result repair started", status: "started" } }, "run", "r7"));
+    h.pacer.accept(event({ phase: "repairing", label: "Working out what went wrong", detail: { kind: "thought", title: "Working out what went wrong", text: "The variant is still China.", status: "succeeded" } }, "run", "r7"));
+    assert.equal(h.pacer.display()?.headline, "Fixing your Flow");
+    h.pacer.accept(event({ phase: "failed", label: title, final: true, detail: { kind: "step", title, status: "failed" } }, "run", "r7"));
+    assert.deepEqual([h.pacer.display()?.headline, h.pacer.display()?.outcome], ["Build failed", "failed"], title);
+  }
+  // A run's own ending still reads as the failed repair it was.
+  const run = harness();
+  run.pacer.accept(event({ phase: "repairing", label: "Repairing the Flow: the result check refuted its answer (attempt 1 of 2)", detail: { kind: "step", title: "Result repair started", status: "started" } }, "run", "r8"));
+  run.pacer.accept(event({ phase: "failed", label: "Run failed", final: true, detail: { kind: "step", title: "Run failed", status: "failed" } }, "run", "r8"));
+  assert.equal(run.pacer.display()?.headline, "Couldn't fix your Flow");
 });
 
 // U3 of t194: the overlay said "Couldn't fix your Flow | Run failed" and

@@ -31,6 +31,8 @@ export type ActionCard = ActivityAction & {
   answer: string | undefined;
   /** True for a result check, which passes or does not rather than working or not. */
   check: boolean;
+  /** How many identical refusals in a row this card stands for (`messages.ts`); absent for one. */
+  times?: number;
 };
 
 /** A dotted id such as `web.output.dom-click` or `core.run_node`, anywhere in a sentence. */
@@ -52,6 +54,8 @@ export function actionCard(event: ClientGatewayActivity, key: string): ActionCar
     why: action.why,
     // What a test of the Flow did with a step it did not simply do again (Core's `activityActionTested`).
     ...(action.tested === undefined ? {} : { tested: action.tested }),
+    // What a finished action came to (Core's `ActivityAction.result`: "13 rows from 5 pages", an edit's change), shown after "Done: ".
+    ...(action.result === undefined ? {} : { result: action.result }),
     ...(action.testing ? { testing: true as const } : {}),
     ...(action.unconfirmed ? { unconfirmed: true as const } : {}),
     // What Core declined of a decision, and why (Core's `activityActionOf`, t193 1003 C13).

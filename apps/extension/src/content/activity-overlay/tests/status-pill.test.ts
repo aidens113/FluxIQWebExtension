@@ -9,6 +9,7 @@ import test from "node:test";
 
 import { ACTIVITY_OVERLAY_HOST_ATTRIBUTE } from "../../picker-host";
 import { StatusPill } from "../status-pill";
+import type { OverlayTextMeasure } from "../text-measure";
 import type { ActivityOverlayView } from "../overlay-view";
 import { withFakeDom, type FakeNode } from "./fake-dom";
 
@@ -83,6 +84,30 @@ test("each mode has a fixed box, so no text can resize the pill, and the text is
     surface.update(view({ mode: "collapsed" }));
     assert.deepEqual([surfaceNode.style.getPropertyValue("width"), surfaceNode.style.getPropertyValue("height")], ["300px", "36px"]);
     assert.equal(hostOf(surface).shadow!.children[0], surfaceNode, "switching mode reuses the pill");
+  });
+});
+
+/** Every box 352 pixels wide (the expanded card's content), every character 7 pixels. */
+const MEASURE: OverlayTextMeasure = { widthOf: () => 352, measure: (text) => text.length * 7 };
+
+// U-4 of the run-muw60j7c-bb7c9a62 UI review: the browser's ellipsis cut
+// "Search Bri…", "trying another w…" and "the check found the…" (for "they").
+test("a line too long for the card is cut where a word ends, never inside one", () => {
+  withFakeDom(() => {
+    const surface = new StatusPill(MEASURE);
+    const detail = "Trying again: typing \"wireless earbuds\" into “Search Brightaisle”";
+    const headline = "Couldn't fix your Flow because every one of its repair rounds ran out";
+    surface.update(view({ headline, detail }));
+    const texts = hostOf(surface).descendants().filter((node) => node.children.length === 0 && node.textContent !== "").map((node) => node.textContent);
+    // 352 - 24 (the mark and its gap) - 2 (slack) leaves 326 pixels: 46 characters.
+    assert.ok(texts.includes("Trying again: typing \"wireless earbuds\" into…"), texts.join(" | "));
+    assert.ok(texts.includes("Couldn't fix your Flow because every one of…"), texts.join(" | "));
+    // A line that fits is drawn whole, and one that cannot be measured is left to the style's ellipsis.
+    surface.update(view({ headline: "Building your Flow", detail: "Deciding the next step" }));
+    assert.ok(hostOf(surface).shadow!.textContent.includes("Deciding the next step"));
+    const unmeasured = new StatusPill({ widthOf: () => 0, measure: () => undefined });
+    unmeasured.update(view({ detail }));
+    assert.ok(hostOf(unmeasured).shadow!.textContent.includes(detail));
   });
 });
 

@@ -53,6 +53,10 @@
 //   again"), through the recovery choice that follows it, which is a thought
 //   (D12 of the t174 review). Only Core working out a repair heads it "Fixing
 //   your Flow" (`run-retry.ts`).
+// - A settling row that names the work it ends -- "Build stopped: ...", "Run
+//   failed" -- heads the status by that name, whatever the event's subject
+//   says: a creation build's ending read "Couldn't fix your Flow" (U4 of
+//   run-muw60unq-591e23bd, `ending-kind.ts`).
 // - `phase` and `step` move with `detail`, so the colour, the mark and the
 //   step count cannot change faster than the words beside them. A repair of
 //   the Flow itself is on no step of the run, so the count does not carry
@@ -67,8 +71,9 @@
 //
 // Pure apart from the injected clock: no browser API, no network.
 
-import { activityWording, isHeadlineEcho, isModelThought, type ActivityDisplay, type ClientGatewayActivity } from "../../shared/activity/index";
+import { activityWording, cutAtWord, isHeadlineEcho, isModelThought, type ActivityDisplay, type ClientGatewayActivity } from "../../shared/activity/index";
 import type { ActivityClock, ActivityTimer } from "./clock";
+import { endingKindOf } from "./ending-kind";
 import { activityHeadline } from "./headline";
 import { RunRetry, type RetryState } from "./run-retry";
 import { UnitSituation, type UnitState } from "./unit-situation";
@@ -81,7 +86,7 @@ import { UnitSituation, type UnitState } from "./unit-situation";
  */
 export const ACTIVITY_DETAIL_INTERVAL_MS = 1_600;
 
-/** The most characters of Core's sentence kept. Core already truncates; this bounds a misbehaving sender. */
+/** The most characters of Core's sentence kept, cut where a word ends (`cutAtWord`). Core already truncates; this bounds a misbehaving sender. */
 const MAX_DETAIL = 160;
 
 /** The detail under "Waiting for you: finish the check on the page", in place of the page action's own outcome. */
@@ -217,7 +222,8 @@ function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | nu
   // through; Core's own settling and waiting events still say what they say.
   const outcome = outcomeOf(event) ?? (unit.check ? "waiting" : null);
   const working = outcome === null;
-  const headline = activityHeadline(subjectKind, outcome, {
+  // A settling row names the work it ends, which outweighs the subject (`ending-kind.ts`).
+  const headline = activityHeadline(endingKindOf(event) ?? subjectKind, outcome, {
     // A run pressing a failed step again is not a repair (D12).
     repairing: unit.repairing && retry.repairing,
     waitingOn: event.phase === "waiting_permission" ? "answer" : "check"
@@ -351,7 +357,7 @@ function stepOf(step: ClientGatewayActivity["step"]): ActivityDisplay["step"] {
 function bounded(text: string): string | null {
   const collapsed = text.replace(/\s+/gu, " ").trim();
   if (!collapsed) return null;
-  return collapsed.length > MAX_DETAIL ? `${collapsed.slice(0, MAX_DETAIL - 1)}…` : collapsed;
+  return cutAtWord(collapsed, MAX_DETAIL);
 }
 
 function visiblyDiffers(a: ActivityDisplay, b: ActivityDisplay): boolean {

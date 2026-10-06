@@ -336,7 +336,7 @@ test("an action's message keeps Core's own words for what it did", () => {
     tool(3, "Opening where the Flow starts", "succeeded", { text: "Result: web.action.succeeded · Node: web.output.browser-navigate" })
   ], 100);
   assert.deepEqual(messages.map((message) => [message.title, message.actions.map((card) => [card.kind, card.target])]), [
-    [LOOK, [["look", "Colour"]]],
+    [LOOK, [["look", 'the "Colour" label']]],
     ["Opening where the Flow starts", [["navigate", null]]]
   ]);
   assert.equal(stepMessages([tool(1, "Using core.run_node", "succeeded", { text: "Result: web.inspect.succeeded" })], 100)[0]!.title, "Looked at the page", "an older Core's id still reads as what it did");
@@ -442,4 +442,52 @@ test("a failed run's last message says what came back and why it failed", () => 
     activityEvent(2, { ...run, phase: "failed", label: `Run failed: ${sentence}`, final: true, detail: { kind: "step", title: "Run failed", status: "failed", text: sentence } })
   ], 10);
   assert.deepEqual(said(messages).at(-1), ["Run failed", sentence, null]);
+});
+
+// U-8 of the run-muw60j7c-bb7c9a62 UI review: three "Edit the Flow · run the step again / Not done: that
+// step was already tried exactly this way ..." cards in a row, each reading as one more piece of work.
+test("identical refusals in a row are one card that counts them; words between them, or another reason, keep them apart", () => {
+  const refusal = (sequence: number, reason = "changed_nothing", status: Detail["status"] = "failed") => activityEvent(sequence, {
+    phase: "building",
+    label: "Running the step again — not done",
+    detail: { kind: "tool", title: "Running the step again", status, ref: "core.flow_draft", ...(status === "started" ? {} : { text: `Result: llm_evidence_loop.repeat_refused · Reason: ${reason}` }) }
+  });
+  const cards = (messages: StepMessage[]) => messages.flatMap((message) => message.actions.map((card) => [card.key, cardWords(card, false).outcome]));
+  const because = "Not done (3 times): it was already tried exactly this way and changed nothing";
+
+  // Three on their own, the second started before it ended: one card, the first's, counting three.
+  const alone = stepMessages([refusal(1), refusal(2, "changed_nothing", "started"), refusal(3), refusal(4)], 100);
+  assert.deepEqual(cards(alone), [["action:build-1#1", because]]);
+  assert.equal(alone.length, 1, "the messages that were only a folded card are gone");
+  assert.equal(alone[0]!.latest, true);
+
+  // Three under one decision: one card under it.
+  const under = stepMessages([thought(1, "Running the step again", "The read stopped early, so I run it again."), refusal(2), refusal(3), refusal(4)], 100);
+  assert.deepEqual(said(under).map(([title, text]) => [title, text]), [["Running the step again", "The read stopped early, so I run it again."]]);
+  assert.deepEqual(cards(under), [["action:build-1#2", because]]);
+
+  // A reason in words between two refusals, or a different reason, keeps them apart; so does another unit of work.
+  const between = stepMessages([refusal(1), thought(2, "Running the step again", "Trying once more."), refusal(3)], 100);
+  assert.deepEqual(cards(between).map(([, outcome]) => outcome), ["Not done: it was already tried exactly this way and changed nothing", "Not done: it was already tried exactly this way and changed nothing"]);
+  const other = stepMessages([refusal(1), refusal(2, "failed")], 100);
+  assert.equal(cards(other).length, 2);
+  const units = stepMessages([refusal(1), { ...refusal(2), activityId: "build-2", subject: { kind: "build", id: "build-2", projectId: "project-1" } }], 100);
+  assert.equal(cards(units).length, 2);
+  // A card that did work is never folded into a refusal.
+  const worked = stepMessages([refusal(1), activityEvent(2, { phase: "building", detail: { kind: "tool", title: "Running the step again", status: "succeeded", ref: "core.flow_draft" } })], 100);
+  assert.equal(cards(worked).length, 2);
+});
+
+// t276 (U-1 of the run-muw60j7c-bb7c9a62 UI review): every read card read a bare
+// "Done", and the chat's "Reading all search result pages" could not be checked
+// against a count. Core's `result` reaches the card through `actionCard`.
+test("a list read's card says how many rows it kept, and an edit's card what it changed", () => {
+  const READ = "Reading the list of “name, price”";
+  const messages = stepMessages([
+    tool(1, READ, "started"),
+    tool(2, READ, "succeeded", { text: "Result: web.read.succeeded · Rows: 4 · Node: web.output.dom-extract-list" }),
+    activityEvent(3, { phase: "building", detail: { kind: "tool", title: "Editing the Flow", ref: "core.flow_draft", status: "succeeded", text: "Changed: removed \"Add to cart\"" } })
+  ], 100);
+  const cards = messages.flatMap((message) => message.actions);
+  assert.deepEqual(cards.map((card) => cardWords(card, false).outcome), ["Done: 4 rows", "Done: removed \"Add to cart\""]);
 });

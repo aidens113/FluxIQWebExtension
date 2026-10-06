@@ -4,8 +4,10 @@
 // place: one host, one shadow root, one pill and the same few nodes inside
 // it, whose text and attributes change and nothing else. Each shape has a
 // fixed size, so a new sentence never moves or resizes the pill; a long one
-// ends in an ellipsis. A detail that changes fades in softly, which is the
-// only motion besides the pulsing mark. The pill itself has no entry
+// is cut where a word ends and ends in an ellipsis (`fit-line.ts`: the
+// browser's own ellipsis cut "Search Bri…", U-4 of the run-muw60j7c-bb7c9a62
+// UI review), measured again whenever the pill changes width. A detail that
+// changes fades in softly, which is the only motion besides the pulsing mark. The pill itself has no entry
 // animation: a page that loads while FluxIQ works (a navigation, U7 of the
 // t174 live lane's UI review) gets the overlay back at full strength the
 // moment the background re-sends the status, so it reads as never having left.
@@ -51,10 +53,12 @@
 
 import { ACTIVITY_DONE_VISIBLE_MS } from "../../shared/activity";
 import { ACTIVITY_OVERLAY_HOST_ATTRIBUTE } from "../picker-host";
+import { fitLine } from "./fit-line";
 import { inertElement } from "./inert-element";
 import type { ActivityOverlayView } from "./overlay-view";
 import { PhaseMark } from "./phase-mark";
 import { anchorStyle, PlacementKeeper, type OverlayPlacement } from "./placement";
+import { browserTextMeasure, type OverlayTextMeasure } from "./text-measure";
 
 type Mode = ActivityOverlayView["mode"];
 type Width = OverlayPlacement["shape"];
@@ -69,6 +73,11 @@ const FADE_DURATION_MS = 400;
 const DETAIL_FADE_MS = 220;
 
 const FONT_STACK = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+/** The headline's and the detail's fonts as a canvas measures them: the lines' own, less their line height. */
+const HEADLINE_FONT = `600 14px ${FONT_STACK}`;
+const DETAIL_FONT = `400 13px ${FONT_STACK}`;
+/** The headline's letter spacing (0.005em of 14 pixels), added to each character its canvas measure leaves out. */
+const HEADLINE_SPACING_PX = 0.07;
 const SURFACE_BACKGROUND = "rgba(17, 19, 26, 0.96)";
 const SURFACE_BORDER = "1px solid rgba(255, 255, 255, 0.16)";
 const SURFACE_SHADOW = "0 0 0 1px rgba(0, 0, 0, 0.32), 0 10px 28px rgba(0, 0, 0, 0.28), 0 2px 6px rgba(0, 0, 0, 0.18)";
@@ -118,6 +127,9 @@ export class StatusPill {
     place: (placement) => this.place(placement)
   });
 
+  /** `measure` is the page's own unless a test passes another. */
+  constructor(private readonly measure: OverlayTextMeasure = browserTextMeasure) {}
+
   /** The host while the overlay is in the page, for tests and for nothing else. */
   host(): HTMLElement | undefined {
     return this.nodes?.host.isConnected ? this.nodes.host : undefined;
@@ -141,10 +153,11 @@ export class StatusPill {
     }
     this.drawShape(nodes);
     nodes.mark.show(view.mark, view.accent);
-    setText(nodes.headline, view.headline);
     setText(nodes.step, view.step);
     this.showTexts(nodes);
-    if (setText(nodes.detail, view.detail) && before?.detail && view.mode === "expanded" && typeof nodes.detail.animate === "function") {
+    const lines = this.fittedLines(nodes, view);
+    setText(nodes.headline, lines.headline);
+    if (setText(nodes.detail, lines.detail) && before?.detail && view.mode === "expanded" && typeof nodes.detail.animate === "function") {
       nodes.detail.animate([{ opacity: 0.25 }, { opacity: 1 }], { duration: DETAIL_FADE_MS, easing: "ease-out" });
     }
     if (view.fades) this.fadeTimer = setTimeout(() => this.fadeOut(), ACTIVITY_DONE_VISIBLE_MS);
@@ -170,7 +183,28 @@ export class StatusPill {
     if (!nodes) return;
     const size = SHAPE_SIZE[this.mode()][placement.shape];
     for (const [property, value] of Object.entries(anchorStyle(placement.anchor, EDGE_MARGIN, size.height, placement.offset))) nodes.host.style.setProperty(property, value, "important");
-    if (this.shown) this.drawShape(nodes);
+    if (!this.shown) return;
+    this.drawShape(nodes);
+    // A narrower or wider card fits its lines again.
+    const lines = this.fittedLines(nodes, this.shown);
+    setText(nodes.headline, lines.headline);
+    setText(nodes.detail, lines.detail);
+  }
+
+  /**
+   * The headline and the detail as the card can show them: each cut where a
+   * word ends when it is wider than its line (`fitLine`). The headline's line
+   * is the top row less the mark and the step beside it; the detail's, its own
+   * box less the indent under the mark. Neither box depends on the text in it.
+   */
+  private fittedLines(nodes: Nodes, view: ActivityOverlayView): { headline: string; detail: string } {
+    const measure = this.measure;
+    const stepRoom = view.mode === "expanded" && view.step ? measure.widthOf(nodes.step) + MARK_GAP : 0;
+    const headlineRoom = measure.widthOf(nodes.top) - MARK_SIZE - MARK_GAP - stepRoom;
+    const headline = fitLine(view.headline, headlineRoom, (text) => withSpacing(measure.measure(text, HEADLINE_FONT), text));
+    if (view.mode !== "expanded" || !view.detail) return { headline, detail: view.detail };
+    const detail = fitLine(view.detail, measure.widthOf(nodes.detail) - MARK_SIZE - MARK_GAP, (text) => measure.measure(text, DETAIL_FONT));
+    return { headline, detail };
   }
 
   private mode(): Mode {
@@ -302,6 +336,10 @@ function buildNodes(): Nodes {
   surface.append(top, detail);
   root.append(surface);
   return { host, surface, top, mark, headline, step, detail };
+}
+
+function withSpacing(width: number | undefined, text: string): number | undefined {
+  return width === undefined ? undefined : width + text.length * HEADLINE_SPACING_PX;
 }
 
 function setDisplay(node: HTMLElement, shown: boolean): void {

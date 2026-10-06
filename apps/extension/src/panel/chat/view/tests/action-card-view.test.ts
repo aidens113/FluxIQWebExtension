@@ -209,6 +209,6 @@ test("a navigate card names its page, and a refusal says its own reason", async 
     ];
     view.render(buildChatStream([], events), null, controls, "run-1");
     const labels = cards(fake(view.element)).map((card) => card.getAttribute("aria-label"));
-    assert.deepEqual(labels, ["Open page, /ip/valueridge-napkins: Done", "Repair, Add to cart: Didn't work: FluxIQ didn't send it, since it named no control from the page"]);
+    assert.deepEqual(labels, ["Open page, /ip/valueridge-napkins: Done", "Repair, Add to cart: Didn't work: FluxIQ didn't send it, as the step didn't say which control on the page to use"]);
   });
 });
