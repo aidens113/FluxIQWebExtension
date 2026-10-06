@@ -365,3 +365,51 @@ async function replayedReadRows(payload: JsonObject): Promise<JsonObject> {
   assert.equal(result.resultCode, "core.replay.replayed");
   return (result.evidence as JsonObject).readRows as JsonObject;
 }
+
+// Live run `run-muwao5n4-44977b2a` (lane D, cause D2-2): an amend decision
+// dropped both navigations to the requests page, so the test ran the request
+// listing on the home feed. Its list never appeared there and the replay
+// answered `failed` ("rerun it with a corrected argument"), where the steps
+// before it, not its argument, were the fault. A list that never appeared on a
+// page other than the one the read read is answered as a missing control is:
+// `unreproducible`. On its own page it still fails.
+const FEED = "https://example.test/";
+const REQUESTS = "https://example.test/friends/requests/";
+
+test("a list read whose list never appeared, on a page other than the one it read, is unreproducible; on its own page it fails", async () => {
+  const elsewhere = await replayNeverAppeared(FEED, { location: REQUESTS });
+  assert.equal(elsewhere.resultCode, "core.replay.unreproducible");
+  assert.equal((elsewhere.evidence as JsonObject).ok, false);
+  assert.equal(elsewhere.resultReason, "list_never_appeared");
+  assert.match(String((elsewhere.evidence as JsonObject).said), /not the page it read/u);
+
+  const ownPage = await replayNeverAppeared(REQUESTS, { location: REQUESTS });
+  assert.equal(ownPage.resultCode, "core.replay.failed");
+  assert.equal(ownPage.resultReason, "list_never_appeared");
+
+  // Where the read found the page unknown: nothing says it is elsewhere, so it fails as before.
+  const unknown = await replayNeverAppeared(FEED, undefined);
+  assert.equal(unknown.resultCode, "core.replay.failed");
+});
+
+/** Replay the read once on a page standing at `at`, where its list never appears. */
+async function replayNeverAppeared(at: string, from: JsonObject | undefined) {
+  const snapshot = page();
+  snapshot.url = at;
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot } };
+      return {
+        status: "failed",
+        failure: { code: "web.validation.output_not_observed" },
+        error: "no list",
+        payload: { extraction: { recordCount: 0, pagesRead: 1, itemsSeen: 0, truncated: false, fieldNames: ["name"], missingFields: [], listPresence: "never_appeared" } }
+      };
+    }
+  };
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const value: JsonObject = { replay: "step", node: EXTRACT, parameters: READ, consequences: [], produced: { records: 8, itemsSeen: 8 } };
+  if (from) value.from = from;
+  return await runtime.executeTool({ ...PROJECT, callId: "dryrun.1.3", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value });
+}
