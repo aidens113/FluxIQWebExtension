@@ -186,3 +186,95 @@ authority). What changes in what to expect:
   verified fixed in the UI; U11 new ("Skipped: it only runs sometimes" on a repeat over an unreached list).
 - Stopped on the supervisor's order (user wrapping up): no fix started, no failing test written for D2-1/D2-2,
   nothing changed in either repository's source this round. No relaunch.
+
+## Round 3 (lead dispatch 2026-10-06 21:16 UTC, off-peak)
+
+Tree `task/t275-live-lane-d` downstream `f224b38a` (dev `7880abda` differs by docs only), Core `e1551fa3` (= Core
+dev). Synced and rebuilt by the supervisor at 21:16 UTC. Slot 4, instance `t275-slot-4`, workspace `t275-d`.
+
+### Expectations for round 3 (written 2026-10-06 21:18 UTC, before the dry run and any launch)
+
+Unchanged from rounds 1-2 (instruction, fixture facts, correct chain, exact oracle of four records in list order:
+`{Amara Osei, "23 mutual friends"}`, `{Jonas Weber, "Aisha Khan and 4 other mutual friends"}`, `{Lin Zhao, "11 mutual
+friends"}`, `{Freya Holm, "5 mutual friends"}`; Tom, Priya, Diego, Marta untouched with Confirm/Delete and no "Request
+removed"; no permission ask; `modify_existing` on the instruction's authority; no `--llm-permit`). Launch is off-peak
+(~21:30 UTC), so the $0.10 ceiling should buy roughly twice round 2's 30 decisions.
+
+New on this source, each checked in the debug:
+- **D2-1 (`strands_a_step`)**: an amend decision that drops the navigation(s) reaching `~/friends/requests/` while the
+  listing stays kept is put back and refused `strands_a_step`, naming the stranded step; a step newly added or moved
+  after a step that does not reach its page gets an `unreached` note (`llm_evidence_loop.draft_step_unreached`, "left
+  unreached", not a refusal). **Must be seen fixed: no accepted edit leaves the listing on the home feed.** If the
+  model still places the listing early (0025 shape), the answer names the step before it and the reorder to make.
+- **D2-2**: a list read whose list never appeared, on a page other than the one it read, answers
+  `core.replay.unreproducible` (so the test's way-line names the steps that no longer reach the page); on its own page
+  it still fails.
+- Lane A loop fix: an identical amendment re-sent after its rerun changed nothing is refused unrun (`same_amendment`)
+  and counts toward the refused-in-a-row stop; history rows say "unchanged"/"refused", never "applied" for refused
+  work. B: a keep-only decision is told keep adds nothing. `web-state.v4`: the same page after a reload digests the
+  same. t278 (`checked` rows reach a node repair); `judgement.whereToFix` in a repair instruction.
+- Build: a draft reaching the full requests list (navigation kept or start there), the listing `where >= 5` keeping
+  exactly the four (Jonas via "and 4 other"), Confirm repeated over it and re-found per row, then a read of rows
+  showing "Request accepted" with `afterWithheld: [<Confirm step>]`, judged **yes** (C1 first exercised). A no that
+  blames the withheld presses is C1 again.
+- Playback (first time for D, if reached): fixture reset, four presses; the 4th inside 15 s meets "You're going too
+  fast". **Predicted main risk**: Freya's press refused, three rows read, oracle 3 of 4, unless recovery waits and
+  presses Try again. Pressing OK and moving on, or reporting success on three rows, is a defect.
+- On a pass: two `lab replay` runs with zero model calls, each 4 records, same SHA-256; then a second live pass.
+- UI (t277 landed items, `t277-r3-ui.md`): per-row test cards "Confirm · <name> — checked, not pressed"; an unreached
+  repeat reads "Skipped: the test reached no rows for it to repeat over" (U11), never "it only runs sometimes"; a check
+  card says the count and why ("Didn't pass: N rows would be stored, but ..."), never bare; no internal words
+  ("extraction", "the judge", "Step N", "next call") in thoughts/cards; "Starting…" from the send; a refusal is never
+  "it wasn't on the page" when it was; repeated refusals fold into one card with a count; one list name across cards
+  and overlay; overlay visible throughout, no flicker. Not landed, expected unchanged: R2-U-2 ending dollar words,
+  R2-U-9 detect card "the repeating list on the page".
+
+### 2026-10-06 — round 3 dry runs (21:20 UTC)
+
+- `FLUXIQ_TEST_ENV_FILES=none FLUXIQ_LAB_INSTANCE=t275-slot-4 pnpm.cmd lab:campaign social-network-feed-confirm-requests
+  --dry-run --max-attempts 1 -- --target persistent-isolated --workspace t275-d --llm-cost-ceiling-usd 0.10` printed the
+  same `pnpm lab run social-network-feed --live-llm ... --llm-max-calls 48 ...` command as round 2.
+- Lab `--dry-run` with that command: `status ready`, `providerCallCount 0`, `buildEntry chat`, `persistent-isolated`,
+  workflow `confirm-requests` judged by `extract-confirmed`; `deepseek-flash` (= `coreDefaultModel`), 48 calls, 25 s
+  per call, `maxEstimatedCostUsd 0.1`, `permittedConsequences []`, key by name from `.env.local`. Prelude rebuilt
+  `domain:host-build` and `extension:build` for the instance (inputs from the 21:16 rebuild).
+
+### 2026-10-06 — round 3 live run `run-mux6nxst-c9bca37c`: FAILED (Lab call count); Flow proposed inside Core; fix in tree; stopped
+
+- One launch 21:20 UTC (off-peak), guard admitted, headed, chat build. Sent 49 calls (chat 1, 41 decisions, 7 judges),
+  **$0.060085** (build $0.059994 of $0.10). Lab verdict `failed`, `performance.budget`: "49 provider call(s) against
+  an authorized 48". Inside Core the build **succeeded**: round-3 reserve judgement yes, outcome `proposed`, chat "is
+  ready". No playback, no oracle, no replay. Excluded rows untouched (only Amara pressed live, no Delete).
+  No permission ask.
+- Cause D3-1 (Core `R/service/instruction-authority.ts`): the instruction reading counted itself a provider call when
+  the build's purse refused it unsent. Nothing triggered the reading during the build (`modify_existing` is not
+  destructive), so it first ran in the post-build cross-check with 48/48 calls spent. Core published
+  `totalProviderCallCount` 49 for 48 sent, and the Lab's `budget.ts` failed the run. The same phantom call made
+  `run-spend.ts` `creationBuildSplit` count the 7 judge calls twice (campaign "57 calls").
+  **Fixed in the tree (uncommitted)**: count a call and its tokens only when `providerInvocation !== "not_attempted"`.
+- The Flow it proposed was still not right: it confirms the right four (after two `where` repairs for Jonas), but its
+  table is the listing read before the presses (no read after the confirms). Judge pair r2 split yes/no on that Flow.
+  Round 3 could make no decision (47/48 calls spent) and accepted the identical Flow on one unpaired yes (D3-5,
+  `result-verification/agreement.ts` takes a lone first verdict as final). The model asked in 19 decisions for a read
+  after the confirms. It only ever tried rerunning the listing in place, and `changes_nothing`'s `next` points it
+  at the loop, never at adding a new read (D3-2). It could not name the "Request accepted" column (hashed detect
+  labels, D3-3), and it wrote a regex instead of the count condition (D3-4). D3-3/D3-4 are the supervisor's in-flight fixes.
+- Seen on this source: lane A's fix (identical reruns refused unsent, "Not done (2 times)" cards, the refused-in-a-row
+  stop ended round 1 instead of looping); `already_answered` on repeated detects/snapshots (`web-state.v4`); C1
+  `afterWithheld` (no judge blamed withheld presses). Not exercised: D2-1 `strands_a_step` (the model reached the
+  requests page by clicks), D2-2, B's keep answer, U11. UI: R2-U-6/7 fixed; R2-U-1 partly (count plus a clause that
+  says what was kept, not why); R2-U-8 not (test card title "name and..." cut); R2-U-10 (old thread with "s8", "s13",
+  "the judge" at moment 1) as expected.
+- Read node count (supervisor's question): `dom-extract_list` ran 11 times (3 live, 4 applied reruns, 4 tests); 6
+  detect and 3 snapshot decisions; 9 listing reruns refused `changes_nothing`. Per-read reasons:
+  debug "Every read of the list".
+- Fix validation (Core tree `fxwork/t275/!FluxIQ`): fail-first `npx vitest run
+  .../service/tests/instruction-authority.test.ts` -> `1 failed | 21 passed` (refused read counted `calls: 1`,
+  `estimatedInputTokens: 10`; the purse refusal was `llm_budget.run_call_limit`); after the fix 22/22, twice. With the
+  13 other files that assert call counts or the authority (generation-catch, with-total-provider-calls, build-judge,
+  evidence-trace, deepseek-bootstrap answerability/exploration, service-authoring build-call-admission,
+  confirm-requests-build, quantity-arrival-build, retained-rerun-feedback, service-bootstrap accounting, generation,
+  judged-build): `Test Files 14 passed (14)`, `Tests 111 passed (111)`. `fluxiq:check` exit 0; Core
+  `structure-audit:check` -> `passed (264 warning(s), 349 baselined)`; Core `pnpm.cmd build` exit 0 (21:43 UTC).
+- Stopped on the supervisor's order: no second launch. Debug
+  `docs/working/language-driven-flow-loop-plan/debugs/run-mux6nxst-c9bca37c.md`.
