@@ -33,11 +33,14 @@
 // resolves to its canonical form, and one the reader would drop is refused at
 // its position rather than dropped, since a model is still there to repair it.
 //
-// `paginate: false` reads only the page shown. Absent or `true`, the detected
-// pagination is read. A pagination the model wrote itself names controls it
+// `paginate: false` reads only the page shown. Absent, the detected pagination
+// is read as detection proposed it (one page). `true` reads the detected
+// pagination until the list ends or the domain's page bound stops it
+// (`everyPage`). A pagination the model wrote itself names controls it
 // was never shown, so it can only mean "keep reading": the detected one is read,
-// with the model's own `maxPages` or `maxScrolls` whatever mode it named
-// (`keptPagination`); with nothing detected it is refused. A `maxPages` or
+// with the model's own `maxPages` or `maxScrolls` whatever mode it named, or to
+// the domain's bound when it named none (`keptPagination`); with nothing
+// detected it is refused. A `maxPages` or
 // `maxScrolls` written beside `paginate` rather than inside it is read inside
 // it where the read pages (`liftedBounds`). A literal `item`
 // beside a handle is replaced by the detected one for the same reason.
@@ -290,14 +293,36 @@ function liftedBounds(value: Record<string, unknown>, binding: WebLlmExtractionB
 function keptPagination(paginate: unknown, binding: WebLlmExtractionBinding): WebAutomationExtractListPagination | undefined | "malformed" {
   const detected = binding.extractList.paginate;
   if (paginate === false) return undefined;
-  if (paginate === undefined || paginate === true) return detected;
+  if (paginate === undefined) return detected;
+  if (paginate === true) return detected === undefined ? undefined : everyPage(detected);
   if (!isJsonRecord(paginate) || detected === undefined) return "malformed";
   const bounded = structuredClone(detected);
   const bound = bounded.mode === "scroll" ? paginate.maxScrolls ?? paginate.maxPages : paginate.maxPages ?? paginate.maxScrolls;
-  if (bound === undefined) return bounded;
+  if (bound === undefined) return everyPage(detected);
   if (typeof bound !== "number" || !Number.isSafeInteger(bound) || bound < 1 || bound > WEB_AUTOMATION_EXTRACT_MAX_PAGES) return "malformed";
   if (bounded.mode === "scroll") bounded.maxScrolls = bound;
   else bounded.maxPages = bound;
+  return bounded;
+}
+
+/**
+ * The detected pagination, read until the list ends or the domain's own bound
+ * (`WEB_AUTOMATION_EXTRACT_MAX_PAGES`) stops it.
+ *
+ * This is what `paginate: true`, or a pagination the plan wrote with no bound,
+ * means: the plan asked to page and said nothing about how far. Until
+ * 2026-10-05 both kept the detection's own bound, and detection proposes one
+ * page (`PROPOSED_MAX_PAGES`), so live run `run-mustvzvg-99695308` asked to
+ * "extract all rows across pages" with `paginate: true` five times and read
+ * page one each time (C1). Absent `paginate` still keeps the proposal: a plan
+ * that never asked to page is read as the detection proposed, which is how a
+ * "first page" instruction reads one page. The read still says when the bound,
+ * not the list, stopped it (`extract-list.ts`, `pagingAccount`).
+ */
+function everyPage(detected: WebAutomationExtractListPagination): WebAutomationExtractListPagination {
+  const bounded = structuredClone(detected);
+  if (bounded.mode === "scroll") bounded.maxScrolls = WEB_AUTOMATION_EXTRACT_MAX_PAGES;
+  else bounded.maxPages = WEB_AUTOMATION_EXTRACT_MAX_PAGES;
   return bounded;
 }
 

@@ -59,6 +59,7 @@
 // collects as it does for `true`, and the summary sends each list's alone lead.
 
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation, WebAutomationExtractListRequest } from "../types";
+import { WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "@fluxiq-web-extension/domain/client";
 import type { ContentActionDependencies } from "./types";
 import { paginationBound } from "../extraction";
 
@@ -343,7 +344,12 @@ function pagingAccount(outcome: Outcome, paginate: WebAutomationExtractListReque
   }
   if (stop === "page_limit" && paginate !== undefined) {
     const key = paginate.mode === "scroll" ? "maxScrolls" : "maxPages";
-    return `; paging stopped because extractList.paginate.${key} = ${paginationBound(paginate)} was reached while the list went on; the read is incomplete -- rerun with input: {extractList: {paginate: {${key}: N}}} to read more`;
+    const bound = paginationBound(paginate);
+    // `paginate: true` reads to the domain's bound (C1); a larger bound is refused, so none is offered.
+    if (bound >= WEB_AUTOMATION_EXTRACT_MAX_PAGES) {
+      return `; paging stopped because extractList.paginate.${key} = ${bound}, the most one read may take, was reached while the list went on; the read is incomplete -- narrow the list on the page (a search or filter) to read the rest`;
+    }
+    return `; paging stopped because extractList.paginate.${key} = ${bound} was reached while the list went on; the read is incomplete -- rerun with input: {extractList: {paginate: {${key}: N}}} to read more`;
   }
   return `; paging stopped because ${PAGING_STOPPED[stop]}`;
 }

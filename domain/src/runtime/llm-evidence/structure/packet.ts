@@ -144,7 +144,7 @@ export type WebLlmRepeatingStructure = {
   itemCount: number;
   fields: WebLlmStructureField[];
   pagination: WebLlmStructurePaginationMode;
-  /** The detected read bound: absent/true paginate keeps it, not an all-pages promise. No control or page value is exposed. */
+  /** The detected read bound: absent paginate keeps it; true reads to the domain bound. No control or page value is exposed. */
   paginationBound?: { maxPages: number } | { maxScrolls: number };
   /** How sure the detection is, from 0 to 1. */
   confidence: number;

@@ -161,7 +161,8 @@ test("binds from the production host seam and selects the sole trusted web clien
   assert.match(detectDescription, /returns what it read and says so in its report/u);
   // A detected pager may propose only one page; true/omission keep that bound.
   assert.match(detectDescription, /paginationBound/u);
-  assert.match(detectDescription, /absent or true keeps the detected bound/u);
+  assert.match(detectDescription, /absent keeps the detected bound/u);
+  assert.match(detectDescription, /true reads every page/u);
   assert.match(detectDescription, /paginate: \{maxPages: N\}/u);
   assert.match(detectDescription, /paginate: \{maxScrolls: N\}/u);
   const validationEvidence = sanitizeWebLlmSnapshot({
