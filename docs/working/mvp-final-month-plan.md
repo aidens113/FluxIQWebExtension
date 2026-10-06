@@ -430,6 +430,13 @@ Each lane tree (both repos) was fast-forwarded to `dev` (Core `6567edac`, downst
 - Outcome: In progress
 - Follow-up: verify each report against the diff and owning tests; commit, merge, sync, rebuild; round 3.
 
+### 2026-10-06 — t278: the ladder's repair input carries `checked`; t277 UI lead dispatched
+- Agent: supervisor (t278); lead t277-r3-ui dispatched in parallel.
+- Changed: Core `1c2f3edf` (merge `eba92c39`): `recovery/refuted-result/attempt.ts` and `recovery/context.ts` carry the directive's `checked` lines (open since t274-c25b: the re-author brief and failure record had them, the structured ladder route did not). Fail-first tests in `refuted-result/tests/attempt.test.ts` and `recovery/tests/context.test.ts`. Pushed both `dev` branches (Core `eba92c39`, downstream `861f5c81`).
+- Validation: before the fix `npx vitest run .../refuted-result/tests/attempt.test.ts .../recovery/tests/context.test.ts` -> 2 failed, 33 passed; after, `.../recovery/refuted-result/tests .../recovery/tests` -> 30 files, 377 passed; `fluxiq:check` exit 0; Core `structure-audit:check` passed; downstream finish ran the structure audit (passed after regenerating the index); Core `pnpm task finish t278` ran `pnpm check`, passed.
+- Outcome: Accepted
+- Follow-up: the detached t278 Core worktree is left for `pnpm task prune`.
+
 ## Open Questions
 
 - Is demonstrate/record an MVP acceptance requirement after the 2026-09-22 scope ruling? Owner: user. Default taken: supported, unmeasured, one smoke proof.
