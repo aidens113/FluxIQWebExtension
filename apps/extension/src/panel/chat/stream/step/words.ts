@@ -20,7 +20,10 @@ export type StepWords = { title: string; text: string | undefined };
 type Tense = { now: string; done: string; failed?: string };
 
 const TOOLS: Readonly<Record<string, Tense>> = {
-  "core.completion_check": { now: "Checking the result", done: "Checked the result", failed: "The result didn't pass its check" },
+  // The completion check reads whether a proposed Flow is finished; it never checks a result.
+  // "The result didn't pass its check" headed "Sent back because some steps weren't written in a
+  // way the Flow can run" (run-mux74k5q-1c3c2127 UI review).
+  "core.completion_check": { now: "Checking the Flow is finished", done: "Checked the Flow is finished", failed: "The Flow isn't finished yet" },
   "core.dry_run": { now: "Trying the automation", done: "Tried the automation" },
   "core.dry_run.page": { now: "Trying the automation on the page", done: "Tried the automation on the page" },
   "core.flow_draft": { now: "Updating the draft automation", done: "Updated the draft automation" },
