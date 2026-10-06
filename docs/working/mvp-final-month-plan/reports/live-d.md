@@ -130,3 +130,59 @@ FLUXIQ_LAB_INSTANCE=t275-slot-4`; dry run first. DeepSeek flash (campaign defaul
 - Not verified: the judge's live behaviour on such a read (needs the next live run); the playback rate limit
   (4th Confirm inside 15 s) is still unexercised, since no build has reached playback.
 - Stopped here per the supervisor's order: no relaunch.
+
+## Round 2 (supervisor dispatch after the C1 merge)
+
+Tree `task/t275-live-lane-d` at `624c7a70` (contains dev), Core at `9fd634d3` (contains dev and `eb672178`, the
+merged `afterWithheld` fix with lanes B and C's judge sentences and t276's UI fixes). Round-1 debug committed
+(`ca1a5c26`), source fingerprint changed, so the `debug` and `unchanged` guards admit one run.
+
+### Expectations for round 2 (written 2026-10-05, before the dry run and any launch)
+
+Unchanged from round 1 above (instruction, fixture facts, the correct chain, the exact oracle of four records
+`{Amara Osei, "23 mutual friends"}`, `{Jonas Weber, "Aisha Khan and 4 other mutual friends"}`,
+`{Lin Zhao, "11 mutual friends"}`, `{Freya Holm, "5 mutual friends"}` in that order, Tom, Priya, Diego and Marta
+untouched with Confirm/Delete and no "Request removed", no permission ask, `modify_existing` on the instruction's
+authority). What changes in what to expect:
+
+- Build: a draft like round 1's (listing `atLeast 5` keeping the four; Confirm repeated over it; a read of rows
+  showing "Request accepted") should now be judged **yes**: its final read carries `afterWithheld: [<Confirm
+  step>]`, and the judge must not refuse it for the three rows whose presses the test withheld. A no that blames
+  the withheld presses or claims Jonas is left out (against `leftOutOnlyByThis`) is C1 or M4 again.
+- Playback (first time for D): the Lab resets the fixture, so all four Confirms are pending and the Flow presses
+  four in a row. The site allows three per 15 s per page load; the 4th press (Freya, list order) shows "You're
+  going too fast" with a countdown, and only "Try again" at zero confirms it. **Predicted main risk**: playback
+  presses all four within 15 s, Freya's press is refused, the after-loop read returns three rows, oracle fails
+  (3 of 4) unless the run's recovery waits and presses Try again. A run that presses OK and moves on, or reports
+  success with three rows, is a defect; so is any excluded row confirmed.
+- On a pass: two `lab replay` runs with zero model calls, each matching the 4 records and storing identical rows
+  (same SHA-256).
+- UI checkpoints: per-row test cards now name the row and say checked, not pressed (t276); a navigate to a
+  loopback address is not called "the start page" (t276, U10); the ending in plain sentences with no node ids
+  or judge quotes (U9); overlay visible through build and playback, no flicker; on success the chat reports the
+  Flow and its table.
+
+### 2026-10-05 — round 2 dry runs
+
+- Campaign dry run printed the same command as round 1. Lab `--dry-run`: `ready`, 0 calls, `buildEntry chat`,
+  `persistent-isolated`, workflow `confirm-requests` judged by `extract-confirmed`; `deepseek-flash` (Core default the
+  same), 48 calls, 25 s per call, `maxEstimatedCostUsd 0.1`, `permittedConsequences []`, key by name from
+  `.env.local`; Core web build `a0841f6b...` not cached (built at launch).
+
+### 2026-10-06 — round 2 live run `run-muwao5n4-44977b2a`: FAILED (budget exhausted); debug written; stopped
+
+- One launch, guard admitted, headed, chat build. 31 calls, $0.086463 (build $0.086282 of the $0.10 ceiling),
+  in DeepSeek's weekday peak window (06:00-10:00 UTC), so each call cost twice round 1's for the same tokens.
+  Core `flow_bootstrap.evidence_budget_exhausted` after four failed tests; never judged; no Flow, no playback,
+  no replay; oracle not measured. Excluded rows untouched (only Amara pressed live, a qualifying row). No
+  permission ask.
+- Causes (debug `docs/working/language-driven-flow-loop-plan/debugs/run-muwao5n4-44977b2a.md`):
+  D2-1 (Core `R/flow-draft/amendment/apply.ts`): amend decisions put the listing at step 2, after `navigate ~/`,
+  and then dropped both navigations to the requests page. Both were applied with no word, so every test ran
+  the listing on the home feed. D2-2 (downstream `domain/src/runtime/llm-evidence/node-run/replay.ts`): a list
+  read whose list never appeared, on a page other than the one it read, is answered `failed` instead of
+  `unreproducible`, so the model was told to fix its argument rather than the steps before it.
+- The C1 fix (`afterWithheld`) and the B/C judge sentences were not exercised (nothing judged). U9 and U10
+  verified fixed in the UI; U11 new ("Skipped: it only runs sometimes" on a repeat over an unreached list).
+- Stopped on the supervisor's order (user wrapping up): no fix started, no failing test written for D2-1/D2-2,
+  nothing changed in either repository's source this round. No relaunch.
