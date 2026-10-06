@@ -256,3 +256,118 @@ a new run-owned project).
     "(e.g.".
 - Debug: `docs/working/language-driven-flow-loop-plan/debugs/run-muwansvz-a2b4a987.md`. UI review:
   `live-C-r2-ui-review.md`.
+
+## Round 3 — expectations (written 2026-10-06T21:18Z, before the dry run and the launch)
+
+Tree: downstream `f224b38a` (= dev except the doc-only `7880abda`), Core `e1551fa3` (= Core dev), both synced and
+rebuilt by the supervisor at 21:16Z. Instance `t274-slot-1`, workspace `t274-c` (round 2's), slot 1. Off-peak
+(Tuesday 21:18Z; no start after 00:45Z).
+
+- Actions and oracle: unchanged from round 1. One filtered list read over every page (5) with an explicit bound;
+  sponsored and non-Plus out; printed rating >= 4.0; price < $50.00; ear tips and the lone charging case out, pairs
+  "with Wireless Charging Case" in; dedupe by url; page order; columns name/price/rating/url. Oracle
+  `extract-plus-under-fifty`: **exactly 13 records in order (B0PXHP88KT, B0R257NR7U, B0P8ZF57AC, B0J5MCMBAY,
+  B0VNKJTVCD, B07Z1RZGJG, B00BJX53AC, B09HZLEPLS, B0HKSZ2BM6, B0G68DZTDB, B0X473P78X, B02UB6NJWC, B016CBKJ2R), 52
+  string fields matched in place, all pages**; final state not challenged, cart "2". Pass = Lab verdict `passed`.
+  Look-alikes: 10 (charging-case pairs dropped), 3 (page 1), 14+ (boundary repeat), 30/82 (unfiltered read kept),
+  sponsored kept, 0 (a name rule "earbuds" that drops every pair).
+- Must be seen fixed for C (round-3 notes): a repair round looks and detects where the blamed step starts (results
+  page 1 after the search), never on the last results page; if a detect still lands on a pager-less page, a paging
+  rerun on it is refused with hint `...paginate.no_pager_detected.detect_on_step_start_page`, not a bare
+  `malformed`; R2-1 (on dev since round 2): a detect on page 5 now proposes `next` pagination from the disabled Next.
+- New on this source, checked in the debug: `judgement.whereToFix` in the repair instruction ("look and detect
+  there, not on the page the test left"); lane A's loop fix (a rerun amendment re-sent after it changed nothing or
+  failed on an unchanged draft is refused unrun `same_amendment`, counts toward the refused-in-a-row stop; history
+  rows "unchanged"/"refused", never "applied"); B's "keep adds nothing"; `web-state.v4` frame-stable digest; t278
+  (`checked` rows reach a node repair); D's `strands_a_step` / unreached note / D2-2 (`unreproducible` for a list
+  never found on another page). Earlier C fixes still to watch: C-1 (no un-added read in the Flow), C-2
+  (`leftOutNamingTheItem` names only the 3 pairs), C-3 (`buildTest.stores` in the build-test judge), C-4, C-5.
+- UI checkpoints (t277 `t277-r3-ui.md` "what the next live UI review must see", plus round 1-2 checkpoints):
+  - check card "Check result · Didn't pass: N rows would be stored, but <one clause>", never a bare "Didn't pass";
+  - no card or thought cut at "(e.g." or glued to the next sentence (the repair heading and ending may still be);
+  - no "extract list node", "extraction", "scrapes", "pagination", "dedup", "the judge", "next call", "Step N" in
+    thoughts or cards; the look-up card reads "Look · how to read a list";
+  - panel live line "Starting…" with the overlay from the send ("Sending your message" cleared);
+  - a refused read says why ("FluxIQ didn't read it, as the step didn't say which list ..."), never "it wasn't on
+    the page"; overlay "-- not tried: ...";
+  - repeated refused reruns fold into one card "(N times)";
+  - one list name ("name, price and 4 more") in overlay, build card and test card alike;
+  - detect card still "Look · the repeating list on the page" (R2-U-9 open);
+  - moment 01 may still show the previous run's "is ready" thread (R2-U-10 open, Lab/profile, not the panel);
+  - no overlay-absent sample 100 ms or more after a new document while FluxIQ works;
+  - a repeat whose list the test never reached: "Skipped: the test reached no rows for it to repeat over";
+  - the ending still carries purse arithmetic (R2-U-2 not landed); reported, not counted as a regression.
+
+### Round 3 — progress
+
+- 21:19Z dry run. `pnpm.cmd lab:campaign everything-store-plus-earbuds-under-50 --dry-run --max-attempts 1` (env
+  `FLUXIQ_LAB_INSTANCE=t274-slot-1`, `FLUXIQ_TEST_ENV_FILES=none`, `FLUXIQ_TEST_TARGET=persistent-isolated`,
+  `FLUXIQ_TEST_PERSISTENT_WORKSPACE=t274-c`) printed the same Lab command as rounds 1-2 (`--llm-max-calls 48`, no
+  permit, no cost option). That Lab command with `--dry-run` printed `status: ready`, `providerCallCount: 0`,
+  `buildEntry: chat`, `target: persistent-isolated`, `coreDefaultModel: deepseek-flash`,
+  `authorized.maxEstimatedCostUsd: 0.1`, `maxTotalEstimatedCostUsd: 0.1`, `permittedConsequences: []`, instruction
+  415 characters `d4f7835b...`; prelude rebuilt the domain host and the extension for the instance (Core quiet,
+  newest Core file 21:10:47Z).
+- 21:20:12Z live run launched (`--max-attempts 1`); guard `admitted`. Run `run-mux6naez-6c20f26e`, 21:20:28Z to
+  21:31:30Z, campaign exit 1. Not relaunched. The supervisor then ordered no further paid run this round (read-list
+  redesign), so there is no second run.
+
+## Round 3 — `run-mux6naez-6c20f26e`: failed, with the oracle held
+
+- Cost: 55 provider calls, $0.103665108 in all. Per build: creation $0.054091, result-check judges $0.002263,
+  re-author $0.047221. No build over the $0.10 ceiling.
+- **Oracle passed**: 13 records, **13 matched in place**, 52/52 fields, final state held. The Flow is correct: one
+  filtered read over 5 pages, 94 items seen, 2 earlier-page repeats, stop `control_disabled`, dedupe by url.
+- **Verdict failed**: Core's post-run result check (judges 0080/0081, `no`, 0.6) refuted the exact answer as
+  `core.result.does_not_answer_request`. The re-author then followed its advice, dropped the correct `plus is
+  present` condition, and ran out of budget (`flow_bootstrap.evidence_budget_exhausted`) before testing it.
+- Build path: the first draft dropped the three charging-case pairs (10/13). Both build-test judges said no and named
+  exactly those pairs (C-2 live). The repair's first rerun read the exact 13. The model then reran the same read six
+  more times, until lane A's `repeat_refused` and the refused-in-a-row stop sent the draft to a retest. Both judges
+  said yes (C-3 `buildTest.stores` cited), and the Flow was proposed and played back.
+- **Cause (R3-1, Core)**: `result-verification/request-rows/summary-reads.ts` inferred that a condition tested the
+  row's own label whenever its left-out rows were said by label alone. The Flow stores only name/price/rating/url, so
+  the playback's `plus is present` rows had no tested cell. `left-out-naming-the-item.ts` flagged two non-Plus "with
+  Wireless Charging Case" pairs as "the item asked for", and the judge's instruction then makes a yes impossible
+  unless it explains those rows one by one.
+- Fix, left uncommitted (Core lane tree `fxwork/t274/!FluxIQ`, worker r3-c-tested-label, verified by the lead):
+  - `read-account/accounts.ts` sets `testedLabel: true` only when every left-out row is labelled by the column the
+    authored condition tests;
+  - `request-rows/summary-reads.ts` takes that field for a run read (a build test keeps the inference: its replay
+    always sends the tested cell, "(no value)" for null);
+  - `contracts.ts` gains `testedLabel?: true`;
+  - header updates in `types.ts` and `left-out-naming-the-item.ts`;
+  - tests in `request-rows/tests/left-out-naming-the-item.test.ts` (new "run mux6naez" case),
+    `request-rows/tests/run-muw60j7c.ts` (fixture name condition carries `testedLabel: true`) and
+    `read-account/tests/alone-rows.test.ts`.
+- Validation (lead):
+  - fail-first, with `summary-reads.ts` at HEAD: `1 failed | 5 passed (6)`;
+  - after: `npx vitest run` over `result-verification/{request-rows,read-account,build-test}/tests` and
+    `result-verification/tests` -> 39 files, 377 passed;
+  - `fluxiq:check` stamp current;
+  - Core `structure-audit:check` passed (264 warnings, 349 baselined);
+  - worker: Core `pnpm.cmd build` exit 0;
+  - no downstream reference to the changed contract.
+- Note for the supervisor: the result judge's JSON now shows `testedLabel: true` on a condition that tested the label.
+  Its instructions already speak of rows "tested on the row's own label", and no instruction text or pin changed. To
+  hide the field from the judge, strip it in `read-account/judge-paging.ts`.
+- Proposed, not done:
+  - R3-2: answer an unchanged rerun as unchanged (it says `applied` / `draftState: changed` because the rerun step
+    gets a new id) and key the repeat guard on the step's resulting input and result (`R/llm/decision-handlers`,
+    `R/llm/evidence-loop`);
+  - R3-3: after a blamed read's rerun keeps the rows `judgement.checked` named, tell the model so and to complete;
+  - R3-U-1..7 UI defects (`live-C-r3-ui-review.md`).
+- Seen working on this source: lane A's repeat refusal and refused-in-a-row stop; history "unchanged"/`sameAs`;
+  `whereToFix` and `checked` (t278) in the repair input; C-1; C-2 at the build test; C-3; B's `already_in_flow`
+  answer.
+- Not exercised: the paging hint, R2-1, D's reach fixes.
+- C's must-see was only partly met: the repair round still opens on page 5, but the model ran no detect there, and
+  the rerun put the page back to the step's start.
+- For the read-list redesign (description only, no change made): this run's paging was right, so it needs nothing
+  from the redesign. The redesign must still carry, to the judge, the value each condition tested on a left-out row,
+  even when that column is not stored. Today a condition on an unstored column (here `plus`, `sponsored`) runs as an
+  inline read whose per-row value never leaves the page, so the result check sees those rows by label only. If rows
+  are post-processed from the run's dataset, keep the condition columns in the collected rows and drop them only
+  from the stored output.
+- Debug: `docs/working/language-driven-flow-loop-plan/debugs/run-mux6naez-6c20f26e.md`. UI review:
+  `live-C-r3-ui-review.md`. Fix report: `r3-c-tested-label.md`.
