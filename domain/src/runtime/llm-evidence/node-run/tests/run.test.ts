@@ -229,6 +229,26 @@ function askedNothing() {
   return { asked, check: async (question: unknown) => { asked.push(question); return { permitted: false as const, missing: [], requestId: "request.one" }; } };
 }
 
+// Live run `run-mux6nxst-c9bca37c` (D3-2): a read that ran returned `inFlow:
+// true` and was left `taken`, never added. A run node's result says only that
+// it can be added; it is in the Flow once added, as the draft entry shows.
+test("a node run's result says it is addable, never that it is in the Flow; a written step says it is", async () => {
+  const runtime = createWebAutomationLlmEvidenceRuntime(stub().gateway);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  assert.equal((looked.evidence as JsonObject).addable, false);
+  assert.equal("inFlow" in (looked.evidence as JsonObject), false);
+  const handle = shownPageLines(looked.evidence)[0]!.target;
+  const pressed = await runtime.executeTool({ ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle } }, consequences: [] } });
+  assert.equal(pressed.resultCode, "web.action.succeeded");
+  assert.equal((pressed.evidence as JsonObject).addable, true);
+  assert.equal("inFlow" in (pressed.evidence as JsonObject), false);
+  const writing = createWebAutomationLlmEvidenceRuntime(stub().gateway);
+  const written = await writing.executeTool({ ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: await lookedHandle(writing) } }, consequences: ["modify_existing"], write: true } });
+  assert.equal(written.resultCode, "core.run_node.written");
+  assert.equal((written.evidence as JsonObject).inFlow, true);
+  assert.equal("addable" in (written.evidence as JsonObject), false);
+});
+
 test("a written press is resolved into the step the Flow keeps and is not pressed, and nobody is asked", async () => {
   const stubbed = stub();
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
