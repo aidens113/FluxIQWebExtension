@@ -148,15 +148,61 @@ test("a long target is cut from the middle, so the words that tell two cards apa
   }
   // The accessible name keeps every word.
   assert.equal(pack.label, "Testing: Click, ValueRidge Everyday Dinner Napkins 250 Count (3-Pack): Done");
-  // A target that fits is left whole, and a word too long to split is cut inside it, keeping its end.
+  // A target that fits is left whole, and a long path is cut where one of its parts ends, keeping its end.
   assert.equal(cardWords(card({ target: "Add to cart", testing: true }), false).target, "Add to cart");
   const path = cardWords(card({ kind: "navigate", target: "/scenarios/bigbox/store/product/valueridge-dinner-napkins-250", testing: true }), false).target!;
   assert.ok(path.endsWith("napkins-250"), path);
-  assert.ok(path.startsWith("/sc"), path);
+  // Cut where one of its parts ends (U-13 of the run-muw60j7c-bb7c9a62 review: "Hybr…"), never inside one.
+  assert.ok(path.startsWith("…") && /^[/-]/u.test("/scenarios/bigbox/store/product/valueridge-dinner-napkins-250".slice(-(path.length - 1) - 1)), path);
   assert.ok("Testing: Open page".length + path.length <= 36, path);
   // A typing step keeps the words it typed, cut from the middle, ahead of the field it typed into.
   const typed = cardWords(card({ kind: "type", target: '"ValueRidge Everyday Dinner Napkins 250 Count" into Search', testing: true }), false).target!;
   assert.ok(typed.startsWith('"ValueRidge') && typed.endsWith('Count"') && typed.includes("…"), typed);
   assert.ok("Testing: Type".length + typed.length <= 36, typed);
   assert.equal(cardWords(card({ kind: "type", target: '"Napkins 250 Count" into Search' }), false).target, '"Napkins 250 Count" into Search', "a typed target that fits keeps its field");
+});
+
+// U-13 of the run-muw60j7c-bb7c9a62 UI review: "Read list · name, ... rating and 3 more" elided
+// inside the list, and "Look · Sponsored ⓘ ... Earbuds, Hybr..." cut a word.
+test("a long target keeps whole words: a list names fewer of its items and counts the rest, and no word is cut", () => {
+  assert.equal(cardWords(card({ kind: "read", target: "name, price, rating and 3 more" }), false).target, "name, price and 4 more");
+  assert.equal(cardWords(card({ kind: "read", target: "name, price, rating and 3 more", testing: true }), false).target, "name and 5 more");
+  assert.equal(cardWords(card({ kind: "read", target: "name, price and rating" }), false).target, "name, price and rating", "a list that fits is left whole");
+  const words = "Sponsored Pulsebud Earbuds Hybridnoisecancellingwirelessbuds";
+  const look = cardWords(card({ kind: "look", target: words }), false).target!;
+  assert.equal(look, "Sponsored Pulsebud Earbuds…");
+  for (const word of look.replace(/…/gu, " ").split(/\s+/u).filter(Boolean)) assert.ok(words.split(" ").includes(word), `${look}: "${word}" is not a whole word`);
+  const one = "Hybridnoisecancellingwirelessbudswithcase";
+  assert.equal(cardWords(card({ kind: "look", target: one }), false).target, one, "one word with nowhere to cut is left for the view");
+});
+
+// The lead's contract for t276 item 7: Core's `ActivityAction.result` ("13 rows from 5 pages",
+// "removed step 9, Add to cart") says what a finished action came to. A read card said a
+// bare "Done" while the chat claimed every page was read (U-1, run-muw60j7c-bb7c9a62).
+test("a done card says what it came to after Done, and a test step says both what it did and what it came to", () => {
+  assert.equal(cardWords(card({ kind: "read", target: null, result: "13 rows from 5 pages" }), false).outcome, "Done: 13 rows from 5 pages");
+  assert.equal(cardWords(card({ kind: "draft", target: null, result: "Removed step 9, Add to cart" }), false).outcome, "Done: removed step 9, Add to cart");
+  assert.equal(cardWords(card({ kind: "read", target: null, result: "13 rows from 5 pages" }), false).label, "Read list: Done: 13 rows from 5 pages");
+  assert.equal(cardWords(card({ kind: "read", target: null, testing: true, tested: "Already done on the site", result: "8 rows" }), false).outcome, "Already done on the site — 8 rows");
+  assert.equal(cardWords(card({ kind: "person_check", target: null, answer: "You pressed Continue.", result: "ignored" }), false).outcome, "Done. You pressed Continue.", "a settled wait says how it was settled");
+  assert.equal(cardWords(card({ kind: "read", target: null, result: "  " }), false).outcome, "Done", "an empty result says nothing");
+  assert.equal(cardWords(card({ kind: "read", target: null, outcome: "working", result: "8 rows" }), true).outcome, "Working on it");
+});
+
+// U-8 of the run-muw60j7c-bb7c9a62 UI review: refusals read as work, three "Edit the Flow · run the
+// step again / Not done: ..." cards in a row.
+test("a refused decision never reads as work done or under way, and a repeated refusal says how many times", () => {
+  const because = "that step was already tried exactly this way on this same page";
+  const refused = { all: true, because } as const;
+  for (const outcome of ["working", "done", "failed"] as const) {
+    for (const current of [true, false]) {
+      const words = cardWords(card({ kind: "draft", target: "run the step again", outcome, refused }), current);
+      assert.deepEqual([words.state, words.outcome], ["refused", `Not done: ${because}`], `${outcome}, current ${current}`);
+    }
+  }
+  const part = cardWords(card({ kind: "draft", target: null, outcome: "done", refused: { all: false, because: "that step already does that" }, result: "added step 4" }), false);
+  assert.deepEqual([part.state, part.outcome], ["done", "Only partly done: that step already does that"]);
+  const thrice = cardWords(card({ kind: "draft", target: "run the step again", outcome: "failed", refused, times: 3 }), false);
+  assert.deepEqual([thrice.outcome, thrice.label], [`Not done (3 times): ${because}`, `Edit the Flow, run the step again: Not done (3 times): ${because}`]);
+  assert.equal(cardWords(card({ kind: "draft", target: null, outcome: "failed", refused, times: 1 }), false).outcome, `Not done: ${because}`, "once is said as once");
 });

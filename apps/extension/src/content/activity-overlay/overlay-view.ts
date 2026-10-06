@@ -18,10 +18,10 @@
 // during a build, and a mark that flipped with it would be the flicker the
 // pacing exists to remove.
 
-import { isHeadlineEcho, type ActivityDisplay, type ActivityOverlayPreference } from "../../shared/activity";
+import { cutAtWord, isHeadlineEcho, type ActivityDisplay, type ActivityOverlayPreference } from "../../shared/activity";
 import { ACTIVITY_PHASE_APPEARANCE, type ActivityPhaseAppearance, type ActivityPhaseMark } from "./phase-appearance";
 
-/** The most characters of one line the overlay renders. The background already bounds it; this bounds a misbehaving sender. */
+/** The most characters of one line the overlay renders, cut where a word ends. The background already bounds it; this bounds a misbehaving sender. */
 const MAX_LINE = 160;
 
 export type ActivityOverlayView = {
@@ -76,5 +76,5 @@ function stepText(step: ActivityDisplay["step"]): string {
 function bounded(text: string | null): string {
   if (typeof text !== "string") return "";
   const collapsed = text.replace(/\s+/gu, " ").trim();
-  return collapsed.length > MAX_LINE ? `${collapsed.slice(0, MAX_LINE - 1)}…` : collapsed;
+  return cutAtWord(collapsed, MAX_LINE);
 }

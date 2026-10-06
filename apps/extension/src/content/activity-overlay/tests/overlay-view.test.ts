@@ -85,6 +85,14 @@ test("no detail is an empty line, and a misbehaving sender's long text is bounde
   assert.equal(activityOverlayView(display({ headline: "   " }), "expanded")?.headline, ACTIVITY_PHASE_APPEARANCE.running.name);
 });
 
+// U-4 of the run-muw60j7c-bb7c9a62 UI review: "trying another w…", "the check found the…".
+test("a line longer than the overlay's bound is cut where a word ends", () => {
+  const words = Array.from({ length: 40 }, (_, index) => `word${index}`).join(" ");
+  const detail = activityOverlayView(display({ detail: words }), "expanded")!.detail;
+  assert.ok(detail.length <= 160 && detail.endsWith("…"), detail);
+  assert.ok(words.startsWith(`${detail.slice(0, -1)} `), `"${detail}" ends inside a word`);
+});
+
 test("nothing the overlay adds of its own is a raw id: fallback headlines, step counts", () => {
   const rawId = /\b[a-z]+\.[a-z_]+/u;
   for (const [phase, appearance] of Object.entries(ACTIVITY_PHASE_APPEARANCE)) assert.doesNotMatch(appearance.name, rawId, phase);
