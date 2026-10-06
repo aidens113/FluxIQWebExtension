@@ -336,6 +336,14 @@ t264 S4 is editing `R/flow-draft/{amendment,entry,routing,step,act-claim,index}.
 - Outcome: Accepted
 - Follow-up: sweep 2; live A-D.
 
+### 2026-10-05 — Sweep 2 green; live A-D launched
+- Agent: supervisor; four live-lane leads dispatched.
+- Changed: lab-slots owners set for this round (slot 1 t274-slot-1 C, slot 2 t262-slot-2 A, slot 3 t262-slot-3 B, slot 4 t275-slot-4 D; slots 2-3 previously held by Codex's dead Oct 4 processes). Lane trees t262, t274, t275 synced to dev and rebuilt (Core, domain, test-runner, extension builds all exit 0).
+- Why: every planned fix is on dev; the user's order is to prove A-D live before anything new.
+- Validation: sweep 2 on dev (logs in scratchpad `sweep2-2026-10-05/`): Core `pnpm build` 0, `pnpm check` 0, `pnpm test` 0 (fluxiq 780 files 7464 passed 1 skipped; web 356 files 2924 passed; contracts 55; gateway 10); downstream `pnpm check` 0, `pnpm test` 0 (every package `# fail 0`, e.g. 2475, 1946, 1459, 627 passed), `pnpm build` 0. First fully green full sweep since t262 landed.
+- Outcome: Accepted
+- Follow-up: live results per lane; fixes merged between runs.
+
 ## Open Questions
 
 - Is demonstrate/record an MVP acceptance requirement after the 2026-09-22 scope ruling? Owner: user. Default taken: supported, unmeasured, one smoke proof.
