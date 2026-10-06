@@ -1,8 +1,8 @@
 # FluxIQ extension: what failed this week, and why (2026-09-29 to 2026-10-06)
 
 Written for Aiden by the supervisor on 2026-10-06, from four evidence reports in this folder
-(`numbers.md`, `causes-late.md`, `friction.md`; `causes-early.md` for 09-29/30 is still being compiled
-and will be added) plus the round-3 lane reports. Every claim below has a run id or commit in those files.
+(`numbers.md`, `causes-early.md` for 09-29/30, `causes-late.md` for 10-01..10-06, `friction.md`) plus the
+round-3 lane reports. Every claim below has a run id or commit in those files.
 
 ## The short version
 
@@ -105,6 +105,20 @@ model still makes these mistakes. Node definitions and readable fields should re
 ### 9. Lasting acts done in tests (9 runs)
 Build tests pressed Add to cart again (a cart reached 13 items) and confirmed the wrong friend requests.
 **Fixed** (none since 10-05): lasting acts are checked, not repeated.
+
+### Early in the week (09-29 and 09-30, 103 debugged runs, none passed)
+The causes then were mostly infrastructure the later runs no longer hit:
+- **Mid-build dry runs replayed the whole draft from a reset start page that kept the site's state** (consent,
+  store, cart): steps came back `unreproducible`, real acts repeated, minutes lost. **68 runs**, fixed (Core `77b269a2`).
+- **The loop let the model burn decisions without progress** (refused or identical completions, no-op
+  amendments). **36 runs**, partly fixed then; the same family is cause 2 above and still produces new shapes.
+- **The model was not shown the controls it needed**: a 40-control page cap, handles not in the page packet,
+  recovery packets cut at 6,000 bytes, and a 4,000-byte draft cap that cut the instruction to 177 bytes.
+  **34 and 33 runs**, fixed (Core `711eab8c`, downstream `b507d5fa`, `040d7c2b`).
+- **The Lab scored 12 permission stops as passes** (no Flow): fixed (`f2f80024`).
+- Still open from then: the later pickup slot chosen (7 runs).
+By runs alone the 09-30 unattended relaunch loop outweighs all of these (383 runs, 346 of them at $0 on an
+empty balance); it is now guarded (`5363e39b`).
 
 ## 3. Biggest friction and time wasters in how the work ran
 
