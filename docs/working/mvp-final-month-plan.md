@@ -269,6 +269,15 @@ t264 S4 is editing `R/flow-draft/{amendment,entry,routing,step,act-claim,index}.
 - **t271-d-route-states** (`fxwork/t271`): D phase 1 per the t269 brief S4. Owns `R/action-permissions/**`, `R/service/instruction-authority.ts`, `R/flow-bootstrap/action-permissions.ts`, new files beside them, and tests. Model-facing wording in `R/llm/deepseek/request-body.ts` or the draft display in `R/flow-draft/entry.ts` is t264's: specify it, do not write it.
 - **t272-c1-pagination** (`fxwork/t272`): C1 per the t269 brief S2. Owns `domain/src/runtime/llm-evidence/plan-resolution/**`, `apps/extension/src/content/actions/extract-list*` and paging files beside them, and tests. Core extraction contracts only if C1 needs them and they are outside the t264 list.
 
+### Brief: t273-creation-wiring (lead; after t264 landed)
+- Repository: both, task t273 trees under `C:/Users/osrs_/FluxStuff/fxwork/t273/`.
+- Task: Finish the creation blockers that needed t264's files, in stages, returning after each for the supervisor to commit. S1 B7 binding affordances per the t269 brief S1 (`b7-binding-feedback-causality.md`; reuse Codex's `wip/t262-uncommitted` Core `c5521e86` `flow-draft/bindable/` and its feedback hunk, fixing the missing import; `bindable/tests/paths.test.ts` fails first). S2 D phase 2: wire t271's route states into the draft display (`flow-draft/entry.ts`), the model-facing wording (`llm/deepseek/request-body.ts`) and enforcement of a named route during the build, per t271's report (`docs/working/mvp-final-month-plan/reports/t271-d-route-states.md` on dev) and `d-grounded-waypoint-contract.md`. S3 P5 wiring: the call sites t270's report lists (`reports/t270-p5-step-binding.md`), so a model's `$step` is accepted end to end, plus `draft-from-flow.ts` translating `$node` back to `$step` on re-seed (t269's note).
+- Required reads: the shared rules above; the named reports.
+- Owns (may edit): Core `R/flow-draft/**`, `R/llm/**`, `R/flow-bootstrap/**`, `R/action-permissions/**`, `R/service/instruction-authority.ts`, `R/nodes/**`, `R/executor/**`, and tests; downstream `domain/src/runtime/**`; architecture docs for these.
+- Must not touch: Core `R/service.ts` and `R/service/runtime-adaptation/**` and `R/service/adaptations/**` (t267 owns them now) — specify any change needed there in the report; files t267 owns downstream.
+- Definition of done per stage: fail-first tests, owning tests green, `fluxiq:check`, Core build, touched downstream checks and both audits exit 0; framework reference regenerated when exports move; the report names the live run that proves the stage.
+- Report to: `docs/working/mvp-final-month-plan/reports/t273-creation-wiring.md` in the t273 downstream tree.
+
 ## Work Ledger
 
 ### 2026-10-05 — Intake started
