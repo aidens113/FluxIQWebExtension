@@ -10,3 +10,4 @@ export { createWebNodeShownAddresses, type WebNodeShownAddresses } from "./shown
 export { createWebNodeOwnLayers, type WebNodeOwnLayers } from "./own-layers";
 export { replayWebOutputNode, webNodeRecordCount, webNodeReplayCall, webNodeReplayStatement, WEB_LLM_REPLAY_KEY, type WebNodeReplayStatement } from "./replay";
 export { webLlmCallWords, type WebLlmCallWords } from "./call-words";
+export { webNodeNamedControlShown } from "./named-control-shown";
