@@ -260,6 +260,15 @@ Source of every port: Claude's uncommitted lane trees, read-only: `C:/Users/osrs
 - Definition of done per stage: fail-first tests then passing, owning tests green, `fluxiq:check` and touched downstream typechecks exit 0, both audits pass, Core rebuilt; the report names the live run that must prove the stage (B, C or D lane).
 - Report to: `docs/working/mvp-final-month-plan/reports/t269-creation-blockers.md`
 
+### Parallel split of t269 (2026-10-05, supervisor): four tasks now, B7 after t264 S4
+
+t264 S4 is editing `R/flow-draft/{amendment,entry,routing,step,act-claim,index}.ts`, `R/flow-draft/amendment/`, `R/llm/{evidence-loop.ts,evidence-loop-decision.ts,draft-amendment-feedback.ts,unusable-decision.ts}`, `R/llm/evidence-loop/**`, `R/llm/decision-handlers/**`, `R/llm/deepseek/**`, `R/llm/harness-options/**`, `R/llm/repeat-guard/**`, `R/llm/node-tools/run-flow-part.ts`, `R/flow-bootstrap/{authoring/draft-routing.ts,authoring/instruction-record-columns.ts,evidence-loop-steps.ts,instructed-acts/**,unfinished-build/**}`, `R/recovery/refuted-result/**`, `R/result-verification/build-test/**`, `src/ui/activity-action/**`. **No t269-t272 worker may edit those files**; if a fix needs one, describe the exact change in the report and stop that part. Each task below has its own worktree pair. Run Core `pnpm.cmd build` in your own Core tree before downstream checks. Reports go to `docs/working/mvp-final-month-plan/reports/<label>.md` in your own task tree.
+
+- **t269-c4-row-repair** (`fxwork/t269`): C4 per the t269 brief S3. Owns `R/llm/node-tools/**` except `run-flow-part.ts`, `replay-span.ts`, `replay-draft.ts`, `run-node.ts`; `R/flow-draft/scheduled-candidate/**`; `R/service/runtime-adaptation/**` only for seeding a saved Flow for repair; downstream `domain/src/runtime/tests/carried-row-service-repair.test.ts` (take it from `wip/t262-uncommitted` `1d6baa6f`) and `domain/src/runtime/**` files the fixture needs. Fail-first: run the fixture first and record the actual failure.
+- **t270-p5-step-binding** (`fxwork/t270`): P5 per the t269 brief S5. Owns `R/flow-draft/binding-forms.ts` and other `R/flow-draft/bind*` files, `R/llm/node-tools/{replay-span,replay-draft,run-node}.ts`, `R/flow-bootstrap/authoring/assemble-draft.ts`, `R/nodes/parameter-bindings.ts`, `R/executor/**`, and tests. Start from `wip/t262-uncommitted` `p5-earlier-output-contract.md` and `p5-binding-preflight.md`.
+- **t271-d-route-states** (`fxwork/t271`): D phase 1 per the t269 brief S4. Owns `R/action-permissions/**`, `R/service/instruction-authority.ts`, `R/flow-bootstrap/action-permissions.ts`, new files beside them, and tests. Model-facing wording in `R/llm/deepseek/request-body.ts` or the draft display in `R/flow-draft/entry.ts` is t264's: specify it, do not write it.
+- **t272-c1-pagination** (`fxwork/t272`): C1 per the t269 brief S2. Owns `domain/src/runtime/llm-evidence/plan-resolution/**`, `apps/extension/src/content/actions/extract-list*` and paging files beside them, and tests. Core extraction contracts only if C1 needs them and they are outside the t264 list.
+
 ## Work Ledger
 
 ### 2026-10-05 — Intake started
