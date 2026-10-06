@@ -220,7 +220,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       run.shown(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, choice: undefined, changed: undefined, control: undefined, read: undefined, inFlow: false })),
+        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, choice: undefined, changed: undefined, control: undefined, read: undefined, addable: false, inFlow: undefined })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
@@ -438,7 +438,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       changed: webNodePageChanges(node, current, after),
       control: control.name,
       read,
-      inFlow: node.proposes
+      addable: node.proposes,
+      inFlow: undefined
     });
     // The state the node found is the read before it acted, and the state it
     // left is the read after -- unsaid where the page could not be read in time.
