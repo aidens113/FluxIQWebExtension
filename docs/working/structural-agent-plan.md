@@ -1,12 +1,12 @@
 # Structural Agent Plan
 
 Status: Active
-Status detail: Plan agreed with the user 2026-10-07; stage 1 and 2 designs were stopped at the Codex handoff before writing reports and must be rerun; nothing built.
+Status detail: Consultant/source audit reordered stages: acceptance and explicit candidates first; fallback feasibility alongside; implementation pending.
 Created: 2026-10-07
-Last updated: 2026-10-07
+Last updated: 2026-10-06
 Owner: Senior supervisor agent
-Scope: The structural changes that stop a quirk in one node or one mislabelled step from failing a whole build: general tools (run script, request, network visibility), acts derived from evidence, a small edit language, cheap recovery, three general rules in place of special-case refusals, and direct checks before AI judges. It does not cover the read-list redesign (first-class-data-extraction-plan) or the live-lane operating rules (mvp-final-month-plan), which it builds on.
-Paired document: none yet (most of stages 2, 3 and 4 is Core work; a Core-side document is owed once a stage's design is accepted)
+Scope: Independent outcome acceptance, separate discovery and candidate submission, declared-start execution and shared promotion, typed browser blockers, and bounded script/request feasibility. Read-list implementation stays in first-class-data-extraction-plan; cross-repository sequencing and live gates stay in mvp-final-month-plan.
+Paired document: none (planning review only; create a Core-side companion before implementation changes generic authoring, verification or promotion)
 Related: [MVP final month plan](./mvp-final-month-plan.md), [week report](./mvp-final-month-plan/reports/week-review/report.md), [read-list design](./first-class-data-extraction-plan/reports/read-list-collect-design.md), [working index](./README.md)
 
 ---
@@ -17,31 +17,60 @@ User's direction (2026-10-07, after round 4): "Tiny things like exact node funct
 
 Done: nothing of this plan is built. Groundwork already on dev: page-change evidence on every draft step (t285), node definitions on first use (t280), readable field labels (t279), every refusal names its way out and three same-kind refusals end the round (t287), judges see only this run's changes (t286), read-list collection and run-end processing (S1-S6).
 
-Not started (handoff 2026-10-07 05:10 UTC): both design leads were stopped before writing their reports when the user handed off to Codex. Rerun stage 1 from "Brief: general-tools design" below (with the user's decisions) and stage 2 from `mvp-final-month-plan.md` "Brief: evidence-acts design", widened to the small edit language (draft = steps that ran and worked; edits remove, redo, move, make optional, repeat) and cheap recovery (Core redoes a wrong step from its start page; a stuck build ends early or asks in the chat).
+Planning review completed 2026-10-06 locally. The cancelled stage designs were
+never implemented. The consultant review and code audits are now recorded under
+`mvp-final-month-plan/`; revised stages below supersede their dispatch order.
+Current source retains unknown-confirmation acceptance and apply-before-judged
+exceptions for unsupported topology. Existing candidate/signature/held-promotion
+seams should be extended. No source or Core files changed in this planning task.
 
-Next: accept both designs (bring the user any decision with a recommended default), build stages 1 and 2 in parallel by file, then stage 3, then live rounds on A-D plus new realistic sites.
+Next: acceptance/readiness fence, explicit candidate submission and declared-start
+verification/promotion. Finish navigation/gaps audits; improve typed blockers in
+parallel by file. Design script/request feasibility alongside, without requiring
+arbitrary page JS before the first trustworthy typed Flow.
 
 User decisions (2026-10-07, memory `js-last-resort-requests-off-by-default`): direct API requests are a toggle, OFF by default, settable in config and in the extension's settings UI; no debugger channel for running JS (normal extension script injection; the debugger only if absolutely needed for network capture and only with the requests toggle on); JS is a last resort, allowed only after about three failed typed-node attempts, and every Lab run that used it is scored "partial success, used JS" and becomes node work (`node-catalog-plan.md`, which also holds the user-ordered full node audit). Typed nodes stay the default.
 
 Structural problem list (supervisor, 2026-10-07, given to the user in full): A1 act labels trusted; A2 complex edit grammar; A3 narrow nodes without fallback; A4 rule-book prompt (~60 KB); A5 opaque handles renumbered on reload; B7 one budget for explore, author, test, judge and repair; B8 exploring and authoring are one activity, so exploration accidents become Flow structure; B9 too many build-test step states; B10 guards as accumulating special cases; B12 layered repair process; B13 giant core files (`service.ts` ~4,400 lines, the loop at 800); C14-16 AI judges from summaries, no oracle in real use, intricate pair rules; D17 the instruction reader misreads choices; E18-23 page view size, target resolution, no code or network access, wording coupled to codes, connection lifecycle; F24 a cheap model asked for long rule-heavy bookkeeping, F25 no worked examples; G26 only live runs show model coping, G27-30 per-run patching, integration, two repositories, Lab overhead.
 
-## Stages
+## Stages (revised after consultant/source audit)
 
-1. **General tools (2-3 days).** `Run script` step: JavaScript in the page that can read, interact and return JSON or rows; saved in the Flow and replayed without a model. `Request` step: direct HTTP (the page's session when same-site) returning status and a bounded body. Network visibility: the page's own data requests (URL, method, response shape) shown to the model. Rows a script or request returns collect into the run's dataset like a read. Every typed-node refusal offers "or do it with a script". Permission gates judge what a script or request actually did (page change, mutating requests); secret screening covers everything returned.
-2. **Acts from evidence and a small edit language (2-3 days, parallel with 1).** The model no longer claims acts; Core derives which step completed which part of the instruction from what changed (cart count, chosen state, confirmation, store switched, request success); acts with no visible change get an explicit check step. The draft is the steps that ran and worked, in order; edits are remove, redo with new settings, move, make optional, repeat over a list or until done.
-3. **Cheap recovery and three general rules (1-2 days).** A wrong step is redone by Core from its start page; a stuck build ends early and tests what it has or asks the person in the chat. Special-case refusals give way to: never resend a call that failed on the same page; every kept step shows an effect or is a read or check; the Flow is judged by one whole run against the instruction.
-4. **Direct checks before AI judges (with 3).** Where the instruction is concrete (a count, a value, items in a cart), check it against the page or the data first.
-5. **Live rounds.** A-D, then new realistic sites; debug and fix what remains. Target: the structural version in live testing by 2026-10-12/13, before the 2026-10-29 freeze.
-6. **Separate exploring from writing the Flow (B8) and give each phase its own budget (B7).** Exploration finds the way; a distinct authoring step writes the Flow from what worked (not from every call made), so stray clicks, extra reads and toggle pairs never become Flow structure; explore, author, test/judge and repair each get a share of the purse so an early mistake cannot starve repair. Design after stage 2 (it reuses evidence-acts).
-7. **Shrink the rule book (A4) and add worked examples (F25).** After stages 2-3 remove the rules they make obsolete; measure request size per decision before and after; add two or three short worked Flows (cart, list across pages, per-row act) to the instructions.
-8. **Confirm the checklist (D17).** When the instruction reader is unsure of a choice or act, ask the person in the chat before building, or check it against the page; never build on a guessed checklist.
-9. **Model strategy (F24).** Measure flash against a stronger model on the same recorded decisions for the judge and for authoring; decide per role from cost per success.
-10. **Replay recorded AI decisions against new code (G26).** A provider-free harness that feeds a live run's recorded decisions back through the current build loop, so a fix can be checked against the run that exposed it without paying for a new run.
-11. **Split the giant core files (B13).** `service.ts` and the evidence loop split by responsibility, so parallel work stops colliding.
+The current implementation detail is the [consultant revision](./mvp-final-month-plan/consultant-revision.md).
+The [original stage order and briefs](./structural-agent-plan/archive/2026-10-06-original-direction.md)
+remain historical evidence. They must not be dispatched unchanged.
+
+1. **Acceptance and readiness fence.** Fix yes-plus-unknown/silent confirmation;
+   block unsupported apply-before-judged repair topologies; define requirement/run/
+   candidate-bound evidence; add running-worker build identity and reachable Stop/
+   build cancellation. Negative and provider-free readiness cases before paid runs.
+2. **Separate discovery from complete candidate submission.** Feature-flagged path
+   using current Flow schema, validation and executor. Discovery is evidence only;
+   submission makes an immutable revision with consolidated diagnostics. Do not
+   build another remove/redo/move/keep editing language first.
+3. **Declared-start execution and shared promotion.** Execute the exact candidate
+   through the normal runtime on declared resettable fixture state; verify outcomes
+   independently; promote only that revision. Bootstrap and repair share the gate,
+   including topology, cancellation, crash and stale-result cases. Use existing
+   held-candidate and graph/adaptation storage seams.
+4. **Typed blockers alongside 1-3.** Finish the ordered full node audit; prioritize
+   shared checkbox/type/Next-page/row/coverage/permission defects blocking A-D.
+   Keep durable identity descriptions, desired-state operations and bounded waits.
+5. **Fallback feasibility alongside, then bounded capability.** Preserve the user's
+   JS-last-resort and requests-OFF rules. Distinguish pure serialized-data transforms
+   from page/network code. Resolve browser/CSP/store channel and pre-effect permission
+   limits before implementation; effect inspection cannot retroactively authorize.
+6. **Prompt/controller/replay throughout.** Extract touched responsibilities, remove
+   obsolete bookkeeping only with regressions, add three concise worked examples,
+   keep global hard budget and protected verification/repair reserve. Decision replay
+   stops at divergence; checkpoint model tests and saved-Flow replay remain distinct.
+7. **Live qualify, adapt, release.** A-D twice per same integrated build pair plus
+   zero-call replays, C S7 after proof, Phase 1b, three-site learned repair chain,
+   ten-site breadth, UX/reliability and clean-profile acceptance. Dates/gates stay
+   in the final-month plan. No live runs performed by this review.
 
 ## Worker Briefs
 
-Stage 2's design brief: `mvp-final-month-plan.md` "Brief: evidence-acts design" (scope widened by message on 2026-10-07 to the small edit language and cheap recovery). Stage 1's design brief:
+Historical, superseded dispatch instructions; use the revised stages and final-month next brief instead. Stage 2's former design brief: `mvp-final-month-plan.md` "Brief: evidence-acts design" (scope widened by message on 2026-10-07 to the small edit language and cheap recovery). Stage 1's design brief:
 
 ### Brief: general-tools design (lead-xhigh, design stage only; 2026-10-07)
 - Repository: both, read-only, at dev.
@@ -69,8 +98,23 @@ Stage 2's design brief: `mvp-final-month-plan.md` "Brief: evidence-acts design" 
 - Outcome: Blocked
 - Follow-up: rerun both designs.
 
+### 2026-10-06 - Consultant and source audit revised execution order
+- Agent: Codex supervisor, task t295.
+- Changed: stage order, cancelled-brief status and stale script/request defaults; original preserved in archive.
+- Why: independent outcome acceptance and explicit candidate boundaries address the repeated failures before new editing grammar or broad fallback tools.
+- Validation: source/doc audit only; no implementation, live runs or paid calls.
+- Outcome: Accepted
+- Follow-up: P0 readiness/acceptance tasks, then P1/P2 vertical candidate slice.
+
 ## Open Questions
 
-- Script execution channel per browser (debugger bar vs CSP-limited alternatives). Owner: user. Default taken: debugger channel on Chrome/Edge; the stage 1 design recommends Firefox's.
-- Cross-origin requests. Owner: user. Default taken: allowed to any origin; mutating methods gated.
-
+- Page-script channel, browser version/toggle/CSP and store compatibility require
+  a concrete feasibility report. Preserve no debugger for JS; network debugger
+  only if absolutely needed and direct requests enabled. The old debugger default
+  is superseded by the user's later explicit decision.
+- Direct-request origins, session attachment, redirects and uncertain-write handling
+  need design. Requests remain OFF by default; do not inherit any-origin as an
+  authorization decision. Existing delete/money/send-or-publish gates stay binding.
+- Trusted-input-only sites cannot be promised by synthetic pointer events or JS;
+  report unsupported behavior under the no-debugger policy rather than silently
+  changing it.
