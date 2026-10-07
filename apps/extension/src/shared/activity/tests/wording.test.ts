@@ -38,7 +38,7 @@ test("tools are named by what they do", () => {
   const cases: Array<[ClientGatewayActivity, string]> = [
     [tool("core.run_node", "started"), "Trying a step on the page"],
     [tool("web.detect_repeating_structure", "started"), "Looking for the list of items"],
-    [tool("core.flow_draft", "started"), "Updating the Flow"],
+    [tool("core.flow_draft", "started"), "Changing the Flow"],
     [tool("web.some_future_tool", "started"), "Working on the page"],
     [tool("", "started"), "Working on the page"]
   ];
@@ -106,15 +106,15 @@ test("result codes become a short outcome, never the code", () => {
   }
 });
 
-test("the draft tool's end reads as the Flow updated", () => {
-  assert.equal(activityWording(tool("core.flow_draft", "succeeded")).sentence, "Updating the Flow — done");
-  assert.equal(activityWording(tool("core.flow_draft", "failed")).sentence, "Updating the Flow — that didn't work, trying another way");
+test("the draft tool's end reads as the Flow changed", () => {
+  assert.equal(activityWording(tool("core.flow_draft", "succeeded")).sentence, "Changing the Flow — done");
+  assert.equal(activityWording(tool("core.flow_draft", "failed")).sentence, "Changing the Flow — that didn't work, trying another way");
 });
 
 test("an event that carries only Core's sentence is read from it", () => {
   assert.equal(activityWording(event({ phase: "exploring", label: "Using core.run_node" })).sentence, "Trying a step on the page");
   assert.equal(activityWording(event({ phase: "exploring", label: "Using web.detect_repeating_structure: web.action.rejected.target_unobserved" })).sentence, "Looking for the list of items — not tried: the step named something it hadn't seen on the page");
-  assert.equal(activityWording(event({ phase: "building", label: "Amending the draft Flow" })).sentence, "Updating the Flow");
+  assert.equal(activityWording(event({ phase: "building", label: "Amending the draft Flow" })).sentence, "Changing the Flow");
   assert.equal(activityWording(event({ phase: "thinking", label: "Deciding the next step" })).sentence, "Thinking about the next step");
 });
 

@@ -9,6 +9,7 @@ export { askThread, type QuestionTarget } from "./ask-thread";
 export {
   actionCard,
   cardWords,
+  doneAgainWords,
   stepMessages,
   stepWords,
   type ActionCard,
