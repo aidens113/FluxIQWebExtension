@@ -22,6 +22,16 @@ test("a Core source newer than its build is refused, naming the stale file and t
   assert.ok(verdict.message.includes(CORE_REBUILD_COMMAND), "names the rebuild command");
 });
 
+test("a refusal names the command it refused, so a build or test is not told to rerun pnpm check", async () => {
+  const gate = "pnpm --filter @fluxiq-web-extension/domain build";
+  const stale = await coreBuildFreshness("C:/core", { entries: built, sources: at(10 * 60_000, "C:/core/packages/fluxiq/src/a.ts"), output: at(60_000, "C:/core/packages/fluxiq/dist/a.js") }, { gate });
+  assert.ok(stale.message.startsWith(`${gate}: `), stale.message);
+  assert.ok(stale.message.includes(`then run ${gate} again`), stale.message);
+  assert.ok(!stale.message.includes("pnpm check"), stale.message);
+  const missing = await coreBuildFreshness("C:/core", { entries: unbuilt, sources: at(0, null), output: at(0, null) }, { gate });
+  assert.ok(missing.message.startsWith(`${gate}: `), missing.message);
+});
+
 test("the rebuild command builds Core's libraries in order", () => {
   assert.equal(CORE_REBUILD_COMMAND, "pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket build");
 });

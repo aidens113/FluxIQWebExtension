@@ -2667,10 +2667,14 @@ pnpm lab inspect <run-id>
 pnpm lab bench --corpus smoke --repeat 2 --target isolated
 pnpm lab bench --corpus week1 --repeat 3 --target isolated --shards 2 --jobs 2
 pnpm lab bench --resume <bench-id>
+pnpm lab stop <instance>
 pnpm lab compare <baseline-report> <candidate-report>
 pnpm lab compare <baseline-report> <candidate-report> --sequential
 pnpm lab compare <report> --halves
 ```
+
+`stop` stops one live run by its instance's ledger pid and process tree, never
+by command line ("Live-run waste guards", "Stopping one Lab run").
 
 `compare` takes benchmark reports, not run ids: two reports, or one report's
 repeats split into halves, each metric judged `improved`, `regressed`, or
@@ -2842,10 +2846,20 @@ variable moves it.
 | Rule | Refuses when | Satisfied by |
 | --- | --- | --- |
 | `balance` | `STOP-balance` exists | The user topping the account up and deleting the file; no override |
+| `peak` | The UTC day is a weekday (Monday to Friday) and the UTC time is inside 01:00-04:00 or 06:00-10:00 (start inclusive, end exclusive), DeepSeek's peak pricing hours | Launching at or after the next off-peak start, which the refusal names (the window's end, 04:00 or 10:00 UTC); `OVERRIDE-peak` |
 | `behind-dev` | This checkout's HEAD does not contain its local `dev` (`git merge-base --is-ancestor dev HEAD`), or the FluxIQ Core it builds against (`FLUXIQ_CORE_ROOT`, else `../!FluxIQ`, as the Lab resolves it) does not contain Core's local `dev`, unless every file `dev` changed since is documentation (`docs/` or Markdown, which the source fingerprint also leaves out); or git cannot answer, for example no local `dev` branch | `git merge dev` in the named checkout, then rebuilding Core's libraries and the extension; `OVERRIDE-behind-dev` |
 | `loop` | The instance already started 3 live runs in the last 30 minutes | Waiting, with the relaunch loop stopped; `OVERRIDE-loop` |
 | `debug` | The instance's previous live run has no `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` in the tree it runs from | Writing that debug; `OVERRIDE-debug` |
 | `unchanged` | The previous live run of the same instance and task did not pass and the source fingerprint is unchanged | Changing the source; `OVERRIDE-unchanged` |
+
+`peak` is the user's rule that paid runs launch off-peak: inside those windows
+DeepSeek's peak pricing halves the decisions a run's $0.10 per-build ceiling
+buys, so a run measures the price rather than the product. The refusal names the
+window it fell in, the next off-peak start in UTC and the override file. The
+rule reads only the admission's clock (`admitLiveRun`'s `now`, the current time
+in `run-lab.mjs`), so tests inject it; like every rule here, only the file
+`lab-slots/OVERRIDE-peak` lets a run past it, never a flag or a variable. It
+judges the start only: a run admitted at 00:59 UTC is not stopped at 01:00.
 
 `behind-dev` is the user's rule of 2026-10-01: live testing runs on code synced
 to the integrated `dev` line. A lane worktree that missed a merge round tests
@@ -2883,6 +2897,30 @@ The fingerprint is a SHA-256 over every file `git ls-files --cached --others
 read from the working tree, leaving out `docs/`, Markdown, and build and run
 output. Writing a debug does not change it; editing source in either
 repository does.
+
+#### Stopping one Lab run
+
+`node scripts/lab/run-lab.mjs stop <instance>` (or `pnpm lab stop <instance>`)
+stops exactly one live run: the instance's most recent ledger `start` with no
+`finish`, by the launcher pid that `start` recorded, killing that process and
+its whole tree (`taskkill /PID <pid> /T /F` on Windows; elsewhere every
+descendant `ps` lists, deepest first, then the pid). `<instance>` is the
+`FLUXIQ_LAB_INSTANCE` the run was launched with, `default` when it had none.
+Once the process is gone it runs the ledger reconciliation, which closes the
+launch with `"reconciled": true` and the runs and spend it produced, exactly
+as the next admission would have. It prints one sentence and a
+`{"lab":"stop","state":"stopped"|"refused"|"failed",...}` line, and exits 0
+only when it stopped the run.
+
+It refuses, killing nothing, when the instance has no open start, when the
+recorded process is no longer running, or when the start is older than six
+hours: Windows reuses process ids, so a pid that old may belong to another
+program. It builds nothing and loads no Core. The code is `scripts/lab/stop-run/`.
+
+Never stop a Lab run by matching processes by command line. On 2026-10-01 a
+`taskkill` by command-line pattern, meant for one lane's run, also killed two
+other lanes' runs (`docs/working/language-driven-flow-loop-plan/debugs/run-muq0in9r-0793b448.md`,
+Cause 1).
 
 #### The per-build cost ceiling
 
