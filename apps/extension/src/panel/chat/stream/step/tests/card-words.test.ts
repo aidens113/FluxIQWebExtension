@@ -116,7 +116,7 @@ test("a test step says what the test did with it: done again, checked, already d
 // summary>". Each is now a card under its decision: what was asked, "Not done", Core's reason.
 test("a decision Core declined says not done and why, never didn't work, and an edit done in part says so", () => {
   const refused = cardWords(card({ kind: "draft", target: null, outcome: "failed", why: "that step is already in the Flow", refused: { all: true, because: "that step is already in the Flow" } }), false);
-  assert.deepEqual(refused, { state: "refused", name: "Edit the Flow", target: null, whole: false, outcome: "Not done: that step is already in the Flow", label: "Edit the Flow: Not done: that step is already in the Flow" });
+  assert.deepEqual(refused, { state: "refused", name: "Change the Flow", target: null, whole: false, outcome: "Not done: that step is already in the Flow", label: "Change the Flow: Not done: that step is already in the Flow" });
   const part = cardWords(card({ kind: "draft", target: null, outcome: "done", refused: { all: false, because: "that step already does that" } }), false);
   assert.deepEqual([part.state, part.outcome], ["done", "Only partly done: that step already does that"]);
 
@@ -126,9 +126,9 @@ test("a decision Core declined says not done and why, never didn't work, and an 
   });
   const words = (event: ClientGatewayActivity) => cardWords(actionCard(event, `action:build:b#${event.sequence}`)!, false);
   const edit = words(row(1, "Editing the Flow", "failed", "Result: llm_evidence_loop.draft_amendments_refused · Reason: already_in_flow,already_out"));
-  assert.deepEqual([edit.state, edit.name, edit.outcome], ["refused", "Edit the Flow", "Not done: that step is already in the Flow; and that step is already out of the Flow"]);
+  assert.deepEqual([edit.state, edit.name, edit.outcome], ["refused", "Change the Flow", "Not done: that step is already in the Flow; and that step is already out of the Flow"]);
   const rerun = words(row(2, "Running the step again", "failed", "Result: llm_evidence_loop.repeat_refused · Reason: changed_nothing"));
-  assert.deepEqual([rerun.name, rerun.target, rerun.outcome], ["Edit the Flow", "run the step again", "Not done: it was already tried exactly this way and changed nothing"]);
+  assert.deepEqual([rerun.name, rerun.target, rerun.outcome], ["Change the Flow", "run the step again", "Not done: it was already tried exactly this way and changed nothing"]);
   const press = words({ ...row(3, "Clicking “Add to cart”", "failed", "Result: llm_evidence_loop.repeat_refused · Reason: failed · Node: web.output.dom-click", "core.run_node"), phase: "exploring" });
   assert.deepEqual([press.state, press.name, press.target, press.outcome], ["refused", "Click", "Add to cart", "Not done: it was already tried exactly this way and did not work"]);
   assert.deepEqual([words(row(4, "Editing the Flow", "succeeded")).state, words(row(4, "Editing the Flow", "succeeded")).outcome], ["done", "Done"]);
@@ -223,6 +223,6 @@ test("a refused decision never reads as work done or under way, and a repeated r
   const bare = cardWords(card({ kind: "draft", target: null, outcome: "done", refused: { all: false, because: "that step is already in the Flow" } }), false);
   assert.equal(bare.outcome, "Only partly done: that step is already in the Flow", "with nothing said of what landed, the reason alone");
   const thrice = cardWords(card({ kind: "draft", target: "run the step again", outcome: "failed", refused, times: 3 }), false);
-  assert.deepEqual([thrice.outcome, thrice.label], [`Not done (3 times): ${because}`, `Edit the Flow, run the step again: Not done (3 times): ${because}`]);
+  assert.deepEqual([thrice.outcome, thrice.label], [`Not done (3 times): ${because}`, `Change the Flow, run the step again: Not done (3 times): ${because}`]);
   assert.equal(cardWords(card({ kind: "draft", target: null, outcome: "failed", refused, times: 1 }), false).outcome, `Not done: ${because}`, "once is said as once");
 });

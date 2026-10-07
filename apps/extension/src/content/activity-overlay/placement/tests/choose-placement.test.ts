@@ -152,3 +152,34 @@ test("the anchor's offsets pin two edges and free the other two", () => {
   assert.deepEqual(anchorStyle("top-right", 16, 66), { left: "auto", right: "16px", top: "16px", bottom: "auto" });
   assert.deepEqual(anchorStyle("left", 16, 30), { left: "16px", right: "auto", top: "calc(50% - 15px)", bottom: "auto" });
 });
+
+// D11 of the t342 round 2 UI review (run-muylu4pp-f9cb2121): on the item page a
+// sticky header, a notification card top-left and a fixed Total / Buy now bar
+// made both left corners busy, and the pill hopped between the band docked
+// above the bar (y 572) and the left midpoint (y 327) at moments 3, 11 and 13,
+// each time the page scrolled text under the place it held. Text scrolls past;
+// a place that stays clear of everything fixed is kept.
+const ITEM_HEADER: Rect = { left: 0, top: 0, width: 1264, height: 93 };
+const NOTIFICATION_CARD: Rect = { left: 24, top: 80, width: 340, height: 142 };
+const TOTAL_BAR: Rect = { left: 0, top: 655, width: 1264, height: 65 };
+const SPEC_TABLE_TEXT: Rect = { left: 40, top: 560, width: 1160, height: 160 };
+const BLANK_COLUMN_TEXT: Rect = { left: 40, top: 300, width: 380, height: 120 };
+
+test("a docked place already held is kept when page text scrolls under it, rather than hopping to the midpoint (D11)", () => {
+  const before = place(page([ITEM_HEADER, NOTIFICATION_CARD, TOTAL_BAR], [], [BLANK_COLUMN_TEXT]));
+  assert.equal(before.anchor, "bottom-left");
+  assert.ok((before.offset ?? 0) > 0, "docked above the bar");
+  const scrolled = page([ITEM_HEADER, NOTIFICATION_CARD, TOTAL_BAR], [], [SPEC_TABLE_TEXT]);
+  assert.deepEqual(place(scrolled, before), before, "the text under it scrolls away again; the pill stays put");
+});
+
+test("a midpoint already held is kept when page text scrolls under it, while the docked band is clear (D11)", () => {
+  const held: OverlayPlacement = { shape: "pill", anchor: "left" };
+  assert.deepEqual(place(page([ITEM_HEADER, NOTIFICATION_CARD, TOTAL_BAR], [], [BLANK_COLUMN_TEXT]), held), held);
+});
+
+test("a held place that a fixed part of the page comes over is still left (D11)", () => {
+  const held: OverlayPlacement = { shape: "pill", anchor: "left" };
+  const popup: Rect = { left: 0, top: 300, width: 500, height: 120 };
+  assert.notDeepEqual(place(page([ITEM_HEADER, NOTIFICATION_CARD, TOTAL_BAR, popup]), held), held);
+});

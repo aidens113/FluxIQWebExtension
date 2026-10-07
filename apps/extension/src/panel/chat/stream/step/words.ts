@@ -26,7 +26,8 @@ const TOOLS: Readonly<Record<string, Tense>> = {
   "core.completion_check": { now: "Checking the Flow is finished", done: "Checked the Flow is finished", failed: "The Flow isn't finished yet" },
   "core.dry_run": { now: "Trying the automation", done: "Tried the automation" },
   "core.dry_run.page": { now: "Trying the automation on the page", done: "Tried the automation on the page" },
-  "core.flow_draft": { now: "Updating the draft automation", done: "Updated the draft automation" },
+  // Core heads an edit "Changing the Flow", and the overlay says the same (D12 of the t342 round 2 UI review).
+  "core.flow_draft": { now: "Changing the Flow", done: "Changed the Flow" },
   "demo.look": { now: "Looking at the page", done: "Looked at the page" },
   "web.detect_repeating_structure": { now: "Finding the repeating items on the page", done: "Found the repeating items on the page" },
   "web.dom.capture_snapshot": { now: "Looking at the page", done: "Looked at the page" },
@@ -49,7 +50,7 @@ const PAGE_ACTION: Tense = { now: "Working on the page", done: "Worked on the pa
 /** Titles Core writes in words, turned to the tense the step is in. */
 const TITLES: Readonly<Record<string, Tense>> = {
   "deciding the next step": { now: "Deciding the next step", done: "Decided the next step" },
-  "amending the draft flow": { now: "Updating the draft automation", done: "Updated the draft automation" },
+  "amending the draft flow": TOOLS["core.flow_draft"]!,
   "completion check": TOOLS["core.completion_check"]!,
   "build started": { now: "Started building", done: "Started building" },
   "build finished": { now: "Finished building", done: "Finished building" },
