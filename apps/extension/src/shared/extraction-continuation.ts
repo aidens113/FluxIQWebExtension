@@ -15,6 +15,18 @@
 // It crosses from the content script to the worker and back and is held only in
 // the worker's memory for the length of the command -- never in storage, a log,
 // or the recording -- which is the same place a reply's records already live.
+//
+// **`web.dom.next_page` crosses documents the same way, carrying no rows.**
+// One step presses one control, so all a document it loads needs to know is
+// that the press was made, how the list moved, and what the landing has spent
+// on pages the server refused. The page sends that mark just before it presses,
+// and again before it reloads a refused landing; when the reply is lost, the
+// worker hands the next document the latest mark, and that document answers
+// whether the list arrived (`content/extraction/page-advance/`). A reply lost
+// before any mark pressed nothing, so the step goes out again from the start.
+
+import { webAutomationNextPageAnswerValue } from "@fluxiq-web-extension/domain/client";
+import type { WebAutomationNextPageBy } from "./protocol";
 
 /** The message a page sends with each checkpoint; the worker and the content script must spell it identically. */
 export const EXTRACTION_CHECKPOINT_MESSAGE = "fluxiq.extraction.checkpoint";
@@ -243,4 +255,47 @@ function isRecord(value: unknown): value is ExtractionCheckpointRecord {
 
 function isCount(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+/** The message a page sends to mark a `web.dom.next_page` press, or a refused landing's reload, before it makes it. */
+export const PAGE_MOVE_MARK_MESSAGE = "fluxiq.nextPage.mark";
+
+/**
+ * What a document a `web.dom.next_page` press loaded is told: the press was
+ * made, how it moved the list, and what the move has spent so far on landings
+ * the server refused (absent for none). Nothing read off a page is in it.
+ */
+export type PageMoveMark = {
+  by: WebAutomationNextPageBy;
+  refusals?: ExtractionCheckpointRefusals | undefined;
+};
+
+/** What an `executeAction` message carries beside a `web.dom.next_page`: the token its marks go under, and the mark a document reached by its press goes on from. */
+export type PageMoveContinuation = {
+  token: string;
+  resume?: PageMoveMark | undefined;
+};
+
+/** The mark message itself. */
+export type PageMoveMarkMessage = {
+  type: typeof PAGE_MOVE_MARK_MESSAGE;
+  token: string;
+  mark: PageMoveMark;
+};
+
+/**
+ * `value` as a mark, or `undefined` when it is not one. Both ends read what the
+ * other sent through this. A member it does not know refuses the mark rather
+ * than being dropped, so nothing rides along with a mark -- no row, no page
+ * text -- and `by` must be one of the answer's own words.
+ */
+export function readPageMoveMark(value: unknown): PageMoveMark | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const { by, refusals, ...rest } = value as Record<string, unknown>;
+  if (Object.keys(rest).length > 0) return undefined;
+  const moved = webAutomationNextPageAnswerValue({ outcome: "moved", by });
+  if (moved?.outcome !== "moved") return undefined;
+  const refusalCounts = refusals === undefined ? undefined : refusalCountsValue(refusals);
+  if (refusals !== undefined && refusalCounts === undefined) return undefined;
+  return { by: moved.by, ...(refusalCounts === undefined ? {} : { refusals: refusalCounts }) };
 }

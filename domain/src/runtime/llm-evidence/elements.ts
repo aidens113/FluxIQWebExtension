@@ -53,7 +53,9 @@ export type WebLlmEvidenceElement = {
    * separate blocks -- "Pickup or delivery? Carden Falls Supercenter" beside
    * "Pickup or delivery?Carden Falls Supercenter". The capture sends it only
    * when the two differ by spacing alone. Display only: the page view prints
-   * it (`page-view/element/words.ts`); identity reads `name` and `text`.
+   * it (`page-view/element/words.ts`), and the route state's controls list
+   * names a control by it (`../route-state/project.ts`), both through
+   * `webLlmReadableWords`; identity reads `name` and `text`.
    */
   readable?: string;
   /**

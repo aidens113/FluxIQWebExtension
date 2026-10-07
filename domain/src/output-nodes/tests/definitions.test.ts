@@ -12,8 +12,6 @@ import { validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio
 import {
   WEB_AUTOMATION_EXTRACT_FIELD_KINDS,
   WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
-  WEB_AUTOMATION_EXTRACT_MAX_PAGES,
-  WEB_AUTOMATION_EXTRACT_PAGINATION_MODES,
   webAutomationExtractListRequestValue
 } from "../../actions/extraction";
 import { webAutomationActionDefinitions } from "../../actions/schemas";
@@ -250,12 +248,13 @@ test("the nodes that return records declare a records port for a later node to r
   }
 });
 
-test("the list extraction carries the words of a scraping request, and no other node does", () => {
+test("the list extraction carries the words of a scraping request, and no other node but the next page carries catalog words", () => {
   const tags = nodeFor("web.dom.extract_list").tags ?? [];
-  for (const tag of ["web-automation", "output", "scrape", "collect", "extract", "list", "table", "rows", "every page", "next page", "load more"]) {
+  for (const tag of ["web-automation", "output", "scrape", "collect", "extract", "list", "table", "rows"]) {
     assert.equal(tags.includes(tag), true, `web.dom.extract_list is missing tag ${tag}`);
   }
-  for (const outputId of WEB_AUTOMATION_ACTION_TYPES.filter((candidate) => candidate !== "web.dom.extract_list")) {
+  // The next page carries its own paging words (`./next-page-node.test.ts`).
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES.filter((candidate) => candidate !== "web.dom.extract_list" && candidate !== "web.dom.next_page")) {
     assert.deepEqual(nodeFor(outputId).tags, ["web-automation", "output"], `${outputId} tags`);
   }
 });
@@ -267,7 +266,9 @@ test("the list extraction describes its request for a model to write one", () =>
   assert.equal(node.description.length <= 240, true, `${node.description.length} characters`);
   const firstSentence = node.description.slice(0, node.description.indexOf(".") + 1);
   assert.equal(firstSentence.length > 0 && firstSentence.length <= 80, true, firstSentence);
-  assert.match(firstSentence, /scrape/iu);
+  assert.match(firstSentence, /rows of a list or table/u);
+  // The read reads one page: paging is a Next page step and a repeat (S4).
+  for (const tag of ["every page", "next page", "load more"]) assert.equal(node.tags?.includes(tag), false, `extract_list still tagged ${tag}`);
   // The grammar goes with the parameter, whose description Core keeps to 700.
   const extractList = node.parameters.find((candidate) => candidate.id === "extractList");
   const grammar = extractList?.description ?? "";
@@ -287,15 +288,15 @@ test("the list extraction describes its request for a model to write one", () =>
   // the one that left. The reader accepts all five exactly as before
   // (`actions/extraction/read-request.ts`).
   const namedKinds = WEB_AUTOMATION_EXTRACT_FIELD_KINDS.filter((kind) => kind !== "value");
-  for (const term of ["item", "fields", "css@attr", "column:", "paginate", "minItems", "maxItems", ...WEB_AUTOMATION_EXTRACT_PAGINATION_MODES, ...namedKinds]) {
+  for (const term of ["item", "fields", "css@attr", "column:", "minItems", "maxItems", ...namedKinds]) {
     assert.equal(grammar.includes(term), true, `the extractList description does not mention ${term}`);
   }
+  assert.equal(grammar.includes("paginate"), false, "paginate left the read's grammar");
   // What a condition may say is named, or it is not writable: the grammar and
   // the detect tool's description are the only places a model reads it.
   for (const term of ["is: \"absent\"", "atLeast", "lessThan", "atMost", "greaterThan", "equals", "contains", "startsWith", "endsWith", "matches", "not: true"]) {
     assert.equal(grammar.includes(term), true, `the extractList description does not mention ${term}`);
   }
-  assert.equal(grammar.includes(String(WEB_AUTOMATION_EXTRACT_MAX_PAGES)), true);
   assert.equal(grammar.includes(String(WEB_AUTOMATION_EXTRACT_MAX_ITEMS)), true);
   // Its example is a request the page would run, and one with no issues.
   assert.notEqual(webAutomationExtractListRequestValue(extractList?.example), undefined);
@@ -303,8 +304,8 @@ test("the list extraction describes its request for a model to write one", () =>
   // Every definition gets its own copy, so no caller can change another's.
   const again = createWebAutomationOutputNodeDefinition(webAutomationActionDefinitions.find((candidate) => candidate.actionType === "web.dom.extract_list")!);
   assert.notEqual(again.parameters.find((candidate) => candidate.id === "extractList")?.example, extractList?.example);
-  // Every other node keeps its action's own description.
-  for (const outputId of WEB_AUTOMATION_ACTION_TYPES.filter((candidate) => candidate !== "web.dom.extract_list")) {
+  // Every other node but the next page, which has catalog text of its own, keeps its action's own description.
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES.filter((candidate) => candidate !== "web.dom.extract_list" && candidate !== "web.dom.next_page")) {
     const definition = webAutomationActionDefinitions.find((candidate) => candidate.actionType === outputId);
     assert.equal(nodeFor(outputId).description, definition?.description, `${outputId} description`);
   }

@@ -232,6 +232,10 @@ the result with the repository-local `AuthoredFlowNode` contract before
 writing `snapshots/flow-lane.json`. Each action-node entry carries only its
 `nodeId`, `definitionId`, `outputId`, screened `parameters`, and
 `parametersWithheld`, the dotted paths whose values the screen refused.
+The sibling `authoredGraph` record (control nodes and edges) carries
+identifiers only -- node, definition, edge and port ids, each checked against
+Core's identifier shape -- and never an edge label, a node label or description,
+metadata, or any control node's parameters.
 
 Those fields preserve three different facts. A missing parameter was never
 authored. A safe transformation may survive -- for example an absolute URL can

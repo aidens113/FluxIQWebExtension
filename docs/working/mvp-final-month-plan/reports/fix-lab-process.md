@@ -49,14 +49,27 @@ once slots freed.
   test-contracts and domain. `node scripts/structure-audit.mjs` printed "passed (172 warning(s), 118 baselined)". The
   only new warning is advisory: `scripts/lab/live-guards/` has 16 files against a 15-file threshold.
 
+## Results (2026-10-07, group 2: after landing at Core 373203a9 / downstream d4cbb3de)
+
+| Item | Status | What changed | Evidence |
+| --- | --- | --- | --- |
+| W22 instrumentation | fixed | `snapshots/flow-lane.json` now carries `authoredGraph` beside `authoredNodes` (unchanged): control nodes and edges, identifiers only, plus a count of what was left out. It reads the same `get-flow` read, with no extra call. Contracts moved to `test-contracts/src/authored-flow/` with the same public exports. Docs: `testing-facility.md`, `sensitive-values.md`. | `h-authored-graph.md`; contract tests 0/3 before; test-contracts 164/164 pass |
+| `shadow-root-controls.spec.ts:109` | stale spec, fixed | `2294dd16` (t193) deliberately made `covered` mean `web.target.not_actionable`. The spec now expects that. | `i-content-specs.md` |
+| `large-page-resolution.spec.ts:94` | product regression, fixed | `b507d5fa` (t200) removed the 2,000-element cap. That exposed O(siblings)-per-element work in `xpathFor`, `isLeadStatement` -> `ownText`, and `:nth-of-type` `position`. Now: per-parent sibling tables in the capture memo (`selector/sibling-position.ts`), plus per-capture lead-text memoisation. Outputs are byte-identical on 7 pages. A bare capture of the 6,000-link page went from 30.9 s to 2.1 s. | `j-large-page-capture.md`; the read-once test failed before (5 expected, 403 actual) |
+| Closed sessions in `core-api.ts` | fixed (lead) | `fetchProjectIdFromCoreSnapshot` ignores `status: "disconnected"` sessions when matching by session or client id, and bounds the request with `AbortSignal.timeout(10 s)`. | 3 new tests in `connection/tests/core-api.test.ts`: 3 failed before; the connection directory passes 242/242 after |
+| Peak-rule test clock (my defect, on dev) | fixed (lead) | `live-guards/tests/behind-dev.test.mjs` admitted on `Date.now()`, so its 5 tests failed during the peak windows. It now uses a fixed off-peak instant. | `node --test "scripts/lab/**/tests/*.test.mjs" "scripts/check/**/tests/*.test.mjs"` at 01:26 UTC (peak): 192 pass, 0 fail |
+
+Lead validation (group 2, observed): the resolver content specs (`node scripts/test-content.mjs --workers=2 identity-ambiguity
+identity-signals identity-veto identity-wire-chain identity.spec large-page-resolution resolve-target.spec shadow-roots`)
+gave "60 passed (1.5m)". The extension content, selector, evidence, action-runtime and connection unit bundles (56 files)
+gave "tests 469, pass 469". `check` exited 0 for extension, test-runner, test-contracts and domain. test-contracts test:
+164 pass. Structure audit "passed (174 warning(s), 118 baselined)". Core was rebuilt after the fast-forward (exit 0).
+
 ## Remaining
 
-- W22 instrumentation (t289): the creation snapshot (`flow-lane/creation/authored-nodes.ts` and the `AuthoredFlowNode`
-  contract) still keeps action nodes only. Add control node ids and an edge list so a bypassed path can be proven.
 - Core fix for W22 belongs to t283 (`executor/graph-navigation.ts`).
 - G's open follow-ups, in t287-owned files: the repeat guard and `noProgress` see a node's first result (which carries
   its definition) differ once from later identical results. `failed-call.ts` drops the marker on an invalid result.
-- C's residual risk, in `core-api.ts`: Core's snapshot still lists closed sessions with their old project.
 - F: `task/start.mjs` builds only an unbuilt Core, so a stale paired Core is now refused at its `pnpm build`. The
   `runtime-stream-store` million-event test is unchanged.
 - Not verified anywhere: no live, Lab or browser run, so the panel's moment 01 and the peak refusal at a real peak

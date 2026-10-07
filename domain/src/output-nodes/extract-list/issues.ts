@@ -41,6 +41,7 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   isWebAutomationExtractFieldKey,
+  webAutomationExtractListPagesBeyondOne,
   webAutomationExtractListRequestWhole,
   webAutomationExtractListSchema
 } from "../../actions/extraction";
@@ -58,6 +59,7 @@ export type WebAutomationExtractListIssueCode =
   | "web.extract_list.all_fields_excluded"
   | "web.extract_list.invalid_paginate"
   | "web.extract_list.unknown_paginate_key"
+  | "web.extract_list.paginate_retired"
   | "web.extract_list.invalid_where"
   | "web.extract_list.invalid_dedupe"
   | "web.extract_list.invalid_sort"
@@ -130,8 +132,19 @@ function addFieldIssues(fields: JsonValue | undefined, specKeys: ReadonlySet<str
   if (!fieldRefused && !readable({ fields })) issues.add("web.extract_list.all_fields_excluded");
 }
 
+/**
+ * A `paginate` that goes past one page is retired whatever its shape (read-list
+ * redesign S4): a Flow goes through pages with a Next page step and a repeat,
+ * and the dispatch refuses such a read with the same code
+ * (`./dispatch.ts`). Its shape is not judged then, since fixing it would only
+ * reach that refusal. A one-page `paginate` is judged as before.
+ */
 function addPaginateIssues(paginate: JsonValue | undefined, paginateKeys: ReadonlySet<string>, issues: IssueSet): void {
   if (paginate === undefined) return;
+  if (webAutomationExtractListPagesBeyondOne(paginate)) {
+    issues.add("web.extract_list.paginate_retired");
+    return;
+  }
   if (isPlainObject(paginate) && Object.keys(paginate).some((key) => !paginateKeys.has(key))) issues.add("web.extract_list.unknown_paginate_key");
   if (!readable({ paginate })) issues.add("web.extract_list.invalid_paginate");
 }

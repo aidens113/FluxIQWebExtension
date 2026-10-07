@@ -32,6 +32,17 @@
 // applied to, and that none survived. That is strictly more than an empty table
 // said, and it is the reason the report is not optional.
 //
+// ## Only in exploration
+//
+// The floor is the exploring model's. A Flow-run or replayed read reads one
+// page (S5), and the domain says so with `answer: "kept"`
+// (`domain/src/actions/extraction/request.ts`): such a read answers only the
+// rows it kept, possibly none, and never the rows it rejected. A page whose
+// items all fail the conditions is a page with nothing to collect, and
+// answering its rejected rows would store rows the instruction excluded beside
+// a later page's kept ones. The "too much, never nothing" judgement moves to
+// the collection, where every page's answer is in view.
+//
 // ## Counts only
 //
 // Nothing here is read off the page but `seen`: one value per condition, cut to
@@ -41,6 +52,7 @@
 // counts, flags and declared field keys -- so no row's content rides out on a
 // diagnostic.
 
+import type { WebAutomationExtractListRequest } from "../types";
 import type { ExtractedListRecord } from "./list-reader";
 
 /**
@@ -93,8 +105,9 @@ export type FilteredListAnswer = {
 /**
  * The rows a filtered read answers with, and whether they are the rejected ones.
  *
- * The rejected rows are the answer only when the conditions kept nothing **and**
- * there is something to fall back to: a read continued from another document
+ * The rejected rows are the answer only when the read names no `answer` rule
+ * (an exploration read; `"kept"` answers the kept rows, possibly none), the
+ * conditions kept nothing, **and** there is something to fall back to: a read continued from another document
  * carries its predecessor's counts but not its rejected rows, and answering
  * "unfiltered" with no rows would be a claim about rows that are not there.
  *
@@ -104,8 +117,8 @@ export type FilteredListAnswer = {
  * while it is being left out, and reporting it is what makes the verb's
  * validation honest once it is not.
  */
-export function filteredListAnswer(rows: FilteredListRows, truncated: boolean): FilteredListAnswer {
-  const unfiltered = rows.kept.length === 0 && rows.rejected.length > 0;
+export function filteredListAnswer(rows: FilteredListRows, truncated: boolean, answer?: WebAutomationExtractListRequest["answer"]): FilteredListAnswer {
+  const unfiltered = answer !== "kept" && rows.kept.length === 0 && rows.rejected.length > 0;
   if (!unfiltered) {
     return { records: [...rows.kept], missingFields: sorted(rows.keptMissing), truncated, unfiltered: false };
   }

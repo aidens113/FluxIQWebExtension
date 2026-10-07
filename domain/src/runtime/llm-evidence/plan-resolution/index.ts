@@ -4,7 +4,8 @@
 // selectors and `extractList` requests the node runs with
 // (`resolve-plan-node.ts`, with the extraction node's list in
 // `extraction/slot.ts`, its columns in `extraction/columns.ts` and the
-// conditions that say which items are records in `extraction/conditions.ts`).
+// conditions that say which items are records in `extraction/conditions.ts`),
+// and the Next page step's `nextPage` naming that list (`next-page-slot.ts`).
 
 export {
   resolveWebPlanNode,

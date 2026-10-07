@@ -17,6 +17,7 @@ import type { WebAutomationExtractionSummary, WebAutomationExtractListRequest, W
 // it carries. Type-only, as the imports above are, so no cycle exists.
 import type { WebAutomationStructureDetection, WebAutomationStructureDetectionRequest } from "../extraction";
 import type { WebAutomationClearedCheckWait } from "./cleared-check-wait";
+import type { WebAutomationNextPageAnswer, WebAutomationNextPageRequest } from "./next-page";
 
 export type WebAutomationActionType =
   | "web.browser.navigate"
@@ -33,6 +34,7 @@ export type WebAutomationActionType =
   | "web.dom.check"
   | "web.dom.assert"
   | "web.dom.extract_list"
+  | "web.dom.next_page"
   | "web.dom.upload"
   | "web.dom.dialog"
   | "web.browser.tab"
@@ -236,6 +238,19 @@ export {
   webAutomationRecordedExtraction
 } from "./extraction";
 
+// `web.dom.next_page`'s request and answer (contract C1) live in `./next-page`
+// and are re-exported here for the reason the extraction's are: `domain/client`
+// reaches this module, not that directory.
+export type {
+  WebAutomationNextPageAnswer,
+  WebAutomationNextPageBy,
+  WebAutomationNextPageEnd,
+  WebAutomationNextPageFault,
+  WebAutomationNextPageRequest,
+  WebAutomationNextPageWay
+} from "./next-page";
+export { webAutomationNextPageAnswerValue, webAutomationNextPageRequestValue } from "./next-page";
+
 /** What `web.dom.assert` claims about the page. `expected` carries the text or URL for `text` and `url`. */
 export type WebAutomationAssertKind = "exists" | "absent" | "text" | "url" | "visible" | "enabled";
 
@@ -355,6 +370,8 @@ export type WebAutomationActionCommand = {
   extract?: WebAutomationExtractRead | undefined;
   /** `web.dom.extract_list`. */
   extractList?: WebAutomationExtractListRequest | undefined;
+  /** `web.dom.next_page`: the list to move on and the way to its next page. One step moves one page. */
+  nextPage?: WebAutomationNextPageRequest | undefined;
   /**
    * `web.dom.capture_snapshot`: also detect a repeating structure, answered on
    * the result's `structure`. Only the domain's authoring runtime sends it,
@@ -484,6 +501,15 @@ export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObj
   extracted?: JsonValue | undefined;
   /** `web.dom.extract_list`'s account of its own read (C2): counts, a flag, and declared field keys only. */
   extraction?: WebAutomationExtractionSummary | undefined;
+  /** `web.dom.next_page`'s answer: the list moved, has no next page, or the move failed. */
+  nextPage?: WebAutomationNextPageAnswer | undefined;
+  /**
+   * The output a succeeded action asks Core to route down instead of
+   * `success`: `ended`, set exactly when `nextPage.outcome` is `ended`, which is
+   * how a loop over the pages of a list leaves it. Lifted to the top of the
+   * dispatch payload Core receives (`io/gateway-output-dispatcher.ts`).
+   */
+  route?: "ended" | undefined;
   /** The native dialog handled before this action, when there was one. */
   dialog?: WebAutomationObservedDialog | undefined;
   /** `web.dom.capture_snapshot` asked with `detectStructure`: the structure the page detected, or why none. Selectors, labels and counts only (D3). */
@@ -529,6 +555,7 @@ export const WEB_AUTOMATION_ACTION_TYPES: WebAutomationActionType[] = [
   "web.dom.check",
   "web.dom.assert",
   "web.dom.extract_list",
+  "web.dom.next_page",
   "web.dom.upload",
   "web.dom.dialog",
   "web.browser.tab",
@@ -556,6 +583,7 @@ export const WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.dom.check": "dom.check",
   "web.dom.assert": "dom.assert",
   "web.dom.extract_list": "dom.extract_list",
+  "web.dom.next_page": "dom.next_page",
   "web.dom.upload": "dom.upload",
   "web.dom.dialog": "dom.dialog",
   "web.browser.tab": "browser.tab",

@@ -67,6 +67,14 @@
 // had nothing on it. A superset is visibly too wide and the loop's own judgement
 // can say so; nothing is a plausible-looking answer that ends the loop.
 //
+// That floor is an exploration read's only. A Flow-run or replayed read reads
+// one page and says so with `answer: "kept"` (S5): it answers the rows it kept,
+// possibly none, and never the rows it rejected, because a page with nothing
+// that matches is a page with nothing to collect (`filtered-answer.ts`). Its
+// `minItems` counts the items the page showed rather than the rows kept, which
+// is what the wait below already counts; the verb reads it so
+// (`actions/extract-list.ts`).
+//
 // So the rejected rows are kept as they are read -- the record is built before
 // the conditions are asked, so this costs an array rather than a second pass --
 // and `conditions` reports what happened in counts alone: how many items the
@@ -395,7 +403,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       rejected: rejectedRows?.records ?? [],
       rejectedMissing: rejectedRows?.missing ?? new Set(),
       rejectedTruncated: rejectedRows?.truncated ?? false
-    }, truncated);
+    }, truncated, request.answer);
     // Then dedupe, sort and the bound, over whichever rows the answer is. For
     // kept rows the dedupe is already done and finds nothing more; for the rows
     // a read the conditions emptied falls back to, it is the whole of it.

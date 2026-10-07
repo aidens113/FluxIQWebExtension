@@ -10,6 +10,12 @@ import {
   WEB_AUTOMATION_EXTRACT_LIST_TAGS,
   webAutomationExtractListParameters
 } from "./extract-list";
+import {
+  WEB_AUTOMATION_NEXT_PAGE_DESCRIPTION,
+  WEB_AUTOMATION_NEXT_PAGE_ENDED_PORT,
+  WEB_AUTOMATION_NEXT_PAGE_TAGS,
+  webAutomationNextPageParameters
+} from "./next-page";
 
 const controlInput: AutomationNodePort = { id: "in", label: "In", valueType: "signal", role: "control" };
 const outputPorts: AutomationNodePort[] = [
@@ -49,11 +55,22 @@ const recordsPathByOutput: Partial<Record<WebAutomationActionType, string>> = {
 
 /**
  * What a model building a Flow reads about an output beyond the action's own
- * label and description (`./extract-list/catalog-text.ts`). Only the list
- * extraction has a request whose shape the catalog cannot otherwise show.
+ * label and description (`./extract-list/catalog-text.ts`,
+ * `./next-page/catalog-text.ts`). Only the list extraction and the next page
+ * have a request whose shape the catalog cannot otherwise show.
  */
 const catalogTextByOutput: Partial<Record<WebAutomationActionType, { description: string; tags: readonly string[] }>> = {
-  "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
+  "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS },
+  "web.dom.next_page": { description: WEB_AUTOMATION_NEXT_PAGE_DESCRIPTION, tags: WEB_AUTOMATION_NEXT_PAGE_TAGS }
+};
+
+/**
+ * The outputs an action routes down besides `success` and `failed`, each named
+ * by the word its result's `route` carries (contract C1). Only the next page
+ * has one: `ended`, when the list has no next page.
+ */
+const branchPortsByOutput: Partial<Record<WebAutomationActionType, readonly AutomationNodePort[]>> = {
+  "web.dom.next_page": [WEB_AUTOMATION_NEXT_PAGE_ENDED_PORT]
 };
 
 /**
@@ -97,7 +114,7 @@ const VERIFIES_STATE_METADATA_KEY = "verifiesState";
  * when the node says it only observes (`automationStudioNodeRepeatIsSafe`), and
  * withholds one for an ambiguous fault when the node says it mutates
  * (`automationStudioNodeMutates`). Without this every web verb was
- * indistinguishable to it: all eighteen dispatch through `builtin.policy.action`,
+ * indistinguishable to it: all nineteen dispatch through `builtin.policy.action`,
  * whose side-effect class is `external` unconditionally, so a rule keyed on that
  * class alone was a no-op for every node in this domain.
  *
@@ -133,6 +150,8 @@ const WEB_AUTOMATION_ACTION_EFFECT: Readonly<Record<WebAutomationActionType, "ob
   "web.dom.wait_for_text": "observe",
   "web.dom.extract": "observe",
   "web.dom.extract_list": "observe",
+  // Pressing Next twice moves two pages.
+  "web.dom.next_page": "mutate",
   "web.dom.capture_snapshot": "observe",
   "web.dom.assert": "observe"
 });
@@ -214,7 +233,7 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
     // (a navigation, a list extraction, a dialog answer) have no element to
     // scope, so they declare no port a loop could wire.
     inputs: requiredParameters.has("selector") ? [controlInput, itemInput] : [controlInput],
-    outputs: recordsPath ? [...outputPorts, recordsPort] : outputPorts,
+    outputs: [...outputPorts, ...(branchPortsByOutput[definition.actionType] ?? []), ...(recordsPath ? [recordsPort] : [])],
     // Every web parameter may be filled from state unless it says otherwise.
     // Only `recordOutput` does, for the reason Core gives its own: a binding
     // could replace the dataset schema, and with it the excluded fields.
@@ -285,6 +304,7 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
   if (outputId === "web.dom.check") return [...selectorParameters, { id: "checked", label: "Checked", valueType: "boolean", defaultValue: true }];
   if (outputId === "web.dom.assert") return [...selectorParameters, structured("assert", "Assertion")];
   if (outputId === "web.dom.extract_list") return webAutomationExtractListParameters();
+  if (outputId === "web.dom.next_page") return webAutomationNextPageParameters();
   if (outputId === "web.dom.upload") return [...selectorParameters, structured("upload", "Files")];
   if (outputId === "web.dom.dialog") return [structured("dialog", "Dialog")];
   if (outputId === "web.browser.tab") return [structured("tab", "Tab")];
@@ -301,6 +321,7 @@ function iconForOutput(outputId: WebAutomationActionType): string {
   if (outputId === "web.dom.check") return "square-check";
   if (outputId === "web.dom.assert") return "circle-check";
   if (outputId === "web.dom.extract_list") return "table";
+  if (outputId === "web.dom.next_page") return "chevrons-right";
   if (outputId === "web.dom.upload") return "upload";
   if (outputId === "web.dom.dialog") return "message-square";
   if (outputId === "web.browser.tab") return "app-window";

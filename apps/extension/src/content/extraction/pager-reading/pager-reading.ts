@@ -1,12 +1,13 @@
-// Reading a pager and the addresses its controls lead to, for a read that pages
-// (`../pagination.ts`): which control is the page after the current one, whether
-// the pager shows any later page, and whether a link leads back to the document
-// already showing. Split out of `pagination.ts` (t194, 2026-10-01) when lane C's
-// and lane D's paging changes together took it past its line limit; the rules
-// these implement are said in that file's header.
+// Reading a pager and the addresses its controls lead to, for a move to the
+// next page (`../page-advance/`): which page is current, which control is the
+// page after it, whether the pager shows any later page, and whether a link
+// leads back to the document already showing. Split out of `pagination.ts`
+// (t194, 2026-10-01) when lane C's and lane D's paging changes together took it
+// past its line limit; the rules these implement are said in the page-advance
+// module's files.
 //
-// Only numbers and addresses are read, and only to compare them: no word of the
-// page is carried anywhere.
+// Only numbers and addresses are read, and only to compare and report them: no
+// word of the page is carried anywhere.
 
 import { parsedUrl } from "../../../shared/parsed-url";
 
@@ -21,12 +22,13 @@ export function leadsToThisPage(control: HTMLElement): boolean {
   return address !== undefined && sameDocument(address, new URL(document.URL));
 }
 
-/** What the pager beside a `next` control says: the control for the page after the current one, and whether it shows any later page at all. */
-export type PagerReading = { following: HTMLElement | undefined; later: boolean };
+/** What the pager beside a `next` control says: the current page's number, the control for the page after it, and whether it shows any later page at all. */
+export type PagerReading = { current: number; following: HTMLElement | undefined; later: boolean };
 
 /**
  * The pager beside a `next` control, read for the page after the current one:
- * `following` is its enabled control numbered one more than the current page,
+ * `current` is the current page's number (what a next-page step reports it
+ * moved to), `following` its enabled control numbered one more than that,
  * and `later` whether it shows any page numbered higher -- a control or not, so
  * a pager that skips to its last page still says the list goes on.
  * `undefined` when the pager does not say which page is current.
@@ -46,6 +48,7 @@ export function readPager(next: HTMLElement): PagerReading | undefined {
     if (number === undefined) continue;
     const following = numbered.map((element) => element.closest(PAGE_CONTROL) ?? element).find((element) => isControl(element) && pageNumber(element) === number + 1);
     return {
+      current: number,
       following: following instanceof HTMLElement && !isDisabled(following) ? following : undefined,
       later: numbered.some((element) => (pageNumber(element) ?? 0) > number)
     };
@@ -79,6 +82,17 @@ export function followingPageControl(controls: readonly Element[], pagesRead: nu
   const number = pageNumber(current);
   if (number === undefined) return controls[controls.indexOf(current) + 1];
   return controls.find((control) => pageNumber(control) === number + 1);
+}
+
+/**
+ * The number of the page `controls` mark current -- `aria-current`, or the
+ * numbered control that links to the document already showing -- or
+ * `undefined` when none of them says. A next-page step counts on from it
+ * (`../page-advance/`), since one step carries no count of the pages before.
+ */
+export function currentPageNumber(controls: readonly Element[]): number | undefined {
+  const current = controls.find(isCurrentPage) ?? controls.find(linksToThisPage);
+  return current === undefined ? undefined : pageNumber(current);
 }
 
 /** A numbered page control that is a link to the document already showing: a pager's current page when nothing is marked. */

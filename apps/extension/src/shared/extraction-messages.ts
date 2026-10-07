@@ -15,7 +15,6 @@
 import type {
   WebAutomationExtractFieldHandling,
   WebAutomationExtractFieldKind,
-  WebAutomationExtractListPagination,
   WebAutomationExtractListRequest,
   WebAutomationExtractionProposal,
   WebAutomationRecordedExtraction
@@ -295,8 +294,6 @@ export type ExtractionConfirmRequest = {
   item: string;
   /** The columns to record, in the order the panel showed them. A column the user removed is simply absent. */
   fields: readonly ExtractionConfirmField[];
-  /** How to read past the first page, or absent to read this page only. */
-  paginate?: WebAutomationExtractListPagination | undefined;
   /** How many items the list held when the extraction was defined. */
   itemCount: number;
   /** At most this many records; absent, the domain's own bound applies. The panel sends none, and the Testing Lab's seam does. */
@@ -323,7 +320,7 @@ export type ExtractionConfirmOutcome = {
   label: string;
   /** How many records the read returned. `0` is an answer, not a failure: the page had none to give. */
   recordCount: number;
-  /** How many pages the read followed, which is `1` unless pagination was on. */
+  /** How many pages the read followed: a recorded read reads one page (S5). */
   pagesRead: number;
   /** `true` when the read stopped at a bound rather than at the end of the list. */
   truncated: boolean;

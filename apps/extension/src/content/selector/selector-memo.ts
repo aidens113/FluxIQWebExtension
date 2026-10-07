@@ -1,10 +1,13 @@
 // The work one capture's selectors share.
 //
-// A snapshot describes up to 2,000 elements, and each selector is built on its
-// parent's: a table's 240 rows would otherwise each rebuild the table's
+// A snapshot describes every rendered element, and each selector is built on
+// its parent's: a table's 240 rows would otherwise each rebuild the table's
 // selector and each re-ask the page whether a row's test id is unique. Inside
 // `withSelectorMemo` both answers are kept for the rest of the call, so every
-// ancestor's selector and every anchor's page-wide match is computed once.
+// ancestor's selector and every anchor's page-wide match is computed once. So
+// is where each child stands among its same-type siblings
+// (`sibling-position.ts`), which a wide parent's children would otherwise each
+// walk every sibling to learn.
 //
 // Only for a synchronous call that does not change the page. That is what makes
 // the kept answers true: a capture only reads. Outside a scope nothing is kept,
@@ -13,10 +16,15 @@
 // module-level cache cleared on a timer would not be: a click handler runs
 // synchronously and can rewrite the page between two descriptors in one task.
 
-/** What one scope keeps: each element's selector, and each anchor's sole match per search root (`null` when not exactly one). */
+/**
+ * What one scope keeps: each element's selector, each anchor's sole match per
+ * search root (`null` when not exactly one), and each parent's table of where
+ * its children stand among their same-type siblings, per grouping.
+ */
 export type SelectorMemo = {
   readonly selectors: Map<Element, string>;
   readonly soleMatches: Map<Document | ShadowRoot, Map<string, Element | null>>;
+  readonly siblingPositions: Map<ParentNode, Map<string, Map<Element, { readonly index: number; readonly shared: boolean }>>>;
 };
 
 let active: SelectorMemo | undefined;
@@ -24,7 +32,7 @@ let active: SelectorMemo | undefined;
 /** Runs `capture` with one memo shared by every selector it builds. A nested call joins the outer scope. */
 export function withSelectorMemo<T>(capture: () => T): T {
   if (active) return capture();
-  active = { selectors: new Map(), soleMatches: new Map() };
+  active = { selectors: new Map(), soleMatches: new Map(), siblingPositions: new Map() };
   try {
     return capture();
   } finally {

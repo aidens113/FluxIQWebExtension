@@ -178,7 +178,7 @@ test("fresh current kind and handling controls remain operable without settling 
 test("old handlers cannot settle pending raw intent after unrelated same-draft redraw", async () => withDialogDom(async world => {
   world.reply = () => ({ ok: true, session: picked }); mountExtractionPanel(world.native(world.host)); await world.flush();
   const old = name(world, "name"); old.value = "  Pending current  "; old.dispatch("input");
-  world.get("extractionPaginate").checked = true; world.get("extractionPaginate").dispatch("change");
+  const other = name(world, "price"); other.value = "Cost"; other.dispatch("change");
   old.value = "Retired commit"; old.dispatch("change");
   assert.equal(name(world, "name").value, "  Pending current  ");
   name(world, "name").dispatch("change"); assert.equal(name(world, "name").value, "Pending current");

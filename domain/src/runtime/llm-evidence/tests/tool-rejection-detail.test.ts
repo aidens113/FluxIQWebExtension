@@ -414,3 +414,22 @@ test("a node is named only beside the wrong-control reason, and only from a code
   const first = rejectionDetail({ reason: "parameters_not_resolved", target: "t1", instead: ["web.handle.wrong_control", "web.handle.expected.node.web.output.dom-click"] });
   assert.deepEqual(rejectionDetail({ reason: first.reason, target: first.target, instead: first.instead }), first);
 });
+
+// A rerun puts its page back by reloading it, and the reload renumbered the
+// handle the rerun was sent with (`run-musq0b1m-0472cfa0`, Cause 4, steps 0063
+// and 0067). The reason stays `handle_not_in_packet` -- Core reads that word
+// (its repeat guard and its activity wording) -- and the resolver's code says
+// the rest, which `next` puts in a sentence the model can act on.
+test("a handle the page renumbered by reloading is told the page was reloaded and to look again, and a handle never shown is not", () => {
+  const renumbered = rejectionDetail({ reason: "parameters_not_resolved", target: "t985", instead: ["web.handle.renumbered_by_reload", "web.handle.renumbered_by_reload:target", 'target: {"handle": "tN"}'] });
+  assert.equal(renumbered.reason, "handle_not_in_packet");
+  assert.equal(renumbered.target, "t985");
+  assert.match(renumbered.next ?? "", /reload/u);
+  assert.match(renumbered.next ?? "", /renumber/u);
+  assert.match(renumbered.next ?? "", /current handle/u);
+  // A repeat passes the same codes back through, and says the same.
+  assert.deepEqual(rejectionDetail({ reason: renumbered.reason, target: renumbered.target, instead: renumbered.instead }), renumbered);
+
+  const never = rejectionDetail({ reason: "parameters_not_resolved", target: "t40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}'] });
+  assert.deepEqual(never, { reason: "handle_not_in_packet", target: "t40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}'] });
+});

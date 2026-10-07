@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "@fluxiq-web-extension/domain/node";
-import { resolveScenarioWorkflow, validateAuthoredFlowNodes, type LlmActionConsequence, type ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
+import { resolveScenarioWorkflow, validateAuthoredFlowGraph, validateAuthoredFlowNodes, type LlmActionConsequence, type ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../../failure.js";
 import type { DeclaredSecret } from "../../declared-secrets.js";
 import type { PersistedFlowLlmExecution } from "../../persisted-flow-run.js";
@@ -134,6 +134,18 @@ test("a dataset task is built, settled, applied, run on a freshly presented page
     { nodeId: "node.extract", definitionId: "web.output.dom-extract_list", outputId: "web.dom.extract_list", parameters: { fields: { name: null } }, parametersWithheld: ["selector", "fields.name"] },
   ]);
   assert.deepEqual(validateAuthoredFlowNodes(snapshot.authoredNodes, WEB_LLM_DENIED_EVIDENCE_KEYS), { valid: true, value: snapshot.authoredNodes });
+  // And the rest of the Flow: the start node the action list leaves out, and
+  // the edges between them, identifiers only. Run `mut4fvkm` could not say
+  // which path its playback took for want of exactly these.
+  assert.deepEqual(snapshot.authoredGraph, {
+    controlNodes: [{ nodeId: "node.start", definitionId: "builtin.control.start" }],
+    edges: [
+      { edgeId: "edge.start-open", sourceNodeId: "node.start", sourcePortId: "out", targetNodeId: "node.open", targetPortId: "in" },
+      { edgeId: "edge.open-extract", sourceNodeId: "node.open", sourcePortId: null, targetNodeId: "node.extract", targetPortId: null },
+    ],
+    omitted: { controlNodes: 0, edges: 0 },
+  });
+  assert.deepEqual(validateAuthoredFlowGraph(snapshot.authoredGraph), { valid: true, value: snapshot.authoredGraph });
   assert.deepEqual(snapshot.actions.map((action) => action.actionType), ["web.browser.navigate", "web.dom.extract_list"]);
   assert.equal(snapshot.extraction?.steps[0]?.matchedRecords, 2);
   const text = JSON.stringify(snapshot);
@@ -144,7 +156,8 @@ test("a dataset task is built, settled, applied, run on a freshly presented page
   // still never appear is the rest of that URL -- the path and the query are
   // where a page number, a search term and a session token live, and reading a
   // Flow's page number out of a bundle is half of what this member exists for.
-  for (const leak of ["data-testid", "Scrape the first page", "Lamp", "/scenarios/", "product-catalog/"]) assert.equal(text.includes(leak), false, `the snapshot carries ${leak}`);
+  // An edge's label and metadata are text a person or a model wrote; neither travels.
+  for (const leak of ["data-testid", "Scrape the first page", "Lamp", "/scenarios/", "product-catalog/", "Open the catalog page", "every card"]) assert.equal(text.includes(leak), false, `the snapshot carries ${leak}`);
 });
 
 test("a dataset task whose Flow stored the wrong records fails, after publishing what it measured", async () => {
@@ -385,7 +398,7 @@ test("a build that proposed no Flow is written down with what the lane knew, and
   assert.equal(written.build?.outcome, "failed");
   assert.equal(written.build?.failure?.code, "flow_bootstrap.evidence_repeat_without_progress");
   // Nothing was built, so nothing is claimed about it.
-  assert.deepEqual([written.review, written.flowShape, written.authoredNodes, written.ownPage, written.runtimeRunId, written.status, written.route], [null, null, null, null, null, null, null]);
+  assert.deepEqual([written.review, written.flowShape, written.authoredNodes, written.authoredGraph, written.ownPage, written.runtimeRunId, written.status, written.route], [null, null, null, null, null, null, null, null]);
   assert.deepEqual(written.actions, []);
   // The same screen the complete snapshot writes under: the instruction is counted and hashed, never quoted.
   assert.equal(JSON.stringify(written).includes("Scrape the first page"), false);

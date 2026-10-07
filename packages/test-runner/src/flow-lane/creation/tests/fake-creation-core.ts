@@ -22,6 +22,12 @@ export const EXTRACTING_NODES = [
   { id: "node.extract", definitionId: "web.output.dom-extract_list", parameterValues: { selector: "[data-testid=\"card\"]", fields: { name: "[data-testid=\"name\"]" } }, metadata: { outputActionId: "web.dom.extract_list" } },
 ];
 
+/** The edges joining `EXTRACTING_NODES`: start, then navigate, then extract. Labels and metadata, as Core may hold them, that the snapshot must not carry. */
+export const EXTRACTING_EDGES = [
+  { id: "edge.start-open", sourceNodeId: "node.start", sourcePortId: "out", targetNodeId: "node.open", targetPortId: "in", label: "Open the catalog page" },
+  { id: "edge.open-extract", sourceNodeId: "node.open", targetNodeId: "node.extract", metadata: { note: "then read every card" } },
+];
+
 export type FakeCreationCoreOptions = {
   /** What the build answers: a proposal, a refusal envelope, or a request that outlives its bound. */
   generation?: { kind: "proposed" } | { kind: "refused"; status: number; payload: unknown } | { kind: "timeout"; proposalAfterPolls?: number } | { kind: "transport" };
@@ -35,6 +41,8 @@ export type FakeCreationCoreOptions = {
   /** What `create-flow` produced, as `get-flow` returns it. */
   blankFlow?: Record<string, unknown>;
   graphNodes?: readonly unknown[];
+  /** The graph Flow's edges; `EXTRACTING_EDGES` unless a test says otherwise. */
+  graphEdges?: readonly unknown[];
   attempts?: ReadonlyArray<{ nodeId: string; status: string }>;
   runStatus?: string;
   datasets?: ReadonlyArray<{ datasetId: string; nodeIds: string[]; rows: Array<Record<string, unknown>> }>;
@@ -72,7 +80,7 @@ export function fakeCreationCore(options: FakeCreationCoreOptions = {}) {
       calls.push(endpoint);
       if (endpoint === "create-flow") return { flow: { flowId: FLOW_ID, projectId: payload.projectId, name: payload.name } };
       if (endpoint === "get-flow") {
-        if (payload.flowId === GRAPH_FLOW_ID) return { flow: { flowId: GRAPH_FLOW_ID, nodes: options.graphNodes ?? EXTRACTING_NODES, edges: [] } };
+        if (payload.flowId === GRAPH_FLOW_ID) return { flow: { flowId: GRAPH_FLOW_ID, nodes: options.graphNodes ?? EXTRACTING_NODES, edges: options.graphEdges ?? EXTRACTING_EDGES } };
         return { flow: options.blankFlow ?? { flowId: FLOW_ID, projectId: PROJECT_ID, nodes: [], edges: [], metadata: { flowRepresentationKind: "orchestration" } } };
       }
       if (endpoint === "list-flow-subflows") return { subflows: applied ? [{ subflowId: "subflow.one", graphFlowId: GRAPH_FLOW_ID }] : [] };

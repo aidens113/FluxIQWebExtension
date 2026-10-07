@@ -68,3 +68,28 @@ test("truncation from the kept rows is carried whichever rows answer", () => {
   assert.equal(filteredListAnswer(rows({ kept: KEPT }), true).truncated, true);
   assert.equal(filteredListAnswer(rows({ rejected: REJECTED }), true).truncated, true);
 });
+
+// A Flow's read reads one page (S5, contract C3): the domain sends
+// `answer: "kept"`, and the floor above moves to the collection. A page whose
+// items all fail the conditions is a page with nothing to collect, not a page to
+// answer with what it rejected -- the rejected rows would be stored as if they
+// matched, and a later page's kept rows would sit beside them.
+
+test("a read that answers what it kept answers nothing when its conditions kept nothing, and never its rejected rows", () => {
+  const answer = filteredListAnswer(rows({ rejected: REJECTED, rejectedMissing: new Set(["rating"]), rejectedTruncated: true }), false, "kept");
+  assert.deepEqual(answer.records, []);
+  assert.equal(answer.unfiltered, false);
+  // The rejected rows are not the answer, so neither their missing fields nor
+  // the bound that cut them short is the answer's.
+  assert.deepEqual(answer.missingFields, []);
+  assert.equal(answer.truncated, false);
+  // What it kept, when it kept something, is unchanged.
+  assert.deepEqual(filteredListAnswer(rows({ kept: KEPT, rejected: REJECTED }), true, "kept").records, KEPT);
+  assert.equal(filteredListAnswer(rows({ kept: KEPT, rejected: REJECTED }), true, "kept").truncated, true);
+});
+
+test("an exploration read, which names no answer rule, keeps the floor", () => {
+  const answer = filteredListAnswer(rows({ rejected: REJECTED }), false, undefined);
+  assert.deepEqual(answer.records, REJECTED);
+  assert.equal(answer.unfiltered, true);
+});

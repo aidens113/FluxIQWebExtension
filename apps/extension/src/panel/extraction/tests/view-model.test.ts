@@ -15,8 +15,7 @@ import {
   removeExtractionField,
   renameExtractionField,
   setExtractionFieldHandling,
-  setExtractionFieldKind,
-  setExtractionPaginate
+  setExtractionFieldKind
 } from "../view-model";
 import { proposalFixture } from "./proposal-fixture";
 
@@ -77,9 +76,8 @@ test("only the kinds the proposal supplied an attribute or header for are offere
   assert.deepEqual(extractionFieldKindOptions(field(draft, "price")), ["text", "link", "value", "column"]);
 });
 
-test("reading one page is the default, and the proposed control is what following pages uses", () => {
+test("a draft reads one page and has no switch to read every page; the detected control is kept only to say the list goes on", () => {
   const opened = extractionDraftFromProposal(proposalFixture(), "Products");
-  assert.equal(opened.paginate, false);
+  assert.equal("paginate" in opened, false);
   assert.deepEqual(opened.pagination, { next: "a.next", maxPages: 5 });
-  assert.equal(setExtractionPaginate(opened, true).paginate, true);
 });

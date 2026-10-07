@@ -19,6 +19,7 @@ import {
   WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE,
   WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS,
   WEB_AUTOMATION_EXTRACT_FIELD_KINDS,
+  WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT,
   WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
   WEB_AUTOMATION_EXTRACT_PAGINATION_MODES,
@@ -112,7 +113,7 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
       dedupe: {
         type: "object",
         label: "Keep each row once",
-        description: "`by`: the field keys whose values together identify a row. The first occurrence in page order is kept, across every page read.",
+        description: "`by`: the field keys whose values together identify a row. The first occurrence is kept, over every row the read collects in the run.",
         properties: { by: { type: "array", label: "Same row when these match", items: { type: "string" } } }
       },
       sort: {
@@ -133,7 +134,11 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
       maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
       // Default 1 where absent, so an empty list fails unless the Flow says empty
       // is an answer; above the item bound no page could satisfy it.
-      minItems: { type: "integer", label: "Minimum items", minimum: 0, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS }
+      minItems: { type: "integer", label: "Minimum items", minimum: 0, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
+      // Set by the domain on a Flow's dispatch and replay, never by an author
+      // (`./request.ts`); declared so the dispatched request is one this schema
+      // describes.
+      answer: { type: "string", label: "Answer", enum: [WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT] }
     }
   };
 }

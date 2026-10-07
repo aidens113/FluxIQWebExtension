@@ -1,5 +1,6 @@
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_EXTRACT_READ_MODES, webAutomationExtractListSchema } from "./extraction";
+import { webAutomationNextPageSchema } from "./next-page";
 import type { WebAutomationActionType } from "./types";
 
 export type WebAutomationActionDefinition = {
@@ -136,6 +137,9 @@ const assertSchema = {
  * in so the two cannot differ and no import runs back into this module.
  */
 const extractListSchema = webAutomationExtractListSchema(elementFingerprintSchema);
+
+/** `WebAutomationNextPageRequest` (C1), owned by `./next-page` and built from this file's fingerprint schema as the list's is. */
+const nextPageSchema = webAutomationNextPageSchema(elementFingerprintSchema);
 
 /** `WebAutomationExtractRead` (C3): which value of the target `web.dom.extract` reads. */
 const extractReadSchema = {
@@ -322,6 +326,12 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
     label: "Extract List",
     description: "Extract a field map from every item of a repeating structure, following pagination.",
     parameterSchema: { type: "object", required: ["extractList"], properties: { extractList: extractListSchema } }
+  },
+  {
+    actionType: "web.dom.next_page",
+    label: "Next page",
+    description: "Show the next page of a detected list -- Next, a numbered page, Load more or scrolling -- or answer ended when there is none.",
+    parameterSchema: { type: "object", required: ["nextPage"], properties: { nextPage: nextPageSchema, timeoutMs: { type: "integer", label: "Timeout in ms" } } }
   },
   {
     actionType: "web.dom.upload",

@@ -1,7 +1,7 @@
-import { AUTHORED_FLOW_NODE_BOUNDS, AUTHORED_FLOW_NODE_UNRECOGNIZED_OUTPUT, type AuthoredFlowNode } from "./authored-flow-node.js";
-import { isCoreIdentifier } from "./harness-recovery-validation.js";
-import { add, array, isObject, keys, object, result, uniqueStrings, type JsonObject } from "./runtime-validation.js";
-import { ContractValidationError, type ValidationIssue, type ValidationResult } from "./validation.js";
+import { AUTHORED_FLOW_NODE_BOUNDS, AUTHORED_FLOW_NODE_UNRECOGNIZED_OUTPUT, type AuthoredFlowNode } from "./node.js";
+import { isCoreIdentifier } from "../harness-recovery-validation.js";
+import { add, array, isObject, keys, object, result, uniqueStrings, type JsonObject } from "../runtime-validation.js";
+import { ContractValidationError, type ValidationIssue, type ValidationResult } from "../validation.js";
 
 const nodeKeys = ["nodeId", "definitionId", "outputId", "parameters", "parametersWithheld"] as const satisfies readonly (keyof AuthoredFlowNode)[];
 

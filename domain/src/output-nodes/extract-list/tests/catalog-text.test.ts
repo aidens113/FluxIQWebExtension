@@ -9,13 +9,13 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR } from "../catalog-text";
+import { WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR, WEB_AUTOMATION_EXTRACT_LIST_TAGS } from "../catalog-text";
 
 test("the node says to detect the list, name it by its handle, and that it saves its own rows", () => {
-  assert.match(WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, /web\.detect_repeating_structure/u);
-  assert.match(WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, /extractList by its handle/u);
+  // Read-list redesign 4.2(g): detect first, and name the list by its handle.
+  assert.match(WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, /Detect the list first and name it by its handle/u);
   // Live, a model added a save node after a successful extraction, and the run failed on it (`run-mu4yk4u1-60a1c3a4`).
-  assert.match(WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, /saves its rows itself: no recordOutput or save node needed/u);
+  assert.match(WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, /saves its rows itself: no save step/u);
   // Core cuts a node description at 240 characters, and a condensed one at its first sentence.
   assert.equal(WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION.length <= 240, true, `${WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION.length} characters`);
 });
@@ -27,25 +27,18 @@ test("the node's first sentence says one record is read as a list is, within the
   assert.equal(first.length <= 80, true, `${first.length} characters`);
 });
 
-test("the grammar leads with the handle form, and says how to keep, rename and read columns and pages", () => {
+test("the grammar leads with the handle form, and says how to keep, rename and read columns", () => {
   const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
-  // 700, with Core's parameter-description bound moved to match. The extra
-  // room carries one clause -- what a page budget is for -- and the pair that
-  // justifies it: on 2026-09-24 "the products shown on the first page" and
-  // "every product, across all of its pages" produced the identical authored
-  // node, `paginate: { maxPages: 3 }`, one failing and one passing. Three
-  // changes elsewhere left that pair unchanged. A budget is for keeping a
-  // prompt honest, not for keeping a term undefined.
+  // Core's parameter-description bound is 700.
   assert.equal(grammar.length <= 700, true, `${grammar.length} characters`);
-  assert.equal(grammar.includes("pages to read, not pages present"), true, "the grammar says what a page budget is for");
-  for (const term of ['handle: "extraction.N"', 'fields?: {yourKey: "colKey"|"colKey@href"}', "paginate?: false", "absolute URL", "raw href"]) {
+  // The page budget's clause left with the read's paging (read-list redesign
+  // S4): a read reads one page, and says so.
+  assert.equal(grammar.includes("Reads this page only."), true, "the grammar says a read reads one page");
+  for (const term of ['handle: "extraction.N"', 'fields?: {yourKey: "colKey"|"colKey@href"}', "absolute URL", "raw href"]) {
     assert.equal(grammar.includes(term), true, `the grammar does not say ${term}`);
   }
   assert.equal(grammar.indexOf("handle") < grammar.indexOf("item: css"), true, "the handle form comes before the literal request");
   assert.match(grammar, /minItems \(default 1, 0 = none\), maxItems/u);
-  // Pagination is described once, for both branches. It was described twice
-  // until 2026-09-24, and the second copy is what paid for the clause below.
-  assert.equal(grammar.split("paginate?:").length - 1, 2, "paginate appears as the detected switch and as the literal shape, and not a third time");
 });
 
 test("the grammar says filtering is optional before it says how to filter", () => {
@@ -109,7 +102,7 @@ test("the grammar says a list can be deduplicated and sorted, and the example de
   // Live run `run-mulwm2dc-0bd95f22`: asked for roles "deduplicated, newest
   // first", the verifier said to add dedupe and sort and the repair had nowhere
   // to write either. Both are `extractList`'s own keys, and the grammar says them
-  // once, for both branches, as it does pagination.
+  // once, for both branches.
   const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
   assert.equal(grammar.includes("dedupe?: true|key"), true, "the grammar does not say dedupe");
   assert.equal(grammar.includes('sort?: "key desc"'), true, "the grammar does not say sort");
@@ -124,4 +117,21 @@ test("the grammar says a list can be deduplicated and sorted, and the example de
   assert.equal(Object.hasOwn(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, "sort"), true);
   assert.equal(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE.dedupe, false);
   assert.deepEqual(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE.sort, []);
+});
+
+// Read-list redesign S4: a read reads one page, and pages are the Flow's -- a
+// Next page step and a repeat -- so the model is no longer shown how to page a
+// read, and the words for paging belong to the Next page node.
+test("the read's catalog text says nothing of paging, and its tags name none", () => {
+  for (const text of [WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR, JSON.stringify(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE)]) {
+    for (const word of ["paginate", "maxPages", "maxScrolls", "one page or many"]) assert.equal(text.includes(word), false, `${word} in ${text}`);
+  }
+  assert.equal(Object.hasOwn(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, "paginate"), false);
+  for (const tag of ["every page", "next page", "load more", "infinite scroll", "pagination"]) assert.equal(WEB_AUTOMATION_EXTRACT_LIST_TAGS.includes(tag), false, tag);
+  assert.equal(
+    WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION,
+    "Read the rows of a list or table on this page, or one record, into the dataset. Detect the list first and name it by its handle. It saves its rows itself: no save step."
+  );
+  // dedupe, sort and maxItems now work over every row the read collects in the run.
+  assert.match(WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR, /every row it collects in the run: dedupe\?: true\|key, sort\?: "key desc", minItems/u);
 });
