@@ -25,7 +25,7 @@ export async function closeLaunch(files, start, entries, { exitCode, now, reconc
     .filter((entry) => entry.event === "start" && entry.runsDirectory === start.runsDirectory && Date.parse(entry.at) > sinceMs)
     .map((entry) => Date.parse(entry.at));
   const untilMs = later.length === 0 ? Infinity : Math.min(...later);
-  const outcomes = (await readRunOutcomes(start.runsDirectory, { sinceMs, knownRunIds }))
+  const outcomes = (await readRunOutcomes(start.runsDirectory, { sinceMs, knownRunIds, labRunsDirectory: files.labRuns ?? null }))
     .filter((outcome) => outcome.startedAt === null || Date.parse(outcome.startedAt) < untilMs);
 
   const base = { event: "finish", launchId: start.launchId, at: new Date(now).toISOString(), instance: start.instance, task: start.task, fingerprint: start.fingerprint, exitCode };
@@ -41,6 +41,7 @@ export async function closeLaunch(files, start, entries, { exitCode, now, reconc
       maxBuildCostUsd: outcome.maxBuildCostUsd,
       buildsOverCeiling: outcome.buildsOverCeiling,
       balanceFailure: outcome.balanceFailure,
+      ...(outcome.killed ? { killed: true } : {}),
       ...marker,
     }));
   for (const finish of finishes) await appendLedgerEntry(files.ledger, finish);

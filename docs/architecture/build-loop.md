@@ -52,6 +52,24 @@ the structured statement. Navigation, missing evidence, unchanged controls
 and written steps send no toggle. Core accepts this field explicitly and
 uses it to recognize cancelling presses; the domain does not edit the draft.
 
+## Which List A Read Read
+
+A live list read (`web.output.dom-extract_list`) that succeeds sends
+`draft.reads: "list:<16 hex>"`, made by `node-run/list-read/code.ts` from a
+sha256 of the page's origin and path (no query or hash, so page 1 and page 5
+of one search are one page, and a reload keeps it) and the resolved
+`extractList.item` selector the read ran with. The model's `extraction.N`
+handle, `fields`, `where`, `sort` and `paginate` are not part of it: they say
+how a list was read, not which list. A read whose page or item selector cannot
+be found, every other node, every refusal, a look and a written step send no
+code; a read whose command met a robot check carries the code it would have
+sent. The dry-run replay builds no draft statement and sends none. Core
+compares codes for equality only and refuses a read joining the Flow with the
+code of a kept read when no kept step changed anything between them
+(`AS/runtime/flow-draft/second-copy.ts`, live run `run-muq4oaof-464f5bce`).
+`capture.ts`'s draft type does not declare `reads` yet; `node-run/run.ts`
+widens its `WebNodeDraftStatement` with it until it does.
+
 `stable-handles.ts` preserves an unambiguous control's handle across a reload
 that rewrites its selector shape by matching page, frame, record, tag and
 identity words after the existing address tiers. Both capture and remembered

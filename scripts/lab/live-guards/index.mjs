@@ -1,5 +1,5 @@
 // The live-run guards: what `run-lab.mjs` asks before a `--live-llm` run may
-// start, and what it records once the run ends. Design and the five rules:
+// start, and what it records once the run ends. Design and the rules:
 // docs/architecture/testing-facility.md, "Live-run waste guards".
 
 export { admitLiveRun, DEBUG_DIRECTORY } from "./admit-live-run.mjs";
