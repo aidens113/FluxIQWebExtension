@@ -56,7 +56,7 @@ hardening. In-flight t334 (click executor), t335 (installer, never compiled) and
 t337 (grammar for one sentence family) are WIP commits on their own branches, not
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
-**In flight.** t349 the saved instruction is the person's own words; sweep-1007 first full sweep (read-only); t350 chat and overlay defects that persist in both modes. Next: the lane A candidate probe once t349 and t350 are merged, compared with legacy round 2 on the same task.
+**In flight.** t349 the saved instruction is the person's own words; t351 the ten Core test failures the sweep found; t352 downstream check order, extension failures and test-runner tests; t350 chat and overlay defects that persist in both modes. Next: the lane A candidate probe once t349 and t350 are merged, compared with legacy round 2 on the same task.
 
 **Next order.**
 
@@ -135,6 +135,21 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
+
+### Brief: t351 the ten Core test failures the first sweep found
+- Worker: t351-core-failures (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t351\` (Core-paired, branch `task/t351-core-dev-test-failures`); edits in its `!FluxIQ` tree. Report: `docs/working/mvp-final-month-plan/reports/t351-core-dev-test-failures.md` in the t351 downstream tree.
+- Source: [sweep-1007](./mvp-final-month-plan/reports/sweep-1007.md), Core section: deterministic failures in `executor/tests/defensive-policy.test.ts` (1), `llm/tests/loop-budget.test.ts` (1), `flow-bootstrap/generation-failure/tests/{provider-refusal,provider-throw}.test.ts` (1, 3), `tests/refuted-result/tests/carried-steps-between-rounds.test.ts` (1), `tests/refuted-result/tests/failed-step-reauthor.test.ts` (3), all under `packages/fluxiq/src/programs/automation-studio/`. t341 found the same "approve spy never called" pattern in re-author stubs: t299's guard refuses a build result without `status: "proposed"`.
+- For each file: find the first bad commit by running only that file; decide whether the product regressed or the test encodes behavior that was deliberately and correctly changed (t296 confirming yes, t299 proposal status, t331 executor split); fix the cause, not the symptom. Product fixes go in the owning module with the test proving them; stale tests are updated to state the current contract, saying why in the report.
+- Owns: those six test files, their helpers, and the product modules a regression fix needs (list them in the report before editing).
+- Must not touch: `runtime/conversations/**` (t349), activity wording and extension (t350), `docs/working/*.md`. If a product fix needs `runtime/conversations/**`, stop and report it. No commits, provider, Lab or panel. No new `as never` casts.
+- Definition of done: all six files pass; the directories around each change pass; Core nonincremental typecheck and structure audit pass; a table of file, first bad commit, cause and fix.
+
+### Brief: t352 downstream check build order, four extension failures, and the test-runner tests the sweep never reached
+- Worker: t352-downstream (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t352-downstream-check-and-tests` (branch `task/t352-downstream-check-and-tests`, shared Core). Report: `docs/working/mvp-final-month-plan/reports/t352-downstream-check-and-tests.md` in that tree.
+- Source: [sweep-1007](./mvp-final-month-plan/reports/sweep-1007.md), downstream section. (1) `pnpm check` fails in a fresh tree: test-runner's typecheck runs before `@fluxiq-web-extension/test-evidence` has a `dist` (32 errors, TS2307 then TS7006). Fix the order or resolution so `pnpm check` passes in a fresh tree, the same way other workspace dependencies are handled. (2) Extension: `content/actions/tests/execute.test.ts` "a target that never appears is still reported as the page's own TARGET_NOT_FOUND..." (attempts unbounded or absent) and three in `content/tests/landmark-role.test.ts` (reading `nodeType` of undefined). Find the first bad commit and fix the cause, product or stale test. (3) The test-runner's tests never ran in the sweep: run its full test command once and fix or report what fails.
+- Owns: the check orchestration scripts and package manifests the order fix needs; `apps/extension/src/content/actions/**` and the landmark-role owner and their tests; test-runner files a failure fix needs (list them before editing).
+- Must not touch: the extension panel chat and content overlay files (t350 owns them), Core, `docs/working/*.md`. No commits, Lab or browser runs, or provider calls. No new `as never` casts.
+- Definition of done: `pnpm check` passes in this tree from a state without `packages/test-evidence/dist` (say how you produced that state); the four extension tests and their directories pass; test-runner full tests pass or every failure is fixed or reported with cause; extension build for all targets if the extension changed; structure audit passes.
 
 ### Brief: t342 round 3 lane A candidate-mode probe
 - Lead: the t342 lead, same worktree and Lab slot 2, after the supervisor merges t349 and t350 and syncs both t342 branches with dev. Append a round 3 section to the t342 report.
@@ -418,6 +433,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: Core `e0664f17`, downstream `69413e02`, both pushed. Core builds the D1 start hook from `FLUXIQ_CANDIDATE_START_URL` and optional `FLUXIQ_CANDIDATE_START_TOKEN` (bearer header only, never logged), unset by default and in product; readiness reports `capabilities.candidateTrial.startReset`; the readiness handler accepts a POST whose only field is the route-added `authSessionId`. The Lab admits candidate mode only when Core reports the trial runner and the hook, gives only a Core it boots in candidate mode the hook pointed at the run's own `/__control/reset`, fails a draft as `runtime.behavior` (`lab.candidate_not_promoted`) with candidate id, verdict and trials, sends a promoted proposal through the existing reset, playback and oracle, and records mode, candidate, trials, verdict and proposal in `flow-lane.json`.
 - Validation: supervisor on the merged t348 trees: Core vitest on candidate-start-hook, programs/_shared, api, candidate-trial, conversations -> 60 files, 465 passed; Core and web `tsc --noEmit` exit 0; Core audit exit 0; test-runner built against it; creation, chat, prove and dist tests -> 514 pass, 0 fail; downstream audit exit 0; lane A candidate dry run of the exact Lab command -> `"status":"ready"`, `"providerCallCount":0`, `"candidateTrial":{"trialRunner":true,"startReset":true,"source":"lab-plan"}`.
 - Limits: the hook-to-reset round trip has not run end to end; the global fixture reset also clears an armed variant between trials (lane A uses none); a chat-path draft's verdict is read from Core's wording. The lane A candidate probe waits for t349 and t350 (no live round with a known fix in flight).
+
+### 2026-10-07 - First full sweep of the day: what is red on dev; t351 and t352 dispatched
+- Changed: sweep on detached trees at Core `93c059b0` and downstream `ac50dd85` ([report](./mvp-final-month-plan/reports/sweep-1007.md)). Core: install, build and check pass; `pnpm test` fails 10 tests in 6 fluxiq files (8617 passed), deterministic on rerun, none timeouts; contracts, client-gateway-websocket and web pass. Downstream: build passes; `pnpm check` fails in a fresh tree because test-runner's typecheck runs before test-evidence has a dist, so the steps after it and the test-runner tests never ran; `pnpm test` fails 4 of 2588 extension tests (execute, landmark-role), every other package passes. t351 fixes the Core ten; t352 fixes the check order and the extension four and runs the test-runner tests.
+- Validation: sweep worker's commands and totals as quoted in the report; the supervisor has not rerun them. The four generation-failure failures match the supervisor's own run on `7c87927a`.
+- Limits: the second sweep of the day, if any, waits until t351 and t352 merge.
 
 ## Open Questions
 
