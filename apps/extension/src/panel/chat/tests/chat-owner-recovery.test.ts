@@ -10,7 +10,7 @@ import { activityEvent, relayState } from "./activity-fixture";
 import type { PanelMessage, PanelStore } from "../../state";
 import { createOpenFluxIQButton } from "../../open-fluxiq";
 const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
-const status = (projectId = "project-1", coreApiUrl = "http://core-a.invalid") => statusWith({ connectionState: "connected", paired: true, projectId, settings: { coreApiUrl, gatewayUrl: "ws://gateway.invalid", autoReconnect: true, captureMutations: false, captureInputValues: false, captureSnapshots: false } });
+const status = (projectId = "project-1", coreApiUrl = "http://core-a.invalid") => statusWith({ connectionState: "connected", paired: true, projectId, settings: { coreApiUrl, gatewayUrl: "ws://gateway.invalid", autoReconnect: true, captureMutations: false, captureInputValues: false, captureSnapshots: false, requestsEnabled: false } });
 for (const changed of ["project", "core"] as const) test(`confirmed ${changed} replacement immediately retires old target and turns`, async () => withFakeDocument(async () => {
   const core = targetCore([{ conversationId: "same-id", subjectKind: "flow", subjectId: "f", turns: [{ turnId: "t", author: "person", text: "Old owner message" }] }]);
   const chat = createChatPanel((message) => core.request(message), () => ({ element: document.createElement("a"), observe() {} }));

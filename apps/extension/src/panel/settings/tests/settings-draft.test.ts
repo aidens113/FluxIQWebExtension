@@ -43,11 +43,16 @@ for (const scenario of ["unchanged", "address", "toggle", "retyped", "failed", "
         await Promise.resolve();
         const root = fake(view.element);
         const find = (id: string) => root.descendants().find((node) => node.id === id)!;
+        const requests = find("requestsEnabled");
+        assert.equal(requests.attributes.has("disabled"), true);
+        assert.equal((requests as unknown as { checked: boolean }).checked, false);
+        (requests as unknown as { checked: boolean }).checked = true;
         const gateway = find("gatewayUrl");
         gateway.value = "ws://127.0.0.1:4888/client";
         gateway.dispatch("input");
         const save = find("saveSettingsButton");
         save.dispatch("click");
+        assert.equal(calls[0]?.settings?.requestsEnabled, false);
         assert.equal(save.disabled, true);
         assert.equal(gateway.disabled, false);
         if (scenario === "address") { gateway.value = "ws://127.0.0.1:4999/client"; gateway.dispatch("input"); }

@@ -69,7 +69,7 @@ for (const kind of ["owner", "reconnect"] as const) {
  });
 }
 test("same owner partial settings and runtime/session churn retain metadata and held working",async()=>{
- const {controller,changes}=fixture(()=>list());const configured={...status(),settings:{coreApiUrl:"https://synthetic-a.invalid",gatewayUrl:"ws://synthetic-a.invalid/client",autoReconnect:true,captureMutations:true,captureInputValues:false,captureSnapshots:true}};
+ const {controller,changes}=fixture(()=>list());const configured={...status(),settings:{coreApiUrl:"https://synthetic-a.invalid",gatewayUrl:"ws://synthetic-a.invalid/client",autoReconnect:true,captureMutations:true,captureInputValues:false,captureSnapshots:true,requestsEnabled:false}};
  controller.observe(configured);await controller.refresh();controller.setWorking(true);const before=changes(),owner=controller.state().ownerRevision;
  for(let i=0;i<5;i++)assert.equal(controller.observe({...status(),sessionId:"session"+i,eventCount:i,queueSize:i,runtime:{state:i%2?"running":"idle"}}),false);
  assert.equal(controller.state().ownerRevision,owner);assert.equal(controller.state().rows.length,1);assert.equal(controller.state().working,true);assert.equal(changes(),before);

@@ -11,10 +11,10 @@ import type { FluxIQSettings } from "../../shared/protocol";
 /** A setting typed as an address. */
 export type AddressKey = "gatewayUrl" | "coreApiUrl";
 /** A setting that is on or off. */
-export type ToggleKey = "autoReconnect" | "captureMutations" | "captureInputValues" | "captureSnapshots";
+export type ToggleKey = "autoReconnect" | "captureMutations" | "captureInputValues" | "captureSnapshots" | "requestsEnabled";
 
 /** How one setting is shown. */
-export type SettingField<K extends keyof FluxIQSettings> = { readonly key: K; readonly id: string; readonly label: string; readonly hint: string };
+export type SettingField<K extends keyof FluxIQSettings> = { readonly key: K; readonly id: string; readonly label: string; readonly disabled?: boolean; readonly hint: string };
 
 /** The connection settings, in display order: the two addresses, then the four switches. */
 export const SETTING_FIELDS: {
@@ -29,6 +29,7 @@ export const SETTING_FIELDS: {
     { key: "autoReconnect", id: "autoReconnect", label: "Reconnect automatically", hint: "Reconnect after the connection drops." },
     { key: "captureMutations", id: "captureMutations", label: "Record page changes", hint: "Notice when the page updates by itself." },
     { key: "captureInputValues", id: "captureInputValues", label: "Record what I type", hint: "Needed to replay typing. Passwords are never recorded." },
-    { key: "captureSnapshots", id: "captureSnapshots", label: "Record page snapshots", hint: "Lets FluxIQ see the page as it was at each step." }
+    { key: "captureSnapshots", id: "captureSnapshots", label: "Record page snapshots", hint: "Lets FluxIQ see the page as it was at each step." },
+    { key: "requestsEnabled", id: "requestsEnabled", label: "Allow direct requests", hint: "Unavailable in this version.", disabled: true }
   ]
 };

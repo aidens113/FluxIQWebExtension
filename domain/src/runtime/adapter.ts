@@ -28,6 +28,7 @@ import { dispatchWebAutomationOutput } from "../io/gateway-output-dispatcher";
 import { outputTargetFromPayload } from "../output-nodes";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
 import { webAutomationRuntimeCapabilities } from "./capabilities";
+import { webAutomationRequestPolicies, type WebAutomationRequestPolicyInput } from "../requests";
 import {
   WEB_AUTOMATION_FAILURE_CODES,
   classifyWebAutomationFailure,
@@ -43,9 +44,11 @@ export type WebAutomationRuntimeAdapterOptions = {
   fluxiq: FluxIQ;
   adapterId?: string;
   label?: string;
+  requestPolicy?: WebAutomationRequestPolicyInput;
 };
 
 export function createWebAutomationRuntimeAdapter(options: WebAutomationRuntimeAdapterOptions): FluxIQRuntimeAdapter {
+  webAutomationRequestPolicies.register(options.fluxiq, options.requestPolicy);
   return {
     adapterId: options.adapterId ?? "web-automation.gateway",
     label: options.label ?? "Web Automation Gateway Runtime",

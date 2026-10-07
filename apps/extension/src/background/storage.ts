@@ -38,6 +38,7 @@ export async function writeSettings(settings: FluxIQSettings): Promise<void> {
 }
 
 function normalizeSettings(settings: FluxIQSettings): FluxIQSettings {
+  settings = { ...settings, requestsEnabled: false };
   if (settings.coreApiUrl.trim().replace(/\/+$/, "") !== LEGACY_GATEWAY_CORE_API_URL) return settings;
   return { ...settings, coreApiUrl: DEFAULT_CORE_API_URL };
 }

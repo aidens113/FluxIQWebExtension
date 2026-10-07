@@ -15,7 +15,8 @@ const settings: FluxIQSettings = {
   autoReconnect: true,
   captureMutations: true,
   captureInputValues: true,
-  captureSnapshots: true
+  captureSnapshots: true,
+  requestsEnabled: false
 };
 
 test("a stored token makes the browser paired, and the token never appears in the status", () => {

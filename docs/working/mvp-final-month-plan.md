@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Acceptance, extension/Core identity, Stop, candidate facade/infrastructure and typed/navigation fixes pushed; durable receipt restart verified; loaded-host identity independently verified; production promotion/live qualification pending.
+Status detail: Verified fences, explicit gateway receipts, original-ID guard and 67-task fixtures pushed; closed run admission and requests-OFF independently verified; canonical ownership/production joins active; production promotion/live qualification pending.
 Created: 2026-10-05
 Last updated: 2026-10-07
 Owner: Senior supervisor agent
@@ -13,31 +13,30 @@ Related: [30-day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 
 ## Current State
 
-**Implementation authorized locally 2026-10-06; P0 in progress.** t296 is integrated
-and pushed: downstream acceptance `62ceaac8`, Core `6c449022`; downstream identity
-`2c76ba48` is also pushed. Supervisor reran the two changed
-test files (29/29), the fluxiq typecheck and Core structure audit; downstream task
-integration audit passed. The identity slice passed independent production Chromium
-match/mismatch checks, 22/22 owning tests and runner typecheck after integration.
-t298 cancellation is integrated as downstream43e5e54b/Core2ee06482. Supervisor
-rebuilt current pair and repeated headed Stop build/run2/2, owning reauthor9/9,
-Core typecheck/build and both integration audits pass. Running Core-server identity
-is integrated/pushed (Corec8501c15/downstream267a4215), after independent
-Core/routes59/59, generator10/10, HTTP15/15 and headed identity/runner61/61.
-Loaded domain host t305 is independently verified (Core6/6, generator/cache21/21,
-headed actual built host/runner55/55); integrated/pushed Corec051b8f7/downstream3b8f78df. t299 candidate facade is integrated (Core7f9bae15/downstreamcb792dee)
-after independent actualservice/API53/53, package/dependentweb types and audits.
-t300 receipt/detached infrastructure is integrated (Core386b4c15)
-with production joins pending. t301 typed readiness is integrated (b2ad00de);
-t303 navigation is integrated/pushed ddc8befd after owning114/114 and production
-Chromium1/1. t304 durable ledger passed independent52/52/types/build; literal
-owned child-process termination/restart checks passed2/2 independently, pushed
-Core04b51050/downstream1c55b131. t306 meaningful assert/wait integrated and
-pushed after root33/33 and production Chromium1/1 (17.2s).
-t307 atomic graph import is integrated/pushed Corec2ea1e5d/downstreamf7b5c5a9
-after independent19/19, merged package types/build and both audits0.
-t308 paginator is integrated after root Chromium2/2, scenario10/10, types/audit0;
-t311 pending command session binding is integrated/pushed Core210453c1/downstreamaed8ae54 after root23/23 and both audits0. t313 command receipt foundation is integrated/pushed Core6712b950/downstreamc40734d7 after root30/30 merged checks, actual types/build and audits0; actual child restart2/2. t317 explicit gateway production seam integrated/pushedCore38b2d8f4/down94fecac0 after independent57/57/types/audit0; actual Flow propagation/run fences remain absent. t309 staged project snapshot foundation is integrated/pushed Core595daf8d/downstream1115c14a after root37/37, actual Core typecheck/build and both audits0. t310 native executing server-adapter identity is integrated/pushed Coref0a5f747/downstreamca788c03; actual Next proof held for explicit authorization. t318 final4 independently verified after merged dev: owner/global87/87, actual Chromium10/10 (27.139s), types/build/audit0, complete ordered original57 plus exactten NEW IDs/67 total; integrated/pushed47322131. t316 state-preservation tasks are integrated after root87/87 and Chromium6/6 (16.380s), types/build/audits0; total63. t312 first three clearly NEW fixture tasks are integrated/pushed downstreamb7c91b4d, originally60 total with the complete ordered original57 preserved; root70/70 owner/catalog checks, Chromium9/9, types/build/audits0. This is readiness, not created-Flow qualification. t315 native structured field typing is integrated/pushed downstreamd1d57889 after real Chromium1/1, source/e2etypes0 and final integrationaudit0. t314 installed Chrome154/Edge154 User Scripts prototype is integrated/pushed downstreamc6fec276 after root2/2 (9.9s), merged extension source/e2e types0 and audit0; still no product capability. t319 typing liveness is integrated after root actual Chromium1/1 (21.8s), unit7/7, types/build/audits0; no detached original can pass/submit. t321 typing observation integrated/pushed6bd6c9dd: queued reverts fail after50ms and post-typing actionability prevents Enter through a newly raised dialog; Chromium1/1, named units7/7. t320 original-ID writer/capture guard foundation integrated/pushedCoread232818/down d77aa1e2 after independent merged51/51, killed combined-built child2/2, actual types/build/audit0; no all-writer/adoption join yet. No P0 completion or fresh A-D qualification is claimed.
+**Implementation is authorized; the complete plan remains active.** Latest independently integrated product units are downstream `7df54aea` / Core `030eca4f` (t329); paired push follows the documentation checkpoint. Later downstream documentation commits assign the next units; they are not product completion. No P0 completion, production promotion, or fresh A-D qualification is claimed. Receipts below describe the source/build at each verified slice, not a qualifying pass on the latest combined pair.
+
+| Integrated area | Independent supervisor evidence | Remaining limit |
+| --- | --- | --- |
+| Acceptance/held-repair fences t296 | 29 changed-owner tests; paired Core6c449022/down62ceaac8 | Requirement evidence and shared production promotion still pending |
+| Extension/Core/loaded host/native server identities t297/t302/t305/t310 | Production Chromium match/refusal; actual loaded host and native socket reload/fresh-owner probes; Coref0a5f747/downca788c03 | Actual production Next probe held for explicit panel management authorization; no final-pair qualification |
+| Stop/build cancellation t298 | Headed build/run2/2, reauthor9/9; Core2ee06482/down43e5e54b | Uncooperative provider completion/charge remains unknown |
+| Explicit candidate draft t299 and receipt/detached infrastructure t300/t304 | Actual facade53/53; durable receipt52/52 and literal process restart2/2 | Candidate-only draft; no production authoritative interpreter/reset/oracle/promotion joins |
+| Atomic graph import t307 and staged full snapshot t309 | Real import19/19; staged37/37, types/build/audits | Staged consistency does not adopt original projects or route all readers/writers |
+| Durable command journal/session binding t311/t313/t317 | Sender23/23; strict journal/restart; explicit production gateway57/57, direct types/domain types/audits; Core38b2d8f4/down94fecac0 | Opaque explicit server seam; actual executor/domain context, consumed outcome and sticky run fencing absent |
+| Original-ID writer/capture guard t320 | Merged guard/ledger/program51/51, direct types/build/audits; combined-built killed child2/2 with zero repeated effect; Coread232818/down d77aa1e2 | No all-writer/global owner/capture/pinned-reader/adoption activation |
+| Closed run admission t323 and runtime event authority t327 | Root merged6files65/65, actual Core/domain types/build/audits; Coread3914cd/downdbf2a5f4 | One-command only; actual outcome tickets/consumption and both Flow paths still unwired |
+| Requests-OFF foundation t324 | Root22Settings+45domain tests, identified Chromium134 Settings1/1, direct types/build/task audit0 | Disabled unavailable UI; no executable requests or grants |
+| Typed check/Next/submit/navigation/assert t301/t303/t306 | Changed owners and production Chromium regressions; navigation114/114, assert33/33 | Remaining ranked node rows need scoped reproductions |
+| Native typing/liveness/queued observation t315/t319/t321 | Actual unpacked Chromium format/invalid/cancel/redaction tests; detached controls fail; microtask/timer reverts fail, new dialog prevents Enter; latest1/1 + owning7/7 | Synthetic input; finite50ms observation does not certify arbitrary later/server acceptance |
+| Fixture paginator t308 | Exact-oracle Chromium2/2, owning10/10 | Fixture readiness, not model-created Flow proof |
+| Ten NEW tasks t312/t316/t318 | Complete ordered original57 object definitions preserved, exact ten additions/67 total; last owner/global87/87 and Chromium10/10, earlier9/9 and6/6 | Readiness only; historical missingten IDs remain unknown, none presented as recovered/qualified |
+| Installed User Scripts prototype t314 | Actual installed Chrome154/Edge1542/2 zero skips | No product script action. CSP image/navigation egress, hard-stop/rollback/Firefox/store limits unresolved |
+
+**Active file-owned isolated work.** t325 canonical routing is implementing reviewed factory/nonrepair primitives; normal WAL catalogue layout is unsupported for mutation-free existence reads, no immutable fallback/seed/adoption/constructor wiring. t328 actual production acceptance review is integrated in fc657df0; actual callers apply before independent oracle, and candidate verifier/promotion remain unwired. t330 is READY (19564 exit0), reviewed draft union/response parser/UI/chat projections and static pre-provider Lab hold source released; no verifier/promotion activation. t329 private outcome consumption is independently verified/integrated; actual executor issuer and Flow activation excluded. t331 actual executor propagation is next, source HOLD pending file-owned contract review. Next serial trusted outcome-ticket/executor-consumption unit follows verified t323; no Flow activation before complete production propagation and fences. Provisioning builds are setup, not qualification.
+
+**Production sequence still required.** Complete atomic run scan/claim, then actual trusted invocation/effect propagation and private outcome consumption on both execution paths; fence next-node/state/recovery/timeout/child retry/resume/repair before any automatic continuation. Reconstructed same-run receipt-only history refuses automatically. Original canonical owner/tombstone routing precedes whole-operation/global/project/file/direct-SQL writer coverage, complete nonrepair capture, pinned compiler/settings/membership readers, and original-ID activation. Candidate-specific requirements/start/reset/private oracle/trusted execution acknowledgement must join the shared acceptance/CAS promoter before feature activation. No caller JSON, builder verdict, receipt consistency or local DB marker substitutes for these joins.
+
+Detailed older receipts and retired briefs remain in the [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md). Exact additional writer source coverage is in [t322](./mvp-final-month-plan/reports/p2-original-project-writer-coverage.md); browser priorities are maintained in the [ranked node backlog](./node-catalog-plan/ranked-backlog.md).
 
 **Planning review completed locally 2026-10-06.**
 The [consultant review and revised execution detail](./mvp-final-month-plan/consultant-revision.md)
@@ -74,12 +73,8 @@ topology limit above), t268 extraction preview/deep links, t270/t273 binding and
 wiring, t279/t280 and read-list S1-S6 are on dev. Their older schedule/gap-map
 entries are superseded. Verify them live instead of implementing again.
 
-**Next order.** P0 fail-closed acceptance, unsupported-topology fence, Lab running
-build identity and Stop/build cancellation; P1 separate discovery and complete
-candidate submission behind a feature flag; P2 declared-start candidate execution
-and one promotion gate for builds/repairs. Improve shared typed browser blockers
-alongside those slices. Complete navigation/gaps node audits and rank all four
-families. Design script/request feasibility and permissions alongside, without
+**Next order.** Close actual final-pair P0 identity evidence; finish the P1/P2 production sequence above behind feature gates, preserving the verified fences, candidate draft representation, normal executor and shared revision-scoped acceptance. Improve shared typed browser blockers
+alongside those slices. The four source audits are ranked; execute remaining browser blockers by reproduction. Design script/request feasibility and permissions alongside, without
 making arbitrary page JS the prerequisite for typed proof. Then current-build
 A-D qualification, S7 after C, Phase 1b, adaptation proof, breadth/UX and release.
 
@@ -134,28 +129,13 @@ Active file-owned tasks only. Prior briefs and exact receipts are preserved in t
 
 
 
-### Brief: command-run-admission (t323, provision/source HOLD)
-- Worker: p0_acceptance. Isolated paired fxwork/t323 provision30677 running; Core/downstream pair required. Read Current State and reports/p2-command-production-context-review.md. No source until READY/exact closed contracts approved.
-- Own new Core runtime/service/command-run/{contracts,controller,index}.ts/tests/controller.test.ts; storage/project/command-ledger/{contracts,store,index}.ts, new admission.ts and owning admission/run-fence tests; unit-of-work.ts + owning unit-of-work.test.ts optional trusted validateAdmission(sql). Own downstream p2-command-run-admission.md; one scoped Core client-gateway architecture paragraph.
-- CLOSED consumption foundation: storage-issued opaque admission registered to exact store/project/run/incarnation after complete no-prior-claim scan. Fresh/reconstructed same-run ANY prior claim (including committed receipt-only) refuses. Privately reserve first command; exact first-command replay never sends; second command refuses even after committed success. No caller/model arrays, receipt JSON or success boolean clear scope.
-- readRun validates project-wide bounded deterministic keyset pages <=128, cap4096 claims plus full receipt/unknown/UoW history and orphan inventory; row <=8192bytes. Corruption/overflow/unavailable/incomplete observation refuses. No json_extract clearance; retain all original exact ownership/request/digest checks.
-- claimForRun capability binding plus complete scan/new claim/UoW proof COMMIT in ONE actual SQL transaction. UoW trusted optional validateAdmission runs BEFORE replay lookup/insertion inside TX; absent callback unchanged; callback failure no effect/claim and existing failure-journal behavior explicit. Two actual owners opening clean run then racing different commands: exactly one can claim/send.
-- Program controller owns dedicated store lease/admission and opaque run scope bound to actual stored live session/root/incarnation; revalidate after awaits, close invalidates scopes/admissions, sticky block. Do not wire service/gateway/command-context/executor/domain yet; no multi-command Flow durability claim.
-- Real SQL and private session tests: copied/foreign/stale scope, replay after corruption, pending/unknown/committed reopen, first-command payload/session conflicts, second-command refusal, different-owner race, read bounds/orphans, pool/close failures. Narrow owner tests/direct types/build/audits; source freeze before supervisor verification.
-- Follow immediately with serial trusted outcome ticket/actual executor consumption, both runtime/IO/domain/bridge propagation, child invocation/effect allocation, sticky graph/recovery/timeout/resume/repair fences. Unknown or receipt-only result_unavailable cannot reach state/next-node/provider diagnosis. No activation from this foundation.
 
-### Brief: requests-policy-foundation (t324, provision/source HOLD)
-- Worker: p0_cancel_control; isolated fxwork/requests-policy/t324-requests-policy-foundation/private read-only Core provision87762 running. Read Current State, consultant P4 and installed-script feasibility report. No Core source, request execution/advertisement, script action, manifest expansion or user state.
-- Own extension shared/{protocol,browser}.ts, background/saved-state.ts, background/panel/settings-save.ts, panel/settings/form-fields.ts and owning tests; domain host.ts/runtime/{service,adapter}.ts and narrow new requests/policy/{contracts,validation,index}.ts + tests/required barrels. Own p4-requests-policy-foundation.md and scoped current architecture paragraph.
-- Closed domain WebAutomationRequestPolicy enabled defaultsfalse; allowedOrigins exact HTTPS origins; credentials omit/redirects reject only; bounded timeoutMs/maxResponseBytes. Validate/clone/freeze injected policy and conflicting repeated registration; no browser-specific fields in generic Core config. Server enabled policy plus extension requestsEnabled are independent prerequisites and neither a grant.
-- Saved-state missing/malformed switch repairs false, explicit Settings control. Product UI must visibly remain unavailable/disabled while executable request capability is absent; activate useful switch with second executable unit. No misleading enabled capability, hidden auto-fetch or local legacy storage grant. Name final UI approach/closed defaults/limits before source release.
-- Default/off policies and typed host registrations advertise NO executable request action. Existing ordinary actions/native/domain registrations unaffected. Preserve browser parity, existing saved settings and no Core/node/wire executable change.
-- Narrow settings repair/save/policy/conflicting registration tests, domain/source/e2e types and owning extension build; actual isolated unpacked Chromium Settings proof for disabled/unavailable control and OFF persisted default when feasible. No panel/provider/fullsuite. Freeze for root review with actual measured checks/limits.
-- Follow-on executable one-shot HTTPS GET/HEAD requires explicit exact preexecution grant and trusted run/attempt/effect command context plus durable unknown/no-retry joins on BOTH paths. Credentials/authenticated session/redirects unsupported initially. DOM arbitrary script remains held: CSP prototype permits image/navigation egress; hard interruption/rollback unproved.
 
-### Brief: canonical-owner-routing (next paired unit, contracts/source HOLD)
-- Worker: p0_build_identity; paired Core/downstream provision pending. Read Current State, t322 actual writer report and integrated t320 guard contracts. Root approved explicit opted-in routing, default legacy behavior, adoption unavailable; exact interfaces/nonrepair project-existence owner still require approval before source.
+### Brief: canonical-owner-routing (t325, implementing reviewed foundation)
+- Worker: p0_build_identity; paired fxwork/t325 provision50576 completed0; generic readonly/closed schema and fixed-root explicit factory options approved; constructor remains unchanged. Read Current State, t322 actual writer report and integrated t320 guard contracts. Root approved explicit opted-in routing, default legacy behavior, adoption unavailable; generic nonrepair project-existence owners approved; reviewed closed routing envelopes released; no public allocation or withCanonicalOperation authority from caller JSON. Plain opted-in put refuses every unbound ID, existing or new.
 - Proposed Core owners: storage/{contracts,sqlite-repository,index}.ts and runtime/service.ts constructor only; new storage/canonical-authority/{contracts,migration,owner-store,repository,index}.ts + owner/repository/process tests; new storage/tests/sqlite-repository.test.ts. No generic raw SQL export; same physical global DB transaction privately held by owner store. Request any extra owner before edits.
+- Additional approved owners: new canonical-authority/project-coordinator.ts and project-existence.ts with owning tests; programs/_shared/storage.ts and existing tests/storage.test.ts; programs/database-manager/storage/sqlite-repository.ts plus new storage/tests/sqlite-repository.test.ts. Generic getExistingReadOnly must OPEN_READONLY without mkdir/create/schema/WAL/repair/fallback, preserving the existing layout resolver; absent returns null, unsupported/corrupt layouts refuse. Project catalogue index.json and manifest.json require matching original membership, bounded nonrepair observations and post-await revalidation; this is not lifecycle stability before all-writer joins.
+- Further approved owners: canonical-authority/validation.ts with owning validation.test.ts, tests/fixture.ts shared related test support and tests/process-probe.mjs actual built child entry. Strict mutation-free readers support checked DELETE-mode SQLite; normal persisted WAL catalogue refuses before opening, no immutable URI/copy fallback. Official original creation ingress and normal WAL-compatible existence still need future joins.
 - Durable original canonical kind/id binding with immutable original project owner, revision, permanent tombstone and closed global operation phases. Initial supported kinds Flow/publication only; publication resolves stored original Flow owner. Replacement document/caller domain/project cannot select existing owner; deleted ID cannot be reallocated after directory removal. No automatic legacy seeding or namespace/new-project substitute.
 - Explicit opt-in mode only, schema creation allocates no owners/proof. Unbound existing legacy rows/ambiguous owner refuse authority allocation. Trusted original-project existence must use actual nonrepair owner; pool.acquire/migration/caller-ID or repair getProject is not proof. Name verified source seam before implementation. Offline seed/old-process drain remain held operations, not inferred from marker/PID/TTL.
 - Global claim COMMIT before effect then actual original-project t320 claim in fixed order; nested opaque operation validates both participants and NEVER completes outer save/publish/delete. Canonical row effect+owner revision/tombstone+effect receipt atomic in global TX. Project completion/global finalization separate: no cross-DB atomicity; any partial failure retains unresolved durable participants, global capture fence must refuse until BOTH exact participants reconciled.
@@ -163,98 +143,30 @@ Active file-owned tasks only. Prior briefs and exact receipts are preserved in t
 - Test actual default factory/global DB plus project claims: two-owner allocation/mutation race, foreign replacement/publication owner, missing/delete/recreate/tombstones, pre-opened object mode check, partial claim/effect/COMMIT-lost reconciliation, literal child kills, nested outer claim retention, unseeded/custom unsupported paths and old rows unchanged. Freeze narrow types/build/audits for root independent review; no panel/providers/fullsuite/user data or git.
 - Own downstream p2-canonical-owner-routing.md and scoped Core persistence paragraph. Detailed closed contracts/limits approved before source release. Adoption/activation/common promotion remains disabled.
 
+
+### Brief: actual creation callers draft-only (t330 READY, reviewed source released)
+- Worker: p0_cancel_control; paired fxwork/t330 provision19564 completed0; read Current State and integrated reports/p1-production-acceptance-joins.md. Own reports/p1-creation-callers-draft-only.md only plus approved source/test owners; no shared docs/git/providers/panel/qualification. Record reviewed contracts and actual findings as work happens.
+- Core proposed owners: apps/web/src/features/automation-studio/authoring/{authoring-commands,blank-flow-authoring-model,improvement-host}.ts, authoring/{BlankFlowAuthoringPanel,ImproveFlowPanel}.tsx, runtime/runtime-host.ts, conversation/capabilities/catalog/flows.ts; program runtime/conversations/commands/{build,apply,create-here,explore,improve,command}.ts and nearest owning tests. Small response projector beside owner if needed. API handlers/llm-generation.ts only if consistent envelope necessary and approved; no broad runtime/service.ts/factory/executor changes.
+- Downstream proposed owners: packages/test-runner/src/flow-lane/creation/{build-proposal,lane,review-proposal}.ts, creation/chat/build-from-chat.ts and existing owning tests. Discover exact control request types/readiness seams with rg --files, propose additional exact owners before source. No fixture/oracle/driver/policy changes.
+- Website Explore/Improve/chat/direct Lab must explicitly request candidate plus evidenceGuided true and return meaningful unverified draft, never automatic approve/apply or accepted write. Preserve original source instructions, permission/purse/cancellation. Existing candidate generator/store owns drafts; no parallel graph representation or fabricated adaptationId.
+- Review a closed authoring outcome union and all actual consumers before edits. Draft ID/revision/digest/binding plus not_performed is successful draft authoring, not verified execution. UI says verification pending; legacy raw API/plain structural generation scope explicit, do not force candidate into non-evidence-guided calls without reviewed compatibility decision.
+- Lab candidate draft cannot execute/promote until trusted executor/original-project authority joins exist. Propose exact readiness preflight that refuses paid qualification BEFORE provider work while unsupported, with no caller boolean/model verdict authority. Timed-out candidate generation must not poll legacy adaptations or pretend no charge; honest pending/unknown diagnostics.
+- Prove fail-first actual request/response and zero approve/apply/canonical writes, pending UI and explicit legacy scope, permissions/cancel and pre-provider readiness refusal. Narrow owner types/tests/build/audits only; reviewed source released after READY; append extra owner approvals below. No actual Next launch without separately pending user authorization.
+
+- Additional approved Core: commands/execute.ts and shared runtime/flow-bootstrap/candidate/authoring-result/{contracts,parse,index}.ts + owning parse tests/candidate barrel. Strict actual sanitized draft wire fields (digest bare64hex), expected original project/Flow binding, immutable informational accounting. Chat done means authoring saved only; second candidate-draft ID-only attachment and pending summary, no executable renderer/schema change.
+- Additional approved downstream: creation/{readiness,candidate-draft,index}.ts + owning tests, existing-fluxiq-control.ts request type if needed; extension-chat-check/prove/chat-build.ts + prove/tests/chat-build.test.ts; creation/chat/{chat-record,chat-thread}.ts type/projection only. Static owning implementation guard before ALL paid helper/chat/provider/authorizer paths, no caller/env bypass; unsupported probe and zero-dispatch tests replace old ready-made claim, independent permission/diagnostic parsing preserved. ID-only chat draft reference does not invent revision/digest or readback. Request other exact owners before edit.
+
+### Brief: actual executor effect propagation (t331 provisioning, source HOLD)
+- Worker: p0_acceptance; paired fxwork/t331. Own reports/p2-actual-executor-effect-propagation.md; read Current State and verified t329 report. No shared docs/git/panel/providers/qualification. Source HOLD until READY and exact actual file-owned contract reviewed.
+- Discover with rg --files actual normal Flow node-entry/child executor, generic Runtime dispatch/IO paths, downstream domain adapter/gateway sends, service construction/run lifecycle and result capture/state routing. Read only source needed to map actual call graph, request exact owners before source edits. Existing t329 APIs remain sole proof/consumption contract, no second ticket library.
+- Propose actual private UUID invocation/attempt/effect issuer per entered root/selected child node; preserve gateway_command.v1 original root Flow meaning, actual executing graph digest/node identity private. Both Runtime and IO/domain bridge must carry authentic context, never payload/model/caller-JSON authority; no optional silent fallback in opted mode.
+- Consume actual ticket only after authoritative awaited result validation, configured output capture/persistence/state/output/route handling. Fence next node/child/composite/retry/resume/repair/provider diagnosis on unknown/unconsumed/timeout/cancel/changed ownership. Raw Runtime events cannot clear awaited flow progress.
+- Register controller with actual stored live root session/private pool and orderly close: gateway drains before run owner/store/pool. Explicit opt-in preserves supported legacy scope while missing custom/child/IO joins refuse; do not enable production candidate verification until all joins proved. Default broad activation needs separate review.
+- Report actual owners, API/closed issuer/handling witness lifecycle, unsupported joins, meaningful fail-first and real provider-free executor multi-effect SQL proof before source release. No broad facade coordinator growth or new graph/schema. Freeze exact tests/types/owning build/audits for supervisor; no full suite.
+
 ## Work Ledger
 
-Earlier verified units and decisions moved intact to the [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
-
-### 2026-10-07 - t306 integrated verification
-- Agent: Codex supervisor.
-- Changed: malformed assertions/waits refuse promptly; valid whole-page text ignores unrelated focus and authored targeted predicates preserve resolution. Integrated after current-dev merge.
-- Validation: supervisor33/33 owning tests, affected source/test typechecks, audit0 and three22-file target builds; actual unpacked Chromium1/1 passed17.2s. Full handoff reports/p3-meaningful-assert-wait.md.
-- Outcome: Narrow P3 slice complete; no paid/site/Firefox/Edge qualification claim.
-- Follow-up: t305 loaded host and t307 graph import frozen; root reviewing merged source and repeating checks. Whole authority/promotion and trusted semantic browser proof remain incomplete.
-
-### 2026-10-07 - t307 atomic graph import independently verified
-- Agent: Codex supervisor.
-- Changed: revision1 existence decision and Flow/revision/node/edge/region/operation/FTS/bounds/partition writes share one actual project SQLite transaction and passed executor; current paired dev merged before final checks.
-- Validation: root19/19 owning regressions zero skips8.10s, fluxiqcheck0(36.4s)/owningbuild0(72.7s); current audits/integration gate follow. Root reviewed SQL boundaries; trigger rollback/reopen retry, separate-owner serialization and lost COMMIT acknowledgement tested. Full receipt reports/p2-atomic-graph-import.md.
-- Outcome: New graph import atomicity verified; integrated/pushed Corec2ea1e5d/downstreamf7b5c5a9; both audits0. Existing partial legacy imports remain undiagnosed/unrepaired. No complete topology promotion or browser/provider/power-loss proof.
-- Follow-up: t309 staged complete-project contract foundation and all-writer/read authority cutover, t310 actual server adapter provenance, t308 paginator. User panel unmanaged; paid A-D remain held.
-
-### 2026-10-07 - Paired push and current dispatch
-- Agent: Codex supervisor.
-- Changed: t305 pushed Corec051b8f7/downstream3b8f78df; t307 pushed Corec2ea1e5d/downstreamf7b5c5a9. Both paired histories align. Current workers: t308 paginator test-first browser regression, t309 staged-only complete-project snapshot/CAS foundation, t310 actual native server adapter/registered-owner identity and build/staging gate.
-- Validation: root observed t3056/6+21/21+55/55 and t30719/19, package types/builds and actual both audit/integration gates0; see individual reports. Taskfinish Core --skip-checks after narrow checks, no broad sweep. Provision t308/t310 completed0; t309 completed0 immediately after first worker source edits, not a frozen-source proof; final worker/root checks required.
-- Outcome: Verified narrow units pushed; whole plan remains active/incomplete. Staged foundation is never accepted authority over legacy data, and promotion remains unavailable.
-- Follow-up: actual Next panel startup proof explicitly held for panel-management authorization per AGENTS; prepare fixture only. Provider-free native socket/synthetic diagnostic tests proceed. Production semantic interpreter/start/independent browser oracle/performed-command durable attribution and coherent all-writer/adoption migration remain. No paid A-D/user panel management.
-
-### 2026-10-07 - t308 paginator independently verified
-- Agent: Codex supervisor.
-- Changed: fixture Next uses current successful rendered page; regression traverses Next1?2?3. Current downstream dev merged before independent owning build.
-- Validation: root real Chromium2/2 zero skips18.03s, scenario10/10, source/e2e typechecks and audit0. Full24rows/23unique exact oracle unchanged; promoted naive collection still rejects. Task integration follows; report p3-professional-paginator.md.
-- Outcome: Fixture correction verified, not paid creation/replay or extension playback qualification.
-- Follow-up: t309 staged authority and t310 executing adapter; command session-binding regression next. Rapid presses/Previous/popstate remain unexercised.
-
-### 2026-10-07 - Memory compacted for continuation
-- Agent: Codex supervisor.
-- Changed: kept authoritative Current State/schedule, three active worker briefs and recent receipts; archived all previous text intact once ledger exceeded20 entries, per working-document protocol.
-- Validation: source text preserved in authored archive; active t309/t310/t311 briefs retained exactly; working index regeneration follows. No product behavior or tests changed.
-- Outcome: Durable readable handoff; whole plan remains active.
-- Follow-up: independently review current worker source/results; preserve held Next startup and paid qualification gates.
-
-### 2026-10-07 - t309 root verification and next bounded dispatch
-- Agent: Codex supervisor.
-- Changed: staged complete-project snapshot CAS/immutable history/receipt join reviewed after current paired dev merge; root required borrowed-owner/operation/generation negatives before accepting storage claim. Production activation remains unavailable. Concrete all-writer/read cutover report retained as a proposal, not a product switch.
-- Validation: root37/37 zero skips (testtotal9.73s, wall29.95s), actual fluxiqcheck0(38.432s)/build0(46.106s), Coreaudit0; downstream integration gate follows. Full receipt reports/p2-staged-authority-foundation.md.
-- Outcome: Narrow staged foundation verified; no production capture/permission/compiler/active-reader/promotion or OS-kill/power-loss proof. Paired integration follows. t311 pushed Core210453c1/downstreamaed8ae54.
-- Follow-up: t310 independent merged-source review/native socket probe; prepared Next proof requires explicit panel authorization. t312 implements three clearly NEW tasks toward67; original57 remain intact. User has not supplied the historical missing ten, so proposed additions are labelled new rather than recovered. No paid qualification or user panel started.
-
-### 2026-10-07 - paired staged foundation pushed; command trust next
-- Agent: Codex supervisor.
-- Changed: t309 integrated/pushed downstream1115c14a/Core595daf8d; immutable staged-only snapshot foundation remains unavailable to ordinary production writers. t313 provisioned as a paired command reconciliation unit; exact owners/production join reviewed before edits.
-- Validation: root37/37, actual types/build and both audit gates0. Initial taskfinish issued from task worktree refused because dev belongs to main checkout; reran from main successfully, no forced checkout/removal. Core narrow gates observed before --skip-checks integration.
-- Outcome: Paired coherent unit pushed. New managed-ID authority proposal is not approved source or a substitute for original candidate/promotion scope; existing-project requirement remains open.
-- Follow-up: t310 merged current source independently owner8/8 and generator/cache9/9; package checks/build/proof in progress. t312 first3 new readiness tasks; paid qualification remains held. No user panel managed.
-
-### 2026-10-07 - t315 native structured field typing verified
-- Agent: Codex supervisor.
-- Changed: native number/calendar/time controls admit exact whole value before one synthetic replacement input/change; malformed native formats preserve old value. Text/autocomplete remains per character, page cancellation/readback/redaction/submit gates preserved. Architecture paragraph updated.
-- Validation: initial stale-build refusal then owning rebuild; real fail-first1.5 returned failed; final production Chromium1/1 passed17.5s (18.8s total), background/content identity matched, all6 native type families and cancellation/revert/readonly/malformed/text/redaction/no-submit cases. Owning3targets22files/build0; source/e2etypes0 finalrepeat observed; final taskaudit0 after regenerating stale handoff index. No broad suite/provider/panel/Core source change. Full report reports/p3-sanitized-field-typing.md.
-- Outcome: Narrow typed readiness slice verified; not trusted keyboard input or async/React/Edge/Firefox/model qualification. One fixture synthetic value was accidentally in commandId; corrected ordinal IDs before final success.
-- Follow-up: t310 actualnative identity verified, preparedNext test awaiting explicitpanel authorization; t312 frozen3 new tasks rootreview; t313 durable command infrastructure and t314 installedbrowser script feasibility active.
-
-
-### 2026-10-07 - installed-browser feasibility independently verified; next3 tasks
-- Agent: Codex supervisor.
-- Changed: t315 pushed downstreamd1d57889 after final typecheck and corrected generated-index integration gate0. New t316 bounded3-site preservation unit provisioned; no shared Core movement. Current reports keep production/native/browser readiness separate.
-- Validation: root t314 actual installed Chrome154.0.8037.98/Edge154.0.4258.62 prototype2/2 zero skips9.9s on identical7-file fingerprint87f504c1c75b7dd09268f01ae1bd49301560d001da01f4881a773247b4e1baee. Missing/revoked enablement and stale/ungranted document refuse; isolated USER_SCRIPT works; no providers/panel. Final merged types/audit follow.
-- Outcome: API feasibility verified, not arbitrary-JS confinement: connect-src denial blocked fetch, but DOM image/navigation requested network; even stricter world CSP did not stop tested anchor navigation. No product script capability, requests toggle or browser-minimum change.
-- Follow-up: P4 must resolve admitted script surface/normal consequence and requests-OFF semantics before enabling. t312 root required current-page account oracle update from actual order response; negatives now refuse without reload and worker refrozen. t313 root required immutable bounded canonical claims/receipts before production wiring. PreparedNext question still unanswered, user panel unmanaged.
-
-
-### 2026-10-07 - t314 installed-browser feasibility integrated; next production context review assigned
-- Validation: Supervisor independently ran `FLUXIQ_USER_SCRIPT_PROBE=1` with `playwright test -c e2e/user-script-feasibility/playwright.config.ts`: actual installed Chrome154/Edge154 matrix2/2, zero skips9.9s on identical seven-file digest87f504c1c75b7dd09268f01ae1bd49301560d001da01f4881a773247b4e1baee. Source/e2e types and structure audit exit0 after current dev merge; task finish audit0; downstreamc6fec276 pushed, Core unchanged.
-- Requests-OFF cannot promise arbitrary JS network confinement: connect-src denial blocked fetch, DOM image still sent and anchor navigation sent even with tested default-src none. Product JS/settings/request capability, hard termination, Firefox and release qualification remain pending. Full receipt in reports/p4-user-script-browser-probe.md; exact retired brief archived.
-- t313 corrected frozen infrastructure independently passed26/26; current-built child probes/checks ongoing. Assigned report-only next production context review to p0_cancel_control, with exact owner list above; no production wiring approved yet.
-- t312 added full authored original57-task field/order baseline and exact three additions inventory plus permission classifications; supervisor owner/global70/70 passed, real browser checks ongoing. Worker report add/add merge conflict resolved by preserving its complete report over the obsolete assigned-only placeholder. No original oracle/instruction weakened.
-- t316 provisioning exit0; worker source released after exact full account fact shapes/mutation wrapper and visible-preserving bigbox price child span approved. Source validation pending. No paid run or panel start.
-
-### 2026-10-07 - t310 native server identity and t312 fixture readiness integrated
-- Validation: t310 independent owner/diag8, web27, route55, generator9 and native socket1/1 zero skips7.059s; actual Coretypes/build0, webtypes/runneremit0 and both audits0. Current downstream source merged; taskfinish audit0. Coref0a5f747/downstreamca788c03 pushed together. Prepared `FLUXIQ_SERVER_ADAPTER_NEXT_PROBE=1` remains unexecuted pending explicit user panel-management authorization; native proof is not production Next proof or P0 completion.
-- Validation: t312 owner/global `node --test`70/70 zero skips2.021s; real Chromium honest/negative/original purchase/review9/9 zero skips37.773s. Fixture source/e2etypes0 actual5.516s/build0 actual12.860s; final/current integration audit0 (176warnings/117baseline). Downstreamb7c91b4d pushed; Core unchanged for that unit.
-- Changed: readonly stale-invitation audit, watch-accessory removal with delete permission, official-only coupon collection with current ALL-order facts. Added complete authored57-task baseline plus exact3newIDs/permission classifications; all original fields/order preserved. Reports preserve commands, fail-first and source identities; exact retired briefs archived.
-- Follow-up: original-project authority/promotion/declared-start semantic execution and both-path durable command joins remain unfinished. t313 merged foundation validation ongoing; no paid run/panel/fullsuite. Native structured typing and installed-script feasibility were already integrated; no product arbitrary-JS capability enabled.
-
-### 2026-10-07 - t313 command receipt foundation integrated; gateway composition next
-- Validation: root generic/SQL26/26, current-built child SIGKILL/relaunch2/2 zero skips5.96s; exact nonincremental tsc0, actual build44.966s. After current t310 merge, owning30/30 zero skips18.07s; actual Coretypes26.285s/build43.451s and Coreaudit0 (281warnings/349baseline); downstream taskfinish audit0. Core6712b950/downstreamc40734d7 pushed together, no known broken source included.
-- Changed: strict bounded exact-JSON hashing, frozen claims/receipts and additive actual-project0027 durable original-request receipt joins. Report repaired invalid punctuation bytes to ASCII. Production context source review completed separately with exact gateway-first and later both-path/fence ownership.
-- Follow-up: t317 implements gateway-only trusted opaque context/project-pool resolver/async settlement; Flow executor/runtime/downstream propagation remains a subsequent unit. Restart with receipt-only data cannot fabricate extracted payload; reconstructed same-run automatic continuation must remain closed until consumed-result association is designed. No new namespace or wire change approved.
-- t316 three state-preservation tasks frozen; root current63 inventory/permission additions and owning verification underway. Final four task brief assigned for precise owner discovery. No paid run/panel/fullsuite; prepared Next question remains pending.
-
-### 2026-10-07 - t316 state-preservation fixture readiness integrated
-- Validation: supervisor owner/global87/87 zero skips3.332s, actual Chromium6/6 zero skips16.380s; actual scenario source/e2etypes0 8.650s/build0 10.949s; audit0 176warnings/117baseline and taskfinish integrationaudit0. Complete original57 fields/order remain identical; combined63 exact new IDs/permission classes asserted. Downstreambc4ed566 integrated, Core source unchanged; push follows.
-- Changed: desired total soap3 with unchanged line/store, saved cloth transfer preserving all original lines, sold unsave preserving Available and no hidden/contact state. Private facts update from actual mutation response before handler continuation; same-table wrong identity/Hide negatives fail on current page. No model/extension qualification claim.
-- Follow-up: t317 provisioning completed exit0 and source READY with actual shutdown owner additionally approved; t318 provisioning completed exit0, exact owners approved and source READY including acknowledged cross-frame private fact and visible-preserving numeric child span. No paid run/panel/fullsuite. Root narrow typing liveness probe next; semantic authority/promotion remain pending.
+Earlier verified units, decisions and ledger detail moved intact to the [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
 
 ### 2026-10-07 - t319 typing target liveness independently verified
 - Validation: actual production Chromium fail-first1failed5.7s, both removed text and numeric-with-submit incorrectly succeeded. Fixed same exact repro passes1/1 zero skips21.8s (fixture20.3s), intended background/content identity match, visible replacements old/7, Enter0/submits0. Owning unit `node --test`7/7 zero skips0.377s; actual all-target extension build0 13.678s/22files each, source/e2etypes0. Audit0 176warnings/117baseline; integration follows.
@@ -283,10 +195,30 @@ Earlier verified units and decisions moved intact to the [execution archive](./m
 - Decision: next original-owner partition remains contract review/source HOLD until actual t320 interface and default physical global DB transaction binding verified. Supported Flow/publication scope alone cannot claim policy/all-writer coverage. No activation/adoption endpoint before whole-operation writers, direct SQL/files, nonrepair complete capture, pinned readers/compiler/dependencies and execution/promotion join.
 - Follow-up: close read-only unit, integrate verified t317/t320 pairs, then provision closed one-effect run admission and original global owner slice. Actual Next authorization remains pending; no panel/provider/fullsuite.
 
+### 2026-10-07 - t323/t324/t327 independently verified and pushed
+- Changed: Coread3914cd/downstreamdbf2a5f4 pushed. t323 atomic one-command actual-run admission; t324 immutable closed policy and forced-OFF unavailable Settings; t327 authoritative runtime completion only from awaited dispatch. Retired exact briefs to archive, own reports retain failures/commands and next ticket proposal.
+- Validation: t323 root merged6files65/65 zero skips36.22s, nonincremental Core/domain source/test types0, owning Core build0 53.597s6094outputs and Core audit0; downstream task finish audit0. t324 root22Settings+45domain tests pass, direct source/test types0, final extension build0 24.474s three targets22files, actual identified Chromium134 Settings1/1 zero skips3.874s and task audit0. t327 root meaningful4fail-first then40/40 pass2.20s/types/audits0. Exact unit-specific pair/proof limits in own reports.
+- Follow-up: t323 scope remains one-command and not registered in actual Flow paths; post-COMMIT private outcomes/actual executor consumption plus both-path propagation and sticky recovery/bounds fences next. t325 owners/all-writers/capture/pinned read/activation and common candidate acceptance remain prerequisites. No Next panel/provider/paid qualification executed.
+
+### 2026-10-07 - t326 execution context checkpoint
+- Changed: folded settled receipt/head summaries into Current State, preserved older source/build evidence and retired briefs in archive, corrected67-task/ranked typing status. Active t323/t324/t325 ownership and source holds explicit; no phase completion inferred from infrastructure.
+- Validation: documentation/source receipt reconciliation only; task structure audit is the gate. No product source/tests/builds/provider/panel/fullsuite.
+- Follow-up: t323 first behavioral failures reproduced same-run double admission and missing UoW callbacks; implementation underway. t324 approved forced-OFF policy/settings fixture owners, no request action. t325 generic read-only/project-existence/coordinator additions approved; public factory contracts still reviewed before release. Provisioning30677/87762/50576 all completed0.
+
+### 2026-10-07 - t328 actual production acceptance joins independently reviewed
+- Finding: actual Lab applies at lane.ts390 before reset419/execution427/private oracles453-454; real website/chat creation callers still request legacy adaptations. Candidate verifier and sole original-project promoter are not production joins. No earlier receipt/build proves accepted candidate execution.
+- Validation: supervisor read actual caller/candidate store paths and confirmed write ordering and draft preservation; report-only source audit, no product test/build/live/provider claim. Task finish structure audit0; integrated fc657df0. Provision68113 was setup only.
+- Follow-up: t330 actual creation callers draft-only, closed truthful response and pre-provider Lab hold reviewed before source release. t325 canonical factory review negatives and t329 consumption provenance tests remain active. Full executor/writer/capture/pinned-reader/promotion and final-pair qualification still required.
+
+### 2026-10-07 - t329 private consumption independently verified/integrated
+- Changed: actual post-COMMIT dispatch-only proof, required observer deadline/uncertainty, trusted post-handling witness and atomic SQL consumed-history continuation. Both actual Flow paths/issuer remain unwired; no feature activation.
+- Validation: supervisor frozen actual5owner81/81 zero skips54.10s, nonincremental Core and both domain tsconfigs0; actual Core audit0 (282/349), worker fresh6098-output build0, downstream task finish audit0. Integrated down7df54aea/Core030eca4f; paired push follows checkpoint. Exact counterfeit/late/unknown/race proofs and limitations in own report.
+- Follow-up: t331 actual executor/node-entry/bridge/result-handling joins source HOLD pending reviewed brief. t325 reviewed source37/37 plus built-child5/5 and types0 independently; current-dev merge brings t329, narrow combined verification/build pending. t330 reviewed source released, no paid/provider/panel.
+
 ## Open Questions
 
 - Recording scope is resolved by the newer user order: evidence beside mandatory instructions, after A-D qualify. Do not reopen the older September ambiguity.
 - Script channel, store eligibility and Firefox parity need a concrete feasibility result. Preserve no-debugger JS and requests-OFF policy meanwhile.
 - Direct-request origins/session/redirect policy needs a concrete design; do not inherit the old any-origin default as authorization.
 - Who runs the Phase 6 release-candidate script as the "person unfamiliar with FluxIQ"? Owner: user.
-- Historical requested67task list had57existing rows; originalmissingten remain unknown. Supervisor is implementing ten clearly NEW proposals (t312 first3; t316 next3), preserving original57, with exact oracles; no recovered-history or qualification-pass claim. Optional original-list question remains unanswered.
+- Historical requested67task list had57existing rows; originalmissingten remain unknown. Ten clearly NEW proposals are integrated (t312 first3; t316 next3; t318 final4), preserving all original57 full ordered objects, with exact oracles; no recovered-history or qualification-pass claim. Optional original-list question remains unanswered.
