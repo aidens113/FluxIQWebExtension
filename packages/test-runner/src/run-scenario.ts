@@ -28,7 +28,7 @@
 // share, because a lane assigns to six of them partway through and a module
 // returning its results instead would change what a mid-lane failure leaves in
 // the bundle.
-import { verifyRunningCoreIdentity, verifyRunningHostIdentity, verifyRunningServerAdapterIdentity, requiresCoreRuntimeIdentity } from "./run-scenario/browser-session/index.js";
+import { presentFlowTab, verifyRunningCoreIdentity, verifyRunningHostIdentity, verifyRunningServerAdapterIdentity, requiresCoreRuntimeIdentity } from "./run-scenario/browser-session/index.js";
 import { randomBytes } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
@@ -302,8 +302,6 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     const flowRunHooks = <E extends { observation: RunLaneObservation; run: PersistedFlowRunOutcome }>(activeTopology: RunningTopology, publish: (evidence: E) => Promise<void>) => ({
       prepareFlowPage: async (moment?: "build" | "playback") => {
         if (moment === "playback") playbackWindow = { since: Date.now() };
-        // Playback drives `page` alone: the tabs the exploration and the build's tests opened are closed, never the extension's own pages.
-        if (moment === "playback") for (const other of context!.pages().filter(other => other !== page && other !== extensionControl && (isScenarioUrl(other.url()) || other.url() === BLANK_TAB_URL))) await other.close();
         // A task whose variant is armed after the build has FluxIQ explore the unarmed page, and its Flow meet the variant:
         // the site changes after the Flow was made. The fixture starts unarmed, so the build's page is simply not armed,
         // and the armed facts are not checked against a page that was not armed.
@@ -328,7 +326,9 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         // (`apps/extension/src/runtime/navigation-target.ts`), so it drives the last tab the worker drove -- or opens
         // one -- and an exploration can therefore end somewhere other than here. A Flow left one fixture tab open
         // would start on a page it never reached, which is the thing this whole rule exists to stop.
-        if (startPage !== "scenario-start-page") for (const open of [page, ...context!.pages().filter(other => other !== page && isScenarioUrl(other.url()))]) await open.goto(BLANK_TAB_URL); if (moment !== "build") uiReview.phase("flow-run");
+        if (startPage !== "scenario-start-page") for (const open of [page, ...context!.pages().filter(other => other !== page && isScenarioUrl(other.url()))]) await open.goto(BLANK_TAB_URL);
+        // Every Flow run, the recording's own too, drives `page` alone and the extension holds it: it drives the tab in front, which a recording that opened a tab left elsewhere (`present-flow-tab.ts`).
+        await presentFlowTab({ page, pages: context!.pages(), extensionControl: paired ? extensionControl : undefined, scenarioOrigin: activeTopology.scenarioOrigin, isScenarioUrl, blankTabUrl: BLANK_TAB_URL, moment, startsOnScenarioPage: startPage === "scenario-start-page" }); if (moment !== "build") uiReview.phase("flow-run");
       },
       recordEvidence: async (evidence: E) => {
         // The lane publishes before it judges any expectation, so these are set even when an expectation then throws:
