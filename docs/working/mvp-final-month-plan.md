@@ -165,6 +165,12 @@ Active file-owned tasks only. Prior briefs and exact receipts are preserved in t
 - Limits: modern branded Chrome extension loading may require documented CDP loadUnpacked test infrastructure; investigate actual availability, never infer from Chromium134. Browser UI enablement only in owned temporary profile, not editing browser storage or normal settings. Firefox parity remains separate unless an actual bounded supported probe is feasible.
 - Validation: exact actual browser/version/API/method outcomes, errors and current-source fingerprint; bounded cleanup verifies resolved owned roots. No provider/panel/fullsuite/git/shared docs or qualification claim. Browser/API prototype is readiness evidence, not permission to ship arbitrary JS or enable requests. Freeze report/source for root independent rerun.
 
+### Brief: sanitized-field-typing (t315, supervisor)
+- Repository: task/t315-sanitized-field-typing in main checkout; no Core source changes. Worker none.
+- Task: Reproduce real browser sanitization of number1.5/-3 and ISO date, then preserve requested native values and refuse malformed formats without partial mutation. Preserve normal text/autocomplete character events, page cancellation/revert and sensitive value redaction.
+- Owns: keyboard/type-text.ts, focused new keyboard/sanitized-input.ts + barrel if needed; e2e/runtime/tests/sanitized-field-typing.spec.ts; scoped action-runtime architecture paragraph and own reports/p3-sanitized-field-typing.md. Native format acceptance comes from detached same-type browser value sanitization, not silent normalization.
+- Validation: fail-first real production content via runtime harness, exact retained field/application state, invalid/reverted/readonly/cancelled paths, unsent form and sensitive readback. Affected source/testtypes, owning builds and audit only; no fullsuite/provider/panel. Final rebuilt background/content identity recorded; no Firefox/Edge/site qualification claim.
+
 ## Work Ledger
 
 Earlier verified units and decisions moved intact to the [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
@@ -225,3 +231,10 @@ Earlier verified units and decisions moved intact to the [execution archive](./m
 - Validation: root37/37, actual types/build and both audit gates0. Initial taskfinish issued from task worktree refused because dev belongs to main checkout; reran from main successfully, no forced checkout/removal. Core narrow gates observed before --skip-checks integration.
 - Outcome: Paired coherent unit pushed. New managed-ID authority proposal is not approved source or a substitute for original candidate/promotion scope; existing-project requirement remains open.
 - Follow-up: t310 merged current source independently owner8/8 and generator/cache9/9; package checks/build/proof in progress. t312 first3 new readiness tasks; paid qualification remains held. No user panel managed.
+
+### 2026-10-07 - t315 native structured field typing verified
+- Agent: Codex supervisor.
+- Changed: native number/calendar/time controls admit exact whole value before one synthetic replacement input/change; malformed native formats preserve old value. Text/autocomplete remains per character, page cancellation/readback/redaction/submit gates preserved. Architecture paragraph updated.
+- Validation: initial stale-build refusal then owning rebuild; real fail-first1.5 returned failed; final production Chromium1/1 passed17.5s (18.8s total), background/content identity matched, all6 native type families and cancellation/revert/readonly/malformed/text/redaction/no-submit cases. Owning3targets22files/build0; source/e2etypes0 and finalrepeat follows, audit follows. No broad suite/provider/panel/Core source change. Full report reports/p3-sanitized-field-typing.md.
+- Outcome: Narrow typed readiness slice verified; not trusted keyboard input or async/React/Edge/Firefox/model qualification. One fixture synthetic value was accidentally in commandId; corrected ordinal IDs before final success.
+- Follow-up: t310 actualnative identity verified, preparedNext test awaiting explicitpanel authorization; t312 frozen3 new tasks rootreview; t313 durable command infrastructure and t314 installedbrowser script feasibility active.
