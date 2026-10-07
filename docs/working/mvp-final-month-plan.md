@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Intake 2026-10-07 found chat creation broken by candidate-only builds (t338 restores legacy as default) and parked Codex's production-integrity chain; next are a live lane A baseline and the candidate vertical slice.
+Status detail: Chat creation restored in legacy mode (t338, merged); candidate slice U1 merged, U2 (t340) in progress; re-author regression (t341) and live lane A baseline (t342) running.
 Created: 2026-10-05
 Last updated: 2026-10-07
 Owner: Senior supervisor agent
@@ -19,16 +19,14 @@ feature freeze October 29. Product source on `dev` is Codex's last pushed pair
 documentation. No A-D lane has passed twice; round 4 (October 6) failed all four,
 and no paid run has happened since October 6 21:08.
 
-**The product cannot currently create a runnable Flow.** Codex's t330 switched
-every chat and panel creation build to candidate mode. That mode saves an
-unverified draft and says "the Flow's steps are unchanged", and nothing in Core
-executes, verifies or promotes a candidate. Every Lab creation lane throws before
-any provider call (`packages/test-runner/src/flow-lane/creation/readiness.ts`).
-At the baseline (downstream `92d790d7`, Core `e9b7d691`) chat builds applied
-their result. Candidate mode also took away the model's test run and the build
-judge, and no text tells the model the Flow format. t338 is restoring the legacy
-build as the default behind one setting, as consultant P1.1 required. Evidence:
-[product path](./mvp-final-month-plan/reports/intake-1007/product-path.md).
+**Creation works again in legacy mode (t338, merged 2026-10-07).** Codex's t330 had
+switched every chat and panel creation build to candidate mode, which only saves an
+unverified draft, so nothing could make a runnable Flow and every Lab creation lane
+refused. One Core setting, `FLUXIQ_AUTHORING_MODE`, now decides: `legacy` (default)
+builds, judges, applies and says the automation is ready, as at the baseline;
+`candidate` stays draft-only until the trial runner (t340) and chat wiring (U3) land.
+The Lab picks the mode per run and refuses candidate creation before any provider call.
+Evidence: [product path](./mvp-final-month-plan/reports/intake-1007/product-path.md).
 
 **What t296-t337 gave us.**
 
@@ -58,12 +56,13 @@ hardening. In-flight t334 (click executor), t335 (installer, never compiled) and
 t337 (grammar for one sentence family) are WIP commits on their own branches, not
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
-**In flight.** t338 restore the creation path (worker, `fxwork/t338`, Core-paired).
+**In flight.** t340 candidate trial runner, judge and promotion (slice U2, Core);
+t341 the seven re-author tests failing on Core dev (repair path); t342 live lane A
+baseline in legacy mode (lead, one supervised run, debug, report only).
 
 **Next order.**
 
-1. t338: legacy default restored, Lab admits legacy creation. Verify, merge both
-   repositories, push.
+1. Done 2026-10-07: t338 legacy default restored, Lab admits legacy creation.
 2. Re-establish the live baseline: rebuild a lane tree on the new pair, assert the
    running identity, then one supervised lane A run started from the extension
    chat (off-peak, flash, $0.10). Debug it fully before anything else is paid for.
@@ -139,6 +138,30 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
 
+### Brief: t340 U2 candidate trial runner, judge and promotion
+- Worker: t340-trial-runner (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t340\` (Core-paired, branch `task/t340-candidate-trial-runner`); edits in its `!FluxIQ` tree. Report: `docs/working/mvp-final-month-plan/reports/t340-candidate-trial-runner.md` in the t340 downstream tree.
+- Design: [t339 design](./mvp-final-month-plan/reports/t339-candidate-slice-design.md), unit U2 row and the sections it cites; decisions D1-D4 (ledger 2026-10-07). U1 is merged: the trial port contract is in Core `runtime/flow-bootstrap/candidate/contracts.ts`, and its request carries the frozen candidate. t338 is merged: the authoring mode comes from `model/authoring-mode/`.
+- Goal: in candidate mode, Core mints the candidate id before the authoring loop and injects a real trial port. A trial runs the exact submitted candidate once through the normal runtime (`runAutomationStudioDetachedCandidate`) under a trial session, from the declared start: when the optional `prepareCandidateStart` service option (D1) is set, call it first and record its result; otherwise record `not_reset`. Judge with `automationStudioBuildTestJudge` (t296 fail-closed) on trial evidence only: attempts, step changes, start and end views, stored rows. Return the verdict for that revision and digest. After the loop, a candidate whose standing verdict is yes becomes a proposed adaptation through `createFlowBootstrapAdaptation`, with `candidateTrial` audit detail and base digest checks; anything else stays a draft.
+- First, before other work: prove a trial gates declared consequences exactly as a normal run does (`permittedConsequences` on graph options). Write it as a fail-first test.
+- Owns: Core new `runtime/service/candidate-trial/**` (with tests); `runtime/flow-bootstrap/verification/detached-execution.ts` and its test; `runtime/result-verification/run-outcome.ts` (export only); `runtime/service/flow-bootstrap-commands/{candidate-generation,contracts,audit-event}.ts` and their tests; `runtime/service.ts` (candidate branch, graph-options sharing, the D1 option only).
+- Must not touch: `runtime/service/runtime-adaptation/**` (t341 owns it), `runtime/conversations/**`, `api/**`, `apps/web/**` (U3, later), required-mode and storage-authority owners, `docs/working/*.md`. No commits, provider, Lab or panel.
+- Definition of done: the U2 row's fail-first negatives pass (judge request holds only trial evidence; yes plus unknown or silent gives no adaptation; instruction edited between trial and promotion gives `FLOW_BOOTSTRAP_STALE` and keeps the draft; digest mismatch refused; cancelled trial means no judge call and no promotion; two yeses give a proposed adaptation; absent hook gives `not_reset`). Owning tests, Core nonincremental typecheck and Core structure audit pass. Say whether trial steps reach the chat's run activity; if not, state what U3 needs.
+
+### Brief: t341 re-author port regression on Core dev
+- Worker: t341-reauthor (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t341\` (Core-paired, branch `task/t341-reauthor-port-regression`); edits in its `!FluxIQ` tree. Report: `docs/working/mvp-final-month-plan/reports/t341-reauthor-port-regression.md` in the t341 downstream tree.
+- Fact: on Core dev (`953272c2`, and still at `e76e1775`) seven tests fail in `runtime/service/runtime-adaptation/tests/step-failure-port.test.ts` and `refuted-result-port.test.ts`: `port.approve` is never called, and one purse total reads 0.2 against an expected 0.22. They passed at some earlier commit. Re-author is the repair path the October 12-23 adaptation work depends on.
+- Find the first bad commit by running only those two files (bisect between Core `e9b7d691` and dev; build only what the tests need). Decide from the code and the consultant revision (P0 item 2: fence apply-before-judged topologies, keep the accepted graph) whether the product regressed or the tests encode behavior that was deliberately and correctly changed. Fix the cause, not the symptom. If the change was correct, update the tests to state the new contract and say why.
+- Owns: Core `runtime/service/runtime-adaptation/**` and its tests.
+- Must not touch: `runtime/service.ts` and `runtime/service/flow-bootstrap-commands/**` (t340 owns them), conversations, api, web, `docs/working/*.md`. If the fix needs a file outside the owned area, stop and report the exact change needed. No commits, provider, Lab or panel.
+- Definition of done: the first bad commit and the cause, with evidence; both files pass; the rest of `runtime/service/runtime-adaptation` passes; Core nonincremental typecheck and structure audit pass.
+
+### Brief: t342 live lane A baseline on the restored creation path
+- Lead: t342-lane-a (lead-xhigh). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t342\` (Core-paired, branch `task/t342-lane-a-baseline`, at downstream `0a0f4979` / Core `e76e1775`). Report: `docs/working/mvp-final-month-plan/reports/t342-lane-a-baseline.md` in the t342 downstream tree. Evidence stays in ignored run directories.
+- Goal: re-establish a measured baseline after t338. One supervised lane A creation run (`crossborder-marketplace-hub-to-cart`) in legacy authoring mode, started by typing into the real extension chat, then a complete debug: every step, the build judge's verdicts against the private oracle, cost and calls, and a review of the chat, overlay and panel UI. If it passes, run one zero-call saved-Flow replay, then a second independent creation run on the same build pair (the qualification streak). If it fails, debug and stop: no further paid run.
+- Preflight, in order: rebuild Core libraries, domain, test-runner and extension in the t342 trees; claim a Lab slot per `docs/architecture/testing-facility.md`; campaign dry run with `--authoring-mode legacy --max-attempts 1` and the $0.10 ceiling; assert the running extension, Core and domain identities before paying. Use the Lab's guards for admission (off-peak, balance, relaunch, debug-before-rerun); never create override files; headed browser; flash model; never relaunch unattended.
+- Must not: edit product source (report causes and proposed fixes with exact files; separate briefs will fix them); edit `docs/working/*.md` other than your report; commit or push; manage the user's panel. A Lab or setup defect that blocks the run itself: report it with evidence and stop.
+- Definition of done: the report gives, in plain English first: pass or fail with cause and how far the run got, the judge-versus-oracle comparison, cost, every distinct cause with an exact reproduction and the file to change, UI findings, and, if passed, the replay's zero-call evidence and the second run's result.
+
 ### Brief: t339 U1 candidate authoring format and trial gate (merged 2026-10-07)
 - Worker: t339-candidate-gate (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t339\` (Core-paired, branch `task/t339-candidate-trial-gate`); edits in its `!FluxIQ` tree. Report: `docs/working/mvp-final-month-plan/reports/t339-candidate-trial-gate.md` in the t339 downstream tree.
 - Design: [t339 design](./mvp-final-month-plan/reports/t339-candidate-slice-design.md), unit U1 row and sections it cites. Decisions D1-D4 are settled (ledger 2026-10-07).
@@ -155,7 +178,7 @@ Active file-owned tasks only. Prior briefs and exact receipts are preserved in t
 - Answer with file:line evidence: (1) what the candidate-mode model sees today (tools, prompt text) and what is missing, especially the Flow format and examples; name the existing sources (node definitions, catalog) to render it from. (2) How the legacy build test-runs its draft today, and how the submitted candidate can run detached through the normal runtime from the declared start (t300 `runAutomationStudioDetachedCandidate`, start location, Lab reset) when the model asks to test it. (3) Which existing judge entry, with t296's fail-closed agreement, can judge only the candidate run's evidence (end page, step changes, rows), never exploration's leftovers. (4) Promotion: one base-revision compare-and-swap writing the accepted candidate graph into the Flow; which existing write path and revision fields to use; what changes in the `promotionAllowed:false` contract. (5) What the Lab creation lane must do in candidate mode (wait for a promoted Flow, record candidate id and verdicts).
 - Output: a file-owned partition into 2-4 implementation units, each with owners, tests (including fail-first negatives: unexecuted candidate, edited revision with an older verdict, base revision changed, judge unsure), and rough size. Flag any point needing a user decision.
 
-### Brief: t338 restore the creation path behind an authoring-mode setting
+### Brief: t338 restore the creation path behind an authoring-mode setting (merged 2026-10-07)
 - Worker: t338-restore (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t338\` (both repos, branch `task/t338-restore-creation-path`). Report: `docs/working/mvp-final-month-plan/reports/t338-restore-creation-path.md` in the t338 downstream tree.
 - Why: t330 (merges downstream `4db30a78`, Core `66a310cc`) made every chat and panel creation build candidate-only, and nothing promotes candidates, so the extension cannot make a runnable Flow and every Lab creation lane throws (`test-runner/src/flow-lane/creation/readiness.ts:4-5`). Consultant revision P1.1 required the new interface behind a flag with legacy kept. Evidence: `reports/intake-1007/product-path.md`, `infra-chain.md`.
 - Goal: ONE authoring-mode setting with a single source of truth in Core runtime configuration (propose the owner; no per-caller literals). `legacy` (default) restores pre-t330 behavior (baseline Core `e9b7d691` / downstream `92d790d7`): create-here and explore build, judge, then approve/apply and say the automation is ready; improve asks to apply; the panel's evidence-guided build proposes an adaptation as before. `candidate` keeps t330's draft-only behavior exactly. Reuse the code t330 replaced (`git diff` its merges); do not reinvent it.
@@ -269,6 +292,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: Core `953272c2` (source `3a250f97`), downstream merge of task t339. In candidate mode `core.submit_candidate` now carries the Flow script format and an act-on-one-item example; new `core.test_candidate` asks an injected trial port to run the exact latest revision and digest; completion needs a yes for that exact revision and digest, a no closes that digest, other verdicts refuse with feedback. Without a port nothing changes: completion saves an unverified draft. The example declares `modify_existing` for the add press, which is not permission-gated (`action-permissions/destructive.ts:53`). Port requests also carry the frozen candidate, so U2 must mint the candidate id before the loop.
 - Validation: supervisor in the t339 Core tree: `npx vitest run` on `flow-bootstrap/candidate/tests` and `plan/tests` -> 16 files, 131 tests passed; `npx tsc --noEmit -p packages/fluxiq/tsconfig.json` -> exit 0; Core `node scripts/structure-audit.mjs` -> passed (283 warnings, 349 baselined). Downstream `pnpm task finish t339` structure audit passed; Core finished with `--skip-checks` after those narrow gates (Core dev unchanged since the branch). Both dev branches pushed.
 - Limits: no provider call or Lab run; candidate mode still ends as a draft until U2 supplies the trial runner. Risk for the live probe: a wrong "no" forces the model to change the Flow before it can finish.
+
+### 2026-10-07 - t338 merged: creation path restored behind FLUXIQ_AUTHORING_MODE; t340-t342 dispatched
+- Changed: Core `e76e1775`, downstream `0a0f4979`, both pushed. One Core setting, `FLUXIQ_AUTHORING_MODE` (`model/authoring-mode/`), default `legacy`: chat create-here and explore build, judge, apply and say the automation is ready; improve asks before applying; the panel proposes an adaptation (it sends `authoringMode: "configured"`, which Core resolves). `candidate` keeps t330's draft-only behavior; an unknown value refuses. The Lab campaign takes `--authoring-mode` (default legacy), starts its Core with the setting, records `coreAuthoringMode` in every report, and the created-Flow readiness hold refuses only candidate mode. Dispatched: t340 (U2 trial runner), t341 (re-author regression), t342 (live lane A baseline).
+- Validation: supervisor on the t338 trees after merging current dev (with U1) into both: Core vitest on conversations/commands, model, api, candidate and authoring-result -> 49 files, 346 tests passed; Core `tsc --noEmit -p tsconfig.json` -> exit 0; web vitest on authoring and conversation (after rebuilding Core libraries) -> 28 files, 318 passed; web `tsc --noEmit` -> exit 0; Core structure audit passed (285 warnings, 349 baselined). Downstream: test-runner build exit 0; `node --test` on creation, chat, prove and live-llm tests -> 287/287; `dist/tests` -> 352/353; campaign tests 69/69; structure audit passed (176, 117). Lane A dry run of the exact Lab command -> `"status":"ready"`, `"providerCallCount":0`, `"coreAuthoringMode":"legacy"`; the same with `--authoring-mode candidate` -> `failed`, `facility.contract`. The two failures not caused by t338 reproduce on dev without it: `cli-llm` "a dry run reports the Core web build it would serve" (downstream dev after rebuilding Core, domain and test-runner) and seven re-author tests in Core `runtime-adaptation/tests/{step-failure-port,refuted-result-port}.test.ts` (Core dev `953272c2`), now t341.
+- Limits: no browser check of the panel and no live run yet (t342). The main checkout's Core build output was stale before t330; it was rebuilt (libraries only) during verification.
 
 ## Open Questions
 
