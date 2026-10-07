@@ -124,3 +124,57 @@ a rerun's rows keep, which are still out, and (all kept) to complete.
 
 No live, Lab, browser or provider run (by the rules): `timeOrigin` through a real capture, the judges' use of
 `startView`, and the re-author ending end to end (needs item 1 above).
+
+## Group 2 (2026-10-06, after the supervisor's merge of dev into t286; lead alone)
+
+Supervisor's list: (1) W17's `service.ts` wiring with an end-to-end test; (2) R3-3 hook-up in the loop; (3) split
+`run-outcome.ts`; (4) the repair told one read under two step numbers; (5) R3-U-6. All done; one domain line remains
+for R3-3 on live reads (below).
+
+1. **W17 end to end.** `R/service.ts`: the four in-place edits (import, `repairEnding` parameter, the watch asked in
+   `checkCompletion` after the unchanged refusal, `generate` passing `ending`); the file stays at its 4,399-line
+   baseline. Found while validating: `tests/refuted-result/tests/repair-purse-chain.test.ts` failed (2 repair calls,
+   not 3) because its provider completes "Unfinished." when the loop's wrap-up offers no call, and that completion of
+   the unchanged seed read as "nothing to change". So the ending is now explicit: the completion must say
+   `nothingToChange: true` (`recovery/refuted-result/nothing-to-change.ts`, `AUTOMATION_STUDIO_REAUTHOR_NOTHING_TO_CHANGE_FIELD`),
+   and the brief says so. Also `activity/wording/run-ending.ts`: such a run ends "…, and the repair found nothing in
+   the Flow to change." (was the false "the fix didn't finish").
+2. **R3-3.** `R/llm/node-tools/rerun-checked-rows.ts` (new; `evidence-loop/` is at its 25-file limit) adds
+   `checkedRowsNow` to a rerun of a read in a repair whose judgement carries `checkedRows`; wired in place on
+   `evidence-loop.ts:443` (still 800 lines). Core names no domain key: rows are read from Core's `readRows.rows`, or
+   from the list the binding declares as a live read's kept records, new `AutomationStudioLlmEvidenceRuntimeBinding.readRowsKey`
+   (`holder.member`), threaded through `loop-configuration.ts` and `service.ts`. `resume.ts` explains `checkedRows` /
+   `checkedRowsNow`.
+3. **`run-outcome.ts`** 800 -> 646 lines: what the check writes on the run moved to `result-verification/run-record.ts`
+   (`automationStudioResultRecordedOutcome`, `…RecordedCheck`, `…RecordOnRunDetail`, `…RecordFlowGraphJudgements`,
+   `…RecordAdaptationReplays`), all called from `run-outcome.ts`.
+4. **One read, two numbers.** `flow-bootstrap/unfinished-build/test-step-numbers.ts` (new): in `judgeFinished`, Core's
+   own step numbers in the judge's account (`checked`/`fix` `Step N:` and `(Step N)`, `checkedRows[].step`,
+   `untestedCarried`) are put in the repair seed's numbers, and `judge.testStepIsDraftStep` maps each changed test
+   number for the judge's own words; `resume.ts` says how to read it. Nothing changes where the numbering agrees.
+5. **R3-U-6.** `service/flow-bootstrap-commands/observed-test-tool.ts` (new): the phases' test of a stopped round gets
+   the activity observer's tool, so its replays show "Testing:" cards; wired in place in `service.ts`.
+
+**Needed elsewhere (not applied):**
+- Downstream `domain/src/runtime/llm-evidence/tools.ts` (t284's), beside `observedStateKeys: WEB_LLM_VIEW_KEYS`:
+  `readRowsKey: "read.extracted",`. Until then R3-3 compares only answers carrying `readRows` (replays), not the live
+  rerun mux6naez made.
+- `R/activity/observer.ts`: a completion check that throws (the nothing-to-change ending) leaves the "Checking the
+  proposed Flow" note open; it needs a closing row whose wording the activity stream should choose.
+
+**Validation (lead):**
+- Fail-first, each red then green: e2e `reauthor-service.test.ts` "ends a re-author…" red ("expected [ 'loop_verification',
+  …(5) ] to deeply equal [ …(2) ]") with the watch disabled; `rerun-place.test.ts` R3-3 cases red ("expected undefined
+  to deeply equal [ 'Lumo Audio Drift Pro', …(2) ]") with the wiring disabled; `judged-wrong-rows.test.ts` numbering red
+  ("…to match /\(Step 6\)|^Step 6:/mu") with the mapping disabled; `observed-test-tool.test.ts` red ("expected 0 to be
+  greater than or equal to 2") with the bare tool; `nothing-to-change.test.ts` and `repair-purse-chain.test.ts` red
+  without the explicit flag; `run-ending.test.ts` red without the sentence.
+- `node scripts/build-cache/cli.mjs fluxiq:check` exit 0; Core `structure-audit:check` -> `passed (274 warning(s), 349
+  baselined)` (first run: `evidence-loop/` 26 files and `service.ts` 4,400 lines, both fixed).
+- Core `npx vitest run` on 223 exact files (result-verification, unfinished-build, recovery, llm evidence-loop and
+  node-tools tests, deepseek pins, harness-options, service flow-bootstrap-commands / runtime-adaptation / end-view,
+  `tests/refuted-result`, activity, flow-draft, diagnosis-channel) in five batches: 427 + 548 + 515 + 380 + 455 =
+  2,325 passed; plus `tests/service-authoring` (4 files, 7) and `tests/{service-bootstrap,deepseek-bootstrap}` +
+  `llm-deepseek-flow-bootstrap.test.ts` (27 files, 155) passed.
+- Core `pnpm.cmd build` exit 0; downstream `domain check` and `extension check` exit 0 against it; downstream audit
+  `passed (174 warning(s), 118 baselined)`.
