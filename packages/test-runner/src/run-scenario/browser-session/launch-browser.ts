@@ -1,7 +1,7 @@
 import { chromium, type BrowserContext } from "@playwright/test";
 import type { RunningTopology } from "../../coordinator.js";
 import { withoutProviderSecrets } from "../../environment.js";
-import { networkContainmentArgs } from "../../guarded-browser/index.js";
+import { forgetCachedServiceWorkers, networkContainmentArgs } from "../../guarded-browser/index.js";
 
 /**
  * The headed Chromium a scenario run drives, with the built extension loaded.
@@ -23,9 +23,14 @@ import { networkContainmentArgs } from "../../guarded-browser/index.js";
  * (`openLivePanel`) has room next to the 1280-wide viewport. `headless` is
  * returned so the caller decides from the launch itself whether there is a
  * window to show that panel in.
+ *
+ * The profile's stored service workers are forgotten first, so a persistent
+ * workspace's profile runs this build's background worker rather than the one
+ * it ran before (`forgetCachedServiceWorkers`).
  */
 export async function launchBrowser(topology: RunningTopology, extensionPath: string): Promise<{ context: BrowserContext; browserVersion: string; headless: boolean }> {
   const headless = false;
+  await forgetCachedServiceWorkers(topology.allocation.browserProfileDir);
   const context = await chromium.launchPersistentContext(topology.allocation.browserProfileDir, { headless, env: withoutProviderSecrets(process.env), locale: "en-US", timezoneId: "UTC", viewport: { width: 1280, height: 720 }, colorScheme: "light", args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, "--no-first-run", "--disable-default-apps", "--window-size=1700,1000", ...networkContainmentArgs([topology.scenarioOrigin, topology.fluxiqOrigin, topology.gatewayUrl])] });
   return { context, browserVersion: context.browser()?.version() ?? "chromium", headless };
 }

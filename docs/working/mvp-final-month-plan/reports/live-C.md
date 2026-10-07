@@ -371,3 +371,121 @@ rebuilt by the supervisor at 21:16Z. Instance `t274-slot-1`, workspace `t274-c` 
   from the stored output.
 - Debug: `docs/working/language-driven-flow-loop-plan/debugs/run-mux6naez-6c20f26e.md`. UI review:
   `live-C-r3-ui-review.md`. Fix report: `r3-c-tested-label.md`.
+
+## Round 4 — expectations (written 2026-10-07T03:38Z, before the dry run and the launch)
+
+First live proof of the read-list redesign (one-page read, Next page node, do-while repeat, run-end dedupe). Tree:
+downstream `5cad8286` (= dev), Core `ffbdea7e` (= Core dev: S1-S6, S3 `385eca1e`, t285 act claims, t286 judges incl.
+R3-1 `testedLabel` hidden from the judge and R3-3, t287 refusal churn incl. R3-2, t292 small gaps), synced and rebuilt
+by the supervisor. Instance `t274-slot-1`, workspace `t274-c`, slot 1. Off-peak window: start at or after 04:00Z,
+never after 05:45Z. One run at a time, headed, built from the extension chat, `--max-attempts 1`.
+
+- **Actions a correct Flow takes** (design expectation from the round-4 notes):
+  1. navigate to the store home;
+  2. Decline (optional / state-routed); 3. Not now (optional / state-routed);
+  4. type "wireless earbuds" into "Search Brightaisle" and submit (results page 1);
+  5. one read of the results list **on one page**, with `where`: sponsored absent, Plus present, printed rating >= 4,
+     price < $50.00, accessories out (replacement ear tips, the charging case sold alone) while pairs "with Wireless
+     Charging Case" stay in; columns name, price, rating, url;
+  6. Next page (`nextPage: {list}`);
+  7. a do-while Repeat over the read through Next page while Next page succeeds, `most` >= 5;
+  8. run-end processing removes the page-boundary repeats (whole-row or by url) and keeps page order.
+- **Build test**: 5 read passes; Next page's 5th pass `core.replay.ended` on page 5 (no following page);
+  `buildTest.stores` = `{passes: 5, collected: 13 + qualifying boundary repeats, answer: {rows: 13}, removed:
+  {duplicates: collected - 13}}`. Round 3's old paged read reported 2 earlier-page repeats among 94 seen, so I expect
+  collected 15 with 2 duplicates; S6's proof shape (17/4) is the fake host's, not the catalog's.
+- **Exact oracle** `extract-plus-under-fifty`: **13 records in order (B0PXHP88KT, B0R257NR7U, B0P8ZF57AC,
+  B0J5MCMBAY, B0VNKJTVCD, B07Z1RZGJG, B00BJX53AC, B09HZLEPLS, B0HKSZ2BM6, B0G68DZTDB, B0X473P78X, B02UB6NJWC,
+  B016CBKJ2R), 52 string fields matched in place**; final state not challenged, cart "2". The Lab measurement carries
+  `collectedRecords` (>= 13) beside `observedRecords` 13; the dataset `processing` account holds collected and
+  duplicates. Pass = Lab verdict `passed`.
+- **Look-alikes**: 3 (page 1 only: no loop, or a repeat that never runs); 10 (charging-case pairs dropped by a name
+  rule); 15/17 (boundary repeats not removed); 30/82 (an unfiltered read stored); sponsored kept; a loop that never
+  ends (page 2's Next leading back to page 2; GAP N1's enabled script Next on page 5); fewer rows from page 1 if the
+  four scroll-loaded results are missed; a 429 from a sweep faster than a person reads.
+- **Traps for the new nodes**: the one-page read must still scroll for the four late results; Next page on page 2
+  must move to page 3 although the link leads back to page 2; on page 5 Next page must answer `ended`, not `moved`.
+- **New on this source, checked in the debug**: act claims judged by the page change (`act_not_done_there`,
+  `step_only_*`); every amendment refusal names its way out; three same-kind refusals in a row end the round (warned
+  at two); identical reruns answered unchanged and count as no progress (R3-2); no second copy of a step or second
+  read of a list; a settings rewrite of a ran step refused; node definitions given on first use; readable field
+  labels and samples; judges see only what this run changed; an unconfirmed yes never passes; no round opens without
+  room for its judge pair; the re-author may end "nothing to change"; a repair is told when a rerun already fixed the
+  rows (R3-3); `testedLabel` (R3-1) keeps non-label conditions' left-out rows out of `leftOutNamingTheItem`; the read
+  reads one page.
+- **UI checkpoints** (S6 "what the UI review must see", S3 activity words, `fix-ui.md` t288 lists):
+  - pass cards name the page: "Reading page N", "Clicking “Next” on page N";
+  - the loop's end said once: "The list ended after 5 pages";
+  - no "paginate", "paginate_retired", `ended` as a code, "Repeat"/node ids, "reading the list handle";
+  - build list read cards "Done: N rows from M pages"; a page whose read kept nothing is not a failure;
+  - the ending names the 13 rows, not the collected count; never "ran, or could run"; a failed run's row says what
+    the check objected to; a failed creation build never "Couldn't fix your Flow";
+  - "Starting…" from the send in panel and page; identical successful reruns fold "(N times)"; a two-field list name
+    never cut; a completion sent back reads "The Flow isn't finished yet"; an unreadable provider reply is not a
+    failed step; "Judging the Flow" says how many steps the test ran; no quote cut in a word; "Added to the Flow, not
+    run yet"; thoughts never end on ";"; repair headings carry no step numbers; a partly done edit card says what
+    landed.
+  - Known open, reported not counted: the Repeat's own card is a bare "Running step N of M" per pass (S3 open
+    question); a loop ending on `ended` only after a recovery says no end sentence.
+
+### Round 4 — progress
+
+- 03:38Z dry run. `pnpm.cmd lab:campaign everything-store-plus-earbuds-under-50 --dry-run --max-attempts 1` (env
+  `FLUXIQ_LAB_INSTANCE=t274-slot-1`, `FLUXIQ_TEST_ENV_FILES=none`, `FLUXIQ_TEST_TARGET=persistent-isolated`,
+  `FLUXIQ_TEST_PERSISTENT_WORKSPACE=t274-c`) printed the same Lab command as rounds 1-3 (`--llm-max-calls 48`, no
+  permit, no cost option). That Lab command with `--dry-run` exited 0: `status: ready`, `providerCallCount: 0`,
+  `lane: created-flow`, `buildEntry: chat`, `target: persistent-isolated`, `coreDefaultModel: deepseek-flash`,
+  `purpose: build_and_adapt`, `authorized.maxEstimatedCostUsd: 0.1`, `maxTotalEstimatedCostUsd: 0.1`,
+  `permittedConsequences: []`, judgement `expected-dataset` `extract-plus-under-fifty`, instruction 415 characters
+  `d4f7835b...` (unchanged since round 1). Prelude: Core quiet (newest file 02:56:56Z), rebuilt scenario-lab, domain
+  host, extension (chrome, firefox, e2e-chromium verified) and test-runner for the instance.
+- 04:00:29Z live run launched (`--max-attempts 1`, headed, chat build); guard `admitted` (`sha256:9def8d90...`). Run
+  `run-muxky0df-c9839389`, chat 04:03:34Z, campaign exit 1 at 04:06:47Z. Not relaunched. A failure ends this dispatch
+  (no second paid run).
+
+## Round 4 — `run-muxky0df-c9839389`: failed, no Flow (stale background worker)
+
+- Cost: 36 provider calls, $0.066685428. Split: chat $0.000209, round 0 $0.028672, 3 judge pairs $0.009625, repair 1
+  $0.011685, repair 2 $0.016495. No build over the $0.10 ceiling.
+- Oracle not measured. Verdict `failed`: `lab.chat_build_failed`, `flow_bootstrap.build_not_finished`.
+- What happened:
+  - The model planned the expected Flow: a one-page read (worked: 3 rows from page 1), then Next page, then repeat the
+    read while Next page succeeds.
+  - Every Next page call (0024, reruns 0027/0032) was refused `invalid_input` / `node_not_runnable_here`.
+  - Three tests read one page, and every judge correctly said no.
+  - Two repair rounds tried to author Next page as an amendment on a look step (`not_a_kept_step`).
+  - The build stopped: "my last 2 attempts ... got no further".
+- **Cause (R4-1, verified by the lead): the Lab's persistent profile runs a stale background worker.**
+  - Chromium keeps the extension service worker stored in the profile (`Default/Service Worker/ScriptCache`) and runs
+    it on later launches, even after the files on disk change.
+  - `t274-c`'s cached worker is from 2026-10-05 21:19 and has 0 mentions of `web.dom.next_page`; the built background
+    has 11.
+  - The old worker's gateway mapping answers the unknown action `UNSUPPORTED_TYPE`, which the domain words as
+    `node_not_runnable_here`.
+  - Content specs stand in for the worker, so this was the first time the real worker met Next page.
+- **All four lanes are affected.** The A and B profiles' workers are from 2026-10-03 18:31; C and D's from 2026-10-05
+  21:19. None has Next page. Up to 28 and 18 commits since then touched source the worker bundles. Background-side
+  behaviour in every live run since was the old build's; content, panel and Core were current.
+- Fix in the lane tree, uncommitted (worker report `live-C-r4-next-page.md`, verified by the lead):
+  - new `packages/test-runner/src/guarded-browser/forget-cached-service-workers.ts`, exported from
+    `guarded-browser/index.ts`;
+  - called before every persistent Chromium launch: `run-scenario/browser-session/launch-browser.ts`,
+    `guarded-browser/launch-guarded-context.ts`, `interactive-session.ts`, `saved-flow-replay/replay-browser.ts`;
+  - tests: `run-scenario/browser-session/tests/launch-browser-worker.test.ts` (real Chromium),
+    `guarded-browser/tests/forget-cached-service-workers.test.ts` and
+    `guarded-browser/tests/fresh-extension-worker.test.ts` (structural: every launch site calls it).
+- Validation (lead):
+  - fail-first, with the call removed from `launch-browser.ts` and test-runner rebuilt: `not ok 1 ... 'first' !==
+    'second'`, `# fail 1`;
+  - restored and rebuilt (`pnpm.cmd run build` exit 0): the tests beside the change gave `# tests 18 # pass 18 # fail
+    0`, and `saved-flow-replay/tests` gave `# tests 20 # pass 20 # fail 0`;
+  - test-runner `pnpm.cmd run check` clean; `structure-audit: passed (176 warning(s), 118 baselined)`.
+- Also found: R4-2 (repair rounds author a step by amendment instead of a new call), R4-3 (judge 0043 misread the
+  Plus badge), and UI R4-U-1..4 (`live-C-r4-ui-review.md`). The worst UI one: "Action · Dom next page / Didn't work:
+  the step wasn't accepted", which gives no reason and uses an internal name.
+- Proposal (not done): after launch the Lab could read the running worker's build id (`build-info.json`) and refuse
+  a mismatch. That would enforce R4-1 mechanically.
+- Next for lane C: once R4-1 is merged and `fxwork/t274` is synced and rebuilt, rerun with the same command. The
+  redesign itself (do-while, run-end dedupe, page words) is still unproven live.
+- Debug: `docs/working/language-driven-flow-loop-plan/debugs/run-muxky0df-c9839389.md`. UI review:
+  `live-C-r4-ui-review.md`. Fix report: `live-C-r4-next-page.md`.
