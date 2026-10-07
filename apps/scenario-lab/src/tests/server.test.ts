@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { request } from "node:http";
 import test from "node:test";
 import { startScenarioLab, type RunningScenarioLab } from "../server.js";
+import { getScenario } from "../registry.js";
+import { isDeepStrictEqual } from "node:util";
 import { scenarioIds } from "../types.js";
 
 const TOKEN = "fixture-run-token-1234";
@@ -19,11 +22,14 @@ test("health and control endpoints require the run token", async () => withLab(a
   assert.equal((await fetch(`${lab.origin}/__control/health`)).status, 401);
   const response = await fetch(`${lab.origin}/__control/health`, authorized());
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { status: "ready", seed: 12, scenarios: [...scenarioIds] });
+  const health = await response.json() as Record<string, unknown>;
+  assert.deepEqual({ status: health.status, seed: health.seed, scenarios: health.scenarios }, { status: "ready", seed: 12, scenarios: [...scenarioIds] });
+  assert.equal(typeof health.provenance, "object");
   const seeded = await fetch(`${lab.origin}/__control/seed`, authorized({
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed: 88 }),
   }));
-  assert.deepEqual(await seeded.json(), { status: "seeded", seed: 88 });
+  const packet = await seeded.json() as Record<string, unknown>;
+  assert.deepEqual({ status: packet.status, seed: packet.seed }, { status: "seeded", seed: 88 });
   const state = await jsonObject(await fetch(`${lab.origin}/__control/final-state?scenario=dynamic-list`, authorized())) as { state: { items: Array<{ label: string }> } };
   assert.equal(state.state.items[0]?.label, "Seed 88 item 1");
 }));
@@ -63,7 +69,7 @@ test("dynamic list identity, mutation, and reset are deterministic", async () =>
 
   await fetch(`${lab.origin}/__control/reset`, authorized({ method: "POST" }));
   const reset = await jsonObject(await fetch(`${lab.origin}/__control/final-state?scenario=dynamic-list`, authorized()));
-  assert.deepEqual(reset, initial);
+  assert.deepEqual(reset.state, initial.state);
 }));
 
 test("target drift control oracle is exact across missing, renamed, restore, and global reset", async () => withLab(async lab => {
@@ -137,7 +143,8 @@ test("new scenario states mutate and reset deterministically", async () => withL
   assert.match(JSON.stringify(sensitive), /"passwordStored":false/);
   await fetch(`${lab.origin}/__control/reset`, authorized({ method: "POST" }));
   const after = await jsonObject(await fetch(`${lab.origin}/__control/final-state`, authorized()));
-  assert.deepEqual(after, before);
+  const data = (packet: Record<string, unknown>) => ({ seed: packet.seed, scenarios: (packet.scenarios as Array<Record<string, unknown>>).map(item => ({ scenarioId: item.scenarioId, seed: item.seed, state: item.state, variant: item.variant })) });
+  assert.equal(isDeepStrictEqual(data(after), data(before)), true);
 }));
 
 test("iframe fixture exposes same-origin and distinct loopback-origin frames", async () => withLab(async lab => {
@@ -187,3 +194,64 @@ function requestStatus(origin: string, hostHeader: string): Promise<number | und
     outgoing.end();
   });
 }
+
+test("actual HTTP failed reset/reseed leaves previous owner packets unchanged", async () => withLab(async lab => {
+  const read = async () => (await fetch(`${lab.origin}/__control/final-state`, authorized())).json();
+  const before = await read(), scenario = getScenario("dynamic-list")!, original = scenario.createState;
+  try {
+    scenario.createState = () => { throw new Error("isolated initializer failure"); };
+    for (const route of ["reset", "seed"]) {
+      const response = await fetch(`${lab.origin}/__control/${route}`, authorized({ method: "POST", ...(route === "seed" ? { body: JSON.stringify({ seed: 88 }) } : {}) }));
+      assert.equal(response.status, 500); assert.equal(isDeepStrictEqual(await read(), before), true);
+    }
+  } finally { scenario.createState = original; }
+}));
+test("actual authenticated owner reset/seed/arm and no-op sequences are truthful", async () => withLab(async lab => {
+  const health = async () => (await fetch(`${lab.origin}/__control/health`, authorized())).json() as Promise<{ seed: number; provenance: { ownerEpoch: string; resetGeneration: number; mutationSequence: number } }>;
+  const first = await health();
+  for (const [path, init, status] of [
+    ["reset", { method: "POST" }, 401], ["reset", { method: "POST", headers: { authorization: "Bearer wrong" } }, 401],
+    ["reset", authorized({ method: "GET" }), 405], ["reset", authorized({ method: "POST", body: JSON.stringify({ ownerEpoch: "forged" }) }), 400],
+    ["seed", authorized({ method: "POST", body: JSON.stringify({ seed: 5, extra: true }) }), 400],
+    ["seed", authorized({ method: "POST", body: JSON.stringify({ seed: Number.MAX_SAFE_INTEGER + 1 }) }), 400],
+    ["arm", authorized({ method: "POST", body: JSON.stringify({ scenarioId: "social-scheduler", variantId: "missing" }) }), 404],
+    ["reset", authorized({ method: "POST", body: "{" }), 400], ["reset", authorized({ method: "POST", body: "x".repeat(16385) }), 400],
+  ] as Array<[string, RequestInit, number]>) {
+    assert.equal((await fetch(`${lab.origin}/__control/${path}`, init)).status, status);
+    assert.deepEqual(await health(), first);
+  }
+  const arm = () => fetch(`${lab.origin}/__control/arm`, authorized({ method: "POST", body: JSON.stringify({ scenarioId: "social-scheduler", variantId: "restyled" }) }));
+  assert.equal((await arm()).status, 200); assert.equal((await health()).provenance.mutationSequence, 1);
+  assert.equal((await arm()).status, 409); assert.equal((await health()).provenance.mutationSequence, 1);
+  const noop = await fetch(`${lab.origin}/api/social-scheduler/unknown`, authorized({ method: "POST" }));
+  assert.deepEqual((await noop.json() as { mutation: unknown }).mutation, { status: "no_change" });
+  const reset = await fetch(`${lab.origin}/__control/reset`, authorized({ method: "POST" }));
+  assert.equal(reset.status, 200); const second = await health();
+  assert.equal(second.provenance.ownerEpoch, first.provenance.ownerEpoch); assert.equal(second.provenance.resetGeneration, 2); assert.equal(second.provenance.mutationSequence, 2);
+  const seeded = await fetch(`${lab.origin}/__control/seed`, authorized({ method: "POST", body: JSON.stringify({ seed: 88 }) }));
+  assert.equal(seeded.status, 200); assert.equal((await health()).seed, 88);
+  assert.equal((await health()).provenance.resetGeneration, 3);
+}));
+test("actual route HEAD does not mutate while GET sequences real state", async () => withLab(async lab => {
+  const read = async () => (await fetch(`${lab.origin}/__control/health`, authorized())).json() as Promise<{ provenance: { mutationSequence: number } }>;
+  const before = await read();
+  await fetch(`${lab.origin}/scenarios/file-transfer/report.csv`, { method: "HEAD" });
+  assert.equal((await read()).provenance.mutationSequence, before.provenance.mutationSequence);
+  await fetch(`${lab.origin}/scenarios/file-transfer/report.csv`);
+  assert.equal((await read()).provenance.mutationSequence, before.provenance.mutationSequence + 1);
+}));
+
+test("fresh actual fixture child processes never reuse the prior owner epoch", async () => {
+  const run = () => new Promise<{ epoch: string; generation: number }>((resolve, reject) => {
+    const script = `const {startScenarioLab}=await import(${JSON.stringify(new URL("../server.js", import.meta.url).href)}); const token='isolated-child-token-1234'; const lab=await startScenarioLab({runToken:token,seed:7}); try { const data=await (await fetch(lab.origin+'/__control/health',{headers:{authorization:'Bearer '+token}})).json(); console.log(JSON.stringify({epoch:data.provenance.ownerEpoch,generation:data.provenance.resetGeneration})); } finally {await lab.close();}`;
+    const child = spawn(process.execPath, ["--input-type=module", "--eval", script], { windowsHide: true, env: { SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP, TMP: process.env.TMP } });
+    let output = "", bytes = 0;
+    const timeout = setTimeout(() => { child.kill(); reject(new Error("fixture child bounded timeout")); }, 10000);
+    child.stdout.on("data", (chunk: Buffer) => { bytes += chunk.length; if (bytes > 4096) { child.kill(); reject(new Error("fixture child output limit")); } else output += chunk.toString(); });
+    child.stderr.on("data", () => { /* private child diagnostics deliberately withheld */ });
+    child.once("error", error => { clearTimeout(timeout); reject(error); });
+    child.once("close", code => { clearTimeout(timeout); if (code !== 0) reject(new Error("fixture child failed")); else try { resolve(JSON.parse(output) as { epoch: string; generation: number }); } catch { reject(new Error("fixture child packet invalid")); } });
+  });
+  const first = await run(), restarted = await run();
+  assert.equal(first.generation, 1); assert.equal(restarted.generation, 1); assert.notEqual(first.epoch, restarted.epoch);
+});

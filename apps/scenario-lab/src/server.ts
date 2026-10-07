@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { pathToFileURL } from "node:url";
 import { getScenario, listScenarios } from "./registry.js";
+import { handleScenarioControl } from "./control.js";
 import { ScenarioStateStore } from "./state-store.js";
 import type { RenderContext, ScenarioRouteResponse } from "./types.js";
 
@@ -71,7 +72,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
 
   if (url.pathname.startsWith(CONTROL_PREFIX)) {
     if (!isAuthorized(request, runToken)) return sendJson(response, 401, { error: "unauthorized" });
-    return handleControl(request, response, url, store);
+    return handleScenarioControl(request, response, url, store, runToken);
   }
 
   if (url.pathname.startsWith("/api/")) {
@@ -79,8 +80,10 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     if (request.method !== "POST") return sendJson(response, 405, { error: "method_not_allowed" });
     const [, , scenarioId, operation] = url.pathname.split("/");
     if (!scenarioId || !operation) return sendJson(response, 404, { error: "not_found" });
-    const result = store.mutate(scenarioId, operation, await readJson(request));
-    return result ? sendJson(response, 200, result) : sendJson(response, 404, { error: "scenario_not_found" });
+    const payload = await readJson(request);
+    const before = store.provenance().mutationSequence;
+    const result = store.mutate(scenarioId, operation, payload);
+    return result ? sendJson(response, 200, { ...result, mutation: { status: result.provenance.mutationSequence === before ? "no_change" : "changed" } }) : sendJson(response, 404, { error: "scenario_not_found" });
   }
 
   if (request.method !== "GET" && request.method !== "HEAD") return sendJson(response, 405, { error: "method_not_allowed" });
@@ -95,31 +98,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
   if (!html) return sendJson(response, 404, { error: "not_found" });
   response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
   response.end(request.method === "HEAD" ? undefined : html);
-}
-
-async function handleControl(request: IncomingMessage, response: ServerResponse, url: URL, store: ScenarioStateStore): Promise<void> {
-  if (url.pathname === `${CONTROL_PREFIX}/health` && request.method === "GET") {
-    return sendJson(response, 200, { status: "ready", seed: store.seed, scenarios: listScenarios().map(value => value.id) });
-  }
-  if (url.pathname === `${CONTROL_PREFIX}/final-state` && request.method === "GET") {
-    const scenarioId = url.searchParams.get("scenario");
-    if (!scenarioId) return sendJson(response, 200, { seed: store.seed, scenarios: store.all() });
-    const snapshot = store.snapshot(scenarioId);
-    return snapshot ? sendJson(response, 200, snapshot) : sendJson(response, 404, { error: "scenario_not_found" });
-  }
-  if (url.pathname === `${CONTROL_PREFIX}/reset` && request.method === "POST") {
-    store.reset();
-    return sendJson(response, 200, { status: "reset", seed: store.seed });
-  }
-  if (url.pathname === `${CONTROL_PREFIX}/seed` && request.method === "POST") {
-    const body = await readJson(request);
-    if (!isRecord(body) || typeof body.seed !== "number" || !Number.isSafeInteger(body.seed)) {
-      return sendJson(response, 400, { error: "invalid_seed" });
-    }
-    store.reseed(body.seed);
-    return sendJson(response, 200, { status: "seeded", seed: store.seed });
-  }
-  sendJson(response, 404, { error: "not_found" });
 }
 
 function renderRoute(pathname: string, runToken: string, store: ScenarioStateStore, alternateOrigin?: string): string | undefined {
