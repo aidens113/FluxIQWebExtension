@@ -162,3 +162,80 @@ Validation (lead, in t281):
 
 Not verified: no live run. That a detection's resolved `item` selector survives a real reload: if it changes, Core
 simply does not refuse, which is a safe miss.
+
+## Round 4 (2026-10-07, 03:35-04:35 UTC; launch off-peak at 04:00:20)
+
+Tree `fxwork/t262`: downstream at 5cad8286 (= dev), Core at ffbdea7e (= Core dev). Both repositories contain `dev`
+(`git merge-base --is-ancestor dev HEAD`), and both trees were clean at 03:36 and at 04:00. Slot 2, instance
+`t262-slot-2`, workspace `t262-a`. No `STOP-balance` and no override files.
+
+- **Expectations** were written before launch in `debugs/run-muxkzdjw-31a13429.md`: the eight actions, the four
+  oracle facts, R4-1..R4-10, and UI checkpoints U1-U6 including t288's two "must see" lists.
+- **Dry-runs (03:37-03:38).** The campaign printed one spawned command. That command with `--dry-run` exited 0:
+  - `status ready`, `providerCallCount 0`;
+  - created-flow, chat entry, persistent-isolated, deepseek-flash;
+  - 48 calls, $0.10 ceiling, `permittedConsequences []`;
+  - the same 219-character instruction (sha256 `2e6f5e7d...a405`).
+- **Run `run-muxkzdjw-31a13429`: failed** `runtime.behavior`, no Flow, oracle not measured. It cost $0.066767 for 47
+  calls (build $0.066594) and stopped at the 48-call allowance.
+  - Exploration authored the right steps up to the coupon.
+  - **Cause C1, decision 0029.** The model sent `add` with `act: a1.quantity` and the `input` of a step it never ran
+    (typing 3 into the quantity field) about step 13, the coupon press. Core (`flow-draft/amendment/apply.ts`) reads
+    `input` only for rerun and bind, so the input was dropped without a word, the claim was applied, and the decision
+    was answered "applied".
+  - **C2.** The model then reran "its quantity step" onto "+". Step 13 had already done the lasting coupon act, so the
+    rerun went as a check that ran nothing, and it still took the new target (`llm/node-tools/rerun-check.ts`, the lane
+    D R7 design).
+  - From then on the coupon-and-quantity step could only be checked, never run. No Add to cart or quantity step was
+    ever run, both judges refuted, and two repair rounds were spent on refused amendments.
+  - The full chain and the UI review are in the debug.
+- **Fix (Core, uncommitted in `fxwork/t262/!FluxIQ`).** An `input` on an amendment change that takes none (anything
+  but rerun and bind) is refused whole as `settings_rewrite_run` when it names another node or gives a ran parameter
+  another value. One that repeats what the step ran with passes. The refusal sentence now says "only rerun and bind take
+  an input, and an amendment never makes a new step". Files, under
+  `packages/fluxiq/src/programs/automation-studio/runtime/`:
+  - `flow-draft/amendment/settings-rewrite-run.ts`: an optional third argument `input`, still one export; private
+    `namesAnotherNode` and `rewritesParameters`; header paragraph;
+  - `flow-draft/amendment/apply.ts`: passes `amendment.input` for every change but `bind`;
+  - `flow-draft/amendment/tests/settings-rewrite-run.test.ts`: 3 new cases;
+  - `llm/draft-amendment-feedback.ts`: line 180, the `settings_rewrite_run` sentence, only.
+- **Fail-first.** I wrote the tests at 04:13:32, before any source edit and before lane B's first edit. Run:
+  `npx vitest run .../flow-draft/amendment/tests/settings-rewrite-run.test.ts` gave `Tests 2 failed | 5 passed (7)`.
+  Both failures are the new refusal cases; the third new case, which pins what still passes, passed.
+- **Validation in the shared tree (lead):**
+  - `npx vitest run` over `flow-draft`, `llm/tests/draft-amendment-feedback.test.ts`, `llm/decision-handlers`,
+    `llm/evidence-loop`, `flow-bootstrap/tests/evidence-loop-steps.test.ts` and `src/ui/activity-action` gave
+    `Test Files 80 passed (80)`, `Tests 973 passed (973)`;
+  - `pnpm.cmd run check` in `packages/fluxiq` exited 0 (after one fix: `apply.ts` answers a rerun earlier, so the
+    condition names `bind` only);
+  - `node scripts/structure-audit.mjs` gave `structure-audit: passed`.
+- **Lane B also edited Core in this tree.** Its lead began editing Core source after my 04:13 check, at 04:16:40. Its
+  files:
+  - `flow-bootstrap/instructed-acts/{act-evidence,check,checklist,contracts}.ts`;
+  - `flow-bootstrap/unfinished-build/not-done.ts`;
+  - the new `flow-bootstrap/instructed-acts/tests/unchanged-press.test.ts`;
+  - the `act_not_done_there` sentence at line 181 of `llm/draft-amendment-feedback.ts`. **That file holds both lanes'
+    edits, on adjacent lines.**
+
+  So the shared-tree run above overlapped B's edits. To keep the claims apart I did the following:
+  - **Saved lane A's hunks alone** as `C:/Users/osrs_/AppData/Local/Temp/claude/c--Users-osrs--FluxStuff--FluxIQWebExtension/b5dc1bbc-81f9-4852-9625-ec836b445188/scratchpad/lane-a-r4-input-rewrite.patch`.
+    `git apply --cached --check --unidiff-zero` against HEAD is clean.
+  - **Validated that patch alone** on an extract of HEAD (`git archive HEAD packages/fluxiq ...`, with `node_modules`
+    junctioned), with no git metadata touched. The same vitest set gave `80 passed (80)`, `973 passed (973)`;
+    `npx tsc --noEmit -p tsconfig.json` exited 0.
+- **Not fixed, described in the debug:**
+  - C1b: a choice claim on a step that acts on another object stands; only act ids are judged at claim time
+    (`claim-verdict.ts`, near lane B's area).
+  - C2b: a checked rerun can retarget a lasting-act step to an unrelated control and keep its acts. It also took a
+    `text` parameter on a click (0075). This needs a design call.
+- **UI.**
+  - Seen fixed: no previous thread at start; "Judging the Flow" counts the steps run and checked; quotes cut at word
+    ends; the failed ending says "only checked, not run", with no "ran, or could run". The overlay came up 1.4 s after
+    the send (round 3: 4.7 s), but no "Starting…" was seen and no reason was logged.
+  - Still open: "Couldn't fix your Flow | Build stopped: a budget ran out" on the overlay at the end of a creation build
+    whose last unit was a repair round; "no rows would be stored" on a cart task; page-view syntax in the repair heading
+    (`quantity field ="1"`, "start view"); "made a value in "clicking on the page" vary"; rerun lines with no control
+    name; the "Reading your instruction gave no answer for ..." sentence.
+- **Not run:** replays and the second live pass (no pass). Per the brief I returned after the failure, without
+  relaunching.
+- **Spend this round:** $0.066767 on one live run.
