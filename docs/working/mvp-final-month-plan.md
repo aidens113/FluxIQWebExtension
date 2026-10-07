@@ -57,7 +57,7 @@ t337 (grammar for one sentence family) are WIP commits on their own branches, no
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
 **In flight.** t340 candidate trial runner, judge and promotion (slice U2, Core);
-t344 Lab panel build serves Core's real identity (blocks every Lab run); t345 Lab refuses non-realistic scenarios; t342 live lane A
+t344 Lab panel build serves Core's real identity (blocks every Lab run); t345 Lab refuses non-realistic scenarios; t346 loops and bindings in candidate submissions (lanes C and D need them); t342 live lane A
 baseline in legacy mode (lead, one supervised run, debug, report only).
 
 **Next order.**
@@ -137,6 +137,15 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
+
+### Brief: t346 candidate submissions can express loops and bindings
+- Worker: t346-candidate-loops (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t346\` (Core-paired, branch `task/t346-candidate-loops`); edits in its `!FluxIQ` tree. Report: `docs/working/mvp-final-month-plan/reports/t346-candidate-loops.md` in the t346 downstream tree.
+- Why: the candidate script format (`runtime/flow-bootstrap/plan/flow-script-format.ts`, parsed in `plan/parsing.ts`) has no loop syntax; loops over rows, repeat-until-no-next-page and bindings (`$row`, Flow inputs, earlier outputs) exist only in the legacy draft machinery (`runtime/flow-draft/`, general-flow-authoring t252). Lanes C (`everything-store-plus-earbuds-under-50`: read one page, Next page, repeat, run-end processing) and D (`social-network-feed-confirm-requests`: act on each matching row) cannot be authored in candidate mode. Consultant P1.3 requires the submit operation to validate loop bindings (`$row`, `$step`, Flow inputs) in the existing graph representation.
+- First map, with file:line evidence: the graph shape the legacy path produces for a row loop and for repeat-until-next-page-ends (control nodes, bindings, routes), and how canonical JSON plans already submitted to `core.submit_candidate` could express them. Then add the smallest syntax to the candidate format that assembles into exactly that existing graph shape: no new graph format, no JSON-to-script conversion.
+- Keep legacy unchanged: legacy prompt text and completion schema stay byte-identical (U1 did this by keeping candidate-only text in its own constant). Candidate-only format text and an example for each loop form go beside U1's example.
+- Owns: Core `runtime/flow-bootstrap/plan/**` (parser, format, validation, contracts) and `runtime/flow-bootstrap/candidate/submission.ts`, with their tests.
+- Must not touch: `runtime/service.ts`, `runtime/service/**`, `runtime/flow-bootstrap/verification/**`, `runtime/result-verification/**` (t340 owns them), `runtime/flow-draft/**` (read only), conversations, api, web, `docs/working/*.md`. No commits, provider, Lab or panel. No new `as never` casts (the audit refuses them).
+- Definition of done: fail-first tests: a lane C-shaped candidate (one-page read, Next page, repeat until ended, run-end processing) and a lane D-shaped candidate (act on each matching row with `$row` bindings) parse, validate and assemble to the same node and binding shape the legacy path builds; invalid bindings (unknown `$row` field, loop body referencing a step outside it, unbounded repeat) are refused with path-specific diagnostics; existing plan and candidate tests unchanged. Owning tests, Core nonincremental typecheck and structure audit pass.
 
 ### Brief: t345 the Lab refuses scenarios outside the ten realistic ones
 - Worker: t345-realistic-only (worker). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t345\!FluxIQWebExtension` (branch `task/t345-lab-realistic-scenarios-only`). Report: `docs/working/mvp-final-month-plan/reports/t345-lab-realistic-scenarios-only.md` in that tree.
