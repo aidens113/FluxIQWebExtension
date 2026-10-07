@@ -575,3 +575,18 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Validation: root observed t3056/6+21/21+55/55 and t30719/19, package types/builds and actual both audit/integration gates0; see individual reports. Taskfinish Core --skip-checks after narrow checks, no broad sweep. Provision t308/t310 completed0; t309 completed0 immediately after first worker source edits, not a frozen-source proof; final worker/root checks required.
 - Outcome: Verified narrow units pushed; whole plan remains active/incomplete. Staged foundation is never accepted authority over legacy data, and promotion remains unavailable.
 - Follow-up: actual Next panel startup proof explicitly held for panel-management authorization per AGENTS; prepare fixture only. Provider-free native socket/synthetic diagnostic tests proceed. Production semantic interpreter/start/independent browser oracle/performed-command durable attribution and coherent all-writer/adoption migration remain. No paid A-D/user panel management.
+
+### 2026-10-07 - t308 paginator independently verified
+- Agent: Codex supervisor.
+- Changed: fixture Next uses current successful rendered page; regression traverses Next1?2?3. Current downstream dev merged before independent owning build.
+- Validation: root real Chromium2/2 zero skips18.03s, scenario10/10, source/e2e typechecks and audit0. Full24rows/23unique exact oracle unchanged; promoted naive collection still rejects. Task integration follows; report p3-professional-paginator.md.
+- Outcome: Fixture correction verified, not paid creation/replay or extension playback qualification.
+- Follow-up: t309 staged authority and t310 executing adapter; command session-binding regression next. Rapid presses/Previous/popstate remain unexercised.
+
+### Brief: p0-command-session-binding (next paired task)
+- Repository: isolated paired task assigned by supervisor; generic Core gateway command trust.
+- Task: Reproduce/fix known pending command settlement by a different ready session; preserve original sender identity through promise and event boundary.
+- Owns: Core client-gateway/service/{commands,inbound}.ts and existing client-gateway/tests/service.test.ts; focused architecture paragraph; own downstream reports/p0-command-session-binding.md. No service.ts/t310identity, protocol/session lifecycle/public contract changes or durable journal implementation.
+- Required reads: Current State, own proposal, actual pending/inbound/event owner and real pairClient test helper, Core instructions.
+- Definition of done: settle accepts sender sessionId and checks pending owner BEFORE timer deletion/resolve; explicit wrong-session disposition suppresses inbound publication. Real ready A/B: B sends known A command ID, A promise remains pending/no event; A valid answer succeeds once. Wrong result cannot shorten original timeout. Unknown/late event compatibility remains explicitly unbound and is not certified receipt evidence; durable journal and late-session attribution still required.
+- Validation: fail-first owning real service tests, narrow gateway/runtime transport tests, Coretypes/build/audits. No providers/panel/browser/fullsuite. Product edits wait provisioning; freeze precise report for supervisor independent rerun. No git/shared docs.
