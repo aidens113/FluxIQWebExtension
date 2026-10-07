@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: P0 acceptance fences integrated and pushed in both repositories; identity, cancellation and candidate authoring in isolated task trees; P0 live readiness and later gates pending.
+Status detail: Acceptance, extension identity, Stop, candidate receipt/executor infrastructure and typed fixes pushed; candidate facade/Core identity/navigation isolated; live and promotion pending.
 Created: 2026-10-05
 Last updated: 2026-10-06
 Owner: Senior supervisor agent
@@ -19,8 +19,12 @@ and pushed: downstream acceptance `62ceaac8`, Core `6c449022`; downstream identi
 test files (29/29), the fluxiq typecheck and Core structure audit; downstream task
 integration audit passed. The identity slice passed independent production Chromium
 match/mismatch checks, 22/22 owning tests and runner typecheck after integration.
-Running Core-server identity remains pending. t298 cancellation, t299 candidate
-authoring/facade and t300 requirement receipts remain isolated. No P0 completion
+t298 cancellation is integrated as downstream43e5e54b/Core2ee06482. Supervisor
+rebuilt current pair and repeated headed Stop build/run2/2, owning reauthor9/9,
+Core typecheck/build and both integration audits pass. Running Core-server identity
+remains t302; t299 candidate facade remains isolated.
+t300 receipt/detached infrastructure is integrated (Core386b4c15)
+with production joins pending. t301 typed readiness is integrated (b2ad00de). No P0 completion
 or fresh A-D qualification is claimed.
 
 **Planning review completed locally 2026-10-06.**
@@ -341,3 +345,44 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - API flag parser/handler/draft response integrated atomically; never expose parser alone.
 - Narrow owning tests, fluxiq/touched web package typechecks, structure audits and diff checks; freeze then report exact receipts/limits.
 - No provider/live/full suite/git mutations/shared docs. Supervisor integrates and verifies.
+
+### 2026-10-06 - t298 integrated and independently verified
+- Agent: Codex supervisor.
+- Changed: merges downstream43e5e54b and Core2ee06482 integrate scoped build cancellation, reachable Stop, truthful terminal states and persisted held-decline reason. t299 now merged both dev branches and worker owns serial facade.
+- Validation: supervisor reviewed source, reauthor9/9, Core packagecheck0/build0, current extension three targets22files each; headed actual Core build/run Stop2/2 (18.1s) on production bundle, no next node/proposal and unchanged graphs. Both structure audits passed; index refreshed after report status change. Finish first invoked from task tree failed dev already checked out, corrected by invoking lifecycle from main; no manual removal/history rewrite. Core legacy finish --skip-checks only after observed manual narrow gates.
+- Outcome: Accepted cancellation slice; paired dev push next.
+- Follow-up: t302 running Core identity, t299 atomic flag/facade, t300 receipt/runtime joins, t301 typed readiness. Independent t300 verification58/58 passes; module is not yet product promotion. No paid calls/full suites/user panel.
+
+### Brief: p3-browser-navigation-readiness (t303)
+- Worker: p0_build_identity; tree fxwork/t303-browser-navigation-readiness, task/t303-browser-navigation-readiness; shared Core read-only.
+- Read: this Current State; node-catalog-plan/ranked-backlog.md rows4/5 and node-audit-navigation.md P0/tab/HTTPS findings; relevant repository instructions.
+- Scope: correct tab repeat-safety metadata, explicit tab-open shared landing verification, and HTTPS downgrade refusal. Preserve blank-tab creation and ordinary switching/close semantics.
+- Discover owners then send exact existing file list before edits; do not expand to downloads/frame identity/readiness timeout or submit-runtime inspection without separate brief.
+- Expected: open/close must not become safely retryable observation; explicit opened URL must pass same HTTP/challenge evidence gates as navigate/click-open, not URL equality alone.
+- Redirect transport does not prove user outcome; unread landing evidence stays unknown. No automatic captcha solving, repeated consequential dispatch or weakened oracle.
+- Preserve existing typed/action/policy boundaries; focused shared landing module only if it owns same capability across callers.
+- Owning negatives before fix: tab metadata repeat classification, explicit open404/challenge/ordinary success, HTTPSdowngrade/upgrade tests. Provider-free production Chromium proof on isolated local fixture; record build identity and driver seam limitations.
+- Narrow extension/domain source+test types, changed-directory tests, structure audit. Shared Core source/dist only rebuilt through lifecycle tool and remains read-only.
+- Write own reports/p3-browser-navigation-readiness.md in task tree; no shared docs/git/providers/user-panel/full suites.
+- Return exact failures/fixes/checks/limits, freeze. Supervisor verifies/integrates.
+
+### 2026-10-06 - Typed readiness independently verified and navigation queued
+- Agent: Codex supervisor.
+- Changed: t301 source4d7a1447 reviewed and current dev merged; t303 bounded navigation task provisioned.
+- Validation: supervisor production Chromium typed checks2/2 (23.9s), four owning extension files19/19 and real Core permission seam12/12. Domain test typecheck0; extension test typecheck found shared Core still at7717ff42 missing t298 buildCancellation API. Task provisioning advances/rebuilds the read-only shared dependency before repeating; do not change product to satisfy stale declarations.
+- Outcome: Partial integration pending current dependency types and audits.
+- Follow-up: integrate typed fixes, then navigation slice; broader extraction/corpus and P2 promotion joins remain open. No paid calls.
+
+### 2026-10-06 - Candidate infrastructure and typed blockers integrated
+- Agent: Codex supervisor.
+- Changed: t300 Core386b4c15 and paired downstream0befce51; t301 downstreamb2ad00de. P4 [feasibility record](./mvp-final-month-plan/reports/p4-script-request-feasibility.md) adds supported API/permission/timeout and requests-OFF requirements without enabling arbitrary execution.
+- Validation: t300 post-dev-merge58/58 and packagecheck0; final export check0/audit0, both task audits0. t301 independent browser2/2, extension19/19, real Core permission12/12, domain/extension source+test checks0 after shared dependency refresh; taskaudit0. No paid call.
+- Outcome: Accepted bounded infrastructure and typed fixes, not full P0/P2/P3.
+- Follow-up: t299 facade, t302 server identity, t303 navigation; durable receipt/promotion/semantic/browser proof joins and breadth still pending. Paired push next; no main/release changes.
+
+### 2026-10-06 - Paired bounded slices pushed
+- Agent: Codex supervisor.
+- Changed: downstream devafb5f939 and Core dev386b4c15 pushed; infrastructure and typed readiness integration documented.
+- Validation: all bounded task receipts above observed; main working state corrected to distinguish merged modules from unintegrated production joins. No new product test required for prose.
+- Outcome: Partial overall plan.
+- Follow-up: t299 facade, t302 actualserver and t303 navigation active; P2 promotion and paid off-peak readiness remain pending. No main/release push.

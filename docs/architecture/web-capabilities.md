@@ -52,6 +52,25 @@ post-condition makes the result `failed` with Core's `output_not_observed`
 
 ## How An Action Runs
 
+Native checkbox/radio `check` activates the control once only when its checked
+state differs from the requested state; already-correct controls are no-ops.
+It preserves actionability/hidden-label checks, refuses radio unchecking, and
+observes state for 50 ms after activation before confirming. A reverted or
+detached control cannot pass that confirmation. This bounded observation does
+not certify future delayed changes and does not produce trusted input.
+
+Next-page advancement compares record text and link addresses captured before
+the press as well as item replacement/count. In-place changes can advance;
+pager replacement alone cannot. Unchanged lists remain bounded failures or
+timeouts, while disabled/no-following-page controls retain explicit ended
+answers. No extra press is issued merely to observe advancement.
+
+A Flow `type` step with `submit: true` must declare consequences (including an
+explicit empty declaration for none), through the same Core permission gate
+as click/keypress/dialog. Typing without submission keeps its existing contract.
+The declaration is resolved before dispatch; this check does not infer a
+control's lasting consequences from its label.
+
 Eighteen action types are defined once, as `WEB_AUTOMATION_ACTION_TYPES` in
 [`domain/src/actions/types.ts`](../../domain/src/actions/types.ts). Each one
 becomes, by one mechanism and with no per-action exception, a parameter

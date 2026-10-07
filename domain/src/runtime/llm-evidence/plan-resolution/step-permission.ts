@@ -106,8 +106,9 @@ const VERBS: Partial<Record<WebAutomationActionType, string>> = {
 };
 
 /** Whether a step running this node must say what it would lastingly do. */
-export function webPlanStepMustDeclare(nodeDefinitionId: string): boolean {
-  return COMMITTING_NODE_IDS.has(nodeDefinitionId);
+export function webPlanStepMustDeclare(nodeDefinitionId: string, parameters?: JsonObject): boolean {
+  return COMMITTING_NODE_IDS.has(nodeDefinitionId)
+    || (nodeDefinitionId === webAutomationOutputNodeId("web.dom.type") && parameters?.submit === true);
 }
 
 /**
@@ -125,7 +126,7 @@ export async function webPlanStepPermission(input: {
   check: AutomationStudioActionPermissionCheck | undefined;
   parameters: JsonObject;
 }): Promise<WebPlanStepPermission> {
-  if (input.declared === undefined) return webPlanStepMustDeclare(input.nodeDefinitionId) ? { kind: "undeclared" } : { kind: "clear" };
+  if (input.declared === undefined) return webPlanStepMustDeclare(input.nodeDefinitionId, input.parameters) ? { kind: "undeclared" } : { kind: "clear" };
   const identity = isJsonRecord(input.parameters.element) ? input.parameters.element : undefined;
   const permission = await webActionPermission({
     check: input.check,

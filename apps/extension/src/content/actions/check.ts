@@ -32,7 +32,7 @@ import type { ActionabilityReport } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
 
-export function checkAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
+export async function checkAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const { element, resolution } = deps.resolveTarget(action);
   // Absent `checked`, the request is to check: that is what a recorded check step means.
   const requested = action.checked ?? true;
@@ -54,7 +54,7 @@ export function checkAction(action: BrowserActionCommand, deps: ContentActionDep
     });
   }
 
-  const outcome = deps.setCheckedState(element, requested);
+  const outcome = await deps.setCheckedState(element, requested);
   // Described after the attempt, so the evidence shows the state the page was left in.
   const evidence = { element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution };
   if (!outcome.ok) {
