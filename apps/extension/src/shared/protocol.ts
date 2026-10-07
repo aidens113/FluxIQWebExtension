@@ -581,6 +581,13 @@ export type {
   WebAutomationExtractListPagination,
   WebAutomationExtractListRequest,
   WebAutomationKeyModifiers,
+  // `web.dom.next_page` (contract C1): the list to move on, and the answer.
+  WebAutomationNextPageAnswer,
+  WebAutomationNextPageBy,
+  WebAutomationNextPageEnd,
+  WebAutomationNextPageFault,
+  WebAutomationNextPageRequest,
+  WebAutomationNextPageWay,
   WebAutomationOptionSelector,
   WebAutomationScrollRequest,
   WebAutomationStructureDetection,

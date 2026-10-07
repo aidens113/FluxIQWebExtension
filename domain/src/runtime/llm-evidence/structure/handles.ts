@@ -5,7 +5,8 @@
 // address the page by. The item selector, the field specs and the pagination
 // that handle names are held here, the way `tools.ts` holds the selector behind
 // every `tN`, so a later step can turn a plan that names the handle into
-// the real `web.dom.extract_list` request. That step reads through
+// the real `web.dom.extract_list` request, or the `web.dom.next_page` request
+// that moves the same list on by one page. Those steps read through
 // `resolveExtractionHandle` and nothing else.
 //
 // A handle belongs to the project and Flow it was issued for. Asked for from
@@ -77,8 +78,13 @@ export type WebLlmExtractionBinding = {
   /**
    * The `web.dom.extract_list` request the handle names: the item selector,
    * every field the model was shown under the key it was shown, and how the
-   * list continues. No sensitive field is in it, and no timeout: a paginated
-   * read's timeout is `webAutomationExtractListTimeoutMs` of this request.
+   * list continues (`paginate`, as detected). No sensitive field is in it,
+   * and no timeout.
+   *
+   * `paginate` is kept for Next page, never for the read: a resolved read
+   * reads the page shown and carries none (`plan-resolution/extraction/slot.ts`),
+   * and a Next page step naming this handle reads its way to the next page
+   * from it, without its bound (`plan-resolution/next-page-slot.ts`).
    */
   extractList: WebAutomationExtractListRequest;
   /** How many items the structure held when it was detected. */

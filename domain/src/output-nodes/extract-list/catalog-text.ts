@@ -40,13 +40,16 @@
 // within the 80 characters Core keeps of it.
 
 import type { JsonObject } from "fluxiq/core";
-import {
-  WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
-  WEB_AUTOMATION_EXTRACT_MAX_PAGES,
-  WEB_AUTOMATION_EXTRACT_PAGINATION_MODES
-} from "../../actions/extraction";
+import { WEB_AUTOMATION_EXTRACT_MAX_ITEMS } from "../../actions/extraction";
 
-/** Words of a scraping request. A tag of two words is ranked as both. */
+/**
+ * Words of a scraping request. A tag of two words is ranked as both.
+ *
+ * The paging words -- "every page", "next page", "load more", "infinite
+ * scroll", "pagination" -- left with the read's paging (read-list redesign S4):
+ * a read reads one page, and the Next page node is what an instruction about
+ * pages should rank first.
+ */
 export const WEB_AUTOMATION_EXTRACT_LIST_TAGS: readonly string[] = [
   "scrape",
   "collect",
@@ -55,12 +58,7 @@ export const WEB_AUTOMATION_EXTRACT_LIST_TAGS: readonly string[] = [
   "table",
   "rows",
   "records",
-  "dataset",
-  "every page",
-  "next page",
-  "load more",
-  "infinite scroll",
-  "pagination"
+  "dataset"
 ];
 
 /**
@@ -86,11 +84,18 @@ export const WEB_AUTOMATION_EXTRACT_LIST_TAGS: readonly string[] = [
  * two could be compared. Two earlier fixes were aimed at the detector's
  * proposal and at the worked example, and neither was the cause; the sentence
  * above them was.
+ *
+ * **Now it says one page, because a read reads one (read-list redesign S4,
+ * design 4.2(g)).** Pages are the Flow's: a Next page step and a repeat go
+ * through them, and the run's dataset collects what each pass read. The
+ * design's first sentence ended "into the run's dataset", which is 91
+ * characters; Core keeps 80 of a condensed description's first sentence, so it
+ * says "into the dataset" and fits.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
-  "Scrape a repeating list, table or one record into a dataset, one page or many.",
-  "Detect the list with web.detect_repeating_structure; name it in extractList by its handle.",
-  "It saves its rows itself: no recordOutput or save node needed."
+  "Read the rows of a list or table on this page, or one record, into the dataset.",
+  "Detect the list first and name it by its handle.",
+  "It saves its rows itself: no save step."
 ].join(" ");
 
 /**
@@ -215,18 +220,25 @@ export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
  *   condition must hold") to the same build (`runtime/llm-evidence/tools.ts`).
  *
  * At 700 of 700 there is nothing left.
+ *
+ * **Paging left on 2026-10-06 (read-list redesign S4), and returned the room.**
+ * A read reads one page; a Next page step and a repeat go through the rest. So
+ * `paginate?: false` and the whole `paginate` clause went, and the clause
+ * that replaced it says what `dedupe`, `sort`, `minItems` and `maxItems`
+ * now work over: every row the read collects in the run, which the domain
+ * declares on the record output rather than sending to the page
+ * (`./one-page-read.ts`).
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
-  `{handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}], paginate?: false};`,
+  `{handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}]};`,
   "where is optional: omit it, keep every item, narrow later. atMost/greaterThan/equals, contains/startsWith/endsWith/matches (text); list = any; not: true inverts; badge: is: \"present\".",
   "link=absolute URL, @href=raw href.",
   "Or {item: css, fields: {key: css|css@attribute|column:<header>}}.",
-  `paginate?: {mode: ${WEB_AUTOMATION_EXTRACT_PAGINATION_MODES.join("|")}, next|control|pages, maxPages|maxScrolls<=${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}: pages to read, not pages present; one page unless asked.`,
-  `dedupe?: true|key, sort?: "key desc"; minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`
+  `Reads this page only. Over every row it collects in the run: dedupe?: true|key, sort?: "key desc", minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`
 ].join(" ");
 
 /**
- * One request the page would run: a paginated product list.
+ * One request the page would run: a product list, read one page.
  *
  * It names `minItems` as well, although 1 is the default and the value is
  * therefore the same request. Core reads a parameter's example as the
@@ -269,6 +281,9 @@ export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
  * (`runtime/llm-evidence/tools.ts`). The example is sent whole or not at all and
  * is cut off above 600 bytes, which this is well inside.
  *
+ * `paginate` left it with the read's paging (read-list redesign S4), so a
+ * model writing it beside `extractList` is refused rather than folded in.
+ *
  * `dedupe` and `sort` are here for the reason `where` is, and since 2026-09-28:
  * Core sets a key a model writes beside `extractList` at `extractList.<key>`
  * only when this example declares it (`flow-bootstrap/authoring/matching.ts`),
@@ -287,6 +302,5 @@ export const WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE: JsonObject = {
   where: [{ read: ".sponsored-label", is: "absent" }],
   dedupe: false,
   sort: [],
-  paginate: { mode: "next", next: "a.next", maxPages: 5 },
   minItems: 1
 };

@@ -65,5 +65,5 @@ test("the client declares detection as a snapshot capability that makes nothing 
   assert.deepEqual(declared[0]!.metadata, { domainId: "web-automation", actionType: "web.dom.capture_snapshot", parameter: "detectStructure" });
   const executable = webAutomationClientCapabilities.flatMap((capability) => capability.actionTypes ?? []);
   assert.deepEqual([...new Set(executable)].sort(), [...WEB_AUTOMATION_ACTION_TYPES].sort());
-  assert.equal(WEB_AUTOMATION_ACTION_TYPES.length, 18);
+  assert.equal(WEB_AUTOMATION_ACTION_TYPES.length, 19);
 });

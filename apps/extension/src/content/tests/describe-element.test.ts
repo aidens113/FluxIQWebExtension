@@ -239,3 +239,70 @@ test("ownText follows the sensitive-text rule: nothing from inside a sensitive c
     assert.equal(ownTextBeside(beside, visibleText(beside)), undefined, "the item's words are its own once the control's contents are left out");
   });
 });
+
+// `readableText` (U-B3-3, lane B round 3, `run-mux6pndp-16feb842`): a size
+// chip drawn as two stacked lines -- its name, and its price in a block child
+// -- has a `text` that runs the two together, as `textContent` does, and keeps
+// it, because a recorded fingerprint and a target's identity compare it. Beside
+// it the capture sends the words a reader sees, with a space wherever the page
+// lays a child out on a line of its own. Only a laid-out page can say which
+// children those are, so these tests give the chip's document a window whose
+// `getComputedStyle` answers each element's `display` (a flex container's
+// items are blockified, so they answer `block`), and inline pieces of one
+// word stay joined.
+
+/** Runs `body` with `root`'s document laid out: `display` answers each element's display, and every cursor is ordinary. */
+function withLayout(root: Element, display: (element: Element) => string, body: () => void): void {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const previous = Object.getOwnPropertyDescriptor(globals, "getComputedStyle");
+  const getComputedStyle = (element: Element) => ({ cursor: "auto", display: display(element) });
+  globals.getComputedStyle = getComputedStyle;
+  Object.defineProperty(root, "ownerDocument", { value: { defaultView: { getComputedStyle } }, configurable: true });
+  try {
+    body();
+  } finally {
+    if (previous) Object.defineProperty(globals, "getComputedStyle", previous);
+    else delete globals.getComputedStyle;
+  }
+}
+
+/** The display a page's default stylesheet gives the stub page's tags, unless the element is listed in `blocks`. */
+function displayOf(blocks: readonly Element[]): (element: Element) => string {
+  return (element) => blocks.includes(element) || ["DIV", "P", "LI"].includes(element.tagName) ? "block" : "inline";
+}
+
+test("a control whose name and price are stacked blocks reads with a space between them, and its text stays as captured", async () => {
+  await withStubPage(load, ({ readableTextBeside, visibleText }) => {
+    const price = element("span", { class: "swatch-price" }, "$16.47");
+    const chip = element("div", { tabindex: "0" }, "12 Double Rolls", price);
+    withLayout(chip, displayOf([price]), () => {
+      assert.equal(visibleText(chip), "12 Double Rolls$16.47", "text is textContent's, which identity compares");
+      assert.equal(readableTextBeside(chip, visibleText(chip)), "12 Double Rolls $16.47");
+    });
+  });
+});
+
+test("a control whose name and price are flex items, or lines split by a <br>, reads with a space between them", async () => {
+  await withStubPage(load, ({ readableTextBeside, visibleText }) => {
+    const name = element("span", {}, "12 Double Rolls");
+    const price = element("span", {}, "$16.47");
+    const flex = element("button", {}, name, price);
+    withLayout(flex, displayOf([name, price]), () => {
+      assert.equal(readableTextBeside(flex, visibleText(flex)), "12 Double Rolls $16.47");
+    });
+    const broken = element("button", {}, "12 Double Rolls", element("br", {}), "$16.47");
+    withLayout(broken, displayOf([]), () => {
+      assert.equal(readableTextBeside(broken, visibleText(broken)), "12 Double Rolls $16.47");
+    });
+  });
+});
+
+test("inline pieces of one word stay joined: no readable words beside a text that already reads as the page draws it", async () => {
+  await withStubPage(load, ({ readableTextBeside, visibleText }) => {
+    const chip = element("div", { tabindex: "0" }, element("b", {}, "Dou"), "ble Rolls");
+    withLayout(chip, displayOf([]), () => {
+      assert.equal(visibleText(chip), "Double Rolls");
+      assert.equal(readableTextBeside(chip, visibleText(chip)), undefined);
+    });
+  });
+});

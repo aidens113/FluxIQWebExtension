@@ -28,7 +28,6 @@ import {
   type WebAutomationExtractFieldKind,
   type WebAutomationExtractFieldSpec,
   type WebAutomationExtractionProposal,
-  type WebAutomationExtractListPagination,
   type WebAutomationExtractListRequest,
   type WebAutomationRecordedListExtraction
 } from "@fluxiq-web-extension/domain/client";
@@ -65,7 +64,6 @@ export function recordedListExtraction(
   const request: WebAutomationExtractListRequest = {
     item: proposal.item,
     fields: columns.fields,
-    ...(confirm.paginate !== undefined ? { paginate: confirm.paginate } : {}),
     ...(confirm.maxItems !== undefined ? { maxItems: confirm.maxItems } : {})
   };
   const definition: WebAutomationRecordedListExtraction = {

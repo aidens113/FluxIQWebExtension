@@ -221,3 +221,20 @@ test("a kind that needs its own member and lacks it is still refused, whatever e
     assert.deepEqual(condition.dropped, ["where.0"], why);
   }
 });
+
+// S4 (C3): a Flow's read answers only the rows it kept, possibly none, and the
+// domain says so on the request. Any other value is not a read this contract
+// knows how to answer, so it is dropped and named like every other part.
+test("a request's answer is read as kept, and another value is dropped and named", () => {
+  const kept = webAutomationExtractListRequestRead({ ...BASE, answer: "kept" });
+  assert.deepEqual(kept.dropped, []);
+  assert.equal(kept.request?.answer, "kept");
+  assert.equal(webAutomationExtractListRequestWhole({ ...BASE, answer: "kept" })?.answer, "kept");
+  for (const answer of ["all", true, 1, null]) {
+    const read = webAutomationExtractListRequestRead({ ...BASE, answer });
+    assert.deepEqual(read.dropped, ["answer"], JSON.stringify(answer));
+    assert.equal(Object.hasOwn(read.request ?? {}, "answer"), false);
+    assert.equal(webAutomationExtractListRequestWhole({ ...BASE, answer }), undefined, JSON.stringify(answer));
+  }
+  assert.equal(Object.hasOwn(webAutomationExtractListRequestValue(BASE) ?? {}, "answer"), false);
+});

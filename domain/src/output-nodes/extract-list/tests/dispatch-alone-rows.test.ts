@@ -37,11 +37,13 @@ test("a node whose parameters already say is sent as they say", () => {
 });
 
 // t194 w55: the draft's replay asks the same way, for the judge of the build's test.
-test("the replay's ask is the dispatch's: a read with conditions asks for its alone rows, any other parameters are left as they are", () => {
+test("the replay's ask is the dispatch's: a read with conditions asks for its alone rows, a read without asks for none", () => {
   const node = { extractList: filtered };
   assert.equal(webAutomationExtractListAloneRowsAsked(node)[WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY], "alone");
   assert.equal(Object.hasOwn(node, WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY), false);
   assert.equal(webAutomationExtractListAloneRowsAsked({ extractList: filtered, rejectedSamples: false })[WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY], false);
+  // Both also ask for only the rows the read kept (read-list redesign C5),
+  // which `one-page-read.test.ts` pins; here only the alone rows are the subject.
   const unfiltered = { extractList: { item: "li.product", fields: { name: ".name" } } };
-  assert.deepEqual(webAutomationExtractListAloneRowsAsked(unfiltered), unfiltered);
+  assert.equal(Object.hasOwn(webAutomationExtractListAloneRowsAsked(unfiltered), WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY), false);
 });

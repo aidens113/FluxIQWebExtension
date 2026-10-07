@@ -5,16 +5,15 @@
 // is never shown a selector, so what it may say about the list is which
 // detected columns to keep and under which of its own keys
 // (`./columns.ts`), which of the list's items are records at all
-// (`./conditions.ts`), whether to read past the page shown, and how
-// many items to expect. The request it gets is the one the detection kept
-// (`structure/handles.ts`), cut to that.
+// (`./conditions.ts`), and how many items to expect. The request it gets is
+// the one the detection kept (`structure/handles.ts`), cut to that.
 //
 // The list is named by its handle in each place a model was seen or is told to
 // name it, as `{ "handle": "extraction.N" }`, optionally with the `location`
 // its evidence reported (Core tells the model to add one after exploring):
 //
-// - as the whole value, beside `fields` (or `columns`), `paginate`, `minItems`
-//   and `maxItems`;
+// - as the whole value, beside `fields` (or `columns`), `where`, `dedupe`,
+//   `sort`, `minItems` and `maxItems`;
 // - as the `item`, the literal request's name for which elements are the list;
 // - on a field, as `./columns.ts` reads it.
 //
@@ -33,17 +32,20 @@
 // resolves to its canonical form, and one the reader would drop is refused at
 // its position rather than dropped, since a model is still there to repair it.
 //
-// `paginate: false` reads only the page shown. Absent, the detected pagination
-// is read as detection proposed it (one page). `true` reads the detected
-// pagination until the list ends or the domain's page bound stops it
-// (`everyPage`). A pagination the model wrote itself names controls it
-// was never shown, so it can only mean "keep reading": the detected one is read,
-// with the model's own `maxPages` or `maxScrolls` whatever mode it named, or to
-// the domain's bound when it named none (`keptPagination`); with nothing
-// detected it is refused. A `maxPages` or
-// `maxScrolls` written beside `paginate` rather than inside it is read inside
-// it where the read pages (`liftedBounds`). A literal `item`
-// beside a handle is replaced by the detected one for the same reason.
+// **The read reads the page shown** (S4 of the read-list redesign,
+// `read-list-collect-design.md` 6.1). Every page of a list is a Flow loop: the
+// read, a Next page step naming the same handle (`../next-page/`), and a repeat
+// on the read through it. So the resolved request never carries `paginate`,
+// though the detected pagination stays in the handle's binding for Next page
+// to read, and a plan that writes `paginate`, `maxPages` or `maxScrolls` is
+// refused at that key with the hint that names the loop
+// (`web.handle.expected.extract_list.next_page`). It is never dropped: a read
+// that quietly took one page where the model asked for every page would be a
+// short answer nothing reports. Until 2026-10-06 the read paged by itself, and
+// this file resolved those keys against the detected pager (`keptPagination`,
+// `everyPage`, `liftedBounds`, run `run-mustvzvg-99695308`). A literal `item`
+// beside a handle is replaced by the detected one, since the model was never
+// shown a selector.
 //
 // Anything that does not name one detected list is refused with the code that
 // says why and the position it was refused at. **The list itself is never
@@ -53,13 +55,8 @@
 // guess is reported in the resolution's `assumed` rather than made silently.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import {
-  WEB_AUTOMATION_EXTRACT_MAX_PAGES,
-  webAutomationExtractListRequestRead,
-  webAutomationExtractListRequestValue,
-  type WebAutomationExtractListPagination
-} from "../../../../actions/extraction";
-import type { WebLlmExtractionBinding, WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../../structure";
+import { webAutomationExtractListRequestRead, webAutomationExtractListRequestValue } from "../../../../actions/extraction";
+import type { WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../../structure";
 import { isJsonRecord } from "../../untrusted-json";
 import type { WebExtractionColumnAssumption } from "./column-match";
 import { keptWebExtractionColumns, type WebExtractionColumnIssue } from "./columns";
@@ -95,37 +92,27 @@ export type WebExtractionSlotResolution =
     assumed: WebExtractionColumnAssumption[];
   }
   /**
-   * `path` is where inside the value it was refused. `also` is the second
-   * position when the refusal is two written values that disagree, and
-   * `expected` the shape the refused key belongs in when it has one.
+   * `path` is where inside the value it was refused, and `expected` the shape
+   * the refused key belongs in when it has one.
    */
-  | { status: "refused"; issue: WebExtractionSlotIssue; path: WebPlanValuePath; also?: WebPlanValuePath; expected?: WebExtractionSlotHint };
+  | { status: "refused"; issue: WebExtractionSlotIssue; path: WebPlanValuePath; expected?: WebExtractionSlotHint };
 
 /**
- * Said beside a `paginate` refused because the list it names was detected with
- * no pagination at all: the handle cannot page, and the way out is a handle
- * detected on the page the step starts on (`keptPagination`).
+ * Said beside a `paginate`, `maxPages` or `maxScrolls` the read no longer
+ * takes: the pages of a list are a Next page step naming the same handle,
+ * after the read, and a repeat on the read through that step while it
+ * succeeds (`../next-page/`). Declared with the resolver's other codes
+ * (`../resolve-plan-node.ts`, `WEB_PLAN_HANDLE_ISSUE_CODES`).
  */
-const NO_PAGER_DETECTED = "web.handle.expected.extract_list.paginate.no_pager_detected.detect_on_step_start_page";
+const NEXT_PAGE_INSTEAD = "web.handle.expected.extract_list.next_page";
 
 /** The shape hints a slot refusal may carry beside its reason. */
-type WebExtractionSlotHint = (typeof BOUND_INSIDE_PAGINATE)[PagingBound] | typeof NO_PAGER_DETECTED;
+type WebExtractionSlotHint = typeof NEXT_PAGE_INSTEAD;
 
-const LIST_KEYS: ReadonlySet<string> = new Set(["handle", "location", "item", "fields", "columns", "where", "dedupe", "sort", "paginate", "minItems", "maxItems"]);
+const LIST_KEYS: ReadonlySet<string> = new Set(["handle", "location", "item", "fields", "columns", "where", "dedupe", "sort", "minItems", "maxItems"]);
 const REFERENCE_KEYS: ReadonlySet<string> = new Set(["handle", "location"]);
-/**
- * The keys of `paginate` that say only how far to read, and so mean the same
- * thing written beside it (`liftedBounds`), each with the shape hint a read
- * that does not page is refused with. The others name controls or a mode,
- * which beside `paginate` could as well be a mistake about something else, so
- * they stay refused as unknown keys.
- */
-const BOUND_INSIDE_PAGINATE = {
-  maxPages: "web.handle.expected.extract_list.paginate.maxPages",
-  maxScrolls: "web.handle.expected.extract_list.paginate.maxScrolls"
-} as const;
-type PagingBound = keyof typeof BOUND_INSIDE_PAGINATE;
-const PAGING_BOUNDS = Object.keys(BOUND_INSIDE_PAGINATE) as PagingBound[];
+/** The keys a read that paged by itself took, each refused where it is written (`NEXT_PAGE_INSTEAD`). */
+const RETIRED_PAGING_KEYS: ReadonlySet<string> = new Set(["paginate", "maxPages", "maxScrolls"]);
 
 type Reference = { handle: unknown; location: unknown; path: WebPlanValuePath };
 type Refused = Extract<WebExtractionSlotResolution, { status: "refused" }>;
@@ -137,7 +124,9 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   if (references.length === 0) return handles[0] ? refused("web.handle.misplaced", handles[0].path) : { status: "literal" };
   const stray = handles.find((found) => !references.some((reference) => samePath(reference.path, found.path)));
   if (stray) return refused("web.handle.misplaced", stray.path);
-  const unknownKey = Object.keys(value).find((key) => !LIST_KEYS.has(key) && !Object.hasOwn(BOUND_INSIDE_PAGINATE, key));
+  const retired = Object.keys(value).find((key) => RETIRED_PAGING_KEYS.has(key));
+  if (retired !== undefined) return { status: "refused", issue: "web.handle.malformed", path: [retired], expected: NEXT_PAGE_INSTEAD };
+  const unknownKey = Object.keys(value).find((key) => !LIST_KEYS.has(key));
   if (unknownKey !== undefined) return refused("web.handle.malformed", [unknownKey]);
   if (value.location !== undefined && !Object.hasOwn(value, "handle")) return refused("web.handle.malformed", ["location"]);
   if (value.fields !== undefined && value.columns !== undefined) return refused("web.handle.malformed", ["columns"]);
@@ -165,17 +154,12 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
     ? undefined
     : keptWebExtractionConditions(value.where, { detected: binding.extractList.fields, kept: columns.fields }, ["where"]);
   if (where !== undefined && !where.ok) return refused(where.issue, where.path);
-  const lifted = liftedBounds(value, binding);
-  if ("issue" in lifted) return lifted;
-  const paginate = keptPagination(lifted.paginate, binding);
-  if (paginate === "malformed") return refused("web.handle.malformed", ["paginate"]);
-  if (paginate === "no_pager_detected") return { status: "refused", issue: "web.handle.malformed", path: ["paginate"], expected: NO_PAGER_DETECTED };
 
   const request: JsonObject = { item: binding.extractList.item, fields: columns.fields as unknown as JsonObject };
   // An empty clause resolves to no conditions, and the request carries no
   // `where` at all rather than an empty one the dispatch would have to read.
+  // No `paginate`, whatever the detection found: the read reads the page shown.
   if (where !== undefined && where.ok && where.where.length > 0) request.where = where.where as unknown as JsonValue;
-  if (paginate !== undefined) request.paginate = paginate as unknown as JsonObject;
   if (value.minItems !== undefined) request.minItems = value.minItems as JsonValue;
   if (value.maxItems !== undefined) request.maxItems = value.maxItems as JsonValue;
   // A handle that names one record reads one row, whatever the plan wrote: two
@@ -250,102 +234,6 @@ function namedHandle(references: Reference[]): { handle: string; path: WebPlanVa
     named ??= { handle: reference.handle, path: reference.path };
   }
   return named ?? refused("web.handle.malformed", []);
-}
-
-/**
- * The `paginate` the plan means, with a page or scroll bound written beside it
- * moved inside it; or why it cannot be.
- *
- * Live run `run-mustvzvg-99695308` (steps 0057, 0060) wrote `maxPages: 10`
- * beside `paginate: {next: ...}` and was refused as an unknown key, though a
- * read that pages has exactly one place a page count can go. So where the read
- * pages -- `paginate` written as an object, or absent or `true` over a detected
- * pagination -- the bound is read there, and the resolved request carries it
- * only inside `paginate`, which is the shape the Flow keeps. The same value
- * written in both places says it once; two different values are refused at both
- * positions, since which was meant is not this resolver's to pick. A read that
- * does not page (`paginate: false`, or nothing detected) has nowhere for it, and
- * is refused saying it belongs inside `paginate`.
- */
-function liftedBounds(value: Record<string, unknown>, binding: WebLlmExtractionBinding): { paginate: unknown } | Refused {
-  const written = PAGING_BOUNDS.filter((key) => Object.hasOwn(value, key));
-  const first = written[0];
-  if (first === undefined) return { paginate: value.paginate };
-  const pages = isJsonRecord(value.paginate) || ((value.paginate === undefined || value.paginate === true) && binding.extractList.paginate !== undefined);
-  if (!pages) return { status: "refused", issue: "web.handle.malformed", path: [first], expected: BOUND_INSIDE_PAGINATE[first] };
-  const paginate: Record<string, unknown> = isJsonRecord(value.paginate) ? { ...value.paginate } : {};
-  for (const key of written) {
-    if (Object.hasOwn(paginate, key) && paginate[key] !== value[key]) return { status: "refused", issue: "web.handle.malformed", path: [key], also: ["paginate", key] };
-    paginate[key] = value[key];
-  }
-  return { paginate };
-}
-
-/**
- * The pagination the plan reads with: the detected one, bounded as the plan
- * says; none; or `malformed`.
- *
- * The plan's bound holds whatever mode it named. A mode the plan names is a
- * control it was never shown, so the detected control is the one read; how much
- * of the list it asked for is still its own to say. Until 2026-10-01 a bound
- * was kept only when the plan's mode was the detected one (since `d9d23e3d`,
- * 2026-09-16). That was harmless while detection proposed every page
- * (`maxPages: 3` on the catalog then), because the detected bound already read
- * the whole list. Since 2026-09-23 detection proposes one page (`f24b0687`,
- * `detect-pagination.ts` `PROPOSED_MAX_PAGES`), so a plan that saw the numbered
- * pager and wrote `{mode: "numbered", maxPages: 5}` read one page, truncated
- * (t194-w27 G2). Keeping the bound reopens nothing the old rule closed: the
- * controls are still the detected ones, and the bound is held to the same cap
- * and refused past it exactly as a same-mode bound is. A page count and a
- * scroll count both say how far to read, so a plan whose mode is not the
- * detected one may give either, and the detected mode's own key wins when it
- * gives both.
- *
- * A pagination written over a list detected with none is `no_pager_detected`
- * rather than a bare `malformed`, because the plan is not what is wrong: the
- * handle is. Live run `run-muwansvz-a2b4a987` (lane C, decisions 0031-0048):
- * the repair round opened on the last results page, where Next is drawn
- * disabled, and the detect there issued a handle with no pagination. Six
- * paging reruns on it were refused `web.handle.malformed:extractList.paginate`
- * with nothing saying why, and the model kept the handle each time. The
- * refusal now says the list was detected with no pager and that a handle
- * detected on the page the step starts on is the one to page with.
- */
-function keptPagination(paginate: unknown, binding: WebLlmExtractionBinding): WebAutomationExtractListPagination | undefined | "malformed" | "no_pager_detected" {
-  const detected = binding.extractList.paginate;
-  if (paginate === false) return undefined;
-  if (paginate === undefined) return detected;
-  if (paginate === true) return detected === undefined ? undefined : everyPage(detected);
-  if (!isJsonRecord(paginate)) return "malformed";
-  if (detected === undefined) return "no_pager_detected";
-  const bounded = structuredClone(detected);
-  const bound = bounded.mode === "scroll" ? paginate.maxScrolls ?? paginate.maxPages : paginate.maxPages ?? paginate.maxScrolls;
-  if (bound === undefined) return everyPage(detected);
-  if (typeof bound !== "number" || !Number.isSafeInteger(bound) || bound < 1 || bound > WEB_AUTOMATION_EXTRACT_MAX_PAGES) return "malformed";
-  if (bounded.mode === "scroll") bounded.maxScrolls = bound;
-  else bounded.maxPages = bound;
-  return bounded;
-}
-
-/**
- * The detected pagination, read until the list ends or the domain's own bound
- * (`WEB_AUTOMATION_EXTRACT_MAX_PAGES`) stops it.
- *
- * This is what `paginate: true`, or a pagination the plan wrote with no bound,
- * means: the plan asked to page and said nothing about how far. Until
- * 2026-10-05 both kept the detection's own bound, and detection proposes one
- * page (`PROPOSED_MAX_PAGES`), so live run `run-mustvzvg-99695308` asked to
- * "extract all rows across pages" with `paginate: true` five times and read
- * page one each time (C1). Absent `paginate` still keeps the proposal: a plan
- * that never asked to page is read as the detection proposed, which is how a
- * "first page" instruction reads one page. The read still says when the bound,
- * not the list, stopped it (`extract-list.ts`, `pagingAccount`).
- */
-function everyPage(detected: WebAutomationExtractListPagination): WebAutomationExtractListPagination {
-  const bounded = structuredClone(detected);
-  if (bounded.mode === "scroll") bounded.maxScrolls = WEB_AUTOMATION_EXTRACT_MAX_PAGES;
-  else bounded.maxPages = WEB_AUTOMATION_EXTRACT_MAX_PAGES;
-  return bounded;
 }
 
 function samePath(left: WebPlanValuePath, right: WebPlanValuePath): boolean {

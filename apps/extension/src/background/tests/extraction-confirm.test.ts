@@ -110,8 +110,11 @@ test("a confirm that repeats a key records nothing, rather than one column fewer
   assert.equal(h.ran.length, 0);
 });
 
-test("a paginated read gets a budget scaled by the pages it may follow, not a flat ceiling", async () => {
-  async function confirmWith(paginate: WebAutomationExtractListPagination | undefined): Promise<number | undefined> {
+test("a recorded read reads one page: a confirm that still names paginate (an older panel) records none and gets the one-page budget", async () => {
+  // S5: the picker's "Read every page" checkbox is gone, and a recorded
+  // definition no longer carries `paginate` from it. A Flow reaches a later
+  // page with a Next page step and a repeat, not with a read that pages itself.
+  async function confirmWith(paginate: WebAutomationExtractListPagination | undefined): Promise<{ timeoutMs: number | undefined; request: Record<string, unknown> | undefined }> {
     const h = harness();
     const sessionId = await startAndPick(h);
     const request = { label: "Products", fields: confirmFields, itemCount: 8, ...(paginate === undefined ? {} : { paginate }) };
@@ -122,28 +125,20 @@ test("a paginated read gets a budget scaled by the pages it may follow, not a fl
       h.deps
     ));
     assert.equal(response.ok, true, JSON.stringify(response));
-    return h.ran[0]?.timeoutMs;
+    const recorded = sentOfType(h.sent, EXTRACTION_CONTENT_MESSAGES.record);
+    const definition = recorded?.message.definition as { request?: Record<string, unknown> } | undefined;
+    return { timeoutMs: h.ran[0]?.timeoutMs, request: definition?.request };
   }
 
   const onePage = await confirmWith(undefined);
-  const fivePages = await confirmWith({ next: "a.next", maxPages: 5 });
-  const twentyPages = await confirmWith({ mode: "loadMore", control: "button.more", maxPages: 20 });
-
-  // The budget is the domain's, not this file's: asserting against the same
-  // function the recorded node declares is what keeps the read the worker runs
-  // and the read a replayed Flow runs on one number.
-  const expected = (paginate?: WebAutomationExtractListPagination) => webAutomationExtractListTimeoutMs({
-    item: proposal.item,
-    fields: { product_name: { kind: "text" } },
-    ...(paginate === undefined ? {} : { paginate })
-  });
-  assert.equal(onePage, expected());
-  assert.equal(fivePages, expected({ next: "a.next", maxPages: 5 }));
-  assert.ok(fivePages !== undefined && onePage !== undefined && fivePages > onePage, `${String(fivePages)} > ${String(onePage)}`);
-
-  // The defect this replaces: a flat 60,000 ms ceiling cut every read past six
-  // pages short, with nothing in the panel saying why.
-  assert.ok(twentyPages !== undefined && twentyPages > 60_000, `a 20-page read gets ${String(twentyPages)} ms`);
+  const stale = await confirmWith({ next: "a.next", maxPages: 5 });
+  assert.equal("paginate" in (stale.request ?? {}), false, "the recorded definition carries no paginate");
+  assert.equal("paginate" in (onePage.request ?? {}), false);
+  // The budget is the domain's one-page budget, asked of the same function the
+  // recorded node declares, so the worker's read and a replayed Flow's agree.
+  const expected = webAutomationExtractListTimeoutMs({ item: proposal.item, fields: { product_name: { kind: "text" } } });
+  assert.equal(onePage.timeoutMs, expected);
+  assert.equal(stale.timeoutMs, expected);
 });
 
 test("a caller that names its own timeout keeps it", async () => {

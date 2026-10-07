@@ -9,6 +9,17 @@
 // the packet its handle came from named it: the identity the resolution carries
 // (`../plan-resolution/element-identity.ts`).
 //
+// **That identity's name is spelled as the packet printed it** (U-B3-3). The
+// identity keeps the control's captured text, which runs together the lines a
+// control lays out apart -- "12 Double Rolls$16.47" for bigbox's size chip --
+// because the page compares it. A rerun that put the page back at its address
+// without `?variant=` pressed the chip by a handle shown on the variant page, so
+// the look before the press did not describe it, and the step result named it
+// glued (`run-mux6pndp-16feb842`, step 0038). The words the packet store keeps
+// beside that identity (`shownWords`, the resolution's `words`) respell it, and
+// only where they differ from its name by spacing alone, so a control the
+// identity does not name -- a secret one -- is still named by nothing.
+//
 // **The words are the ones the control's view line prints** (`webLlmElementWords`,
 // `../page-view/element/words.ts`), not a reading of its own. Until t174-w82 this
 // read `name ?? text`, and a field the page labels only by the text beside it
@@ -32,23 +43,25 @@
 import type { JsonObject } from "fluxiq/core";
 import { isSensitiveFieldSignature } from "../../../sensitivity";
 import type { WebLlmEvidenceElement } from "../elements";
-import { webLlmElementWords } from "../page-view";
+import { webLlmElementWords, webLlmReadableWords } from "../page-view";
 import type { WebLlmPageEvidence } from "../sanitize";
 import { isJsonRecord } from "../untrusted-json";
 import { isWithheldText } from "../withheld";
 
 /**
  * What `handle` names, from the look before acting or else from the resolved
- * parameters' `element` identity; `step` with no name when neither says.
+ * parameters' `element` identity, spelled as `shownWords` -- the words the
+ * packet store keeps for the handle -- when they differ from its name by
+ * spacing alone; `step` with no name when neither says.
  */
-export function webObservedControl(evidence: WebLlmPageEvidence, handle: string | undefined, resolved: JsonObject): { name: string | undefined; kind: string } {
+export function webObservedControl(evidence: WebLlmPageEvidence, handle: string | undefined, resolved: JsonObject, shownWords?: string): { name: string | undefined; kind: string } {
   if (handle === undefined) return { name: undefined, kind: "step" };
   const element = evidence.elements.find((candidate) => candidate.target === handle);
   if (element) return { name: webLlmElementWords(element), kind: controlKind(element.role, element.tag) };
   const identity = isJsonRecord(resolved.element) ? resolved.element : undefined;
   if (identity === undefined || typeof identity.tagName !== "string") return { name: undefined, kind: "step" };
   const name = [identity.accessibleName, identity.visibleText, identity.label].find((words): words is string => typeof words === "string");
-  return { name, kind: controlKind(typeof identity.role === "string" ? identity.role : undefined, identity.tagName) };
+  return { name: shownWords === undefined ? name : webLlmReadableWords({ readable: shownWords }, name), kind: controlKind(typeof identity.role === "string" ? identity.role : undefined, identity.tagName) };
 }
 
 /**

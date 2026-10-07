@@ -13,6 +13,9 @@
 // parameter lift refuses whole. Each is written only under the kind that reads
 // it.
 //
+// A recorded read reads one page (S5): there is no `paginate` member, and a
+// Flow reaches a later page with a Next page step and a repeat.
+//
 // Record keys are derived here rather than held in the draft: a rename may
 // collide with another column's key, and `webAutomationExtractionFieldKey`
 // settles the collision the one way the domain settles it (D16).
@@ -33,7 +36,6 @@ export function extractionConfirmPayload(draft: ExtractionDraft): ExtractionConf
     label: draft.label,
     item: draft.item,
     fields,
-    paginate: draft.paginate ? draft.pagination : undefined,
     itemCount: draft.itemCount
   };
 }

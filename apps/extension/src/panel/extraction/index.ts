@@ -23,7 +23,6 @@ export {
   renameExtractionField,
   setExtractionFieldHandling,
   setExtractionFieldKind,
-  setExtractionPaginate,
   type ExtractionDraft,
   type ExtractionFieldHandling,
   type ExtractionFieldRow

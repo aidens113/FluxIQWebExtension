@@ -166,7 +166,7 @@ assert.equal(outputTargetFromPayload({
 })?.selector, "button.save-current");
 
 const outputNodeDefinitions = listWebAutomationOutputNodeDefinitions();
-assert.equal(outputNodeDefinitions.length, 18);
+assert.equal(outputNodeDefinitions.length, 19);
 const clickNodeDefinition = outputNodeDefinitions.find((definition) => definition.outputAction?.fixedOutputId === "web.dom.click");
 assert.equal(clickNodeDefinition?.requiredRuntimeCapabilities?.includes("web.actions"), true);
 assert.equal(validateAutomationStudioNodeDefinition(clickNodeDefinition!).ok, true);

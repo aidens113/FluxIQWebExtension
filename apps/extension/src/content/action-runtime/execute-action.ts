@@ -5,7 +5,8 @@
 //
 // `extractionContinuation` is what the worker sent beside the action when it
 // wants a paginated list read to survive a navigation; it changes only the list
-// read the verbs are granted (`extraction-continuation.ts`).
+// read the verbs are granted (`extraction-continuation.ts`), and the next-page
+// move (`extraction/page-advance/continued-move.ts`), from the same member.
 
 import { executeContentAction } from "../actions";
 import { captureSnapshot } from "../dom-snapshot";
@@ -20,6 +21,7 @@ import { checkActionability } from "./actionability";
 import { keyboard } from "./keyboard";
 import { setCheckedState } from "./checkable-state";
 import { detectStructureWhenPresent } from "../extraction";
+import { pageMoveFor } from "../extraction/page-advance";
 import { setInputFiles } from "./file-input";
 import { dialogControl } from "./dialog-control";
 import { evaluateAssertion } from "./assertion-evaluation";
@@ -45,6 +47,7 @@ export async function executeAction(action: BrowserActionCommand, extractionCont
     setCheckedState,
     detectStructure: detectStructureWhenPresent,
     extractList: listReadFor(extractionContinuation),
+    nextPage: pageMoveFor(extractionContinuation),
     setInputFiles,
     dialogControl,
     evaluateAssertion,

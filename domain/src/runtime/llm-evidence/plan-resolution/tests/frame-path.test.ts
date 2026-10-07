@@ -40,6 +40,7 @@ const SCOPE = { projectId: "project.one", flowId: "flow.one" };
 
 const CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
 const EXTRACT_LIST_NODE = webAutomationOutputNodeId("web.dom.extract_list");
+const NEXT_PAGE_NODE = webAutomationOutputNodeId("web.dom.next_page");
 
 /** An element the frame merge took in from frame 7, stamped as it stamps one. */
 function framed(selector: string, name: string, tagName: string): JsonObject {
@@ -150,4 +151,26 @@ test("a list detected in a child frame keeps the frame's path, and the extract n
   if (resolved.status !== "resolved") return;
   assert.equal(resolved.parameters.browserFrameId, FRAME_ID);
   assert.equal(resolved.parameters.browserFrameUrlPath, FRAME_PATH);
+});
+
+test("a Next page step over a list detected in a child frame names that frame and its path, and a control in another frame is refused", async () => {
+  const { runtime } = careersPage();
+  const handles = await look(runtime);
+  const detected = await runtime.executeTool({ ...SCOPE, callId: "call.detect.next", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: { target: handleFor(handles, "TL-ABCD-EFGH") } });
+  const handle = (detected.evidence as WebLlmRepeatingStructure).extraction;
+  const item = CAPTURED_DETECTIONS["data-table-largest"].structure.ok ? CAPTURED_DETECTIONS["data-table-largest"].structure.proposal.item : "";
+  const nextPage = (parameters: JsonObject) => runtime.resolvePlanNodeParameters({ ...SCOPE, nodeDefinitionId: NEXT_PAGE_NODE, parameters, declaredConsequences: [] });
+
+  assert.deepEqual(await nextPage({ nextPage: { list: handle } }), {
+    status: "resolved",
+    parameters: { nextPage: { item }, browserFrameId: FRAME_ID, browserFrameUrlPath: FRAME_PATH }
+  });
+  // The frame's own control moves the frame's list.
+  assert.deepEqual(await nextPage({ nextPage: { list: handle, control: handleFor(handles, "Submit application") } }), {
+    status: "resolved",
+    parameters: { nextPage: { item, pagination: { next: "form > button.tl-submit" } }, browserFrameId: FRAME_ID, browserFrameUrlPath: FRAME_PATH }
+  });
+  // A top-frame control cannot move a list in frame 7, and a node naming another frame is not silently moved.
+  assert.deepEqual(await nextPage({ nextPage: { list: handle, control: handleFor(handles, "Accept cookies") } }), { status: "refused", issueCodes: ["web.handle.frame_mismatch", "web.handle.frame_mismatch:nextPage.control"] });
+  assert.deepEqual(await nextPage({ nextPage: { list: handle }, browserFrameId: 0 }), { status: "refused", issueCodes: ["web.handle.frame_mismatch", "web.handle.frame_mismatch:browserFrameId"] });
 });

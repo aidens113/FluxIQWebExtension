@@ -125,6 +125,9 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
     // alone (D2). No declaration buys it back and no validation status skips
     // it, so it is asked here rather than inside the comparison guard, which
     // stands down for both.
+    // Both guards keep the payload's top level, so a next-page step's
+    // `route: "ended"`, which the dispatcher lifted there (contract C1), reaches
+    // Core on this path exactly as on the IO path.
     const readable = sensitiveTarget ? dispatchPayloadWithoutExtracted(result.payload) : result.payload;
     runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(readable) : readable;
   }

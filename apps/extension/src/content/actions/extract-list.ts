@@ -12,6 +12,15 @@
 // answer says so with `minItems: 0`. An empty list on a sign-in gate is
 // reported as `auth_required` by `results.ts`, which sees every result.
 //
+// **A read that answers what it kept counts the page, not the rows** (S5,
+// contract C3). A Flow-run or replayed read reads one page and names
+// `answer: "kept"`; for it `minItems` says the list is there -- the items the
+// page showed, kept or not (`itemsSeen`) -- and a page whose items all fail
+// the conditions passes with no rows. The minimum on rows is the collection's
+// (`process.minRows`). A page that showed no item still fails, so a selector
+// that names nothing is not mistaken for a page with nothing to keep. An
+// exploration read names no rule and keeps the minimum on rows.
+//
 // **Rows that read nothing are not an answer** (supervisor's decision on
 // t194-w25 G4, 2026-10-01). A read whose every returned record is empty --
 // every declared field of every row read nothing -- found the list and read its
@@ -81,7 +90,10 @@ export async function extractListAction(action: BrowserActionCommand, deps: Cont
     const outcome = await deps.extractList(request, { timeoutMs: action.timeoutMs, ...(sampleRejected ? { sampleRejected } : {}) });
     const minItems = minimumItems(request.minItems);
     const fieldNames = includedFieldNames(request);
-    const expected = `at least ${count(minItems, "record")}, each carrying ${fieldNames.join(", ")}`;
+    const onPage = countsItemsSeen(request);
+    const expected = onPage
+      ? `at least ${count(minItems, "item")} on the page, each kept record carrying ${fieldNames.join(", ")}`
+      : `at least ${count(minItems, "record")}, each carrying ${fieldNames.join(", ")}`;
     const evidence = { extracted: outcome.records, extraction: summaryOf(outcome, fieldNames, aloneOnly), snapshot: deps.captureSnapshot() };
     if (outcome.timedOut) {
       return deps.timedOut(action, startedAt, `Timed out extracting the list after ${count(outcome.pagesRead, "page")}.`, {
@@ -90,7 +102,7 @@ export async function extractListAction(action: BrowserActionCommand, deps: Cont
         actual: `${readSummary(outcome, request.paginate)}; the time ran out before the list ended`
       }, evidence);
     }
-    return deps.success(action, startedAt, "List extracted.", validationFor(outcome, minItems, expected, request.paginate), evidence);
+    return deps.success(action, startedAt, "List extracted.", validationFor(outcome, { minItems, onPage }, expected, request.paginate), evidence);
   } catch (error) {
     return deps.failure(action, error, startedAt);
   }
@@ -99,6 +111,20 @@ export async function extractListAction(action: BrowserActionCommand, deps: Cont
 /** The request's minimum, or 1 when it names none: a list that matched nothing is not a success unless the author said so. */
 function minimumItems(requested: number | undefined): number {
   return typeof requested === "number" && Number.isFinite(requested) ? Math.max(0, Math.trunc(requested)) : 1;
+}
+
+/** Whether `minItems` counts the items the page showed rather than the rows kept: a read that answers only what it kept (see the header). */
+function countsItemsSeen(request: WebAutomationExtractListRequest): boolean {
+  return request.answer === "kept";
+}
+
+/**
+ * What the minimum is measured against. For a read that answers what it kept,
+ * the items the page showed; a continued read that carried no item count falls
+ * back to its rows, which never overstates the list.
+ */
+function measured(outcome: Outcome, onPage: boolean): number {
+  return onPage ? Math.max(outcome.itemsSeen ?? 0, outcome.records.length) : outcome.records.length;
 }
 
 /** The declared field keys, in declaration order, with every `handling: "exclude"` field left out (D12). */
@@ -197,13 +223,15 @@ function conditionsOf(report: NonNullable<Outcome["conditions"]>): NonNullable<E
  * the columns and `incompleteRecords` counts the rows, so the answer is wide,
  * visibly imperfect, and repairable -- which is what the loop converges on.
  */
-function validationFor(outcome: Outcome, minItems: number, expected: string, paginate: WebAutomationExtractListRequest["paginate"]): BrowserActionValidation {
+function validationFor(outcome: Outcome, minimum: { minItems: number; onPage: boolean }, expected: string, paginate: WebAutomationExtractListRequest["paginate"]): BrowserActionValidation {
   const gap = recordGap(outcome);
-  if (outcome.records.length >= minItems && outcome.missingFields.length === 0 && !everyRecordEmpty(outcome)) {
+  const { minItems, onPage } = minimum;
+  const short = measured(outcome, onPage) < minItems;
+  if (!short && outcome.missingFields.length === 0 && !everyRecordEmpty(outcome)) {
     return { status: "passed", expected, actual: `${readSummary(outcome, paginate)}; ${gap ?? "every declared field present"}` };
   }
   const shortfalls = [
-    ...(outcome.records.length < minItems ? [`fewer than the ${minItems} required`] : []),
+    ...(short ? [onPage ? `fewer than the ${count(minItems, "item")} required on the page` : `fewer than the ${minItems} required`] : []),
     ...(outcome.missingFields.length > 0 ? [`required fields missing from some records: ${outcome.missingFields.join(", ")}`] : []),
     ...(gap ? [gap] : [])
   ];

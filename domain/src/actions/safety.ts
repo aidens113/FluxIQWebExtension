@@ -27,6 +27,8 @@ export const WEB_AUTOMATION_ACTION_SAFETY = {
   "web.dom.check": "review",
   "web.dom.assert": "safe",
   "web.dom.extract_list": "safe",
+  // Moves the list to its next page: pressing it twice moves two pages.
+  "web.dom.next_page": "review",
   "web.dom.upload": "review",
   "web.dom.dialog": "review",
   "web.browser.tab": "review",

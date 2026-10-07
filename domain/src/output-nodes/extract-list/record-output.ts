@@ -44,9 +44,8 @@ export type WebAutomationRecordOutput = Omit<AutomationStudioRecordOutput, "reco
 /** What the dataset is built from: a recorded list extraction, or the same four parts of one a Flow authored. */
 export type WebAutomationRecordOutputSource = Pick<WebAutomationRecordedListExtraction, "datasetId" | "label" | "request" | "fieldLabels">;
 
-/** Core's default and ceiling for the rows one capture keeps (`AUTOMATION_STUDIO_RECORD_OUTPUT_LIMITS`). */
+/** Core's default for the rows one capture keeps (`AUTOMATION_STUDIO_RECORD_OUTPUT_LIMITS`). */
 const DEFAULT_MAX_RECORDS = 1_000;
-const MAX_RECORDS_CEILING = 10_000;
 
 /** Core's bound on a field label (`labelMaxLength`). */
 const LABEL_MAX_LENGTH = 200;
@@ -55,8 +54,13 @@ const LABEL_MAX_LENGTH = 200;
  * The dataset a list extraction saves into: its id and name, a schema over
  * every field the request declares, and the rows one run may keep.
  *
- * `writeMode` is `append`, so a paginated read's later pages add to the rows the
- * earlier ones stored rather than replacing them.
+ * `writeMode` is `append`, so a Flow's later passes over a list add to the rows
+ * the earlier ones stored rather than replacing them.
+ *
+ * `maxRecords` is Core's default, the most one capture -- one read of one page
+ * -- keeps. It no longer comes from the read's `maxItems`: that is a bound on
+ * every row the run collects, which the dispatch declares as the output's
+ * `process.limit` (`./one-page-read.ts`, read-list redesign C3).
  */
 export function webAutomationRecordOutput(definition: WebAutomationRecordOutputSource): WebAutomationRecordOutput {
   const taken = new Set<string>();
@@ -79,7 +83,7 @@ export function webAutomationRecordOutput(definition: WebAutomationRecordOutputS
     label: definition.label,
     schema: { schemaVersion: "0.1", fields },
     writeMode: "append",
-    maxRecords: Math.min(definition.request.maxItems ?? DEFAULT_MAX_RECORDS, MAX_RECORDS_CEILING)
+    maxRecords: DEFAULT_MAX_RECORDS
   };
 }
 

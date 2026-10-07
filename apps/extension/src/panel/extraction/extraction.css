@@ -18,7 +18,7 @@
   padding: var(--space-3);
   background: var(--canvas);
 }
-.extraction-panel[hidden], .extraction-body[hidden], .extraction-paginate[hidden] { display: none; }
+.extraction-panel[hidden], .extraction-body[hidden] { display: none; }
 .extraction-header { display: flex; align-items: start; justify-content: space-between; gap: var(--space-2); }
 .extraction-header > div { display: grid; gap: 3px; min-width: 0; }
 .extraction-status { color: var(--muted); font-size: 12px; white-space: normal; }
@@ -58,7 +58,6 @@
   cursor: help;
 }
 
-.extraction-paginate { display: flex; align-items: center; gap: var(--space-2); color: var(--text); font-size: 12px; }
 .extraction-preview-scroll { overflow: auto; border: 1px solid var(--divider); border-radius: var(--radius); background: var(--surface); }
 .extraction-preview { border-collapse: collapse; width: 100%; font-size: 11px; }
 .extraction-preview th, .extraction-preview td { border-bottom: 1px solid var(--divider); padding: 6px 8px; max-width: 140px; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; }

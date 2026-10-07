@@ -24,7 +24,7 @@ import {
 import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 
 const EXTRACT_LIST_NODE = webAutomationOutputNodeId("web.dom.extract_list");
-const EXTRACTION_HINT = "web.handle.expected.extract_list.handle_fields_paginate";
+const EXTRACTION_HINT = "web.handle.expected.extract_list.handle_fields";
 const REQUIRED = { status: "refused", issueCodes: ["web.handle.extraction_required", EXTRACTION_HINT, "web.handle.extraction_required:extractList"] };
 const CAPTURE = CAPTURED_DETECTIONS["product-catalog-largest"];
 

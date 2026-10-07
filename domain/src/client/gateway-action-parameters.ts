@@ -21,6 +21,7 @@
 
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationExtractListRequestValue, webAutomationExtractReadValue } from "../actions/extraction";
+import { webAutomationNextPageRequestValue } from "../actions/next-page";
 import { webAutomationStructureDetectionRequestValue } from "../extraction";
 import {
   WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES,
@@ -45,7 +46,7 @@ import { webAutomationUrlPath } from "../output-nodes";
 /** The command fields that come from a gateway command's `parameters` rather than from its target or envelope. */
 export type WebAutomationLiftedActionParameters = Pick<
   WebAutomationActionCommand,
-  "tabId" | "frameId" | "frameUrlPath" | "newTab" | "option" | "scroll" | "wait" | "modifiers" | "checked" | "submit" | "assert" | "extract" | "extractList" | "detectStructure" | "upload" | "dialog" | "tab" | "download"
+  "tabId" | "frameId" | "frameUrlPath" | "newTab" | "option" | "scroll" | "wait" | "modifiers" | "checked" | "submit" | "assert" | "extract" | "extractList" | "nextPage" | "detectStructure" | "upload" | "dialog" | "tab" | "download"
 >;
 
 /**
@@ -85,6 +86,10 @@ export function webAutomationReadActionParameters(parameters: JsonObject): WebAu
     assert: assertRequestValue(parameters.assert),
     extract: webAutomationExtractReadValue(parameters.extract),
     extractList: webAutomationExtractListRequestValue(parameters.extractList),
+    // `web.dom.next_page`'s request, refused whole for a bound or an unknown key
+    // (`actions/next-page/request-value.ts`); the action requires it, so a
+    // refused one refuses the command.
+    nextPage: webAutomationNextPageRequestValue(parameters.nextPage),
     // Only `web.dom.capture_snapshot` reads it, and only the authoring runtime
     // sends it (`extraction/structure-detection.ts`).
     detectStructure: webAutomationStructureDetectionRequestValue(parameters.detectStructure),
