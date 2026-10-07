@@ -1,4 +1,4 @@
-import { buildCreatedFlowFromChat, LAB_PROJECT_DOMAIN_ID, type CreatedFlowChatBuild } from "../../flow-lane/index.js";
+import { failedCreatedFlowBuild, buildCreatedFlowFromChat, LAB_PROJECT_DOMAIN_ID, type CreatedFlowChatBuild } from "../../flow-lane/index.js";
 import type { ExistingFluxIQControlClient } from "../../existing-fluxiq-control.js";
 import type { ChatCheckContext } from "../types.js";
 
@@ -31,31 +31,10 @@ export type ChatBuildObservation = {
  * how far it got, and never as anything that could pass.
  */
 export async function proveChatBuild(context: ChatCheckContext, input: { control: Pick<ExistingFluxIQControlClient, "automationStudioCall" | "listFlowAdaptations" | "getFlowAdaptation">; screenshot: (name: string) => Promise<unknown> }): Promise<ChatBuildObservation> {
-  const panel = context.session.panel;
-  if (!panel) throw new Error("The chat is not open, so there is nowhere to type");
-  const result = await buildCreatedFlowFromChat(input.control, {
-    panelInput: panel.input,
-    type: text => panel.send(text),
-    shows: () => panel.text(),
-    picture: async moment => { await input.screenshot(`chat-build-${moment}`).catch(/* best-effort: a picture never decides the claim */ () => undefined); },
-  }, { projectId: context.projectId, domainId: LAB_PROJECT_DOMAIN_ID, instruction: CHAT_BUILD_MESSAGE }, { startMs: 30_000, deadlineMs: 180_000 });
-  context.log(`[chat-check] chat build: became ${result.build.chat?.became}, ending ${result.build.chat?.ending}, flow ${result.flowId ? "made" : "none"}, failure ${result.build.failure?.code ?? "none"}`);
-  const savedInstruction = result.flowId ? await activeInstruction(input.control, context.projectId, result.flowId) : null;
-  const chat = result.build.chat;
-  return {
-    message: CHAT_BUILD_MESSAGE,
-    result,
-    savedInstruction,
-    checks: {
-      stageFoundThePersonTurn: chat !== undefined && chat.personTurn > 0,
-      fluxiqStartedABuild: chat?.became === "build",
-      fluxiqMadeTheFlow: result.flowId !== null,
-      theMessageIsTheInstruction: savedInstruction === CHAT_BUILD_MESSAGE,
-      theBuildEndedInTheThread: chat?.resultTurn !== null && chat?.resultTurn !== undefined,
-      noModelMeansNoFlowIsApplied: result.applied === null && result.build.outcome === "failed",
-      fluxiqSaidWhy: typeof result.said === "string" && /model key is locked/u.test(result.said),
-    },
-  };
+  // Qualification cannot safely send a paid build while verification is unsupported.
+  void context; void input;
+  return { message: CHAT_BUILD_MESSAGE, result: { build: failedCreatedFlowBuild({ code: "lab.candidate_verification_unavailable", stage: "before_provider", httpStatus: null }, "not_attempted", 0), flowId: null, applied: null, said: "Created-Flow qualification is unavailable; no chat build was sent." }, savedInstruction: null,
+    checks: { qualificationAvailable: false, noBuildDispatched: true, noFlowApplied: true } };
 }
 
 /** The Flow's active generation instruction, as Core holds it. */
