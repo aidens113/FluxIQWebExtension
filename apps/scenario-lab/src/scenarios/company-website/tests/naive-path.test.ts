@@ -1,3 +1,4 @@
+import { companyReviewWorkflow } from "../qualification/index.js";
 import assert from "node:assert/strict";
 import { after, describe, test } from "node:test";
 import { resolveScenarioWorkflow, type ScenarioStep } from "@fluxiq-web-extension/test-contracts";
@@ -122,3 +123,28 @@ describe("a naive path fails the oracles", { concurrency: 4 }, () => {
     assert.equal((await serverState(lab)).deposits.count, 1, "and the deposit went with it");
   }));
 });
+
+
+test("qualification final: paid review updates parent with acknowledged frame state before booking then fails after leaving", { timeout: 90000 }, () => withSite(async ({ page, lab }) => {
+  await runScript(page, companyReviewWorkflow.recordingScript);
+  const events: Array<{ type: string; account: { bookingCount: number; deposits: { count: number; totalPence: number } }; origin: string }> = [];
+  await page.exposeFunction('observeQualificationOrder', (value: (typeof events)[number]) => { events.push(value); });
+  await page.evaluate(`window.addEventListener('message', (event) => { if (event.data?.type === 'slotwise:booked') window.observeQualificationOrder({ type:'booked', account:JSON.parse(document.querySelector('[data-testid="company-review-account"]').textContent), origin:event.origin }); });`);
+  const frame = page.frames().find((frame) => frame !== page.mainFrame() && frame.url().includes('/booking-widget'))!;
+  const frameOrigin = new URL(frame.url()).origin;
+  const parentOrigin = new URL(page.url()).origin;
+  assert.notEqual(frameOrigin, parentOrigin);
+  await frame.evaluate(`window.addEventListener('message', (event) => { if (event.data?.type === 'qualification:company-account-ack') window.observeQualificationOrder({ type:'ack', account:JSON.parse(document.querySelector('[data-testid="company-review-account"]').textContent), origin:event.origin }); });`);
+  await locate(page, 'frame:Slotwise booking/button:text-is("Confirm and pay £30.00")').click();
+  await page.getByTestId('booking-reference').waitFor({ timeout: 10000 });
+  assert.deepEqual(events.map(({ type }) => type), ['ack','booked']);
+  assert.equal(events[0]!.origin, parentOrigin);
+  assert.equal(events[1]!.origin, frameOrigin);
+  assert.deepEqual(events.map(({ account }) => [account.bookingCount,account.deposits.count,account.deposits.totalPence]), [[1,1,3000],[1,1,3000]]);
+  await page.getByRole('link', { name: 'Services & prices', exact: true }).click();
+  assert.notEqual(new URL(page.url()).pathname, '/scenarios/company-website/booking/confirmed');
+  const current = JSON.parse((await page.getByTestId('company-review-account').textContent())!);
+  assert.deepEqual([current.bookingCount,current.deposits.count,current.deposits.totalPence], [1,1,3000]);
+  assert.notDeepEqual(await failedFacts(page, companyReviewWorkflow.expected.finalState!), []);
+  assert.equal((await serverState(lab)).bookings.length, 1);
+}));

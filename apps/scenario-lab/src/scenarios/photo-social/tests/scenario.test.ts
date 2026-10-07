@@ -23,7 +23,7 @@ const markupOf = (html: string) => html.slice(0, html.indexOf(`<script type="mod
 test("the manifest is valid, with the collection as its primary workflow and two further workflows, each variant arming one mode", () => {
   const result = validateWebScenario(manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
-  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["giveaway-entries", "ask-price"]);
+  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["giveaway-entries", "ask-price", "extend-studio-inspo"]);
   assert.deepEqual(manifest.variants?.map(({ id, arm }) => ({ id, arm })), [{ id: "consent-redesign", arm: { operation: "set-mode", payload: { mode: "consent-redesign" } } }]);
   assert.deepEqual(manifest.workflows?.[0]?.variants?.map(({ id, arm }) => ({ id, arm })), [{ id: "verified-upsell", arm: { operation: "set-mode", payload: { mode: "verified-upsell" } } }]);
 });
@@ -133,9 +133,9 @@ test("the seed renames every class and generated id, and the markup carries no t
   assert.ok([...classes(home)].every((name) => /^x[0-9a-z]+$/u.test(name)), "every class is an atomic hash");
   assert.notEqual(photoLook(238).hook.card, photoLook(239).hook.card);
   const testIds = (html: string) => [...markupOf(html).matchAll(/data-testid="([^"]*)"/gu)].map((match) => match[1]).sort();
-  assert.deepEqual(testIds(home), ["cookie-policy-manage-dialog-accept-button", "cookie-policy-manage-dialog-decline-button", "fl-relay-blocked", "fl-relay-collections", "fl-relay-consent", "fl-relay-outbox"]);
+  assert.deepEqual(testIds(home), ["cookie-policy-manage-dialog-accept-button", "cookie-policy-manage-dialog-decline-button", "fl-relay-blocked", "fl-relay-collections", "fl-relay-consent", "fl-relay-outbox", "photo-studio-account"]);
   const answered = apply(fresh(), "consent", { choice: "essential" });
-  assert.deepEqual(testIds(scenario.render(answered, context)), ["fl-relay-blocked", "fl-relay-collections", "fl-relay-consent", "fl-relay-outbox"]);
+  assert.deepEqual(testIds(scenario.render(answered, context)), ["fl-relay-blocked", "fl-relay-collections", "fl-relay-consent", "fl-relay-outbox", "photo-studio-account"]);
   const redesigned = scenario.render(apply(fresh(), "set-mode", { mode: "consent-redesign" }), context);
   assert.ok(!redesigned.includes("cookie-policy-manage-dialog-decline-button") && redesigned.includes("Only allow essential cookies"));
   assert.ok(redesigned.indexOf("Allow all cookies") < redesigned.indexOf("Only allow essential cookies"), "the accept control moved first");
@@ -196,6 +196,7 @@ test("the catalog carries the three jobs, the upsell twin and the repair task, e
     // for the build as well, the row measured a Flow built around the upsell.
     { id: "photo-social-giveaway-entries-verified-upsell", judgeBy: "expected-dataset", expectedDatasetId: "extract-giveaway-entries", variantId: "verified-upsell", variantArmedAfterBuild: true },
     { id: "photo-social-moon-jar-price", judgeBy: "expected-dataset", expectedDatasetId: "extract-moon-jar-price", variantId: undefined, variantArmedAfterBuild: undefined },
+    { id: "photo-social-extend-studio-inspo", judgeBy: "expected-dataset", expectedDatasetId: "extract-studio-inspo", variantId: undefined, variantArmedAfterBuild: undefined },
   ]);
   assert.ok(!/message|dm\b|send/iu.test(tasks[3]!.instruction), "the price task never asks for a message to be sent");
   assert.deepEqual(LIVE_REPAIR_TASKS.filter(({ scenarioId }) => scenarioId === "photo-social").map(({ id, variantId, expect }) => ({ id, variantId, expect })), [

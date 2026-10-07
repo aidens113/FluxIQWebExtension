@@ -1,3 +1,4 @@
+import { studioUnionAccountFacts } from "../qualification/index.js";
 import { escapeHtml, fixtureClient, page } from "../../../html.js";
 import { photoClientScript, type ClientModule } from "../client/index.js";
 import { VIEWER, postByCode } from "../data/index.js";
@@ -103,8 +104,18 @@ ${navMarkup(ctx)}
 ${banner}
 ${consentMarkup(ctx)}
 ${relayMarkup(ctx)}
+<script type="application/json" data-testid="photo-studio-account">${studioUnionAccountFacts(ctx.state).replaceAll("<", "\\u003c")}</script>
 <style>${photoStylesheet(ctx.look)}</style>`;
   const script = `${fixtureClient(ctx.runToken, "photo-social")}
+const qualificationAccountFacts = ${studioUnionAccountFacts.toString()};
+const qualificationMutate = mutate;
+mutate = async (operation, payload = {}) => {
+  const result = await qualificationMutate(operation, payload);
+  const account = document.querySelector('[data-testid="photo-studio-account"]');
+  if (account) account.textContent = qualificationAccountFacts(result.state);
+  return result;
+};
+
 const FL = ${JSON.stringify(clientConfig(ctx, options)).replaceAll("</", "<\\/")};
 ${photoClientScript(options.modules)}`;
   return page(options.title, body, script);

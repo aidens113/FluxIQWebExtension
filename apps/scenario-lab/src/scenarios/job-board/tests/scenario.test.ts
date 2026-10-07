@@ -10,7 +10,7 @@ import { JOB_BOARD_LIVE_TASKS } from "../live-tasks.js";
 import { jobBoardScenario as scenario } from "../scenario.js";
 import type { JobBoardMode, JobBoardState } from "../types.js";
 
-const ORACLE_TEST_IDS = new Set(["saved-summary", "saved-list", "posting-status", "application-reference"]);
+const ORACLE_TEST_IDS = new Set(["saved-summary", "saved-list", "posting-status", "application-reference", "job-closed-account"]);
 const context = (seed = 246) => ({ runToken: "job-board-unit-token", seed, alternateOrigin: "http://127.0.0.1:9" });
 const fresh = (mode: JobBoardMode = "baseline") => scenario.mutate(scenario.createState(246), "set-mode", { mode });
 
@@ -55,11 +55,12 @@ const asRecord = (card: Card) => ({ title: card.title, company: card.company, sa
 test("the manifest is valid, with three workflows each carrying one armed variant", () => {
   const result = validateWebScenario(scenario.manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
-  assert.deepEqual(scenario.manifest.workflows?.map(({ id }) => id), ["remote-rust-roles", "apply-remote-rust-role"]);
+  assert.deepEqual(scenario.manifest.workflows?.map(({ id }) => id), ["remote-rust-roles", "apply-remote-rust-role", "remove-closed-saved-jobs"]);
   assert.deepEqual([scenario.manifest, ...(scenario.manifest.workflows ?? [])].map((workflow) => (workflow.variants ?? []).map(({ id, arm }) => [id, arm])), [
     [["overflow-save", { operation: "set-mode", payload: { mode: "overflow-save" } }]],
     [["no-exact-matches", { operation: "set-mode", payload: { mode: "quiet-market" } }]],
     [["posting-closed", { operation: "set-mode", payload: { mode: "posting-closed" } }]],
+    [],
   ]);
   const closed = resolveScenarioWorkflow(scenario.manifest, { workflowId: "apply-remote-rust-role", variantId: "posting-closed" });
   assert.deepEqual(closed.expected.failure, { category: "target_not_found" });
@@ -296,8 +297,8 @@ test("arming a rendering starts the board over, and an unknown operation or payl
 });
 
 test("the live tasks name the variants and datasets the manifest declares", () => {
-  assert.equal(JOB_BOARD_LIVE_TASKS.length, 8);
-  const datasets = new Set(["extract-remote-rust-roles", "extract-application"]);
+  assert.equal(JOB_BOARD_LIVE_TASKS.length, 9);
+  const datasets = new Set(["extract-remote-rust-roles", "extract-application", "extract-open-saved-jobs"]);
   for (const task of JOB_BOARD_LIVE_TASKS) {
     assert.equal(task.scenarioId, "job-board");
     if (task.expectedDatasetId) assert.ok(datasets.has(task.expectedDatasetId), task.id);

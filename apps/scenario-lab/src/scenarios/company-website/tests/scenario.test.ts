@@ -24,7 +24,7 @@ const readable = (html: string) => html.replace(/\s(?:class|id|for|aria-labelled
 test("the manifest is valid, loopback-only, and its workflows and variants are the ones the tasks name", () => {
   assert.deepEqual(validateWebScenario(manifest), { valid: true, value: manifest });
   assert.deepEqual([manifest.id, manifest.seed, manifest.startPath, manifest.networkPolicy], ["company-website", 4519, "/scenarios/company-website/", "loopback-only"]);
-  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["gas-engineers", "business-prices", "book-service"]);
+  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["gas-engineers", "business-prices", "book-service", "review-service-without-booking"]);
   assert.deepEqual(manifest.variants?.map(({ id }) => id), ["redesigned-quote-submit"]);
   assert.equal(resolveScenarioWorkflow(manifest, { workflowId: "gas-engineers", variantId: "winter-notice" }).expected.extracted?.[0]?.records?.length, 8);
 });
@@ -108,7 +108,7 @@ test("the seed renames every class and generated id and changes nothing a person
   const classes = new Set([...markup.matchAll(/class="([^"]+)"/gu)].flatMap((match) => (match[1] ?? "").split(" ")).filter(Boolean));
   assert.ok(classes.size > 30);
   for (const name of classes) assert.match(name, /^css-[a-z0-9]{7}$/u, `class ${name} reads as authored`);
-  assert.equal((home.match(/\sdata-testid="/gu) ?? []).length, 2, "only the consent host and the analytics-tagged submit carry test ids");
+  assert.equal((home.match(/\sdata-testid="/gu) ?? []).length, 3, "consent, analytics submit and private account oracle carry test ids");
 });
 
 test("the renderings the variants arm are the ones they describe", () => {
@@ -130,7 +130,7 @@ test("the scenario's tasks are in the shared catalogs, and each names a dataset 
   for (const task of COMPANY_WEBSITE_LIVE_TASKS) assert.ok(LIVE_INSTRUCTION_TASKS.some(({ id }) => id === task.id), task.id);
   for (const task of COMPANY_WEBSITE_REPAIR_TASKS) assert.ok(LIVE_REPAIR_TASKS.some(({ id }) => id === task.id), task.id);
   const kinds = COMPANY_WEBSITE_LIVE_TASKS.map(({ judgeBy, variantId, variantArmedAfterBuild }) => `${judgeBy}:${variantId ?? "-"}:${variantArmedAfterBuild ? "after" : "before"}`);
-  assert.deepEqual(kinds, ["playback-goal:-:before", "playback-goal:redesigned-quote-submit:after", "expected-dataset:-:before", "expected-dataset:winter-notice:before", "expected-dataset:-:before", "expected-dataset:-:before"]);
+  assert.deepEqual(kinds, ["playback-goal:-:before", "playback-goal:redesigned-quote-submit:after", "expected-dataset:-:before", "expected-dataset:winter-notice:before", "expected-dataset:-:before", "expected-dataset:-:before", "expected-dataset:-:before"]);
   assert.match(COMPANY_WEBSITE_LIVE_TASKS.find(({ id }) => id === "company-website-book-service")?.instruction ?? "", /^Book /u);
   assert.doesNotMatch(COMPANY_WEBSITE_LIVE_TASKS.find(({ id }) => id === "company-website-book-service")?.instruction ?? "", /deposit|pay/iu, "nothing the person says allows money to move");
 });
