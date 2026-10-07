@@ -510,8 +510,9 @@ FLUXIQ_BUILD_CACHE_DIR=off pnpm build    # no store: stamps only, per tree
   whose inputs another tree has already built is restored from the store, and
   `scripts/worktree/core-build.mjs` builds Core's `contracts`, `fluxiq` and
   `client-gateway-websocket` libraries through the same fingerprint and store
-  (`@fluxiq/web` is not cached). **`pnpm task finish`** runs `pnpm check`, whose
-  package checks are likewise reused from the store; the tests still run.
+  (`@fluxiq/web` is not cached). **`pnpm task finish`** runs only the structure
+  audit unless `--full-check` asks for `pnpm check`, whose package checks are
+  likewise reused from the store; the tests still run.
 - **The Lab's Core web build** is cached separately
   (`packages/test-runner/src/core-web-build/`). Its key covers Core's
   `apps/web` tree, the generated `next.config.mjs`, the Next version, the
@@ -705,11 +706,22 @@ creates anything.
 
 The Lab refuses to start against a Core that is detached and behind `dev`,
 naming the commit count and `pnpm task sync-core`, rather than failing later as
-`environment.missing` (`scripts/lab/core/commit/`). That check lives in the Lab
-rather than in `pnpm task`, because a worktree's Core is right when the worktree
-opens and goes wrong afterwards, when nothing in `pnpm task` runs. The Lab's
-checkout pair pins Core on purpose and waives it with
-`FLUXIQ_LAB_ALLOW_BEHIND_CORE=1`.
+`environment.missing` (`scripts/lab/core/commit/`). The Lab's checkout pair
+pins Core on purpose and waives it with `FLUXIQ_LAB_ALLOW_BEHIND_CORE=1`.
+
+`pnpm task finish` asks the same question before its gate, `--dry-run`
+included, and `--skip-checks` does not waive it: the Core the task tree links
+must contain Core's `dev`, or the finish is refused before anything merges,
+naming the Core's commit, Core's `dev` commit and the fix
+(`scripts/task/core-currency.mjs`). For the shared Core the fix is
+`pnpm task sync-core` in that worktree; for a Core-paired task it is merging
+Core's `dev` into the task's own Core branch, which must contain it too; for the
+main Core it is bringing that checkout up by hand. Nothing is checked out for
+you. `pnpm task start` proves the same thing after it moves the shared Core or
+branches the paired one. On 2026-10-07 a shared Core behind Core's `dev` made
+the extension suite report two false failures, and `scripts/check/core-build.mjs`
+only proves the build matches the checked-out source, not that the source is
+current.
 
 ## Panel Commands
 
