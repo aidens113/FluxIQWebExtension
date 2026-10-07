@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Acceptance, extension identity, Stop, candidate receipt/executor infrastructure and typed fixes pushed; candidate facade/Core identity/navigation isolated; live and promotion pending.
+Status detail: Acceptance, extension identity, Stop, candidate receipt/executor infrastructure and typed fixes pushed; candidate facade pushed; Core identity/receipts isolated, navigation verified; live and promotion pending.
 Created: 2026-10-05
 Last updated: 2026-10-06
 Owner: Senior supervisor agent
@@ -424,3 +424,10 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Validation: post-dev53/53 independently observed; Corecheck/build0, dependentwebcheck0 and both integration audits0. Core lifecycle full sweep skipped only after observed narrow gates, preserving daily suite limit. No paid calls.
 - Outcome: Accepted opt-in draft slice, partial overall plan.
 - Follow-up: t302 loadedserver identity inventory refinement/rebuild, t303 navigation, t304 durable receipts; authoritative topology transaction and interpreter/start/oracle/command acknowledgements still required. Paired push next.
+
+### 2026-10-06 - t303 navigation independently verified
+- Agent: Codex supervisor.
+- Changed: tab actions mutate; explicit URL opens share navigate landing checks; HTTPS downgrade refused; unknown evidence unvalidated. Current dev/t301 merged into task before checks.
+- Validation: owning extension96/96 + domain18/18, affected source/test typechecks and structure audit0, three-target22-file builds, production Chromium1/1 (8.4s). Initial ad hoc native-addon bundling probe corrected to established ESM/external boundary; no product defect inferred.
+- Outcome: Narrow P3 slice verified; task integration follows.
+- Follow-up: Core/domain executing identity, receipt/store authority and trusted start/oracle joins remain. No paid A-D, Firefox/Edge live or TLS redirect proof. Full handoff in reports/p3-browser-navigation-readiness.md.

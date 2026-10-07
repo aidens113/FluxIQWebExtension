@@ -3,8 +3,6 @@ import type { BrowserActionCommand, BrowserActionResult } from "../shared/protoc
 import { allTabFrames, ensureContentScript, sendToTab, unreachableFrameReason } from "../background/tabs";
 import { paceNavigation, withPagePace, withPaceNote, type OriginPace } from "../background/page-pace";
 import {
-  navigationChallengeFailure,
-  navigationUnexpectedFailure,
   workerActionFailedFailure,
   workerActionResult,
   workerBlockedFailure
@@ -14,43 +12,30 @@ import {
   currentAutomationTabId,
   latestOpenAutomationTab,
   noteSnapshotReadiness,
-  readTabTitle,
   readTabUrl,
   resolveAutomationTab,
   setAutomationTab,
-  waitForTabReady,
-  type TabDriveRecord
+  waitForTabReady
 } from "./automation-tab";
 import { runBrowserDownloadAction } from "./browser-download";
 import { runBrowserTabAction } from "./browser-tab";
 import { sendClickCheckingLanding } from "./click-landing";
-import { closesOpenedTabs, frameIdForAction, frameUrlPathForAction, opensNewTab, tabIdForAction } from "./command-options";
+import { closesOpenedTabs, frameIdForAction, frameUrlPathForAction, opensNewTab, tabIdForAction, tabRequestForAction } from "./command-options";
 import { fluxiqOpenedTabs } from "./fluxiq-opened-tabs";
 import { waitForFrameChoice } from "./frame-address";
 import { sendExtractListAcrossDocuments, sendNextPageAcrossDocuments } from "./extract-list-continuation";
-import { readLandedPage, type LandedPageReading } from "./landed-challenge";
-import {
-  checkWaitBudgetMs,
-  clearedCheckWait,
-  settleLandedReading,
-  standingCheckWords,
-  type LandedCheckWait,
-  type LandedTabAccess
-} from "./landed-check-wait";
-import { landedPath } from "./quoted-path";
+import { readLandedPage } from "./landed-challenge";
+import type { LandedTabAccess } from "./landed-check-wait";
 import { lookAcrossFrames, type MergeFrameSnapshots } from "./look-across-frames";
 import { metNavigatingPage } from "./navigating-page";
-import { compareNavigatedUrl, judgeTabMovement } from "./navigation-outcome";
-import { navigationTargetTab } from "./navigation-target";
-import { noteRateLimitedLanding, type RateLimitedLanding } from "./rate-limited-landing";
-import { servedStatus, type ServedStatus } from "./served-status";
+import { navigationTargetTab, verifyNavigationLanding } from "./navigation";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
 
 export type BrowserActionRunRequest = {
   action: BrowserActionCommand;
   activeTabId?: number;
   unsupportedPageReason?: string;
-  /** The origins of FluxIQ's own pages, which a navigation never takes over (`navigation-target.ts`). */
+  /** The origins of FluxIQ's own pages, which a navigation never takes over (`navigation/target.ts`). */
   ownOrigins?: readonly string[];
   /**
    * The page-load pace a navigation and a paginated list read consult before
@@ -89,9 +74,11 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   // to open it from -- and the page guard, which is about the document an
   // action needs, does not apply to them.
   if (action.actionType === "web.browser.tab") {
-    const result = await runBrowserTabAction(action);
+    const result = await runBrowserTabAction(action, { attachTabForRecording: request.attachTabForRecording, verifyLanding: (tabId, url, startedAt) => verifyNavigationLanding(action, startedAt, tabId, url, { opened: true, reloaded: false }, { frames: allTabFrames, send: sendToTab }, request.pace) });
     const selected = currentAutomationTabId();
-    if (result.status === "succeeded" && selected !== undefined) await request.attachTabForRecording(selected);
+    const operation = tabRequestForAction(action);
+    const attachedForLanding = operation?.operation === "open" && operation.url !== undefined;
+    if (result.status === "succeeded" && selected !== undefined && !attachedForLanding) await request.attachTabForRecording(selected);
     return withTarget(result, selected, undefined);
   }
   if (action.actionType === "web.browser.download") {
@@ -123,25 +110,7 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   if (isNavigation && action.url) {
     setAutomationTab(tabId);
     await request.attachTabForRecording(tabId);
-    // resolveAutomationTab has already waited for the tab to settle, so the URL
-    // read here is where the browser actually committed the navigation -- and
-    // the top frame says whether what it committed was the page or Chrome's
-    // own error page, which keeps the requested URL in the address bar. A page
-    // that did load is asked whether it is a robot check -- Chrome's error page
-    // runs no content script and is no challenge -- and which HTTP status it
-    // was served with, from the document the drive landed on when it named one.
-    const loadFailed = (await allTabFrames(tabId)).some((frame) => frame.frameId === TOP_FRAME_ID && frame.errorOccurred);
-    const firstReading = loadFailed ? undefined : await readLandedPage(tabId, sendToTab);
-    // A check that clears by itself is waited out where it stands, before the
-    // landing is judged: what the navigation reached is the page behind it.
-    const { reading, checkWait } = await settleLandedReading(firstReading, tabId, LANDED_TAB_ACCESS, checkWaitBudgetMs(action, startedAt));
-    const served = loadFailed ? undefined : await servedStatus(tabId, drive?.documentAfter);
-    const landed = await readTabUrl(tabId);
-    const rateLimited = noteRateLimitedLanding(landed, reading, served, request.pace);
-    const landing = { landed, title: await readTabTitle(tabId), loadFailed, reading, checkWait, served, rateLimited, drive };
-    const result = navigationResult(action, startedAt, action.url, landing);
-    const clearedWait = clearedCheckWait(landing.checkWait);
-    if (clearedWait) result.checkWait = clearedWait;
+    const result = await verifyNavigationLanding(action, startedAt, tabId, action.url, drive, { frames: allTabFrames, send: sendToTab }, request.pace);
     return withTarget(navigationPace ? withPaceNote(result, navigationPace) : result, tabId, frameId);
   }
 
@@ -182,7 +151,7 @@ export function browserActionFailure(action: BrowserActionCommand, message: stri
 /**
  * Which tab the action runs in. A navigation that asked for a new tab gets one
  * and one that named a tab drives it; otherwise it drives the page every other
- * action runs on, when that is a page it may take over (`navigation-target.ts`),
+ * action runs on, when that is a page it may take over (`navigation/target.ts`),
  * and only failing that the automation tab, or a new one. Before Phase 1.2 step
  * 4 it always opened a new tab, abandoning the page the Flow had reached; until
  * P17 it preferred the automation tab even over the page in front, so the first
@@ -247,143 +216,6 @@ async function unsupportedPageReasonFor(
 }
 
 /** Where the tab ended up and what putting it there did: everything the navigate's post-condition is judged on. */
-type NavigationLanding = {
-  landed: string | undefined;
-  title: string | undefined;
-  loadFailed: boolean;
-  /**
-   * What the landed page's top frame said it is (`landed-challenge.ts`), after
-   * any self-clearing check on it was waited out; absent when the page did not
-   * load.
-   */
-  reading: LandedPageReading | undefined;
-  /** The wait on a self-clearing check, when the landed page first read as one (`landed-check-wait.ts`). */
-  checkWait: LandedCheckWait | undefined;
-  /** The HTTP status the landed document was served with (`served-status.ts`); absent when the page did not load. */
-  served: ServedStatus | undefined;
-  /** The landing's refusal for coming too fast, already told to the pace (`noteRateLimitedLanding`); absent when it is none. */
-  rateLimited: RateLimitedLanding | undefined;
-  drive: TabDriveRecord | undefined;
-};
-
-/** The lowest HTTP status that means the server refused the page. */
-const FIRST_ERROR_STATUS = 400;
-
-/**
- * A navigation's post-condition, in two halves, after two questions that
- * override both.
- *
- * A landed page that is a robot check is the person's, wherever it is and
- * whatever the drive did: it fails USER_INTERVENTION_REQUIRED and is never a
- * success. Reported as one, it sent the model on into the check again and
- * again (live runs 15 and 17 on the crossborder marketplace); reported as
- * NAVIGATION_UNEXPECTED, a check a site redirects to would read as a page the
- * model could navigate away from. A check that clears by itself has already
- * been waited out by then, so the check still standing here is one a person
- * must answer, or one that did not clear in time; one that did clear leaves
- * the page behind it to be judged, and the validation says it was waited out.
- *
- * Next, a landing served 429 or 503 is the site saying "not now", wherever it
- * landed: it fails RATE_LIMITED, which is retryable and states the navigation
- * did not happen, with the wait before it may be made again as `retryAfterMs`
- * (`noteRateLimitedLanding` has already told the pace). It is not
- * NAVIGATION_UNEXPECTED, which is never retried: the same request after the
- * wait is the one that works.
- *
- * Then the destination is judged, because landing somewhere else explains
- * everything after it. Then the server's answer: a page served HTTP 400 or
- * above (other than the two above) is a page the server refused, though it
- * loaded at the address asked for -- bigbox answers an item it does not know with 404 and a line of JSON,
- * and lane A run 23 reported that navigation a success. A check served 403 was
- * judged above, and stays the person's. A status the browser would not give
- * leaves the navigation as it was. Then the movement: a navigation that left the tab on
- * the document it already held did nothing, however right its address reads,
- * and reporting that as success is how a Flow carried on against a page it
- * believed it had replaced. Only positive evidence of a no-op fails --
- * `judgeTabMovement` says when it could not tell -- and what it saw is put on
- * the validation either way, because a navigate result carries no snapshot and
- * no element to reconstruct it from.
- */
-function navigationResult(
-  action: BrowserActionCommand,
-  startedAt: number,
-  requested: string,
-  landing: NavigationLanding
-): BrowserActionResult {
-  const { landed, title, loadFailed } = landing;
-  const page = { ...(landed !== undefined ? { url: landed } : {}), ...(title ? { title } : {}) };
-  if (landing.reading?.kind === "robot_check") {
-    const expected = `the page at ${requested}`;
-    const seen = standingCheckWords("the page the browser landed on", landing.checkWait);
-    return workerActionResult(action, startedAt, {
-      status: "failed",
-      message: landing.checkWait === undefined
-        ? "Navigation landed on a robot check, which only a person can answer."
-        : "Navigation landed on a robot check that did not clear by itself, so only a person can answer it.",
-      validation: { status: "failed", expected, actual: "a robot check" },
-      failure: navigationChallengeFailure(expected, seen),
-      ...page
-    });
-  }
-  if (landing.rateLimited !== undefined) {
-    const { status, retryAfterMs } = landing.rateLimited;
-    const path = landedPath(landed ?? requested);
-    const expected = `the page at ${requested}`;
-    const actual = `the server answered HTTP ${status} for ${path}: the site refused the load for now and nothing was loaded; the same navigation may be made again after ${retryAfterMs} ms`;
-    return workerActionResult(action, startedAt, {
-      status: "failed",
-      message: `Navigation refused by the site for now: HTTP ${status} for ${path}; it may be made again after ${retryAfterMs} ms.`,
-      validation: { status: "failed", expected, actual },
-      failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { expected, actual, retryAfterMs }),
-      ...page
-    });
-  }
-  const comparison = compareNavigatedUrl(requested, landed, loadFailed);
-  if (!comparison.matched) {
-    return workerActionResult(action, startedAt, {
-      status: "failed",
-      message: loadFailed ? `The browser could not load ${comparison.expected}.` : `Navigation landed on ${comparison.actual}, not ${comparison.expected}.`,
-      validation: { status: "failed", expected: comparison.expected, actual: comparison.actual },
-      failure: navigationUnexpectedFailure(comparison.expected, comparison.actual),
-      ...page
-    });
-  }
-  if (landing.served !== undefined && "status" in landing.served && landing.served.status >= FIRST_ERROR_STATUS) {
-    const path = landedPath(comparison.actual);
-    const actual = `the server answered HTTP ${landing.served.status} for ${path}`;
-    return workerActionResult(action, startedAt, {
-      status: "failed",
-      message: `Navigation landed on ${path}, which the server answered with HTTP ${landing.served.status}.`,
-      validation: { status: "failed", expected: comparison.expected, actual },
-      failure: navigationUnexpectedFailure(comparison.expected, actual),
-      ...page
-    });
-  }
-  const movement = judgeTabMovement(landing.drive);
-  if (!movement.moved) {
-    const expected = `${comparison.expected}, reached by loading it`;
-    const actual = `${comparison.actual}: ${movement.detail}`;
-    return workerActionResult(action, startedAt, {
-      status: "failed",
-      message: `Navigation left the tab on the page it was already showing: ${movement.detail}.`,
-      validation: { status: "failed", expected, actual },
-      failure: navigationUnexpectedFailure(expected, actual),
-      ...page
-    });
-  }
-  const unread = landing.reading?.kind === "unread" ? `; whether the page is a robot check went unread: ${landing.reading.why}` : "";
-  const waited = landing.checkWait?.outcome === "cleared"
-    ? `; a robot check stood on the page and cleared by itself after ${landing.checkWait.waitedMs} ms, untouched`
-    : "";
-  const completed = workerActionResult(action, startedAt, {
-    status: "succeeded",
-    message: "Navigation completed.",
-    validation: { status: "passed", expected: comparison.expected, actual: `${comparison.actual}: ${movement.detail}${waited}${unread}` },
-    ...page
-  });
-  return completed;
-}
-
 /**
  * The page cannot be automated at all -- a `chrome://` page, an extension page,
  * a web store. `ACTION_REJECTED` is the set's member for a refusal, and the

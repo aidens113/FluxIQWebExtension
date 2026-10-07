@@ -11,8 +11,13 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { compareNavigatedUrl, judgeTabMovement } from "../navigation-outcome";
-import type { TabDriveRecord } from "../automation-tab";
+import { compareNavigatedUrl, judgeTabMovement } from "../index";
+import type { TabDriveRecord } from "../../automation-tab";
+
+test("HTTPS to HTTP downgrade is not arrival while HTTP to HTTPS upgrade remains allowed", () => {
+  assert.equal(compareNavigatedUrl("https://example.test/checkout", "http://example.test/checkout").matched, false);
+  assert.equal(compareNavigatedUrl("http://example.test/checkout", "https://example.test/checkout").matched, true);
+});
 
 test("the same URL, and the rewrites a site performs on its own address, match", () => {
   const same: Array<[string, string]> = [
