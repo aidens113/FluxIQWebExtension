@@ -1,3 +1,4 @@
+import { soldSavesWorkflow } from "./qualification/index.js";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
 import { listingByKey, sellerById } from "./catalog/index.js";
@@ -242,5 +243,6 @@ export const localClassifiedsManifest = createScenarioManifest({
         },
       ],
     },
+    soldSavesWorkflow,
   ],
 });

@@ -1,3 +1,4 @@
+import { soapQuantityWorkflow } from "../qualification/index.js";
 import { createScenarioManifest } from "../../../types.js";
 import { PICKUP_ORDER_WORKFLOW } from "./pickup-order-workflow.js";
 import { PICKUP_TOWELS_WORKFLOW } from "./pickup-towels-workflow.js";
@@ -38,5 +39,5 @@ export const bigboxRetailManifest = createScenarioManifest({
   },
   expected: PRIMARY_EXPECTED,
   variants: [REDESIGNED_BUY_BOX, STORE_REMEMBERED],
-  workflows: [PICKUP_TOWELS_WORKFLOW, PICKUP_ORDER_WORKFLOW],
+  workflows: [PICKUP_TOWELS_WORKFLOW, PICKUP_ORDER_WORKFLOW, soapQuantityWorkflow],
 });

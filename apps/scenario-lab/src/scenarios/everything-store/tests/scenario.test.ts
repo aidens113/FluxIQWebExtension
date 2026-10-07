@@ -26,10 +26,10 @@ const failingFacts = (page: string, facts: readonly ExpectedFact[]) => facts.fil
   return fact.predicate === "text" ? shown?.trim() !== fact.value : (shown !== undefined) !== fact.value;
 }).map((fact) => fact.id);
 
-test("the manifest is valid, with four workflows, three variants, and a goal on the purchase", () => {
+test("the manifest is valid, with five workflows, three variants, and a goal on the purchase", () => {
   const result = validateWebScenario(manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
-  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["add-to-cart", "first-page-earbuds", "plus-under-fifty"]);
+  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["add-to-cart", "first-page-earbuds", "plus-under-fifty", "restore-saved-cloths"]);
   assert.deepEqual(manifest.workflows?.flatMap((workflow) => (workflow.variants ?? []).map(({ id, arm }) => `${workflow.id}/${id}/${JSON.stringify(arm.payload)}`)), [
     `add-to-cart/redesigned-header/{"mode":"redesigned-header"}`,
     `first-page-earbuds/deal-wheel/{"mode":"deal-wheel"}`,
@@ -241,7 +241,7 @@ test("the sponsored redirect sends only to the store's own product pages", () =>
 
 test("the catalogue's tasks name only this scenario, and its repairs name its drift and its challenge", () => {
   assert.deepEqual(EVERYTHING_STORE_LIVE_TASKS.map(({ scenarioId }) => scenarioId), Array(EVERYTHING_STORE_LIVE_TASKS.length).fill("everything-store"));
-  assert.deepEqual(EVERYTHING_STORE_LIVE_TASKS.map(({ judgeBy, expectedDatasetId }) => expectedDatasetId ?? judgeBy), ["extract-plus-under-fifty", "extract-first-page", "extract-first-page", "extract-cart", "playback-goal"]);
+  assert.deepEqual(EVERYTHING_STORE_LIVE_TASKS.map(({ judgeBy, expectedDatasetId }) => expectedDatasetId ?? judgeBy), ["extract-plus-under-fifty", "extract-first-page", "extract-first-page", "extract-cart", "playback-goal", "extract-restored-cloths"]);
   assert.deepEqual(EVERYTHING_STORE_REPAIR_TASKS.map(({ variantId, expect }) => `${variantId}:${expect}`), ["redesigned-header:repair", "robot-check:hand-off"]);
 });
 

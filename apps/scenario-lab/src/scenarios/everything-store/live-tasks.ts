@@ -59,4 +59,12 @@ export const EVERYTHING_STORE_LIVE_TASKS: readonly LiveInstructionTask[] = [
     instruction: "Buy one new Tidewell electric kettle, 1.7 litre, in matte black, sold by Brightaisle itself, delivered free with standard delivery to my home address and paid with my Visa. I want only the kettle: nothing else ordered, nothing signed up for, and the other things in my cart left where they are.",
     judgeBy: "playback-goal",
   },
+  {
+    id: "everything-store-restore-saved-cloths",
+    scenarioId: "everything-store",
+    kind: "navigate-and-extract",
+    instruction: "Move the Brightaisle Basics Microfiber Cleaning Cloths, 24 Pack from Save for later back into my cart. Keep the phone case and batteries already in my cart unchanged and leave the saved Tidewell kettle where it is. Do not find and add another pack, delete anything, buy anything or sign up for anything. List the active cart with columns item, quantity and price, where price is the price of one, in the order the cart shows it.",
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-restored-cloths",
+  },
 ];

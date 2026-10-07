@@ -1,3 +1,4 @@
+import { restoreClothsAccountFacts } from "../qualification/index.js";
 import { escapeHtml, fixtureClient, page } from "../../../html.js";
 import { STORE_PATHS } from "../catalog/index.js";
 import { shellScript } from "../client/index.js";
@@ -53,9 +54,19 @@ ${headerMarkup(kit, input.keywords ?? "", input.department ?? "all")}
 <main class="${css.main}">${input.body}</main>
 ${footer(kit)}
 </div>
+<script type="application/json" data-testid="everything-saved-cloths-account">${restoreClothsAccountFacts(kit.state).replaceAll("<", "\\u003c")}</script>
 ${consentBanner(kit)}
 <style>${storeStylesheet(css)}</style>`;
   const script = `${fixtureClient(kit.runToken, "everything-store")}
+// Readonly fixture account fact follows actual mutation responses; visible UI is unchanged.
+const qualificationAccountFacts = ${restoreClothsAccountFacts.toString()};
+const qualificationMutation = mutate;
+mutate = async (operation, payload = {}) => {
+  const result = await qualificationMutation(operation, payload);
+  const fact = document.querySelector('[data-testid="everything-saved-cloths-account"]');
+  if (fact) fact.textContent = qualificationAccountFacts(result.state);
+  return result;
+};
 ${shellScript(kit.state, css, ids, { autoOpenChat: input.autoOpenChat === true })}
 ${input.script}`;
   return page(input.title, body, script);

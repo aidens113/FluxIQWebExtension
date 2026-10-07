@@ -21,16 +21,17 @@ function selections(): Selection[] {
   });
 }
 
-test("the manifest is valid, with an offer, two further workflows and three variants, each judged on succeeding", () => {
+test("the manifest is valid, with an offer, three further workflows and three variants, each judged on succeeding", () => {
   const result = validateWebScenario(manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
-  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["bike-search", "save-dining-tables"]);
+  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["bike-search", "save-dining-tables", "remove-sold-saves"]);
   assert.deepEqual([manifest, ...(manifest.workflows ?? [])].map((workflow) => (workflow.variants ?? []).map(({ id, arm }) => ({ id, arm }))), [
     [],
     [{ id: "list-layout", arm: { operation: "set-mode", payload: { mode: "list-layout" } } }, { id: "location-check", arm: { operation: "set-mode", payload: { mode: "location-check" } } }],
     [{ id: "moved-save", arm: { operation: "set-mode", payload: { mode: "moved-save" } } }],
+    [],
   ]);
-  assert.equal(selections().length, 6);
+  assert.equal(selections().length, 7);
   for (const selection of selections()) {
     const { expected } = resolveScenarioWorkflow(manifest, selection);
     assert.ok((expected.finalState ?? []).length > 0, label(selection));
@@ -125,7 +126,7 @@ test("a naive read of the feed differs from the answer: it takes the adverts, th
 
 test("the task catalogs point at this scenario's declared datasets, goal and repair row", () => {
   assert.deepEqual(LOCAL_CLASSIFIEDS_LIVE_TASKS.map(({ id }) => id), [
-    "local-classifieds-bike-search", "local-classifieds-bike-search-list-layout", "local-classifieds-bike-search-location-check", "local-classifieds-save-dining-tables", "local-classifieds-make-offer",
+    "local-classifieds-bike-search", "local-classifieds-bike-search-list-layout", "local-classifieds-bike-search-location-check", "local-classifieds-save-dining-tables", "local-classifieds-make-offer", "local-classifieds-remove-sold-saves",
   ]);
   const datasets = new Set([manifest, ...(manifest.workflows ?? [])].flatMap((workflow) => workflow.recordingScript.filter(({ operation }) => operation === "extract").map(({ id }) => id)));
   for (const task of LOCAL_CLASSIFIEDS_LIVE_TASKS) {
