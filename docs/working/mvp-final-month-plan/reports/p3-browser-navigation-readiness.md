@@ -1,6 +1,6 @@
 # P3 browser navigation readiness
 
-Status: Completed ? worker claims awaiting supervisor verification
+Status: Integrated source independently verified; task integration pending
 Task: t303
 Worker: p0_build_identity
 Date: 2026-10-06
@@ -54,3 +54,10 @@ Bundle: apps/extension/dist/e2e-chromium/build-info.json. Running background and
 The provider-free local HTTP fixture exercised actual production background/content code, explicit ordinary200/HTTP404/person-only CAPTCHA landing and blank tab, and tab counts (no repeated creation). Fixture CAPTCHA is diagnostic text, not a real challenge provider. HTTPS downgrade and missing/unread landing evidence are owning Node regressions, not a live TLS redirect probe. Existing self-clearing wait/rate-limit/navigation movement regressions passed in navigate-action; no new paid/real-site checks were performed. Chrome/Edge/Firefox production bundles built; Firefox and Edge browser sessions were not run. Core digest identifies bundled contracts, not independently connected running Core. No broad readiness timeout, download provenance, frame, Stop, protocol or permission work was folded into this brief.
 
 Source inventory: domain output definitions/tests; extension runtime action-runner, automation-tab, browser-tab, action-results, navigation target/outcome/landing, landed challenge/check-wait, served status/rate-limit/quoted path, runtime index, and owning tests; extension build/e2e fixture/harness/config; scoped web-capabilities docs and written brief/current state. Mechanical owner changes remain in approved files; target/outcome tests moved into the feature's tests directory. Authored report and capability docs updated. No commit/push or git mutation.
+
+## Supervisor integration verification
+
+- Merged current dev (including t301 typed changes) into task t303 before checks. Reviewed the shared landing evaluator, injected evidence access, explicit-open path, mutation metadata and moved URL/movement helpers.
+- Validation: independent extension owning tests96/96 and domain definitions18/18; domain source/test check0; extension source/test typechecks0; structure audit0. The initial supervisor ad hoc CJS bundle omitted the established external-package boundaries and tried to bundle sqlite's native addon. Corrected the probe to the repository's ESM/external pattern; this was a harness failure, not a product regression.
+- Validation: rebuilt Chrome/Firefox/E2E targets (22 files each), then production Chromium explicit-open fixture1/1 (8.4s): ordinary landing passes, HTTP404 and person-only check fail, no repeat tab open, blank-tab behavior preserved. Local fixture and owned browser only; no provider or user-panel management.
+- Merged-source E2E inputsDigest: 2d672af15d9289ba02b8ff8a305a2214c756cfa7474f651bbcec700d195a7e19; sibling shared Core2ee06482. Source-level downgrade/unknown-evidence negatives pass, no live TLS redirect proof. Existing report limits remain.
