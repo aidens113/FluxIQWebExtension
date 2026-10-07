@@ -42,7 +42,19 @@ export type RunDatasetSummary = {
   storeTruncated: boolean;
   /** Rows Core's own record validation refused. */
   invalidCount: number;
+  /**
+   * Core's run-end processing account, in counts (read-list S1/S6): what the
+   * read's passes collected, and what processing removed on the way to the
+   * answer the dataset now serves (`recordCount` is the answer's). `passes` is
+   * the number of batches that stored rows, so a page that kept none is not
+   * one. Absent while the dataset is unprocessed, when Core serves the
+   * collected rows as they are.
+   */
+  processing?: RunDatasetProcessing;
 };
+
+/** `AutomationStudioRecordProcessingAccount` narrowed to counts; never a row, a node id or a value. */
+export type RunDatasetProcessing = { collected: number; duplicates: number; filteredOut: number; cut: number; passes: number };
 
 /**
  * One run dataset, read whole.
@@ -82,14 +94,25 @@ export function runDatasetSummaries(detail: Record<string, unknown>): RunDataset
   return datasets.flatMap((value): RunDatasetSummary[] => {
     const summary = optionalRecord(value);
     if (typeof summary?.datasetId !== "string" || !summary.datasetId) return [];
+    const processing = processingAccount(summary.processing);
     return [{
       datasetId: summary.datasetId,
       nodeIds: (Array.isArray(summary.nodeIds) ? summary.nodeIds : []).filter((nodeId): nodeId is string => typeof nodeId === "string"),
       recordCount: wholeNumber(summary.recordCount),
       storeTruncated: summary.truncated === true,
       invalidCount: wholeNumber(summary.invalidCount),
+      ...(processing === undefined ? {} : { processing }),
     }];
   });
+}
+
+/** The processing account's counts, or `undefined` when Core sent none or one that is not whole counts: the lane never invents a collection. */
+function processingAccount(value: unknown): RunDatasetProcessing | undefined {
+  const account = optionalRecord(value);
+  if (!account || !Array.isArray(account.passes)) return undefined;
+  const counts = [account.collected, account.duplicates, account.filteredOut, account.cut];
+  if (!counts.every((count) => typeof count === "number" && Number.isInteger(count) && count >= 0)) return undefined;
+  return { collected: account.collected as number, duplicates: account.duplicates as number, filteredOut: account.filteredOut as number, cut: account.cut as number, passes: account.passes.length };
 }
 
 /**

@@ -390,7 +390,10 @@ the model was shown, or for the page's largest list (`web.dom.capture_snapshot`
 with `detectStructure`; the page side is `apps/extension/src/content/extraction/`).
 The domain splits the answer (`domain/src/runtime/llm-evidence/structure/`):
 the model gets an opaque `extraction.N` handle with each column's key, label,
-kind and coverage, the item count and how the list continues; the handle store
+kind and coverage, the item count and how the list continues (a list that
+continues also carries `nextPageNote`, which says a read reads this page only
+and every page is read by a Next page step naming the same handle, `nextPage:
+{list}`, and a repeat on the read through it; no page bound is stated); the handle store
 keeps the selectors. Each column also carries `at`, the page-view handle of its
 element in the list's first item, as the model was last shown the page, so a
 column labelled by a meaningless atomic-CSS class path can still be matched to

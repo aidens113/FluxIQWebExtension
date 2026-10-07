@@ -59,7 +59,7 @@ const EXTRACT_LIST_NODE = "web.output.dom-extract_list";
 const BASE = { projectId: "project.item-conditions", flowId: "flow.item-conditions", maxEvidenceBytes: 24_000 } as const;
 
 type Detected = Extract<WebAutomationStructureDetection, { ok: true }>;
-type StructurePacket = { extraction: string; itemCount: number; fields: Array<{ key: string; label: string; coverage: number }> };
+type StructurePacket = { extraction: string; itemCount: number; fields: Array<{ key: string; label: string; coverage: number; sample?: string }> };
 type Record_ = Record<string, unknown>;
 
 /**
@@ -251,12 +251,16 @@ test("the model names which items it wants in the vocabulary the detection showe
   const detected = await runtime.executeTool({ ...BASE, callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
   expect(detected.resultCode, JSON.stringify(detected.evidence)).toBe("web.structure.detected");
   const packet = detected.evidence as unknown as StructurePacket;
-  // What the model is shown: keys, labels, coverage. A label is page structure
-  // and may be a path, but nothing the model can read the page with, and no
-  // value read inside an item (D3).
+  // What the model is shown: keys, labels, coverage, and nothing the model can
+  // read the page with. Since D3-3 (b05e186b, 2026-10-06) each column also
+  // carries its value in the first item that has it -- screened, one line, at
+  // most 40 characters (`structure/field-sample.ts`) -- so a badge's words such
+  // as "Sponsored" may now be quoted; a whole item never is.
   expect(Object.keys(packet)).not.toContain("item");
   expect(JSON.stringify(packet)).not.toContain(":scope");
-  expect(JSON.stringify(packet), "the packet quotes no value read inside an item").not.toContain("Sponsored");
+  for (const field of packet.fields) {
+    expect(field.sample === undefined || (field.sample.length <= 40 && !/\s{2}|[\r\n]/u.test(field.sample)), `${field.key}'s sample is one short line: ${field.sample}`).toBe(true);
+  }
   const mark = packet.fields.find((field) => field.label === "data-ad-id");
   expect(mark, `the packet offers the ad mark as a column: ${packet.fields.map((field) => `${field.label}@${field.coverage}`).join(" | ")}`).toBeTruthy();
   if (!mark) throw new Error("no ad-mark column in the packet");
@@ -273,8 +277,7 @@ test("the model names which items it wants in the vocabulary the detection showe
         extractList: {
           handle: packet.extraction,
           fields: Object.fromEntries(columns.map((key) => [key, key])),
-          where: [{ field: mark.key, is: "absent" }],
-          paginate: false
+          where: [{ field: mark.key, is: "absent" }]
         }
       },
       consequences: []

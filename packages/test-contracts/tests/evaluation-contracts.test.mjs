@@ -464,3 +464,17 @@ test("a 0.3 measurement written before the two members reads as stating neither,
   // A current producer states both, so its evaluation is returned as itself.
   assert.doesNotThrow(() => assertRunEvaluation(extractionRun()));
 });
+
+// Read-list S6: a Flow run's read collects rows on every pass, and Core's
+// run-end processing turns them into the answer the lane reads. The
+// measurement states both: `observedRecords` is the answer, `collectedRecords`
+// the rows the passes collected before processing.
+test("a measurement may state the rows its reads collected beside the processed answer, never fewer than the answer", () => {
+  assert.deepEqual(issuesOf(extractionRun([measurement({ collectedRecords: 27 })])), []);
+  // Absent is how every producer without run-end processing states it, and how every earlier evaluation reads.
+  assert.deepEqual(issuesOf(extractionRun([measurement()])), []);
+  assert.deepEqual(issuesOf(extractionRun([measurement({ collectedRecords: 23 })])), ["$.extraction[0].collectedRecords"]);
+  assert.deepEqual(issuesOf(extractionRun([measurement({ collectedRecords: -1 })])), ["$.extraction[0].collectedRecords"]);
+  assert.deepEqual(issuesOf(extractionRun([measurement({ collectedRecords: 2.5 })])), ["$.extraction[0].collectedRecords"]);
+  rejects(extractionRun([measurement({ collectedRecords: "27" })]), "a string is never a measurement");
+});

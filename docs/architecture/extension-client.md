@@ -843,6 +843,7 @@ derives from:
 - `web.dom.check`
 - `web.dom.assert`
 - `web.dom.extract_list`
+- `web.dom.next_page`
 - `web.dom.upload`
 - `web.dom.dialog`
 - `web.browser.tab`
@@ -1697,15 +1698,26 @@ Two rules keep the worker honest about what it runs:
   extraction becomes an executable node, and runs the request that reader
   rebuilt. A definition the domain refuses is neither recorded nor run, so the
   worker cannot run a read the replayed Flow would not;
-- **the timeout is the domain's number.** The page waits up to 10 s for *each*
-  page of a list, so the budget is `webAutomationExtractListTimeoutMs`
-  ([`domain/src/actions/extraction/request.ts`](../../domain/src/actions/extraction/request.ts)):
-  the per-page wait times the pages the request may follow, which is `maxPages`
-  for every mode that follows pages and `maxScrolls` for a scrolling list. It is
-  imported rather than restated. The worker once carried a flat 60,000 ms ceiling
-  of its own, because the function could not be reached from `domain/client`, and
-  that truncated every read past six pages; the function is exported there now,
-  so the worker's budget and the recorded node's declared budget are one number.
+- **the timeout is the domain's number.** The budget is
+  `webAutomationExtractListTimeoutMs`
+  ([`domain/src/actions/extraction/request.ts`](../../domain/src/actions/extraction/request.ts)),
+  imported rather than restated, so the worker's budget and the recorded node's
+  declared budget are one number. It is the per-page wait times the pages the
+  request may follow, and a picked definition follows none: the read covers the
+  current page only.
+
+**The pick records one page.** The panel offers no switch for reading every
+page. Where the proposal found a pager it says "Current page only. The list goes
+on: a Next page step after this one reads the pages that follow", and otherwise
+that FluxIQ found no link to more pages
+([`panel/extraction/panel.ts`](../../apps/extension/src/panel/extraction/panel.ts)).
+The confirm payload carries no `paginate` member
+([`panel/extraction/confirm-payload.ts`](../../apps/extension/src/panel/extraction/confirm-payload.ts)).
+A Flow reaches a later page with a Next page step (`web.dom.next_page`) and a
+repeat on the read; recording that loop from a person's own Next press is not
+built, and the recorder records such a press as an ordinary click. A recorded
+definition that still carries a multi-page `paginate` is refused at dispatch
+with `web.extract_list.paginate_retired`; a one-page one is dropped.
 
 ### What The Recording Holds
 
@@ -1888,14 +1900,18 @@ from every other action's in three ways:
 - **a list carries a `recordOutput`**, which is what makes the approved node save
   its rows as a dataset: the dataset's id and name, a schema over every field the
   request declares — the excluded ones included, carrying their `handling` — and
-  `writeMode: "append"`, so a paginated read's later pages add to the rows the
-  earlier ones stored
+  `writeMode: "append"`, so each pass of a Flow's page loop adds to the rows
+  the earlier passes stored
   ([`domain/src/recording/proposals/record-output.ts`](../../domain/src/recording/proposals/record-output.ts)).
+  At run end Core processes the collected rows into the dataset's answer (each
+  row kept once, then the read's declared `dedupe`, `sort` and limit), and the
+  readers and exports read that answer.
   The single-value form carries none: one value is not a list of records;
-- **a list carries a scaled `timeoutMs`**, the same
-  `webAutomationExtractListTimeoutMs` the picker's own run uses. Core otherwise
-  sends the node's 5,000 ms default as the command timeout, which would cut a
-  paginated read short at its first page.
+- **a list carries a `timeoutMs`**, the same
+  `webAutomationExtractListTimeoutMs` the picker's own run uses: one page's
+  wait, since a picked read covers one page. Core otherwise sends the node's
+  5,000 ms default as the command timeout, which is shorter than the page's own
+  wait for a list to render.
 
 ### Stable navigation controls
 

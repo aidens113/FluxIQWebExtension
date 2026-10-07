@@ -31,11 +31,17 @@ const RECORDS = earbudRecords(ANSWER);
  * results a page load only on scroll, the Next link on page two leads back to
  * page two, and a sweep faster than a person reads is refused with a 429.
  *
- * No recording of this workflow can pass, and that is deliberate: a recorded
- * extract has no step that drops rows by a rule or removes a repeat, so the
- * script below reads everything its filters let through. The workflow exists
- * because its dataset is the created-Flow lane's judgement of a Flow that can
- * reason about what it reads.
+ * No recording of this workflow runs: its extract step pages, FluxIQ's read
+ * reads one page, and no recording can produce the loop a Flow pages with
+ * (`pagedExtractExclusion`). The step's `pagination` is the Lab's description
+ * of the list. The workflow exists because its dataset is the created-Flow
+ * lane's judgement of a Flow that can reason about what it reads, which since
+ * the read-list redesign is: navigate; Decline and Not now (optional); type the
+ * search; read with `where` (sponsored absent, Plus present, rating at least
+ * 4, price under 50, accessories out); Next page; repeat the read through Next
+ * page while it moves on. The read collects every pass, Core's run-end
+ * whole-row dedupe removes each page's repeat of the page before, and the
+ * answer is the 13 ordered records (52 fields) below.
  */
 export const PLUS_UNDER_FIFTY_WORKFLOW: ScenarioWorkflow = {
   id: "plus-under-fifty",

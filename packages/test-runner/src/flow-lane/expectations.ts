@@ -274,8 +274,10 @@ export function assertFlowExtraction(judgement: FlowExtractionJudgement): void {
 }
 
 /**
- * What the lane observed of one step's extraction: its duration, and the
- * values its dataset could not carry. `pagesRead` and `truncated` are
+ * What the lane observed of one step's extraction: its duration, the values
+ * its dataset could not carry, and -- when Core processed the dataset at run
+ * end -- the rows the read's passes collected before processing kept the
+ * answer the records are. `pagesRead` and `truncated` are
  * deliberately absent — see `LANE_UNOBSERVABLE` — so the measurement reports
  * them as `null` instead of inventing them, and the entries handed to
  * `assertExtraction` never declare them.
@@ -286,7 +288,11 @@ function observedExtraction(dataset: FlowRunDataset | undefined, durationsByNode
     const duration = durationsByNode.get(nodeId);
     return duration === undefined ? total : (total ?? 0) + duration;
   }, undefined);
-  return { nonStringValues: dataset.nonStringValues, ...(durationMs === undefined ? {} : { durationMs }) };
+  return {
+    nonStringValues: dataset.nonStringValues,
+    ...(durationMs === undefined ? {} : { durationMs }),
+    ...(dataset.processing === undefined ? {} : { collectedRecords: dataset.processing.collected }),
+  };
 }
 
 /**

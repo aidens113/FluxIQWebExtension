@@ -17,8 +17,9 @@
 // `extraction/tests/list-completeness.spec.ts` does: detect, read every column,
 // then name the columns and conditions the instruction asks for. The decisions
 // are what a model can write -- detected keys and conditions over them -- and a
-// column is chosen by the values a read showed, which is all a model has to go
-// on: the packet labels are paths through hashed class names (D3).
+// column is chosen by the values a read showed: the packet's keys are paths
+// through hashed class names, and since D3-3 (b05e186b) its labels quote one
+// item's sample, not every row's value. A read reads one page (read-list S4).
 //
 // The gaps these rows traced (`docs/working/language-driven-flow-loop-plan/reports/
 // t194-w26-spain-hubs-fixture.md`) are fixed, and no row is marked `test.fail`:
@@ -287,7 +288,7 @@ function instructionColumns(rows: Row[], packet: StructurePacket): { title: stri
 
 /** Every detected column, this page only: what a model reads first to see what each column holds. */
 async function readEveryColumn(reader: Reader, packet: StructurePacket): Promise<Row[]> {
-  const { rows } = await readList(reader, { handle: packet.extraction, paginate: false, minItems: 0 });
+  const { rows } = await readList(reader, { handle: packet.extraction, minItems: 0 });
   return rows;
 }
 
@@ -366,7 +367,7 @@ test.describe("crossborder-marketplace-spain-hubs, the site's own filters", () =
 
     // The site's "4★ & up" is a 4.0 band (results.ts:91): without the rating
     // condition the 4.1, 4.3 and 4.4 cards stay in.
-    const banded = await readList(read, { handle: packet.extraction, fields: { title: keys.title, store: keys.store, rating: keys.rating }, where: [{ field: keys.ad, is: "absent" }], paginate: false, minItems: 0 });
+    const banded = await readList(read, { handle: packet.extraction, fields: { title: keys.title, store: keys.store, rating: keys.rating }, where: [{ field: keys.ad, is: "absent" }], minItems: 0 });
     expect(banded.rows, "the filter's band keeps the 4.1/4.3/4.4 near-misses").toHaveLength(16);
 
     // "rated 4.5 stars or higher" over the rating the card writes, which every
@@ -376,15 +377,16 @@ test.describe("crossborder-marketplace-spain-hubs, the site's own filters", () =
       handle: packet.extraction,
       fields: { title: keys.title, store: keys.store, rating: keys.rating },
       where: [{ field: keys.ad, is: "absent" }, { field: "rating", atLeast: 4.5 }],
-      paginate: false,
       minItems: 13
     });
     expect(kept.reply.status, JSON.stringify(kept.reply.validation)).toBe("succeeded");
     expect(answer(kept.rows), "#2 and #5 share a title and stay two rows: their stores differ").toEqual(expectedWithout("price"));
-    // The saved request carries its conditions resolved into column reads.
-    expect(kept.request.where?.map((condition) => ({ is: condition.is, atLeast: condition.atLeast, read: typeof condition.read }))).toEqual([
-      { is: "absent", atLeast: undefined, read: "object" },
-      { is: undefined, atLeast: 4.5, read: "object" }
+    // The saved request carries its conditions resolved: the ad mark, a column
+    // the read does not keep, as its own read; the rating, which it keeps, by
+    // its kept key (c8be5125, `plan-resolution/extraction/conditions.ts`).
+    expect(kept.request.where?.map((condition) => ({ is: condition.is, atLeast: condition.atLeast, field: condition.field, read: typeof condition.read }))).toEqual([
+      { is: "absent", atLeast: undefined, field: undefined, read: "object" },
+      { is: undefined, atLeast: 4.5, field: "rating", read: "undefined" }
     ]);
   });
 
@@ -403,7 +405,6 @@ test.describe("crossborder-marketplace-spain-hubs, the site's own filters", () =
       handle: packet.extraction,
       fields: { title: keys.title, store: keys.store, price: price.key!, rating: keys.rating },
       where: [{ field: keys.ad, is: "absent" }, { field: "rating", atLeast: 4.5 }],
-      paginate: false,
       minItems: 0
     });
     expect.soft(price.asWritten, "GAP G1: no detected column holds the price as the card writes it. The card draws it in four sibling spans, and infer-fields.ts:385 offers only text leaves, so the proposal has its pieces (\"16\", \",49\", \"€\") and the one column labelled (currency amount) is the struck-through original price").toBe(true);
@@ -434,7 +435,6 @@ test.describe("crossborder-marketplace-spain-hubs, every page of the unfiltered 
         { field: shipping[0]!, equals: "Free shipping" },
         { field: "rating", atLeast: 4.5 }
       ],
-      paginate: false,
       minItems: 0
     });
     return { read, packet, request: pageOne.request, pageOne: pageOne.rows };
@@ -503,7 +503,6 @@ test.describe("crossborder-marketplace-spain-hubs-list-layout, the Flow built on
       handle: packet.extraction,
       fields: { title: keys.title, store: keys.store, price: price.key!, rating: keys.rating },
       where: [{ field: keys.ad, is: "absent" }, { field: "rating", atLeast: 4.5 }],
-      paginate: false,
       minItems: 13
     });
     expect(answer(saved.rows), "the grid build reads the thirteen").toEqual(EXPECTED);

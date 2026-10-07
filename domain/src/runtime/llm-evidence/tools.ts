@@ -148,6 +148,13 @@ export type WebAutomationLlmEvidenceRuntime = {
   /** The keys Core refuses in evidence from this domain. Core carries no browser vocabulary of its own, so the domain that knows what these words mean declares them and Core enforces the declaration. Required here, because the producer always knows: an evidence runtime that declared nothing would silently deny nothing. */
   deniedEvidenceKeys: readonly string[];
   observedStateKeys: readonly string[];
+  /**
+   * Where a live list read's answer holds its kept rows, as Core's `holder.member`
+   * key: one of the read's row keys (`./observed-state/read-rows-keys.ts`). A
+   * repair compares a rerun of the read a judged test blamed with the rows Core's
+   * check named (R3-3), and only this domain knows which member is the kept rows.
+   */
+  readRowsKey: string;
   /** The keys under which a step's argument carries the row its control was found in (`./plan-resolution/row-context-keys.ts`). Core leaves them out of what it tells the judge a repeated step acts on, and names none of its own. */
   rowContextKeys: readonly string[];
   /** What Core tells the model on every request for this domain's work: that it operates a website for a person, how the page view reads, and the rules (`./system-instructions/`). Core checks it when the runtime is bound. */
@@ -332,6 +339,9 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
     deniedEvidenceKeys: WEB_LLM_DENIED_EVIDENCE_KEYS,
     // The page and a read's rows, each replaced only by a newer one of its kind (`./observed-state/`).
     observedStateKeys: WEB_LLM_VIEW_KEYS,
+    // A live read's kept rows, so a repair's rerun of a blamed read is compared
+    // with the rows Core's check named, not only a replay's (R3-3, live run `run-mux6naez-6c20f26e`).
+    readRowsKey: "read.extracted",
     // The card a press was built on, which a repeat replaces with each kept row (`./plan-resolution/row-context-keys.ts`).
     rowContextKeys: WEB_LLM_ROW_CONTEXT_KEYS,
     // Placed by Core in the system message of every model request (t237).

@@ -138,7 +138,7 @@ test("a read that reached its page bound says the list went on", async ({ openHa
     extractList: { item: "article[data-jk]", fields: { title: "h2 a" }, paginate: { next, maxPages: 1 }, minItems: 0 }
   });
   expect(reply).toMatchObject({ status: "succeeded", extraction: { pagesRead: 1, truncated: true, paginationStop: "page_limit" } });
-  expect(reply.validation).toMatchObject({ actual: expect.stringContaining("the page bound (maxPages, or maxScrolls for a scroll read) was reached while the list went on") });
+  expect(reply.validation).toMatchObject({ actual: expect.stringContaining("paging stopped because extractList.paginate.maxPages = 1 was reached while the list went on; the read is incomplete") });
 });
 
 test("with the consent wall cancelling its click, Next is followed by its own address", async ({ openHarness, page }) => {

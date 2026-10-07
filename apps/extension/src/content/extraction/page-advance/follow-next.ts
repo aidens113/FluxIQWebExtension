@@ -9,7 +9,9 @@
 // reloads the page, and a read that followed it would read the same page until
 // its bound. When the pager beside it shows the current page's number and a
 // control numbered one more, that is followed instead (`by: "following"`); when
-// it shows none, the Next is followed anyway, and the read stops on
+// it marks the current page and shows no page after it, the list has ended
+// (`no_following_page`, nothing pressed); when it shows neither, the Next is
+// followed anyway, and the read stops on
 // `page_repeated` when the page it reaches holds nothing new
 // (`../list-reader.ts`). **A script's Next is treated the same way**, because
 // it carries no address to be checked against this page: Guildline's people
@@ -56,7 +58,14 @@ export async function followNext(way: Extract<WebAutomationNextPageWay, { next: 
   // A Next with an address is checked against this page before it is
   // followed; a script's Next has none to check, so where the pager beside it
   // shows the page after the current one, that is followed (see the header).
-  const following = leadsToThisPage(named) || linkAddress(named) === undefined ? pager?.following : undefined;
+  const unaddressed = leadsToThisPage(named) || linkAddress(named) === undefined;
+  // Such a Next on a pager that marks the current page and shows no page after
+  // it is on the last page: pressing it reloads this page (Guildline keeps its
+  // script Next enabled there), and a read + Next page loop would read it
+  // again on every pass (S6 GAP N1). The paged read used to notice the repeat
+  // after the press; a next-page step keeps no history, so it ends here.
+  if (unaddressed && pager !== undefined && pager.following === undefined && !pager.later) return { outcome: "ended", stop: "no_following_page" };
+  const following = unaddressed ? pager?.following : undefined;
   const control = following ?? named;
   progress.laterPageShown = pager?.later === true;
   if (pastDeadline(progress.deadline)) return { outcome: "timed_out", stop: "deadline" };

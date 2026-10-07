@@ -108,7 +108,7 @@ test.describe("on product-catalog", () => {
     });
     expect(reply).toMatchObject({
       status: "succeeded",
-      validation: { status: "passed", actual: "16 records from 2 pages, truncated; paging stopped because the page bound (maxPages, or maxScrolls for a scroll read) was reached while the list went on -- raise it to read more; every declared field present" },
+      validation: { status: "passed", actual: "16 records from 2 pages, truncated; paging stopped because extractList.paginate.maxPages = 2 was reached while the list went on; the read is incomplete -- rerun with input: {extractList: {paginate: {maxPages: N}}} to read more; every declared field present" },
       extraction: { recordCount: 16, pagesRead: 2, truncated: true, missingFields: [] }
     });
     await expect(page.locator(PAGE_STATUS)).toHaveText("Page 2 of 3");

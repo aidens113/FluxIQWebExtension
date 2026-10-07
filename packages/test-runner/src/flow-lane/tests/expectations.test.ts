@@ -218,3 +218,18 @@ test("a restored null matches an expected null and is not counted as a field the
   assert.deepEqual([wanted.measurements[0]?.expectedFields, wanted.measurements[0]?.presentFields], [2, 1]);
   assert.throws(() => assertFlowExtraction(wanted), /carried no value for 1 required field/);
 });
+
+// Read-list S6: lane C's shape. Five passes of one read collected 17 rows, the
+// run-end dedupe removed the 4 boundary repeats, and the dataset serves the 13
+// the oracle lists. The step is judged on the answer and states the collection.
+test("a processed dataset is judged on its answer, and its measurement states the rows the passes collected", () => {
+  const answer = Array.from({ length: 13 }, (_value, index) => ({ name: `item ${index}` }));
+  const processed = dataset("node.extract", answer, { processing: { collected: 17, duplicates: 4, filteredOut: 0, cut: 0, passes: 5 } });
+  const judged = judge([{ step: "extract", count: 13, records: answer }], ["extract"], [processed]);
+  assert.equal(judged.steps[0]!.measurement.observedRecords, 13);
+  assert.equal(judged.steps[0]!.measurement.collectedRecords, 17);
+  assert.doesNotThrow(() => assertFlowExtraction(judged));
+  // An unprocessed dataset states no collection rather than one equal to its rows.
+  const unprocessed = judge([{ step: "extract", count: 13, records: answer }], ["extract"], [dataset("node.extract", answer)]);
+  assert.equal(Object.hasOwn(unprocessed.steps[0]!.measurement, "collectedRecords"), false);
+});
