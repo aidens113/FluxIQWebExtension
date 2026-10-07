@@ -93,7 +93,8 @@ Discovery freeze: this report is the only t313 mutation. No product source, migr
 - Full owner/operation/request/result/historical joins validated against immutable claim/receipt rows, including replay and reconciliation. Server commit timestamps store-issued.
 - Owning generic tests and real SQLite races, preclaim rollback, receipt rollback/lost COMMIT acknowledgement/reopen, corrupt/borrowed records, fully migrated DB preservation.
 - Production reconciliation, executor context/unknown run stop/resume fences, candidate effect subject acknowledgement, semantic outcome and graph authority remain unsupported.
-- No providers/browser/panel/full suites/git/shared document mutations.
+- No providers/browser/panel/full suites/git/shared document mutations.
+
 
 ## First partition implementation and validation (source frozen 2026-10-07)
 
@@ -124,7 +125,8 @@ Observed2/2, zero skips,5.49s (child cases2.465s/2.441s). Both launch an actual 
 
 Core structure first refused generated docs/working/README.md only; supervisor regenerated via owning rule. Final structure passed280 warnings/349 baselined. No source baseline increase. Downstream structure/final owning repeat results recorded below once observed.
 
-Limitations for next approved partition: both production dispatch paths still drop trusted run context; gateway commands are still memory-only and settle synchronously. Executor UUID allocation, terminal outcome_unknown and same-run pending/unknown preflight need serial implementation and real owning tests. This infrastructure cannot itself stop recovery ladders or resumed graphs from issuing another invocation. Normal authorization/session/action checks must remain in their current owners when the port is wired. Receipt timestamp must be trusted server receive time, not client-supplied completion metadata. Detached candidate controller/subject performed acknowledgement/semantic observer and accepted-state authority remain closed. No production gateway receipt, browser result, provider run, panel or full MVP qualification claimed.
+Limitations for next approved partition: both production dispatch paths still drop trusted run context; gateway commands are still memory-only and settle synchronously. Executor UUID allocation, terminal outcome_unknown and same-run pending/unknown preflight need serial implementation and real owning tests. This infrastructure cannot itself stop recovery ladders or resumed graphs from issuing another invocation. Normal authorization/session/action checks must remain in their current owners when the port is wired. Receipt timestamp must be trusted server receive time, not client-supplied completion metadata. Detached candidate controller/subject performed acknowledgement/semantic observer and accepted-state authority remain closed. No production gateway receipt, browser result, provider run, panel or full MVP qualification claimed.
+
 
 Final repeat: ordinary owning21/21,18.39s; actual built process probe2/2 zero skips as above. Downstream structure passed176 warnings/117 baselined. Initial PowerShell stderr redirection returned shell exit1 despite the audit's passed summary; an explicit native exit-code preserving rerun was used, rather than reporting that wrapper outcome as a product failure. Core structure passed as above. All source/report now frozen for supervisor review; no commits/merges/pushes by worker.
 
@@ -141,9 +143,13 @@ Claims and nested bindings are validated, cloned and recursively frozen before i
 
 Post-correction owning26/26 (11 generic+15 actual SQLite),27.08s, then frozen owner repeat26/26,25.72s. Strengthened the node-count assertion to isolate it from byte size; final generic11/11,0.784s, and final typecheck exit0/stamped8.858s. Earlier post-correction typecheck also exit0/stamped31.804s. Current Core owning build exit0/stamped51.796s, with corrected product source; no unstamped build claimed. Repeated the explicit opt-in current-built child probe:2/2 zero skips,7.06s, synthetic pending/committed termination semantics unchanged. Both actual kills retain a single effect marker and never restore a fabricated usable payload. Core/downstream structure audit results below are native exit-code preserving runs after freeze.
 
-Final source freeze remains infrastructure only. No independent semantic result/command subject acknowledgement, production delivery/result authority, same-run executor unknown fence, browser/panel/provider test or accepted graph promotion claim. Parent supervisor must inspect and independently rerun before integrating.
-Final correction audits: Core native exit0, passed280 warnings/349 baselined; downstream native exit0, passed176 warnings/117 baselined. Corrected source and own report now frozen. No worker git mutations.
+Final source freeze remains infrastructure only. No independent semantic result/command subject acknowledgement, production delivery/result authority, same-run executor unknown fence, browser/panel/provider test or accepted graph promotion claim. Parent supervisor must inspect and independently rerun before integrating.
+
+Final correction audits: Core native exit0, passed280 warnings/349 baselined; downstream native exit0, passed176 warnings/117 baselined. Corrected source and own report now frozen. No worker git mutations.
+
 
 ## Supervisor independent verification of first foundation partition
 
 Supervisor reviewed generic controller/schema and actual SQL joins/migration, then independently reran generic11+SQLite15=26/26, zero skips17.83s. Exact package typecheck via `tsc --noEmit --incremental false` exit0; owning build exit0 actual44.966s. Explicit current-built child kill/restart probe2/2, zero skips5.96s: pending/committed receipt-only reconciliation, zero repeated synthetic effects. Cached package check0 additionally matched frozen source, but is not called an independently executed compilation. Production context review is a separate report; source remains infrastructure only. Root repaired two non-UTF8 punctuation bytes in this report to ASCII before integration. Root audit/integration receipts follow in supervisor ledger.
+
+Final merged t310/t313 proof: owning30/30 zero skips18.07s, actual package types0 26.285s/build0 43.451s; Coreaudit0 281warnings/349baseline and downstreamaudit0 176warnings/117baseline. Production source remains unchanged/closed.
