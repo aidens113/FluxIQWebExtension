@@ -199,6 +199,6 @@ function requireSelector(request: WaitConditionRequest): string {
 }
 
 function requireText(request: WaitConditionRequest): string {
-  if (!request.text) throw new Error(`The "${request.condition}" wait condition needs a selector or text to wait for.`);
+  if (typeof request.text !== "string" || request.text.trim().length === 0) throw new Error(`The "${request.condition}" wait condition needs a selector or text to wait for.`);
   return request.text;
 }

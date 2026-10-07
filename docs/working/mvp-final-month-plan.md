@@ -1,9 +1,9 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Acceptance, extension identity, Stop, candidate receipt/executor infrastructure and typed fixes pushed; candidate facade pushed; Core identity/receipts isolated, navigation verified; live and promotion pending.
+Status detail: Acceptance, extension/Core identity, Stop, candidate facade/infrastructure and typed/navigation fixes pushed; durable receipt restart verification and loaded-host identity underway; production promotion/live qualification pending.
 Created: 2026-10-05
-Last updated: 2026-10-06
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: The ordered plan from 2026-10-05 to the polished-MVP deadline of 2026-11-10: what is done, what is held on unmerged branches or dirty trees, what must be integrated and pushed, and the week-by-week work to pass the 30-day plan's Final MVP Acceptance Test. It does not redo intake already recorded in the 2026-10-03 handoff, and it does not itself run live provider calls.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/mvp-final-month-plan.md
@@ -22,10 +22,16 @@ match/mismatch checks, 22/22 owning tests and runner typecheck after integration
 t298 cancellation is integrated as downstream43e5e54b/Core2ee06482. Supervisor
 rebuilt current pair and repeated headed Stop build/run2/2, owning reauthor9/9,
 Core typecheck/build and both integration audits pass. Running Core-server identity
-remains t302. t299 candidate facade is integrated (Core7f9bae15/downstreamcb792dee)
+is integrated/pushed (Corec8501c15/downstream267a4215), after independent
+Core/routes59/59, generator10/10, HTTP15/15 and headed identity/runner61/61.
+Loaded domain host remains t305. t299 candidate facade is integrated (Core7f9bae15/downstreamcb792dee)
 after independent actualservice/API53/53, package/dependentweb types and audits.
 t300 receipt/detached infrastructure is integrated (Core386b4c15)
-with production joins pending. t301 typed readiness is integrated (b2ad00de). No P0 completion
+with production joins pending. t301 typed readiness is integrated (b2ad00de);
+t303 navigation is integrated/pushed ddc8befd after owning114/114 and production
+Chromium1/1. t304 durable ledger passed independent52/52/types/build; literal
+owned child-process termination/restart checks passed2/2 independently.
+No P0 completion
 or fresh A-D qualification is claimed.
 
 **Planning review completed locally 2026-10-06.**
@@ -446,3 +452,49 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Owns: only the named report. No source, shared working docs, git, provider/browser/server commands, baseline or migrations.
 - Definition of done: concrete owner/function table for instruction source/revision saves/deletes, settings, flow/router/subflow/graph reads/writes, publication/revision dependency mutation, caches; show which uses project SQL transaction versus JSON/global projection. Recommend the smallest executable migration phases that do not let an ordinary writer evade CAS, and required restart/concurrency negatives. Distinguish unresolved reader/writer authority from proposed design.
 - Validation: source inspection with paths/function names; no atomicity success claim. Return status, inspected files, own report path and exact unresolved seams.
+
+### Brief: p0-loaded-domain-host-identity (task t305)
+- Repository: paired fxwork/t305/!FluxIQ and !FluxIQWebExtension; main user panel is not managed. Core generic provenance changes remain additive and legacy calls stay usable; missing provenance refuses Lab admission.
+- Task: Attest the actual separately bundled web domain host loaded by the retained Core service, not its latest disk file or extension-bundled domain contracts. Extend t302's authenticated gate with bounded loaded module identity.
+- Required reads: Current State; t302 identity report/modules/tests; domain/scripts/build-web-panel-host.mjs and domain/src/web-panel-host.ts; Core bindNativeNodeRuntime and existing route classification; downstream build-cache domain:host-build, Core-process host loading.
+- Proposed seam: optional immutable generic module build identity on existing trusted native-runtime binding, captured in service-owned registry/WeakMap by focused Core helper. No browser concepts in Core. Preserve method budget. Bound host must register its embedded identity BEFORE any host registration/IO mutation. Rebinding changed loaded identity must refuse; uninstrumented binding must never attest old provenance. Discuss exact owners/design with supervisor before editing.
+- Owns after approval: focused Core build-identity module registry/types/tests, existing native-runtime binding signature/body and diagnostics projection/tests; downstream host build generator/embedded reader/build-cache inputs + owning tests, host registration, Lab expected/verify gate + tests. Own report reports/p0-domain-host-identity.md. New folders require barrels/owning tests. No storage/controller/t304/shared docs/git edits.
+- Definition of done: immutable embedded normalized executable host digest plus source freshness/full matching inventory; intended artifacts independently regenerated; authenticated diagnostic returns actual retained binding; Lab refuses missing, stale, changed artifact/source/registration and retained old host after disk/route reload before chat/provider. Generic diagnostic remains read-only and bounded. Include actual loaded built-host retained/fresh process provider-free proof; use synthetic authenticated transport only if stated. No passing stamp from reading the latest disk on server.
+- Validation: narrow owner tests, affected Core/domain/runner typechecks and structure audit; rebuild owning Core/host/extension artifacts sequentially; precise browser/process/source identity receipts. No full suite, paid Lab, user panel, debugger or fabricated loaded server-adapter claim. Provisioning first; wait for supervisor before frozen checks. Return file inventory/report/commands/limits.
+
+### Brief: p2-receipt-process-restart-probe (task t304 continuation)
+- Repository: paired t304 Core (latest dev merged; root built/check and observed52/52) and own downstream p2-durable-receipts.md.
+- Task: Add a literal owned child-process termination/relaunch fixture for the durable session and real project SQLite ledger; close the reopened-connection-only validation gap. No product changes.
+- Owns: verification/tests/process-restart.test.ts (focused helper under tests if necessary, barrel where required); append only own p2-durable-receipts.md. No service/storage/source/shared docs/git/browser/provider/panel changes.
+- Definition of done: actual built internal session/store imports in owned child process; kill after synthetic command marker is written but before execution-stage commit, restart another child/session with same immutable attempt, assert unknown and no second start/marker. Also kill after actual finish COMMIT before acknowledgement and reconcile original committed draft without re-execution. Inspect persisted status/stages and counters; no accepted promotion or browser/power-loss claim.
+- Validation: independently runnable narrow vitest file + affected package typecheck; bounded child startup/IPC timeouts, cleanup only owned child/temp directories; output bounded packets without original source/page/secrets. Existing build available; source tests excluded from runtime identity. Supervisor repeats before integration.
+
+### 2026-10-07 - Paired identity push and next proofs
+- Agent: Codex supervisor.
+- Changed: t302 pushed downstream267a4215/Corec8501c15. t305 paired tree provision completed0; additive loaded-domain-host provenance work authorized. t304 source merged latest dev, root reviewed controller/store/session/migration and observed owning52/52. Actual child termination/relaunch negatives now assigned before integration.
+- Validation: t302 receipt above; t304 Corecheck0 (37.6s)/build0 (45.5s)/audit0 and owning52/52 (16.5s). Core task lifecycle used --skip-checks solely to avoid forbidden broad suite, after root-observed narrow gates. t305 provisioning completed before any worker edits; no frozen-source test claim from provisioning.
+- Outcome: Partial ordered implementation; no accepting promotion or paid qualification.
+- Follow-up: authoritative topology/source/settings/read/write/publication migration inventory report; domain-host proof; trusted interpreter/start/oracle/command receipts. User asked asynchronously whether to propose ten missing qualification tasks or use an existing omitted list; preserve67scope meanwhile. No user panel managed.
+
+### Brief: p3-meaningful-assert-wait (task t306)
+- Repository: flat fxwork/t306-meaningful-assert-wait; shared Core read-only.
+- Task: Reproduce and correct false-success from missing authored assertion/wait predicates. Focus absent assertion with no target and text assertion/wait with missing/empty expectation; preserve genuine exists/absent and literal text such as null when explicitly authored. Hidden-match/any-match semantics are excluded unless inseparable; report them separately.
+- Required reads: Current State; node backlog row6 and reading audit A1/A2/W1/W5; extension assertion-evaluation, actions assert/wait-for-text/wait conditions and existing tests; domain assertion/wait wire request normalization.
+- Owns after supervisor-approved file list: assertion-evaluation and wait owner(s), domain assertion/wait request normalization only if reachable malformed input currently defaulted; owning unit tests and one provider-free production Chromium probe. Own report reports/p3-meaningful-assert-wait.md and scoped architecture paragraph. No Core/shared docs/git/identity/host/storage/permissions/other-node edits.
+- Definition of done: fail first through actual dispatch where feasible; malformed/no meaningful expectation refused with closed failure and no passed assertion or hanging poll. Valid predicates keep compatible behavior and timeout/state mismatch semantics. Explicit valid text must not be censored by arbitrary string-word bans; assert's contains model cannot use empty substring as real predicate. Blank-value equality requires a real separately supported equality contract, not silent contains-empty.
+- Validation: narrow affected tests/source+test types/audit, three-target build and actual content Chromium fixture with fresh build identities; no provider/fullsuite/userpanel/debugger. Proposed exact owners before edits; wait for supervisor provisioning completion before frozen checks. Return report/commands/limits.
+
+### 2026-10-07 - t304 durable claims and literal restart verified
+- Agent: Codex supervisor.
+- Changed: project-SQL overall/stage claims before effects, bounded immutable binding/receipt joins, authoritative draft read, explicit unsupported promotion; create-all/minimum0 cannot satisfy empty scope. Actual process test is opt-in after owning build.
+- Validation: root52/52 after current-dev merge, Corecheck0/build0/dependentwebcheck0; root actual kill/relaunch2/2 zero skips (6.66s), pending effect never repeated and committed draft reconciled with original receipt/run IDs. Core audit0; task integration audit follows. Initial provisioning overlapping worker source changes was not a frozen-source gate; final checks were on frozen merged source.
+- Outcome: Bounded durable infrastructure verified; production promotion stays unavailable.
+- Follow-up: graph import itself currently writes sequentially; move entire import to actual transaction with injected failure/concurrency regressions, then accepted topology/source/settings/all-writer authority migration. Reports p2-durable-receipts.md and p2-authority-migration-inventory.md preserve source owners/commands and unknowns. No paid runs or user panel.
+
+### Brief: p2-atomic-project-graph-import (task t307)
+- Repository: paired fxwork/t307 Core/downstream; Core storage change, existing public callers compatible. No accepting candidate promotion.
+- Task: Fix confirmed sequential importMonolithicFlowGraph partial-state risk with actual single project SQLite transaction. Make existing Flow upsert accept/use the transaction executor and keep every import SQL operation in that executor; no nested queued database calls/deadlocks.
+- Required reads: Current State; p2-authority-migration-inventory.md graph row; Core instructions; storage/project graph-store/database/unit-of-work and owning graph tests. Inspect all current import callers and transaction nesting before edits.
+- Owns after supervisor-approved exact list: graph-store.ts focused import/upsert executor changes, new owning graph import atomicity test file(s), focused Core storage/architecture paragraph, own downstream reports/p2-atomic-graph-import.md. No service/bootstrap/ledger/schema/shared docs/git/host/t305/publication/source-authority edits.
+- Definition of done: fail-first injected node/edge/region/revision/partition failure leaves no partially imported Flow/revision/entities/indexes; retry imports complete graph rather than false already_imported. Concurrent same-flow imports across real separate SQLite owners result one complete graph; preserve existing graph patch/inverse/ownership semantics and upsert compatibility. Entire already-imported decision+write must be inside transaction. Reconcile cancellation/storage uncertainty truthfully, no success from compile.
+- Validation: owning graph tests and real SQLite fail/reopen/concurrency cases, Core typecheck/owning build and structure audit; bounded fixtures with owned cleanup. Explain transaction boundaries and remaining whole-topology authority gaps. No full suites/provider/browser/userpanel or JSON/global atomicity claim. Proposed owners/caller analysis before edit; provisioning first, root signals ready for frozen checks.

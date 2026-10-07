@@ -138,6 +138,13 @@ export async function evaluateAssertion(request: WebAutomationAssertRequest, tar
 function evaluateOnce(request: WebAutomationAssertRequest, target: AssertionTarget): AssertionAttempt {
   if (request.kind === "url") return urlOutcome(request.expected);
 
+  if (request.kind === "text" && (typeof request.expected !== "string" || request.expected.trim().length === 0)) {
+    return { held: false, expected: "a nonblank text expectation", actual: "the assertion named no meaningful text", verdict: "malformed" };
+  }
+  if (request.kind === "absent" && !target.selector && !target.element) {
+    return { held: false, expected: "an authored target to test for absence", actual: "the action named no selector and no element", verdict: "malformed" };
+  }
+
   const where = target.selector ? `"${target.selector}"` : "the resolved element";
   const found = currentElement(target);
   if (request.kind === "exists") {

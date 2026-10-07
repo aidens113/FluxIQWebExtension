@@ -349,3 +349,32 @@ test("an unscoped selector check still hands the selector over and never resolve
     assert.equal((asked[0] as { selector?: unknown }).selector, action.selector);
   }
 });
+
+test("absent with no authored target does not infer the focused element", async () => {
+  const { deps, asked, resolved } = capturing(() => ({ element: { isConnected: true }, resolution: { strategy: "active-element", candidateCount: 1 } }));
+  await assertAction({ ...action, selector: undefined, assert: { kind: "absent" } }, deps, 100);
+  assert.equal(resolved.length, 0);
+  assert.deepEqual(asked, [{}]);
+});
+
+test("absent preserves authored fingerprint coordinate and visual targets", async () => {
+  const element = { isConnected: true };
+  for (const target of [
+    { element: { tagName: "button" } },
+    { options: { element: { tagName: "button" } } },
+    { coordinates: { x: 10, y: 10 } },
+    { visualTarget: { bounds: { x: 0, y: 0, width: 10, height: 10 } } }
+  ]) {
+    const { deps, asked, resolved } = capturing(() => ({ element, resolution: { strategy: "coordinates", candidateCount: 1 } }));
+    await assertAction({ ...action, selector: undefined, ...target, assert: { kind: "absent" } } as BrowserActionCommand, deps, 100);
+    assert.equal(resolved.length, 1);
+    assert.deepEqual(asked, [{ element }]);
+  }
+});
+
+test("whole-page text with no authored target does not infer a focused field", async () => {
+  const { deps, asked, resolved } = capturing(() => ({ element: {}, resolution: { strategy: "active-element", candidateCount: 1 } }));
+  await assertAction({ ...action, selector: undefined, assert: { kind: "text", expected: "null" } }, deps, 100);
+  assert.equal(resolved.length, 0);
+  assert.deepEqual(asked, [{}]);
+});
