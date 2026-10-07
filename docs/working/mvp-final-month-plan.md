@@ -14,11 +14,14 @@ Related: [30-day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 ## Current State
 
 **Implementation authorized locally 2026-10-06; P0 in progress.** t296 is integrated
-and pushed: downstream `62ceaac8`, Core `6c449022`. Supervisor reran the two changed
+and pushed: downstream acceptance `62ceaac8`, Core `6c449022`; downstream identity
+`2c76ba48` is also pushed. Supervisor reran the two changed
 test files (29/29), the fluxiq typecheck and Core structure audit; downstream task
-integration audit passed. See the acceptance report and ledger. t297 running-build
-identity, t298 cancellation and t299 feature-flagged candidate authoring remain in
-isolated trees. No P0 completion or fresh A-D qualification is claimed.
+integration audit passed. The identity slice passed independent production Chromium
+match/mismatch checks, 22/22 owning tests and runner typecheck after integration.
+Running Core-server identity remains pending. t298 cancellation, t299 candidate
+authoring/facade and t300 requirement receipts remain isolated. No P0 completion
+or fresh A-D qualification is claimed.
 
 **Planning review completed locally 2026-10-06.**
 The [consultant review and revised execution detail](./mvp-final-month-plan/consultant-revision.md)
@@ -40,8 +43,9 @@ when build confirmation is requested and refuses unsupported held-repair topolog
 before applying or dispatching. Desired-state check and persistent
 locator fingerprints already exist; their implementations need refinement. The
 Lab already resets before persisted playback and checks exact zero-call reuse.
-Its cached-worker deletion is wired, but running-worker build identity is missing.
-No fresh product behavior was executed in this review.
+Its cached-worker deletion is wired; t297 now asserts actual background/top-frame
+content identity before Lab dispatch. The planning audit performed no product
+checks; later implementation/browser proofs are recorded in the ledger.
 
 **Evidence correction.** Affected cached workers leave recent background fixes
 unproven live; historical page outcomes and replay receipts remain evidence of
@@ -190,6 +194,13 @@ not pending implementation assignments; the next brief is P0 in the revision.
 Historical briefs: [Claude schedule and task briefs](./mvp-final-month-plan/archive/2026-10-06-pre-consultant-schedule-and-briefs.md).
 
 ## Work Ledger
+
+### 2026-10-06 - Identity integrated; candidate and Stop proofs advance
+- Agent: Codex supervisor.
+- Changed: t297 merge `2c76ba48` pushed; t299 Core local commit `0b5d7543` and downstream `467bb74f` hold static candidate/discovery plus separate unverified draft storage. t299 is not merged or pushed because facade/API must read the new flag atomically. t300 receipt worker and navigation/gaps report worker active.
+- Validation: t297 supervisor post-merge real Chromium production probe and negatives 22/22; digest 1/1; runner check exit 0 and task finish audit pass. t299 supervisor candidate loop 7/7, request parser 6/6, JSON/SQLite draft storage 3/3; fluxiq check/audit pass. Worker isolated real build Stop proof returned, independent rerun and active-run browser proof pending.
+- Outcome: Partial.
+- Follow-up: t298 current-dev integration/cancel checks, serial t299 facade/durable unverified response, t300 exact execution/evidence/promotion adapter. No paid calls. Core `7717ff42` fixes ledger validation format and remains local until next paired push. Current source catalog has 57 tasks versus planned 67; audit reconciliation must preserve the missing scope explicitly.
 
 ### 2026-10-06 - t297 running-extension identity independently verified
 - Agent: Codex supervisor.
