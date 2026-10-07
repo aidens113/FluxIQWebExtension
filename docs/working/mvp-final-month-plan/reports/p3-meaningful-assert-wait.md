@@ -1,5 +1,5 @@
 # P3 meaningful assert and wait
-Status: Completed ? worker claims awaiting supervisor review
+Status: Independently verified; integration pending
 Task: t306
 Worker: p0_build_identity
 Date: 2026-10-07
@@ -12,7 +12,7 @@ Approved ownership and provisioning completed (shared Core dc5c1aa2 read-only). 
 
 assertion-evaluation evaluateOnce guards exists with no target but absent has no matching guard; no target produces held:true. Text request falls through expected??empty, then includes(empty) is true on any page. Gateway preserves missing/empty expectation rather than synthesizing real text; content boundary can validate without changing domain normalization.
 
-wait-conditions requireText already throws missing/empty text. Its truthiness guard permits whitespace-only strings, which can match rendered normalized page spacing. This is a hypothesis awaiting actual dispatch negative; no assertion that missing/empty currently passed. Literal null can be a real page substring and must remain supported.
+wait-conditions requireText already throws missing/empty text. Its truthiness guard permits whitespace-only strings, which can match rendered normalized page spacing. The dispatch regression below reproduced whitespace-only success; missing/empty waits already refused. Literal null can be a real page substring and must remain supported.
 
 ## Validation ledger
 
@@ -52,3 +52,7 @@ The production fixture loads the actual unpacked extension on isolated local HTT
 Literal words are not censored: null is positively exercised. Missing/empty wait text already refused before this change; only trim-empty wait guard is new. Blank equality is not added: the existing assertion is contains, so empty substring cannot become equality proof. Valid state mismatch/timeout behavior remains in existing tests. No hidden first-match, any-match, shadow-page-text, selector semantics or observer policy expansion.
 
 Read inventory: current working state/brief, node backlog6 and reading A1/A2/W1/W5; extension assertion-evaluation, assert action/target/dependencies/tests, wait conditions/engine/text action, actual execute dispatcher and target resolver; domain gateway-action-parameters/gateway-mapping/action wire types; production runtime harness/fixture/config and prior content assertion/wait fixture seams. Written owners only: assertion-evaluation + owning test; wait-conditions + new owning test; actions/assert + owning test; new production probe; scoped web-capabilities paragraph; this report.
+
+## Supervisor verification
+
+Current dev (including t304) merged before independent checks. Five owning ESM/external-package bundles passed33/33; extension source/test typechecks, structure audit and all three22-file target builds passed. Supervisor reran the actual unpacked Chromium fixture:1/1 passed17.2s (fixture15.5s), including seven malformed failures without polling and four valid predicates. This verifies the content dispatch on an isolated fixture, not domain-gateway playback, real sites, Firefox/Edge or paid qualification. No user panel or providers used.
