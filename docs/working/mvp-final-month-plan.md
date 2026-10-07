@@ -57,7 +57,7 @@ t337 (grammar for one sentence family) are WIP commits on their own branches, no
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
 **In flight.** t340 candidate trial runner, judge and promotion (slice U2, Core);
-t344 Lab panel build serves Core's real identity (blocks every Lab run); t342 live lane A
+t344 Lab panel build serves Core's real identity (blocks every Lab run); t345 Lab refuses non-realistic scenarios; t342 live lane A
 baseline in legacy mode (lead, one supervised run, debug, report only).
 
 **Next order.**
@@ -137,6 +137,14 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
+
+### Brief: t345 the Lab refuses scenarios outside the ten realistic ones
+- Worker: t345-realistic-only (worker). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t345\!FluxIQWebExtension` (branch `task/t345-lab-realistic-scenarios-only`). Report: `docs/working/mvp-final-month-plan/reports/t345-lab-realistic-scenarios-only.md` in that tree.
+- User rule (pinned, 2026-09-29): every Lab or browser test run, live or provider-free, LLM or not, uses only the ten realistic scenarios: everything-store, crossborder-marketplace, bigbox-retail, job-board, local-classifieds, auction-marketplace, photo-social, social-network-feed, company-website, professional-network. On 2026-10-07 a lead ran `node scripts/lab/run-lab.mjs run basic-form --flow` because nothing refused it; only `extension-chat-check/run-chat-check.ts:18` checks a private copy of the list.
+- Goal: one exported list with one owner (propose it; the scenario-lab package or the test-runner), and every Lab launch entry refuses any other scenario before starting anything, with a message that names the rule and the ten: `run-lab` run, interactive, replay and pair; the live campaign's selection; ui-e2e, demo-workspace and bench launches if they open a browser. `run-chat-check.ts` uses the shared list. Unit tests and fixtures that never launch a browser stay allowed.
+- Owns: the new list module; `packages/test-runner/src/cli.ts` and the launch entry files you find (list them in the report before editing); `extension-chat-check/run-chat-check.ts`; their tests; the testing-facility doc's scenario section.
+- Must not touch: `packages/test-runner/src/core-web-build/**` and `scripts/lab/live-campaign/lab-run/**` (t344 owns them); product source; `docs/working/*.md`. No commits; no Lab or browser runs (prove it with unit tests).
+- Definition of done: fail-first tests that `basic-form` and another non-realistic scenario are refused at each entry before any process starts, and the ten are admitted; test-runner build, owning tests and structure audit pass. List any existing test, script or command that the guard now refuses.
 
 ### Brief: t344 Lab-built Core panel serves its real build identity
 - Worker: t344-lab-identity (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t344\!FluxIQWebExtension` (branch `task/t344-lab-core-identity`, shared Core). Report: `docs/working/mvp-final-month-plan/reports/t344-lab-core-identity.md` in that tree.
