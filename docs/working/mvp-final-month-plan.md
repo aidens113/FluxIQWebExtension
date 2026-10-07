@@ -158,6 +158,11 @@ Active file-owned tasks only. Prior briefs and exact receipts are preserved in t
 - Test actual default factory/global DB plus project claims: two-owner allocation/mutation race, foreign replacement/publication owner, missing/delete/recreate/tombstones, pre-opened object mode check, partial claim/effect/COMMIT-lost reconciliation, literal child kills, nested outer claim retention, unseeded/custom unsupported paths and old rows unchanged. Freeze narrow types/build/audits for root independent review; no panel/providers/fullsuite/user data or git.
 - Own downstream p2-canonical-owner-routing.md and scoped Core persistence paragraph. Detailed closed contracts/limits approved before source release. Adoption/activation/common promotion remains disabled.
 
+### Brief: runtime gateway event authority (supervisor serial slice)
+- Supervisor-owned paired task: Core runtime/client-gateway-transport.ts and existing runtime/tests/client-gateway-transport.test.ts; scoped Core client-gateway architecture paragraph and downstream reports/p2-runtime-gateway-event-authority.md. No worker overlap, executor/facade/context propagation or activation.
+- Stop forwarding compatibility client.action_result as authoritative runtime command.result; retain gateway diagnostic events and runtime state/client lifecycle events. Awaited dispatch remains the sole result input to RuntimeService's authoritative result event. Document public observer compatibility effect.
+- Fail-first unsolicited/late/duplicate result tests; awaited dispatch failure/cleared-wait preservation and actual RuntimeService exactly-one completion test. Narrow owning tests/direct Core types/build only if needed, structure audits; no panel/providers/full suites. This closes event authority only, not whole-run durability.
+
 ## Work Ledger
 
 Earlier verified units, decisions and ledger detail moved intact to the [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
