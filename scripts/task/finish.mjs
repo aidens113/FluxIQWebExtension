@@ -31,10 +31,11 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { processesUsingRoots, readSideState, removeWorktree, runGit, runPnpm } from "../worktree/index.mjs";
 import { withoutProviderSecrets } from "../provider-secret-environment.mjs";
+import { checkCoreCurrent } from "./core-currency.mjs";
 import { locateTask } from "./locate.mjs";
 import { pairedCore } from "./paired-core.mjs";
 
-export async function finishTask({ repositoryRoot, coreRepositoryRoot, id, integrationBranch = "dev", skipChecks = false, fullCheck = false, allowRunning = false, dryRun = false, title }) {
+export async function finishTask({ repositoryRoot, coreRepositoryRoot, id, integrationBranch = "dev", coreIntegrationBranch = "dev", skipChecks = false, fullCheck = false, allowRunning = false, dryRun = false, title }) {
   const task = await locateTask(repositoryRoot, id);
   const workRoot = task.worktree?.root ?? repositoryRoot;
 
@@ -61,7 +62,18 @@ export async function finishTask({ repositoryRoot, coreRepositoryRoot, id, integ
     why: `Task ${id} also has a branch in Core. Finish it there, in ${coreRepositoryRoot}, so Core's own checks run against Core's own merge. This side is finished first because its checks build against that worktree.`
   };
 
-  if (dryRun) return { id, branch: task.branch, worktree: task.worktree?.root ?? null, core: pairing, applied: false };
+  // The Core this tree builds against must contain Core's `dev` before any
+  // gate runs, or the gate -- and the narrow checks run before finish --
+  // measured an old Core (`core-currency.mjs`). Decided before the dry-run
+  // return so a dry run refuses exactly as the real one would, and before
+  // anything moves. A paired task's Core is its own branch, so this also
+  // requires that branch to contain Core's `dev`. --skip-checks does not waive
+  // it: it skips the gate, not the question of what the work was checked against.
+  const coreCurrency = await checkCoreCurrent({ workRoot, coreRepositoryRoot, coreIntegrationBranch });
+  if (coreCurrency?.refusal) throw new Error(`Task ${id} was not finished. ${coreCurrency.refusal}`);
+  const coreChecked = coreCurrency === null ? null : { root: coreCurrency.root, head: coreCurrency.head, target: coreCurrency.target };
+
+  if (dryRun) return { id, branch: task.branch, worktree: task.worktree?.root ?? null, core: pairing, coreChecked, applied: false };
 
   if (!task.worktree && mainBranch !== task.branch) {
     await runGit(repositoryRoot, ["checkout", task.branch]);
@@ -81,14 +93,14 @@ export async function finishTask({ repositoryRoot, coreRepositoryRoot, id, integ
   if (task.worktree) {
     const busy = await processesUsingRoots([task.worktree.root]);
     if (busy.length > 0 && !allowRunning) {
-      return { id, branch: task.branch, merged: subject, validation, worktree: task.worktree.root, removed: false, core: pairing, note: `Merged, but ${busy.length} process(es) are still running under the worktree, so it was left in place. Remove it with "pnpm task abandon ${id}" once they exit, or pass --allow-running.`, applied: true };
+      return { id, branch: task.branch, merged: subject, validation, worktree: task.worktree.root, removed: false, core: pairing, coreChecked, note: `Merged, but ${busy.length} process(es) are still running under the worktree, so it was left in place. Remove it with "pnpm task abandon ${id}" once they exit, or pass --allow-running.`, applied: true };
     }
     await removeWorktree({ repositoryRoot, root: task.worktree.root, allowRunning });
   }
 
   await runGit(repositoryRoot, ["branch", "-d", task.branch]);
 
-  return { id, branch: task.branch, merged: subject, validation, worktree: task.worktree?.root ?? null, removed: Boolean(task.worktree), core: pairing, applied: true };
+  return { id, branch: task.branch, merged: subject, validation, worktree: task.worktree?.root ?? null, removed: Boolean(task.worktree), core: pairing, coreChecked, applied: true };
 }
 
 async function audit(workRoot) {

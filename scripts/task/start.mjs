@@ -17,6 +17,7 @@ import { stat } from "node:fs/promises";
 import { applyMove, assertDisposable, buildCore, copyEnvLocal, coreDistPaths, createWorktree, planSharedCoreMove, readSideState, runGit, runPnpm, writeMarker } from "../worktree/index.mjs";
 import { withoutProviderSecrets } from "../provider-secret-environment.mjs";
 import { taskBranchName } from "./branch-name.mjs";
+import { checkCoreCurrent } from "./core-currency.mjs";
 import { resolveTaskRoots } from "./roots.mjs";
 import { nextTaskId } from "./task-id.mjs";
 
@@ -76,6 +77,12 @@ export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, work
     } else {
       moved = await moveSharedCore(created.coreRoot, { repositoryRoot, coreFrom, env });
     }
+    // The move above (or the paired branch made at Core's `dev`) should leave
+    // the Core this worktree builds against containing Core's `dev`; this proves
+    // it rather than assuming it, so a task never starts its work against an
+    // old Core (`core-currency.mjs`). Only a defect in the move can trip it.
+    const coreCurrency = await checkCoreCurrent({ workRoot: created.root, coreRepositoryRoot, coreIntegrationBranch: coreFrom });
+    if (coreCurrency?.refusal) throw new Error(`Task ${id}'s worktree was created at ${created.root} but its Core is not current, so it was not built. ${coreCurrency.refusal}`);
 
     // The workspace's own packages need building for the same reason Core does:
     // every `dist/` is gitignored, so a fresh worktree resolves
