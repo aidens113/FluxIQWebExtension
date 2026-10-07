@@ -56,7 +56,7 @@ hardening. In-flight t334 (click executor), t335 (installer, never compiled) and
 t337 (grammar for one sentence family) are WIP commits on their own branches, not
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
-**In flight.** t354 candidate build survives an unusable reply and accounts for its spend (blocks the next candidate probe).
+**In flight.** t342 round 4, lane A candidate-mode probe with t354's retry and spend fix (lead, live).
 
 **Next order.**
 
@@ -474,6 +474,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: `run-muyqgopm-1bfa7054`, candidate mode, admitted 23:22 UTC, dry run showed `trialRunner` and `startReset` true. Exploration was clean (16 decisions, no refused submissions, trials or completions) and the person's own words were saved (t349 confirmed live). The model then wrapped a complete `core.submit_candidate` call as `"kind":"callId"`, and that one reply ended the build before any candidate reached Core: no trial, judge, promotion or playback ran. Causes C1 (no unusable-reply retry in the candidate loop), C2 (wrong failure stage and words), C3 (a failed candidate build carries no spend, so the ceiling read $0) go to t354. Versus round 2 legacy: 18 calls and $0.021 against 38 and $0.057, but no outcome to compare yet. UI: Stop button and overlay placement now right; click cards still name no control and "Reading your instruction gave no answer" reappeared.
 - Validation: lead's run evidence: candidate dry run ready with 0 calls and `candidateTrial {trialRunner:true, startReset:true}`; live run 18 calls, $0.020980, `flow_bootstrap.unexpected_error`; no Lab processes left. Supervisor confirmed `unusableDecisions` appears only in the legacy loop options (`runtime/service.ts:1596`).
 - Limits: the trial runner, start-hook reset, trial judge, promotion and chat apply are still unexercised live. Lab slot 2 stays with t342; its `unchanged` guard refuses until source changes.
+
+### 2026-10-07 - t354 merged: candidate builds retry unusable replies and carry their spend; round 4 launched
+- Changed: Core `0c53a16c`, downstream `ea2366b9`, both pushed. Legacy and candidate loops build their unusable-reply retry and stall handling from one helper (`service/flow-bootstrap-commands/unusable-decisions.ts`); C2 and C3 shared one cause (the unusable error escaped while the stage was still `provider_request`, dropping stage and spend), so a candidate that keeps getting unusable replies now ends as `evidence_unusable_decision` at `provider_output_validation`, and every failed build carries its whole spend (`failure-spend.ts`). Lane A round 4 (candidate probe with the fix) launched on t342 trees synced to these heads.
+- Validation: supervisor on the merged t354 trees: Core vitest over flow-bootstrap-commands, flow-bootstrap, candidate-trial, conversations, llm, service-bootstrap, api -> 351 files, 3763 passed, 2 skipped; Core tsc exit 0; Core audit exit 0; test-runner built against it, creation and chat tests 155 pass, 0 fail.
+- Limits: a stalled candidate does not keep its latest submission as a draft; the purse counts a call that got no answer at the amount it held, so it can read slightly above the failure's spend.
 
 ## Open Questions
 
