@@ -1,3 +1,4 @@
+import { BUILD_IDENTITY_MESSAGE } from "../shared/build-identity";
 import { RUNTIME_MESSAGES } from "../shared/constants";
 import { browserDescriptor, defaultSettings } from "../shared/browser";
 import type { ExtensionStatus, FluxIQSettings, RecordingEventPayload } from "../shared/protocol";
@@ -10,7 +11,7 @@ import { clearExtractionTab, handleExtractionControl } from "./extraction";
 import { isControlPage } from "./control-page";
 import { AutoConnect, handlePanelControl, panelControlDeps, sessionDisconnectMemory, ToolbarIndicator } from "./panel";
 import { callCoreProgram } from "./connection/index";
-import { handleReportProblem, localProblemLogStore, ProblemLog, ProblemNoticer, type ReportProblemDeps } from "./diagnostics";
+import { readBuildIdentity, handleReportProblem, localProblemLogStore, ProblemLog, ProblemNoticer, type ReportProblemDeps } from "./diagnostics";
 import { browserReconnectAlarms, RECONNECT_ALARM_NAME, ReconnectWatchdog } from "./reconnect-watchdog";
 import { handleAutomationRelay, type AutomationRelayDeps } from "./automation-relay";
 
@@ -144,8 +145,9 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
 });
 
 async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.MessageSender): Promise<unknown> {
-  const manager = await getConnection();
   const typed = message as { type?: string; [key: string]: unknown };
+  if (typed.type === BUILD_IDENTITY_MESSAGE) return readBuildIdentity({ tabId: typed.tabId }, sender);
+  const manager = await getConnection();
 
   const scriptedNavigation = await handleScriptedNavigationControl(typed, sender, manager);
   if (scriptedNavigation.handled) return scriptedNavigation.response;

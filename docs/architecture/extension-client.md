@@ -221,6 +221,16 @@ is missing. The panel's settings show it as "Report a problem":
 it copies the report and offers it as a file. What it holds and withholds is in
 [sensitive values](sensitive-values.md#problem-reports).
 
+The internal `fluxiq.buildIdentity` diagnostic is also control-page-only. A
+numeric tab id addresses frame zero, which responds only from the active content
+instance. The reply contains immutable build identities for background/content,
+without connecting to Core or reading settings, pairing tokens or page data.
+The build embeds the exact input digest, target, version and protocol marker into
+each bundle and writes the same identity into `build-info.json`; runtime fetches
+of that file would conceal stale workers and are deliberately avoided. The Lab
+uses this handshake before model work. Core/domain input digests cover only
+browser-reached contracts, not the running server.
+
 ## Panel Relays
 
 The panel's automation and recording requests (`AUTOMATION_PANEL_MESSAGES` in `shared/protocol.ts`, the
