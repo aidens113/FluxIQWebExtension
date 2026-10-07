@@ -134,14 +134,6 @@ Active file-owned tasks only. Prior briefs and exact receipts are preserved in t
 
 
 
-### Brief: original-writer-coverage (t322, read-only discovery)
-- Worker: p0_build_identity. Main checkout task/t322-original-writer-coverage; no source/build/test/git/shared doc edits. Own only reports/p2-original-project-writer-coverage.md. Read Current State and reports/p2-original-project-authority-review.md exact checklist.
-- Investigate actual Core source in sibling MAIN !FluxIQ read-only; do not use stale flat task buddy. t320 foundation still isolated/unintegrated; do not assume production guards exist.
-- Enumerate actual original-project SQL, global canonical/resource, file/projection/private repair and public facade writer entrypoints, ownership routing and pin readers. Distinguish whole-operation effect boundaries from nested TX/repair reads; identify bypasses, missing/deleted resource routing and injectable ports.
-- Propose smallest coherent next implementation partition with exact existing/new paths and closed interfaces. Canonical global companion owner protocol must preserve original IDs and tombstones, bounded scopes, atomic allocation and owner joins; no caller-selected project authority, marker/TTL/readonly-open proof.
-- Identify actual graph/source/settings/membership capture inputs, unsupported dependencies and mandatory old-process drain; no adoption endpoint or alternative namespace. Provide source evidence and concrete provider-free verification matrix, including two-process races/kill boundaries/foreign-resource and >100 membership tests.
-- Write concise report with findings/unknowns/limitations and candidate first partition; no implementation or executable proof claim. Return exact paths and unresolved design decisions for supervisor review.
-
 ### Brief: command-run-admission (next paired unit, provision/source HOLD)
 - Worker: p0_acceptance. Exact next task id assigned after t317 integration; Core/downstream pair required. Read Current State and reports/p2-command-production-context-review.md. No source until READY/exact closed contracts approved.
 - Own new Core runtime/service/command-run/{contracts,controller,index}.ts/tests/controller.test.ts; storage/project/command-ledger/{contracts,store,index}.ts, new admission.ts and owning admission/run-fence tests; unit-of-work.ts + owning unit-of-work.test.ts optional trusted validateAdmission(sql). Own downstream p2-command-run-admission.md; one scoped Core client-gateway architecture paragraph.
@@ -265,6 +257,12 @@ Earlier verified units and decisions moved intact to the [execution archive](./m
 - Changed: explicit opaque stored-session/private-pool gateway claim-before-send/receipt-before-result and orderly shutdown; original-ID separate durable legacy writer/capture claims, full historical joins, revision CAS and trusted read-only owner release. Exact reports retain fail-first and scope limits.
 - Follow-up: t322 read-only actual all-writer/global owner/pinned reader coverage. Next command-run foundation requires atomic scan+claim before replay/insertion, private incarnation-owned consumption evidence, sticky unknown, conservative receipt-only restart refusal. Serial actual executor/domain/bridge propagation and recovery/resume fences remain mandatory; neither foundation closes P2.
 - Limits: no all-writer, original capture/adoption/accepted promotion or model/live qualification; no panel/provider/fullsuite. Active worker discovery remains source read-only.
+
+### 2026-10-07 - t322 concrete writer coverage reviewed
+- Validation: source/report review only, including actual global canonical wrapper and existing project UoW transaction boundary. No executable all-writer/atomicity proof. Exact read inventory/unknowns and future race/kill matrix in reports/p2-original-project-writer-coverage.md. Documentation structure audit is the integration gate.
+- Finding: canonical global rows lack stable project owner/tombstone; whole saves span global SQL/project SQL/files, and repair reads/direct SQL/publication/delete paths bypass a facade-only guard. Existing bootstrap pages all100-sized batches; do not invent a blanket first100 defect. Project directory deletion can erase local coordination, requiring surviving global tombstone.
+- Decision: next original-owner partition remains contract review/source HOLD until actual t320 interface and default physical global DB transaction binding verified. Supported Flow/publication scope alone cannot claim policy/all-writer coverage. No activation/adoption endpoint before whole-operation writers, direct SQL/files, nonrepair complete capture, pinned readers/compiler/dependencies and execution/promotion join.
+- Follow-up: close read-only unit, integrate verified t317/t320 pairs, then provision closed one-effect run admission and original global owner slice. Actual Next authorization remains pending; no panel/provider/fullsuite.
 
 ## Open Questions
 

@@ -725,3 +725,14 @@ Earlier entries: [Claude implementation and handoff ledger](../../mvp-final-mont
 - Narrow real SQLite two owners/concurrent legacy-vs-capture, preclaim rollback zeroeffects, uncertain synthetic multi-store sentinel, revision/key conflicts/corrupt/borrowed receipts; literal child kill after external sentinel+pending and aftercompletion beforeack then reopen/no repeat. Provider-free explicit probe; source/e2etypes/owning build/audits, no fullsuite/panel/user data. Freeze then root independently reviews/runs.
 - One-time old uninstrumented writer drain remains separate authorization/deployment gate; no code can attest it from marker/PID/TTL. No actual original-project authority/candidate acceptance claim from this foundation.
 
+
+## Retired t322 discovery brief
+
+### Brief: original-writer-coverage (t322, read-only discovery)
+- Worker: p0_build_identity. Main checkout task/t322-original-writer-coverage; no source/build/test/git/shared doc edits. Own only reports/p2-original-project-writer-coverage.md. Read Current State and reports/p2-original-project-authority-review.md exact checklist.
+- Investigate actual Core source in sibling MAIN !FluxIQ read-only; do not use stale flat task buddy. t320 foundation still isolated/unintegrated; do not assume production guards exist.
+- Enumerate actual original-project SQL, global canonical/resource, file/projection/private repair and public facade writer entrypoints, ownership routing and pin readers. Distinguish whole-operation effect boundaries from nested TX/repair reads; identify bypasses, missing/deleted resource routing and injectable ports.
+- Propose smallest coherent next implementation partition with exact existing/new paths and closed interfaces. Canonical global companion owner protocol must preserve original IDs and tombstones, bounded scopes, atomic allocation and owner joins; no caller-selected project authority, marker/TTL/readonly-open proof.
+- Identify actual graph/source/settings/membership capture inputs, unsupported dependencies and mandatory old-process drain; no adoption endpoint or alternative namespace. Provide source evidence and concrete provider-free verification matrix, including two-process races/kill boundaries/foreign-resource and >100 membership tests.
+- Write concise report with findings/unknowns/limitations and candidate first partition; no implementation or executable proof claim. Return exact paths and unresolved design decisions for supervisor review.
+
