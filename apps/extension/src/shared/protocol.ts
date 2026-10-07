@@ -234,6 +234,8 @@ export type PanelConversationAnswerRequest = {
 export type PanelStopRunRequest = {
   projectId?: string | undefined;
   runId?: string | undefined;
+  /** Stops an active build of this Flow. Mutually exclusive with runId. */
+  flowId?: string | undefined;
 };
 
 /** `panelSaveSettings`: settings to store without connecting. */

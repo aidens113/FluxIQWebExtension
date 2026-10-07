@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: P0 acceptance fences integrated and pushed in both repositories; identity, cancellation and candidate authoring in isolated task trees; P0 live readiness and later gates pending.
+Status detail: Acceptance, extension identity and Stop integrated; Core runtime identity and candidate authoring/execution still isolated; live readiness and promotion pending.
 Created: 2026-10-05
 Last updated: 2026-10-06
 Owner: Senior supervisor agent
@@ -19,8 +19,11 @@ and pushed: downstream acceptance `62ceaac8`, Core `6c449022`; downstream identi
 test files (29/29), the fluxiq typecheck and Core structure audit; downstream task
 integration audit passed. The identity slice passed independent production Chromium
 match/mismatch checks, 22/22 owning tests and runner typecheck after integration.
-Running Core-server identity remains pending. t298 cancellation, t299 candidate
-authoring/facade and t300 requirement receipts remain isolated. No P0 completion
+t298 cancellation is integrated as downstream43e5e54b/Core2ee06482. Supervisor
+rebuilt current pair and repeated headed Stop build/run2/2, owning reauthor9/9,
+Core typecheck/build and both integration audits pass. Running Core-server identity
+remains t302; t299 candidate facade, t300 requirement receipts/detached executor
+and t301 typed readiness remain isolated. No P0 completion
 or fresh A-D qualification is claimed.
 
 **Planning review completed locally 2026-10-06.**
@@ -113,6 +116,24 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 ## Worker Briefs
 
+### Brief: p2-detached-execution (continues task t300)
+- Repository: paired t300 !FluxIQ / !FluxIQWebExtension. Verification controller source frozen and independently reviewed/tested before this continuation.
+- Task: Add an actual detached-topology executor adapter for canonical submitted candidates using existing normalizeAutomationStudioFlowBuildPlan, routeAutomationStudioRun and runCanonicalAutomationStudioFlow; no graph/adaptation apply or accepted storage write. Preserve normal registry/runtime/effect permissions and host routing state.
+- Required reads: t300 verification report/identity/start/execute contracts; existing bootstrap normalization/validation; route-state/router-state.ts; composite-executor.ts/executor.ts owning tests; native node/effect runtime options used by service.ts; held-candidate limits.
+- Owns: new flow-bootstrap/verification/detached-execution.ts + owning tests and verification barrel; own reports/p2-detached-execution.md downstream. Existing verification controller/contracts only for a concrete adapter incompatibility, report before edit. No service/API/other barrel/storage changes.
+- Definition of done: execute actual representative multi-node canonical topology without persistence using real router/graph executor, pure mocked native/effect boundaries only; changed selected graph is exactly submitted candidate, other graph not read from accepted store. Ownership/topology/registry errors, absent host state, cancellation/partial execution/waiting fail closed; no recovery that applies before judgement. Static validity alone insufficient. Provide precise trace-to-receipt command/subject/provenance integration contract; do not infer performed lasting action from succeeded node alone.
+- Must not touch: shared/main docs, t299 tree/source, cancellation/UI, runtime data; no gitmutation/provider/full suites. No blanket authorize flag or stub runtime replacing real executor. Unsupported topology safely draft/refused with reason.
+- Report: t300 docs/working/mvp-final-month-plan/reports/p2-detached-execution.md; actual runtime tests/limits and serial facade integration seam.
+
+### Brief: p3-typed-browser-readiness (task t301)
+- Repository: isolated C:/Users/osrs_/FluxStuff/fxwork/t301-typed-browser-readiness; shared sibling Core read-only.
+- Task: Reproduce then fix three shared browser blockers: controlled desired-state checkbox/radio, in-place Next-page rerender/ended distinction, type(submit:true) committing declaration parity. Preserve actionability, sensitive evidence and no blind mutating retry.
+- Required reads: this Current State/revision P3; node-catalog interaction/reading reports; exact checkable-state/check action and owning browser tests; pagination list-change/Next execution/tests; domain plan-resolution step-permission/type parameters/existing tests. Discover exact Next owners before editing and send file list.
+- Owns: checkable-state.ts/check.ts and owning regression/browser fixtures/tests; Next list-change/continuation modules and owning tests; domain step-permission.ts and owning tests; scoped authored web-capabilities docs; own reports/p3-typed-browser-readiness.md in task tree. No Core/shared protocols/Stop/identity/facade source.
+- Must not touch: main/shared docs, other trees, Core, runtime/user data; no git mutation/provider/full suites. Wait provisioning completion before source edit; no debugger input fallback.
+- Definition of done: controlled components update application state, already-correct check has no click, unchecked radio refused, revert readback fails; Next changing text in existing rows advances once, unchanged/disabled/ended remain truthful and bounded; submit type requires explicit consequences through same Core gate, unsent type preserves contract. Fail-first owning regressions and provider-free real production/browser fixture proofs; touched typechecks/audit.
+- Report: docs/working/mvp-final-month-plan/reports/p3-typed-browser-readiness.md; include before/after, exact commands, browser/target and limitations.
+
 ### Brief: p2-candidate-evidence (task t300; supervisor until a worker is free)
 - Repository: paired C:/Users/osrs_/FluxStuff/fxwork/t300/!FluxIQ and !FluxIQWebExtension.
 - Task: Implement domain-neutral immutable requirement/evidence receipt contracts and fail-closed candidate acceptance controller; later wire the serial facade after t298/t299 integration. Preserve canonical graph/runtime/persistence ownership.
@@ -195,6 +216,20 @@ Historical briefs: [Claude schedule and task briefs](./mvp-final-month-plan/arch
 
 ## Work Ledger
 
+### 2026-10-06 - Requirement controller independently checked; detached execution follows
+- Agent: Codex supervisor.
+- Validation: reviewed t300 contracts/controller/predicates; supervisor owning tests 31/31. Worker fluxiq typecheck/audit passed; intent interpreter, browser observation and durable atomic promotion are explicitly absent.
+- Changed: written continuation brief for real router/executor adapter; t299 static authoring remains isolated until atomic facade integration.
+- Outcome: Partial.
+- Follow-up: actual detached runtime proof; supported create currently new-result identity only, existing-subject quantity deltas stay unsupported/unknown rather than relabelled ensure. No paid launch.
+
+### 2026-10-06 - Typed shared blocker task prepared
+- Agent: Codex supervisor.
+- Changed: t301 bounded brief; isolated downstream provisioning started session 72014; worker assignment follows completed navigation/gaps reports.
+- Validation: source inspected check/type/permission boundaries; no fix or live behavior claimed yet. t299 candidate module and unverified store committed locally with checked architecture/report updates, pending atomic facade integration.
+- Outcome: Partial.
+- Follow-up: reproduce controlled check, in-place Next and submit declaration parity; qualify with narrow browser regressions. Preserve all existing safety/actionability gates.
+
 ### 2026-10-06 - Identity integrated; candidate and Stop proofs advance
 - Agent: Codex supervisor.
 - Changed: t297 merge `2c76ba48` pushed; t299 Core local commit `0b5d7543` and downstream `467bb74f` hold static candidate/discovery plus separate unverified draft storage. t299 is not merged or pushed because facade/API must read the new flag atomically. t300 receipt worker and navigation/gaps report worker active.
@@ -272,3 +307,47 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Script channel, store eligibility and Firefox parity need a concrete feasibility result. Preserve no-debugger JS and requests-OFF policy meanwhile.
 - Direct-request origins/session/redirect policy needs a concrete design; do not inherit the old any-origin default as authorization.
 - Who runs the Phase 6 release-candidate script as the "person unfamiliar with FluxIQ"? Owner: user.
+
+### Brief: p0-core-runtime-identity (t302)
+- Mode: Execute Plan With Workers; worker never declares mode.
+- Task: close the running Core-server identity gap before Lab paid dispatch.
+- Trees: C:/Users/osrs_/FluxStuff/fxwork/t302/{!FluxIQ,!FluxIQWebExtension}; paired task/t302-core-runtime-identity.
+- Read: this Current State, consultant-revision P0, p0-build-identity report, repository boundaries and Core instructions/working Current State.
+- Own: new focused Core build/runtime identity module and authenticated restricted diagnostic route; paired Lab preflight/identity gate and owning tests; architecture identity paragraphs; own reports/p0-core-runtime-identity.md only.
+- Inspect first and send exact existing files before editing shared router/protocol modules.
+- Expected: embed immutable executing Core build identity, compare reached contract digest and expected built artifact before any provider/chat dispatch; changed disk alone must not masquerade as restarted server.
+- Refuse missing/stale/mismatched actual server identity; never return secret keys, storage, page data or tokens.
+- Use existing authenticated downstream route. No new broad privilege, public unauthenticated diagnostic or source-only handshake.
+- No provider calls, user panel management, full suites, git mutation or shared document edits.
+- Provider-free owning negatives plus isolated server/browser proof; narrow package typechecks and structure audit.
+- Return exact source paths/checks/limits in own report. Supervisor reviews, integrates and independently verifies.
+
+### 2026-10-06 - Serial facade and remaining P0 identity assigned
+- Agent: Codex supervisor.
+- Changed: t299 candidate-generation command extraction added locally; t302 paired running-Core identity task provisioned; t298 decline reason reviewed before independent checks.
+- Validation: first helper typecheck exposed harness completionSchema/provider/result narrowing; corrected types and explicit schema, final check pending. No provider call. t298 independent owning regression and current-pair rebuild in progress.
+- Outcome: Partial.
+- Follow-up: wire candidate flag/draft API atomically, independently repeat Stop browser proof, then integrate receipt/detached execution and typed readiness. Running Core identity still blocks P0 completion.
+
+### Brief: p1-candidate-facade (t299 continuation)
+- Worker: p0_acceptance; paired trees fxwork/t299/{!FluxIQ,!FluxIQWebExtension}; same t299 branch.
+- Read: Current State; own p1-candidate-authoring.md and p1-supervisor-integration.md reports; current Core instructions.
+- Own: runtime/service.ts candidate branch, flow-bootstrap-commands/{candidate-generation,contracts,index}.ts, Core api/contracts/adaptation.ts and owning generation API handler/sanitizer, relevant conversation build draft rendering, focused service/API regressions, architecture bootstrap candidate section, own report p1-candidate-facade.md.
+- Do not edit cancellation, held rerun, candidate submission/controller, draft store, t300 verification or downstream source/shared docs.
+- Supervisor added uncommitted candidate-generation.ts helper + barrel export. Own/fix these now; current first checks revealed missing harness completionSchema and optional provider, corrected locally but final check pending.
+- Start read-only design and exact file list now; wait for supervisor to merge current dev/t298 into t299 before service.ts edits.
+- Wire authoringMode:candidate through restricted request/API to actual service discovery-only branch and durable Core candidate-draft store. Omitted preserves legacy proposed.
+- Result status:draft must discriminate from status:proposed, contain candidate identity/base/source instruction IDs/accounting, verification:not_performed and promotionAllowed:false. No apply action/no adaptationId fabrication/no adaptation creation.
+- Preserve purse, inherited external cancellation, permissions/tool wrappers, current registry/handle resolution, immutable original instruction text, stale Flow/settings refusal and truthful accounting. Draft must not mark creation purse ended.
+- All old legacy/reauthor callers must narrow proposed before adaptation use; reject unexpected draft explicitly. Keep service line budget via focused extraction, no bulk refactor.
+- Service-level scripted test must exercise discover wrong turn + complete submission/revision -> durable draft, unchanged accepted Flow and empty adaptations; cancel and stale base cannot write. No real provider call.
+- API flag parser/handler/draft response integrated atomically; never expose parser alone.
+- Narrow owning tests, fluxiq/touched web package typechecks, structure audits and diff checks; freeze then report exact receipts/limits.
+- No provider/live/full suite/git mutations/shared docs. Supervisor integrates and verifies.
+
+### 2026-10-06 - t298 integrated and independently verified
+- Agent: Codex supervisor.
+- Changed: merges downstream43e5e54b and Core2ee06482 integrate scoped build cancellation, reachable Stop, truthful terminal states and persisted held-decline reason. t299 now merged both dev branches and worker owns serial facade.
+- Validation: supervisor reviewed source, reauthor9/9, Core packagecheck0/build0, current extension three targets22files each; headed actual Core build/run Stop2/2 (18.1s) on production bundle, no next node/proposal and unchanged graphs. Both structure audits passed; index refreshed after report status change. Finish first invoked from task tree failed dev already checked out, corrected by invoking lifecycle from main; no manual removal/history rewrite. Core legacy finish --skip-checks only after observed manual narrow gates.
+- Outcome: Accepted cancellation slice; paired dev push next.
+- Follow-up: t302 running Core identity, t299 atomic flag/facade, t300 receipt/runtime joins, t301 typed readiness. Independent t300 verification58/58 passes; module is not yet product promotion. No paid calls/full suites/user panel.

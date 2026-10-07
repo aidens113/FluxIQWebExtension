@@ -36,6 +36,8 @@ import type { ActivityDisplay } from "../../shared/activity/index";
 export type ActivityWaitReason = "answer" | "check";
 
 export type ActivityHeadlineSituation = {
+  /** A terminal cancellation reported by Core. */
+  readonly stopped?: boolean;
   /** Core is repairing the Flow in this unit of work. */
   readonly repairing?: boolean;
   /** Why the work waits, when `outcome` is `waiting`. */
@@ -68,6 +70,7 @@ const REPAIR_FAILED = "Couldn't fix your Flow";
 
 /** The headline for a unit of work of `kind`, working (`outcome` null) or settled, in `situation`. */
 export function activityHeadline(kind: ActivityDisplay["subjectKind"], outcome: ActivityDisplay["outcome"], situation: ActivityHeadlineSituation = {}): string {
+  if (outcome === "failed" && situation.stopped) return kind === "build" ? "Build stopped" : "Run stopped";
   if (outcome === "waiting") return WAITING[situation.waitingOn ?? "answer"];
   if (outcome === "done") return DONE[kind];
   if (outcome === "failed") return kind === "run" && situation.repairing ? REPAIR_FAILED : FAILED[kind];
