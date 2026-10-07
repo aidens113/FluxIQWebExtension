@@ -109,6 +109,15 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 ## Worker Briefs
 
+### Brief: p2-candidate-evidence (task t300; supervisor until a worker is free)
+- Repository: paired C:/Users/osrs_/FluxStuff/fxwork/t300/!FluxIQ and !FluxIQWebExtension.
+- Task: Implement domain-neutral immutable requirement/evidence receipt contracts and fail-closed candidate acceptance controller; later wire the serial facade after t298/t299 integration. Preserve canonical graph/runtime/persistence ownership.
+- Required reads: this Current State; consultant revision Binding design contracts and P0/P2; Core code structure; candidate submission contracts after t299; current bootstrap acceptance, adaptation validation and held-candidate executor/promotion owners.
+- Owns: new Core flow-bootstrap/verification modules/barrel/tests and own downstream reports/p2-candidate-evidence.md; facade/API/persistence wiring only supervisor serially after control integration. Do not overlap candidate directory/evidence-loop cancellation or existing worker files.
+- Definition of done: receipts bound to original instruction requirements, candidate revision/digest/base and actual execution run/command/subject/coverage; builder claims cannot act as facts. Negative tests: unknown, wrong qualifier, partial subjects, withheld/zero-action create, stale revision, cancelled/late result, changed base, duplicate promotion, insufficient coverage. Existing ensure can pass only with trusted observed state. Concrete contradictions outrank semantic yes. No model fields accepted as trusted observations.
+- Must not touch: shared/main docs, other trees, service.ts until assigned serially, runtime data; no git mutations/provider/full suites. Unsupported execution shapes remain draft; no assertion of universal verification or real-browser qualification.
+- Report: docs/working/mvp-final-month-plan/reports/p2-candidate-evidence.md in t300 downstream, record exact implemented versus not yet wired seams and narrow checks.
+
 ### Brief: p1-candidate-authoring (task t299, follows t296)
 - Repository: paired trees C:/Users/osrs_/FluxStuff/fxwork/t299/!FluxIQ and !FluxIQWebExtension.
 - Task: Implement a feature-flagged vertical candidate-authoring path. Discovery executes existing registry tools and records evidence without draft retention/auto-openers/act completion; one explicit complete submission reuses canonical bootstrap acceptance/plan validation, assigns revision/digest/diff, and returns consolidated diagnostics. Keep accepted Flow untouched, existing saved Flows/legacy default compatible. No claim of semantic acceptance from static validity.
@@ -181,6 +190,14 @@ not pending implementation assignments; the next brief is P0 in the revision.
 Historical briefs: [Claude schedule and task briefs](./mvp-final-month-plan/archive/2026-10-06-pre-consultant-schedule-and-briefs.md).
 
 ## Work Ledger
+
+### 2026-10-06 - t300 provisioned for requirement receipts and common acceptance
+- Agent: Codex supervisor.
+- Changed: written P2 brief; paired isolated worktree provisioning started (session 30711).
+- Why: static candidate validity alone cannot establish outcomes or authorize promotion; requirement-level negatives are still a P0 exit dependency.
+- Validation: no source edit or completion claim yet. Identity supervisor unit checks passed 20/20 plus digest test 1/1; browser rerun initially refused on missing default bundle path, worker asked for reproducible custom-root command.
+- Outcome: Partial.
+- Follow-up: complete provisioning, receipt controller, then serial facade/exact-runtime proof; no paid launch while readiness remains open.
 
 ### 2026-10-06 - t296 integrated and paired dev branches pushed
 - Agent: Codex supervisor.
