@@ -438,3 +438,11 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Validation: generator/cache10/10; Core reader/diagnostic/real Next route59/59; HTTP15/15; headed Chromium identity/runner61/61 including retained service versus regenerated disk/reloaded route refusal; package/dependentweb/runner checks and both audits0, three-target extension builds22 files each.
 - Outcome: Paired unit verified, integration follows. Full commands/digests/limits in reports/p0-core-runtime-identity.md.
 - Follow-up: loaded domain-host and server-adapter identity, receipt/storage authority, independent browser oracle. P0/all-plan/live qualification remain incomplete; zero providers or user-panel management.
+
+### Brief: p2-authority-mutation-inventory (task t304 companion)
+- Repository: inspect current main Core C:/Users/osrs_/FluxStuff/!FluxIQ read-only; write only paired t304 downstream reports/p2-authority-migration-inventory.md.
+- Task: Discover every mutable dependency of getLlmExecutionBinding and the ordinary save/delete paths that must join a single promotion authority. Continue the already inspected p2-promotion-design.md; do not rediscover its conclusions.
+- Required reads: main and t304 Current State; p2-promotion-design.md; Core instructions; binding digest/canonical plan route ownership; flow instruction and publication/dependency stores.
+- Owns: only the named report. No source, shared working docs, git, provider/browser/server commands, baseline or migrations.
+- Definition of done: concrete owner/function table for instruction source/revision saves/deletes, settings, flow/router/subflow/graph reads/writes, publication/revision dependency mutation, caches; show which uses project SQL transaction versus JSON/global projection. Recommend the smallest executable migration phases that do not let an ordinary writer evade CAS, and required restart/concurrency negatives. Distinguish unresolved reader/writer authority from proposed design.
+- Validation: source inspection with paths/function names; no atomicity success claim. Return status, inspected files, own report path and exact unresolved seams.
