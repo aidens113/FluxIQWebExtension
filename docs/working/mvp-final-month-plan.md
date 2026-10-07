@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Acceptance, extension/Core identity, Stop, candidate facade/infrastructure and typed/navigation fixes pushed; durable receipt restart verification and loaded-host identity underway; production promotion/live qualification pending.
+Status detail: Acceptance, extension/Core identity, Stop, candidate facade/infrastructure and typed/navigation fixes pushed; durable receipt restart verified; loaded-host identity independently verified; production promotion/live qualification pending.
 Created: 2026-10-05
 Last updated: 2026-10-07
 Owner: Senior supervisor agent
@@ -24,15 +24,21 @@ rebuilt current pair and repeated headed Stop build/run2/2, owning reauthor9/9,
 Core typecheck/build and both integration audits pass. Running Core-server identity
 is integrated/pushed (Corec8501c15/downstream267a4215), after independent
 Core/routes59/59, generator10/10, HTTP15/15 and headed identity/runner61/61.
-Loaded domain host remains t305. t299 candidate facade is integrated (Core7f9bae15/downstreamcb792dee)
+Loaded domain host t305 is independently verified (Core6/6, generator/cache21/21,
+headed actual built host/runner55/55); integrated/pushed Corec051b8f7/downstream3b8f78df. t299 candidate facade is integrated (Core7f9bae15/downstreamcb792dee)
 after independent actualservice/API53/53, package/dependentweb types and audits.
 t300 receipt/detached infrastructure is integrated (Core386b4c15)
 with production joins pending. t301 typed readiness is integrated (b2ad00de);
 t303 navigation is integrated/pushed ddc8befd after owning114/114 and production
 Chromium1/1. t304 durable ledger passed independent52/52/types/build; literal
-owned child-process termination/restart checks passed2/2 independently.
-No P0 completion
-or fresh A-D qualification is claimed.
+owned child-process termination/restart checks passed2/2 independently, pushed
+Core04b51050/downstream1c55b131. t306 meaningful assert/wait integrated and
+pushed after root33/33 and production Chromium1/1 (17.2s).
+t307 atomic graph import is integrated/pushed Corec2ea1e5d/downstreamf7b5c5a9
+after independent19/19, merged package types/build and both audits0.
+t308 fixture paginator, t309 staged project snapshot foundation and t310 actual
+server-adapter identity are isolated active tasks. No P0 completion or fresh A-D
+qualification is claimed.
 
 **Planning review completed locally 2026-10-06.**
 The [consultant review and revised execution detail](./mvp-final-month-plan/consultant-revision.md)
@@ -499,6 +505,13 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Definition of done: fail-first injected node/edge/region/revision/partition failure leaves no partially imported Flow/revision/entities/indexes; retry imports complete graph rather than false already_imported. Concurrent same-flow imports across real separate SQLite owners result one complete graph; preserve existing graph patch/inverse/ownership semantics and upsert compatibility. Entire already-imported decision+write must be inside transaction. Reconcile cancellation/storage uncertainty truthfully, no success from compile.
 - Validation: owning graph tests and real SQLite fail/reopen/concurrency cases, Core typecheck/owning build and structure audit; bounded fixtures with owned cleanup. Explain transaction boundaries and remaining whole-topology authority gaps. No full suites/provider/browser/userpanel or JSON/global atomicity claim. Proposed owners/caller analysis before edit; provisioning first, root signals ready for frozen checks.
 
+### 2026-10-07 - t305 loaded domain host independently verified
+- Agent: Codex supervisor.
+- Changed: immutable trusted native-module capture before host IO, owning normalized host stamp and full source inventory, mandatory pre-dispatch Lab gate and per-instance companion copy. Merged both current dev branches before checks; architecture updated.
+- Validation: Core binding/diagnostic6/6, generator/cache/Lab21/21, actual built-host headed Chromium/identity/runner55/55 zero skips9.27s, Core/domain/runner typechecks, sequential Core/host/three-target builds and Coreaudit0. Downstream integration audit follows. Full receipt reports/p0-domain-host-identity.md.
+- Outcome: Bounded loaded-host provenance verified; paired integration follows. No paid/provider calls or user panel management.
+- Follow-up: actual websocket server adapter stamp/retained closure; iframe/Firefox/Edge live identity and trusted P2 browser oracle/authority. t307 atomic graph import independently19/19, matching-stamp Coretypes/build/audit0; merge latest integrated pair before finish.
+
 ### 2026-10-07 - t306 integrated verification
 - Agent: Codex supervisor.
 - Changed: malformed assertions/waits refuse promptly; valid whole-page text ignores unrelated focus and authored targeted predicates preserve resolution. Integrated after current-dev merge.
@@ -529,3 +542,36 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Required reads: Current State and own proposal; relevant backlog16, owning client/tests/helper.
 - Definition of done: fail first with actual Chromium Next1?2?3, then use current+1 and retain full23unique/24includingrepeat expected dataset; naive promoted all-card extraction still rejected. Preserve challenge/attempt guard/history/Previous/filter semantics; do not claim rapid press/popstate coverage unless exercised.
 - Validation: owning scenario build/two Chromium tests, narrow scenario test, source/e2e typechecks/audit. No full suites/provider/userpanel/debugger/external site. Wait provisioning before checks, report honest limits and freeze for supervisor.
+
+### 2026-10-07 - t307 atomic graph import independently verified
+- Agent: Codex supervisor.
+- Changed: revision1 existence decision and Flow/revision/node/edge/region/operation/FTS/bounds/partition writes share one actual project SQLite transaction and passed executor; current paired dev merged before final checks.
+- Validation: root19/19 owning regressions zero skips8.10s, fluxiqcheck0(36.4s)/owningbuild0(72.7s); current audits/integration gate follow. Root reviewed SQL boundaries; trigger rollback/reopen retry, separate-owner serialization and lost COMMIT acknowledgement tested. Full receipt reports/p2-atomic-graph-import.md.
+- Outcome: New graph import atomicity verified; integrated/pushed Corec2ea1e5d/downstreamf7b5c5a9; both audits0. Existing partial legacy imports remain undiagnosed/unrepaired. No complete topology promotion or browser/provider/power-loss proof.
+- Follow-up: t309 staged complete-project contract foundation and all-writer/read authority cutover, t310 actual server adapter provenance, t308 paginator. User panel unmanaged; paid A-D remain held.
+
+### Brief: p2-staged-project-authority-foundation (next paired task)
+- Repository: isolated paired task assigned by supervisor; Core storage boundary already authorized, no production cutover.
+- Task: Implement the concrete contract in reports/p2-authority-contract-slice.md as one complete-project staged immutable snapshot/head foundation. This is preparation for authority migration, not authority over legacy data.
+- Owns: new Core storage/project/accepted-state/{contracts,migration,validation,digest,store,index}.ts and owning tests/{validation,store}.test.ts; project/index.ts additive barrel; focused persistence architecture paragraph; own downstream reports/p2-staged-authority-foundation.md. Request approval for further cohesive splits before editing. No service/controller/promoter/ordinary writers/legacy migration edits.
+- Required reads: Current State, authority contract report, Core instructions and existing project database/migration/UoW/digest conventions.
+- Definition of done: two local numbered snapshot/head tables, complete visual artifacts/settings/router/subflow/source bodies/scopes/bindings, internally derived complete membership/vector; project generation/epoch CAS and durable mutation replay/reconciliation. Staged/tombstoned only, no active/adopted/promoted enum or automatic adoption/read fallback. Refuse JSON/code/global or cross-project instructions/ALL publication-dependent scope. Explicit supplied snapshot, open creates no head. No production capture completeness claim from caller-supplied none list.
+- Limits: canonical32MiBUTF8 reject without truncation, IDs200 chars, positive safe generations; immutable history/no pruning; preserve semantic ordering. Future adoption needs separately reviewed all-reader/all-writer fence/participation and explicit opt-in. No feature flag bypass.
+- Validation: real SQLite failures before writes/commit, lost-commit-ack/reopen, separate-owner competing CAS, same-key replay/conflict, corruption/tombstone, >100 source/member fixture, fully migrated existing DB checksum/user_version/data preservation and unchanged legacy files. Direct context.sql only within UoW; never queued nested owner calls. Narrow owning tests/Coretypes/build/bothaudits, no fullsuite/providers/panel/browser. Provision first, supervisor signals ready before frozen checks; freeze precise report.
+
+### Brief: p0-executing-server-adapter (next paired task)
+- Repository: isolated paired task assigned by supervisor; Core web server/runtime provenance, additive framework capture. User notified boundary/startup compatibility; user panel not managed.
+- Task: Implement reports/p0-server-adapter-identity-design.md using actual native-bundled websocket server factory and retained actual ClientGatewayService capture. Browser client package hash is not executing server identity.
+- Owns Core: client-gateway/service.ts two provenance delegates + focused service/transport-build-identity/{owner,lease,index} and owningtests; service/index.ts only necessary exports; existing identity diagnostic+test; apps/web/src/server/client-gateway-websocket.ts+owningtest; server/gateway-runtime/{types,load,index}, server/build-identity/{read,index}+tests; lib/fluxiq.ts+owningtest; webpackage/cache steps/.gitignore; owning native generator scripts/build-client-gateway-server.mjs and gateway-server-identity/{build,inventory,normalize,index}+tests. Instrumentation only if proven necessary and root notified.
+- Owns downstream: necessary core-web-build/{prepare,types,required-paths,publication,workspace,index,server-adapter}.ts+owningtests; browser-session/server-adapter-identity/{types,screen,inventory,normalize,expected,assert-match,verify,index}+tests; browser-session/index.ts and run-scenario.ts additive gate. Own reports/p0-server-adapter-identity.md; scoped architecture paragraphs. Request further owner changes before editing.
+- Required reads: Current State, design report, Core instructions and actual owner/start/staging/cache conventions.
+- Definition of done: normalized immutable actual server executable stamp/full intended inventory, preloaded native factory exclusively for supported enabled web startup, actual gateway-owner trusted lease capture BEFORE IO; changed retained rebind rejects, legacy clears active but preserves anchor, old close cannot clear new lease, failed/inactive server unattested. Native-host slot unchanged. Separate authenticated bounded serverTransportIdentity projection; mandatory gate before project/browser/chat/providers. Pure offline exemption preserved.
+- Build compatibility: dev/build/native-generator+cache registry and Lab canonical generate before collect/stage/directNext must agree; copy artifact/companion and resolve staged app, generated paths ignored. No stamp from latest disk reported as loaded. Capture limits supported registered owner; no arbitrary-listener/per-session attestation claim.
+- Validation: fail-first owner/factory/diagnostic negatives, generator/inventory/cache/staging tests, actual built native server plus real socket handshake/frame/ping/close and retained route/factory reload refusal/fresh owner match, bounded cleanup/provider0. Actual isolated production Next route proof requires explicit panel-management authorization under AGENTS; prepare opt-in fixture but do not launch until authorized. Native socket/synthetic diagnostic and source route tests continue; production Next remains unverified until authorized. Narrow Core/web/runner types/affectedtests/audits, owning artifacts sequentially; no full suite/paid Lab. Provision first and root signals ready, then freeze report for independent supervisor checks.
+
+### 2026-10-07 - Paired push and current dispatch
+- Agent: Codex supervisor.
+- Changed: t305 pushed Corec051b8f7/downstream3b8f78df; t307 pushed Corec2ea1e5d/downstreamf7b5c5a9. Both paired histories align. Current workers: t308 paginator test-first browser regression, t309 staged-only complete-project snapshot/CAS foundation, t310 actual native server adapter/registered-owner identity and build/staging gate.
+- Validation: root observed t3056/6+21/21+55/55 and t30719/19, package types/builds and actual both audit/integration gates0; see individual reports. Taskfinish Core --skip-checks after narrow checks, no broad sweep. Provision t308/t310 completed0; t309 completed0 immediately after first worker source edits, not a frozen-source proof; final worker/root checks required.
+- Outcome: Verified narrow units pushed; whole plan remains active/incomplete. Staged foundation is never accepted authority over legacy data, and promotion remains unavailable.
+- Follow-up: actual Next panel startup proof explicitly held for panel-management authorization per AGENTS; prepare fixture only. Provider-free native socket/synthetic diagnostic tests proceed. Production semantic interpreter/start/independent browser oracle/performed-command durable attribution and coherent all-writer/adoption migration remain. No paid A-D/user panel management.
