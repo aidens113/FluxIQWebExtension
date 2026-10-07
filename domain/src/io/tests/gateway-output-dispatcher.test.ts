@@ -1,3 +1,4 @@
+import { exerciseRequiredWebDispatch } from "./required-context";
 // T1 for Phase 1.2 step 5 on the IO path. Core's `dispatchPolicyOutput` reads
 // three fields of a dispatch result: `status` (which `failureForCommandStatus`
 // classifies), `failure` (a host-reported record wins over Core's own
@@ -9,6 +10,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { FluxIQ } from "fluxiq";
+import { ClientGatewayCommandContext } from "fluxiq/client-gateway";
 import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
@@ -140,4 +142,11 @@ test("a gateway that throws fails with the thrown reason and no status", async (
   assert.equal(result.ok, false);
   assert.equal(result.status, undefined);
   assert.equal(result.error, "The websocket closed.");
+});
+
+test("actual required io domain owner forwards service-issued context through durable gateway", async () => { await exerciseRequiredWebDispatch("io"); });
+test("required IO refuses copied and unregistered contexts before selecting/sending", async () => {
+  const fluxiq = { programs: {} } as unknown as FluxIQ;
+  for (const context of [{} as ClientGatewayCommandContext, ClientGatewayCommandContext.issue({ projectId: "project.1", runId: "run.1", flowId: "flow.1", invocationId: "invoke.1", attemptId: "attempt.1", effectOrdinal: 0 })])
+    await assert.rejects(() => dispatchWebAutomationOutput(fluxiq, { ...dispatchRequest, commandContext: context }));
 });

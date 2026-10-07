@@ -18,7 +18,7 @@
 // snapshot when diagnosis runs -- describes a page that has since moved on.
 
 import { createHash } from "node:crypto";
-import type { FluxIQRuntimeAdapter, FluxIQRuntimeCommand, FluxIQRuntimeCommandResult, FluxIQRuntimeCommandStatus } from "fluxiq/runtime";
+import type { FluxIQRuntimeAdapter, FluxIQRuntimeCommand, FluxIQRuntimeCommandResult, FluxIQRuntimeCommandStatus, FluxIQRuntimeExecutionContext } from "fluxiq/runtime";
 import type { FluxIQ } from "fluxiq";
 import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
@@ -57,6 +57,10 @@ export function createWebAutomationRuntimeAdapter(options: WebAutomationRuntimeA
     capabilities: () => webAutomationRuntimeCapabilities,
     canExecute: (command) => canExecuteWebAutomationCommand(command),
     execute: (command) => executeWebAutomationRuntimeCommand(options.fluxiq, command),
+    executeWithCommandContext: (command, context) => {
+      if (!Object.hasOwn(context, "commandContext")) throw new Error("web.required_context_missing");
+      return executeWebAutomationRuntimeCommand(options.fluxiq, command, context);
+    },
     captureSnapshot: (command) => captureWebAutomationSnapshot(options.fluxiq, command),
     readState: (command) => captureWebAutomationSnapshot(options.fluxiq, command)
   };
@@ -70,7 +74,7 @@ function canExecuteWebAutomationCommand(command: FluxIQRuntimeCommand): boolean 
   return WEB_AUTOMATION_ACTION_TYPES.includes(outputId as never);
 }
 
-async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxIQRuntimeCommand): Promise<FluxIQRuntimeCommandResult> {
+async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxIQRuntimeCommand, context?: FluxIQRuntimeExecutionContext): Promise<FluxIQRuntimeCommandResult> {
   const outputId = command.outputId ?? command.actionType;
   if (!outputId || !WEB_AUTOMATION_ACTION_TYPES.includes(outputId as never)) {
     return rejected(command, `Unsupported web automation output: ${outputId ?? "(missing)"}`, WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE);
@@ -83,6 +87,7 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
     payload
   };
   if (command.metadata) request.metadata = command.metadata;
+  if (context && Object.hasOwn(context, "commandContext")) { request.commandContext = context.commandContext!; if (context.signal) request.signal = context.signal; }
   // The client is given the command's own timeout -- its Flow node's, 5,000 ms
   // unless the node sets one -- so it gives up when the node does and answers
   // with its own `web.action.timeout`, carrying what it expected and saw. Core's

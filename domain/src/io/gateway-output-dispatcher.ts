@@ -1,5 +1,6 @@
 import type { FluxIQ, OutputDispatchRequest, OutputDispatchResult } from "fluxiq";
 import type { JsonObject } from "fluxiq/core";
+import { ClientGatewayRequiredCommandContext } from "fluxiq/client-gateway";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { outputTargetFromPayload } from "../output-nodes";
@@ -11,8 +12,10 @@ export async function dispatchWebAutomationOutput(
   // Core's IO output path has none, and a request without one sends none.
   request: OutputDispatchRequest<JsonObject> & { timeoutMs?: number }
 ): Promise<OutputDispatchResult<JsonObject>> {
+  const required = Object.hasOwn(request, "commandContext");
+  if (required) ClientGatewayRequiredCommandContext.assertRequired(request.commandContext!);
   const sessionId = targetSessionId(fluxiq, request.metadata);
-  if (!sessionId) return { ok: false, outputId: request.outputId, error: "A single paired web-automation client must be selected before dispatching an output." };
+  if (!sessionId) { if (required) await ClientGatewayRequiredCommandContext.stop(request.commandContext!, "web.no_selected_session"); return { ok: false, outputId: request.outputId, error: "A single paired web-automation client must be selected before dispatching an output." }; }
   try {
     const target = outputTargetFromPayload(request.payload);
     const command: { actionType: string; parameters: JsonObject; target?: JsonObject; timeoutMs?: number } = {
@@ -21,7 +24,11 @@ export async function dispatchWebAutomationOutput(
     };
     if (target) command.target = target;
     if (request.timeoutMs !== undefined) command.timeoutMs = request.timeoutMs;
-    const result = await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command);
+    const result = required ? await (async () => {
+      const outcome = await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command, { context: request.commandContext!, ...(request.signal ? { signal: request.signal } : {}) });
+      if (outcome.status !== "completed") { await ClientGatewayRequiredCommandContext.stop(request.commandContext!, outcome.status); throw new Error(`web.required_${outcome.status}`); }
+      return outcome.result;
+    })() : await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command);
     const succeeded = result.status === "succeeded";
     const message = stringValue(result.message);
     // A robot check that stood on the landed page and cleared by itself rides
@@ -52,6 +59,7 @@ export async function dispatchWebAutomationOutput(
       ...(clearedWait ? { clearedWait } : {})
     };
   } catch (error) {
+    if (required) { await ClientGatewayRequiredCommandContext.stop(request.commandContext!, "web.required_dispatch_failed"); throw error; }
     return { ok: false, outputId: request.outputId, error: error instanceof Error ? error.message : "Web automation output dispatch failed." };
   }
 }
