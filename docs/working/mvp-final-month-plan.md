@@ -131,6 +131,21 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
 
+### Brief: intake A, product path today (Claude intake 2026-10-07; read-only)
+- Worker: intake-product-path (worker-high). Own ONLY `reports/intake-1007/product-path.md`. Read-only on dev heads downstream `53324d18` / Core `a2672def` (`C:\Users\osrs_\FluxStuff\!FluxIQ`). No edits, builds, Lab, provider, panel.
+- Context: [week review](./mvp-final-month-plan/reports/week-review/report.md) sections 5-6; [consultant revision](./mvp-final-month-plan/consultant-revision.md) P0-P2. Baseline before Codex: downstream `92d790d7` / Core `e9b7d691`.
+- Answer with file:line evidence, plain English first: (1) a person types an instruction in the extension chat today; trace to a saved Flow. Does a successful build still yield a Flow the person can run, or only a draft nothing promotes (t330 "draft-only")? Compare with the baseline. (2) Can `pnpm lab:campaign` on A-D tasks reach a provider call now, or does a readiness hold refuse it? Exact hold, what lifts it. (3) Is the model still authoring with the legacy add/act/keep/drop/amend language (`runtime/flow-draft/entry.ts`), or does a candidate-submit tool exist that the default build calls? Flags and defaults. (4) For each week-review "open" cause (act-claim trust, judges reading exploration leftovers, unconfirmed yes, refusal churn, read-list), did t296-t337 change the default path? (5) Net: is the default product closer to or further from passing A-D than at the baseline, and why.
+
+### Brief: intake B, Codex infrastructure chain (Claude intake 2026-10-07; read-only)
+- Worker: intake-infra-chain (worker-high). Own ONLY `reports/intake-1007/infra-chain.md`. Read-only, same heads; may read `C:\Users\osrs_\FluxStuff\fxwork\t334|t335|t337` trees and `git diff` there. No edits, builds, Lab, provider, panel.
+- Context: this document's Current State and Worker Briefs (t334/t335/t337), reports `p1-*`/`p2-*` as needed.
+- Answer with file:line evidence, plain English first: (1) one line per unit t296-t337: what it does, whether any default production path calls it, or opt-in/test-only. (2) "Required mode" executor (t331/t334): which callers use it by default; supported node types; what a Flow with type/select/read-list nodes does in it. (3) The chain the Current State says is required before promotion/qualification ("Production sequence still required"): each link, exists/partial/absent, rough size. (4) Uncommitted t334/t335/t337 work: contents, apparent completeness, whether it is safe to keep, park, or drop. (5) Which of this is MVP-blocking per the consultant revision and which is release hardening (its Oct 29-Nov 4 window) pulled forward.
+
+### Brief: intake C, working documents audit (Claude intake 2026-10-07; read-only)
+- Worker: intake-docs-audit (worker). Own ONLY `reports/intake-1007/working-docs-audit.md`. Read-only.
+- Read [the protocol](./agent-working-doc-protocol.md) (status vocabulary, size limits, compaction), the [index](./README.md), then each Active document's header and Current State only (deeper only if needed to decide).
+- Per Active document: last commit date touching it (`git log -1`), whether its scope is now owned/superseded by this plan or its consultant revision, anything still live in it, recommended status (protocol vocabulary) and action (keep / compact / mark complete / archive). Flag protocol breaches: over size, Current State bloat, unreadable compressed prose, briefs left for dead workers. Include a specific compaction proposal for THIS document's Current State.
+
 
 
 
