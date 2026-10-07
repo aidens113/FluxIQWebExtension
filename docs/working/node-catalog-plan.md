@@ -3,7 +3,7 @@
 Status: Active
 Status detail: Interaction and reading audits done; navigation and gaps audits stopped at the Codex handoff and must be rerun.
 Created: 2026-10-07
-Last updated: 2026-10-07
+Last updated: 2026-10-06
 Owner: Senior supervisor agent
 Scope: A full audit of the web extension's node catalog — every existing node's contract, implementation, tests and live failures — then fixes and extensions so each node is robust, and new nodes for what the realistic sites need. It does not cover the general tools (script, request; `structural-agent-plan.md` stage 1) except where a node would replace a script use the Lab reports.
 Paired document: none (web domain and extension; Core control nodes are referenced, not owned)
@@ -18,6 +18,13 @@ User's order (2026-10-07): a full audit of the node catalog; robust nodes with p
 Catalog today (domain `domain/src/output-nodes/`, `domain/src/actions/`; extension `apps/extension/src/content/actions/`): navigate, click, type, select, check, clear, upload, keypress, dialog, scroll, extract, extract_list, next_page, assert, capture_snapshot, wait_for_selector, wait_for_text; observation tools detect_repeating_structure and find_on_page.
 
 Done: `reports/node-audit-interaction.md` (18 ranked fixes, 8 proposed nodes; top: unarmed native dialogs hang a run, `check` sets `.checked` without a click so React checkboxes stay unchanged, number and date fields lose characters, `scroll` only moves the window, a press nothing answered still succeeds) and `reports/node-audit-reading.md` (18 fixes, 7 nodes; top: Next page misses in-place re-renders, Next page with no detected way should try every way, one shared disabled rule including ancestors and classes, verifying nodes must verify something, waits and asserts judge every match). Not done: the navigation and gaps audits were stopped at the Codex handoff (2026-10-07 05:10 UTC); rerun them from their briefs. Pending user decision from the interaction audit: trusted input for hover menus needs the debugger channel, which the user ruled out except for network capture. Next: rerun the two audits, merge all four into one ranked list, then implementation stages partitioned by file.
+
+The consultant review does not cancel the user-ordered full audit. Finish
+navigation/gaps and merge all four reports into one ranked backlog; implement
+shared A-D blockers first alongside the [candidate/acceptance work](./mvp-final-month-plan/consultant-revision.md).
+Wide catalog expansion is not a prerequisite for that first proof. Audit claims
+about React/input/navigation behavior remain source hypotheses until browser
+regressions reproduce them; JavaScript does not produce trusted input events.
 
 ## Worker Briefs
 
@@ -53,6 +60,14 @@ Read-only: no source, test or other doc edits; no builds, tests, Lab, browser or
 - Validation: not validated (read-only audits; nothing run).
 - Outcome: Partial
 - Follow-up: rerun the navigation and gaps audits; one ranked plan.
+
+### 2026-10-06 - Audit retained; implementation priority aligned with candidate gate
+- Agent: Codex supervisor, task t295.
+- Changed: explicit full-audit obligation and blocker-first implementation dependency.
+- Why: consultant suggested deferral, but the newer explicit user request requires all four audit families; broad expansion need not block acceptance proof.
+- Validation: documentation/source review only; navigation/gaps audits and browser proofs remain pending.
+- Outcome: Accepted
+- Follow-up: finish remaining audits, rank fixes, implement shared blockers with owning regressions.
 
 ## Open Questions
 
