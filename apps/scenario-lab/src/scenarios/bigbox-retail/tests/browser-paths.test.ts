@@ -1,3 +1,4 @@
+import { soapQuantityWorkflow } from "../qualification/index.js";
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
 import { chromium, type Browser } from "@playwright/test";
@@ -171,3 +172,37 @@ describe("naive paths fail", { concurrency: true }, () => {
     assert.equal((await harness.state()).express?.sku, "5510202");
   }));
 });
+
+
+test("qualification preservation: desired soap total three remains three on a second execution", TIMEOUT, () => withHarness(async (harness) => {
+  await harness.open();
+  assert.deepEqual(await failingFacts(harness.page, soapQuantityWorkflow.expected.pageFacts!), []);
+  const rows = await runSteps(harness, soapQuantityWorkflow.recordingScript);
+  assert.deepEqual(rows.get("extract-soap-quantity"), soapQuantityWorkflow.expected.extracted![0]!.records);
+  assert.deepEqual(await failingFacts(harness.page, soapQuantityWorkflow.expected.finalState!), []);
+  const choose = soapQuantityWorkflow.recordingScript.find(({ id }) => id === "soap-total-three")!;
+  await Promise.all([harness.page.waitForEvent("load"), locate(harness.page, choose.target!).selectOption("3")]);
+  const tail = soapQuantityWorkflow.recordingScript.slice(soapQuantityWorkflow.recordingScript.indexOf(choose) + 1);
+  const again = await runSteps(harness, tail);
+  assert.deepEqual(again.get("extract-soap-quantity"), soapQuantityWorkflow.expected.extracted![0]!.records);
+  assert.deepEqual(await failingFacts(harness.page, soapQuantityWorkflow.expected.finalState!), []);
+  const state = await harness.state();
+  assert.equal(state.storeId, "2291");
+  assert.equal(state.nextLine, 2);
+  assert.deepEqual(state.cart, [{ lineId: "L1", productId: "418832007", sku: "5530601", qty: 3, fulfilment: "pickup" }]);
+  await harness.page.reload();
+  assert.deepEqual(await failingFacts(harness.page, soapQuantityWorkflow.expected.finalState!), []);
+  await assertCleanRun(harness);
+}));
+
+test("qualification preservation: repeating an increment instead of ensuring total three fails current account facts", TIMEOUT, () => withHarness(async (harness) => {
+  await harness.open();
+  await runSteps(harness, soapQuantityWorkflow.recordingScript);
+  const choose = soapQuantityWorkflow.recordingScript.find(({ id }) => id === "soap-total-three")!;
+  await Promise.all([harness.page.waitForEvent("load"), locate(harness.page, choose.target!).selectOption("5")]);
+  assert.equal(JSON.parse((await harness.page.getByTestId("bigbox-soap-account").textContent())!).cart[0].qty, 5);
+  assert.notDeepEqual(await failingFacts(harness.page, soapQuantityWorkflow.expected.finalState!), []);
+  assert.equal((await harness.state()).cart[0]!.qty, 5);
+  await harness.page.reload();
+  assert.notDeepEqual(await failingFacts(harness.page, soapQuantityWorkflow.expected.finalState!), []);
+}));

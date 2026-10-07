@@ -1,3 +1,4 @@
+import { requestAuditAccountFacts } from "../qualification/index.js";
 import { escapeHtml as esc, page } from "../../../html.js";
 import type { RenderContext } from "../../../types.js";
 import type { ClientConfig, ClientPage } from "../client/index.js";
@@ -45,8 +46,17 @@ export function buildMarkerText(mode: FeedMode): string {
  */
 export function sitePage(context: ShellContext, title: string, main: string, script: string): string {
   const { css, seed, state } = context;
-  const body = `<div class="${css.app}">${topBar(context)}${main}</div>${state.consent === "pending" ? consentDialog(css) : ""}<div class="${css.toastRegion}" role="status" aria-live="polite"></div><style>${feedStylesheet(css, seed)}</style>`;
-  return page(title, body, script);
+  const body = `<div class="${css.app}">${topBar(context)}${main}</div>${state.consent === "pending" ? consentDialog(css) : ""}<div class="${css.toastRegion}" role="status" aria-live="polite"></div><style>${feedStylesheet(css, seed)}</style><script type="application/json" data-testid="social-request-audit-account">${requestAuditAccountFacts(state).replaceAll("<", "\\u003c")}</script>`;
+  return page(title, body, `
+const qualificationAccountFacts = ${requestAuditAccountFacts.toString()};
+const qualificationMutate = mutate;
+mutate = async (operation, payload = {}) => {
+  const result = await qualificationMutate(operation, payload);
+  const account = document.querySelector('[data-testid="social-request-audit-account"]');
+  if (account) account.textContent = qualificationAccountFacts(result.state);
+  return result;
+};
+${script}`);
 }
 
 /**

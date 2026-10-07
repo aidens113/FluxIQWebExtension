@@ -1,0 +1,4 @@
+import type { ScenarioExpected } from "@fluxiq-web-extension/test-contracts";
+
+/** Independent literal dataset and account identities, never derived from the renderer. */
+export const closedJobsExpected: ScenarioExpected = {"pageFacts":[{"id":"remove-closed-saved-jobs-initial-account","subject":"job-closed-account","predicate":"text","value":"{\"saved\":[\"13707d7b1e529572\",\"21184d1fa92f3741\"],\"follows\":[],\"alertSubscriptions\":[],\"applicationCount\":0}"}],"finalState":[{"id":"remove-closed-saved-jobs-account","subject":"job-closed-account","predicate":"text","value":"{\"saved\":[\"13707d7b1e529572\"],\"follows\":[],\"alertSubscriptions\":[],\"applicationCount\":0}"}],"extracted":[{"step":"extract-open-saved-jobs","count":1,"records":[{"title":"Product Designer","company":"Halvard Systems","location":"Leeds","status":"Accepting applications"}]}],"allowedConsoleErrors":[]};

@@ -25,4 +25,13 @@ export const LOCAL_CLASSIFIEDS_LIVE_TASKS: readonly LiveInstructionTask[] = [
   { id: "local-classifieds-bike-search-location-check", scenarioId: "local-classifieds", variantId: "location-check", variantArmedAfterBuild: true, kind: "navigate-and-extract", instruction: BIKES, judgeBy: "expected-dataset", expectedDatasetId: "extract-bike-results" },
   { id: "local-classifieds-save-dining-tables", scenarioId: "local-classifieds", kind: "navigate-and-extract", instruction: TABLES, judgeBy: "expected-dataset", expectedDatasetId: "extract-saved-items" },
   { id: "local-classifieds-make-offer", scenarioId: "local-classifieds", kind: "form", instruction: OFFER, judgeBy: "playback-goal", permissionPoint: OFFER_POINT },
+  {
+    id: "local-classifieds-remove-sold-saves",
+    scenarioId: "local-classifieds",
+    kind: "navigate-and-extract",
+    instruction: "Remove listings marked Sold from my Kerbfind saved items, leaving every Available item saved. Do not hide listings, make an offer or message a seller. Then show everything still saved, with columns title, price and status exactly as the saved list shows them.",
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-available-saves",
+    permissionPoint: { consequence: "delete", control: "Remove from saved items" },
+  },
 ];

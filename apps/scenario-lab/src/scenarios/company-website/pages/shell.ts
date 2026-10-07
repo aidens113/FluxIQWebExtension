@@ -1,3 +1,4 @@
+import { companyReviewAccountFacts } from "../qualification/index.js";
 import { buildClassNames } from "../../../build-classes.js";
 import { escapeHtml } from "../../../html.js";
 import type { RenderContext } from "../../../types.js";
@@ -64,7 +65,36 @@ ${input.main}
 ${footer(c)}
 </div>
 ${consentBanner(state, context.seed)}${winterNotice(state, c)}
-<script type="module">${shellScript(context.runToken, c, chat, flags)}
+<script type="application/json" data-testid="company-review-account">${companyReviewAccountFacts(state).replaceAll("<", "\\u003c")}</script>
+<script type="module">
+const qualificationAccountFacts = ${companyReviewAccountFacts.toString()};
+const qualificationMutate = mutate;
+mutate = async (operation, payload = {}) => {
+  const result = await qualificationMutate(operation, payload);
+  document.querySelector('[data-testid="company-review-account"]').textContent = qualificationAccountFacts(result.state);
+  return result;
+};
+window.addEventListener('message', (event) => {
+  const frame = document.querySelector('iframe[title="Slotwise booking"]');
+  if (!frame || event.source !== frame.contentWindow || event.origin !== new URL(frame.src).origin) return;
+  const data = event.data;
+  if (!data || typeof data.nonce !== 'string' || !/^[0-9a-f-]{36}$/i.test(data.nonce)) return;
+  if (data.type === 'qualification:company-hello') {
+    if (Object.keys(data).sort().join(',') !== 'nonce,type') return;
+    event.source.postMessage({ type: 'qualification:company-parent-origin', nonce: data.nonce, parentOrigin: location.origin }, event.origin);
+    return;
+  }
+  if (data.type !== 'qualification:company-account' || typeof data.account !== 'string' || Object.keys(data).sort().join(',') !== 'account,nonce,type') return;
+  let account;
+  try { account = JSON.parse(data.account); } catch { return; }
+  const keys = (value, expected) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).sort().join(',') === expected.slice().sort().join(',');
+  if (!keys(account, ['bookingCount','deposits','quoteCount','subscriberCount','discarded','drafts','refusedBookings']) || !keys(account.deposits, ['count','totalPence']) || !keys(account.discarded, ['honeypot','unverified','invalid'])) return;
+  const numbers = [account.bookingCount,account.deposits.count,account.deposits.totalPence,account.quoteCount,account.subscriberCount,account.discarded.honeypot,account.discarded.unverified,account.discarded.invalid,account.drafts,account.refusedBookings];
+  if (!numbers.every((value) => Number.isSafeInteger(value) && value >= 0)) return;
+  document.querySelector('[data-testid="company-review-account"]').textContent = data.account;
+  event.source.postMessage({ type: 'qualification:company-account-ack', nonce: data.nonce }, event.origin);
+});
+${shellScript(context.runToken, c, chat, flags)}
 ${quoteOpener()}
 ${input.pageScript ?? ""}</script>
 </body>

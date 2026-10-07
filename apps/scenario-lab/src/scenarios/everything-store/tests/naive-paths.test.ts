@@ -1,3 +1,4 @@
+import { restoreClothsExpected } from "../qualification/index.js";
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { resolveScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
@@ -126,6 +127,31 @@ describe("a naive shopper fails", { concurrency: true }, () => {
       const finalState = resolveScenarioWorkflow(manifest, { workflowId: "first-page-earbuds", variantId: "robot-check" }).expected.finalState ?? [];
       assert.ok((await kit.factFailures(page, finalState)).some((failure) => failure.startsWith("challenge-passed:")), "the row does not pass with the check standing");
       assert.match(PERSON_CHECKS.tampered?.(await kit.storeState(session.lab)) ?? "", /wrong answer/u, "and the person the Lab plays sees the guess on the check and declines");
+    } finally { await session.close(); }
+  });
+
+  it("qualification preservation: adding another cloth pack makes the right active table but wrong line and saved state", async () => {
+    const session = await kit.openStore();
+    try {
+      const { page } = session;
+      await kit.settleIn(page);
+      await page.goto(`${session.lab.origin}/scenarios/everything-store/dp/B0BAMFC24P`);
+      await page.getByRole("dialog", { name: "Brightaisle Assistant" }).waitFor({ timeout: 9000 });
+      await page.getByRole("button", { name: "Minimize chat" }).click();
+      await kit.awaitLiveProductPage(page);
+      await page.getByRole("button", { name: "Add to Cart", exact: true }).click();
+      await page.getByRole("dialog", { name: "Added to cart" }).waitFor();
+      const current = JSON.parse((await page.getByTestId("everything-saved-cloths-account").textContent())!);
+      assert.equal(current.cart[0].lineId, "L3");
+      assert.equal(current.nextLine, 4);
+      assert.notDeepEqual(await kit.factFailures(page, restoreClothsExpected.finalState!), []);
+      await page.getByRole("link", { name: "Go to Cart" }).click();
+      assert.deepEqual(await kit.readCart(page), restoreClothsExpected.extracted![0]!.records, "same visible active table, different existing-line/saved account state");
+      assert.notDeepEqual(await kit.factFailures(page, restoreClothsExpected.finalState!), []);
+      const snapshot = JSON.parse((await page.getByTestId("everything-saved-cloths-account").textContent())!);
+      assert.deepEqual(snapshot.saved.map(({ lineId }: { lineId: string }) => lineId), ["S2", "S1"]);
+      await page.reload();
+      assert.notDeepEqual(await kit.factFailures(page, restoreClothsExpected.finalState!), []);
     } finally { await session.close(); }
   });
 });

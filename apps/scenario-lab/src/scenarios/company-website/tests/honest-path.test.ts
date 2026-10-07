@@ -1,3 +1,4 @@
+import { companyReviewWorkflow } from "../qualification/index.js";
 import assert from "node:assert/strict";
 import { after, describe, test } from "node:test";
 import { resolveScenarioWorkflow, type ScenarioStep } from "@fluxiq-web-extension/test-contracts";
@@ -94,3 +95,16 @@ describe("the honest path passes every oracle", { concurrency: 4 }, () => {
     assert.equal((await serverState(lab)).quotes.length, 0);
   }, { arm: { operation: "set-mode", payload: { mode: "redesigned-quote-submit" } } }));
 });
+
+
+test("qualification final: cross-origin booking review extracts exact charges without commitment", { timeout: 90000 }, () => withSite(async ({ page, lab }) => {
+  assert.deepEqual(await failedFacts(page, companyReviewWorkflow.expected.pageFacts!), []);
+  const rows = await runScript(page, companyReviewWorkflow.recordingScript);
+  assert.deepEqual(rows['extract-service-review'], companyReviewWorkflow.expected.extracted![0]!.records);
+  const frame = page.frames().find((frame) => frame !== page.mainFrame() && frame.url().includes('/booking-widget'))!;
+  assert.ok(frame);
+  assert.notEqual(new URL(frame.url()).origin, new URL(page.url()).origin);
+  assert.deepEqual(await failedFacts(page, companyReviewWorkflow.expected.finalState!), []);
+  const state = await serverState(lab);
+  assert.deepEqual([state.bookings.length,state.deposits.count,state.quotes.length,state.newsletter.subscribers.length], [0,0,0,0]);
+}));

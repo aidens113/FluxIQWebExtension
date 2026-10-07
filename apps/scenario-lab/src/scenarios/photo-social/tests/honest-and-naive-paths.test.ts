@@ -1,3 +1,4 @@
+import { studioUnionWorkflow } from "../qualification/index.js";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { after, before, describe, it } from "node:test";
@@ -223,4 +224,46 @@ describe("naive paths: each careless shortcut fails an oracle", { concurrency: t
       assert.equal(await first.locator(`svg[aria-label="Verified"]`).count(), 0);
     } finally { await s.close(); }
   });
+});
+
+
+it("qualification final: existing Studio inspo union preserves all identities and repeat ensure skips correct membership", { timeout: 90000 }, async () => {
+  const opened = await session();
+  try {
+    const { page, lab } = opened;
+    await assertFacts(page, studioUnionWorkflow.expected.pageFacts!, 'initial');
+    const rows = await runScript(page, lab.origin, studioUnionWorkflow.recordingScript);
+    assert.deepEqual(rows.get('extract-studio-inspo'), studioUnionWorkflow.expected.extracted![0]!.records);
+    await assertFacts(page, studioUnionWorkflow.expected.finalState!, 'union');
+    for (const code of ['DNcepNICLlQ','DdAML7AgNTw','D5ESx9wGf76']) {
+      await page.goto(lab.origin + '/scenarios/photo-social/p/' + code + '/');
+      assert.equal(await page.getByRole('button', { name: 'Remove', exact: true }).count(), 1, 'already saved: do not toggle');
+    }
+    await page.goto(lab.origin + '/scenarios/photo-social/tamsin.reyes/saved/studio-inspo/');
+    const members = await page.locator('main a[href*="/p/"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href')));
+    for (const code of ['DNcepNICLlQ','DdAML7AgNTw','D5ESx9wGf76']) assert.ok(members.some((href) => href?.includes('/p/' + code + '/')), 'already in existing collection: no second press');
+    await assertFacts(page, studioUnionWorkflow.expected.finalState!, 'second desired-state execution');
+    const second = await runScript(page, lab.origin, studioUnionWorkflow.recordingScript.slice(-2));
+    assert.deepEqual(second.get('extract-studio-inspo'), studioUnionWorkflow.expected.extracted![0]!.records);
+  } finally { await opened.close(); }
+});
+
+it("qualification final: correct seven-post union plus a like fails current complete account oracle", { timeout: 90000 }, async () => {
+  const opened = await session();
+  try {
+    const { page, lab } = opened;
+    const first = await runScript(page, lab.origin, studioUnionWorkflow.recordingScript);
+    assert.deepEqual(first.get('extract-studio-inspo'), studioUnionWorkflow.expected.extracted![0]!.records);
+    await page.goto(lab.origin + '/scenarios/photo-social/p/DNcepNICLlQ/');
+    await page.locator('article section').getByRole('button', { name: 'Like', exact: true }).click();
+    const fact = studioUnionWorkflow.expected.finalState![0]!;
+    const current = JSON.parse((await page.getByTestId(fact.subject).textContent())!);
+    assert.deepEqual(current.liked, ['DNcepNICLlQ']);
+    assert.notEqual(await page.getByTestId(fact.subject).textContent(), fact.value);
+    const visible = await runScript(page, lab.origin, studioUnionWorkflow.recordingScript.slice(-2));
+    assert.deepEqual(visible.get('extract-studio-inspo'), studioUnionWorkflow.expected.extracted![0]!.records);
+    assert.notEqual(await page.getByTestId(fact.subject).textContent(), fact.value);
+    await page.reload();
+    assert.notEqual(await page.getByTestId(fact.subject).textContent(), fact.value);
+  } finally { await opened.close(); }
 });

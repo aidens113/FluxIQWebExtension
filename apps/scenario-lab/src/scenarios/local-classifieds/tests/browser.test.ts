@@ -1,3 +1,4 @@
+import { soldSavesWorkflow } from "../qualification/index.js";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { after, before, test } from "node:test";
@@ -166,5 +167,43 @@ test("offer: pressing Send on the ready-made message, then offering once the rat
     const failing = await failingFacts(run.page, manifest.playbackGoal!.successFacts);
     assert.deepEqual(failing.map(({ id }) => id), ["only-the-offer"]);
     assert.equal(failing[0]!.actual, "You've sent Morgan Tate 1 message and 1 offer");
+  } finally { await run.close(); }
+});
+
+
+test("qualification preservation: remove Sold save and preserve Available, hidden and contact state", { timeout: TEST_TIMEOUT_MS }, async () => {
+  const run = await session();
+  try {
+    assert.deepEqual(await failingFacts(run.page, soldSavesWorkflow.expected.pageFacts!), []);
+    const records = await runScript(run.page, run.lab.origin, soldSavesWorkflow.recordingScript);
+    assert.deepEqual(records.get("extract-available-saves"), soldSavesWorkflow.expected.extracted![0]!.records);
+    assert.deepEqual(await failingFacts(run.page, soldSavesWorkflow.expected.finalState!), []);
+    const state = await serverState(run.lab);
+    assert.deepEqual(state.saved, ["1030986358004719"]);
+    assert.deepEqual([state.hidden, state.offers, state.messages, state.contactLog], [[], [], [], []]);
+    await run.page.reload();
+    assert.deepEqual(await failingFacts(run.page, soldSavesWorkflow.expected.finalState!), []);
+    assert.deepEqual(run.errors, []);
+  } finally { await run.close(); }
+});
+
+test("qualification preservation: Hide removes the Sold save and matches the table but fails no-hide account oracle", { timeout: TEST_TIMEOUT_MS }, async () => {
+  const run = await session("moved-save");
+  try {
+    await runScript(run.page, run.lab.origin, soldSavesWorkflow.recordingScript.slice(0, 3));
+    await run.page.goto(`${run.lab.origin}${CLASSIFIEDS_ROOT}item/1057533328723847/`);
+    // Hide is physically present in the existing moved-save rendering, not baseline.
+    await run.page.getByText("Hide", { exact: true }).click();
+    await run.page.getByText("Listing hidden. You won't see it in your feed.", { exact: true }).waitFor();
+    const current = JSON.parse((await run.page.getByTestId("classifieds-sold-saves-account").textContent())!);
+    assert.deepEqual(current.saved, ["1030986358004719"]);
+    assert.deepEqual(current.hidden, ["1057533328723847"]);
+    assert.notDeepEqual(await failingFacts(run.page, soldSavesWorkflow.expected.finalState!), []);
+    await run.page.goto(`${run.lab.origin}${CLASSIFIEDS_ROOT}saved/`);
+    const step = soldSavesWorkflow.recordingScript.find(({ operation }) => operation === "extract")!;
+    assert.deepEqual(await readRecords(run.page, step), soldSavesWorkflow.expected.extracted![0]!.records);
+    assert.notDeepEqual(await failingFacts(run.page, soldSavesWorkflow.expected.finalState!), []);
+    await run.page.reload();
+    assert.notDeepEqual(await failingFacts(run.page, soldSavesWorkflow.expected.finalState!), []);
   } finally { await run.close(); }
 });

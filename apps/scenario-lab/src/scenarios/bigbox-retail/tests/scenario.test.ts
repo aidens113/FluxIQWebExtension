@@ -18,12 +18,12 @@ const factText = (facts: ReadonlyArray<{ subject: string; value: unknown }>, sub
 const CONTACT = { firstName: "Dana", lastName: "Whitfield", email: "dana.whitfield@example.com", phone: "555-014-2290", company_website: "", payment: "pickup", slotId: "2291-0921-14" };
 const FILTERED = "q=paper+towels&facet=" + encodeURIComponent("dept:Paper Towels||retailer_type:ValueRidge||fulfillment_method:Pickup||fulfillment_speed:Today||customer_rating:4 & up");
 
-test("the manifest is valid, loopback-only, and declares the three workflows and their variants", () => {
+test("the manifest is valid, loopback-only, and declares the four workflows and their variants", () => {
   assert.deepEqual(validateWebScenario(manifest), { valid: true, value: manifest });
   assert.equal(manifest.networkPolicy, "loopback-only");
   assert.deepEqual([manifest.id, manifest.seed, manifest.startPath], ["bigbox-retail", 239, "/scenarios/bigbox-retail/"]);
   assert.deepEqual(manifest.variants?.map((variant) => variant.id), ["redesigned-buy-box", "store-remembered"]);
-  assert.deepEqual(manifest.workflows?.map((workflow) => [workflow.id, (workflow.variants ?? []).map((variant) => variant.id)]), [["pickup-towels", ["list-layout"]], ["pickup-order", []]]);
+  assert.deepEqual(manifest.workflows?.map((workflow) => [workflow.id, (workflow.variants ?? []).map((variant) => variant.id)]), [["pickup-towels", ["list-layout"]], ["pickup-order", []], ["ensure-soap-quantity", []]]);
   for (const selection of [{}, { variantId: "redesigned-buy-box" }, { variantId: "store-remembered" }, { workflowId: "pickup-towels" }, { workflowId: "pickup-towels", variantId: "list-layout" }, { workflowId: "pickup-order" }]) {
     assert.equal(resolveScenarioWorkflow(manifest, selection).expected.failure, undefined, JSON.stringify(selection));
   }

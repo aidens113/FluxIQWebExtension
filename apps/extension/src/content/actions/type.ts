@@ -50,7 +50,7 @@ import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
 import { describeFieldValue } from "./value-redaction";
 
-export function typeAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
+export async function typeAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const { element, resolution } = deps.resolveTarget(action);
   const text = action.text ?? action.value ?? "";
   const withheld = isSensitiveFormControl(element);
@@ -71,11 +71,21 @@ export function typeAction(action: BrowserActionCommand, deps: ContentActionDepe
   }
 
   deps.keyboard.typeText(element, text);
+  // Observe queued page handlers before proving the edit or sending its form.
+  // This bounded window does not certify arbitrary future application updates.
+  await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
   const actual = enteredText(element);
-  const held = actual === text;
-  const typed = { expected: `the field holds ${describeFieldValue(text, withheld)}`, actual: heldText(actual, text, withheld), redacted: withheld };
+  // Event handlers may replace the field while the detached original still holds text.
+  // That object's value cannot prove the current page accepted the requested edit.
+  const connected = element.isConnected;
+  const held = connected && actual === text;
+  const typed = { expected: `the field holds ${describeFieldValue(text, withheld)}`, actual: connected ? heldText(actual, text, withheld) : "the original field was detached during typing", redacted: withheld };
   if (held && action.submit === true) {
+    const sendReport = deps.checkActionability(element);
+    if (!sendReport.actionable) {
+      return deps.rejected(action, startedAt, sendReport.code, "an edited field reachable for Enter", sendReport.detail, { ...evidence(), blockedAt: sendReport.point, target: element });
+    }
     const sent = deps.keyboard.pressKey(element, "Enter");
     return deps.success(action, startedAt, sent.held ? "Text entered, then Enter pressed in the field." : "Text entered, but Enter did not send the field's form.", {
       status: sent.held ? "passed" : "failed",

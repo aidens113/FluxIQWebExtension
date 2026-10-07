@@ -1,3 +1,4 @@
+import { requestAuditWorkflow } from "../qualification/index.js";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { after, before, describe, it } from "node:test";
@@ -242,3 +243,42 @@ async function confirm(page: Page, slug: string): Promise<void> {
   }
   throw new Error(`${slug} was neither accepted nor refused`);
 }
+
+
+it("qualification final: complete eight pending requests preserve empty mutual line and read-only account", { timeout: 90000 }, async () => {
+  const opened = await session();
+  try {
+    const { page } = opened;
+    const initial = requestAuditWorkflow.expected.pageFacts![0]!;
+    assert.equal(await page.getByTestId(initial.subject).textContent(), initial.value);
+    const rows = await run(page, requestAuditWorkflow.recordingScript);
+    assert.deepEqual(rows.get('extract-pending-requests'), requestAuditWorkflow.expected.extracted![0]!.records);
+    const fact = requestAuditWorkflow.expected.finalState![0]!;
+    assert.equal(await page.getByTestId(fact.subject).textContent(), fact.value);
+  } finally { await opened.close(); }
+});
+
+it("qualification final: home four is incomplete and confirmation fails despite the same eight name rows", { timeout: 90000 }, async () => {
+  const opened = await session();
+  try {
+    const { page } = opened;
+    const steps = requestAuditWorkflow.recordingScript;
+    const at = steps.findIndex(({ id }) => id === 'audit-see-all');
+    await run(page, steps.slice(0,at));
+    const extraction = steps.find(({ id }) => id === 'extract-pending-requests')!;
+    const preview = await extract(page, { ...extraction, target: '[role="main"] [role="list"]:has([aria-label="Confirm"]) [role="listitem"]' });
+    assert.equal(preview.length, 4);
+    assert.notDeepEqual(preview, requestAuditWorkflow.expected.extracted![0]!.records);
+    await run(page, steps.slice(at));
+    const first = page.locator('[role="listitem"]').filter({ has: page.locator('a[href$="/people/tom.becker.9/"]') });
+    await first.getByRole('button', { name: 'Confirm', exact: true }).click();
+    await first.getByText('Request accepted', { exact: true }).waitFor();
+    assert.deepEqual(await extract(page, extraction), requestAuditWorkflow.expected.extracted![0]!.records, 'same complete name/mutual/url table despite prohibited confirmation');
+    const fact = requestAuditWorkflow.expected.finalState![0]!;
+    const current = JSON.parse((await page.getByTestId(fact.subject).textContent())!);
+    assert.equal(Object.keys(current.requests).length, 1);
+    assert.notEqual(await page.getByTestId(fact.subject).textContent(), fact.value);
+    await page.reload();
+    assert.notEqual(await page.getByTestId(fact.subject).textContent(), fact.value);
+  } finally { await opened.close(); }
+});

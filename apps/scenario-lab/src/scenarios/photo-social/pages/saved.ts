@@ -6,14 +6,14 @@ import type { PageContext } from "./context.js";
 import { photoSrc } from "./media.js";
 import { gridCell } from "./profile.js";
 import { photoDocument } from "./shell.js";
-import { ROOT, posts } from "./text.js";
+import { ROOT } from "./text.js";
 
 const known = (codes: readonly string[]): Post[] => codes.map((code) => postByCode(code)).filter((post): post is Post => post !== undefined);
 
 function tile(ctx: PageContext, name: string, href: string, codes: readonly string[]): string {
   const { cls } = ctx.look;
   const covers = known(codes).slice(0, 4).map((post) => `<img alt="" src="${photoSrc(post, 0)}" style="width:50%;aspect-ratio:1;object-fit:cover;display:block;float:left">`).join("");
-  return `<a class="${cls.tile}" href="${href}"><div style="overflow:hidden;border-radius:8px;background:#efefef;aspect-ratio:1">${covers}</div><span class="${cls.handle}">${escapeHtml(name)}</span><span class="${cls.meta}">${posts(codes.length)}</span></a>`;
+  return `<a class="${cls.tile}" href="${href}"><div style="overflow:hidden;border-radius:8px;background:#efefef;aspect-ratio:1">${covers}</div><span class="${cls.handle}">${escapeHtml(name)}</span><span class="${cls.meta}"><span>${codes.length}</span> ${codes.length === 1 ? "post" : "posts"}</span></a>`;
 }
 
 /**
