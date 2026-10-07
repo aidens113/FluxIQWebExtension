@@ -278,3 +278,104 @@ standing rule. Round 2 ran only `crossborder-marketplace`.
 - Workspace `t342-a` holds the unfinished draft Flow `flow.13a2efa3-9dac-42a8-b177-4e047d5e114e`, in project
   `99c4b41d-...`, with no runs.
 - The round 1 probe directory `!FluxIQ/.tmp/p1` is already gone.
+
+## Round 3 (2026-10-07, 23:20-23:55 UTC, off-peak): the first live candidate-mode build
+
+The tree `fxwork/t342` was at downstream 1d3731f7 (contains dev 7cc511ed) and Core 1b9f15f7 (= Core dev), both clean.
+Same instance, slot 2 and workspace as before. Run debug:
+`docs/working/language-driven-flow-loop-plan/debugs/run-muyqgopm-1bfa7054.md`.
+
+### In plain English
+
+**Failed before the first candidate reached Core: $0.021, no candidate, no trial, no further paid run.**
+
+The candidate build started properly from the chat, with the person's own words. It explored the page cleanly and
+quickly: in 16 decisions it found the item, collected the coupon, chose 7-in-1 and Spain, and typed 3 into the quantity
+field. Then the model wrote its first complete candidate, but got one word of the reply's wrapper wrong. It wrote "callId"
+where "tool_call" belongs.
+
+In legacy mode Core would have told the model its reply was unusable and asked again. In candidate mode that retry is
+not wired up, so this single slip ended the whole build. The chat then told the person something false, "the model
+could not be reached", directly under its own line saying it was asking again. The failed build also reported its spend
+as $0 to the Lab's per-build check, although it cost $0.0206.
+
+The submit tool and the test tool were offered correctly, but the trial runner, its judge, promotion and apply were
+never exercised. So this round says nothing yet about whether candidate mode builds lane A better. It does show three
+defects that would stop any candidate build at its first malformed reply.
+
+The script the model was about to submit would probably have been refused by a trial. It presses Space Grey (round 2's
+toggle trap) and dismisses none of the layers covering Add to cart. The quantity, however, was right this time.
+
+### Candidate (round 3) versus legacy (round 2), same task and instance
+
+| | Round 2, legacy (`run-muylu4pp-f9cb2121`) | Round 3, candidate (`run-muyqgopm-1bfa7054`) |
+| --- | --- | --- |
+| Outcome | failed honestly after build, test, judges, one repair and a second test | failed at the first submission (unusable reply ended the build) |
+| How far | Flow drafted, tested twice, judged once; nothing applied | exploration done; candidate never accepted for checking; no trial |
+| Calls | 38 (chat 1, exploration 28, judges 2, repair 7) | 18 (chat 1, exploration 17) |
+| Cost | $0.056718 (build $0.056546) | $0.020980 (build $0.020646; recorded as $0) |
+| Exploration decisions to a complete answer | 28 to `complete` | 16 to the submit |
+| Churn | 20 amendment answers, 13 with refusals; 1 refused repeat call; three same-kind refusals ended repair | 0 submissions refused, 0 trials, 0 completions refused; 1 refused repeat call; 1 unusable reply (fatal) |
+| Quantity | one "+" press (2), accepted as three | typed 3 into the field |
+| Space Grey | toggle half kept; un-chose the colour | the script presses it (same trap; untested) |
+| Add to cart | ran but left out of the Flow (rerun `act` dropped) | in the script (untested) |
+| Instruction saved | chat paraphrase | person's own words (t349 seen) |
+
+### Causes, reproduction and the file to change
+
+- **C1: one unusable reply ends a candidate build.**
+  - Reproduction: step 0035's `decision.json` has `"kind": "callId"` with a complete `core.submit_candidate` input.
+    `logs/core.log` shows `decide throw ... AutomationStudioLlmUnusableDecisionError ...
+    llm_output.invalid_evidence_decision`, then `build throw`.
+  - Cause: Core `runtime/service.ts:1565` (candidate loop options) sets `propagateDecisionErrors: true` without the
+    `unusableDecisions` setting that legacy passes (`service.ts:1596`). Core `llm/evidence-loop.ts:660-690` then
+    rethrows.
+  - Fix: pass `unusableDecisions` to the candidate loop, with a stalled ending that keeps the draft. The failing test
+    first: one malformed decision, then a valid submission, must continue.
+  - Verified by the lead in code and logs.
+- **C2: an unusable reply is told as "the model could not be reached".**
+  - Reproduction: 05-failure-panel.png and `build.chat.said`.
+  - Cause: the candidate branch never moves `failureStage` to `provider_output_validation` when a decision returns
+    (legacy does, `service.ts:1633`; the candidate branch sets it only at `service.ts:1574`). Stage `provider_request`
+    is worded at `conversations/commands/progress.ts:103`.
+  - Fix: in the candidate branch, set the stage when a decision returns.
+  - Verified by the lead in code.
+- **C3: a failed candidate build reports no spend.**
+  - Reproduction: `build.accounting: null` and `perBuild.estimatedCostUsd: 0` against $0.020646 summed from the step
+    logs. The ledger shows `maxBuildCostUsd 0`.
+  - Cause: the candidate failure path carries only `failureAccounting` from `progress` (`service.ts:1574`).
+  - Fix: carry the loop's accounting on failure, as legacy's `loopAccounting` does. This matters for the $0.10 per-build
+    check.
+  - Verified by the lead from the files.
+
+Predictive risks for the next candidate run, untested because no trial ran:
+
+- the script's Space Grey press (round 2 C2, unfixed);
+- the item URL opened directly with the covering layers left;
+- a `wait_for_text "added to cart"` whose wording may not match the page's "Added to cart!".
+
+### UI review (all 5 moments, by the lead)
+
+- **Fixed (t350):** "Stop build" is a real button from the first moment; the overlay is placed stably at the bottom
+  left.
+- **Plain and good:** the candidate intro ("working out its steps by trying them on the page ... then test-running the
+  whole Flow once from the start").
+- **Still open:** click cards and overlay lines name no control ("Click · Working on it", "Clicking on the page").
+- **Back:** the confusing "Reading your instruction gave no answer for ... so the build's tests check the steps that do
+  them rather than do them again" sentence.
+- **New, from C1/C2:** "Asking it again" directly followed by "stopped ... could not be reached".
+- **Minor:** the Flow is named with the instruction's first 70 characters.
+
+### Not run, not verified
+
+- Trial runner, start-hook reset receipt, build-test judge on trial evidence, promotion, chat apply, playback on the
+  Flow's own tab: never reached.
+- Replay and second candidate run: not run (no pass), as briefed.
+- The C1 fix is a design. No test was written, per the no-source-edits rule.
+
+### Guard and slot state left behind (round 3)
+
+- Ledger: `start` and `finish` for `run-muyqgopm-1bfa7054` (failed, $0.020980).
+- The run's debug exists under the run id. The `unchanged` guard refuses this instance and task until source changes.
+- Slot 2 is still claimed by t342.
+- No Lab process is running.
