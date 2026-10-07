@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:net";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { FluxIQ } from "fluxiq";
 import { prepareCoreWebBuild, coreWebServerProcessSpec, serverAdapterBuild } from "../../../../core-web-build/index.js";
 import { ProcessSupervisor } from "../../../../process-supervisor.js";
+import { withoutProviderSecrets } from "../../../../environment.js";
 import { verifyRunningServerAdapterIdentity } from "../index.js";
 
 async function freePort(): Promise<number> {
@@ -20,7 +21,8 @@ test("opt-in copied native artifact through actual production Next restricted di
   const downstream = process.env.FLUXIQ_SERVER_ADAPTER_DOWNSTREAM_ROOT ?? fileURLToPath(new URL("../../../../../../..", import.meta.url));
   const core = process.env.FLUXIQ_SERVER_ADAPTER_CORE_ROOT ?? path.resolve(downstream, "../!FluxIQ");
   // Short isolated cache paths preserve the Windows production build path budget.
-  const root = path.join(path.dirname(core), `np-${randomUUID().slice(0, 8)}`); await mkdir(root);
+  const intendedParent = await realpath(path.dirname(path.resolve(core))), rootName = `np-${randomUUID().slice(0, 8)}`;
+  const root = path.resolve(intendedParent, rootName); await mkdir(root);
   const supervisor = new ProcessSupervisor(), stateRoot = path.join(root, "state"), countPath = path.join(root, "provider-count.json"), trapPath = path.join(root, "trap.mjs");
   let seed: FluxIQ | undefined;
   try {
@@ -35,7 +37,7 @@ globalThis.fetch = (input, options) => { const url = new URL(typeof input === 's
     const build = await prepareCoreWebBuild({ fluxiqRepositoryRoot: core, cacheRoot: path.join(root, "cache"), supervisor, logPath: path.join(root, "build.log") });
     await serverAdapterBuild.validateCopy(core, build.webDirectory);
     const port = await freePort(), gatewayPort = await freePort(), origin = `http://127.0.0.1:${port}`;
-    supervisor.start(coreWebServerProcessSpec({ name: "owned-next-identity-proof", build, port, logPath: path.join(root, "next.log"), env: { ...process.env,
+    supervisor.start(coreWebServerProcessSpec({ name: "owned-next-identity-proof", build, port, logPath: path.join(root, "next.log"), env: { ...withoutProviderSecrets(process.env),
       FLUXIQ_ROOT: stateRoot, FLUXIQ_MODEL_PROVIDERS_ENABLED: "false", FLUXIQ_CLIENT_GATEWAY_ENABLED: "true", FLUXIQ_CLIENT_GATEWAY_PORT: String(gatewayPort),
       FLUXIQ_HOST_MODULE: "", FLUXIQ_HOST_ROOT: stateRoot, FLUXIQ_PROBE_COUNT_PATH: countPath, NEXT_TELEMETRY_DISABLED: "1", NODE_OPTIONS: `--import=${pathToFileURL(trapPath).href}` } }));
     const endpoint = `${origin}/api/programs/automation-studio/get-runtime-build-identity`;
@@ -55,6 +57,11 @@ globalThis.fetch = (input, options) => { const url = new URL(typeof input === 's
   } finally {
     if (seed) await seed.close();
     await supervisor.cleanup(); assert.equal(supervisor.activeProcessCount, 0);
-    await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    const resolvedRoot = await realpath(root);
+    assert.equal(path.dirname(resolvedRoot), intendedParent, "Cleanup target must be an immediate child of the intended worktree parent");
+    assert.equal(path.basename(resolvedRoot), rootName, "Cleanup target must retain its owned random name");
+    assert.match(rootName, /^np-[0-9a-f]{8}$/);
+    assert.equal(resolvedRoot, root, "Cleanup refuses a redirected or replaced root");
+    await rm(resolvedRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   }
 });
