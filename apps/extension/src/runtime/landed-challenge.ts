@@ -2,7 +2,7 @@
 // clears it.
 //
 // The worker judges a navigation by its address and by whether the tab moved
-// (`navigation-outcome.ts`), and neither can see what the page says. The
+// (`navigation/outcome.ts`), and neither can see what the page says. The
 // crossborder marketplace serves its traffic screen at the very address that
 // was asked for, so both halves passed and every navigation onto it reported
 // `web.action.succeeded`: live runs 15 and 17 (`run-munoeac4-33c17306`,

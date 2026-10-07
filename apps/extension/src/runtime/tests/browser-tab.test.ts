@@ -15,6 +15,7 @@ import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import { WEB_AUTOMATION_FAILURE_CODES, isWebAutomationFailureCode } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../../shared/protocol";
 import { currentAutomationTabId, forgetAutomationTab, setAutomationTab } from "../automation-tab";
+import { runBrowserActionCommand } from "../action-runner";
 import { runBrowserTabAction, selectTabForSwitch, type SwitchableTab } from "../browser-tab";
 
 const tabs: SwitchableTab[] = [
@@ -23,6 +24,56 @@ const tabs: SwitchableTab[] = [
   { id: 3, url: "https://shop.example.test/checkout/step-2" },
   { id: 4 }
 ];
+
+test("explicit URL open shares HTTP/challenge/unknown landing gates and creates exactly once", async () => {
+  for (const sample of [
+    { page: { challenge: null }, served: 200, status: "succeeded", validation: "passed" },
+    { page: { challenge: null }, served: 404, status: "failed", validation: "failed" },
+    { page: { challenge: "captcha", robotCheck: "person_only" }, served: 403, status: "failed", validation: "failed" },
+    { page: null, served: 200, status: "succeeded", validation: "none" },
+    { page: { challenge: null }, served: undefined, status: "succeeded", validation: "none" }
+  ]) {
+    let created = 0;
+    const url = "https://fixture.test/landing";
+    const chromeStub = {
+      runtime: {},
+      tabs: {
+        create: async () => { created++; return { id: 900 }; },
+        get: async () => ({ id: 900, url, title: "Fixture", status: "complete" }),
+        onUpdated: { addListener: () => {}, removeListener: () => {} },
+        sendMessage: (_id: number, _message: unknown, _options: unknown, callback: (value: unknown) => void) => callback(sample.page)
+      },
+      webNavigation: { getAllFrames: (_details: unknown, callback: (value: unknown) => void) => callback([{ frameId: 0, errorOccurred: false }]) },
+      scripting: { executeScript: async () => [{ result: sample.served }] }
+    };
+    (globalThis as { chrome?: unknown }).chrome = chromeStub;
+    try {
+      const { result } = await runBrowserActionCommand({ action: { commandId: "explicit-open", actionType: "web.browser.tab", tab: { operation: "open", url } }, attachTabForRecording: async () => {} });
+      assert.equal(result.status, sample.status, result.message);
+      assert.equal(result.validation.status, sample.validation, result.message);
+      if (sample.validation === "none") assert.deepEqual(result.validation, { status: "none", reason: "not-yet-validated" });
+      assert.equal(created, 1);
+    } finally { forgetAutomationTab(); delete (globalThis as { chrome?: unknown }).chrome; }
+  }
+});
+
+test("direct URL open without a landing reader never certifies HTTP or challenge evidence", async () => {
+  let created = 0;
+  (globalThis as { chrome?: unknown }).chrome = {
+    tabs: {
+      create: async () => { created++; return { id: 901 }; },
+      get: async () => ({ id: 901, url: "https://fixture.test/landing", status: "complete" }),
+      onUpdated: { addListener: () => {}, removeListener: () => {} }
+    }
+  };
+  try {
+    const result = await runBrowserTabAction({ commandId: "no-reader", actionType: "web.browser.tab", tab: { operation: "open", url: "https://fixture.test/landing" } });
+    assert.equal(result.status, "succeeded");
+    assert.deepEqual(result.validation, { status: "none", reason: "not-yet-validated" });
+    assert.match(result.message ?? "", /no evidence reader/u);
+    assert.equal(created, 1);
+  } finally { forgetAutomationTab(); delete (globalThis as { chrome?: unknown }).chrome; }
+});
 
 test("a switch by id selects that tab", () => {
   assert.deepEqual(selectTabForSwitch(tabs, { tabId: 2 }), { id: 2, url: "https://shop.example.test/checkout" });

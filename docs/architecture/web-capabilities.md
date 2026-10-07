@@ -709,3 +709,23 @@ Two condition shapes are accepted, because two producers write them: the flat
 `web.dom.assert` node carries. The kind table is exhaustive by construction, so
 a seventh assert kind stops `conditions.ts` compiling rather than being
 silently dropped as unreadable.
+
+### Browser landing verification and tab repeats
+
+Tab output nodes are mutating for repeat classification: another open creates
+another tab, and another unnamed close can consume the returned-to tab. Switch
+and close behavior is unchanged; an ambiguous mutating result is not permission
+to repeat it.
+
+Explicit tab open with a URL and navigate share physical landing verification
+(`runtime/navigation-landing.ts`): browser load failure, destination, HTTP
+status/rate limits, robot-check evidence and bounded self-clearing wait. A
+person-only check is handed off untouched. Blank tab creation remains creation
+only, with no claim that a page arrived. HTTP to HTTPS upgrade is permitted;
+HTTPS to HTTP downgrade is a different destination and fails confirmation.
+
+Unread challenge or HTTP evidence produces transport `succeeded` with validation
+`none` / `not-yet-validated` and an explicit unknown message, rather than a passed
+landing assertion. A transport receipt never certifies the requested user
+outcome. Click-open retains its existing landing primitives and behavior; the
+new shared evaluator specifically owns navigate and explicit URL opens.

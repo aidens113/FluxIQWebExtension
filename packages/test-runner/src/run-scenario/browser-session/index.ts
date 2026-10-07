@@ -10,3 +10,5 @@ export * from "./live-panel/index.js";
 export { requireExtension } from "./require-extension.js";
 
 export * from "./build-identity/index.js";
+
+export * from "./core-identity/index.js";

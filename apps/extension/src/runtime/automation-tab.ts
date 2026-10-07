@@ -10,7 +10,7 @@
 // Driving the tab reports what it did (`TabDriveRecord`), because nothing can
 // see it afterwards: the address reads the same whether the page was loaded
 // again or nothing happened at all, which is how a navigate that never left
-// the page it was already on was reported as a success. `navigation-outcome.ts`
+// the page it was already on was reported as a success. `navigation/outcome.ts`
 // judges the record.
 
 const DEFAULT_AUTOMATION_URL = "about:blank";

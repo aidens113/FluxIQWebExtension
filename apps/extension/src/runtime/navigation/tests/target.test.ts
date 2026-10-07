@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { navigationTargetTab } from "../navigation-target";
+import { navigationTargetTab } from "../index";
 
 const PANEL = "http://127.0.0.1:3300";
 
