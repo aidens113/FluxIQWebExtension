@@ -595,3 +595,13 @@ Earlier entries: [Claude implementation and handoff ledger](../../mvp-final-mont
 - Required reads: Current State, own proposal, actual pending/inbound/event owner and real pairClient test helper, Core instructions.
 - Definition of done: settle accepts sender sessionId and checks pending owner BEFORE timer deletion/resolve; explicit wrong-session disposition suppresses inbound publication. Real ready A/B: B sends known A command ID, A promise remains pending/no event; A valid answer succeeds once. Wrong result cannot shorten original timeout. Unknown/late event compatibility remains explicitly unbound and is not certified receipt evidence; durable journal and late-session attribution still required.
 - Validation: fail-first owning real service tests, narrow gateway/runtime transport tests, Coretypes/build/audits. No providers/panel/browser/fullsuite. Product edits wait provisioning; freeze precise report for supervisor independent rerun. No git/shared docs.
+
+
+## Additional verified task briefs
+
+### Brief: sanitized-field-typing (t315, supervisor)
+- Repository: task/t315-sanitized-field-typing in main checkout; no Core source changes. Worker none.
+- Task: Reproduce real browser sanitization of number1.5/-3 and ISO date, then preserve requested native values and refuse malformed formats without partial mutation. Preserve normal text/autocomplete character events, page cancellation/revert and sensitive value redaction.
+- Owns: keyboard/type-text.ts, focused new keyboard/sanitized-input.ts + barrel if needed; e2e/runtime/tests/sanitized-field-typing.spec.ts; scoped action-runtime architecture paragraph and own reports/p3-sanitized-field-typing.md. Native format acceptance comes from detached same-type browser value sanitization, not silent normalization.
+- Validation: fail-first real production content via runtime harness, exact retained field/application state, invalid/reverted/readonly/cancelled paths, unsent form and sensitive readback. Affected source/testtypes, owning builds and audit only; no fullsuite/provider/panel. Final rebuilt background/content identity recorded; no Firefox/Edge/site qualification claim.
+

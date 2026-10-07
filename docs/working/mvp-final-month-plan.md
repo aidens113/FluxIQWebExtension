@@ -37,9 +37,7 @@ pushed after root33/33 and production Chromium1/1 (17.2s).
 t307 atomic graph import is integrated/pushed Corec2ea1e5d/downstreamf7b5c5a9
 after independent19/19, merged package types/build and both audits0.
 t308 paginator is integrated after root Chromium2/2, scenario10/10, types/audit0;
-t309 staged project snapshot foundation, t310 actual server-adapter identity and
-t311 pending command session-binding are isolated active tasks. No P0 completion or fresh A-D
-qualification is claimed.
+t311 pending command session binding is integrated/pushed Core210453c1/downstreamaed8ae54 after root23/23 and both audits0. t309 staged project snapshot foundation is integrated/pushed Core595daf8d/downstream1115c14a after root37/37, actual Core typecheck/build and both audits0. t310 actual server-adapter identity is frozen for independent review. t312 starts the first three clearly NEW fixture tasks toward the67-task denominator, preserving all57 existing tasks. t315 native structured field typing is integrated/pushed downstreamd1d57889 after real Chromium1/1, source/e2etypes0 and final integrationaudit0. t314 installed Chrome154/Edge154 User Scripts prototype passed root2/2 (9.9s), still no product capability. No P0 completion or fresh A-D qualification is claimed.
 
 **Planning review completed locally 2026-10-06.**
 The [consultant review and revised execution detail](./mvp-final-month-plan/consultant-revision.md)
@@ -134,15 +132,6 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
 
-### Brief: p2-staged-project-authority-foundation (next paired task)
-- Repository: isolated paired task assigned by supervisor; Core storage boundary already authorized, no production cutover.
-- Task: Implement the concrete contract in reports/p2-authority-contract-slice.md as one complete-project staged immutable snapshot/head foundation. This is preparation for authority migration, not authority over legacy data.
-- Owns: new Core storage/project/accepted-state/{contracts,migration,validation,digest,store,index}.ts and owning tests/{validation,store}.test.ts; project/index.ts additive barrel; focused persistence architecture paragraph; own downstream reports/p2-staged-authority-foundation.md. Request approval for further cohesive splits before editing. No service/controller/promoter/ordinary writers/legacy migration edits.
-- Required reads: Current State, authority contract report, Core instructions and existing project database/migration/UoW/digest conventions.
-- Definition of done: two local numbered snapshot/head tables, complete visual artifacts/settings/router/subflow/source bodies/scopes/bindings, internally derived complete membership/vector; project generation/epoch CAS and durable mutation replay/reconciliation. Staged/tombstoned only, no active/adopted/promoted enum or automatic adoption/read fallback. Refuse JSON/code/global or cross-project instructions/ALL publication-dependent scope. Explicit supplied snapshot, open creates no head. No production capture completeness claim from caller-supplied none list.
-- Limits: canonical32MiBUTF8 reject without truncation, IDs200 chars, positive safe generations; immutable history/no pruning; preserve semantic ordering. Future adoption needs separately reviewed all-reader/all-writer fence/participation and explicit opt-in. No feature flag bypass.
-- Validation: real SQLite failures before writes/commit, lost-commit-ack/reopen, separate-owner competing CAS, same-key replay/conflict, corruption/tombstone, >100 source/member fixture, fully migrated existing DB checksum/user_version/data preservation and unchanged legacy files. Direct context.sql only within UoW; never queued nested owner calls. Narrow owning tests/Coretypes/build/bothaudits, no fullsuite/providers/panel/browser. Provision first, supervisor signals ready before frozen checks; freeze precise report.
-
 ### Brief: p0-executing-server-adapter (next paired task)
 - Repository: isolated paired task assigned by supervisor; Core web server/runtime provenance, additive framework capture. User notified boundary/startup compatibility; user panel not managed.
 - Task: Implement reports/p0-server-adapter-identity-design.md using actual native-bundled websocket server factory and retained actual ClientGatewayService capture. Browser client package hash is not executing server identity.
@@ -153,13 +142,34 @@ Active file-owned tasks only. Prior briefs and exact receipts are preserved in t
 - Build compatibility: dev/build/native-generator+cache registry and Lab canonical generate before collect/stage/directNext must agree; copy artifact/companion and resolve staged app, generated paths ignored. No stamp from latest disk reported as loaded. Capture limits supported registered owner; no arbitrary-listener/per-session attestation claim.
 - Validation: fail-first owner/factory/diagnostic negatives, generator/inventory/cache/staging tests, actual built native server plus real socket handshake/frame/ping/close and retained route/factory reload refusal/fresh owner match, bounded cleanup/provider0. Actual isolated production Next route proof requires explicit panel-management authorization under AGENTS; prepare opt-in fixture but do not launch until authorized. Native socket/synthetic diagnostic and source route tests continue; production Next remains unverified until authorized. Narrow Core/web/runner types/affectedtests/audits, owning artifacts sequentially; no full suite/paid Lab. Provision first and root signals ready, then freeze report for independent supervisor checks.
 
-### Brief: p0-command-session-binding (next paired task)
-- Repository: isolated paired task assigned by supervisor; generic Core gateway command trust.
-- Task: Reproduce/fix known pending command settlement by a different ready session; preserve original sender identity through promise and event boundary.
-- Owns: Core client-gateway/service/{commands,inbound}.ts and existing client-gateway/tests/service.test.ts; focused architecture paragraph; own downstream reports/p0-command-session-binding.md. No service.ts/t310identity, protocol/session lifecycle/public contract changes or durable journal implementation.
-- Required reads: Current State, own proposal, actual pending/inbound/event owner and real pairClient test helper, Core instructions.
-- Definition of done: settle accepts sender sessionId and checks pending owner BEFORE timer deletion/resolve; explicit wrong-session disposition suppresses inbound publication. Real ready A/B: B sends known A command ID, A promise remains pending/no event; A valid answer succeeds once. Wrong result cannot shorten original timeout. Unknown/late event compatibility remains explicitly unbound and is not certified receipt evidence; durable journal and late-session attribution still required.
-- Validation: fail-first owning real service tests, narrow gateway/runtime transport tests, Coretypes/build/audits. No providers/panel/browser/fullsuite. Product edits wait provisioning; freeze precise report for supervisor independent rerun. No git/shared docs.
+### Brief: qualification-readiness-first-three (t312)
+- Repository: isolated downstream fxwork/t312-qualification-readiness-first-three; shared Core read-only. Worker p0_build_identity.
+- Task: Implement only professional-network-audit-stale-requests, auction-marketplace-remove-watched-accessories and crossborder-marketplace-collect-official-coupon-only from reports/qualification-ten-new-task-proposal.md. They are NEW tasks, not recovered historical IDs. Preserve every existing57 ID/instruction/oracle.
+- Owns: those three site live-tasks.ts and exact manifest/barrel owners; new qualification/{workflow,expected,index}.ts and tests/expected.test.ts; existing site honest/naive browser tests. Name exact current owners in report before editing; no state/renderer edits without supervisor review. Own reports/qualification-first-three.md. No shared inventory test/document edits, Core edits or other sites.
+- Required reads: Current State, own proposal sections1/4/9, scenario contracts and owning tests. Literal exact datasets/account outcomes; unique workflow/columns. Each honest browser path and wrong-outcome negative must exercise actual fixture account facts, not copied success metadata.
+- Validation: narrow owning scenario/oracle tests, source/e2e typechecks, owning fixture build, real isolated Chromium honest/negative proof, audit. Provision first; wait supervisor ready before edits/frozen checks. No provider/Lab/fullsuite/panel/git. Freeze report with commands, measured counts and limits; root independently verifies. No qualification pass claimed from fixture readiness.
+
+### Brief: durable-command-reconciliation (t313, bounded owner discovery first)
+- Repository: paired fxwork/t313 trees; Core gateway/runtime command trust boundary. Worker p0_acceptance. Provisioning; no source edits until ready and exact owners approved.
+- Task: Trace actual command dispatch/ack/project-run IDs, then implement a durable command claim/result join before send and truthful restart reconciliation, preserving normal session/action permissions. Candidate receipts must not treat unknown/late unbound events as effects evidence.
+- Approved first source partition: generic client-gateway/service/command-ledger/{contracts,controller,index}.ts + owning tests; actual project storage/project/command-ledger/{contracts,migration,store,index}.ts + real SQL tests and additive project barrel; own report. Production commands/inbound/service/executor/context wiring still held for the next serial partition. No authority namespace/cutover source approved. Exact discovery report names both real dispatch paths and missing context.
+- Required contract: durable stable attempt/command/client/session/run binding independent of payload digest; claim before send; same-key conflict refuse; pending/restarted effects remain unknown, no blind resend; full owner/operation/request/result joins refuse borrowed receipts. Receipt-only safe status/classification/timestamps/resultdigest, no raw parameters/page/results/secrets. Restart missing usable payload returns result_unavailable, never fake extraction success. Actual dispatcher/context/permission joins must land before any production authority claim. Allocate local migration after0026; direct context.sql inside TX.
+- Validation: real SQL lost acknowledgement/process restart and paired sender negatives; bounded owning tests/types/build/audits. No provider/panel/fullsuite/git/shared docs or user-state mutation. Describe unsupported joins before source approval, avoid model outcome claims. Freeze brief in own report for root review; root verifies integrated code independently.
+
+### Brief: user-script-browser-feasibility (t314)
+- Repository: isolated downstream fxwork/script-feasibility/t314-user-script-browser-feasibility; private sibling Core detached/read-only. Worker p0_cancel_control. Provision first; no edits until ready.
+- Task: Implement a provider-free actual installed Chrome/Edge User Scripts API feasibility fixture, not a product capability. Read p4-script-request-feasibility.md, current browser harness and current official primary API/permission/CSP docs. Confirm installed executable versions; never inspect real browser profiles.
+- Initial owns: own reports/p4-user-script-browser-probe.md plus proposed focused apps/extension/e2e/user-script-feasibility/ fixture/harness/owning tests. Name exact cohesive files for supervisor before edits. Generate minimal probe extension/local pages in ignored owned temporary directories only; no production manifests/action registry/settings/Core change.
+- Required proof: supported135+ one-shot USER_SCRIPT, missing/revoked user-controlled permission/toggle, site/document targeting, page CSP and per-world connect-src behavior. Exercise only isolated synthetic pages/accounts; no secrets, real sites, infinite-loop page hangs or claims of hard termination. Network isolation versus DOM-triggered navigation must be reported separately and honestly. No debugger permission/input/JS executor in product.
+- Limits: modern branded Chrome extension loading may require documented CDP loadUnpacked test infrastructure; investigate actual availability, never infer from Chromium134. Browser UI enablement only in owned temporary profile, not editing browser storage or normal settings. Firefox parity remains separate unless an actual bounded supported probe is feasible.
+- Validation: exact actual browser/version/API/method outcomes, errors and current-source fingerprint; bounded cleanup verifies resolved owned roots. No provider/panel/fullsuite/git/shared docs or qualification claim. Browser/API prototype is readiness evidence, not permission to ship arbitrary JS or enable requests. Freeze report/source for root independent rerun.
+
+### Brief: qualification-state-preservation (t316)
+- Repository: fxwork/qualification-next/t316-qualification-state-preservation, private sibling Core detached/read-only. Worker p0_build_identity; provision15520 pending, no edits until ready.
+- Task: Add only NEW bigbox-retail-ensure-soap-quantity, everything-store-restore-saved-cloths and local-classifieds-remove-sold-saves from ten-task proposal sections2/5/7. Preserve all original57 and t3123 additions; total63 only after combined integration.
+- Initial owns: those3 site live-tasks/manifest and necessary barrel owners; new qualification/{workflow,expected,facts,index}.ts + owning tests; existing owning browser/scenario tests, narrow actual-account oracle readout owners to be named BEFORE editing. Own reports/qualification-state-preservation.md. No shared global inventory test/document, other sites/Core/product node edits.
+- Contract: exact literal independent row identities/order/quantities/full account state. Bigbox ensure total3 twice produces no added line/store change; everything transfers existing saved S1 without duplicate/newline and keeps S2; local removes Sold save without hidden/messages/offers. Actual current account facts, not stale readouts or just count/confirmation; explicit permission labels. Refresh only private instrumentation from actual mutation response if necessary, preserve visible fixture quirks. Wrongoutcomes fail before manual reload; also verify durable reload.
+- Validation: owning old+new unit/oracle tests, real isolated Chromium honest and deliberatewrongoutcome probes, source/e2etypes/owningbuild/audit. Literal authored records independent from renderer/filter code; record lifecycle/staticcodepin exactly. No provider/fullsuite/panel/git/shared docs. Freeze reports and source for independent root checks; no model/extension qualification claim.
 
 ## Work Ledger
 
@@ -200,10 +210,40 @@ Earlier verified units and decisions moved intact to the [execution archive](./m
 - Outcome: Durable readable handoff; whole plan remains active.
 - Follow-up: independently review current worker source/results; preserve held Next startup and paid qualification gates.
 
+### 2026-10-07 - t309 root verification and next bounded dispatch
+- Agent: Codex supervisor.
+- Changed: staged complete-project snapshot CAS/immutable history/receipt join reviewed after current paired dev merge; root required borrowed-owner/operation/generation negatives before accepting storage claim. Production activation remains unavailable. Concrete all-writer/read cutover report retained as a proposal, not a product switch.
+- Validation: root37/37 zero skips (testtotal9.73s, wall29.95s), actual fluxiqcheck0(38.432s)/build0(46.106s), Coreaudit0; downstream integration gate follows. Full receipt reports/p2-staged-authority-foundation.md.
+- Outcome: Narrow staged foundation verified; no production capture/permission/compiler/active-reader/promotion or OS-kill/power-loss proof. Paired integration follows. t311 pushed Core210453c1/downstreamaed8ae54.
+- Follow-up: t310 independent merged-source review/native socket probe; prepared Next proof requires explicit panel authorization. t312 implements three clearly NEW tasks toward67; original57 remain intact. User has not supplied the historical missing ten, so proposed additions are labelled new rather than recovered. No paid qualification or user panel started.
+
+### 2026-10-07 - paired staged foundation pushed; command trust next
+- Agent: Codex supervisor.
+- Changed: t309 integrated/pushed downstream1115c14a/Core595daf8d; immutable staged-only snapshot foundation remains unavailable to ordinary production writers. t313 provisioned as a paired command reconciliation unit; exact owners/production join reviewed before edits.
+- Validation: root37/37, actual types/build and both audit gates0. Initial taskfinish issued from task worktree refused because dev belongs to main checkout; reran from main successfully, no forced checkout/removal. Core narrow gates observed before --skip-checks integration.
+- Outcome: Paired coherent unit pushed. New managed-ID authority proposal is not approved source or a substitute for original candidate/promotion scope; existing-project requirement remains open.
+- Follow-up: t310 merged current source independently owner8/8 and generator/cache9/9; package checks/build/proof in progress. t312 first3 new readiness tasks; paid qualification remains held. No user panel managed.
+
+### 2026-10-07 - t315 native structured field typing verified
+- Agent: Codex supervisor.
+- Changed: native number/calendar/time controls admit exact whole value before one synthetic replacement input/change; malformed native formats preserve old value. Text/autocomplete remains per character, page cancellation/readback/redaction/submit gates preserved. Architecture paragraph updated.
+- Validation: initial stale-build refusal then owning rebuild; real fail-first1.5 returned failed; final production Chromium1/1 passed17.5s (18.8s total), background/content identity matched, all6 native type families and cancellation/revert/readonly/malformed/text/redaction/no-submit cases. Owning3targets22files/build0; source/e2etypes0 finalrepeat observed; final taskaudit0 after regenerating stale handoff index. No broad suite/provider/panel/Core source change. Full report reports/p3-sanitized-field-typing.md.
+- Outcome: Narrow typed readiness slice verified; not trusted keyboard input or async/React/Edge/Firefox/model qualification. One fixture synthetic value was accidentally in commandId; corrected ordinal IDs before final success.
+- Follow-up: t310 actualnative identity verified, preparedNext test awaiting explicitpanel authorization; t312 frozen3 new tasks rootreview; t313 durable command infrastructure and t314 installedbrowser script feasibility active.
+
+
+### 2026-10-07 - installed-browser feasibility independently verified; next3 tasks
+- Agent: Codex supervisor.
+- Changed: t315 pushed downstreamd1d57889 after final typecheck and corrected generated-index integration gate0. New t316 bounded3-site preservation unit provisioned; no shared Core movement. Current reports keep production/native/browser readiness separate.
+- Validation: root t314 actual installed Chrome154.0.8037.98/Edge154.0.4258.62 prototype2/2 zero skips9.9s on identical7-file fingerprint87f504c1c75b7dd09268f01ae1bd49301560d001da01f4881a773247b4e1baee. Missing/revoked enablement and stale/ungranted document refuse; isolated USER_SCRIPT works; no providers/panel. Final merged types/audit follow.
+- Outcome: API feasibility verified, not arbitrary-JS confinement: connect-src denial blocked fetch, but DOM image/navigation requested network; even stricter world CSP did not stop tested anchor navigation. No product script capability, requests toggle or browser-minimum change.
+- Follow-up: P4 must resolve admitted script surface/normal consequence and requests-OFF semantics before enabling. t312 root required current-page account oracle update from actual order response; negatives now refuse without reload and worker refrozen. t313 root required immutable bounded canonical claims/receipts before production wiring. PreparedNext question still unanswered, user panel unmanaged.
+
+
 ## Open Questions
 
 - Recording scope is resolved by the newer user order: evidence beside mandatory instructions, after A-D qualify. Do not reopen the older September ambiguity.
 - Script channel, store eligibility and Firefox parity need a concrete feasibility result. Preserve no-debugger JS and requests-OFF policy meanwhile.
 - Direct-request origins/session/redirect policy needs a concrete design; do not inherit the old any-origin default as authorization.
 - Who runs the Phase 6 release-candidate script as the "person unfamiliar with FluxIQ"? Owner: user.
-- Requested67task inventory has57existing rows; ten are unaccounted. Optional user question asking for an existing list versus proposing new tasks remains unanswered. Do not fabricate historical IDs/passes; explicit new definitions and independent oracles required to add scope.
+- Historical requested67task list had57existing rows; originalmissingten remain unknown. Supervisor is implementing ten clearly NEW proposals (t312 first3; t316 next3), preserving original57, with exact oracles; no recovered-history or qualification-pass claim. Optional original-list question remains unanswered.

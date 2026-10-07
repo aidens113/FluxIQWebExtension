@@ -6,10 +6,10 @@ regressions. No row is complete merely because a source report identifies it.
 
 ## Current work and acceptance
 
-Rows1?3 integrated in t301; rows4?5 in t303. t306 fixes malformed predicates
+Rows1-3 integrated in t301; rows4-5 in t303. t306 fixes malformed predicates
 and implicit-focus text in row6 (other matching semantics pending); t308 fixes
 fixture paginator row16 after independent exact-oracle Chromium2/2.
-Other rows await bounded file-owned briefs. Preserve canonical
+t315 fixes native number/calendar/time sanitization in row10 after real Chromium1/1; asynchronous application acceptance remains separate. Other rows await bounded file-owned briefs. Preserve canonical
 registered outputs, browser/domain boundaries, consequence gates, sensitivity and
 truthful unknown/partial evidence. Every fix needs its owning tests and a real
 isolated browser proof where behavior is browser-dependent. Compilation is not
@@ -39,8 +39,7 @@ that proof. Rebuild and identify the final pair before paid qualification.
 ## Inventory and policy limits
 
 Current source enumerates 57 tasks across ten sites. The gaps report lists every
-ID and four checked historical snapshots with 55. The planned 67 denominator has
-ten unexplained rows; do not invent IDs, claim 67 coverage or reduce scope silently.
+ID and four checked historical snapshots with 55. The historical planned67 denominator had ten unexplained rows. The supervisor approved ten explicitly NEW proposals without claiming recovered historical IDs; t312 implements the first3, pending independent integration (total60). Do not claim67 coverage or reduce scope silently.
 Candidate affected-task counts overlap and mean zero demonstrated newly unblocked
 tasks until actual qualification. Full task creation/repair denominator remains in
 the MVP plan.

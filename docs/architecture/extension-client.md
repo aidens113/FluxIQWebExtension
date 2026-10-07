@@ -2101,3 +2101,7 @@ The existing panelStopRun relay accepts an optional Flow ID for a build and
 calls Core's `cancel-flow-bootstrap`; a run still uses `cancel-runtime-session`.
 Supplying both target IDs is refused. No target retains the legacy active-run
 scan. Cancellation does not promise rollback of actions already sent to a page.
+
+### Native structured field typing
+
+Text and autocomplete fields keep per-character synthetic keyboard/input events. Native number, date, time, datetime-local, month and week fields admit the exact requested string through a detached same-type native control before committing one replacement input/change sequence; incomplete prefixes otherwise sanitize to empty. Invalid format, readonly/disabled controls or cancelled keyboard/beforeinput events do not partially clear the field. Production type action still reads the actual value after application handlers and applies existing sensitive-value redaction and submit consequence rules. This is synthetic DOM input, not trusted browser keyboard input; immediate readback does not certify later asynchronous application changes.
