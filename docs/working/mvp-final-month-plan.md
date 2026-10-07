@@ -431,3 +431,11 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Validation: owning extension96/96 + domain18/18, affected source/test typechecks and structure audit0, three-target22-file builds, production Chromium1/1 (8.4s). Initial ad hoc native-addon bundling probe corrected to established ESM/external boundary; no product defect inferred.
 - Outcome: Narrow P3 slice verified; task integration follows.
 - Follow-up: Core/domain executing identity, receipt/store authority and trusted start/oracle joins remain. No paid A-D, Firefox/Edge live or TLS redirect proof. Full handoff in reports/p3-browser-navigation-readiness.md.
+
+### Brief: p2-authority-mutation-inventory (task t304 companion)
+- Repository: inspect current main Core C:/Users/osrs_/FluxStuff/!FluxIQ read-only; write only paired t304 downstream reports/p2-authority-migration-inventory.md.
+- Task: Discover every mutable dependency of getLlmExecutionBinding and the ordinary save/delete paths that must join a single promotion authority. Continue the already inspected p2-promotion-design.md; do not rediscover its conclusions.
+- Required reads: main and t304 Current State; p2-promotion-design.md; Core instructions; binding digest/canonical plan route ownership; flow instruction and publication/dependency stores.
+- Owns: only the named report. No source, shared working docs, git, provider/browser/server commands, baseline or migrations.
+- Definition of done: concrete owner/function table for instruction source/revision saves/deletes, settings, flow/router/subflow/graph reads/writes, publication/revision dependency mutation, caches; show which uses project SQL transaction versus JSON/global projection. Recommend the smallest executable migration phases that do not let an ordinary writer evade CAS, and required restart/concurrency negatives. Distinguish unresolved reader/writer authority from proposed design.
+- Validation: source inspection with paths/function names; no atomicity success claim. Return status, inspected files, own report path and exact unresolved seams.
