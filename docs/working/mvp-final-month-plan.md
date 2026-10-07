@@ -25,7 +25,7 @@ Core typecheck/build and both integration audits pass. Running Core-server ident
 is integrated/pushed (Corec8501c15/downstream267a4215), after independent
 Core/routes59/59, generator10/10, HTTP15/15 and headed identity/runner61/61.
 Loaded domain host t305 is independently verified (Core6/6, generator/cache21/21,
-headed actual built host/runner55/55); integration follows. t299 candidate facade is integrated (Core7f9bae15/downstreamcb792dee)
+headed actual built host/runner55/55); integrated/pushed Corec051b8f7/downstream3b8f78df. t299 candidate facade is integrated (Core7f9bae15/downstreamcb792dee)
 after independent actualservice/API53/53, package/dependentweb types and audits.
 t300 receipt/detached infrastructure is integrated (Core386b4c15)
 with production joins pending. t301 typed readiness is integrated (b2ad00de);
@@ -539,3 +539,10 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Required reads: Current State and own proposal; relevant backlog16, owning client/tests/helper.
 - Definition of done: fail first with actual Chromium Next1?2?3, then use current+1 and retain full23unique/24includingrepeat expected dataset; naive promoted all-card extraction still rejected. Preserve challenge/attempt guard/history/Previous/filter semantics; do not claim rapid press/popstate coverage unless exercised.
 - Validation: owning scenario build/two Chromium tests, narrow scenario test, source/e2e typechecks/audit. No full suites/provider/userpanel/debugger/external site. Wait provisioning before checks, report honest limits and freeze for supervisor.
+
+### 2026-10-07 - t307 atomic graph import independently verified
+- Agent: Codex supervisor.
+- Changed: revision1 existence decision and Flow/revision/node/edge/region/operation/FTS/bounds/partition writes share one actual project SQLite transaction and passed executor; current paired dev merged before final checks.
+- Validation: root19/19 owning regressions zero skips8.10s, fluxiqcheck0(36.4s)/owningbuild0(72.7s); current audits/integration gate follow. Root reviewed SQL boundaries; trigger rollback/reopen retry, separate-owner serialization and lost COMMIT acknowledgement tested. Full receipt reports/p2-atomic-graph-import.md.
+- Outcome: New graph import atomicity verified; paired integration follows. Existing partial legacy imports remain undiagnosed/unrepaired. No complete topology promotion or browser/provider/power-loss proof.
+- Follow-up: t309 staged complete-project contract foundation and all-writer/read authority cutover, t310 actual server adapter provenance, t308 paginator. User panel unmanaged; paid A-D remain held.
