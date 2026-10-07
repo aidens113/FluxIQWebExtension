@@ -1,64 +1,76 @@
 ﻿# P0 command result session binding
 
-Status: Proposal complete; source-confirmed defect, executable fail-first pending task assignment.
+Status: Worker complete; source/report frozen, awaiting independent supervisor verification and integration.
 Worker: p0_build_identity
 Date: 2026-10-07
-Scope: Main Core read-only inspection; only this downstream report written. No source, build, test, provider, panel or git mutation.
+Scope: Paired t311 command/session trust fix; no provider, panel, full suite, git mutation or shared-document edit.
 
 ## Current State
 
-A ready client can settle another ready client's pending command if it knows the command ID. packages/fluxiq/src/client-gateway/service/commands.ts executeAction records { sessionId, resolve, timeout }, but settle(result) looks up only result.commandId and clears/deletes/resolves without checking the recorded sessionId. service/inbound.ts receives the authoritative transport sessionId and requires that session to be ready, but calls commands.settle(message.payload), dropping that identity. This is confirmed by source, not yet executed as a regression. Knowledge or leakage of the target command ID is a prerequisite; this inspection does not claim a mechanism that reveals random IDs to another client.
+A known pending action result is now bound to the transport session that received its command. ClientGatewayCommands.settle(senderSessionId,result) looks up the pending command and checks pending.sessionId before clearing the timer, deleting the entry or resolving the promise. It returns an internal disposition: settled, unknown_command or wrong_session. Inbound passes the authoritative receive argument sessionId and suppresses action-result publication for wrong_session. No client-authored identity field supplies that check.
 
-A related path within the same owners must be included: inbound also publishes client.action_result regardless of settlement. runtime/client-gateway-transport.ts forwards that event as command.result, omitting the gateway event's session identity. Guarding the promise alone would still let the mismatched known-pending result reach observers. The proposed inbound change suppresses that specific wrong-session event. Unknown-command/late-result event semantics should remain unchanged in this bounded unit; durable receipt/journal behavior is separate.
+Real service regressions passed after failing first: another paired ready client cannot settle the owner's promise or publish the counterfeit result event; the original owner can answer before its deadline, and a rejected foreign answer cannot shorten or reset the original timeout. Existing unknown/late event behavior remains unchanged and explicitly unbound. Those events must not be used for authoritative candidate verification or represented as durable performed-command receipts.
 
-## Exact proposed owners
+## Exact changed files
 
-Core source:
+Core:
 
-- packages/fluxiq/src/client-gateway/service/commands.ts: require sender sessionId in settle, compare it to pending.sessionId before clearTimeout/delete/resolve, and return an explicit internal disposition (settled, unknown_command, wrong_session).
-- packages/fluxiq/src/client-gateway/service/inbound.ts: supply the actual receive argument sessionId, not a payload field; return without publishing client.action_result when disposition is wrong_session. Preserve existing readiness gate and unmatched/late-event behavior.
-- packages/fluxiq/src/client-gateway/tests/service.test.ts: real service integration tests through existing pairClient, clientMessage, settledValue and onEvent helpers/API.
+- packages/fluxiq/src/client-gateway/service/commands.ts
+- packages/fluxiq/src/client-gateway/service/inbound.ts
+- packages/fluxiq/src/client-gateway/tests/service.test.ts
+- docs/architecture/automation-studio/client-gateway.md
 
-Downstream documentation: this report only. No service.ts edit: its public receive/executeAction/onEvent delegators already expose the required seam; t310 owns that file's identity work. No types.ts/contracts/runtime transport edit is required. Proposed dispositions are internal to the existing class method, not a new wire protocol. Supervisor should approve the small event suppression explicitly before execution.
+Downstream: docs/working/mvp-final-month-plan/reports/p0-command-session-binding.md only.
 
-## Concrete fail-first regression
+No service.ts, protocol, types.ts, session lifecycle, runtime transport or t310 identity owner changed. The existing service delegates expose the required testing seam. The focused architecture paragraph documents pending-only binding and durable/late limitations.
 
-Use ClientGatewayService, not mocked commands or a direct private map assertion.
+## Discovery and implementation ledger
 
-1. Pair two distinct clients A and B using existing pairClient; assert both snapshot sessions are ready. Both can share an operator so the test isolates exact transport-session binding rather than different-user policy. Do not log readyToken values.
-2. Under fake timers in try/finally, dispatch an action to A using executeAction(A.sessionId, ...). Track response.result with settledValue. Subscribe via onEvent, collecting only client.action_result. Assert the command is queued to A, not B.
-3. B sends client.action_result through gateway.receive(B.sessionId, clientMessage(...)) using the returned command ID and a recognizable counterfeit result. Flush promise microtasks using the existing async timer helper or explicit Promise.resolve. Assert tracked result is undefined and no action-result event was published. On current source this fails because B settles A's promise and emits the result.
-4. Advance to one millisecond before the configured default command deadline; still pending. A sends the same command ID with a distinct authentic result. Assert promise resolves to A's exact payload and one event with A.sessionId appears. Advance beyond deadline and ensure the authentic result remains unchanged. This proves rejection leaves the pending entry/timer alive and the legitimate owner can finish.
-5. Separate timeout regression: B's attempted settlement does not stop the command's original deadline; advance to deadline and require normal timed_out. Drain fake timers and restore real timers in finally, even when fail-first assertions throw.
-6. Preserve the existing same-session correlation, answer-margin/default-timeout, readiness/pairing, reconnect and recording tests. A narrow unknown-command event regression can pin unchanged compatibility if the implementation uses dispositions; no durable correctness claim follows from it.
+1. Main source confirmed the defect: executeAction stores sessionId with each pending promise; former settle(result) used only commandId. Inbound requires a ready sender but formerly dropped its identity during settlement, then published the result regardless of owner. Runtime client-gateway-transport forwards action results as command.result without session identity, so promise-only guarding would leave a false event path.
+2. Knowledge of another command ID is a prerequisite. No source inspection or test demonstrated random-ID leakage; the regression intentionally supplies the returned owner's ID to the second ready client.
+3. Supervisor assigned isolated paired t311 and approved the exact owners. Three test-only cases were authored before product edits: two foreign-session regressions and one unknown/late compatibility case. Provision3184 completed0; its Core cache build was not stamped because test inputs changed during provisioning. That output was not a frozen-source validation gate or a product failure.
+4. Worker fail-first command selected the two another-ready-session tests against unchanged product. Both failed: the tracked owner's pending result already contained counterfeit succeeded from the other client. Vitest2.1.9: 2 failed/14 skipped,23ms tests,972ms total. This executed real service handshake, pairing, dispatch, inbound and pending promises rather than mocks/private-map assertions.
+5. Applied owner-session check and wrong-session event suppression; unknown and expired IDs retain their prior event behavior. No random-ID, timeout, answer-margin or journal change.
+6. Frozen-source owning tests passed23/23 (service16 + runtime transport7),344ms tests,1.52s total. Both sessions are genuinely ready, share an operator, and have distinct client/session identities. The command queues only to its owner. The first regression checks pending/no event after counterfeit, legitimate owner resolution and exactly one owner event; the second checks timeout at the original100ms deadline. Fake timers are drained/restored in finally. Compatibility case proves unknown and post-timeout foreign events still publish without changing the timed-out promise.
+7. Core package check passed0, executed33,505ms. Owning Core package build passed0, executed40,599ms and stored5,970 generated files in the shared cache. Core structure audit passed280warnings/349baselined; downstream report-only audit passed176warnings/117baselined. No baseline edits. Both diff checks passed and status showed only the approved files.
 
-No long wall-clock wait, browser, model or server process is required for this transport/session bug. These tests exercise the real Core service, handshake, pairing, dispatch, inbound routing, pending promise and event fan-out. They do not prove HTTP/WebSocket authentication end to end.
+## Exact reproduction commands
 
-## Proposed validation commands after assignment
-
-From the assigned paired Core packages/fluxiq directory:
+From the assigned Core packages/fluxiq directory:
 
 ```powershell
 pnpm.cmd exec vitest run src/client-gateway/tests/service.test.ts --testNamePattern "another ready session"
-pnpm.cmd exec vitest run src/client-gateway/tests/service.test.ts
+pnpm.cmd exec vitest run src/client-gateway/tests/service.test.ts src/runtime/tests/client-gateway-transport.test.ts
 pnpm.cmd run check
+pnpm.cmd run build
 ```
 
-From assigned Core repository root:
+The first command was run before the product fix and failed2/2. The second command was run after the fix and passed all23, including those same regressions. No test source changed afterward.
+
+From each paired repository root:
 
 ```powershell
 node scripts/structure-audit.mjs
 git diff --check
 ```
 
-Run the first regression command before product edits and record the exact observed counterfeit settlement failure. After the bounded fix, rerun that command then the owning service file, package typecheck and structure audit. No full suite. Build only if supervisor requires it for integration/dependent checks. These are proposed commands, none executed during this investigation. Report current pair revisions and observed counts after provisioning, not guessed from main's ongoing task work.
+No browser or external server is needed for this generic transport-session flaw. Validation uses real ClientGatewayService and existing pairClient/clientMessage/settledValue/onEvent seams. No HTTP/WebSocket authentication end-to-end or production server startup claim is made.
 
-## Distinct deferred durable command journal gap
+## Tested identity
 
-executeAction generates a fresh random UUID, keeps its pending map in process memory, and deletes entries when its timeout resolves. settle ignores results for IDs no longer present. There is no durable command identity/outcome receipt in this inspected owner. Inbound currently still emits unknown/late results, so the precise statement is that late results cannot settle the expired pending promise; not that every downstream observer drops them. This unit must not claim restart recovery, idempotent retry, at-most-once side effects, uncertain-outcome reconciliation or late-result journal retention. Those require a separately designed durable contract.
+- Core task base: c2ea1e5dce112f5f12d8fce816210e5ee2505b5d, plus the four approved uncommitted changes.
+- Downstream task base: 425441a104695adf59cc4195dc4203997598c11a, plus this report.
+- commands.ts SHA256: B89B564F9353BAC1FAB6741FC584F26CFB626E7DB6D83ED6FC9C5F77CD945B9E.
+- inbound.ts SHA256: C0FBFEC2CD5CCDD5C97B96E215222BA3EE496F165B49DE75BB9B3F8189F48A86.
+
+These identify tested disk sources, not a running server attestation. Generated artifacts remain untracked. Supervisor owns merging current dev, independent reruns, integration and commits/pushes.
+
+## Deferred durable command journal and receipt gap
+
+executeAction still creates a fresh random UUID, keeps pending entries only in process memory and deletes them on timeout. Results for IDs no longer present cannot settle the expired promise, but inbound still emits unknown/late action-result events under the pre-existing contract. A late result from a different session is therefore still an unbound client report; the compatibility test deliberately preserves that limitation. Future authoritative late acknowledgements require durable command identity, persistent client/session attribution and reconciliation across restart. This slice does not establish restart recovery, idempotent retry, at-most-once side effects or receipt retention.
 
 ## Read inventory and limits
 
-Read downstream MVP Current State; Core MVP Current State; Core AGENTS relevant role, boundary, structure/validation guidance; commands.ts; inbound.ts; types.ts PendingCommand; service.ts receive/executeAction/onEvent delegators (read-only); full owning service.test.ts and existing helper implementations; event-bus.ts; runtime/client-gateway-transport.ts result forwarding branch; packages/fluxiq/package.json check/test commands. Source searches found commands settlement called by inbound and identified the runtime event consumer; an initially guessed automation-studio/runtime/client-gateway directory does not exist and was not treated as an owner.
+Read downstream MVP Current State and written bounded brief; own proposal; Core MVP Current State and relevant Core AGENTS role/boundary/structure/documentation/validation guidance; commands.ts; inbound.ts; types.ts PendingCommand; service.ts public receive/executeAction/onEvent delegates; full service.test.ts and existing pairing/promise/message helpers; event-bus.ts; runtime/client-gateway-transport.ts action-result forwarding; existing runtime transport test; Core client-gateway architecture paragraph/context; packages/fluxiq/package.json scripts. Source search identified inbound as command settlement caller and the runtime event consumer. An initially guessed automation-studio/runtime/client-gateway directory does not exist; no source owner was invented there. An initial report read used the Core cwd instead of downstream and found no report; the correct downstream report was then updated.
 
-No execution, production behavior proof, source change, task branch creation, commit or push occurred. The supervisor must assign a task and authorize exact owners before implementation. Native gateway identity and durable journal work remain separate.
+No wire protocol, owner reconnect migration, revocation lifecycle, provider/model execution, browser behavior, durable journal, production candidate acceptance or full-suite validation was exercised. This is a complete bounded pending-session fix; the broader P0 receipt/qualification work remains open.
