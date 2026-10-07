@@ -56,7 +56,7 @@ hardening. In-flight t334 (click executor), t335 (installer, never compiled) and
 t337 (grammar for one sentence family) are WIP commits on their own branches, not
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
-**In flight.** t342 round 3, the first live lane A candidate-mode build (lead).
+**In flight.** t354 candidate build survives an unusable reply and accounts for its spend (blocks the next candidate probe).
 
 **Next order.**
 
@@ -135,6 +135,14 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
+
+### Brief: t354 a candidate build survives an unusable reply and accounts for its spend
+- Worker: t354-candidate-resilience (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t354\` (Core-paired, branch `task/t354-candidate-loop-resilience`); edits in its `!FluxIQ` tree. Report: `docs/working/mvp-final-month-plan/reports/t354-candidate-loop-resilience.md` in the t354 downstream tree.
+- Fact (lane A round 3, `run-muyqgopm-1bfa7054`, t342 report round 3 and its debug file): after 16 clean exploration decisions the model wrapped a complete `core.submit_candidate` call as `"kind":"callId"` instead of `"tool_call"`, and that one reply ended the build with `flow_bootstrap.unexpected_error` at $0.020980. C1: the candidate loop's options (`runtime/service.ts` candidate branch, near line 1565) lack the `unusableDecisions` retry the legacy loop passes (line 1596). C2: the candidate branch never moves the failure stage to `provider_output_validation` (legacy does near line 1633), so the chat said the model could not be reached. C3: a failed candidate build carries no spend (near line 1574), so the per-build ceiling check read $0 for $0.0206.
+- Goal: the candidate loop gets the same bounded unusable-reply retry and stall handling as legacy (shared, not copied: one place builds those options for both); an unusable reply that ends a candidate build is staged and worded like legacy's; every candidate build ending carries its true spend into the failure, the per-build ceiling and the Lab's spend accounting.
+- Owns: Core `runtime/service.ts` (candidate branch and the shared loop-options helper only), `runtime/service/flow-bootstrap-commands/**`, `runtime/flow-bootstrap/candidate/**`, `runtime/llm/**` only if the retry option lives there, and their tests.
+- Must not touch: `docs/working/*.md`, conversations, the Lab. No commits, provider, Lab or panel. No new `as never` casts.
+- Definition of done: fail-first tests: one malformed reply then a valid submission continues the build; consecutive unusable replies stop at the shared bound with legacy's stage and words; a failed candidate build reports its spend and the ceiling sees it; legacy behavior unchanged. Owning tests, Core nonincremental typecheck and structure audit pass.
 
 ### Brief: t353 task tooling refuses to validate against a Core that is behind Core's dev
 - Worker: t353-stale-core (worker). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t353-finish-refuses-stale-core` (branch `task/t353-finish-refuses-stale-core`). Report: `docs/working/mvp-final-month-plan/reports/t353-finish-refuses-stale-core.md` in that tree.
@@ -461,6 +469,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: downstream `8ffc3f74`, pushed. `pnpm task finish` refuses, before any merge and in dry runs, when the Core the task builds against (the shared Core, or a Core-paired task's own branch) does not contain Core's dev, naming both commits, the distance and the fix (`pnpm task sync-core`, or merging dev into the paired branch); `--skip-checks` does not waive it; `pnpm task start` checks again after moving the shared Core (`scripts/task/core-currency.mjs`). `repository-layout.md` now says finish runs only the structure audit unless `--full-check`.
 - Validation: supervisor in the t353 tree: `pnpm task:test` -> 137 pass, 0 fail (worker showed the six new tests failing against the old `finish.mjs`); structure audit exit 0; `pnpm task finish t353` audit passed.
 - Limits: start's safety-net check has no test (a full start needs install and build); `scripts/task/` holds 20 files, past the 15-file advisory.
+
+### 2026-10-07 - Lane A round 3 (first candidate-mode build) ended at $0.021 on one malformed reply; t354 dispatched
+- Changed: `run-muyqgopm-1bfa7054`, candidate mode, admitted 23:22 UTC, dry run showed `trialRunner` and `startReset` true. Exploration was clean (16 decisions, no refused submissions, trials or completions) and the person's own words were saved (t349 confirmed live). The model then wrapped a complete `core.submit_candidate` call as `"kind":"callId"`, and that one reply ended the build before any candidate reached Core: no trial, judge, promotion or playback ran. Causes C1 (no unusable-reply retry in the candidate loop), C2 (wrong failure stage and words), C3 (a failed candidate build carries no spend, so the ceiling read $0) go to t354. Versus round 2 legacy: 18 calls and $0.021 against 38 and $0.057, but no outcome to compare yet. UI: Stop button and overlay placement now right; click cards still name no control and "Reading your instruction gave no answer" reappeared.
+- Validation: lead's run evidence: candidate dry run ready with 0 calls and `candidateTrial {trialRunner:true, startReset:true}`; live run 18 calls, $0.020980, `flow_bootstrap.unexpected_error`; no Lab processes left. Supervisor confirmed `unusableDecisions` appears only in the legacy loop options (`runtime/service.ts:1596`).
+- Limits: the trial runner, start-hook reset, trial judge, promotion and chat apply are still unexercised live. Lab slot 2 stays with t342; its `unchanged` guard refuses until source changes.
 
 ## Open Questions
 
