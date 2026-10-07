@@ -173,6 +173,14 @@ Active file-owned tasks only. Prior briefs and exact receipts are preserved in t
 
 - Root-only t333 additional owner: flow-bootstrap-commands/instruction-inventory.ts and owning test. Strict complete original-ID enumeration precedes any dedup/filter; actual service bridge stays serial after t331. Isolated helper4/4 pass is not actual caller/pinned-read proof. t331 public export review approves validating-only RequiredCommandContext.assertRequired/stop; private registration/issuance is never exported. Actual domain positives must obtain service-issued contexts.
 
+### Brief: actual native-web command authority (t334 provisioning; discovery only)
+- Worker: p0_build_identity. Pair fxwork/t334; report reports/p2-native-web-command-authority.md. Read this Current State, t331 report and existing domain/extension runtime architecture needed for the bounded discovery. No shared docs/git/provider/panel/fullsuite.
+- Map actual typed web-native definitions, registration/callback identity, IO/runtime adapter and background routing, genuine command-result receipt/consumer join and caller-subject attribution. Required mode currently supports Core policy actions; do not mistake typed definition names for trusted execution ownership.
+- Propose exact file-owned next partition for authentic required execution of supported typed web actions on BOTH IO paths. Reuse t331 actual node-entry issuer/handling and private registered callback/context; no JSON authority, public mint/registration or parallel result journal.
+- Define unsupported action/custom/code/request refusal before effects, nested graph/retry/repair/unknown continuation fences, exact outside-JSON context preservation and actual extension acknowledgement boundaries. Requests stay OFF; debugger JS forbidden.
+- Propose meaningful counterfeit/copied/dropped-context/late-result/cancel regressions plus actual identified Chromium fixture proof; unit receipt success never semantic acceptance. Private candidate attribution and oracle/reset remain separate dependencies.
+- Source HOLD pending READY, reviewed concrete API/owners and t331 integration. Do not edit source or test current t331 tree; proposal/report only, no live run or server launch. Keep first supported typed action scope explicit rather than broadly trusting all domain definitions.
+
 ## Work Ledger
 
 Earlier verified units, decisions and ledger detail moved intact to the [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
