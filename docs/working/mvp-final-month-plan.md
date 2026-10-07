@@ -163,6 +163,14 @@ Active file-owned tasks only. Prior briefs and exact receipts are preserved in t
 - Own reports/qualification-final-four.md only plus approved per-site source; no shared inventory/docs/Core/domain/node changes. Supervisor owns original baseline and67 aggregate tests/classifications.
 - Narrow scenario source/e2e types/owning fixture build/owning tests/real isolated Chromium/audit, no fullsuite/provider/panel/git/real profile. Freeze with commands/source digest/actual measured failures/results/limits. Root independently verifies/integrates; fixture readiness is not model qualification.
 
+### Brief: original-project-authority-cutover-review (report only)
+- Worker: p0_cancel_control; main Core/downstream source inspection, own downstream reports/p2-original-project-authority-review.md only. No source/build/browser/provider/panel/git/shared docs.
+- Read Current State, consultant-revision P2 authority requirements, verified staged foundation report and prior p2-authority-cutover-brief.md. Prior asql reserved-namespace/new-project-only proposal remains UNAPPROVED and does not satisfy original-project candidate acceptance. Preserve existing IDs and user data.
+- Find a coherent explicit adoption/capture/read/all-writer cutover using actual project SQL snapshot owner and original IDs. Reuse schema, normal compiler/permissions, source/settings/membership and all actual production readers/writers; no second graph schema or shadow-only feature claim.
+- Inspect exact prior writer table owners and actual project pool/UoW/outbox/coordinator boundaries; identify minimum first implementable partition and full later activation gate. Specify race handling when legacy writer begins before adoption and completes after capture, cross-process writers, missing graph/global canonical writes, file/instruction/index revisions. A lookup-only marker or callback preflight is not atomic fencing.
+- Consider a project-SQL claim/guard that all legacy official writers acquire before effects and release only after full operation, with adoption refusing pending/unknown claims; if viable explain migration/admission/restart/compatibility and enumerate exact ingress/read joins. Unknown interrupted file/global write cannot silently activate from mixed capture. Refuse unsupported dependencies without silently creating a new project.
+- Return concrete owner/contract proposal plus unsupported assumptions. No namespace/source implementation authorized. Root owns acceptance of architecture and integration; report is not proof or activation.
+
 ## Work Ledger
 
 Earlier verified units and decisions moved intact to the [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
