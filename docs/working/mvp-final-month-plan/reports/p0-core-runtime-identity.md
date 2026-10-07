@@ -1,6 +1,6 @@
 # P0 running Core runtime identity — t302
 
-Status: Complete (worker claim; independent integration verification pending)
+Status: Independently verified after current-dev integration; paired task merge pending
 Owner: p0-core-runtime-identity worker
 
 ## Current State
@@ -87,3 +87,11 @@ Root review found the first expected-build implementation checked only stamp-lis
 Added only downstream `core-identity/inventory.ts` and its barrel export, wired exact source/artifact key-set comparison into `expected.ts`, and expanded its owning test fixture. Enumeration matches the owning Core generator: all contracts/fluxiq `src` `.ts` and `dist` `.js` inputs, excluding directories named `tests`, plus both package.json files. Both key sets must match before any hashes or server request. Existing source/content/self-reader checks remain afterward. These negatives construct synthetic malformed receipts in owned temporary fixtures; no actual generated stamp was hand-edited and no Core source changed.
 
 After correction, the three inventory negatives pass; all current `core-identity/tests/identity.test.ts` tests pass16/16 (13 top-level plus3 subtests). Runner package typecheck, downstream structure audit and diff check exit0. Read-only admission against the actual current paired artifact still succeeds with digest `3762caac9b0146313209573f97e8cf9b76085b40fa7d8bdc290c1627bdc3b398` and107 reached inputs. No browser rerun or new paid claim is made after this correction. Root will rerun its independent retained-server proof after integration/rebuilding. Product source is frozen again; all checks stopped.
+
+## Supervisor integration verification
+
+- Merged latest Core dev (P1 facade, Stop and receipt/executor infrastructure) and downstream dev (typed/navigation fixes) before final artifact checks. Resolved service field conflict preserving both build cancellation and immutable identity; preserved both architecture sections.
+- Validation: Core generator/cache10/10; executing reader/diagnostic/real Next route owners59/59; Core package check/build0 and dependent webcheck0. Downstream HTTP owners15/15; runner typecheck0; both structure audits0. Root reviewed generator normalization, retained service capture, authenticated bounded projection, early gate and exact current file inventory.
+- Validation: regenerated all three extension targets (22 files each), then independent headed Chromium134.0.6998.35 retained-service proof plus identity/runner negatives61/61, no skips (32.2s overall; proof31.0s). Match admitted; stale source refused; regenerated copied executable reader and route reload retained old service refused; fresh process admitted. Provider/chat dispatch counters stayed0.
+- Intended merged Core artifactDigest: 4f29565327f008c5bad030ebc88f2859c7178c37d32aeda3aa7c7d95868d2424. Disposable altered-reader fixture909e38da4c20c5371683601703603842afa6c5fc6d67d56e7346c93aeefb1b78 is not the intended artifact.
+- P0 is still partial: separately bundled running domain host, server gateway adapter, iframe and installed Firefox/Edge live proof remain. No user panel or paid A-D run was started.

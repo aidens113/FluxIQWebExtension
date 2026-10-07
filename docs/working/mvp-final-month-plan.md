@@ -431,3 +431,10 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Validation: owning extension96/96 + domain18/18, affected source/test typechecks and structure audit0, three-target22-file builds, production Chromium1/1 (8.4s). Initial ad hoc native-addon bundling probe corrected to established ESM/external boundary; no product defect inferred.
 - Outcome: Narrow P3 slice verified; task integration follows.
 - Follow-up: Core/domain executing identity, receipt/store authority and trusted start/oracle joins remain. No paid A-D, Firefox/Edge live or TLS redirect proof. Full handoff in reports/p3-browser-navigation-readiness.md.
+
+### 2026-10-07 - t302 executing Core identity independently verified
+- Agent: Codex supervisor.
+- Changed: immutable executing-service capture, authenticated read-only identity diagnostic, exact expected source/artifact inventory and Lab gate before project/browser/chat/provider setup. Merged latest dev on both sides and resolved Stop/identity service field conflict preserving both.
+- Validation: generator/cache10/10; Core reader/diagnostic/real Next route59/59; HTTP15/15; headed Chromium identity/runner61/61 including retained service versus regenerated disk/reloaded route refusal; package/dependentweb/runner checks and both audits0, three-target extension builds22 files each.
+- Outcome: Paired unit verified, integration follows. Full commands/digests/limits in reports/p0-core-runtime-identity.md.
+- Follow-up: loaded domain-host and server-adapter identity, receipt/storage authority, independent browser oracle. P0/all-plan/live qualification remain incomplete; zero providers or user-panel management.
