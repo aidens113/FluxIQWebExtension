@@ -898,6 +898,34 @@ the target, compatible Core revision, Flow behavior, and retained evidence.
 
 ## Scenario lab and contract
 
+### Only the ten realistic scenarios run
+
+Every Lab or browser test run, live or provider-free, with a model or without
+one, opens only the ten realistic scenarios (user rule, 2026-09-29):
+`everything-store`, `crossborder-marketplace`, `bigbox-retail`, `job-board`,
+`local-classifieds`, `auction-marketplace`, `photo-social`,
+`social-network-feed`, `company-website` and `professional-network`. The other
+registered scenarios (`basic-form`, `product-catalog` and the rest) stay for
+unit tests and fixtures that never launch a browser.
+
+The list has one owner, `packages/test-runner/src/realistic-scenarios/index.ts`,
+and every launch entry refuses any other scenario before it starts anything,
+with a message that names the entry, the refused scenario, the rule and the ten:
+
+| Entry | Where it refuses |
+| --- | --- |
+| `pnpm lab run`, `interactive`, `replay`, `matrix --scenarios-json` | `scripts/lab/run-lab.mjs`, first, before the live-run guards, the Core checks and the build, so a refused run leaves nothing in the spend ledger (`scripts/lab/scenario-guard/`). The scenario must follow the command (`lab run <scenario> ...`) |
+| The runner's CLI (`packages/test-runner/dist/cli.js`, `fluxiq-lab`) | Right after it parses the command, for the same commands; `matrix --all` runs only the realistic scenarios; `bench` refuses a corpus that names any other scenario, which today is every corpus |
+| `pnpm lab:campaign` | Task selection: a task named by id on another scenario is refused; `--kind`, `--all` and a dry run's default choose among the realistic scenarios' tasks only |
+| `pnpm ui:e2e` | `scripts/run/ui-e2e.mjs`, before it prepares a workspace, from the scenarios each journey declares (`ui-e2e/realistic-selection.ts`); every provider-free journey opens a basic fixture scenario today, so the suite is refused |
+| `pnpm panel:golden` | `scripts/run/panel-golden-path.mjs`, on `FLUXIQ_LLM_SCENARIO_ID` (default `instruction-only-form`, refused) before Core starts |
+| Demo workspace browser sessions (`demo:*`, and every `ui:e2e` journey) | `withDemoBrowser`, before the scenario lab or a browser starts; its default page is `basic-form`, so a demo lane that names no realistic page is refused |
+| The extension chat check | `runExtensionChatCheck`, before the topology starts |
+
+The Lab's `.mjs` launchers import that barrel from source, before the runner is
+built; Node strips its types. The file therefore imports nothing and uses only
+erasable TypeScript.
+
 The lab binds only to `127.0.0.1`, rejects foreign `Host` headers, applies a
 same-origin content security policy, and keeps state in memory per server
 process. A random run token protects health, seed, reset, final-state, and

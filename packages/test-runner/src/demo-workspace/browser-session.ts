@@ -16,7 +16,8 @@ import { executable, processLogPath, ProcessSupervisor } from "../process-superv
 import type { DemoWorkspaceConfiguration } from "./configuration.js";
 import { approvePairingInPanel } from "./panel-navigation.js";
 import { openResponsiveExtensionPage } from "./extension-readiness.js";
-import { requireDemoScenarioUrl, startPersistentScenarioLabWithRecovery, waitForUrl } from "./scenario-lab.js";
+import { assertRealisticScenarios } from "../realistic-scenarios/index.js";
+import { demoScenarioIdOfPath, requireDemoScenarioUrl, startPersistentScenarioLabWithRecovery, waitForUrl } from "./scenario-lab.js";
 
 export async function withDemoBrowser<T>(
   config: DemoWorkspaceConfiguration,
@@ -27,6 +28,8 @@ export async function withDemoBrowser<T>(
   scenarioPath: string = "/scenarios/basic-form/",
   phaseTracker?: DemoLlmPreparationPhaseTracker,
 ): Promise<T> {
+  // Before the scenario lab or a browser starts: the demo lanes and `pnpm ui:e2e` open only the ten realistic scenarios.
+  assertRealisticScenarios([demoScenarioIdOfPath(scenarioPath)], "A demo or UI end-to-end browser session");
   const supervisor = new ProcessSupervisor();
   const token = randomBytes(32).toString("base64url");
   let context: BrowserContext | undefined;

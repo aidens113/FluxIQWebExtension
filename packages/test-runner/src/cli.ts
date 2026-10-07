@@ -13,6 +13,7 @@ import { inspectRun } from "./inspect.js";
 import { beginLiveLlmRun } from "./live-llm/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { runInteractiveSession } from "./interactive-session.js";
+import { assertRealisticScenarios, isRealisticScenario } from "./realistic-scenarios/index.js";
 import { runScenario } from "./run-scenario.js";
 import { replaySavedFlow } from "./saved-flow-replay/index.js";
 import { loadScenarioManifests } from "./scenarios.js";
@@ -26,6 +27,10 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
     const labPaths = resolveLabPaths(repositoryRoot, resolvedEnvironment);
     const runsDirectory = labPaths.runsDirectory;
     const command = parseLabCommand(argv);
+    // Before anything the command does: a Lab run opens only the ten realistic scenarios (`realistic-scenarios/index.ts`).
+    // `matrix --all` runs the realistic ones; a bench is held to its corpus's scenarios once the corpus is known.
+    if (command.command === "run" || command.command === "interactive" || command.command === "replay") assertRealisticScenarios([command.scenarioId], `lab ${command.command}`);
+    if (command.command === "matrix" && command.scenarioIds) assertRealisticScenarios(command.scenarioIds, "lab matrix");
     if (command.command === "interactive") {
       const target = resolveInteractiveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });
       if (target.mode === "clone") throw new Error("interactive mode does not support clone targets");
@@ -62,6 +67,7 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       const savedManifest = "resumeBenchId" in command ? await loadCampaignManifest(benchDirectory(runsDirectory, command.resumeBenchId)) : null;
       const request = savedManifest?.request ?? null;
       const corpus = findBenchCorpus(request?.corpusId ?? ("corpusId" in command ? command.corpusId : ""));
+      assertRealisticScenarios(corpus.rows.map(row => row.scenarioId), `lab bench --corpus ${corpus.id}`);
       const target = resolveTargetConfiguration({
         ...("resumeBenchId" in command
           ? { cliTarget: request!.target.mode, ...(request!.target.workspace === null ? {} : { cliWorkspace: request!.target.workspace }) }
@@ -122,7 +128,7 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
     // runs the Flow lane because that is the only lane a provider is authorized
     // against; `runScenario` refuses the combination otherwise.
     const matrixLive = command.llm ? await beginLiveLlmRun({ profile: command.llm, repositoryRoot, environment: resolvedEnvironment, flowLane: true, targetMode: target.mode }) : undefined;
-    for (const job of expandMatrix(command, manifests.map(item => item.id))) results.push(await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: job.scenarioId, ...(command.evidence ? { evidence: command.evidence } : {}), ...(matrixLive ? { live: matrixLive, flow: true } : {}), ...(command.livePanel === false ? { livePanel: false } : {}), environment: resolvedEnvironment, target }));
+    for (const job of expandMatrix(command, manifests.map(item => item.id).filter(isRealisticScenario))) results.push(await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: job.scenarioId, ...(command.evidence ? { evidence: command.evidence } : {}), ...(matrixLive ? { live: matrixLive, flow: true } : {}), ...(command.livePanel === false ? { livePanel: false } : {}), environment: resolvedEnvironment, target }));
     const passed = results.every(result => result.verdict === "passed");
     process.stdout.write(`${JSON.stringify({ status: passed ? "passed" : "failed", runs: results })}\n`);
     return passed ? 0 : 1;
