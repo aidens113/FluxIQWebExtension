@@ -1371,10 +1371,19 @@ proposal was applied still created that Flow, so its `evaluation.json` reads
 `stoppedLane`; `run-musq0b1m-0472cfa0` read "Flow created: no" for a Flow that
 existed).
 
-Before playback the runner closes every fixture tab other than the one playback
-drives -- the tabs the exploration and the build's tests opened, on the
-fixture's origin or blank -- and never the extension's own pages, so a Flow
-starts with only its own tab open (`run-scenario.ts` `prepareFlowPage`).
+Before every Flow run -- a created Flow's playback, the Flow the recording lane
+builds from its own recording, and its repair replays -- the runner closes every
+fixture tab other than the one the Flow runs on -- the tabs the recording, the
+exploration and the build's tests opened, on the fixture's origin or blank --
+and never the extension's own pages. When the Flow starts on the fixture's entry
+point, that tab is then brought to the front and the run waits until the
+extension reports holding it, because the extension drives the tab in front,
+not the tab the runner loaded the start page into
+(`run-scenario/browser-session/present-flow-tab.ts`). Until t347 only created-Flow
+playback closed the other tabs: crossborder-marketplace's recording opens the
+listing in a new tab and switches to it, so the recording lane's Flow ran on the
+listing tab and its first step, a wait for the start page's welcome dialog,
+timed out (`run-muykc54t-0cefc7eb`).
 
 A 400 from Core on an Automation Studio call is Core refusing a value the Lab
 sent, and fails the run as `facility.contract`, naming the endpoint and Core's
