@@ -6,7 +6,10 @@ regressions. No row is complete merely because a source report identifies it.
 
 ## Current work and acceptance
 
-t301 owns rows 1–3. Other rows await bounded file-owned briefs. Preserve canonical
+Rows1?3 integrated in t301; rows4?5 in t303. t306 fixes malformed predicates
+and implicit-focus text in row6 (other matching semantics pending); t308 fixes
+fixture paginator row16 after independent exact-oracle Chromium2/2.
+Other rows await bounded file-owned briefs. Preserve canonical
 registered outputs, browser/domain boundaries, consequence gates, sensitivity and
 truthful unknown/partial evidence. Every fix needs its owning tests and a real
 isolated browser proof where behavior is browser-dependent. Compilation is not
