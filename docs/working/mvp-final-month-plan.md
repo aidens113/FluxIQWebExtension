@@ -191,6 +191,13 @@ Historical briefs: [Claude schedule and task briefs](./mvp-final-month-plan/arch
 
 ## Work Ledger
 
+### 2026-10-06 - t297 running-extension identity independently verified
+- Agent: Codex supervisor.
+- Changed: source/architecture/report commit `ac243ae0`; embedded per-target stamp, authenticated background/top-frame content query, screened Lab pre-dispatch gate.
+- Validation: reviewed generation/diagnostic/preflight modules; supervisor digest test 1/1 and post-dev-merge identity/browser selection 22/22. Real Chromium 134.0.6998.35, production E2E bundle, four owned-profile launches: match accepted; deliberately altered background/content/disk refused, zero simulated dispatch on each mismatch. Runner check passed after merge; worker extension typecheck/release/authorization checks passed. Task audit required at finish.
+- Outcome: Accepted for this bounded slice, not all P0.
+- Follow-up: running Core-server identity still absent (reached Core/domain source digests are not that handshake); rebuild integrated pair before paid live qualification. No paid call or user-panel management.
+
 ### 2026-10-06 - t300 provisioned for requirement receipts and common acceptance
 - Agent: Codex supervisor.
 - Changed: written P2 brief; paired isolated worktree provisioning started (session 30711).

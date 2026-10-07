@@ -1,0 +1,1 @@
+export type ScreenedBuildIdentity = Readonly<{ schema: 1; target: string; version: string; protocol: "fluxiq.build-identity.v1"; inputsDigest: string; coreInputsDigest: string; domainInputsDigest: string }>;
