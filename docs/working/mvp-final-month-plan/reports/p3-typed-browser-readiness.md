@@ -76,3 +76,5 @@ Paging uses normalized text/link semantics, not a complete stable page/dataset d
 ## Supervisor verification
 
 Current dev merged, source reviewed and production bundles regenerated. Independent headed Chromium2/2 passed (23.9s), four extension owning files19/19 and real Core permission seam12/12 passed. Domain source/test typecheck0. Extension test typecheck initially found readonly shared Core at old7717ff42 lacking t298 buildCancellation; lifecycle provisioning advanced and rebuilt it to2ee06482, repeat pending. No product code changed to conceal stale declarations.
+
+After shared dependency rebuild, supervisor extension source+e2e test typecheck passed0. No source workaround was needed. Current-dependency narrow verification is complete; integration audit next.
