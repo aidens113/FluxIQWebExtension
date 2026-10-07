@@ -336,21 +336,46 @@ limit; a root longer than 80 characters is refused before anything is staged,
 with a message naming both numbers. Below a worktree's `test-runs`, a task slug
 three characters longer than its neighbour's was enough to fail every build as
 a Turbopack internal error; beside the Core, the slug is not in the path. The key is a
-SHA-256 over Core's `HEAD`; the content of the `apps/web` files the build copies
-and of Core's `tsconfig.base.json`; the content of `packages/fluxiq/dist`,
-`packages/contracts/dist`, and `packages/client-gateway-websocket/dist`; the
-generated `next.config.mjs`; and the installed Next version. Changing any of
-them makes the next run build again. The web panel host module and every
-`FLUXIQ_*` value are read at runtime, so they are not part of the key.
+SHA-256 over a layout version (`core-web-build/key.ts`, raised whenever staging
+or publication changes so a build made the old way is never reused); Core's
+`pnpm-lock.yaml`; the content of the `apps/web` files the build copies, except
+the generated gateway server below, and of Core's `tsconfig.base.json`; the
+digest of every source the gateway server generator reads, computed as its
+receipt's `sourceInputsDigest`; the content and manifest of
+`packages/fluxiq/dist`, `packages/contracts/dist`, and
+`packages/client-gateway-websocket/dist`; the generated `next.config.mjs`; and
+the installed Next version. It reads no git state. Changing any of them makes
+the next run build again. The web panel host module and every `FLUXIQ_*` value
+are read at runtime, so they are not part of the key.
+
+The gateway server artifact, `apps/web/.server-runtime/client-gateway-server.mjs`
+and its receipt, is copied into the build but keyed by its sources, not by its
+bytes. A run regenerates it just before keying and a dry run never does, so a
+key over the artifact told a dry run one key and built another (t342: the dry
+run reported `a22a7ea3...`, the run built `3ba01156...`, and the difference was
+exactly that `.server-runtime` did not exist before the run). Its sources
+determine it, and reuse still compares the published copy with a freshly
+generated one.
 
 A build runs in its own attempt directory, `<key>/b-<random>/`, laid out the
 way the per-run workspace copy used to be: `apps/web` copied without build
 output or dependencies, `node_modules` mirrored as links into Core's
-installation, Core's `tsconfig.base.json`, and a `packages` link.
+installation, Core's `tsconfig.base.json`, and a `packages` link. The staged
+`tsconfig.base.json` drops every `paths` alias into a `packages/<name>/src`
+tree (`core-web-build/staged-tsconfig.ts`), so the panel resolves `fluxiq` and
+`@fluxiq/contracts` through `node_modules/fluxiq` and its package exports, which
+point at the stamped `dist` the key hashes. Turbopack honours `paths`, and with
+Core's aliases every panel up to layout 2 compiled Core from source, whose
+runtime identity literal only the `dist` build stamps: every Lab run that
+started Core failed its identity check with a 400 (t342).
 `next build --turbopack` runs there with a build-only FluxIQ root inside the
 attempt, the client gateway disabled, and inherited `FLUXIQ_*`, `NEXT_PUBLIC_*`,
-`NODE_ENV`, and `PORT` values removed. Only after the build exits 0 and leaves
-`.next/BUILD_ID` does the attempt receive `build-complete.json`, and only then
+`NODE_ENV`, and `PORT` values removed. After the build exits 0 and leaves
+`.next/BUILD_ID`, its `.next/server` JavaScript is searched for Core's
+unstamped identity placeholder, `fluxiqRuntimeIdentityPlaceholder`; a build
+that contains it, or that left no server output, fails as `process.startup`
+naming the file and is never published (`core-web-build/stamped-identity.ts`).
+Only then does the attempt receive `build-complete.json`, and only then
 does the key receive `published.json` naming the attempt. Both records are
 written to a temporary file and renamed into place. A run accepts a build only
 when those two records and `BUILD_ID` agree, so a failed, interrupted, or
@@ -872,6 +897,34 @@ existing target remains unverified until the primary validation run reports
 the target, compatible Core revision, Flow behavior, and retained evidence.
 
 ## Scenario lab and contract
+
+### Only the ten realistic scenarios run
+
+Every Lab or browser test run, live or provider-free, with a model or without
+one, opens only the ten realistic scenarios (user rule, 2026-09-29):
+`everything-store`, `crossborder-marketplace`, `bigbox-retail`, `job-board`,
+`local-classifieds`, `auction-marketplace`, `photo-social`,
+`social-network-feed`, `company-website` and `professional-network`. The other
+registered scenarios (`basic-form`, `product-catalog` and the rest) stay for
+unit tests and fixtures that never launch a browser.
+
+The list has one owner, `packages/test-runner/src/realistic-scenarios/index.ts`,
+and every launch entry refuses any other scenario before it starts anything,
+with a message that names the entry, the refused scenario, the rule and the ten:
+
+| Entry | Where it refuses |
+| --- | --- |
+| `pnpm lab run`, `interactive`, `replay`, `matrix --scenarios-json` | `scripts/lab/run-lab.mjs`, first, before the live-run guards, the Core checks and the build, so a refused run leaves nothing in the spend ledger (`scripts/lab/scenario-guard/`). The scenario must follow the command (`lab run <scenario> ...`) |
+| The runner's CLI (`packages/test-runner/dist/cli.js`, `fluxiq-lab`) | Right after it parses the command, for the same commands; `matrix --all` runs only the realistic scenarios; `bench` refuses a corpus that names any other scenario, which today is every corpus |
+| `pnpm lab:campaign` | Task selection: a task named by id on another scenario is refused; `--kind`, `--all` and a dry run's default choose among the realistic scenarios' tasks only |
+| `pnpm ui:e2e` | `scripts/run/ui-e2e.mjs`, before it prepares a workspace, from the scenarios each journey declares (`ui-e2e/realistic-selection.ts`); every provider-free journey opens a basic fixture scenario today, so the suite is refused |
+| `pnpm panel:golden` | `scripts/run/panel-golden-path.mjs`, on `FLUXIQ_LLM_SCENARIO_ID` (default `instruction-only-form`, refused) before Core starts |
+| Demo workspace browser sessions (`demo:*`, and every `ui:e2e` journey) | `withDemoBrowser`, before the scenario lab or a browser starts; its default page is `basic-form`, so a demo lane that names no realistic page is refused |
+| The extension chat check | `runExtensionChatCheck`, before the topology starts |
+
+The Lab's `.mjs` launchers import that barrel from source, before the runner is
+built; Node strips its types. The file therefore imports nothing and uses only
+erasable TypeScript.
 
 The lab binds only to `127.0.0.1`, rejects foreign `Host` headers, applies a
 same-origin content security policy, and keeps state in memory per server
@@ -3338,6 +3391,6 @@ The provider-free proof uses actual built Core and the bundled host with a bound
 
 The authenticated pre-dispatch identity gate also requires `serverTransportIdentity` from the running Core gateway owner, independently of Core's retained service identity and the native domain host's `loadedModules`. Missing, inactive, legacy, or different server provenance refuses before project creation, browser launch, chat, or provider dispatch. Pure offline recording without authenticated control remains exempt.
 
-Before collecting production panel build inputs, Lab invokes Core's owning `apps/web/scripts/build-client-gateway-server.mjs` generator. Workspace staging copies `.server-runtime/client-gateway-server.mjs` and its `.identity.json` companion together; both influence the build key. Canonical and copied inventory/artifact freshness are checked before compiling or reusing a published panel. The executing native reader hashes all surrounding semantics and normalizes only its single embedded identity payload; this is not a raw full-file digest. The diagnostic reports an immutable descriptor captured by the actual `ClientGatewayService` before IO and activated only by its current listening lease. Route reload and changed files on disk cannot update an older retained owner.
+Before collecting production panel build inputs, Lab invokes Core's owning `apps/web/scripts/build-client-gateway-server.mjs` generator. Workspace staging copies `.server-runtime/client-gateway-server.mjs` and its `.identity.json` companion together; the build key covers the generator's sources rather than these generated bytes, so a dry run that never generated them reports the key the run builds ([Core web panel production build](#core-web-panel-production-build)). Canonical and copied inventory/artifact freshness are checked before compiling or reusing a published panel. The executing native reader hashes all surrounding semantics and normalizes only its single embedded identity payload; this is not a raw full-file digest. The diagnostic reports an immutable descriptor captured by the actual `ClientGatewayService` before IO and activated only by its current listening lease. Route reload and changed files on disk cannot update an older retained owner.
 
 This proves provenance for the supported registered web startup adapter. Arbitrary bypass listeners and attribution of each remote socket to that listener remain outside the contract. The focused native socket proof uses a synthetic authenticated HTTP wrapper around the real handler, not production Next. The opt-in production Next test requires explicit current-session panel-management authorization before enabling `FLUXIQ_SERVER_ADAPTER_NEXT_PROBE=1`; a skipped test is not production verification.
