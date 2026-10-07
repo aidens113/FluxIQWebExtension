@@ -80,7 +80,8 @@ test("report.md states each extraction rate with the steps it stands on, and pri
   const evaluation: RunEvaluation = {
     ...run("flow", 50_000, 900),
     extraction: [
-      step({ recordsListed: true, expectedRecords: 2, observedRecords: 2, comparedRecords: 2, matchedRecords: 1, expectedFields: 2, presentFields: 1, expectedPages: 3 }),
+      // Its read collected 3 rows; run-end processing kept the 2 it answers with (read-list S6).
+      step({ recordsListed: true, expectedRecords: 2, observedRecords: 2, comparedRecords: 2, matchedRecords: 1, expectedFields: 2, presentFields: 1, expectedPages: 3, collectedRecords: 3 }),
       step({ countStated: true, expectedRecords: 1_000, observedRecords: 1_000 }),
       step({}),
     ],
@@ -95,6 +96,7 @@ test("report.md states each extraction rate with the steps it stands on, and pri
   };
   const extraction = section(renderBenchMarkdown(runs, report, coverage), "## Extraction");
   assert.ok(extraction.some((line) => line.includes("3 step(s) judged and 0 not: 1 compared their records, 1 stated a count alone")), extraction.join("\n"));
+  assert.ok(extraction.some((line) => line.endsWith(" 1 judged step reported run-end processing: its reads collected 3 row(s) and its answer kept 2. Every record count above is the answer.")), extraction.join("\n"));
   assert.ok(extraction.some((line) => line.startsWith("| extractionRecordAccuracy | records | 1 | 2 | 1 | 0.500 | judged steps whose expectation listed the records")), extraction.join("\n"));
   assert.ok(extraction.some((line) => line.startsWith("| extractionCountAccuracy | steps | 1 | 1 | 1 | 1.000 | judged steps that stated a count and listed no records")), extraction.join("\n"));
   // Declared pages nothing observed, so the rate has one side and publishes none.

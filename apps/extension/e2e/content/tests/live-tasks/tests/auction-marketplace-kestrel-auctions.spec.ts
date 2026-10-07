@@ -92,7 +92,7 @@ const TITLE_WITHOUT_BADGE = ":scope > div:nth-child(2) > a span:not([class])";
 
 type Row = Record<string, string | null>;
 type Detected = Extract<WebAutomationStructureDetection, { ok: true }>;
-type Packet = { extraction: string; itemCount: number; fields: Array<{ key: string; label: string; kind: string; coverage: number }> };
+type Packet = { extraction: string; itemCount: number; pagination?: string; nextPageNote?: string; fields: Array<{ key: string; label: string; kind: string; coverage: number }> };
 type Acted = BrowserActionResult | "document replaced";
 
 let command = 0;
@@ -280,25 +280,34 @@ function project(rows: readonly Row[], keys: Record<(typeof OWED_COLUMNS)[number
   return rows.map((row) => Object.fromEntries(OWED_COLUMNS.map((column) => [column, row[keys[column]] ?? null])));
 }
 
-/** A field of the detection by the shape of its label: page structure the model is shown, never a value. */
-function labelled(fields: readonly { key: string; label: string; coverage: number }[], pattern: RegExp, full: boolean): string {
-  const found = fields.find((field) => pattern.test(field.label) && (full ? field.coverage === 1 : field.coverage < 1));
-  expect(found, `a detected column labelled ${pattern} (${full ? "on every card" : "on some cards"}): ${fields.map((field) => `${field.label} ${field.coverage}`).join(" | ")}`).toBeTruthy();
+/**
+ * A field of the detection by the shape of its key: page structure the model
+ * is shown, never a value. Until D3-3 (b05e186b, 2026-10-06) a hashed column's
+ * label was this same class path; it now says what the element is and its
+ * sample (`link: 'Kestrel 35 ...'`, `structure/field-sample.ts`), and the key,
+ * the same in the proposal and the packet, is what keeps the path.
+ */
+function keyed(fields: readonly { key: string; label: string; coverage: number }[], pattern: RegExp, full: boolean): string {
+  const found = fields.find((field) => pattern.test(field.key) && (full ? field.coverage === 1 : field.coverage < 1));
+  expect(found, `a detected column keyed ${pattern} (${full ? "on every card" : "on some cards"}): ${fields.map((field) => `${field.key} ${field.coverage}`).join(" | ")}`).toBeTruthy();
   return found!.key;
 }
 
-/** The detected columns this task's read needs, picked by label as a model must pick them. */
+/** A kind the key may end in, as the label's "(number)" or "(currency amount)" once did. */
+const KIND = "(?:_number|_currency_amount)?";
+
+/** The detected columns this task's read needs, picked by the page structure a model is shown. */
 function taskColumns(fields: readonly { key: string; label: string; coverage: number }[]) {
   return {
     // The title link's words: the one column every card fills with its title.
     // The heading's span beside it reads only the badge on a badged card.
-    title: labelled(fields, /> a\.[\w-]+(?: \(.*\))?$/u, true),
-    price: labelled(fields, /> div:3 > span\.[\w-]+(?: \(.*\))?$/u, true),
-    estimate: labelled(fields, /> div:3 > span\.[\w-]+(?: \(.*\))?$/u, false),
-    bids: labelled(fields, /> div:4 > span\.[\w-]+(?: \(.*\))?$/u, true),
-    postage: labelled(fields, /> div:6 > span\.[\w-]+(?: \(.*\))?$/u, true),
-    condition: labelled(fields, /> div:2 > span:1(?: \(.*\))?$/u, true),
-    adMark: labelled(fields, /^data-adid$/u, false)
+    title: keyed(fields, new RegExp(`_a_css-[a-z0-9]+${KIND}$`, "u"), true),
+    price: keyed(fields, new RegExp(`_div_3_span_css-[a-z0-9]+${KIND}$`, "u"), true),
+    estimate: keyed(fields, new RegExp(`_div_3_span_css-[a-z0-9]+${KIND}$`, "u"), false),
+    bids: keyed(fields, new RegExp(`_div_4_span_css-[a-z0-9]+${KIND}$`, "u"), true),
+    postage: keyed(fields, new RegExp(`_div_6_span_css-[a-z0-9]+${KIND}$`, "u"), true),
+    condition: keyed(fields, new RegExp(`_div_2_span_1${KIND}$`, "u"), true),
+    adMark: keyed(fields, /^data-adid$/u, false)
   };
 }
 
@@ -584,7 +593,7 @@ test.describe("auction-marketplace-kestrel-auctions on the fixture", () => {
     expect(pages).toEqual(["1", "2", "3"]);
   });
 
-  test("keyword route: through the evidence runtime the handle's read carries the detected pager, and read across documents with G1 supplied it returns the ten owed rows", async ({ openHarness }) => {
+  test("keyword route: through the evidence runtime the handle's read reads page one and the packet says the list goes on, and read across documents with G1 supplied it returns the ten owed rows", async ({ openHarness }) => {
     const harness = await openHarness("auction-marketplace");
     await answerArrivals(harness);
     await search(harness);
@@ -608,24 +617,31 @@ test.describe("auction-marketplace-kestrel-auctions on the fixture", () => {
     const request = sent.parameters.extractList as unknown as WebAutomationExtractListRequest;
     note("keyword runtime request", request);
     note("keyword runtime summary", sent.reply.extraction);
-    // The handle carries the detected pager, at the one page a proposal asks
-    // for (detect-pagination.ts PROPOSED_MAX_PAGES): page one is read and the
-    // read says the list went on rather than answering short in silence.
-    expect(request.paginate, "the handle carries the detected numbered pager").toMatchObject({ mode: "numbered", maxPages: 1 });
+    // A read reads the page it is on (read-list S4, contract C3): the resolved
+    // request carries no pager and page one answers alone. That the list goes
+    // on is the packet's to say -- the numbered pager it detected, and the note
+    // naming Next page on this very handle -- so a build adds Next page and a
+    // repeat rather than answering short in silence.
+    expect(packet.pagination, "the packet says the results go on by numbered pages").toBe("numbered_pages");
+    expect(packet.nextPageNote, "and how every page is read").toContain(`nextPage: {list: "${packet.extraction}"}`);
+    expect(request.paginate, "the handle's read carries no pager").toBeUndefined();
     const pageOne = (sent.reply.extracted ?? []) as Row[];
     expect(pageOne.length, "page one holds only some of the owed rows").toBeLessThan(OWED.length);
-    expect(sent.reply.extraction, "and the read says it stopped at its bound with pages left").toMatchObject({ pagesRead: 1, truncated: true });
+    expect(sent.reply.extraction, "the read read page one").toMatchObject({ pagesRead: 1 });
     // Every condition was resolved into a read of its own column: the estimate
     // and the condition line are tested without becoming columns of the table.
     expect(Object.keys(request.fields).sort()).toEqual([...OWED_COLUMNS].sort());
 
-    // The same request, its detected pager unchanged but allowed every page,
-    // with G1's title supplied, carried across the documents its numbered links
+    // The same request with the detected pager allowed every page, sent to the
+    // content script directly (its own paged read stays until stage S7), with
+    // G1's title supplied, carried across the documents its numbered links
     // load: page 2, the bot check the fourth results view meets, and page 3.
+    const { proposal } = await detect(harness);
+    expect(proposal.pagination, "the content script proposes the numbered pager").toMatchObject({ mode: "numbered" });
     const whole: WebAutomationExtractListRequest = {
       ...request,
       fields: { ...request.fields, title: TITLE_WITHOUT_BADGE },
-      paginate: { mode: "numbered", pages: (request.paginate as { pages: string }).pages, maxPages: 5 }
+      paginate: { mode: "numbered", pages: (proposal.pagination as { pages: string }).pages, maxPages: 5 }
     };
     const across = await readAcrossDocuments(harness, whole, 90_000);
     note("keyword across documents", { documents: across.documents, checkpoints: across.checkpoints, status: across.reply.status, extraction: across.reply.extraction, validation: across.reply.validation });

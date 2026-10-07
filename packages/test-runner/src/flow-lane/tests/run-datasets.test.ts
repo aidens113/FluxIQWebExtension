@@ -85,3 +85,16 @@ test("the summaries a run detail carries are read from the detail, and a detail 
   ]);
   assert.deepEqual(runDatasetSummaries({}), []);
 });
+
+// Read-list S6: Core processes each dataset at run end (whole-row dedupe, then
+// the read's declared processing), and its summary then counts what the passes
+// collected beside the answer it serves. The reader keeps the counts, never a
+// row, and keeps no account for a dataset Core has not processed.
+test("a processed dataset's summary keeps Core's collection account in counts, and an unprocessed one carries none", () => {
+  const processing = { collected: 17, duplicates: 4, filteredOut: 0, cut: 0, kept: 13, passes: [{ node: "node.extract", pass: 1, rows: 4, newRows: 4 }, { node: "node.extract", pass: 2, rows: 5, newRows: 4 }] };
+  assert.deepEqual(runDatasetSummaries({ datasets: [{ datasetId: "earbuds", nodeIds: ["node.extract"], recordCount: 13, truncated: false, invalidCount: 0, processing }] }), [
+    { datasetId: "earbuds", nodeIds: ["node.extract"], recordCount: 13, storeTruncated: false, invalidCount: 0, processing: { collected: 17, duplicates: 4, filteredOut: 0, cut: 0, passes: 2 } },
+  ]);
+  // A malformed account is no account: the lane never invents a collection.
+  assert.equal(Object.hasOwn(runDatasetSummaries({ datasets: [{ datasetId: "earbuds", nodeIds: [], recordCount: 1, processing: { collected: "17" } }] })[0]!, "processing"), false);
+});

@@ -20,7 +20,9 @@
 // The two gaps these rows traced (report `t194-w27-rotterdam-fixture.md`) are
 // fixed, and no row is marked `test.fail`: G1, a script Next that leads back to
 // its own page, is swapped for the pager's next number (t194-w30); G2, a plan's
-// page bound dropped when its mode is not the detected one, is kept (t194-w32).
+// page bound dropped when its mode is not the detected one, was kept (t194-w32)
+// until read-list S4 retired a read's page bound: a read now reads one page,
+// Next page moves the list on, and a plan that writes the bound is refused.
 
 import type { Page } from "@playwright/test";
 import type { JsonObject, JsonValue } from "fluxiq/core";
@@ -39,6 +41,7 @@ import type { ContentHarness } from "../../../index.js";
 const EXPECTED = peopleRecords(ROTTERDAM_ENGINEERS);
 const ORGANIC = 'li[data-urn^="urn:gl:member:"]';
 const EXTRACT_LIST_NODE = "web.output.dom-extract_list";
+const NEXT_PAGE_NODE = "web.output.dom-next_page";
 const BASE = { projectId: "project.w27", flowId: "flow.w27", maxEvidenceBytes: 24_000 } as const;
 const FILTERED_PATH = `/scenarios/professional-network/search/results/people/?keywords=${encodeURIComponent(ROTTERDAM_ENGINEERS.keywords)}&network=${encodeURIComponent('["S"]')}&geoUrn=${encodeURIComponent(JSON.stringify([ROTTERDAM_NL]))}&origin=FACETED_SEARCH`;
 
@@ -253,14 +256,29 @@ function gatewayFor(harness: ContentHarness, dispatched: Array<{ actionType: str
 }
 
 /** What one read built from the page's proposal sent and got back. */
-type ProposalRead = { packet: StructurePacket; detected: Detected; mapping: Record<string, string>; request: JsonObject | undefined; reply: BrowserActionResult | undefined; resultCode: string | undefined };
+type ProposalRead = {
+  packet: StructurePacket;
+  detected: Detected;
+  mapping: Record<string, string>;
+  request: JsonObject | undefined;
+  reply: BrowserActionResult | undefined;
+  resultCode: string | undefined;
+  /** What the read node answered the model, as the runtime said it. */
+  evidence: unknown;
+  /** Whether the read node sent a read to the page at all (a refused plan sends none). */
+  reachedPage: boolean;
+  runtime: ReturnType<typeof createWebAutomationLlmEvidenceRuntime>;
+  dispatched: Array<{ actionType: string; parameters: JsonObject; reply: BrowserActionResult }>;
+  /** The read node's parameters, as the plan wrote them, to run the same read again on the next page. */
+  readParameters: JsonObject;
+};
 
 /**
  * Opens the filtered search, detects its structure through the evidence
  * runtime, maps name, headline and location to the detected columns that read
  * them exactly on page 1, and runs one `web.dom.extract_list` node from the
- * handle with `paginate` as the plan writes it, leaving out what carries the
- * promoted mark or no name link, each person once.
+ * handle -- with `paginate` when the plan writes one -- leaving out what
+ * carries the promoted mark or no name link, each person once.
  */
 async function readFromProposal(harness: ContentHarness, paginate: JsonValue | undefined): Promise<ProposalRead> {
   await openFiltered(harness);
@@ -280,7 +298,7 @@ async function readFromProposal(harness: ContentHarness, paginate: JsonValue | u
   // A first look at page 1, every column, no pagination: which column holds what.
   const look = await runtime.executeTool({
     ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID,
-    value: { node: EXTRACT_LIST_NODE, parameters: { extractList: { handle: packet.extraction, paginate: false, minItems: 0 } }, consequences: [] }
+    value: { node: EXTRACT_LIST_NODE, parameters: { extractList: { handle: packet.extraction, minItems: 0 } }, consequences: [] }
   });
   expect(look.resultCode, JSON.stringify(look.evidence)).toBe("web.inspect.succeeded");
   const rows = (dispatched.filter((entry) => entry.actionType === "web.dom.extract_list").at(-1)?.reply.extracted ?? []) as Row[];
@@ -291,30 +309,41 @@ async function readFromProposal(harness: ContentHarness, paginate: JsonValue | u
   const promoted = packet.fields.find((field) => field.label === "data-ad-slot");
   expect(promoted, "the promoted cards' mark is a detected column").toBeTruthy();
 
+  const readParameters: JsonObject = {
+    extractList: {
+      handle: packet.extraction,
+      fields: mapping,
+      // The promoted profiles carry the mark; the product ad and the
+      // "people also searched" module carry no profile link, so no name.
+      where: [{ field: promoted!.key, is: "absent" }, { field: "name", is: "present" }],
+      dedupe: { by: ["name"] },
+      ...(paginate === undefined ? {} : { paginate })
+    }
+  };
+  const readsBefore = dispatched.filter((entry) => entry.actionType === "web.dom.extract_list").length;
   const read = await runtime.executeTool({
     ...BASE, callId: "call.read", toolId: WEB_LLM_RUN_NODE_TOOL_ID,
-    value: {
-      node: EXTRACT_LIST_NODE,
-      parameters: {
-        extractList: {
-          handle: packet.extraction,
-          fields: mapping,
-          // The promoted profiles carry the mark; the product ad and the
-          // "people also searched" module carry no profile link, so no name.
-          where: [{ field: promoted!.key, is: "absent" }, { field: "name", is: "present" }],
-          dedupe: { by: ["name"] },
-          ...(paginate === undefined ? {} : { paginate })
-        }
-      },
-      consequences: []
-    }
+    value: { node: EXTRACT_LIST_NODE, parameters: readParameters, consequences: [] }
   });
-  const sent = dispatched.filter((entry) => entry.actionType === "web.dom.extract_list").at(-1);
+  const reads = dispatched.filter((entry) => entry.actionType === "web.dom.extract_list");
+  const sent = reads.at(-1);
   log("resolved request sent to the page", sent?.parameters.extractList);
   log("read result", { resultCode: read.resultCode, status: sent?.reply.status, extraction: sent?.reply.extraction, message: sent?.reply.message });
   log("rows", (sent?.reply.extracted as Row[] | undefined)?.map((row) => row.name));
   log("security checks the search answered with", await challenges(harness));
-  return { packet, detected, mapping, request: sent?.parameters.extractList as JsonObject | undefined, reply: sent?.reply, resultCode: read.resultCode };
+  return {
+    packet,
+    detected,
+    mapping,
+    request: sent?.parameters.extractList as JsonObject | undefined,
+    reply: sent?.reply,
+    resultCode: read.resultCode,
+    evidence: read.evidence,
+    reachedPage: reads.length > readsBefore,
+    runtime,
+    dispatched,
+    readParameters
+  };
 }
 
 test.describe("professional-network: what the page proposes for the people results", () => {
@@ -340,32 +369,87 @@ test.describe("professional-network: what the page proposes for the people resul
     expect(followed).toBe("Next");
   });
 
-  test("a read built only from the proposal, asking for every page, returns the 23 people", async ({ openHarness }) => {
-    // Gap G1, observed 2026-10-01: 20 people, pagesRead 3, paginationStop
-    // page_repeated, truncated false. The proposal names the pager's Next
-    // (detect-pagination.ts:94-95 prefers Next over the numbered run), and
-    // Guildline's Next is a script button that goes from page 2 to page 2;
-    // followNext swaps a Next for the pager's following number only when the
-    // Next is a link to this very page (pagination.ts:376), so page 3 is never
-    // reached. Flips to passing when that is fixed.
+  /**
+   * The read built from the proposal on page 1, then `presses` times Next page
+   * on the read's own handle and, after each that moved, the same read again --
+   * as a Flow that reads every page runs them (read-list S4, contract C1-C3).
+   */
+  async function readThenNextPage(harness: ContentHarness, presses: number): Promise<{ pages: Row[][]; pressed: BrowserActionResult[] }> {
+    const first = await readFromProposal(harness, undefined);
+    expect(first.resultCode, JSON.stringify(first.evidence)).toBe("web.inspect.succeeded");
+    expect(first.request?.paginate, "the read carries no pager").toBeUndefined();
+    const pages: Row[][] = [(first.reply?.extracted ?? []) as Row[]];
+    const pressed: BrowserActionResult[] = [];
+    for (let step = 1; step <= presses; step += 1) {
+      const moved = await first.runtime.executeTool({
+        ...BASE, callId: `call.next.${step}`, toolId: WEB_LLM_RUN_NODE_TOOL_ID,
+        value: { node: NEXT_PAGE_NODE, parameters: { nextPage: { list: first.packet.extraction } }, consequences: [] }
+      });
+      const sent = first.dispatched.filter((entry) => entry.actionType === "web.dom.next_page");
+      expect(sent, `Next page ${step} reached the page, one press per step: ${moved.resultCode} ${JSON.stringify(moved.evidence)}`).toHaveLength(step);
+      const press = sent.at(-1)!.reply;
+      pressed.push(press);
+      log(`next page ${step}`, { resultCode: moved.resultCode, nextPage: press.nextPage, status: press.status, url: harness.page.url() });
+      if (press.nextPage?.outcome !== "moved") break;
+      const again = await first.runtime.executeTool({
+        ...BASE, callId: `call.read.${step + 1}`, toolId: WEB_LLM_RUN_NODE_TOOL_ID,
+        value: { node: EXTRACT_LIST_NODE, parameters: first.readParameters, consequences: [] }
+      });
+      expect(again.resultCode, JSON.stringify(again.evidence)).toBe("web.inspect.succeeded");
+      const read = first.dispatched.filter((entry) => entry.actionType === "web.dom.extract_list").at(-1)!;
+      log(`page ${step + 1} rows`, (read.reply.extracted as Row[] | undefined)?.map((row) => row.name));
+      pages.push((read.reply.extracted ?? []) as Row[]);
+    }
+    return { pages, pressed };
+  }
+
+  test("a read built only from the proposal, with Next page between reads, returns the 23 people over the three pages", async ({ openHarness }) => {
+    // Gap G1 (fixed by t194-w30) stands guard here: the proposal names the
+    // pager's Next, and Guildline's Next is a script button that goes from
+    // page 2 to page 2, so a Next page that followed it would never reach
+    // page 3; it takes the pager's following number instead.
     test.setTimeout(240_000);
     const harness = await openHarness("professional-network");
-    const result = await readFromProposal(harness, { maxPages: 5 });
-    expect(result.resultCode).toBe("web.inspect.succeeded");
-    expect(result.reply?.extracted).toEqual(EXPECTED);
+    const { pages, pressed } = await readThenNextPage(harness, 2);
+    expect(pressed.map((reply) => reply.nextPage), "page 1 to 2, then 2 to 3, by the pager's numbers").toMatchObject([
+      { outcome: "moved", page: 2 },
+      { outcome: "moved", by: "following", page: 3 }
+    ]);
+    // Page 3 opens with the person page 2 ended on. Each read answers its own
+    // page; a Flow's `dedupe: {by: ["name"]}` is applied across them by Core's
+    // record collection (`recordOutput.process`), as it is here: first seen kept.
+    const people: Row[] = [];
+    for (const row of pages.flat()) if (!people.some((kept) => kept.name === row.name)) people.push(row);
+    expect(people, "the three pages' rows, in order, each person once").toEqual(EXPECTED);
   });
 
-  test("a plan that names the numbered pager it sees keeps the page bound it asked for", async ({ openHarness }) => {
-    // Gap G2, observed and fixed 2026-10-01 (t194-w32): the resolved request
-    // carried maxPages 1 and the read returned page 1 alone, truncated. A plan
-    // whose paginate named a mode other than the detected one kept the
-    // detected bound, which is always 1 (detect-pagination.ts:84); the plan's
-    // own bound now holds whatever its mode (plan-resolution/extraction/slot.ts,
-    // keptPagination).
+  test("on the last page Next page answers that the list ended, rather than following the script Next back", async ({ openHarness }) => {
+    // GAP N1 (read-list S5, found and fixed in S6, 2026-10-06): on page 3 of 3
+    // Guildline's script Next loads page 2 again. The step used to press it
+    // and answer `moved`, so a Flow's loop went 2, 3, 2, 3 ... . The pager
+    // marks 3 current and shows no later number, which is the list ending
+    // (`no_following_page`, `page-advance/follow-next.ts`).
+    test.setTimeout(240_000);
+    const harness = await openHarness("professional-network");
+    const { pressed } = await readThenNextPage(harness, 3);
+    expect(pressed.slice(0, 2).map((reply) => reply.nextPage?.outcome)).toEqual(["moved", "moved"]);
+    expect(pressed[2], "and on page 3 it answered that the list ended").toMatchObject({ status: "succeeded", route: "ended", nextPage: { outcome: "ended" } });
+  });
+
+  test("a plan that writes a page bound on the read is refused and pointed at Next page", async ({ openHarness }) => {
+    // G2 (t194-w32) kept a plan's page bound on the read. Since read-list S4 a
+    // read reads one page, so a handle-form read writing `paginate` is refused
+    // `web.handle.malformed` with the hint that names Next page (contract C3),
+    // and nothing is sent to the page.
     test.setTimeout(240_000);
     const harness = await openHarness("professional-network");
     const result = await readFromProposal(harness, { mode: "numbered", maxPages: 5 });
-    expect((result.request?.paginate as { maxPages?: number } | undefined)?.maxPages).toBe(5);
+    expect(result.resultCode).toBe("web.action.rejected.target_unobserved");
+    const said = JSON.stringify(result.evidence);
+    expect(said).toContain("malformed_handle");
+    expect(said).toContain("web.handle.malformed:extractList.paginate");
+    expect(said).toContain("web.handle.expected.extract_list.next_page");
+    expect(result.reachedPage, "the refused read sent nothing to the page").toBe(false);
   });
 });
 

@@ -892,8 +892,11 @@ A manifest contains:
 - a semantic recording script using the click, type, select, scroll,
   navigate, waitForState, checkpoint, press, check, upload, switchTab,
   closeTab, waitForDownload, and extract step operations, where an `extract`
-  step with `pagination` declares up to `maxPages` pages (at most 50) and
-  FluxIQ's own extraction, not the Lab, follows them
+  step's `pagination` (up to `maxPages` pages, at most 50) is the Lab reference
+  reader's data and the oracle's description of the list. FluxIQ's list read
+  reads one page and a Flow pages with a read, a Next page step and a repeat,
+  which no recording can produce yet, so the recording and Flow lanes do not run
+  a workflow with a paged `extract` step
   ([the recording lane](#the-recording-lane)).
   A scripted `navigate` first arms an extension-internal, loopback-only intent,
   loads the fixture page, and waits for the extension to acknowledge that one
@@ -936,13 +939,23 @@ same script. A `click` step, for example, can yield `web.dom.click`,
 `web.dom.check`, and a `web.dom.wait_for_selector` proposed before it. An
 `extract` step yields `web.dom.extract_list`, or `web.dom.extract` for a
 single-element read: the extraction intent puts one extract node in the
-recording, and its pagination belongs to that node, so a paginated step yields
-the same two types as an unpaginated one and no `web.dom.click`. A script with
-no steps is a playback goal and is not checked.
+recording, and never the clicks the read makes. A paged step would yield the
+same two types, but no lane records one any more (below). A script with no
+steps is a playback goal and is not checked.
 
-This is why `flowLaneExclusion` excludes no `week1` workflow. It excludes a
-workflow whose script records no action at all, and before an `extract` was
-recordable that was W04 and W08, whose scripts only extract.
+`flowLaneExclusion` (`packages/test-contracts/src/lane-exclusion/flow-lane-exclusion.ts`)
+excludes a workflow from the Flow lane for two reasons. A script that records no
+action at all can yield no Flow; before an `extract` was recordable that was
+W04 and W08, whose scripts only extract, and no `week1` workflow is such a
+script now. A script with a paged `extract` step is excluded too, by
+`pagedExtractExclusion` (`lane-exclusion/paged-extract-exclusion.ts`): FluxIQ's
+read reads one page and a recording cannot hold the Next page loop a Flow pages
+with, so a Flow built from the recording would read the first page of a list
+the workflow reads whole. The recording lane skips the same workflows for the
+same reason, and its extraction intent refuses a paged step as
+`fixture.invalid` rather than record a one-page read. In `week1` that is W05
+and W07. Their paging is judged on the created-Flow lane, where the model builds
+the loop from the task's words.
 
 The runner reports every contract rejection as `fixture.invalid`, whether the
 registry threw it while building a manifest or the runner's own validation
@@ -1011,19 +1024,24 @@ Six fixtures carry an **extraction catalog** beyond what the corpus asks of
 them: the shapes a real page takes, each with the expectation that judges it.
 None of these workflows or variants has a Week 1 corpus row, so a `lab run` and
 the fixtures' own page specs exercise them and the bench does not — which also
-means the only paginated extraction a `week1` bench measures is W05's `next`.
+means a `week1` bench measures no paginated extraction: its only paged
+workflows, W05 and W07, are skipped on both of its lanes. The catalog's paged
+workflows (`numbered-pages`, `link-pagination`, `extract-until-end`,
+`extract-by-load-more`) are refused by the recording lane's extraction intent
+for the same reason, and their `pagination` stays as the reference reader's
+data and the oracle's description of the list.
 
 | Fixture | Workflow or variant | What it pins |
 | --- | --- | --- |
 | `product-catalog` | variant `sparse-cards` | A card that carries no price, or no rating: the element is absent rather than empty, so the field reads as no value and the expectation names it in `optionalFields`. |
 | `product-catalog` | variant `absolute-links` | A link field returns the href exactly as the page writes it, absolute or not. |
 | `product-catalog` | `with-images`, variant `lazy-images` | Attribute reads over images: the loaded `src`, its `alt`, and the real source a deferred card keeps in `data-src`. Armed, the two attribute reads swap places. |
-| `product-catalog` | `numbered-pages` | `numbered` pagination: all 23 products by visiting each page control in turn, three pages, rather than by following Next. |
+| `product-catalog` | `numbered-pages` | `numbered` pagination: all 23 products, three pages, reached through each page control in turn rather than by following Next. |
 | `product-catalog` | `paginated-extraction` variant `link-pagination` | The same catalog paged by a link rather than by a button control. |
 | `data-table` | variant `large-table` | A 2,000-row table past the 1,000-record extraction cap: the read returns 1,000 records and reports itself truncated, rather than passing a partial table off as the whole one. The variant lists no records deliberately — what matters is that the cap reported itself, not where it cut. |
 | `data-table` | `empty-table`, variant `no-rows` | `minItems: 0`, so an empty list is a valid answer instead of a failure; and `column:` fields still resolve against a table that kept its caption and headers and shows no rows. |
-| `infinite-feed` | `extract-until-end` | `scroll` pagination: every post in one read, loading more until the feed ends, rather than the posts that happen to be on screen. |
-| `infinite-feed` | `extract-by-load-more`, variant `load-more-button` | `loadMore` pagination. Unarmed the control does not exist, so the read returns the first page and stops instead of waiting for a button that is never coming; armed, every page after the first comes from pressing it. |
+| `infinite-feed` | `extract-until-end` | `scroll` pagination: every post, loading more until the feed ends, rather than the posts that happen to be on screen. |
+| `infinite-feed` | `extract-by-load-more`, variant `load-more-button` | `loadMore` pagination. Unarmed the control does not exist, so the list is its first page, with no button to wait for; armed, every page after the first comes from pressing it. |
 | `sensitive-input` | `extract-card-secrets` | Reading a password control through its value attribute is refused in every mode: the workflow expects `blocked_by_capability_or_policy` / `web.action.rejected` and no records at all, rather than a blank that later looks like data. |
 | `sensitive-input` | `extract-card-labels` | The same list with that column left out, which is what excluding a column means: it is absent from the records rather than masked in them, and the read succeeds. |
 | `admin-console` | `extract-customer-list`, variant `short-book` | Every customer read off a virtualised list that scrolls inside its own pane; the variant shrinks the book below the list's render window, so every row is mounted and the same extraction returns all of them. |
@@ -1098,8 +1116,9 @@ while the extension records. An `extract` step's records are asserted against
 `expected.extracted` as the step runs, and what the step read is kept before it
 is judged and published as one counts-only measurement per extract step in the
 run's `evaluation.json` (`run-expectations/extraction/measurements.ts`): the
-records compared, the fields that carried a value, the pages the read followed,
-whether it truncated, and how long it took. A step whose records did not match
+records compared, the fields that carried a value, the pages the read followed
+(one, since the read reads one page), whether it truncated, and how long it
+took. A step whose records did not match
 is measured too, which is the measurement worth having; a step an expectation
 named that never ran is `not_run`; a step nothing expected is `not_expected`;
 and a run that never reached its script publishes `null`, which reads as
@@ -1110,12 +1129,15 @@ An `extract` step is **FluxIQ's read, not the Lab's**
 extraction definition and sent to the extension's own control page as
 `fluxiq.test.defineExtraction`; the background worker records `data.extract`
 and runs `web.dom.extract_list` through the same command a replayed Flow uses,
-and answers with the records. Pagination is part of that definition, so FluxIQ
-follows `next`, `loadMore`, `scroll` or `numbered` itself, up to the step's
-`maxPages`, and the recording holds one extract node rather than a Next click
-per page. The step sends no timeout: the read is bounded by the domain's own
-budget, scaled by the pages the request may read, because a bound the harness
-imposed would be the harness deciding how long the product may take.
+and answers with the records. The definition reads one page and carries no
+`paginate`. A step that declares `pagination` is refused before anything is
+sent, as `fixture.invalid` with `pagedExtractExclusion`'s reason
+(`scenario-steps/extract-intent.ts`): sent without its paging it would record
+and measure a one-page read of a list the workflow reads whole, and the domain
+refuses a multi-page `paginate` anyway. The bench skips such a workflow on the
+recording and Flow lanes with the same reason. The step sends no timeout: the
+read is bounded by the domain's own budget, because a bound the harness imposed
+would be the harness deciding how long the product may take.
 
 A run with no extension control page falls back to the Lab's reference reader
 (`scenario-steps/extract-records.ts`), which reads a page with Playwright,
@@ -1198,7 +1220,9 @@ The expectations are judged in this order:
   `truncated` is Core's per-run row cap, a different event. They are therefore
   removed from the entry handed to the assertion, named on the step as
   `unjudged`, and enter no rate — so `paginationAccuracy` on this lane has an
-  empty population and publishes no number. The records are still compared in
+  empty population and publishes no number. It stays a recording-lane measure,
+  and no recording-lane result pages any more, so it publishes no rate there
+  either until a page loop can be recorded. The records are still compared in
   full, which is the stronger claim: a step that read only page 1 cannot
   produce page 3's records.
 - The fixture oracle. A Flow whose expectations held but whose fixture did not
@@ -2220,9 +2244,11 @@ resumed.
   anything starts — but no `week1` workflow is such a workflow any more. W04 and
   W08 were, their scripts doing nothing but extract; an `extract` now records a
   `web.dom.extract_list`, so their four Flow-lane entries run again and their
-  extraction is judged on the Flow lane. That leaves 67 runnable results per
-  repeat and 0 skipped: 23 on the recording lane, and 44 on the Flow lane
-  (23 unarmed and 21 variants).
+  extraction is judged on the Flow lane. A workflow with a paged `extract` step
+  is skipped on both lanes (`pagedExtractExclusion`, in `bench/expand-corpus.ts`
+  and the runner's `--flow` refusal): W05 and W07. That leaves 62 runnable
+  results per repeat and 5 skipped: 21 on the recording lane, and 41 on the
+  Flow lane (21 unarmed and 20 variants).
   W19 to W23 and W29 are variants only. Because `week1` runs
   `auth-gate` on the Flow lane, it needs `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD`.
   `week2` is A01 to A06 on the Flow lane alone: identity-drift's
@@ -2306,7 +2332,8 @@ resumed.
   carried a **value** for it, since Core's stored schema guarantees the key and
   a presence test would read 1.000 whatever happened; `paginationAccuracy`
   needs both an expected page count and an observed one, which the Flow lane
-  cannot supply; and `extractionExactSuccess` and `extractionFalseSuccess` are
+  cannot supply and which no recording-lane step has while paged extract steps
+  are excluded from that lane, so it publishes no rate; and `extractionExactSuccess` and `extractionFalseSuccess` are
   per run. A run is an exact success only when every judged step listed its
   records and matched them: a count-only step whose counts agree is a miss for
   exact success (X5.5), so a lane of count-only steps such as
@@ -2317,7 +2344,16 @@ resumed.
   each rate's own unit and population beside it, because no two of these rates
   are counted over the same steps. Two distributions,
   `extractionDurationMs` and `extractionMsPerPage`, complete the block; the
-  second has no samples on a lane that cannot observe pages.
+  second has no samples on a lane that cannot observe pages. Every record
+  count in the block is the **answer**: on the Flow lane a step's records are
+  what Core's run-end processing kept from the rows the read's passes
+  collected. A measurement states the other side as `collectedRecords` when
+  the dataset's summary carried a processing account
+  (`flow-lane/run-datasets.ts`), never fewer than `observedRecords`, and the
+  lane block's optional `collection` pools it (`steps`, `collectedRecords`,
+  `answerRecords`) over the judged steps that stated it; `report.md` prints it
+  after the basis sentence. A step with no processing account, every
+  recording-lane step among them, enters neither side.
 - **Causes.** A failed run's cause is the summary of its own last `error` event
   written under the category the runner returned (`bench/read-run-bundle.ts`),
   because the runner's result carries a category and no text. The outcome
@@ -2454,7 +2490,8 @@ frames, the `identity-*` resolution family, target resolution, large-page
 resolution, modal intervention, recorder trust, redaction and selection
 redaction, and the upload dialog. Two families have outgrown that directory and
 have their own: `extraction/tests/` holds list extraction split by what it
-exercises — the catalog fields, pagination, tables, sensitive controls, the
+exercises — the catalog fields, pagination, Next page
+(`everything-store-next-page.spec.ts`), tables, sensitive controls, the
 picker, and inference — and `evidence/tests/` holds the page-evidence and
 snapshot specs.
 
@@ -3098,7 +3135,8 @@ after it, its folder and its `meta.json` `step` both, so the folders read in
 time order (`run-musp8nz1-dbd3905a`: the check was 0048 before the playback it
 checked, 0049-0061). A list read (`web.dom.extract_list`) also says what it
 read, as `result.read` and in its summary. That covers its records, pages,
-items seen, empty records, whether a cap cut it short, why paging stopped,
+items seen, empty records, whether a cap cut it short, why paging stopped (a
+Flow's read reads one page, so a Flow's paging shows in its Next page steps),
 what its conditions kept and the rows it returned, in counts and closed words
 only, never a row or a field (`run-musp39u8-9ac026ab` wrote `validation: null`
 and nothing else). Every runtime step is

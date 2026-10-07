@@ -152,7 +152,17 @@ export type RunExtractionMeasurement = {
    * judges nothing and is why `countStated` exists.
    */
   expectedRecords: number;
+  /** The records the step yielded. On the Flow lane, the answer Core's run-end processing kept from what the read collected. */
   observedRecords: number;
+  /**
+   * The rows the step's read collected over all its passes before Core's
+   * run-end processing (whole-row dedupe, then the read's declared dedupe,
+   * filter, sort and limit) turned them into `observedRecords`; never fewer
+   * than the answer. Absent when the producer reported no processing: the
+   * recording lane reads one definition once, and a dataset Core has not
+   * processed serves its collected rows as they are.
+   */
+  collectedRecords?: number;
   /** Whether the expectation listed the records themselves, the only thing that lets a value be compared. */
   recordsListed: boolean;
   /** Whether the expectation stated a record count of its own, rather than `expectedRecords` being adopted from what the step observed. */

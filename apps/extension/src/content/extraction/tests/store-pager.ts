@@ -37,7 +37,10 @@
 //   same pager whose current page links somewhere else, so nothing on it says
 //   which page is current;
 // - `stuckOn` is a page every control of which loads that same page again:
-//   a list that goes on past a page the read cannot leave.
+//   a list that goes on past a page the read cannot leave;
+// - `lastNext: "enabled"` is Guildline's last page (S6 GAP N1): Next stays an
+//   enabled script button with no address on the last page, and pressing it
+//   reloads that page, while the pager marks the last number current.
 
 /** One row of the fake document per element, and the viewport's height, in px. */
 const ROW_PX = 40;
@@ -255,6 +258,8 @@ export type PagerStyle = {
   current?: "aria" | "self-link" | "unmarked";
   /** A page every control of which loads that page again. */
   stuckOn?: number;
+  /** Next stays enabled on the last page and loads that page again. */
+  lastNext?: "enabled";
 };
 
 /** The Next a `next` read names on a pager drawn with `controls: "buttons"`. */
@@ -290,7 +295,9 @@ function pager(page: number, turnTo: (target: number) => void, style: PagerStyle
   // The store's own bug: on page two, Next leads back to page two.
   const next = page < PAGE_COUNT
     ? control(lead(page === 2 ? 2 : page + 1), `Go to next page, page ${page + 1}`, "Next", turnTo, style, style.controls === "buttons" ? { "data-next": "true" } : {})
-    : new FakeElement(style.controls === "buttons" ? "button" : "span", { "aria-disabled": "true" }, "Next");
+    : style.lastNext === "enabled"
+      ? control(page, "Go to next page", "Next", turnTo, style, style.controls === "buttons" ? { "data-next": "true" } : {})
+      : new FakeElement(style.controls === "buttons" ? "button" : "span", { "aria-disabled": "true" }, "Next");
   return new FakeElement("nav", { role: "navigation", "aria-label": "pagination" }, "", [previous, ...numbers, next]);
 }
 

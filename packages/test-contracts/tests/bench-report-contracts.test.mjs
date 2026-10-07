@@ -398,3 +398,14 @@ test("compareBenchReports lists each lane's extraction rates after the Metrics-t
   const tampered = { ...comparison, metrics: comparison.metrics.map((entry, at) => (at === exact ? { ...entry, tolerance: 1 / 6, outcome: "improved" } : entry)) };
   assert.deepEqual(issuesOf({ ...candidate, comparison: tampered }), [`$.comparison.metrics[${exact}].tolerance`, `$.comparison.metrics[${exact}].outcome`]);
 });
+
+// Read-list S6: the lane states how many rows its reads collected and how many
+// the processed answers kept, over the judged steps that reported processing.
+test("an extraction block may state the collected rows and the processed answer, never an answer larger than the collection", () => {
+  const collection = { steps: 2, collectedRecords: 30, answerRecords: 26 };
+  assert.deepEqual(issuesOf(extracted({ flow: extractionMetrics({ collection }) })), []);
+  assert.deepEqual(parseBenchReportJson(JSON.stringify(extracted({ flow: extractionMetrics({ collection }) }))).metrics.extractionByLane.flow.collection, collection);
+  assert.deepEqual(issuesOf(extracted({ flow: extractionMetrics({ collection: { ...collection, answerRecords: 31 } }) })), [extractionPath("flow", "collection.answerRecords")]);
+  assert.deepEqual(issuesOf(extracted({ flow: extractionMetrics({ collection: { ...collection, steps: 7 } }) })), [extractionPath("flow", "collection.steps")]);
+  assert.deepEqual(issuesOf(extracted({ flow: extractionMetrics({ collection: { ...collection, rows: 1 } }) })), [extractionPath("flow", "collection.rows")]);
+});

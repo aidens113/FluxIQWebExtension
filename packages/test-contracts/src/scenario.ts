@@ -23,11 +23,12 @@ export type NetworkPolicy = "loopback-only" | "allowlisted-real-site";
  * through Playwright while the extension records. `extract` reads the page and
  * is recorded as a data-extraction action: the extraction intent puts one
  * extract node in the recording, which the domain maps to `web.dom.extract_list`,
- * or to `web.dom.extract` for a single-element read. With `pagination` the step
- * reaches each further page as trusted input -- in the default `next` mode by
- * clicking `next` -- but those clicks belong to that one node, so a paginated
- * step yields the same types as an unpaginated one and no `web.dom.click`
- * (`recordableActionTypes`).
+ * or to `web.dom.extract` for a single-element read. A step with `pagination`
+ * is not recorded: FluxIQ's read reads one page, a Flow pages with a read, a
+ * Next page step and a repeat, and no recording can produce that loop yet, so
+ * the recording and Flow lanes exclude such a workflow
+ * (`lane-exclusion/paged-extract-exclusion.ts`) and its paging is judged on the
+ * created-Flow lane.
  */
 export const scenarioStepOperations = [
   "click",
@@ -48,7 +49,13 @@ export const scenarioStepOperations = [
 
 export type ScenarioStepOperation = (typeof scenarioStepOperations)[number];
 
-/** The ways an extract step reaches further pages, named as the domain's `WebAutomationExtractListPagination` names them (D14). */
+/**
+ * The ways an extract step reaches further pages, named as the domain's
+ * `WebAutomationExtractListPagination` and the Next page node's ways name them
+ * (D14). Lab data only: the reference reader (`extract-records.ts`) follows
+ * `next`, and the oracle states what list the step reads; FluxIQ's read never
+ * receives it.
+ */
 export const scenarioExtractPaginationModes = ["next", "loadMore", "scroll", "numbered"] as const;
 
 export type ScenarioExtractPaginationMode = (typeof scenarioExtractPaginationModes)[number];

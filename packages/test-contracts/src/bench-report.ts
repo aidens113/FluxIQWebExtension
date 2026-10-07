@@ -122,7 +122,22 @@ export type BenchExtractionMetrics = {
   extractionDurationMs: BenchDistribution;
   /** Each step's extraction duration over the pages it followed. */
   extractionMsPerPage: BenchDistribution;
+  /**
+   * What the lane's reads collected beside the answers Core's run-end
+   * processing kept (read-list S6), over the judged steps that stated
+   * `collectedRecords`. Every rate above is over the answer; this says how
+   * much processing removed. Absent when no judged step reported processing,
+   * as on the recording lane and in every report written before it existed.
+   */
+  collection?: BenchExtractionCollection;
 } & Record<BenchExtractionRateMetric, BenchRate>;
+
+/** The judged steps that reported run-end processing, the rows their reads collected, and the rows their answers kept (`answerRecords <= collectedRecords`). */
+export type BenchExtractionCollection = {
+  steps: number;
+  collectedRecords: number;
+  answerRecords: number;
+};
 
 /**
  * The Week 1 Metrics table over the whole corpus. Units are in the field

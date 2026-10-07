@@ -1,4 +1,4 @@
-import { flowLaneExclusion, resolveScenarioWorkflow, type EvaluationLane, type ExpectedFailure, type WebScenario } from "@fluxiq-web-extension/test-contracts";
+import { flowLaneExclusion, pagedExtractExclusion, resolveScenarioWorkflow, type EvaluationLane, type ExpectedFailure, type ScenarioStep, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import type { BenchCorpus, BenchCorpusRow } from "./corpus/index.js";
 
 /** Why a resolved variant does not run: a variant is armed only by the Flow lane, and this corpus does not run it. */
@@ -26,8 +26,8 @@ export const lanesForResult = (variantId: string | null): readonly EvaluationLan
  * `resolved` is whether `resolveScenarioWorkflow` finds the scenario,
  * workflow, and variant in the registry. `lane` is the lane the entry runs on.
  * `skipReason` is set exactly when the entry does not run: it did not resolve,
- * the corpus runs none of the lanes that can run it, or it is on the Flow lane
- * and its workflow's script records no action (`flowLaneExclusion`).
+ * the corpus runs none of the lanes that can run it, or its lane cannot run its
+ * workflow's script (`laneExclusion`).
  */
 export type BenchPlanEntry = {
   corpusRowId: string;
@@ -61,10 +61,9 @@ function plannedLanes(corpus: BenchCorpus, variantId: string | null): Array<{ la
 }
 
 /**
- * A resolved Flow-lane entry whose workflow's script records no action is
- * skipped with `flowLaneExclusion`'s reason: no Flow can be built from its
- * recording, so it would fail every repeat as `recording.contract` whatever
- * FluxIQ did. The runner refuses a `--flow` run of it with the same reason.
+ * A resolved entry whose lane cannot run its workflow's script is skipped with
+ * the reason `laneExclusion` gives, rather than planned to fail every repeat
+ * whatever FluxIQ did.
  */
 function planEntry(row: BenchCorpusRow, variantId: string | null, lane: EvaluationLane, laneSkip: string | undefined, manifests: readonly WebScenario[]): BenchPlanEntry {
   const identity = { corpusRowId: row.id, scenarioId: row.scenarioId, workflowId: row.workflowId, variantId, lane };
@@ -73,9 +72,27 @@ function planEntry(row: BenchCorpusRow, variantId: string | null, lane: Evaluati
   try {
     const resolved = resolveScenarioWorkflow(scenario, { ...(row.workflowId === null ? {} : { workflowId: row.workflowId }), ...(variantId === null ? {} : { variantId }) });
     const expectedFailure = resolved.expected.failure ?? null;
-    const skipReason = laneSkip ?? (lane === "flow" ? flowLaneExclusion(resolved.recordingScript) : undefined);
+    const skipReason = laneSkip ?? laneExclusion(lane, resolved.recordingScript);
     return { ...identity, resolved: true, ...(skipReason === undefined ? {} : { skipReason }), expectedFailure };
   } catch (error) {
     return { ...identity, resolved: false, skipReason: `unresolved: ${error instanceof Error ? error.message : String(error)}`, expectedFailure: null };
   }
+}
+
+/**
+ * Why `lane` cannot run a workflow's script, or `undefined` when it can.
+ *
+ * - The Flow lane: `flowLaneExclusion` (a script that records no action, or
+ *   one with a paged extract step). The runner refuses a `--flow` run of it
+ *   with the same reason.
+ * - The recording lane: a paged extract step (`pagedExtractExclusion`).
+ *   FluxIQ's read reads one page and no recording can hold the Next page loop,
+ *   so the step's extraction intent refuses it (`extract-intent.ts`) rather
+ *   than record and measure a one-page read; planning the run would only plan
+ *   that refusal.
+ */
+function laneExclusion(lane: EvaluationLane, script: readonly ScenarioStep[]): string | undefined {
+  if (lane === "flow") return flowLaneExclusion(script);
+  const paged = pagedExtractExclusion(script);
+  return paged === undefined ? undefined : `the recording lane reads each extract step through FluxIQ's own read, and its ${paged}`;
 }

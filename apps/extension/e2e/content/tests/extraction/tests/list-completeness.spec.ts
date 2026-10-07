@@ -159,7 +159,7 @@ test("a read that is told an empty answer is possible still returns the whole li
   expect(reply.extraction?.recordCount, "every card of the run, the advertisements included").toBe(20);
 });
 
-test("a bound the plan writes over a column it renamed is resolved into the column's own read and applied to the page", async ({ openHarness }) => {
+test("a bound the plan writes over a column it renamed names that column by its kept key and is applied to the page", async ({ openHarness }) => {
   test.setTimeout(120_000);
   const harness = await openHarness("everything-store");
   await open(harness);
@@ -208,7 +208,7 @@ test("a bound the plan writes over a column it renamed is resolved into the colu
     ...BASE,
     callId: "call.read",
     toolId: WEB_LLM_RUN_NODE_TOOL_ID,
-    value: { node: EXTRACT_LIST_NODE, parameters: { extractList: { handle: packet.extraction, fields: renamed, paginate: false } }, consequences: [] }
+    value: { node: EXTRACT_LIST_NODE, parameters: { extractList: { handle: packet.extraction, fields: renamed } }, consequences: [] }
   });
   expect(read.resultCode, JSON.stringify(read.evidence)).toBe("web.inspect.succeeded");
   const every = dispatched.filter((entry) => entry.actionType === "web.dom.extract_list").at(-1);
@@ -241,21 +241,25 @@ test("a bound the plan writes over a column it renamed is resolved into the colu
     toolId: WEB_LLM_RUN_NODE_TOOL_ID,
     value: {
       node: EXTRACT_LIST_NODE,
-      parameters: { extractList: { handle: packet.extraction, fields: renamed, where: [{ field: measured, atLeast: bound }], paginate: false, minItems: 0 } },
+      parameters: { extractList: { handle: packet.extraction, fields: renamed, where: [{ field: measured, atLeast: bound }], minItems: 0 } },
       consequences: []
     }
   });
   expect(bounded.resultCode, JSON.stringify(bounded.evidence)).toBe("web.inspect.succeeded");
 
-  // What went out is a literal request the page can run, with the condition
-  // resolved into the column's own spec: the saved Flow needs no handle, no
-  // detection and no field map to read the same rows again.
+  // What went out is a literal request the page can run: the saved Flow needs
+  // no handle and no detection to read the same rows again. Since 2026-10-01
+  // (c8be5125, lane C F35) a condition over a column the read keeps names it by
+  // the kept key -- the plan's own name, resolved against the request's own
+  // `fields` -- rather than repeating the column's spec, so a rerun or a
+  // re-author can name the column it tests (`plan-resolution/extraction/conditions.ts`).
   const sent = dispatched.filter((entry) => entry.actionType === "web.dom.extract_list").at(-1);
   const request = sent?.parameters.extractList as unknown as WebAutomationExtractListRequest;
   expect(request.where?.length).toBe(1);
   expect(request.where?.[0]?.atLeast).toBe(bound);
-  expect(request.where?.[0]?.field, "the resolved condition carries the column, not a reference to the table's fields").toBeUndefined();
-  expect(request.where?.[0]?.read, "the column the plan named under its own key").toBeTruthy();
+  expect(request.where?.[0]?.field, "the condition names the column by the key the plan kept it under").toBe(measured);
+  expect(request.where?.[0]?.read, "and does not repeat its spec").toBeUndefined();
+  expect(request.fields[measured], "a key the request itself reads").toBeTruthy();
   expect(sent?.recordCount, "the rows the bound keeps, as the store's own values say").toBe(wanted);
   expect((sent?.records ?? []).every((row) => numberIn(row[measured]) >= bound), "every row kept satisfies the bound").toBe(true);
 });

@@ -85,10 +85,29 @@ async function nextPage(harness: ContentHarness, item: string, step: number): Pr
   const action: BrowserActionCommand = { commandId: `next-page-${step}`, actionType: "web.dom.next_page", timeoutMs: 30_000, nextPage: { item } };
   const sent = await harness.deliver({ type: "executeAction", topFrameOnly: true, extraction: { token: TOKEN }, action }).catch(() => undefined);
   if (sent?.responded) return sent.response as BrowserActionResult;
-  await harness.page.waitForLoadState("load");
-  const asked = await harness.deliver({ type: "executeAction", topFrameOnly: true, extraction: { token: TOKEN, resume: { by: "next" } }, action });
+  const asked = await deliverToNewDocument(harness, { type: "executeAction", topFrameOnly: true, extraction: { token: TOKEN, resume: { by: "next" } }, action });
   expect(asked.responded, "the document the press loaded answered for it").toBe(true);
   return asked.response as BrowserActionResult;
+}
+
+/**
+ * Delivers `message` to the document the press loaded. The worker waits for
+ * that document's content script to announce itself; here `load` can still be
+ * the old document's when the lost reply comes back, and a delivery into it
+ * dies with it ("Execution context was destroyed"). Only that error is
+ * retried, after the next load, a bounded number of times: any other is the
+ * page's answer and fails the row.
+ */
+async function deliverToNewDocument(harness: ContentHarness, message: unknown): Promise<Awaited<ReturnType<ContentHarness["deliver"]>>> {
+  for (let attempt = 1; ; attempt += 1) {
+    await harness.page.waitForLoadState("load");
+    try {
+      return await harness.deliver(message);
+    } catch (error) {
+      if (attempt >= 5 || !/Execution context was destroyed/u.test(String(error))) throw error;
+      await harness.page.waitForTimeout(250);
+    }
+  }
 }
 
 test("a read and Next page go through all five results pages, and Next page ends on the last without pressing", async ({ openHarness, page }) => {

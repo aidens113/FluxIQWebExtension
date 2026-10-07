@@ -59,8 +59,9 @@ A live list read (`web.output.dom-extract_list`) that succeeds sends
 sha256 of the page's origin and path (no query or hash, so page 1 and page 5
 of one search are one page, and a reload keeps it) and the resolved
 `extractList.item` selector the read ran with. The model's `extraction.N`
-handle, `fields`, `where`, `sort` and `paginate` are not part of it: they say
-how a list was read, not which list. A read whose page or item selector cannot
+handle, `fields`, `where` and `sort` are not part of it: they say how a list
+was read, not which list. Page 1 and page 5 sharing a code is what a page loop
+needs: the read is one step that runs once a pass, not a new read per page. A read whose page or item selector cannot
 be found, every other node, every refusal, a look and a written step send no
 code; a read whose command met a robot check carries the code it would have
 sent. The dry-run replay builds no draft statement and sends none. Core
@@ -156,11 +157,15 @@ no historical execution proof; whole-Flow testing remains required.
 ## The Model's Instructions
 
 The Lists line of the web system instructions
-(`runtime/llm-evidence/system-instructions/instructions.ts`, version `web-4`)
+(`runtime/llm-evidence/system-instructions/instructions.ts`, version `web-5`)
 says repetitive work is a loop: list the items with a `where` that keeps only
 the ones to act on, act once on one kept item or write the act (`write true`),
 state `repeat`, never act on every item; and bind a value that changes between
-runs or rows (`{"$input": name}`, `{"$row": field}`).
+runs or rows (`{"$input": name}`, `{"$row": field}`). It adds that every page
+of a list is a loop too: read the list, then Next page on the same list, then
+`amend_draft` `repeat` on the read through Next page while it succeeds (`most N`
+for "the first N pages"); the Flow keeps each row once. The build runs Next page
+once live and states the loop; it never repeats a call to reach page two.
 
 Core adds its own notes beside these. Its start-location note says the Flow's
 first step may go straight to a stable deeper address on the same site where
@@ -184,9 +189,43 @@ durations, verdict words and codes only, never page text (Core's
 row anchors are P6. Stored Flow nodes keep `metadata.declaredConsequences`,
 but no stored-run gate reads it; that change is the user's decision.
 
-### Bounded extraction feedback
+### Paged lists
 
-Detected list evidence includes selector-free paginationBound (maxPages or maxScrolls). Omitting paginate, or passing true, retains the detected bound; it does not request every page. Explicit extractList.paginate.maxPages or maxScrolls changes that bound. Defaults remain bounded. A page_limit report names the reader's actual clamped bound and the nested amendment needed to read further; truncation is still incomplete evidence, never proof that the list ended.
+A list read (`web.output.dom-extract_list`) reads the one page it is given. A
+detected list that continues carries `pagination` (how it continues:
+`next_link`, `numbered_pages`, `load_more_button` or `infinite_scroll`) and a
+`nextPageNote` naming its handle: for every page, add Next page with
+`nextPage: {list: "extraction.N"}` after the read, then repeat the read through
+Next page while it succeeds (`runtime/llm-evidence/structure/packet.ts`). The
+packet states no page bound. Next page (`web.output.dom-next_page`, action
+`web.dom.next_page`) moves the list on by one page and answers `success`,
+`ended` when there is no further page, or `failed`; Core's do-while
+`repeat {through, while, most}` runs the span again while Next page moves on,
+and an `ended` answer leaves the loop cleanly. `nextPage` may also name a
+page-view handle for the site's own Next control (`control: "tN"`), or be a
+literal `{item, next?}` for a list nothing detected
+(`plan-resolution/next-page-slot.ts`).
+
+A handle-form read that writes `paginate`, `maxPages` or `maxScrolls` is
+refused `web.handle.malformed` at that key with the expected hint
+`web.handle.expected.extract_list.next_page`
+(`plan-resolution/extraction/slot.ts`); it is never dropped silently. A stored
+or literal read whose `paginate` goes past one page (any `maxPages` above one,
+a `scroll` mode or a `maxScrolls`) is refused at dispatch with
+`web.extract_list.paginate_retired` and the sentence "This step used to go
+through pages by itself; the Flow now needs a Next page step and a repeat", which
+sends the run to repair (`output-nodes/extract-list/dispatch.ts`,
+`actions/extraction/retired-paging.ts`). A one-page `paginate` (`maxPages: 1`,
+what the picker used to record) is dropped, since it reads the same page.
+
+Every pass of the read appends to that read's run dataset. At run end Core
+processes each dataset's collected rows into its answer: each row is kept once
+by default (whole row, first seen kept), then the read's declared `dedupe`,
+`sort` and limit apply, carried as `recordOutput.process` (`maxItems` becomes
+`limit`, `minItems` becomes `minRows`). Readers, exports, the Lab and the run
+judges read the answer; the collected rows stay as evidence. The build test
+replays the span pass by pass and ends on Next page's `ended` answer, bounded
+by `most`.
 
 ### Bound target test values
 
