@@ -68,8 +68,28 @@ sent. The dry-run replay builds no draft statement and sends none. Core
 compares codes for equality only and refuses a read joining the Flow with the
 code of a kept read when no kept step changed anything between them
 (`AS/runtime/flow-draft/second-copy.ts`, live run `run-muq4oaof-464f5bce`).
-`capture.ts`'s draft type does not declare `reads` yet; `node-run/run.ts`
-widens its `WebNodeDraftStatement` with it until it does.
+
+## What A Press Changed
+
+A press, a type or a choice that changed the page in place sends
+`draft.changed`: at most sixteen `{ words, how }` lines in page order, made by
+`node-run/press-effect/change/statement.ts` from the same walk
+(`press-effect/change/walk.ts`) as the outcome's own `changed` list, so the
+two never disagree. A text line that appeared or went is stated `appeared` or
+`went` in the cut words the outcome entry quotes; a line of any kind with
+words on both pages whose words changed is stated with its words now, `rose`
+when they differ only in one number that went up ("Cart (2)" to "Cart (3)",
+"1 item" to "2 items", `press-effect/change/rose.ts`) and `reads` otherwise.
+State-token changes and lines without words are never stated. It is sent under
+the outcome's own conditions -- a mutating node that does not move the page,
+both pages read, one location -- and absent otherwise; a look, a navigation, a
+read, a refusal, a robot-check standing step and a written step send none.
+Core withholds a line whose words the call's evidence never showed (so a line
+past the outcome's eight that went is usually withheld) and keeps the rest on
+the step, where it reads which step did an act from what the step changed
+rather than from the model's label (`AS/runtime/flow-draft/step.ts`,
+`changed`; week report W1, run `run-muqiho5c-e830ce01`). A checked rerun given
+a new argument clears it with `toggle` and `reads`.
 
 `stable-handles.ts` preserves an unambiguous control's handle across a reload
 that rewrites its selector shape by matching page, frame, record, tag and

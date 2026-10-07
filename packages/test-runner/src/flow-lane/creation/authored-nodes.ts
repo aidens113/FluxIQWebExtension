@@ -28,10 +28,7 @@ import type { FlowNodeRecord } from "../flow-action-types.js";
 // carried to the artifact's own envelope (URL origins, closed words, bounds).
 import { automationStudioScreenedNodeParameters } from "fluxiq/automation-studio";
 import { createdFlowArtifactScreen } from "./artifact-screen.js";
-
-/** Whether a node id or definition id is shaped like one Core writes: no space, so it can carry no text. */
-const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
-const MAX_IDENTIFIER_LENGTH = 256;
+import { flowIdentifier } from "./document-identifier.js";
 
 /**
  * The Flow's action nodes, in the Flow document's own order, each with its
@@ -62,16 +59,12 @@ export function createdFlowAuthoredNodes(
     const parameters = (node.parameterValues ?? {}) as Parameters<typeof automationStudioScreenedNodeParameters>[0];
     const screened = createdFlowArtifactScreen(parameters, automationStudioScreenedNodeParameters(parameters, deniedKeys));
     authored.push({
-      nodeId: identifier(node.id) ?? `unrecognized.node.${authored.length}`,
-      definitionId: identifier(node.definitionId) ?? null,
+      nodeId: flowIdentifier(node.id) ?? `unrecognized.node.${authored.length}`,
+      definitionId: flowIdentifier(node.definitionId) ?? null,
       outputId,
       parameters: screened.values,
       parametersWithheld: screened.withheld,
     });
   }
   return authored;
-}
-
-function identifier(value: string | undefined): string | undefined {
-  return typeof value === "string" && value.length > 0 && value.length <= MAX_IDENTIFIER_LENGTH && IDENTIFIER.test(value) ? value : undefined;
 }

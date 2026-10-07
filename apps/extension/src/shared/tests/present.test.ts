@@ -106,7 +106,8 @@ test("false, zero and the empty string are values, and only undefined is dropped
     type: undefined,
     redirects: 0,
     historyLength: 1,
-    visibility: "visible"
+    visibility: "visible",
+    timeOrigin: undefined
   });
   assert.equal(navigation.redirects, 0, "zero redirects is a measurement, not a missing field");
   assert.equal(navigation.referrer, "");

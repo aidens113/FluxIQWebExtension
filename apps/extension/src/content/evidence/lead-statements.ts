@@ -44,6 +44,7 @@
 
 import { directVisibleText, visibleText } from "../describe-element";
 import { isRecordElement, landmarkRole } from "../identity";
+import { activeSelectorMemo, type SelectorMemo } from "../selector";
 
 /** Longer than this is prose, not a statement. A status line or a notice is well under it. */
 const MAX_STATEMENT_CHARACTERS = 200;
@@ -72,16 +73,45 @@ const CONTROL_ROLES: ReadonlySet<string> = new Set([
  *
  * The cheap questions first: this is asked of every rendered element of every
  * capture, and `visibleText` walks the element's whole subtree, so it is asked
- * last and only of an element whose raw text could be short enough.
+ * last and only of an element whose raw text could be short enough. The
+ * landmark walk comes before the parent's words, because it answers at once
+ * for every control, every item and everything outside `main`. And the
+ * parent's words are asked once per capture (`hasOwnWords`): reading them
+ * walks all of the parent's child nodes, and asked again for each child that
+ * cost every capture of a page with thousands of siblings the square of their
+ * number (t289).
  */
 export function isLeadStatement(element: Element): boolean {
-  if (!directVisibleText(element)) return false;
-  const parent = element.parentElement;
-  if (parent && directVisibleText(parent)) return false;
-  if ((element.textContent?.length ?? 0) > MAX_RAW_CHARACTERS) return false;
+  if (!hasOwnWords(element)) return false;
   if (!belongsToMainRegion(element)) return false;
+  const parent = element.parentElement;
+  if (parent && hasOwnWords(parent)) return false;
+  if ((element.textContent?.length ?? 0) > MAX_RAW_CHARACTERS) return false;
   const words = visibleText(element);
   return words !== undefined && words.length <= MAX_STATEMENT_CHARACTERS;
+}
+
+/** Each capture's answers to `hasOwnWords`, held for as long as its selector memo is. */
+const ownWordsByCapture = new WeakMap<SelectorMemo, Map<Element, boolean>>();
+
+/**
+ * Whether the element has words of its own (`directVisibleText`). Inside a
+ * capture (`withSelectorMemo`) the answer is kept for the rest of it, so a
+ * parent is read once however many children ask; outside one it is read afresh.
+ */
+function hasOwnWords(element: Element): boolean {
+  const memo = activeSelectorMemo();
+  if (!memo) return directVisibleText(element) !== undefined;
+  let known = ownWordsByCapture.get(memo);
+  if (!known) {
+    known = new Map();
+    ownWordsByCapture.set(memo, known);
+  }
+  const cached = known.get(element);
+  if (cached !== undefined) return cached;
+  const words = directVisibleText(element) !== undefined;
+  known.set(element, words);
+  return words;
 }
 
 /** Whether the nearest landmark above the element is `main`, with nothing on the way that makes its words a control's or an item's. */

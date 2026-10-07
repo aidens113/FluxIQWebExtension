@@ -40,6 +40,16 @@ export class PageElement {
     return this.tagName.toLowerCase();
   }
 
+  /**
+   * The parent whose children `selectorFor` counts for `:nth-of-type`
+   * (`selector/sibling-position.ts` takes them from the parent node, so the top
+   * of a shadow tree counts the shadow root's). Here every parent is an element;
+   * the root's is `null`, which the position reads as standing alone, as `html` does.
+   */
+  get parentNode(): PageElement | null {
+    return this.parentElement;
+  }
+
   getAttribute(name: string): string | null {
     return this.attributes.get(name) ?? null;
   }

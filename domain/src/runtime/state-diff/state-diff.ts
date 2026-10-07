@@ -7,6 +7,18 @@
 // words the model reads every page in, and never as element objects. The lines
 // are compared as a multiset: a page that lists "Add to cart" twelve times and
 // then eleven lost one. Nothing is capped (t200).
+//
+// `locationChanged` says the address differs; `documentChanged` says the page
+// is a new document. They are not the same thing: a page that rewrites its
+// address in place (`history.replaceState`) is the same document at another
+// address, and in run `run-muw5zv4m-52d83027` the fixture's size buttons did
+// exactly that, so Core's finished-run check read the choice as a page move and
+// dropped its change lines. The document is compared by the identity each
+// summary carries (`documentTimeOrigin`, the page's `performance.timeOrigin`)
+// when both carry one; otherwise a document change is a location change, as
+// every diff was before. A single-page app's route change (`pushState`) is
+// therefore the same document too, and its lines are diffed like any other
+// change in place; a reload is a new document at the same address.
 
 import type { JsonObject } from "fluxiq/core";
 import { WEB_STATE_DIFF_SCHEMA_VERSION } from "./schema-version";
@@ -23,13 +35,17 @@ export function webAutomationStateDiff(
   const now = webStateSummaryLines(after);
   const added = leftOver(now.lines, was.lines);
   const removed = leftOver(was.lines, now.lines);
+  const locationChanged = was.location !== undefined && now.location !== undefined && was.location !== now.location;
   return {
     schemaVersion: WEB_STATE_DIFF_SCHEMA_VERSION,
     ...(beforeStateRef === undefined ? {} : { beforeStateRef }),
     ...(afterStateRef === undefined ? {} : { afterStateRef }),
     ...(was.location === undefined ? {} : { beforeLocation: was.location }),
     ...(now.location === undefined ? {} : { afterLocation: now.location }),
-    locationChanged: was.location !== undefined && now.location !== undefined && was.location !== now.location,
+    locationChanged,
+    documentChanged: was.documentTimeOrigin !== undefined && now.documentTimeOrigin !== undefined
+      ? was.documentTimeOrigin !== now.documentTimeOrigin
+      : locationChanged,
     titleChanged: was.title !== now.title,
     beforeLineCount: was.lines.length,
     afterLineCount: now.lines.length,

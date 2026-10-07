@@ -18,6 +18,7 @@ test("the diff reports the move, the title, the counts, and the lines that came 
     beforeLocation: "https://shop.test/cart",
     afterLocation: "https://shop.test/thanks",
     locationChanged: true,
+    documentChanged: true,
     titleChanged: true,
     beforeLineCount: 2,
     afterLineCount: 2,
@@ -63,4 +64,42 @@ test("every line that came is listed, with exact counts, and nothing is capped",
   assert.equal(String(grown.added).split("\n").length, 300);
   assert.equal(grown.locationChanged, false);
   assert.equal(grown.beforeLineCount, 0);
+});
+
+// Run `run-muw5zv4m-52d83027`: the fixture's size buttons rewrite the address
+// in place (`history.replaceState`), and Core's finished-run check dropped the
+// step's change lines because the address differed. The document identity
+// (`performance.timeOrigin`, one per document) says the page never moved.
+function inDocument(summary: JsonObject, documentTimeOrigin: number): JsonObject {
+  return { ...summary, documentTimeOrigin };
+}
+
+test("an address rewritten in place is a location change in the same document, and its lines are diffed", () => {
+  const before = inDocument(view("https://shop.test/p/rolls?size=6", "Rolls", ["t1 option \"6 Double Rolls\" (chosen)", "t2 option \"12 Double Rolls\""]), 1_759_000_000_123.4);
+  const after = inDocument(view("https://shop.test/p/rolls?size=12", "Rolls", ["t1 option \"6 Double Rolls\"", "t2 option \"12 Double Rolls\" (chosen)"]), 1_759_000_000_123.4);
+  const diff = webAutomationStateDiff(before, after);
+  assert.equal(diff.locationChanged, true);
+  assert.equal(diff.documentChanged, false);
+  assert.equal(diff.added, "option \"6 Double Rolls\"\noption \"12 Double Rolls\" (chosen)");
+  assert.equal(diff.removed, "option \"6 Double Rolls\" (chosen)\noption \"12 Double Rolls\"");
+  assert.doesNotMatch(JSON.stringify(diff), /1759000000123/u);
+});
+
+test("a new document is a document change, even at the same address (a reload)", () => {
+  const before = inDocument(view("https://shop.test/cart", "Cart", ["t1 \"Qty 1\""]), 1_759_000_000_123.4);
+  const after = inDocument(view("https://shop.test/cart", "Cart", ["t1 \"Qty 1\""]), 1_759_000_004_567.8);
+  const diff = webAutomationStateDiff(before, after);
+  assert.equal(diff.locationChanged, false);
+  assert.equal(diff.documentChanged, true);
+});
+
+test("with the document identity missing on either side, a document change is a location change, as before", () => {
+  const plain = view("https://shop.test/a", "A", []);
+  const moved = view("https://shop.test/b", "B", []);
+  assert.equal(webAutomationStateDiff(inDocument(plain, 5), moved).documentChanged, true);
+  assert.equal(webAutomationStateDiff(plain, inDocument(moved, 5)).documentChanged, true);
+  assert.equal(webAutomationStateDiff(plain, moved).documentChanged, true);
+  assert.equal(webAutomationStateDiff(plain, inDocument(plain, 5)).documentChanged, false);
+  // Only a finite number is an identity.
+  assert.equal(webAutomationStateDiff({ ...plain, documentTimeOrigin: "5" }, { ...moved, documentTimeOrigin: "5" }).documentChanged, true);
 });

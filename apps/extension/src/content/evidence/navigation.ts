@@ -15,6 +15,13 @@
 // Both addresses are whole (t200); they were cut at 2,000 characters. What in
 // an address is secret-shaped is the domain's to withhold, parameter by
 // parameter, not a length's.
+//
+// `timeOrigin` says which document this is. `url` is `location.href`, so a page
+// that rewrites its address in place (`history.replaceState`) and a new page
+// look alike by address; in run `run-muw5zv4m-52d83027` a size choice that
+// rewrote the address read as a page move and its change was dropped.
+// `performance.timeOrigin` is one value per document, new for every document,
+// and unchanged by `replaceState` and `pushState`.
 
 import { present } from "../../shared/present";
 import type { NavigationEvidence } from "./types";
@@ -31,8 +38,20 @@ export function navigationEvidence(): NavigationEvidence {
     type: entry?.type || undefined,
     redirects: entry && entry.redirectCount > 0 ? entry.redirectCount : undefined,
     historyLength: history.length,
-    visibility: document.visibilityState
+    visibility: document.visibilityState,
+    timeOrigin: documentTimeOrigin()
   });
+}
+
+/**
+ * This document's `performance.timeOrigin`, or nothing where the page has no
+ * `performance` or reports no finite origin. Like the timing entry, reading it
+ * must never be the reason a snapshot fails; the attribute is a plain number
+ * with no failure of its own, so only its absence is guarded.
+ */
+function documentTimeOrigin(): number | undefined {
+  const origin: unknown = typeof performance === "undefined" ? undefined : performance.timeOrigin;
+  return typeof origin === "number" && Number.isFinite(origin) ? origin : undefined;
 }
 
 /**

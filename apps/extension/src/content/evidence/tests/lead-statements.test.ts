@@ -20,6 +20,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withSelectorMemo } from "../../selector";
 import { element, withStubPage } from "../../tests/stub-page";
 
 type Module = typeof import("../lead-statements");
@@ -127,5 +128,42 @@ test("a page with no main region has no lead statements", async () => {
   await withStubPage(load, ({ isLeadStatement }) => {
     const page = element("div", {}, element("p", {}, "No results."), element("footer", {}, element("p", {}, "Help")));
     assert.deepEqual(descendants(page).filter(isLeadStatement), []);
+  });
+});
+
+/** `main` holding `count` short lines, each after a run of markup whitespace, then a container that has words of its own. */
+function wideMain(count: number) {
+  const lines = Array.from({ length: count }, (_, index) => element("p", {}, `Line ${index}.`));
+  const talky = element("div", {}, "Words of its own ", element("em", {}, "and a child's"), ".");
+  const main = element("main", {}, ...lines.flatMap((line) => ["\n  ", line]), talky);
+  return { main, talky };
+}
+
+test("inside a capture the marks are the ones read outside it, on a wide region and on the store's empty results", async () => {
+  await withStubPage(load, ({ isLeadStatement }) => {
+    for (const page of [noResultsPage().page, wideMain(500).main]) {
+      const elements = descendants(page);
+      const outside = elements.map(isLeadStatement);
+      const inside = withSelectorMemo(() => elements.map(isLeadStatement));
+      assert.deepEqual(inside, outside);
+    }
+    const { main } = wideMain(3);
+    assert.deepEqual(descendants(main).filter(isLeadStatement).map(textOf), ["Line 0.", "Line 1.", "Line 2.", "Words of its own and a child's."]);
+  });
+});
+
+test("inside a capture a parent's own words are read once, however many children ask (t289)", async () => {
+  await withStubPage(load, ({ isLeadStatement }) => {
+    /** How often `main`'s child nodes are read while every element of a `count`-line region is asked. */
+    const reads = (count: number): number => {
+      const { main } = wideMain(count);
+      const childNodes = (main as unknown as { childNodes: unknown[] }).childNodes;
+      let read = 0;
+      Object.defineProperty(main, "childNodes", { get: () => { read += 1; return childNodes; } });
+      withSelectorMemo(() => descendants(main).forEach(isLeadStatement));
+      return read;
+    };
+    // Read once per child before: 2 lines cost a handful of reads, 400 lines hundreds.
+    assert.equal(reads(400), reads(2));
   });
 });

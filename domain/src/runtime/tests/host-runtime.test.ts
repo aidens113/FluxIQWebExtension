@@ -176,6 +176,32 @@ test("two summaries the boundary captured diff into the lines that came and went
   assert.doesNotMatch(JSON.stringify(diff), /"addedElements"|"removedElements"|"tag"/u);
 });
 
+// Run `run-muw5zv4m-52d83027`: an address rewritten in place read as a page
+// move. The summary carries the document's identity (`performance.timeOrigin`)
+// beside the view, never in the view text a model reads, so the diff can tell a
+// rewritten address from a new document.
+test("a summary carries the document's identity beside the view, never in it, and the diff reads it", async () => {
+  const origin = 1_759_000_000_123.4;
+  const navigation = (url: string, timeOrigin: unknown): JsonObject => ({ evidence: { navigation: { url, origin: "https://shop.test", path: "/p", historyLength: 2, visibility: "visible", timeOrigin } } as unknown as JsonObject });
+  const before = { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/p?size=6", ["#six"], navigation("https://shop.test/p?size=6", origin)) } };
+  const after = { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/p?size=12", ["#six", "#twelve"], navigation("https://shop.test/p?size=12", origin)) } };
+  const unusable = { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/p?size=12", ["#six"], navigation("https://shop.test/p?size=12", "1759000000123.4")) } };
+  const { gateway: seam } = gateway([{ ok: true, status: "succeeded", payload: before }, { ok: true, status: "succeeded", payload: after }, { ok: true, status: "succeeded", payload: unusable }]);
+  const boundary = createWebAutomationHostRuntime(seam);
+  const was = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID));
+  const now = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID, "after_action"));
+  const odd = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID, "after_action"));
+
+  assert.equal(was.summary?.documentTimeOrigin, origin);
+  assert.doesNotMatch(String(was.summary?.page), /1759000000123/u);
+  // Only a finite number is an identity.
+  assert.equal(odd.summary?.documentTimeOrigin, undefined);
+  const diff = await boundary.inspectStateDiff!({ before: was, after: now, node: { id: "node.1", definitionId: CLICK_NODE_ID }, attemptId: "a" });
+  assert.equal(diff.locationChanged, true);
+  assert.equal(diff.documentChanged, false);
+  assert.equal(diff.added, "button \"twelve\"");
+});
+
 test("each capture gets its own id, so a retry does not reuse the previous attempt's ref", async () => {
   const payload = { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/cart", ["#pay"]) } };
   const { gateway: seam } = gateway([{ ok: true, status: "succeeded", payload }, { ok: true, status: "succeeded", payload }]);

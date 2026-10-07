@@ -252,6 +252,15 @@ export type WebAutomationNavigationEvidence = {
   /** Session history entries, so a reader knows whether going back is possible. */
   historyLength: number;
   visibility: WebAutomationDocumentVisibility;
+  /**
+   * The document's identity: `performance.timeOrigin`, one value per document,
+   * new for every document (a reload included) and unchanged by
+   * `history.replaceState` and `pushState`. The address alone cannot tell a URL
+   * rewritten in place from a new page (run `run-muw5zv4m-52d83027`: a size
+   * choice that rewrote the address read as a page move), so the state diff
+   * compares this instead. Absent when it could not be read.
+   */
+  timeOrigin?: number | undefined;
 };
 
 /**
