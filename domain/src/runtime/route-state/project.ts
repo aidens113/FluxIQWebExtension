@@ -15,7 +15,7 @@
 // is missing` must hold on a page with no dialog.
 
 import type { JsonObject } from "fluxiq/core";
-import { actionableEvidenceElement, type WebLlmPageEvidence } from "../llm-evidence";
+import { actionableEvidenceElement, webLlmReadableWords, type WebLlmPageEvidence } from "../llm-evidence";
 
 const LIST_SEPARATOR = " | ";
 
@@ -32,7 +32,12 @@ export function webAutomationRouteState(evidence: WebLlmPageEvidence): JsonObjec
   if (blockers) page.blockedBy = blockers;
   // Rendered controls only: a hidden one is captured only by a search, and a
   // search of a page must test as the same route state as a look at it (t223).
-  const controls = joinedNames(evidence.elements.filter((element) => element.hidden !== true && actionableEvidenceElement(element)).map((element) => element.name ?? element.text ?? ""));
+  // Each is named as the page view names it where the words are the same:
+  // a name or text that runs a control's stacked lines together is listed by
+  // the capture's spaced `readable` words, "12 Double Rolls $16.47" and not
+  // "12 Double Rolls$16.47" (U-B3-3). `name` and `text` themselves stay as
+  // captured; identity compares them.
+  const controls = joinedNames(evidence.elements.filter((element) => element.hidden !== true && actionableEvidenceElement(element)).map((element) => webLlmReadableWords(element, element.name ?? element.text) ?? ""));
   if (controls) page.controls = controls;
   return { page };
 }

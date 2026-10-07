@@ -211,6 +211,104 @@ test("a replayed list read answers the rows the Flow's extract_list would produc
   assert.deepEqual(read.outputs, { records: [{ name: "Amara Osei", mutual: "23 mutual friends" }, { name: "Jon Park", mutual: "4 mutual friends" }] });
 });
 
+// S4 of the read-list redesign (contract C3): the Flow's read answers only the
+// rows it kept, and the build's test replays the Flow, so a replayed read asks
+// the page for `answer: "kept"` as the Flow's dispatch does. Exploration is the
+// model looking, and keeps the read's floor of rejected rows: it never asks.
+test("a replayed list read asks for the kept rows alone, and an exploration read does not", async () => {
+  const extractList = { item: "li.request", fields: { name: ".name" } };
+  const replayedStub = stub({ payload: { extracted: [{ name: "Amara Osei" }] } });
+  const replayed = await createWebAutomationLlmEvidenceRuntime(replayedStub.gateway).executeTool({
+    ...PROJECT, callId: "dryrun.1.1", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: EXTRACT_LIST, parameters: { extractList }, consequences: [] }
+  });
+  assert.equal(replayed.resultCode, "core.replay.replayed");
+  const replayedRead = replayedStub.commands.find((command) => command.actionType === "web.dom.extract_list");
+  assert.equal((replayedRead?.parameters.extractList as JsonObject | undefined)?.answer, "kept");
+
+  const exploringStub = stub({ payload: { extracted: [{ name: "Amara Osei" }] } });
+  await createWebAutomationLlmEvidenceRuntime(exploringStub.gateway).executeTool({
+    ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID,
+    value: { node: EXTRACT_LIST, parameters: { extractList }, consequences: [] }
+  });
+  const explored = exploringStub.commands.find((command) => command.actionType === "web.dom.extract_list");
+  assert.ok(explored, "the exploration read went out");
+  assert.equal(Object.hasOwn((explored.parameters.extractList as JsonObject | undefined) ?? {}, "answer"), false);
+});
+
+// S4 (contract C1): a replayed Next page dispatches the request the Flow keeps.
+// A list with no next page is the loop's way out, never a failure: the answer
+// passes and carries `route: "ended"` at its top level, which the build test's
+// walker ends the do-while on. A move is an ordinary success line.
+const NEXT_PAGE = "web.output.dom-next_page";
+const NEXT_PAGE_REQUEST: JsonObject = { item: "li.result", pagination: { next: "a.next" } };
+
+test("a replayed Next page dispatches its resolved request", async () => {
+  const stubbed = stub({ payload: { nextPage: { outcome: "moved", by: "next", page: 2 } } });
+  await createWebAutomationLlmEvidenceRuntime(stubbed.gateway).executeTool({
+    ...PROJECT, callId: "dryrun.1.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: NEXT_PAGE, parameters: { nextPage: NEXT_PAGE_REQUEST }, consequences: [] }
+  });
+  const sent = stubbed.commands.filter((command) => command.actionType === "web.dom.next_page");
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0]!.parameters.nextPage, NEXT_PAGE_REQUEST);
+});
+
+test("a replayed Next page whose list ended answers core.replay.ended (S2) with route ended at the answer's top level", async () => {
+  const stubbed = stub({ payload: { nextPage: { outcome: "ended", stop: "control_disabled" }, route: "ended" } });
+  const ended = await createWebAutomationLlmEvidenceRuntime(stubbed.gateway).executeTool({
+    ...PROJECT, callId: "dryrun.1.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: NEXT_PAGE, parameters: { nextPage: NEXT_PAGE_REQUEST }, consequences: [] }
+  });
+  assert.equal(ended.resultCode, "core.replay.ended");
+  assert.equal(ended.resultReason, undefined);
+  const value = ended.evidence as JsonObject;
+  assert.equal(value.ok, true);
+  assert.equal(value.route, "ended");
+  assert.equal(value.said, "the step ran again: the list has no next page (control_disabled), so the loop over its pages ends here");
+  // Carried in the evidence, never as a member of the execution result: Core
+  // refuses a result member it has not learned (`unknown_key`).
+  assert.equal(Object.hasOwn(ended, "route"), false);
+});
+
+test("a replayed Next page that moved says the page it moved to, with no route", async () => {
+  for (const [nextPage, said] of [
+    [{ outcome: "moved", by: "numbered", page: 3 }, "the step ran again: moved to page 3"],
+    [{ outcome: "moved", by: "loadMore" }, "the step ran again: moved to the next page"]
+  ] as const) {
+    const stubbed = stub({ payload: { nextPage } });
+    const moved = await createWebAutomationLlmEvidenceRuntime(stubbed.gateway).executeTool({
+      ...PROJECT, callId: "dryrun.1.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+      value: { replay: "step", node: NEXT_PAGE, parameters: { nextPage: NEXT_PAGE_REQUEST }, consequences: [] }
+    });
+    assert.equal(moved.resultCode, "core.replay.replayed");
+    const value = moved.evidence as JsonObject;
+    assert.equal(value.ok, true);
+    assert.equal(value.said, said);
+    assert.equal(Object.hasOwn(value, "route"), false);
+  }
+});
+
+test("a route the page sent beside a list that moved is not carried", async () => {
+  const stubbed = stub({ payload: { nextPage: { outcome: "moved", by: "next", page: 2 }, route: "ended" } });
+  const moved = await createWebAutomationLlmEvidenceRuntime(stubbed.gateway).executeTool({
+    ...PROJECT, callId: "dryrun.1.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: NEXT_PAGE, parameters: { nextPage: NEXT_PAGE_REQUEST }, consequences: [] }
+  });
+  assert.equal(Object.hasOwn(moved.evidence as JsonObject, "route"), false);
+});
+
+test("a replayed Next page the page could not move fails, with no route", async () => {
+  const stubbed = stub({ nextPageFailure: { code: "web.validation.output_not_observed" } });
+  const failed = await createWebAutomationLlmEvidenceRuntime(stubbed.gateway).executeTool({
+    ...PROJECT, callId: "dryrun.1.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
+    value: { replay: "step", node: NEXT_PAGE, parameters: { nextPage: NEXT_PAGE_REQUEST }, consequences: [] }
+  });
+  assert.equal(failed.resultCode, "core.replay.failed");
+  assert.equal((failed.evidence as JsonObject).ok, false);
+  assert.equal(Object.hasOwn(failed.evidence as JsonObject, "route"), false);
+});
+
 test("a replayed step that is not a list read, or a read that did not replay, answers no outputs", async () => {
   const stubbed = stub({ payload: { extracted: [{ name: "Amara Osei" }] } });
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
@@ -313,7 +411,7 @@ function answeringStub(failure: { code: string } | undefined, answer: string) {
   return { gateway };
 }
 
-function stub(options: { clickFailure?: { code?: string }; payload?: JsonObject; elements?: JsonObject[]; truncated?: true } = {}) {
+function stub(options: { clickFailure?: { code?: string }; nextPageFailure?: { code: string }; payload?: JsonObject; elements?: JsonObject[]; truncated?: true } = {}) {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
@@ -324,6 +422,7 @@ function stub(options: { clickFailure?: { code?: string }; payload?: JsonObject;
         const code = options.clickFailure.code;
         return code === undefined ? { status: "failed", error: "no" } : { status: "failed", failure: { code }, error: "no" };
       }
+      if (command.actionType === "web.dom.next_page" && options.nextPageFailure) return { status: "failed", failure: { code: options.nextPageFailure.code }, error: "no" };
       return { status: "succeeded", payload: options.payload ?? { value: "ok" } };
     }
   };

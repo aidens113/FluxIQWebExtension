@@ -29,11 +29,16 @@
 // `plus` and `ad`. Taking the helper out of the field map makes the page, the
 // stored rows, the preview and the account say the same thing from the source.
 //
-// **A helper an ordering names stays in the read.** `sort` and `dedupe` order
-// and fold rows by the columns the read keeps (`content/extraction/order-rows.ts`),
-// so a read sorted by a helper would silently stop being sorted without it.
-// Such a column is still read and is left out of the schema alone, so Core
-// drops it from what is stored; the page's account then still names it.
+// **A helper an ordering names stays in the read, and is stored.** `sort` and
+// `dedupe` order and fold the rows a run collects, after they are stored
+// (`./record-output-process.ts`, read-list redesign C3), so a read sorted by a
+// helper would silently stop being sorted unless the helper is a stored column.
+// Until S4 the page did the ordering and such a column was left out of the
+// schema; now it is kept in it, as the one column the author did not declare
+// that the answer needs. A dedupe over every column the read reads -- "list
+// each once" -- names no column in particular: it is the whole row, Core's
+// default over whatever is stored, so it pins no helper and keeps its meaning
+// over the narrowed read by naming every column left.
 //
 // **Only a schema that is a subset of the field map narrows anything.** A
 // schema naming a column the field map does not read says the author's names
@@ -53,12 +58,13 @@ import {
   type WebAutomationExtractItemCondition,
   type WebAutomationExtractListRequest
 } from "../../actions/extraction";
+import { webAutomationRecordOutputProcessOfRead } from "./record-output-process";
 
 /** A read narrowed to its author's declared columns, and those columns. */
 export type WebAutomationDeclaredColumnsRead = {
   /** The request the page runs: the declared columns, the helpers an ordering names, and every condition. */
   request: WebAutomationExtractListRequest;
-  /** The field keys the author's schema names, which are the only kept columns stored. */
+  /** The kept columns stored: the field keys the author's schema names, and the helpers an ordering names. */
   columns: ReadonlySet<string>;
 };
 
@@ -70,20 +76,23 @@ export type WebAutomationDeclaredColumnsRead = {
 export function webAutomationDeclaredColumnsRead(authored: JsonValue | undefined, request: WebAutomationExtractListRequest): WebAutomationDeclaredColumnsRead | undefined {
   const columns = declaredColumns(authored, request);
   if (columns === undefined) return undefined;
-  const ordering = new Set([...(request.sort ?? []).map((key) => key.field), ...(request.dedupe?.by ?? [])]);
+  const wholeRow = webAutomationRecordOutputProcessOfRead(request).wholeRowDedupe;
+  const ordering = new Set([...(request.sort ?? []).map((key) => key.field), ...(wholeRow ? [] : request.dedupe?.by ?? [])]);
   const helpers = Object.entries(request.fields).filter(([key, field]) => !columns.has(key) && isReadAsColumn(field));
   if (helpers.length === 0) return undefined;
   const removed = new Map(helpers.filter(([key]) => !ordering.has(key)));
   const narrowed: WebAutomationExtractListRequest = {
     ...request,
     fields: Object.fromEntries(Object.entries(request.fields).filter(([key]) => !removed.has(key))),
+    ...(wholeRow && request.dedupe !== undefined ? { dedupe: { by: request.dedupe.by.filter((key) => !removed.has(key)) } } : {}),
     ...(request.where !== undefined ? { where: request.where.map((condition) => readingItsOwnColumn(condition, removed)) } : {})
   };
   // Read back as the dispatch's own reader would, so what is sent is a request
   // the page runs. A narrowing it could not run -- every column left excluded --
   // narrows nothing.
   const sent = webAutomationExtractListRequestValue(narrowed);
-  return sent === undefined ? undefined : { request: sent, columns };
+  const ordered = helpers.filter(([key]) => ordering.has(key)).map(([key]) => key);
+  return sent === undefined ? undefined : { request: sent, columns: new Set([...columns, ...ordered]) };
 }
 
 /** The keys the authored schema names, when every one is a key of the field map. */

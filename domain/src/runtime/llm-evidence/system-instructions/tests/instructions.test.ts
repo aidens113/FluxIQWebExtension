@@ -14,12 +14,12 @@ const { text, version } = WEB_LLM_SYSTEM_INSTRUCTIONS;
 
 test("the version is one Core's seam accepts, and names the text with loops and written steps", () => {
   assert.match(version, /^[a-z0-9][a-z0-9._-]{0,63}$/u);
-  assert.equal(version, "web-4");
+  assert.equal(version, "web-5");
 });
 
-test("the text holds no control character but a newline, and stays under 2,800 characters", () => {
+test("the text holds no control character but a newline, and stays under 3,000 characters", () => {
   assert.doesNotMatch(text, /[\u0000-\u0009\u000b-\u001f\u007f]/u);
-  assert.ok(text.length > 0 && text.length <= 2800, `text is ${text.length} characters`);
+  assert.ok(text.length > 0 && text.length <= 3000, `text is ${text.length} characters`);
 });
 
 test("it says the model operates a website on the person's behalf", () => {
@@ -68,6 +68,19 @@ test("repetitive work is a loop over the rows a listing kept: act on one kept ro
   assert.ok(text.includes('{"$input": name}'));
   assert.ok(text.includes('{"$row": field}'));
   assert.doesNotMatch(text, /do it to one item and state repeat/u);
+});
+
+// S4 of the read-list redesign (web-5): a read reads one page, and a step
+// that reads no longer goes through pages by itself. Every page is a loop the
+// Flow states: the read, Next page on the same list, and a repeat on the read
+// through Next page while it succeeds, which ends when the list does.
+test("every page of a list is a loop: read, Next page on the same list, and repeat through Next page while it succeeds", () => {
+  const lists = text.split("\n").find((line) => line.startsWith("Lists."));
+  assert.ok(lists, "the Lists line is there");
+  assert.ok(lists.includes("Every page of a list is a loop: read the list, then Next page on the same list, then amend_draft repeat on the read through Next page while it succeeds (most N for 'the first N pages'); the Flow keeps each row once."));
+  // The loop rule for acting on rows stays beside it.
+  assert.match(lists, /^Lists\. Repetitive work is a loop/u);
+  assert.doesNotMatch(text, /paginate/u);
 });
 
 test("money, delete and send or publish are asked of the person; no secrets; no robot checks", () => {

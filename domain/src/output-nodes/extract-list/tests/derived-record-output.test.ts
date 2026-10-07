@@ -58,7 +58,9 @@ test("pagination and the item bound change the rows kept, not the dataset", () =
   const paged = webAutomationDerivedRecordOutput({ ...request, paginate: { mode: "scroll", maxScrolls: 4 }, maxItems: 20 });
   const plain = webAutomationDerivedRecordOutput(request);
   assert.equal(paged.datasetId, plain.datasetId);
-  assert.equal(paged.maxRecords, 20);
+  // The item bound is the collection's (`process.limit`, read-list redesign
+  // C3), not one capture's, so it no longer sets `maxRecords`.
+  assert.equal(paged.maxRecords, 1_000);
   assert.equal(plain.maxRecords, 1_000);
 });
 

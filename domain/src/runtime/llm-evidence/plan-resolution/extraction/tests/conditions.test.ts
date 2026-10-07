@@ -33,7 +33,7 @@ const EXTRACT_LIST_NODE = webAutomationOutputNodeId("web.dom.extract_list");
 const CATALOG = CAPTURED_DETECTIONS["product-catalog-largest"];
 const CARD = '[data-testid="product-card"]';
 /** The shape a refused `extractList` is told to take, which every refusal here carries. */
-const HINT = "web.handle.expected.extract_list.handle_fields_paginate";
+const HINT = "web.handle.expected.extract_list.handle_fields";
 const NAME = { kind: "text", selector: '[data-testid="product-name"]', required: true } satisfies JsonObject;
 const BADGE = { kind: "text", selector: '[data-testid="stock-badge"]', required: true } satisfies JsonObject;
 const PRICE = { kind: "text", selector: '[data-testid="product-price"]', required: true } satisfies JsonObject;
@@ -82,8 +82,7 @@ test("a condition names a detected column and becomes the column's own read, so 
   const resolved = await resolve(instance, {
     handle: extraction,
     fields: { name: "product-name" },
-    where: [{ field: "stock-badge", is: "absent" }],
-    paginate: false
+    where: [{ field: "stock-badge", is: "absent" }]
   });
   assert.deepEqual(resolved, {
     status: "resolved",
@@ -116,7 +115,7 @@ test("a condition may be written every way a column may be named, on its own or 
   ];
   for (const [where, expected] of rows) {
     assert.deepEqual(
-      await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where, paginate: false }),
+      await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where }),
       { status: "resolved", parameters: { extractList: { item: CARD, fields: { name: asKept(NAME) }, where: expected } } },
       JSON.stringify(where)
     );
@@ -131,8 +130,8 @@ test("an empty clause resolves to no conditions, because filtering is optional",
   // than a refusal it has to spend a repair on. `where: []` was refused until
   // 2026-09-24.
   const plain = { status: "resolved", parameters: { extractList: { item: CARD, fields: { name: asKept(NAME) } } } };
-  assert.deepEqual(await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where: [], paginate: false }), plain);
-  assert.deepEqual(await resolve(instance, { handle: extraction, fields: { name: "product-name" }, paginate: false }), plain);
+  assert.deepEqual(await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where: [] }), plain);
+  assert.deepEqual(await resolve(instance, { handle: extraction, fields: { name: "product-name" } }), plain);
 });
 
 test("a condition may say of a detected column everything the dispatch reader accepts, in the same words", async () => {
@@ -164,7 +163,7 @@ test("a condition may say of a detected column everything the dispatch reader ac
     ]
   ];
   for (const [where, expected] of rows) {
-    const resolved = await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where, paginate: false });
+    const resolved = await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where });
     assert.deepEqual(
       resolved,
       { status: "resolved", parameters: { extractList: { item: CARD, fields: { name: asKept(NAME) }, where: expected } } },
@@ -194,7 +193,7 @@ test("a comparison the page could not run is refused where it was written", asyn
     [[{ field: "product-price", lessThan: 50, lt: 40 }], "extractList.where.0.lt"]
   ];
   for (const [where, position] of rows) {
-    const refused = await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where, paginate: false });
+    const refused = await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where });
     assert.deepEqual(refused, { status: "refused", issueCodes: ["web.handle.malformed", HINT, `web.handle.malformed:${position}`] }, JSON.stringify(where));
   }
   // "The value is not there" and "its text contains a case" cannot both have
@@ -203,8 +202,7 @@ test("a comparison the page could not run is refused where it was written", asyn
     await resolve(instance, {
       handle: extraction,
       fields: { name: "product-name" },
-      where: [{ field: "product-name", is: "absent", contains: "case" }],
-      paginate: false
+      where: [{ field: "product-name", is: "absent", contains: "case" }]
     }),
     { status: "refused", issueCodes: ["web.handle.malformed", HINT, "web.handle.malformed:extractList.where.0"] }
   );
@@ -224,8 +222,7 @@ test("a condition may name a column by the key this plan keeps it under, which i
     await resolve(instance, {
       handle: extraction,
       fields: { title: "product-name", cost: "product-price" },
-      where: [{ field: "cost", lessThan: 50 }, { field: "stock-badge", is: "absent" }],
-      paginate: false
+      where: [{ field: "cost", lessThan: 50 }, { field: "stock-badge", is: "absent" }]
     }),
     {
       status: "resolved",
@@ -250,8 +247,7 @@ test("a condition may name a column by the key this plan keeps it under, which i
     await resolve(instance, {
       handle: extraction,
       fields: { "stock-badge": "product-price" },
-      where: [{ field: "stock-badge", is: "absent" }],
-      paginate: false
+      where: [{ field: "stock-badge", is: "absent" }]
     }),
     { status: "resolved", parameters: { extractList: { item: CARD, fields: { "stock-badge": asKept(PRICE) }, where: [{ read: BADGE, is: "absent" }] } } }
   );
@@ -284,7 +280,7 @@ test("a condition that names no one detected column, or contradicts itself, is r
     [[{ field: "product-price", lessThan: 50 }, { field: "nothing" }], "web.handle.unknown_field", "extractList.where.1"]
   ];
   for (const [where, reason, position] of rows) {
-    const refused = await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where, paginate: false });
+    const refused = await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where });
     // Every one of these is a shape the grammar could have taken, so the
     // refusal carries the shape it accepts beside the position it refused at.
     assert.deepEqual(refused, { status: "refused", issueCodes: [reason, HINT, `${reason}:${position}`] }, JSON.stringify(where));
@@ -295,7 +291,7 @@ test("two nodes that read the same columns and keep different items save into di
   const instance = runtime();
   const { extraction } = await detect(instance);
   const requestFor = async (where: JsonValue | undefined): Promise<JsonObject> => {
-    const extractList: JsonObject = { handle: extraction, fields: { name: "product-name" }, paginate: false };
+    const extractList: JsonObject = { handle: extraction, fields: { name: "product-name" } };
     if (where !== undefined) extractList.where = where;
     const resolved = await resolve(instance, extractList);
     assert.equal(resolved.status, "resolved");
@@ -332,8 +328,7 @@ test("a condition over a kept column is stored by the key the plan keeps it unde
       { field: "product-link", is: "present" },
       // A column the table does not keep.
       { field: "stock-badge", is: "absent" }
-    ],
-    paginate: false
+    ]
   });
   assert.equal(resolved.status, "resolved", JSON.stringify(resolved));
   const stored = resolved.status === "resolved" ? resolved.parameters.extractList as JsonObject : {};
@@ -362,8 +357,7 @@ test("a condition by key over a column the declared schema then drops reads that
   const resolved = await resolve(instance, {
     handle: extraction,
     fields: { title: "product-name", stock: "stock-badge" },
-    where: [{ field: "stock", is: "absent" }],
-    paginate: false
+    where: [{ field: "stock", is: "absent" }]
   });
   assert.deepEqual(resolved, {
     status: "resolved",

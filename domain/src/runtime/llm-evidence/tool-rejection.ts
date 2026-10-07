@@ -198,6 +198,9 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   have come from one. Look at the page first.
  * - `handle_not_in_packet`: the handle is not one of those in the packet last
  *   shown for this page. Look again and copy a handle from what comes back.
+ *   When the resolver says the page was reloaded since the handle was shown
+ *   and the reload renumbered its controls (`web.handle.renumbered_by_reload`),
+ *   `next` says so: the reason stays this one, because Core reads it.
  * - `page_moved_since_packet`: the packet the handle came from describes a
  *   different page than the one now loaded. Look again where you are now.
  * - `handle_no_longer_on_page`: the control that handle named is not on the
@@ -546,10 +549,21 @@ export function recoverable(code: WebLlmToolRejectionCode, detail?: WebLlmToolRe
  * `web.handle.expected.*` shape hints, and the `<code>:<position>` entries --
  * are not reasons at all and are passed over.
  */
+/**
+ * The resolver's code for a handle the page renumbered by reloading since it
+ * was shown (`plan-resolution/target-packets.ts` `renumberedByReload`).
+ */
+const WEB_LLM_HANDLE_RENUMBERED_BY_RELOAD = "web.handle.renumbered_by_reload";
+
 const HANDLE_ISSUE_REASONS: ReadonlyMap<string, WebLlmToolRejectionReason> = new Map([
   ["web.handle.malformed", "malformed_handle"],
   ["web.handle.misplaced", "handle_in_wrong_parameter"],
   ["web.handle.unknown", "handle_not_in_packet"],
+  // A handle shown before the page was reloaded -- a rerun puts its page back
+  // that way -- whose control the reloaded page numbers anew
+  // (`plan-resolution/target-packets.ts`). The same reason, which Core's repeat
+  // guard and activity wording read; `next` says the rest.
+  [WEB_LLM_HANDLE_RENUMBERED_BY_RELOAD, "handle_not_in_packet"],
   ["web.handle.stale", "page_moved_since_packet"],
   ["web.handle.ambiguous", "handle_names_several_now"],
   ["web.handle.not_unique", "handle_names_several_now"],
@@ -645,7 +659,10 @@ export function rejectionDetail(fields: {
     // back through here, names the node again without knowing it exists.
     useNode: reason === "handle_wrong_kind_of_control" && fields.instead !== undefined ? webLlmHandleFittingNode(fields.instead) : undefined,
     closeWith: fields.closeWith === undefined || fields.closeWith.length === 0 ? undefined : [...fields.closeWith],
-    next: reason === "covered_by_layer" ? (fields.closeWith?.length ? COVERED_NEXT_CLOSE : COVERED_NEXT) : undefined,
+    next: reason === "covered_by_layer" ? (fields.closeWith?.length ? COVERED_NEXT_CLOSE : COVERED_NEXT)
+      // Read off the codes, so a repeat that passes them back says it again.
+      : reason === "handle_not_in_packet" && fields.instead?.includes(WEB_LLM_HANDLE_RENUMBERED_BY_RELOAD) === true ? RENUMBERED_NEXT
+      : undefined,
     missing: fields.missing === undefined ? undefined : [...fields.missing],
     requestId: fields.requestId,
     startLocation: fields.startLocation,
@@ -671,6 +688,13 @@ export function rejectionDetail(fields: {
 const COVERED_NEXT_CLOSE = "Nothing was done. The layer in instead covers the target: press one of closeWith to close it, then make this same call again, unchanged.";
 /** The same, when no control of the layer reads as closing it. */
 const COVERED_NEXT = "Nothing was done. The layer in instead covers the target: close or answer it with one of its own controls on the page, then make this same call again, unchanged.";
+
+/**
+ * What to do about a handle the page renumbered by reloading. A rerun reloads
+ * its page before it runs, so the model's correction -- the handle from the page
+ * it was just shown -- missed again (`run-musq0b1m-0472cfa0`, steps 0063, 0067).
+ */
+const RENUMBERED_NEXT = "Nothing was done. The page was reloaded (put back) since the view this handle came from, and the reload renumbered its controls, so the handle names nothing now. Look at the page again and use the control's current handle from that view.";
 
 /** A count fit to put on the wire, or nothing. */
 function wholeCount(value: number | undefined): number | undefined {

@@ -52,10 +52,8 @@ export type ExtractionDraft = {
   /** How many items the list held on the page as it was proposed. */
   itemCount: number;
   fields: ExtractionFieldRow[];
-  /** How the list continues past this page, when the picker detected a control for it. */
+  /** How the list continues past this page, when the picker detected a control for it. Said, never followed: a recorded read reads one page (S5). */
   pagination?: WebAutomationExtractListPagination | undefined;
-  /** `true` to follow that control. Off by default: reading one page is the smaller promise. */
-  paginate: boolean;
 };
 
 /** The draft a proposal opens with: every column included except the ones the picker marked sensitive, which open excluded (D12). */
@@ -65,8 +63,7 @@ export function extractionDraftFromProposal(proposal: WebAutomationExtractionPro
     item: proposal.item,
     itemCount: proposal.itemCount,
     fields: proposal.fields.map(fieldRow),
-    pagination: proposal.pagination,
-    paginate: false
+    pagination: proposal.pagination
   };
 }
 
@@ -88,11 +85,6 @@ export function setExtractionFieldHandling(draft: ExtractionDraft, sourceKey: st
 /** The same draft with `sourceKey` reading something else. Its previewed values described the old read, so the column is marked stale. */
 export function setExtractionFieldKind(draft: ExtractionDraft, sourceKey: string, kind: WebAutomationExtractFieldKind): ExtractionDraft {
   return mapField(draft, sourceKey, (field) => (field.kind === kind ? field : { ...field, kind, stale: true }));
-}
-
-/** The same draft reading one page or every page. */
-export function setExtractionPaginate(draft: ExtractionDraft, paginate: boolean): ExtractionDraft {
-  return { ...draft, paginate };
 }
 
 /**

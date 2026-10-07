@@ -91,6 +91,7 @@ import { keypressAction } from "./keypress";
 import { checkAction } from "./check";
 import { assertAction } from "./assert";
 import { extractListAction } from "./extract-list";
+import { nextPageAction } from "./next-page";
 import { uploadAction } from "./upload";
 import { dialogAction } from "./dialog";
 
@@ -216,6 +217,9 @@ async function routeContentAction(action: BrowserActionCommand, deps: ContentAct
     }
     if (action.actionType === "web.dom.extract_list") {
       return await extractListAction(action, deps, startedAt);
+    }
+    if (action.actionType === "web.dom.next_page") {
+      return await nextPageAction(action, deps, startedAt);
     }
     if (action.actionType === "web.dom.upload") {
       return await uploadAction(action, deps, startedAt);

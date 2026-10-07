@@ -23,7 +23,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { AutomationStudioActionConsequence } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import { WEB_AUTOMATION_EXTRACT_MAX_PAGES, webAutomationExtractListRequestValue } from "../../../../../actions/extraction";
+import { webAutomationExtractListRequestValue } from "../../../../../actions/extraction";
 import { webAutomationOutputNodeId } from "../../../../../output-nodes";
 import { webAutomationDerivedRecordOutput, webAutomationExtractListIssues } from "../../../../../output-nodes/extract-list";
 import {
@@ -38,10 +38,10 @@ import { CAPTURED_DETECTIONS, type CapturedDetection } from "../../../structure/
 const EXTRACT_LIST_NODE = webAutomationOutputNodeId("web.dom.extract_list");
 const CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
 const CATALOG = CAPTURED_DETECTIONS["product-catalog-largest"];
-const EXTRACTION_HINT = "web.handle.expected.extract_list.handle_fields_paginate";
+const EXTRACTION_HINT = "web.handle.expected.extract_list.handle_fields";
 const TARGET_HINT = "web.handle.expected.selector.handle_location";
-const MAX_PAGES_INSIDE_PAGINATE = "web.handle.expected.extract_list.paginate.maxPages";
-const NO_PAGER_DETECTED = "web.handle.expected.extract_list.paginate.no_pager_detected.detect_on_step_start_page";
+/** Beside a read that asks to page itself: the pages of a list are a Next page step on the same handle, and a repeat. */
+const NEXT_PAGE_HINT = "web.handle.expected.extract_list.next_page";
 
 const CARD = '[data-testid="product-card"]';
 const testId = (id: string) => `[data-testid="${id}"]`;
@@ -84,9 +84,9 @@ function resolvedList(extractList: JsonObject) {
   return { status: "resolved", parameters: { extractList } };
 }
 
-/** A refusal for one reason at one position, with the placement it points to when it has one. */
-function refusedAt(reason: string, position: string, hint?: string) {
-  return { status: "refused", issueCodes: [reason, ...(hint ? [hint] : []), `${reason}:${position}`] };
+/** A refusal for one reason at one position, with the placement and shape hints it points to when it has them. */
+function refusedAt(reason: string, position: string, ...hints: string[]) {
+  return { status: "refused", issueCodes: [reason, ...hints, `${reason}:${position}`] };
 }
 
 /**
@@ -101,7 +101,7 @@ test("a detected list keeps the columns the plan names, under the plan's keys, o
   const shown = await detect(runtime);
   assert.deepEqual(shown.fields.map((field) => field.key), ["product-image_src", "product-image_alt", "product-name", "product-link", "product-price", "product-rating", "stock-badge"]);
 
-  const resolved = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: RENAMED, paginate: false } });
+  const resolved = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: RENAMED } });
   assert.deepEqual(resolved, resolvedList({ item: CARD, fields: CARD_FIELDS }));
 
   // What runs is a request the page reads as written, saved under the instruction's column names.
@@ -113,7 +113,7 @@ test("a detected list keeps the columns the plan names, under the plan's keys, o
 
   // The link column itself is the absolute address; only `@href` is the href as written.
   assert.deepEqual(
-    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: { url: "product-link" }, paginate: false } }),
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: { url: "product-link" } } }),
     resolvedList({ item: CARD, fields: { url: { kind: "link", selector: testId("product-link"), required: false } } })
   );
 });
@@ -133,8 +133,7 @@ test("a column named in the instruction's own words resolves to the detected one
       extractList: {
         handle: extraction,
         fields: { name: "name", price: "price", rating: "rating", url: "product-link@href" },
-        where: [{ field: "rating", atLeast: 4 }, { field: "stock", is: "present" }],
-        paginate: false
+        where: [{ field: "rating", atLeast: 4 }, { field: "stock", is: "present" }]
       }
     }),
     resolvedList({
@@ -151,12 +150,12 @@ test("a column named in the instruction's own words resolves to the detected one
   // folds `.` with the other separators, so `.product-name` is the `product-name`
   // column spelled differently rather than a guess at one.
   assert.deepEqual(
-    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: ".product-name" }, paginate: false } }),
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: ".product-name" } } }),
     resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name } })
   );
   // A field that names its column by nothing but the key it is kept under.
   assert.deepEqual(
-    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: { handle: extraction } }, paginate: false } }),
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: { handle: extraction } } } }),
     resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name } })
   );
 
@@ -175,92 +174,78 @@ test("a list of the instruction's column names keeps each column under the name 
   // by the instruction's names found none of them
   // (`lane-run-mum06sfc-f1d9403f.md`, cause 2).
   assert.deepEqual(
-    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["name", "price", "rating", "url@href"], paginate: false } }),
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["name", "price", "rating", "url@href"] } }),
     resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name, price: CARD_FIELDS.price, rating: CARD_FIELDS.rating, url: CARD_FIELDS.url } })
   );
   // A name that is the detected key, or that could not be a key itself, keeps the detected key.
   assert.deepEqual(
-    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["product-name", ".product-price"], paginate: false } }),
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["product-name", ".product-price"] } }),
     resolvedList({ item: CARD, fields: { "product-name": CARD_FIELDS.name, "product-price": CARD_FIELDS.price } })
   );
 });
 
-test("the handle keeps every detected column and the detected pagination unless the plan says otherwise", async () => {
+test("the handle keeps every detected column, and the read never carries the detected pagination, which the binding keeps for Next page", async () => {
+  // The read reads one page (S4, `read-list-collect-design.md` 6.1): every
+  // page of a list is a Next page step on the same handle and a repeat, so a
+  // resolved read that carried the detected pager would page by itself again.
   const runtime = runtimeOver(CATALOG);
   const { extraction } = await detect(runtime);
   const whole = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction } });
   const request = whole.status === "resolved" ? whole.parameters.extractList as JsonObject : {};
   assert.deepEqual(Object.keys(request.fields as JsonObject), ["product-image_src", "product-image_alt", "product-name", "product-link", "product-price", "product-rating", "stock-badge"]);
-  assert.deepEqual(request.paginate, NEXT);
+  assert.equal("paginate" in request, false, "the read reads the page shown");
+  // The detection's pager stays behind the handle, where Next page reads it.
+  const kept = runtime.resolveExtractionHandle({ projectId: "project.one", flowId: "flow.one", handle: extraction });
+  assert.deepEqual(kept.ok && kept.binding.extractList.paginate, NEXT);
 
-  // A pagination the model wrote names controls it was never shown: the detected one is read, bounded as the model said whatever mode it named.
-  // Until 2026-10-01 a bound under another mode was dropped for the detected one, and detection
-  // now proposes one page: a plan that saw Guildline's numbered pager and asked for five pages
-  // read one, truncated (t194-w27 G2).
-  // Asking to page with no bound reads to the domain's bound (C1, the next test).
-  const everyPage = { ...NEXT, maxPages: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
-  const rows: Array<[JsonValue, JsonObject]> = [
-    [true, everyPage],
-    [{ mode: "next", next: "a.next" }, everyPage],
-    [{ mode: "next", next: "a.next", maxPages: 2 }, { ...NEXT, maxPages: 2 }],
-    [{ maxPages: 1 }, { ...NEXT, maxPages: 1 }],
-    [{ mode: "numbered", pages: "button.page", maxPages: 2 }, { ...NEXT, maxPages: 2 }],
-    [{ mode: "numbered", pages: "button.page" }, everyPage],
-    // A scroll count says how far to read as a page count does.
-    [{ mode: "scroll", maxScrolls: 2 }, { ...NEXT, maxPages: 2 }],
-    [{ mode: "numbered", maxPages: 4, maxScrolls: 2 }, { ...NEXT, maxPages: 4 }]
-  ];
-  for (const [paginate, expected] of rows) {
-    assert.deepEqual(
-      await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: "product-name" }, paginate } }),
-      resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name }, paginate: expected }),
-      JSON.stringify(paginate)
-    );
-  }
+  // A feed's detected scroll is not read either.
+  const feed = runtimeOver(CAPTURED_DETECTIONS["infinite-feed-largest"]);
+  const posts = await detect(feed);
+  const scrolled = await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction } });
+  assert.equal(scrolled.status === "resolved" && "paginate" in (scrolled.parameters.extractList as JsonObject), false);
+
   // A column may be read twice, and the plan's bounds still apply.
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { title: "product-name", name: "product-name" }, paginate: false, minItems: 0, maxItems: 8 }, timeoutMs: 20_000 }), {
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { title: "product-name", name: "product-name" }, minItems: 0, maxItems: 8 }, timeoutMs: 20_000 }), {
     status: "resolved",
     parameters: { extractList: { item: CARD, fields: { title: CARD_FIELDS.name, name: CARD_FIELDS.name }, minItems: 0, maxItems: 8 }, timeoutMs: 20_000 }
   });
 });
 
-test("a page bound written beside paginate instead of inside it bounds the read's paging, and only where it can mean nothing else", async () => {
-  // Live run `run-mustvzvg-99695308` (steps 0057, 0060): the model reran a list
-  // read with `maxPages: 10` beside `paginate: {next: "a[rel=next]"}` and was
-  // refused `web.handle.malformed:extractList.maxPages`. A read that pages has
-  // one place a page count can go, so it is read there, and the Flow keeps it
-  // there: the resolved request carries `paginate.maxPages` and no top-level key.
+test("paginate, maxPages and maxScrolls on a handle are refused at that key, naming Next page and a repeat instead", async () => {
+  // The read no longer pages (`read-list-collect-design.md` 6.1). A plan that
+  // asks it to is never read as one page silently: it is refused where it
+  // asked, with the shape the pages of a list now take.
   const runtime = runtimeOver(CATALOG);
   const { extraction } = await detect(runtime);
   const fields = { name: "product-name" };
-  const read = { item: CARD, fields: { name: CARD_FIELDS.name } };
-  assert.deepEqual(
-    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields, paginate: { next: "a[rel=next]" }, minItems: 0, maxPages: 10 } }),
-    resolvedList({ ...read, paginate: { ...NEXT, maxPages: 10 }, minItems: 0 })
-  );
-  // The same value written in both places says it once; the detected pagination, read when nothing is written, is bounded the same way.
-  for (const paginate of [{ next: "a[rel=next]", maxPages: 10 }, true, undefined]) {
-    const extractList: JsonObject = { handle: extraction, fields, maxPages: 10 };
-    if (paginate !== undefined) extractList.paginate = paginate;
-    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), resolvedList({ ...read, paginate: { ...NEXT, maxPages: 10 } }), JSON.stringify(paginate));
+  const written: Array<[JsonObject, string]> = [
+    [{ paginate: true }, "extractList.paginate"],
+    [{ paginate: false }, "extractList.paginate"],
+    [{ paginate: { maxPages: 5 } }, "extractList.paginate"],
+    [{ paginate: { next: "a[rel=next]", maxPages: 10 } }, "extractList.paginate"],
+    [{ paginate: "next" }, "extractList.paginate"],
+    [{ maxPages: 10 }, "extractList.maxPages"],
+    [{ maxScrolls: 4 }, "extractList.maxScrolls"],
+    [{ paginate: { next: "a[rel=next]" }, maxPages: 10 }, "extractList.paginate"]
+  ];
+  for (const [extra, position] of written) {
+    const extractList: JsonObject = { handle: extraction, fields };
+    for (const [key, value] of Object.entries(extra)) extractList[key] = value;
+    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT, NEXT_PAGE_HINT), JSON.stringify(extra));
   }
-  // Two different page counts are not one: refused, naming both.
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields, paginate: { next: "a[rel=next]", maxPages: 3 }, maxPages: 10 } }), {
-    status: "refused",
-    issueCodes: ["web.handle.malformed", EXTRACTION_HINT, "web.handle.malformed:extractList.maxPages", "web.handle.malformed:extractList.paginate.maxPages"]
-  });
-  // A read that does not page has nowhere for a page count: refused, saying it belongs inside paginate.
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields, paginate: false, maxPages: 10 } }), {
-    status: "refused",
-    issueCodes: ["web.handle.malformed", EXTRACTION_HINT, MAX_PAGES_INSIDE_PAGINATE, "web.handle.malformed:extractList.maxPages"]
-  });
-  // A scroll count beside paginate is the same mistake on a feed.
-  const feed = runtimeOver(CAPTURED_DETECTIONS["infinite-feed-largest"]);
-  const posts = await detect(feed);
-  const scrolled = await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: { mode: "scroll" }, maxScrolls: 4 } });
-  assert.deepEqual(scrolled.status === "resolved" ? (scrolled.parameters.extractList as JsonObject).paginate : scrolled, { mode: "scroll", maxScrolls: 4 });
+  // The same over a list detected with no pager, and inside a Run Output payload.
+  const capture = structuredClone(CATALOG);
+  if (!capture.structure.ok) throw new Error("catalog detection failed");
+  delete (capture.structure.proposal as { pagination?: unknown }).pagination;
+  const unpaged = runtimeOver(capture);
+  const shown = await detect(unpaged);
+  assert.equal(shown.pagination, "none");
+  assert.deepEqual(await resolve(unpaged, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields, paginate: { next: "a.next", maxPages: 5 } } }),
+    refusedAt("web.handle.malformed", "extractList.paginate", EXTRACTION_HINT, NEXT_PAGE_HINT));
+  assert.equal((await resolve(unpaged, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields } })).status, "resolved");
+  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: { handle: extraction, maxPages: 3 } } }),
+    refusedAt("web.handle.malformed", "parameters.extractList.maxPages", EXTRACTION_HINT, NEXT_PAGE_HINT));
 });
-
 test("the list may be named with the location its evidence reported, at the item, or at each field", async () => {
   const runtime = runtimeOver(CATALOG);
   const { extraction, location } = await detect(runtime);
@@ -269,21 +254,20 @@ test("the list may be named with the location its evidence reported, at the item
   const byField = (extra: JsonObject) => Object.fromEntries(Object.entries(RENAMED).map(([key, column]) => [key, { ...extra, key: column }]));
   const placements: JsonObject[] = [
     // Core tells the model to add the location after exploring more than one place.
-    { ...reference, fields: RENAMED, paginate: false },
+    { ...reference, fields: RENAMED },
     // The list named where a literal request names its items; a guessed item beside a handle is replaced by the detected one.
-    { item: reference, fields: RENAMED, paginate: false },
-    { item: { handle: extraction }, fields: RENAMED, paginate: false },
+    { item: reference, fields: RENAMED },
+    { item: { handle: extraction }, fields: RENAMED },
     // Each column named by the list's handle and the detected key it reads.
-    { item: "li.product", fields: byField({ handle: extraction }), paginate: false },
-    { fields: byField(reference), paginate: false },
+    { item: "li.product", fields: byField({ handle: extraction }) },
+    { fields: byField(reference) },
     // `columns` for `fields`, and the map written the other way round.
-    { handle: extraction, columns: RENAMED, paginate: false },
-    { handle: extraction, fields: { "product-name": "name", "product-price": "price", "product-rating": "rating", "product-link@href": "url" }, paginate: false },
+    { handle: extraction, columns: RENAMED },
+    { handle: extraction, fields: { "product-name": "name", "product-price": "price", "product-rating": "rating", "product-link@href": "url" } },
     // A column named by an object, a key in another case, or `@attr` written as its own key.
     {
       handle: extraction,
-      fields: { name: { key: "Product-Name" }, price: { field: "product-price" }, rating: "PRODUCT-RATING", url: { column: "product-link", attribute: "href", kind: "attribute" } },
-      paginate: false
+      fields: { name: { key: "Product-Name" }, price: { field: "product-price" }, rating: "PRODUCT-RATING", url: { column: "product-link", attribute: "href", kind: "attribute" } }
     }
   ];
   for (const extractList of placements) {
@@ -291,16 +275,16 @@ test("the list may be named with the location its evidence reported, at the item
   }
   // A bare reference names the column its own key names; an array keeps columns under their detected keys; a field may be made optional.
   assert.deepEqual(
-    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { "product-price": { handle: extraction }, name: { key: "product-name", required: false } }, paginate: false } }),
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { "product-price": { handle: extraction }, name: { key: "product-name", required: false } } } }),
     resolvedList({ item: CARD, fields: { "product-price": CARD_FIELDS.price, name: { ...CARD_FIELDS.name, required: false } } })
   );
   assert.deepEqual(
-    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["product-name", "product-link@href"], paginate: false } }),
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["product-name", "product-link@href"] } }),
     resolvedList({ item: CARD, fields: { "product-name": CARD_FIELDS.name, "product-link": CARD_FIELDS.url } })
   );
 });
 
-test("a table's columns may be named by header, and a feed's by attribute, with its scroll bounded", async () => {
+test("a table's columns may be named by header, and a feed's by attribute", async () => {
   const table = runtimeOver(CAPTURED_DETECTIONS["data-table-largest"]);
   const rows = await detect(table);
   const header = (name: string) => ({ kind: "column", header: name, required: false });
@@ -321,7 +305,7 @@ test("a table's columns may be named by header, and a feed's by attribute, with 
   const posts = await detect(feed);
   assert.equal(posts.pagination, "infinite_scroll");
   assert.deepEqual(
-    await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, fields: { title: "feed-item-title", author: "feed-item-author", published: "feed-item-time@datetime" }, paginate: { mode: "scroll", maxScrolls: 10 }, maxItems: 40 } }),
+    await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, fields: { title: "feed-item-title", author: "feed-item-author", published: "feed-item-time@datetime" }, maxItems: 40 } }),
     resolvedList({
       item: testId("feed-item"),
       fields: {
@@ -329,52 +313,15 @@ test("a table's columns may be named by header, and a feed's by attribute, with 
         author: { kind: "text", selector: testId("feed-item-author"), required: false },
         published: { kind: "attribute", selector: testId("feed-item-time"), attribute: "datetime", required: false }
       },
-      paginate: { mode: "scroll", maxScrolls: 10 },
       maxItems: 40
     })
   );
-  assert.deepEqual(await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: { mode: "scroll", maxScrolls: 51 } } }), refusedAt("web.handle.malformed", "extractList.paginate", EXTRACTION_HINT));
-  // A bound under a mode the detection did not find bounds the detected scroll, and is held to the same cap.
-  const scrolled = await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: { mode: "next", maxPages: 4 } } });
-  assert.deepEqual(scrolled.status === "resolved" ? (scrolled.parameters.extractList as JsonObject).paginate : scrolled, { mode: "scroll", maxScrolls: 4 });
-  assert.deepEqual(await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: { mode: "numbered", maxPages: 51 } } }), refusedAt("web.handle.malformed", "extractList.paginate", EXTRACTION_HINT));
-});
-
-test("paginate: true, or a pagination without a bound, reads every page up to the domain's bound; absent keeps the page the detection proposed", async () => {
-  // Live run `run-mustvzvg-99695308` (lane C, steps 0015-0028): the model asked
-  // to "extract all rows across pages" with `paginate: true`, and every read
-  // took one page, because `true` kept the detection's proposal and detection
-  // proposes one page (`detect-pagination.ts` `PROPOSED_MAX_PAGES = 1`). Five
-  // reruns rewrote filters instead of the bound (C1).
-  const proposedOnePage = structuredClone(CATALOG) as CapturedDetection;
-  if (!proposedOnePage.structure.ok) throw new Error("the catalog capture detected nothing");
-  proposedOnePage.structure.proposal.pagination = { mode: "next", next: testId("pagination-next"), maxPages: 1 };
-  const runtime = runtimeOver(proposedOnePage);
-  const { extraction } = await detect(runtime);
-  const fields = { name: "product-name" };
-  const read = { item: CARD, fields: { name: CARD_FIELDS.name } };
-  // The domain's parse drops the default `mode: "next"` (`extraction/pagination.ts`).
-  const everyPage = { next: testId("pagination-next"), maxPages: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
-  for (const paginate of [true, { next: "a[rel=next]" }, { mode: "numbered", pages: "button.page" }] as JsonValue[]) {
-    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields, paginate } }), resolvedList({ ...read, paginate: everyPage }), JSON.stringify(paginate));
-  }
-  // Absent is not an ask to page: a "first page" instruction leaves it out, and reads the one page proposed.
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields } }), resolvedList({ ...read, paginate: { ...everyPage, maxPages: 1 } }));
-  // An explicit bound is still the plan's own, and false still reads the page shown.
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields, paginate: { maxPages: 2 } } }), resolvedList({ ...read, paginate: { ...everyPage, maxPages: 2 } }));
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields, paginate: false } }), resolvedList(read));
-
-  // A feed's `true` scrolls up to the same bound.
-  const feed = runtimeOver(CAPTURED_DETECTIONS["infinite-feed-largest"]);
-  const posts = await detect(feed);
-  const scrolled = await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: true } });
-  assert.deepEqual(scrolled.status === "resolved" ? (scrolled.parameters.extractList as JsonObject).paginate : scrolled, { mode: "scroll", maxScrolls: WEB_AUTOMATION_EXTRACT_MAX_PAGES });
 });
 
 test("a Run Output node naming a web output resolves its payload as that output's own node would", async () => {
   const runtime = runtimeOver(CATALOG);
   const { extraction } = await detect(runtime);
-  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: { handle: extraction, fields: RENAMED, paginate: false } }, timeoutMs: 30_000 }), {
+  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: { handle: extraction, fields: RENAMED } }, timeoutMs: 30_000 }), {
     status: "resolved",
     parameters: { outputId: "web.dom.extract_list", parameters: { extractList: { item: CARD, fields: CARD_FIELDS } }, timeoutMs: 30_000 }
   });
@@ -416,8 +363,6 @@ test("what cannot name one detected list or column is refused with where the han
     [{ handle: extraction, fields: { name: { handle: extraction, key: "product-name", extra: 1 } } }, "extractList.fields.0.2"],
     [{ handle: extraction, fields: ["product-name", "product-name"] }, "extractList.fields.1"],
     [{ handle: extraction, fields: RENAMED, columns: RENAMED }, "extractList.columns"],
-    [{ handle: extraction, paginate: "next" }, "extractList.paginate"],
-    [{ handle: extraction, paginate: { maxPages: 500 } }, "extractList.paginate"],
     [{ handle: extraction, itemElement: { tagName: "li" } }, "extractList.itemElement"],
     [{ handle: extraction, location: "" }, "extractList.location"],
     [{ handle: 7 }, "extractList.handle"],
@@ -493,25 +438,26 @@ test("a detected list may be deduplicated and sorted by the plan's own column ke
   const runtime = runtimeOver(CATALOG);
   const { extraction } = await detect(runtime);
 
-  // Forgiving spellings in, canonical out: `true` keys on the list's link column,
-  // and a column named by the plan's key sorts by that column.
+  // Forgiving spellings in, canonical out: `true` keys on the whole row (every
+  // column the read keeps, Core S1's default identity), and a column named by
+  // the plan's key sorts by that column.
   assert.deepEqual(
-    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: true, sort: "price desc", paginate: false } }),
-    resolvedList({ item: CARD, fields: CARD_FIELDS, dedupe: { by: ["url"] }, sort: [{ field: "price", order: "desc" }] })
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: true, sort: "price desc" } }),
+    resolvedList({ item: CARD, fields: CARD_FIELDS, dedupe: { by: ["name", "price", "rating", "url"] }, sort: [{ field: "price", order: "desc" }] })
   );
   assert.deepEqual(
-    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: ["name"], sort: [{ field: "rating", order: "desc", as: "number" }, "name"], paginate: false } }),
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: ["name"], sort: [{ field: "rating", order: "desc", as: "number" }, "name"] } }),
     resolvedList({ item: CARD, fields: CARD_FIELDS, dedupe: { by: ["name"] }, sort: [{ field: "rating", order: "desc", as: "number" }, { field: "name", order: "asc" }] })
   );
   // What runs is a request the page reads as resolved, with no issue left in it.
-  const resolved = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: true, sort: "-price", paginate: false } });
+  const resolved = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: true, sort: "-price" } });
   const request = resolved.status === "resolved" ? resolved.parameters.extractList : undefined;
   assert.deepEqual(webAutomationExtractListIssues(request), []);
   assert.deepEqual(webAutomationExtractListRequestValue(request)?.sort, [{ field: "price", order: "desc" }]);
 
   // Off is nothing, not a fault.
   assert.deepEqual(
-    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: false, sort: [], paginate: false } }),
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: false, sort: [] } }),
     resolvedList({ item: CARD, fields: CARD_FIELDS })
   );
 });
@@ -530,57 +476,5 @@ test("a dedupe that is not one, or a sort key naming no column, is refused where
   ];
   for (const [extractList, position] of refusals) {
     assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT), JSON.stringify(extractList));
-  }
-});
-
-test("absent keeps the detected one-page bound, true reads to the domain's bound, and an explicit nested bound reads five pages", async () => {
-  const capture = structuredClone(CATALOG);
-  if (!capture.structure.ok) throw new Error("catalog detection failed");
-  capture.structure.proposal.pagination = { ...NEXT, maxPages: 1 };
-  const runtime = runtimeOver(capture);
-  const shown = await detect(runtime);
-  assert.deepEqual((shown as WebLlmRepeatingStructure & { paginationBound?: object }).paginationBound, { maxPages: 1 });
-  for (const [paginate, maxPages] of [[true, WEB_AUTOMATION_EXTRACT_MAX_PAGES], [undefined, 1]] as const) {
-    const written: JsonObject = { handle: shown.extraction, fields: { name: "product-name" } };
-    if (paginate !== undefined) written.paginate = paginate;
-    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: written }),
-      resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name }, paginate: { ...NEXT, maxPages } }), String(paginate));
-  }
-  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: { name: "product-name" }, paginate: { maxPages: 5 } } }),
-    resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name }, paginate: { ...NEXT, maxPages: 5 } }));
-});
-
-test("a paging read over a list detected with no pagination is refused saying so, and naming the way out", async () => {
-  // Live run `run-muwansvz-a2b4a987` (lane C, decisions 0031-0048): the repair
-  // round opened on results page 5, the last, where Next is drawn disabled; the
-  // detect there issued `extraction.3` with `pagination: "none"`, and six reruns
-  // writing `paginate: {next, maxPages: 5}` on it were refused
-  // `web.handle.malformed:extractList.paginate` with nothing saying why. The
-  // refusal now names it: the list was detected with no pagination, and the
-  // handle to page with is one detected on the page the step starts on.
-  const capture = structuredClone(CATALOG);
-  if (!capture.structure.ok) throw new Error("catalog detection failed");
-  delete (capture.structure.proposal as { pagination?: unknown }).pagination;
-  const runtime = runtimeOver(capture);
-  const shown = await detect(runtime);
-  assert.equal(shown.pagination, "none");
-  const fields = { name: "product-name" };
-  for (const paginate of [{ next: "a.next", maxPages: 5 }, { mode: "numbered" }, {}]) {
-    assert.deepEqual(
-      await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields, paginate } }),
-      { status: "refused", issueCodes: ["web.handle.malformed", EXTRACTION_HINT, NO_PAGER_DETECTED, "web.handle.malformed:extractList.paginate"] },
-      JSON.stringify(paginate)
-    );
-  }
-  // A bound past the cap over a list that does page is still the plain malformed bound, with no word about detection.
-  const paged = runtimeOver(CATALOG);
-  const listed = await detect(paged);
-  assert.deepEqual(await resolve(paged, EXTRACT_LIST_NODE, { extractList: { handle: listed.extraction, fields, paginate: { maxPages: WEB_AUTOMATION_EXTRACT_MAX_PAGES + 1 } } }),
-    refusedAt("web.handle.malformed", "extractList.paginate", EXTRACTION_HINT));
-  // Not paging, or asking for the detected pagination, still resolves on the unpaged handle.
-  for (const paginate of [false, undefined]) {
-    const written: JsonObject = { handle: shown.extraction, fields };
-    if (paginate !== undefined) written.paginate = paginate;
-    assert.equal((await resolve(runtime, EXTRACT_LIST_NODE, { extractList: written })).status, "resolved", String(paginate));
   }
 });

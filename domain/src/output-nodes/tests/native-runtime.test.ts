@@ -110,8 +110,9 @@ test("a created list extraction with no record output dispatches one derived fro
   assert.equal(parsed.output.recordsPath, WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH);
   assert.equal(parsed.output.writeMode, "append");
   // The record output is Core's instruction, not the page's, and the node's
-  // own parameters reach the page unchanged apart from the timeout.
-  assert.deepEqual(payload.parameters, { extractList, timeoutMs: 10_000 });
+  // own parameters reach the page unchanged apart from the timeout and the
+  // Flow read's `answer: "kept"` (S4: a Flow read answers only what it kept).
+  assert.deepEqual(payload.parameters, { extractList: { ...extractList, answer: "kept" }, timeoutMs: 10_000 });
   assert.equal(payload.outputId, "web.dom.extract_list");
 });
 
@@ -153,16 +154,20 @@ test("a list extraction whose field asks to be encrypted fails with Core's own c
   assert.equal(result.failure?.code, "record_output.encrypt_unavailable");
 });
 
-test("a list extraction left at the default timeout is given one per page it may read", async () => {
+test("a list extraction that would page by itself is refused; a one-page read keeps the one-page timeout", async () => {
   const paged = { ...extractList, paginate: { mode: "next", next: "a.next", maxPages: 3 } };
-  for (const timeoutMs of [undefined, 10_000]) {
-    const parameters = timeoutMs === undefined ? { extractList: paged } : { extractList: paged, timeoutMs };
-    const payload = dispatchedPayload(await execute("web.dom.extract_list", parameters));
-    assert.equal((payload.parameters as Record<string, JsonValue>).timeoutMs, 30_000);
+  const scrolled = { ...extractList, paginate: { mode: "scroll", maxScrolls: 20 } };
+  for (const request of [paged, scrolled]) {
+    const result = await execute("web.dom.extract_list", { extractList: request });
+    assert.deepEqual(result.effects, []);
+    assert.equal(result.failure?.code, "web.extract_list.paginate_retired");
   }
-  const scrolled = dispatchedPayload(await execute("web.dom.extract_list", { extractList: { ...extractList, paginate: { mode: "scroll", maxScrolls: 20 } } }));
-  assert.equal((scrolled.parameters as Record<string, JsonValue>).timeoutMs, 200_000);
-  const authored = dispatchedPayload(await execute("web.dom.extract_list", { extractList: paged, timeoutMs: 12_000 }));
+  for (const timeoutMs of [undefined, 10_000]) {
+    const parameters = timeoutMs === undefined ? { extractList } : { extractList, timeoutMs };
+    const payload = dispatchedPayload(await execute("web.dom.extract_list", parameters));
+    assert.equal((payload.parameters as Record<string, JsonValue>).timeoutMs, 10_000);
+  }
+  const authored = dispatchedPayload(await execute("web.dom.extract_list", { extractList, timeoutMs: 12_000 }));
   assert.equal((authored.parameters as Record<string, JsonValue>).timeoutMs, 12_000);
 });
 
@@ -183,7 +188,7 @@ test("each of the seven new action types dispatches under its own output id", as
 /**
  * A throw out of the implementation, which used to end the whole session.
  *
- * All eighteen of these nodes run through Core's `options.nativeNodeExecutor`
+ * All nineteen of these nodes run through Core's `options.nativeNodeExecutor`
  * (`AS/runtime/executor/node-execution.ts:87`), which sits **outside** the try
  * block that guards `definition.execute`. A throw here propagated to
  * `service.ts`, which ended the session and rethrew: no attempt row, no ladder,

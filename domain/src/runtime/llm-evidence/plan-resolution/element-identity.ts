@@ -60,10 +60,22 @@
 // record the page *keyed* (`data-id` and the like) publishes no words and so
 // travels no record from here; its key lives in the binding's `records`, which
 // only the call site (`target-packets.ts`) holds.
+//
+// **The words a person reads for the element ride beside the identity, never in
+// it** (`webPlanElementWords`, U-B3-3). A control that lays its words out as
+// separate blocks -- bigbox's size chip, "12 Double Rolls" over "$16.47" --
+// has a captured text that runs them together, "12 Double Rolls$16.47", and the
+// identity keeps that text whole because the page compares it. Named from the
+// identity, the step result, the draft's `does` and the chat read the glued
+// string the page view never printed (`run-mux6pndp-16feb842`, step 0038). The
+// readable spelling is the packet's `readable`, taken only where it differs from
+// the identity's own name by spacing alone, so it is never words the identity
+// would not already carry: no name for a secret control, none that was withheld.
 
 import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../../../actions/types";
 import { isSensitiveFieldSignature } from "../../../sensitivity";
 import type { WebLlmEvidenceElement } from "../elements";
+import { webLlmReadableWords } from "../page-view";
 import { present } from "../present";
 import { isWithheldText } from "../withheld";
 
@@ -103,6 +115,18 @@ export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector:
     inputType: element.inputType,
     context: Object.keys(context).length > 0 ? context : undefined
   });
+}
+
+/**
+ * The words a person reads for the element `identity` was made from: the
+ * identity's own name -- its accessible name, else its visible text -- spelled
+ * as the packet's readable words when the two differ by spacing alone; nothing
+ * when the identity names it no way (a secret control, a withheld name).
+ * Display only: never a field of the identity the page compares.
+ */
+export function webPlanElementWords(element: Pick<WebLlmEvidenceElement, "readable">, identity: WebPlanElementIdentity): string | undefined {
+  const name = identity.accessibleName ?? identity.visibleText;
+  return name === undefined || name.trim() === "" ? undefined : webLlmReadableWords(element, name);
 }
 
 /** The record the packet named the element's row or card by, when it named one whole. */

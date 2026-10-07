@@ -401,6 +401,45 @@ test("counts that do not fit the request's conditions are not added to, and a re
   }
 });
 
+// ---- A Flow's read answers what it kept (S5, contract C3) ----
+//
+// A Flow-run or replayed read reads one page, and the domain says so with
+// `answer: "kept"`: a page whose every item fails the conditions answers no rows
+// rather than its rejected ones, because the collection, not the page, is where
+// "too much, never nothing" now applies. An exploration read names no rule and
+// keeps the floor.
+
+/** Every row is sponsored, so the one condition rejects every item on the page. */
+const ALL_SPONSORED = [
+  { title: "Ad one", posted: "", url: "/ad1", sponsored: "yes" },
+  { title: "Ad two", posted: "", url: "/ad2", sponsored: "yes" }
+];
+
+test("a read that answers what it kept answers no rows from a page whose items all fail its conditions, and counts the items it saw", async () => {
+  const page = fakeRows(ALL_SPONSORED);
+  try {
+    const outcome = await extractList({ ...JOBS, paginate: undefined, answer: "kept" }, { resume: START });
+    assert.deepEqual(outcome.records, []);
+    assert.equal(outcome.itemsSeen, 2, "the list was there, so a minimum counted on items is met");
+    assert.equal(outcome.filtered, 2);
+    assert.equal(outcome.conditions?.unfiltered, false);
+    assert.equal(outcome.conditions?.kept, 0);
+  } finally {
+    page.restore();
+  }
+});
+
+test("an exploration read of the same page keeps the floor and answers the rows it rejected", async () => {
+  const page = fakeRows(ALL_SPONSORED);
+  try {
+    const outcome = await extractList({ ...JOBS, paginate: undefined }, { resume: START });
+    assert.deepEqual(outcome.records.map((record) => record.title), ["Ad one", "Ad two"]);
+    assert.equal(outcome.conditions?.unfiltered, true);
+  } finally {
+    page.restore();
+  }
+});
+
 // ---- Lazily loaded tails (folded in from `list-reader-lazy-tail.test.ts`) ----
 //
 // A page-by-page read reveals each page's lazily loaded tail before reading it.

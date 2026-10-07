@@ -188,3 +188,27 @@ Only the lead edits this file; each worker writes `s2-<part>.md` beside it.
   `tests/service-authoring/tests`: 4 files / 7 passed. Before the build, 9 S1 storage and service tests failed with
   "processAutomationStudioRecordRows is not a function". Cause: `packages/contracts/dist` predated S1, and fluxiq
   resolves `@fluxiq/contracts` from `dist`. After the build all 9 passed.
+- Follow-ups on t283 at dev (Core `0b323ebd`, after S1+S2 landed as `c7094301`), uncommitted:
+  1. W22 (`run-mut4fvkm-e2fc03e6`, cause in `mvp-final-month-plan/reports/fix-lab-process/e-mut4fvkm-terminal.md`).
+     `executor/graph-navigation.ts` `hasUnvisitedAutomationStudioNodes` now counts as visited every node on an edge
+     path between a forward state-routed attempt's node and its `skipped.toNodeId`. A node off every such path still
+     fails a run with no End node. Fail-first in `executor/tests/state-routing-run.test.ts`, the W22 shape (s6 routed
+     forward to s9 past a sometimes-present s7 and its join m8, no End node): "expected 'failed' to be 'succeeded'".
+     A guard case (s5's untaken recovery step) stays `failed` with the unvisited message. After: 31 executor test
+     files, 345 passed.
+  2. R3-U-12: a Flow node is labelled with its draft step's `does.target` (the step's `words.target`). Path:
+     `authoring/assemble-draft.ts` -> `draft-routing.ts` (`nodeLabel`) -> `assemble.ts` (plan node `label`) ->
+     `plan/{contracts,parsing}.ts` (bounded text) -> `adaptation.ts` (Flow node `label`, which the run's step card
+     reads). Members of a repeat over an earlier step get none, since their words name the one row explored;
+     do-while members keep theirs. Fail-first `flow-bootstrap/tests/node-label.test.ts` (new): 3 failed, then 3
+     passed.
+  3. `flow-draft/amendment/schema.ts` `input`: "a key left out is kept, except in an object you write out again,
+     repeating more of it than you leave out: that drops the keys you were shown and left out, and keeps keys
+     withheld from you" (t287's restated-object rule). The only pin is hand-written, in
+     `llm/evidence-loop/tests/rerun-input.test.ts`; there is no regeneration script. It was changed first and
+     observed failing, then passed.
+  Gates: `fluxiq:check` 0, `structure-audit:check` 0, `pnpm.cmd build` 0 (5m39s). vitest: `llm/deepseek/tests`,
+  `flow-bootstrap/{tests,plan/tests,authoring/tests}`, `flow-draft/tests`: 67 files / 709 passed;
+  `llm/evidence-loop/tests`, `llm/node-tools/tests`, `tests/service-authoring/tests`, `tests/service-flows/tests`,
+  `activity/`: 90 files / 843 passed; `flow-draft/amendment/tests`, `rerun-input.test.ts`,
+  `tests/deepseek-bootstrap/tests`: 8 files / 103 passed.
