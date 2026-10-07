@@ -32,10 +32,10 @@ Archived by the Claude supervisor at intake. The Current State below is Codex's 
 
 **Actual host persistence selection (t332 discovery).** Core programs/_shared/runtime.ts passes artifact storageRootDir but no canonical repository; the service default remains memory. Normal v2 artifact files and SQL catalogue roots differ: catalogue is .fluxiq/global.sqlite automation.state, while artifacts live under .fluxiq/artifacts/automation-studio. Existing factory/global SQL probes do not prove that production host selects canonical SQLite. t332 must validate actual strict layout/factory provenance and cannot reuse unsupported standalone root assumptions or claim host activation from explicit test construction. Production root wiring/adoption stays held.
 
-Detailed older receipts and retired briefs remain in the [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md). Exact additional writer source coverage is in [t322](./mvp-final-month-plan/reports/p2-original-project-writer-coverage.md); browser priorities are maintained in the [ranked node backlog](./node-catalog-plan/ranked-backlog.md).
+Detailed older receipts and retired briefs remain in the [execution archive](../../mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md). Exact additional writer source coverage is in [t322](../../mvp-final-month-plan/reports/p2-original-project-writer-coverage.md); browser priorities are maintained in the [ranked node backlog](../../node-catalog-plan/ranked-backlog.md).
 
 **Planning review completed locally 2026-10-06.**
-The [consultant review and revised execution detail](./mvp-final-month-plan/consultant-revision.md)
+The [consultant review and revised execution detail](../../mvp-final-month-plan/consultant-revision.md)
 is the current order of work. It supersedes the old schedule and structural
 stage ordering, preserves the November 10 deadline and October 29 freeze, and
 keeps the existing runtime rather than introducing a new Flow language.
@@ -44,8 +44,8 @@ keeps the existing runtime rather than introducing a new Flow language.
 at intake and pushed by Claude. Handoff 2026-10-07 05:10 UTC is October 6 locally.
 Read-list S1-S6 and fix-everything workstreams landed; round 4 failed A-D; round 5
 was cancelled. No lane has passed twice consecutively. The complete prior
-[Current State](./mvp-final-month-plan/archive/2026-10-06-claude-stopping-point.md)
-and [implementation ledger](./mvp-final-month-plan/archive/2026-10-06-pre-consultant-ledger.md)
+[Current State](../../mvp-final-month-plan/archive/2026-10-06-claude-stopping-point.md)
+and [implementation ledger](../../mvp-final-month-plan/archive/2026-10-06-pre-consultant-ledger.md)
 remain available; historical briefs are not active dispatch instructions.
 
 **Verified by source/history inspection.** Discovery and authoring still share
@@ -88,9 +88,9 @@ success used JS. No debugger for JS; network capture debugger only if absolutely
 needed with requests enabled. Full suites at most twice daily; narrow gates per
 change; no user-panel management unless explicitly authorized.
 
-**Audit reports.** [Working docs](./mvp-final-month-plan/reports/consultant-doc-context.md),
-[Core source](./mvp-final-month-plan/reports/consultant-core-audit.md),
-[browser/Lab source](./mvp-final-month-plan/reports/consultant-browser-lab-audit.md).
+**Audit reports.** [Working docs](../../mvp-final-month-plan/reports/consultant-doc-context.md),
+[Core source](../../mvp-final-month-plan/reports/consultant-core-audit.md),
+[browser/Lab source](../../mvp-final-month-plan/reports/consultant-browser-lab-audit.md).
 These record planning coverage and unverified hypotheses. Implementation checks
 and source changes are recorded separately below; no paid run has started. Identity
 and cancellation browser evidence must be independently reviewed before P0 closes.
@@ -100,7 +100,7 @@ and cancellation browser evidence must be independently reviewed before P0 close
 
 ### Brief: intake A, product path today (Claude intake 2026-10-07; read-only)
 - Worker: intake-product-path (worker-high). Own ONLY `reports/intake-1007/product-path.md`. Read-only on dev heads downstream `53324d18` / Core `a2672def` (`C:\Users\osrs_\FluxStuff\!FluxIQ`). No edits, builds, Lab, provider, panel.
-- Context: [week review](./mvp-final-month-plan/reports/week-review/report.md) sections 5-6; [consultant revision](./mvp-final-month-plan/consultant-revision.md) P0-P2. Baseline before Codex: downstream `92d790d7` / Core `e9b7d691`.
+- Context: [week review](../../mvp-final-month-plan/reports/week-review/report.md) sections 5-6; [consultant revision](../../mvp-final-month-plan/consultant-revision.md) P0-P2. Baseline before Codex: downstream `92d790d7` / Core `e9b7d691`.
 - Answer with file:line evidence, plain English first: (1) a person types an instruction in the extension chat today; trace to a saved Flow. Does a successful build still yield a Flow the person can run, or only a draft nothing promotes (t330 "draft-only")? Compare with the baseline. (2) Can `pnpm lab:campaign` on A-D tasks reach a provider call now, or does a readiness hold refuse it? Exact hold, what lifts it. (3) Is the model still authoring with the legacy add/act/keep/drop/amend language (`runtime/flow-draft/entry.ts`), or does a candidate-submit tool exist that the default build calls? Flags and defaults. (4) For each week-review "open" cause (act-claim trust, judges reading exploration leftovers, unconfirmed yes, refusal churn, read-list), did t296-t337 change the default path? (5) Net: is the default product closer to or further from passing A-D than at the baseline, and why.
 
 ### Brief: intake B, Codex infrastructure chain (Claude intake 2026-10-07; read-only)
@@ -110,7 +110,7 @@ and cancellation browser evidence must be independently reviewed before P0 close
 
 ### Brief: intake C, working documents audit (Claude intake 2026-10-07; read-only)
 - Worker: intake-docs-audit (worker). Own ONLY `reports/intake-1007/working-docs-audit.md`. Read-only.
-- Read [the protocol](./agent-working-doc-protocol.md) (status vocabulary, size limits, compaction), the [index](./README.md), then each Active document's header and Current State only (deeper only if needed to decide).
+- Read [the protocol](../../agent-working-doc-protocol.md) (status vocabulary, size limits, compaction), the [index](../../README.md), then each Active document's header and Current State only (deeper only if needed to decide).
 - Per Active document: last commit date touching it (`git log -1`), whether its scope is now owned/superseded by this plan or its consultant revision, anything still live in it, recommended status (protocol vocabulary) and action (keep / compact / mark complete / archive). Flag protocol breaches: over size, Current State bloat, unreadable compressed prose, briefs left for dead workers. Include a specific compaction proposal for THIS document's Current State.
 
 
