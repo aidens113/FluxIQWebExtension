@@ -107,6 +107,15 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 ## Worker Briefs
 
+### Brief: p1-candidate-authoring (task t299, follows t296)
+- Repository: paired trees C:/Users/osrs_/FluxStuff/fxwork/t299/!FluxIQ and !FluxIQWebExtension.
+- Task: Implement a feature-flagged vertical candidate-authoring path. Discovery executes existing registry tools and records evidence without draft retention/auto-openers/act completion; one explicit complete submission reuses canonical bootstrap acceptance/plan validation, assigns revision/digest/diff, and returns consolidated diagnostics. Keep accepted Flow untouched, existing saved Flows/legacy default compatible. No claim of semantic acceptance from static validity.
+- Required reads: main Current State; consultant revision P1/P2 and Core audit; Core boundary/structure; current evidence-loop/node-tools, bootstrap authoring/plan/unfinished-build, runtime service generation-request/built-loop, and their owning tests.
+- Owns: focused Core flow-bootstrap/candidate modules/barrels/tests, feature-flag/tool-interface contracts, evidence-loop and bootstrap integration owners needed for the path (not service.ts until t298 frozen/merged); domain candidate plan resolution adapter if required; own downstream report docs/working/mvp-final-month-plan/reports/p1-candidate-authoring.md.
+- Must not touch: main checkouts/shared docs, other trees, cancellation/acceptance/identity worker files, Lab launch/Stop UI; no git mutations/commits/merges, provider calls/full suites. Send exact discovered ownership list before editing existing coordinators. If service.ts wiring required, give supervisor narrow patch for serial integration.
+- Definition of done: provider-free scripted harness constructs/revises representative multi-node candidate without amend/keep/act grammar; discovery wrong-turn omitted; registry/parameter/binding/permission/ownership/handle validation diagnostics; any revision invalidates prior receipt; legacy owning regressions and touched checks/audit pass. The new path must fail closed until exact candidate runtime verification is wired; no untested proposal promotion.
+- Report to: t299 downstream docs/working/mvp-final-month-plan/reports/p1-candidate-authoring.md; record implementation, commands/results, limitations and precise P2 caller wiring as work progresses.
+
 ### Brief: p0-acceptance (task t296)
 - Repository: paired trees C:/Users/osrs_/FluxStuff/fxwork/t296/!FluxIQ and !FluxIQWebExtension.
 - Task: Implement P0 fail-closed confirming judgement (yes + unsure/silent/unavailable must not pass) and refuse unsupported held reauthor topology instead of apply-before-judge. Add fail-first tests proving accepted graph is never applied for unsupported topology, and update downstream callers only if required to render a truthful unknown/draft.
@@ -178,6 +187,14 @@ Historical briefs: [Claude schedule and task briefs](./mvp-final-month-plan/arch
 - Validation: main downstream/Core intake clean; source audit baselines read; provisioning and worker execution still in progress. No paid run started.
 - Outcome: Partial
 - Follow-up: acceptance/control/identity reports and independent validation; then P1/P2 vertical candidate slice and remaining node audits.
+
+### 2026-10-06 - t296 code returned; candidate slice prepared
+- Agent: Codex supervisor; p0-acceptance worker.
+- Changed: t296 agreement and held-topology fences, owning regression tests/report; t299 paired tree and P1 bounded brief prepared.
+- Why: acceptance now has a concrete fail-closed implementation to verify; separate candidate authoring can proceed in isolated files while cancellation is integrated serially.
+- Validation: worker reports fail-first 10 failures, final 391 owning tests, fluxiq typecheck/audit; supervisor rerun of the two changed test owners is running. Not merged or accepted as complete yet. t297/t299 provisioning still finishing.
+- Outcome: Partial
+- Follow-up: supervisor verifies t296 and documents architecture; integrate downstream then Core; P1 implementation; identity/cancellation and remaining P0 receipt cases still open.
 
 Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-plan/archive/2026-10-06-pre-consultant-ledger.md).
 
