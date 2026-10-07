@@ -108,14 +108,18 @@ describe("professional-network in a browser", { concurrency: 4 }, () => {
     assert.equal(await page.getByRole("checkbox", { name: "Rotterdam, South Holland, Netherlands" }).isChecked(), true);
     await page.locator('div:text-is("Show results") >> visible=true').click();
     await page.waitForURL(/geoUrn=/u);
+    await pageStatus(page).filter({ hasText: "Page 1 of 3" }).waitFor({ timeout: 8_000 });
     const collected = await readOrganic(page);
     await readingPause(page);
-    await goToPage(page, "2", "Page 2 of 3");
+    await goToPage(page, "Next", "Page 2 of 3");
+    assert.equal(new URL(page.url()).searchParams.get("page"), "2");
     collected.push(...await readOrganic(page));
     await readingPause(page);
-    await goToPage(page, "3", "Page 3 of 3");
+    await goToPage(page, "Next", "Page 3 of 3");
+    assert.equal(new URL(page.url()).searchParams.get("page"), "3");
     collected.push(...await readOrganic(page));
     assert.equal(collected.length, 24, "page 3 repeats the last person of page 2");
+    assert.equal(firstSeen(collected).length, 23, "all unique organic people across three pages");
     assert.deepEqual(firstSeen(collected), EXPECTED);
     assert.equal(await factText(page, "invitation-store"), STORE_AT_START, "searching changed nothing");
     assert.deepEqual(current.consoleErrors, []);
@@ -129,14 +133,14 @@ describe("professional-network in a browser", { concurrency: 4 }, () => {
       return page.locator(`li[data-urn] ${FIELDS.name}`).allTextContents();
     };
     const names = await everything();
-    for (const status of ["Page 2 of 3", "Page 2 of 3"]) {
+    for (const status of ["Page 2 of 3", "Page 3 of 3"]) {
       await readingPause(page);
       await pagerButton(page, "Next").click();
       await pageStatus(page).filter({ hasText: status }).waitFor({ timeout: 8_000 });
       names.push(...await everything());
     }
     assert.ok(names.includes("Sanne de Wit"), "a promoted profile was taken");
-    assert.ok(!names.includes("Yara Haddad"), "Next never reached page 3");
+    assert.ok(names.includes("Yara Haddad"), "Next reached the final page; taking promoted profiles still gives the wrong dataset");
     assert.notDeepEqual(firstSeen(names.map((name) => ({ name }))).map(({ name }) => name), EXPECTED.map(({ name }) => name));
   }));
 

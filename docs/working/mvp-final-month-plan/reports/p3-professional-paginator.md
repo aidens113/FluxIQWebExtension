@@ -1,43 +1,69 @@
-# P3 professional-network fixture paginator
+﻿# P3 professional-network fixture paginator
 
-Status: Proposed ? awaiting supervisor task/owner authorization
+Status: Worker complete; source frozen, awaiting supervisor verification/integration.
 Worker: p0_build_identity
 Date: 2026-10-07
-Scope: source inspection and written proposal only; no source/build/browser/provider/panel/git changes.
+Scope: fixture-only t308 in fxwork/t308-professional-paginator; shared Core read-only. No provider, panel, git mutation or shared-plan changes.
 
 ## Current State
 
-Backlog row16 is confirmed by source, with real dispatch reproduction pending. Fixture people-client sets initialPage from QUERY.page once, tracks current after each successful fragment, but Next calls load(initialPage + 1, true). Starting at page1 therefore asks page2 on every Next. This behavior is explicitly documented as a fixture defect and pinned in one existing browser test; it is not a hypothesis of browser runtime failure.
+Backlog row 16 is confirmed by source and real Chromium failure. Next formerly called load(initialPage + 1, true), so both browser paths stopped at page 2 on their second Next press. Next now calls load(current + 1, true), using the page assigned after successful fragment rendering. The obsolete initialPage binding and defect comment are removed.
 
-## Exact proposed owners
+The two owning Chromium tests now pass. The honest path presses Next from 1 to 2 to 3, checks status and URL page values, and retains the exact full-field results oracle: 24 collected organic rows including the boundary repeat, 23 unique expected people. The naive path reaches the final-page person Yara Haddad while its all-card dataset still includes the promoted profile and fails the exact expected-name oracle. No dataset, manifest, member, page-size, filter, repeated-row or runtime extraction behavior changed.
 
-- apps/scenario-lab/src/scenarios/professional-network/search/people-client.ts: Next uses current + 1; remove unused initialPage binding and update owning behavior comment. Preserve 700ms skeleton, attempt guard, challenge self-retry, history, Previous, numbered page and filter reset semantics.
-- apps/scenario-lab/src/scenarios/professional-network/tests/honest-and-naive-paths.test.ts: existing professional-feature browser tests are the nearest owning tests spanning client/data/oracle. No separate generic runtime or extension change.
-- This report only; no authored shared-plan edit.
+## Exact owned files
 
-The honest browser path currently reaches page2/page3 by numbered buttons, so it never catches Next. Change those two transitions to Next, retaining page status1?2?3 and the exact dataset comparison. The naive reader currently expects Page2 twice and missing Yara; update to Page2?Page3 and affirm later-page person appears, retaining rejection of promoted profiles/all-card extraction against the unchanged oracle. Advertisements, promoted entries and repeated boundary row remain fixture behavior.
+- apps/scenario-lab/src/scenarios/professional-network/search/people-client.ts
+- apps/scenario-lab/src/scenarios/professional-network/tests/honest-and-naive-paths.test.ts
+- docs/working/mvp-final-month-plan/reports/p3-professional-paginator.md
 
-## Fail-first plan and checks
+The existing browser test owns the client/data/oracle interaction. No generic runtime or extension source was changed. The client retains the 700ms skeleton, attempt guard, challenge retry, history, Previous, numbered-page and filter-reset logic.
 
-1. Supervisor assigns isolated task worktree and approves owners before any edits/builds. Write owning test changes first.
-2. Build only scenario-lab through its owning script (test-contracts dependency must already be provisioned); run the two real Chromium Node tests against the built fixture. Honest Next1?2?3 fails before fix on the second transition, since page3 status never arrives. No fake client string assertion as browser proof.
-3. Fix client one-page transition owner, rerun same two tests. Keep existing exact organic data fields and firstSeen identity handling. Honest collection still sees24 records including boundary duplicate and exactly23 unique expected records. Naive all-card extraction still rejects promoted/irrelevant rows; fixing Next does not justify a smaller oracle.
-4. Package source typecheck and e2e typecheck (configuration below), narrow professional-network scenario tests and repository structure audit; no whole package/full suite. Report exact browser, requested/landed pages and failures. No extension/Core product build needed for this fixture-only slice.
+## Implementation and observed evidence
 
-Commands from assigned task:
-- From apps/scenario-lab: node scripts/build-scenario-lab.mjs
-- From apps/scenario-lab: node --test --test-name-pattern="honest person|naive reader" dist/scenarios/professional-network/tests/honest-and-naive-paths.test.js
-- From apps/scenario-lab: pnpm.cmd exec tsc -p tsconfig.json --noEmit
-- From apps/scenario-lab: pnpm.cmd exec tsc -p tsconfig.e2e.json --noEmit
-- From apps/scenario-lab: node --test dist/scenarios/professional-network/tests/scenario.test.js
-- From repository root: node scripts/structure-audit.mjs
+1. Supervisor approved the three owners and isolated t308 tree. Test edits came first: replace the honest numbered-page transitions with Next, assert page 1 initially and status/URL 2 then 3, retain the full oracle, and update the naive path from repeated page 2 to pages 2 then 3.
+2. Provision57384 completed successfully; its build was not counted as task verification because it may have read in-progress test edits. Worker rebuilt the fixture with product Next unchanged.
+3. Fail first: both actual Chromium tests failed waiting eight seconds for Page 3 of 3 after the second Next press. Honest 23,322.6185ms; naive 17,820.3532ms; total 28,031.1097ms, 0/2 passed. First Next reached page 2.
+4. Applied the scoped client fix only after those failures completed. A build command initially used repository-root cwd and failed MODULE_NOT_FOUND for the package-owned script; rerunning in apps/scenario-lab succeeded. This was a command-location error.
+5. Final owning fixture build passed. The same real Chromium command passed 2/2: honest 15,480.9513ms, naive 10,332.3376ms, total 18,378.9917ms. Both sessions used the existing isolated loopback fixture and cleanup.
+6. Both scenario source and e2e no-emit typechecks passed. Narrow professional-network scenario tests passed 10/10 in 1,052.9849ms, including the unchanged 23-person oracle, ads/promoted/repeated-row fixture, filters, seed, security challenge and invitation oracle cases. Structure audit passed with 176 warnings, 117 baselined; no baseline edits. git diff --check passed.
 
-Browser helper launches real headless full Chromium channel chromium, isolated local Scenario Lab, seed42 and offsite route guard; each session closes only its owned context/server. Existing trusted page controls, results fragments, status and extraction fields provide the regression. No provider, user panel, debugger or external website request.
+## Reproduction commands
 
-## Findings and limits
+From apps/scenario-lab in the task tree:
 
-people-client updates current only after a successful fragment; security-check response deliberately returns before that assignment and retries the same requested page. Next uses current, not URL's mutable page field, after completed render. This preserves attempt cancellation and challenge retry; source inspection alone does not prove timing behavior. Rapid presses/security challenges/Previous/popstate are not expanded in this unit.
+```powershell
+node scripts/build-scenario-lab.mjs
+node --test --test-name-pattern="honest person|naive reader" dist/scenarios/professional-network/tests/honest-and-naive-paths.test.js
+pnpm.cmd exec tsc -p tsconfig.json --noEmit
+pnpm.cmd exec tsc -p tsconfig.e2e.json --noEmit
+node --test dist/scenarios/professional-network/tests/scenario.test.js
+```
 
-Existing full-results workflow lives in professionalNetworkManifest resolved workflow people-search; extract-rotterdam-engineers target/fields/expected records are used by the existing honest/naive tests. Do not modify manifest/live-task instruction, expected dataset, member catalogue, search filters, pagination page size, repeated row policy or runtime extraction guard. Backlog repeated-page runtime detection remains separate from this narrow fixture correction.
+From repository root:
 
-Inspected: main MVP Current State; backlog row16 and relevant reading repeat/Next finding (navigation report has no professional paginator owner); people-client.ts; search/results.ts; professional tests honest-and-naive-paths.test.ts and browser-session.ts; live-tasks.ts; package.json, tsconfig.json and scripts/build-scenario-lab.mjs. Test configuration e2e command is proposed from package script; compilation and browser checks have not run. Search/pager.ts does not exist and was not treated as an owner. Await task assignment.
+```powershell
+node scripts/structure-audit.mjs
+git diff --check
+```
+
+Browser: Playwright 1.51.1, real headless full Chromium channel chromium; exact browser patch was not captured. Existing browser-session helper runs local Scenario Lab seed 42 with offsite route guard, then closes its owned context/server. No provider, external website, user panel or debugger was used. This is browser fixture proof, not a live extension/model workflow qualification.
+
+## Tested source/artifact identity
+
+- Downstream task base: f6d4360862709b0eb768c30b935f7103d0422bad, plus the three uncommitted worker-owned file changes above.
+- Shared read-only Core: 04b51050dcf6dbdcb34255d99a1aa73cab89e63d.
+- people-client.ts SHA256: 0DCC17D66E7A18873859304361EAEC5FBD8DC13932AB85C62DD929F3BE631D87.
+- Ignored dist/scenarios/professional-network/search/people-client.js SHA256: 3D452533BC9D0648B0D88321960F9CAC7287F072B08A1AAD2CD3D6DD1610CBCC.
+
+These are disk fingerprints of tested source/build output, not an embedded running Core or extension identity claim. Generated output is untracked. Supervisor owns merging current dev into the task and independent checks before integration.
+
+## Read inventory and limits
+
+Read main MVP Current State and bounded brief; backlog row 16 and relevant reading repeat/Next finding (navigation report has no professional paginator owner); people-client.ts; search/results.ts; professional tests honest-and-naive-paths.test.ts and browser-session.ts; live-tasks.ts; package.json; tsconfig.json; tsconfig.e2e.json; scripts/build-scenario-lab.mjs. Search/pager.ts does not exist and was not treated as an owner.
+
+current changes only after successful rendering; the security-check response returns before that assignment and retries the same requested page. Source preserves those branches, and the existing narrow security unit test passes. Rapid presses, live security challenge timing, Previous, popstate, filter reset and extension execution were not newly exercised in a browser. No claim of runtime repeated-page detection is made; that remains separate backlog work. No full suite, Core source edit, provider run, panel management, commit or push occurred.
+
+## Supervisor verification
+
+Source1074a5d2 merged current downstream dev before independent owning build. Root real Chromium honest/naive2/2 zero skips18.03s, scenario10/10, package source/e2e typechecks and structureaudit0. Next1?2?3 and full24rows/23unique exact fields preserved; promoted naive rows still reject. Shared Core04b51050 is a read-only fixture dependency, not a connected executing Core identity. No extension/domain-gateway or paid qualification claimed. Integration follows; fixture timing/rapid presses/Previous/popstate remain unexercised.

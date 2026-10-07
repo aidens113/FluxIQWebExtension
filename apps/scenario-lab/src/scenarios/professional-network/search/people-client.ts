@@ -7,13 +7,12 @@ import type { PeopleQuery } from "./query.js";
 type Input = { query: PeopleQuery; resultsId: string; bar: FilterBarIds; upsell: UpsellIds | undefined; skeleton: string };
 
 /**
- * The people page's behaviour, defects included:
+ * The people page's behaviour:
  *
  * - results load 0.7 seconds after the page, and after every page change,
  *   behind skeleton cards; a page change scrolls back to the top;
- * - Next was written against the page the address had when it loaded, so
- *   from a first page it reaches page 2, and from page 2 it reaches page 2
- *   again, forever. Page numbers and Previous work;
+ * - Next and Previous move from the current successfully rendered page;
+ *   numbered buttons choose their page directly;
  * - a results request answered with the security check shows the check, which
  *   retries by itself after the answer's `retryAfter`, or two seconds after
  *   its box is clicked;
@@ -27,7 +26,6 @@ export function peopleClientScript(kit: ShellKit, input: Input): string {
   return `const byId = (id) => document.getElementById(id);
 const GL = window.GL;
 const QUERY = ${j(input.query)};
-const initialPage = QUERY.page;
 let current = QUERY.page;
 let cards = {};
 let upsellShown = false;
@@ -80,7 +78,7 @@ results.addEventListener('click', (event) => {
   if (!button) return;
   if (button.closest(${j(`.${c.pager}`)})) {
     const label = button.textContent.trim();
-    if (label === 'Next') return void load(initialPage + 1, true);
+    if (label === 'Next') return void load(current + 1, true);
     if (label === 'Previous') return void load(Math.max(1, current - 1), true);
     const number = Number(label);
     if (number) load(number, true);
