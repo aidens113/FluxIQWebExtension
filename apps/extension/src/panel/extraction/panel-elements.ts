@@ -26,9 +26,6 @@ export type ExtractionPanelElements = {
   label: HTMLInputElement;
   summary: HTMLElement;
   fields: HTMLElement;
-  paginateRow: HTMLElement;
-  paginate: HTMLInputElement;
-  paginateLabel: HTMLElement;
   /** "Pages": which pages the extraction reads, said in words whether or not more pages were found. */
   pagesNote: HTMLElement;
   /** The sample table, named "Extraction preview" and marked busy while a new sample is being read. */
@@ -71,9 +68,6 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
   });
   const summary = createElement("p", { id: "extractionSummary", className: "extraction-summary" });
   const fields = createElement("div", { id: "extractionFields", className: "extraction-fields" });
-  const paginate = createElement("input", { id: "extractionPaginate", attrs: { type: "checkbox" } });
-  const paginateLabel = createElement("span", { id: "extractionPaginateLabel", text: "Read every page" });
-  const paginateRow = createElement("label", { id: "extractionPaginateRow", className: "extraction-paginate", hidden: true }, [paginate, paginateLabel]);
   const pagesNote = createElement("span", { id: "extractionPagesNote" });
   const previewNote = createElement("span", { id: "extractionPreviewNote", attrs: { role: "status", "aria-live": "polite", "aria-atomic": "true" } });
   const previewHead = createElement("tr", { id: "extractionPreviewHead" });
@@ -89,7 +83,6 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
     sectionHeading("Columns", createElement("span", { text: "Rename, remove, or exclude a column." })),
     fields,
     sectionHeading("Pages", pagesNote),
-    paginateRow,
     sectionHeading("Preview", previewNote),
     createElement("div", { className: "extraction-preview-scroll" }, [previewTable])
   ]);
@@ -132,9 +125,6 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
     label,
     summary,
     fields,
-    paginateRow,
-    paginate,
-    paginateLabel,
     pagesNote,
     previewTable,
     previewHead,

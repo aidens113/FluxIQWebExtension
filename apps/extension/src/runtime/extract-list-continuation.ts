@@ -1,5 +1,6 @@
 // The worker's half of a paginated `web.dom.extract_list` read that outlives
-// the document it began in (`shared/extraction-continuation.ts` says why).
+// the document it began in (`shared/extraction-continuation.ts` says why), and
+// of a `web.dom.next_page` step whose press loads a new document.
 //
 // The command goes out as any other does, with a token beside it. Before the
 // page follows each pagination control it sends a checkpoint under that token
@@ -11,29 +12,35 @@
 // document goes on from it, so the reply that finally comes back holds every
 // record from every document, in order, as one read.
 //
-// What makes re-sending safe is what the page promises: it never follows a
-// control before its checkpoint was taken. A reply lost before the first
-// checkpoint therefore lost nothing but reading -- nothing was pressed -- and
-// the command goes out again from the start; one lost after it goes on from
-// the pages that checkpoint holds. Either way no control is followed twice.
+// A next-page step goes the same way with a mark in place of a checkpoint: the
+// page marks its press just before it makes it, and again before it reloads a
+// landing the server refused. A reply lost after a mark is a press that was
+// made, so the new document is handed the mark and asked whether the list
+// arrived; it presses nothing. No rows are carried.
 //
-// How long this may go on. A document that goes away without the read having
+// What makes re-sending safe is what the page promises: it never follows a
+// control before its checkpoint, or mark, was taken. A reply lost before the
+// first one therefore lost nothing but reading -- nothing was pressed -- and
+// the command goes out again from the start; one lost after it goes on from
+// what that one holds. Either way no control is followed twice.
+//
+// How long this may go on. A document that goes away without the page having
 // checkpointed since it arrived -- a check page that reloads itself, a
 // redirect -- is allowed `STALLED_DOCUMENTS_ALLOWED` in a row; a checkpoint
 // resets the count, because it is progress. The command's own `timeoutMs`
-// bounds the whole read: the re-sent command carries only what is left of it,
-// and once none is, the page is asked for one last read with a 1 ms budget,
-// which answers `timed_out` with every record the checkpoint holds instead of
-// the records being dropped. Only the top frame is continued -- a child frame's
-// id is reassigned when it navigates, and no extraction is defined in one --
-// and a closed tab ends the read with the refusal it met.
+// bounds the whole command: the re-sent command carries only what is left of
+// it, and once none is, the page is asked for one last answer with a 1 ms
+// budget -- a read answers `timed_out` with every record the checkpoint holds
+// instead of the records being dropped. Only the top frame is continued -- a
+// child frame's id is reassigned when it navigates, and no extraction is
+// defined in one -- and a closed tab ends the command with the refusal it met.
 //
-// The checkpoint listener takes only a message carrying this command's token
-// from this tab's addressed frame, and is removed when the command ends. The
-// records it holds live in this call alone.
+// The listener takes only a message carrying this command's token from this
+// tab's addressed frame, and is removed when the command ends. What it holds
+// lives in this call alone.
 
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
-import { EXTRACTION_CHECKPOINT_MESSAGE, readExtractionCheckpoint, type ExtractionCheckpoint, type ExtractionContinuation } from "../shared/extraction-continuation";
+import { EXTRACTION_CHECKPOINT_MESSAGE, PAGE_MOVE_MARK_MESSAGE, readExtractionCheckpoint, readPageMoveMark } from "../shared/extraction-continuation";
 import { tabIsOpen, waitForTabReady } from "./automation-tab";
 
 /** How the worker reaches a frame: the runner's own `sendToTab` and `ensureContentScript`, handed in. */
@@ -45,11 +52,17 @@ export type FrameMessaging = {
 /** The id the browser always gives a tab's main frame. */
 const TOP_FRAME_ID = 0;
 
-/** Documents in a row that may go away before the read checkpoints in them. */
+/** Documents in a row that may go away before the page checkpoints in them. */
 const STALLED_DOCUMENTS_ALLOWED = 3;
 
-/** The budget of the last read asked for once the command's time has run out. */
+/** The budget of the last answer asked for once the command's time has run out. */
 const LAST_READ_BUDGET_MS = 1;
+
+/** What a page hands the worker before it presses: the message type, the member that carries it, and its reader. */
+type Handover<T> = { type: string; member: string; read(value: unknown): T | undefined };
+
+const READ_CHECKPOINTS = { type: EXTRACTION_CHECKPOINT_MESSAGE, member: "checkpoint", read: readExtractionCheckpoint } satisfies Handover<unknown>;
+const MOVE_MARKS = { type: PAGE_MOVE_MARK_MESSAGE, member: "mark", read: readPageMoveMark } satisfies Handover<unknown>;
 
 /**
  * Sends a paginated list read to `frameId` of `tabId` and carries it into every
@@ -64,19 +77,45 @@ export async function sendExtractListAcrossDocuments(
   frameId: number,
   frames: FrameMessaging
 ): Promise<BrowserActionResult> {
+  return await sendAcrossDocuments(action, tabId, message, frameId, frames, READ_CHECKPOINTS);
+}
+
+/**
+ * Sends a `web.dom.next_page` step to `frameId` of `tabId` and, when its press
+ * loads a new document, asks that document whether the list arrived; see the
+ * header.
+ */
+export async function sendNextPageAcrossDocuments(
+  action: BrowserActionCommand,
+  tabId: number,
+  message: Record<string, unknown>,
+  frameId: number,
+  frames: FrameMessaging
+): Promise<BrowserActionResult> {
+  return await sendAcrossDocuments(action, tabId, message, frameId, frames, MOVE_MARKS);
+}
+
+async function sendAcrossDocuments<T>(
+  action: BrowserActionCommand,
+  tabId: number,
+  message: Record<string, unknown>,
+  frameId: number,
+  frames: FrameMessaging,
+  handover: Handover<T>
+): Promise<BrowserActionResult> {
   const token = crypto.randomUUID();
   const startedAt = Date.now();
   const deadline = typeof action.timeoutMs === "number" && Number.isFinite(action.timeoutMs) && action.timeoutMs > 0 ? startedAt + action.timeoutMs : undefined;
-  let checkpoint: ExtractionCheckpoint | undefined;
-  let checkpointed = false;
+  let handed: T | undefined;
+  let progressed = false;
   const listener = (received: unknown, sender: chrome.runtime.MessageSender, sendResponse: (response?: unknown) => void): boolean => {
-    const body = received as { type?: unknown; token?: unknown; checkpoint?: unknown } | undefined;
-    if (body?.type !== EXTRACTION_CHECKPOINT_MESSAGE || body.token !== token) return false;
+    const body = received as Record<string, unknown> | undefined;
+    if (body?.["type"] !== handover.type || body["token"] !== token) return false;
     if (sender.tab?.id !== tabId || (sender.frameId ?? TOP_FRAME_ID) !== frameId) return false;
-    const taken = readExtractionCheckpoint(body.checkpoint);
+    const taken = handover.read(body[handover.member]);
     if (taken !== undefined) {
-      checkpoint = taken;
-      checkpointed = true;
+      handed = taken;
+      progressed = true;
     }
     sendResponse({ ok: taken !== undefined });
     return false;
@@ -84,14 +123,14 @@ export async function sendExtractListAcrossDocuments(
   chrome.runtime.onMessage.addListener(listener);
   try {
     for (let stalled = 0; ; ) {
-      checkpointed = false;
-      const continuation: ExtractionContinuation = { token, ...(checkpoint !== undefined ? { resume: checkpoint } : {}) };
+      progressed = false;
+      const continuation = { token, ...(handed !== undefined ? { resume: handed } : {}) };
       try {
         const result = await frames.send<BrowserActionResult>(tabId, { ...message, action: withBudget(action, deadline), extraction: continuation }, frameId);
-        if (checkpoint !== undefined && typeof result.startedAt === "number") result.startedAt = Math.min(result.startedAt, startedAt);
+        if (handed !== undefined && typeof result.startedAt === "number") result.startedAt = Math.min(result.startedAt, startedAt);
         return result;
       } catch (error) {
-        stalled = checkpointed ? 0 : stalled + 1;
+        stalled = progressed ? 0 : stalled + 1;
         if (frameId !== TOP_FRAME_ID || stalled > STALLED_DOCUMENTS_ALLOWED || !await tabIsOpen(tabId)) throw error;
         await waitForTabReady(tabId);
         await frames.makeReady(tabId, frameId);
@@ -102,7 +141,7 @@ export async function sendExtractListAcrossDocuments(
   }
 }
 
-/** The action with the time the read has left as its `timeoutMs`, or unchanged when nothing bounds it. */
+/** The action with the time the command has left as its `timeoutMs`, or unchanged when nothing bounds it. */
 function withBudget(action: BrowserActionCommand, deadline: number | undefined): BrowserActionCommand {
   if (deadline === undefined) return action;
   return { ...action, timeoutMs: Math.max(LAST_READ_BUDGET_MS, deadline - Date.now()) };

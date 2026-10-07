@@ -16,9 +16,12 @@
 // **`dedupe` never fails to say something.** A dedupe whose every column is
 // unknown still means "list each once", so it keeps the default key rather than
 // being dropped; only a value that is not a dedupe at all -- a number, an object
-// of foreign keys -- is refused. The default key is the list's link column,
-// because a listing's address is what identifies it, or every column when the
-// list reads no link.
+// of foreign keys -- is refused. The default key is the whole record: every
+// column the read reads. That is Core's default identity for the rows a run
+// collects (a record output's `process` with no `dedupe`), so the page's own
+// dedupe in exploration folds exactly the rows the stored answer will; until
+// read-list S1 it was the list's link column, which folded rows that shared a
+// link and differed in everything else.
 //
 // **A sort key that cannot be read is dropped on its own**, by position, and the
 // keys beside it still sort. Dropping a key widens nothing and narrows nothing:
@@ -45,7 +48,7 @@ export function webAutomationExtractListDedupeValue(value: unknown, fields: Fiel
   const readable = readableKeys(fields);
   if (readable.length === 0) return { refused: false };
   const resolved = unique(written.flatMap((name) => resolvedColumn(name, fields) ?? []));
-  return { dedupe: { by: resolved.length > 0 ? resolved : defaultKey(fields, readable) }, refused: false };
+  return { dedupe: { by: resolved.length > 0 ? resolved : [...readable] }, refused: false };
 }
 
 /** The sort keys a value asks for, and the positions of the keys that could not be read. */
@@ -209,23 +212,6 @@ function resolvedColumn(name: string, fields: Fields): string | undefined {
 function readableKeys(fields: Fields): string[] {
   return Object.keys(fields).filter((key) => isWebAutomationExtractFieldRead(fields[key]));
 }
-
-/**
- * What identifies a row when the author said only "each once": the list's link
- * column -- a `link` field, an `@href` read, or a key that says it is one -- or,
- * with none, every column the request reads, which is the whole record.
- */
-function defaultKey(fields: Fields, readable: readonly string[]): string[] {
-  const link = readable.find((key) => readsLink(fields[key]!)) ?? readable.find((key) => LINK_KEY.test(key));
-  return link === undefined ? [...readable] : [link];
-}
-
-function readsLink(field: WebAutomationExtractField): boolean {
-  if (typeof field === "string") return /@href\s*$/iu.test(field);
-  return field.kind === "link" || (field.kind === "attribute" && field.attribute?.toLowerCase() === "href");
-}
-
-const LINK_KEY = /(?:^|[_-])(?:url|link|href)$|^(?:url|link|href)/iu;
 
 function unique(values: readonly string[]): string[] {
   return [...new Set(values)];

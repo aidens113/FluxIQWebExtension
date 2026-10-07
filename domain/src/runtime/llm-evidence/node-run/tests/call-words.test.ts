@@ -11,7 +11,8 @@ const SCOPE = { projectId: "p1", flowId: "f1" };
 const known: Record<string, WebLlmTargetResolution> = {
   t11: { ok: true, selector: "#q", frameId: undefined, element: { tagName: "input", accessibleName: "Search", inputType: "search" } },
   t20: { ok: true, selector: "#pw", frameId: undefined, element: { tagName: "input", accessibleName: "Password", inputType: "password" } },
-  t30: { ok: true, selector: "#add", frameId: undefined, element: { tagName: "button", visibleText: "Add to cart" } }
+  t30: { ok: true, selector: "#add", frameId: undefined, element: { tagName: "button", visibleText: "Add to cart" } },
+  t50: { ok: true, selector: "#size-12", frameId: undefined, element: { tagName: "div", visibleText: "12 Double Rolls$16.47" }, words: "12 Double Rolls $16.47" }
 };
 const resolve = (_scope: unknown, handle: string): WebLlmTargetResolution => known[handle] ?? { ok: false, code: "unknown" };
 const run = (node: string, parameters: Record<string, unknown>) => webLlmCallWords({ ...SCOPE, toolId: "core.run_node", value: { node, parameters, consequences: [] } as never }, resolve);
@@ -69,4 +70,27 @@ test("a list read names the fields it reads, never the selectors behind them", (
   assert.equal(read({}), undefined);
   assert.equal(read("name"), undefined);
   assert.equal(run("web.output.dom-extract_list", { timeoutMs: 20000 }), undefined);
+});
+
+// S4 of the read-list redesign: a Next page step names the control it moves the
+// list by when the call names the page's own (`control: "tN"`), and otherwise
+// says it is the list's Next page; never the retired word "paginate".
+test("a Next page run names the page's own control, else the list's Next page, and never paginate", () => {
+  const next = (nextPage: unknown) => run("web.output.dom-next_page", { nextPage });
+  known.t40 = { ok: true, selector: "a.next", frameId: undefined, element: { tagName: "a", visibleText: "Next ›" } };
+  assert.deepEqual(next({ list: "extraction.2", control: "t40" }), { target: "Next ›" });
+  assert.deepEqual(next({ list: "extraction.2" }), { target: "Next page" });
+  assert.deepEqual(next({ list: "extraction.2", control: "t99" }), { target: "Next page" });
+  assert.deepEqual(next({ item: "li.result", pagination: { next: "a.next" } }), { target: "Next page" });
+  assert.deepEqual(run("web.output.dom-next_page", { timeoutMs: 30000 }), { target: "Next page" });
+  for (const words of [next({ list: "extraction.2" }), next({ list: "extraction.2", control: "t40" })]) {
+    assert.doesNotMatch(JSON.stringify(words), /paginat/iu);
+  }
+});
+
+// U-B3-3 (`run-mux6pndp-16feb842`): the draft's `does.target` read the size chip's captured text, its lines run together.
+test("a shown control is named by the words the packet printed for it, never by words an identity alone carries", () => {
+  assert.deepEqual(run("web.output.dom-click", { target: { handle: "t50" } }), { target: "12 Double Rolls $16.47" });
+  assert.deepEqual(webLlmCallWords({ ...SCOPE, toolId: "web.describe_element", value: { target: "t50" } }, resolve), { target: "12 Double Rolls $16.47" });
+  assert.deepEqual(run("web.output.dom-click", { element: { tagName: "div", visibleText: "12 Double Rolls$16.47", words: "Injected" } }), { target: "12 Double Rolls$16.47" }, "a step's own identity is named as it is written");
 });

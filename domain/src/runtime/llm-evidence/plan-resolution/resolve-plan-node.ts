@@ -20,7 +20,10 @@
 //   `ambiguous`;
 // - the extraction node's `extractList` naming an `extraction.N` becomes the
 //   `web.dom.extract_list` request the detection tool kept behind it, cut to the
-//   columns and pages the plan asks for (`extraction/slot.ts`);
+//   columns the plan asks for, on the page shown (`extraction/slot.ts`);
+// - the Next page node's `nextPage` naming `{list: "extraction.N", control?: "tN"}`
+//   becomes the `web.dom.next_page` request: the list's item and the way to
+//   its next page the detection found, or the named control (`next-page-slot.ts`);
 // - Core's Run Output node (`builtin.policy.action`) naming a web output is
 //   resolved in its payload exactly as that output's own node is, since the
 //   payload is what the output runs with. One naming a click or a navigation
@@ -89,6 +92,7 @@ import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
 import { webPlanPositionCode } from "./issue-position";
 import { webPlanOwnExtractionList } from "./own-extraction-list";
+import { resolveWebNextPageSlot } from "./next-page-slot";
 import { webPlanStepPermission, type WebPlanStepIssueCode } from "./step-permission";
 import type { WebLlmTargetPackets } from "./target-packets";
 
@@ -101,6 +105,10 @@ export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   "web.handle.malformed",
   "web.handle.misplaced",
   "web.handle.unknown",
+  // A handle shown before a reload (a rerun puts its page back that way) whose
+  // control the reloaded page numbers anew (`./target-packets.ts`,
+  // `renumberedByReload`; run-musq0b1m-0472cfa0 cause 4).
+  "web.handle.renumbered_by_reload",
   "web.handle.stale",
   "web.handle.ambiguous",
   "web.handle.not_unique",
@@ -115,19 +123,21 @@ export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   // choose value 5 in, actual the target is a <button>"). Only a contradiction
   // the registered output itself would refuse is counted.
   "web.handle.wrong_control",
-  // The extraction node's `extractList` as `{ handle, fields?, paginate? }`, as its description spells out.
-  "web.handle.expected.extract_list.handle_fields_paginate",
-  // Beside a page or scroll bound written next to `paginate` on a read that
-  // does not page: the bound goes inside `paginate`, and only a read that pages
-  // has one (`extraction/slot.ts`, `liftedBounds`; `run-mustvzvg-99695308`).
-  "web.handle.expected.extract_list.paginate.maxPages",
-  "web.handle.expected.extract_list.paginate.maxScrolls",
-  // Beside a `paginate` written over a list that was detected with no
-  // pagination: the list cannot page on that handle, and the handle to page
-  // with is one detected on the page the step starts on -- not the last page
-  // of the list, where Next is drawn disabled (`extraction/slot.ts`,
-  // `keptPagination`; `run-muwansvz-a2b4a987`).
-  "web.handle.expected.extract_list.paginate.no_pager_detected.detect_on_step_start_page",
+  // The extraction node's `extractList` as `{ handle, fields? }`, as its
+  // description spells out. Until S4 it was `handle_fields_paginate`, which
+  // named a key the read no longer takes beside the refusal of that key.
+  "web.handle.expected.extract_list.handle_fields",
+  // Beside a `paginate`, `maxPages` or `maxScrolls` on a read: the read
+  // reads the page shown, and every page of a list is a loop -- the read, a
+  // Next page step whose `nextPage` names the same handle as `{list}`, and a
+  // repeat on the read through Next page while it succeeds (`extraction/slot.ts`;
+  // `read-list-collect-design.md` 6.1). Until S4 the read paged by itself, and
+  // a bound in the wrong place or over a list with no pager had hints of its own.
+  "web.handle.expected.extract_list.next_page",
+  // The Next page node's `nextPage` as `{ list, control? }`: the detected
+  // list's handle, and optionally the page's own Next control by its
+  // handle (`next-page-slot.ts`).
+  "web.handle.expected.next_page.list_control",
   // An element node's `selector` as `{ handle, location? }`.
   "web.handle.expected.selector.handle_location",
   // Beside `web.handle.wrong_control`: the node that does act on the control
@@ -235,7 +245,7 @@ const MAX_ISSUE_CODES = 16;
 
 /** Where a handle of each kind is accepted, named for a refusal that is about where or how it was written. */
 const EXPECTED_PLACEMENT = {
-  extraction: "web.handle.expected.extract_list.handle_fields_paginate",
+  extraction: "web.handle.expected.extract_list.handle_fields",
   target: "web.handle.expected.selector.handle_location"
 } as const satisfies Record<WebPlanHandleKind, WebPlanHandleIssueCode>;
 const PLACEMENT_REASONS: ReadonlySet<WebPlanHandleIssueCode> = new Set(["web.handle.malformed", "web.handle.misplaced", "web.handle.unknown_field", "web.handle.extraction_required"]);
@@ -277,6 +287,10 @@ function isTargetSlot(key: string, nodeDefinitionId: string): boolean {
 
 /** The one node an extraction handle may name a request for. */
 const EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
+/** The node that moves a detected list on by one page, naming the list by its extraction handle. */
+const NEXT_PAGE_NODE_ID = webAutomationOutputNodeId("web.dom.next_page");
+/** Where every handle on a Next page node goes, said beside a refusal about where or how one was written there. */
+const NEXT_PAGE_SHAPE: WebPlanHandleIssueCode = "web.handle.expected.next_page.list_control";
 
 /** Choosing an option is `HTMLSelectElement` behaviour, and the output refuses anything else outright. */
 const SELECT_NODE_ID = webAutomationOutputNodeId("web.dom.select");
@@ -429,7 +443,18 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
   const assumed: WebLlmNameAssumptionSaid[] = [];
   const replaced = new Map<string, Resolved>();
   const extractionNode = nodeDefinitionId === EXTRACT_LIST_NODE_ID;
+  const nextPageNode = nodeDefinitionId === NEXT_PAGE_NODE_ID;
   for (const [key, value] of Object.entries(parameters)) {
+    if (nextPageNode && key === "nextPage") {
+      const slot = resolveWebNextPageSlot(value, scope, stores.targets, stores.extractions);
+      if (slot.status === "resolved") replaced.set(key, { value: slot.request, frameId: slot.frameId, frameUrlPath: slot.frameUrlPath, element: undefined });
+      // The short literal runs in whatever frame the node already names.
+      else if (slot.status === "written") replaced.set(key, { value: slot.request, frameId: declaredFrame(parameters.browserFrameId), frameUrlPath: undefined, element: undefined });
+      else if (slot.status === "refused") {
+        refusals.push({ code: slot.issue, kind: undefined, path: [key, ...slot.path], fits: PLACEMENT_REASONS.has(slot.issue) ? NEXT_PAGE_SHAPE : undefined });
+      }
+      continue;
+    }
     if (extractionNode && key === "extractList") {
       const slot = resolveWebExtractionSlot(value, scope, stores.extractions);
       if (slot.status === "resolved") {
@@ -447,8 +472,6 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
         }
       } else if (slot.status === "refused") {
         refusals.push({ code: slot.issue, kind: "extraction", path: [key, ...slot.path], fits: slot.expected });
-        // Two written values that disagree are both named, so the model sees which two.
-        if (slot.also !== undefined) refusals.push({ code: slot.issue, kind: "extraction", path: [key, ...slot.also] });
       }
       else {
         const frameId = declaredFrame(parameters.browserFrameId);
@@ -480,9 +503,11 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
       continue;
     }
     // Outside a handle slot, a recognisable handle is misplaced. On the
-    // extraction node it can only have been meant for the list.
+    // extraction node it can only have been meant for the list, and on the
+    // Next page node for `nextPage`.
     for (const found of webPlanHandlesIn(value)) {
-      refusals.push({ code: "web.handle.misplaced", kind: extractionNode ? "extraction" : found.kind, path: [key, ...found.path] });
+      if (nextPageNode) refusals.push({ code: "web.handle.misplaced", kind: undefined, path: [key, ...found.path], fits: NEXT_PAGE_SHAPE });
+      else refusals.push({ code: "web.handle.misplaced", kind: extractionNode ? "extraction" : found.kind, path: [key, ...found.path] });
     }
   }
   if (refusals.length > 0) return { status: "refused", refusals };
@@ -615,7 +640,7 @@ function resolveTarget(value: Record<string, unknown>, scope: Scope, targets: We
   if (kind !== "target" || typeof value.handle !== "string") return "web.handle.malformed";
   if (value.location !== undefined && (typeof value.location !== "string" || value.location === "")) return "web.handle.malformed";
   const resolution = targets.resolve(scope, canonicalWebLlmTargetHandle(value.handle) ?? value.handle, value.location as string | undefined);
-  if (!resolution.ok) return TARGET_ISSUES[resolution.code];
+  if (!resolution.ok) return resolution.renumberedByReload === true ? "web.handle.renumbered_by_reload" : TARGET_ISSUES[resolution.code];
   return { value: resolution.selector, frameId: resolution.frameId, frameUrlPath: resolution.frameUrlPath, element: resolution.element as unknown as JsonObject };
 }
 

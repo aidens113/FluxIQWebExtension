@@ -153,6 +153,13 @@ export const WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE = ["present", "absent"] a
  *
  * Every bound is held to `WEB_AUTOMATION_EXTRACT_MAX_PAGES`, as the scenario
  * contract holds its own.
+ *
+ * **Retired in a Flow (read-list redesign S4).** A Flow's read reads one page;
+ * a Next page step and a repeat go through the rest. So a Flow dispatch refuses
+ * a `paginate` above one page -- any `maxPages` above 1, or any `scroll` --
+ * with `web.extract_list.paginate_retired`, and drops a one-page one, which
+ * reads the same page (`output-nodes/extract-list/dispatch.ts`). It stays
+ * readable here until the read's own paging is removed (S7).
  */
 export type WebAutomationExtractListPagination =
   | { mode?: "next" | undefined; next: string; maxPages: number }
@@ -165,9 +172,9 @@ export type WebAutomationExtractListPagination =
  *
  * `by` is the field keys whose values together identify a row, always resolved
  * by the reader (`./order-request.ts`): an author who wrote only "list each
- * once" gets the list's link column, or every column when it has none. The
- * first occurrence in page order is kept, across every page and document the
- * read covers, after `where`. Values compare with their layout and case
+ * once" gets every column the read reads -- the whole record, which is Core's
+ * default identity for the rows a run collects. The first occurrence in page
+ * order is kept, across every page and document the read covers, after `where`. Values compare with their layout and case
  * ignored. A row with none of the `by` values is never a duplicate: it cannot
  * be identified, and folding every such row into one would drop rows that
  * differ in everything else.
@@ -303,9 +310,28 @@ export type WebAutomationExtractListRequest = {
    * refused whole, since no page could satisfy it.
    *
    * It counts the records the read **kept**, so a filtered read declares how
-   * many rows the answer must have, not how many the page must render.
+   * many rows the answer must have, not how many the page must render -- except
+   * on a read that says `answer: "kept"`, where it counts the items the page
+   * **shows**, kept or not (see `answer`).
    */
   minItems?: number | undefined;
+  /**
+   * `"kept"`: answer only the rows this read kept, possibly none, and never
+   * the rows it rejected (read-list redesign C5). The domain sends it on every
+   * Flow dispatch and on the build test's replay
+   * (`output-nodes/extract-list/dispatch.ts`), and never on an exploration's
+   * live read, which keeps the page's floor of answering what it rejected when
+   * it kept nothing (`content/extraction/filtered-answer.ts`).
+   *
+   * **Why.** A Flow reads a list one page a pass and its dataset collects the
+   * passes, so a page holding no qualifying item is an ordinary page, not a
+   * failed read: answering its rejected rows would store rows the instruction
+   * excluded, and failing it would stop the loop. So on such a read
+   * `minItems` counts the items **seen** -- the list is there -- rather than
+   * the rows kept, and how many rows the whole collection must hold is the
+   * record output's `process.minRows`. Absent, the read answers as it always has.
+   */
+  answer?: "kept" | undefined;
   /**
    * Which items are records. Every condition must hold, or the item is not
    * read at all: it is absent from the records, from `maxItems`, from the
@@ -322,7 +348,7 @@ export type WebAutomationExtractListRequest = {
    * words they do not want in a column they named is not that.
    */
   where?: WebAutomationExtractItemCondition[] | undefined;
-  /** Keep one row per value of these columns, the first in page order, across every page read, after `where` and before `sort` and `maxItems`. */
+  /** Keep one row per value of these columns, the first in page order, across every page read, after `where` and before `sort` and `maxItems`. A Flow's dispatch sends this, `sort`, `maxItems` and `minItems` to the record output's `process` instead (S4). */
   dedupe?: WebAutomationExtractListDedupe | undefined;
   /**
    * The order the rows are answered in, over every page read, by each key in
@@ -331,6 +357,9 @@ export type WebAutomationExtractListRequest = {
    */
   sort?: WebAutomationExtractListSortKey[] | undefined;
 };
+
+/** The one value `answer` takes. */
+export const WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT = "kept" as const satisfies NonNullable<WebAutomationExtractListRequest["answer"]>;
 
 /** Upper bound on the pages one `web.dom.extract_list` may follow, mirroring the scenario contract's own. */
 export const WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;

@@ -91,6 +91,7 @@ export function runtimeActionLabel(actionType: string): string {
   if (actionType === "web.dom.check") return "Set checked";
   if (actionType === "web.dom.assert") return "Assert";
   if (actionType === "web.dom.extract_list") return "Extract list";
+  if (actionType === "web.dom.next_page") return "Next page";
   if (actionType === "web.dom.upload") return "Upload files";
   if (actionType === "web.dom.dialog") return "Answer dialog";
   if (actionType === "web.browser.tab") return "Browser tab";

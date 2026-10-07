@@ -85,7 +85,7 @@ async function resolve(runtime: WebAutomationLlmEvidenceRuntime, nodeDefinitionI
   return await runtime.resolvePlanNodeParameters({ projectId: scope.projectId ?? "project.one", flowId: scope.flowId ?? "flow.one", nodeDefinitionId, parameters, declaredConsequences: NOTHING_LASTING });
 }
 
-const EXTRACTION_HINT = "web.handle.expected.extract_list.handle_fields_paginate";
+const EXTRACTION_HINT = "web.handle.expected.extract_list.handle_fields";
 const TARGET_HINT = "web.handle.expected.selector.handle_location";
 /** The node that fits a control a refused node could not act on, as a refusal names it. */
 const USE_CLICK = "web.handle.expected.node.web.output.dom-click";
@@ -304,7 +304,8 @@ test("a let-go extraction handle is stale", async () => {
   assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: handles[0]! } }), refusedAt("web.handle.stale", "extractList"));
   const newest = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: handles[16]! } });
   assert.equal(newest.status, "resolved");
-  assert.deepEqual(newest.status === "resolved" && (newest.parameters.extractList as JsonObject).paginate, { mode: "scroll", maxScrolls: 50 });
+  // The read reads one page: the feed's detected scroll stays behind the handle, for Next page (S4).
+  assert.equal(newest.status === "resolved" && "paginate" in (newest.parameters.extractList as JsonObject), false);
 });
 
 test("handles are resolved per page and numbered per Flow: a recapture replaces a page, and no bare handle names two controls", async () => {
@@ -417,6 +418,7 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
     "web.handle.malformed",
     "web.handle.misplaced",
     "web.handle.unknown",
+    "web.handle.renumbered_by_reload",
     "web.handle.stale",
     "web.handle.ambiguous",
     "web.handle.not_unique",
@@ -425,9 +427,8 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
     "web.handle.extraction_required",
     "web.handle.wrong_control",
     EXTRACTION_HINT,
-    "web.handle.expected.extract_list.paginate.maxPages",
-    "web.handle.expected.extract_list.paginate.maxScrolls",
-    "web.handle.expected.extract_list.paginate.no_pager_detected.detect_on_step_start_page",
+    "web.handle.expected.extract_list.next_page",
+    "web.handle.expected.next_page.list_control",
     TARGET_HINT,
     USE_CLICK,
     USE_SELECT

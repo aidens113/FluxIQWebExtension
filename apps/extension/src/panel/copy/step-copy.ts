@@ -52,6 +52,7 @@ const STEPS = {
   "web.dom.wait_for_text": fixed("Waiting for the page", "Page was ready"),
   "web.dom.extract": fixed("Reading data from the page", "Read data from the page"),
   "web.dom.extract_list": fixed("Reading data from the page", "Read data from the page"),
+  "web.dom.next_page": fixed("Going to the next page", "Went to the next page"),
   "web.dom.capture_snapshot": onSite({ present: "Looking over", past: "Looked over" }, { present: "Looking over the whole page", past: "Looked over the whole page" }),
   "web.dom.assert": fixed("Checking the page", "Checked the page"),
   "web.dom.upload": fixed("Attaching files", "Attached files"),

@@ -24,7 +24,6 @@
 // already has. A panel that only narrowed its own copy would leave the values
 // one `getSession` away from being on screen again.
 
-import type { WebAutomationExtractListPagination } from "@fluxiq-web-extension/domain/client";
 import { cancelExtraction, confirmExtraction, readExtractionSession, startExtractionPick } from "./client";
 import { createElement } from "../dom";
 import { createExtractionReadRecovery, type ExtractionRecoveryTicket } from "./read-recovery";
@@ -41,7 +40,6 @@ import {
   renameExtractionField,
   setExtractionFieldHandling,
   setExtractionFieldKind,
-  setExtractionPaginate,
   type ExtractionDraft
 } from "./view-model";
 import "./extraction.css";
@@ -263,7 +261,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
         remove: (key) => { if (editable(key)) edit(removeExtractionField(requireDraft(), key)); }
       })));
       for (const control of els.body.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>("input, select, button")) control.disabled = busy;
-      renderPagination(els, draft);
+      els.pagesNote.textContent = pagesSentence(draft);
       previewShown = renderExtractionPreview(els.previewHead, els.previewBody, extractionPreviewColumns(draft), rows);
     });
     drawRecovery();
@@ -304,10 +302,6 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
 
   els.label.addEventListener("input", () => {
     if (draft && !busy) draft = { ...draft, label: els.label.value };
-  });
-
-  els.paginate.addEventListener("change", () => {
-    if (draft && !busy) edit(setExtractionPaginate(draft, els.paginate.checked));
   });
 
   els.confirmButton.addEventListener("click", () => {
@@ -374,14 +368,6 @@ function shownColumnsKey(draft: ExtractionDraft | undefined): string {
   return draft === undefined ? "" : extractionPreviewColumns(draft).map((field) => field.sourceKey).join(",");
 }
 
-function renderPagination(els: ExtractionPanelElements, draft: ExtractionDraft): void {
-  els.paginateRow.hidden = draft.pagination === undefined;
-  els.pagesNote.textContent = pagesSentence(draft);
-  if (draft.pagination === undefined) return;
-  els.paginate.checked = draft.paginate;
-  els.paginateLabel.textContent = paginationLabel(draft.pagination);
-}
-
 /**
  * The note beside the sample, which says whether the rows under it are current.
  *
@@ -421,23 +407,14 @@ function summaryLabel(draft: ExtractionDraft): string {
   return excluded === 0 ? `${items}, ${columns}.` : `${items}, ${columns}, ${excluded} excluded.`;
 }
 
-/** "Current page" or "All pages", in words (plan 3.7, "Pages"). */
+/**
+ * What the recorded read covers, in words (plan 3.7, "Pages"). It reads the
+ * current page only (S5); a list that goes on is read further by a Next page
+ * step and a repeat, which the sentence says rather than offering a switch.
+ */
 function pagesSentence(draft: ExtractionDraft): string {
   if (draft.pagination === undefined) return "Current page only: FluxIQ found no link to more pages.";
-  return draft.paginate ? "All pages." : "Current page. Tick below to read every page.";
-}
-
-function paginationLabel(pagination: WebAutomationExtractListPagination): string {
-  switch (pagination.mode) {
-    case "loadMore":
-      return `Read every page, pressing the load-more control up to ${pagination.maxPages} times`;
-    case "scroll":
-      return `Read every page, scrolling up to ${pagination.maxScrolls} times`;
-    case "numbered":
-      return `Read every page, following the numbered page links, up to ${pagination.maxPages} pages`;
-    default:
-      return `Read every page, following the next-page link, up to ${pagination.maxPages} pages`;
-  }
+  return "Current page only. The list goes on: a Next page step after this one reads the pages that follow.";
 }
 
 /** The guard survives the typing: a worker from an older build can still send a word this one has never heard of. */

@@ -29,13 +29,20 @@ test("every spelling of a dedupe says which columns identify a row", () => {
   }
 });
 
-test("a dedupe that says only 'each once' keys on the list's link column, or every column when it reads none", () => {
+test("a dedupe that says only 'each once' keys on the whole record: every column the read reads", () => {
+  // Core's default identity at run end is the whole row, so the page's in-read
+  // dedupe agrees with it rather than folding rows that share only a link.
   for (const written of [true, "yes", "unique", {}, [true]]) {
-    assert.deepEqual(webAutomationExtractListDedupeValue(written, FIELDS), { dedupe: { by: ["url"] }, refused: false }, JSON.stringify(written));
+    assert.deepEqual(
+      webAutomationExtractListDedupeValue(written, FIELDS),
+      { dedupe: { by: ["title", "company", "posted", "salary", "url"] }, refused: false },
+      JSON.stringify(written)
+    );
   }
+  // An excluded column is not read, so it is not part of the record.
   assert.deepEqual(
-    webAutomationExtractListDedupeValue(true, { title: ".title", company: ".company" }),
-    { dedupe: { by: ["title", "company"] }, refused: false }
+    webAutomationExtractListDedupeValue(true, { title: ".title", note: { kind: "text" as const, selector: ".note", handling: "exclude" as const }, url: "a@href" }),
+    { dedupe: { by: ["title", "url"] }, refused: false }
   );
 });
 

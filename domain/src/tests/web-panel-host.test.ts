@@ -294,7 +294,9 @@ test("a recorded list extraction proposes extract_list with a recordOutput Core 
   assert.ok(recordOutput, "the candidate proposes a dataset");
   assert.equal(recordOutput.datasetId, "products:4f1c9a");
   assert.equal(recordOutput.writeMode, "append");
-  assert.equal(recordOutput.maxRecords, 200);
+  // `maxItems` bounds the rows a run collects, which the dispatch declares as
+  // the output's `process.limit` (read-list redesign C3); one capture keeps Core's default.
+  assert.equal(recordOutput.maxRecords, 1_000);
   // Core fills the path from the output's own metadata, so the candidate names none.
   assert.equal(recordOutput.recordsPath, "result.extracted", "Core resolved the path from the output definition");
   const fields = recordOutput.schema as { fields: Array<{ id: string; label: string; valueType: string; required?: boolean; handling?: string }> };

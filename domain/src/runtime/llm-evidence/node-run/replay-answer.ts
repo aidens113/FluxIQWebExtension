@@ -10,6 +10,7 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { validateAutomationStudioRecords, type AutomationStudioRecordSchema } from "fluxiq/automation-studio/nodes";
 import { isWebAutomationExtractFieldKey, webAutomationExtractionSummaryValue } from "../../../actions/extraction";
+import { webAutomationNextPageAnswerValue } from "../../../actions/next-page";
 import { webAutomationExtractListDispatch } from "../../../output-nodes";
 import { captureEvidence, toolExecution, withCallStates, type WebLlmEvidenceToolExecution } from "../capture";
 import { webLlmEvidenceKeyIsDenied } from "../denied-keys";
@@ -41,7 +42,14 @@ export const WEB_NODE_REPLAY_RESULT_CODES = {
   failed: "core.replay.failed",
   changed: "core.replay.changed",
   unreproducible: "core.replay.unreproducible",
-  resetFailed: "core.replay.reset_failed"
+  resetFailed: "core.replay.reset_failed",
+  /**
+   * Run again, and it took its `ended` route: a Next page whose list has no
+   * next page. Core's build-test walker (read-list S2, `replay-span.ts`) ends a
+   * do-while span on the last member answering this code; anywhere else Core
+   * reads it as failed.
+   */
+  ended: "core.replay.ended"
 } as const;
 
 /**
@@ -66,8 +74,16 @@ export type WebNodeVerifyFinding = "missing" | "hidden" | "disabled";
  * on `run-murwd8le-79e735a8` that judge was told "the step ran again" of an
  * Add to cart the page answered "You have reached the purchase limit for this
  * item.".
+ *
+ * `route` is the one route a replayed step may choose besides the replay code:
+ * `ended`, said by a Next page whose list has no next page
+ * (`webNodeReplayNextPage`). It sits at the top level of the answer -- the
+ * execution result's `evidence` -- as `route` sits at the top level of the
+ * Flow's dispatch payload (contract C1), and the build test's walker ends a
+ * do-while span on it. It is not a member of the execution result itself,
+ * because Core refuses a result member it has not learned (`unknown_key`).
  */
-type WebNodeReplayAnswer = { ok: boolean; code: string; said: string; reason?: WebLlmToolRejectionReason; found?: WebNodeVerifyFinding; notice?: string[]; changed?: string[]; readRows?: JsonObject };
+type WebNodeReplayAnswer = { ok: boolean; code: string; said: string; reason?: WebLlmToolRejectionReason; found?: WebNodeVerifyFinding; notice?: string[]; changed?: string[]; readRows?: JsonObject; route?: "ended" };
 
 /**
  * What a replay answer says about itself beyond Core's replay code
@@ -102,8 +118,28 @@ export type WebNodeReplayFacts = {
  * page, which is what `effectApplied` tells Core. They differ only for a
  * checked step, which passed and did nothing.
  */
-export function webNodeReplayAnswer(code: string, said: string, ok = false, about?: WebNodeReplayFacts, acted = ok, readRows?: JsonObject, changed?: string[]): WebLlmEvidenceToolExecution {
-  return toolExecution(present<WebNodeReplayAnswer>({ ok, code, said: replaySaid(said, about), reason: about?.resultReason, found: undefined, notice: undefined, changed, readRows }) as unknown as JsonValue, acted, code, undefined, undefined, about);
+export function webNodeReplayAnswer(code: string, said: string, ok = false, about?: WebNodeReplayFacts, acted = ok, readRows?: JsonObject, changed?: string[], route?: "ended"): WebLlmEvidenceToolExecution {
+  return toolExecution(present<WebNodeReplayAnswer>({ ok, code, said: replaySaid(said, about), reason: about?.resultReason, found: undefined, notice: undefined, changed, readRows, route }) as unknown as JsonValue, acted, code, undefined, undefined, about);
+}
+
+/** What a replayed Next page says it did, and the route it chose; see `webNodeReplayNextPage`. */
+export type WebNodeReplayNextPage = { said: string; route?: "ended" | undefined };
+
+/**
+ * What a replayed Next page says, from the page's own answer
+ * (`actions/next-page/answer.ts`), or nothing when the payload carries none.
+ *
+ * A list with no next page is how a loop over its pages ends, never a failure:
+ * the step passes, says the stop word, and chooses `route: "ended"`. A move is
+ * an ordinary success line naming the page the pager marks current, when it
+ * marks one. A move the page could not make arrives as a failed action and
+ * never reaches here. Only closed words and a number: nothing is page text.
+ */
+export function webNodeReplayNextPage(payload: JsonValue | undefined): WebNodeReplayNextPage | undefined {
+  const answer = isJsonRecord(payload) ? webAutomationNextPageAnswerValue(payload.nextPage) : undefined;
+  if (answer === undefined || answer.outcome === "failed") return undefined;
+  if (answer.outcome === "ended") return { said: `the step ran again: the list has no next page (${answer.stop}), so the loop over its pages ends here`, route: "ended" };
+  return { said: answer.page === undefined ? "the step ran again: moved to the next page" : `the step ran again: moved to page ${answer.page}` };
 }
 
 /** Ambiguous matches stay failed and must not be described as an absent control. */
@@ -146,7 +182,7 @@ export function webNodeReplayAnswerOnPage(
   answer: { code: string; said: string; acted: boolean; about?: WebNodeReplayFacts | undefined; found?: WebNodeVerifyFinding | undefined; ok?: boolean; notice?: string[] | undefined }
 ): WebLlmEvidenceToolExecution {
   // An answer on a page did not replay a read, so it names no rows; the page it carries is what changed.
-  const verdict: JsonObject = present<WebNodeReplayAnswer>({ ok: answer.ok ?? false, code: answer.code, said: replaySaid(answer.said, answer.about), reason: answer.about?.resultReason, found: answer.found, notice: answer.notice, changed: undefined, readRows: undefined }) as unknown as JsonObject;
+  const verdict: JsonObject = present<WebNodeReplayAnswer>({ ok: answer.ok ?? false, code: answer.code, said: replaySaid(answer.said, answer.about), reason: answer.about?.resultReason, found: answer.found, notice: answer.notice, changed: undefined, readRows: undefined, route: undefined }) as unknown as JsonObject;
   if (page) {
     // The page, with what the replay made of this step written on the same
     // result: the one shape every other page has (`web-llm-page.v3`), and a

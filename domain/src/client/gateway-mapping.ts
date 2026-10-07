@@ -20,6 +20,7 @@ import { webAutomationExtractionSummaryValue, webAutomationRecordedExtraction, t
 import { webAutomationStructureDetectionValue } from "../extraction";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
+import { webAutomationNextPageAnswerValue } from "../actions/next-page";
 import { adaptedTargetSupersedesRecording, elementFingerprint, webAutomationUnresolvedSecretParameters, webAutomationUploadBindingPath } from "../output-nodes";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../runtime/failure";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
@@ -297,8 +298,16 @@ function elementFingerprintSources(target: JsonObject, parameters: JsonObject): 
  * `checkWait` is copied the same way (`actions/cleared-check-wait.ts`): a whole
  * number of milliseconds within ten minutes, said only when a robot check stood
  * on the landed page and cleared by itself, untouched.
+ *
+ * `nextPage` is copied the same way (`actions/next-page/answer-value.ts`): an
+ * outcome, one closed word, and a page number, nothing else. `route` travels
+ * only as the literal `ended`, and only beside an answer that ended (contract
+ * C1): it is what Core routes the node's `ended` output by, so a stray word, or
+ * an `ended` beside a list that moved, would send a loop out of a list that
+ * still has pages.
  */
 export function webAutomationActionResultPayload(result: WebAutomationActionResult): JsonObject {
+  const nextPage = webAutomationNextPageAnswerValue(result.nextPage);
   return compactJsonObject({
     commandId: result.commandId,
     actionType: result.actionType,
@@ -316,6 +325,8 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     structure: webAutomationStructureDetectionValue(result.structure),
     resolution: result.resolution,
     checkWait: webAutomationClearedCheckWaitValue(result.checkWait),
+    nextPage,
+    route: result.route === "ended" && nextPage?.outcome === "ended" ? "ended" : undefined,
     startedAt: result.startedAt,
     finishedAt: result.finishedAt
   });

@@ -253,3 +253,18 @@ test("Firefox document recreation resumes background pick without prepare/start/
     assert.equal(world.sent.filter((message) => message.type === M.start || message.type === M.cancel).length, 0);
   });
 });
+
+test("the picker offers no 'Read every page' checkbox: a recorded read reads one page, and a list that goes on says how to read the rest", async () => withDialogDom(async (world) => {
+  // `picked` carries a detected next-page control (`proposal-fixture.ts`).
+  world.reply = (message) => ({ ok: true, ...(message.type === M.getSession ? { session: picked } : {}) });
+  mountExtractionPanel(world.native(world.host));
+  await world.flush();
+  assert.throws(() => world.get("extractionPaginate"), /missing extractionPaginate/u);
+  assert.throws(() => world.get("extractionPaginateRow"), /missing extractionPaginateRow/u);
+  assert.doesNotMatch(world.get("extractionPanel").textContent, /Read every page/u);
+  assert.match(world.get("extractionPagesNote").textContent, /Next page step/u);
+  world.get("extractionConfirmButton").dispatch("click"); await world.flush();
+  const request = world.sent.find((message) => message.type === M.confirm)?.request as Record<string, unknown> | undefined;
+  assert.ok(request, "the confirm was sent");
+  assert.equal("paginate" in request, false);
+}));

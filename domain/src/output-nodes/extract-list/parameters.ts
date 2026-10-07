@@ -6,10 +6,10 @@ import { WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, WEB_AUTOMATION_EXTRACT_LIST_GRAMMA
  * The list extraction node's own parameters, before `expectedState`.
  *
  * `extractList` is the request, shaped as `actions/extraction/schema.ts`
- * declares it. `timeoutMs` bounds the whole read (D14): the request carries no
- * timeout of its own, and a paginated read outlasts Core's 5,000 ms default, so
- * the node states one, which the dispatch scales by the pages the request may
- * read when the author left it (`./dispatch.ts`).
+ * declares it. `timeoutMs` bounds the read (D14): the request carries no
+ * timeout of its own, and the node states the page's wait rather than Core's
+ * 5,000 ms default. A read reads one page (read-list redesign S4), so the wait
+ * is no longer scaled by pages (`./dispatch.ts`).
  *
  * `recordOutput` is declared as Core's `builtin.policy.action` declares it,
  * and is the one web parameter a state binding may not fill: a binding could
@@ -30,7 +30,7 @@ export function webAutomationExtractListParameters(): AutomationNodeParameter[] 
     {
       id: "timeoutMs",
       label: "Timeout",
-      description: "Milliseconds for the whole read. Left at the default, it grows with the pages the list may read.",
+      description: "Milliseconds for the read of the page.",
       valueType: "number",
       defaultValue: WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS
     },

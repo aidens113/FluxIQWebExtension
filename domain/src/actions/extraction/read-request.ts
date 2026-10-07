@@ -30,7 +30,7 @@
 //
 // So the parts a read can do without are **dropped and named** instead:
 // `itemElement`, `paginate`, `minItems`, one condition of `where`, `dedupe`,
-// and one key of `sort`. Each
+// one key of `sort`, and `answer`. Each
 // drop can only widen the answer -- a read of the page shown, a default
 // minimum, an unnarrowed row set -- and widening is visible to the loop's own
 // judgement while emptiness is not (`content/extraction/filtered-answer.ts`
@@ -70,6 +70,7 @@ import { webAutomationExtractListDedupeValue, webAutomationExtractListSortValue 
 import {
   WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS,
   WEB_AUTOMATION_EXTRACT_FIELD_KINDS,
+  WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT,
   WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
   WEB_AUTOMATION_EXTRACT_PAGINATION_MODES,
@@ -115,7 +116,7 @@ export function webAutomationExtractListRequestWhole(value: unknown): WebAutomat
  * was written under. A condition carries its index in the `where` the author
  * wrote, so a caller can name the clause rather than the clause count.
  */
-export type WebAutomationExtractListDroppedPart = "itemElement" | "paginate" | "minItems" | `where.${number}` | "dedupe" | `sort.${number}`;
+export type WebAutomationExtractListDroppedPart = "itemElement" | "paginate" | "minItems" | `where.${number}` | "dedupe" | `sort.${number}` | "answer";
 
 /**
  * A condition whose column was resolved rather than named: what was written,
@@ -143,8 +144,8 @@ export type WebAutomationExtractListRequestRead = {
 
 /**
  * A list extraction needs both the item selector and the field map, and nothing
- * else: `itemElement`, `paginate`, `minItems` and any one condition of `where`
- * are dropped when they cannot be read, and named in `dropped`.
+ * else: `itemElement`, `paginate`, `minItems`, any one condition of `where`
+ * and `answer` are dropped when they cannot be read, and named in `dropped`.
  *
  * `maxItems` is held to the domain's record bound, as `maxPages` is to its page
  * bound; one that is not a positive integer has always been dropped rather than
@@ -192,6 +193,11 @@ export function webAutomationExtractListRequestRead(value: unknown): WebAutomati
   if (dedupe?.refused) dropped.push("dedupe");
   const sort = request.sort === undefined ? undefined : webAutomationExtractListSortValue(request.sort, fields);
   for (const index of sort?.refused ?? []) dropped.push(`sort.${index}`);
+  // Which rows the page answers (`./request.ts`). `kept` is the only value; any
+  // other is dropped and named, and the read then answers as it always has,
+  // which can only add the rows it rejected -- wider, never narrower.
+  const answer = request.answer === WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT ? WEB_AUTOMATION_EXTRACT_LIST_ANSWER_KEPT : undefined;
+  if (request.answer !== undefined && answer === undefined) dropped.push("answer");
   return {
     request: {
       item,
@@ -202,7 +208,8 @@ export function webAutomationExtractListRequestRead(value: unknown): WebAutomati
       ...(minItems !== undefined ? { minItems } : {}),
       ...(conditions.length > 0 ? { where: conditions } : {}),
       ...(dedupe?.dedupe !== undefined ? { dedupe: dedupe.dedupe } : {}),
-      ...(sort !== undefined && sort.sort.length > 0 ? { sort: sort.sort } : {})
+      ...(sort !== undefined && sort.sort.length > 0 ? { sort: sort.sort } : {}),
+      ...(answer !== undefined ? { answer } : {})
     },
     dropped,
     assumed

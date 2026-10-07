@@ -20,7 +20,8 @@ const good = {
     sku: { kind: "attribute", selector: ".sku", attribute: "data-sku", required: false },
     email: { kind: "text", selector: ".email", handling: "exclude" }
   },
-  paginate: { mode: "next", next: "a.next", maxPages: 3 },
+  // One page, which is what the picker records and all a read now reads.
+  paginate: { mode: "next", next: "a.next", maxPages: 1 },
   minItems: 0,
   maxItems: 500
 };
@@ -37,11 +38,26 @@ test("a well-formed request has no issues", () => {
   assert.deepEqual(issuesFor(good), []);
   assert.deepEqual(issuesFor({ item: "tr", fields: { name: "td" } }), []);
   for (const paginate of [
+    { next: "a.next", maxPages: 1 },
+    { mode: "loadMore", control: "button.more", maxPages: 1 },
+    { mode: "numbered", pages: "nav a", maxPages: 1 }
+  ]) assert.deepEqual(issuesFor({ ...good, paginate }), [], JSON.stringify(paginate));
+});
+
+// Read-list redesign S4: a read reads one page, and the Flow goes through pages
+// with a Next page step and a repeat. A read that pages by itself is refused by
+// name before the Flow runs, as the dispatch refuses it when it runs, whether or
+// not the rest of its paging is well formed.
+test("a read that goes through more than one page by itself is refused as retired", () => {
+  for (const paginate of [
     { next: "a.next", maxPages: 2 },
     { mode: "loadMore", control: "button.more", maxPages: 5 },
     { mode: "scroll", maxScrolls: 20 },
-    { mode: "numbered", pages: "nav a", maxPages: 3 }
-  ]) assert.deepEqual(issuesFor({ ...good, paginate }), [], JSON.stringify(paginate));
+    { mode: "scroll", maxScrolls: 1 },
+    { mode: "numbered", pages: "nav a", maxPages: 3 },
+    { next: null, maxPages: 5 },
+    { mode: "scroll", maxScrolls: 5, limit: 5 }
+  ]) assert.deepEqual(issuesFor({ ...good, paginate }), ["web.extract_list.paginate_retired"], JSON.stringify(paginate));
 });
 
 test("the gap report's malformed value is refused for its missing parts", () => {
@@ -70,11 +86,11 @@ test("each malformed shape is refused with the code for its part", () => {
     [{ ...good, fields: { email: { kind: "text", handling: "exclude" } } }, ["web.extract_list.all_fields_excluded"]],
     [{ ...good, itemElement: "li" }, ["web.extract_list.invalid_item_element"]],
     [{ ...good, paginate: "next" }, ["web.extract_list.invalid_paginate"]],
-    [{ ...good, paginate: { mode: "infinite", maxPages: 3 } }, ["web.extract_list.invalid_paginate"]],
-    [{ ...good, paginate: { mode: "next", maxPages: 3 } }, ["web.extract_list.invalid_paginate"]],
+    [{ ...good, paginate: { mode: "infinite", maxPages: 1 } }, ["web.extract_list.invalid_paginate"]],
+    [{ ...good, paginate: { mode: "next", maxPages: 1 } }, ["web.extract_list.invalid_paginate"]],
     [{ ...good, paginate: { mode: "next", next: "a", maxPages: 0 } }, ["web.extract_list.invalid_paginate"]],
-    [{ ...good, paginate: { mode: "scroll", maxScrolls: 5, maxPages: 5 } }, ["web.extract_list.invalid_paginate"]],
-    [{ ...good, paginate: { mode: "scroll", maxScrolls: 5, limit: 5 } }, ["web.extract_list.unknown_paginate_key"]],
+    [{ ...good, paginate: { mode: "next", next: "a", maxPages: 1, control: "b" } }, ["web.extract_list.invalid_paginate"]],
+    [{ ...good, paginate: { mode: "next", next: "a", maxPages: 1, limit: 5 } }, ["web.extract_list.unknown_paginate_key"]],
     [{ ...good, minItems: -1 }, ["web.extract_list.invalid_min_items"]],
     [{ ...good, minItems: "1" }, ["web.extract_list.invalid_min_items"]],
     [{ ...good, minItems: 600 }, ["web.extract_list.min_items_exceed_max"]],

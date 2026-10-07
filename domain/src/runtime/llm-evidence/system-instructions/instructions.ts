@@ -19,6 +19,12 @@
 // listing excluded, so the build accepted a request the Flow had to leave
 // alone; repetitive work is now a loop over the rows a listing kept, one act on
 // one kept row or the act written without doing it, and changing values bound.
+// web-5 (read-list redesign S4, `docs/working/first-class-data-extraction-plan/
+// reports/read-list-collect-design.md` 4.2(g)): a read reads one page and no
+// longer goes through pages by itself, so the Lists line adds that every page
+// is a loop the Flow states -- the read, Next page on the same list, and a
+// repeat on the read through Next page while it succeeds -- after the rule for
+// acting on rows, which stays.
 // The page-view terms are the
 // ones the renderer prints (`../page-view/header.ts`, `line/render.ts`,
 // `structure-markers.ts`, `element/kind.ts`, `element/state-tokens.ts`);
@@ -28,11 +34,11 @@
 // file imports nothing from Core. Change `version` whenever `text` changes, so a
 // run bundle says which instructions its model read.
 //
-// The text is 2,633 characters (`text.length`); its test holds it to 2,800,
-// well inside Core's own 4,000-character bound.
+// The text is 2,849 characters (`text.length`); its test holds it to 3,000
+// (2,800 until web-5), well inside Core's own 4,000-character bound.
 
 export const WEB_LLM_SYSTEM_INSTRUCTIONS: { readonly version: string; readonly text: string } = Object.freeze({
-  version: "web-4",
+  version: "web-5",
   text: [
     "You operate a real website in the person's own browser, through the FluxIQ extension, on their behalf, to build a Flow that does their instruction on that site.",
     "",
@@ -44,7 +50,7 @@ export const WEB_LLM_SYSTEM_INSTRUCTIONS: { readonly version: string; readonly t
     "",
     "Choices. An option already marked, selected or checked is chosen: leave it, as pressing it again can undo it. After a press, read what it changed and any message it shows.",
     "",
-    "Lists. Repetitive work is a loop: list the items with a where that keeps only the ones to act on, act once on one item it kept, or write the act (write true) without doing it, then state repeat; never act on every item. A value that changes between runs or rows is bound ({\"$input\": name} or {\"$row\": field}), never typed in.",
+    "Lists. Repetitive work is a loop: list the items with a where that keeps only the ones to act on, act once on one item it kept, or write the act (write true) without doing it, then state repeat; never act on every item. A value that changes between runs or rows is bound ({\"$input\": name} or {\"$row\": field}), never typed in. Every page of a list is a loop: read the list, then Next page on the same list, then amend_draft repeat on the read through Next page while it succeeds (most N for 'the first N pages'); the Flow keeps each row once.",
     "",
     "Limits. Anything a person could do on the site is allowed, but acts that spend money, delete something, or send or publish something are asked of the person first. Never type a password or other secret. Never solve a robot check (CAPTCHA); say that one blocks you.",
     "",

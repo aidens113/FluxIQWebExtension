@@ -30,7 +30,11 @@
 //            exactly as the Flow's For Each scopes it
 //            (`output-nodes/targets/row-scope.ts`, t252); a list read answers
 //            the rows it returned on `outputs.records`, which is what the test
-//            loops over.
+//            loops over. A list read asks the page for the rows it kept
+//            alone (`answer: "kept"`), as the Flow's dispatch does; a Next
+//            page sends the request the Flow keeps, and a list with no next
+//            page passes with `route: "ended"` at the answer's top level, which
+//            ends the test's loop over the pages (`./replay-answer.ts`).
 //
 //   verify -- check a step whose effect lasts, and run nothing that acts: a
 //            dry run never repeats a lasting effect (`./verify.ts`).
@@ -83,6 +87,7 @@ import {
   webNodeReplayAnswerOnPage as answerOnPage,
   webNodeReplayAnswerWithPage as answerWithPage,
   webNodeReplayFlowRows as flowRows,
+  webNodeReplayNextPage as nextPageSaid,
   webNodeReplayPage as replayPage,
   webNodeReplayPermissionReason as permissionReason,
   webNodeReplayReadRows as readRows,
@@ -98,6 +103,9 @@ export const WEB_LLM_REPLAY_KEY = "replay";
 
 /** The one verb whose replay asks for the rows its conditions removed by themselves. */
 const EXTRACT_LIST_ACTION = "web.dom.extract_list";
+
+/** The verb that moves a list to its next page, whose end is a route rather than a failure. */
+const NEXT_PAGE_ACTION = "web.dom.next_page";
 
 /** The command a reset dispatches: the same move the Flow's own navigate makes. */
 const RESET_ACTION = "web.browser.navigate";
@@ -385,7 +393,10 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // from a list read's own account, and otherwise the longest list
   // (`webNodeProduced`). What counts as a change is `readChange`.
   const payload = result.payload as JsonValue | undefined;
-  const changed = readChange(recordedProduced(value.produced), webNodeProduced(payload));
+  // A Next page reads nothing, so nothing it answers is a read that changed:
+  // it says where the list went, or that the list ended (`./replay-answer.ts`).
+  const moved = node.actionType === NEXT_PAGE_ACTION ? nextPageSaid(payload) : undefined;
+  const changed = moved === undefined ? readChange(recordedProduced(value.produced), webNodeProduced(payload)) : undefined;
   if (changed !== undefined) {
     return await answerWithPage(run, REPLAY_RESULT_CODES.changed, changed, true, { resultReason: undefined, nodeId: node.definitionId, assumed });
   }
@@ -400,10 +411,10 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // from the `where` the page ran (t195-w34, run `run-murwcaj0-40e56557` R6).
   const where = isJsonRecord(parameters.extractList) ? parameters.extractList.where : undefined;
   const ranWhere = isJsonRecord(resolvedParameters.extractList) ? resolvedParameters.extractList.where : undefined;
-  const said = readSaid(payload, where) ?? "the step ran again";
+  const said = moved?.said ?? readSaid(payload, where) ?? "the step ran again";
   // What it changed on the page it stayed on, as an exploration press says it (`./press-effect/page-changes.ts`).
   const after = before === undefined ? undefined : await replayPage(run, false);
-  const replayed = answer(REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed }, true, readRows(payload, where, ranWhere), webNodePageChanges(node, before, after));
+  const replayed = answer(moved?.route === "ended" ? REPLAY_RESULT_CODES.ended : REPLAY_RESULT_CODES.replayed, said, true, { resultReason: undefined, nodeId: undefined, assumed }, true, readRows(payload, where, ranWhere), webNodePageChanges(node, before, after), moved?.route);
   // A list read's rows, as the Flow's own read saves them, for the test to loop over (D6).
   return withNodeOutputs(replayed, node.actionType === EXTRACT_LIST_ACTION ? flowRows(resolvedParameters, payload) : undefined);
 }

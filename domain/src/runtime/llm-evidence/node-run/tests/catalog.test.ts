@@ -92,6 +92,50 @@ test("a name written wrong runs the real command and appends the step under the 
   assert.equal(webRunnableNode(ranWith.node)?.definitionId, NAVIGATE);
 });
 
+// S4 of the read-list redesign (contract C1): Next page is a node of this
+// domain's library like any other, so the build can run it while exploring and
+// the build's test can run it again; nothing here lists it by hand.
+const NEXT_PAGE = "web.output.dom-next_page";
+
+test("Next page is runnable: its own command, a step that changes the page, and one the Flow keeps", () => {
+  const node = webRunnableNode(NEXT_PAGE);
+  assert.equal(node?.definitionId, NEXT_PAGE);
+  assert.equal(node?.actionType, "web.dom.next_page");
+  assert.equal(node?.effect, "mutate");
+  assert.equal(node?.proposes, true);
+  assert.equal(webRunnableNodeIds().includes(NEXT_PAGE), true);
+  // The kebab-case spelling a model writes for the underscored id.
+  assert.equal(webRunnableNode("web.output.dom-next-page")?.definitionId, NEXT_PAGE);
+  // And the bound runtime offers it, so Core's run_node can name it.
+  const runtime = createWebAutomationLlmEvidenceRuntime(blankTab().gateway);
+  assert.equal(runtime.runsNodes?.runnable?.includes(NEXT_PAGE), true);
+});
+
+test("Next page's catalog text holds Core's bounds: 240 for the description, 80 for its first sentence, 700 for a parameter", () => {
+  const definition = webRunnableNode(NEXT_PAGE)!.definition;
+  const description = definition.description ?? "";
+  assert.equal(description.length > 0 && description.length <= 240, true, `${description.length} characters`);
+  const firstSentence = description.split(/(?<=\.)\s/u)[0] ?? "";
+  assert.equal(firstSentence.length > 0 && firstSentence.length <= 80, true, firstSentence);
+  for (const parameter of definition.parameters) {
+    assert.equal((parameter.description ?? "").length <= 700, true, `${parameter.id}: ${(parameter.description ?? "").length} characters`);
+  }
+  // One step moves one page: nothing it teaches is a page budget.
+  assert.doesNotMatch(`${description} ${definition.parameters.map((parameter) => parameter.description ?? "").join(" ")}`, /maxPages: \d|maxScrolls/u);
+});
+
+test("an exploration run of Next page dispatches its request as the Flow's node will", async () => {
+  const stubbed = blankTab();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, value: { node: NAVIGATE, parameters: { url: START }, consequences: [] } });
+  const nextPage = { item: "li.result", pagination: { next: "a.next" } };
+  const moved = await runtime.executeTool({ ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, value: { node: NEXT_PAGE, parameters: { nextPage }, consequences: [] } });
+  assert.equal(moved.resultCode, "web.action.succeeded");
+  const sent = stubbed.commands.find((command) => command.actionType === "web.dom.next_page");
+  assert.deepEqual(sent?.parameters.nextPage, nextPage);
+  assert.equal(moved.draft?.actionId, NEXT_PAGE);
+});
+
 /** The blank tab and the one site it can reach (`./start-location.test.ts`). */
 function blankTab() {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];

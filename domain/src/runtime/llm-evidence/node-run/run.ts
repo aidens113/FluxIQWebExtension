@@ -300,7 +300,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     }
     // No page, no control to have observed: the move that goes to the start
     // location acts on the browser rather than on anything in front of it.
-    const control = current ? webObservedControl(current.evidence, firstHandle(written), ran) : { name: undefined, kind: "step" };
+    // The words the packet store keeps for the handle, for a control the look before acting does not describe (`./observed-control.ts`).
+    const control = current ? webObservedControl(current.evidence, firstHandle(written), ran, shownWords(run, written)) : { name: undefined, kind: "step" };
     // A node that acts must say what acting would lastingly do, `[]` included.
     // Saying nothing is not the same as saying it causes nothing: a step that
     // declared nothing would be waved past the gate every time the Flow ran,
@@ -654,6 +655,18 @@ function handleRefusal(parameters: JsonObject, issueCodes: readonly string[]) {
 }
 
 /** The first target handle a call's parameters name, wherever it wrote it. */
+/**
+ * The words the packet store keeps beside the identity of the control
+ * `written`'s handle names, resolved bare as the call's words are
+ * (`../tools.ts`, `describeCall`); nothing for a call that names no handle.
+ */
+function shownWords(run: WebNodeRun, written: JsonObject): string | undefined {
+  const handle = firstHandle(written);
+  if (handle === undefined) return undefined;
+  const resolution = run.stores.targets.resolve({ projectId: run.request.projectId, flowId: run.request.flowId }, handle, undefined);
+  return resolution.ok ? resolution.words : undefined;
+}
+
 function firstHandle(value: JsonValue | undefined, depth = 0): string | undefined {
   if (depth > 6 || value === undefined || value === null) return undefined;
   if (typeof value === "string") return canonicalWebLlmTargetHandle(value);

@@ -28,6 +28,7 @@ import type {
   WaitConditionRequest
 } from "../action-runtime";
 import type { ListExtractionOptions, ListExtractionOutcome } from "../extraction";
+import type { PageMove } from "../extraction/page-advance";
 import type { SnapshotCaptureOptions } from "../../shared/snapshot-capture-options";
 import type {
   BrowserActionCommand,
@@ -79,6 +80,12 @@ export type ContentActionDependencies = {
   detectStructure(request: WebAutomationStructureDetectionRequest, timeoutMs?: number): Promise<WebAutomationStructureDetection>;
   /** Reads a repeating structure into records, following pagination, within the command's `timeoutMs` when it names one. */
   extractList(request: WebAutomationExtractListRequest, options?: ListExtractionOptions): Promise<ListExtractionOutcome>;
+  /**
+   * Moves a list to its next page, or says it has none (`web.dom.next_page`),
+   * within the command's `timeoutMs`. In a document a press loaded, it answers
+   * for that press instead, pressing nothing (`extraction/page-advance/`).
+   */
+  nextPage: PageMove;
   /** Puts files into a file input through a `DataTransfer`. */
   setInputFiles(element: Element, files: readonly WebAutomationUploadFile[]): FileInputOutcome;
   /** Arms the answer to the next native dialog, and reports the one that was handled. */
