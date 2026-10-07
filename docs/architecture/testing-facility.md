@@ -2450,6 +2450,24 @@ matches the source, or that has no stamp, as `environment.stale`; see
 complete extension artifact, attaches its metadata, closes Chromium, deletes
 the temporary profile, and verifies deletion.
 
+The Lab scenario runner additionally verifies **running** build identity after
+loading the fixture and before chat, build, recording or action dispatch.
+`run-scenario/browser-session/build-identity/` compares `build-info.json` with
+immutable identities embedded into the running background and active top-frame
+content bundles. Missing/legacy or mismatched target, version, protocol or input
+digests fail as `extension.worker`; `snapshots/running-build-identity.json` records
+only screened identifiers, including a failed comparison before refusal. Cached
+service-worker deletion remains scoped to the run-owned profile and is not proof
+of the identity on its own.
+
+`coreInputsDigest` and `domainInputsDigest` name only source/contracts reached
+by the browser bundles; the run manifest records the intended repository pair
+separately. This does not certify a running Core server's build. The explicit
+provider-free production-browser probe is enabled with
+`FLUXIQ_IDENTITY_BROWSER_PROBE=1` and requires a current E2E extension build; it
+uses an owned persistent profile and checks matching, background mismatch,
+content mismatch and disk mismatch before any simulated dispatch.
+
 The implemented specs verify:
 
 - manifest/service-worker startup, artifact hash, version/name agreement, and

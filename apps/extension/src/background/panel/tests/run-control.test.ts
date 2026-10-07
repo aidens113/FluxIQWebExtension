@@ -23,6 +23,14 @@ function context(answer: (endpoint: string, payload: Record<string, unknown>) =>
 
 const reason = "Stopped from the browser extension.";
 
+test("a build is cancelled by Flow without scanning or stopping runs", async () => {
+  const c = context(() => ({ ok: true, payload: { cancellationRequested: true } }));
+  await stopRun({ projectId: "p", flowId: "f" }, c.value);
+  assert.deepEqual(c.calls, [{ endpoint: "cancel-flow-bootstrap", payload: { projectId: "p", flowId: "f" } }]);
+  const reply = await stopRun({ flowId: "f", runId: "r" }, c.value);
+  assert.equal(reply.ok, false); assert.equal(c.calls.length, 1);
+});
+
 test("a named run is stopped directly, and Core's answer comes back unchanged", async () => {
   const c = context(() => ({ ok: true, payload: { runtimeSession: { runId: "run-1", status: "cancelled" } } }));
   const reply = await stopRun({ runId: "run-1" }, c.value);

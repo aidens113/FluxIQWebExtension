@@ -67,7 +67,7 @@ import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioS
 import { cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
-import { createdFlowChatEntry, ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, keepsRunState, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter } from "./run-scenario/index.js";
+import { createdFlowChatEntry, verifyRunningBuildIdentity, ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, keepsRunState, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter } from "./run-scenario/index.js";
 import { prepareIndependentCreationProject, writeCreationContext, type CreationContext } from "./run-scenario/chat-build/index.js";
 
 /**
@@ -290,6 +290,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     if (workflow.variant && !flowLane) await armScenarioVariant(topology.scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
     const page = scenarioPage = await context.newPage();
     await openScenarioStart(page, topology.scenarioOrigin, scenario);
+    await verifyRunningBuildIdentity(extensionControl, extensionPath, page.url(), identity => bundle.writeStructured("snapshots/running-build-identity.json", identity));
     await page.bringToFront(); uiReview.attach({ context, scenarioPage: page, controlPage: extensionControl });
     // The extension panel beside the fixture, for whoever watches a headed run. It never fails the run; the mode that ran is kept in the bundle.
     const livePanel = await openLivePanel(extensionControl, { enabled: options.livePanel !== false, headless: launched.headless, scenarioOrigin: topology.scenarioOrigin, log: line => process.stderr.write(`${line}\n`) });

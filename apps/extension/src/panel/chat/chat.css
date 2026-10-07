@@ -357,3 +357,10 @@
 @keyframes chat-breathe { 0%, 100% { opacity: .45; transform: scale(.72); } 50% { opacity: 1; transform: scale(1); } }
 @keyframes chat-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
 @keyframes chat-spin { to { transform: rotate(360deg); } }
+
+.chat-stop-control { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+.chat-stop-control[hidden] { display: none; }
+.chat-stop { border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; background: var(--surface); color: var(--text); cursor: pointer; }
+.chat-stop:disabled { opacity: .6; cursor: default; }
+.chat-stop:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.chat-stop-status { color: var(--muted); font-size: 12px; }
