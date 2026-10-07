@@ -115,3 +115,12 @@ node --test .test-build-scratch/t324-own/requests/policy/tests/validation.test.m
 ## Limits and remaining gates
 
 Root independent source review/merged-dev checks and shared working README regeneration remain. No P4 executable request, authenticated site session, redirect, network capture, arbitrary script, grant UI or production durable command join is implemented. Policy controls are not a security sandbox or execution grant. Canonical HTTPS origins validate configuration spelling; this unit performs no DNS/IP confinement proof. Actual browser result covers bundled Chromium only, not installed Chrome/Edge or Firefox parity. Host registration tests use a framework collaborator fixture, not a running Core/Next instance. Reloaded validation-module ownership and release qualification are not claimed. No commits/pushes/shared docs/Core source changes by this worker.
+
+
+## Supervisor independent verification and integration
+
+Root reviewed strict policy clone/freeze, exact HTTPS origins, closed field descriptors, instance rebind ordering, saved-state/write/draft clamps and unavailable UI. Worker source committed5743a250; merged current downstream devc00a4f3d without source conflicts. Private readonly Core buddy advanced fromad232818 to actual69d0b3fb; owning Core rebuild exit0 (49.542s,6078 outputs) before final pair checks. No Core source edits in this task.
+
+Root independently freshly bundled owning Settings files:22/22 zero skips0.304s; policy/registration plus actual adapter/host-runtime owners:45/45 zero skips2.943s. Direct nonincremental extension source/test and domain source/test types exit0. Final integrated owning extension build exit0 (24.474s), all three targets22verified files. Root actual isolated Chromium134 Settings proof1/1 zero skips2.309s fixture/3.874s total; current expected background/content digestfe2208c16acc700b6220d604d43f6efbe4ed5e9fa0368944645d427fff2db334 matched; unavailable false/persistedEnabled false, normal Save and owned MV3 worker restart repair exercised. An earlier root same-source proof1/1 also passed; JSON reader initially misread PowerShell's UTF16 output, corrected reader without repeating that run. Final pair repeat justified by newer Core buddy/build.
+
+Screened JSON proof retained only in ignored run-local cache; no raw storage/profile/page captures committed. No actual Next/provider/request/script execution, user panel, Firefox/Edge Settings behavior or semantic task qualification proved. Final task structure gate follows.
