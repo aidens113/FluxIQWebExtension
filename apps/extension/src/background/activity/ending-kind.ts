@@ -16,6 +16,14 @@
 // finished" end a build (`build.ts`'s titles); "Run failed", "Run cancelled"
 // and "Run finished" end a run (`run.ts`). So a settling row's own title picks
 // the headline's kind, and the subject only when the title names neither.
+//
+// The words count wherever the settling row carries them: its row's title, of
+// any kind, or its label when it has no row (lane A round 4,
+// `run-muxkzdjw-31a13429`, moments 15-16: a creation build that stopped on its
+// call allowance still ended "Couldn't fix your Flow · Build stopped: a budget
+// ran out"; with no record of the events received, a row of another kind
+// carrying the build's words is one of the two ways left to that headline, the
+// other a later row reopening the settled unit, `pacer.ts`).
 
 import type { ActivityDisplay, ClientGatewayActivity } from "../../shared/activity/index";
 
@@ -24,9 +32,11 @@ const RUN_ENDING = /^Run (?:failed|cancelled|finished)\b/u;
 
 /** The kind of work `event`'s settling row says it ends; undefined for any other row. */
 export function endingKindOf(event: ClientGatewayActivity): ActivityDisplay["subjectKind"] | undefined {
-  const detail = event.detail;
-  if (detail?.kind !== "step" || (event.final !== true && event.phase !== "failed" && event.phase !== "done")) return undefined;
-  if (BUILD_ENDING.test(detail.title)) return "build";
-  if (RUN_ENDING.test(detail.title)) return "run";
+  if (event.final !== true && event.phase !== "failed" && event.phase !== "done") return undefined;
+  for (const words of [event.detail?.title, event.label]) {
+    if (typeof words !== "string") continue;
+    if (BUILD_ENDING.test(words)) return "build";
+    if (RUN_ENDING.test(words)) return "run";
+  }
   return undefined;
 }
