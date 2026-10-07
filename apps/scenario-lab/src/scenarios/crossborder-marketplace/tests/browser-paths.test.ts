@@ -1,3 +1,4 @@
+import { couponOnlyWorkflow } from "../qualification/index.js";
 import assert from "node:assert/strict";
 import { after, describe, test } from "node:test";
 import type { ScenarioStep } from "@fluxiq-web-extension/test-contracts";
@@ -267,4 +268,57 @@ describe("crossborder-marketplace in a browser", { concurrency: true }, () => {
     assert.deepEqual(rows["list-read"], spainHubRecords());
     assert.deepEqual(unexpectedErrors(session), []);
   }));
+});
+
+
+test("qualification readiness: collect only the official coupon and report account wording", () => withSession(async (session) => {
+  const extracted = await session.run(couponOnlyWorkflow.recordingScript);
+  assert.deepEqual(extracted["extract-official-coupon-only"], couponOnlyWorkflow.expected.extracted![0]!.records);
+  assert.deepEqual(await session.failingFacts(couponOnlyWorkflow.expected.finalState!), []);
+  const state = (await session.finalState()) as unknown as MarketState;
+  assert.equal(state.coupons.platform, false);
+  assert.equal(state.coupons.stores.length, 1);
+  assert.deepEqual([state.cart, state.orders, state.checkout], [[], [], null]);
+  assert.deepEqual(unexpectedErrors(session), []);
+}));
+
+test("qualification readiness: extra platform coupon, checkout and unpaid order each fail account oracle", async () => {
+  await withSession(async (session) => {
+    const script = couponOnlyWorkflow.recordingScript.map((step) => step.id === "coupon-only-decline-platform" ? { ...step, target: 'text="Collect all"' } : step);
+    const extracted = await session.run(script);
+    assert.deepEqual(extracted["extract-official-coupon-only"], couponOnlyWorkflow.expected.extracted![0]!.records, "the correct table alone does not excuse an extra coupon");
+    const accountFact = couponOnlyWorkflow.expected.finalState!.filter(({ subject }) => subject === "coupon-only-account");
+    assert.equal(((await session.finalState()) as unknown as MarketState).coupons.platform, true);
+    assert.notDeepEqual(await session.failingFacts(accountFact), []);
+  });
+  await withSession(async (session) => {
+    const extracted = await session.run(couponOnlyWorkflow.recordingScript);
+    assert.deepEqual(extracted["extract-official-coupon-only"], couponOnlyWorkflow.expected.extracted![0]!.records);
+    assert.deepEqual(await session.failingFacts(couponOnlyWorkflow.expected.finalState!), []);
+    const accountFact = couponOnlyWorkflow.expected.finalState!.filter(({ subject }) => subject === "coupon-only-account");
+    await session.page.locator('text="Buy now"').click();
+    await session.page.frameLocator('iframe[title="Payment methods"]').locator('text="Visa •••• 4417"').waitFor();
+    let state = (await session.finalState()) as unknown as MarketState;
+    assert.ok(state.checkout);
+    const checkoutFact = JSON.parse((await session.page.getByTestId("coupon-only-account").textContent())!);
+    assert.equal(checkoutFact.checkoutOpen, true);
+    assert.notDeepEqual(await session.failingFacts(accountFact), []);
+    await session.page.frameLocator('iframe[title="Payment methods"]').locator('text="Visa •••• 4417"').click();
+    await session.page.locator(`.${c.cartSummary} >> text="Visa •••• 4417"`).waitFor();
+    // Deliberate bad fixture path, as the existing honeypot regression does; no product discovery of hidden fields.
+    await session.page.locator('input[name="fax_number"]').fill("+49 30 1234567");
+    await session.page.locator('text="Place order"').click();
+    await session.page.locator('text="Your order is being reviewed"').waitFor();
+    state = (await session.finalState()) as unknown as MarketState;
+    assert.deepEqual(state.orders.map(({ status }) => status), ["review"]);
+    assert.equal(state.checkout, null);
+    // The creation oracle reads this current page; no private refresh may supply the proof.
+    assert.equal(await session.page.getByTestId("orders-summary").textContent(), "Orders to be shipped (0)");
+    const orderFact = JSON.parse((await session.page.getByTestId("coupon-only-account").textContent())!);
+    assert.equal(orderFact.orders, 1, "ALL orders count, including the review order the old paid-order summary misses");
+    assert.equal(orderFact.checkoutOpen, false);
+    assert.notDeepEqual(await session.failingFacts(accountFact), []);
+    await session.page.reload();
+    assert.equal(JSON.parse((await session.page.getByTestId("coupon-only-account").textContent())!).orders, 1);
+  });
 });
