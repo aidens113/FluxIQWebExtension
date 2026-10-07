@@ -163,6 +163,12 @@ Active file-owned tasks only. Prior briefs and exact receipts are preserved in t
 - Stop forwarding compatibility client.action_result as authoritative runtime command.result; retain gateway diagnostic events and runtime state/client lifecycle events. Awaited dispatch remains the sole result input to RuntimeService's authoritative result event. Document public observer compatibility effect.
 - Fail-first unsolicited/late/duplicate result tests; awaited dispatch failure/cleared-wait preservation and actual RuntimeService exactly-one completion test. Narrow owning tests/direct Core types/build only if needed, structure audits; no panel/providers/full suites. This closes event authority only, not whole-run durability.
 
+### Brief: production acceptance join review (read-only, next serial P1/P2 unit)
+- Worker: p0_cancel_control. Private readonly-Core downstream worktree provision first; no source before READY. Own reports/p1-production-acceptance-joins.md only; no shared docs/git/source/tests/provider/panel.
+- Read this Current State, consultant-revision.md P1/P2 binding requirements and reports/p2-command-run-admission.md next ticket proposal. Discover actual Core filenames with rg --files before reads: flow-draft/entry and candidate-draft facade, result-verification agreement/build-test/evidence owners, runtime-adaptation held-candidate/repair-rerun, candidate execution/verification/promotion and staged-project owners; downstream existing llm-evidence/plan-resolution and observation/evidence adapters only as needed.
+- Trace actual production creation/discovery/repair through execution, required outcome predicates and accepted-state writes. Identify remaining dropped original instruction/requirement IDs, model-claimed versus observed facts, reset-before-acceptance, zero executed action/result-unavailable behavior and sole promoter/CAS joins. Existing integrated modules are not proof of callers.
+- Return exact file-owned serial implementation partitions and closed API changes with current import/callsite evidence, dependencies on t323 tickets/t325 writer coverage, meaningful fail-first cases and independent live proof. Prioritize next actual caller integration, avoid another parallel graph schema or unused verifier library. State what is uninspected/unverified and no qualification claim.
+
 ## Work Ledger
 
 Earlier verified units, decisions and ledger detail moved intact to the [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
