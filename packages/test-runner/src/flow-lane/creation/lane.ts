@@ -1,3 +1,4 @@
+import { assertCreatedFlowVerificationReady } from "./readiness.js";
 // The created-Flow lane: a Flow is built by FluxIQ from a live instruction
 // task rather than from a recording, then run and judged on the isolated
 // target like any other Flow-lane run. The lane owns neither the credential nor
@@ -334,6 +335,7 @@ type CreatedFlowLaneProgress = {
  * run's record rather than taken out of its verdict.
  */
 export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<CreatedFlowLaneEvidence | CreatedFlowLanePermissionStop> {
+  assertCreatedFlowVerificationReady();
   const progress: CreatedFlowLaneProgress = { stage: "blank-flow", published: false };
   try {
     return await buildRunAndJudge(input, progress);
@@ -379,6 +381,7 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   if (request.task.permissionPoint?.askFirst && build.outcome === "proposed") {
     throw new RunnerFailure("runtime.behavior", "The task says to ask before its lasting act, and FluxIQ built a Flow without asking", { details: { permissionPoint: "not_asked", consequence: request.task.permissionPoint.consequence, adaptationId: build.adaptationId } });
   }
+  if (build.outcome === "draft") throw new RunnerFailure("facility.contract", "Saved candidate draft; verification and promotion remain unavailable.", { details: { code: "lab.candidate_verification_unavailable", stage: "verification", candidateId: build.candidate?.candidateId ?? build.candidateReference?.candidateId ?? null, providerInvocation: build.providerInvocation } });
   if (build.outcome !== "proposed" || build.adaptationId === null) {
     throw new RunnerFailure("runtime.behavior", `FluxIQ did not build a Flow from the task's instruction (${build.failure?.code ?? "no proposal"})${said ? `; it said: ${JSON.stringify(said)}` : ""}`, {
       details: { failure: build.failure, providerCalls: build.providerCalls, providerInvocation: build.providerInvocation, ...(build.chat ? { chat: build.chat } : {}) },

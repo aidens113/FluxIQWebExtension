@@ -348,13 +348,13 @@ test("a build's tool calls are held to Core's own loop ceiling, not to a number 
 test("a Flow build answers with Core's whole envelope, so a refusal's diagnostic survives the HTTP status", async (t) => {
   const requests: Array<{ path: string; body: unknown }> = [];
   const diagnostic = { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation" };
-  let answer: Response = json({ ok: true, payload: { adaptation: { adaptationId: "adaptation.new", status: "proposed" } } });
+  let answer: Response = json({ ok: true, payload: { candidate: { candidateId: "candidate.new", status: "draft", verification: "not_performed", promotionAllowed: false } } });
   const client = await mockedClient(t, (url, init) => {
     requests.push({ path: url.pathname, body: JSON.parse(String(init.body)) });
     return answer;
   });
-  const input = { projectId: "project.web", flowId: "flow.blank", evidenceGuided: true as const, permittedConsequences: ["send_or_publish" as const] };
-  assert.deepEqual(await client.generateFlowBootstrapAdaptation(input), { status: 200, ok: true, payload: { adaptation: { adaptationId: "adaptation.new", status: "proposed" } } });
+  const input = { projectId: "project.web", flowId: "flow.blank", evidenceGuided: true as const, authoringMode: "candidate" as const, permittedConsequences: ["send_or_publish" as const] };
+  assert.deepEqual(await client.generateFlowBootstrapAdaptation(input), { status: 200, ok: true, payload: { candidate: { candidateId: "candidate.new", status: "draft", verification: "not_performed", promotionAllowed: false } } });
   answer = json({ ok: false, error: "Flow Bootstrap generation failed (flow_bootstrap.evidence_iteration_limit).", payload: { diagnostic } }, 400);
   assert.deepEqual(await client.generateFlowBootstrapAdaptation(input), { status: 400, ok: false, payload: { diagnostic } });
   // An envelope that says ok on a failed status is not a success, and a body that is not JSON is an empty refusal.
