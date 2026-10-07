@@ -223,6 +223,15 @@ as a dialog's Close, is dispatched unchanged on every pass.
   before and after snapshots were captured: the view's element lines that
   appeared or left, handle-free and compared as a multiset, as text. A summary
   stored before t223 as a packet is written as the view first.
+  Beside the view, never in it, the snapshot carries `documentTimeOrigin`: the
+  page's `performance.timeOrigin` (navigation evidence `timeOrigin`), one value
+  per document and unchanged by `history.replaceState`/`pushState`. The diff
+  says `documentChanged` from it when both sides carry one, and otherwise
+  `documentChanged` equals `locationChanged`. An address rewritten in place
+  (run `run-muw5zv4m-52d83027`'s size buttons) is therefore the same document,
+  and Core's finished-run check keeps its change lines; a single-page app's
+  route change reads the same way. The page-state digest omits navigation, so
+  the identity never changes a digest.
   A snapshot also carries `from: { location }`, the page's real address as the
   reset token a step's `replay.from` is, so Core's re-author can put the page
   back where a node started in the run it repairs (t194 cause C-D). It is

@@ -138,8 +138,17 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       // than a ref pointing at nothing.
       // The page as the model reads every page (t223): Core returns this summary
       // to a recovery model as `core.state_snapshot`, and diffs two of them.
+      // Beside the view, never in it: the document's identity, so the diff can
+      // tell an address rewritten in place from a new document (run
+      // `run-muw5zv4m-52d83027`). Put here rather than in `publishedWebLlmPage`,
+      // which is every page a model is shown.
       const snapshot = actionSnapshot(result.payload);
-      const summary = publishedWebLlmPage(sanitizeWebLlmSnapshot(snapshot)) as unknown as JsonObject;
+      const packet = sanitizeWebLlmSnapshot(snapshot);
+      const documentTimeOrigin = packet.navigation?.timeOrigin;
+      const summary = {
+        ...publishedWebLlmPage(packet),
+        ...(documentTimeOrigin === undefined ? {} : { documentTimeOrigin })
+      } as unknown as JsonObject;
       captures += 1;
       const stateSnapshotId = `web.state.${captures}`;
       const from = resetToken(snapshot);
