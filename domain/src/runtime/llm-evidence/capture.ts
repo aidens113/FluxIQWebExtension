@@ -247,6 +247,14 @@ export type WebLlmEvidenceToolExecution = {
      * so Core must learn `toggle` before this side sends it.
      */
     toggle?: { key: string; to: "on" | "off" };
+    /**
+     * The list a list read read, as an opaque code (`./node-run/list-read/code.ts`):
+     * the same for the same list on the same page path for the whole build. Core
+     * refuses a second kept read of one list with nothing kept changing the page
+     * between them (`AS/runtime/flow-draft/second-copy.ts`, run `run-muq4oaof-464f5bce`).
+     * Absent on every other node.
+     */
+    reads?: string;
   };
 };
 

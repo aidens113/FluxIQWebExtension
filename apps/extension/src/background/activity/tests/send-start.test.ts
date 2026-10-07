@@ -18,8 +18,9 @@ async function settle(): Promise<void> {
   for (let round = 0; round < 10; round += 1) await new Promise((resolve) => setImmediate(resolve));
 }
 
-function harness(options: { live?: boolean; stored?: ActivityOverlayPreference } = {}) {
+function harness(options: { live?: boolean | (() => boolean); stored?: ActivityOverlayPreference } = {}) {
   const clock = new FakeClock(10_000);
+  const live = options.live;
   const pages: ActivityContentMessage[] = [];
   const panels: ExtensionActivityState[] = [];
   const relay = new ActivityRelay({
@@ -33,7 +34,7 @@ function harness(options: { live?: boolean; stored?: ActivityOverlayPreference }
       assert.equal(message.type, ACTIVITY_MESSAGES.content);
       pages.push(message);
     },
-    live: () => options.live ?? true,
+    live: () => (typeof live === "function" ? live() : live ?? true),
     clock
   });
   return { relay, clock, pages, panels, drawn: () => pages.at(-1)?.display ?? null };
@@ -164,4 +165,61 @@ test("no start without a live session to carry Core's activity, and a hidden ove
   await settle();
   assert.equal(hidden.pages.at(-1)?.overlay, "hidden", "the stored preference is read before the first send");
   send.answer(started);
+});
+
+// W27 / R2-U-5 of the run-mux6n7m4-8273e7a0 and run-mux6pndp-16feb842 UI reviews (lanes A and B,
+// round 3): the panel said "Sending your message" and the page had no overlay from the send until
+// Core's first activity, ~1.7 s later, while lane C's run-mux6naez-6c20f26e showed "Starting…"
+// from the send. A send made while the session is still connecting puts the starting status up
+// the moment the session is ready, unless Core already spoke or answered without starting work.
+test("a send made before the session is live shows the starting status once the session is ready", async () => {
+  let connected = false;
+  const h = harness({ live: () => connected });
+  const send = pendingSend();
+  const answered = h.relay.sending(send.send);
+  await settle();
+  assert.equal(h.drawn(), null, "nothing yet: no session could carry Core's activity");
+  connected = true;
+  h.relay.noteSessionReady();
+  await settle();
+  assert.deepEqual([h.drawn()?.headline, h.drawn()?.kind], [STARTING_HEADLINE, "starting"], "up as soon as the session is ready");
+  send.answer(started);
+  await answered;
+  await h.relay.accept(activity(1));
+  h.clock.advance(300);
+  await settle();
+  assert.equal(h.drawn()?.headline, "Building your Flow", "Core's first activity replaces it");
+
+  // Answered without work before the session was ready: nothing is put up.
+  let ready = false;
+  const words = harness({ live: () => ready });
+  await words.relay.sending(async () => wordsOnly);
+  ready = true;
+  words.relay.noteSessionReady();
+  await settle();
+  assert.equal(words.relay.state().display, null);
+
+  // Core spoke first: its activity is truer than "Starting…".
+  let up = false;
+  const spoke = harness({ live: () => up });
+  const later = pendingSend();
+  void spoke.relay.sending(later.send);
+  await settle();
+  up = true;
+  await spoke.relay.accept(activity(1));
+  spoke.relay.noteSessionReady();
+  spoke.clock.advance(300);
+  await settle();
+  assert.equal(spoke.relay.state().display?.headline, "Building your Flow");
+  later.answer(started);
+
+  // A session that comes later than Core's first activity could have puts nothing up.
+  let late = false;
+  const slow = harness({ live: () => late });
+  await slow.relay.sending(async () => started);
+  slow.clock.advance(STARTING_HOLD_MS + 1);
+  late = true;
+  slow.relay.noteSessionReady();
+  await settle();
+  assert.equal(slow.relay.state().display, null);
 });

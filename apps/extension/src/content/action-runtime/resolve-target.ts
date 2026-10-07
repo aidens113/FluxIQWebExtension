@@ -142,10 +142,12 @@ import { findClosestFingerprint, type ElementFingerprint } from "../element-find
 import { deepElementFromPoint, resolveShadowScope, type LookupRoot, type ShadowScope } from "../selector";
 import { composedRoots } from "../shadow-dom";
 import {
+  accessibleNameFor,
   agreesWithRecordedRecord,
   candidateFingerprint,
   candidateLabel,
   collectTargetCandidates,
+  normalizedText,
   scoreTargetCandidates,
   stableNameReading,
   vetoCandidate,
@@ -475,6 +477,16 @@ function* exactAttempts(action: BrowserActionCommand, target: RecordedTarget | u
  * Each root in scope is asked on its own, so a stable signal that answers in
  * two shadow roots answers twice, and the resolver weighs the two rather than
  * taking the first.
+ *
+ * A role-less target's recorded accessible name is scanned for before the text,
+ * counted the same way. `findClosestFingerprint` reads a name only off
+ * `aria-label` or `name`, the recording computed it by `accessibleNameFor`
+ * (`title`, `alt` too), and enumeration never lists a role-less div
+ * (`../identity/candidates.ts`), so a text-less swatch named only by `title` had
+ * no path once its selector drifted (`run-mux6n7m4-8273e7a0`). A target with a
+ * role is left to enumeration, which weighs its name with its other signals.
+ * Two controls with one name are two matches, which the veto, the record gate
+ * and scoring then treat as any other strategy's.
  */
 function fingerprintMatches(target: RecordedTarget, roots: readonly LookupRoot[]): Element[] {
   const { visibleText, ...stable } = target;
@@ -483,18 +495,28 @@ function fingerprintMatches(target: RecordedTarget, roots: readonly LookupRoot[]
     return found ? [found] : [];
   });
   if (exact.length) return exact;
+  const name = target.role?.trim() || target.implicitRole?.trim() ? undefined : normalizedText(target.accessibleName);
+  if (name) {
+    const named = scanMatches(target, roots, (element) => accessibleNameFor(element) === name);
+    if (named.length) return named;
+  }
   if (!visibleText) return [];
   const wanted = normalizeText(visibleText);
-  const matches: Element[] = [];
+  return scanMatches(target, roots, (element) => normalizeText(element.textContent ?? "") === wanted);
+}
+
+/** The recorded tag's elements in scope that `matches` accepts, walking at most `MAX_TEXT_SCAN` of them. */
+function scanMatches(target: RecordedTarget, roots: readonly LookupRoot[], matches: (element: Element) => boolean): Element[] {
+  const found: Element[] = [];
   let scanned = 0;
   for (const root of roots) {
     for (const element of root.querySelectorAll(target.tagName || "*")) {
       scanned += 1;
-      if (scanned > MAX_TEXT_SCAN) return matches;
-      if (normalizeText(element.textContent ?? "") === wanted) matches.push(element);
+      if (scanned > MAX_TEXT_SCAN) return found;
+      if (matches(element)) found.push(element);
     }
   }
-  return matches;
+  return found;
 }
 
 /**
