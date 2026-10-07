@@ -684,3 +684,17 @@ Earlier entries: [Claude implementation and handoff ledger](../../mvp-final-mont
 - Reproduce truthful readback gap after deferred application handlers. Execute already awaits typeAction, so use bounded50ms timer observation after typing as existing checkable-state does, then original connected-control value comparison. Recheck existing actionability before requested Enter after the await; no pre-dispatch refusal flag after text already typed. No silent replacement or retry.
 - Preserve per-character/native format/redaction, initial permission/actionability and form messages. Real-browser fail-first before fix, then named units/types/build/current identity/browser/audit. This finite window is not general asynchronous/server acceptance or React qualification. No Core/domain/schema changes/fullsuite/provider/panel/user-state reset.
 
+
+## Retired independently verified t318 brief
+
+### Brief: qualification-final-four (t318)
+- Worker: p0_build_identity; supervisor provisions separate downstream task/private read-only Core. No source until READY/exact owners approved. Preserve all original57 and prior six new tasks; final denominator67, no historical recovered IDs/pass claim.
+- Implement proposal sections3/6/8/10: company review without booking, job closed saved cleanup, photo existing collection union, social pending request audit. Read only Current State, these proposal sections and owning scenario conventions.
+- Name exact per-site manifest/live-tasks/qualification module+tests/browser owners and state-backed readout/bootstrap hook BEFORE editing. Company cross-frame review must provide positive exact review plus independently observed no bookings/deposits/quotes/newsletter on current page after wrong pay+leave; job exposes existing filled-heart accessible Unsave job label, delete point; photo literal full saved/collection/follow/liked/outbox state; social complete8 ordered literal requests no confirmation/delete/message.
+- Pure private fact formatter must read actual response.state and update current DOM before returning result, no stale badge/no secret body. Preserve existing controls/mutation/UI quirks; no generic fixture helper/state operation changes. Full membership/IDs; counts only complete baseline-zero forbidden collections. Actual cross-origin frame proof, no JS/network mutation bypass.
+- Exact datasets hand authored from proposal, unique workflows/columns, explicit start facts. Negative paths must preserve correct-looking requested table while forbidden side effects/full membership fail. Photo repeated union desired-state idempotence; social full8 vs home4 negative.
+- Own reports/qualification-final-four.md only plus approved per-site source; no shared inventory/docs/Core/domain/node changes. Supervisor owns original baseline and67 aggregate tests/classifications.
+- Narrow scenario source/e2e types/owning fixture build/owning tests/real isolated Chromium/audit, no fullsuite/provider/panel/git/real profile. Freeze with commands/source digest/actual measured failures/results/limits. Root independently verifies/integrates; fixture readiness is not model qualification.
+
+
+
