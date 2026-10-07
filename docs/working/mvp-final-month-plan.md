@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Acceptance, extension identity and Stop integrated; Core runtime identity and candidate authoring/execution still isolated; live readiness and promotion pending.
+Status detail: Acceptance, extension identity, Stop, candidate receipt/executor infrastructure and typed fixes pushed; candidate facade/Core identity/navigation isolated; live and promotion pending.
 Created: 2026-10-05
 Last updated: 2026-10-06
 Owner: Senior supervisor agent
@@ -22,8 +22,10 @@ match/mismatch checks, 22/22 owning tests and runner typecheck after integration
 t298 cancellation is integrated as downstream43e5e54b/Core2ee06482. Supervisor
 rebuilt current pair and repeated headed Stop build/run2/2, owning reauthor9/9,
 Core typecheck/build and both integration audits pass. Running Core-server identity
-remains t302; t299 candidate facade, t300 requirement receipts/detached executor
-and t301 typed readiness remain isolated. No P0 completion
+remains t302. t299 candidate facade is integrated (Core7f9bae15/downstreamcb792dee)
+after independent actualservice/API53/53, package/dependentweb types and audits.
+t300 receipt/detached infrastructure is integrated (Core386b4c15)
+with production joins pending. t301 typed readiness is integrated (b2ad00de). No P0 completion
 or fresh A-D qualification is claimed.
 
 **Planning review completed locally 2026-10-06.**
@@ -351,3 +353,74 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Validation: supervisor reviewed source, reauthor9/9, Core packagecheck0/build0, current extension three targets22files each; headed actual Core build/run Stop2/2 (18.1s) on production bundle, no next node/proposal and unchanged graphs. Both structure audits passed; index refreshed after report status change. Finish first invoked from task tree failed dev already checked out, corrected by invoking lifecycle from main; no manual removal/history rewrite. Core legacy finish --skip-checks only after observed manual narrow gates.
 - Outcome: Accepted cancellation slice; paired dev push next.
 - Follow-up: t302 running Core identity, t299 atomic flag/facade, t300 receipt/runtime joins, t301 typed readiness. Independent t300 verification58/58 passes; module is not yet product promotion. No paid calls/full suites/user panel.
+
+### Brief: p3-browser-navigation-readiness (t303)
+- Worker: p0_build_identity; tree fxwork/t303-browser-navigation-readiness, task/t303-browser-navigation-readiness; shared Core read-only.
+- Read: this Current State; node-catalog-plan/ranked-backlog.md rows4/5 and node-audit-navigation.md P0/tab/HTTPS findings; relevant repository instructions.
+- Scope: correct tab repeat-safety metadata, explicit tab-open shared landing verification, and HTTPS downgrade refusal. Preserve blank-tab creation and ordinary switching/close semantics.
+- Discover owners then send exact existing file list before edits; do not expand to downloads/frame identity/readiness timeout or submit-runtime inspection without separate brief.
+- Expected: open/close must not become safely retryable observation; explicit opened URL must pass same HTTP/challenge evidence gates as navigate/click-open, not URL equality alone.
+- Redirect transport does not prove user outcome; unread landing evidence stays unknown. No automatic captcha solving, repeated consequential dispatch or weakened oracle.
+- Preserve existing typed/action/policy boundaries; focused shared landing module only if it owns same capability across callers.
+- Owning negatives before fix: tab metadata repeat classification, explicit open404/challenge/ordinary success, HTTPSdowngrade/upgrade tests. Provider-free production Chromium proof on isolated local fixture; record build identity and driver seam limitations.
+- Narrow extension/domain source+test types, changed-directory tests, structure audit. Shared Core source/dist only rebuilt through lifecycle tool and remains read-only.
+- Write own reports/p3-browser-navigation-readiness.md in task tree; no shared docs/git/providers/user-panel/full suites.
+- Return exact failures/fixes/checks/limits, freeze. Supervisor verifies/integrates.
+
+### 2026-10-06 - Typed readiness independently verified and navigation queued
+- Agent: Codex supervisor.
+- Changed: t301 source4d7a1447 reviewed and current dev merged; t303 bounded navigation task provisioned.
+- Validation: supervisor production Chromium typed checks2/2 (23.9s), four owning extension files19/19 and real Core permission seam12/12. Domain test typecheck0; extension test typecheck found shared Core still at7717ff42 missing t298 buildCancellation API. Task provisioning advances/rebuilds the read-only shared dependency before repeating; do not change product to satisfy stale declarations.
+- Outcome: Partial integration pending current dependency types and audits.
+- Follow-up: integrate typed fixes, then navigation slice; broader extraction/corpus and P2 promotion joins remain open. No paid calls.
+
+### 2026-10-06 - Candidate infrastructure and typed blockers integrated
+- Agent: Codex supervisor.
+- Changed: t300 Core386b4c15 and paired downstream0befce51; t301 downstreamb2ad00de. P4 [feasibility record](./mvp-final-month-plan/reports/p4-script-request-feasibility.md) adds supported API/permission/timeout and requests-OFF requirements without enabling arbitrary execution.
+- Validation: t300 post-dev-merge58/58 and packagecheck0; final export check0/audit0, both task audits0. t301 independent browser2/2, extension19/19, real Core permission12/12, domain/extension source+test checks0 after shared dependency refresh; taskaudit0. No paid call.
+- Outcome: Accepted bounded infrastructure and typed fixes, not full P0/P2/P3.
+- Follow-up: t299 facade, t302 server identity, t303 navigation; durable receipt/promotion/semantic/browser proof joins and breadth still pending. Paired push next; no main/release changes.
+
+### 2026-10-06 - Paired bounded slices pushed
+- Agent: Codex supervisor.
+- Changed: downstream devafb5f939 and Core dev386b4c15 pushed; infrastructure and typed readiness integration documented.
+- Validation: all bounded task receipts above observed; main working state corrected to distinguish merged modules from unintegrated production joins. No new product test required for prose.
+- Outcome: Partial overall plan.
+- Follow-up: t299 facade, t302 actualserver and t303 navigation active; P2 promotion and paid off-peak readiness remain pending. No main/release push.
+
+### Brief: p2-durable-candidate-promotion (next paired unit)
+- Worker: p0_acceptance; task/tree assigned after t299 integration. Until then read-only bounded discovery in frozen t299 Core, report p2-promotion-design.md downstream t299.
+- Read: main Current State, consultant-revision P2, t300 verification contracts/controller and t299 draft store/service report.
+- Investigate exact existing bootstrap apply transaction, locks, authorization/validation, ProgramJsonStore transactions and accepted parent/subflow graph persistence. Send exact file owners/design before edits.
+- Objective: durable requirement/start/run/evidence receipts and one idempotent promotion adapter whose commit atomically compares candidate/revision/digest/original instructions/accepted base/settings and preserves normal apply-time permissions, graph validation and representation/version rules.
+- Do not expose a receipt supplied by builder/API caller as authority. Trusted observer/controller issues acceptance; persisted unknown/partial/stale/cancel receipts cannot authorize mutation.
+- Persist bounded IDs/receipt references and explicit pending/committed/outcome_unknown states, preserving original instruction association. No raw page/cookie/credential logs.
+- Failures before/after graph commit and duplicate delivery must recover truthfully; rerun write must never execute irreversible candidate commands again. Preserve unknown in-flight charges/outcomes.
+- Normal locks alone are not crash atomicity. Join existing project transaction, test rollback/crash boundaries against real JSON/SQLite storage, not fake bool promotion.
+- Candidate create/ensure evidence rules remain strict; do not reinterpret create as ensure, infer performed from successful attempt, or treat compile as semantics.
+- Source will be one paired unit after plan approval; focused new receipt/promoter owner and narrow existing storage/apply hooks, no service budget/baseline growth or broad refactor.
+- Production requirement interpreter/start/independent browser oracle/domain command acknowledgements remain separate ports; report exactly which joins exist and which do not.
+- No provider/live/full suites/git/shared docs; owning negatives/narrow types/audits and source freeze, supervisor verifies/integrates.
+
+### Brief: p2-durable-receipt-ledger (t304)
+- Worker: p0_acceptance; paired fxwork/t304/{!FluxIQ,!FluxIQWebExtension}, task/t304-durable-candidate-receipts.
+- Read: main Current State, own p2-promotion-design.md (now preserved main), consultant P2 and relevant Core instructions.
+- Approved scope: first bounded receipt-ledger unit described in promotion design, production promotion explicitly unavailable.
+- Own: new storage/project/candidate-verification/{contracts,migration,store,index}.ts + owning tests; required focused migration/export registration after exact file proposal.
+- Own: flow-bootstrap/verification/durable-session.ts + owning tests/barrel; candidate-drafts/store.ts narrow uncached read; own reports/p2-durable-receipts.md only.
+- Send exact existing controller stagehook/migration files before edits if required; no broad accepted-topology/service changes.
+- Durable envelope includes candidateId/revision/digest/base/settings/original instruction source+requirements and permission/compiler/version binding; bounded IDs/digests, no public builder receipt issuance input.
+- Commit pending claim before any start/execute. Duplicate or restarted pending attempt returns outcome_unknown and never repeats irreversible actions. Conflicting same key/payload refuses; committed known stages recover truthfully.
+- Persist trusted controller/observer receipts only through private issuance seam. Unknown/partial/stale/cancel/corrupt joins cannot prepare mutation.
+- Preparation must return explicit unsupported storage authority and change no accepted graph; do not provide fake successful promote callback or claim P2 complete.
+- JSON promotion refuses; SQL ledger uses actual project transaction/idempotency and survives reopen. No automatic migration/reset of user data.
+- Real storage tests: simultaneous/duplicate/conflicting claims, restart pending, crash before/after stage write, malformed/mismatched refs, uncached draft freshness, unchanged accepted files and no repeated start/execute.
+- No provider/live/full suites/git/shared docs/user panel. Narrow owning tests/types/audits; freeze and report exact product joins/limits.
+- Provisioning running; discovery only until supervisor signals built dependencies.
+
+### 2026-10-06 - Candidate draft facade integrated; durable receipts next
+- Agent: Codex supervisor.
+- Changed: t299 paired merges Core7f9bae15/downstreamcb792dee; exact atomic-topology prerequisite investigation preserved. Pairedt304 receipt ledger provisioned, no accepting promoter authorized by this bounded brief.
+- Validation: post-dev53/53 independently observed; Corecheck/build0, dependentwebcheck0 and both integration audits0. Core lifecycle full sweep skipped only after observed narrow gates, preserving daily suite limit. No paid calls.
+- Outcome: Accepted opt-in draft slice, partial overall plan.
+- Follow-up: t302 loadedserver identity inventory refinement/rebuild, t303 navigation, t304 durable receipts; authoritative topology transaction and interpreter/start/oracle/command acknowledgements still required. Paired push next.

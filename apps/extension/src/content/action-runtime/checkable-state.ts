@@ -1,7 +1,7 @@
 // Setting a checkbox or radio to a requested state rather than toggling it.
 //
 // A click toggles, so replaying a recorded click can leave a control in the
-// opposite state to the one recorded. This sets the state directly and reports
+// opposite state to the one recorded. This presses only when needed and reports
 // what the control was left holding, so the verb can compare `checked` with the
 // request. An element that is neither a checkbox nor a radio is refused rather
 // than coerced.
@@ -26,7 +26,7 @@ export type CheckableStateOutcome =
   | { ok: true; kind: "checkbox" | "radio"; checked: boolean; changed: boolean }
   | { ok: false; reason: string; code?: "not-checkable" | "disabled" | undefined };
 
-export function setCheckedState(element: Element, checked: boolean): CheckableStateOutcome {
+export async function setCheckedState(element: Element, checked: boolean): Promise<CheckableStateOutcome> {
   const input = checkableInput(element);
   if (!input) {
     return { ok: false, reason: `${describeTarget(element)} is not a checkbox or a radio`, code: "not-checkable" };
@@ -41,11 +41,15 @@ export function setCheckedState(element: Element, checked: boolean): CheckableSt
   if (input.checked === checked) return { ok: true, kind, checked: input.checked, changed: false };
 
   input.focus();
-  input.checked = checked;
-  // What a real check fires, in order, and both bubble: the page's handler is
-  // as often on an enclosing fieldset as on the control itself.
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  input.dispatchEvent(new Event("change", { bubbles: true }));
+  // Native activation updates checked and delivers click/input/change in their
+  // browser order. Property assignment bypasses click-controlled application
+  // state. One activation only: a revert must fail, never toggle a second time.
+  input.click();
+  // Bounded observation allows application microtasks/render handlers to revert
+  // the control. A timer works in background tabs where rAF may not run. This
+  // is a 50ms observation window, not proof against a future delayed change.
+  await new Promise<void>((resolve) => setTimeout(resolve, 50));
+  if (!input.isConnected) return { ok: false, reason: "the control was detached before its checked state could be confirmed", code: "not-checkable" };
   return { ok: true, kind, checked: input.checked, changed: true };
 }
 

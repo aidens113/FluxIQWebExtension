@@ -107,7 +107,7 @@ test("a disabled control check.ts found after setCheckedState makes no such stat
       return { ok: false, reason: "the checkbox is disabled", code: "disabled" };
     }
   });
-  checkAction({ commandId: "c", actionType: "web.dom.check" }, deps, 0);
+  await checkAction({ commandId: "c", actionType: "web.dom.check" }, deps, 0);
   assert.deepEqual(set, [true], "the gate passed, so the state setter ran");
   assert.equal(refusals[0]?.code, "disabled");
   assert.equal(refusals[0]?.evidence?.refusedBeforeDispatch, undefined);

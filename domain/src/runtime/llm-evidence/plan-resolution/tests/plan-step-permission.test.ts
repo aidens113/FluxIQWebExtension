@@ -57,11 +57,12 @@ const COMPOSER_URL = "https://scheduler.test/compose";
 const body: JsonObject = { tagName: "textarea", selector: "#body", accessibleName: "Post body", attributes: { name: "body" } };
 const schedule: JsonObject = { tagName: "button", selector: "#schedule", visibleText: "Schedule post" };
 
-function runtimeOver(elements: JsonObject[]): WebAutomationLlmEvidenceRuntime {
+function runtimeOver(elements: JsonObject[], calls?: string[]): WebAutomationLlmEvidenceRuntime {
   return createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
     structureDetectionSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
+      calls?.push(command.actionType);
       if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
       return { status: "succeeded", payload: { snapshot: { url: COMPOSER_URL, title: "Compose", interactiveElements: elements } } };
     },
@@ -101,8 +102,8 @@ function composerPlan(clickParameters: JsonObject, declared?: string[]) {
 }
 
 /** A build that has looked at the composer, with the gate shown what the model was shown. */
-async function explored(gate: AutomationStudioActionPermissionGate) {
-  const runtime = runtimeOver([body, schedule]);
+async function explored(gate: AutomationStudioActionPermissionGate, calls?: string[]) {
+  const runtime = runtimeOver([body, schedule], calls);
   const shown = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT_NODE, parameters: {}, consequences: [] } });
   gate.observe(shown);
   return runtime;
@@ -129,6 +130,39 @@ async function resolveUnder(gate: AutomationStudioActionPermissionGate, runtime:
 }
 
 const PRESS_SCHEDULE: JsonObject = { target: { handle: "t2" } };
+
+async function resolveSubmittingType(gate: AutomationStudioActionPermissionGate, submit: boolean, declared?: string[], calls?: string[]) {
+  const runtime = await explored(gate, calls);
+  const plan = composerPlan({ target: { handle: "t1" }, text: "Hello", submit }, declared);
+  plan.subflows[0]!.nodes[1]!.definitionId = TYPE_NODE;
+  return await resolveAutomationStudioFlowBootstrapPlanParameters({
+    plan, projectId: "project.one", flowId: "flow.one", binding: runtime,
+    handlesIssued: true,
+    permissionFor: (step) => gate.checkFor({ kind: "flow_step", id: step.definitionId, ref: step.ref })
+  });
+}
+
+test("submitting type without consequences is refused before any submission; unsent typing remains compatible", async () => {
+  const gate = gateHolding([]);
+  const calls: string[] = [];
+  const submitted = await resolveSubmittingType(gate, true, undefined, calls);
+  assert.equal(submitted.ok, false);
+  assert.equal(submitted.ok ? undefined : submitted.issues[0]?.code, "web.step.consequences_undeclared");
+  assert.deepEqual(calls, ["web.dom.capture_snapshot"], "authoring refusal dispatched no type or submit command");
+  const unsent = await resolveSubmittingType(gateHolding([]), false);
+  assert.equal(unsent.ok, true);
+});
+
+test("submitting type reaches the same real Core gate for declared consequences", async () => {
+  const denied = gateHolding([]);
+  const rejected = await resolveSubmittingType(denied, true, ["delete"]);
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.ok ? undefined : rejected.issues[0]?.code, "bootstrap.step_permission_required");
+  assert.deepEqual(denied.request?.missing, ["delete"]);
+  assert.equal(denied.request?.control.name, "Post body");
+  assert.equal((await resolveSubmittingType(gateHolding(["delete"]), true, ["delete"])).ok, true);
+  assert.equal((await resolveSubmittingType(gateHolding([]), true, [])).ok, true);
+});
 
 test("a bound target uses its concrete observed fallback for permission but keeps only the dynamic target in the accepted plan", async () => {
   const target = { $state: { path: "chosenControl", fallback: { handle: "t2" } } };

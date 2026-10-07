@@ -1,7 +1,7 @@
 # Node Catalog Plan
 
 Status: Active
-Status detail: Four source audits complete and reconciled into a ranked backlog; t301 implements three shared blockers with provider-free browser regressions.
+Status detail: Four audits reconciled; three shared blockers integrated/verified, bounded tab/landing/navigation fixes underway; broader catalog qualification pending.
 Created: 2026-10-07
 Last updated: 2026-10-06
 Owner: Senior supervisor agent
@@ -17,19 +17,22 @@ User's order (2026-10-07): a full audit of the node catalog; robust nodes with p
 
 Catalog today (domain `domain/src/output-nodes/`, `domain/src/actions/`; extension `apps/extension/src/content/actions/`): navigate, tab, download, click, type, select, check, clear, upload, keypress, dialog, scroll, extract, extract_list, next_page, assert, capture_snapshot, wait_for_selector, wait_for_text; observation tools detect_repeating_structure and find_on_page.
 
-Done: `reports/node-audit-interaction.md` (18 ranked fixes, 8 proposed nodes; top: unarmed native dialogs hang a run, `check` sets `.checked` without a click so React checkboxes stay unchanged, number and date fields lose characters, `scroll` only moves the window, a press nothing answered still succeeds) and `reports/node-audit-reading.md` (18 fixes, 7 nodes; top: Next page misses in-place re-renders, Next page with no detected way should try every way, one shared disabled rule including ancestors and classes, verifying nodes must verify something, waits and asserts judge every match). Not done: the navigation and gaps audits were stopped at the Codex handoff (2026-10-07 05:10 UTC); rerun them from their briefs. Pending user decision from the interaction audit: trusted input for hover menus needs the debugger channel, which the user ruled out except for network capture. Next: rerun the two audits, merge all four into one ranked list, then implementation stages partitioned by file.
+All four source audits are complete: interaction18rankedfixes/8proposednodes,
+reading18fixes/7nodes, navigation and gaps. They feed the
+[ranked backlog](./node-catalog-plan/ranked-backlog.md); source findings are not
+browser qualification. t301 controlled check, in-place Next and type-submit
+permission fixes are integrated/pushed (b2ad00de), with supervisor Chromium2/2,
+extension19/19, Core permission12/12 and current-dependency types/audit passing.
+The controlled fixture simulates component application state; React/Firefox/Edge
+parity is unexercised. t303 handles tab repeat safety, explicit-open landing and
+HTTPS downgrade next; other backlog rows remain pending.
 
-The consultant review does not cancel the user-ordered full audit. Finish
-navigation/gaps and merge all four reports into one ranked backlog; implement
-shared A-D blockers first alongside the [candidate/acceptance work](./mvp-final-month-plan/consultant-revision.md).
-The remaining [navigation](./node-catalog-plan/reports/node-audit-navigation.md)
-and [gaps](./node-catalog-plan/reports/node-audit-gaps.md) source audits are now
-complete (2026-10-06 locally), superseding the stopped-at-handoff statement above.
-All four feed the [ranked backlog](./node-catalog-plan/ranked-backlog.md). t301 owns
-controlled check, in-place Next and type-submit permission parity; none is complete
-on assignment alone. Supervisor independently counted 57 current task definitions
-across ten sites. The planned 67 scope has ten unaccounted tasks, not ten passes or
-retired rows; preserve this discrepancy until the intended inventory is reconciled.
+Supervisor independently counted57current task definitions across ten sites.
+The requested67scope has10unaccounted tasks, not10passes or retired rows;
+preserve the discrepancy until the intended inventory is reconciled. The
+consultant review preserves the full audit and typed-first order. Input through
+a debugger is excluded by the user's decision; no pending hover-input approval
+should be inferred from historical worker recommendations.
 
 Wide catalog expansion is not a prerequisite for that first proof. Audit claims
 about React/input/navigation behavior remain source hypotheses until browser
@@ -88,3 +91,10 @@ Read-only: no source, test or other doc edits; no builds, tests, Lab, browser or
 ## Open Questions
 
 - Trusted input (hover menus, sites that ignore synthetic events) needs the debugger channel. Owner: user. Recommended default: no debugger; send the full synthetic pointer sequence (pointerover/enter/move/down/up/click at the element's coordinates) and report sites where that fails as JS-or-node work.
+
+### 2026-10-06 - Three shared typed blockers integrated
+- Agent: Codex supervisor.
+- Changed: t3014d7a1447 source, b2ad00de integration pushed; Current State replaces superseded stopped-at-handoff audit/hover statements.
+- Validation: independently observed Chromium2/2, extension19/19, actual Core permission12/12; domain and current-extension typecheck0/taskaudit0.
+- Outcome: Partial catalog implementation.
+- Follow-up: t303 tab/landing/HTTPS; remaining ranked fixes/new nodes and67scope reconciliation. No paid live-task passes claimed.

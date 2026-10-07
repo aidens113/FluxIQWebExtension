@@ -73,6 +73,9 @@ export async function afterListChange(
   by: WebAutomationNextPageBy
 ): Promise<PageStep> {
   const { item, shown, deadline } = progress;
+  // Capture before pressing: shown contains live Elements whose fields may be
+  // replaced in place. Comparing those Elements after pressing loses page one.
+  const previousRecords = shown.map(recordMeaning);
   const address = linkAddress(control);
   const elsewhere = address !== undefined && !sameDocument(address, new URL(document.URL)) ? address : undefined;
   const leaving = watchUnload();
@@ -80,7 +83,7 @@ export async function afterListChange(
   let byAddress = false;
   try {
     const cancelled = clickNoticingCancel(control);
-    const changed = (): boolean => listChanged(item, shown) || !control.isConnected;
+    const changed = (): boolean => listChanged(item, shown, previousRecords);
     const firstWindow = cancelled && elsewhere !== undefined ? CANCELLED_LINK_WINDOW_MS : LIST_CHANGE_TIMEOUT_MS;
     outcome = await waitUntil(changed, firstWindow, LIST_CHANGE_POLL_MS, deadline);
     if (outcome === "unchanged" && elsewhere !== undefined && !leaving.started()) {
@@ -153,14 +156,22 @@ function watchUnload(): { started(): boolean; stop(): void } {
 /**
  * Whether the list became a different list. A page that replaces its results
  * detaches the old items, and one that appends changes their number, so both
- * are observed without knowing how the page loads. The followed control
- * detaching says the same of a page whose pager is redrawn with its results,
- * which is the only sign a page that showed no item can give (see
- * `afterListChange`).
+ * are observed without knowing how the page loads. Text/link changes cover
+ * records rendered into the same elements. Pager churn alone proves nothing
+ * about the records and cannot count as advancement.
  */
-function listChanged(itemSelector: string, previous: readonly Element[]): boolean {
+function listChanged(itemSelector: string, previous: readonly Element[], previousRecords: readonly string[]): boolean {
   const current = document.querySelectorAll(itemSelector);
   const first = previous[0];
   if (!first) return current.length > 0;
-  return !first.isConnected || current.length !== previous.length || current[0] !== first;
+  return !first.isConnected || current.length !== previous.length || current[0] !== first
+    || Array.from(current).some((record, index) => recordMeaning(record) !== previousRecords[index]);
+}
+
+/** Record meaning only, not animation/style/pager mutations. Kept locally;
+ * neither field text nor link addresses are added to wire evidence or logs. */
+function recordMeaning(record: Element): string {
+  const text = (record.textContent ?? "").replace(/\s+/gu, " ").trim();
+  const links = Array.from(record.querySelectorAll?.("a[href]") ?? []).map((link) => link.getAttribute("href"));
+  return JSON.stringify([text, links]);
 }
