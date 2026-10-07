@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Implementation authorized; P0 acceptance, running-build identity and Stop/build cancellation assigned in isolated task trees; later phases pending.
+Status detail: P0 acceptance fences integrated and pushed in both repositories; identity, cancellation and candidate authoring in isolated task trees; P0 live readiness and later gates pending.
 Created: 2026-10-05
 Last updated: 2026-10-06
 Owner: Senior supervisor agent
@@ -13,10 +13,12 @@ Related: [30-day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 
 ## Current State
 
-**Implementation authorized locally 2026-10-06; P0 in progress.** Three isolated
-units are provisioned: t296 paired Core acceptance fence; t297 downstream running
-build identity; t298 paired build cancellation/control. Worker reports and exact
-checks are recorded below as work lands. No phase is complete on assignment alone.
+**Implementation authorized locally 2026-10-06; P0 in progress.** t296 is integrated
+and pushed: downstream `62ceaac8`, Core `6c449022`. Supervisor reran the two changed
+test files (29/29), the fluxiq typecheck and Core structure audit; downstream task
+integration audit passed. See the acceptance report and ledger. t297 running-build
+identity, t298 cancellation and t299 feature-flagged candidate authoring remain in
+isolated trees. No P0 completion or fresh A-D qualification is claimed.
 
 **Planning review completed locally 2026-10-06.**
 The [consultant review and revised execution detail](./mvp-final-month-plan/consultant-revision.md)
@@ -33,9 +35,9 @@ and [implementation ledger](./mvp-final-month-plan/archive/2026-10-06-pre-consul
 remain available; historical briefs are not active dispatch instructions.
 
 **Verified by source/history inspection.** Discovery and authoring still share
-draft state. Yes followed by an unsure/silent confirmation can still pass. Held
-reauthor promotion protects the selected single-subflow shape, but unsupported
-topologies apply before their judged rerun. Desired-state check and persistent
+draft state on the legacy path. t296 now requires a second affirmative verdict
+when build confirmation is requested and refuses unsupported held-repair topologies
+before applying or dispatching. Desired-state check and persistent
 locator fingerprints already exist; their implementations need refinement. The
 Lab already resets before persisted playback and checks exact zero-call reuse.
 Its cached-worker deletion is wired, but running-worker build identity is missing.
@@ -78,9 +80,9 @@ change; no user-panel management unless explicitly authorized.
 **Audit reports.** [Working docs](./mvp-final-month-plan/reports/consultant-doc-context.md),
 [Core source](./mvp-final-month-plan/reports/consultant-core-audit.md),
 [browser/Lab source](./mvp-final-month-plan/reports/consultant-browser-lab-audit.md).
-These record coverage and unverified hypotheses. No source changes, Core edits,
-product tests, live sessions or paid calls were made. Documentation validation
-and task integration are recorded in the ledger below.
+These record planning coverage and unverified hypotheses. Implementation checks
+and source changes are recorded separately below; no paid run has started. Identity
+and cancellation browser evidence must be independently reviewed before P0 closes.
 
 ## Schedule to 2026-11-10
 
@@ -179,6 +181,13 @@ not pending implementation assignments; the next brief is P0 in the revision.
 Historical briefs: [Claude schedule and task briefs](./mvp-final-month-plan/archive/2026-10-06-pre-consultant-schedule-and-briefs.md).
 
 ## Work Ledger
+
+### 2026-10-06 - t296 integrated and paired dev branches pushed
+- Agent: Codex supervisor.
+- Changed: Core source/test/architecture commit `1736ba81`, paired verification ledgers and downstream acceptance report; merges downstream `62ceaac8`, Core `6c449022`.
+- Validation: supervisor reviewed source and reran changed agreement/held-candidate tests 29/29 after dev integration; fluxiq check exit 0; Core audit exit 0; downstream task finish audit passed. Worker broader owning selection: 391 tests; not substituted for supervisor checks.
+- Outcome: Partial (two P0 fences complete; requirements receipts, identity and real cancel proof remain).
+- Follow-up: t297/t298 validation and merge; t299 authoring followed by serial candidate runtime verification. Both dev branches pushed; main/release untouched. Core task finish used `--skip-checks` only after observed narrow gates to honor the twice-daily full-suite limit.
 
 ### 2026-10-06 - t296 two acceptance fences independently verified
 - Agent: Codex supervisor; p0-acceptance worker.
