@@ -113,6 +113,15 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 ## Worker Briefs
 
+### Brief: p3-typed-browser-readiness (task t301)
+- Repository: isolated C:/Users/osrs_/FluxStuff/fxwork/t301-typed-browser-readiness; shared sibling Core read-only.
+- Task: Reproduce then fix three shared browser blockers: controlled desired-state checkbox/radio, in-place Next-page rerender/ended distinction, type(submit:true) committing declaration parity. Preserve actionability, sensitive evidence and no blind mutating retry.
+- Required reads: this Current State/revision P3; node-catalog interaction/reading reports; exact checkable-state/check action and owning browser tests; pagination list-change/Next execution/tests; domain plan-resolution step-permission/type parameters/existing tests. Discover exact Next owners before editing and send file list.
+- Owns: checkable-state.ts/check.ts and owning regression/browser fixtures/tests; Next list-change/continuation modules and owning tests; domain step-permission.ts and owning tests; scoped authored web-capabilities docs; own reports/p3-typed-browser-readiness.md in task tree. No Core/shared protocols/Stop/identity/facade source.
+- Must not touch: main/shared docs, other trees, Core, runtime/user data; no git mutation/provider/full suites. Wait provisioning completion before source edit; no debugger input fallback.
+- Definition of done: controlled components update application state, already-correct check has no click, unchecked radio refused, revert readback fails; Next changing text in existing rows advances once, unchanged/disabled/ended remain truthful and bounded; submit type requires explicit consequences through same Core gate, unsent type preserves contract. Fail-first owning regressions and provider-free real production/browser fixture proofs; touched typechecks/audit.
+- Report: docs/working/mvp-final-month-plan/reports/p3-typed-browser-readiness.md; include before/after, exact commands, browser/target and limitations.
+
 ### Brief: p2-candidate-evidence (task t300; supervisor until a worker is free)
 - Repository: paired C:/Users/osrs_/FluxStuff/fxwork/t300/!FluxIQ and !FluxIQWebExtension.
 - Task: Implement domain-neutral immutable requirement/evidence receipt contracts and fail-closed candidate acceptance controller; later wire the serial facade after t298/t299 integration. Preserve canonical graph/runtime/persistence ownership.
@@ -194,6 +203,13 @@ not pending implementation assignments; the next brief is P0 in the revision.
 Historical briefs: [Claude schedule and task briefs](./mvp-final-month-plan/archive/2026-10-06-pre-consultant-schedule-and-briefs.md).
 
 ## Work Ledger
+
+### 2026-10-06 - Typed shared blocker task prepared
+- Agent: Codex supervisor.
+- Changed: t301 bounded brief; isolated downstream provisioning started session 72014; worker assignment follows completed navigation/gaps reports.
+- Validation: source inspected check/type/permission boundaries; no fix or live behavior claimed yet. t299 candidate module and unverified store committed locally with checked architecture/report updates, pending atomic facade integration.
+- Outcome: Partial.
+- Follow-up: reproduce controlled check, in-place Next and submit declaration parity; qualify with narrow browser regressions. Preserve all existing safety/actionability gates.
 
 ### 2026-10-06 - Identity integrated; candidate and Stop proofs advance
 - Agent: Codex supervisor.
