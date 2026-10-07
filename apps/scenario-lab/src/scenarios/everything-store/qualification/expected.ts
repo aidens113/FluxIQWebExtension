@@ -1,0 +1,9 @@
+import type { ScenarioExpected } from "@fluxiq-web-extension/test-contracts";
+
+/** Literal answers and account identities, independent of the renderer and facts formatter. */
+export const restoreClothsExpected: ScenarioExpected = {
+  pageFacts: [{ id: "restoreCloths-start", subject: "everything-saved-cloths-account", predicate: "text", value: "{\"cart\":[{\"lineId\":\"L2\",\"sku\":\"B0RDGAU8PM\",\"offerId\":null,\"quantity\":1,\"selected\":true},{\"lineId\":\"L1\",\"sku\":\"B0BAAA48CT\",\"offerId\":null,\"quantity\":1,\"selected\":true}],\"saved\":[{\"lineId\":\"S2\",\"sku\":\"B0TWGOOSE9\",\"offerId\":null,\"quantity\":1,\"selected\":true},{\"lineId\":\"S1\",\"sku\":\"B0BAMFC24P\",\"offerId\":null,\"quantity\":1,\"selected\":true}],\"nextLine\":3,\"checkoutOpen\":false,\"orderCount\":0,\"newsletter\":\"none\"}" }],
+  extracted: [{ step: "extract-restored-cloths", count: 3, records: [{"item": "Brightaisle Basics Microfiber Cleaning Cloths, 24 Pack", "quantity": "1", "price": "$12.99"}, {"item": "Ridgeline Slim Case for Aurel 8 Pro, Shockproof Phone Case with Raised Edges, Midnight", "quantity": "1", "price": "$19.99"}, {"item": "Brightaisle Basics AA Alkaline Batteries, 48 Count", "quantity": "1", "price": "$17.49"}] }],
+  finalState: [{ id: "restoreCloths-account", subject: "everything-saved-cloths-account", predicate: "text", value: "{\"cart\":[{\"lineId\":\"S1\",\"sku\":\"B0BAMFC24P\",\"offerId\":null,\"quantity\":1,\"selected\":true},{\"lineId\":\"L2\",\"sku\":\"B0RDGAU8PM\",\"offerId\":null,\"quantity\":1,\"selected\":true},{\"lineId\":\"L1\",\"sku\":\"B0BAAA48CT\",\"offerId\":null,\"quantity\":1,\"selected\":true}],\"saved\":[{\"lineId\":\"S2\",\"sku\":\"B0TWGOOSE9\",\"offerId\":null,\"quantity\":1,\"selected\":true}],\"nextLine\":3,\"checkoutOpen\":false,\"orderCount\":0,\"newsletter\":\"none\"}" }],
+  allowedConsoleErrors: [],
+};

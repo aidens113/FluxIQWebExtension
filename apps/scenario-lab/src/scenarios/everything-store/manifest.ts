@@ -1,3 +1,4 @@
+import { restoreClothsWorkflow } from "./qualification/index.js";
 import { createScenarioManifest } from "../../types.js";
 import { ADD_TO_CART_WORKFLOW, FIRST_PAGE_WORKFLOW, PLUS_UNDER_FIFTY_WORKFLOW, PURCHASE_WORKFLOW } from "./workflows/index.js";
 
@@ -29,5 +30,5 @@ export const everythingStoreManifest = createScenarioManifest({
   recordingScript: PURCHASE_WORKFLOW.recordingScript,
   playbackGoal: PURCHASE_WORKFLOW.playbackGoal,
   expected: PURCHASE_WORKFLOW.expected,
-  workflows: [ADD_TO_CART_WORKFLOW, FIRST_PAGE_WORKFLOW, PLUS_UNDER_FIFTY_WORKFLOW],
+  workflows: [ADD_TO_CART_WORKFLOW, FIRST_PAGE_WORKFLOW, PLUS_UNDER_FIFTY_WORKFLOW, restoreClothsWorkflow],
 });

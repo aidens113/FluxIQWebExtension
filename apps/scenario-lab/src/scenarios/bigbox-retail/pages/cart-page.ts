@@ -20,7 +20,7 @@ function lineMarkup(view: LineView, c: BigboxClasses, saved: boolean): string {
   const actions = saved
     ? `<button type="button" class="${c.btnLink}">Move to cart</button><button type="button" class="${c.btnLink}">Remove</button>`
     : `<label>Qty <select class="${c.qtySelect}">${options}</select></label><button type="button" class="${c.btnLink}">Remove</button><button type="button" class="${c.btnLink}">Save for later</button>`;
-  return `<div class="${c.cartLine}"><div class="${c.cartLineMain}"><a href="${productHref(view.product, view.variant.sku)}">${escapeHtml(view.title)}</a><span>Sold and shipped by ${escapeHtml(view.product.seller)}</span><span>${formatMoney(view.unitCents)} each</span><div class="${c.cartLineActions}">${actions}</div></div><strong>${formatMoney(view.totalCents)}</strong></div>`;
+  return `<div class="${c.cartLine}"><div class="${c.cartLineMain}"><a href="${productHref(view.product, view.variant.sku)}">${escapeHtml(view.title)}</a><span>Sold and shipped by ${escapeHtml(view.product.seller)}</span><span><span>${formatMoney(view.unitCents)}</span> each</span><div class="${c.cartLineActions}">${actions}</div></div><strong>${formatMoney(view.totalCents)}</strong></div>`;
 }
 
 const views = (lines: readonly CartLine[]) => lines.map(describeLine).filter((view) => view !== undefined);

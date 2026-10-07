@@ -651,3 +651,36 @@ Earlier entries: [Claude implementation and handoff ledger](../../mvp-final-mont
 - Return verified source findings with line references, exact required exports/contract changes and unknowns; no tests/provider/panel/git/shared docs. Supervisor must approve source owners before implementation.
 
 
+
+### Brief: qualification-state-preservation (t316)
+- Repository: fxwork/qualification-next/t316-qualification-state-preservation, private sibling Core detached/read-only. Worker p0_build_identity; provision15520 pending, no edits until ready.
+- Task: Add only NEW bigbox-retail-ensure-soap-quantity, everything-store-restore-saved-cloths and local-classifieds-remove-sold-saves from ten-task proposal sections2/5/7. Preserve all original57 and t3123 additions; total63 only after combined integration.
+- Initial owns: those3 site live-tasks/manifest and necessary barrel owners; new qualification/{workflow,expected,facts,index}.ts + owning tests; existing owning browser/scenario tests, narrow actual-account oracle readout owners to be named BEFORE editing. Own reports/qualification-state-preservation.md. No shared global inventory test/document, other sites/Core/product node edits.
+- Contract: exact literal independent row identities/order/quantities/full account state. Bigbox ensure total3 twice produces no added line/store change; everything transfers existing saved S1 without duplicate/newline and keeps S2; local removes Sold save without hidden/messages/offers. Actual current account facts, not stale readouts or just count/confirmation; explicit permission labels. Refresh only private instrumentation from actual mutation response if necessary, preserve visible fixture quirks. Wrongoutcomes fail before manual reload; also verify durable reload.
+- Validation: owning old+new unit/oracle tests, real isolated Chromium honest and deliberatewrongoutcome probes, source/e2etypes/owningbuild/audit. Literal authored records independent from renderer/filter code; record lifecycle/staticcodepin exactly. No provider/fullsuite/panel/git/shared docs. Freeze reports and source for independent root checks; no model/extension qualification claim.
+
+
+### Brief: original-project-authority-cutover-review (report only)
+- Worker: p0_cancel_control; main Core/downstream source inspection, own downstream reports/p2-original-project-authority-review.md only. No source/build/browser/provider/panel/git/shared docs.
+- Read Current State, consultant-revision P2 authority requirements, verified staged foundation report and prior p2-authority-cutover-brief.md. Prior asql reserved-namespace/new-project-only proposal remains UNAPPROVED and does not satisfy original-project candidate acceptance. Preserve existing IDs and user data.
+- Find a coherent explicit adoption/capture/read/all-writer cutover using actual project SQL snapshot owner and original IDs. Reuse schema, normal compiler/permissions, source/settings/membership and all actual production readers/writers; no second graph schema or shadow-only feature claim.
+- Inspect exact prior writer table owners and actual project pool/UoW/outbox/coordinator boundaries; identify minimum first implementable partition and full later activation gate. Specify race handling when legacy writer begins before adoption and completes after capture, cross-process writers, missing graph/global canonical writes, file/instruction/index revisions. A lookup-only marker or callback preflight is not atomic fencing.
+- Consider a project-SQL claim/guard that all legacy official writers acquire before effects and release only after full operation, with adoption refusing pending/unknown claims; if viable explain migration/admission/restart/compatibility and enumerate exact ingress/read joins. Unknown interrupted file/global write cannot silently activate from mixed capture. Refuse unsupported dependencies without silently creating a new project.
+- Return concrete owner/contract proposal plus unsupported assumptions. No namespace/source implementation authorized. Root owns acceptance of architecture and integration; report is not proof or activation.
+
+
+### Brief: typing-target-liveness (t319, supervisor)
+- Task branch in main checkout; owned private HTTP/production extension proof. Core source unchanged, current owning dependency build needed before unpacked extension build.
+- Own existing content/actions/type.ts, owning actions/tests/type-unsent-form.test.ts fake connected field property, existing e2e/runtime/tests/sanitized-field-typing.spec.ts actual removed/replaced-field negative, scoped architecture extension-client typing paragraph and reports/p3-typing-target-liveness.md.
+- Reproduce actual false success when input handler removes/replaces target but detached object retains requested value. Original resolved control must still be connected at immediate readback; refuse passed result and any submit Enter after detachment, even if old value matches. Do not silently resolve a replacement target or claim async application acceptance.
+- Preserve actual native whole-value/per-character semantics, redaction, form/permission behavior; no source change in keyboard/other nodes unless reproduction requires revised brief. Real content+background identities, wrong visible replacement value and zero submit/Enter evidence.
+- Fail-first browser proof before implementation, then source/e2e types, narrow owning content tests, owning all-target extension build, real unpacked Chromium proof and audit. No fullsuite/provider/panel/user-state/gitforce. Document exact results/limits before integration/push.
+
+
+## Retired verified t321 brief
+
+### Brief: typing-observation-window (t321, supervisor)
+- Root task branch in main checkout; owned extension fixture only. Own content/actions/type.ts, existing actions/tests/type-unsent-form.test.ts async test contract, existing e2e/runtime/tests/sanitized-field-typing.spec.ts delayed/microtask revert negatives, extension-client scoped paragraph and reports/p3-typing-observation-window.md.
+- Reproduce truthful readback gap after deferred application handlers. Execute already awaits typeAction, so use bounded50ms timer observation after typing as existing checkable-state does, then original connected-control value comparison. Recheck existing actionability before requested Enter after the await; no pre-dispatch refusal flag after text already typed. No silent replacement or retry.
+- Preserve per-character/native format/redaction, initial permission/actionability and form messages. Real-browser fail-first before fix, then named units/types/build/current identity/browser/audit. This finite window is not general asynchronous/server acceptance or React qualification. No Core/domain/schema changes/fullsuite/provider/panel/user-state reset.
+

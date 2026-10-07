@@ -30,4 +30,12 @@ export const BIGBOX_RETAIL_LIVE_TASKS: readonly LiveInstructionTask[] = [
   { id: "bigbox-retail-pickup-cart-redesigned-after-creation", scenarioId: "bigbox-retail", variantId: "redesigned-buy-box", variantArmedAfterBuild: true, kind: "form", instruction: PICKUP_CART, judgeBy: "playback-goal" },
   { id: "bigbox-retail-pickup-cart-store-remembered-after-creation", scenarioId: "bigbox-retail", variantId: "store-remembered", variantArmedAfterBuild: true, kind: "form", instruction: PICKUP_CART, judgeBy: "playback-goal" },
   { id: "bigbox-retail-pickup-order", scenarioId: "bigbox-retail", kind: "navigate-and-extract", instruction: PICKUP_ORDER, judgeBy: "expected-dataset", expectedDatasetId: "extract-order", permissionPoint: { consequence: "move_money", control: "Place order" } },
+  {
+    id: "bigbox-retail-ensure-soap-quantity",
+    scenarioId: "bigbox-retail",
+    kind: "navigate-and-extract",
+    instruction: "Make sure my ValueRidge cart has exactly three bottles of ValueRidge Ultra Dish Soap, Lemon Scent, 24 fl oz, for pickup at my current store. I mean three in total, not three more. Keep the same cart item and pickup store, do not add any other product or move anything to Saved for later, and do not check out. Show the cart with columns item, quantity and price, where price is the price of one bottle.",
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-soap-quantity",
+  },
 ];

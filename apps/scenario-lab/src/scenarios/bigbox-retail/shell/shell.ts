@@ -1,3 +1,4 @@
+import { soapQuantityAccountFacts } from "../qualification/index.js";
 import { escapeHtml, page } from "../../../html.js";
 import type { RenderContext } from "../../../types.js";
 import { formatMoney, SITE_ROOT } from "../catalog/index.js";
@@ -51,9 +52,19 @@ ${storePickerMarkup(state.storeId, c)}
 <a class="${c.cartLink}" href="${SITE_ROOT}cart"><span aria-hidden="true">&#128722;</span><span class="${c.cartBadge}">${totals.itemCount}</span><span class="${c.cartTotal}">${formatMoney(totals.subtotalCents)}</span></a></nav>
 <div class="${c.miniCart}" data-testid="mini-cart" hidden>${miniCartMarkup(state, c)}</div>
 </div><nav class="${c.deptNav}" aria-label="Departments">${departments}${weeklyAd}</nav></header>
+<script type="application/json" data-testid="bigbox-soap-account">${soapQuantityAccountFacts(state).replaceAll("<", "\\u003c")}</script>
 <main class="${c.main}">${input.main(c)}</main>
 <footer class="${c.footer}"><div class="${c.footerCols}">${footer}</div><small class="${c.buildNote}">&copy; 2026 ValueRidge Stores, Inc. · ${escapeHtml(buildOf(state.mode))}</small></footer>
 </div>${state.consent === "pending" ? consentDialogMarkup(c, elementId(context.seed, "consent-title")) : ""}${supportChatMarkup(c, kind !== "cart")}`;
-  const script = `${shellScript({ runToken: context.runToken, classes: c, kind, consent: state.consent, promo: state.promo, chatCard: state.chatCard, tileDefaults: input.tileDefaults ?? {} })}\n${input.script?.(c) ?? ""}`;
+  const script = `// Readonly fixture account fact follows actual mutation responses; visible UI is unchanged.
+const qualificationAccountFacts = ${soapQuantityAccountFacts.toString()};
+const qualificationMutation = mutate;
+mutate = async (operation, payload = {}) => {
+  const result = await qualificationMutation(operation, payload);
+  const fact = document.querySelector('[data-testid="bigbox-soap-account"]');
+  if (fact) fact.textContent = qualificationAccountFacts(result.state);
+  return result;
+};
+${shellScript({ runToken: context.runToken, classes: c, kind, consent: state.consent, promo: state.promo, chatCard: state.chatCard, tileDefaults: input.tileDefaults ?? {} })}\n${input.script?.(c) ?? ""}`;
   return page(`${input.title} - ValueRidge`, body, script);
 }
