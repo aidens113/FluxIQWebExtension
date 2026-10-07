@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 
 import type { ActivityEntry, FluxIQSession, FluxIQSettings } from "../../../shared/protocol";
-import { callCoreProgram } from "../core-api";
+import { callCoreProgram, fetchProjectIdFromCoreSnapshot } from "../core-api";
 import { ProjectContext } from "../project-context";
 
 const TOKEN = "secret-pairing-token";
@@ -253,4 +253,43 @@ test("reads at the same moment share one lookup, and a read just after reuses it
   assert.equal(await harness.context.resolve("panel"), "project-new");
   assert.equal(requests.length, 1);
   assert.deepEqual(harness.adopted, ["project-new"]);
+});
+
+// A closed session stays in Core's snapshot with its old project
+// (client-gateway/service/lifecycle.ts `disconnect`). The previous run's
+// session -- the one the extension stored, or the first with its client id --
+// must not stand in for Core's current project.
+test("a disconnected session's project is not Core's answer; Core's studio context is", async (t) => {
+  stubFetch(t, () => json(200, {
+    ok: true,
+    payload: {
+      sessions: [
+        { sessionId: "session-old", clientId: "client-1", status: "disconnected", projectId: "project-old" },
+        { sessionId: "session-other", clientId: "client-1", status: "disconnected", projectId: "project-older" }
+      ],
+      webRuntime: { automationStudio: { activeProjectId: "project-new" } }
+    }
+  }));
+  assert.equal(await fetchProjectIdFromCoreSnapshot(credentials, { sessionId: "session-old", clientId: "client-1" }, "panel"), "project-new");
+});
+
+test("a live session's binding still wins, matched by session id or else by client id", async (t) => {
+  stubFetch(t, () => json(200, {
+    ok: true,
+    payload: {
+      sessions: [
+        { sessionId: "session-old", clientId: "client-1", status: "disconnected", projectId: "project-old" },
+        { sessionId: "session-live", clientId: "client-1", status: "ready", projectId: "project-bound" }
+      ],
+      webRuntime: { automationStudio: { activeProjectId: "project-studio" } }
+    }
+  }));
+  assert.equal(await fetchProjectIdFromCoreSnapshot(credentials, { sessionId: "session-live", clientId: "client-1" }, "panel"), "project-bound");
+  assert.equal(await fetchProjectIdFromCoreSnapshot(credentials, { sessionId: undefined, clientId: "client-1" }, "panel"), "project-bound");
+});
+
+test("the snapshot lookup carries a timeout, so a Core that never answers cannot hold the request open", async (t) => {
+  const requests = stubFetch(t, () => json(200, { ok: true, payload: { sessions: [] } }));
+  await fetchProjectIdFromCoreSnapshot(credentials, { sessionId: undefined, clientId: "client-1" }, "panel");
+  assert.ok(requests[0]?.init.signal instanceof AbortSignal);
 });

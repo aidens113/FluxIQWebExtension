@@ -10,6 +10,9 @@ import path from "node:path";
 import test from "node:test";
 import { admitLiveRun, readDevAncestry } from "../index.mjs";
 
+/** A weekday noon UTC, outside the peak rule's windows, so these tests do not depend on the hour they run at. */
+const OFF_PEAK = Date.UTC(2026, 9, 6, 12);
+
 const ARGS = ["run", "bigbox-retail", "--live-llm", "--llm-task", "create-flow", "--instruction-task", "bigbox-retail-pickup-cart"];
 
 function git(root, ...args) {
@@ -30,7 +33,7 @@ async function fixture() {
   const web = path.join(directory, "web");
   const core = path.join(directory, "core");
   await mkdir(slots, { recursive: true });
-  const admit = () => admitLiveRun({ args: ARGS, env: { FLUXIQ_LAB_INSTANCE: "slot-1" }, repositoryRoot: web, coreRoot: core, slotsDirectory: slots, now: Date.now(), isAlive: () => true, fingerprint: async () => ({ digest: "sha256:x", files: 1 }) });
+  const admit = () => admitLiveRun({ args: ARGS, env: { FLUXIQ_LAB_INSTANCE: "slot-1" }, repositoryRoot: web, coreRoot: core, slotsDirectory: slots, now: OFF_PEAK, isAlive: () => true, fingerprint: async () => ({ digest: "sha256:x", files: 1 }) });
   return { directory, slots, web, core, admit, cleanup: () => rm(directory, { recursive: true, force: true }) };
 }
 

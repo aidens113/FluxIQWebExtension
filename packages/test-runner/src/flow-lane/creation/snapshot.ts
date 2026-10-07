@@ -26,6 +26,12 @@ import { describeCreatedFlowRequest } from "./request.js";
  * maxPages: 3 }`, `mode: "numbered"`, or a scroll with a cap. No Flow document
  * is persisted under `test-runs/`, Core deletes an isolated run's workspace
  * when the run ends, and a fix shipped against the inferred cause did not work.
+ *
+ * `authoredGraph` is the rest of that Flow -- every control node (id and
+ * definition) and every edge (id, endpoints, ports) -- because `authoredNodes`
+ * lists action nodes only. Run `mut4fvkm` played a merge node the authored list
+ * did not hold and skipped an action it did, and with no edge on record a state
+ * route that passed over two nodes read as a revision mismatch.
  */
 export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
   return {
@@ -42,6 +48,8 @@ export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
     flowId: evidence.flowId,
     flowShape: evidence.shape,
     authoredNodes: evidence.authoredNodes,
+    // The Flow's control nodes and edges, identifiers only, from the same read.
+    authoredGraph: evidence.authoredGraph,
     // Whether the Flow can reach the page it works on, or whether
     // `prepareFlowPage("playback")` reached it for the Flow. A
     // `navigate-and-extract` Flow with no navigation node is measured on a page

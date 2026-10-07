@@ -54,11 +54,15 @@ export function textOutsideSensitiveControls(element: Element, extent: "all" | "
   return textSkippingSensitiveSubtrees(element);
 }
 
+/** The element's own text nodes, joined by a space: one pass over its child nodes, with no copy of the list. */
 function ownText(element: Element): string {
-  return [...element.childNodes]
-    .filter((node) => node.nodeType === Node.TEXT_NODE)
-    .map((node) => node.textContent ?? "")
-    .join(" ");
+  const pieces: string[] = [];
+  const children = element.childNodes;
+  for (let index = 0; index < children.length; index += 1) {
+    const node = children[index];
+    if (node && node.nodeType === Node.TEXT_NODE) pieces.push(node.textContent ?? "");
+  }
+  return pieces.join(" ");
 }
 
 /**

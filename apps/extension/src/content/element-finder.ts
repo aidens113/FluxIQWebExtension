@@ -1,4 +1,4 @@
-import { isVolatileIdentifier, type LookupRoot } from "./selector";
+import { isVolatileIdentifier, siblingPosition, type LookupRoot } from "./selector";
 
 export type ElementFingerprint = {
   selector?: string;
@@ -81,8 +81,9 @@ export function xpathFor(element: Element): string {
       anchored = true;
       break;
     }
-    const siblings = current.parentElement ? [...current.parentElement.children].filter((sibling) => sibling.tagName === current!.tagName) : [];
-    parts.unshift(`${current.tagName.toLowerCase()}[${Math.max(1, siblings.indexOf(current) + 1)}]`);
+    // Among same-`tagName` siblings, which is what XPath's name test matches; a table lookup inside a capture (`selector/sibling-position.ts`).
+    const { index } = siblingPosition(current, current.parentElement, "tag-name");
+    parts.unshift(`${current.tagName.toLowerCase()}[${index}]`);
     current = current.parentElement;
   }
   return `${anchored ? "//" : "/"}${parts.join("/")}`;
