@@ -4,8 +4,10 @@
 
 t299 remains isolated. The worker's controller/wrapper and request parser are
 verified but must not merge until the facade reads the flag atomically. Supervisor
-has added Core-owned unverified draft storage; facade/API wiring waits for the
-serial service.ts owner in t298. No candidate promotion or live qualification.
+added Core-owned unverified draft storage and the command orchestration; worker
+then wired service/API atomically after t298 integration. Current-dev merged and
+independent actual facade/API/conversation/reauthor53/53 pass, Core typecheck0.
+No candidate promotion or live qualification; final integration audits pending.
 
 ## Work ledger
 
@@ -36,3 +38,14 @@ extract candidate generation orchestration into its owning command module and
 wire the request flag/draft response/persistence atomically. Add service-level
 scripted proof, then exact detached runtime execution and t300 requirement receipts.
 Do not merge the flag parser by itself or treat static submission as product success.
+
+## Current integration receipts
+
+Worker source87c4c9f9 froze the atomic flag/draft/service/API slice. Supervisor
+reviewed extraction/permissions/purse/accounting and merge246a503f preserves both
+candidate and verification exports after the only merge conflict (barrel). Actual
+service4cases, API19, conversation4 and reauthor26 passed independently after dev
+merge:53/53 (26.58s). fluxiq check executed/stamped0 (45.29s). Public result
+consumers still need the built declaration/web check; narrow build is running.
+Draft cancellation during underlying OS write and base CAS remain explicitly
+unverified; stored draft cannot execute or promote solely because it is readable.
