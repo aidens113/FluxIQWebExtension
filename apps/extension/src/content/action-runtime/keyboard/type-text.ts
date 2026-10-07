@@ -13,6 +13,7 @@
 // The trailing `change` event is what a field fires when the user commits an
 // edit, and pages that autosave on `change` depend on it.
 
+import { typeSanitizedInput } from "./sanitized-input";
 import { dispatchKeyEvent } from "./key-event";
 import { deleteAllContent, insertText } from "./text-edits";
 import { isEditableHost, isTextField } from "./editable-target";
@@ -20,6 +21,12 @@ import { isEditableHost, isTextField } from "./editable-target";
 export function typeText(element: Element, text: string): void {
   if (!isTextField(element) && !isEditableHost(element)) return;
   if (element instanceof HTMLElement) element.focus();
+  // Number/calendar/time controls sanitize incomplete prefixes to empty strings.
+  // Text and autocomplete controls retain the established per-character path.
+  if (element instanceof HTMLInputElement && ["number", "date", "time", "datetime-local", "month", "week"].includes(element.type)) {
+    typeSanitizedInput(element, text);
+    return;
+  }
   deleteAllContent(element);
   for (const character of text) {
     if (dispatchKeyEvent(element, "keydown", character)) insertText(element, character);
