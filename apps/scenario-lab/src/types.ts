@@ -97,5 +97,12 @@ export type ScenarioSnapshot = {
   scenarioId: ScenarioId;
   seed: number;
   state: object;
+  provenance: {
+    schemaVersion: "fixture.state.v1";
+    ownerEpoch: string;
+    resetGeneration: number;
+    mutationSequence: number;
+  };
+  variant: { status: "baseline" } | { status: "unknown" } | { status: "armed"; variantId: string; workflowId: string | null; armSequence: number };
 };
 import { assertWebScenario, type WebScenario } from "@fluxiq-web-extension/test-contracts";
