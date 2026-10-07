@@ -56,7 +56,7 @@ hardening. In-flight t334 (click executor), t335 (installer, never compiled) and
 t337 (grammar for one sentence family) are WIP commits on their own branches, not
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
-**In flight.** t349 the saved instruction is the person's own words; t351 the ten Core test failures the sweep found; t352 downstream check order, extension failures and test-runner tests; t350 chat and overlay defects that persist in both modes. Next: the lane A candidate probe once t349 and t350 are merged, compared with legacy round 2 on the same task.
+**In flight.** t351 the ten Core test failures the sweep found; t352 downstream check order, extension failures and test-runner tests. Next: lane A round 3, the first candidate-mode probe (brief written), once both are merged.
 
 **Next order.**
 
@@ -438,6 +438,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: sweep on detached trees at Core `93c059b0` and downstream `ac50dd85` ([report](./mvp-final-month-plan/reports/sweep-1007.md)). Core: install, build and check pass; `pnpm test` fails 10 tests in 6 fluxiq files (8617 passed), deterministic on rerun, none timeouts; contracts, client-gateway-websocket and web pass. Downstream: build passes; `pnpm check` fails in a fresh tree because test-runner's typecheck runs before test-evidence has a dist, so the steps after it and the test-runner tests never ran; `pnpm test` fails 4 of 2588 extension tests (execute, landmark-role), every other package passes. t351 fixes the Core ten; t352 fixes the check order and the extension four and runs the test-runner tests.
 - Validation: sweep worker's commands and totals as quoted in the report; the supervisor has not rerun them. The four generation-failure failures match the supervisor's own run on `7c87927a`.
 - Limits: the second sweep of the day, if any, waits until t351 and t352 merge.
+
+### 2026-10-07 - t350 and t349 merged: chat and overlay fixes; builds save the person's own words
+- Changed: Core `c00b6120`, downstream `992ed2b8`, both pushed. t350 (round 2 UI review): click cards name their target when the page has a name (D4, partly: two targets have no name anywhere); the overlay keeps short labels whole (D6) and stops jumping (D11); repeated replays fold into one expandable line (D7); Stop shows during "Starting..." and draws as a button, its border having used an undefined CSS variable, now refused by a css-tokens test (D9); one verb per act, "Change the Flow" (D12). t349: a conversation-started build saves the person's turns since the thread last did something, kept whole; create-here and improve always, explore when the message says more than its own phrases; a caller with no person turn uses the model's argument, marked as such.
+- Validation: supervisor on merged trees. t350: Core vitest activity, activity-action, conversations -> 52 files, 601 passed; web activity and conversation 267 passed; Core and web tsc exit 0; Core audit exit 0; extension `pnpm test` -> 2607 tests, 2604 pass, 3 fail (`content/tests/landmark-role.test.ts`, already failing on dev per sweep-1007, owned by t352); extension build verified 22 files for chrome, firefox, e2e-chromium; downstream audit exit 0. t349: Core vitest conversations, activity, api, activity-action -> 76 files, 747 passed; Core and web tsc exit 0; web conversation and authoring 318 passed; Core audit exit 0; test-runner built against it, creation, chat and chat-check tests 166 pass, 0 fail.
+- Limits: no browser view of the UI fixes yet (the round 3 probe reviews them live). t349 open questions in its report: `flow.describe` still saves the model's wording; an explore follow-up such as "only the first five" replaces the whole goal; a running build's request can leak into the next; joined words over 4,000 characters fail the save. Round 3 waits for t351 and t352 (one of t351's failures covers the evidence loop's purse accounting).
 
 ## Open Questions
 
