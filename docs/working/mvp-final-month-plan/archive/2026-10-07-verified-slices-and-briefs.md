@@ -899,5 +899,3 @@ t311 pending command session binding is integrated/pushed Core210453c1/downstrea
 - Default factory and updated-source old objects check durable mode/binding at execution time; custom/memory ports legacy-only absent verified durable capability, no shaped-object privilege. Whole file/SQL/facade/direct writer/repair/policy/shared-index/pinned-reader joins remain serial prerequisites; no all-writer protection claim.
 - Test actual default factory/global DB plus project claims: two-owner allocation/mutation race, foreign replacement/publication owner, missing/delete/recreate/tombstones, pre-opened object mode check, partial claim/effect/COMMIT-lost reconciliation, literal child kills, nested outer claim retention, unseeded/custom unsupported paths and old rows unchanged. Freeze narrow types/build/audits for root independent review; no panel/providers/fullsuite/user data or git.
 - Own downstream p2-canonical-owner-routing.md and scoped Core persistence paragraph. Detailed closed contracts/limits approved before source release. Adoption/activation/common promotion remains disabled.
-
-
