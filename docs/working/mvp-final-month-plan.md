@@ -57,7 +57,7 @@ t337 (grammar for one sentence family) are WIP commits on their own branches, no
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
 **In flight.** t340 candidate trial runner, judge and promotion (slice U2, Core);
-t343 audit rule refusing new `as never` casts; t342 live lane A
+t344 Lab panel build serves Core's real identity (blocks every Lab run); t342 live lane A
 baseline in legacy mode (lead, one supervised run, debug, report only).
 
 **Next order.**
@@ -137,6 +137,14 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
+
+### Brief: t344 Lab-built Core panel serves its real build identity
+- Worker: t344-lab-identity (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t344\!FluxIQWebExtension` (branch `task/t344-lab-core-identity`, shared Core). Report: `docs/working/mvp-final-month-plan/reports/t344-lab-core-identity.md` in that tree.
+- Fact (t342, verified by the supervisor): every Lab run that starts Core fails its identity check with `get-runtime-build-identity (400): Executing Core runtime build identity is unavailable.` `packages/test-runner/src/core-web-build/workspace.ts:36` copies Core's `tsconfig.base.json` unchanged; its `paths` send `fluxiq` and `@fluxiq/contracts` to `src`, where `packages/fluxiq/src/runtime/build-identity/read.ts:5` holds the placeholder; only Core's `dist` is stamped. Broken since t302. Evidence: the t342 report (`fxwork/t342/.../reports/t342-lane-a-baseline.md`) and its debug file.
+- Goal: (1) the staged panel build resolves Core packages from their built output, not source; (2) raise `BUILD_LAYOUT_VERSION` (`core-web-build/key.ts`) so the broken cached panel is never reused; (3) refuse to publish a panel build that still contains the identity placeholder (`core-web-build/prepare.ts`); (4) the campaign must not attribute a repeatable Core 400 to a possible memory fault (`scripts/lab/live-campaign/lab-run/ram-fault.mjs`): the standing rule is that live failures are product or Lab defects, never machine load. Also explain why the dry run's panel key differed from the key the run built, and fix it if it is a defect.
+- Owns: `packages/test-runner/src/core-web-build/**` and tests; `scripts/lab/live-campaign/lab-run/**` and tests; `docs/architecture/testing-facility.md` where it describes the panel build.
+- Must not touch: Core, product source, `docs/working/*.md`. No commits, provider calls or override files. Lab or browser runs only on the ten realistic scenarios (user rule, applies to provider-free runs too).
+- Definition of done: fail-first unit tests for each of (1)-(4); test-runner build and owning tests pass; structure audit passes. Then one provider-free Lab run on a realistic scenario that starts Core and writes the four `running-*-identity.json` files, if such a path exists without a provider (report the exact command and output); if none exists, say so and stop, since the next guarded live run refuses before any provider call on an identity mismatch.
 
 ### Brief: t343 structure audit refuses new `as never` casts
 - Worker: t343-as-never (worker). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t343\` (Core-paired, branch `task/t343-ban-new-as-never`). Report: `docs/working/mvp-final-month-plan/reports/t343-ban-new-as-never.md` in the t343 downstream tree.
@@ -310,6 +318,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: Core `ca978fd9`, downstream `7f17acd2`, both pushed. The seven re-author port tests failing on Core dev broke at `87c4c9f9` (t299), whose guard at `runtime/service/runtime-adaptation/reauthor-build.ts:141` correctly refuses any build result not marked `status: "proposed"`; the tests' build stubs lacked the status and were cast `as never`, so the compiler never flagged them. Tests now use a typed `reauthor-proposal` helper; no product change. Re-author requests set no authoring mode, so they always get a legacy proposal. t343 adds an audit rule refusing new `as never` casts.
 - Validation: supervisor in the t341 Core tree: `npx vitest run src/programs/automation-studio/runtime/service/runtime-adaptation` -> 12 files, 169 passed; `npx tsc --noEmit -p tsconfig.json` -> exit 0; Core structure audit exit 0; downstream `pnpm task finish t341` audit passed; Core finished with `--skip-checks` after those gates (Core dev unchanged since the branch).
 - Limits: no live re-author run; the repair chain is still unproven live.
+
+### 2026-10-07 - t342 blocked at $0 by the Lab's Core identity; t343 merged; t344 dispatched
+- Changed: t342's one allowed lane A run (`run-muyj5f0b-02fcd351`, admitted 19:58 UTC off-peak) stopped at the Lab's Core identity check, before project setup, browser, chat or any provider call: `get-runtime-build-identity (400)`. Cause: the Lab builds the Core panel from Core source (`core-web-build/workspace.ts:36` copies `tsconfig.base.json` whose `paths` point at `src`), where the identity is still the placeholder; broken since t302, so no Lab run that starts Core could have worked since then. t344 fixes the panel build. t343 merged (Core `e5f25177`, downstream `073a9c77`): the structure audit refuses new `as never` casts (Core baseline 381 in 160 files, downstream 136 in 65). Process note: the lead also ran a provider-free check on `basic-form`, which breaks the user's rule that Lab runs use only the ten realistic scenarios; t344's brief restates the rule.
+- Validation: supervisor confirmed `workspace.ts:36` copies Core's `tsconfig.base.json`, its `paths` map `fluxiq` and `@fluxiq/contracts` to `src`, and `packages/fluxiq/src/runtime/build-identity/read.ts:5` holds `{"fluxiqRuntimeIdentityPlaceholder":302}`. Campaign totals for the run: `providerCalls 0`, `reportedCostUsd 0`. t343: `node --test` on the audit tests -> 210 pass, 0 fail in each repository; `node scripts/structure-audit.mjs` -> Core passed (285, 509 baselined), downstream passed (176, 182 baselined); the rule file is identical in both.
+- Limits: the lane A baseline is still unmeasured; the host, server-adapter and extension identity checks have never run in a real setup. t342's Lab slot 2 stays claimed for the rerun after t344.
 
 ## Open Questions
 
