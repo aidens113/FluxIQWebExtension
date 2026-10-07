@@ -9,6 +9,7 @@ import { RunnerFailure } from "../../../failure.js";
 import type { CreatedFlowLaneControl } from "../lane.js";
 import { PAGE_ONE_RECORDS } from "./scenario-fixture.js";
 import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS } from "fluxiq/automation-studio";
 
 export const PROJECT_ID = "project.lab";
 export const FLOW_ID = "flow.created";
@@ -30,7 +31,17 @@ export const EXTRACTING_EDGES = [
 
 export type FakeCreationCoreOptions = {
   /** What the build answers: a proposal, a refusal envelope, or a request that outlives its bound. */
-  generation?: { kind: "proposed" } | { kind: "refused"; status: number; payload: unknown } | { kind: "timeout"; proposalAfterPolls?: number } | { kind: "transport" };
+  generation?: { kind: "proposed" } | { kind: "refused"; status: number; payload: unknown } | { kind: "timeout"; proposalAfterPolls?: number } | { kind: "transport" } | { kind: "candidate-draft"; candidate: Record<string, unknown> };
+  /**
+   * What `get-flow-bootstrap-generation-readiness` says about candidate trials
+   * (t348): a Core with the trial runner and whether its start hook is set;
+   * absent, a Core older than the trial runner, whose readiness carries none.
+   */
+  candidateReadiness?: { startReset: boolean };
+  /** The `candidateTrial` Core recorded on the proposal's created audit event, raw; absent, none. */
+  candidateTrial?: unknown;
+  /** Core's runtime sessions, as `list-runtime-sessions` returns them; absent, none. */
+  runtimeSessions?: readonly unknown[];
   /** The pending proposal's evidence-loop audit; `null` for none. */
   evidenceLoop?: ExistingFlowAdaptation["evidenceLoop"] | null;
   /** What the proposal says its steps declared, and the question it carries out to a person. */
@@ -87,7 +98,12 @@ export function fakeCreationCore(options: FakeCreationCoreOptions = {}) {
       if (endpoint === "get-flow-router") return { router: applied ? { routerId: "router.one" } : null };
       if (endpoint === "list-conversations") return { conversations: [{ conversationId: "conversation.flow", pendingAskCount: 0, subject: { kind: "flow", id: FLOW_ID } }] };
       if (endpoint === "get-conversation") return { conversation: { turns: (options.flowThreadAsks ?? []).map((ask, index) => ({ turnId: `turn.${index}`, ask })), hasMore: false } };
-      if (endpoint === "get-flow-adaptation") return { adaptation: { adaptationId: ADAPTATION_ID, metadata: { phase9: { auditEvents: [{ eventType: "created", detail: options.buildJudged === undefined ? {} : { buildJudged: options.buildJudged } }] } } } };
+      if (endpoint === "get-flow-adaptation") return { adaptation: { adaptationId: ADAPTATION_ID, metadata: { phase9: { auditEvents: [{ eventType: "created", detail: { ...(options.buildJudged === undefined ? {} : { buildJudged: options.buildJudged }), ...(options.candidateTrial === undefined ? {} : { candidateTrial: options.candidateTrial }) } }] } } } };
+      if (endpoint === "get-flow-bootstrap-generation-readiness") {
+        const { candidateTrial, ...olderCapabilities } = AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS.capabilities;
+        return { readiness: { ...AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS, capabilities: options.candidateReadiness ? { ...olderCapabilities, candidateTrial: { ...candidateTrial, startReset: options.candidateReadiness.startReset } } : olderCapabilities } };
+      }
+      if (endpoint === "list-runtime-sessions") return { runtimeSessions: [...(options.runtimeSessions ?? [])] };
       if (endpoint === "save-flow-generation-instruction") {
         instructionRequests.push(payload);
         return { instruction: { instructionId: "instruction.one", status: options.instructionStatus ?? "active" } };
@@ -112,6 +128,7 @@ export function fakeCreationCore(options: FakeCreationCoreOptions = {}) {
       if (generation.kind === "timeout") throw new RunnerFailure("runtime.behavior", "FluxIQ HTTP operation timed out", { details: { bounded: "timeout", operationStage: "control.request", timeoutMs: 1 } });
       if (generation.kind === "transport") throw new RunnerFailure("runtime.behavior", "FluxIQ HTTP transport failed", { details: { transportCode: "ECONNRESET" } });
       if (generation.kind === "refused") return { status: generation.status, ok: false, payload: generation.payload };
+      if (generation.kind === "candidate-draft") return { status: 200, ok: true, payload: { candidate: generation.candidate } };
       return { status: 200, ok: true, payload: { adaptation: { projectId: input.projectId, flowId: input.flowId, adaptationId: ADAPTATION_ID, status: "proposed", accounting: { requestId: "evidence.one" } } } };
     },
     async listFlowAdaptations() {

@@ -28,7 +28,8 @@ import type { FinalStateVerdict } from "./final-state-facts.js";
 import { assertCreatedFlowOracles, createdFlowOraclesHold, judgeCreatedFlowOracles, type CreatedFlowOracles } from "./oracles.js";
 import { assertCreatedFlowReachesItsOwnPage, createdFlowOwnPage, type CreatedFlowOwnPage } from "./own-page.js";
 import { judgeCreatedFlowPermissionStop, readCreatedFlowPermissionAsks, type CreatedFlowPermissionStop } from "./permission-point.js";
-import { assertCreatedFlowVerificationReady } from "./readiness.js";
+import { createdFlowCandidateDraftFailure } from "./candidate-outcome.js";
+import { assertCreatedFlowVerificationReady, readCreatedFlowCandidateTrialReadiness, type CreatedFlowCandidateTrialReadiness } from "./readiness.js";
 import { describeCreatedFlowRequest, type CreatedFlowRequest } from "./request.js";
 import { applyCreatedFlowProposal, type CreatedFlowReview, type CreatedFlowReviewControl } from "./review-proposal.js";
 import { createdFlowSecretInputs } from "./secrets.js";
@@ -110,8 +111,10 @@ export type CreatedFlowLaneInput = {
   authorizationPin: string;
   /**
    * The authoring mode the run's Core was started in (`LiveLlmPlan.coreAuthoringMode`,
-   * `../../live-llm/authoring-mode-env.ts`). Only `legacy` builds; `candidate` is
-   * refused before anything is built or spent (`./readiness.ts`).
+   * `../../live-llm/authoring-mode-env.ts`). `legacy` builds as at the
+   * baseline. `candidate` builds only when the running Core says it test-runs
+   * candidates and was started with the start hook on the Lab's fixture reset,
+   * and is refused before anything is built or spent otherwise (`./readiness.ts`).
    */
   authoringMode: AutomationStudioAuthoringMode;
   request: CreatedFlowRequest;
@@ -244,6 +247,8 @@ export type CreatedFlowLaneEvidence = Readonly<{
   oracles: CreatedFlowOracles;
   /** Where `build.instructedConsequences` came from, as `live-llm.json` says it. */
   instructedConsequencesFrom: CreatedFlowSettledBuild["instructedConsequencesFrom"];
+  /** The mode the run's Core authored in; a candidate-mode build's candidate, trials and verdict are on `build.candidateOutcome`. */
+  authoringMode: AutomationStudioAuthoringMode;
 }>;
 
 /**
@@ -283,6 +288,10 @@ export type CreatedFlowLaneIncomplete = Readonly<{
   task: ReturnType<typeof describeCreatedFlowRequest>;
   /** How the build was started, as the complete snapshot says it: the lane's own entry, since a build that stopped may leave no chat record (`run-murdouox-c5294247`). */
   buildEntry: CreatedFlowLaneEntry["kind"];
+  /** The mode the run's Core authored in, as the complete snapshot says it. */
+  authoringMode: AutomationStudioAuthoringMode;
+  /** A candidate-mode build's candidate, trials, deciding verdict and promoted proposal (`build.candidateOutcome`); `null` otherwise. */
+  candidate: NonNullable<CreatedFlowBuild["candidateOutcome"]> | null;
   flowId: string | null;
   build: CreatedFlowBuild | null;
   /** Where `build.instructedConsequences` came from, as `live-llm.json` says it; `null` too when the settlement answered nothing. */
@@ -342,10 +351,12 @@ type CreatedFlowLaneProgress = {
  * run's record rather than taken out of its verdict.
  */
 export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<CreatedFlowLaneEvidence | CreatedFlowLanePermissionStop> {
-  assertCreatedFlowVerificationReady(input.authoringMode);
+  // In candidate mode the running Core is asked first -- a read, no provider -- whether it test-runs candidates and starts each trial from the Lab's reset.
+  const candidateTrial = input.authoringMode === "candidate" ? await readCreatedFlowCandidateTrialReadiness(input.control, input.projectDomainId ?? LAB_PROJECT_DOMAIN_ID, input.bounds ?? {}) : undefined;
+  assertCreatedFlowVerificationReady(input.authoringMode, candidateTrial);
   const progress: CreatedFlowLaneProgress = { stage: "blank-flow", published: false };
   try {
-    return await buildRunAndJudge(input, progress);
+    return await buildRunAndJudge(input, progress, candidateTrial);
   } catch (error) {
     // Written once the lane has a Flow of its own to describe. A refusal before
     // that -- a workflow that is not the task's, a blank Flow Core did not leave
@@ -361,13 +372,13 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
   }
 }
 
-async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFlowLaneProgress): Promise<CreatedFlowLaneEvidence | CreatedFlowLanePermissionStop> {
+async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFlowLaneProgress, candidateTrial: CreatedFlowCandidateTrialReadiness | undefined): Promise<CreatedFlowLaneEvidence | CreatedFlowLanePermissionStop> {
   const bounds = input.bounds ?? {};
   const { request, workflow, projectId, facilityRunId, authorizationPin } = input;
   if (workflow.workflowId !== request.workflowId || workflow.variant?.id !== request.variantId) {
     throw new RunnerFailure("fixture.invalid", "The created-Flow lane was handed a workflow other than the one its task resolved to");
   }
-  const started = input.entry.kind === "chat" ? await startChatBuild(input, input.entry, progress, bounds) : await startDirectBuild(input, progress, bounds);
+  const started = input.entry.kind === "chat" ? await startChatBuild(input, input.entry, progress, bounds, candidateTrial) : await startDirectBuild(input, progress, bounds, candidateTrial);
   const { build, buildPermitted, said } = started;
   if (started.flowId === null) {
     throw new RunnerFailure("runtime.behavior", `FluxIQ's chat did not build a Flow from the task's instruction (${build.failure?.code ?? "no Flow"})${said ? `; it said: ${JSON.stringify(said)}` : ""}`, {
@@ -388,7 +399,14 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   if (request.task.permissionPoint?.askFirst && build.outcome === "proposed") {
     throw new RunnerFailure("runtime.behavior", "The task says to ask before its lasting act, and FluxIQ built a Flow without asking", { details: { permissionPoint: "not_asked", consequence: request.task.permissionPoint.consequence, adaptationId: build.adaptationId } });
   }
-  if (build.outcome === "draft") throw new RunnerFailure("facility.contract", "Saved candidate draft; verification and promotion remain unavailable.", { details: { code: "lab.candidate_verification_unavailable", stage: "verification", candidateId: build.candidate?.candidateId ?? build.candidateReference?.candidateId ?? null, providerInvocation: build.providerInvocation } });
+  // A candidate whose test run did not stand stays a draft: the product's outcome, with the candidate and its verdicts (`./candidate-outcome.ts`).
+  if (build.outcome === "draft") {
+    throw build.candidateOutcome ? createdFlowCandidateDraftFailure(build.candidateOutcome, said) : new RunnerFailure("runtime.behavior", "FluxIQ kept a candidate draft and built no Flow, and said nothing the Lab could read its verdict from", { details: { code: "lab.candidate_not_promoted", stage: "verification", authoringMode: input.authoringMode, candidateId: build.candidate?.candidateId ?? build.candidateReference?.candidateId ?? null, verdict: "unknown", providerInvocation: build.providerInvocation } });
+  }
+  // In candidate mode only a tested candidate is proposed, and its proposal names it; one that does not is not a candidate's and is never run.
+  if (input.authoringMode === "candidate" && build.outcome === "proposed" && build.candidateOutcome?.outcome !== "promoted") {
+    throw new RunnerFailure("runtime.behavior", "FluxIQ proposed a Flow in candidate mode without naming the tested candidate behind it", { details: { code: "lab.candidate_proposal_unattributed", stage: "verification", adaptationId: build.adaptationId } });
+  }
   if (build.outcome !== "proposed" || build.adaptationId === null) {
     throw new RunnerFailure("runtime.behavior", `FluxIQ did not build a Flow from the task's instruction (${build.failure?.code ?? "no proposal"})${said ? `; it said: ${JSON.stringify(said)}` : ""}`, {
       details: { failure: build.failure, providerCalls: build.providerCalls, providerInvocation: build.providerInvocation, ...(build.chat ? { chat: build.chat } : {}) },
@@ -397,7 +415,7 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   await assertGrantedAtPermissionPoint(input, { flowId, adaptationId: build.adaptationId, buildPermitted, ...(build.chat ? { conversationId: build.chat.conversationId } : {}) }, bounds);
   progress.stage = "review";
   // The chat approves and applies its own proposal on the Flow it made; only a direct build is reviewed by the Lab.
-  const review = started.applied ?? await applyCreatedFlowProposal(input.control, { projectId, flowId, adaptationId: build.adaptationId, authorizationPin, authoringMode: input.authoringMode });
+  const review = started.applied ?? await applyCreatedFlowProposal(input.control, { projectId, flowId, adaptationId: build.adaptationId, authorizationPin, authoringMode: input.authoringMode, ...(candidateTrial ? { candidateTrial } : {}) });
   progress.review = review;
   progress.stage = "flow-read";
   const { nodes, edges } = await readCreatedFlowGraph(input.control, { projectId, flowId }, bounds);
@@ -470,7 +488,7 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
     automationFailureExpected: workflow.expected.failure ?? null,
     extraction: extraction?.measurements ?? [],
   });
-  const evidence: CreatedFlowLaneEvidence = Object.freeze({ request, build, review, flowId, shape, authoredNodes, authoredGraph, ownPage, run, observation, extraction, oracles, instructedConsequencesFrom: progress.instructedConsequencesFrom ?? null });
+  const evidence: CreatedFlowLaneEvidence = Object.freeze({ request, build, review, flowId, shape, authoredNodes, authoredGraph, ownPage, run, observation, extraction, oracles, instructedConsequencesFrom: progress.instructedConsequencesFrom ?? null, authoringMode: input.authoringMode });
   progress.stage = "publish";
   await input.recordEvidence(evidence);
   // From here the complete snapshot is on disk, so a failing expectation below
@@ -492,7 +510,7 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
  * Lab with the start page and the operator's permit, and the proposal left for
  * the Lab's own review below.
  */
-async function startDirectBuild(input: CreatedFlowLaneInput, progress: CreatedFlowLaneProgress, bounds: FluxIQHttpOptions): Promise<StartedBuild> {
+async function startDirectBuild(input: CreatedFlowLaneInput, progress: CreatedFlowLaneProgress, bounds: FluxIQHttpOptions, candidateTrial: CreatedFlowCandidateTrialReadiness | undefined): Promise<StartedBuild> {
   const { projectId, authorizationPin, facilityRunId, request } = input;
   const flowId = await createBlankCreationFlow(input.control, { projectId, name: `Lab created flow ${facilityRunId}`, authorizationPin }, bounds);
   progress.flowId = flowId;
@@ -505,7 +523,7 @@ async function startDirectBuild(input: CreatedFlowLaneInput, progress: CreatedFl
     buildPermitted = llm.permittedConsequences;
     return llm;
   };
-  const proposed = await buildCreatedFlowProposal(input.control, { projectId, flowId, instruction: request.task.instruction, startLocation: input.startLocation, authorize, authoringMode: input.authoringMode }, bounds, input.buildWait);
+  const proposed = await buildCreatedFlowProposal(input.control, { projectId, flowId, instruction: request.task.instruction, startLocation: input.startLocation, authorize, authoringMode: input.authoringMode, ...(candidateTrial ? { candidateTrial } : {}) }, bounds, input.buildWait);
   // Held before the settlement and before either refusal after it, which are the
   // two endings that used to leave a run with no artifact at all.
   progress.build = proposed;
@@ -529,14 +547,14 @@ async function startDirectBuild(input: CreatedFlowLaneInput, progress: CreatedFl
  * The chat carries no operator permit: a lasting act is asked about in the
  * thread and answered there by the Lab's person, at the task's point.
  */
-async function startChatBuild(input: CreatedFlowLaneInput, entry: Extract<CreatedFlowLaneEntry, { kind: "chat" }>, progress: CreatedFlowLaneProgress, bounds: FluxIQHttpOptions): Promise<StartedBuild> {
+async function startChatBuild(input: CreatedFlowLaneInput, entry: Extract<CreatedFlowLaneEntry, { kind: "chat" }>, progress: CreatedFlowLaneProgress, bounds: FluxIQHttpOptions, candidateTrial: CreatedFlowCandidateTrialReadiness | undefined): Promise<StartedBuild> {
   const { projectId } = input;
   progress.stage = "build";
   await input.prepareFlowPage("build");
   await entry.authorizeChat();
   // The chat's thread and the build it starts belong to the project the paired extension has selected.
   await input.control.selectExistingContext(projectId, undefined, bounds);
-  const made = await buildCreatedFlowFromChat(input.control, entry.chat, { projectId, domainId: input.projectDomainId ?? LAB_PROJECT_DOMAIN_ID, instruction: input.request.task.instruction, authoringMode: input.authoringMode }, entry.wait);
+  const made = await buildCreatedFlowFromChat(input.control, entry.chat, { projectId, domainId: input.projectDomainId ?? LAB_PROJECT_DOMAIN_ID, instruction: input.request.task.instruction, authoringMode: input.authoringMode, ...(candidateTrial ? { candidateTrial } : {}) }, entry.wait);
   if (made.flowId !== null) progress.flowId = made.flowId;
   progress.build = made.build;
   // A chat that built nothing spent nothing on a build, so the settlement's
@@ -616,6 +634,8 @@ function incompleteCreatedFlowLaneEvidence(input: CreatedFlowLaneInput, progress
     failure: error === undefined ? null : { category: error instanceof RunnerFailure ? error.category : null, message: error instanceof Error ? error.message : String(error) },
     task: describeCreatedFlowRequest(input.request),
     buildEntry: input.entry.kind,
+    authoringMode: input.authoringMode,
+    candidate: progress.build?.candidateOutcome ?? null,
     flowId: progress.flowId ?? null,
     build: progress.build ?? null,
     instructedConsequencesFrom: progress.instructedConsequencesFrom ?? null,
