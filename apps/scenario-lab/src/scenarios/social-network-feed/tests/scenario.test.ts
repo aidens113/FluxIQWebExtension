@@ -33,9 +33,9 @@ function selections(): Selection[] {
 test("the manifest is valid, with four workflows, three variants, and no row judged on a refusal", () => {
   const result = validateWebScenario(manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
-  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["feed-digest", "confirm-requests", "move-open-day"]);
+  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["feed-digest", "confirm-requests", "move-open-day", "audit-pending-requests"]);
   assert.deepEqual(selections().map(({ workflowId, variantId }) => `${workflowId ?? "primary"}/${variantId ?? "-"}`), [
-    "primary/-", "primary/regrouped", "feed-digest/-", "feed-digest/quiet-feed", "feed-digest/app-install", "confirm-requests/-", "move-open-day/-",
+    "primary/-", "primary/regrouped", "feed-digest/-", "feed-digest/quiet-feed", "feed-digest/app-install", "confirm-requests/-", "move-open-day/-", "audit-pending-requests/-",
   ]);
   for (const selection of selections()) {
     const { expected } = resolveScenarioWorkflow(manifest, selection);

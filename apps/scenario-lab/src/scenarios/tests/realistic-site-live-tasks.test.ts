@@ -74,10 +74,14 @@ test("qualification additions preserve the complete ordered original 57 tasks", 
   assert.deepEqual(REALISTIC_SITE_LIVE_TASKS.filter(task => !originalIds.has(task.id)).map(task => task.id).sort(), [
     "auction-marketplace-remove-watched-accessories",
     "bigbox-retail-ensure-soap-quantity",
+    "company-website-review-service-without-booking",
     "crossborder-marketplace-collect-official-coupon-only",
     "everything-store-restore-saved-cloths",
+    "job-board-remove-closed-saved-jobs",
     "local-classifieds-remove-sold-saves",
+    "photo-social-extend-studio-inspo",
     "professional-network-audit-stale-requests",
+    "social-network-feed-audit-pending-requests",
   ]);
-  assert.equal(REALISTIC_SITE_LIVE_TASKS.length, 63);
+  assert.equal(REALISTIC_SITE_LIVE_TASKS.length, 67);
 });
