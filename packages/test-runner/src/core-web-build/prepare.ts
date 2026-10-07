@@ -12,6 +12,7 @@ import { insideNodeModules } from "./node-modules-root.js";
 import { coreWebBuildPathBudget, WINDOWS_PATH_LIMIT, type CoreWebBuildPathBudget } from "./path-budget.js";
 import { markBuildComplete, newBuildAttemptName, publishBuildAttempt, readBuildId, readPublishedCoreWebBuild } from "./publication.js";
 import type { CoreWebBuild, CoreWebBuildInputs } from "./types.js";
+import { assertStampedRuntimeIdentity } from "./stamped-identity.js";
 import { prepareWebWorkspace } from "./workspace.js";
 
 const BUILD_PROCESS_NAME = "core-web-build";
@@ -172,6 +173,7 @@ async function buildAndPublish(options: CoreWebBuildOptions, dependencies: CoreW
   }
   const buildId = await readBuildId(webDirectory);
   if (!buildId) throw new RunnerFailure("process.startup", "Core web panel production build left no build id", { details: { process: BUILD_PROCESS_NAME } });
+  await assertStampedRuntimeIdentity(webDirectory);
   await markBuildComplete(directory, key, buildId);
   await publishBuildAttempt(keyDirectory, key, attempt);
   return { key, directory, webDirectory, nextExecutable, buildId };

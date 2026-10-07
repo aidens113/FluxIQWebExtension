@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { runCli } from "../cli.js";
 import { collectCoreWebBuildInputs, coreWebBuildKey, markBuildComplete, newBuildAttemptName, publishBuildAttempt } from "../core-web-build/index.js";
+import { writeServerAdapterFixture } from "../core-web-build/tests/server-adapter-fixture.js";
 import { catalogScenario, datasetTask } from "../flow-lane/creation/tests/scenario-fixture.js";
 import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
@@ -83,7 +84,14 @@ async function stubLab(t: test.TestContext): Promise<{ root: string; env: NodeJS
   const coreFiles: Record<string, string> = {
     "tsconfig.base.json": "{}\n",
     "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+    "package.json": "{}\n",
     "apps/web/package.json": "{}\n",
+    // The gateway server's sources, which the key covers in place of its generated artifact.
+    "apps/web/src/server/client-gateway-websocket.ts": "export {};\n",
+    "apps/web/src/lib/fluxiq.ts": "export {};\n",
+    "apps/web/src/instrumentation.ts": "export {};\n",
+    "apps/web/scripts/build-client-gateway-server.mjs": "// generator\n",
+    "scripts/build-cache/cli.mjs": "// build cache\n",
     "apps/web/node_modules/next/package.json": JSON.stringify({ version: "15.5.24" }),
     ...Object.fromEntries(["client-gateway-websocket", "contracts", "fluxiq"].flatMap(name => [[`packages/${name}/package.json`, "{}\n"], [`packages/${name}/dist/index.js`, `${name}\n`]])),
   };
@@ -176,6 +184,8 @@ test("a dry run reports the Core web build it would serve, and whether it is cac
   const attempt = newBuildAttemptName();
   await mkdir(path.join(keyDirectory, attempt, "apps", "web", ".next"), { recursive: true });
   await writeFile(path.join(keyDirectory, attempt, "apps", "web", ".next", "BUILD_ID"), "stub-build\n");
+  // A published build is reusable only with its gateway server artifact beside it (t310).
+  await writeServerAdapterFixture(path.join(keyDirectory, attempt, "apps", "web"));
   await markBuildComplete(path.join(keyDirectory, attempt), expectedKey, "stub-build");
   await publishBuildAttempt(keyDirectory, expectedKey, attempt);
   const warm = await captureCli(argv, env);
