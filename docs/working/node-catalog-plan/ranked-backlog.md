@@ -9,7 +9,7 @@ regressions. No row is complete merely because a source report identifies it.
 Rows1-3 integrated in t301; rows4-5 in t303. t306 fixes malformed predicates
 and implicit-focus text in row6 (other matching semantics pending); t308 fixes
 fixture paginator row16 after independent exact-oracle Chromium2/2.
-t315 fixes native number/calendar/time sanitization in row10 after real Chromium1/1; asynchronous application acceptance remains separate. Other rows await bounded file-owned briefs. Preserve canonical
+t315 fixes native number/calendar/time sanitization in row10 after real Chromium1/1; t319/t321 cover original-control liveness and bounded50ms queued-handler observation/rechecked Enter in row13 (real Chromium1/1 plus owning7/7). Arbitrary later/server application acceptance remains separate. Other rows await bounded file-owned briefs. Preserve canonical
 registered outputs, browser/domain boundaries, consequence gates, sensitivity and
 truthful unknown/partial evidence. Every fix needs its owning tests and a real
 isolated browser proof where behavior is browser-dependent. Compilation is not
@@ -38,8 +38,7 @@ that proof. Rebuild and identify the final pair before paid qualification.
 
 ## Inventory and policy limits
 
-Current source enumerates 57 tasks across ten sites. The gaps report lists every
-ID and four checked historical snapshots with 55. The historical planned67 denominator had ten unexplained rows. The supervisor approved ten explicitly NEW proposals without claiming recovered historical IDs; t312 implements the first3, pending independent integration (total60). Do not claim67 coverage or reduce scope silently.
+Current source enumerates67 tasks across ten sites: the complete ordered original57 definitions plus exactly ten explicitly NEW additions integrated through t312/t316/t318. Original metadata/instructions/order and explicit permission classes are asserted. The historical missingten IDs remain unknown; these additions are not recovered historical IDs. Independent fixture browser/oracle readiness is not created-Flow/model qualification or67-task coverage. See the active MVP plan and qualification reports for exact checks and current source heads.
 Candidate affected-task counts overlap and mean zero demonstrated newly unblocked
 tasks until actual qualification. Full task creation/repair denominator remains in
 the MVP plan.
