@@ -110,3 +110,171 @@ build. The Lab staging is narrower and matches the facility doc's statement that
 - Slot 2 is still claimed by t342 (lane A).
 - Scratch output to delete when no longer needed: `fxwork/t342/!FluxIQ/.tmp/p1` (probe build, about 210 MB, ignored)
   and the Lab's published source-built panel under `fxwork/t342/!FluxIQ/.tmp/core-web-build/3ba01156...`.
+
+## Round 2 (2026-10-07, 21:11-21:50 UTC, off-peak)
+
+Tree `fxwork/t342`: downstream at d0f0b7ea, which contains dev 706d2dfb (local `dev` ac50dd85 is two documentation
+commits ahead, which the guard allows); Core at 93c059b0 (= Core dev). Both trees clean. Same instance, slot 2 and
+workspace as round 1. Run debug: `docs/working/language-driven-flow-loop-plan/debugs/run-muylu4pp-f9cb2121.md`.
+
+### In plain English
+
+**Failed honestly: $0.0567 spent, no Flow saved, no further paid run.**
+
+The identity fix worked. The Lab confirmed the running Core, domain host, server adapter and extension builds before
+anything was spent. The build then ran from the extension chat in legacy mode.
+
+The build found every control. It closed the cookie layers, searched, opened the right item, chose 7-in-1 and Spain,
+collected the coupon, and even pressed Add to cart successfully. But the Flow it finished with had three faults:
+
+- no Add to cart step;
+- the quantity at 2, not 3;
+- a Space Grey press that un-chose the colour the page already had.
+
+Both build judges saw exactly that and said no, so nothing wrong was saved. One repair round could not fix it, and the
+build stopped honestly, saying what was still missing.
+
+Why, in order of weight:
+
+1. **Core lost the Add to cart step while answering "applied".** The model asked to run Add to cart again and name it
+   as the add (an `act` on a `rerun`). Core ran it, and the press worked. But Core ignored the `act` without saying so,
+   and a rerun does not put a step into the Flow. The model thought the step was in and finished.
+2. **Space Grey is already chosen when the page opens, and the build has no way to count that.** The acts checklist
+   kept asking for a Space Grey step, so the model kept pressing a swatch that un-chooses itself. Core had even taken
+   that press out and said why. The model put it back, and a press the model puts back is never taken out again.
+3. **One "+" press, making the quantity 2, was accepted as "three".** Choice claims are not checked against the value
+   they set.
+4. **In the repair round the model tried edits the edit language does not have.** It tried to insert a new step with
+   `add` and to turn a click into typing with `rerun`. It never made the run call the refusals told it to make. The
+   repeat guard then closed the round.
+
+Also found: this time the chat passed the build a paraphrase of the user's instruction (round 4 passed it verbatim).
+The UI still has many wording and clutter defects, though two round-4 gaps are fixed.
+
+### Measured
+
+- **Run:** `run-muylu4pp-f9cb2121`. Guard admitted 21:13:20, chat send 21:15:11, ended 21:19:00.
+- **Verdict:** failed, `runtime.behavior` / `lab.chat_build_failed`. Issues: `flow_bootstrap.build_not_finished`,
+  `llm_evidence_loop.repeat_refused`.
+- **Calls and cost:** 38 calls, $0.056718.
+  - chat: 1 call, $0.000172;
+  - exploration: 28 calls, $0.042911;
+  - judges: 2 calls, $0.001649;
+  - repair: 7 calls, $0.011986.
+  - The build used $0.056546 of its $0.10 ceiling and 37 of its 48 calls.
+- **Identities:** all four `running-{core,host,server-adapter,build}-identity.json` verified at 21:15:02-07, before the
+  first call (21:15:11.9).
+- **Mode:** legacy (`snapshots/live-llm.json`).
+- **Judges versus oracle:** both judges said no. All four oracle facts would fail on the end view: no hub line, the
+  `1 Cart` comes from exploration only, Space Grey is off, and the quantity is 2. So the judges agree with the oracle.
+  Their Space Grey advice ("select it rather than toggling it off"), however, pointed the repair the wrong way.
+- **UI:** U1 and U3 pass; U2, U4 and U5 partly. Details below.
+- **Lab processes left:** none (checked by command line after the run).
+
+Before launch, 21:11-21:12:
+
+- Rebuild: Core libraries reused or restored from the build store; `pnpm build` exit 0.
+- The campaign printed one command.
+- The Lab's `--dry-run` exited 0: `status ready`, `providerCallCount 0`, legacy, flash, 48 calls, $0.10,
+  `permittedConsequences []`, instruction sha256 `2e6f5e7d...a405`, `coreWeb` key `7baf48d2...` not cached.
+
+### Causes, reproduction and the file to change
+
+**C1: an `act` on a `rerun` is dropped without a word.** A rerun of a step that is not in the Flow leaves it out, and
+the answer still says `applied`.
+
+- Reproduction: decision 0073; answer 0074 (`applied`, keptStepCount 10); 0075 "Added to cart!"; the draft at 0076
+  shows step 15 as `disposition: taken`.
+- File to change: Core `runtime/llm/evidence-loop/rerun-request.ts:108-170`, which never reads `amendment.act`; also
+  `flow-draft/amendment/apply.ts:113-116`. The refusal sentence goes in `llm/draft-amendment-feedback.ts`; the test
+  goes beside `rerun-request.ts`.
+- Verified by the lead, from the code and the step files.
+
+**C2: a choice the page arrives with has no "already chosen" state on the checklist, and a re-added toggle half is
+exempt from being taken out.**
+
+- Reproduction: at 0012 Space Grey is marked, and every press un-chooses it (0020 ... 0139). The draft shown at 0071
+  says step 19 was "taken out by Core". Decision 0071 re-adds it with `a1.colour`. The test's end view shows Space Grey
+  off.
+- Files to change:
+  - a new rule under Core `flow-bootstrap/instructed-acts/`, so a preset choice counts as done;
+  - `flow-draft/reversal.ts:86-95`, where `partnerOf` should skip `replacedBy` receipts;
+  - a design call on the exemption at `reversal.ts:63`.
+- Verified by the lead from the draft text and the code. The `partnerOf` change was shown only by a worker's scratch
+  run against Core dist.
+
+**C3: a quantity choice is accepted on a press that set 2, not 3.**
+
+- Reproduction: step 13 is one "+" press (quantity 2 at 0039); the checklist at 0080 says `a1.quantity done: 13`.
+- Files to change: Core `flow-bootstrap/instructed-acts/claim-verdict.ts:50`, which judges only ids matching
+  `/^a[0-9]+$/`, and `quantity-fault.ts`, which accepts any stepper, field or select press. The domain's page-change
+  statements must also carry field values.
+- Verified by the lead for the Core lines. The domain part is the worker's claim only.
+
+**C4: the repair round tried edits the edit language does not have.** It used `add` to "insert a step", refused
+`not_a_kept_step` four times with the advice ignored. It used `rerun` to turn a click into typing, and the `text` on a
+click was ignored.
+
+- Reproduction: 0096, 0112 and 0132 for the inserts. 0131 and 0140 for the reruns: the clicks at 0102, 0110 and 0139
+  succeeded and the quantity stayed 1.
+- File to change: refuse rerun input keys the node does not take, in `llm/evidence-loop/rerun-input.ts` or in the click
+  node's parameter validation. Owner not traced.
+- Verified by the lead, from the step files.
+
+**C5: three same-kind refusals in a row closed the repair round.** This is a consequence of C2: `changes_nothing` at
+0130, 0132 and 0141. Nothing to change; it worked as designed. Verified by the lead.
+
+Other findings:
+
+- **F1: the chat paraphrased the instruction.** At 0001 it passed "add three ... to my cart ... while on the item
+  page"; round 4 passed the user's words verbatim. Core `runtime/conversations/commands/create-here.ts:49` saves the
+  interpreter's `instruction` argument. Proposal: when create-here starts from the person's turn, save the person's own
+  message.
+- **F2: a design question.** Completion is accepted by design while an act still has no step
+  (`llm/harness-options/bootstrap-completion.ts`). A provider-free refusal saying "step 15 ran Add to cart but is not
+  in the Flow" would have let the model recover during exploration.
+
+Worker reports, with their claims verified as marked above:
+
+- `reports/t342-r2-toggle-trace.md` (worker-high). It cites `quantity-fault.ts` lines 107-126, which do not exist in the
+  101-line file. The behaviour it describes does match the file's header.
+- `reports/t342-r2-ui-review.md` (worker). The lead checked `09-mid-build-panel.png` and `14-failure-panel.png`.
+
+### UI review (summary)
+
+- **Pass:** U1 start; U3 overlay (shown from the send, 16 of 16 samples visible in most moments, no flicker).
+- **Fixed since round 4:** "Couldn't fix your Flow" on a creation build; the missing "Starting…" after the send.
+- **Still open:** "Trying again: clicking on the page" names no control (moment 12).
+- **New:**
+  - the repair heading carries a step number, "judged" and the judge's raw observation (09);
+  - edit cards use step numbers or contradict themselves ("added "Space Grey"; removed "Space Grey"", 07, 10, 11);
+  - click cards have no target (03, 08, 12);
+  - "Get coupons" is cut to "Get…" in the overlay;
+  - each repair replay reprints 4-6 full cards (09-13);
+  - identical refusals are not folded (05);
+  - "Stop build" is absent during "Starting…" and looks like plain text afterwards;
+  - the ending is one long paragraph and never says why the build stopped;
+  - the overlay jumps in height.
+
+### Not run, not verified
+
+- Replay and second creation run: not run (no pass), as briefed.
+- R6-2, playback on the Flow's own tab: not exercised, because nothing was played back.
+- C2's checklist rule and C3's value check are designs only; no tests were written. The `partnerOf` change was shown
+  only by a worker's scratch script against Core dist.
+
+### Process correction acknowledged
+
+Round 1's provider-free check used `basic-form`, which is not one of the ten realistic scenarios. That broke the
+standing rule. Round 2 ran only `crossborder-marketplace`.
+
+### Guard and slot state left behind (round 2)
+
+- Ledger: `start` and `finish` for `run-muylu4pp-f9cb2121` (failed, $0.056718).
+- The run's debug exists under the run id, which satisfies the `debug` guard.
+- The `unchanged` guard refuses this instance and task until source changes.
+- `loop`: one start in the window.
+- Slot 2 is still claimed by t342 (lane A).
+- Workspace `t342-a` holds the unfinished draft Flow `flow.13a2efa3-9dac-42a8-b177-4e047d5e114e`, in project
+  `99c4b41d-...`, with no runs.
+- The round 1 probe directory `!FluxIQ/.tmp/p1` is already gone.
