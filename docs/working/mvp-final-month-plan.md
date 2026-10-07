@@ -57,7 +57,7 @@ t337 (grammar for one sentence family) are WIP commits on their own branches, no
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
 **In flight.** t340 candidate trial runner, judge and promotion (slice U2, Core);
-t341 the seven re-author tests failing on Core dev (repair path); t342 live lane A
+t343 audit rule refusing new `as never` casts; t342 live lane A
 baseline in legacy mode (lead, one supervised run, debug, report only).
 
 **Next order.**
@@ -137,6 +137,14 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
+
+### Brief: t343 structure audit refuses new `as never` casts
+- Worker: t343-as-never (worker). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t343\` (Core-paired, branch `task/t343-ban-new-as-never`). Report: `docs/working/mvp-final-month-plan/reports/t343-ban-new-as-never.md` in the t343 downstream tree.
+- Why: t341 found seven re-author tests broken for a day because build stubs cast with `as never` hid a type change (t299) from the compiler. `as never` is assignable to anything, so it silences exactly the check that would catch a stale stub. Core has 372 occurrences in 167 files; downstream 129 in 69. Enforce mechanically, do not just document it.
+- Goal: a structure-audit rule that fails on any `as never` cast beyond the per-file baseline, in source and tests alike, with a message that says why and what to write instead (a typed stub, `satisfies`, or a helper returning the real type). Existing occurrences are baselined, so nothing currently on dev fails. Author it in Core first (`scripts/structure-audit/rules/`, its tests, Core baseline), then mirror the rule into this repository the way the audit's other mirrored rules are, with this repository's own baseline.
+- Owns: Core `scripts/structure-audit/**` and `.structure-baseline.json`; downstream `scripts/structure-audit/**` and `.structure-baseline.json`; the code-structure doc section in Core that lists the rules, if one exists.
+- Must not touch: any product source or test outside the audit's own tests; `docs/working/*.md`. No commits.
+- Definition of done: rule tests including fail-first (a new `as never` beyond the baseline fails; baselined ones pass; a comment or string containing the words does not count); `node --test` on the audit's tests in both repos; both repositories' `node scripts/structure-audit.mjs` pass on the t343 trees.
 
 ### Brief: t340 U2 candidate trial runner, judge and promotion
 - Worker: t340-trial-runner (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t340\` (Core-paired, branch `task/t340-candidate-trial-runner`); edits in its `!FluxIQ` tree. Report: `docs/working/mvp-final-month-plan/reports/t340-candidate-trial-runner.md` in the t340 downstream tree.
@@ -297,6 +305,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: Core `e76e1775`, downstream `0a0f4979`, both pushed. One Core setting, `FLUXIQ_AUTHORING_MODE` (`model/authoring-mode/`), default `legacy`: chat create-here and explore build, judge, apply and say the automation is ready; improve asks before applying; the panel proposes an adaptation (it sends `authoringMode: "configured"`, which Core resolves). `candidate` keeps t330's draft-only behavior; an unknown value refuses. The Lab campaign takes `--authoring-mode` (default legacy), starts its Core with the setting, records `coreAuthoringMode` in every report, and the created-Flow readiness hold refuses only candidate mode. Dispatched: t340 (U2 trial runner), t341 (re-author regression), t342 (live lane A baseline).
 - Validation: supervisor on the t338 trees after merging current dev (with U1) into both: Core vitest on conversations/commands, model, api, candidate and authoring-result -> 49 files, 346 tests passed; Core `tsc --noEmit -p tsconfig.json` -> exit 0; web vitest on authoring and conversation (after rebuilding Core libraries) -> 28 files, 318 passed; web `tsc --noEmit` -> exit 0; Core structure audit passed (285 warnings, 349 baselined). Downstream: test-runner build exit 0; `node --test` on creation, chat, prove and live-llm tests -> 287/287; `dist/tests` -> 352/353; campaign tests 69/69; structure audit passed (176, 117). Lane A dry run of the exact Lab command -> `"status":"ready"`, `"providerCallCount":0`, `"coreAuthoringMode":"legacy"`; the same with `--authoring-mode candidate` -> `failed`, `facility.contract`. The two failures not caused by t338 reproduce on dev without it: `cli-llm` "a dry run reports the Core web build it would serve" (downstream dev after rebuilding Core, domain and test-runner) and seven re-author tests in Core `runtime-adaptation/tests/{step-failure-port,refuted-result-port}.test.ts` (Core dev `953272c2`), now t341.
 - Limits: no browser check of the panel and no live run yet (t342). The main checkout's Core build output was stale before t330; it was rebuilt (libraries only) during verification.
+
+### 2026-10-07 - t341 merged: re-author failures were stale test stubs; t343 dispatched
+- Changed: Core `ca978fd9`, downstream `7f17acd2`, both pushed. The seven re-author port tests failing on Core dev broke at `87c4c9f9` (t299), whose guard at `runtime/service/runtime-adaptation/reauthor-build.ts:141` correctly refuses any build result not marked `status: "proposed"`; the tests' build stubs lacked the status and were cast `as never`, so the compiler never flagged them. Tests now use a typed `reauthor-proposal` helper; no product change. Re-author requests set no authoring mode, so they always get a legacy proposal. t343 adds an audit rule refusing new `as never` casts.
+- Validation: supervisor in the t341 Core tree: `npx vitest run src/programs/automation-studio/runtime/service/runtime-adaptation` -> 12 files, 169 passed; `npx tsc --noEmit -p tsconfig.json` -> exit 0; Core structure audit exit 0; downstream `pnpm task finish t341` audit passed; Core finished with `--skip-checks` after those gates (Core dev unchanged since the branch).
+- Limits: no live re-author run; the repair chain is still unproven live.
 
 ## Open Questions
 
