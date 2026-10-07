@@ -85,3 +85,8 @@ node scripts/structure-audit.mjs
 ```
 
 Source/report frozen now; supervisor must independently review and merge current dev, rerun owning gates and verify final67 aggregate inventory before integration/push. Requests-OFF, no-debugger and JS-last-resort product constraints remain untouched. No worker git mutation/commit/push. Working report captures earlier measured failures, implementation decisions and unverified bounds for Claude handoff.
+
+## Independent supervisor integration verification
+Root reviewed actual four workflow/expected/account owners, frame WindowProxy/origin/nonce handshake and passive ACK-before-booked test, desired-state union and current-page forbidden-state negatives. Committed frozen worker slice then merged current dev7755d935, including t316 and t321. Root extended shared exact addition inventory to all ten NEW IDs/67 total, retained full ordered original57 object baseline, classified closed-job unsave as delete/Unsave job and three other tasks as asking nothing with explicit reasons.
+
+Independent root checks on merged source: scenario source/e2e types0 (9.086s), owning build0 (14.548s,895 outputs), owning/global eleven files87/87 zero skips1.961s. Actual Chromium fixture ten cases10/10 zero skips27.139s; includes cross-origin review/pay ACK sequencing, current-account negatives, original paid-service and shortlist regressions, complete8 vs preview4, and observed no-toggle repeat union. Structure audit exit0,176warnings/117baseline; no baseline change. No model-created Flow/extension/provider/panel/real-site qualification; unexercised message timeout/foreign/malformed/parallel branches remain stated above. Original57 preserved in entirety, prior six additions present. Source unchanged after successful probes.
