@@ -304,3 +304,40 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Script channel, store eligibility and Firefox parity need a concrete feasibility result. Preserve no-debugger JS and requests-OFF policy meanwhile.
 - Direct-request origins/session/redirect policy needs a concrete design; do not inherit the old any-origin default as authorization.
 - Who runs the Phase 6 release-candidate script as the "person unfamiliar with FluxIQ"? Owner: user.
+
+### Brief: p0-core-runtime-identity (t302)
+- Mode: Execute Plan With Workers; worker never declares mode.
+- Task: close the running Core-server identity gap before Lab paid dispatch.
+- Trees: C:/Users/osrs_/FluxStuff/fxwork/t302/{!FluxIQ,!FluxIQWebExtension}; paired task/t302-core-runtime-identity.
+- Read: this Current State, consultant-revision P0, p0-build-identity report, repository boundaries and Core instructions/working Current State.
+- Own: new focused Core build/runtime identity module and authenticated restricted diagnostic route; paired Lab preflight/identity gate and owning tests; architecture identity paragraphs; own reports/p0-core-runtime-identity.md only.
+- Inspect first and send exact existing files before editing shared router/protocol modules.
+- Expected: embed immutable executing Core build identity, compare reached contract digest and expected built artifact before any provider/chat dispatch; changed disk alone must not masquerade as restarted server.
+- Refuse missing/stale/mismatched actual server identity; never return secret keys, storage, page data or tokens.
+- Use existing authenticated downstream route. No new broad privilege, public unauthenticated diagnostic or source-only handshake.
+- No provider calls, user panel management, full suites, git mutation or shared document edits.
+- Provider-free owning negatives plus isolated server/browser proof; narrow package typechecks and structure audit.
+- Return exact source paths/checks/limits in own report. Supervisor reviews, integrates and independently verifies.
+
+### 2026-10-06 - Serial facade and remaining P0 identity assigned
+- Agent: Codex supervisor.
+- Changed: t299 candidate-generation command extraction added locally; t302 paired running-Core identity task provisioned; t298 decline reason reviewed before independent checks.
+- Validation: first helper typecheck exposed harness completionSchema/provider/result narrowing; corrected types and explicit schema, final check pending. No provider call. t298 independent owning regression and current-pair rebuild in progress.
+- Outcome: Partial.
+- Follow-up: wire candidate flag/draft API atomically, independently repeat Stop browser proof, then integrate receipt/detached execution and typed readiness. Running Core identity still blocks P0 completion.
+
+### Brief: p1-candidate-facade (t299 continuation)
+- Worker: p0_acceptance; paired trees fxwork/t299/{!FluxIQ,!FluxIQWebExtension}; same t299 branch.
+- Read: Current State; own p1-candidate-authoring.md and p1-supervisor-integration.md reports; current Core instructions.
+- Own: runtime/service.ts candidate branch, flow-bootstrap-commands/{candidate-generation,contracts,index}.ts, Core api/contracts/adaptation.ts and owning generation API handler/sanitizer, relevant conversation build draft rendering, focused service/API regressions, architecture bootstrap candidate section, own report p1-candidate-facade.md.
+- Do not edit cancellation, held rerun, candidate submission/controller, draft store, t300 verification or downstream source/shared docs.
+- Supervisor added uncommitted candidate-generation.ts helper + barrel export. Own/fix these now; current first checks revealed missing harness completionSchema and optional provider, corrected locally but final check pending.
+- Start read-only design and exact file list now; wait for supervisor to merge current dev/t298 into t299 before service.ts edits.
+- Wire authoringMode:candidate through restricted request/API to actual service discovery-only branch and durable Core candidate-draft store. Omitted preserves legacy proposed.
+- Result status:draft must discriminate from status:proposed, contain candidate identity/base/source instruction IDs/accounting, verification:not_performed and promotionAllowed:false. No apply action/no adaptationId fabrication/no adaptation creation.
+- Preserve purse, inherited external cancellation, permissions/tool wrappers, current registry/handle resolution, immutable original instruction text, stale Flow/settings refusal and truthful accounting. Draft must not mark creation purse ended.
+- All old legacy/reauthor callers must narrow proposed before adaptation use; reject unexpected draft explicitly. Keep service line budget via focused extraction, no bulk refactor.
+- Service-level scripted test must exercise discover wrong turn + complete submission/revision -> durable draft, unchanged accepted Flow and empty adaptations; cancel and stale base cannot write. No real provider call.
+- API flag parser/handler/draft response integrated atomically; never expose parser alone.
+- Narrow owning tests, fluxiq/touched web package typechecks, structure audits and diff checks; freeze then report exact receipts/limits.
+- No provider/live/full suite/git mutations/shared docs. Supervisor integrates and verifies.
