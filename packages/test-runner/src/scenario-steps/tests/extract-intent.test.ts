@@ -2,13 +2,13 @@
 // extraction request, and the driver that hands it to the extension.
 //
 // One row per grammar form, because each is a separate clause of the
-// translation and a wrong one is silent: a mis-keyed field or a pagination mode
-// that lost its control does not throw, it just measures something else.
+// translation and a wrong one is silent: a mis-keyed field or a field
+// that lost its selector does not throw, it just measures something else.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Page } from "@playwright/test";
-import type { ScenarioStep } from "@fluxiq-web-extension/test-contracts";
+import type { ScenarioExtractPagination, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
 import { createExtractionIntentDriver, scenarioExtractionDefinition } from "../extract-intent.js";
 
@@ -82,29 +82,36 @@ test("no field declares required, so a value the page cannot read is null rather
   });
 });
 
-test("next pagination carries its control, named as the domain names it", () => {
-  const definition = scenarioExtractionDefinition(extractStep({ pagination: { next: "testid:pagination-next", maxPages: 5 } }));
-  assert.deepEqual(definition.request.paginate, { mode: "next", next: '[data-testid="pagination-next"]', maxPages: 5 });
+// Read-list S6: FluxIQ's read reads one page, and a Flow pages with read + Next
+// page + repeat, which no recording can produce yet. A paged step is excluded
+// from the recording lane, never sent as a one-page read and never as the
+// retired `paginate`.
+const PAGINATIONS: ScenarioExtractPagination[] = [
+  { next: "testid:pagination-next", maxPages: 5 },
+  { mode: "next", next: "testid:pagination-next", maxPages: 2 },
+  { mode: "loadMore", control: "testid:load-more", maxPages: 10 },
+  { mode: "scroll", maxScrolls: 20 },
+  { mode: "numbered", pages: '[data-testid^="pagination-page-"]', maxPages: 5 },
+];
+
+test("a paged step is excluded rather than recorded as a one-page read, whatever its mode", () => {
+  for (const pagination of PAGINATIONS) {
+    assert.throws(() => scenarioExtractionDefinition(extractStep({ id: "extract-all-pages", pagination })), (error: unknown) =>
+      error instanceof RunnerFailure && error.category === "fixture.invalid"
+      && /^The recording lane does not record extract step extract-all-pages: extract step extract-all-pages pages through its list, and FluxIQ's read reads one page/u.test(error.message),
+    JSON.stringify(pagination));
+  }
 });
 
-test("an explicit next mode reads the same as an absent one", () => {
-  const definition = scenarioExtractionDefinition(extractStep({ pagination: { mode: "next", next: "testid:pagination-next", maxPages: 2 } }));
-  assert.deepEqual(definition.request.paginate, { mode: "next", next: '[data-testid="pagination-next"]', maxPages: 2 });
+test("the driver sends nothing for a paged step", async () => {
+  const { page, sent } = controlPage({ ok: true, records: [] });
+  await assert.rejects(createExtractionIntentDriver(page)(scenarioPage, extractStep({ pagination: { next: "testid:pagination-next", maxPages: 3 } })), (error: unknown) =>
+    error instanceof RunnerFailure && error.category === "fixture.invalid");
+  assert.deepEqual(sent, []);
 });
 
-test("loadMore pagination carries its control", () => {
-  const definition = scenarioExtractionDefinition(extractStep({ pagination: { mode: "loadMore", control: "testid:load-more", maxPages: 10 } }));
-  assert.deepEqual(definition.request.paginate, { mode: "loadMore", control: '[data-testid="load-more"]', maxPages: 10 });
-});
-
-test("scroll pagination carries its scroll bound and no selector", () => {
-  const definition = scenarioExtractionDefinition(extractStep({ pagination: { mode: "scroll", maxScrolls: 20 } }));
-  assert.deepEqual(definition.request.paginate, { mode: "scroll", maxScrolls: 20 });
-});
-
-test("numbered pagination carries the selector that matches every page control", () => {
-  const definition = scenarioExtractionDefinition(extractStep({ pagination: { mode: "numbered", pages: '[data-testid^="pagination-page-"]', maxPages: 5 } }));
-  assert.deepEqual(definition.request.paginate, { mode: "numbered", pages: '[data-testid^="pagination-page-"]', maxPages: 5 });
+test("an unpaged definition carries no paging member", () => {
+  assert.equal(Object.hasOwn(scenarioExtractionDefinition(extractStep()).request, "paginate"), false);
 });
 
 test("minItems is copied, so a workflow where an empty list is valid still says so", () => {

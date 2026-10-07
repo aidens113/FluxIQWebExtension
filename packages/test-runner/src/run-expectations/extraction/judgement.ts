@@ -16,6 +16,8 @@ export type ObservedExtraction = {
   pagesRead?: number;
   truncated?: boolean;
   durationMs?: number;
+  /** The rows the read collected before run-end processing kept the records judged here; absent when nothing processed them. */
+  collectedRecords?: number;
   /** Values the step's records carried that were not strings, counted by the caller that read them. */
   nonStringValues: number;
 };
@@ -120,6 +122,10 @@ export function measureExtraction(entry: ExpectedExtraction | undefined, records
     truncated: observed.truncated ?? null,
     durationMs: observed.durationMs ?? null,
     nonStringValues: observed.nonStringValues,
+    // Stated only when a producer reported run-end processing: the answer is
+    // `observedRecords`, and a collection equal to it would claim a
+    // processing that never ran.
+    ...(observed.collectedRecords === undefined ? {} : { collectedRecords: observed.collectedRecords }),
   };
 }
 

@@ -68,7 +68,7 @@ function runtimeFor(harness: ContentHarness) {
       ...base,
       callId: `call.${++call}`,
       toolId: WEB_LLM_RUN_NODE_TOOL_ID,
-      value: { node: EXTRACT_LIST, parameters: { extractList: { handle, fields, paginate: false } } as unknown as JsonObject, consequences: [] }
+      value: { node: EXTRACT_LIST, parameters: { extractList: { handle, fields } } as unknown as JsonObject, consequences: [] }
     })
   };
 }

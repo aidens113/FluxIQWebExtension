@@ -1,4 +1,4 @@
-import type { BenchDistribution, BenchExtractionMetrics, BenchExtractionRateMetric, BenchRate, RunEvaluation, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
+import type { BenchDistribution, BenchExtractionCollection, BenchExtractionMetrics, BenchExtractionRateMetric, BenchRate, RunEvaluation, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
 import type { BenchResultRuns } from "./aggregate-report.js";
 import { benchDistribution } from "./distribution.js";
 import { benchExtractionAccuracy } from "./extraction-accuracy.js";
@@ -72,6 +72,11 @@ export const BENCH_EXTRACTION_RATE_DEFINITIONS: Readonly<Record<BenchExtractionR
  * with nothing in it publishes `rate: null` rather than a flattering number.
  * The three step counts state the basis, so a reader can see how much of the
  * lane each rate stands on.
+ *
+ * Every record count here is the **answer**: on the Flow lane a step's records
+ * are what Core's run-end processing kept from the rows the read's passes
+ * collected (read-list S6). `collection` states the other side, so a reader can
+ * see how much the dedupe and the read's declared processing removed.
  */
 export function benchExtractionMetrics(results: readonly BenchResultRuns[]): BenchExtractionMetrics | undefined {
   const runs = results.flatMap((result, resultIndex) => result.evaluations.map((evaluation) => ({ evaluation, resultIndex })));
@@ -80,6 +85,7 @@ export function benchExtractionMetrics(results: readonly BenchResultRuns[]): Ben
   const measured = runs.filter(({ evaluation }) => evaluation.extraction !== null);
   const accuracy = benchExtractionAccuracy(steps.map(({ measurement }) => measurement));
   const judged = steps.filter(({ measurement }) => measurement.status === "judged");
+  const collection = collectionOf(judged);
   return {
     judgedSteps: accuracy.basis.judgedSteps,
     unjudgedSteps: accuracy.basis.unjudgedSteps,
@@ -94,6 +100,23 @@ export function benchExtractionMetrics(results: readonly BenchResultRuns[]): Ben
     extractionFalseSuccess: falseSuccess(measured),
     extractionDurationMs: distributionOf(steps, (measurement) => measurement.durationMs),
     extractionMsPerPage: distributionOf(steps, (measurement) => (measurement.durationMs === null || !measurement.pagesFollowed ? null : measurement.durationMs / measurement.pagesFollowed)),
+    ...(collection === undefined ? {} : { collection }),
+  };
+}
+
+/**
+ * The rows the judged steps' reads collected and the rows their processed
+ * answers kept, over the judged steps that stated `collectedRecords`; absent
+ * when none did. A step that reported no processing enters neither side:
+ * counting its records as both would claim a processing that removed nothing.
+ */
+function collectionOf(judged: readonly Step[]): BenchExtractionCollection | undefined {
+  const processed = judged.flatMap(({ measurement }) => (measurement.collectedRecords === undefined ? [] : [{ collected: measurement.collectedRecords, answer: measurement.observedRecords }]));
+  if (processed.length === 0) return undefined;
+  return {
+    steps: processed.length,
+    collectedRecords: processed.reduce((total, step) => total + step.collected, 0),
+    answerRecords: processed.reduce((total, step) => total + step.answer, 0),
   };
 }
 

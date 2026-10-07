@@ -1,4 +1,4 @@
-import { benchExtractionRateMetrics, benchRateMetrics, evaluationLanes, type BenchDistribution, type BenchReport, type EvaluationLane } from "@fluxiq-web-extension/test-contracts";
+import { benchExtractionRateMetrics, benchRateMetrics, evaluationLanes, type BenchDistribution, type BenchExtractionCollection, type BenchReport, type EvaluationLane } from "@fluxiq-web-extension/test-contracts";
 import { BENCH_RATE_DEFINITIONS } from "./aggregate-report.js";
 import { BENCH_EXTRACTION_RATE_DEFINITIONS } from "./extraction-metrics.js";
 import type { BenchExecutionCoverage } from "./execution-coverage.js";
@@ -206,7 +206,7 @@ function extractionLines(report: BenchReport): string[] {
     "Each rate is pooled over one lane's extraction steps in the unit its metric defines, and states the steps it stands on. Population is the rate's own, and no two of them are the same set of steps: reading one rate's number against another's basis is the mistake this column exists to stop. A rate with no population prints n/a: nothing judged it, which is not the same as judging it and finding nothing.",
     "",
     ...lanes.flatMap(([lane, measured]) => [
-      `**${lane} lane.** ${measured.judgedSteps} step(s) judged and ${measured.unjudgedSteps} not: ${measured.comparedSteps} compared their records, ${measured.countOnlySteps} stated a count alone and compared no value, and ${measured.unjudgeableSteps} could judge neither. Only the compared steps are in the record accuracy.`,
+      `**${lane} lane.** ${measured.judgedSteps} step(s) judged and ${measured.unjudgedSteps} not: ${measured.comparedSteps} compared their records, ${measured.countOnlySteps} stated a count alone and compared no value, and ${measured.unjudgeableSteps} could judge neither. Only the compared steps are in the record accuracy.${collectionSentence(measured.collection)}`,
       "",
       table(["Metric", "Unit", "Count", "Total", "Workflows", "Rate", "Population"], benchExtractionRateMetrics.map((metric) => {
         const value = measured[metric];
@@ -219,6 +219,13 @@ function extractionLines(report: BenchReport): string[] {
       "",
     ]),
   ];
+}
+
+/** What the lane's reads collected beside the processed answers every count is over (read-list S6); nothing when no judged step reported processing. */
+function collectionSentence(collection: BenchExtractionCollection | undefined): string {
+  if (collection === undefined) return "";
+  const one = collection.steps === 1;
+  return ` ${collection.steps} judged step${one ? "" : "s"} reported run-end processing: ${one ? "its" : "their"} reads collected ${collection.collectedRecords} row(s) and ${one ? "its answer" : "their answers"} kept ${collection.answerRecords}. Every record count above is the answer.`;
 }
 
 function sourceLines(lane: string, sources: Readonly<Record<string, string>>): string[] {

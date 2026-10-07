@@ -27,7 +27,7 @@ const coverageKeys = ["notExecutedRuns", "actionsExecuted"] as const;
 const distributionKeys = ["runDurationMs", "sanitizedPacketBytes", "rawSnapshotBytes"] as const;
 const extractionStepKeys = ["judgedSteps", "unjudgedSteps", "comparedSteps", "countOnlySteps", "unjudgeableSteps"] as const satisfies readonly (keyof BenchExtractionMetrics)[];
 const extractionDistributionKeys = ["extractionDurationMs", "extractionMsPerPage"] as const satisfies readonly (keyof BenchExtractionMetrics)[];
-const extractionMetricKeys = [...extractionStepKeys, ...benchExtractionRateMetrics, ...extractionDistributionKeys] as const satisfies readonly (keyof BenchExtractionMetrics)[];
+const extractionMetricKeys = [...extractionStepKeys, ...benchExtractionRateMetrics, ...extractionDistributionKeys, "collection"] as const satisfies readonly (keyof BenchExtractionMetrics)[];
 /** What a set of counts is bounded by: how many workflow results, each run `repeatCount` times. */
 type Population = { workflows: number; repeatCount: number };
 /** Every result the report lists, the results on each lane, and whether its results state a lane at all. */
@@ -224,6 +224,22 @@ function checkExtractionMetrics(input: unknown, path: string, laneResults: numbe
   checkExtractionBasis(value, path, issues);
   for (const metric of benchExtractionRateMetrics) checkExtractionRate(value[metric], `${path}.${metric}`, laneResults, issues);
   for (const key of extractionDistributionKeys) checkDistribution(value[key], `${path}.${key}`, issues);
+  if (value.collection !== undefined) checkExtractionCollection(value.collection, `${path}.collection`, value.judgedSteps, issues);
+}
+/**
+ * The collected rows beside the processed answers (read-list S6). Optional:
+ * absent is a lane where no judged step reported processing. Its steps are
+ * judged steps, and processing only removes rows, so an answer larger than
+ * its collection is a producer that counted something else.
+ */
+function checkExtractionCollection(input: unknown, path: string, judgedSteps: unknown, issues: ValidationIssue[]): void {
+  const value = object(input, path, issues); if (!value) return;
+  keys(value, ["steps", "collectedRecords", "answerRecords"], path, issues);
+  for (const key of ["steps", "collectedRecords", "answerRecords"]) finite(value[key], `${path}.${key}`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  if (typeof value.steps === "number" && typeof judgedSteps === "number" && value.steps > judgedSteps) add(issues, `${path}.steps`, "must not exceed judgedSteps: only a judged step enters the collection");
+  if (typeof value.answerRecords === "number" && typeof value.collectedRecords === "number" && value.answerRecords > value.collectedRecords) {
+    add(issues, `${path}.answerRecords`, "must not exceed collectedRecords: processing removes rows from what the reads collected, never adds them");
+  }
 }
 /**
  * Every judged step is in exactly one basis, and the record accuracy is over

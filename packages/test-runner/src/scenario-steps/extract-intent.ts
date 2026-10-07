@@ -19,13 +19,19 @@
 // FluxIQ's reader and read itself back out. That restriction is load-bearing,
 // and this driver is built around it rather than against it.
 //
+// **A paged step is not recorded.** FluxIQ's read reads one page; a Flow goes
+// through pages with a read, a Next page step and a repeat, and a recording
+// cannot produce that loop yet. So a step declaring `pagination` is refused
+// before anything is sent (`pagedExtractExclusion`): sending it without its
+// paging would record and measure a one-page read of a list the workflow reads
+// whole, and the domain refuses the retired `paginate` anyway. The bench skips
+// such a workflow on the recording and Flow lanes with the same reason.
+//
 // **No timeout is sent.** `confirmExtraction` bounds the read with
-// `webAutomationExtractListTimeoutMs(request)`, a budget scaled by the pages
-// the request may read; a flat ceiling there once truncated any read past six
-// pages. A step's `timeoutMs` is the fixture's bound on a Playwright action,
-// and imposing it here would let the harness decide how long the product is
-// allowed to take -- which is the product's own budget, and part of what is
-// being measured.
+// `webAutomationExtractListTimeoutMs(request)`, the product's own budget. A
+// step's `timeoutMs` is the fixture's bound on a Playwright action, and
+// imposing it here would let the harness decide how long the product is
+// allowed to take -- which is part of what is being measured.
 //
 // **The field keys are the runner's field names, verbatim.** They are what
 // `expected.extracted` names its columns, what the recorded definition carries
@@ -37,11 +43,10 @@
 // judged a second time by a copy of the rule kept here.
 
 import type { Page } from "@playwright/test";
-import type { ScenarioExtractPagination, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
+import { pagedExtractExclusion, type ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import {
   webAutomationDatasetId,
   type WebAutomationExtractFieldSpec,
-  type WebAutomationExtractListPagination,
   type WebAutomationExtractListRequest,
   type WebAutomationRecordedListExtraction,
 } from "@fluxiq-web-extension/domain/node";
@@ -82,8 +87,10 @@ export type ExtractionIntentDependencies = {
  * through `parse-target.ts` and `css-selector.ts`, so the seam and the
  * reference reader cannot read the grammar differently); `selector@attribute`
  * becomes an `attribute` field; `column:<header>` becomes a `column` field;
- * `pagination` becomes `paginate`, by mode; and `minItems` is copied, so a
- * workflow declaring that an empty list is a valid answer still says so.
+ * and `minItems` is copied, so a workflow declaring that an empty list is a
+ * valid answer still says so. A step declaring `pagination` throws
+ * `fixture.invalid` with `pagedExtractExclusion`'s reason: no one-page
+ * definition stands for it (see the header).
  *
  * A field is left `required`-less, which is the domain's optional reading: a
  * value the page cannot find arrives as `null` in its record rather than
@@ -97,6 +104,10 @@ export type ExtractionIntentDependencies = {
  * measurement.
  */
 export function scenarioExtractionDefinition(step: ScenarioStep, nonce: string = DEFAULT_NONCE): WebAutomationRecordedListExtraction {
+  const paged = pagedExtractExclusion([step]);
+  if (paged !== undefined) {
+    throw new RunnerFailure("fixture.invalid", `The recording lane does not record extract step ${step.id}: ${paged}`, { details: { stepId: step.id } });
+  }
   const item = selectorFor(step.target, step, "its target");
   const entries = Object.entries(step.fields ?? {});
   if (entries.length === 0) throw new RunnerFailure("fixture.invalid", `Extract step ${step.id} names no fields`, { details: { stepId: step.id } });
@@ -106,11 +117,9 @@ export function scenarioExtractionDefinition(step: ScenarioStep, nonce: string =
     fields[name] = fieldSpec(parseExtractField(spec), step, name);
     fieldLabels[name] = name;
   }
-  const paginate = step.pagination === undefined ? undefined : paginationFor(step.pagination, step);
   const request: WebAutomationExtractListRequest = {
     item,
     fields,
-    ...(paginate !== undefined ? { paginate } : {}),
     ...(step.minItems !== undefined ? { minItems: step.minItems } : {}),
   };
   return {
@@ -170,14 +179,6 @@ function fieldSpec(field: ExtractField, step: ScenarioStep, name: string): WebAu
     ...(field.attribute !== undefined ? { attribute: field.attribute } : {}),
     handling: "include",
   };
-}
-
-/** The step's pagination in the domain's shape. Both vocabularies name the four modes the same way (D14), so each maps across whole. */
-function paginationFor(pagination: ScenarioExtractPagination, step: ScenarioStep): WebAutomationExtractListPagination {
-  if (pagination.mode === "scroll") return { mode: "scroll", maxScrolls: pagination.maxScrolls };
-  if (pagination.mode === "loadMore") return { mode: "loadMore", control: selectorFor(pagination.control, step, "its loadMore control"), maxPages: pagination.maxPages };
-  if (pagination.mode === "numbered") return { mode: "numbered", pages: selectorFor(pagination.pages, step, "its numbered page controls"), maxPages: pagination.maxPages };
-  return { mode: "next", next: selectorFor(pagination.next, step, "its next control"), maxPages: pagination.maxPages };
 }
 
 function selectorFor(text: string | undefined, step: ScenarioStep, what: string): string {

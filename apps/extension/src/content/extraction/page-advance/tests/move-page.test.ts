@@ -12,7 +12,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PageMoveMark } from "../../../../shared/extraction-continuation";
-import { FakeElement, nthPagerLink, STORE_ITEM, storePage } from "../../tests/store-pager";
+import { FakeElement, NEXT_BUTTON, nthPagerLink, STORE_ITEM, storePage } from "../../tests/store-pager";
 import { movePage, type PageMoveOptions, type RefusedPageHost } from "..";
 
 /** Runs `body` on the store's results page `page`, collecting the marks handed to the worker. */
@@ -57,6 +57,25 @@ test("the last page, whose Next is a disabled span, ends on control_disabled and
     assert.deepEqual(shown.followed, []);
     assert.deepEqual(marks, [], "nothing was about to be pressed");
   });
+});
+
+// S6 GAP N1 (professional-network): on the last page a script's Next stays
+// enabled with no address, and the pager marks the last page current and
+// shows none after it. Pressing it reloads the page, which a read + Next page
+// loop would read again forever (2, 3, 2, 3 live in the e2e).
+test("the last page, whose script Next is still enabled, ends on no_following_page and presses nothing", async () => {
+  const shown = storePage(5, { controls: "buttons", lastNext: "enabled" });
+  const marks: PageMoveMark[] = [];
+  try {
+    const named = await movePage({ item: STORE_ITEM, pagination: { next: NEXT_BUTTON } }, { timeoutMs: 20_000, mark: marking(marks) });
+    assert.deepEqual(named, { outcome: "ended", stop: "no_following_page" });
+    const live = await movePage({ item: STORE_ITEM }, { timeoutMs: 20_000, mark: marking(marks) });
+    assert.deepEqual(live, { outcome: "ended", stop: "no_following_page" });
+    assert.deepEqual(shown.followed, []);
+    assert.deepEqual(marks, [], "nothing was about to be pressed");
+  } finally {
+    shown.restore();
+  }
 });
 
 test("a list that is not on the page is a failed move, not an ended one", async () => {

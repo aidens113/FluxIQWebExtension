@@ -21,8 +21,10 @@ import type { ScenarioStepOperation } from "./scenario.js";
  * - `extract` is recorded as a data-extraction action, not as the clicks it
  *   makes: the extraction intent puts an extract node in the recording, which
  *   the domain maps to `web.dom.extract_list`, or to `web.dom.extract` for a
- *   single-element read. Pagination belongs to that one node, so a paginated
- *   step yields the same two types as an unpaginated one and no `web.dom.click`.
+ *   single-element read, and never the clicks the read makes. A paged step
+ *   would yield the same two types, but no lane records one any more: the
+ *   read reads one page and a recording cannot hold the Next page loop
+ *   (`lane-exclusion/paged-extract-exclusion.ts`).
  * - `upload` sets a file input's files as trusted input. The extension records
  *   the change, and the domain maps a file choice to `web.dom.upload`.
  * - `switchTab` brings another open tab to the front and `closeTab` closes the

@@ -31,7 +31,7 @@ const extractionCountKeys = [
 ] as const satisfies readonly (keyof RunExtractionMeasurement)[];
 /** What the expectation offered, which decides which rate a step may enter at all. */
 const extractionFlagKeys = ["recordsListed", "countStated"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
-const extractionMeasurementKeys = [...extractionCountKeys, ...extractionFlagKeys, "status", "matchedInAnyOrder", "unjudged", "expectedPages", "pagesFollowed", "truncated", "durationMs"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
+const extractionMeasurementKeys = [...extractionCountKeys, ...extractionFlagKeys, "status", "matchedInAnyOrder", "unjudged", "expectedPages", "pagesFollowed", "truncated", "durationMs", "collectedRecords"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
 const automationVerdicts = ["passed", "failed"] as const;
 /**
  * What FluxIQ may report, which is the oracle's vocabulary plus the one word
@@ -258,6 +258,13 @@ function checkExtractionMeasurement(input: unknown, path: string, issues: Valida
     if (value.recordsListed === false && comparedRecords > 0) add(issues, `${path}.comparedRecords`, "must be 0 when the expectation listed no records: nothing was there to compare against");
   }
   if (typeof presentFields === "number" && typeof expectedFields === "number" && presentFields > expectedFields) add(issues, `${path}.presentFields`, "must not exceed expectedFields");
+  // Optional: absent is a producer that reported no run-end processing. Processing only removes rows, so the answer never outnumbers the collection.
+  if (value.collectedRecords !== undefined) {
+    finite(value.collectedRecords, `${path}.collectedRecords`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+    if (typeof value.collectedRecords === "number" && Number.isInteger(value.collectedRecords) && value.collectedRecords >= 0 && typeof observedRecords === "number" && value.collectedRecords < observedRecords) {
+      add(issues, `${path}.collectedRecords`, "must not be fewer than observedRecords: processing removes rows from what the read collected, never adds them");
+    }
+  }
   checkMatchedInAnyOrder(value, issues, path);
 }
 

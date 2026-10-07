@@ -148,3 +148,21 @@ test("the report states extraction per lane, and only for a lane whose runs meas
   });
   assert.equal(none.metrics.extractionByLane, undefined);
 });
+
+/**
+ * Read-list S6. A Flow-lane step's records are the answer Core's run-end
+ * processing kept; `collectedRecords` is what the read's passes collected
+ * before it. The lane states both, over the judged steps that reported
+ * processing, and never invents a collection for a step that reported none.
+ */
+test("the collected rows and the processed answer are pooled over the judged steps that reported processing", () => {
+  const metrics = benchExtractionMetrics([result("C1", [run(0, { extraction: [
+    compared(13, 13, { collectedRecords: 17 }),
+    compared(4, 4, { collectedRecords: 4 }),
+    compared(3, 3),
+    measurement({ status: "not_run", collectedRecords: 9, observedRecords: 2 }),
+  ] })])]);
+  assert.deepEqual(metrics?.collection, { steps: 2, collectedRecords: 21, answerRecords: 17 });
+  const none = benchExtractionMetrics([result("C1", [run(0, { extraction: [compared(3, 3)] })])]);
+  assert.equal(none !== undefined && Object.hasOwn(none, "collection"), false);
+});
