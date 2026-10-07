@@ -42,7 +42,8 @@ test("headlines for every outcome of a build and a run", () => {
     [event({ phase: "failed", label: "Build failed", final: true }, "build", "x2"), "Build failed", "failed", null],
     [event({ phase: "running", label: "Run started" }, "run", "x3"), "Running your Flow", null, "Run started"],
     [event({ phase: "done", label: "Run finished", final: true }, "run", "x4"), "Run finished", "done", null],
-    [event({ phase: "failed", label: "Run cancelled", final: true }, "run", "x5"), "Run failed", "failed", "Run cancelled"],
+    [event({ phase: "failed", label: "Run cancelled", final: true }, "run", "x5"), "Run stopped", "failed", "Run cancelled"],
+    [event({ phase: "failed", label: "Build stopped", final: true }, "build", "x7"), "Build stopped", "failed", null],
     [event({ phase: "waiting_permission", label: "Run is waiting for an answer" }, "run", "x6"), "Waiting for you: answer in the FluxIQ panel", "waiting", "Run is waiting for an answer"]
   ];
   for (const [input, headline, outcome, detail] of cases) {

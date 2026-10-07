@@ -24,6 +24,9 @@ export async function stopRun(message: Partial<PanelStopRunRequest>, context: Pa
   const projectId = text(message.projectId) ?? text(await context.projectId());
   if (!projectId) return relayFailure("no_project");
   const runId = text(message.runId);
+  const flowId = text(message.flowId);
+  if (runId && flowId) return { ok: false, code: "failed", error: "Stop must name a run or a build, not both." };
+  if (flowId) return context.call("cancel-flow-bootstrap", { projectId, flowId });
   if (runId) return context.call("cancel-runtime-session", { projectId, runId, reason: STOP_REASON });
 
   const listed = await context.call("list-runtime-sessions", { projectId, summaries: true, limit: ACTIVE_RUN_SCAN_LIMIT });
