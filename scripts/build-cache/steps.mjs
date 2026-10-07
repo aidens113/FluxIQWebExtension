@@ -101,7 +101,7 @@ export const STEPS = Object.freeze({
     command: "node scripts/build-web-panel-host.mjs",
     generated: ["dist"],
     outputs: [{ path: "dist/host" }],
-    required: ["dist/host/web-panel-host.mjs"],
+    required: ["dist/host/web-panel-host.mjs", "dist/host/web-panel-host.mjs.identity.json"],
     tsconfigs: [],
     // Only a running Lab and the web panel load the host bundle; no
     // dependant's compiler does.

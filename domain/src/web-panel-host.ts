@@ -1,3 +1,4 @@
+import { readHostBuildIdentity } from "./host-build-identity";
 import type { FluxIQ } from "fluxiq";
 import { AutomationStudioNativeNodeRuntime, type AutomationStudioRecordingMapperCandidate, type AutomationStudioRecordingMapperContext, type AutomationStudioRecordingMapperObservation } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
@@ -34,6 +35,35 @@ const RECORDING_MAPPER_ID = "web-recording-actions";
  * infer or import importer code on its own.
  */
 export function registerFluxIQHost(fluxiq: FluxIQ): FluxIQ {
+  const nativeRuntime = new AutomationStudioNativeNodeRuntime({
+    permissions: WEB_AUTOMATION_RUNTIME_PERMISSIONS,
+    runtimeCapabilities: WEB_AUTOMATION_RUNTIME_CAPABILITIES
+  }).register(createWebAutomationOutputNodeManifest({
+    stateVisualizers: [{
+      id: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
+      version: WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION,
+      label: "Web viewport",
+      description: "Renders browser DOM state as a viewport frame with anchored interactive elements.",
+      supportedNamespaces: [WEB_AUTOMATION_STATE_NAMESPACE],
+      supportedKinds: ["bounds", "text", "label", "selector", "url", "visibility", "enabled"],
+      supportedRendererIds: [WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID],
+      metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, packageId: WEB_AUTOMATION_IMPORTER_PACKAGE_ID }
+    }],
+    recordingMappers: [{
+      id: RECORDING_MAPPER_ID,
+      version: WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION,
+      description: "Maps recorded browser interactions to executable web automation actions.",
+      outputIds: WEB_AUTOMATION_ACTION_TYPES
+    }]
+  }), createWebAutomationOutputNodeImplementationBundle({
+    recordingMappers: {
+      [RECORDING_MAPPER_ID]: mapWebRecordingObservation
+    }
+  }));
+
+  // Capture provenance before any domain, recording, or host IO mutation.
+  fluxiq.programs.automationStudio.bindNativeNodeRuntime(nativeRuntime, readHostBuildIdentity());
+
   if (!fluxiq.domains.maybeGet(WEB_AUTOMATION_DOMAIN_ID)) {
     fluxiq.registerDomain(webAutomationDomain);
   }
@@ -67,35 +97,6 @@ export function registerFluxIQHost(fluxiq: FluxIQ): FluxIQ {
     fluxiq.programs.automationStudio.registerRecordingDomain(webAutomationRecordingDomain);
   }
 
-  const nativeRuntime = new AutomationStudioNativeNodeRuntime({
-    permissions: WEB_AUTOMATION_RUNTIME_PERMISSIONS,
-    runtimeCapabilities: WEB_AUTOMATION_RUNTIME_CAPABILITIES
-  }).register(createWebAutomationOutputNodeManifest({
-    stateVisualizers: [{
-      id: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
-      version: WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION,
-      label: "Web viewport",
-      description: "Renders browser DOM state as a viewport frame with anchored interactive elements.",
-      supportedNamespaces: [WEB_AUTOMATION_STATE_NAMESPACE],
-      supportedKinds: ["bounds", "text", "label", "selector", "url", "visibility", "enabled"],
-      supportedRendererIds: [WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID],
-      metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, packageId: WEB_AUTOMATION_IMPORTER_PACKAGE_ID }
-    }],
-    recordingMappers: [{
-      id: RECORDING_MAPPER_ID,
-      version: WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION,
-      description: "Maps recorded browser interactions to executable web automation actions.",
-      outputIds: WEB_AUTOMATION_ACTION_TYPES
-    }]
-  }), createWebAutomationOutputNodeImplementationBundle({
-    recordingMappers: {
-      [RECORDING_MAPPER_ID]: mapWebRecordingObservation
-    }
-  }));
-
-  // Bind through Automation Studio directly for compatibility with the
-  // framework build currently linked by this importing repository.
-  fluxiq.programs.automationStudio.bindNativeNodeRuntime(nativeRuntime);
   registerWebAutomationRuntime(fluxiq);
   return fluxiq;
 }

@@ -1,0 +1,1 @@
+export type HostBuildIdentity = { schema: 1; protocol: "fluxiq.module-build-identity.v1"; moduleId: "@fluxiq-web-extension/domain-host"; version: string; normalization: "module-payload-v1"; artifactDigest: string; sourceInputsDigest: string };
