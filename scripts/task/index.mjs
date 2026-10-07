@@ -8,6 +8,7 @@ export { COMMAND_OPTIONS } from "./command-options.mjs";
 export { abandonTask } from "./abandon.mjs";
 export { parseTaskBranch, taskBranchName } from "./branch-name.mjs";
 export { runTaskCommandLine } from "./command-line.mjs";
+export { checkCoreCurrent } from "./core-currency.mjs";
 export { finishTask } from "./finish.mjs";
 export { listTasks } from "./list.mjs";
 export { listWorktrees, locateTask } from "./locate.mjs";
