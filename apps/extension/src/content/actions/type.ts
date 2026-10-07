@@ -4,6 +4,9 @@
 // Typing goes through the keyboard capability, so each character is a real
 // key and input sequence (decision D5) rather than one value assignment: a
 // combobox or autocomplete that filters per keystroke sees the keystrokes.
+// Native number/calendar/time controls instead commit one browser-validated
+// whole value: their native setter discards incomplete prefixes. Page key and
+// beforeinput refusal still prevents that commit; all events remain synthetic.
 // The post-condition is a value read-back -- the field is asked what it holds
 // afterwards rather than assumed to hold what was sent -- so a read-only
 // field, a page that rewrites the value in its own `input` handler, and a

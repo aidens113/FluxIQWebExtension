@@ -14,3 +14,4 @@ export { markBuildComplete, newBuildAttemptName, publishBuildAttempt } from "./p
 export { prepareCoreWebBuild, type CoreWebBuildDependencies, type CoreWebBuildOptions } from "./prepare.js";
 export { coreWebServerProcessSpec, type CoreWebServerProcessInput } from "./server-process.js";
 export type { CoreWebBuild, CoreWebBuildInputs } from "./types.js";
+export { serverAdapterBuild } from "./server-adapter.js";

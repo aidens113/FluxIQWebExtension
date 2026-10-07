@@ -13,3 +13,4 @@ export * from "./build-identity/index.js";
 
 export * from "./core-identity/index.js";
 export * from "./host-identity/index.js";
+export * from "./server-adapter-identity/index.js";

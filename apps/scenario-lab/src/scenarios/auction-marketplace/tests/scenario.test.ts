@@ -28,11 +28,11 @@ function selections(): Selection[] {
   });
 }
 
-test("the manifest is a valid scenario: a bid, two workflows, three variants, every row judged on succeeding", () => {
+test("the manifest is a valid scenario: a bid, three secondary workflows, three variants, every row judged on succeeding", () => {
   const result = validateWebScenario(manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
-  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["watch-endings", "kestrel-auctions"]);
-  assert.deepEqual([manifest, ...manifest.workflows!].map((workflow) => (workflow.variants ?? []).map(({ id }) => id)), [[], ["watch-redesign"], ["grid-view", "feedback-survey"]]);
+  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["watch-endings", "kestrel-auctions", "remove-watched-accessories"]);
+  assert.deepEqual([manifest, ...manifest.workflows!].map((workflow) => (workflow.variants ?? []).map(({ id }) => id)), [[], ["watch-redesign"], ["grid-view", "feedback-survey"], []]);
   for (const selection of selections()) {
     const { expected } = resolveScenarioWorkflow(manifest, selection);
     assert.ok((expected.finalState ?? []).length > 0, JSON.stringify(selection));
@@ -139,7 +139,7 @@ test("the live tasks name this scenario's datasets and variants, and the repair 
   const ids = AUCTION_MARKETPLACE_LIVE_TASKS.map(({ id }) => id);
   assert.equal(new Set(ids).size, ids.length);
   assert.ok(ids.every((id) => id.startsWith("auction-marketplace-")));
-  assert.deepEqual(AUCTION_MARKETPLACE_LIVE_TASKS.map(({ judgeBy }) => judgeBy).sort(), ["expected-dataset", "expected-dataset", "expected-dataset", "expected-dataset", "playback-goal"]);
+  assert.deepEqual(AUCTION_MARKETPLACE_LIVE_TASKS.map(({ judgeBy }) => judgeBy).sort(), ["expected-dataset", "expected-dataset", "expected-dataset", "expected-dataset", "expected-dataset", "playback-goal"]);
   for (const task of AUCTION_MARKETPLACE_LIVE_TASKS.filter(({ variantId }) => variantId !== undefined)) {
     assert.equal(task.variantArmedAfterBuild, true, `${task.id} is the existing-Flow entry point`);
     assert.ok(manifest.workflows!.some((workflow) => (workflow.variants ?? []).some(({ id }) => id === task.variantId)));

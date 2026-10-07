@@ -595,3 +595,22 @@ Earlier entries: [Claude implementation and handoff ledger](../../mvp-final-mont
 - Required reads: Current State, own proposal, actual pending/inbound/event owner and real pairClient test helper, Core instructions.
 - Definition of done: settle accepts sender sessionId and checks pending owner BEFORE timer deletion/resolve; explicit wrong-session disposition suppresses inbound publication. Real ready A/B: B sends known A command ID, A promise remains pending/no event; A valid answer succeeds once. Wrong result cannot shorten original timeout. Unknown/late event compatibility remains explicitly unbound and is not certified receipt evidence; durable journal and late-session attribution still required.
 - Validation: fail-first owning real service tests, narrow gateway/runtime transport tests, Coretypes/build/audits. No providers/panel/browser/fullsuite. Product edits wait provisioning; freeze precise report for supervisor independent rerun. No git/shared docs.
+
+
+## Additional verified task briefs
+
+### Brief: sanitized-field-typing (t315, supervisor)
+- Repository: task/t315-sanitized-field-typing in main checkout; no Core source changes. Worker none.
+- Task: Reproduce real browser sanitization of number1.5/-3 and ISO date, then preserve requested native values and refuse malformed formats without partial mutation. Preserve normal text/autocomplete character events, page cancellation/revert and sensitive value redaction.
+- Owns: keyboard/type-text.ts, focused new keyboard/sanitized-input.ts + barrel if needed; e2e/runtime/tests/sanitized-field-typing.spec.ts; scoped action-runtime architecture paragraph and own reports/p3-sanitized-field-typing.md. Native format acceptance comes from detached same-type browser value sanitization, not silent normalization.
+- Validation: fail-first real production content via runtime harness, exact retained field/application state, invalid/reverted/readonly/cancelled paths, unsent form and sensitive readback. Affected source/testtypes, owning builds and audit only; no fullsuite/provider/panel. Final rebuilt background/content identity recorded; no Firefox/Edge/site qualification claim.
+
+
+### Brief: user-script-browser-feasibility (t314)
+- Repository: isolated downstream fxwork/script-feasibility/t314-user-script-browser-feasibility; private sibling Core detached/read-only. Worker p0_cancel_control. Provision first; no edits until ready.
+- Task: Implement a provider-free actual installed Chrome/Edge User Scripts API feasibility fixture, not a product capability. Read p4-script-request-feasibility.md, current browser harness and current official primary API/permission/CSP docs. Confirm installed executable versions; never inspect real browser profiles.
+- Initial owns: own reports/p4-user-script-browser-probe.md plus proposed focused apps/extension/e2e/user-script-feasibility/ fixture/harness/owning tests. Name exact cohesive files for supervisor before edits. Generate minimal probe extension/local pages in ignored owned temporary directories only; no production manifests/action registry/settings/Core change.
+- Required proof: supported135+ one-shot USER_SCRIPT, missing/revoked user-controlled permission/toggle, site/document targeting, page CSP and per-world connect-src behavior. Exercise only isolated synthetic pages/accounts; no secrets, real sites, infinite-loop page hangs or claims of hard termination. Network isolation versus DOM-triggered navigation must be reported separately and honestly. No debugger permission/input/JS executor in product.
+- Limits: modern branded Chrome extension loading may require documented CDP loadUnpacked test infrastructure; investigate actual availability, never infer from Chromium134. Browser UI enablement only in owned temporary profile, not editing browser storage or normal settings. Firefox parity remains separate unless an actual bounded supported probe is feasible.
+- Validation: exact actual browser/version/API/method outcomes, errors and current-source fingerprint; bounded cleanup verifies resolved owned roots. No provider/panel/fullsuite/git/shared docs or qualification claim. Browser/API prototype is readiness evidence, not permission to ship arbitrary JS or enable requests. Freeze report/source for root independent rerun.
+

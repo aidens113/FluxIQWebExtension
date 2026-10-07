@@ -1,3 +1,4 @@
+import { accessoryCleanupWorkflow } from "./qualification/index.js";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
 import { currentPrice, listingByHandle, moneyText } from "./catalog/index.js";
@@ -258,5 +259,6 @@ export const auctionMarketplaceManifest = createScenarioManifest({
         expected: { pageFacts: HOME_AT_LOAD, ...kestrelExpected },
       }],
     },
+    accessoryCleanupWorkflow,
   ],
 });

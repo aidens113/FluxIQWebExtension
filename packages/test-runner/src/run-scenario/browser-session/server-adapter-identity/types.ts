@@ -1,0 +1,1 @@
+export type ServerAdapterBuildIdentity = { schema: 1; protocol: "fluxiq.module-build-identity.v1"; moduleId: "fluxiq/web-client-gateway-server"; version: string; normalization: "module-payload-v1"; artifactDigest: string; sourceInputsDigest: string };
