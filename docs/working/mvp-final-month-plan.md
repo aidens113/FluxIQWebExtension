@@ -37,8 +37,7 @@ pushed after root33/33 and production Chromium1/1 (17.2s).
 t307 atomic graph import is integrated/pushed Corec2ea1e5d/downstreamf7b5c5a9
 after independent19/19, merged package types/build and both audits0.
 t308 paginator is integrated after root Chromium2/2, scenario10/10, types/audit0;
-t311 pending command session binding is integrated/pushed Core210453c1/downstreamaed8ae54 after root23/23 and both audits0. t309 staged project snapshot foundation is integrated/pushed Core595daf8d/downstream1115c14a after root37/37, actual Core typecheck/build and both audits0. t310 actual server-adapter identity is frozen for independent review. t312 starts the first three clearly NEW fixture tasks toward the67-task denominator, preserving all57 existing tasks. No P0 completion or fresh A-D
-qualification is claimed.
+t311 pending command session binding is integrated/pushed Core210453c1/downstreamaed8ae54 after root23/23 and both audits0. t309 staged project snapshot foundation is integrated/pushed Core595daf8d/downstream1115c14a after root37/37, actual Core typecheck/build and both audits0. t310 actual server-adapter identity is frozen for independent review. t312 starts the first three clearly NEW fixture tasks toward the67-task denominator, preserving all57 existing tasks. t315 native structured field typing is integrated/pushed downstreamd1d57889 after real Chromium1/1, source/e2etypes0 and final integrationaudit0. t314 installed Chrome154/Edge154 User Scripts prototype passed root2/2 (9.9s), still no product capability. No P0 completion or fresh A-D qualification is claimed.
 
 **Planning review completed locally 2026-10-06.**
 The [consultant review and revised execution detail](./mvp-final-month-plan/consultant-revision.md)
@@ -165,11 +164,12 @@ Active file-owned tasks only. Prior briefs and exact receipts are preserved in t
 - Limits: modern branded Chrome extension loading may require documented CDP loadUnpacked test infrastructure; investigate actual availability, never infer from Chromium134. Browser UI enablement only in owned temporary profile, not editing browser storage or normal settings. Firefox parity remains separate unless an actual bounded supported probe is feasible.
 - Validation: exact actual browser/version/API/method outcomes, errors and current-source fingerprint; bounded cleanup verifies resolved owned roots. No provider/panel/fullsuite/git/shared docs or qualification claim. Browser/API prototype is readiness evidence, not permission to ship arbitrary JS or enable requests. Freeze report/source for root independent rerun.
 
-### Brief: sanitized-field-typing (t315, supervisor)
-- Repository: task/t315-sanitized-field-typing in main checkout; no Core source changes. Worker none.
-- Task: Reproduce real browser sanitization of number1.5/-3 and ISO date, then preserve requested native values and refuse malformed formats without partial mutation. Preserve normal text/autocomplete character events, page cancellation/revert and sensitive value redaction.
-- Owns: keyboard/type-text.ts, focused new keyboard/sanitized-input.ts + barrel if needed; e2e/runtime/tests/sanitized-field-typing.spec.ts; scoped action-runtime architecture paragraph and own reports/p3-sanitized-field-typing.md. Native format acceptance comes from detached same-type browser value sanitization, not silent normalization.
-- Validation: fail-first real production content via runtime harness, exact retained field/application state, invalid/reverted/readonly/cancelled paths, unsent form and sensitive readback. Affected source/testtypes, owning builds and audit only; no fullsuite/provider/panel. Final rebuilt background/content identity recorded; no Firefox/Edge/site qualification claim.
+### Brief: qualification-state-preservation (t316)
+- Repository: fxwork/qualification-next/t316-qualification-state-preservation, private sibling Core detached/read-only. Worker p0_build_identity; provision15520 pending, no edits until ready.
+- Task: Add only NEW bigbox-retail-ensure-soap-quantity, everything-store-restore-saved-cloths and local-classifieds-remove-sold-saves from ten-task proposal sections2/5/7. Preserve all original57 and t3123 additions; total63 only after combined integration.
+- Initial owns: those3 site live-tasks/manifest and necessary barrel owners; new qualification/{workflow,expected,facts,index}.ts + owning tests; existing owning browser/scenario tests, narrow actual-account oracle readout owners to be named BEFORE editing. Own reports/qualification-state-preservation.md. No shared global inventory test/document, other sites/Core/product node edits.
+- Contract: exact literal independent row identities/order/quantities/full account state. Bigbox ensure total3 twice produces no added line/store change; everything transfers existing saved S1 without duplicate/newline and keeps S2; local removes Sold save without hidden/messages/offers. Actual current account facts, not stale readouts or just count/confirmation; explicit permission labels. Refresh only private instrumentation from actual mutation response if necessary, preserve visible fixture quirks. Wrongoutcomes fail before manual reload; also verify durable reload.
+- Validation: owning old+new unit/oracle tests, real isolated Chromium honest and deliberatewrongoutcome probes, source/e2etypes/owningbuild/audit. Literal authored records independent from renderer/filter code; record lifecycle/staticcodepin exactly. No provider/fullsuite/panel/git/shared docs. Freeze reports and source for independent root checks; no model/extension qualification claim.
 
 ## Work Ledger
 
@@ -210,14 +210,6 @@ Earlier verified units and decisions moved intact to the [execution archive](./m
 - Outcome: Durable readable handoff; whole plan remains active.
 - Follow-up: independently review current worker source/results; preserve held Next startup and paid qualification gates.
 
-## Open Questions
-
-- Recording scope is resolved by the newer user order: evidence beside mandatory instructions, after A-D qualify. Do not reopen the older September ambiguity.
-- Script channel, store eligibility and Firefox parity need a concrete feasibility result. Preserve no-debugger JS and requests-OFF policy meanwhile.
-- Direct-request origins/session/redirect policy needs a concrete design; do not inherit the old any-origin default as authorization.
-- Who runs the Phase 6 release-candidate script as the "person unfamiliar with FluxIQ"? Owner: user.
-- Requested67task inventory has57existing rows; ten are unaccounted. Optional user question asking for an existing list versus proposing new tasks remains unanswered. Do not fabricate historical IDs/passes; explicit new definitions and independent oracles required to add scope.
-
 ### 2026-10-07 - t309 root verification and next bounded dispatch
 - Agent: Codex supervisor.
 - Changed: staged complete-project snapshot CAS/immutable history/receipt join reviewed after current paired dev merge; root required borrowed-owner/operation/generation negatives before accepting storage claim. Production activation remains unavailable. Concrete all-writer/read cutover report retained as a proposal, not a product switch.
@@ -235,6 +227,23 @@ Earlier verified units and decisions moved intact to the [execution archive](./m
 ### 2026-10-07 - t315 native structured field typing verified
 - Agent: Codex supervisor.
 - Changed: native number/calendar/time controls admit exact whole value before one synthetic replacement input/change; malformed native formats preserve old value. Text/autocomplete remains per character, page cancellation/readback/redaction/submit gates preserved. Architecture paragraph updated.
-- Validation: initial stale-build refusal then owning rebuild; real fail-first1.5 returned failed; final production Chromium1/1 passed17.5s (18.8s total), background/content identity matched, all6 native type families and cancellation/revert/readonly/malformed/text/redaction/no-submit cases. Owning3targets22files/build0; source/e2etypes0 and finalrepeat follows, audit follows. No broad suite/provider/panel/Core source change. Full report reports/p3-sanitized-field-typing.md.
+- Validation: initial stale-build refusal then owning rebuild; real fail-first1.5 returned failed; final production Chromium1/1 passed17.5s (18.8s total), background/content identity matched, all6 native type families and cancellation/revert/readonly/malformed/text/redaction/no-submit cases. Owning3targets22files/build0; source/e2etypes0 finalrepeat observed; final taskaudit0 after regenerating stale handoff index. No broad suite/provider/panel/Core source change. Full report reports/p3-sanitized-field-typing.md.
 - Outcome: Narrow typed readiness slice verified; not trusted keyboard input or async/React/Edge/Firefox/model qualification. One fixture synthetic value was accidentally in commandId; corrected ordinal IDs before final success.
 - Follow-up: t310 actualnative identity verified, preparedNext test awaiting explicitpanel authorization; t312 frozen3 new tasks rootreview; t313 durable command infrastructure and t314 installedbrowser script feasibility active.
+
+
+### 2026-10-07 - installed-browser feasibility independently verified; next3 tasks
+- Agent: Codex supervisor.
+- Changed: t315 pushed downstreamd1d57889 after final typecheck and corrected generated-index integration gate0. New t316 bounded3-site preservation unit provisioned; no shared Core movement. Current reports keep production/native/browser readiness separate.
+- Validation: root t314 actual installed Chrome154.0.8037.98/Edge154.0.4258.62 prototype2/2 zero skips9.9s on identical7-file fingerprint87f504c1c75b7dd09268f01ae1bd49301560d001da01f4881a773247b4e1baee. Missing/revoked enablement and stale/ungranted document refuse; isolated USER_SCRIPT works; no providers/panel. Final merged types/audit follow.
+- Outcome: API feasibility verified, not arbitrary-JS confinement: connect-src denial blocked fetch, but DOM image/navigation requested network; even stricter world CSP did not stop tested anchor navigation. No product script capability, requests toggle or browser-minimum change.
+- Follow-up: P4 must resolve admitted script surface/normal consequence and requests-OFF semantics before enabling. t312 root required current-page account oracle update from actual order response; negatives now refuse without reload and worker refrozen. t313 root required immutable bounded canonical claims/receipts before production wiring. PreparedNext question still unanswered, user panel unmanaged.
+
+
+## Open Questions
+
+- Recording scope is resolved by the newer user order: evidence beside mandatory instructions, after A-D qualify. Do not reopen the older September ambiguity.
+- Script channel, store eligibility and Firefox parity need a concrete feasibility result. Preserve no-debugger JS and requests-OFF policy meanwhile.
+- Direct-request origins/session/redirect policy needs a concrete design; do not inherit the old any-origin default as authorization.
+- Who runs the Phase 6 release-candidate script as the "person unfamiliar with FluxIQ"? Owner: user.
+- Historical requested67task list had57existing rows; originalmissingten remain unknown. Supervisor is implementing ten clearly NEW proposals (t312 first3; t316 next3), preserving original57, with exact oracles; no recovered-history or qualification-pass claim. Optional original-list question remains unanswered.
