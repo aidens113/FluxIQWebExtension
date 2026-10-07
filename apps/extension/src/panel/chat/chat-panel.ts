@@ -55,6 +55,7 @@ import type { ExtensionStatus } from "../../shared/protocol";
 import { createComposer, createConversationController, createReadNotice, type ConversationState, type CoreTurn } from "./conversation";
 import { createActivityFeed, listenToRuntime, threadRefreshWanted } from "./feed";
 import { sameThread } from "./same-thread";
+import { createStopControl } from "./stop-control";
 import { createChatOwnerContext, type ChatOwner } from "./owner-context";
 import { activityForTarget, buildChatStream, createTurnClock, type QuestionTarget } from "./stream";
 import type { ChatTarget } from "./target";
@@ -149,7 +150,8 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     return destination.send(text);
   });
   const main = createElement("div", { className: "chat-main" }, [scroller, jump]);
-  const dock = createElement("div", { className: "chat-dock" }, [composer.element]);
+  const stop = createStopControl((message) => owner.request(message), () => connected && actionsAllowed());
+  const dock = createElement("div", { className: "chat-dock" }, [stop.element, composer.element]);
   const fallback = createElement("div", { className: "chat-fallback", hidden: true }, [
     createElement("p", { className: "chat-empty-title", text: "Talk to FluxIQ in the FluxIQ window." }),
     createElement("p", { className: "chat-empty-line", text: "This browser can't hold the conversation here. Open FluxIQ from the top of this panel." })
@@ -270,6 +272,11 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
   }
 
   function renderAll(): void {
+    const raw = feed.snapshot().state.current;
+    const paced = feed.snapshot().state.display;
+    const ended = paced?.activityId === raw?.activityId && (paced?.outcome === "done" || paced?.outcome === "failed");
+    const projectId = shownTarget.projectId ?? latestStatus?.projectId;
+    stop.update(raw && !ended && (projectId === undefined || raw.subject.projectId === projectId) ? raw : null);
     let state = controller.state();
     if (state.fallbackReason === "unsupported") unsupported = true;
     if (unsupported) state = { ...state, mode: connected ? "fallback" : "offline", fallbackReason: "unsupported" };

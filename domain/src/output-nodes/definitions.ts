@@ -126,9 +126,9 @@ const VERIFIES_STATE_METADATA_KEY = "verifiesState";
  *
  * A read is `observe` even when it waits or scrolls: waiting again is harmless
  * and a delta scroll that runs twice moves the viewport, which no downstream step
- * depends on. `web.browser.tab` observes because the operations it performs are
- * idempotent in the sense that matters here -- asking for the same tab twice
- * leaves one tab. Everything that presses, types, uploads, answers a dialog,
+ * depends on. Tab operations mutate: repeated open creates another tab and an
+ * unnamed close can close the returned-to tab on replay. Everything that
+ * presses, types, uploads, answers a dialog,
  * navigates or downloads mutates, and mutating is the answer whenever there is
  * doubt: this record is read to decide whether an action may be repeated, so the
  * cost of being wrong is one-sided.
@@ -136,7 +136,7 @@ const VERIFIES_STATE_METADATA_KEY = "verifiesState";
 const WEB_AUTOMATION_ACTION_EFFECT: Readonly<Record<WebAutomationActionType, "observe" | "mutate">> = Object.freeze({
   "web.browser.navigate": "mutate",
   "web.browser.download": "mutate",
-  "web.browser.tab": "observe",
+  "web.browser.tab": "mutate",
   "web.dom.click": "mutate",
   "web.dom.type": "mutate",
   "web.dom.clear": "mutate",

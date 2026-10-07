@@ -38,7 +38,8 @@
 // above, `served-status.ts`), are judged around them in `action-runner.ts`'s
 // `navigationResult`.
 
-import type { TabDriveRecord } from "./automation-tab";
+import { parsedUrl } from "../../shared/parsed-url";
+import type { TabDriveRecord } from "../automation-tab";
 
 export type NavigationComparison = {
   matched: boolean;
@@ -67,25 +68,13 @@ export function compareNavigatedUrl(requested: string, landed: string | undefine
 
 function sameDestination(requested: string, landed: string): boolean {
   if (requested === landed) return true;
-  const wanted = parseUrl(requested);
-  const reached = parseUrl(landed);
+  const wanted = parsedUrl(requested);
+  const reached = parsedUrl(landed);
   if (!wanted || !reached) return false;
-  if (!(isWebScheme(wanted.protocol) && isWebScheme(reached.protocol)) && wanted.protocol !== reached.protocol) return false;
+  if (wanted.protocol !== reached.protocol && !(wanted.protocol === "http:" && reached.protocol === "https:")) return false;
   if (hostOf(wanted) !== hostOf(reached)) return false;
   if (pathOf(wanted) !== pathOf(reached)) return false;
   return wanted.search === "" || wanted.search === reached.search;
-}
-
-function parseUrl(value: string): URL | undefined {
-  try {
-    return new URL(value);
-  } catch {
-    return undefined;
-  }
-}
-
-function isWebScheme(protocol: string): boolean {
-  return protocol === "http:" || protocol === "https:";
 }
 
 function hostOf(url: URL): string {

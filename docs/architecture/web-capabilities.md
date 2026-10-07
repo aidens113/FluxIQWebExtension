@@ -52,6 +52,25 @@ post-condition makes the result `failed` with Core's `output_not_observed`
 
 ## How An Action Runs
 
+Native checkbox/radio `check` activates the control once only when its checked
+state differs from the requested state; already-correct controls are no-ops.
+It preserves actionability/hidden-label checks, refuses radio unchecking, and
+observes state for 50 ms after activation before confirming. A reverted or
+detached control cannot pass that confirmation. This bounded observation does
+not certify future delayed changes and does not produce trusted input.
+
+Next-page advancement compares record text and link addresses captured before
+the press as well as item replacement/count. In-place changes can advance;
+pager replacement alone cannot. Unchanged lists remain bounded failures or
+timeouts, while disabled/no-following-page controls retain explicit ended
+answers. No extra press is issued merely to observe advancement.
+
+A Flow `type` step with `submit: true` must declare consequences (including an
+explicit empty declaration for none), through the same Core permission gate
+as click/keypress/dialog. Typing without submission keeps its existing contract.
+The declaration is resolved before dispatch; this check does not infer a
+control's lasting consequences from its label.
+
 Eighteen action types are defined once, as `WEB_AUTOMATION_ACTION_TYPES` in
 [`domain/src/actions/types.ts`](../../domain/src/actions/types.ts). Each one
 becomes, by one mechanism and with no per-action exception, a parameter
@@ -690,3 +709,23 @@ Two condition shapes are accepted, because two producers write them: the flat
 `web.dom.assert` node carries. The kind table is exhaustive by construction, so
 a seventh assert kind stops `conditions.ts` compiling rather than being
 silently dropped as unreadable.
+
+### Browser landing verification and tab repeats
+
+Tab output nodes are mutating for repeat classification: another open creates
+another tab, and another unnamed close can consume the returned-to tab. Switch
+and close behavior is unchanged; an ambiguous mutating result is not permission
+to repeat it.
+
+Explicit tab open with a URL and navigate share physical landing verification
+(`runtime/navigation-landing.ts`): browser load failure, destination, HTTP
+status/rate limits, robot-check evidence and bounded self-clearing wait. A
+person-only check is handed off untouched. Blank tab creation remains creation
+only, with no claim that a page arrived. HTTP to HTTPS upgrade is permitted;
+HTTPS to HTTP downgrade is a different destination and fails confirmation.
+
+Unread challenge or HTTP evidence produces transport `succeeded` with validation
+`none` / `not-yet-validated` and an explicit unknown message, rather than a passed
+landing assertion. A transport receipt never certifies the requested user
+outcome. Click-open retains its existing landing primitives and behavior; the
+new shared evaluator specifically owns navigate and explicit URL opens.

@@ -25,9 +25,9 @@
 // A tab whose URL cannot be read is not taken over either: nothing proves it is
 // a page a navigation may replace.
 
-import { readTabUrl } from "./automation-tab";
-import { unsupportedAutomationPageReason } from "./unsupported-page";
-import { parsedUrl } from "../shared/parsed-url";
+import { readTabUrl } from "../index";
+import { unsupportedAutomationPageReason } from "../index";
+import { parsedUrl } from "../../shared/parsed-url";
 
 /**
  * The page in front, when a navigation that names no tab should drive it; or
