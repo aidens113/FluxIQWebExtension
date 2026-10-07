@@ -1,6 +1,6 @@
 # P0 executing server adapter identity ? t310
 
-Status: source frozen; supervisor integration and independent verification pending. Work occurs only in paired fxwork/t310 trees. No git, providers, user panel, or actual Next process started.
+Status: native registered-owner implementation independently verified; integration pending, actual production Next proof held for explicit user authorization. Work occurs only in paired fxwork/t310 trees. No git, providers, user panel, or actual Next process started.
 
 ## Ownership and behavior
 
@@ -75,3 +75,7 @@ Only `server-adapter-identity/tests/next-probe.test.ts` changed: it resolves the
 Root merged current downstream1115c14a/Core595daf8d (with t309/t311), reviewed actual gateway lease/native loader/generator/cache/staging/early gate and repeated owner+diagnostic8/8, web factory/loader/reader/startup27/27, actual route invocation55/55, generator/cache9/9. Owning fluxiqcheck0 actual40.002s/build0 actual57.261s; native generator0; web source typecheck0; runner emit0. Root runner selected directories78 passed/four opt-in probes skipped, not a101-test claim. Separately actual native socket proof1/1 zero skips7.059s wall (fixture5.873s) in Chromium134.0.6998.35: original retained gateway/real socket, changed source+generator+actual handler reload refused, changed factory refused before IO, legacy clear retained anchor and fresh child matched; provider/chat0.
 
 Core audit first found the paired working index stale after merged ledger updates; regenerated through its owning rule, then Coreaudit0. Downstreamaudit0. Prepared Next fixture additionally strips inherited provider secrets and checks resolved owned immediate-child cleanup. Actual production Next still unexecuted: root sent an explicit authorization question under AGENTS current-session panel rule; no answer yet, no permission inferred. These narrow receipts support native registered-owner provenance, not P0 completion or production Next/paired action qualification. No full suite/provider/user-panel action.
+
+## Integration scope
+
+Supervisor will integrate the coherent native registered-owner identity and Lab early gate after observed narrow checks. Actual Next opt-in probe remains prepared but unexecuted because the explicit current-session panel-management question is unanswered. Its native/socket/actual-handler evidence above is not substituted for production Next startup/authentication evidence; P0 and paid qualification remain open. Latest downstream dev43837638 merged with no changed t310 product source; final downstream structure audit0,176 warnings/117baseline.
