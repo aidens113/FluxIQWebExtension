@@ -20,6 +20,7 @@ import type { CoreWebBuildInputs } from "../types.js";
 const inputs: CoreWebBuildInputs = {
   lockfileHash: "a".repeat(64),
   webSourceHash: "b".repeat(64),
+  serverAdapterSourcesHash: "d".repeat(64),
   packageHashes: { fluxiq: "c".repeat(64) },
   nextConfig: "export default {};\n",
   nextVersion: "15.5.23",
@@ -63,6 +64,7 @@ async function withHarness(run: (harness: Harness) => Promise<void>): Promise<vo
     builds.push(spec);
     await delay(25);
     await writeText(path.join(spec.cwd, ".next", "BUILD_ID"), `build-${builds.length}\n`);
+    await writeServerOutput(spec.cwd);
   };
   const options = (supervisor: ProcessSupervisor) => ({ fluxiqRepositoryRoot: path.join(root, "core"), cacheRoot, supervisor, logPath });
   try {
@@ -86,6 +88,7 @@ test("concurrent preparations in one runs directory build once, publish only aft
         await delay(40);
         publishedDuringBuild = await exists(path.join(keyDirectory, "published.json"));
         await writeText(path.join(spec.cwd, ".next", "BUILD_ID"), "build-1\n");
+        await writeServerOutput(spec.cwd);
       },
     })));
     assert.equal(builds.length, 1, "three concurrent callers, one build");
@@ -235,7 +238,7 @@ test("the build runs `next build --turbopack` in its attempt with a build-only F
 
     const succeeding = new ProcessSupervisor((_command, _args, options) => {
       const child = fakeChild();
-      setImmediate(() => void writeText(path.join(String(options.cwd), ".next", "BUILD_ID"), "fake-build\n").then(() => exitChild(child, 0)));
+      setImmediate(() => void writeText(path.join(String(options.cwd), ".next", "BUILD_ID"), "fake-build\n").then(() => writeServerOutput(String(options.cwd))).then(() => exitChild(child, 0)));
       return child;
     }, async () => undefined);
     const published = await prepareWithDefaultBuild({}, succeeding);
@@ -244,6 +247,48 @@ test("the build runs `next build --turbopack` in its attempt with a build-only F
     assert.deepEqual(JSON.parse(await readFile(path.join(keyDirectory, "published.json"), "utf8")), { schemaVersion: 1, key, attempt: path.basename(published.directory) });
   });
 });
+
+test("a build whose server output embeds Core's unstamped runtime identity is refused, not published, and names the file", async () => {
+  // What every Lab panel built at layout 2 contained: Core compiled from
+  // source, whose identity literal only Core's dist build stamps (t342, B1).
+  await withHarness(async ({ keyDirectory, lockPath, builds, prepare }) => {
+    const chunk = `coreRuntimeBuildIdentity=(function(){let e=JSON.parse('{"fluxiqRuntimeIdentityPlaceholder":302}')})();\n`;
+    await assert.rejects(prepare({
+      runBuild: async (_supervisor, spec) => {
+        builds.push(spec);
+        await writeText(path.join(spec.cwd, ".next", "BUILD_ID"), "source-build\n");
+        await writeServerOutput(spec.cwd);
+        await writeText(path.join(spec.cwd, ".next", "server", "chunks", "core_service.js"), chunk);
+      },
+    }), (error: unknown) => {
+      closedFailure("Core web panel production build embeds Core's unstamped runtime build identity: it compiled Core from source instead of its built dist, so it was not published")(error);
+      assert.match(failureText(error), /chunks[\\/]+core_service\.js/u, "the failure names the server file");
+      assert.match(failureText(error), /fluxiqRuntimeIdentityPlaceholder/u, "and the placeholder it found");
+      return true;
+    });
+    assert.equal(await exists(path.join(keyDirectory, "published.json")), false, "never published");
+    const [attempt] = await attemptNames(keyDirectory);
+    assert.equal(await exists(path.join(keyDirectory, attempt!, "build-complete.json")), false, "never marked complete");
+    assert.equal(await exists(lockPath), false, "the lock is released");
+  });
+});
+
+test("a build that leaves no server output is refused and not published", async () => {
+  await withHarness(async ({ keyDirectory, builds, prepare }) => {
+    await assert.rejects(prepare({
+      runBuild: async (_supervisor, spec) => {
+        builds.push(spec);
+        await writeText(path.join(spec.cwd, ".next", "BUILD_ID"), "no-server\n");
+      },
+    }), closedFailure("Core web panel production build left no server output to check for Core's runtime build identity"));
+    assert.equal(await exists(path.join(keyDirectory, "published.json")), false);
+  });
+});
+
+/** A server chunk as a build that resolved Core through its stamped dist leaves it. */
+async function writeServerOutput(webDirectory: string): Promise<void> {
+  await writeText(path.join(webDirectory, ".next", "server", "app", "page.js"), `const embedded = "{\\"schema\\":1}";\n`);
+}
 
 type AttemptSeed = { marker?: { key: string; buildId: string }; publishedKey?: string };
 
