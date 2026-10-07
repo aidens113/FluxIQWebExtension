@@ -180,6 +180,14 @@ Historical briefs: [Claude schedule and task briefs](./mvp-final-month-plan/arch
 
 ## Work Ledger
 
+### 2026-10-06 - t296 two acceptance fences independently verified
+- Agent: Codex supervisor; p0-acceptance worker.
+- Changed: paired Core agreement/held-topology source and architecture; downstream p0-acceptance report. Source commit Core 1736ba81.
+- Why: automatic build completion needs actual affirmative confirmation; accepted graph stays unchanged for unsupported held topology.
+- Validation: supervisor reviewed source/negative tests and reran changed owners 29/29 passed; worker directory regressions 391 passed and fluxiq check/audit passed; dev integrated and owning checks rerun before merge. No browser/provider calls; this is not all of P0 complete.
+- Outcome: Accepted
+- Follow-up: t297 identity, t298 control/decline reason, remaining requirement receipts; t299 explicit candidates. Core legacy finish runs full check by default: use its --skip-checks only after observed manual narrow gates under the user's twice-daily full-suite rule.
+
 ### 2026-10-06 - Implementation started; first P0 units assigned
 - Agent: Codex supervisor.
 - Changed: paired Core working doc, this Current State and three bounded briefs; isolated t296/t297/t298 trees provisioned through task tooling.
