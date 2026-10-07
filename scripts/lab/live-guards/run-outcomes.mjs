@@ -13,26 +13,38 @@
 // also carries the run's spend per build against the ceiling it was planned
 // under (`perBuildSpend`, the same reading the live campaign's rows use): the
 // ceiling, the most any one build spent, and how many builds went past it.
+//
+// A run killed before `finalize` renamed it is still a `.staging-run-*`
+// directory. It is read as that run, `verdict: "killed"`, with the cost and
+// balance failure its step log proves (`step-log-outcome.mjs`), so its spend
+// reaches the ledger, an empty balance it hit still stops later launches, and
+// the debug rule still asks for its debug. Once its bundle exists, the bundle
+// is read instead.
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { perBuildSpend } from "../live-campaign/row/index.mjs";
 import { detectBalanceFailure } from "./balance-failure.mjs";
+import { readStepLogOutcome } from "./step-log-outcome.mjs";
 
 const RUN_DIRECTORY = /^run-([a-z0-9]+)-[0-9a-f]{8}$/u;
+const STAGING_DIRECTORY = /^\.staging-(run-([a-z0-9]+)-[0-9a-f]{8})$/u;
+/** The verdict of a run whose process died before its bundle was finalized. */
+const KILLED_VERDICT = "killed";
 // Clock skew between this process's `Date.now()` and the runner's timestamps.
 const SKEW_MS = 5_000;
 
 /**
- * @typedef {{ runId: string, startedAt: string | null, verdict: string | null, totalEstimatedCostUsd: number | null, buildCeilingUsd: number | null, maxBuildCostUsd: number | null, buildsOverCeiling: number | null, balanceFailure: ReturnType<typeof detectBalanceFailure> }} RunOutcome
+ * @typedef {{ runId: string, startedAt: string | null, verdict: string | null, totalEstimatedCostUsd: number | null, buildCeilingUsd: number | null, maxBuildCostUsd: number | null, buildsOverCeiling: number | null, balanceFailure: ReturnType<typeof detectBalanceFailure>, killed?: true }} RunOutcome
  */
 
 /**
  * @param {string} runsDirectory
- * @param {{ sinceMs: number, knownRunIds: Set<string> }} options
+ * @param {{ sinceMs: number, knownRunIds: Set<string>, labRunsDirectory?: string | null }} options
+ *   `labRunsDirectory`: the machine-wide `lab-runs/`, where a killed run's step log is read
  * @returns {Promise<RunOutcome[]>} oldest first
  */
-export async function readRunOutcomes(runsDirectory, { sinceMs, knownRunIds }) {
+export async function readRunOutcomes(runsDirectory, { sinceMs, knownRunIds, labRunsDirectory = null }) {
   let names;
   try {
     names = await readdir(runsDirectory);
@@ -41,7 +53,17 @@ export async function readRunOutcomes(runsDirectory, { sinceMs, knownRunIds }) {
     throw error;
   }
   const outcomes = [];
+  const finalized = new Set(names.filter((name) => RUN_DIRECTORY.test(name)));
   for (const name of names) {
+    const staged = STAGING_DIRECTORY.exec(name);
+    if (staged !== null) {
+      const runId = staged[1];
+      const startMs = parseInt(staged[2], 36);
+      if (finalized.has(runId) || knownRunIds.has(runId) || !(startMs >= sinceMs - SKEW_MS)) continue;
+      if (!(await stat(path.join(runsDirectory, name))).isDirectory()) continue;
+      outcomes.push(await killedOutcome(runId, startMs, labRunsDirectory));
+      continue;
+    }
     const named = RUN_DIRECTORY.exec(name);
     if (named === null || knownRunIds.has(name) || !(parseInt(named[1], 36) >= sinceMs - SKEW_MS)) continue;
     const directory = path.join(runsDirectory, name);
@@ -60,6 +82,22 @@ export async function readRunOutcomes(runsDirectory, { sinceMs, knownRunIds }) {
     });
   }
   return outcomes.sort((left, right) => String(left.startedAt).localeCompare(String(right.startedAt)));
+}
+
+/** A run killed before its bundle was finalized: what its step log proves it spent, or an unknown cost when it has none. */
+async function killedOutcome(runId, startMs, labRunsDirectory) {
+  const logged = labRunsDirectory === null ? null : await readStepLogOutcome(labRunsDirectory, runId);
+  return {
+    runId,
+    startedAt: new Date(startMs).toISOString(),
+    verdict: KILLED_VERDICT,
+    totalEstimatedCostUsd: logged?.totalEstimatedCostUsd ?? null,
+    buildCeilingUsd: null,
+    maxBuildCostUsd: null,
+    buildsOverCeiling: null,
+    balanceFailure: logged?.balanceFailure ?? null,
+    killed: true,
+  };
 }
 
 /** The run's spend per build against its ceiling, or nulls where it recorded no ceiling. */

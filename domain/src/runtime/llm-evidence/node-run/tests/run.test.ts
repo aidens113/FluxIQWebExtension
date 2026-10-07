@@ -364,3 +364,54 @@ function page(title: string): JsonObject {
     interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }]
   };
 }
+
+// t281 w15: a list read tells Core which list on which page it read (`reads`,
+// `../list-read/code.ts`), so Core refuses a second kept read of one list
+// (`AS/runtime/flow-draft/second-copy.ts`). Live run `run-muq4oaof-464f5bce`,
+// cause 3: two kept reads of one list.
+const EXTRACT = "web.output.dom-extract_list";
+const READ_PERMITTED = async () => ({ permitted: true as const });
+const RESULTS_ONE = "https://shop.test/search?q=earbuds&page=1";
+const listRead = (item: string, extra: JsonObject = {}): JsonObject => ({ extractList: { item, fields: { name: { selector: ".name" } }, minItems: 0, ...extra } });
+
+test("the same list on page 1 and page 5 of one search is one code, whatever the read keeps or how it pages", async () => {
+  const first = await readsOf(RESULTS_ONE, listRead(".card"));
+  const fifth = await readsOf("https://shop.test/search?q=earbuds&page=5#results", listRead(".card", { where: [{ field: "name", contains: ["pro"] }], paginate: false }));
+  assert.match(String(first), /^list:[0-9a-f]+$/u);
+  assert.equal(first, fifth);
+});
+
+test("another list on the same page, or the same list on another path, is another code", async () => {
+  const cards = await readsOf(RESULTS_ONE, listRead(".card"));
+  const rows = await readsOf(RESULTS_ONE, listRead(".row"));
+  const deals = await readsOf("https://shop.test/deals?page=1", listRead(".card"));
+  assert.notEqual(rows, undefined);
+  assert.notEqual(deals, undefined);
+  assert.notEqual(cards, rows);
+  assert.notEqual(cards, deals);
+});
+
+test("a press and a look carry no list code", async () => {
+  const runtime = createWebAutomationLlmEvidenceRuntime(stub().gateway);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  assert.equal(looked.draft !== undefined && "reads" in looked.draft, false);
+  const handle = shownPageLines(looked.evidence)[0]!.target;
+  const pressed = await runtime.executeTool({ ...PROJECT, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle } }, consequences: [] } });
+  assert.equal(pressed.effectApplied, true);
+  assert.equal(pressed.draft !== undefined && "reads" in pressed.draft, false);
+});
+
+/** Run one list read on a page at `location`; the code its draft statement sent. */
+async function readsOf(location: string, parameters: JsonObject): Promise<unknown> {
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: Object.assign(page("Results"), { url: location }) } };
+      return { status: "succeeded", payload: { extracted: [{ name: "Row 1" }], extraction: { recordCount: 1, pagesRead: 1, itemsSeen: 1, truncated: false, fieldNames: ["name"], missingFields: [] } } };
+    }
+  };
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const result = await runtime.executeTool({ ...PROJECT, callId: "call.read", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: READ_PERMITTED, value: { node: EXTRACT, parameters, consequences: [] } });
+  assert.equal(result.effectApplied, true);
+  return (result.draft as { reads?: string } | undefined)?.reads;
+}

@@ -176,6 +176,13 @@ test("a long target keeps whole words: a list keeps Core's name, whole, and no w
   }
   const fits = cardWords(card({ kind: "read", target: "name, price and rating" }), false);
   assert.deepEqual([fits.target, fits.whole], ["name, price and rating", false], "a list that fits is left as it is");
+  // U-R3-1 of run-mux6nxst-c9bca37c: Core names a list of two or three fields by all of them
+  // ("name and mutualFriends"), with no "and N more"; its test card read "Testing: Read list ·
+  // name and…". A read's target is Core's name for its list, whatever its shape: never cut.
+  for (const name of ["name and mutualFriends", "name, price and averageRatingOutOfFive"]) {
+    const tested = cardWords(card({ kind: "read", target: name, testing: true }), false);
+    assert.deepEqual([tested.target, tested.whole], [name, true], name);
+  }
   const words = "Sponsored Pulsebud Earbuds Hybridnoisecancellingwirelessbuds";
   const look = cardWords(card({ kind: "look", target: words }), false).target!;
   assert.equal(look, "Sponsored Pulsebud Earbuds…");

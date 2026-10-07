@@ -25,8 +25,18 @@ import { repositoryRoot, resolveLabInstancePaths } from "./lab-instance.mjs";
 import { admitLiveRun, formatRefusals, recordLiveRunFinish, recordLiveRunStart } from "./live-guards/index.mjs";
 import { createStepTimer, runBuildPhase } from "./prelude/index.mjs";
 import { buildOrder, runStep } from "../build-cache/index.mjs";
+import { runStopCommand } from "./stop-run/index.mjs";
 
 const args = process.argv.slice(2);
+
+// `stop <instance>` stops exactly one Lab run: the instance's open launch in
+// the spend ledger, by the pid it recorded, with its process tree. It builds
+// nothing, loads no Core and is not a live run, so it returns before all of
+// that. Never stop a run by matching command lines: on 2026-10-01 that killed
+// three lanes' runs to stop one (docs/architecture/testing-facility.md,
+// "Stopping one Lab run").
+if (args[0] === "stop") process.exit(await runStopCommand(args.slice(1)));
+
 const interactive = args[0] === "interactive";
 const paths = resolveLabInstancePaths(process.env);
 const instanced = paths.instance !== null;
