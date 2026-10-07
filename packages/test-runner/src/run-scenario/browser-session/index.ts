@@ -8,3 +8,5 @@ export { installRunNetworkGuard } from "./install-run-network-guard.js";
 export { launchBrowser } from "./launch-browser.js";
 export * from "./live-panel/index.js";
 export { requireExtension } from "./require-extension.js";
+
+export * from "./build-identity/index.js";

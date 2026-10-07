@@ -6,6 +6,11 @@ import test from "node:test";
 
 import { activityHeadline } from "../headline";
 
+test("a terminal cancellation says stopped rather than failed or ready", () => {
+  assert.equal(activityHeadline("build", "failed", { stopped: true }), "Build stopped");
+  assert.equal(activityHeadline("run", "failed", { stopped: true }), "Run stopped");
+});
+
 test("a run's recovery that fails reads \"Couldn't fix your Flow\"", () => {
   assert.equal(activityHeadline("run", null, { repairing: true }), "Fixing your Flow");
   assert.equal(activityHeadline("run", "failed", { repairing: true }), "Couldn't fix your Flow");

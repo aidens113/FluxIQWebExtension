@@ -1,3 +1,4 @@
+import { BUILD_IDENTITY_MESSAGE, currentBuildIdentity } from "../shared/build-identity";
 // Everything the background worker can ask this frame to do. The message names
 // and the reply shapes are a contract with `background/`: `fluxiq.ping` answers
 // even from a superseded instance so the worker can tell a stale script from a
@@ -82,6 +83,11 @@ export function installMessageHandler(): void {
       return false;
     }
     if (!isActiveContentInstance()) return false;
+    if (typed.type === BUILD_IDENTITY_MESSAGE) {
+      if (!isTopFrame()) return false;
+      sendResponse(currentBuildIdentity());
+      return false;
+    }
     if (typed.type === "recording") {
       captureSettings.mutations = typed.settings?.captureMutations ?? captureSettings.mutations;
       captureSettings.inputValues = typed.settings?.captureInputValues ?? captureSettings.inputValues;

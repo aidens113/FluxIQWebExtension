@@ -1,7 +1,7 @@
 # Node Catalog Plan
 
 Status: Active
-Status detail: Interaction and reading audits done; navigation and gaps audits stopped at the Codex handoff and must be rerun.
+Status detail: Four source audits complete and reconciled into a ranked backlog; t301 implements three shared blockers with provider-free browser regressions.
 Created: 2026-10-07
 Last updated: 2026-10-06
 Owner: Senior supervisor agent
@@ -15,13 +15,22 @@ Related: [structural agent plan](./structural-agent-plan.md), [week report](./mv
 
 User's order (2026-10-07): a full audit of the node catalog; robust nodes with proper logic; every existing node improved or fixed; many more nodes planned. Model-written JS is a last resort and each Lab use of it is a node-building work item (memory `js-last-resort-requests-off-by-default`).
 
-Catalog today (domain `domain/src/output-nodes/`, `domain/src/actions/`; extension `apps/extension/src/content/actions/`): navigate, click, type, select, check, clear, upload, keypress, dialog, scroll, extract, extract_list, next_page, assert, capture_snapshot, wait_for_selector, wait_for_text; observation tools detect_repeating_structure and find_on_page.
+Catalog today (domain `domain/src/output-nodes/`, `domain/src/actions/`; extension `apps/extension/src/content/actions/`): navigate, tab, download, click, type, select, check, clear, upload, keypress, dialog, scroll, extract, extract_list, next_page, assert, capture_snapshot, wait_for_selector, wait_for_text; observation tools detect_repeating_structure and find_on_page.
 
 Done: `reports/node-audit-interaction.md` (18 ranked fixes, 8 proposed nodes; top: unarmed native dialogs hang a run, `check` sets `.checked` without a click so React checkboxes stay unchanged, number and date fields lose characters, `scroll` only moves the window, a press nothing answered still succeeds) and `reports/node-audit-reading.md` (18 fixes, 7 nodes; top: Next page misses in-place re-renders, Next page with no detected way should try every way, one shared disabled rule including ancestors and classes, verifying nodes must verify something, waits and asserts judge every match). Not done: the navigation and gaps audits were stopped at the Codex handoff (2026-10-07 05:10 UTC); rerun them from their briefs. Pending user decision from the interaction audit: trusted input for hover menus needs the debugger channel, which the user ruled out except for network capture. Next: rerun the two audits, merge all four into one ranked list, then implementation stages partitioned by file.
 
 The consultant review does not cancel the user-ordered full audit. Finish
 navigation/gaps and merge all four reports into one ranked backlog; implement
 shared A-D blockers first alongside the [candidate/acceptance work](./mvp-final-month-plan/consultant-revision.md).
+The remaining [navigation](./node-catalog-plan/reports/node-audit-navigation.md)
+and [gaps](./node-catalog-plan/reports/node-audit-gaps.md) source audits are now
+complete (2026-10-06 locally), superseding the stopped-at-handoff statement above.
+All four feed the [ranked backlog](./node-catalog-plan/ranked-backlog.md). t301 owns
+controlled check, in-place Next and type-submit permission parity; none is complete
+on assignment alone. Supervisor independently counted 57 current task definitions
+across ten sites. The planned 67 scope has ten unaccounted tasks, not ten passes or
+retired rows; preserve this discrepancy until the intended inventory is reconciled.
+
 Wide catalog expansion is not a prerequisite for that first proof. Audit claims
 about React/input/navigation behavior remain source hypotheses until browser
 regressions reproduce them; JavaScript does not produce trusted input events.
@@ -44,6 +53,13 @@ Read-only: no source, test or other doc edits; no builds, tests, Lab, browser or
 - Task: what the ten realistic scenario sites and their 67 live tasks (`apps/scenario-lab/src/scenarios/*`, `realistic-site-live-tasks.ts`) need that no node does well today — e.g. date pickers, autocomplete and comboboxes, hover menus, drag and drop, infinite scroll, tables, file download, copy text, sliders, rich text editors, multi-step forms, login handover. For each: the task(s) that need it, how a build does it today (or fails), and a proposed node with contract and tests. Rank by tasks unblocked.
 
 ## Work Ledger
+
+### 2026-10-06 - Four audits reconciled; three shared fixes assigned
+- Agent: Codex supervisor; navigation/gaps worker.
+- Changed: navigation/gaps reports `2b248440`, current inventory and ranked backlog.
+- Validation: supervisor reviewed both reports and spot-checked tab effect table, download missing-time acceptance and professional fixture initialPage Next bug; independently counted all ten live-tasks.ts files (57). Reports are source findings, no reproduced browser failures or qualification.
+- Outcome: Partial.
+- Follow-up: t301 fail-first browser regressions/checks; other ranked owner units follow. Do not repeat historical landed Core/read-list changes or relax the requested 67 scope silently.
 
 ### 2026-10-07 — Audit dispatched
 - Agent: supervisor
