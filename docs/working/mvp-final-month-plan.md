@@ -268,6 +268,11 @@ Earlier verified units and decisions moved intact to the [execution archive](./m
 - Changed: desired total soap3 with unchanged line/store, saved cloth transfer preserving all original lines, sold unsave preserving Available and no hidden/contact state. Private facts update from actual mutation response before handler continuation; same-table wrong identity/Hide negatives fail on current page. No model/extension qualification claim.
 - Follow-up: t317 provisioning completed exit0 and source READY with actual shutdown owner additionally approved; t318 provisioning completed exit0, exact owners approved and source READY including acknowledged cross-frame private fact and visible-preserving numeric child span. No paid run/panel/fullsuite. Root narrow typing liveness probe next; semantic authority/promotion remain pending.
 
+### 2026-10-07 - t319 typing target liveness independently verified
+- Validation: actual production Chromium fail-first1failed5.7s, both removed text and numeric-with-submit incorrectly succeeded. Fixed same exact repro passes1/1 zero skips21.8s (fixture20.3s), intended background/content identity match, visible replacements old/7, Enter0/submits0. Owning unit `node --test`7/7 zero skips0.377s; actual all-target extension build0 13.678s/22files each, source/e2etypes0. Audit0 176warnings/117baseline; integration follows.
+- Changed: original control must remain connected after keyboard/application handlers before positive readback or Enter. Existing native format/text/redaction/readonly/cancel tests pass; no silent replacement targeting or asynchronous application acceptance claim. Core source unchanged; existing current Core owning dependency rebuilt42.809s before probe, not full suite.
+- Follow-up: t317 generic production gateway and t318 final4 fixtures implementing; t320 provision0, guard contracts reviewed before source release. No panel/provider/paid qualification; actual Next permission question remains unanswered. Full commands/limits in reports/p3-typing-target-liveness.md.
+
 ## Open Questions
 
 - Recording scope is resolved by the newer user order: evidence beside mandatory instructions, after A-D qualify. Do not reopen the older September ambiguity.
