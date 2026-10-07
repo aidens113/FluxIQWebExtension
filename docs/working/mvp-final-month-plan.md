@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: P0 acceptance fences integrated and pushed in both repositories; identity, cancellation and candidate authoring in isolated task trees; P0 live readiness and later gates pending.
+Status detail: Acceptance, extension identity and Stop integrated; Core runtime identity and candidate authoring/execution still isolated; live readiness and promotion pending.
 Created: 2026-10-05
 Last updated: 2026-10-06
 Owner: Senior supervisor agent
@@ -19,8 +19,11 @@ and pushed: downstream acceptance `62ceaac8`, Core `6c449022`; downstream identi
 test files (29/29), the fluxiq typecheck and Core structure audit; downstream task
 integration audit passed. The identity slice passed independent production Chromium
 match/mismatch checks, 22/22 owning tests and runner typecheck after integration.
-Running Core-server identity remains pending. t298 cancellation, t299 candidate
-authoring/facade and t300 requirement receipts remain isolated. No P0 completion
+t298 cancellation is integrated as downstream43e5e54b/Core2ee06482. Supervisor
+rebuilt current pair and repeated headed Stop build/run2/2, owning reauthor9/9,
+Core typecheck/build and both integration audits pass. Running Core-server identity
+remains t302; t299 candidate facade, t300 requirement receipts/detached executor
+and t301 typed readiness remain isolated. No P0 completion
 or fresh A-D qualification is claimed.
 
 **Planning review completed locally 2026-10-06.**
@@ -341,3 +344,10 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - API flag parser/handler/draft response integrated atomically; never expose parser alone.
 - Narrow owning tests, fluxiq/touched web package typechecks, structure audits and diff checks; freeze then report exact receipts/limits.
 - No provider/live/full suite/git mutations/shared docs. Supervisor integrates and verifies.
+
+### 2026-10-06 - t298 integrated and independently verified
+- Agent: Codex supervisor.
+- Changed: merges downstream43e5e54b and Core2ee06482 integrate scoped build cancellation, reachable Stop, truthful terminal states and persisted held-decline reason. t299 now merged both dev branches and worker owns serial facade.
+- Validation: supervisor reviewed source, reauthor9/9, Core packagecheck0/build0, current extension three targets22files each; headed actual Core build/run Stop2/2 (18.1s) on production bundle, no next node/proposal and unchanged graphs. Both structure audits passed; index refreshed after report status change. Finish first invoked from task tree failed dev already checked out, corrected by invoking lifecycle from main; no manual removal/history rewrite. Core legacy finish --skip-checks only after observed manual narrow gates.
+- Outcome: Accepted cancellation slice; paired dev push next.
+- Follow-up: t302 running Core identity, t299 atomic flag/facade, t300 receipt/runtime joins, t301 typed readiness. Independent t300 verification58/58 passes; module is not yet product promotion. No paid calls/full suites/user panel.
