@@ -113,6 +113,15 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 ## Worker Briefs
 
+### Brief: p2-detached-execution (continues task t300)
+- Repository: paired t300 !FluxIQ / !FluxIQWebExtension. Verification controller source frozen and independently reviewed/tested before this continuation.
+- Task: Add an actual detached-topology executor adapter for canonical submitted candidates using existing normalizeAutomationStudioFlowBuildPlan, routeAutomationStudioRun and runCanonicalAutomationStudioFlow; no graph/adaptation apply or accepted storage write. Preserve normal registry/runtime/effect permissions and host routing state.
+- Required reads: t300 verification report/identity/start/execute contracts; existing bootstrap normalization/validation; route-state/router-state.ts; composite-executor.ts/executor.ts owning tests; native node/effect runtime options used by service.ts; held-candidate limits.
+- Owns: new flow-bootstrap/verification/detached-execution.ts + owning tests and verification barrel; own reports/p2-detached-execution.md downstream. Existing verification controller/contracts only for a concrete adapter incompatibility, report before edit. No service/API/other barrel/storage changes.
+- Definition of done: execute actual representative multi-node canonical topology without persistence using real router/graph executor, pure mocked native/effect boundaries only; changed selected graph is exactly submitted candidate, other graph not read from accepted store. Ownership/topology/registry errors, absent host state, cancellation/partial execution/waiting fail closed; no recovery that applies before judgement. Static validity alone insufficient. Provide precise trace-to-receipt command/subject/provenance integration contract; do not infer performed lasting action from succeeded node alone.
+- Must not touch: shared/main docs, t299 tree/source, cancellation/UI, runtime data; no gitmutation/provider/full suites. No blanket authorize flag or stub runtime replacing real executor. Unsupported topology safely draft/refused with reason.
+- Report: t300 docs/working/mvp-final-month-plan/reports/p2-detached-execution.md; actual runtime tests/limits and serial facade integration seam.
+
 ### Brief: p3-typed-browser-readiness (task t301)
 - Repository: isolated C:/Users/osrs_/FluxStuff/fxwork/t301-typed-browser-readiness; shared sibling Core read-only.
 - Task: Reproduce then fix three shared browser blockers: controlled desired-state checkbox/radio, in-place Next-page rerender/ended distinction, type(submit:true) committing declaration parity. Preserve actionability, sensitive evidence and no blind mutating retry.
@@ -203,6 +212,13 @@ not pending implementation assignments; the next brief is P0 in the revision.
 Historical briefs: [Claude schedule and task briefs](./mvp-final-month-plan/archive/2026-10-06-pre-consultant-schedule-and-briefs.md).
 
 ## Work Ledger
+
+### 2026-10-06 - Requirement controller independently checked; detached execution follows
+- Agent: Codex supervisor.
+- Validation: reviewed t300 contracts/controller/predicates; supervisor owning tests 31/31. Worker fluxiq typecheck/audit passed; intent interpreter, browser observation and durable atomic promotion are explicitly absent.
+- Changed: written continuation brief for real router/executor adapter; t299 static authoring remains isolated until atomic facade integration.
+- Outcome: Partial.
+- Follow-up: actual detached runtime proof; supported create currently new-result identity only, existing-subject quantity deltas stay unsupported/unknown rather than relabelled ensure. No paid launch.
 
 ### 2026-10-06 - Typed shared blocker task prepared
 - Agent: Codex supervisor.
