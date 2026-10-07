@@ -12,12 +12,18 @@
 // written out in full, since two pages may have different bases. Structure
 // markers -- `[main]`, `- 3/16`, `--- below the fold ---` -- are where things
 // are, not what is there, and are left out.
+//
+// `documentTimeOrigin` is read beside the view, never from it: the document's
+// identity the capture put on the summary (`../host-runtime.ts`), absent on a
+// summary recorded before it or when it was not a finite number.
 
 import type { JsonObject } from "fluxiq/core";
 import { WEB_LLM_EVIDENCE_SCHEMA_VERSION, webLlmPageText, type WebLlmEvidenceElement, type WebLlmPageEvidence } from "../llm-evidence";
 
 export type WebStateSummaryLines = {
   location: string | undefined;
+  /** Which document the summary was captured in (`performance.timeOrigin`), when it says. */
+  documentTimeOrigin: number | undefined;
   title: string | undefined;
   /** The element lines, handle-free, in page order. */
   lines: string[];
@@ -28,8 +34,10 @@ const QUOTED = /"(?:[^"\\]|\\.)*"/gu;
 /** The location, title and handle-free element lines of a state summary, or none of them for a summary that is neither shape. */
 export function webStateSummaryLines(summary: JsonObject | undefined): WebStateSummaryLines {
   const location = typeof summary?.location === "string" ? summary.location : undefined;
+  const origin = summary?.documentTimeOrigin;
+  const documentTimeOrigin = typeof origin === "number" && Number.isFinite(origin) ? origin : undefined;
   const text = typeof summary?.page === "string" ? summary.page : legacyText(summary, location);
-  if (text === undefined) return { location, title: typeof summary?.title === "string" ? summary.title : undefined, lines: [] };
+  if (text === undefined) return { location, documentTimeOrigin, title: typeof summary?.title === "string" ? summary.title : undefined, lines: [] };
   const blank = text.indexOf("\n\n");
   const header = (blank < 0 ? text : text.slice(0, blank)).split("\n");
   const body = blank < 0 ? [] : text.slice(blank + 2).split("\n");
@@ -38,7 +46,7 @@ export function webStateSummaryLines(summary: JsonObject | undefined): WebStateS
     const element = /^t[1-9][0-9]*(?: (.*))?$/u.exec(line);
     return element ? [handleFree(element[1] ?? "", base)] : [];
   });
-  return { location, title: titleOf(header) ?? (typeof summary?.title === "string" ? summary.title : undefined), lines };
+  return { location, documentTimeOrigin, title: titleOf(header) ?? (typeof summary?.title === "string" ? summary.title : undefined), lines };
 }
 
 /** A structured packet stored before t223, written as the view; `undefined` when it is not one. */

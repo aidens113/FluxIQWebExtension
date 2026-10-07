@@ -46,6 +46,7 @@
 // | `navigation.type`             | `evidence.navigation.type`                      | omitted when `navigate` |
 // | `navigation.redirects`        | `evidence.navigation.redirects`                 | omitted when none |
 // | `navigation.referrer`         | `evidence.navigation.referrer`                  | screened as a location is |
+// | `navigation.timeOrigin`       | `evidence.navigation.timeOrigin`                | a finite number only; the document's identity, never in the view text |
 // | `dialogs[].role`              | `evidence.dialogs.open[].role`                  | |
 // | `dialogs[].name`              | `evidence.dialogs.open[].label`                 | `name` is the packet's word for an accessible name, as on an element |
 // | `dialogs[].modal`             | `evidence.dialogs.open[].modal`                 | |
@@ -156,8 +157,13 @@ export type WebLlmPageContext = {
   /** The window the capture was taken in, when the snapshot measured it. */
   viewport?: WebLlmEvidenceViewport;
   loading?: { readyState?: string; busy?: true; indicators?: WebLlmEvidenceLoadingIndicator[]; pendingNavigation?: true };
-  /** How this document was reached. */
-  navigation?: { url?: string; type?: string; redirects?: number; referrer?: string };
+  /**
+   * How this document was reached. `timeOrigin` is which document it is
+   * (`performance.timeOrigin`): the state summary carries it so the state diff
+   * can tell an address rewritten in place from a new document (run
+   * `run-muw5zv4m-52d83027`). It is never written into the page view.
+   */
+  navigation?: { url?: string; type?: string; redirects?: number; referrer?: string; timeOrigin?: number };
   /** Every open dialog, top-most first. */
   dialogs?: WebLlmEvidenceDialog[];
   /** Everything painted over the page's controls, in document order. */
@@ -273,7 +279,8 @@ function evidenceNavigation(input: PageEvidenceWire<WebAutomationNavigationEvide
     url: screenedEvidenceUrl(input.url),
     type: type && type !== ORDINARY_NAVIGATION_TYPE ? type : undefined,
     redirects: redirects || undefined,
-    referrer: screenedEvidenceUrl(input.referrer)
+    referrer: screenedEvidenceUrl(input.referrer),
+    timeOrigin: typeof input.timeOrigin === "number" && Number.isFinite(input.timeOrigin) ? input.timeOrigin : undefined
   });
   return Object.keys(navigation).length ? navigation : undefined;
 }
