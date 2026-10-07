@@ -22,7 +22,6 @@ import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/clien
 import type {
   BrowserActionCommand,
   BrowserActionResult,
-  BrowserActionValidation,
   WebAutomationTabRequest
 } from "../shared/protocol";
 import {
@@ -43,7 +42,8 @@ import {
 } from "./automation-tab";
 import { tabRequestForAction } from "./command-options";
 import { fluxiqOpenedTabs } from "./fluxiq-opened-tabs";
-import { compareNavigatedUrl } from "./navigation-outcome";
+import { compareNavigatedUrl } from "./navigation";
+
 import { unsupportedAutomationPageReason } from "./unsupported-page";
 
 /** How long a switch by path waits for its tab to open, when the command names no timeout. */
@@ -58,7 +58,7 @@ type OpenRequest = Extract<WebAutomationTabRequest, { operation: "open" }>;
 type SwitchRequest = Extract<WebAutomationTabRequest, { operation: "switch" }>;
 type CloseRequest = Extract<WebAutomationTabRequest, { operation: "close" }>;
 
-export async function runBrowserTabAction(action: BrowserActionCommand): Promise<BrowserActionResult> {
+export async function runBrowserTabAction(action: BrowserActionCommand, options: { attachTabForRecording?: ((tabId: number) => Promise<void>) | undefined; verifyLanding?: ((tabId: number, requested: string, startedAt: number) => Promise<BrowserActionResult>) | undefined } = {}): Promise<BrowserActionResult> {
   const startedAt = Date.now();
   const request = tabRequestForAction(action);
   if (request === undefined) {
@@ -71,7 +71,7 @@ export async function runBrowserTabAction(action: BrowserActionCommand): Promise
     });
   }
   try {
-    if (request.operation === "open") return await openTab(action, startedAt, request);
+    if (request.operation === "open") return await openTab(action, startedAt, request, options);
     if (request.operation === "switch") return await switchTab(action, startedAt, request);
     return await closeTab(action, startedAt, request);
   } catch (error) {
@@ -149,7 +149,7 @@ async function findTabForSwitch(request: SwitchRequest, timeoutMs: number | unde
   }
 }
 
-async function openTab(action: BrowserActionCommand, startedAt: number, request: OpenRequest): Promise<BrowserActionResult> {
+async function openTab(action: BrowserActionCommand, startedAt: number, request: OpenRequest, options: { attachTabForRecording?: ((tabId: number) => Promise<void>) | undefined; verifyLanding?: ((tabId: number, requested: string, startedAt: number) => Promise<BrowserActionResult>) | undefined }): Promise<BrowserActionResult> {
   const created = await chrome.tabs.create({
     ...(request.url !== undefined ? { url: request.url } : {}),
     active: request.active ?? true
@@ -177,17 +177,14 @@ async function openTab(action: BrowserActionCommand, startedAt: number, request:
       ...(landed !== undefined ? { url: landed } : {})
     });
   }
-  const comparison = compareNavigatedUrl(request.url, landed);
-  const validation: BrowserActionValidation = comparison.matched
-    ? { status: "passed", expected: comparison.expected, actual: comparison.actual }
-    : { status: "failed", expected: comparison.expected, actual: comparison.actual };
+  await options.attachTabForRecording?.(tabId);
+  if (options.verifyLanding) return await options.verifyLanding(tabId, request.url, startedAt);
+  const comparison = compareNavigatedUrl(request.url, landed, false);
   return workerActionResult(action, startedAt, {
     status: comparison.matched ? "succeeded" : "failed",
-    message: comparison.matched
-      ? `Opened tab ${tabId} at ${comparison.actual}.`
-      : `Tab ${tabId} opened at ${comparison.actual}, not ${comparison.expected}.`,
-    validation,
-    ...(comparison.matched ? {} : { failure: navigationUnexpectedFailure(comparison.expected, comparison.actual) }),
+    message: comparison.matched ? "Tab opened; landing verification is unknown because no evidence reader was supplied." : "Tab opened on an unexpected destination.",
+    validation: comparison.matched ? { status: "none", reason: "not-yet-validated" } : { status: "failed", expected: comparison.expected, actual: comparison.actual },
+    ...(!comparison.matched ? { failure: navigationUnexpectedFailure(comparison.expected, comparison.actual) } : {}),
     ...(landed !== undefined ? { url: landed } : {})
   });
 }

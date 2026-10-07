@@ -45,7 +45,7 @@ type BrowserTab = {
    * when the stub has no scripting at all; `"none"`, the document answers
    * nothing, as Firefox, which keeps no `responseStatus`, does.
    */
-  served?: number | "none";
+  served?: number | "none" | undefined;
 };
 
 /**
@@ -91,7 +91,7 @@ function installNavigationStub(tabs: Record<number, BrowserTab>): { updated: num
       onUpdated: { addListener: () => undefined, removeListener: () => undefined },
       sendMessage: (tabId: number, message: unknown, options: { frameId?: number }, callback: (response: unknown) => void) => {
         calls.asked.push({ tabId, message: message as Record<string, unknown>, frameId: options.frameId });
-        const page = tabs[tabId]?.page;
+        const page = tabs[tabId]?.page ?? { challenge: null };
         if (Array.isArray(page)) {
           callback(page[0]);
           if (page.length > 1) page.shift();
@@ -103,7 +103,8 @@ function installNavigationStub(tabs: Record<number, BrowserTab>): { updated: num
     scripting: {
       executeScript: (injection: { target: { tabId: number } }) => {
         calls.injected.push(injection.target);
-        const served = tabs[injection.target.tabId]?.served;
+        const tab = tabs[injection.target.tabId];
+        const served = tab && Object.hasOwn(tab, "served") ? tab.served : 200;
         if (served === undefined) return Promise.reject(new Error("Cannot access contents of the page."));
         return Promise.resolve([{ frameId: 0, result: served === "none" ? undefined : served }]);
       }
@@ -276,13 +277,14 @@ test("a navigation onto a page asking for a verification code is left to the ste
   assert.equal(run.result.status, "succeeded");
 });
 
-test("a landed page whose top frame never answers leaves the navigation's result as it was", async () => {
+test("a landed page whose top frame never answers is transport success with unknown validation", async () => {
   forgetAutomationTab();
   installNavigationStub({ 41: { url: STORE, page: "silent" } });
   const run = await navigate(RESULTS, 41);
   assert.equal(run.result.status, "succeeded", "missing evidence is never a failure");
   const validation = run.result.validation;
-  assert.match(validation.status === "passed" ? validation.actual : "", /robot check went unread: the top frame did not answer within 1000 ms/u, "and the validation says the page went unread");
+  assert.deepEqual(validation, { status: "none", reason: "not-yet-validated" });
+  assert.match(run.result.message ?? "", /top frame did not answer within 1000 ms/u);
 });
 
 test("a page the browser could not load is not asked about, and stays a load failure", async () => {
@@ -427,16 +429,18 @@ test("a navigation the server answered with HTTP 200 still succeeds", async () =
   assert.equal(calls.injected.length, 1, "the status was read");
 });
 
-test("a navigation whose served status cannot be read is left as it was: missing evidence is never a failure", async () => {
+test("unread HTTP status preserves transport arrival but cannot pass landing validation", async () => {
   forgetAutomationTab();
-  installNavigationStub({ 41: { url: STORE, page: ORDINARY_PAGE } });
+  installNavigationStub({ 41: { url: STORE, page: ORDINARY_PAGE, served: undefined } });
   const refused = await navigate(RESULTS, 41);
   assert.equal(refused.result.status, "succeeded", "an injection the browser refuses");
+  assert.deepEqual(refused.result.validation, { status: "none", reason: "not-yet-validated" });
 
   forgetAutomationTab();
   installNavigationStub({ 41: { url: STORE, page: ORDINARY_PAGE, served: "none" } });
   const silent = await navigate(RESULTS, 41);
   assert.equal(silent.result.status, "succeeded", "a document that keeps no status, as in Firefox");
+  assert.deepEqual(silent.result.validation, { status: "none", reason: "not-yet-validated" });
 });
 
 test("a robot check served HTTP 403 is still the person's, not a refused page", async () => {

@@ -21,6 +21,12 @@ import { webAutomationExtractListIssues } from "../extract-list";
 
 const nodes = webAutomationOutputNodeDefinitions;
 
+test("tab operations cannot be classified as safe repeatable observation", () => {
+  const tab = nodes.find((definition) => definition.outputAction?.fixedOutputId === "web.browser.tab");
+  assert.ok(tab);
+  assert.equal(tab.metadata?.effect, "mutate", "open creates another tab and unnamed close may close another tab on replay");
+});
+
 function nodeFor(outputId: WebAutomationActionType) {
   const node = nodes.find((definition) => definition.outputAction?.fixedOutputId === outputId);
   assert.ok(node, `${outputId} has no output node`);
