@@ -1,6 +1,6 @@
 # P0 cancellation and reachable Stop
 
-Status: Active
+Status: Complete (worker claim; supervisor verification pending)
 Created: 2026-10-06
 Last updated: 2026-10-06
 Owner: p0-cancel-control worker
@@ -62,3 +62,19 @@ The gateway/HTTP host were synthetic loopback transport, not the user's web pane
 Supervisor requested a separate active-run proof and an explicit visible terminal build label. First strengthened run failed on two fixture defects: synthetic terminal activity omitted Core's step detail (so there was no terminal chat card); active-run fixture used legacy artifact storage rather than canonical Flow/subflow APIs. Corrected only fixtures, forwarding actual captured Core terminal label/detail and constructing the stored runnable graph through createFlow/createFlowSubflow/saveFlow/setFlowMapFallback. A subsequent fixture attempt mistakenly substituted a builtin executor (builtins bypass the native executor), timed out, and was corrected to registered native delayed/after implementations. The run executor is deterministically delayed, then returns late after actual cancelRuntimeSession; assertions require no next-node dispatch, unchanged parent and subflow graph, cancelled session, actual terminal Core label and visible chat terminal card/hidden Stop. No paid calls. Both headed cases passed 2/2 (2.6 s build, 2.4 s run, 11.9 s total), and full source+e2e TypeScript check exited 0. The exact command added both named cases to the earlier Playwright invocation. Actual Core activity terminal label/detail are forwarded by the synthetic transport; both terminal chat labels are asserted visible.
 
 Web app package check completed exit 0. Core package check repeated after final service-test additions completed exit 0. Both reports intentionally separate request-count/unknown-cost limitations from no-promotion guarantees.
+
+## Post-integration decline-reason correction
+
+Supervisor merged current dev into both t298 trees after committing the cancellation source. The merged acceptance path safely declines unsupported held reauthor topology but the service's from-start result-repair adapter discarded its declinedCode. A genuine fail-first regression in the existing reauthor service mock-provider harness returned an unsupported code only for from:start; the saved run detail lacked adaptiveRetry entirely. Narrow service wiring now persists the existing decline receipt `{ attempted: false, notResumableCode }` before returning no rerun, and removes the stale apply-first comment. This records refused execution; it does not claim an executed retry or alter promotion. The eventual settleResultRepair reads latest stored detail and preserves the reason.
+
+Focused regression passed 1/1; all touched reauthor-service.test.ts cases passed 9/9 (37.35 s). Core package typecheck, structure audit and diff check exited 0 after this patch. Source frozen and no checks remain active. Browser proofs above were pre-integration cancellation artifacts; supervisor must rebuild Core and extension after merged build identity and independently repeat both named browser cases before integrated live claims. No browser was rerun by this worker after merge. No worker git mutation occurred.
+## Supervisor integration verification
+
+Both task branches merged current dev before verification. Supervisor reviewed
+the held-decline patch and independently reran the entire owning reauthor service
+file: 9/9 passed (58.98s total). Core package typecheck reused matching stamp
+exit0; touched Core build executed exit0 (75.09s), and all three current extension
+targets rebuilt/verified 22 files each (17.07s). Independent two-case headed Stop
+proof on that rebuilt pair is running; no provider call or user panel management.
+
+Independent current-pair headed browser proof passed2/2 (18.1s): actual build4.2s and run2.8s test bodies. Terminal UI, no next dispatch/proposal and unchanged accepted graphs verified. No paid call.
