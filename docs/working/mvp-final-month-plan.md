@@ -386,3 +386,17 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Validation: all bounded task receipts above observed; main working state corrected to distinguish merged modules from unintegrated production joins. No new product test required for prose.
 - Outcome: Partial overall plan.
 - Follow-up: t299 facade, t302 actualserver and t303 navigation active; P2 promotion and paid off-peak readiness remain pending. No main/release push.
+
+### Brief: p2-durable-candidate-promotion (next paired unit)
+- Worker: p0_acceptance; task/tree assigned after t299 integration. Until then read-only bounded discovery in frozen t299 Core, report p2-promotion-design.md downstream t299.
+- Read: main Current State, consultant-revision P2, t300 verification contracts/controller and t299 draft store/service report.
+- Investigate exact existing bootstrap apply transaction, locks, authorization/validation, ProgramJsonStore transactions and accepted parent/subflow graph persistence. Send exact file owners/design before edits.
+- Objective: durable requirement/start/run/evidence receipts and one idempotent promotion adapter whose commit atomically compares candidate/revision/digest/original instructions/accepted base/settings and preserves normal apply-time permissions, graph validation and representation/version rules.
+- Do not expose a receipt supplied by builder/API caller as authority. Trusted observer/controller issues acceptance; persisted unknown/partial/stale/cancel receipts cannot authorize mutation.
+- Persist bounded IDs/receipt references and explicit pending/committed/outcome_unknown states, preserving original instruction association. No raw page/cookie/credential logs.
+- Failures before/after graph commit and duplicate delivery must recover truthfully; rerun write must never execute irreversible candidate commands again. Preserve unknown in-flight charges/outcomes.
+- Normal locks alone are not crash atomicity. Join existing project transaction, test rollback/crash boundaries against real JSON/SQLite storage, not fake bool promotion.
+- Candidate create/ensure evidence rules remain strict; do not reinterpret create as ensure, infer performed from successful attempt, or treat compile as semantics.
+- Source will be one paired unit after plan approval; focused new receipt/promoter owner and narrow existing storage/apply hooks, no service budget/baseline growth or broad refactor.
+- Production requirement interpreter/start/independent browser oracle/domain command acknowledgements remain separate ports; report exactly which joins exist and which do not.
+- No provider/live/full suites/git/shared docs; owning negatives/narrow types/audits and source freeze, supervisor verifies/integrates.
