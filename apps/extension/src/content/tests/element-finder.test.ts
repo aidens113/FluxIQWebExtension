@@ -33,6 +33,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { findClosestFingerprint, xpathFor } from "../element-finder";
+import { withSelectorMemo } from "../selector";
 import { element, input } from "./stub-page";
 
 /** The element `tagName` in `attributes`, wrapped in the given ancestors, outermost first. */
@@ -175,4 +176,19 @@ test("everything the writer now emits is still evaluated, including an id holdin
     for (const xpath of written) assert.equal(findClosestFingerprint({ xpath }), byXpath);
     assert.deepEqual(evaluated, written, "every expression the writer produces is handed over rather than refused");
   });
+});
+
+test("inside a capture the xpath is the one written outside it, on a wide list and a nested one (t289)", () => {
+  const links = Array.from({ length: 1_500 }, (_, index) => element(index % 3 ? "a" : "span", {}));
+  const cells = Array.from({ length: 12 }, (_, index) => element(index % 2 ? "td" : "th", {}));
+  const rows = [element("tr", {}, ...cells.slice(0, 6)), element("tr", {}, ...cells.slice(6))];
+  const page = element("body", {}, element("nav", {}, ...links), element("table", {}, ...rows), element("nav", {}));
+  assert.equal(page.tagName, "BODY");
+  const every = [...links, ...cells, ...rows];
+  const outside = every.map(xpathFor);
+  const inside = withSelectorMemo(() => every.map(xpathFor));
+  assert.deepEqual(inside, outside);
+  assert.equal(xpathFor(links[4]!), "/body[1]/nav[1]/a[3]");
+  assert.equal(xpathFor(links[3]!), "/body[1]/nav[1]/span[2]");
+  assert.equal(xpathFor(cells[9]!), "/body[1]/table[1]/tr[2]/td[2]");
 });

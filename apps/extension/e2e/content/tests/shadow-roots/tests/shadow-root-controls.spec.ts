@@ -119,7 +119,10 @@ test.describe("a closed shadow root", () => {
 
     const reply = await harness.runAction({ commandId: "shadow:search-behind-closed", actionType: "web.dom.click", selector: SEARCH_BOX, timeoutMs: 1_000 });
     expect(reply.status).toBe("failed");
-    expect(reply.failure?.code).toBe(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED);
+    // A covered target is the page's state, not a refusal on purpose: since
+    // t193 (2294dd16) the gate's `covered` travels as TARGET_NOT_ACTIONABLE,
+    // which a repair may answer (`action-runtime/results.ts`, PAGE_STATE_CODES).
+    expect(reply.failure?.code).toBe(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE);
     expect(reply.failure?.actual).toMatch(/^covered: the point \d+,\d+ landed on closed-wall, which covers the target; it is part of closed-wall, a layer over the page with no control to press/u);
   });
 });

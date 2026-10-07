@@ -5,12 +5,11 @@
 // `settleBuild` for the build, and `authorizeRun` and `settleRun` for the
 // repair its playback may make, and the lane decides only when each is used.
 
-import type { AuthoredFlowNode, ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
+import type { AuthoredFlowGraph, AuthoredFlowNode, ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure, type RunnerFailureCategory } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
 import type { DeclaredSecret } from "../declared-secrets.js";
 import { assertFlowFailure, type FlowExtractionJudgement } from "../expectations.js";
-import { readFlowNodes } from "../flow-action-types.js";
 import { LAB_PROJECT_DOMAIN_ID } from "../lab-project-domain.js";
 import { flowLaneObservation, type RunLaneObservation } from "../lane-observation.js";
 import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "../persisted-flow-run.js";
@@ -19,7 +18,9 @@ import { assertFlowDidNotStopEarly, flowActionsSnapshot } from "../run-flow-lane
 import { createBlankCreationFlow } from "./blank-flow.js";
 import { buildCreatedFlowFromChat, type CreatedFlowChat, type CreatedFlowChatWait } from "./chat/index.js";
 import { buildCreatedFlowProposal, type CreatedFlowBuild, type CreatedFlowBuildControl, type CreatedFlowBuildLlm, type CreatedFlowBuildWait, type CreatedFlowPermissionRequest } from "./build-proposal.js";
+import { createdFlowAuthoredGraph } from "./authored-graph.js";
 import { createdFlowAuthoredNodes } from "./authored-nodes.js";
+import { readCreatedFlowGraph } from "./graph-read.js";
 import { createdFlowActionTypes, createdFlowShape, type CreatedFlowShape } from "./flow-shape.js";
 import { judgeCreatedFlowDataset } from "./judgement.js";
 import type { FinalStateVerdict } from "./final-state-facts.js";
@@ -220,6 +221,12 @@ export type CreatedFlowLaneEvidence = Readonly<{
    * paginate.
    */
   authoredNodes: readonly AuthoredFlowNode[];
+  /**
+   * The rest of the built Flow: its control nodes and every edge, identifiers
+   * only. Run `mut4fvkm` could not say which path its playback took, because
+   * `authoredNodes` held no merge node and nothing recorded an edge.
+   */
+  authoredGraph: AuthoredFlowGraph;
   /** Whether the Flow can reach the page it works on, or whether the harness reached it for the Flow. */
   ownPage: CreatedFlowOwnPage;
   run: PersistedFlowRunOutcome;
@@ -275,6 +282,7 @@ export type CreatedFlowLaneIncomplete = Readonly<{
   review: CreatedFlowReview | null;
   flowShape: CreatedFlowShape | null;
   authoredNodes: readonly AuthoredFlowNode[] | null;
+  authoredGraph: AuthoredFlowGraph | null;
   ownPage: CreatedFlowOwnPage | null;
   runtimeRunId: string | null;
   status: PersistedFlowRunOutcome["status"] | null;
@@ -296,6 +304,7 @@ type CreatedFlowLaneProgress = {
   review?: CreatedFlowReview;
   shape?: CreatedFlowShape;
   authoredNodes?: readonly AuthoredFlowNode[];
+  authoredGraph?: AuthoredFlowGraph;
   ownPage?: CreatedFlowOwnPage;
   run?: PersistedFlowRunOutcome;
 };
@@ -381,7 +390,7 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   const review = started.applied ?? await applyCreatedFlowProposal(input.control, { projectId, flowId, adaptationId: build.adaptationId, authorizationPin });
   progress.review = review;
   progress.stage = "flow-read";
-  const nodes = await readFlowNodes(input.control, { projectId, flowId }, bounds);
+  const { nodes, edges } = await readCreatedFlowGraph(input.control, { projectId, flowId }, bounds);
   const actionTypes = createdFlowActionTypes(nodes, flowId);
   const shape = createdFlowShape(nodes, actionTypes);
   progress.shape = shape;
@@ -391,6 +400,10 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   // workspace when an isolated run ends.
   const authoredNodes = createdFlowAuthoredNodes(nodes, actionTypes);
   progress.authoredNodes = authoredNodes;
+  // The same read's control nodes and edges, so the path a playback took can
+  // be traced on the graph the build left rather than inferred from attempts.
+  const authoredGraph = createdFlowAuthoredGraph(nodes, actionTypes, edges);
+  progress.authoredGraph = authoredGraph;
   // Stated before the run and judged after it: the run publishes what the Flow
   // did either way, and a Flow that cannot reach its own page is the first
   // thing said about it.
@@ -447,7 +460,7 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
     automationFailureExpected: workflow.expected.failure ?? null,
     extraction: extraction?.measurements ?? [],
   });
-  const evidence: CreatedFlowLaneEvidence = Object.freeze({ request, build, review, flowId, shape, authoredNodes, ownPage, run, observation, extraction, oracles, instructedConsequencesFrom: progress.instructedConsequencesFrom ?? null });
+  const evidence: CreatedFlowLaneEvidence = Object.freeze({ request, build, review, flowId, shape, authoredNodes, authoredGraph, ownPage, run, observation, extraction, oracles, instructedConsequencesFrom: progress.instructedConsequencesFrom ?? null });
   progress.stage = "publish";
   await input.recordEvidence(evidence);
   // From here the complete snapshot is on disk, so a failing expectation below
@@ -599,6 +612,7 @@ function incompleteCreatedFlowLaneEvidence(input: CreatedFlowLaneInput, progress
     review: progress.review ?? null,
     flowShape: progress.shape ?? null,
     authoredNodes: progress.authoredNodes ?? null,
+    authoredGraph: progress.authoredGraph ?? null,
     ownPage: progress.ownPage ?? null,
     runtimeRunId: run?.runId ?? null,
     status: run?.status ?? null,

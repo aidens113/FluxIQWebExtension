@@ -32,6 +32,9 @@ export async function fetchCoreRecordings(
 
 // The project this client's session belongs to, as Core currently sees it.
 // Falls back to whichever project Automation Studio has open.
+/** How long the project-context lookup may take before the request is abandoned. */
+const PROJECT_CONTEXT_LOOKUP_TIMEOUT_MS = 10_000;
+
 export async function fetchProjectIdFromCoreSnapshot(
   credentials: CoreApiCredentials & { token: string },
   identity: { sessionId: string | undefined; clientId: string },
@@ -42,7 +45,10 @@ export async function fetchProjectIdFromCoreSnapshot(
     headers: compactObject({
       accept: "application/json",
       authorization: `Bearer ${credentials.token}`
-    }) as Record<string, string>
+    }) as Record<string, string>,
+    // Callers wait a bounded time (project-context.ts); this bounds the request
+    // itself, so a Core that never answers does not hold a connection open.
+    signal: AbortSignal.timeout(PROJECT_CONTEXT_LOOKUP_TIMEOUT_MS)
   });
   const bodyText = await response.text().catch(() => "");
   const payload = parseJsonBody(bodyText);
@@ -53,13 +59,14 @@ export async function fetchProjectIdFromCoreSnapshot(
   const root = objectValue(payload);
   if (root?.ok !== true) return undefined;
   const body = objectValue(root.payload);
-  const sessions = arrayValue(body?.sessions);
-  const matchingSession = sessions
+  // Core keeps a closed session in its snapshot with the project it had
+  // (client-gateway `disconnect`). A previous run's closed session is not this
+  // browser's binding now, so only a session still open is matched.
+  const sessions = arrayValue(body?.sessions)
     .map(objectValue)
-    .find((session) => session && stringValue(session.sessionId) === identity.sessionId)
-    ?? sessions
-      .map(objectValue)
-      .find((session) => session && stringValue(session.clientId) === identity.clientId);
+    .filter((session) => session && stringValue(session.status) !== "disconnected");
+  const matchingSession = sessions.find((session) => session && stringValue(session.sessionId) === identity.sessionId)
+    ?? sessions.find((session) => session && stringValue(session.clientId) === identity.clientId);
   const sessionProjectId = stringValue(matchingSession?.projectId);
   const webRuntime = objectValue(body?.webRuntime);
   const automationStudio = objectValue(webRuntime?.automationStudio);

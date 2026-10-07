@@ -39,6 +39,7 @@
 
 import { elementAnchors, type ElementAnchor } from "./element-anchors";
 import { activeSelectorMemo, type SelectorMemo } from "./selector-memo";
+import { siblingPosition } from "./sibling-position";
 
 const DOCUMENT_NODE = 9;
 const DOCUMENT_FRAGMENT_NODE = 11;
@@ -147,21 +148,16 @@ function typeSelector(element: Element): string {
   return CSS.escape(element.localName);
 }
 
-/** `:nth-of-type(n)` when a sibling shares the element's type, or nothing when it is the only one. */
+/**
+ * `:nth-of-type(n)` when a sibling shares the element's type -- its local name
+ * and namespace, as CSS counts -- or nothing when it is the only one. The
+ * siblings are its parent node's children, so the top of a shadow tree counts
+ * the shadow root's; inside a capture that is a table lookup
+ * (`sibling-position.ts`).
+ */
 function position(element: Element): string {
-  let index = 1;
-  for (let sibling = element.previousElementSibling; sibling; sibling = sibling.previousElementSibling) {
-    if (sameType(sibling, element)) index += 1;
-  }
-  let shared = index > 1;
-  for (let sibling = element.nextElementSibling; sibling && !shared; sibling = sibling.nextElementSibling) {
-    if (sameType(sibling, element)) shared = true;
-  }
+  const { index, shared } = siblingPosition(element, element.parentNode ?? null, "local-name");
   return shared ? `:nth-of-type(${index})` : "";
-}
-
-function sameType(left: Element, right: Element): boolean {
-  return left.localName === right.localName && left.namespaceURI === right.namespaceURI;
 }
 
 /** Up to five structural steps, for an element no document can check a selector against. */

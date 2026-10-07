@@ -8,16 +8,20 @@
 // one rule for which of those identifiers a rendering generated, and so may not
 // be addressed by at all -- by a selector written now, or by one written before
 // the rule existed. `selector-memo.ts` lets one
-// capture share the work its selectors have in common. `shadow/` is the other
+// capture share the work its selectors have in common, and `sibling-position.ts`
+// is where an element stands among its same-type siblings, for this selector's
+// `:nth-of-type` and an xpath's index alike. `shadow/` is the other
 // half of the address of an element inside a shadow root: the chain of hosts to
 // walk before the selector means anything, and the walk itself.
 
 export { elementAnchors } from "./element-anchors";
 export { activeSelectorMemo, withSelectorMemo } from "./selector-memo";
 export { deepElementFromPoint, resolveShadowScope, shadowHostChain } from "./shadow";
+export { siblingPosition } from "./sibling-position";
 export { selectorFor } from "./unique-selector";
 export { isVolatileIdentifier, selectorQuotesVolatileIdentifier } from "./volatile-identifier";
 
 export type { ElementAnchor } from "./element-anchors";
 export type { SelectorMemo } from "./selector-memo";
+export type { SiblingGrouping, SiblingPosition } from "./sibling-position";
 export type { LookupRoot, ShadowScope } from "./shadow";

@@ -1421,6 +1421,23 @@ retain only its transformed safe origin while also naming `"url"` in
 `parametersWithheld`: the origin is useful authored structure, and the original
 path, query and fragment did not enter the artifact.
 
+`authoredGraph` records the rest of the same Flow, read from the same `get-flow`
+documents as the nodes (`creation/graph-read.ts` observes that one read rather
+than repeating it). `controlNodes` lists every node that dispatches no domain
+output, as `nodeId` and `definitionId`; `edges` lists every edge of the Flow and
+its Subflow graphs as `edgeId`, `sourceNodeId`, `sourcePortId`, `targetNodeId`
+and `targetPortId`. Identifiers only: no label, description, metadata or
+parameter, and an id not shaped like a Core identifier is never carried. A port
+the document did not name, or an edge id that is malformed or repeated, is
+`null`; a control node or edge whose own id or endpoint is malformed, or that
+falls past `AUTHORED_FLOW_GRAPH_BOUNDS` (128 control nodes, 512 edges), is
+counted under `omitted` instead. The test contract `validateAuthoredFlowGraph`
+(`packages/test-contracts/src/authored-flow/`) rechecks that shape. It exists
+because run `mut4fvkm` could not show which path its playback took:
+`authoredNodes` held no merge node and no edge was on record, so a state route
+that passed over two nodes read as a revision mismatch. An incomplete snapshot
+carries `authoredGraph: null` until the Flow has been read.
+
 Created-build decision rows also carry Core's bounded progress instrumentation
 through the same shape screen on both proposed and refused builds. `progress`,
 `draftChange`, `draft`, and `answerability` are optional additive records with
