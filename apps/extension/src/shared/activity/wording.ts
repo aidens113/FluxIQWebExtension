@@ -57,7 +57,8 @@ const RUN_NODE_TOOL_ID = "core.run_node";
 
 /** Tools whose purpose alone names them. */
 const TOOL_ACTIONS: Readonly<Record<string, string>> = Object.freeze({
-  [DRAFT_TOOL_ID]: "Updating the Flow",
+  // Core's own heading for an edit; the panel says it the same way (D12 of the t342 round 2 UI review).
+  [DRAFT_TOOL_ID]: "Changing the Flow",
   "web.detect_repeating_structure": "Looking for the list of items"
 });
 

@@ -5,5 +5,6 @@
 // than an id (`stepWords`). No DOM.
 export { actionCard, type ActionCard } from "./action-card";
 export { cardWords, type CardWords } from "./card-words";
+export { doneAgainWords } from "./done-again";
 export { stepMessages, type StepMessage, type StepMessageKind } from "./messages";
 export { stepWords, type StepWords } from "./words";
