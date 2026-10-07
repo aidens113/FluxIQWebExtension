@@ -104,7 +104,11 @@ function outcomeOf(card: ActionCard, current: boolean): [CardWords["state"], str
   // A decision Core declined is no work, done or under way, whatever its outcome says.
   if (card.refused !== undefined && card.outcome !== "waiting") {
     const { all, because } = card.refused;
-    return all ? ["refused", joined(counted("Not done", card.times), because)] : ["done", joined(counted("Only partly done", card.times), because)];
+    if (all) return ["refused", joined(counted("Not done", card.times), because)];
+    // What landed first, then what did not and why: the refusal alone read as the work done
+    // ("Only partly done: that step is already in the Flow", run-mux6naez-6c20f26e, moment 05).
+    const landed = resultOf(card);
+    return ["done", landed === undefined ? joined(counted("Only partly done", card.times), because) : `${counted("Only partly done", card.times)}: ${lowerFirst(landed)}${because.trim() ? `; not done: ${lowerFirst(because.trim())}` : ""}`];
   }
   switch (card.outcome) {
     case "working":
