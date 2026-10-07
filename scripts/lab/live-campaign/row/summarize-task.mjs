@@ -120,6 +120,12 @@ export function summarizeTask(task, attempts, final, bundle, timing = {}) {
      */
     buildOutcome: typeof liveLlm?.build?.outcome === "string" ? liveLlm.build.outcome : null,
     /**
+     * The authoring mode the run's Core was started in, as the run recorded it
+     * (`snapshots/live-llm.json` `coreAuthoringMode`): `legacy` or `candidate`.
+     * `null` for a run that recorded none (no live record, or one made before the field).
+     */
+    authoringMode: typeof liveLlm?.coreAuthoringMode === "string" ? liveLlm.coreAuthoringMode : null,
+    /**
      * What the build's acting steps said they would lastingly do, who allowed
      * it (`answeredBy`), and the question it asked if nobody had. `null` for a
      * run that reached no build.

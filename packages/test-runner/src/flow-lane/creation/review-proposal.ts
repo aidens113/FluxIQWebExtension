@@ -1,10 +1,13 @@
-import { assertCreatedFlowVerificationReady } from "./readiness.js";
 // Approving and applying the proposal a live build left, through the same
 // `review-flow-adaptation` actions the panel's Approve and Apply buttons post.
-// Nothing reaches the Flow before this: a build only ever proposes.
+// Nothing reaches the Flow before this: a build only ever proposes. Only a
+// legacy-mode Core proposes (`./readiness.ts`); in candidate mode nothing is
+// approved or applied.
 
+import type { AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
 import type { ExistingFlowAdaptation } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
+import { assertCreatedFlowVerificationReady } from "./readiness.js";
 
 export type CreatedFlowReviewControl = {
   approveFlowAdaptation(input: { projectId: string; flowId: string; adaptationId: string; authorizationPin: string }): Promise<ExistingFlowAdaptation>;
@@ -21,11 +24,12 @@ export type CreatedFlowReview = Readonly<{ adaptationId: string; appliedMutation
  */
 export async function applyCreatedFlowProposal(
   control: CreatedFlowReviewControl,
-  input: { projectId: string; flowId: string; adaptationId: string; authorizationPin: string },
+  input: { projectId: string; flowId: string; adaptationId: string; authorizationPin: string; authoringMode: AutomationStudioAuthoringMode },
 ): Promise<CreatedFlowReview> {
-  assertCreatedFlowVerificationReady();
-  await control.approveFlowAdaptation(input);
-  const applied = await control.applyFlowAdaptation(input);
+  const { authoringMode, ...review } = input;
+  assertCreatedFlowVerificationReady(authoringMode);
+  await control.approveFlowAdaptation(review);
+  const applied = await control.applyFlowAdaptation(review);
   const appliedMutationCount = applied.appliedMutationCount ?? 0;
   if (appliedMutationCount < 1) {
     throw new RunnerFailure("runtime.behavior", "Core applied the build's proposal but reported no change to the Flow", { details: { adaptationId: input.adaptationId } });

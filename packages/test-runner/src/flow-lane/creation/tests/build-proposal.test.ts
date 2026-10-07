@@ -1,10 +1,547 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { RunnerFailure } from "../../../failure.js";
 import { buildCreatedFlowProposal } from "../build-proposal.js";
+import { ADAPTATION_ID, FLOW_ID, PROJECT_ID, fakeCreationCore, type FakeCreationCoreOptions } from "./fake-creation-core.js";
+import { permissionRequiredDiagnostic } from "./permission-required-diagnostic.js";
+import { parkedProposalConsequences } from "./parked-proposal.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
-test("qualification refuses before any control, authorizer, chat or provider work", async () => {
+/**
+ * The build is the one paid step of a created-Flow run, and whatever Core
+ * answers must become a record the run can publish before it judges anything:
+ * a proposal, a refusal read through Core's own diagnostic parser, or a build
+ * that outlived its request. These pin the order the web panel uses, each
+ * outcome, and that nothing but identifiers, codes and counts is kept.
+ */
+
+const INSTRUCTION = "Scrape the first page with columns name and price.";
+
+test("proposed and refused builds both preserve the screened call-time refusal account", async () => {
+  const diagnostic = { schemaVersion: "web-build-refusal.v1", phase: "before_action", code: "blocked_by_dialog", pageObserved: true, target: "t1", targetObserved: true, coveringTargets: ["t2"], coveringKinds: ["consent"], coveringCount: 1 };
+  const steps = [{ toolId: "core.run_node", iteration: 1, effectApplied: false, resultCode: "web.action.rejected.blocked_by_dialog", diagnostic }];
+  const proposed = await build({ evidenceLoop: { providerCallCount: 1, decisionCount: 1, traceStepCount: 1, iterationCount: 1, toolCallCount: 1, evidenceBytes: 100, toolIds: ["core.run_node"], steps } });
+  assert.deepEqual(proposed.record.evidenceLoop?.steps?.[0]?.diagnostic, diagnostic);
+  const refused = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic: { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation", retryable: true, providerInvocation: "attempted", providerResponse: "received", evidenceLoop: { iterationCount: 1, decisionCount: 1, toolCallCount: 1, evidenceBytes: 100, steps } } } } });
+  assert.deepEqual(refused.record.evidenceLoop?.steps?.[0]?.diagnostic, diagnostic);
+});
+
+const PROGRESS_STEP = {
+  toolId: "core.decision_amend_draft",
+  iteration: 2,
+  resultCode: "llm_evidence_loop.draft_amended",
+  progress: { draftRevisionBefore: 2, draftRevisionAfter: 3, pageState: "unchanged", draftState: "changed", answerabilityState: "changed" },
+  draftChange: { targetedStepIds: ["f1", "d2"], appliedCount: 1, refusedCount: 1, keptStepCount: 2, rerunStepId: "d2" },
+  draft: { bytes: 2_048, budget: 8_192, steps: 2, instructionBytes: 384, withoutInput: 1 },
+  answerability: { recordsRequested: true, recordProducerPresent: false, recordStorePresent: true, issueCode: "bootstrap.cannot_answer_instruction" },
+} as const;
+
+async function build(options: FakeCreationCoreOptions = {}, wait: { deadlineMs?: number } = {}) {
+  const core = fakeCreationCore(options);
+  const authorized: string[] = [];
+  let clock = 0;
+  const record = await buildCreatedFlowProposal(core.control, {
+    projectId: PROJECT_ID,
+    flowId: FLOW_ID,
+    instruction: INSTRUCTION,
+    authorize: async (flowId) => { core.calls.push("authorize"); authorized.push(flowId); return { permittedConsequences: [] }; },
+    authoringMode: "legacy",
+  }, {}, { now: () => clock, sleep: async (ms) => { clock += ms; }, pollMs: 1_000, ...(wait.deadlineMs === undefined ? {} : { deadlineMs: wait.deadlineMs }) });
+  return { core, authorized, record };
+}
+
+test("the build saves the instruction, then authorizes, selects the context and explores, as the web panel does", async () => {
+  const { core, authorized, record } = await build();
+  assert.deepEqual(core.calls, ["save-flow-generation-instruction", "authorize", "select-context", "generate", "get-adaptation", "get-flow-adaptation"]);
+  assert.deepEqual(core.instructionRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION }]);
+  assert.deepEqual(authorized, [FLOW_ID]);
+  // No start location was named, so the request carries none and Core builds
+  // from whatever is in front of it, exactly as it did before t103.
+  assert.deepEqual(core.generationRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, evidenceGuided: true }]);
+  assert.deepEqual(record, {
+    outcome: "proposed",
+    adaptationId: ADAPTATION_ID,
+    providerCalls: 4,
+    loopProviderCalls: 4,
+    providerInvocation: "attempted",
+    accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 12_000, outputTokens: 2_000, totalTokens: 14_000, estimatedCostUsd: 0.01 },
+    // A tool id without an identifier's shape is not kept.
+    evidenceLoop: { decisionCount: 4, toolCallCount: 4, evidenceBytes: 18_000, toolIds: ["web.recovery.inspect"], steps: null },
+    failure: null,
+    recoveredAfterTimeout: false,
+    durationMs: 0,
+    instructedConsequences: [],
+    declaredConsequences: null,
+    consequenceCrossCheck: null,
+    permissionRequest: null,
+    // Core recorded no judged yes on this proposal: a build given no judge.
+    judged: null,
+  });
+  assert.equal(JSON.stringify(record).includes("Scrape"), false, "the record holds no instruction text");
+});
+
+test("a proposed build keeps the decisions Core published on the proposal, in the shape a refused build's carry", async () => {
+  // Core stores the build's evidence trace on the proposal and does not
+  // project it onto `get-flow-adaptation` yet, so `steps` is `null` on every
+  // proposed build measured so far. This pins the Lab's half: the moment the
+  // created audit detail carries them, the accrual trail of a *successful*
+  // build is in the record, filtered exactly as a refused build's is.
+  const { record } = await build({
+    evidenceLoop: {
+      providerCallCount: 4, decisionCount: 4, traceStepCount: 5, iterationCount: 5, toolCallCount: 4, evidenceBytes: 18_000,
+      toolIds: ["web.recovery.inspect"],
+      steps: [
+        { toolId: "web.inspect_current_page", effectApplied: false, resultCode: "web.inspect.succeeded" },
+        { toolId: "web.reveal_safe", effectApplied: true },
+        { toolId: "core.decision_unusable", resultCode: "web.handle.unknown" },
+        { toolId: "WEB.Unrecognized.Tool" },
+      ],
+    },
+  });
+  assert.deepEqual(record.evidenceLoop?.steps, [
+    { toolId: "web.inspect_current_page", effectApplied: false, resultCode: "web.inspect.succeeded" },
+    { toolId: "web.reveal_safe", effectApplied: true },
+    { toolId: "core.decision_unusable", resultCode: "web.handle.unknown" },
+  ]);
+  // `toolIds` stays Core's own list on a proposal, which already excludes its decision steps.
+  assert.deepEqual(record.evidenceLoop?.toolIds, ["web.recovery.inspect"]);
+});
+
+test("proposed and refused builds publish the same content-free draft progress row", async () => {
+  const proposed = await build({
+    evidenceLoop: {
+      providerCallCount: 2, decisionCount: 2, traceStepCount: 2, iterationCount: 2, toolCallCount: 1, evidenceBytes: 2_048,
+      toolIds: ["core.run_node"],
+      steps: [{
+        ...PROGRESS_STEP,
+        prompt: "Private instruction text must not travel",
+        selector: "[data-testid=private-card]",
+        url: "http://127.0.0.1/private",
+        contentHash: `sha256:${"c".repeat(64)}`,
+      }],
+    },
+  });
+  const diagnostic = {
+    code: "flow_bootstrap.evidence_unusable_decision",
+    stage: "provider_output_validation",
+    retryable: false,
+    providerInvocation: "attempted",
+    providerResponse: "received",
+    evidenceLoop: { iterationCount: 2, decisionCount: 2, toolCallCount: 1, evidenceBytes: 2_048, steps: [PROGRESS_STEP] },
+    issueCodes: ["bootstrap.cannot_answer_instruction"],
+  };
+  const refused = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+
+  assert.deepEqual(proposed.record.evidenceLoop?.steps, [PROGRESS_STEP]);
+  assert.deepEqual(refused.record.evidenceLoop?.steps, [PROGRESS_STEP]);
+  assert.deepEqual(proposed.record.evidenceLoop?.steps, refused.record.evidenceLoop?.steps);
+  const serialized = JSON.stringify(proposed.record);
+  for (const forbidden of ["Private instruction", "data-testid", "127.0.0.1", "sha256"]) assert.equal(serialized.includes(forbidden), false);
+});
+
+test("a decision row carries every member Core published on it, and leaves behind anything that could be page content", async () => {
+  // The failed run this was written for published 32 rows of two members each,
+  // twenty of them the identical `web.action.rejected.target_unobserved` inside
+  // one undivided 99-second gap, so one handle refused twenty times and twenty
+  // different handles read exactly alike (`run-muf8dstp-0135804a`). What
+  // separates them -- the iteration, the call, the refusal's own reason, the
+  // moment, what it spent -- is all on Core's row and was all dropped here.
+  const { record } = await build({
+    evidenceLoop: {
+      providerCallCount: 2, decisionCount: 2, traceStepCount: 2, iterationCount: 2, toolCallCount: 2, evidenceBytes: 18_000,
+      toolIds: ["core.run_node"],
+      steps: [
+        {
+          toolId: "core.run_node", iteration: 1, callId: "evidence.1", effectApplied: true,
+          resultCode: "web.action.rejected.target_unobserved", reason: "handle_not_in_packet",
+          evidenceBytes: 1_450, at: "2026-09-24T10:31:05.412+01:00",
+          usage: { inputTokens: 9_000, outputTokens: 400, totalTokens: 9_400, estimatedCostUsd: 0.006 },
+        },
+        {
+          toolId: "core.run_node", iteration: 2, issueCodes: ["web.handle.unknown", "not a code but a sentence"],
+          // None of these may travel, whatever a future Core calls them: the
+          // record is bounded by the shape of a value, not by a list of names.
+          selector: "[data-testid=\"card\"]",
+          reply: "The lamp costs 16.00 USD",
+          url: "http://127.0.0.1:53017/scenarios/everything-store/",
+          usage: { inputTokens: 11_000, note: "cached prefix reused" },
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(record.evidenceLoop?.steps, [
+    {
+      toolId: "core.run_node", iteration: 1, callId: "evidence.1", effectApplied: true,
+      resultCode: "web.action.rejected.target_unobserved", reason: "handle_not_in_packet",
+      evidenceBytes: 1_450, at: "2026-09-24T10:31:05.412+01:00",
+      usage: { inputTokens: 9_000, outputTokens: 400, totalTokens: 9_400, estimatedCostUsd: 0.006 },
+    },
+    { toolId: "core.run_node", iteration: 2, issueCodes: ["web.handle.unknown"], usage: { inputTokens: 11_000 } },
+  ]);
+  const published = JSON.stringify(record);
+  for (const leaked of ["data-testid", "The lamp costs", "127.0.0.1", "cached prefix", "not a code"]) {
+    assert.equal(published.includes(leaked), false, `${leaked} must not travel on a decision row`);
+  }
+});
+
+test("the tools a build called include Core's own node runner, and never its decision names", async () => {
+  // `vocabulary()` filtered the whole `core.` prefix, and the tool the model
+  // explores with is `core.run_node`: 21 of one build's 22 calls were deleted
+  // from the record of what it did, while `core.decision_*` -- which are
+  // decisions, not tools -- is what the filter was for.
+  const proposal = await build({
+    evidenceLoop: { providerCallCount: 2, decisionCount: 2, traceStepCount: 2, iterationCount: 2, toolCallCount: 2, evidenceBytes: 18_000, toolIds: ["core.run_node", "web.inspect_current_page"] },
+  });
+  assert.deepEqual(proposal.record.evidenceLoop?.toolIds, ["core.run_node", "web.inspect_current_page"]);
+
+  const diagnostic = {
+    code: "flow_bootstrap.evidence_unusable_decision",
+    stage: "provider_output_validation",
+    retryable: false,
+    providerInvocation: "attempted",
+    providerResponse: "received",
+    evidenceLoop: {
+      iterationCount: 3, decisionCount: 3, toolCallCount: 2, evidenceBytes: 4_300,
+      steps: [
+        { toolId: "core.run_node", effectApplied: true, resultCode: "web.action.rejected.target_unobserved" },
+        { toolId: "core.decision_unusable", resultCode: "web.handle.unknown" },
+        { toolId: "web.inspect_current_page", resultCode: "web.inspect.succeeded" },
+      ],
+    },
+  };
+  const refusal = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+  assert.deepEqual(refusal.record.evidenceLoop?.toolIds, ["core.run_node", "web.inspect_current_page"]);
+  // The decision itself is still a step: it is what it called nothing for that is not listed as a tool.
+  assert.deepEqual(refusal.record.evidenceLoop?.steps?.map((step) => step.toolId), ["core.run_node", "core.decision_unusable", "web.inspect_current_page"]);
+});
+
+test("an instruction Core did not activate refuses before the Flow is readied for the model", async () => {
+  await assert.rejects(build({ instructionStatus: "draft" }), /Core did not make the task's instruction the Flow's active instruction/u);
+});
+
+test("a refusal is read through Core's diagnostic parser, keeping its code, stage, counts and only well-formed tool ids", async () => {
+  const diagnostic = {
+    code: "flow_bootstrap.evidence_iteration_limit",
+    stage: "provider_output_validation",
+    retryable: true,
+    providerInvocation: "attempted",
+    providerResponse: "received",
+    accounting: { requestId: "evidence.one", estimatedInputTokens: 900, provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 7_000, outputTokens: 700, totalTokens: 7_700, estimatedCostUsd: 0.004 },
+    evidenceLoop: { iterationCount: 6, decisionCount: 5, toolCallCount: 5, evidenceBytes: 12_000, steps: [{ toolId: "web.recovery.inspect", effectApplied: false, resultCode: "web.evidence.captured" }, { toolId: "WEB.Recovery.Shout" }] },
+  };
+  const { core, record } = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+  assert.equal(core.calls.includes("get-adaptation"), false);
+  assert.deepEqual(record, {
+    outcome: "failed",
+    adaptationId: null,
+    providerCalls: null,
+    loopProviderCalls: 5,
+    providerInvocation: "attempted",
+    accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 7_000, outputTokens: 700, totalTokens: 7_700, estimatedCostUsd: 0.004 },
+    evidenceLoop: { decisionCount: 5, toolCallCount: 5, evidenceBytes: 12_000, toolIds: ["web.recovery.inspect"], steps: [{ toolId: "web.recovery.inspect", effectApplied: false, resultCode: "web.evidence.captured" }] },
+    failure: { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation", httpStatus: 400 },
+    recoveredAfterTimeout: false,
+    durationMs: 0,
+    instructedConsequences: null,
+    declaredConsequences: null,
+    consequenceCrossCheck: null,
+    permissionRequest: null,
+    judged: null,
+  });
+  // A refusal before any request is a build that made no call.
+  const early = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic: { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", retryable: false, providerInvocation: "not_attempted", providerResponse: "not_received" } } } });
+  assert.equal(early.record.providerCalls, 0);
+  assert.equal(early.record.providerInvocation, "not_attempted");
+  assert.deepEqual(early.record.failure, { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", httpStatus: 400 });
+});
+
+test("an unnamed provider throw publishes its class and codes, never its message", async () => {
+  const diagnostic = {
+    code: "flow_bootstrap.provider_transport_unknown",
+    stage: "provider_request",
+    retryable: false,
+    providerInvocation: "unknown",
+    providerResponse: "unknown",
+    providerThrow: { errorClass: "TypeError", causeClass: "Error", causeCode: "ECONNRESET", message: "fetch failed" },
+  };
+  const { record } = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+  assert.deepEqual(record.failure?.providerThrow, { errorClass: "TypeError", causeClass: "Error", causeCode: "ECONNRESET" });
+  assert.doesNotMatch(JSON.stringify(record), /fetch failed/u);
+});
+
+test("a build that ran out and kept its draft says which revision it kept and how many steps", async () => {
+  const diagnostic = {
+    code: "flow_bootstrap.evidence_iteration_limit",
+    stage: "provider_output_validation",
+    retryable: true,
+    providerInvocation: "attempted",
+    providerResponse: "received",
+    evidenceLoop: { iterationCount: 6, decisionCount: 5, toolCallCount: 5, evidenceBytes: 12_000, steps: [{ toolId: "web.recovery.inspect" }], incompleteDraft: { revision: 4, steps: 7 } },
+  };
+  const { record } = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+  assert.deepEqual(record.evidenceLoop?.incompleteDraft, { revision: 4, steps: 7 });
+});
+
+test("a build Core stopped to ask a person is a permission request naming the missing classes, not an HTTP failure", async () => {
+  const diagnostic = await permissionRequiredDiagnostic();
+  const { core, record } = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+  assert.equal(record.outcome, "permission_required");
+  assert.deepEqual(record.failure, { code: "flow_bootstrap.permission_required", stage: "provider_output_validation", httpStatus: 400 });
+  assert.deepEqual(record.permissionRequest, {
+    actionKind: "exploration_step",
+    verb: "press",
+    controlName: "Delete post",
+    controlKind: "button",
+    consequences: ["delete"],
+    missing: ["delete"],
+    instructed: [],
+  });
+  assert.equal(record.providerCalls, null, "this legacy diagnostic publishes loop decisions, not an actual build aggregate");
+  assert.equal(record.loopProviderCalls, 2);
+  assert.equal(record.adaptationId, null);
+  // Core built nothing, so there is no proposal to read back.
+  assert.equal(core.calls.includes("get-adaptation"), false);
+  // A request only ever travels on its own ending: the same request on another code is no diagnostic at all.
+  const other = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic: { ...(diagnostic as Record<string, unknown>), code: "flow_bootstrap.evidence_cancelled" } } } });
+  assert.equal(other.record.outcome, "failed");
+  assert.equal(other.record.failure?.code, "lab.generation_http_400");
+  assert.equal(other.record.permissionRequest, null);
+});
+
+test("a build stopped on refused plans keeps what refused them, decision by decision, and no tool list of Core's own steps", async () => {
+  const diagnostic = {
+    code: "flow_bootstrap.evidence_unusable_decision",
+    stage: "provider_output_validation",
+    retryable: false,
+    providerInvocation: "attempted",
+    providerResponse: "received",
+    accounting: { requestId: "evidence.two", estimatedInputTokens: 9_000, provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 13_000, outputTokens: 1_500, totalTokens: 14_500, estimatedCostUsd: 0.008 },
+    evidenceLoop: {
+      iterationCount: 3,
+      decisionCount: 4,
+      toolCallCount: 1,
+      evidenceBytes: 4_300,
+      steps: [
+        { toolId: "web.inspect_current_page", resultCode: "web.inspect.succeeded" },
+        { toolId: "core.decision_unusable", resultCode: "web.handle.unknown" },
+        { toolId: "core.decision_unusable", resultCode: "bootstrap.invalid_parameter_value" },
+        { toolId: "core.decision_unusable" },
+      ],
+    },
+    issueCodes: ["bootstrap.invalid_parameter_value", "web.handle.unknown"],
+  };
+  const { record } = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+  assert.deepEqual(record.failure, { code: "flow_bootstrap.evidence_unusable_decision", stage: "provider_output_validation", httpStatus: 400, issueCodes: ["bootstrap.invalid_parameter_value", "web.handle.unknown"] });
+  assert.deepEqual(record.evidenceLoop, {
+    decisionCount: 4,
+    toolCallCount: 1,
+    evidenceBytes: 4_300,
+    // Core's own decision steps are decisions, not tools the build called.
+    toolIds: ["web.inspect_current_page"],
+    steps: [
+      { toolId: "web.inspect_current_page", resultCode: "web.inspect.succeeded" },
+      { toolId: "core.decision_unusable", resultCode: "web.handle.unknown" },
+      { toolId: "core.decision_unusable", resultCode: "bootstrap.invalid_parameter_value" },
+      { toolId: "core.decision_unusable" },
+    ],
+  });
+});
+
+test("a refusal Core's parser does not accept keeps only its HTTP status, and a malformed success is a refusal too", async () => {
+  const unparsed = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic: { code: "made.up", detail: "page text that must not travel" } } } });
+  assert.deepEqual(unparsed.record.failure, { code: "lab.generation_http_400", stage: null, httpStatus: 400 });
+  assert.equal(unparsed.record.providerInvocation, "unknown");
+  assert.equal(JSON.stringify(unparsed.record).includes("page text"), false);
+  const core = fakeCreationCore();
+  const original = core.control.generateFlowBootstrapAdaptation;
+  core.control.generateFlowBootstrapAdaptation = async (input) => { await original(input); return { status: 200, ok: true, payload: { adaptation: { projectId: PROJECT_ID, flowId: "another.flow", adaptationId: ADAPTATION_ID, status: "proposed" } } }; };
+  const escaped = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ permittedConsequences: [] }), authoringMode: "legacy" });
+  assert.deepEqual(escaped.failure, { code: "lab.generation_answer_invalid", stage: null, httpStatus: 200 });
+});
+
+test("a build that outlives its request is found by polling for its proposal, within the build's deadline and no longer", async () => {
+  const recovered = await build({ generation: { kind: "timeout", proposalAfterPolls: 3 } });
+  assert.equal(recovered.record.outcome, "proposed");
+  assert.equal(recovered.record.recoveredAfterTimeout, true);
+  assert.equal(recovered.record.durationMs, 2_000);
+  assert.deepEqual(recovered.core.calls.filter((call) => call === "list-adaptations"), ["list-adaptations", "list-adaptations", "list-adaptations"]);
+  const unfinished = await build({ generation: { kind: "timeout" } }, { deadlineMs: 5_000 });
+  assert.deepEqual(unfinished.record.failure, { code: "lab.generation_unfinished", stage: null, httpStatus: null });
+  assert.equal(unfinished.record.providerInvocation, "unknown");
+  assert.equal(unfinished.core.calls.filter((call) => call === "list-adaptations").length, 5);
+});
+
+test("the build request is held open, as a long request, until the build's own deadline", async () => {
+  const core = fakeCreationCore();
+  const bounds: unknown[] = [];
+  const original = core.control.generateFlowBootstrapAdaptation;
+  core.control.generateFlowBootstrapAdaptation = async (input, requestBounds) => { bounds.push(requestBounds); return original(input); };
+  const record = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ permittedConsequences: [] }), authoringMode: "legacy" });
+  assert.equal(record.outcome, "proposed");
+  // Core answers only when the build is over: 60 s claim, 600 s run lease, 15 s reply.
+  assert.deepEqual(bounds, [{ timeoutMs: 675_000, longRequest: true }]);
+});
+
+test("a build that fails after the ordinary request cap is recorded with Core's own diagnostic", async () => {
+  const diagnostic = { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation", retryable: true, providerInvocation: "attempted", providerResponse: "received" };
+  const core = fakeCreationCore({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+  let clock = 0;
+  const original = core.control.generateFlowBootstrapAdaptation;
+  // Answered 8 minutes in, as run-munaiz76-7026748c's build was; a request held
+  // only for the ordinary 300 s cap never sees it.
+  core.control.generateFlowBootstrapAdaptation = async (input, requestBounds) => {
+    if (!requestBounds?.longRequest || (requestBounds.timeoutMs ?? 0) <= 300_000) throw new RunnerFailure("runtime.behavior", "FluxIQ HTTP operation timed out", { details: { bounded: "timeout", operationStage: "control.request", timeoutMs: requestBounds?.timeoutMs } });
+    clock += 488_000;
+    return original(input);
+  };
+  const record = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ permittedConsequences: [] }), authoringMode: "legacy" }, {}, { now: () => clock, sleep: async (ms) => { clock += ms; } });
+  assert.deepEqual(record.failure, { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation", httpStatus: 400 });
+  assert.equal(record.durationMs, 488_000);
+});
+
+test("a build request that times out at the deadline still looks once for a proposal", async () => {
+  const core = fakeCreationCore({ generation: { kind: "timeout", proposalAfterPolls: 1 } });
+  let clock = 0;
+  const original = core.control.generateFlowBootstrapAdaptation;
+  core.control.generateFlowBootstrapAdaptation = async (input) => { clock = 5_000; return original(input); };
+  const record = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ permittedConsequences: [] }), authoringMode: "legacy" }, {}, { now: () => clock, sleep: async (ms) => { clock += ms; }, deadlineMs: 5_000 });
+  assert.equal(record.outcome, "proposed");
+  assert.equal(record.recoveredAfterTimeout, true);
+  assert.equal(core.calls.filter((call) => call === "list-adaptations").length, 1);
+});
+
+test("a transport failure that is not a bounded wait is not mistaken for a build still running", async () => {
+  await assert.rejects(build({ generation: { kind: "transport" } }), (error: unknown) => error instanceof RunnerFailure && /transport failed/u.test(error.message));
+});
+
+test("a proposal that cannot be shown to be what was paid for is a failed build, not a Flow", async () => {
+  const cases: Array<[FakeCreationCoreOptions, string]> = [
+    [{ adaptationStatus: "validated" }, "lab.proposal_not_pending_bootstrap"],
+    [{ evidenceLoop: null }, "lab.proposal_without_evidence_audit"],
+    [{ evidenceLoop: { iterationCount: 3, toolCallCount: 2, evidenceBytes: 10, toolIds: [] } }, "lab.proposal_without_call_count"],
+    [{ evidenceLoop: { providerCallCount: 2, iterationCount: 3, toolCallCount: 0, evidenceBytes: 0, toolIds: [] } }, "lab.proposal_without_page_evidence"],
+  ];
+  for (const [options, code] of cases) {
+    const { record } = await build(options);
+    assert.equal(record.outcome, "failed", code);
+    assert.equal(record.failure?.code, code);
+    assert.equal(record.providerInvocation, "attempted", `${code}: a proposal exists, so a provider answered`);
+  }
+});
+
+test("a proposal that still carries an unanswered question is a permission request, not a build to be reviewed", async () => {
+  // Since the gate learned to park, a build can finish, leave a proposal and
+  // carry the question on it. Core then refuses to approve or apply it, and
+  // that refusal used to be the first anyone heard of it: an HTTP 400 on
+  // `review-flow-adaptation`, which a campaign recorded as
+  // `environment.missing` (`run-mudt5jr5-92321d8c`). The proposal says so
+  // itself, before anything is asked of the review surface.
+  const { record } = await build({ consequences: await parkedProposalConsequences() });
+
+  assert.equal(record.outcome, "permission_required");
+  assert.deepEqual(record.failure, { code: "flow_bootstrap.permission_required", stage: "review", httpStatus: null });
+  assert.equal(record.permissionRequest?.controlName, "Delete post");
+  assert.deepEqual(record.permissionRequest?.missing, ["delete"]);
+  // The proposal is still named: a Flow was built and waits on an answer.
+  assert.equal(record.adaptationId, ADAPTATION_ID);
+});
+
+test("a build's declarations and Core's cross-check are read from where Core puts them, so a Flow's steps can be read rather than deduced", async () => {
+  // They live under `metadata.bootstrap`. The top-level
+  // `adaptation.instructedConsequences` this used to read is never populated
+  // for a bootstrap proposal, so every build measured before 2026-09-23
+  // reported an empty declaration while the stored proposal held a full one.
+  const { record } = await build({ consequences: await parkedProposalConsequences() });
+
+  assert.deepEqual(record.declaredConsequences?.map((entry) => [entry.actionKind, entry.verb, entry.controlName, entry.consequences, entry.permitted]), [
+    ["exploration_step", "enter", "Post text", [], true],
+    ["flow_step", "press", "Delete post", ["delete"], false],
+  ]);
+  assert.equal(record.consequenceCrossCheck?.verdict, "beyond_instruction");
+  assert.deepEqual(record.consequenceCrossCheck?.declared, ["delete"]);
+  assert.deepEqual([record.consequenceCrossCheck?.actions, record.consequenceCrossCheck?.declaredNothing], [2, 1]);
+});
+
+test("a build's reported calls are every call it made, with the loop's own beside them", async () => {
+  // Core spends provider calls outside the evidence loop -- reading what the
+  // person's instruction already asks for -- and publishes them separately, so
+  // a reader taking the loop count alone under-reports what the build paid for.
+  const { record } = await build({
+    evidenceLoop: { providerCallCount: 17, decisionCount: 17, additionalProviderCallCount: 1, totalProviderCallCount: 18, traceStepCount: 18, iterationCount: 18, toolCallCount: 9, evidenceBytes: 18_000, toolIds: ["web.recovery.inspect"] },
+  });
+
+  assert.equal(record.providerCalls, 18);
+  assert.equal(record.loopProviderCalls, 17);
+  assert.equal(record.evidenceLoop?.decisionCount, 17);
+});
+
+/**
+ * Where the Flow starts, told to Core rather than loaded for the build.
+ *
+ * No instruction in the catalog names an address -- they are written as a
+ * shopper would type them -- and the fixture's origin is a loopback port drawn
+ * per run, so nothing written down beforehand could have carried one. This is
+ * the only channel it has (`AS/runtime/flow-bootstrap/start-location.ts`), and
+ * without it a build that starts on a blank tab has nowhere to go.
+ */
+test("the build tells Core where the Flow starts, when the run named a start location", async () => {
+  const core = fakeCreationCore();
+  await buildCreatedFlowProposal(core.control, {
+    projectId: PROJECT_ID,
+    flowId: FLOW_ID,
+    instruction: INSTRUCTION,
+    startLocation: "http://127.0.0.1:53017/scenarios/everything-store/",
+    authorize: async () => ({ permittedConsequences: ["send_or_publish"] }),
+    authoringMode: "legacy",
+  }, {}, { now: () => 0, sleep: async () => {} });
+
+  assert.deepEqual(core.generationRequests, [{
+    projectId: PROJECT_ID,
+    flowId: FLOW_ID,
+    evidenceGuided: true,
+    startLocation: "http://127.0.0.1:53017/scenarios/everything-store/",
+    // The operator's permit travels with the build, and only because it
+    // permits something.
+    permittedConsequences: ["send_or_publish"],
+  }]);
+});
+
+// Live run run-musp8nz1-dbd3905a (cause R2): that the build finished on a judged
+// yes about the standing Flow was provable only from core.log order. Core now
+// records that yes on the proposal's created audit event, and the build record
+// carries it. Advice beside the yes is unconfirmed (run-murwd8le, cause 10) and
+// the judge's free text, so the record keeps only that it was given.
+const DIGEST = `sha256:${"a".repeat(64)}`;
+const WRONG_ADVICE = "Remove or reorder step 11";
+
+test("a proposed build carries the judged yes Core recorded on its proposal, with a yes's advice as unconfirmed and never its words", async () => {
+  const { record } = await build({ buildJudged: { verdict: "yes", round: 1, judgedAt: "finished_round", flowSignature: DIGEST, standingFlowSignature: DIGEST, matchesStandingFlow: true, confidence: 0.9, unconfirmed: { advice: WRONG_ADVICE, patchNeeded: true } } });
+  assert.deepEqual(record.judged, { verdict: "yes", round: 1, judgedAt: "finished_round", flowSignature: DIGEST, standingFlowSignature: DIGEST, matchesStandingFlow: true, confidence: 0.9, unconfirmed: { adviceGiven: true, patchNeeded: true } });
+  assert.equal(JSON.stringify(record).includes(WRONG_ADVICE), false, "the judge's advice is not copied");
+  assert.equal(record.outcome, "proposed", "the record of a verdict changes nothing about the build's outcome");
+});
+
+test("every judgedAt Core writes is read, with no confidence or advice where Core recorded none", async () => {
+  for (const judgedAt of ["finished_round", "judging_reserve", "stopped_short"] as const) {
+    const { record } = await build({ buildJudged: { verdict: "yes", round: 2, judgedAt, flowSignature: null, standingFlowSignature: DIGEST, matchesStandingFlow: false } });
+    assert.deepEqual(record.judged, { verdict: "yes", round: 2, judgedAt, flowSignature: null, standingFlowSignature: DIGEST, matchesStandingFlow: false, confidence: null, unconfirmed: null }, judgedAt);
+  }
+  const patchOnly = await build({ buildJudged: { verdict: "yes", round: 0, judgedAt: "stopped_short", flowSignature: DIGEST, standingFlowSignature: DIGEST, matchesStandingFlow: true, unconfirmed: { patchNeeded: false } } });
+  assert.deepEqual(patchOnly.record.judged?.unconfirmed, { adviceGiven: false, patchNeeded: false });
+});
+
+test("a judged yes not in Core's shape is no record, and a refused build has none", async () => {
+  for (const buildJudged of [{ verdict: "no" }, { verdict: "yes", round: 0, judgedAt: "finished_round", flowSignature: "raw signature", standingFlowSignature: DIGEST, matchesStandingFlow: true }, { verdict: "yes", round: -1, judgedAt: "finished_round", flowSignature: null, standingFlowSignature: DIGEST, matchesStandingFlow: false }, { verdict: "yes", round: 0, judgedAt: "somewhere_else", flowSignature: null, standingFlowSignature: DIGEST, matchesStandingFlow: true }]) {
+    assert.equal((await build({ buildJudged })).record.judged, null);
+  }
+  const refused = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic: { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation", retryable: true, providerInvocation: "attempted", providerResponse: "received" } } } });
+  assert.equal(refused.record.judged, null);
+});
+
+test("candidate authoring mode refuses before any control, authorizer, chat or provider work", async () => {
   const calls: string[] = [];
   const control = new Proxy({}, { get: (_target, key) => { calls.push(String(key)); return async () => { calls.push("effect"); }; } });
-  await assert.rejects(async () => { await buildCreatedFlowProposal(control as never, { projectId: "project", flowId: "flow", instruction: "job", authorize: async () => { calls.push("authorize"); return { permittedConsequences: [] }; } }); }, (error: unknown) => !!error && typeof error === "object" && "details" in error && (error.details as Record<string, unknown>)?.code === "lab.candidate_verification_unavailable");
+  await assert.rejects(async () => { await buildCreatedFlowProposal(control as never, { projectId: "project", flowId: "flow", instruction: "job", authorize: async () => { calls.push("authorize"); return { permittedConsequences: [] }; }, authoringMode: "candidate" }); }, (error: unknown) => !!error && typeof error === "object" && "details" in error && (error.details as Record<string, unknown>)?.code === "lab.candidate_verification_unavailable");
   assert.deepEqual(calls, []);
 });

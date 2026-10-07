@@ -23,3 +23,4 @@ export { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from
 export { ensureLiveLlmSecretKey, LAB_LIVE_LLM_KEY_NAME, type LiveLlmSecretKeyControl, type LiveLlmSecretKeyReference } from "./secret-key.js";
 export * from "./cost-ceiling-env.js";
 export * from "./default-model-env.js";
+export * from "./authoring-mode-env.js";

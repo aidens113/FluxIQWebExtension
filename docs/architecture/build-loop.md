@@ -11,6 +11,22 @@ verdict; they are in FluxIQ Core's
 so Core's pages are named by path, as the neighbouring pages do). Paths below
 are under `domain/src/`.
 
+## Which Build Runs
+
+Everything below describes the build Core runs in its default `legacy`
+authoring mode, which is how the product creates and improves Flows: the
+evidence loop explores, writes and tests the steps, the build is judged, and the
+chat applies the proposal onto a new or blank Flow and says the automation is
+ready, or asks before applying an improvement. Core's single setting
+`FLUXIQ_AUTHORING_MODE` (Core `model/authoring-mode/`, described in Core's
+`docs/architecture/automation-studio/llm-flow-bootstrap.md`) can instead select
+`candidate`, in which a creation or improvement submits an unverified candidate
+draft and nothing is applied; no web-domain behaviour differs between the modes
+apart from what the build is asked to return. The Lab starts each Core in the
+mode a run names (`--authoring-mode`, `legacy` by default) and builds a Flow to
+qualify only in `legacy` (`testing-facility.md`, the instruction-created Flow
+lane).
+
 ## Live Run Or Write
 
 `core.run_node` reaches `runtime/llm-evidence/node-run/run.ts`. Without `write`

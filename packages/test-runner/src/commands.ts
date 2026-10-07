@@ -1,5 +1,6 @@
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, assertLlmExecutionProfile, llmActionConsequences, type LlmActionConsequence, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
 import { requireSafePersistentWorkspaceName, type FluxIQTargetMode } from "./target-config.js";
+import { LAB_AUTHORING_MODE_FLAG, labAuthoringModeValue } from "./live-llm/index.js";
 
 export type EvidenceMode = "none" | "failure" | "checkpoints" | "events";
 export type TargetMode = FluxIQTargetMode;
@@ -148,6 +149,8 @@ const llmOptionNames = [
   "--live-llm", "--llm-profile", "--llm-provider", "--llm-model", "--llm-task", "--llm-permit",
   "--llm-max-input-tokens", "--llm-max-output-tokens", "--llm-max-total-tokens",
   "--llm-max-calls", "--llm-max-run-tokens", "--llm-timeout-ms", "--llm-max-retries", "--llm-max-cost-usd", "--llm-cost-ceiling-usd",
+  // The authoring mode of the run's Core (`./live-llm/authoring-mode-env.ts`): only a live run builds, so only a live run names it.
+  LAB_AUTHORING_MODE_FLAG,
 ] as const;
 
 function llmOptions(args: string[]): LlmExecutionProfile | undefined {
@@ -167,6 +170,9 @@ function llmOptions(args: string[]): LlmExecutionProfile | undefined {
   // line in the repository.
   const model = option(args, "--llm-model") ?? DEFAULT_LLM_MODEL;
   const task = required("--llm-task");
+  // Refused here, by Core's own resolver, rather than when Core starts.
+  if (args.filter(value => value === LAB_AUTHORING_MODE_FLAG).length > 1) throw new Error(`${LAB_AUTHORING_MODE_FLAG} may only be specified once`);
+  labAuthoringModeValue(args);
   if (!["create-flow", "refine-recording", "edit-flow", "diagnose", "adapt", "repair"].includes(task)) throw new Error("--llm-task is invalid");
   const cost = option(args, "--llm-max-cost-usd");
   const maxEstimatedCostUsd = cost === undefined ? undefined : Number(cost);

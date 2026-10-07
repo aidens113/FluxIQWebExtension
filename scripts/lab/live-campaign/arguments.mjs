@@ -9,15 +9,23 @@
 // before a key is read, rather than reaching DeepSeek as an opaque 400.
 const DEFAULT_LLM_MODEL = "deepseek-flash";
 
+// Mirrors Core's `AUTOMATION_STUDIO_AUTHORING_MODE_DEFAULT` (`model/authoring-mode/`),
+// for the same reason as the model above. The campaign always names the mode
+// each run's Core is started in (`--authoring-mode`), so every run says which
+// mode it was; a value Core would refuse is refused by the Lab's own parse,
+// through Core's resolver, before any Core starts or anything is spent
+// (`packages/test-runner/src/live-llm/authoring-mode-env.ts`).
+const DEFAULT_AUTHORING_MODE = "legacy";
+
 const KINDS = ["form", "navigate", "extract", "navigate-and-extract", "repair"];
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
-const CAMPAIGN_OWNED_OPTIONS = new Set(["--live-llm", "--llm-task", "--llm-profile", "--llm-provider", "--llm-model", "--instruction-task", "--variant", "--workflow", "--flow"]);
+const CAMPAIGN_OWNED_OPTIONS = new Set(["--live-llm", "--llm-task", "--llm-profile", "--llm-provider", "--llm-model", "--instruction-task", "--variant", "--workflow", "--flow", "--authoring-mode"]);
 
-export const CAMPAIGN_USAGE = `Usage: pnpm lab:campaign [task-id ...] [--kind form|navigate|extract|navigate-and-extract|repair[,...]] [--all] [--limit N] [--dry-run] [--no-build] [--max-attempts N] [--llm-profile ID (default lab-create-flow, or lab-adapt-repair for repair tasks)] [--llm-provider NAME] [--llm-model NAME (default ${DEFAULT_LLM_MODEL})] [--output DIR] [-- LAB-OPTIONS]`;
+export const CAMPAIGN_USAGE = `Usage: pnpm lab:campaign [task-id ...] [--kind form|navigate|extract|navigate-and-extract|repair[,...]] [--all] [--limit N] [--dry-run] [--no-build] [--max-attempts N] [--llm-profile ID (default lab-create-flow, or lab-adapt-repair for repair tasks)] [--llm-provider NAME] [--llm-model NAME (default ${DEFAULT_LLM_MODEL})] [--authoring-mode legacy|candidate (default ${DEFAULT_AUTHORING_MODE})] [--output DIR] [-- LAB-OPTIONS]`;
 
 /** @param {string[]} argv */
 export function parseCampaignArgs(argv) {
-  const options = { taskIds: [], kinds: [], all: false, limit: undefined, dryRun: false, build: true, maxAttempts: 3, profile: undefined, provider: "deepseek", model: DEFAULT_LLM_MODEL, output: undefined, labArgs: [], help: false };
+  const options = { taskIds: [], kinds: [], all: false, limit: undefined, dryRun: false, build: true, maxAttempts: 3, profile: undefined, provider: "deepseek", model: DEFAULT_LLM_MODEL, authoringMode: DEFAULT_AUTHORING_MODE, output: undefined, labArgs: [], help: false };
   const value = (index, name) => { const next = argv[index + 1]; if (next === undefined || next.startsWith("--")) throw new Error(`${name} requires a value`); return next; };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -32,6 +40,7 @@ export function parseCampaignArgs(argv) {
     else if (arg === "--llm-profile") { options.profile = value(index, arg); index += 1; }
     else if (arg === "--llm-provider") { options.provider = value(index, arg); index += 1; }
     else if (arg === "--llm-model") { options.model = value(index, arg); index += 1; }
+    else if (arg === "--authoring-mode") { options.authoringMode = value(index, arg); index += 1; }
     else if (arg === "--output") { options.output = value(index, arg); index += 1; }
     else if (arg.startsWith("-")) throw new Error(`Unknown option ${arg}; Lab options go after --`);
     else if (!KEBAB_ID.test(arg)) throw new Error(`Task id ${JSON.stringify(arg)} is not kebab-case`);

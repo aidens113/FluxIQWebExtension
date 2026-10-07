@@ -1,4 +1,3 @@
-import { assertCreatedFlowVerificationReady } from "../readiness.js";
 // The created-Flow build as a person starts one: the task's instruction typed
 // into the extension's chat window beside the page and sent, and the build
 // followed through Core and the chat thread until it ends.
@@ -17,7 +16,9 @@ import { assertCreatedFlowVerificationReady } from "../readiness.js";
 // answers it in the chat (`person-simulation/`), by the task's permission
 // point, as the person sitting at the panel would.
 
+import type { AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../../../failure.js";
+import { assertCreatedFlowVerificationReady } from "../readiness.js";
 import { createdFlowBuildFromDiagnostic, failedCreatedFlowBuild, readCreatedFlowBuild, type CreatedFlowBuild, type CreatedFlowBuildControl } from "../build-proposal.js";
 import type { CreatedFlowChatRecord } from "./chat-record.js";
 import { chatConversationIds, chatThreadTurns, projectFlowIds, type CreatedFlowChatScope, type CreatedFlowChatTurn } from "./chat-thread.js";
@@ -86,10 +87,11 @@ const DEADLINE_MS = 60_000 + 600_000 + 15_000 + 120_000;
 export async function buildCreatedFlowFromChat(
   control: CreatedFlowChatControl,
   chat: CreatedFlowChat,
-  input: CreatedFlowChatScope & { instruction: string },
+  input: CreatedFlowChatScope & { instruction: string; authoringMode: AutomationStudioAuthoringMode },
   wait: CreatedFlowChatWait = {},
 ): Promise<CreatedFlowChatBuild> {
-  assertCreatedFlowVerificationReady();
+  // Only a legacy-mode Core builds a Flow the lane can run (`../readiness.ts`).
+  assertCreatedFlowVerificationReady(input.authoringMode);
   const now = wait.now ?? Date.now;
   const sleep = wait.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const pollMs = wait.pollMs ?? POLL_MS;
@@ -167,13 +169,34 @@ export async function buildCreatedFlowFromChat(
     return Object.freeze({ build: Object.freeze({ ...build, chat: ending({ ending: ended ? "failed" : "no_result" }) }), flowId, applied: null, said });
   }
 
+  // A Core that saved a candidate draft instead (candidate mode, refused above
+  // before anything was typed): an unverified reference, never a created Flow.
   const draft = turns.find((turn) => turn.author === "automation" && turn.attachment?.kind === "candidate-draft" && typeof turn.attachment.ref === "string" && turn.attachment.ref.length > 0 && turn.attachment.ref.length <= 200);
   if (draft) {
     const build = failedCreatedFlowBuild({ code: "lab.verification_pending", stage: "verification", httpStatus: null }, "unknown", durationMs);
     return Object.freeze({ build: Object.freeze({ ...build, outcome: "draft" as const, failure: null, candidateReference: Object.freeze({ candidateId: draft.attachment!.ref, verification: "not_performed" as const }), chat: ending({ ending: "draft" }) }), flowId, applied: null, said });
   }
-  const build = await failedBuildOf(control, scope, flowId, durationMs);
-  return Object.freeze({ build: Object.freeze({ ...build, chat: ending({ ending: "failed" }) }), flowId, applied: null, said });
+
+  const proposals = await control.listFlowAdaptations(input.projectId, flowId);
+  if (proposals.length > 1) throw new RunnerFailure("runtime.behavior", `FluxIQ's chat left ${proposals.length} proposals on the Flow one instruction built`, { details: { stage: "chat.proposal", conversationId, flowId, proposals: proposals.length } });
+  const proposal = proposals[0];
+  if (!proposal) {
+    // The build ended without leaving a change behind. Core told the person in
+    // words, and keeps the build's diagnostic -- what it spent, how far it got --
+    // for a reader that started it this way (`get-flow-bootstrap-failure`).
+    const build = await failedBuildOf(control, scope, flowId, durationMs);
+    return Object.freeze({ build: Object.freeze({ ...build, chat: ending({ ending: "failed" }) }), flowId, applied: null, said });
+  }
+  const read = await readCreatedFlowBuild(control, { projectId: input.projectId, flowId }, proposal.adaptationId, { recoveredAfterTimeout: false, durationMs, statuses: ["proposed", "validated", "applied"] });
+  if (read.build.outcome === "permission_required") {
+    return Object.freeze({ build: Object.freeze({ ...read.build, chat: ending({ ending: "awaiting_permission" }) }), flowId, applied: null, said });
+  }
+  if (read.build.outcome === "proposed" && read.status === "applied") {
+    return Object.freeze({ build: Object.freeze({ ...read.build, chat: ending({ ending: "created" }) }), flowId, applied: Object.freeze({ adaptationId: proposal.adaptationId, appliedMutationCount: read.appliedMutationCount ?? 0 }), said });
+  }
+  // A well-formed proposal the chat did not put into the Flow: its own apply failed, and the thread says why.
+  const failure = read.build.failure ?? { code: "lab.chat_not_applied", stage: "review", httpStatus: null };
+  return Object.freeze({ build: Object.freeze({ ...read.build, outcome: "failed" as const, failure, chat: ending({ ending: "failed" }) }), flowId, applied: null, said });
 }
 
 /**

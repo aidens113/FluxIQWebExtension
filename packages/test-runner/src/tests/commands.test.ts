@@ -329,3 +329,11 @@ test("--no-live-panel turns the headed run's live panel off for run, matrix and 
   assert.throws(() => parseLabCommand(["run", "basic-form", "--no-live-panel", "--no-live-panel"]), /--no-live-panel may only be specified once/);
   assert.throws(() => parseLabCommand(["bench", "--corpus", "smoke", "--no-live-panel"]), /Unknown option: --no-live-panel/);
 });
+
+test("--authoring-mode names the mode of a live run's Core, and only a live run's", () => {
+  const live = ["run", "basic-form", "--live-llm", "--llm-profile", "deepseek-lab", "--llm-provider", "deepseek", "--llm-task", "create-flow"];
+  for (const mode of ["legacy", "candidate"]) assert.equal(parseLabCommand([...live, "--authoring-mode", mode]).command, "run");
+  assert.throws(() => parseLabCommand([...live, "--authoring-mode", "draft"]), /cannot be the authoring mode/u);
+  assert.throws(() => parseLabCommand([...live, "--authoring-mode", "legacy", "--authoring-mode", "candidate"]), /only be specified once/u);
+  assert.throws(() => parseLabCommand(["run", "basic-form", "--authoring-mode", "legacy"]), /LLM options require explicit --live-llm/u);
+});

@@ -1,6 +1,6 @@
 import { assertCreatedFlowVerificationReady } from "./readiness.js";
 import { createdFlowCandidateDraft } from "./candidate-draft.js";
-import type { AutomationStudioCandidateAuthoringResult } from "fluxiq/automation-studio";
+import type { AutomationStudioAuthoringMode, AutomationStudioCandidateAuthoringResult } from "fluxiq/automation-studio";
 // The one paid step of a created-Flow run: give Core the task's instruction,
 // ready the Flow's LLM settings, and ask Core to explore the live page and
 // propose a Flow -- the calls the web panel's "Explore and create proposal"
@@ -74,7 +74,8 @@ export type CreatedFlowBuildControl = {
  * model call needs none. `permittedConsequences` is the operator's
  * `--llm-permit`, sent only when it permits something.
  */
-export type CreatedFlowBuildRequest = { projectId: string; flowId: string; evidenceGuided: true; authoringMode: "candidate"; startLocation?: string; permittedConsequences?: LlmActionConsequence[] };
+/** `authoringMode` is absent from a legacy build, which asks for a proposed adaptation as the baseline did; a candidate-mode run is refused before it builds (`./readiness.ts`). */
+export type CreatedFlowBuildRequest = { projectId: string; flowId: string; evidenceGuided: true; authoringMode?: "candidate"; startLocation?: string; permittedConsequences?: LlmActionConsequence[] };
 
 /** What readying a Flow for its build answers with: the consequences the operator permitted it (`--llm-permit`), empty for none. */
 export type CreatedFlowBuildLlm = { permittedConsequences: readonly LlmActionConsequence[] };
@@ -351,15 +352,17 @@ export type CreatedFlowPermissionRequest = Readonly<{
 /**
  * Saves the instruction, readies the Flow's LLM settings, and builds.
  * `authorize` installs the key and saves the settings once the instruction is
- * saved; a refusal there throws before anything is spent.
+ * saved; a refusal there throws before anything is spent. `authoringMode` is
+ * the mode the run's Core was started in (`../../live-llm/authoring-mode-env.ts`):
+ * only `legacy` builds, and `candidate` is refused before anything is sent.
  */
 export async function buildCreatedFlowProposal(
   control: CreatedFlowBuildControl,
-  input: { projectId: string; flowId: string; instruction: string; startLocation?: string; authorize: (flowId: string) => Promise<CreatedFlowBuildLlm> },
+  input: { projectId: string; flowId: string; instruction: string; startLocation?: string; authorize: (flowId: string) => Promise<CreatedFlowBuildLlm>; authoringMode: AutomationStudioAuthoringMode },
   bounds: FluxIQHttpOptions = {},
   wait: CreatedFlowBuildWait = {},
 ): Promise<CreatedFlowBuild> {
-  assertCreatedFlowVerificationReady();
+  assertCreatedFlowVerificationReady(input.authoringMode);
   const now = wait.now ?? Date.now;
   const saved = record(await control.automationStudioCall("save-flow-generation-instruction", { projectId: input.projectId, flowId: input.flowId, instruction: input.instruction }, bounds));
   if (record(saved.instruction).status !== "active") throw new RunnerFailure("runtime.behavior", "Core did not make the task's instruction the Flow's active instruction");
@@ -379,7 +382,6 @@ export async function buildCreatedFlowProposal(
         projectId: input.projectId,
         flowId: input.flowId,
         evidenceGuided: true,
-        authoringMode: "candidate",
         ...(input.startLocation === undefined ? {} : { startLocation: input.startLocation }),
         ...(permittedConsequences.length ? { permittedConsequences: [...permittedConsequences] } : {}),
       },
@@ -389,15 +391,39 @@ export async function buildCreatedFlowProposal(
     // Core keeps building after the client has stopped waiting, and persists
     // the proposal when it is done, so a bounded request is not a failed build.
     if (!isBoundedHttpFailure(error)) throw error;
-    return failed({ code: "lab.candidate_generation_pending", stage: "generation", httpStatus: null }, "unknown", now() - startedAt);
+    const adaptationId = await awaitProposal(control, input, startedAt, wait);
+    if (adaptationId === undefined) return failed({ code: "lab.generation_unfinished", stage: null, httpStatus: null }, "unknown", now() - startedAt);
+    return proposed(control, input, adaptationId, true, now() - startedAt);
   }
   if (!envelope.ok) return refused(envelope, now() - startedAt);
+  const adaptation = isRecord(envelope.payload) && isRecord(envelope.payload.adaptation) ? envelope.payload.adaptation : undefined;
+  if (adaptation?.projectId === input.projectId && adaptation.flowId === input.flowId && adaptation.status === "proposed" && typeof adaptation.adaptationId === "string") {
+    return proposed(control, input, adaptation.adaptationId, false, now() - startedAt);
+  }
+  // A Core that authored a candidate draft instead (candidate mode, which the
+  // readiness check above should already have refused): kept as an unverified
+  // draft, never as a Flow that could be run or pass.
   const candidate = createdFlowCandidateDraft(envelope.payload, input);
   if (!candidate) return failed({ code: "lab.generation_answer_invalid", stage: null, httpStatus: envelope.status }, "unknown", now() - startedAt);
   return Object.freeze({ ...failed({ code: "lab.verification_pending", stage: "verification", httpStatus: null }, "attempted", now() - startedAt), outcome: "draft", failure: null, candidate,
     accounting: { provider: candidate.accounting.provider ?? null, model: candidate.accounting.model ?? null, inputTokens: candidate.accounting.inputTokens ?? null, outputTokens: candidate.accounting.outputTokens ?? null, totalTokens: candidate.accounting.totalTokens ?? null, estimatedCostUsd: candidate.accounting.estimatedCostUsd ?? null } });
 }
 
+async function awaitProposal(control: CreatedFlowBuildControl, input: { projectId: string; flowId: string }, startedAt: number, wait: CreatedFlowBuildWait): Promise<string | undefined> {
+  const now = wait.now ?? Date.now;
+  const sleep = wait.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const deadline = startedAt + (wait.deadlineMs ?? GENERATION_DEADLINE_MS);
+  // At least one look: the request is held to the deadline itself, so it can
+  // time out with no time left, just as Core saves a proposal.
+  do {
+    const pending = await control.listFlowAdaptations(input.projectId, input.flowId, "proposed");
+    if (pending.length > 1) throw new RunnerFailure("runtime.behavior", "Core left more than one pending proposal on the Flow a single build was asked for", { details: { pending: pending.length } });
+    if (pending[0]) return pending[0].adaptationId;
+    if (now() >= deadline) break;
+    await sleep(Math.min(wait.pollMs ?? PROPOSAL_POLL_MS, Math.max(0, deadline - now())));
+  } while (now() < deadline);
+  return undefined;
+}
 
 /**
  * A proposal, as Core's review surface describes it. It must be the pending

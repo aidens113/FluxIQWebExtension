@@ -3,7 +3,7 @@ import { distinct } from "../distinct.mjs";
 /** The campaign summary as Markdown: totals, then a table of creation tasks and a table of repair tasks. */
 export function renderSummaryMarkdown(summary) {
   const t = summary.totals;
-  const { profiles, provider, model, maxAttempts } = summary.options;
+  const { profiles, provider, model, authoringMode, maxAttempts } = summary.options;
   const cell = (value) => (value === null || value === undefined || value === "" ? "—" : String(value).replace(/\|/gu, "\\|").replace(/\s+/gu, " "));
   const yesNo = (value) => (value === null || value === undefined ? "—" : value ? "yes" : "no");
   const tableRow = (values) => `| ${values.map(cell).join(" | ")} |`;
@@ -37,7 +37,7 @@ export function renderSummaryMarkdown(summary) {
   const repairs = summary.tasks.filter((row) => row.kind === "repair");
   const lines = [
     `# Live campaign ${summary.campaignId}`, "",
-    `Started ${summary.startedAt}, finished ${summary.finishedAt ?? "(in progress)"}. Lab: creation tasks \`pnpm lab run ... --llm-task create-flow\` (profile \`${profiles.create}\`), repair tasks \`pnpm lab run ... --flow --llm-task adapt\` (profile \`${profiles.repair}\`); ${provider}/${model}, up to ${maxAttempts} attempt(s) per task.`, "",
+    `Started ${summary.startedAt}, finished ${summary.finishedAt ?? "(in progress)"}. Lab: creation tasks \`pnpm lab run ... --llm-task create-flow\` (profile \`${profiles.create}\`), repair tasks \`pnpm lab run ... --flow --llm-task adapt\` (profile \`${profiles.repair}\`); ${provider}/${model}, authoring mode \`${authoringMode ?? "not recorded"}\`, up to ${maxAttempts} attempt(s) per task.`, "",
     // A permission stop has its own count: it is neither a pass nor a failure, and a summary that folded it into either would misreport it.
     `**${t.passed} of ${t.tasks} runs passed** (${t.failed} failed, ${t.stoppedForPermission ?? 0} stopped for permission and built no Flow, ${t.noResult} produced no result); ${t.judgementsPassed} judgement(s) passed; **${t.succeeded} of ${t.tasks} tasks succeeded** (a creation task on its run's verdict, a repair task on its judgement; a run whose scenario declares the failure it must report passes by reporting exactly that failure). Provider calls ${t.providerCalls}; reported tokens ${t.reportedTokens}; reported cost $${t.reportedCostUsd.toFixed(6)} (reservations excluded); ${t.buildsOverCeiling ?? 0} build(s) over the per-build spend ceiling.`,
   ];

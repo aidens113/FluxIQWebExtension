@@ -115,11 +115,14 @@ function permitArguments(task, options) {
  * The Lab arguments for one task, after `pnpm lab`. A creation task builds a
  * Flow from its instruction; a repair task runs the Flow recorded on the
  * unarmed page against its variant, with the model allowed to diagnose and
- * propose (`adapt`), under `REPAIR_LIMITS` less any given after `--`.
+ * propose (`adapt`), under `REPAIR_LIMITS` less any given after `--`. Every run
+ * names the authoring mode its Core is started in (`--authoring-mode`, the
+ * campaign's own option, `legacy` by default), so each run records it and a
+ * created-Flow run builds only in legacy.
  */
 export function labRunArguments(task, options) {
   const repair = task.kind === "repair";
-  const identity = ["--live-llm", "--llm-profile", options.profile ?? (repair ? DEFAULT_PROFILES.repair : DEFAULT_PROFILES.create), "--llm-provider", options.provider, "--llm-model", options.model];
+  const identity = ["--live-llm", "--llm-profile", options.profile ?? (repair ? DEFAULT_PROFILES.repair : DEFAULT_PROFILES.create), "--llm-provider", options.provider, "--llm-model", options.model, "--authoring-mode", options.authoringMode];
   if (!repair) {
     const createLimits = CREATE_LIMITS.filter(([name]) => !options.labArgs.includes(name)).flat();
     return ["run", task.scenarioId, ...(task.variantId ? ["--variant", task.variantId] : []), ...identity, "--llm-task", "create-flow", "--instruction-task", task.id, ...createLimits, ...permitArguments(task, options), ...options.labArgs];

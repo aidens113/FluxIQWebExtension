@@ -143,3 +143,14 @@ test("a build that stopped to ask for permission reads stopped_for_permission, n
   const noResult = summarizeTask(CATALOG[0], [], attempt({ code: 1 }), evaluated);
   assert.equal(noResult.verdict, "no-result", "a run with no printed result stays no-result");
 });
+
+test("a row and the summary say which authoring mode the run's Core was in", () => {
+  const empty = { evaluation: null, run: null, flowLane: null };
+  for (const mode of ["legacy", "candidate"]) {
+    assert.equal(summarizeTask(CATALOG[0], [], attempt({ stdout: resultLine({}) }), { ...empty, liveLlm: { coreAuthoringMode: mode } }).authoringMode, mode);
+  }
+  assert.equal(summarizeTask(CATALOG[0], [], attempt({ stdout: resultLine({}) }), { ...empty, liveLlm: {} }).authoringMode, null, "a record made before the field says nothing");
+  assert.equal(summarizeTask(CATALOG[0], [], attempt({ stdout: resultLine({}) }), { ...empty, liveLlm: null }).authoringMode, null);
+  const summary = { startedAt: "2026-10-07T00:00:00.000Z", finishedAt: null, options: { profiles: { create: "c", repair: "r" }, provider: "deepseek", model: "deepseek-flash", authoringMode: "legacy", maxAttempts: 1 }, totals: totalsOf([]), tasks: [] };
+  assert.match(renderSummaryMarkdown(summary), /authoring mode `legacy`/u);
+});

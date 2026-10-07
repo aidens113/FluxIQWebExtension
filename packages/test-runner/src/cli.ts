@@ -8,7 +8,7 @@ import { ClonePackageCache } from "./clone-cache.js";
 import { parseLabCommand, expandMatrix } from "./commands.js";
 import { inspectCoreWebBuild } from "./core-web-build/index.js";
 import { classifyRunnerFailure } from "./failure.js";
-import { describeCreatedFlowRequest, loadCreatedFlowRequest } from "./flow-lane/index.js";
+import { assertCreatedFlowVerificationReady, describeCreatedFlowRequest, loadCreatedFlowRequest } from "./flow-lane/index.js";
 import { inspectRun } from "./inspect.js";
 import { beginLiveLlmRun } from "./live-llm/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
@@ -100,6 +100,8 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       // After the live refusals, so a missing key is reported before a missing catalog: the task, its workflow and variant, and what judges it.
       // A build typed into the extension's chat carries no permit and runs on Core's own default model; refused here, before anything starts, rather than inside the run.
       if (live?.createsFlow && !command.directApiBuild) live.assertChatBuildable();
+      // A Core started in candidate authoring mode saves only an unverified draft, so a created-Flow run is refused here, before anything starts (`flow-lane/creation/readiness.ts`).
+      if (live?.createsFlow) assertCreatedFlowVerificationReady(live.coreAuthoringMode);
       const creation = live?.createsFlow ? await loadCreatedFlowRequest({ repositoryRoot, scenarioLabDist: labPaths.scenarioLabDist, scenarioId: command.scenarioId, ...(command.instructionTaskId ? { taskId: command.instructionTaskId } : {}), ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) }) : undefined;
       if (command.dryRun) {
         // Everything a live build would check before it starts, and nothing after: no topology, no browser, no provider call.
