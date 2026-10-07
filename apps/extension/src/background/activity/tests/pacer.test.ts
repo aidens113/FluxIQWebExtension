@@ -497,6 +497,39 @@ test("rows after a build's ending in the same unit keep the build's failure as t
   }
 });
 
+// Lane A round 4, run-muxkzdjw-31a13429 (moments 15-16): a creation build that stopped on its call
+// allowance after two repair rounds still ended on "Couldn't fix your Flow | Build stopped: a budget
+// ran out". The Lab keeps no record of the events the extension received, so the row's exact shape is
+// not established; these are the two ways the build's own ending sentence can still sit under a run's
+// failed-repair headline.
+test("a settling row whose words end the build heads the build's failure, whatever kind of row carries them", () => {
+  const title = "Build stopped: a budget ran out";
+  for (const detail of [undefined, { kind: "note" as const, title, status: "failed" as const }, { kind: "thought" as const, title, text: title, status: "failed" as const }]) {
+    const h = harness();
+    h.pacer.accept(event({ phase: "repairing", label: "Repairing the Flow: the result check refuted its answer (attempt 1 of 2)", detail: { kind: "step", title: "Result repair started", status: "started" } }, "run", "r11"));
+    h.pacer.accept(event({ phase: "failed", label: title, final: true, ...(detail ? { detail } : {}) }, "run", "r11"));
+    assert.deepEqual([h.pacer.display()?.headline, h.pacer.display()?.outcome], ["Build failed", "failed"], detail?.kind ?? "no detail");
+  }
+});
+
+test("a unit that settled stays settled: a later row in it does not reopen the work", () => {
+  for (const kind of ["build", "run"] as const) {
+    const h = harness();
+    h.pacer.accept(event({ phase: "repairing", label: "Repairing the Flow", detail: { kind: "note", title: "Repairing the Flow", status: "started", text: "Repairing it live." } }, kind, "u1"));
+    const title = "Build stopped: a budget ran out";
+    h.pacer.accept(event({ phase: "failed", label: title, final: true, detail: { kind: "step", title, status: "failed" } }, kind, "u1"));
+    const settledAt = h.shown.length;
+    h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+    h.pacer.accept(event({ phase: "thinking", label: "I will set the quantity", detail: { kind: "thought", title: "Deciding", text: "I will set the quantity to 3.", status: "succeeded" } }, kind, "u1"));
+    h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+    h.pacer.accept(event({ phase: "exploring", label: "Clicking “+”", detail: { kind: "tool", title: "Clicking “+”", status: "started" } }, kind, "u1"));
+    h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+    assert.deepEqual([h.pacer.display()?.headline, h.pacer.display()?.outcome, h.pacer.display()?.detail], ["Build failed", "failed", title], kind);
+    const after = h.shown.slice(settledAt - 1).map((entry) => [entry.display.headline, entry.display.outcome]);
+    assert.ok(after.every(([headline, outcome]) => headline === "Build failed" && outcome === "failed"), `${kind}: ${JSON.stringify(after)}`);
+  }
+});
+
 // U3 of t194: the overlay said "Couldn't fix your Flow | Run failed" and
 // nothing more. Core's last row now says what came back and why; the status
 // shows it whole, as the chat does.
