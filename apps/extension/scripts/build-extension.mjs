@@ -4,7 +4,7 @@ import { builtinModules } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
-import { hashBuildInputs, readTargetFiles, renderIconPng, verifyExtensionTarget, writeBuildInfo } from "./release/index.mjs";
+import { buildIdentity, hashBuildInputs, readTargetFiles, renderIconPng, verifyExtensionTarget, writeBuildInfo } from "./release/index.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(root, "..", "..");
@@ -20,6 +20,7 @@ const webAutomationDomainClient = path.join(repoRoot, "domain", "src", "client",
 const buildRoot = resolveBuildRoot(process.env.FLUXIQ_LAB_EXTENSION_BUILD_ROOT);
 const buildDir = path.join(buildRoot, "build");
 const distDir = path.join(buildRoot, "dist");
+const BUILD_IDENTITY_PLACEHOLDER = "86753091234098765432100987654321";
 const extensionVersion = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).version;
 
 // `distDir` is deleted on every build, so a build root outside the repository
@@ -78,6 +79,7 @@ export const EXTENSION_BUNDLE_SOURCES = Object.freeze({
 const BUILD_CODE = [
   "scripts/build-extension.mjs",
   "scripts/release/build-info.mjs",
+  "scripts/release/build-identity.mjs",
   "scripts/release/icon-png.mjs"
 ];
 
@@ -96,7 +98,13 @@ async function buildTarget(target, manifestName, bundleInputs) {
     path.join(root, "package.json"),
     ...BUILD_CODE.map((file) => path.join(root, file))
   ]);
-  await writeBuildInfo(out, { target, version: extensionVersion, inputs });
+  const identity = buildIdentity({ target, version: extensionVersion, inputs });
+  for (const entry of Object.values(extensionEntries)) {
+    const file = path.join(out, entry.outfile);
+    const source = await readFile(file, "utf8");
+    await writeFile(file, source.replaceAll(JSON.stringify(BUILD_IDENTITY_PLACEHOLDER), JSON.stringify(JSON.stringify(identity))), "utf8");
+  }
+  await writeBuildInfo(out, { target, version: extensionVersion, inputs, identity });
 }
 
 /** @returns {Promise<Set<string>>} the absolute path of every file esbuild read for any entry */
@@ -135,6 +143,7 @@ export async function bundleExtensionEntry(name, outputDir, options = {}) {
   const outfile = path.join(outputDir, entry.outfile);
   const result = await build({
     bundle: true,
+    define: { __FLUXIQ_BUILD_IDENTITY_JSON__: JSON.stringify(BUILD_IDENTITY_PLACEHOLDER) },
     metafile: options.inputs !== undefined || options.metafiles !== undefined,
     platform: "browser",
     target: ["chrome109", "firefox109"],

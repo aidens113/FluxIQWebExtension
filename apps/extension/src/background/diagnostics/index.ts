@@ -16,3 +16,5 @@ export {
 } from "./problem/index";
 export { PROBLEM_REPORT_RUN_LIMIT, readRecentRuns, type RecentRunsCall } from "./recent-runs";
 export { assembleProblemReport, handleReportProblem, type ReportProblemDeps } from "./report-problem-control";
+
+export { readBuildIdentity } from "./build-identity";

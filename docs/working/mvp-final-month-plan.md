@@ -1,19 +1,29 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Consultant/code/document audit reconciled; revised acceptance-first candidate plan and live gates written; implementation and fresh live qualification pending.
+Status detail: P0 acceptance fences integrated and pushed in both repositories; identity, cancellation and candidate authoring in isolated task trees; P0 live readiness and later gates pending.
 Created: 2026-10-05
 Last updated: 2026-10-06
 Owner: Senior supervisor agent
 Scope: The ordered plan from 2026-10-05 to the polished-MVP deadline of 2026-11-10: what is done, what is held on unmerged branches or dirty trees, what must be integrated and pushed, and the week-by-week work to pass the 30-day plan's Final MVP Acceptance Test. It does not redo intake already recorded in the 2026-10-03 handoff, and it does not itself run live provider calls.
-Paired document: none (planning only; Core state is read, not changed)
+Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/mvp-final-month-plan.md
 Related: [30-day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%20MVP%20Implementation%20Plan.md), [Claude handoff 2026-10-03](./claude-work-handoff-2026-10-03.md), [live loop](./language-driven-flow-loop-plan.md), [working index](./README.md)
 
 ---
 
 ## Current State
 
-**Planning review completed locally 2026-10-06; implementation has not started.**
+**Implementation authorized locally 2026-10-06; P0 in progress.** t296 is integrated
+and pushed: downstream acceptance `62ceaac8`, Core `6c449022`; downstream identity
+`2c76ba48` is also pushed. Supervisor reran the two changed
+test files (29/29), the fluxiq typecheck and Core structure audit; downstream task
+integration audit passed. The identity slice passed independent production Chromium
+match/mismatch checks, 22/22 owning tests and runner typecheck after integration.
+Running Core-server identity remains pending. t298 cancellation, t299 candidate
+authoring/facade and t300 requirement receipts remain isolated. No P0 completion
+or fresh A-D qualification is claimed.
+
+**Planning review completed locally 2026-10-06.**
 The [consultant review and revised execution detail](./mvp-final-month-plan/consultant-revision.md)
 is the current order of work. It supersedes the old schedule and structural
 stage ordering, preserves the November 10 deadline and October 29 freeze, and
@@ -28,13 +38,14 @@ and [implementation ledger](./mvp-final-month-plan/archive/2026-10-06-pre-consul
 remain available; historical briefs are not active dispatch instructions.
 
 **Verified by source/history inspection.** Discovery and authoring still share
-draft state. Yes followed by an unsure/silent confirmation can still pass. Held
-reauthor promotion protects the selected single-subflow shape, but unsupported
-topologies apply before their judged rerun. Desired-state check and persistent
+draft state on the legacy path. t296 now requires a second affirmative verdict
+when build confirmation is requested and refuses unsupported held-repair topologies
+before applying or dispatching. Desired-state check and persistent
 locator fingerprints already exist; their implementations need refinement. The
 Lab already resets before persisted playback and checks exact zero-call reuse.
-Its cached-worker deletion is wired, but running-worker build identity is missing.
-No fresh product behavior was executed in this review.
+Its cached-worker deletion is wired; t297 now asserts actual background/top-frame
+content identity before Lab dispatch. The planning audit performed no product
+checks; later implementation/browser proofs are recorded in the ledger.
 
 **Evidence correction.** Affected cached workers leave recent background fixes
 unproven live; historical page outcomes and replay receipts remain evidence of
@@ -73,9 +84,9 @@ change; no user-panel management unless explicitly authorized.
 **Audit reports.** [Working docs](./mvp-final-month-plan/reports/consultant-doc-context.md),
 [Core source](./mvp-final-month-plan/reports/consultant-core-audit.md),
 [browser/Lab source](./mvp-final-month-plan/reports/consultant-browser-lab-audit.md).
-These record coverage and unverified hypotheses. No source changes, Core edits,
-product tests, live sessions or paid calls were made. Documentation validation
-and task integration are recorded in the ledger below.
+These record planning coverage and unverified hypotheses. Implementation checks
+and source changes are recorded separately below; no paid run has started. Identity
+and cancellation browser evidence must be independently reviewed before P0 closes.
 
 ## Schedule to 2026-11-10
 
@@ -101,6 +112,69 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 [historical reference](./mvp-final-month-plan/archive/2026-10-06-pre-consultant-schedule-and-briefs.md).
 
 ## Worker Briefs
+
+### Brief: p2-detached-execution (continues task t300)
+- Repository: paired t300 !FluxIQ / !FluxIQWebExtension. Verification controller source frozen and independently reviewed/tested before this continuation.
+- Task: Add an actual detached-topology executor adapter for canonical submitted candidates using existing normalizeAutomationStudioFlowBuildPlan, routeAutomationStudioRun and runCanonicalAutomationStudioFlow; no graph/adaptation apply or accepted storage write. Preserve normal registry/runtime/effect permissions and host routing state.
+- Required reads: t300 verification report/identity/start/execute contracts; existing bootstrap normalization/validation; route-state/router-state.ts; composite-executor.ts/executor.ts owning tests; native node/effect runtime options used by service.ts; held-candidate limits.
+- Owns: new flow-bootstrap/verification/detached-execution.ts + owning tests and verification barrel; own reports/p2-detached-execution.md downstream. Existing verification controller/contracts only for a concrete adapter incompatibility, report before edit. No service/API/other barrel/storage changes.
+- Definition of done: execute actual representative multi-node canonical topology without persistence using real router/graph executor, pure mocked native/effect boundaries only; changed selected graph is exactly submitted candidate, other graph not read from accepted store. Ownership/topology/registry errors, absent host state, cancellation/partial execution/waiting fail closed; no recovery that applies before judgement. Static validity alone insufficient. Provide precise trace-to-receipt command/subject/provenance integration contract; do not infer performed lasting action from succeeded node alone.
+- Must not touch: shared/main docs, t299 tree/source, cancellation/UI, runtime data; no gitmutation/provider/full suites. No blanket authorize flag or stub runtime replacing real executor. Unsupported topology safely draft/refused with reason.
+- Report: t300 docs/working/mvp-final-month-plan/reports/p2-detached-execution.md; actual runtime tests/limits and serial facade integration seam.
+
+### Brief: p3-typed-browser-readiness (task t301)
+- Repository: isolated C:/Users/osrs_/FluxStuff/fxwork/t301-typed-browser-readiness; shared sibling Core read-only.
+- Task: Reproduce then fix three shared browser blockers: controlled desired-state checkbox/radio, in-place Next-page rerender/ended distinction, type(submit:true) committing declaration parity. Preserve actionability, sensitive evidence and no blind mutating retry.
+- Required reads: this Current State/revision P3; node-catalog interaction/reading reports; exact checkable-state/check action and owning browser tests; pagination list-change/Next execution/tests; domain plan-resolution step-permission/type parameters/existing tests. Discover exact Next owners before editing and send file list.
+- Owns: checkable-state.ts/check.ts and owning regression/browser fixtures/tests; Next list-change/continuation modules and owning tests; domain step-permission.ts and owning tests; scoped authored web-capabilities docs; own reports/p3-typed-browser-readiness.md in task tree. No Core/shared protocols/Stop/identity/facade source.
+- Must not touch: main/shared docs, other trees, Core, runtime/user data; no git mutation/provider/full suites. Wait provisioning completion before source edit; no debugger input fallback.
+- Definition of done: controlled components update application state, already-correct check has no click, unchecked radio refused, revert readback fails; Next changing text in existing rows advances once, unchanged/disabled/ended remain truthful and bounded; submit type requires explicit consequences through same Core gate, unsent type preserves contract. Fail-first owning regressions and provider-free real production/browser fixture proofs; touched typechecks/audit.
+- Report: docs/working/mvp-final-month-plan/reports/p3-typed-browser-readiness.md; include before/after, exact commands, browser/target and limitations.
+
+### Brief: p2-candidate-evidence (task t300; supervisor until a worker is free)
+- Repository: paired C:/Users/osrs_/FluxStuff/fxwork/t300/!FluxIQ and !FluxIQWebExtension.
+- Task: Implement domain-neutral immutable requirement/evidence receipt contracts and fail-closed candidate acceptance controller; later wire the serial facade after t298/t299 integration. Preserve canonical graph/runtime/persistence ownership.
+- Required reads: this Current State; consultant revision Binding design contracts and P0/P2; Core code structure; candidate submission contracts after t299; current bootstrap acceptance, adaptation validation and held-candidate executor/promotion owners.
+- Owns: new Core flow-bootstrap/verification modules/barrel/tests and own downstream reports/p2-candidate-evidence.md; facade/API/persistence wiring only supervisor serially after control integration. Do not overlap candidate directory/evidence-loop cancellation or existing worker files.
+- Definition of done: receipts bound to original instruction requirements, candidate revision/digest/base and actual execution run/command/subject/coverage; builder claims cannot act as facts. Negative tests: unknown, wrong qualifier, partial subjects, withheld/zero-action create, stale revision, cancelled/late result, changed base, duplicate promotion, insufficient coverage. Existing ensure can pass only with trusted observed state. Concrete contradictions outrank semantic yes. No model fields accepted as trusted observations.
+- Must not touch: shared/main docs, other trees, service.ts until assigned serially, runtime data; no git mutations/provider/full suites. Unsupported execution shapes remain draft; no assertion of universal verification or real-browser qualification.
+- Report: docs/working/mvp-final-month-plan/reports/p2-candidate-evidence.md in t300 downstream, record exact implemented versus not yet wired seams and narrow checks.
+
+### Brief: p1-candidate-authoring (task t299, follows t296)
+- Repository: paired trees C:/Users/osrs_/FluxStuff/fxwork/t299/!FluxIQ and !FluxIQWebExtension.
+- Task: Implement a feature-flagged vertical candidate-authoring path. Discovery executes existing registry tools and records evidence without draft retention/auto-openers/act completion; one explicit complete submission reuses canonical bootstrap acceptance/plan validation, assigns revision/digest/diff, and returns consolidated diagnostics. Keep accepted Flow untouched, existing saved Flows/legacy default compatible. No claim of semantic acceptance from static validity.
+- Required reads: main Current State; consultant revision P1/P2 and Core audit; Core boundary/structure; current evidence-loop/node-tools, bootstrap authoring/plan/unfinished-build, runtime service generation-request/built-loop, and their owning tests.
+- Owns: focused Core flow-bootstrap/candidate modules/barrels/tests, feature-flag/tool-interface contracts, evidence-loop and bootstrap integration owners needed for the path (not service.ts until t298 frozen/merged); domain candidate plan resolution adapter if required; own downstream report docs/working/mvp-final-month-plan/reports/p1-candidate-authoring.md.
+- Must not touch: main checkouts/shared docs, other trees, cancellation/acceptance/identity worker files, Lab launch/Stop UI; no git mutations/commits/merges, provider calls/full suites. Send exact discovered ownership list before editing existing coordinators. If service.ts wiring required, give supervisor narrow patch for serial integration.
+- Definition of done: provider-free scripted harness constructs/revises representative multi-node candidate without amend/keep/act grammar; discovery wrong-turn omitted; registry/parameter/binding/permission/ownership/handle validation diagnostics; any revision invalidates prior receipt; legacy owning regressions and touched checks/audit pass. The new path must fail closed until exact candidate runtime verification is wired; no untested proposal promotion.
+- Report to: t299 downstream docs/working/mvp-final-month-plan/reports/p1-candidate-authoring.md; record implementation, commands/results, limitations and precise P2 caller wiring as work progresses.
+
+### Brief: p0-acceptance (task t296)
+- Repository: paired trees C:/Users/osrs_/FluxStuff/fxwork/t296/!FluxIQ and !FluxIQWebExtension.
+- Task: Implement P0 fail-closed confirming judgement (yes + unsure/silent/unavailable must not pass) and refuse unsupported held reauthor topology instead of apply-before-judge. Add fail-first tests proving accepted graph is never applied for unsupported topology, and update downstream callers only if required to render a truthful unknown/draft.
+- Required reads: main downstream Current State and consultant revision P0; consultant-core-audit.md; Core AGENTS boundary/validation; existing agreement, held-candidate, repair-rerun and their owning tests.
+- Owns: Core result-verification/agreement.ts and tests; service/runtime-adaptation/held-candidate.ts, repair-rerun.ts and their tests/barrels if needed; downstream report docs/working/mvp-final-month-plan/reports/p0-acceptance.md in t296 tree only.
+- Must not touch: main checkouts/shared docs, other task trees, service.ts, cancellation owners, gateway, Lab, UI; no git mutations/commits/merges, provider/live/full-suite calls.
+- Definition of done: fail-first then passing owning tests, fluxiq typecheck, Core structure audit; list compatibility behavior/unsupported shapes. Inspect callers for truthful refusal; report needed changes outside ownership instead of editing them.
+- Report to: t296 downstream docs/working/mvp-final-month-plan/reports/p0-acceptance.md.
+
+### Brief: p0-build-identity (task t297)
+- Repository: C:/Users/osrs_/FluxStuff/fxwork/t297-lab-build-identity; its sibling shared Core read-only.
+- Task: Implement running extension background/content build identity assertion in Lab before any provider call; compare intended build-info/core-domain pair/protocol identity and record screened identities. Preserve cached-worker workaround only in owned profiles. Add provider-free mismatch tests and a real browser identity probe where possible, no paid runs.
+- Required reads: main downstream Current State/revision P0 and consultant-browser-lab-audit.md; build-info generation, background/content diagnostic messaging, guarded launch and chat/build preflight owners/tests.
+- Owns: extension build-stamp diagnostic owners/protocol/barrels and tests; Lab browser/build identity preflight/report owners and tests; docs/architecture/testing-facility.md and extension-client.md in task tree if needed; own report docs/working/mvp-final-month-plan/reports/p0-build-identity.md.
+- Must not touch: main checkout/shared working docs, any Core, panel/chat cancellation owners, other task trees; no git mutations/commits/merges, provider calls or full suites.
+- Definition of done: deliberate worker/content/disk mismatch rejected before provider work; current match accepted; owning tests, extension/test-runner checks and audit pass; identify exact live/probe evidence and limitations. Coordinate any shared protocol filename with supervisor before editing.
+- Report to: t297 docs/working/mvp-final-month-plan/reports/p0-build-identity.md.
+
+### Brief: p0-cancel-control (task t298)
+- Repository: paired trees C:/Users/osrs_/FluxStuff/fxwork/t298/!FluxIQ and !FluxIQWebExtension.
+- Task: Expose reachable Stop for active run and active build in extension; implement cooperative build cancellation through existing Core controller/API grants. Stop new dispatch and prevent cancelled/late result promotion; UI settles truthfully. Reuse current run cancellation. Add fail-first owning tests and a provider-free real extension isolated cancellation proof if feasible.
+- Required reads: main downstream Current State/revision P0; consultant-doc-context UX gaps; Core AGENTS; existing runtime cancel and bootstrap/evidence-loop cancellation APIs, client handler allowlist, extension run-control and chat/automations surfaces/tests.
+- Owns: Core build cancellation API/runtime/handler owners and tests (not verdict/agreement or held-candidate); extension panel/chat/automations Stop, background/panel/run-control and API relay/cancel contracts/tests; existing cancellation architecture docs; own report docs/working/mvp-final-month-plan/reports/p0-cancel-control.md in t298 downstream.
+- Must not touch: main checkouts/shared working docs, other task trees, build identity protocol files, acceptance worker files; no git mutations/commits/merges, paid calls or full suites. For contested source owners request supervisor partition before editing.
+- Definition of done: cancel-before-dispatch, mid-build/mid-run, late result/no promotion tested; reachable UI control and status; touched package checks and owning tests/audits pass. No user-panel management, only owned isolated test topology.
+- Report to: t298 downstream docs/working/mvp-final-month-plan/reports/p0-cancel-control.md.
 
 ### Completed consultant audit briefs (2026-10-06, task t295; planning only)
 
@@ -138,6 +212,73 @@ not pending implementation assignments; the next brief is P0 in the revision.
 Historical briefs: [Claude schedule and task briefs](./mvp-final-month-plan/archive/2026-10-06-pre-consultant-schedule-and-briefs.md).
 
 ## Work Ledger
+
+### 2026-10-06 - Requirement controller independently checked; detached execution follows
+- Agent: Codex supervisor.
+- Validation: reviewed t300 contracts/controller/predicates; supervisor owning tests 31/31. Worker fluxiq typecheck/audit passed; intent interpreter, browser observation and durable atomic promotion are explicitly absent.
+- Changed: written continuation brief for real router/executor adapter; t299 static authoring remains isolated until atomic facade integration.
+- Outcome: Partial.
+- Follow-up: actual detached runtime proof; supported create currently new-result identity only, existing-subject quantity deltas stay unsupported/unknown rather than relabelled ensure. No paid launch.
+
+### 2026-10-06 - Typed shared blocker task prepared
+- Agent: Codex supervisor.
+- Changed: t301 bounded brief; isolated downstream provisioning started session 72014; worker assignment follows completed navigation/gaps reports.
+- Validation: source inspected check/type/permission boundaries; no fix or live behavior claimed yet. t299 candidate module and unverified store committed locally with checked architecture/report updates, pending atomic facade integration.
+- Outcome: Partial.
+- Follow-up: reproduce controlled check, in-place Next and submit declaration parity; qualify with narrow browser regressions. Preserve all existing safety/actionability gates.
+
+### 2026-10-06 - Identity integrated; candidate and Stop proofs advance
+- Agent: Codex supervisor.
+- Changed: t297 merge `2c76ba48` pushed; t299 Core local commit `0b5d7543` and downstream `467bb74f` hold static candidate/discovery plus separate unverified draft storage. t299 is not merged or pushed because facade/API must read the new flag atomically. t300 receipt worker and navigation/gaps report worker active.
+- Validation: t297 supervisor post-merge real Chromium production probe and negatives 22/22; digest 1/1; runner check exit 0 and task finish audit pass. t299 supervisor candidate loop 7/7, request parser 6/6, JSON/SQLite draft storage 3/3; fluxiq check/audit pass. Worker isolated real build Stop proof returned, independent rerun and active-run browser proof pending.
+- Outcome: Partial.
+- Follow-up: t298 current-dev integration/cancel checks, serial t299 facade/durable unverified response, t300 exact execution/evidence/promotion adapter. No paid calls. Core `7717ff42` fixes ledger validation format and remains local until next paired push. Current source catalog has 57 tasks versus planned 67; audit reconciliation must preserve the missing scope explicitly.
+
+### 2026-10-06 - t297 running-extension identity independently verified
+- Agent: Codex supervisor.
+- Changed: source/architecture/report commit `ac243ae0`; embedded per-target stamp, authenticated background/top-frame content query, screened Lab pre-dispatch gate.
+- Validation: reviewed generation/diagnostic/preflight modules; supervisor digest test 1/1 and post-dev-merge identity/browser selection 22/22. Real Chromium 134.0.6998.35, production E2E bundle, four owned-profile launches: match accepted; deliberately altered background/content/disk refused, zero simulated dispatch on each mismatch. Runner check passed after merge; worker extension typecheck/release/authorization checks passed. Task audit required at finish.
+- Outcome: Accepted for this bounded slice, not all P0.
+- Follow-up: running Core-server identity still absent (reached Core/domain source digests are not that handshake); rebuild integrated pair before paid live qualification. No paid call or user-panel management.
+
+### 2026-10-06 - t300 provisioned for requirement receipts and common acceptance
+- Agent: Codex supervisor.
+- Changed: written P2 brief; paired isolated worktree provisioning started (session 30711).
+- Why: static candidate validity alone cannot establish outcomes or authorize promotion; requirement-level negatives are still a P0 exit dependency.
+- Validation: no source edit or completion claim yet. Identity supervisor unit checks passed 20/20 plus digest test 1/1; browser rerun initially refused on missing default bundle path, worker asked for reproducible custom-root command.
+- Outcome: Partial.
+- Follow-up: complete provisioning, receipt controller, then serial facade/exact-runtime proof; no paid launch while readiness remains open.
+
+### 2026-10-06 - t296 integrated and paired dev branches pushed
+- Agent: Codex supervisor.
+- Changed: Core source/test/architecture commit `1736ba81`, paired verification ledgers and downstream acceptance report; merges downstream `62ceaac8`, Core `6c449022`.
+- Validation: supervisor reviewed source and reran changed agreement/held-candidate tests 29/29 after dev integration; fluxiq check exit 0; Core audit exit 0; downstream task finish audit passed. Worker broader owning selection: 391 tests; not substituted for supervisor checks.
+- Outcome: Partial (two P0 fences complete; requirements receipts, identity and real cancel proof remain).
+- Follow-up: t297/t298 validation and merge; t299 authoring followed by serial candidate runtime verification. Both dev branches pushed; main/release untouched. Core task finish used `--skip-checks` only after observed narrow gates to honor the twice-daily full-suite limit.
+
+### 2026-10-06 - t296 two acceptance fences independently verified
+- Agent: Codex supervisor; p0-acceptance worker.
+- Changed: paired Core agreement/held-topology source and architecture; downstream p0-acceptance report. Source commit Core 1736ba81.
+- Why: automatic build completion needs actual affirmative confirmation; accepted graph stays unchanged for unsupported held topology.
+- Validation: supervisor reviewed source/negative tests and reran changed owners 29/29 passed; worker directory regressions 391 passed and fluxiq check/audit passed; dev integrated and owning checks rerun before merge. No browser/provider calls; this is not all of P0 complete.
+- Outcome: Accepted
+- Follow-up: t297 identity, t298 control/decline reason, remaining requirement receipts; t299 explicit candidates. Core legacy finish runs full check by default: use its --skip-checks only after observed manual narrow gates under the user's twice-daily full-suite rule.
+
+### 2026-10-06 - Implementation started; first P0 units assigned
+- Agent: Codex supervisor.
+- Changed: paired Core working doc, this Current State and three bounded briefs; isolated t296/t297/t298 trees provisioned through task tooling.
+- Why: user authorized plan execution with continuous handoff documentation.
+- Validation: main downstream/Core intake clean; source audit baselines read; provisioning and worker execution still in progress. No paid run started.
+- Outcome: Partial
+- Follow-up: acceptance/control/identity reports and independent validation; then P1/P2 vertical candidate slice and remaining node audits.
+
+### 2026-10-06 - t296 code returned; candidate slice prepared
+- Agent: Codex supervisor; p0-acceptance worker.
+- Changed: t296 agreement and held-topology fences, owning regression tests/report; t299 paired tree and P1 bounded brief prepared.
+- Why: acceptance now has a concrete fail-closed implementation to verify; separate candidate authoring can proceed in isolated files while cancellation is integrated serially.
+- Validation: worker reports fail-first 10 failures, final 391 owning tests, fluxiq typecheck/audit; supervisor rerun of the two changed test owners is running. Not merged or accepted as complete yet. t297/t299 provisioning still finishing.
+- Outcome: Partial
+- Follow-up: supervisor verifies t296 and documents architecture; integrate downstream then Core; P1 implementation; identity/cancellation and remaining P0 receipt cases still open.
 
 Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-plan/archive/2026-10-06-pre-consultant-ledger.md).
 

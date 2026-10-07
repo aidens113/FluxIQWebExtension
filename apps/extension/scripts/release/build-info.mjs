@@ -42,10 +42,10 @@ export async function hashBuildInputs(repoRoot, absolutePaths) {
 
 /**
  * @param {string} targetDir
- * @param {{ target: string, version: string, inputs: Record<string, string> }} info
+ * @param {{ target: string, version: string, inputs: Record<string, string>, identity?: object }} info
  */
 export async function writeBuildInfo(targetDir, info) {
-  const body = { schema: SCHEMA, target: info.target, version: info.version, inputs: info.inputs };
+  const body = { schema: SCHEMA, target: info.target, version: info.version, inputs: info.inputs, ...(info.identity ? { identity: info.identity } : {}) };
   await writeFile(path.join(targetDir, BUILD_INFO_FILE), `${JSON.stringify(body, null, 2)}\n`, "utf8");
 }
 
