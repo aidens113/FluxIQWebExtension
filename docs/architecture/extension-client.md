@@ -682,7 +682,15 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     words added to the model's sentence: "Not done: <Core's reason>", or
     "Only partly done: ..." for an edit some of which landed, with a neutral
     mark, never "Didn't work", since nothing was tried and failed, and never
-    "Done" or "Working on it" whatever outcome the card carries. A card that
+    "Done" or "Working on it" whatever outcome the card carries. An edit done
+    in part says what landed first, then what did not and why: "Only partly
+    done: added "Read list"; not done: that step is already in the Flow" (the
+    refusal alone read as the work, `run-mux6naez-6c20f26e`). A step written
+    into the Flow without running it reads "Added to the Flow, not run yet",
+    never "Done" (Core's `activityActionTested`, `core.run_node.written`;
+    U-B3-1 of `run-mux6pndp-16feb842`), and a build's own list read says its
+    count, "Done: 20 rows from 1 page", from the read's own extraction count
+    when it sends no rows (F2). A card that
     did nothing -- a decision declined in whole, an action that didn't work --
     and repeats one shown since anything new happened (same unit, kind,
     target, test mark and words) is folded into that card, which says how many
