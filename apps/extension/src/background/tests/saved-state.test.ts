@@ -10,7 +10,8 @@ const defaults: FluxIQSettings = {
   autoReconnect: true,
   captureMutations: true,
   captureInputValues: true,
-  captureSnapshots: true
+  captureSnapshots: true,
+  requestsEnabled: false
 };
 
 test("well-formed settings are kept, and nothing stored reads as the defaults", () => {
@@ -22,7 +23,7 @@ test("well-formed settings are kept, and nothing stored reads as the defaults", 
 test("each malformed settings field is replaced by its default and named", () => {
   const reading = readSavedSettings({ gatewayUrl: "http://not-a-socket", coreApiUrl: 42, autoReconnect: "yes", captureSnapshots: false }, defaults);
   assert.deepEqual(reading.value, { ...defaults, captureSnapshots: false });
-  assert.deepEqual(reading.repaired, ["gatewayUrl", "coreApiUrl", "autoReconnect"]);
+  assert.deepEqual(reading.repaired, ["requestsEnabled", "gatewayUrl", "coreApiUrl", "autoReconnect"]);
   assert.deepEqual(readSavedSettings("garbage", defaults), { value: defaults, repaired: ["settings"] });
   assert.deepEqual(readSavedSettings([1, 2], defaults), { value: defaults, repaired: ["settings"] });
 });
@@ -47,4 +48,11 @@ test("a client id must be a non-blank string", () => {
   assert.equal(readSavedClientId("extension-1"), "extension-1");
   assert.equal(readSavedClientId("  "), undefined);
   assert.equal(readSavedClientId(7), undefined);
+});
+
+
+test("request preference stays OFF for missing, malformed and attempted true saved settings", () => {
+  for (const stored of [undefined, {}, { requestsEnabled: true }, { requestsEnabled: "yes" }, { requestsEnabled: false }]) {
+    assert.equal(readSavedSettings(stored, defaults).value.requestsEnabled, false);
+  }
 });

@@ -25,7 +25,8 @@ export function parseConnectionDraft(value: unknown): FluxIQSettings | undefined
     autoReconnect: record.autoReconnect as boolean,
     captureMutations: record.captureMutations as boolean,
     captureInputValues: record.captureInputValues as boolean,
-    captureSnapshots: record.captureSnapshots as boolean
+    captureSnapshots: record.captureSnapshots as boolean,
+    requestsEnabled: false
   };
 }
 
@@ -49,7 +50,7 @@ export function writeConnectionDraft(values: FluxIQSettings | undefined): void {
       void chrome.runtime.lastError;
     };
     if (values === undefined) chrome.storage.local.remove(CONNECTION_DRAFT_KEY, done);
-    else chrome.storage.local.set({ [CONNECTION_DRAFT_KEY]: values }, done);
+    else chrome.storage.local.set({ [CONNECTION_DRAFT_KEY]: { ...values, requestsEnabled: false } }, done);
   } catch {
     /* best-effort: the draft is a viewer convenience, and Save works the same without it */
   }

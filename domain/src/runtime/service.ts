@@ -3,15 +3,18 @@ import type { FluxIQ } from "fluxiq";
 import { createWebAutomationRuntimeAdapter } from "./adapter";
 import { bindWebAutomationHostRuntime } from "./host-runtime";
 import { bindWebAutomationLlmEvidenceRuntime } from "./llm-evidence";
+import { webAutomationRequestPolicies, type WebAutomationRequestPolicyInput } from "../requests";
 
-export function registerWebAutomationRuntime(fluxiq: FluxIQ): FluxIQ {
+export function registerWebAutomationRuntime(fluxiq: FluxIQ, requestPolicy?: WebAutomationRequestPolicyInput): FluxIQ {
+  webAutomationRequestPolicies.register(fluxiq, requestPolicy);
   registerWebAutomationRuntimeAdapter(fluxiq);
   bindAutomationStudioRuntimeService(fluxiq);
   bindWebAutomationLlmEvidenceRuntime(fluxiq);
   return fluxiq;
 }
 
-export function registerWebAutomationRuntimeAdapter(fluxiq: FluxIQ): FluxIQRuntimeAdapter {
+export function registerWebAutomationRuntimeAdapter(fluxiq: FluxIQ, requestPolicy?: WebAutomationRequestPolicyInput): FluxIQRuntimeAdapter {
+  webAutomationRequestPolicies.register(fluxiq, requestPolicy);
   const existing = fluxiq.runtime.adaptersList().find((adapter) => adapter.adapterId === "web-automation.gateway");
   if (existing) return existing;
   const adapter = createWebAutomationRuntimeAdapter({ fluxiq });

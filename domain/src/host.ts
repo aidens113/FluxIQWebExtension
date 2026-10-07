@@ -3,8 +3,10 @@ import { webAutomationDomain } from "./manifest";
 import { createWebAutomationDomainIo } from "./io/web-automation-io";
 import { webAutomationRecordingDomain } from "./recording/domain";
 import { registerWebAutomationRuntime } from "./runtime/service";
+import { webAutomationRequestPolicies, type WebAutomationRequestPolicyInput } from "./requests";
 
-export function registerWebAutomationDomain(fluxiq: FluxIQ): FluxIQ {
+export function registerWebAutomationDomain(fluxiq: FluxIQ, requestPolicy?: WebAutomationRequestPolicyInput): FluxIQ {
+  webAutomationRequestPolicies.register(fluxiq, requestPolicy);
   if (!fluxiq.domains.maybeGet(webAutomationDomain.manifest.id)) {
     fluxiq.registerDomain(webAutomationDomain);
   }
@@ -18,9 +20,10 @@ export function registerWebAutomationDomain(fluxiq: FluxIQ): FluxIQ {
   return fluxiq;
 }
 
-export function createWebAutomationFluxIQ(options: FluxIQOptions = {}): FluxIQ {
+export function createWebAutomationFluxIQ(options: FluxIQOptions = {}, requestPolicy?: WebAutomationRequestPolicyInput): FluxIQ {
+  const policy = webAutomationRequestPolicies.normalize(requestPolicy);
   return registerWebAutomationDomain(FluxIQ.create({
     ...options,
     domains: [...(options.domains ?? []), webAutomationDomain]
-  }));
+  }), policy);
 }
