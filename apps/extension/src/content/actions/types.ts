@@ -71,7 +71,7 @@ export type ContentActionDependencies = {
   /** Per-character typing and key presses that perform a trusted event's default action. */
   keyboard: KeyboardCapability;
   /** Sets a checkbox or radio to a state rather than toggling it. */
-  setCheckedState(element: Element, checked: boolean): CheckableStateOutcome;
+  setCheckedState(element: Element, checked: boolean): CheckableStateOutcome | Promise<CheckableStateOutcome>;
   /**
    * Detects the repeating structure around an element, or the page's largest,
    * as the picker would propose it. Reads nothing but structure, and waits,
