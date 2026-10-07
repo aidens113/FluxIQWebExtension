@@ -6,15 +6,15 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { CATALOG, REPAIR_LIMIT_ARGS, REPAIRS } from "./tasks.mjs";
+import { CATALOG, REALISTIC_CATALOG, REALISTIC_REPAIRS, REPAIR_LIMIT_ARGS } from "./tasks.mjs";
 import { withTemp } from "./temp-directory.mjs";
 
-/** The one stub scenario that declares replay secrets, shaped like sensitive-input: typed on the primary script, run with a workflow that types neither. */
+/** The one stub scenario that declares replay secrets, shaped like sensitive-input (here on a realistic scenario's id): typed on the primary script, run with a workflow that types neither. */
 const MANIFESTS = [{
-  id: "sensitive-input",
+  id: "professional-network",
   recordingScript: [{ id: "replace-password", operation: "type", target: "testid:password", value: "fixture-password" }, { id: "replace-payment", operation: "type", target: "testid:payment", value: "fixture-card" }],
   workflows: [{ id: "extract-card-secrets", recordingScript: [{ id: "cards", operation: "checkpoint" }] }],
-  secrets: [{ id: "sensitive-input-password", step: "replace-password" }, { id: "sensitive-input-payment", step: "replace-payment" }],
+  secrets: [{ id: "professional-network-password", step: "replace-password" }, { id: "professional-network-payment", step: "replace-payment" }],
 }];
 
 const CAMPAIGN = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "live-campaign.mjs");
@@ -31,9 +31,12 @@ function runCli(args, env) {
   });
 }
 
+/** A task on a scenario outside the ten realistic ones, which the campaign may list but never run. */
+const OUTSIDE = { ...CATALOG.find((task) => task.scenarioId === "instruction-only-form"), id: "outside-form" };
+
 async function writeStubCatalog(directory) {
   const file = path.join(directory, "catalog.mjs");
-  await writeFile(file, `export const LIVE_INSTRUCTION_TASKS = ${JSON.stringify(CATALOG)};\nexport const LIVE_REPAIR_TASKS = ${JSON.stringify(REPAIRS)};\nexport const listScenarioManifests = () => ${JSON.stringify(MANIFESTS)};\n`);
+  await writeFile(file, `export const LIVE_INSTRUCTION_TASKS = ${JSON.stringify([...REALISTIC_CATALOG, OUTSIDE])};\nexport const LIVE_REPAIR_TASKS = ${JSON.stringify(REALISTIC_REPAIRS)};\nexport const listScenarioManifests = () => ${JSON.stringify(MANIFESTS)};\n`);
   return file;
 }
 
@@ -59,12 +62,12 @@ test("the command line: a repair dry run prints the adapt commands and runs noth
   assert.equal(dry.code, 0, dry.stderr);
   const limits = REPAIR_LIMIT_ARGS.join(" ");
   assert.deepEqual(dry.stdout.trim().split("\n").filter((line) => !line.startsWith("#")), [
-    `pnpm lab run identity-drift --variant renamed-redesign --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task adapt ${limits}`,
-    `pnpm lab run identity-drift --variant save-and-exit --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task adapt ${limits}`,
-    `pnpm lab run sensitive-input --workflow extract-card-secrets --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task adapt ${limits}`,
+    `pnpm lab run local-classifieds --variant renamed-redesign --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task adapt ${limits}`,
+    `pnpm lab run local-classifieds --variant save-and-exit --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task adapt ${limits}`,
+    `pnpm lab run professional-network --workflow extract-card-secrets --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task adapt ${limits}`,
   ]);
   const every = await runCli(["--dry-run"], env);
-  assert.equal(every.stdout.trim().split("\n").filter((line) => !line.startsWith("#")).length, CATALOG.length + REPAIRS.length);
+  assert.equal(every.stdout.trim().split("\n").filter((line) => !line.startsWith("#")).length, REALISTIC_CATALOG.length + REALISTIC_REPAIRS.length);
   await assert.rejects(stat(path.join(directory, "invocations.ndjson")), { code: "ENOENT" });
   await assert.rejects(stat(path.join(directory, "campaigns")), { code: "ENOENT" });
 }));
@@ -75,13 +78,13 @@ test("the command line refuses a catalog that files a task under the wrong list,
     await writeFile(file, `export const LIVE_INSTRUCTION_TASKS = ${JSON.stringify(creations)};\n${repairs === undefined ? "" : `export const LIVE_REPAIR_TASKS = ${JSON.stringify(repairs)};\n`}`);
     return { FLUXIQ_LAB_CAMPAIGN_CATALOG: file, FLUXIQ_LAB_CAMPAIGN_LAB_SCRIPT: path.join(directory, "absent-lab.mjs"), FLUXIQ_TEST_RUNS_DIR: directory };
   };
-  const misfiled = await runCli(["--dry-run"], await catalog("misfiled", [...CATALOG, REPAIRS[0]], []));
+  const misfiled = await runCli(["--dry-run"], await catalog("misfiled", [...REALISTIC_CATALOG, REALISTIC_REPAIRS[0]], []));
   assert.equal(misfiled.code, 1);
   assert.match(misfiled.stderr, /wrong list for their kind: drift-repair/u);
-  const repeated = await runCli(["--dry-run"], await catalog("repeated", CATALOG, [{ ...REPAIRS[1], id: "form-goal" }]));
+  const repeated = await runCli(["--dry-run"], await catalog("repeated", REALISTIC_CATALOG, [{ ...REALISTIC_REPAIRS[1], id: "form-goal" }]));
   assert.equal(repeated.code, 1);
   assert.match(repeated.stderr, /used twice across the catalog: form-goal/u);
-  const missing = await runCli(["--dry-run"], await catalog("missing", CATALOG));
+  const missing = await runCli(["--dry-run"], await catalog("missing", REALISTIC_CATALOG));
   assert.equal(missing.code, 1);
   assert.match(missing.stderr, /exports no LIVE_REPAIR_TASKS/u);
 }));
@@ -92,8 +95,8 @@ test("the command line: a dry run prints commands and runs nothing", () => withT
   assert.equal(dry.code, 0, dry.stderr);
   const commands = dry.stdout.trim().split("\n").filter((line) => !line.startsWith("#"));
   assert.deepEqual(commands, [
-    "pnpm lab run data-table --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task create-flow --instruction-task table-read --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000 --llm-max-calls 48",
-    "pnpm lab run data-table --variant column-reorder --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task create-flow --instruction-task table-read-reordered --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000 --llm-max-calls 48",
+    "pnpm lab run job-board --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task create-flow --instruction-task table-read --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000 --llm-max-calls 48",
+    "pnpm lab run job-board --variant column-reorder --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode legacy --llm-task create-flow --instruction-task table-read-reordered --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000 --llm-max-calls 48",
   ]);
   await assert.rejects(stat(path.join(directory, "invocations.ndjson")), { code: "ENOENT" });
   await assert.rejects(stat(path.join(directory, "campaigns")), { code: "ENOENT" });
@@ -134,14 +137,14 @@ test("the command line refuses an unknown task before running anything", () => w
 }));
 
 test("the command line gives each run its scenario's fixture secrets, drops the machine's, and a dry run names them without their values", () => withTemp(async (directory) => {
-  const env = { FLUXIQ_LAB_CAMPAIGN_CATALOG: await writeStubCatalog(directory), FLUXIQ_LAB_CAMPAIGN_LAB_SCRIPT: await writeStubLab(directory), FLUXIQ_TEST_RUNS_DIR: directory, FLUXIQ_TEST_SECRET_SENSITIVE_INPUT_PASSWORD: "machine-value", FLUXIQ_TEST_SECRET_ANYTHING: "machine-value" };
+  const env = { FLUXIQ_LAB_CAMPAIGN_CATALOG: await writeStubCatalog(directory), FLUXIQ_LAB_CAMPAIGN_LAB_SCRIPT: await writeStubLab(directory), FLUXIQ_TEST_RUNS_DIR: directory, FLUXIQ_TEST_SECRET_PROFESSIONAL_NETWORK_PASSWORD: "machine-value", FLUXIQ_TEST_SECRET_ANYTHING: "machine-value" };
   const leaked = /fixture-password|fixture-card|machine-value/u;
   const dry = await runCli(["--dry-run", "secrets-refuse", "form-goal"], env);
   assert.equal(dry.code, 0, dry.stderr);
   const lines = dry.stdout.trim().split("\n");
-  const secretsAt = lines.findIndex((line) => line.startsWith("pnpm lab run sensitive-input "));
-  assert.equal(lines[secretsAt + 1], "#   with FLUXIQ_TEST_SECRET_SENSITIVE_INPUT_PASSWORD, FLUXIQ_TEST_SECRET_SENSITIVE_INPUT_PAYMENT from the sensitive-input fixture");
-  assert.equal(lines[lines.findIndex((line) => line.startsWith("pnpm lab run instruction-only-form ")) + 1], undefined, "a scenario with no secrets gets no note");
+  const secretsAt = lines.findIndex((line) => line.startsWith("pnpm lab run professional-network "));
+  assert.equal(lines[secretsAt + 1], "#   with FLUXIQ_TEST_SECRET_PROFESSIONAL_NETWORK_PASSWORD, FLUXIQ_TEST_SECRET_PROFESSIONAL_NETWORK_PAYMENT from the professional-network fixture");
+  assert.equal(lines[lines.findIndex((line) => line.startsWith("pnpm lab run company-website ")) + 1], undefined, "a scenario with no secrets gets no note");
   assert.equal(leaked.test(dry.stdout + dry.stderr), false, "a dry run prints names, never values");
 
   const live = await runCli(["secrets-refuse", "form-goal"], env);
@@ -150,8 +153,23 @@ test("the command line gives each run its scenario's fixture secrets, drops the 
   assert.doesNotMatch(live.stderr, /campaign\.usage/u);
   const invocations = (await readFile(path.join(directory, "invocations.ndjson"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
   assert.deepEqual(invocations.map(({ secrets }) => secrets), [
-    { FLUXIQ_TEST_SECRET_SENSITIVE_INPUT_PASSWORD: "fixture-password", FLUXIQ_TEST_SECRET_SENSITIVE_INPUT_PAYMENT: "fixture-card" },
+    { FLUXIQ_TEST_SECRET_PROFESSIONAL_NETWORK_PASSWORD: "fixture-password", FLUXIQ_TEST_SECRET_PROFESSIONAL_NETWORK_PAYMENT: "fixture-card" },
     {},
   ]);
   assert.equal(leaked.test(live.stdout + live.stderr), false, "the campaign prints no secret value");
+}));
+
+test("the command line refuses a task on a scenario outside the ten realistic ones before running anything, and lists only realistic tasks", () => withTemp(async (directory) => {
+  await mkdir(path.join(directory, "empty"));
+  const env = { FLUXIQ_LAB_CAMPAIGN_CATALOG: await writeStubCatalog(directory), FLUXIQ_LAB_CAMPAIGN_LAB_SCRIPT: await writeStubLab(directory), FLUXIQ_TEST_RUNS_DIR: path.join(directory, "empty") };
+  for (const argv of [["outside-form"], ["form-goal", "outside-form"], ["outside-form", "--dry-run"]]) {
+    const refused = await runCli(argv, env);
+    assert.equal(refused.code, 1, argv.join(" "));
+    assert.match(refused.stderr, /lab:campaign task outside-form refused instruction-only-form: every Lab or browser test run, live or provider-free, uses only the ten realistic scenarios \(user rule, 2026-09-29\): everything-store, crossborder-marketplace, bigbox-retail, job-board, local-classifieds, auction-marketplace, photo-social, social-network-feed, company-website, professional-network\./u);
+  }
+  await assert.rejects(stat(path.join(directory, "invocations.ndjson")), { code: "ENOENT" });
+  assert.deepEqual(await readdir(path.join(directory, "empty")), []);
+  const dry = await runCli(["--dry-run", "--kind", "form"], env);
+  assert.equal(dry.code, 0, dry.stderr);
+  assert.deepEqual(dry.stdout.trim().split("\n").filter((line) => !line.startsWith("#")).map((line) => line.split(" ")[3]), ["company-website"]);
 }));

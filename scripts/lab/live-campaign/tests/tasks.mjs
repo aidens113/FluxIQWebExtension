@@ -23,3 +23,12 @@ export const REPAIR_LIMIT_ARGS = ["--llm-max-input-tokens", "992000", "--llm-max
  * of 26 failed six of six live tasks that had already done the work.
  */
 export const CREATE_LIMIT_ARGS = ["--llm-max-input-tokens", "992000", "--llm-max-output-tokens", "8000", "--llm-max-total-tokens", "1000000", "--llm-max-calls", "48"];
+
+/**
+ * The same tasks on realistic scenarios, for tests that go through the
+ * campaign's selection: a Lab run opens only the ten realistic scenarios, so
+ * selection refuses or skips the tasks above (`selection.mjs`).
+ */
+const REALISTIC_STAND_IN = Object.freeze({ "instruction-only-form": "company-website", "data-table": "job-board", "product-catalog": "everything-store", "identity-drift": "local-classifieds", "sensitive-input": "professional-network" });
+export const REALISTIC_CATALOG = Object.freeze(CATALOG.map((task) => ({ ...task, scenarioId: REALISTIC_STAND_IN[task.scenarioId] })));
+export const REALISTIC_REPAIRS = Object.freeze(REPAIRS.map((task) => ({ ...task, scenarioId: REALISTIC_STAND_IN[task.scenarioId] })));

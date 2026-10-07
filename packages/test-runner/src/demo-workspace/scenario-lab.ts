@@ -68,6 +68,16 @@ export async function startPersistentScenarioLabWithRecovery(input: {
   return { port: replacementPort, child };
 }
 
+/**
+ * The scenario a demo browser session's `scenarioPath` opens: the segment after
+ * `/scenarios/`, or the whole path when it names none, so a refusal of it still
+ * says what was asked for.
+ */
+export function demoScenarioIdOfPath(scenarioPath: string): string {
+  const match = /^\/scenarios\/([^/?#]+)/u.exec(scenarioPath);
+  return match?.[1] ?? scenarioPath;
+}
+
 export function requireDemoScenarioUrl(origin: string, scenarioPath: string): string {
   let originUrl: URL;
   let scenarioUrl: URL;

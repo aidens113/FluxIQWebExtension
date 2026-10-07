@@ -17,14 +17,14 @@
 // failure" from "the same symptom", so two of those in a row are still the
 // hardware as far as anyone can tell, and stay retried as such.
 
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { repositoryRoot } from "../../lab-instance.mjs";
+import { readFirstFailure as firstFailureOfRun } from "./first-failure.mjs";
 import { parseLabResult, parseRunnerRefusal } from "./output.mjs";
 
 /**
  * @param {{ code: number | null, signal?: string | null, stdout: string, stderr: string }} attempt
- * @param {{ readFirstFailure?: (runPath: string) => Promise<string | null> }} [options]
+ * @param {{ readFirstFailure?: (runPath: string) => Promise<string | null> | string | null }} [options]
  * @returns {Promise<{ fingerprint: string, description: string } | null>} null when the attempt carries no classified failure
  */
 export async function describeAttemptFailure(attempt, { readFirstFailure = firstFailureOfRun } = {}) {
@@ -42,17 +42,3 @@ export async function describeAttemptFailure(attempt, { readFirstFailure = first
   };
 }
 
-/** The summary of the first failure a run's bundle recorded, or null when it recorded none. */
-async function firstFailureOfRun(runPath) {
-  let text;
-  try {
-    text = await readFile(path.join(runPath, "summary.json"), "utf8");
-  } catch (error) {
-    // An attempt that died before finalizing has no summary; its printed
-    // result still fingerprints it.
-    if (error?.code === "ENOENT") return null;
-    throw error;
-  }
-  const summary = JSON.parse(text)?.firstFailure?.summary;
-  return typeof summary === "string" && summary.trim() !== "" ? summary.trim() : null;
-}

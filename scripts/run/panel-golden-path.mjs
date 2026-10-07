@@ -10,15 +10,22 @@ const names = [
 ];
 
 try {
-  const [{ loadAllowlistedTestEnvironment }, workspace, golden, requests] = await Promise.all([
+  const [{ loadAllowlistedTestEnvironment }, workspace, golden, requests, realistic] = await Promise.all([
     import("../../packages/test-runner/dist/target-config.js"),
     import("../../packages/test-runner/dist/demo-workspace.js"),
     import("../../packages/test-runner/dist/panel-golden-path/index.js"),
     import("../../packages/test-runner/dist/demo-llm-exploration-request.js"),
+    import("../../packages/test-runner/dist/realistic-scenarios/index.js"),
   ]);
   const environment = await loadAllowlistedTestEnvironment(repositoryRoot, withoutProviderSecrets(process.env), names);
   const config = workspace.resolveDemoWorkspaceConfiguration(repositoryRoot, environment);
   const request = await requests.resolveDemoLlmExplorationRequest(repositoryRoot, environment);
+  // Before Core or a browser starts: browser test runs open only the ten realistic scenarios.
+  const refusal = realistic.unrealisticScenarioRefusal([request.scenarioId], "pnpm panel:golden");
+  if (refusal !== null) {
+    process.stderr.write(JSON.stringify({ status: "refused", reasonCode: "panel_golden_path.scenario_not_realistic", message: refusal }) + "\n");
+    process.exit(1);
+  }
   const result = await golden.runPanelGoldenPath(config, request);
   process.stdout.write(JSON.stringify({
     status: result.status,

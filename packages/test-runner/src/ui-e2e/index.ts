@@ -2,6 +2,7 @@
 // run-scoped workspace, the suite that composes the journeys, and its result.
 // The journeys, assertions and topology have their own entry points.
 export * from "./journey-selection.js";
+export * from "./realistic-selection.js";
 export * from "./run-configuration.js";
 export * from "./suite.js";
 export * from "./suite-outcome.js";

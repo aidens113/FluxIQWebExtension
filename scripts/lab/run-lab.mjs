@@ -25,6 +25,7 @@ import { repositoryRoot, resolveLabInstancePaths } from "./lab-instance.mjs";
 import { admitLiveRun, formatRefusals, recordLiveRunFinish, recordLiveRunStart } from "./live-guards/index.mjs";
 import { createStepTimer, runBuildPhase } from "./prelude/index.mjs";
 import { buildOrder, runStep } from "../build-cache/index.mjs";
+import { labScenarioRefusal } from "./scenario-guard/index.mjs";
 import { runStopCommand } from "./stop-run/index.mjs";
 
 const args = process.argv.slice(2);
@@ -36,6 +37,20 @@ const args = process.argv.slice(2);
 // three lanes' runs to stop one (docs/architecture/testing-facility.md,
 // "Stopping one Lab run").
 if (args[0] === "stop") process.exit(await runStopCommand(args.slice(1)));
+
+// Every Lab run, live or provider-free, opens only the ten realistic scenarios
+// (user rule, 2026-09-29). Asked first, before the live-run guards, the Core
+// checks and the build, so a refused run starts nothing and leaves nothing in
+// the spend ledger. On 2026-10-07 `run basic-form --flow` ran because nothing
+// refused it (docs/architecture/testing-facility.md, "Only the ten realistic scenarios run").
+{
+  const refusal = labScenarioRefusal(args);
+  if (refusal !== null) {
+    note({ lab: "scenario-guard", state: "refused", failure: "setup", why: refusal });
+    process.stderr.write(`${refusal}\n`);
+    process.exit(1);
+  }
+}
 
 const interactive = args[0] === "interactive";
 const paths = resolveLabInstancePaths(process.env);

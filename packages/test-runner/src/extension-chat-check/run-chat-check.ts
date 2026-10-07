@@ -2,6 +2,7 @@ import path from "node:path";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "../coordinator.js";
 import { resolveLabPaths } from "../lab-instance/index.js";
 import { extensionStatus, pairExtensionWithColdEpochRecovery, runtimeMessage } from "../run-lifecycle/index.js";
+import { assertRealisticScenarios } from "../realistic-scenarios/index.js";
 import { loadScenarioManifest } from "../scenarios.js";
 import { saveApprovalFlow, type ApprovalFlow } from "./approval-flow.js";
 import { startCoreRecordingProxy, type CoreRecordingProxy } from "./core-recording-proxy.js";
@@ -13,9 +14,6 @@ import { proveAskAnswered, proveChatBuild, proveChatRelay, type AskAnswerObserva
 import { threadReader } from "./thread-reader.js";
 import type { Page } from "@playwright/test";
 import type { ChatBrowser, ChatBrowserSession, ChatCheckContext } from "./types.js";
-
-/** The ten realistic Scenario Lab scenarios; nothing else may be opened by this check. */
-const REALISTIC_SCENARIOS = new Set(["everything-store", "crossborder-marketplace", "bigbox-retail", "job-board", "local-classifieds", "auction-marketplace", "photo-social", "social-network-feed", "company-website", "professional-network"]);
 
 export type ChatCheckOptions = {
   repositoryRoot: string;
@@ -67,7 +65,7 @@ const RELEVANT = new Set(["open-conversation", "append-turn", "answer-ask"]);
  * how far it got, so a failure reads as a cause and a distance.
  */
 export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<ChatCheckResult> {
-  if (!REALISTIC_SCENARIOS.has(options.scenarioId)) throw new Error(`${options.scenarioId} is not one of the ten realistic scenarios`);
+  assertRealisticScenarios([options.scenarioId], "The extension chat check");
   const log = options.log ?? (() => undefined);
   const labPaths = resolveLabPaths(options.repositoryRoot);
   const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);

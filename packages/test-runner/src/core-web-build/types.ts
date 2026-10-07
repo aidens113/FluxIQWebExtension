@@ -8,8 +8,14 @@ export type CoreWebBuildInputs = {
    * which no other input names. It stands in for the installation itself.
    */
   lockfileHash: string;
-  /** Content hash of the `apps/web` entries the staged workspace copies, and of Core's `tsconfig.base.json`. */
+  /** Content hash of the `apps/web` entries the staged workspace copies, except the generated gateway server, and of Core's `tsconfig.base.json`. */
   webSourceHash: string;
+  /**
+   * Digest of every source Core's gateway server generator reads, equal to a
+   * fresh receipt's `sourceInputsDigest`. It stands in for the generated
+   * artifact, which a run regenerates before keying and a dry run never does.
+   */
+  serverAdapterSourcesHash: string;
   /** Content hash of each built Core package the panel consumes -- its `dist` tree and its `package.json` -- by package directory name. */
   packageHashes: Readonly<Record<string, string>>;
   /** The exact `next.config.mjs` text the staged workspace receives. */

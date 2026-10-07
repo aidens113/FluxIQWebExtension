@@ -20,6 +20,12 @@ try {
     import("../../packages/test-runner/dist/ui-e2e/index.js"),
   ]);
   const args = suite.parseUiE2eArguments(process.argv.slice(2));
+  // Before a workspace is prepared or anything starts: browser test runs open only the ten realistic scenarios.
+  const refusal = suite.uiE2eScenarioRefusal(args);
+  if (refusal !== null) {
+    process.stderr.write(JSON.stringify({ status: "refused", reasonCode: "ui_e2e.scenario_not_realistic", message: refusal, wallClockMs: Date.now() - began }) + "\n");
+    process.exit(1);
+  }
   const environment = await loadAllowlistedTestEnvironment(repositoryRoot, scrubbed, names);
   const run = await suite.prepareUiE2eRunConfiguration({ repositoryRoot, environment });
   const result = await suite.runUiE2eSuite({ lane: args.lane, journeys: args.journeys, config: run.config });
