@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Acceptance, extension identity and Stop integrated; Core runtime identity and candidate authoring/execution still isolated; live readiness and promotion pending.
+Status detail: Acceptance, extension identity, Stop, candidate receipt/executor infrastructure and typed fixes pushed; candidate facade/Core identity/navigation isolated; live and promotion pending.
 Created: 2026-10-05
 Last updated: 2026-10-06
 Owner: Senior supervisor agent
@@ -22,8 +22,8 @@ match/mismatch checks, 22/22 owning tests and runner typecheck after integration
 t298 cancellation is integrated as downstream43e5e54b/Core2ee06482. Supervisor
 rebuilt current pair and repeated headed Stop build/run2/2, owning reauthor9/9,
 Core typecheck/build and both integration audits pass. Running Core-server identity
-remains t302; t299 candidate facade, t300 requirement receipts/detached executor
-remain isolated; t300 receipt/detached infrastructure is integrated (Core386b4c15)
+remains t302; t299 candidate facade remains isolated.
+t300 receipt/detached infrastructure is integrated (Core386b4c15)
 with production joins pending. t301 typed readiness is integrated (b2ad00de). No P0 completion
 or fresh A-D qualification is claimed.
 
@@ -379,3 +379,10 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Validation: t300 post-dev-merge58/58 and packagecheck0; final export check0/audit0, both task audits0. t301 independent browser2/2, extension19/19, real Core permission12/12, domain/extension source+test checks0 after shared dependency refresh; taskaudit0. No paid call.
 - Outcome: Accepted bounded infrastructure and typed fixes, not full P0/P2/P3.
 - Follow-up: t299 facade, t302 server identity, t303 navigation; durable receipt/promotion/semantic/browser proof joins and breadth still pending. Paired push next; no main/release changes.
+
+### 2026-10-06 - Paired bounded slices pushed
+- Agent: Codex supervisor.
+- Changed: downstream devafb5f939 and Core dev386b4c15 pushed; infrastructure and typed readiness integration documented.
+- Validation: all bounded task receipts above observed; main working state corrected to distinguish merged modules from unintegrated production joins. No new product test required for prose.
+- Outcome: Partial overall plan.
+- Follow-up: t299 facade, t302 actualserver and t303 navigation active; P2 promotion and paid off-peak readiness remain pending. No main/release push.
