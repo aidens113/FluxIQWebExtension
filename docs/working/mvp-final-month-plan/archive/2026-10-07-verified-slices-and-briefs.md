@@ -698,3 +698,41 @@ Earlier entries: [Claude implementation and handoff ledger](../../mvp-final-mont
 
 
 
+
+## Retired independently verified t317/t320 briefs
+
+### Brief: durable-gateway-production-seam (t317)
+- Worker: p0_acceptance; isolated paired fxwork/t317 trees, provision after verified t313 integration. No source edits until READY; identify exact added filenames before edits.
+- Read Current State and reports/p2-command-production-context-review.md Gateway-only first production partition; Core instructions. Foundation is receipt-only; no raw action/results/page secrets persisted.
+- Own Core generic: client-gateway/service/command-ledger/{contracts,controller,index}.ts, new {context,dispatch}.ts and owning tests; existing service/{commands,inbound,transport,types,index}.ts and client-gateway/service.ts narrow delegates; client-gateway/index.ts necessary exports. No client wire changes.
+- Own Core program: new automation-studio/runtime/service/command-context/{contracts,controller,index}.ts + tests; runtime/service.ts narrow readonly collaborator/constructor; programs/_shared/runtime.ts generic resolver injection using existing actual private pool and validated actual stored session. Own scoped architecture/automation-studio/client-gateway.md paragraph and downstream reports/p2-durable-gateway-production-seam.md only.
+- Implement opaque server-issued context, impossible to forge via JSON/model metadata; exact actual project/run/graph/invocation/attempt/effect ownership. Generic resolveCommandLedger(context) returns domain-neutral leased port+close; no generic program-storage import/exposed pool. Freeze actual request before await and compute bounded original digest.
+- Real ready selected client/session immutable claim before queue/send; revalidate readiness/signal after await. Receipt-only replay committed=>result_unavailable, pending/unknown=>outcome_unknown and no resend. Legacy context-free path retains behavior; malformed supplied context NEVER downgrades to legacy. SQL missing refuses before send.
+- Parse closed bounded actual sender result; status unknown/no acknowledgement/timeout/disconnect/cancel/send-after-effect throw stay uncertain. Compute original bounded resultDigest/server receive time; no client provenance authority. Serialize result/timeout/abort/disconnect races, commit/read exact receipt BEFORE public resolve or authoritative event; preserve right-session/duplicate protections and normal permissions.
+- Cover every ledger lease close/error path and gateway disposal. No automatic continuation/new command key for unknown. Program factory validates existing session/project; no LLM API/endpoint grants context issuance. Actual node/run-scope allocation, complete run scans/atomic same-run admission and executor/domain propagation remain next serial partition, not claimed here.
+- Validate provider-free real program pool+stored session+actual gateway/socket; delayed/failing claim zero sends, commit delayed before public resolve, wrong sender/forgery/malformed/oversize/duplicates, uncertain send, timeout/abort/disconnect/commit-loss races, legacy compatibility/permission denial/lease cleanup. Narrow types/build/owner tests/audits; no fullsuite/panel/provider/git/shared docs. Freeze before root independent proof.
+
+
+
+
+### Brief: original-project-authority-guard (t320, bounded contracts first)
+- Worker: p0_cancel_control; paired isolated fxwork/t320 trees provisioned by root. Read Current State and own p2-original-project-authority-review.md first foundation partition. Source HOLD until provision READY and exact contracts approved; original IDs, no reserved namespace/new project substitute.
+- Own new Core storage/project/authority-guard/{contracts,migration,validation,store,index}.ts + owning tests/process probe, additive project/index.ts only. Scoped architecture persistence paragraph: name exact existing doc before editing. Own downstream reports/p2-original-project-authority-guard.md only; no shared docs/git.
+- Propose closed bounded original-project/operation key/request/owner/revision/capture contracts first. Next local migration0028 after0027; no old checksum edits. Durable pre-effect claim COMMIT separate from external-operation callback. Serialize per-project topology claims and block capturing mode; pending/unknown persists across error/process death and never expires. Same key original request joins, conflicts/foreign borrowed records refuse.
+- Successful whole-operation completion increments legacy revision once with immutable receipt, never a nested helper's first SQL write. Same owner/key replay cannot repeat external sentinel; completion lost COMMIT ack reconciles original record. Atomic beginCapture compares completed revision and no pending/unknown inside same actual transaction; later legacy claim refuses; recorded capture key/revision/protocol/owner remain immutable across restart.
+- No active/tombstone/adoption endpoint or snapshot activation method. Capture release/reconcile requires exact recorded read-only capture owner; do not accept arbitrary caller success/no-effects fields as independent proof. Store is infrastructure/trusted owner port only; actual all-writer wiring/global ownership/capture/compiler/pinned readers/promotion stay unavailable.
+- Use existing project pool/UoW direct context.sql, no nested queued transaction or uncommitted started row pretending pre-effect durability. Store-issued timestamps and strict original owner/operation/request/result/historical joins. No raw page/source/secret payload persisted.
+- Narrow real SQLite two owners/concurrent legacy-vs-capture, preclaim rollback zeroeffects, uncertain synthetic multi-store sentinel, revision/key conflicts/corrupt/borrowed receipts; literal child kill after external sentinel+pending and aftercompletion beforeack then reopen/no repeat. Provider-free explicit probe; source/e2etypes/owning build/audits, no fullsuite/panel/user data. Freeze then root independently reviews/runs.
+- One-time old uninstrumented writer drain remains separate authorization/deployment gate; no code can attest it from marker/PID/TTL. No actual original-project authority/candidate acceptance claim from this foundation.
+
+
+## Retired t322 discovery brief
+
+### Brief: original-writer-coverage (t322, read-only discovery)
+- Worker: p0_build_identity. Main checkout task/t322-original-writer-coverage; no source/build/test/git/shared doc edits. Own only reports/p2-original-project-writer-coverage.md. Read Current State and reports/p2-original-project-authority-review.md exact checklist.
+- Investigate actual Core source in sibling MAIN !FluxIQ read-only; do not use stale flat task buddy. t320 foundation still isolated/unintegrated; do not assume production guards exist.
+- Enumerate actual original-project SQL, global canonical/resource, file/projection/private repair and public facade writer entrypoints, ownership routing and pin readers. Distinguish whole-operation effect boundaries from nested TX/repair reads; identify bypasses, missing/deleted resource routing and injectable ports.
+- Propose smallest coherent next implementation partition with exact existing/new paths and closed interfaces. Canonical global companion owner protocol must preserve original IDs and tombstones, bounded scopes, atomic allocation and owner joins; no caller-selected project authority, marker/TTL/readonly-open proof.
+- Identify actual graph/source/settings/membership capture inputs, unsupported dependencies and mandatory old-process drain; no adoption endpoint or alternative namespace. Provide source evidence and concrete provider-free verification matrix, including two-process races/kill boundaries/foreign-resource and >100 membership tests.
+- Write concise report with findings/unknowns/limitations and candidate first partition; no implementation or executable proof claim. Return exact paths and unresolved design decisions for supervisor review.
+
