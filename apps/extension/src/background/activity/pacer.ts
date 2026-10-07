@@ -56,7 +56,9 @@
 // - A settling row that names the work it ends -- "Build stopped: ...", "Run
 //   failed" -- heads the status by that name, whatever the event's subject
 //   says: a creation build's ending read "Couldn't fix your Flow" (U4 of
-//   run-muw60unq-591e23bd, `ending-kind.ts`).
+//   run-muw60unq-591e23bd, `ending-kind.ts`). A unit that settled stays
+//   settled: a later row in it that settles nothing (a late thought) does not
+//   reopen it (run-muxkzdjw-31a13429).
 // - `phase` and `step` move with `detail`, so the colour, the mark and the
 //   step count cannot change faster than the words beside them. A repair of
 //   the Flow itself is on no step of the run, so the count does not carry
@@ -143,6 +145,11 @@ export class ActivityPacer {
     const unit = this.situation.observe(event);
     const retry = this.retry.observe(event, subjectKindOf(event));
     const latest = this.pending ?? this.shown;
+    // A unit that settled -- failed or done -- is over: a row Core says in it
+    // afterwards, a late thought or a step's echo, does not reopen it as work
+    // under way (lane A round 4, `run-muxkzdjw-31a13429`: a thought after a
+    // build's ending turned "Build failed" back into "Fixing your Flow").
+    if (latest !== null && latest.activityId === event.activityId && (latest.outcome === "failed" || latest.outcome === "done") && outcomeOf(event) === null) return;
     if (isModelThought(event)) {
       this.acceptThought(thoughtDisplayFor(event, latest, unit, retry), now);
       return;
