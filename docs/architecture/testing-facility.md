@@ -1347,15 +1347,57 @@ through Core's own resolver, before anything starts. The run's plan records it a
 record carry. In `legacy` mode the lane runs as it did before t330 (downstream
 `92d790d7`): the chat's create-here builds, approves and applies its own proposal,
 a direct build is approved and applied by the Lab, and the Flow is run and judged.
-In `candidate` mode Core only saves an unverified candidate draft that nothing
-executes, verifies or promotes yet, so `assertCreatedFlowVerificationReady`
-(`flow-lane/creation/readiness.ts`) refuses with
-`lab.candidate_verification_unavailable` at stage `before_provider`: in the Lab
-command before any topology starts, and again at the lane, the chat build, the
-direct build and approve/apply. Only Core's exact `legacy` admits; no caller
-verdict lifts the refusal. Should a Core answer with a draft anyway, the lane
-records it as `outcome: "draft"` and fails as a facility contract, never as a
-created Flow.
+
+**Candidate mode (t348).** In `candidate` mode Core test-runs each candidate the
+model submits once, from its declared start, through the normal runtime, and
+proposes it only after the build-test judge's confirmed yes (Core t340); anything
+else stays a draft that is never applied. The Lab admits a candidate-mode
+creation only when both hold, and refuses at stage `before_provider` otherwise
+(`assertCreatedFlowVerificationReady`, `flow-lane/creation/readiness.ts`):
+
+- the Core under test has the trial runner, which its generation readiness says
+  with `capabilities.candidateTrial` (`lab.candidate_verification_unavailable`);
+- that Core was started with the candidate start hook (decision D1), so every
+  trial starts from the seeded fixture rather than from exploration's or an
+  earlier trial's cart (`capabilities.candidateTrial.startReset`;
+  `lab.candidate_start_hook_unset`).
+
+The Lab command asks before anything starts, from the linked Core's readiness
+contract and whether the Lab starts the Core itself (an `existing` target never
+gets the hook); the dry run reports that answer as `candidateTrial` with
+`source: "lab-plan"`. The lane asks the running Core again, through
+`get-flow-bootstrap-generation-readiness`, before it builds anything, and the
+chat build, direct build and approve/apply refuse without that answer.
+
+The hook is Core deployment configuration: `FLUXIQ_CANDIDATE_START_URL`, an
+http(s) address Core POSTs an empty JSON object to before each trial, with the
+optional `FLUXIQ_CANDIDATE_START_TOKEN` as a bearer token (Core
+`runtime/candidate-start-hook/`, read where `programs/_shared/runtime.ts`
+constructs the service). Unset is every product deployment's configuration, and
+a half-set value refuses as the host starts. `buildFluxIQEnvironment` sets both
+only for a Core the Lab starts in candidate mode: the run's own Scenario Lab
+`/__control/reset` on its loopback port -- the same atomic reset the lane runs
+before playback (t336), not a new path -- and the run's controller token that
+reset requires. A legacy Core gets neither, and an inherited value of either is
+always dropped. The token is never written to a log, a readiness record or a
+trial record.
+
+A candidate that stayed a draft fails the lane as `runtime.behavior` with
+`lab.candidate_not_promoted`, the candidate id, the deciding verdict, Core's
+codes and every trial (run id, revision, start, execution, code); it is never
+approved, applied or run. A candidate-mode proposal that names no tested
+candidate fails as `lab.candidate_proposal_unattributed` and is never applied. A
+promoted candidate goes on to the same reset, playback, private oracle and
+zero-call replays as a legacy build; Core's judge only gates promotion. The
+build record carries `candidateOutcome` -- authoring mode, candidate id,
+revision and digest, the deciding verdict and trial run, judge calls, trial
+count, each trial from Core's trial sessions (`metadata.candidateTrial`), and
+the promoted adaptation id -- read from the direct build's answer, from the
+chat's `candidate-draft` turn and Core's own words for the verdict, or from the
+`candidateTrial` detail on the promoted proposal's `created` audit event
+(`flow-lane/creation/candidate-outcome.ts`). `snapshots/flow-lane.json`, complete
+or not, records `authoringMode` and the same record as `candidate`, and
+`snapshots/live-llm.json` keeps it on its `build`.
 
 Live instruction campaigns use a third, distinct lane. The created-Flow lane
 does not derive a Flow from a recording: Core builds one from the instruction,

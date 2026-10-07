@@ -4,9 +4,22 @@ import type { PanelRelayResponse } from "../../shared/protocol";
 import { createElement } from "../dom";
 import type { PanelStore } from "../state";
 
-/** Stop follows the raw live subject, with an owner lease checked again at click time. */
+const STOPPING_SOON = "Stopping as soon as it starts.";
+
+/**
+ * Stop follows the raw live subject, with an owner lease checked again at click time.
+ *
+ * It is offered from the moment the person's send says "Starting…", before
+ * Core has named the build or run it starts: D9 of the t342 round 2 UI review
+ * (run-muylu4pp-f9cb2121, moment 02) had no Stop at all while the panel and
+ * the overlay said "Starting…". There is nothing to name in a stop request
+ * yet, so a press then is held and sent for the first live work Core reports
+ * after it; if the send starts nothing, the press is dropped with it.
+ */
 export function createStopControl(request: PanelStore["request"], eligible: () => boolean) {
   let current: ClientGatewayActivity | null = null;
+  let starting = false;
+  let held = false;
   let pending: string | null = null;
   let notice = "";
   let generation = 0;
@@ -16,14 +29,13 @@ export function createStopControl(request: PanelStore["request"], eligible: () =
   const active = () => current !== null && !current.final && current.phase !== "done" && current.phase !== "failed"
     && (current.subject.kind === "run" || Boolean(current.subject.flowId));
   function render() {
-    element.hidden = !active() || !eligible();
-    button.disabled = pending === current?.activityId;
-    button.textContent = button.disabled ? "Stopping…" : current?.subject.kind === "build" ? "Stop build" : "Stop run";
+    const waiting = starting && !active();
+    element.hidden = !(active() || waiting) || !eligible();
+    button.disabled = held || pending === current?.activityId;
+    button.textContent = button.disabled ? "Stopping…" : waiting ? "Stop" : current?.subject.kind === "build" ? "Stop build" : "Stop run";
     status.textContent = notice;
   }
-  button.addEventListener("click", () => {
-    if (!active() || !eligible() || pending === current?.activityId) return;
-    const target = current!;
+  function send(target: ClientGatewayActivity) {
     const lease = generation;
     pending = target.activityId; notice = ""; render();
     void request<PanelRelayResponse>({ type: RUNTIME_MESSAGES.panelStopRun, projectId: target.subject.projectId,
@@ -43,9 +55,27 @@ export function createStopControl(request: PanelStore["request"], eligible: () =
       if (generation !== lease || current?.activityId !== target.activityId || !eligible()) return;
       pending = null; notice = "Couldn't stop the work. Try again."; render();
     });
+  }
+  button.addEventListener("click", () => {
+    if (!eligible() || held) return;
+    if (!active()) {
+      if (!starting) return;
+      held = true; notice = STOPPING_SOON; render();
+      return;
+    }
+    if (pending === current?.activityId) return;
+    send(current!);
   });
-  return { element, update(activity: ClientGatewayActivity | null) {
-    if (current?.activityId !== activity?.activityId) { generation++; pending = null; notice = ""; }
-    current = activity; render();
-  } };
+  return { element,
+    /** Shows `activity`'s Stop; `sendStarting` is true while the person's send says "Starting…" and Core has named no work yet. */
+    update(activity: ClientGatewayActivity | null, sendStarting = false) {
+      if (current?.activityId !== activity?.activityId) { generation++; pending = null; if (!held) notice = ""; }
+      current = activity; starting = sendStarting;
+      if (held && active()) {
+        held = false;
+        if (eligible()) { send(current!); return; }
+        notice = "";
+      } else if (held && !starting) { held = false; notice = ""; }
+      render();
+    } };
 }

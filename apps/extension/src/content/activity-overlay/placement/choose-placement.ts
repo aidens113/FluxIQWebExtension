@@ -45,11 +45,14 @@
 //    past links never makes it hop between corners.
 // 3. When every corner is busy it takes the **least-busy place**: of the
 //    corners and the side midpoints, with the full pill or a narrower one, the
-//    one over the fewest fixed points; then the full pill before the narrow
-//    one, so more of the words fit; then the place it already holds, so
-//    controls scrolling past do not move it (rule 2); then the fewest
-//    controls; then `FALLBACK_ANCHORS` order. The narrow pill keeps
-//    the same lines; a line that does not fit ends in an ellipsis.
+//    one over the fewest fixed points; then the place it already holds, while
+//    nothing fixed is under it, so text and controls scrolling past do not
+//    move it (rule 2: on run-muylu4pp-f9cb2121's item page the pill hopped
+//    between the band above the Buy now bar and the left midpoint each time
+//    the page scrolled text under it, D11 of the t342 round 2 UI review);
+//    then the full pill before the narrow one, so more of the words fit; then
+//    the fewest controls; then `FALLBACK_ANCHORS` order. The narrow pill
+//    keeps the same lines; a line that does not fit ends in an ellipsis.
 // 4. **Nothing a person reads is covered while a place clear of it exists.**
 //    The probe also reports **content**: an image, a video, a canvas, text.
 //    Among clear corners the one over the least content and controls wins.
@@ -150,9 +153,16 @@ function leastBusy(input: PlacementInput, places: readonly OverlayAnchor[], corn
   const consider = (placement: OverlayPlacement, cost: Cost): void => {
     const held = current?.shape === placement.shape && current.anchor === placement.anchor && (current.offset ?? 0) === (placement.offset ?? 0) ? 0 : 1;
     const covered = cost.controls + cost.content;
-    const rank = [cost.fixed, covered > 0 ? 1 : 0, placement.shape === "pill" ? 0 : 1, held, covered];
+    // Rule 2 for every place: one held and clear of everything fixed is kept, whatever scrolls under it (D11).
+    const keptClear = held === 0 && cost.fixed === 0 ? 0 : 1;
+    const rank = [cost.fixed, keptClear, covered > 0 ? 1 : 0, placement.shape === "pill" ? 0 : 1, held, covered];
     if (!chosen || before(rank, chosen.rank)) chosen = { placement, rank };
   };
+  // The place held now, at the offset it holds: a docked band's offset is found
+  // afresh below, and one a pixel off would not count as the place held.
+  if (current && (places.includes(current.anchor) || corners.includes(current.anchor))) {
+    consider(current, costAt(input, current.anchor, sizeOf(input, current.shape), current.offset ?? 0));
+  }
   for (const anchor of places) {
     for (const shape of ["pill", "narrow"] as const) consider({ shape, anchor }, costAt(input, anchor, sizeOf(input, shape)));
   }

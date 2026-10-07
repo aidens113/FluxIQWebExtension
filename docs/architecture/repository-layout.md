@@ -382,6 +382,15 @@ consumer. A consumer-side `paths` mapping cannot substitute: `domain/package.jso
 declares `"type": "module"`, so a `NodeNext` consumer reading `domain/src`
 rejects every extensionless relative specifier with `TS2834`/`TS2835`.
 
+`packages/test-evidence` already uses `.js` specifiers, so it takes its types
+from source like `packages/test-contracts` (`"types": "./src/index.ts"`, runtime
+`import` still from `dist`). Until 2026-10-07 it pointed `types` at
+`dist/index.d.ts`, which nothing in `pnpm check` builds, so a fresh tree failed
+`packages/test-runner`'s typecheck with `TS2307`. A consumer that *runs*
+test-evidence still needs its `dist`; `pnpm test` and `pnpm build` produce it
+before `packages/test-runner` in workspace order, and the Lab prelude builds it
+through `buildOrder("test-runner:build")`.
+
 ## Validation Commands
 
 Workspace level:

@@ -4,6 +4,7 @@
 // at the bottom.
 export { createActionCardView, type ActionCardView } from "./action-card-view";
 export { createContextLine, type ContextLine } from "./context-line";
+export { createDoneAgainView, type DoneAgainView } from "./done-again-view";
 export { createEmptyState, type EmptyState } from "./empty-state";
 export { emptyStateModel, type EmptyStateModel } from "./empty-state-model";
 export { createLiveLine, type LiveLine } from "./live-line";

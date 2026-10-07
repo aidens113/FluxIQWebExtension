@@ -10,8 +10,13 @@
 //   stays over the content and that a person may have to reach.
 // - A fixed box covering most of the viewport is a **backdrop** -- a modal's
 //   scrim, an app shell -- not an obstacle: covering its corner hides nothing
-//   the person needs, and the dialog it frames is found on its own. What is
-//   beneath it is not looked at, since the backdrop covers it too.
+//   the person needs, and the dialog it frames is found on its own. A point
+//   where the backdrop's own surface is all there is -- no control and no
+//   words of its own -- is looked beneath, since a scrim is see-through: on
+//   crossborder-marketplace's home page a coupon dialog's scrim covered the
+//   whole viewport, every corner read clear, and the pill sat on the cookie
+//   banner's text showing through it (D11 of the t342 round 2 UI review,
+//   run-muylu4pp-f9cb2121, moment 2). Beneath it, the cookie banner is fixed.
 // - **control** -- an ordinary link, button or field in the page's flow. It
 //   scrolls, so it only breaks ties between clear corners.
 // - **content** -- something in the page's flow a person reads: an image, a
@@ -59,7 +64,7 @@ export function pageProbe(): (x: number, y: number) => PointCover {
   const root = document.documentElement;
   const viewportArea = Math.max(1, root.clientWidth * root.clientHeight);
   const layers = new Map<Element, Layer>();
-  const covers = new Map<Element, PointCover>();
+  const covers = new Map<Element, { cover: PointCover; surface?: Element }>();
 
   const layerOf = (element: Element): Layer => {
     let layer = layers.get(element);
@@ -70,38 +75,71 @@ export function pageProbe(): (x: number, y: number) => PointCover {
     return layer;
   };
 
-  const coverOf = (hit: Element): PointCover => {
+  /** What `hit` is, and the backdrop it sits on when only that backdrop's surface is at the point. */
+  const coverOf = (hit: Element): { cover: PointCover; surface?: Element } => {
     let control = false;
     for (let element: Element | undefined = hit; element && element !== root && element !== document.body; element = parentOf(element)) {
       if (!control && element.matches(CONTROL_SELECTOR)) control = true;
       const layer = layerOf(element);
-      if (layer === "fixed") return "fixed";
-      if (layer === "backdrop") break;
+      if (layer === "fixed") return { cover: "fixed" };
+      if (layer === "backdrop") {
+        const cover = control ? "control" : isContent(hit) ? "content" : null;
+        return cover === null ? { cover, surface: element } : { cover };
+      }
     }
-    return control ? "control" : isContent(hit) ? "content" : null;
+    return { cover: control ? "control" : isContent(hit) ? "content" : null };
+  };
+  const coverAt = (hit: Element): { cover: PointCover; surface?: Element } => {
+    let known = covers.get(hit);
+    if (known === undefined) {
+      known = coverOf(hit);
+      covers.set(hit, known);
+    }
+    return known;
   };
 
   return (x, y) => {
     const hit = topmostAt(x, y);
     if (!hit || isExtensionUiNode(hit)) return null;
-    let cover = covers.get(hit);
-    if (cover === undefined) {
-      cover = coverOf(hit);
-      covers.set(hit, cover);
-    }
-    return cover;
+    const found = coverAt(hit);
+    return found.surface === undefined ? found.cover : beneath(found.surface, x, y, coverAt);
   };
+}
+
+/**
+ * What lies under a backdrop's bare surface at the point: the first element of
+ * the page's hit stack that is not the backdrop or inside it, read as any hit
+ * is. Nothing when the browser gives no stack, or nothing is beneath.
+ */
+function beneath(backdrop: Element, x: number, y: number, coverAt: (hit: Element) => { cover: PointCover; surface?: Element }): PointCover {
+  if (typeof document.elementsFromPoint !== "function") return null;
+  const root = document.documentElement;
+  for (const element of document.elementsFromPoint(x, y)) {
+    if (element === backdrop || backdrop.contains(element) || isExtensionUiNode(element)) continue;
+    if (element === root || element === document.body) return null;
+    const found = coverAt(deepestAt(element, x, y));
+    // A second backdrop under the first is looked beneath in turn.
+    if (found.surface === undefined) return found.cover;
+    backdrop = found.surface;
+  }
+  return null;
 }
 
 /** The topmost element at the point, looking into open shadow roots. */
 function topmostAt(x: number, y: number): Element | undefined {
-  let element = document.elementFromPoint(x, y) ?? undefined;
-  for (let depth = 0; element && depth < MAX_SHADOW_DEPTH; depth += 1) {
-    const inner = element.shadowRoot?.elementFromPoint(x, y);
-    if (!inner || inner === element) break;
-    element = inner;
+  const element = document.elementFromPoint(x, y) ?? undefined;
+  return element === undefined ? undefined : deepestAt(element, x, y);
+}
+
+/** `element`, or the element at the point inside its open shadow roots. */
+function deepestAt(element: Element, x: number, y: number): Element {
+  let deepest = element;
+  for (let depth = 0; depth < MAX_SHADOW_DEPTH; depth += 1) {
+    const inner = deepest.shadowRoot?.elementFromPoint(x, y);
+    if (!inner || inner === deepest) break;
+    deepest = inner;
   }
-  return element;
+  return deepest;
 }
 
 /** The element's parent, stepping out of a shadow root to its host. */

@@ -7,6 +7,7 @@ import type { HarnessRecoveryDetail } from "../harness-recovery.js";
 import type { PersistedFlowLlmExecution } from "../persisted-flow-run.js";
 import type { FlowRepairExpectation } from "../repair/index.js";
 import { flowLaneSnapshot, runFlowLane, type FlowLaneControl, type FlowLaneEvidence } from "../run-flow-lane.js";
+import { resetProducerResponse } from "./reset-producer-response.js";
 
 // The Flow lane with the model taking part, the way `identity-drift --variant
 // renamed-redesign --flow --live-llm --llm-task adapt` runs it: the recorded
@@ -112,7 +113,7 @@ async function runLiveLane(recovery: Recovery, options: { intent?: PersistedFlow
   const evidence: FlowLaneEvidence[] = [];
   const identified: string[] = [];
   const realFetch = globalThis.fetch;
-  globalThis.fetch = (async () => ({ ok: true, status: 200 })) as unknown as typeof globalThis.fetch;
+  globalThis.fetch = (async (_url: string, init?: { method?: string }) => resetProducerResponse(init?.method)) as unknown as typeof globalThis.fetch;
   const expectation = options.expectation === null ? undefined : options.expectation ?? EXPECTATION;
   try {
     const outcome = runFlowLane({

@@ -40,7 +40,7 @@
 // in Node with no DOM.
 
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import {
   WEB_AUTOMATION_ACTION_TYPES,
@@ -309,9 +309,10 @@ test("awaiting a branch does not change what a caller sees when the verb succeed
  * that directory cover the policy, and these cover the wiring, which is the part
  * a reader of `execute.ts` alone cannot check.
  *
- * The waiting here is real, not injected, so the first row costs the 250 ms the
- * first rung of the target ladder is worth. That is the price of exercising the
- * production path rather than a stub of it.
+ * The pause is the production one, not injected, so the first row costs the
+ * 250 ms the first rung of the target ladder is worth. That is the price of
+ * exercising the production path rather than a stub of it. The second row
+ * drives the same pause on a mock clock, for the reason given above it.
  */
 function resolvesOnAttempt(attempt: number): { resolveTarget: () => { element: Element; resolution: undefined }; calls: () => number } {
   let calls = 0;
@@ -353,16 +354,44 @@ test("a target the page had not drawn yet is waited for, and the verb then reads
   assert.equal(target.calls(), 2, "the target was not resolved a second time, so the retry is not re-resolving");
 });
 
-test("a target that never appears is still reported as the page's own TARGET_NOT_FOUND, with the account beside it", async () => {
+// This row runs on a mock clock. On the wall clock it asked for more than one
+// attempt inside a 400 ms timeout, which holds only while the event loop wakes
+// the 250 ms pause before the deadline: in a full suite run, a stall of 150 ms
+// or more made the loop do exactly what `recovery/attempt.ts` says it must --
+// return the last page result rather than start an attempt after the timeout --
+// and the row failed with "attempts were unbounded or absent: 1" (sweep-1007).
+// The product's own `setTimeout` pause and `Date.now` clock still run; only the
+// time they read is driven, so the count below is exact rather than a range.
+test("a target that never appears is still reported as the page's own TARGET_NOT_FOUND, with the account beside it", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 0 });
   const target = resolvesOnAttempt(99);
-  const result = await executeContentAction(
+  const result = await settledOnMockClock(t, executeContentAction(
     // A 400 ms timeout keeps the row cheap and exercises the clip: the budget is
     // the command's, so the ladder is cut short rather than run to 3.75 s.
     { commandId: "cmd-extract", actionType: "web.dom.extract", selector: "#save", timeoutMs: 400 },
     dependencies({ resolveTarget: target.resolveTarget as unknown as ContentActionDependencies["resolveTarget"] })
-  );
+  ));
   assert.equal(result.status, "failed");
   assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND);
   assert.match(String(result.failure?.actual), /absorbing target_absent/u);
-  assert.ok(target.calls() > 1 && target.calls() <= 5, `attempts were unbounded or absent: ${target.calls()}`);
+  // One attempt at 0 ms and one after the first 250 ms rung; the second rung is
+  // clipped to the 150 ms left, and no attempt starts at the 400 ms deadline.
+  assert.equal(target.calls(), 2, `attempts were unbounded or absent: ${target.calls()}`);
 });
+
+/**
+ * Advances the mock clock 10 ms at a time until `work` settles, letting every
+ * continuation the last tick released run before the next one.
+ *
+ * `setImmediate` is not mocked, so awaiting it drains the microtask queue; the
+ * limit stops a loop that never settles from ticking forever.
+ */
+async function settledOnMockClock<T>(t: TestContext, work: Promise<T>, limitMs = 10_000): Promise<T> {
+  let settled = false;
+  work.then(() => { settled = true; }, () => { settled = true; });
+  for (let elapsed = 0; !settled && elapsed <= limitMs; elapsed += 10) {
+    await new Promise<void>((resolve) => { setImmediate(resolve); });
+    if (!settled) t.mock.timers.tick(10);
+  }
+  return await work;
+}

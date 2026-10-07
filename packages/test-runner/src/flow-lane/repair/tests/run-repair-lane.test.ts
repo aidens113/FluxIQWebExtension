@@ -5,6 +5,7 @@ import { RunnerFailure } from "../../../failure.js";
 import { createdFlowSecretInputs } from "../../creation/index.js";
 import { runLiveRepairLane, type LiveRepairLaneInput } from "../run-repair-lane.js";
 import type { ProveLiveRepairControl } from "../prove-repair.js";
+import { resetProducerResponse } from "../../tests/reset-producer-response.js";
 
 /**
  * The lane end to end, against a fake Core: approve, apply, replay, publish,
@@ -90,9 +91,13 @@ function lane(options: { recovery?: RunHarnessRecovery; replays?: number; applyR
     publish: async (details: Record<string, unknown>) => { published.push(details); },
   };
   // The reset is the lane's own and goes through `fetch`; the fixture origin is
-  // unreachable, so it is replaced rather than served.
+  // unreachable, so it is replaced rather than served, in the producer's own
+  // shape. Only the POST is a reset; the GET is the health read confirming it.
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async () => { reset.push(reset.length + 1); return { ok: true, status: 204 }; }) as unknown as typeof fetch;
+  globalThis.fetch = (async (_url: string, init?: { method?: string }) => {
+    if (init?.method === "POST") reset.push(reset.length + 1);
+    return resetProducerResponse(init?.method);
+  }) as unknown as typeof fetch;
   return { control, input, endpoints, written, published, reset, restore: () => { globalThis.fetch = originalFetch; } };
 }
 

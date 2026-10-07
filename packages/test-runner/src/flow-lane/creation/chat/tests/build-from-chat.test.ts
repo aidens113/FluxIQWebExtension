@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { automationStudioConversationCandidateDraftSaid, type AutomationStudioCandidateAuthoringResult } from "fluxiq/automation-studio";
 import type { ExistingFlowAdaptation } from "../../../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../../../failure.js";
 import { buildCreatedFlowFromChat, type CreatedFlowChat, type CreatedFlowChatControl } from "../build-from-chat.js";
@@ -31,7 +32,21 @@ type FakeChatOptions = {
   kept?: unknown;
   /** The words of a failed build's result turn, when not the default. */
   failedSaid?: string;
+  /**
+   * Candidate mode (t348): `draft` ends the build on Core's draft words for
+   * `verdict` and a `candidate-draft` turn, written `draftTurnLate` reads
+   * after the result when set; `promoted` ends it created, with the
+   * `candidateTrial` audit Core records on a promoted candidate's proposal.
+   */
+  candidate?: { kind: "draft"; verdict: NonNullable<AutomationStudioCandidateAuthoringResult["trial"]>["verdict"]; draftTurnLate?: number } | { kind: "promoted" };
+  /** Core's runtime sessions, as `list-runtime-sessions` returns them. */
+  runtimeSessions?: readonly unknown[];
 };
+
+const CANDIDATE_ID = "candidate.chat";
+const DRAFT_TEMPLATE: AutomationStudioCandidateAuthoringResult = { status: "draft", projectId: PROJECT, flowId: FLOW, candidateId: CANDIDATE_ID, revision: 2, digest: "d".repeat(64), sourceInstructionIds: ["instruction.one"], baseDependencyDigest: "base", baseSettingsRevision: 0, verification: "not_performed", promotionAllowed: false, accounting: { requestId: "request.one", estimatedInputTokens: 10 } };
+const CANDIDATE_SCOPE = { ...SCOPE, authoringMode: "candidate" as const, candidateTrial: { trialRunner: true, startReset: true, source: "core" as const } };
+const trialSession = (runId: string, queuedAt: number, trial: Record<string, unknown>, flowId = FLOW) => ({ runId, flowId, queuedAt, status: "succeeded", flow: { nodes: [{ text: "page words never kept" }] }, metadata: { candidateTrial: { candidateId: CANDIDATE_ID, digest: "d".repeat(64), start: "reset", ...trial } } });
 
 function fakeChat(options: FakeChatOptions) {
   const turns: Turn[] = [];
@@ -39,19 +54,24 @@ function fakeChat(options: FakeChatOptions) {
   let adaptation: ExistingFlowAdaptation | null = null;
   const pictures: string[] = [];
   let clock = 0;
+  let lateDraftReads = -1;
   const turn = (author: string, text: string, attachment: Turn["attachment"] = null): void => {
     turns.push({ turnId: `turn.${turns.length + 1}`, ordinal: turns.length + 1, author, text, ask: null, attachment });
   };
   const control: CreatedFlowChatControl = {
     async automationStudioCall(endpoint, payload, _bounds, domainId) {
-      // The proposal read raw for the judged yes Core recorded on it, as `getFlowAdaptation` reads it: no domain. This Core recorded none.
-      if (endpoint === "get-flow-adaptation") return { adaptation: { adaptationId: ADAPTATION, metadata: { phase9: { auditEvents: [{ eventType: "created", detail: {} }] } } } };
+      // The proposal read raw for the judged yes Core recorded on it, as `getFlowAdaptation` reads it: no domain. This Core recorded none, unless its candidate was promoted.
+      if (endpoint === "get-flow-adaptation") return { adaptation: { adaptationId: ADAPTATION, metadata: { phase9: { auditEvents: [{ eventType: "created", detail: options.candidate?.kind === "promoted" ? { candidateTrial: { candidateId: CANDIDATE_ID, revision: 2, digest: "d".repeat(64), trial: { runId: "trial.two", verdict: "yes", calls: 2, start: "reset" }, trials: 2 } } : {} }] } } } };
+      if (endpoint === "list-runtime-sessions") { assert.equal(payload.projectId, PROJECT); return { runtimeSessions: [...(options.runtimeSessions ?? [])] }; }
       assert.equal(domainId, "web-automation", "every read is held to the project's domain");
       assert.equal(payload.projectId, PROJECT);
       // A Subflow is listed as a Flow of its own; it must never count as the Flow the chat made.
       if (endpoint === "list-flows") return { flows: [...flows.map((flowId) => ({ flow: { flowId, metadata: {} } })), ...(flows.length ? [{ flow: { flowId: "flow.made.subflow", metadata: { subflowGraph: true } } }] : [])] };
       if (endpoint === "list-conversations") return { conversations: [{ conversationId: "conversation.chat", subject: { kind: "project", id: PROJECT } }] };
-      if (endpoint === "get-conversation") return { conversation: { turns, hasMore: false } };
+      if (endpoint === "get-conversation") {
+        if (lateDraftReads > 0 && --lateDraftReads === 0) turn("automation", "Saved candidate draft. Verification pending; the Flow's steps are unchanged.", { kind: "candidate-draft", ref: CANDIDATE_ID });
+        return { conversation: { turns: [...turns], hasMore: false } };
+      }
       if (endpoint === "get-flow-bootstrap-failure" && options.kept !== undefined) {
         assert.equal(payload.flowId, FLOW);
         return { failure: options.kept };
@@ -83,6 +103,12 @@ function fakeChat(options: FakeChatOptions) {
       flows.push(FLOW);
       if (options.ending === "never") return;
       if (options.ending === "created") adaptation = proposal("applied", { appliedMutationCount: 3 });
+      if (options.candidate?.kind === "draft") {
+        turn("automation", automationStudioConversationCandidateDraftSaid({ ...DRAFT_TEMPLATE, trial: { verdict: options.candidate.verdict, codes: [] } }), { kind: "panel-capability-result", ref: "flow.createHere" });
+        if (options.candidate.draftTurnLate) lateDraftReads = options.candidate.draftTurnLate;
+        else turn("automation", "Saved candidate draft. Verification pending; the Flow's steps are unchanged.", { kind: "candidate-draft", ref: CANDIDATE_ID });
+        return;
+      }
       if (options.ending === "awaiting_permission") {
         adaptation = proposal("proposed", { consequences: { declared: [], instructed: [], permissionRequest: { action: { kind: "click", verb: "press" }, control: { name: "Place order", kind: "button" }, consequences: ["move_money"], missing: ["move_money"] } } as unknown as NonNullable<ExistingFlowAdaptation["consequences"]> });
       }
@@ -224,4 +250,56 @@ test("candidate authoring mode refuses before any control, authorizer, chat or p
   const control = new Proxy({}, { get: (_target, key) => { calls.push(String(key)); return async () => { calls.push("effect"); }; } });
   await assert.rejects(async () => { await buildCreatedFlowFromChat(control as never, control as never, { projectId: "project", domainId: "web", instruction: "job", authoringMode: "candidate" }); }, (error: unknown) => !!error && typeof error === "object" && "details" in error && (error.details as Record<string, unknown>)?.code === "lab.candidate_verification_unavailable");
   assert.deepEqual(calls, []);
+});
+
+test("a candidate the chat kept as a draft is recorded with its id, the verdict in Core's own words and every trial Core ran (t348)", async () => {
+  const sessions = [
+    trialSession("trial.two", 20, { revision: 2, execution: "succeeded" }),
+    trialSession("trial.one", 10, { revision: 1, execution: "failed", code: "web.action.timeout" }),
+    trialSession("trial.elsewhere", 5, { revision: 1, execution: "succeeded" }, "flow.other"),
+    { runId: "run.normal", flowId: FLOW, queuedAt: 1, status: "succeeded", metadata: {} },
+  ];
+  for (const verdict of ["no", "unsure", "execution_failed"] as const) {
+    const { control, chat, wait } = fakeChat({ answer: "build", candidate: { kind: "draft", verdict }, runtimeSessions: sessions });
+    const made = await buildCreatedFlowFromChat(control, chat, CANDIDATE_SCOPE, wait);
+    assert.equal(made.build.outcome, "draft");
+    assert.equal(made.applied, null, "a draft is never applied");
+    assert.equal(made.build.candidateReference?.candidateId, CANDIDATE_ID);
+    const outcome = made.build.candidateOutcome;
+    assert.equal(outcome?.outcome, "draft");
+    assert.equal(outcome?.candidateId, CANDIDATE_ID);
+    assert.equal(outcome?.verdict, verdict, "read from Core's own words for that verdict");
+    assert.deepEqual(outcome?.trials?.map((trial) => [trial.runId, trial.revision, trial.execution, trial.code, trial.start]), [["trial.one", 1, "failed", "web.action.timeout", "reset"], ["trial.two", 2, "succeeded", null, "reset"]], "this Flow's trials of this candidate, in the order Core queued them");
+    assert.equal(outcome?.trialRunId, "trial.two", "the last trial is the one that decided");
+    assert.equal(outcome?.revision, 2);
+    assert.doesNotMatch(JSON.stringify(outcome), /page words/u, "nothing of a trial's Flow document is kept");
+  }
+});
+
+test("a draft turn Core writes just after the result is waited for, not read as a failed build (t348)", async () => {
+  const { control, chat, wait } = fakeChat({ answer: "build", candidate: { kind: "draft", verdict: "no", draftTurnLate: 6 } });
+  const made = await buildCreatedFlowFromChat(control, chat, CANDIDATE_SCOPE, wait);
+  assert.equal(made.build.outcome, "draft");
+  assert.equal(made.build.candidateOutcome?.verdict, "no");
+  assert.deepEqual(made.build.candidateOutcome?.trials, []);
+});
+
+test("a candidate the chat promoted and applied carries the candidate and trial behind its proposal (t348)", async () => {
+  const { control, chat, wait } = fakeChat({ answer: "build", ending: "created", candidate: { kind: "promoted" }, runtimeSessions: [trialSession("trial.two", 20, { revision: 2, execution: "succeeded" })] });
+  const made = await buildCreatedFlowFromChat(control, chat, CANDIDATE_SCOPE, wait);
+  assert.equal(made.build.outcome, "proposed");
+  assert.deepEqual(made.applied, { adaptationId: ADAPTATION, appliedMutationCount: 3 });
+  assert.deepEqual({ ...made.build.candidateOutcome, trials: made.build.candidateOutcome?.trials?.map((trial) => trial.runId) }, { authoringMode: "candidate", outcome: "promoted", candidateId: CANDIDATE_ID, revision: 2, digest: "d".repeat(64), verdict: "yes", trialRunId: "trial.two", codes: [], judgeCalls: 2, trialCount: 2, trials: ["trial.two"], promotedAdaptationId: ADAPTATION });
+  // The same chat in legacy mode reads no candidate.
+  const legacy = fakeChat({ answer: "build", ending: "created" });
+  assert.equal((await buildCreatedFlowFromChat(legacy.control, legacy.chat, SCOPE, legacy.wait)).build.candidateOutcome, undefined);
+});
+
+test("candidate mode refuses a Core without the trial runner, or without the start hook, before anything is typed (t348)", async () => {
+  for (const [candidateTrial, code] of [[{ trialRunner: false, startReset: false, source: "core" as const }, "lab.candidate_verification_unavailable"], [{ trialRunner: true, startReset: false, source: "core" as const }, "lab.candidate_start_hook_unset"]] as const) {
+    const { control, chat, wait } = fakeChat({ answer: "build", ending: "created" });
+    let typed = 0;
+    await assert.rejects(buildCreatedFlowFromChat(control, { ...chat, type: async (text) => { typed += 1; await chat.type(text); } }, { ...SCOPE, authoringMode: "candidate", candidateTrial }, wait), (error: unknown) => error instanceof RunnerFailure && error.category === "facility.contract" && error.details?.code === code && error.details?.stage === "before_provider");
+    assert.equal(typed, 0);
+  }
 });

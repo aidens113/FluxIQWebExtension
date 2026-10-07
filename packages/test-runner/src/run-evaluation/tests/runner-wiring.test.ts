@@ -452,11 +452,19 @@ test("the runner hands a permission stop to the evaluation and the printed resul
 // the exploration and the build's tests had opened still open, so a Flow could
 // start beside pages it never reached. Before playback the runner closes every
 // fixture tab but the one playback drives, and never the extension's own pages.
+// Since d9e06d86 that rule is `run-scenario/browser-session/present-flow-tab.ts`,
+// applied to every Flow run (the recording's own too), and its behaviour --
+// which tabs close, that the extension's pages stay -- is tested beside it. What
+// is pinned here is that the runner hands it over once, last in the hook every
+// Flow run prepares through, after the tab was loaded or blanked.
 test("the runner closes every other fixture tab before playback, and leaves the extension's pages open", async () => {
   const source = await runnerSource();
-  const close = source.indexOf('if (moment === "playback") for (const other of context!.pages().filter(other => other !== page && other !== extensionControl && (isScenarioUrl(other.url()) || other.url() === BLANK_TAB_URL))) await other.close();');
-  assert.ok(close > 0, "the runner closes the other fixture tabs at playback");
-  assert.ok(close < source.indexOf("const startPage = flowStartPage({"), "before the page playback starts on is prepared");
+  const present = source.indexOf('await presentFlowTab({ page, pages: context!.pages(), extensionControl: paired ? extensionControl : undefined, scenarioOrigin: activeTopology.scenarioOrigin, isScenarioUrl, blankTabUrl: BLANK_TAB_URL, moment, startsOnScenarioPage: startPage === "scenario-start-page" });');
+  assert.ok(present > 0, "the runner closes the other fixture tabs at playback, through presentFlowTab");
+  assert.equal(source.match(/presentFlowTab\(/gu)?.length, 1, "one call, in the one hook both Flow lanes and the repair lane prepare through");
+  assert.equal(source.includes("await other.close()"), false, "no tab is closed by a rule of the runner's own");
+  const blank = source.indexOf('if (startPage !== "scenario-start-page") for (const open of [page, ...context!.pages().filter(other => other !== page && isScenarioUrl(other.url()))]) await open.goto(BLANK_TAB_URL);');
+  assert.ok(source.indexOf("const startPage = flowStartPage({") < blank && blank < present, "after the page playback starts on is prepared, so the tab it is handed is the one the Flow meets");
 });
 
 // `run-musq0b1m-0472cfa0`: a lane that stopped after its Flow was built and

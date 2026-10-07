@@ -41,6 +41,11 @@ export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
     // does, or by the Lab calling Core's build endpoint itself, which is
     // test-only and never a pass. The chat's own record is on `build.chat`.
     buildEntry: evidence.build.chat ? "chat" as const : "direct-api" as const,
+    // The mode the run's Core authored in, and in candidate mode the candidate,
+    // each trial Core ran of it, the verdict that decided and the proposal it
+    // became (t348); the same record is on `build.candidateOutcome`.
+    authoringMode: evidence.authoringMode,
+    candidate: evidence.build.candidateOutcome ?? null,
     build: evidence.build,
     // Where `build.instructedConsequences` came from, as `live-llm.json` says it.
     instructedConsequencesFrom: evidence.instructedConsequencesFrom,

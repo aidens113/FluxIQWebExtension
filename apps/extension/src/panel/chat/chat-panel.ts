@@ -276,7 +276,8 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     const paced = feed.snapshot().state.display;
     const ended = paced?.activityId === raw?.activityId && (paced?.outcome === "done" || paced?.outcome === "failed");
     const projectId = shownTarget.projectId ?? latestStatus?.projectId;
-    stop.update(raw && !ended && (projectId === undefined || raw.subject.projectId === projectId) ? raw : null);
+    // Stop is offered from the send's "Starting…" on, before Core names the work (`stop-control.ts`, D9).
+    stop.update(raw && !ended && (projectId === undefined || raw.subject.projectId === projectId) ? raw : null, paced?.kind === "starting");
     let state = controller.state();
     if (state.fallbackReason === "unsupported") unsupported = true;
     if (unsupported) state = { ...state, mode: connected ? "fallback" : "offline", fallbackReason: "unsupported" };

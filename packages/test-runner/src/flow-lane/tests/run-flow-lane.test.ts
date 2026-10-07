@@ -7,6 +7,7 @@ import type { DeclaredSecret } from "../declared-secrets.js";
 import type { HarnessRecoveryDetail } from "../harness-recovery.js";
 import { flowLaneSnapshot, runFlowLane, type FlowLaneControl, type FlowLaneEvidence } from "../run-flow-lane.js";
 import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
+import { resetProducerResponse } from "./reset-producer-response.js";
 
 /**
  * The regression this file exists for.
@@ -136,7 +137,11 @@ type LaneOptions = {
 async function runLane(fake: ReturnType<typeof fakeCore>, evidence: FlowLaneEvidence[], lane: LaneOptions = {}) {
   const resetCalls: string[] = [];
   const realFetch = globalThis.fetch;
-  globalThis.fetch = (async (url: string) => { resetCalls.push(String(url)); fake.sequence.push("reset"); return { ok: true, status: 200 }; }) as unknown as typeof globalThis.fetch;
+  // The reset is the POST; the health read that confirms it is the producer's answer, not a call the lane makes on purpose.
+  globalThis.fetch = (async (url: string, init?: { method?: string }) => {
+    if (init?.method === "POST") { resetCalls.push(String(url)); fake.sequence.push("reset"); }
+    return resetProducerResponse(init?.method);
+  }) as unknown as typeof globalThis.fetch;
   try {
     const outcome = await runFlowLane({
       control: fake.control,

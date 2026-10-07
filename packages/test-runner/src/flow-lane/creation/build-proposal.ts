@@ -1,5 +1,6 @@
-import { assertCreatedFlowVerificationReady } from "./readiness.js";
+import { assertCreatedFlowVerificationReady, type CreatedFlowCandidateTrialReadiness } from "./readiness.js";
 import { createdFlowCandidateDraft } from "./candidate-draft.js";
+import { createdFlowCandidateDraftOutcome, readCreatedFlowCandidatePromotion, type CreatedFlowCandidateOutcome } from "./candidate-outcome.js";
 import type { AutomationStudioAuthoringMode, AutomationStudioCandidateAuthoringResult } from "fluxiq/automation-studio";
 // The one paid step of a created-Flow run: give Core the task's instruction,
 // ready the Flow's LLM settings, and ask Core to explore the live page and
@@ -74,7 +75,7 @@ export type CreatedFlowBuildControl = {
  * model call needs none. `permittedConsequences` is the operator's
  * `--llm-permit`, sent only when it permits something.
  */
-/** `authoringMode` is absent from a legacy build, which asks for a proposed adaptation as the baseline did; a candidate-mode run is refused before it builds (`./readiness.ts`). */
+/** `authoringMode` is absent from a legacy build, which asks for a proposed adaptation as the baseline did, and `candidate` in a candidate-mode run that `./readiness.ts` admitted. */
 export type CreatedFlowBuildRequest = { projectId: string; flowId: string; evidenceGuided: true; authoringMode?: "candidate"; startLocation?: string; permittedConsequences?: LlmActionConsequence[] };
 
 /** What readying a Flow for its build answers with: the consequences the operator permitted it (`--llm-permit`), empty for none. */
@@ -237,6 +238,8 @@ export type CreatedFlowBuild = Readonly<{
   outcome: "proposed" | "draft" | "permission_required" | "failed";
   candidate?: AutomationStudioCandidateAuthoringResult;
   candidateReference?: Readonly<{ candidateId: string; verification: "not_performed" }>;
+  /** A candidate-mode build's candidate, trials and deciding verdict, and the proposal it became when promoted (`./candidate-outcome.ts`). Absent from a legacy build. */
+  candidateOutcome?: CreatedFlowCandidateOutcome;
   adaptationId: string | null;
   providerCalls: number | null;
   providerInvocation: "attempted" | "not_attempted" | "unknown";
@@ -354,16 +357,24 @@ export type CreatedFlowPermissionRequest = Readonly<{
  * `authorize` installs the key and saves the settings once the instruction is
  * saved; a refusal there throws before anything is spent. `authoringMode` is
  * the mode the run's Core was started in (`../../live-llm/authoring-mode-env.ts`):
- * only `legacy` builds, and `candidate` is refused before anything is sent.
+ * `legacy` builds as at the baseline, and `candidate` builds only with the
+ * Core's `candidateTrial` readiness admitted (`./readiness.ts`), asks Core for
+ * a tested candidate, and records what came of it (`candidateOutcome`).
  */
 export async function buildCreatedFlowProposal(
   control: CreatedFlowBuildControl,
-  input: { projectId: string; flowId: string; instruction: string; startLocation?: string; authorize: (flowId: string) => Promise<CreatedFlowBuildLlm>; authoringMode: AutomationStudioAuthoringMode },
+  input: { projectId: string; flowId: string; instruction: string; startLocation?: string; authorize: (flowId: string) => Promise<CreatedFlowBuildLlm>; authoringMode: AutomationStudioAuthoringMode; candidateTrial?: CreatedFlowCandidateTrialReadiness },
   bounds: FluxIQHttpOptions = {},
   wait: CreatedFlowBuildWait = {},
 ): Promise<CreatedFlowBuild> {
-  assertCreatedFlowVerificationReady(input.authoringMode);
+  assertCreatedFlowVerificationReady(input.authoringMode, input.candidateTrial);
   const now = wait.now ?? Date.now;
+  // A promoted candidate is an ordinary proposal; the candidate behind it is read from its audit.
+  const withCandidate = async (build: CreatedFlowBuild): Promise<CreatedFlowBuild> => {
+    if (input.authoringMode !== "candidate" || build.adaptationId === null) return build;
+    const candidateOutcome = await readCreatedFlowCandidatePromotion(control, input, build.adaptationId);
+    return candidateOutcome ? Object.freeze({ ...build, candidateOutcome }) : build;
+  };
   const saved = record(await control.automationStudioCall("save-flow-generation-instruction", { projectId: input.projectId, flowId: input.flowId, instruction: input.instruction }, bounds));
   if (record(saved.instruction).status !== "active") throw new RunnerFailure("runtime.behavior", "Core did not make the task's instruction the Flow's active instruction");
   const { permittedConsequences } = await input.authorize(input.flowId);
@@ -382,6 +393,7 @@ export async function buildCreatedFlowProposal(
         projectId: input.projectId,
         flowId: input.flowId,
         evidenceGuided: true,
+        ...(input.authoringMode === "candidate" ? { authoringMode: "candidate" as const } : {}),
         ...(input.startLocation === undefined ? {} : { startLocation: input.startLocation }),
         ...(permittedConsequences.length ? { permittedConsequences: [...permittedConsequences] } : {}),
       },
@@ -393,19 +405,18 @@ export async function buildCreatedFlowProposal(
     if (!isBoundedHttpFailure(error)) throw error;
     const adaptationId = await awaitProposal(control, input, startedAt, wait);
     if (adaptationId === undefined) return failed({ code: "lab.generation_unfinished", stage: null, httpStatus: null }, "unknown", now() - startedAt);
-    return proposed(control, input, adaptationId, true, now() - startedAt);
+    return withCandidate(await proposed(control, input, adaptationId, true, now() - startedAt));
   }
   if (!envelope.ok) return refused(envelope, now() - startedAt);
   const adaptation = isRecord(envelope.payload) && isRecord(envelope.payload.adaptation) ? envelope.payload.adaptation : undefined;
   if (adaptation?.projectId === input.projectId && adaptation.flowId === input.flowId && adaptation.status === "proposed" && typeof adaptation.adaptationId === "string") {
-    return proposed(control, input, adaptation.adaptationId, false, now() - startedAt);
+    return withCandidate(await proposed(control, input, adaptation.adaptationId, false, now() - startedAt));
   }
-  // A Core that authored a candidate draft instead (candidate mode, which the
-  // readiness check above should already have refused): kept as an unverified
-  // draft, never as a Flow that could be run or pass.
+  // A candidate Core kept as a draft: its trial did not stand. Kept as an
+  // unverified draft with its verdict, never as a Flow that could be run or pass.
   const candidate = createdFlowCandidateDraft(envelope.payload, input);
   if (!candidate) return failed({ code: "lab.generation_answer_invalid", stage: null, httpStatus: envelope.status }, "unknown", now() - startedAt);
-  return Object.freeze({ ...failed({ code: "lab.verification_pending", stage: "verification", httpStatus: null }, "attempted", now() - startedAt), outcome: "draft", failure: null, candidate,
+  return Object.freeze({ ...failed({ code: "lab.verification_pending", stage: "verification", httpStatus: null }, "attempted", now() - startedAt), outcome: "draft", failure: null, candidate, candidateOutcome: await createdFlowCandidateDraftOutcome(control, candidate),
     accounting: { provider: candidate.accounting.provider ?? null, model: candidate.accounting.model ?? null, inputTokens: candidate.accounting.inputTokens ?? null, outputTokens: candidate.accounting.outputTokens ?? null, totalTokens: candidate.accounting.totalTokens ?? null, estimatedCostUsd: candidate.accounting.estimatedCostUsd ?? null } });
 }
 

@@ -33,6 +33,8 @@ export type ActionCard = ActivityAction & {
   check: boolean;
   /** How many identical cards that did nothing this card stands for (`card-repeats.ts`); absent for one. */
   times?: number;
+  /** The steps done again this card stands for, itself first, when it is one line for them (`done-again.ts`); absent otherwise. */
+  again?: readonly ActionCard[];
 };
 
 /**

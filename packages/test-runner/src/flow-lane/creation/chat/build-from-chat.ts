@@ -18,7 +18,8 @@
 
 import type { AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../../../failure.js";
-import { assertCreatedFlowVerificationReady } from "../readiness.js";
+import { assertCreatedFlowVerificationReady, type CreatedFlowCandidateTrialReadiness } from "../readiness.js";
+import { createdFlowChatCandidateDraftOutcome, readCreatedFlowCandidatePromotion } from "../candidate-outcome.js";
 import { createdFlowBuildFromDiagnostic, failedCreatedFlowBuild, readCreatedFlowBuild, type CreatedFlowBuild, type CreatedFlowBuildControl } from "../build-proposal.js";
 import type { CreatedFlowChatRecord } from "./chat-record.js";
 import { chatConversationIds, chatThreadTurns, projectFlowIds, type CreatedFlowChatScope, type CreatedFlowChatTurn } from "./chat-thread.js";
@@ -74,6 +75,8 @@ const POLL_MS = 500;
 const SEND_MS = 60_000;
 const ANSWER_MS = 60_000;
 const START_MS = 30_000;
+/** How long a candidate-mode build that left no proposal is given for Core's draft turn, written just after its result. */
+const DRAFT_TURN_MS = 5_000;
 const DEADLINE_MS = 60_000 + 600_000 + 15_000 + 120_000;
 
 /**
@@ -87,11 +90,11 @@ const DEADLINE_MS = 60_000 + 600_000 + 15_000 + 120_000;
 export async function buildCreatedFlowFromChat(
   control: CreatedFlowChatControl,
   chat: CreatedFlowChat,
-  input: CreatedFlowChatScope & { instruction: string; authoringMode: AutomationStudioAuthoringMode },
+  input: CreatedFlowChatScope & { instruction: string; authoringMode: AutomationStudioAuthoringMode; candidateTrial?: CreatedFlowCandidateTrialReadiness },
   wait: CreatedFlowChatWait = {},
 ): Promise<CreatedFlowChatBuild> {
-  // Only a legacy-mode Core builds a Flow the lane can run (`../readiness.ts`).
-  assertCreatedFlowVerificationReady(input.authoringMode);
+  // A legacy-mode Core, or a candidate-mode one whose trials start from the Lab's reset (`../readiness.ts`).
+  assertCreatedFlowVerificationReady(input.authoringMode, input.candidateTrial);
   const now = wait.now ?? Date.now;
   const sleep = wait.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const pollMs = wait.pollMs ?? POLL_MS;
@@ -169,12 +172,18 @@ export async function buildCreatedFlowFromChat(
     return Object.freeze({ build: Object.freeze({ ...build, chat: ending({ ending: ended ? "failed" : "no_result" }) }), flowId, applied: null, said });
   }
 
-  // A Core that saved a candidate draft instead (candidate mode, refused above
-  // before anything was typed): an unverified reference, never a created Flow.
-  const draft = turns.find((turn) => turn.author === "automation" && turn.attachment?.kind === "candidate-draft" && typeof turn.attachment.ref === "string" && turn.attachment.ref.length > 0 && turn.attachment.ref.length <= 200);
+  // A candidate Core kept as a draft (candidate mode): its trial did not stand,
+  // so nothing was applied. An unverified reference with the trial's verdict,
+  // never a created Flow. Only this instruction's turns are read. Core writes
+  // the draft's turn just after the command's result, so a candidate-mode
+  // build that left no proposal waits a moment for it.
+  const isDraft = (turn: CreatedFlowChatTurn) => turn.author === "automation" && turn.attachment?.kind === "candidate-draft" && typeof turn.attachment.ref === "string" && turn.attachment.ref.length > 0 && turn.attachment.ref.length <= 200;
+  const draft = after(turns).find(isDraft) ?? (input.authoringMode === "candidate" && (await control.listFlowAdaptations(input.projectId, flowId)).length === 0
+    ? await until(DRAFT_TURN_MS, async () => after(await thread()).find(isDraft)) : undefined);
   if (draft) {
     const build = failedCreatedFlowBuild({ code: "lab.verification_pending", stage: "verification", httpStatus: null }, "unknown", durationMs);
-    return Object.freeze({ build: Object.freeze({ ...build, outcome: "draft" as const, failure: null, candidateReference: Object.freeze({ candidateId: draft.attachment!.ref, verification: "not_performed" as const }), chat: ending({ ending: "draft" }) }), flowId, applied: null, said });
+    const candidateOutcome = await createdFlowChatCandidateDraftOutcome(control, { projectId: input.projectId, flowId }, draft.attachment!.ref, said);
+    return Object.freeze({ build: Object.freeze({ ...build, outcome: "draft" as const, failure: null, candidateReference: Object.freeze({ candidateId: draft.attachment!.ref, verification: "not_performed" as const }), candidateOutcome, chat: ending({ ending: "draft" }) }), flowId, applied: null, said });
   }
 
   const proposals = await control.listFlowAdaptations(input.projectId, flowId);
@@ -192,7 +201,9 @@ export async function buildCreatedFlowFromChat(
     return Object.freeze({ build: Object.freeze({ ...read.build, chat: ending({ ending: "awaiting_permission" }) }), flowId, applied: null, said });
   }
   if (read.build.outcome === "proposed" && read.status === "applied") {
-    return Object.freeze({ build: Object.freeze({ ...read.build, chat: ending({ ending: "created" }) }), flowId, applied: Object.freeze({ adaptationId: proposal.adaptationId, appliedMutationCount: read.appliedMutationCount ?? 0 }), said });
+    // A candidate the chat applied: the candidate and trial behind it, from the proposal's audit.
+    const candidateOutcome = input.authoringMode === "candidate" ? await readCreatedFlowCandidatePromotion(control, { projectId: input.projectId, flowId }, proposal.adaptationId) : null;
+    return Object.freeze({ build: Object.freeze({ ...read.build, ...(candidateOutcome ? { candidateOutcome } : {}), chat: ending({ ending: "created" }) }), flowId, applied: Object.freeze({ adaptationId: proposal.adaptationId, appliedMutationCount: read.appliedMutationCount ?? 0 }), said });
   }
   // A well-formed proposal the chat did not put into the Flow: its own apply failed, and the thread says why.
   const failure = read.build.failure ?? { code: "lab.chat_not_applied", stage: "review", httpStatus: null };

@@ -1,6 +1,8 @@
 // One of FluxIQ's step messages, the way it reads in the chat: on FluxIQ's
 // side of the conversation, what it decided in bold and why after a dash,
-// then each action that led to as a card (`action-card-view.ts`).
+// then each action that led to as a card (`action-card-view.ts`), and steps
+// done again before a retry as one line that opens to show them
+// (`done-again-view.ts`).
 //
 //   **Clicking “Get a free quote”** — The quote form is behind this button,
 //   so I'm opening it.
@@ -23,6 +25,7 @@
 import { createElement } from "../../dom";
 import type { StepMessage } from "../stream";
 import { createActionCardView, type ActionCardView } from "./action-card-view";
+import { createDoneAgainView, type DoneAgainView } from "./done-again-view";
 import { placeChildren } from "./place-children";
 
 /** The mounted message. */
@@ -43,6 +46,7 @@ export function createStepMessageView(): StepMessageView {
   const cards = createElement("div", { className: "chat-cards", hidden: true });
   const element = createElement("li", { className: "chat-entry chat-step-msg" }, [line, cards]);
   const views = new Map<string, ActionCardView>();
+  const groups = new Map<string, DoneAgainView>();
 
   return {
     element,
@@ -57,6 +61,16 @@ export function createStepMessageView(): StepMessageView {
 
       const last = message.actions.length - 1;
       const shown = message.actions.map((card, index) => {
+        if (card.again !== undefined) {
+          // Steps done again are one line that opens to show them (`done-again-view.ts`, D7).
+          let group = groups.get(card.key);
+          if (group === undefined) {
+            group = createDoneAgainView();
+            groups.set(card.key, group);
+          }
+          group.update(card);
+          return group.element;
+        }
         let view = views.get(card.key);
         if (view === undefined) {
           view = createActionCardView();
@@ -67,8 +81,10 @@ export function createStepMessageView(): StepMessageView {
         view.update(card, current && (card.outcome === "waiting" || (message.latest && index === last)));
         return view.element;
       });
-      const keys = new Set(message.actions.map((card) => card.key));
+      const keys = new Set(message.actions.filter((card) => card.again === undefined).map((card) => card.key));
       for (const key of [...views.keys()]) if (!keys.has(key)) views.delete(key);
+      const grouped = new Set(message.actions.filter((card) => card.again !== undefined).map((card) => card.key));
+      for (const key of [...groups.keys()]) if (!grouped.has(key)) groups.delete(key);
       placeChildren(cards, shown);
       if (cards.hidden !== (shown.length === 0)) cards.hidden = shown.length === 0;
     }

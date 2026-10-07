@@ -81,33 +81,68 @@ const fixtures: readonly Fixture[] = [
   { what: "a <section> given a non-landmark role", role: undefined, element: stub("SECTION", "decor", { role: "presentation" }) }
 ];
 
-installStubDom();
-
 test("the shared rule decides a landmark by tag, by explicit role, and by whether the page named it", () => {
-  for (const fixture of fixtures) {
-    assert.equal(landmarkRole(fixture.element), fixture.role, fixture.what);
-  }
+  withStubDom(() => {
+    for (const fixture of fixtures) {
+      assert.equal(landmarkRole(fixture.element), fixture.role, fixture.what);
+    }
+  });
 });
 
 test("the context call site reports the same role the rule gives", () => {
-  for (const fixture of fixtures) {
-    assert.equal(elementContext(fixture.element)?.landmark, fixture.role, fixture.what);
-  }
+  withStubDom(() => {
+    for (const fixture of fixtures) {
+      assert.equal(elementContext(fixture.element)?.landmark, fixture.role, fixture.what);
+    }
+  });
 });
 
 test("the region call site reports the same role the rule gives, for the same elements", () => {
-  const landmarks = fixtures.filter((fixture) => fixture.role !== undefined);
-  const regions = regionEvidence();
-  assert.deepEqual(regions?.map((region) => region.role), landmarks.map((fixture) => fixture.role));
-  assert.deepEqual(regions?.map((region) => region.selector), landmarks.map((fixture) => `#${fixture.element.id}`));
+  withStubDom(() => {
+    const landmarks = fixtures.filter((fixture) => fixture.role !== undefined);
+    const regions = regionEvidence();
+    assert.deepEqual(regions?.map((region) => region.role), landmarks.map((fixture) => fixture.role));
+    assert.deepEqual(regions?.map((region) => region.selector), landmarks.map((fixture) => `#${fixture.element.id}`));
+  });
 });
 
 test("neither call site is answering from a rule of its own", () => {
-  for (const fixture of fixtures) {
-    const region = regionEvidence()?.find((candidate) => candidate.selector === `#${fixture.element.id}`);
-    assert.equal(region?.role, elementContext(fixture.element)?.landmark, fixture.what);
-  }
+  withStubDom(() => {
+    for (const fixture of fixtures) {
+      const region = regionEvidence()?.find((candidate) => candidate.selector === `#${fixture.element.id}`);
+      assert.equal(region?.role, elementContext(fixture.element)?.landmark, fixture.what);
+    }
+  });
 });
+
+const STUB_GLOBALS = ["document", "window", "CSS", "HTMLElement", "HTMLInputElement", "HTMLSelectElement", "HTMLTextAreaElement", "HTMLTableCellElement"] as const;
+
+/**
+ * Runs `body` with the stub DOM installed, then puts back whatever those
+ * globals held before, even when `body` throws.
+ *
+ * Every extension test bundle runs in one Node process
+ * (`scripts/test-extension.mjs`): the bundles are all imported first and their
+ * tests run afterwards, in file order. A DOM installed when this file was
+ * imported survived only until a test in an earlier file replaced or deleted it,
+ * and since t306 one does (`action-runtime/tests/assertion-evaluation.test.ts`
+ * deletes `document` when it finishes). So the stub goes in at the start of
+ * each test, and comes out again so this file leaves nothing behind for the
+ * files after it.
+ */
+function withStubDom(body: () => void): void {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const previous = STUB_GLOBALS.map((name) => [name, Object.getOwnPropertyDescriptor(globals, name)] as const);
+  installStubDom();
+  try {
+    body();
+  } finally {
+    for (const [name, descriptor] of previous) {
+      if (descriptor === undefined) delete globals[name];
+      else Object.defineProperty(globals, name, descriptor);
+    }
+  }
+}
 
 /**
  * The least DOM the two call sites read. `regionEvidence` sweeps the document
@@ -115,10 +150,15 @@ test("neither call site is answering from a rule of its own", () => {
  * from an element. Everything either one asks for that a stub element cannot
  * answer is answered here, and nothing more, so a rule that started reading
  * something new would fail loudly rather than quietly.
+ *
+ * Each global is defined rather than assigned: another file may have left one
+ * as a read-only property, which an assignment could not replace.
  */
 function installStubDom(): void {
-  const globals = globalThis as unknown as Record<string, unknown>;
-  globals["document"] = {
+  const install = (name: (typeof STUB_GLOBALS)[number], value: unknown): void => {
+    Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
+  };
+  install("document", {
     nodeType: 9,
     documentElement: {},
     getElementById: () => null,
@@ -129,10 +169,10 @@ function installStubDom(): void {
       selector.startsWith("label[") ? [] :
         selector.startsWith("#") ? fixtures.filter((fixture) => `#${fixture.element.id}` === selector).map((fixture) => fixture.element) :
           fixtures.map((fixture) => fixture.element)
-  };
-  globals["window"] = { innerWidth: 1280, innerHeight: 800, scrollX: 0, scrollY: 0 };
-  globals["CSS"] = { escape: (value: string) => value };
-  for (const name of ["HTMLElement", "HTMLInputElement", "HTMLSelectElement", "HTMLTextAreaElement", "HTMLTableCellElement"]) {
-    globals[name] = class {};
+  });
+  install("window", { innerWidth: 1280, innerHeight: 800, scrollX: 0, scrollY: 0 });
+  install("CSS", { escape: (value: string) => value });
+  for (const name of ["HTMLElement", "HTMLInputElement", "HTMLSelectElement", "HTMLTextAreaElement", "HTMLTableCellElement"] as const) {
+    install(name, class {});
   }
 }
