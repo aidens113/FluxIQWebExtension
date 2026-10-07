@@ -1,3 +1,4 @@
+import { serverAdapterBuild } from "./server-adapter.js";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { RunnerFailure } from "../failure.js";
@@ -42,6 +43,8 @@ export type CoreWebBuildOptions = {
 };
 
 export type CoreWebBuildDependencies = {
+  prepareAdapter: typeof serverAdapterBuild.prepare;
+  validateAdapterCopy: typeof serverAdapterBuild.validateCopy;
   collectInputs: (fluxiqRepositoryRoot: string) => Promise<{ inputs: CoreWebBuildInputs; nextExecutable: string }>;
   stageWorkspace: (fluxiqRepositoryRoot: string, webDirectory: string) => Promise<unknown>;
   runBuild: (supervisor: ProcessSupervisor, spec: ProcessSpec, timeoutMs: number) => Promise<void>;
@@ -61,6 +64,7 @@ export type CoreWebBuildDependencies = {
 };
 
 const defaultDependencies: CoreWebBuildDependencies = {
+  prepareAdapter: serverAdapterBuild.prepare, validateAdapterCopy: serverAdapterBuild.validateCopy,
   collectInputs: root => collectCoreWebBuildInputs(root),
   stageWorkspace: prepareWebWorkspace,
   runBuild: (supervisor, spec, timeoutMs) => supervisor.run(spec, timeoutMs),
@@ -97,6 +101,7 @@ export async function prepareCoreWebBuild(options: CoreWebBuildOptions, override
     if (!budget.fits) {
       throw new RunnerFailure("environment.missing", `The Core web build cache path is too long for this filesystem: ${cacheRoot} is ${budget.root} characters and the deepest file Next writes below it needs ${budget.longest}, over the ${WINDOWS_PATH_LIMIT}-character limit. Point FLUXIQ_CORE_WEB_BUILD_CACHE at a short directory (for example F:\\fxcache) -- at most ${budget.allowed} characters.`, { details: { process: BUILD_PROCESS_NAME, cacheRoot, ...budget } });
     }
+    await dependencies.prepareAdapter(options);
     const { inputs, nextExecutable } = await dependencies.collectInputs(options.fluxiqRepositoryRoot);
     const key = coreWebBuildKey(inputs);
     const keyDirectory = path.join(cacheRoot, key);
@@ -105,7 +110,7 @@ export async function prepareCoreWebBuild(options: CoreWebBuildOptions, override
     let unreadableSince: number | undefined;
     for (;;) {
       const published = await readPublishedCoreWebBuild(keyDirectory, key, nextExecutable);
-      if (published) return published;
+      if (published) { await dependencies.validateAdapterCopy(options.fluxiqRepositoryRoot, published.webDirectory); return published; }
       options.signal?.throwIfAborted();
       const attempt = await tryAcquireBuildLock(keyDirectory, dependencies.lock);
       if ("lock" in attempt) return await buildUnderLock(attempt.lock, options, dependencies, key, keyDirectory, nextExecutable);
@@ -132,6 +137,7 @@ async function buildUnderLock(lock: WorkspaceOperationLock, options: CoreWebBuil
   let build: CoreWebBuild;
   try {
     build = await readPublishedCoreWebBuild(keyDirectory, key, nextExecutable) ?? await buildAndPublish(options, dependencies, key, keyDirectory, nextExecutable);
+    await dependencies.validateAdapterCopy(options.fluxiqRepositoryRoot, build.webDirectory);
   } catch (error) {
     await lock.release().catch(() => undefined);
     throw error;
@@ -150,6 +156,7 @@ async function buildAndPublish(options: CoreWebBuildOptions, dependencies: CoreW
   await mkdir(webDirectory, { recursive: true });
   await mkdir(path.join(fluxiqRoot, ".fluxiq"), { recursive: true });
   await dependencies.stageWorkspace(options.fluxiqRepositoryRoot, webDirectory);
+  await dependencies.validateAdapterCopy(options.fluxiqRepositoryRoot, webDirectory);
   try {
     await dependencies.runBuild(options.supervisor, {
       name: BUILD_PROCESS_NAME,

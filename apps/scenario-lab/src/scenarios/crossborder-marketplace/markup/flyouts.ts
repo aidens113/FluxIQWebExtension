@@ -51,5 +51,7 @@ export function accountFlyoutMarkup(state: MarketState, c: MarketClasses): strin
     + `<p class="${c.flyoutLine}" data-testid="orders-summary">${escapeHtml(ordersSummaryText(state))}</p>`
     + `<p class="${c.flyoutLine}" data-testid="store-coupons">${escapeHtml(storeCouponsText(state))}</p>`
     + `<p class="${c.flyoutLine}">${escapeHtml(platform)}</p>`
+    // Read-only fixture oracle; never a discovery input for the automation product.
+    + `<script type="application/json" data-testid="coupon-only-account">${JSON.stringify({ platformCoupon: state.coupons.platform, checkoutOpen: state.checkout !== null, orders: state.orders.length })}</script>`
     + `<p class="${c.flyoutLine}">Wish list (7) · Followed stores (3) · Feedback (2)</p></div>`;
 }

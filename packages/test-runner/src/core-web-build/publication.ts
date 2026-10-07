@@ -1,3 +1,4 @@
+import { serverAdapterBuild } from "./server-adapter.js";
 // How a finished build becomes reusable. A build attempt runs in its own
 // directory and is never moved. After `next build` exits 0 and has written
 // `.next/BUILD_ID`, the attempt receives a completion marker; only then does
@@ -50,7 +51,7 @@ export async function readPublishedCoreWebBuild(keyDirectory: string, key: strin
   const marker = await readRecord(path.join(directory, COMPLETION_FILE), ["buildId", "key", "schemaVersion"]);
   if (!marker || marker.key !== key) return undefined;
   const buildId = await readBuildId(webDirectory);
-  if (!buildId || marker.buildId !== buildId) return undefined;
+  if (!buildId || marker.buildId !== buildId || !await serverAdapterBuild.hasArtifacts(webDirectory)) return undefined;
   return { key, directory, webDirectory, nextExecutable, buildId };
 }
 

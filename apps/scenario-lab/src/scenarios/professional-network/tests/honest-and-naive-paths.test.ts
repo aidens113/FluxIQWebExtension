@@ -1,3 +1,4 @@
+import { staleRequestAuditExpected, staleRequestAuditWorkflow } from "../qualification/index.js";
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
 import type { Browser, Page } from "@playwright/test";
@@ -315,3 +316,62 @@ async function withdrawWhere(page: Page, choose: (label: string, isPerson: boole
   }
   return count;
 }
+
+
+test("qualification readiness: audit reads twelve old people requests without withdrawing", () => session(async (current) => {
+  const page = await arrive(current, `${ROOT}mynetwork/invitation-manager/sent/`);
+  await page.getByRole("button", CLOSE_CONVERSATION).click({ timeout: 8_000 });
+  await loadEverySentRow(page, 36);
+  const records: Array<Record<string, string>> = [];
+  for (const row of await page.locator("li[data-entity-urn]").all()) {
+    const age = (await row.locator("gl-time-ago span").textContent())?.trim() ?? "";
+    if (!(await row.getByRole("button", { name: "Withdraw", exact: true }).count()) || !/months? ago|years? ago/u.test(age)) continue;
+    records.push({ name: (await row.locator('a span[aria-hidden="true"]').textContent())!.trim() });
+  }
+  assert.deepEqual(records, staleRequestAuditExpected.extracted![0]!.records);
+  assert.equal(await factText(page, "invitation-store"), staleRequestAuditExpected.finalState![0]!.value);
+  assert.equal(new Set(records.map(({ name }) => name)).size, 12);
+  assert.deepEqual(current.consoleErrors, []);
+}));
+
+test("qualification readiness: a correct audit table does not excuse withdrawing a request", () => session(async (current) => {
+  const page = await arrive(current, `${ROOT}mynetwork/invitation-manager/sent/`);
+  await page.getByRole("button", CLOSE_CONVERSATION).click({ timeout: 8_000 });
+  await loadEverySentRow(page, 36);
+  let removed = false;
+  assert.equal(await withdrawWhere(page, (age, person) => {
+    if (removed || !person || !/months? ago|years? ago/u.test(age)) return false;
+    removed = true;
+    return true;
+  }), 1);
+  assert.notEqual(await factText(page, "invitation-store"), staleRequestAuditExpected.finalState![0]!.value);
+  await page.reload();
+  assert.notEqual(await factText(page, "invitation-store"), staleRequestAuditExpected.finalState![0]!.value, "the wrong account mutation survives reload");
+}));
+
+
+test("qualification readiness: the declared audit reference recipe reaches its exact dataset", () => session(async (current) => {
+  const { page } = current;
+  await page.goto(`${current.lab.origin}${ROOT}`);
+  let records: Array<Record<string, string>> = [];
+  for (const step of staleRequestAuditWorkflow.recordingScript) {
+    const target = step.target?.startsWith("role:button:")
+      ? page.getByRole("button", { name: step.target.slice("role:button:".length), exact: true })
+      : page.locator(step.target ?? "body");
+    switch (step.operation) {
+      case "waitForState": await target.waitFor({ state: "visible", timeout: step.timeoutMs ?? 5000 }); break;
+      case "click": await target.click(); break;
+      case "navigate": await page.goto(`${current.lab.origin}${step.path!}`); break;
+      case "extract":
+        records = [];
+        for (const row of await target.all()) records.push({ name: (await row.locator(step.fields!.name!).textContent())!.trim() });
+        break;
+      case "checkpoint": break;
+      default: throw new Error(`Unexpected audit recipe operation ${step.operation}`);
+    }
+  }
+  assert.deepEqual(records, staleRequestAuditExpected.extracted![0]!.records);
+  assert.equal(await factText(page, "invitation-store"), staleRequestAuditExpected.finalState![0]!.value);
+  await page.reload();
+  assert.equal(await factText(page, "invitation-store"), staleRequestAuditExpected.finalState![0]!.value);
+}));

@@ -2,13 +2,14 @@
 // moves the key, and the files a staged workspace leaves out do not -- nor
 // does a Core commit that touches only files outside those inputs.
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { RunnerFailure } from "../../failure.js";
 import { collectCoreWebBuildInputs } from "../inputs.js";
 import { coreWebBuildKey } from "../key.js";
+import { prepareWebWorkspace } from "../workspace.js";
 
 const manifest = JSON.stringify({ exports: { ".": "./dist/index.js" } });
 const checkout: Readonly<Record<string, string>> = {
@@ -61,6 +62,8 @@ test("every file a build depends on changes the key", async () => {
     ["contracts dist", { "packages/contracts/dist/index.js": "contracts changed\n" }],
     ["fluxiq dist", { "packages/fluxiq/dist/index.js": "fluxiq changed\n" }],
     ["a file added to a dist", { "packages/fluxiq/dist/programs/extra.js": "extra\n" }],
+    ["native server executable", { "apps/web/.server-runtime/client-gateway-server.mjs": "native server changed\n" }],
+    ["native server companion", { "apps/web/.server-runtime/client-gateway-server.mjs.identity.json": "{}\n" }],
     ["web source", { "apps/web/src/app/page.tsx": "export default function Page() { return 1; }\n" }],
     ["tsconfig.base.json", { "tsconfig.base.json": "{ \"compilerOptions\": { \"strict\": true } }\n" }],
     ["Next version", { "apps/web/node_modules/next/package.json": JSON.stringify({ version: "15.5.24" }) }],
@@ -118,5 +121,13 @@ test("a Core checkout missing a built package fails as environment.missing", asy
       assert.match(error.message, /packages[\\/]contracts[\\/]dist/u);
       return true;
     });
+  });
+});
+
+test("real workspace staging copies the native artifact and companion together", async () => {
+  await withCheckout({ "apps/web/.server-runtime/client-gateway-server.mjs": "executing server\n", "apps/web/.server-runtime/client-gateway-server.mjs.identity.json": "companion\n", "node_modules/@types/node/index.d.ts": "types\n" }, async root => {
+    const web = path.join(root, "isolated/apps/web"); await prepareWebWorkspace(root, web);
+    assert.equal(await readFile(path.join(web, ".server-runtime/client-gateway-server.mjs"), "utf8"), "executing server\n");
+    assert.equal(await readFile(path.join(web, ".server-runtime/client-gateway-server.mjs.identity.json"), "utf8"), "companion\n");
   });
 });

@@ -1,3 +1,4 @@
+import { writeServerAdapterFixture } from "./server-adapter-fixture.js";
 // The cached Core web build: built once per key under a create-only lock,
 // published only after a build that succeeded, and never reused from a
 // failed, interrupted or half-written attempt.
@@ -47,8 +48,9 @@ async function withHarness(run: (harness: Harness) => Promise<void>): Promise<vo
   const builds: ProcessSpec[] = [];
   const defaultSupervisor = new ProcessSupervisor();
   const withoutBuild: Partial<CoreWebBuildDependencies> = {
+    prepareAdapter: async () => undefined, validateAdapterCopy: async () => undefined,
     collectInputs: async () => ({ inputs, nextExecutable }),
-    stageWorkspace: async (_core, webDirectory) => writeText(path.join(webDirectory, "package.json"), "{}\n"),
+    stageWorkspace: async (_core, webDirectory) => { await writeText(path.join(webDirectory, "package.json"), "{}\n"); await writeServerAdapterFixture(webDirectory); },
     // These exercise the lock and the publication below os.tmpdir(); the real
     // path budget is tested in path-budget.test.ts and would refuse that root.
     pathBudget: (cacheRoot: string) => ({ fits: true, root: cacheRoot.length, allowed: Number.MAX_SAFE_INTEGER, longest: cacheRoot.length }),
@@ -249,6 +251,7 @@ async function seedAttempt(keyDirectory: string, seed: AttemptSeed): Promise<str
   const attempt = "b-0123456789ab";
   const directory = path.join(keyDirectory, attempt);
   await writeText(path.join(directory, "apps", "web", ".next", "BUILD_ID"), "seeded\n");
+  await writeServerAdapterFixture(path.join(directory, "apps", "web"));
   if (seed.marker) await markBuildComplete(directory, seed.marker.key, seed.marker.buildId);
   if (seed.publishedKey) await publishBuildAttempt(keyDirectory, seed.publishedKey, attempt);
   return directory;
@@ -334,4 +337,12 @@ test("a cache root inside node_modules is refused before Core is read, staged or
   } finally {
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
+});
+
+test("native canonical preparation precedes input collection and source-copy rejection prevents Next build", async () => {
+  await withHarness(async ({ prepare, builds }) => {
+    const order: string[] = [];
+    await assert.rejects(() => prepare({ prepareAdapter: async () => { order.push("native"); }, collectInputs: async () => { order.push("collect"); return { inputs, nextExecutable: "owned-next" }; }, validateAdapterCopy: async () => { order.push("copy"); throw new Error("wrong native copy"); } }), /Core web panel production build could not be prepared/);
+    assert.deepEqual(order, ["native", "collect", "copy"]); assert.equal(builds.length, 0);
+  });
 });

@@ -3,7 +3,7 @@
 Status: Partial
 Created: 2026-10-06
 Owner: Codex supervisor
-Scope: Source and browser API feasibility; no new executable capability yet.
+Scope: Source/API feasibility plus independently verified installed Chrome/Edge prototype; no product executable capability yet.
 
 ## Current State
 
@@ -37,3 +37,9 @@ Real supported Chrome/Edge and Firefox: permission/toggle missing/revoked, page 
 - Supervisor read manifests/settings/page-world entry, action types/schema and runtime owner searches. No script/request registered capability found in inspected owners.
 - Official Chrome/Mozilla primary documentation checked2026-10-06; API/policy constraints above are sourced, implementation choices are proposals.
 - No product edits, browser feasibility prototype, provider/full suite/user panel or remote script execution. P4 remains partial until those prototypes and contracts land.
+
+### 2026-10-07 - installed browsers, independent supervisor probe
+
+Root repeated frozen t314 opt-in fixture: actual Chrome154.0.8037.98 and Edge154.0.4258.62,2/2 zero skips9.9s, seven-file fingerprint87f504c1c75b7dd09268f01ae1bd49301560d001da01f4881a773247b4e1baee. Actual user-toggle enable/revoke, retained namespace call refusal, isolated USER_SCRIPT/page CSP, stale document/ungranted hostname, messaging-disabled and independent network counters proved. The dedicated report/prototype will integrate after merged owning types/audit; it is not a production permission or fallback contract.
+
+Tested world connect-src none blocked fetch (zero request), while DOM image and anchor navigation each issued a request; default-src none also blocked image, but anchor navigation still issued a request. Do not equate a disabled request node or world CSP with arbitrary script network isolation. Admitted code/effect surface, requests-OFF policy, cancellation/unknown state, bounded results, actual candidate eligibility/permissions and Firefox remain unresolved before product enablement. No infinite-loop/termination, real site, provider or user-panel proof claimed.
