@@ -174,6 +174,7 @@ test("every consequential task declares its permission point, as a closed class 
     "everything-store-buy-kettle": { consequence: "move_money", control: "Place your order" },
     "auction-marketplace-remove-watched-accessories": { consequence: "delete", control: "Remove" },
     "auction-marketplace-place-bid": { consequence: "move_money", control: "Confirm bid" },
+    "local-classifieds-remove-sold-saves": { consequence: "delete", control: "Remove from saved items" },
     "local-classifieds-make-offer": { consequence: "send_or_publish", control: "Send offer" },
   });
 });
@@ -187,6 +188,8 @@ test("every consequential task declares its permission point, as a closed class 
  * until someone decides which, so it fails the build until then.
  */
 const ASKS_NOTHING: Readonly<Record<string, string>> = {
+  "bigbox-retail-ensure-soap-quantity": "sets the existing cart quantity without checkout or deletion",
+  "everything-store-restore-saved-cloths": "transfers an existing private saved line into the cart without purchase",
   "professional-network-audit-stale-requests": "a read",
   "crossborder-marketplace-collect-official-coupon-only": "collects a private coupon without checkout or purchase",
   "everything-store-plus-earbuds-under-50": "a read",
