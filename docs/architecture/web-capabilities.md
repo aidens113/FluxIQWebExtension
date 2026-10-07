@@ -729,3 +729,7 @@ Unread challenge or HTTP evidence produces transport `succeeded` with validation
 landing assertion. A transport receipt never certifies the requested user
 outcome. Click-open retains its existing landing primitives and behavior; the
 new shared evaluator specifically owns navigate and explicit URL opens.
+
+### Meaningful authored assertion and wait predicates
+
+Text assertions use contains semantics and require a nonblank expected string; text waits likewise require nonblank text for text conditions. Missing, empty or whitespace-only text cannot certify a page state. Explicit literal text such as null remains supported without word filtering. Absence assertions require an authored selector, fingerprint/element, coordinate or visual target; focused-element inference cannot supply the missing subject. Unscoped text assertions read the page even when another field is focused. Valid targeted existence/absence, wait timeout and observed-state mismatch behavior retain their contracts.
