@@ -13,6 +13,7 @@ import { chromium, type BrowserContext, type Page } from "@playwright/test";
 import type { RunningTopology } from "../coordinator.js";
 import { withoutProviderSecrets } from "../environment.js";
 import { RunnerFailure } from "../failure.js";
+import { forgetCachedServiceWorkers } from "../guarded-browser/index.js";
 import { scenarioLabOriginProof } from "../lab-control/index.js";
 import { installDeterministicNetworkGuard, scenarioNetworkOrigins, type DeterministicNetworkGuard } from "../network-guard.js";
 import { awaitExtensionWorker, extensionStatus, pairExtensionWithColdEpochRecovery, pollStatus, runtimeMessage } from "../run-lifecycle/index.js";
@@ -36,6 +37,8 @@ export type ReplayBrowser = Readonly<{
 export async function openReplayBrowser(topology: RunningTopology, input: { extensionPath: string; startPath: string }): Promise<ReplayBrowser> {
   const control = topology.control;
   if (!control) throw new RunnerFailure("environment.missing", "A saved-Flow replay needs an authenticated Core to pair its extension with");
+  // A persistent workspace's profile would otherwise run the background worker of the build it ran before.
+  await forgetCachedServiceWorkers(topology.allocation.browserProfileDir);
   const context = await chromium.launchPersistentContext(topology.allocation.browserProfileDir, {
     headless: false, env: withoutProviderSecrets(process.env), locale: "en-US", timezoneId: "UTC", viewport: { width: 1280, height: 720 }, colorScheme: "light",
     args: [`--disable-extensions-except=${input.extensionPath}`, `--load-extension=${input.extensionPath}`, "--no-first-run", "--disable-default-apps"],

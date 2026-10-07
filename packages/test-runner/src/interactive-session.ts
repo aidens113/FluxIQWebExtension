@@ -8,6 +8,7 @@ import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from
 import { withoutProviderSecrets } from "./environment.js";
 import { ExistingFluxIQControlClient } from "./existing-fluxiq-control.js";
 import { WebPanelAuthSessionCache } from "./auth-session.js";
+import { forgetCachedServiceWorkers } from "./guarded-browser/index.js";
 import { installDeterministicNetworkGuard, scenarioNetworkOrigins } from "./network-guard.js";
 import { fluxIQSessionCookieDescriptor } from "./panel-verification.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
@@ -228,6 +229,8 @@ export async function runInteractiveSession(options: InteractiveSessionOptions):
       await control.login({ username: options.target.credentials.username, password: options.target.credentials.password, pin: options.target.credentials.authorizationPin, ...(options.target.credentials.totp ? { totp: options.target.credentials.totp } : {}) }, { sessionCache: new WebPanelAuthSessionCache(options.runsDirectory), ...(options.target.freshLogin ? { freshLogin: true } : {}) });
     }
     const headless = false;
+    // A persistent workspace's profile would otherwise run the background worker of the build it ran before.
+    await forgetCachedServiceWorkers(topology.allocation.browserProfileDir);
     context = await chromium.launchPersistentContext(topology.allocation.browserProfileDir, {
       headless,
       env: withoutProviderSecrets(environment),
