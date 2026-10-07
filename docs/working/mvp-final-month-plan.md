@@ -37,7 +37,7 @@ pushed after root33/33 and production Chromium1/1 (17.2s).
 t307 atomic graph import is integrated/pushed Corec2ea1e5d/downstreamf7b5c5a9
 after independent19/19, merged package types/build and both audits0.
 t308 paginator is integrated after root Chromium2/2, scenario10/10, types/audit0;
-t311 pending command session binding is integrated/pushed Core210453c1/downstreamaed8ae54 after root23/23 and both audits0. t309 staged project snapshot foundation passed root37/37, actual Core typecheck/build and audit0; paired integration follows. t310 actual server-adapter identity is frozen for independent review. t312 starts the first three clearly NEW fixture tasks toward the67-task denominator, preserving all57 existing tasks. No P0 completion or fresh A-D
+t311 pending command session binding is integrated/pushed Core210453c1/downstreamaed8ae54 after root23/23 and both audits0. t309 staged project snapshot foundation is integrated/pushed Core595daf8d/downstream1115c14a after root37/37, actual Core typecheck/build and both audits0. t310 actual server-adapter identity is frozen for independent review. t312 starts the first three clearly NEW fixture tasks toward the67-task denominator, preserving all57 existing tasks. No P0 completion or fresh A-D
 qualification is claimed.
 
 **Planning review completed locally 2026-10-06.**
@@ -133,15 +133,6 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
 
-### Brief: p2-staged-project-authority-foundation (next paired task)
-- Repository: isolated paired task assigned by supervisor; Core storage boundary already authorized, no production cutover.
-- Task: Implement the concrete contract in reports/p2-authority-contract-slice.md as one complete-project staged immutable snapshot/head foundation. This is preparation for authority migration, not authority over legacy data.
-- Owns: new Core storage/project/accepted-state/{contracts,migration,validation,digest,store,index}.ts and owning tests/{validation,store}.test.ts; project/index.ts additive barrel; focused persistence architecture paragraph; own downstream reports/p2-staged-authority-foundation.md. Request approval for further cohesive splits before editing. No service/controller/promoter/ordinary writers/legacy migration edits.
-- Required reads: Current State, authority contract report, Core instructions and existing project database/migration/UoW/digest conventions.
-- Definition of done: two local numbered snapshot/head tables, complete visual artifacts/settings/router/subflow/source bodies/scopes/bindings, internally derived complete membership/vector; project generation/epoch CAS and durable mutation replay/reconciliation. Staged/tombstoned only, no active/adopted/promoted enum or automatic adoption/read fallback. Refuse JSON/code/global or cross-project instructions/ALL publication-dependent scope. Explicit supplied snapshot, open creates no head. No production capture completeness claim from caller-supplied none list.
-- Limits: canonical32MiBUTF8 reject without truncation, IDs200 chars, positive safe generations; immutable history/no pruning; preserve semantic ordering. Future adoption needs separately reviewed all-reader/all-writer fence/participation and explicit opt-in. No feature flag bypass.
-- Validation: real SQLite failures before writes/commit, lost-commit-ack/reopen, separate-owner competing CAS, same-key replay/conflict, corruption/tombstone, >100 source/member fixture, fully migrated existing DB checksum/user_version/data preservation and unchanged legacy files. Direct context.sql only within UoW; never queued nested owner calls. Narrow owning tests/Coretypes/build/bothaudits, no fullsuite/providers/panel/browser. Provision first, supervisor signals ready before frozen checks; freeze precise report.
-
 ### Brief: p0-executing-server-adapter (next paired task)
 - Repository: isolated paired task assigned by supervisor; Core web server/runtime provenance, additive framework capture. User notified boundary/startup compatibility; user panel not managed.
 - Task: Implement reports/p0-server-adapter-identity-design.md using actual native-bundled websocket server factory and retained actual ClientGatewayService capture. Browser client package hash is not executing server identity.
@@ -158,6 +149,13 @@ Active file-owned tasks only. Prior briefs and exact receipts are preserved in t
 - Owns: those three site live-tasks.ts and exact manifest/barrel owners; new qualification/{workflow,expected,index}.ts and tests/expected.test.ts; existing site honest/naive browser tests. Name exact current owners in report before editing; no state/renderer edits without supervisor review. Own reports/qualification-first-three.md. No shared inventory test/document edits, Core edits or other sites.
 - Required reads: Current State, own proposal sections1/4/9, scenario contracts and owning tests. Literal exact datasets/account outcomes; unique workflow/columns. Each honest browser path and wrong-outcome negative must exercise actual fixture account facts, not copied success metadata.
 - Validation: narrow owning scenario/oracle tests, source/e2e typechecks, owning fixture build, real isolated Chromium honest/negative proof, audit. Provision first; wait supervisor ready before edits/frozen checks. No provider/Lab/fullsuite/panel/git. Freeze report with commands, measured counts and limits; root independently verifies. No qualification pass claimed from fixture readiness.
+
+### Brief: durable-command-reconciliation (t313, bounded owner discovery first)
+- Repository: paired fxwork/t313 trees; Core gateway/runtime command trust boundary. Worker p0_acceptance. Provisioning; no source edits until ready and exact owners approved.
+- Task: Trace actual command dispatch/ack/project-run IDs, then implement a durable command claim/result join before send and truthful restart reconciliation, preserving normal session/action permissions. Candidate receipts must not treat unknown/late unbound events as effects evidence.
+- Initial owns: own reports/p2-durable-command-reconciliation.md only; inspect named commands/inbound/service options, runtime transport, actual project UoW and domain gateway action context. Propose exact cohesive source/test owners before editing. No authority namespace/cutover source approved; its broad proposal is design only.
+- Required contract: durable stable attempt/command/client/session/run binding; claim before first send; same-key conflict refuse; pending/restarted uncertain effects reconcile as unknown, no blind resend; known owner result join persists before authoritative completion. Late/unknown compatibility events remain untrusted. Actual production dispatcher wiring, permission gates and original command payload digest required before claiming production receipt authority.
+- Validation: real SQL lost acknowledgement/process restart and paired sender negatives; bounded owning tests/types/build/audits. No provider/panel/fullsuite/git/shared docs or user-state mutation. Describe unsupported joins before source approval, avoid model outcome claims. Freeze brief in own report for root review; root verifies integrated code independently.
 
 ## Work Ledger
 
@@ -212,3 +210,10 @@ Earlier verified units and decisions moved intact to the [execution archive](./m
 - Validation: root37/37 zero skips (testtotal9.73s, wall29.95s), actual fluxiqcheck0(38.432s)/build0(46.106s), Coreaudit0; downstream integration gate follows. Full receipt reports/p2-staged-authority-foundation.md.
 - Outcome: Narrow staged foundation verified; no production capture/permission/compiler/active-reader/promotion or OS-kill/power-loss proof. Paired integration follows. t311 pushed Core210453c1/downstreamaed8ae54.
 - Follow-up: t310 independent merged-source review/native socket probe; prepared Next proof requires explicit panel authorization. t312 implements three clearly NEW tasks toward67; original57 remain intact. User has not supplied the historical missing ten, so proposed additions are labelled new rather than recovered. No paid qualification or user panel started.
+
+### 2026-10-07 - paired staged foundation pushed; command trust next
+- Agent: Codex supervisor.
+- Changed: t309 integrated/pushed downstream1115c14a/Core595daf8d; immutable staged-only snapshot foundation remains unavailable to ordinary production writers. t313 provisioned as a paired command reconciliation unit; exact owners/production join reviewed before edits.
+- Validation: root37/37, actual types/build and both audit gates0. Initial taskfinish issued from task worktree refused because dev belongs to main checkout; reran from main successfully, no forced checkout/removal. Core narrow gates observed before --skip-checks integration.
+- Outcome: Paired coherent unit pushed. New managed-ID authority proposal is not approved source or a substitute for original candidate/promotion scope; existing-project requirement remains open.
+- Follow-up: t310 merged current source independently owner8/8 and generator/cache9/9; package checks/build/proof in progress. t312 first3 new readiness tasks; paid qualification remains held. No user panel managed.
