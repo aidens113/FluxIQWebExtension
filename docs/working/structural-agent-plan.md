@@ -21,7 +21,9 @@ In progress: stage 2 design (evidence-acts, lead-xhigh, brief in mvp-final-month
 
 Next: accept both designs (bring the user any decision with a recommended default), build stages 1 and 2 in parallel by file, then stage 3, then live rounds on A-D plus new realistic sites.
 
-Decisions taken (user may override): scripts run through the browser debugger channel on Chrome/Edge (works under any page CSP; Chrome shows a "being debugged" bar during a run); requests may go to any origin, with POST/PUT/PATCH/DELETE treated as consequential and gated; typed nodes stay the default for simple steps, with script and request as the always-available fallback.
+User decisions (2026-10-07, memory `js-last-resort-requests-off-by-default`): direct API requests are a toggle, OFF by default, settable in config and in the extension's settings UI; no debugger channel for running JS (normal extension script injection; the debugger only if absolutely needed for network capture and only with the requests toggle on); JS is a last resort, allowed only after about three failed typed-node attempts, and every Lab run that used it is scored "partial success, used JS" and becomes node work (`node-catalog-plan.md`, which also holds the user-ordered full node audit). Typed nodes stay the default.
+
+Structural problem list (supervisor, 2026-10-07, given to the user in full): A1 act labels trusted; A2 complex edit grammar; A3 narrow nodes without fallback; A4 rule-book prompt (~60 KB); A5 opaque handles renumbered on reload; B7 one budget for explore, author, test, judge and repair; B8 exploring and authoring are one activity, so exploration accidents become Flow structure; B9 too many build-test step states; B10 guards as accumulating special cases; B12 layered repair process; B13 giant core files (`service.ts` ~4,400 lines, the loop at 800); C14-16 AI judges from summaries, no oracle in real use, intricate pair rules; D17 the instruction reader misreads choices; E18-23 page view size, target resolution, no code or network access, wording coupled to codes, connection lifecycle; F24 a cheap model asked for long rule-heavy bookkeeping, F25 no worked examples; G26 only live runs show model coping, G27-30 per-run patching, integration, two repositories, Lab overhead.
 
 ## Stages
 
@@ -30,6 +32,12 @@ Decisions taken (user may override): scripts run through the browser debugger ch
 3. **Cheap recovery and three general rules (1-2 days).** A wrong step is redone by Core from its start page; a stuck build ends early and tests what it has or asks the person in the chat. Special-case refusals give way to: never resend a call that failed on the same page; every kept step shows an effect or is a read or check; the Flow is judged by one whole run against the instruction.
 4. **Direct checks before AI judges (with 3).** Where the instruction is concrete (a count, a value, items in a cart), check it against the page or the data first.
 5. **Live rounds.** A-D, then new realistic sites; debug and fix what remains. Target: the structural version in live testing by 2026-10-12/13, before the 2026-10-29 freeze.
+6. **Separate exploring from writing the Flow (B8) and give each phase its own budget (B7).** Exploration finds the way; a distinct authoring step writes the Flow from what worked (not from every call made), so stray clicks, extra reads and toggle pairs never become Flow structure; explore, author, test/judge and repair each get a share of the purse so an early mistake cannot starve repair. Design after stage 2 (it reuses evidence-acts).
+7. **Shrink the rule book (A4) and add worked examples (F25).** After stages 2-3 remove the rules they make obsolete; measure request size per decision before and after; add two or three short worked Flows (cart, list across pages, per-row act) to the instructions.
+8. **Confirm the checklist (D17).** When the instruction reader is unsure of a choice or act, ask the person in the chat before building, or check it against the page; never build on a guessed checklist.
+9. **Model strategy (F24).** Measure flash against a stronger model on the same recorded decisions for the judge and for authoring; decide per role from cost per success.
+10. **Replay recorded AI decisions against new code (G26).** A provider-free harness that feeds a live run's recorded decisions back through the current build loop, so a fix can be checked against the run that exposed it without paying for a new run.
+11. **Split the giant core files (B13).** `service.ts` and the evidence loop split by responsibility, so parallel work stops colliding.
 
 ## Worker Briefs
 
