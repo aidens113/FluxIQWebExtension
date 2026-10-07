@@ -166,3 +166,25 @@ Only the lead edits this file; each worker writes `s2-<part>.md` beside it.
   `amendment/types.ts` followed the gates.
 - A first 52-file run of every native-runtime test had 4 service tests time out at 15 s under load; run with fewer
   files, 3 passed, and the fourth (`service-recordings/tests/proposals.test.ts`) passed alone in 3.1 s.
+- After the supervisor committed S2 (Core `9af71ceb`) and merged dev (t287 group 1) and S1 (`5cf49477`) into t283
+  (`370ed11e`), the lead finished two things, uncommitted:
+  1. `R/llm/decision-handlers/tests/refusal-way-out.test.ts`: `settings_rewrite_run` added to the exhaustive reason map,
+     plus an expectation that its way out names the step and the rerun (`13 passed`).
+  2. `replay-parity.test.ts` failed 3 of 3: S1 assembly now writes a per-step `recordOutput` on every read, and the
+     walker sent none, since `replay.ts`'s step and verify calls take the node definition and nothing passed one.
+     Added `AutomationStudioFlowDraftReplayDefinitionOf` (`replay-span.ts`). It is threaded beside `nodeOf` through
+     `replay-span.ts`, `replay-draft.ts`, `dry-run-gate.ts`, `run-flow.ts`, `run-flow-part.ts`, `loop-configuration.ts`
+     and `evidence-loop.ts`. `service.ts` passes `definitionOf: (id) => registry.get(id, resolution)` at both build-loop
+     sites. `nodeOf` stays the catalog entry the model is shown. A temporary assertion proved the walker's calls now
+     equal the stored Flow's; the test's expected lists gain the read's `recordOutput`, and `recordOutput` leaves
+     `DEFAULTS_ASSEMBLY_WRITES` (it is never the default now). Result: 3 passed.
+- Gates after that round: `contracts:check` 0, `fluxiq:check` 0, `structure-audit:check` 0, `pnpm.cmd build` 0
+  (6m31s). `npx vitest run`: `packages/contracts` `src/record-sets/{tests,process/tests}` 11 files / 118 tests passed;
+  flow-draft, amendment, authoring, `nodes/{control-flow/tests,tests}`, `storage/project/tests`,
+  `service/datasets/tests`: 71 files, 684 passed and 2 timed out (`runtime-stream-store` at 60 s and `adaptation-store`
+  at 15 s; neither file changed since `ee7ba0f3`; together alone, 2 files / 32 passed); executor, state-routing and
+  io-policy: 32 files / 364 passed; `llm/{node-tools,harness-options,decision-handlers,evidence-loop}/tests`, the
+  evidence-loop and feedback tests, instructed-acts, build-test and answerability: 94 files / 1,214 passed;
+  `tests/service-authoring/tests`: 4 files / 7 passed. Before the build, 9 S1 storage and service tests failed with
+  "processAutomationStudioRecordRows is not a function". Cause: `packages/contracts/dist` predated S1, and fluxiq
+  resolves `@fluxiq/contracts` from `dist`. After the build all 9 passed.
