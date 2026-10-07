@@ -55,13 +55,68 @@ folding of successes, list names whole, completion-check words).
   12 Double Rolls$16.47". Fix in the content naming of a control (t284 owns content extraction): join the text of
   block-level children, or `<br>`-separated lines, with a space, as the rendered text does.
 
-## Remaining (group 2, Core; not started)
+## Group 2 (ready to land)
 
-- W24 "6 of the 6 things you asked have a step that ran, or could run" (`unfinished-build/not-done.ts`).
-- U-B3-2 "The Flow so far ran clean from its start" while steps did not run (`unfinished-build/phases.ts:460`
-  announce; not on the owned list, one line).
-- W25 cut quote "...shipped f...".
-- U-B3-1 a never-run `write: true` step reading "Done".
-- F2 build-time read counts.
-- R3-U-3, R3-U-4, R3-U-6, R3-U-8, R3-U-9, R3-U-10, R3-U-12.
-- The "Only partly done: that step is already in the Flow" card for a refused part.
+Group 1 landed as Core `2c7c3a39` and downstream `8f7c4e42`, verified by the supervisor. In the table, `R` = `packages/fluxiq/src/programs/automation-studio/runtime`.
+
+| Id | Item (evidence) | Cause | Fix | Files |
+| --- | --- | --- | --- | --- |
+| W24 | "6 of the 6 things you asked have a step that ran, or could run" while Add to cart was never pressed (`mux74k5q`: the final test had step 0158 `verified` and 0161 `present`) | `proven` counted any act whose step replayed, including steps the test only checked (`verified`) or found already done (`present`). | The judgement also counts `checked` (verified or present). The ending says "4 of the 6 ... have a step that ran ..., and 2 more have a step that was only checked, not run". A judgement with no `checked` field keeps the older words. | Core `R/flow-bootstrap/unfinished-build/{judgement,contracts,not-done}.ts` (**`judgement.ts` and `contracts.ts` are not on the owned list**: additive `checked` field only) |
+| U-B3-2 | "Judging the Flow — The Flow so far ran clean from its start" while 6 steps did not run (`mux6pndp` 14; `mux6naez` 14) | A fixed sentence. | `automationStudioFlowBootstrapTestReachSaid(judged.seed)`: "ran clean" only when every step ran; otherwise "The test ran 1 of the Flow's 3 steps from its start; 1 was only checked, not run, and 1 could not run." | `not-done.ts`; `phases.ts` (the announce line and its import only, as allowed) |
+| W25 | "...the 7-in-1 version, shipped f..." (`mux6n7m4` 4) | `saidUnanswered` cut each act's words at 119 characters with `slice`. | `automationStudioFlowBootstrapUnansweredSaid` (exported, pure) cuts after the last whole word. | Core `R/flow-bootstrap/action-permissions.ts` (**not on the owned list, and owned by no stream**: that function only) and its test |
+| U-B3-1 | "Click · Add to cart · Done" for a step written into the Flow without running it (`mux6pndp` 10, 12, 14; step 0095 answered `core.run_node.written`) | The shared card reading had no words for `core.run_node.written`. | `activityActionTested`: "Added to the Flow, not run yet", on the card and in the overlay. | Core `src/ui/activity-action/tested.ts` |
+| F2 | Build list read cards showed a bare "Done" (`mux6naez` 04, 08-12) | A build's own read sends no `outputs` or `readRows`. Its evidence already says `read.extraction.recordCount` and `pagesRead` (step 0016: 20 and 1). | `call-context.ts` reads that count when there are no rows; the observer writes `Rows: 20 · Pages: 1`; the card reads "Done: 20 rows from 1 page". **No domain change needed.** | Core `R/activity/{call-context,observer}.ts` |
+| R3-U-9 | Thoughts ended on ";" (`mux6naez` 05, 12) | `withoutMechanics` dropped the clause after the ";" and kept the semicolon. | The last kept clause ends with ".". | Core `R/activity/wording/reason-text.ts` |
+| R3-U-10 | "the detected reading the list handle" (`mux6naez` 04; the model wrote "the detected extraction handle") | `EXTRACTION` replaced "extraction" with "reading the list". | "extraction handle" / "extract list handle" is said as "list". | Core `R/activity/wording/person-words.ts` |
+| R3-U-4 | "steps 1, 2, 4 and 5 came from the Flow being changed", five times (`mux6naez` 20-26) | The draft's step numbers were used in sentences the person reads. | Counts instead: "4 of its steps came from the Flow being changed ...". Same for the ending and for the "came from the earlier Flow" sentences. Model-facing `resume.ts` is unchanged. | Core `not-done.ts` |
+| R3-U-8 | "it kept retrying things that had already failed or done nothing" beside reads that worked | Wording for `repeat_refused`. | "it kept asking to run steps again exactly as they had already run, which changes nothing". | Core `not-done.ts` |
+| R3-U-3 | "...the fix used all its rounds" named no objection, and read against "attempt 1 of 3" | The ending did not use the check's `reason`; "rounds" meant the re-author's build rounds. | The run's failed row text adds "The check said: <reason, whole sentences, screened>". The status line keeps the ending alone, within 160 characters. "the fix ran out of build rounds before it could test a change". | Core `R/activity/{run.ts,wording/run-ending.ts,wording/index.ts}` |
+| Partly done | "Edit the Flow / Only partly done: that step is already in the Flow" (`mux6naez` 05; 0019 kept 4 and 9, 4 was refused `already_in_flow`) | The card showed only the refusal, though Core sends what landed (`Changed: added ...`). | "Only partly done: added "Read list"; not done: that step is already in the Flow". | ext `panel/chat/stream/step/card-words.ts` |
+
+### Described, not fixed (owned elsewhere)
+
+- **R3-U-6**, the second build test showed no "Testing:" cards. Cause: in Core `R/service.ts` (~line 1624, owned by t282),
+  `runAutomationStudioFlowBootstrapBuildPhases`'s `test` runs `automationStudioFlowDraftDryRunGate` with
+  `automationStudioLlmStepLogTool(executeTool)`, which is not the activity-observed tool. So the stopped round's test emits
+  no rows. The loop's own dry run goes through `observeAutomationStudioEvidenceLoop`, which is why the first test had cards.
+  Change: pass an observed `executeTool` to that gate (for example
+  `observeAutomationStudioEvidenceLoop({ tools: [], decide, executeTool: automationStudioLlmStepLogTool(executeTool), describeCall })
+  .executeTool`, built once beside the loop's own).
+- **R3-U-12**, the playback read card was unnamed ("Read list"). Core's executor names a step only by its saved label or
+  its node's parameters. A list read's parameters are the web domain's (`extractList.fields`), and the domain's name for
+  the list ("name, price and 4 more") is only given through `describeCall` during a build. Change: when the Flow is
+  assembled from the draft, carry the step's described name (the draft entry's `does.target`) into the authored node's
+  `label`, which `emitAutomationStudioActivityStep` already uses. Owner: flow-draft assembly (t283 S2 area).
+- **U-B3-3** goes to t284 (supervisor).
+
+### Validation (lead, group 2, observed)
+
+- Fail-first. Each new or changed test failed before its fix:
+  - `not-done.test.ts`: `2 failed | 26 passed`;
+  - `judge-stopped-round.test.ts`: `1 failed | 6 passed` (received "ran clean");
+  - `action-permissions.test.ts` with the old cut put back: `1 failed | 18 passed`;
+  - `action-of.test.ts`: `1 failed | 103 passed`;
+  - `call-context.test.ts`: `1 failed | 4 passed` (no `Rows:`);
+  - `reason-screen.test.ts`: `2 failed | 8 passed`;
+  - `never-run-whole.test.ts` and `judged.test.ts`: `4 failed | 22 passed`;
+  - R3-U-8: `2 failed | 26 passed`;
+  - `run-ending.test.ts` and `scope.test.ts`: `4 failed | 23 passed`;
+  - ext `card-words.test.ts`: `# fail 1`.
+- After the fixes:
+  - Core `npx vitest run` over `runtime/activity`, `src/ui/activity-action/tests`, `flow-bootstrap/unfinished-build/tests` and `flow-bootstrap/tests/action-permissions.test.ts`: `Test Files 58 passed (58)`, `Tests 661 passed (661)`.
+  - Core neighbours: `tests/service-bootstrap/tests`, `flow-bootstrap/tests`, `llm/evidence-loop/tests/resume.test.ts` and `result-verification/build-test/tests` gave `47 passed, 1 failed`. The one failure was `service-bootstrap/tests/adaptation.test.ts` "Test timed out in 15000ms". With `--testTimeout=90000` it gives `9 passed (9)` in 75 s. That is the known heavy-test timeout (P3/P4, t289), not an assertion.
+  - Core root: `fluxiq:check` exit 0; `structure-audit:check` "passed (266 warning(s), 349 baselined)"; `pnpm.cmd build` exit 0.
+  - Extension tests in step, stream, background/activity, shared/activity and chat/view: `# tests 211 # pass 211 # fail 0`.
+  - `pnpm.cmd --filter @fluxiq-web-extension/extension check` exit 0; downstream audit "passed (172 warning(s), 118 baselined)".
+
+### Next live UI review must see
+
+- An ending never says "ran, or could run". A checked-only act is said as "only checked, not run".
+- "Judging the Flow" says how many steps the test ran.
+- No quote is cut inside a word.
+- A step written into the Flow without running it reads "Added to the Flow, not run yet".
+- Build list read cards say "Done: N rows from M pages".
+- Thoughts never end on ";", and there is no "reading the list handle".
+- Repair headings have no step numbers.
+- A failed run's row says what the check objected to.
+- A partly done edit card says what landed.

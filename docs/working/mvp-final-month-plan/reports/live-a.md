@@ -111,4 +111,54 @@ Validation (lead, in t281):
 - Core: `npx vitest run` over `flow-draft`, `llm/tests/draft-amendment-feedback.test.ts`, `llm/{evidence-loop,repeat-guard,node-tools,decision-handlers,evidence-progress,decision-context}/tests`, `flow-bootstrap/tests/evidence-loop-steps.test.ts` and `src/ui/activity-action/tests` -> 111 files, 1220 passed. Core build (`pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket build`) exit 0; `fluxiq:check` exit 0; `structure-audit:check` passed. `evidence-loop.ts` was at 801 lines after C3; I folded two declarations into one line, so it is 800.
 - Downstream: content specs `identity-resolution`, `identity-wire-chain`, `large-page-resolution` and `shadow-root-controls` -> 35 passed, 2 failed. The two failures, `large-page-resolution.spec.ts:94` and `shadow-root-controls.spec.ts:109`, also fail with HEAD's resolver swapped in (31 passed, 4 failed: those two plus the two new rows), so they are not from this change; they were not checked on a tree without the domain edit. Domain node-run tests via the worker's esbuild subset runner -> `# tests 205 # pass 205 # fail 0`. `node scripts/structure-audit.mjs` passed (`resolve-target.ts` trimmed to 800 lines). `pnpm --filter @fluxiq-web-extension/extension check` exit 0; `pnpm --filter @fluxiq-web-extension/domain check` exit 0. The extension worker's whole extension unit run: 2498 passed.
 
-Open, noted by the C1a worker: reversal on a drop runs before the strand check. If the strand check puts a dropped toggle half back, the partner that reversal took out stays out. This can only happen when the toggle press also navigated.
+Open, noted by the C1a worker: reversal on a drop runs before the strand check. If the strand check puts a dropped toggle half back, the partner that reversal took out stays out. This can only happen when the toggle press also navigated. (Fixed in group 2.)
+
+## W15 add-on, group 2 (t281, 2026-10-06 22:54-23:48 UTC; no paid run)
+
+Group 1 was merged to dev (Core b181f4bc, downstream 8bfa6e2e), and t281 contains it. The supervisor's add-on: refuse a
+second read of the same list (`run-muq4oaof-464f5bce` cause 3) and a second copy of a step already in the Flow
+(`run-murwdp4f-35f976d2` C9). Each refusal names the existing step.
+
+- **Already closed before this work:** muq4oaof's actual path, re-adding a rerun's replaced original, is refused today
+  as `not_a_kept_step` with `replacedBy` (`flow-draft/amendment/replaced-attempt.ts`).
+- **The rule** is Core `flow-draft/second-copy.ts` (new). A step joining the Flow copies a kept step with the same
+  actionId and toolId in either of two cases:
+  - (a) an act with canonical-equal `input` and `ranWith` and the same known `stateBefore`. "+" pressed twice starts
+    from two different states, so it is not a copy.
+  - (b) a read with the same `reads` code and no kept step that changes anything between the two. A re-read after a
+    filter or a next-page press is not a copy.
+- **Call path.** A call with `add: true` that copies a kept step stays `taken`: no act claim and no openers. That
+  call's feedback says "not added to the Flow: step N already does this" (`llm/decision-handlers/second-copy.ts`,
+  `llm/evidence-loop.ts`, still 800 lines). This is the C9 shape: `click t1212, add` from the same results page.
+- **Amendment path.** An `add` or `keep` that would bring in a copy is refused `second_copy` with `copyOf`, before
+  anything about it changes (`flow-draft/amendment/{apply,types}.ts`). The model is told which step does it.
+  - In `llm/draft-amendment-feedback.ts`: one `REFUSAL_REASONS` entry, `copyOf` carried on the refused entry, and a
+    `secondCopy` next-sentence helper. The worker's report lists every line.
+  - Exhaustive maps also updated: `src/ui/activity-action/refusal-words.ts`, `flow-bootstrap/evidence-loop-steps.ts`,
+    and the feedback test.
+- **`reads` code (new opaque draft-statement field, both repos), the host's half of rule (b):**
+  - Core: `AutomationStudioFlowDraftStep.reads`; the statement type; `llm/evidence-loop-decision.ts` keeps it on an
+    observe statement only (`/^[a-z0-9_.:-]{1,100}$/i`); `llm/evidence-loop/call-record.ts`.
+  - Domain: `node-run/list-read/code.ts` (new) sends `list:` plus 16 hex digits of sha256 over the page's origin and
+    pathname and the list's resolved `item` selector, for `web.output.dom-extract_list` only; `node-run/run.ts` sets it.
+  - Lead: put `reads?` on the domain's draft type in `llm-evidence/capture.ts` and `reads: undefined` in
+    `node-run/written-step.ts`, replacing the worker's intersection type in run.ts. I also added `delete step.reads`
+    beside `delete step.toggle` in `llm/node-tools/rerun-check.ts`, so a checked rerun that takes drops both.
+  - Docs: Core `docs/architecture/automation-studio/flow-authoring.md`; downstream `docs/architecture/build-loop.md`.
+- **Edge case fixed.** In apply.ts, the reversal for a step that left the Flow now runs after the strand check, and
+  only for kept steps that really left. A drop that the strand check puts back no longer takes its toggle partner out.
+  Test in `amendment/tests/drop-reversal.test.ts`.
+  - Still open: a decision that drops a toggle half and also adds or keeps another step runs the add's reversal
+    before the strand check.
+
+Fail-first (worker runs): Core new and extended tests `16 failed | 56 passed (72)` before, `72 passed` after; domain
+list-read tests 3 of 5 failing before (`expected 'string' actual 'undefined'`), all passing after.
+
+Validation (lead, in t281):
+- Core `npx vitest run` over `flow-draft`, `llm/{evidence-loop,repeat-guard,node-tools,decision-handlers,evidence-progress,decision-context}/tests`, `llm/tests`, `flow-bootstrap/tests/evidence-loop-steps.test.ts` and `src/ui/activity-action/tests` -> 138 files, 1611 passed.
+- Core library build exit 0; `fluxiq:check` exit 0; `structure-audit:check` passed.
+- Domain: node-run tests `# tests 209 # pass 209 # fail 0`; list-read tests `# tests 2 # pass 2`; `tsc -p domain/tsconfig.json` and `tsconfig.test.json` exit 0.
+- `pnpm --filter @fluxiq-web-extension/domain check` exit 0; `pnpm --filter @fluxiq-web-extension/extension check` exit 0; `node scripts/structure-audit.mjs` passed.
+
+Not verified: no live run. That a detection's resolved `item` selector survives a real reload: if it changes, Core
+simply does not refuse, which is a safe miss.

@@ -215,8 +215,13 @@ test("a refused decision never reads as work done or under way, and a repeated r
       assert.deepEqual([words.state, words.outcome], ["refused", `Not done: ${because}`], `${outcome}, current ${current}`);
     }
   }
+  // live-C round 3 (run-mux6naez-6c20f26e, moment 05; steps 0019-0020): "Edit the Flow / Only partly
+  // done: that step is already in the Flow" said only what was refused, so it read as the work. It
+  // says what landed, then what did not and why.
   const part = cardWords(card({ kind: "draft", target: null, outcome: "done", refused: { all: false, because: "that step already does that" }, result: "added step 4" }), false);
-  assert.deepEqual([part.state, part.outcome], ["done", "Only partly done: that step already does that"]);
+  assert.deepEqual([part.state, part.outcome], ["done", "Only partly done: added step 4; not done: that step already does that"]);
+  const bare = cardWords(card({ kind: "draft", target: null, outcome: "done", refused: { all: false, because: "that step is already in the Flow" } }), false);
+  assert.equal(bare.outcome, "Only partly done: that step is already in the Flow", "with nothing said of what landed, the reason alone");
   const thrice = cardWords(card({ kind: "draft", target: "run the step again", outcome: "failed", refused, times: 3 }), false);
   assert.deepEqual([thrice.outcome, thrice.label], [`Not done (3 times): ${because}`, `Edit the Flow, run the step again: Not done (3 times): ${because}`]);
   assert.equal(cardWords(card({ kind: "draft", target: null, outcome: "failed", refused, times: 1 }), false).outcome, `Not done: ${because}`, "once is said as once");

@@ -6,9 +6,9 @@
 // not overridable (`balance`) refuses
 // whatever files exist.
 
-import { checkBalanceStop, checkBehindDev, checkPreviousDebug, checkRelaunchLoop, checkUnchangedRerun } from "./rules/index.mjs";
+import { checkBalanceStop, checkBehindDev, checkPeakHours, checkPreviousDebug, checkRelaunchLoop, checkUnchangedRerun } from "./rules/index.mjs";
 
-const RULES = [checkBalanceStop, checkBehindDev, checkRelaunchLoop, checkPreviousDebug, checkUnchangedRerun];
+const RULES = [checkBalanceStop, checkPeakHours, checkBehindDev, checkRelaunchLoop, checkPreviousDebug, checkUnchangedRerun];
 
 /**
  * @param {import("./rules/guard-state.mjs").GuardState} state
