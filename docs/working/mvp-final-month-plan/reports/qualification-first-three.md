@@ -93,3 +93,7 @@ node --test --test-name-pattern="qualification readiness|the honest purchase|a c
 ```
 
 Ignored correction logs under node_modules/.cache: t312-current-account-negative.log (observed0/1 fail-first), t312-current-account-browser-final.log, t312-current-account-unit-final.log, t312-current-account-audit-final.log. No provider, Core, shared-doc, panel, full-suite, git/commit/push work; no generated extension node/permission/discovery expansion. Source/report frozen.
+
+## Supervisor independent verification
+
+After reviewing the corrected current-page checkout fact and all three expected modules, supervisor added an authored complete57-task baseline plus exact new-task inventory and shared permission classifications. Owner/global tests passed70/70, zero skips2.021s; real isolated Chromium paths passed9/9, zero skips37.773s, including original purchase/review and pre-reload wrong-account negative. Source/e2e types exit0 actual5.516s; owning fixture build exit0 actual12.860s. Audit exit0, baseline unchanged. Add/add report conflict preserved this full report over the obsolete assigned-only placeholder. No provider, extension-created Flow or qualification pass is claimed. Final dev integration audit follows in supervisor ledger.

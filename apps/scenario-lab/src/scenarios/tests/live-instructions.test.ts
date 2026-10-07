@@ -172,6 +172,7 @@ test("every consequential task declares its permission point, as a closed class 
     "company-website-quote-request-redesigned-after-creation": { consequence: "send_or_publish", control: "Send request" },
     // A purchase and a binding bid move money; a classifieds offer is a message to the seller (t205).
     "everything-store-buy-kettle": { consequence: "move_money", control: "Place your order" },
+    "auction-marketplace-remove-watched-accessories": { consequence: "delete", control: "Remove" },
     "auction-marketplace-place-bid": { consequence: "move_money", control: "Confirm bid" },
     "local-classifieds-make-offer": { consequence: "send_or_publish", control: "Send offer" },
   });
@@ -186,6 +187,8 @@ test("every consequential task declares its permission point, as a closed class 
  * until someone decides which, so it fails the build until then.
  */
 const ASKS_NOTHING: Readonly<Record<string, string>> = {
+  "professional-network-audit-stale-requests": "a read",
+  "crossborder-marketplace-collect-official-coupon-only": "collects a private coupon without checkout or purchase",
   "everything-store-plus-earbuds-under-50": "a read",
   "everything-store-first-page-plus-earbuds": "a read",
   "everything-store-kettle-to-cart": "fills the cart and buys nothing",
