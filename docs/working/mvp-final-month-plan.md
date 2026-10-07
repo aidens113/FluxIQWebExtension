@@ -56,7 +56,7 @@ hardening. In-flight t334 (click executor), t335 (installer, never compiled) and
 t337 (grammar for one sentence family) are WIP commits on their own branches, not
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
-**In flight.** t342 round 3, the first live lane A candidate-mode build (lead); t353 task tooling refuses a Core behind Core's dev.
+**In flight.** t342 round 3, the first live lane A candidate-mode build (lead).
 
 **Next order.**
 
@@ -456,6 +456,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: Core `1b9f15f7`, downstream `7cc511ed`, both pushed. t351: six Core failures in four files came from one module cycle t299 (`0b5d7543`) opened by re-exporting candidate from the flow-bootstrap barrel (test loader only; built dist unaffected), fixed by moving the export to `runtime/index.ts` with the public surface unchanged; the rest were stale tests (re-author stubs without `status: "proposed"`, t299; the executor seam guard after t331's split). t352: test-evidence exposes types from source so `pnpm check` passes in a fresh tree; landmark-role installs its fake DOM per test (earlier files delete `document` since t306); one execute test runs on a mock clock; 32 test-runner failures the sweep never reached were stale fakes after t336's strict reset (31) and t347's tab change (1). No product source changed in t352. Lane A round 3, the first live candidate-mode build, launched on the synced t342 trees. t353 makes task tooling refuse a Core behind Core's dev.
 - Validation: supervisor. t351 merged tree: Core vitest over executor, llm, flow-bootstrap, refuted-result, runtime-adaptation, candidate-trial, candidate-drafts, flow-bootstrap-commands, conversations -> 358 files, 4142 passed, 2 skipped; Core tsc exit 0; audit exit 0; test-runner built against it, creation and chat tests 155 pass. t352 merged tree: test-runner `tsc --noEmit` with `packages/test-evidence/dist` moved aside -> exit 0; test-runner `pnpm test` -> 2103 pass, 0 fail, 5 skipped; extension `pnpm test` first gave 2 failures because the shared Core was at `e0664f17` (built names still "Edit the Flow"), then after `pnpm task sync-core --allow-running` to `1b9f15f7` -> 2607 pass, 0 fail; changed test-runner directories against the synced Core -> 501 pass; audit exit 0.
 - Limits: the second sweep of the day has not run; dev should now be clean in both repositories, unproven until it does.
+
+### 2026-10-07 - t353 merged: task tooling refuses a Core behind Core's dev
+- Changed: downstream `8ffc3f74`, pushed. `pnpm task finish` refuses, before any merge and in dry runs, when the Core the task builds against (the shared Core, or a Core-paired task's own branch) does not contain Core's dev, naming both commits, the distance and the fix (`pnpm task sync-core`, or merging dev into the paired branch); `--skip-checks` does not waive it; `pnpm task start` checks again after moving the shared Core (`scripts/task/core-currency.mjs`). `repository-layout.md` now says finish runs only the structure audit unless `--full-check`.
+- Validation: supervisor in the t353 tree: `pnpm task:test` -> 137 pass, 0 fail (worker showed the six new tests failing against the old `finish.mjs`); structure audit exit 0; `pnpm task finish t353` audit passed.
+- Limits: start's safety-net check has no test (a full start needs install and build); `scripts/task/` holds 20 files, past the 15-file advisory.
 
 ## Open Questions
 
