@@ -80,6 +80,7 @@ import { webLlmHandleRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
 import { webRunnableNode } from "./catalog";
 import { webNodeReplayMissingTarget } from "./missing-target";
+import { webNodeNamedControlShown } from "./named-control-shown";
 import { webNodePageChanges, webNodePageNotice } from "./press-effect";
 import {
   WEB_NODE_REPLAY_RESULT_CODES as REPLAY_RESULT_CODES,
@@ -377,7 +378,14 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // did, and quotes those words, as the exploration refusal does.
     // A list read whose list never appeared is told apart by where the page
     // stands, as a missing control is (`listNeverAppeared`).
-    const answered = result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND
+    // A not-found press whose control the read before it showed by name, on
+    // the page the step acted on, is a control the step could not find, not
+    // one the site remembered (`./named-control-shown.ts`, run mux6n7m4).
+    const notFound = result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND;
+    const shownByName = notFound && before !== undefined ? webNodeNamedControlShown(before, ran, value) : undefined;
+    const answered = shownByName !== undefined
+      ? await failedOnPage(run, `the page shows a control named "${shownByName}" but the step could not find it (${failure})`, about, undefined)
+      : notFound
       ? await webNodeReplayMissingTarget(run, "step", about, failure)
       : about.resultReason === "list_never_appeared"
         ? await listNeverAppeared(run, about, failure)

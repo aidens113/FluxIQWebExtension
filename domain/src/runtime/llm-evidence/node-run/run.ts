@@ -82,6 +82,7 @@ import { webMovesThePage, webScopeAnchor, webStartLocationRefusal, WEB_NAVIGATIO
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
+import { webListReadCode } from "./list-read";
 
 const EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 /**
@@ -156,7 +157,7 @@ type WebNodeCallRecord = {
    * behind it -- so it is the same statement a success would have made
    * (`personDraft`).
    */
-  standing?: { input: JsonObject; ranWith: JsonObject; replay: WebNodeReplayStatement; control: string | undefined };
+  standing?: { input: JsonObject; ranWith: JsonObject; replay: WebNodeReplayStatement; control: string | undefined; reads: string | undefined };
 };
 
 /** Run the node a call named, and answer with what it did. */
@@ -224,7 +225,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
-        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined }),
+        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined, reads: undefined }),
         // A look that worked refuses nothing, so it says neither why it refused
         // nor which node it would have named: the draft statement beside it
         // already carries `actionId`, and a successful call is not the row a
@@ -356,7 +357,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       input: safeCall(value, written),
       ranWith: nodeCall(value, flowParameters(written, ran)),
       replay: webNodeReplayStatement({ location: foundAt(current, run.request.startLocation, undefined), payload: undefined, reads: false }),
-      control: control.name
+      control: control.name,
+      // A list read behind which a robot check stood still read its list (`./list-read/code.ts`).
+      reads: webListReadCode(node.definitionId, current?.evidence.location, ran)
     };
     record.acted = true;
     // A list read also asks for a few of the rows its conditions turned down,
@@ -504,7 +507,13 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         written: undefined,
         // The press flipped whether its control is chosen, under the control's handle: Core
         // takes it out with a later press that flips it back (`./press-effect/toggle.ts`).
-        toggle: webPressToggle(node, current, after, firstHandle(written))
+        toggle: webPressToggle(node, current, after, firstHandle(written)),
+        // Which list on which page a list read read, as an opaque code: Core
+        // refuses a second kept read of one list (`AS/runtime/flow-draft/
+        // second-copy.ts`, `run-muq4oaof-464f5bce`). Made from the page the read
+        // ran on and the list as it was resolved, never the model's handle
+        // (`./list-read/code.ts`); absent on every other node.
+        reads: webListReadCode(node.definitionId, current?.evidence.location ?? after?.evidence.location, ran)
       }),
       // The node ran and nothing was refused, so neither of the refusal fields
       // is said: the draft statement above already names the node under
@@ -572,6 +581,7 @@ function refusal(
     interruption: undefined,
     written: undefined,
     toggle: undefined,
+    reads: undefined,
     // Whether a call of this kind belongs in a result, which is a property of
     // the node and not of this attempt. That it did not work is said by
     // `effectApplied: false`, and the two are held apart so a failed step stays
@@ -612,7 +622,7 @@ function refusal(
 function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
   const input = record.standing?.input ?? safeCall(record.call ?? {}, record.parameters ?? {});
   if (!record.acted || record.standing === undefined) {
-    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined });
+    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined, reads: undefined });
   }
   return present<WebNodeDraftStatement>({
     actionId: record.actionId,
@@ -624,7 +634,8 @@ function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
     control: record.standing.control,
     interruption: undefined,
     written: undefined,
-    toggle: undefined
+    toggle: undefined,
+    reads: record.standing.reads
   });
 }
 

@@ -60,7 +60,7 @@ import { systemActivityClock, type ActivityClock } from "./clock";
 import { ActivityPacer } from "./pacer";
 import { FanOutGate } from "./fan-out-gate";
 import { sendStartedWork } from "./send-answer";
-import { SendStart } from "./send-start";
+import { SendStart, STARTING_HOLD_MS } from "./send-start";
 import { UnitHistory } from "./unit-history";
 
 /** The top frame's id in every tab; the overlay lives only there. */
@@ -92,6 +92,19 @@ export type ActivityRelayDeps = {
   readonly clock?: ActivityClock;
 };
 
+/** A send's claim on the starting status: `open` while it may still put it up, `started` once it did. */
+type WaitingSend = { open: boolean; started: ActivityDisplay | undefined; sentAt: number };
+
+/**
+ * Why a send showed no starting status, in the worker's console: the Lab keeps
+ * it (`extension-start.local.json`), and round 3 could not tell from its
+ * evidence why lanes A and B showed none (R2-U-5). Ids and phases only, never
+ * page words.
+ */
+function startNotShown(reason: string): void {
+  console.info("FluxIQ starting status not shown at send", { reason });
+}
+
 export class ActivityRelay {
   private current: ClientGatewayActivity | null = null;
   private recent: ClientGatewayActivity[] = [];
@@ -102,6 +115,8 @@ export class ActivityRelay {
   private readonly pacer: ActivityPacer;
   /** The starting status between a send and Core's first activity. */
   private readonly start: SendStart;
+  /** A send made while no session was live: its starting status goes up once one is (`noteSessionReady`). */
+  private waitingSend: WaitingSend | undefined;
   // One gate per audience, so the panels' traffic -- every event changes the
   // list they show -- never delays a display change on its way to the page.
   private readonly panelGate: FanOutGate;
@@ -162,7 +177,9 @@ export class ActivityRelay {
     // the same send as the event list rather than one interval later.
     this.panelStale = true;
     // Core's first activity after a send replaces the starting status, even
-    // when the pacer's own display did not change with it.
+    // when the pacer's own display did not change with it; a send still
+    // waiting for its session no longer needs one.
+    if (this.waitingSend !== undefined) this.closeWaiting(this.waitingSend);
     const replacedStart = this.start.coreSpoke();
     this.pacer.accept(activity);
     if (replacedStart) {
@@ -183,21 +200,44 @@ export class ActivityRelay {
    */
   async sending<T>(send: () => Promise<T>): Promise<T> {
     const answering = (async () => send())();
-    let started: ActivityDisplay | undefined;
-    if (this.deps.live()) {
-      // The stored preference first: a person who hid the overlay is not shown it for the start.
-      await this.load();
-      started = this.start.putUp(this.display());
-    }
+    // A send made while the session is still connecting puts the status up
+    // once it is ready (`noteSessionReady`): lanes A and B of round 3 sent
+    // before it was, and showed "Sending your message" with no overlay until
+    // Core's first activity (R2-U-5 of the run-mux6n7m4-8273e7a0 and
+    // run-mux6pndp-16feb842 UI reviews), while lane C's showed "Starting…".
+    const waiting: WaitingSend = { open: true, started: undefined, sentAt: this.clock.now() };
+    this.waitingSend = waiting;
+    if (this.deps.live()) await this.putUpStart(waiting);
+    else startNotShown("no live session yet; shown once it is ready");
     let answer: T;
     try {
       answer = await answering;
     } catch (error) {
-      this.start.takeDown(started);
+      this.closeWaiting(waiting);
+      this.start.takeDown(waiting.started);
       throw error;
     }
-    if (!sendStartedWork(answer)) this.start.takeDown(started);
+    if (!sendStartedWork(answer)) {
+      this.closeWaiting(waiting);
+      this.start.takeDown(waiting.started);
+    }
     return answer;
+  }
+
+  /** Puts the starting status up for `waiting`, once: the stored preference first, so a person who hid the overlay is not shown it. */
+  private async putUpStart(waiting: WaitingSend): Promise<void> {
+    await this.load();
+    if (!waiting.open) return;
+    this.closeWaiting(waiting);
+    const shown = this.display();
+    waiting.started = this.start.putUp(shown);
+    if (waiting.started === undefined && shown !== null) startNotShown(`work already ${shown.outcome === "waiting" ? "waiting on the person" : "running"} (${shown.activityId}, ${shown.phase})`);
+  }
+
+  /** `waiting` can no longer put the starting status up. */
+  private closeWaiting(waiting: WaitingSend): void {
+    waiting.open = false;
+    if (this.waitingSend === waiting) this.waitingSend = undefined;
   }
 
   /** What a person sees now: the starting status while it applies, else the pacer's display. */
@@ -213,6 +253,12 @@ export class ActivityRelay {
    */
   noteSessionReady(): void {
     this.lastSequence = Number.NEGATIVE_INFINITY;
+    // A send made before the session was live shows its starting status now,
+    // unless the session came later than Core's first activity could have.
+    const waiting = this.waitingSend;
+    if (waiting === undefined) return;
+    if (this.clock.now() - waiting.sentAt > STARTING_HOLD_MS) this.closeWaiting(waiting);
+    else void this.putUpStart(waiting);
   }
 
   async setOverlay(overlay: ActivityOverlayPreference): Promise<ExtensionActivityState> {
