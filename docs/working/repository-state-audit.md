@@ -1,9 +1,9 @@
 # Repository State Audit
 
-Status: Active
-Status detail: The three pre-Stage-4 issues are remediated and independently verified; broader Core/product risks remain deferred as recorded below.
+Status: Complete
+Status detail: The three pre-Stage-4 issues are remediated and verified; deferred Core risks remain recorded below for reference.
 Created: 2026-09-13
-Last updated: 2026-09-13
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: Read-only audit of FluxIQWebExtension and FluxIQ Core at their current dev heads, with confirmed findings and prioritized follow-up.
 Paired document: `F:\!FluxIQ\docs\working\repository-state-audit.md`

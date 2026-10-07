@@ -33,10 +33,11 @@ Chromium1/1 (17.2s), affected typechecks/audit and three target builds.
 Missing/blank predicates refuse; literal text and authored target scope remain valid.
 Other backlog rows remain pending.
 
-Supervisor independently counted57current task definitions across ten sites.
-The requested67scope has10unaccounted tasks, not10passes or retired rows;
-preserve the discrepancy until the intended inventory is reconciled. The
-consultant review preserves the full audit and typed-first order. Input through
+The ten sites now hold 67 task definitions: the original 57 unchanged plus ten
+clearly new tasks (t312, t316, t318), recorded in mvp-final-month-plan. The
+ten originally intended tasks were never recovered, and the new ten are not
+presented as them. The consultant review preserves the full audit and
+typed-first order. Input through
 a debugger is excluded by the user's decision; no pending hover-input approval
 should be inferred from historical worker recommendations.
 

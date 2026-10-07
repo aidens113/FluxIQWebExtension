@@ -50,7 +50,6 @@
       "apps/extension/src/runtime/browser-download.ts": 1,
       "apps/extension/src/runtime/browser-tab.ts": 1,
       "apps/extension/src/runtime/frame-address.ts": 1,
-      "apps/extension/src/runtime/navigation-outcome.ts": 1,
       "apps/extension/src/shared/dialog-channel.ts": 1,
       "domain/src/output-nodes/payloads.ts": 1,
       "domain/src/recording/proposals/late-target-wait.ts": 1,

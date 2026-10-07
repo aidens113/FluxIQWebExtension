@@ -1,9 +1,9 @@
 # MVP live continuation and Claude handoff
 
-Status: Active
-Status detail: A7/B6 independently debugged failures; focused quality fixes/types/runtime builds/audits verified. A8/B7 predeclared on gated paired source checkpoints; A8 creation/runtime and two unchanged zero-model reuses accepted; B7 failed; focused binding/row repair next.
+Status: Superseded
+Status detail: Superseded 2026-10-07 by [mvp-final-month-plan.md](./mvp-final-month-plan.md), which absorbed Codex's 2026-10-03 continuation; its briefs are for finished workers.
 Created: 2026-10-03
-Last updated: 2026-10-03
+Last updated: 2026-10-07
 Owner: Codex senior supervisor
 Scope: Integrate evidenced lane blockers, run real extension-chat build/judge/playback/repair/reuse tests, and leave an executable Claude handoff.
 Paired document: ../!FluxIQ/docs/working/mvp-live-continuation-2026-10-03.md

@@ -1,9 +1,9 @@
 # Flow Authoring And Defensive Runtime
 
-Status: Active
-Status detail: The nineteen-task extract lane measured twice on 2026-09-24: 9 stable passes, 6 stable failures, 4 tasks flipping between identical runs. Nine one-node extractions are correct to the field on hard pages; multi-step automation still is not. Five causes fixed (t116-t123), three of them not yet measured by a lane.
+Status: Superseded
+Status detail: Superseded 2026-10-07 by [mvp-final-month-plan.md](./mvp-final-month-plan.md); its 2026-09-24 design backlog is historical.
 Created: 2026-09-22
-Last updated: 2026-09-24
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: Make a model-authored Flow faithful to what the model actually did, and make a Flow's execution survive a site we do not control. Covers the build loop's authoring model, the draft Flow and its edit and dry-run tools, branch and loop authoring, the runtime's deterministic recovery ladder, and the adversarial fixture conditions that measure both. It deliberately does not cover the real-site lane itself, the campaign measurement, new extraction capabilities, or the Week 2 exit criteria, which stay in their own documents.
 Paired document: `F:\!FluxIQ\docs\working\flow-authoring-and-defensive-runtime-plan.md`

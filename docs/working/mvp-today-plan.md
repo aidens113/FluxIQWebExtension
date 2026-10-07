@@ -1,9 +1,9 @@
 # MVP Today
 
-Status: Active
-Status detail: Run 4 remains the latest accepted failed product measurement and the pass streak remains 0. Its measured draft-input loss is corrected inside the unchanged 4,000-byte reservation; provider-free gates, corrected-order output freshness, final candidate review, and local Core/downstream integration are green. Remote delivery is blocked by expired GitHub authentication, and a fresh no-hindsight authorization remains; no provider call is authorized.
+Status: Superseded
+Status detail: Superseded 2026-10-07 by [mvp-final-month-plan.md](./mvp-final-month-plan.md). Its "no provider call is authorized" and expired-GitHub notes are historical, not current rules.
 Created: 2026-09-26
-Last updated: 2026-09-27
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: Close the MVP loop in which an instruction becomes a Flow, runs deterministically, repairs itself when judged wrong, and judges its own answer. This plan owns the binding rules and live exit criteria; operating history remains in `language-driven-flow-loop-plan.md`.
 Paired document: none

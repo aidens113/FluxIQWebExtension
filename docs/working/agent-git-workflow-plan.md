@@ -1,9 +1,9 @@
 # Agent Git Workflow
 
-Status: Active
-Status detail: Implemented and exercised end to end on this repository; what remains is the Core-side paired-branch half and two prune jobs, all in Open Questions.
+Status: Complete
+Status detail: Implemented and exercised end to end; the Core-side paired-branch half and prune jobs remain in Open Questions.
 Created: 2026-09-17
-Last updated: 2026-09-17
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: How work reaches `dev` in this repository when several agents run at once — when a unit of work gets its own branch, when it also gets its own worktree, how a worktree is paired with FluxIQ Core, how provenance survives the fact that workers never commit, and what tooling makes the correct path the cheap one. It deliberately does not introduce pull requests, review gates on `dev`, or any change to what `pnpm check`, `pnpm test` and `pnpm build` mean.
 Paired document: none yet — a Core-side document is required only if Core adopts the paired-branch half of this (see Open Questions).

@@ -1,9 +1,9 @@
 # Agent Token Efficiency Plan
 
-Status: Active
-Status detail: Phases 0 to 3 executed on 2026-09-10; merging the settings fragment into ~/.claude/settings.json is left to the user; Phase 4 (measure and trim) begins after real use.
+Status: Paused
+Status detail: Phases 0-3 executed 2026-09-10; global agent tooling is now owned by F:!AgentBrain. Phase 4 (measure and trim) is deferred until the user asks.
 Created: 2026-09-10
-Last updated: 2026-09-10
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: Keeping the senior supervisor agent's context small on every project: fix instruction loading, add a global layer under `~/.claude` fed from a shared brain repository, define global / family / project / task memory tiers, and enforce delegation, worker return, and handoff rules mechanically.
 Paired document: `F:\!FluxIQ\docs\working\agent-token-efficiency-plan.md`

@@ -1,9 +1,9 @@
 # Week 2 Exit Plan
 
-Status: Active
-Status detail: E1 round 1 complete on all ten sites (no instruction-built Flow replayed; every cause has an owner); fourteen fix workers in flight; E2 after they land.
+Status: Superseded
+Status detail: Superseded 2026-10-07 by [mvp-final-month-plan.md](./mvp-final-month-plan.md); the workers and worktrees it names are long finished.
 Created: 2026-09-21
-Last updated: 2026-09-21
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: Take the 30-day MVP over the Week 2 exit line — Fail, Diagnose, Explore, Recover, Generate Repair, Validate, Persist, Resume, Re-run Deterministically, proven live through the real panel and extension — by integrating the open task branches, closing the loop's remaining gaps across all three entry points, and building an end-to-end UI test lane that exercises it.
 Paired document: `F:\!FluxIQ\docs\working\mvp-week2-automation-loop-plan.md` (Core's side of the Week 2 loop)

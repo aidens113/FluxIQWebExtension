@@ -1,9 +1,9 @@
 # Bootstrap Generation No-Proposal Investigation
 
-Status: Active
-Status detail: Durable creation, isolated manual hosting, and permission continuation are verified; integration waits for the task's first-generation multi-action code to be reconciled with t033's default-one live candidate.
+Status: Archived
+Status detail: Historical (2026-09-20 bootstrap investigation); later bootstrap and candidate work replaced it. Do not plan from it.
 Created: 2026-09-20
-Last updated: 2026-09-20
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: Diagnose and fix the first closed boundary that turns a successful model-backed Flow bootstrap request into zero durable proposals, then rerun that same live UI path before focused tests.
 Paired document: none

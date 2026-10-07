@@ -1,9 +1,9 @@
 # Codex Tasks, 2026-09-30
 
-Status: Active
-Status detail: Five bounded tasks written for Codex runs the user assigns tonight; none started yet.
+Status: Complete
+Status detail: All five tasks landed on dev 2026-09-30 (d9820ec2, efc92b69, 9fee5fb2, 3dc66aee, 1310723d; matched by subject). The task table below is historical.
 Created: 2026-09-30
-Last updated: 2026-09-30
+Last updated: 2026-10-07
 Owner: Senior supervisor agent (Claude) writes and integrates; each Codex run owns its own task branch
 Scope: Five self-contained tasks that do not overlap the work Claude's agents are doing right now: docs for integration round 3, Lab bookkeeping gaps, extension cleanup and a deep link, robot-check wait gaps, and full traces for every build ending. Codex works on its own task branches; the Claude supervisor verifies and merges them into dev.
 Paired document: none

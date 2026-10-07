@@ -1,9 +1,9 @@
 # Language-Driven Flow Loop
 
-Status: Active
-Status detail: Codex resumed MVP implementation/live testing in paired t262; round-1003 endings reconciled and focused blockers being integrated.
+Status: Superseded
+Status detail: Superseded 2026-10-07 by [mvp-final-month-plan.md](./mvp-final-month-plan.md), which owns the live loop, A-D gates and operating rules; its debugs/ folder stays as evidence.
 Created: 2026-09-24
-Last updated: 2026-10-03
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: Reaching the MVP goal — a person's instruction becomes a Flow, that Flow runs deterministically, repairs itself when it breaks, and judges its own answer — by running several complex, multi-node live scenarios in parallel lanes, debugging every run end to end, fixing every cause it exposes, and re-running that same scenario until it works. It deliberately does not cover corpus-wide campaigns, pass-count measurement, single-node extraction tasks, recorded Flows, or any surface that does not block this loop.
 Paired document: none

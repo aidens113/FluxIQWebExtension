@@ -1,9 +1,9 @@
 # MVP Week 2 Automation Loop Plan
 
-Status: Active
-Status detail: Executing 2026-09-20. Creation, recording, extraction, restart/reuse, and the 44.7% runtime-latency gain are live-proven; repair proposal persistence and unified batch acceptance remain open.
+Status: Superseded
+Status detail: Superseded 2026-10-07 by [mvp-final-month-plan.md](./mvp-final-month-plan.md); its 2026-09-17 open list is historical.
 Created: 2026-09-15
-Last updated: 2026-09-20
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: Week 2 of the 30-day MVP, Phases 2.1-2.9: the automation loop (standardized adaptation context, diagnosis separated from exploration, bounded harness exploration, recovery success detection, converting exploration into reusable automation, validating, persisting, and resuming adaptations, and proving deterministic reuse), with Testing Lab verification. Phase 2.0, the data extraction foundation, lives in first-class-data-extraction-plan.md.
 Paired document: `F:\!FluxIQ\docs\working\mvp-week2-automation-loop-plan.md`

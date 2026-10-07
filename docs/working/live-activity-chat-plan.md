@@ -1,9 +1,9 @@
 # Live Activity And Extension Chat
 
-Status: Active
-Status detail: Every phase is implemented and checked in both trees (2026-09-29); the browser proof passes to the live lane's next run.
+Status: Complete
+Status detail: Every phase implemented and checked in both trees (2026-09-29); the remaining browser proof is part of each live run's UI review.
 Created: 2026-09-29
-Last updated: 2026-09-29
+Last updated: 2026-10-07
 Owner: Senior supervisor agent (lane lead t185)
 Scope: Show what FluxIQ is actually doing, live, on the page it is automating and in the extension's panel: a typed, bounded Core activity stream pushed over the client gateway, an on-page shadow-root status overlay, the extension chat window sharing Core's conversation, and the Lab opening the panel beside the page. It does not change the build loop, the recovery ladder or LLM call grants.
 Paired document: none — Core's side is the `server.activity` contract in `packages/contracts/src/client-gateway.ts`, recorded here; a Core-side document is owed if the stream grows beyond this lane.

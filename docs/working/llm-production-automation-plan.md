@@ -1,9 +1,9 @@
 # LLM Production Automation Audit And Implementation Plan
 
-Status: Active
-Status detail: execution authorized; instruction-only creation, first live runtime adaptation, and parameterized `basic-form` creation/run are accepted; active work is repeatable generation/adaptation and reusable sanitized context
+Status: Archived
+Status detail: Historical (2026-09-10); its scope was overtaken by the Week 2, loop and final-month plans. Do not plan from it.
 Created: 2026-09-06
-Last updated: 2026-09-10
+Last updated: 2026-10-07
 Owner: root coordination agent
 Scope: Production-capable, provider-neutral LLM automation through the real web panel, production extension, and Testing Lab (instruction-only blank-Flow creation, evidence-guided exploration, runtime failure diagnosis/adaptation, reusable sanitized evidence); generic behavior lives in Core (`F:\!FluxIQ`), browser/DOM/selector/Testing Lab concerns live in this repository.
 Paired document: none

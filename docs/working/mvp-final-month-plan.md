@@ -274,6 +274,7 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 
 ## Open Questions
 
+- Carried over from general-flow-authoring-plan (marked Complete 2026-10-07): P5 binding to an earlier step's output (`$step`) is still refused, and F7, a stored Flow node keeping no `consequences` for the stored-run permission gate, is still open. Schedule them only if an A-D or Phase 1b task needs them.
 - Recording scope is resolved by the newer user order: evidence beside mandatory instructions, after A-D qualify. Do not reopen the older September ambiguity.
 - Script channel, store eligibility and Firefox parity need a concrete feasibility result. Preserve no-debugger JS and requests-OFF policy meanwhile.
 - Direct-request origins/session/redirect policy needs a concrete design; do not inherit the old any-origin default as authorization.

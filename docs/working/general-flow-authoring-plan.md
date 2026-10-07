@@ -1,9 +1,9 @@
 # General Flow Authoring
 
-Status: Active
-Status detail: t252 implementing P1-P4 (Core-paired); P3 waits for lane A on Core dev; live runs are held by the user until t252 lands.
+Status: Complete
+Status detail: t252 (P1-P3) integrated. P5 earlier-output (`$step`) binding and F7 stored-node consequences remain open, tracked in [mvp-final-month-plan.md](./mvp-final-month-plan.md) Open Questions.
 Created: 2026-10-02
-Last updated: 2026-10-02
+Last updated: 2026-10-07
 Owner: Senior supervisor agent (design and t252 by lane lead t251/t252)
 Scope: How a build writes general Flow steps (loops over rows, Flow inputs, earlier outputs) from what it explored, beside the recorded steps it runs live, and how those steps are declared, tested and taught. It does not change the judge's rules, the recovery ladder, the stored-run permission model, or the $0.10 purse.
 Paired document: none (Core changes are recorded here; Core architecture docs are updated in P4)

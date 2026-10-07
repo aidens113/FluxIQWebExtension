@@ -1,9 +1,9 @@
 # FluxIQ Conversations
 
-Status: Active
-Status detail: Directed by the user 2026-09-22 and started the same day; two discovery workers reading Core's primitives and the panel's shell. No implementation dispatched yet.
+Status: Complete
+Status detail: Conversation tasks t083-t086 merged in Core (conversation integration, chat window, live chat window, parking); later work extended it under t210.
 Created: 2026-09-22
-Last updated: 2026-09-22
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: A real conversation between FluxIQ and the person, with its chat window, as a first-class part of FluxIQ Core and the general channel for anything the model needs from them — permission for a consequential act, a decision between readings of an instruction, approval of a repair, feedback on a Flow. Covers the thread's model and persistence, how the model reads and writes it, how a run or build parks on a question and resumes on the answer, and the panel surface. It deliberately does not remove or replace existing manual controls, does not redesign the panel, and does not own the web domain's own UI.
 Paired document: none yet — conversations are generic framework behaviour and land in FluxIQ Core, so a Core-side document is required once the design is accepted.

@@ -1,9 +1,9 @@
 # Module Size Governance Plan
 
-Status: Active
-Status detail: Phases 1 and 2 complete here; both shipped oversized files decomposed; neither split is runtime-verified.
+Status: Complete
+Status detail: Phases 1 and 2 complete; leftovers (extension unit runner, demo-workspace split) stay in Open Questions.
 Created: 2026-09-10
-Last updated: 2026-09-10
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: Applying the shared file and class size policy to this repository, and decomposing the files here that already exceed it.
 Paired document: `F:\!FluxIQ\docs\working\module-size-governance-plan.md`

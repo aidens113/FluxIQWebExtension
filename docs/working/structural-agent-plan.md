@@ -1,9 +1,9 @@
 # Structural Agent Plan
 
-Status: Active
-Status detail: Consultant/source audit reordered stages: acceptance and explicit candidates first; fallback feasibility alongside; implementation pending.
+Status: Superseded
+Status detail: Superseded 2026-10-07 by the [consultant revision](./mvp-final-month-plan/consultant-revision.md), executed as units t296 onward; its A1-G30 problem list stays as reference.
 Created: 2026-10-07
-Last updated: 2026-10-06
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: Independent outcome acceptance, separate discovery and candidate submission, declared-start execution and shared promotion, typed browser blockers, and bounded script/request feasibility. Read-list implementation stays in first-class-data-extraction-plan; cross-repository sequencing and live gates stay in mvp-final-month-plan.
 Paired document: none (planning review only; create a Core-side companion before implementation changes generic authoring, verification or promotion)
