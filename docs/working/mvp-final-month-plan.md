@@ -498,3 +498,26 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Owns after supervisor-approved exact list: graph-store.ts focused import/upsert executor changes, new owning graph import atomicity test file(s), focused Core storage/architecture paragraph, own downstream reports/p2-atomic-graph-import.md. No service/bootstrap/ledger/schema/shared docs/git/host/t305/publication/source-authority edits.
 - Definition of done: fail-first injected node/edge/region/revision/partition failure leaves no partially imported Flow/revision/entities/indexes; retry imports complete graph rather than false already_imported. Concurrent same-flow imports across real separate SQLite owners result one complete graph; preserve existing graph patch/inverse/ownership semantics and upsert compatibility. Entire already-imported decision+write must be inside transaction. Reconcile cancellation/storage uncertainty truthfully, no success from compile.
 - Validation: owning graph tests and real SQLite fail/reopen/concurrency cases, Core typecheck/owning build and structure audit; bounded fixtures with owned cleanup. Explain transaction boundaries and remaining whole-topology authority gaps. No full suites/provider/browser/userpanel or JSON/global atomicity claim. Proposed owners/caller analysis before edit; provisioning first, root signals ready for frozen checks.
+
+### 2026-10-07 - t306 integrated verification
+- Agent: Codex supervisor.
+- Changed: malformed assertions/waits refuse promptly; valid whole-page text ignores unrelated focus and authored targeted predicates preserve resolution. Integrated after current-dev merge.
+- Validation: supervisor33/33 owning tests, affected source/test typechecks, audit0 and three22-file target builds; actual unpacked Chromium1/1 passed17.2s. Full handoff reports/p3-meaningful-assert-wait.md.
+- Outcome: Narrow P3 slice complete; no paid/site/Firefox/Edge qualification claim.
+- Follow-up: t305 loaded host and t307 graph import frozen; root reviewing merged source and repeating checks. Whole authority/promotion and trusted semantic browser proof remain incomplete.
+
+### Brief: p0-server-adapter-identity-design
+- Repository: main Core/downstream read-only; own report only.
+- Task: Locate the actual executing server websocket adapter and retained owner, then propose the smallest additive generic provenance/stamp/gate slice closing t305's explicit scope gap.
+- Owns: reports/p0-server-adapter-identity-design.md only; no shared/source/git/build/panel/provider/runtime-state edits.
+- Required reads: Current State, t305 report limits, Core instructions, actual server registration/module owners and build pipeline.
+- Definition of done: exact executable artifact and trusted retained capture, expected source/artifact inventory and route-reload/adapter-reload negatives; distinguish browser client package from server adapter. Return precise implementation owners for supervisor approval.
+- Validation: source inspection with paths/functions; no executing adapter identity claim from disk or mocks.
+
+### Brief: p2-authority-contract-slice
+- Repository: main Core/downstream read-only; own report only.
+- Task: Design the first bounded complete accepted-state project-SQL contract/storage foundation from the prior authority inventory, with coherent snapshot/CAS and explicit support limits. Do not enable promotion or cut over existing writers.
+- Owns: reports/p2-authority-contract-slice.md only; no shared/source/git/build/panel/provider/runtime-state edits.
+- Required reads: Current State, p2-promotion-design.md, p2-authority-migration-inventory.md and concrete existing graph/source/instruction/settings/reader owners.
+- Definition of done: exact minimal schema, complete source/settings/router/subflow/graph/instruction vector, stable authority/CAS/adoption invariants, unsupported publication-dependent/JSON scope, and precise new implementation owners/tests. List existing writers that must join before production cutover. No automatic user-data adoption.
+- Validation: source evidence and concrete contract proposal, not duplicate general inventory or atomicity proof.

@@ -28,6 +28,9 @@ parity is unexercised. t303 tab repeat safety, explicit-open landing and
 HTTPS downgrade are integrated/pushed ddc8befd after independent owning114/114,
 affected types/audit/builds and production Chromium1/1. Missing evidence remains
 unvalidated; no live TLS downgrade, Firefox/Edge session or paid qualification.
+t306 meaningful assert/wait is integrated after supervisor33/33 and production
+Chromium1/1 (17.2s), affected typechecks/audit and three target builds.
+Missing/blank predicates refuse; literal text and authored target scope remain valid.
 Other backlog rows remain pending.
 
 Supervisor independently counted57current task definitions across ten sites.
