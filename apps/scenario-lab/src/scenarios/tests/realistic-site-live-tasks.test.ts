@@ -3,6 +3,7 @@ import test from "node:test";
 import { resolveScenarioWorkflow, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { getScenarioManifest } from "../../registry.js";
 import { REALISTIC_SITE_LIVE_TASKS } from "../realistic-site-live-tasks.js";
+import { ORIGINAL_REALISTIC_TASKS } from "./fixtures/index.js";
 import type { LiveInstructionTask } from "../live-instructions.js";
 
 type ExtractedEntry = NonNullable<WebScenario["expected"]["extracted"]>[number];
@@ -64,4 +65,16 @@ test("the column check rejects a dataset key the instruction does not name", () 
   assert.equal(named("with columns name, price and url", "rating"), false);
   assert.equal(named("with columns name and mutualFriends", "mutualFriends"), true);
   assert.equal(named("with columns item and priceEach", "price"), false);
+});
+
+test("qualification additions preserve the complete ordered original 57 tasks", () => {
+  assert.equal(ORIGINAL_REALISTIC_TASKS.length, 57);
+  const originalIds = new Set<string>(ORIGINAL_REALISTIC_TASKS.map(task => task.id));
+  assert.deepEqual(REALISTIC_SITE_LIVE_TASKS.filter(task => originalIds.has(task.id)), ORIGINAL_REALISTIC_TASKS);
+  assert.deepEqual(REALISTIC_SITE_LIVE_TASKS.filter(task => !originalIds.has(task.id)).map(task => task.id).sort(), [
+    "auction-marketplace-remove-watched-accessories",
+    "crossborder-marketplace-collect-official-coupon-only",
+    "professional-network-audit-stale-requests",
+  ]);
+  assert.equal(REALISTIC_SITE_LIVE_TASKS.length, 60);
 });

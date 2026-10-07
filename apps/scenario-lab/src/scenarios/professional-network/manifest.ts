@@ -1,3 +1,4 @@
+import { staleRequestAuditWorkflow } from "./qualification/index.js";
 import type { ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
 import { SENT_INVITATIONS } from "./data/index.js";
@@ -178,5 +179,5 @@ export const professionalNetworkManifest = createScenarioManifest({
         finalState: [storeIs(STORE_AT_START)],
       },
     }],
-  }],
+  }, staleRequestAuditWorkflow],
 });

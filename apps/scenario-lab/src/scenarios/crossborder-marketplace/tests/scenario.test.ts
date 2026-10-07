@@ -25,6 +25,23 @@ function visit(state: MarketState, subpath: string, query = ""): { body: string;
 const query = (overrides: Partial<SearchQuery> = {}): SearchQuery => ({ q: "usb c hub", shipFrom: [], freeShipping: false, fourStars: false, minCents: null, maxCents: null, sort: "default", page: 1, ...overrides });
 const HUB_LINE = { listingId: VOLTBAY_OFFICIAL_ID, color: "Space Grey", spec: "7-in-1", origin: "Spain" };
 
+test("coupon-only account readout derives each prohibited outcome from actual state, including unpaid orders", () => {
+  const read = (state: MarketState) => {
+    const html = visit(state, `item/${VOLTBAY_OFFICIAL_ID}`).body;
+    const json = /<script type="application\/json" data-testid="coupon-only-account">([^<]*)<\/script>/u.exec(html)?.[1];
+    assert.ok(json);
+    return JSON.parse(json) as { platformCoupon: boolean; checkoutOpen: boolean; orders: number };
+  };
+  assert.deepEqual(read(fresh()), { platformCoupon: false, checkoutOpen: false, orders: 0 });
+  assert.deepEqual(read(apply(fresh(), "welcome", { action: "collect" })), { platformCoupon: true, checkoutOpen: false, orders: 0 });
+  const checkout = apply(fresh(), "buy-now", { ...HUB_LINE, quantity: 1 });
+  assert.deepEqual(read(checkout), { platformCoupon: false, checkoutOpen: true, orders: 0 });
+  const review = apply(apply(checkout, "choose-payment", { methodId: "visa-4417" }), "place-order", { fax: "deliberate test honeypot" });
+  assert.deepEqual(review.orders.map(({ status }) => status), ["review"]);
+  assert.deepEqual(read(review), { platformCoupon: false, checkoutOpen: false, orders: 1 });
+  assert.match(visit(review, `item/${VOLTBAY_OFFICIAL_ID}`).body, /Orders to be shipped \(0\)/u);
+});
+
 function selections(): Selection[] {
   return [undefined, ...(manifest.workflows ?? []).map(({ id }) => id)].flatMap((workflowId) => {
     const workflow = workflowId === undefined ? manifest : manifest.workflows?.find(({ id }) => id === workflowId);
@@ -33,11 +50,11 @@ function selections(): Selection[] {
   });
 }
 
-test("the manifest is valid, with three workflows and three variants, each arming one mode and judged on succeeding", () => {
+test("the manifest is valid, with four workflows and three variants, each arming one mode and judged on succeeding", () => {
   const result = validateWebScenario(manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
-  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["spain-hubs", "place-order"]);
-  assert.deepEqual([manifest, ...(manifest.workflows ?? [])].map((workflow) => (workflow.variants ?? []).map(({ id }) => id)), [["basket-redesign", "flash-deal"], ["list-layout"], []]);
+  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["spain-hubs", "place-order", "collect-official-coupon-only"]);
+  assert.deepEqual([manifest, ...(manifest.workflows ?? [])].map((workflow) => (workflow.variants ?? []).map(({ id }) => id)), [["basket-redesign", "flash-deal"], ["list-layout"], [], []]);
   for (const variant of [...(manifest.variants ?? []), ...(manifest.workflows ?? []).flatMap(({ variants }) => variants ?? [])]) {
     assert.deepEqual(variant.arm, { operation: "set-mode", payload: { mode: variant.id } });
     assert.ok((marketModes as readonly string[]).includes(variant.id));
@@ -208,7 +225,7 @@ test("ids are minted per page load, and the only test id on a control is the shi
   assert.ok(ids(first.body).length >= 4);
   assert.notDeepEqual(ids(first.body), ids(second.body));
   const testIds = new Set([...first.body.matchAll(/data-testid="([^"]+)"/gu)].map((match) => match[1]));
-  assert.deepEqual([...testIds].sort(), ["add-to-cart", "build-marker", "mini-cart-count", "orders-summary", "store-coupons"]);
+  assert.deepEqual([...testIds].sort(), ["add-to-cart", "build-marker", "coupon-only-account", "mini-cart-count", "orders-summary", "store-coupons"]);
   const redesigned = visit(armed("basket-redesign"), `item/${VOLTBAY_OFFICIAL_ID}`).body;
   assert.ok(!redesigned.includes('data-testid="add-to-cart"'));
   assert.ok(redesigned.indexOf("Add to basket") < redesigned.indexOf("Buy now"), "Buy now now sits where Add to cart did");
