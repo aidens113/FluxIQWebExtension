@@ -1,3 +1,4 @@
+import { stampHostBuildIdentity } from "./host-build-identity/index.mjs";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,5 +34,7 @@ await build({
   sourcemap: false,
   logLevel: "info"
 });
+
+await stampHostBuildIdentity(path.dirname(root), outfile);
 
 console.log(`[FluxIQ Web Automation] Built web panel host module: ${outfile}`);
