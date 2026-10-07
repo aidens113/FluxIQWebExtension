@@ -1282,6 +1282,28 @@ record that a rename was survived.
 
 ### The instruction-created Flow lane and its authored artifact
 
+**Authoring mode (t338).** Whether this lane can build at all is Core's one
+authoring-mode setting, `FLUXIQ_AUTHORING_MODE` (Core `model/authoring-mode/`):
+`legacy` (the default) or `candidate`. The Lab gives every Core it starts the
+run's `--authoring-mode`, or `legacy` when the run names none
+(`packages/test-runner/src/live-llm/authoring-mode-env.ts`, used by
+`buildFluxIQEnvironment`); a value inherited from whoever launched the Lab is
+dropped, and a value Core would refuse is refused by the Lab's command parse,
+through Core's own resolver, before anything starts. The run's plan records it as
+`coreAuthoringMode`, which `snapshots/live-llm.json` and the dry run's `live`
+record carry. In `legacy` mode the lane runs as it did before t330 (downstream
+`92d790d7`): the chat's create-here builds, approves and applies its own proposal,
+a direct build is approved and applied by the Lab, and the Flow is run and judged.
+In `candidate` mode Core only saves an unverified candidate draft that nothing
+executes, verifies or promotes yet, so `assertCreatedFlowVerificationReady`
+(`flow-lane/creation/readiness.ts`) refuses with
+`lab.candidate_verification_unavailable` at stage `before_provider`: in the Lab
+command before any topology starts, and again at the lane, the chat build, the
+direct build and approve/apply. Only Core's exact `legacy` admits; no caller
+verdict lifts the refusal. Should a Core answer with a draft anyway, the lane
+records it as `outcome: "draft"` and fails as a facility contract, never as a
+created Flow.
+
 Live instruction campaigns use a third, distinct lane. The created-Flow lane
 does not derive a Flow from a recording: Core builds one from the instruction,
 the lane applies the reviewed proposal, runs the persisted Flow, and judges the
@@ -3077,6 +3099,13 @@ pnpm lab:campaign <task-id> --llm-model deepseek-v4-pro
 The live campaign always hands each run its `--llm-model` (default
 `deepseek-flash`), so a campaign run gives Core that default explicitly; it is
 the same model Core would use unset.
+
+The campaign likewise always hands each run its `--authoring-mode` (the
+campaign's own option, default `legacy`; refused after `--`), so every run's
+Core is started in a stated mode. Each summary row records the mode the run's
+Core recorded (`authoringMode`, from `snapshots/live-llm.json`), and the summary
+states the mode the campaign selected. `pnpm lab:campaign <task-id> --authoring-mode
+candidate` exists to show that refusal; it builds nothing.
 
 `deepseek-v4-pro` costs about four and a half times as much per token, so the
 same per-build ceiling buys fewer calls. A comparison requiring more room

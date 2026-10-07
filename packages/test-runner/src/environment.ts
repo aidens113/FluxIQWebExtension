@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV } from "fluxiq/automation-studio";
 import type { RunAllocation } from "./allocation.js";
-import { LAB_COST_CEILING_ENV, LAB_COST_CEILING_SCOPE_ENV, LAB_DEFAULT_MODEL_ENV, labBuildCallLimitEnvironment, labCostCeilingValue, labDefaultModelValue } from "./live-llm/index.js";
+import { LAB_AUTHORING_MODE_ENV, LAB_COST_CEILING_ENV, LAB_COST_CEILING_SCOPE_ENV, LAB_DEFAULT_MODEL_ENV, labAuthoringModeValue, labBuildCallLimitEnvironment, labCostCeilingValue, labDefaultModelValue } from "./live-llm/index.js";
 
 /**
  * Provider credentials belong to the test driver. Child processes receive an
@@ -86,6 +86,10 @@ export function webPanelHostModulePath(repositoryRoot: string): string {
  * build runs on, which is the one a build typed into the extension's chat gets.
  * An inherited value is dropped, so a run without the flag gives Core nothing
  * and Core builds on its own default.
+ *
+ * `FLUXIQ_AUTHORING_MODE` is always set, from the run's `--authoring-mode` or
+ * Core's default `legacy` (`./live-llm/authoring-mode-env.ts`): an inherited value
+ * is dropped, so the mode the run records is the mode its Core runs in.
  */
 export function buildFluxIQEnvironment(allocation: RunAllocation, paths: TopologyPaths, base: NodeJS.ProcessEnv = process.env, args: readonly string[] = process.argv): NodeJS.ProcessEnv {
   const hostModulePath = paths.hostModulePath ?? webPanelHostModulePath(paths.repositoryRoot);
@@ -94,8 +98,10 @@ export function buildFluxIQEnvironment(allocation: RunAllocation, paths: Topolog
   const costCeiling = labCostCeilingValue(paths.repositoryRoot, args, base);
   // Core's default model, from the run's --llm-model only; refused here when Core would refuse it at start.
   const defaultModel = labDefaultModelValue(args);
+  // Core's authoring mode, from the run's --authoring-mode only; refused here when Core would refuse it.
+  const authoringMode = labAuthoringModeValue(args);
   if (paths.modelProvidersEnabled !== undefined && typeof paths.modelProvidersEnabled !== "boolean") throw new Error("modelProvidersEnabled must be an explicit boolean");
-  const { FLUXIQ_MODEL_PROVIDERS_ENABLED: _inheritedModelAdmission, FLUXIQ_LLM_STEP_LOG_DIR: _inheritedStepLogDirectory, [LAB_DEFAULT_MODEL_ENV]: _inheritedDefaultModel, [AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV]: _inheritedCallLimit, [AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV]: _inheritedCallScope, ...inherited } = withoutProviderSecrets(base);
+  const { FLUXIQ_MODEL_PROVIDERS_ENABLED: _inheritedModelAdmission, FLUXIQ_LLM_STEP_LOG_DIR: _inheritedStepLogDirectory, [LAB_DEFAULT_MODEL_ENV]: _inheritedDefaultModel, [LAB_AUTHORING_MODE_ENV]: _inheritedAuthoringMode, [AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV]: _inheritedCallLimit, [AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV]: _inheritedCallScope, ...inherited } = withoutProviderSecrets(base);
   return {
     FLUXIQ_BUILD_PROGRESS_TRACE: "1",
     ...inherited,
@@ -104,6 +110,7 @@ export function buildFluxIQEnvironment(allocation: RunAllocation, paths: Topolog
     ...labBuildCallLimitEnvironment(paths.buildCallLimit),
     ...(paths.modelProvidersEnabled === undefined ? {} : { FLUXIQ_MODEL_PROVIDERS_ENABLED: String(paths.modelProvidersEnabled) }),
     ...(defaultModel === undefined ? {} : { [LAB_DEFAULT_MODEL_ENV]: defaultModel }),
+    [LAB_AUTHORING_MODE_ENV]: authoringMode,
     ...(paths.stepLogDirectory ? { FLUXIQ_LLM_STEP_LOG_DIR: paths.stepLogDirectory } : {}),
     PORT: String(allocation.webPort),
     FLUXIQ_ROOT: allocation.fluxiqRoot,

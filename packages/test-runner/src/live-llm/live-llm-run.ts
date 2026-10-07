@@ -19,8 +19,9 @@ import { assertProviderCallsAsDeclared, type DeclaredProviderCalls } from "./dec
 import { liveLlmBuildUsage } from "./build-usage.js";
 import { liveLlmBuildCostCeilingUsd } from "./build-cost-ceiling.js";
 import { liveLlmCoreDefaultModel } from "./core-default-model.js";
+import { labAuthoringModeValue } from "./authoring-mode-env.js";
 import { readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExplorationRecord } from "./exploration-record.js";
-import { planLiveLlmExecution, type LiveLlmPlan } from "./live-llm-plan.js";
+import { assertLiveLlmLaneFlag, planLiveLlmExecution, type LiveLlmPlan } from "./live-llm-plan.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usage.js";
 import { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
 import { readLiveLlmReauthor, type LiveLlmReauthorRecord } from "./reauthor-record.js";
@@ -67,8 +68,8 @@ export async function beginLiveLlmRun(input: {
   costCeilingSources?: { args: readonly string[]; environment: NodeJS.ProcessEnv };
 }): Promise<LiveLlmRun> {
   const sources = input.costCeilingSources ?? { args: process.argv, environment: process.env };
-  const plan = planLiveLlmExecution(input.profile, liveLlmBuildCostCeilingUsd(input.repositoryRoot, sources.args, sources.environment), liveLlmCoreDefaultModel(sources.args));
-  assertLaneFlag(plan, input.flowLane);
+  const plan = planLiveLlmExecution(input.profile, liveLlmBuildCostCeilingUsd(input.repositoryRoot, sources.args, sources.environment), liveLlmCoreDefaultModel(sources.args), labAuthoringModeValue(sources.args));
+  assertLiveLlmLaneFlag(plan, input.flowLane);
   if (input.targetMode !== "isolated" && input.targetMode !== "persistent-isolated") {
     throw new RunnerFailure("fixture.invalid", `A live LLM run needs a Core this runner owns, and the ${input.targetMode} target's is not; use --target isolated or persistent-isolated`);
   }
@@ -163,6 +164,8 @@ export class LiveLlmRun {
 
   constructor(private readonly plan: LiveLlmPlan, private readonly credential: LiveLlmProviderCredential) {}
   get authorizedBuildCallLimit(): number { return this.plan.maxCalls; }
+  /** The authoring mode the run's Core was started in (`./authoring-mode-env.ts`). */
+  get coreAuthoringMode(): LiveLlmPlan["coreAuthoringMode"] { return this.plan.coreAuthoringMode; }
 
   /**
    * Where Core logs this run's model and tool steps (`FLUXIQ_LLM_STEP_LOG_DIR`).
@@ -339,7 +342,7 @@ export class LiveLlmRun {
    * task needs the recorded Flow lane and no instruction task.
    */
   assertLane(lane: { flowLane: boolean; creation: boolean }): void {
-    assertLaneFlag(this.plan, lane.flowLane);
+    assertLiveLlmLaneFlag(this.plan, lane.flowLane);
     if (this.createsFlow && !lane.creation) throw new RunnerFailure("fixture.invalid", "--llm-task create-flow needs an instruction task to build from, and this run carries none");
     if (!this.createsFlow && lane.creation) throw new RunnerFailure("fixture.invalid", `An instruction task is built only by --llm-task create-flow, not ${this.plan.task}`);
   }
@@ -366,6 +369,7 @@ export class LiveLlmRun {
       provider: plan.provider,
       model: plan.model,
       coreDefaultModel: plan.coreDefaultModel,
+      coreAuthoringMode: plan.coreAuthoringMode,
       task: plan.task,
       purpose: plan.purpose,
       authorized: {
@@ -665,6 +669,8 @@ export class LiveLlmRun {
       model: this.plan.model,
       task: this.plan.task,
       purpose: this.plan.purpose,
+      // The mode the run's Core authored in: a created Flow is built only in `legacy`.
+      coreAuthoringMode: this.plan.coreAuthoringMode,
       credentialSource: { name: this.credential.name, from: this.credential.source },
       authorized: {
         maxCalls: this.plan.maxCalls,
@@ -776,14 +782,6 @@ function spendSummary(spend: LiveLlmRunSpend): Record<string, unknown> {
 /** What a settlement publishes on the run's event stream: counts and a total, never a call. */
 function usageSummary(observed: LiveLlmObservedUsage): Record<string, unknown> {
   return { calls: observed.calls, interventions: observed.interventions, totalEstimatedCostUsd: observed.totalEstimatedCostUsd, ...(observed.gate ? { llmGate: observed.gate } : {}) };
-}
-
-function assertLaneFlag(plan: LiveLlmPlan, flowLane: boolean): void {
-  if (plan.task === "create-flow") {
-    if (flowLane) throw new RunnerFailure("fixture.invalid", "--llm-task create-flow builds its Flow from an instruction task, not from the run's recording: drop --flow");
-    return;
-  }
-  if (!flowLane) throw new RunnerFailure("fixture.invalid", "A live LLM run needs the Flow lane: pass --flow, which is what builds the Flow the provider is authorized against");
 }
 
 /**

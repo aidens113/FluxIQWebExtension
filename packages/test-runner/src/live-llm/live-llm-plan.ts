@@ -8,6 +8,7 @@
 // become Flow settings Core's loop budget enforces, and the only thing the
 // operator still allows is a consequence (`--llm-permit`).
 
+import type { AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
 import { DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, isLlmModel, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../failure.js";
@@ -73,6 +74,12 @@ export type LiveLlmPlan = {
    * on there, so what a build typed into the extension's chat runs on.
    */
   coreDefaultModel: LlmModel;
+  /**
+   * The authoring mode the run's Core was started with (`labAuthoringModeValue`,
+   * `FLUXIQ_AUTHORING_MODE` from `--authoring-mode`, `legacy` by default). A
+   * created-Flow run builds only in `legacy` (`../flow-lane/creation/readiness.ts`).
+   */
+  coreAuthoringMode: AutomationStudioAuthoringMode;
   /** The budget the operator asked for, kept verbatim so the post-run check judges their numbers, not Core's. */
   declared: LlmTokenBudget;
   /**
@@ -97,7 +104,7 @@ export type LiveLlmPlan = {
  * default model (`liveLlmCoreDefaultModel`, `./core-default-model.ts`), passed
  * in for the same reason; a Core given none builds on `DEFAULT_LLM_MODEL`.
  */
-export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeilingUsd: number, coreDefaultModel: string = DEFAULT_LLM_MODEL): LiveLlmPlan {
+export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeilingUsd: number, coreDefaultModel: string = DEFAULT_LLM_MODEL, coreAuthoringMode: AutomationStudioAuthoringMode = "legacy"): LiveLlmPlan {
   if (!Number.isFinite(buildCostCeilingUsd) || buildCostCeilingUsd <= 0) throw refusal(`the per-build cost ceiling ${buildCostCeilingUsd} is not a positive amount`);
   if (!isLlmModel(coreDefaultModel)) throw refusal(`the run's Core default model ${describe(coreDefaultModel)} is unsupported; Core is configured for ${llmModels.join(", ")}`);
   if (profile.mode !== "live") throw refusal("only a live LLM profile can reach a provider");
@@ -146,6 +153,7 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile, buildCostCeil
     maxTotalEstimatedCostUsd: buildCeilingUsd,
     buildCostCeilingUsd,
     coreDefaultModel,
+    coreAuthoringMode,
     declared: { ...budget },
     permittedConsequences: permittedConsequencesOf(profile.permittedConsequences, purpose),
   };
@@ -216,4 +224,18 @@ function describe(value: string | undefined): string {
 
 function refusal(detail: string): RunnerFailure {
   return new RunnerFailure("fixture.invalid", `Live LLM execution refused: ${detail}`);
+}
+
+/**
+ * Refuses a `--flow` that does not fit the plan's task, before anything starts:
+ * a created Flow is built from an instruction task, never from the run's
+ * recording, and every other live task needs the Flow lane, which builds the
+ * Flow the provider is authorized against.
+ */
+export function assertLiveLlmLaneFlag(plan: Pick<LiveLlmPlan, "task">, flowLane: boolean): void {
+  if (plan.task === "create-flow") {
+    if (flowLane) throw new RunnerFailure("fixture.invalid", "--llm-task create-flow builds its Flow from an instruction task, not from the run's recording: drop --flow");
+    return;
+  }
+  if (!flowLane) throw new RunnerFailure("fixture.invalid", "A live LLM run needs the Flow lane: pass --flow, which is what builds the Flow the provider is authorized against");
 }

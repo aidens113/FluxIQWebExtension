@@ -1,4 +1,3 @@
-import { assertCreatedFlowVerificationReady } from "./readiness.js";
 // The created-Flow lane: a Flow is built by FluxIQ from a live instruction
 // task rather than from a recording, then run and judged on the isolated
 // target like any other Flow-lane run. The lane owns neither the credential nor
@@ -7,6 +6,7 @@ import { assertCreatedFlowVerificationReady } from "./readiness.js";
 // repair its playback may make, and the lane decides only when each is used.
 
 import type { AuthoredFlowGraph, AuthoredFlowNode, ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
+import type { AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
 import { RunnerFailure, type RunnerFailureCategory } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
 import type { DeclaredSecret } from "../declared-secrets.js";
@@ -28,6 +28,7 @@ import type { FinalStateVerdict } from "./final-state-facts.js";
 import { assertCreatedFlowOracles, createdFlowOraclesHold, judgeCreatedFlowOracles, type CreatedFlowOracles } from "./oracles.js";
 import { assertCreatedFlowReachesItsOwnPage, createdFlowOwnPage, type CreatedFlowOwnPage } from "./own-page.js";
 import { judgeCreatedFlowPermissionStop, readCreatedFlowPermissionAsks, type CreatedFlowPermissionStop } from "./permission-point.js";
+import { assertCreatedFlowVerificationReady } from "./readiness.js";
 import { describeCreatedFlowRequest, type CreatedFlowRequest } from "./request.js";
 import { applyCreatedFlowProposal, type CreatedFlowReview, type CreatedFlowReviewControl } from "./review-proposal.js";
 import { createdFlowSecretInputs } from "./secrets.js";
@@ -107,6 +108,12 @@ export type CreatedFlowLaneInput = {
   /** The project's domain, as `FlowLaneInput.projectDomainId`; the Lab's own by default. */
   projectDomainId?: string;
   authorizationPin: string;
+  /**
+   * The authoring mode the run's Core was started in (`LiveLlmPlan.coreAuthoringMode`,
+   * `../../live-llm/authoring-mode-env.ts`). Only `legacy` builds; `candidate` is
+   * refused before anything is built or spent (`./readiness.ts`).
+   */
+  authoringMode: AutomationStudioAuthoringMode;
   request: CreatedFlowRequest;
   /** The workflow `request` resolved to, with its variant applied: its expectations judge the run. */
   workflow: ResolvedScenarioWorkflow;
@@ -335,7 +342,7 @@ type CreatedFlowLaneProgress = {
  * run's record rather than taken out of its verdict.
  */
 export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<CreatedFlowLaneEvidence | CreatedFlowLanePermissionStop> {
-  assertCreatedFlowVerificationReady();
+  assertCreatedFlowVerificationReady(input.authoringMode);
   const progress: CreatedFlowLaneProgress = { stage: "blank-flow", published: false };
   try {
     return await buildRunAndJudge(input, progress);
@@ -390,7 +397,7 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   await assertGrantedAtPermissionPoint(input, { flowId, adaptationId: build.adaptationId, buildPermitted, ...(build.chat ? { conversationId: build.chat.conversationId } : {}) }, bounds);
   progress.stage = "review";
   // The chat approves and applies its own proposal on the Flow it made; only a direct build is reviewed by the Lab.
-  const review = started.applied ?? await applyCreatedFlowProposal(input.control, { projectId, flowId, adaptationId: build.adaptationId, authorizationPin });
+  const review = started.applied ?? await applyCreatedFlowProposal(input.control, { projectId, flowId, adaptationId: build.adaptationId, authorizationPin, authoringMode: input.authoringMode });
   progress.review = review;
   progress.stage = "flow-read";
   const { nodes, edges } = await readCreatedFlowGraph(input.control, { projectId, flowId }, bounds);
@@ -498,7 +505,7 @@ async function startDirectBuild(input: CreatedFlowLaneInput, progress: CreatedFl
     buildPermitted = llm.permittedConsequences;
     return llm;
   };
-  const proposed = await buildCreatedFlowProposal(input.control, { projectId, flowId, instruction: request.task.instruction, startLocation: input.startLocation, authorize }, bounds, input.buildWait);
+  const proposed = await buildCreatedFlowProposal(input.control, { projectId, flowId, instruction: request.task.instruction, startLocation: input.startLocation, authorize, authoringMode: input.authoringMode }, bounds, input.buildWait);
   // Held before the settlement and before either refusal after it, which are the
   // two endings that used to leave a run with no artifact at all.
   progress.build = proposed;
@@ -529,7 +536,7 @@ async function startChatBuild(input: CreatedFlowLaneInput, entry: Extract<Create
   await entry.authorizeChat();
   // The chat's thread and the build it starts belong to the project the paired extension has selected.
   await input.control.selectExistingContext(projectId, undefined, bounds);
-  const made = await buildCreatedFlowFromChat(input.control, entry.chat, { projectId, domainId: input.projectDomainId ?? LAB_PROJECT_DOMAIN_ID, instruction: input.request.task.instruction }, entry.wait);
+  const made = await buildCreatedFlowFromChat(input.control, entry.chat, { projectId, domainId: input.projectDomainId ?? LAB_PROJECT_DOMAIN_ID, instruction: input.request.task.instruction, authoringMode: input.authoringMode }, entry.wait);
   if (made.flowId !== null) progress.flowId = made.flowId;
   progress.build = made.build;
   // A chat that built nothing spent nothing on a build, so the settlement's

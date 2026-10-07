@@ -8,7 +8,7 @@ import { CATALOG, REPAIR_LIMIT_ARGS, CREATE_LIMIT_ARGS, REPAIRS } from "./tasks.
 test("each repair task becomes one adapt run of the recorded Flow, with the live limits unless they are given after --", () => {
   assert.deepEqual(labRunArguments(REPAIRS[0], parseCampaignArgs([])), [
     "run", "identity-drift", "--variant", "renamed-redesign", "--flow",
-    "--live-llm", "--llm-profile", "lab-adapt-repair", "--llm-provider", "deepseek", "--llm-model", "deepseek-flash",
+    "--live-llm", "--llm-profile", "lab-adapt-repair", "--llm-provider", "deepseek", "--llm-model", "deepseek-flash", "--authoring-mode", "legacy",
     "--llm-task", "adapt", ...REPAIR_LIMIT_ARGS,
   ]);
   const workflowOnly = labRunArguments(REPAIRS[2], parseCampaignArgs(["--llm-profile", "p"]));
@@ -49,7 +49,7 @@ test("each task becomes one create-flow Lab run naming its scenario, variant and
   const options = parseCampaignArgs(["--llm-profile", "p", "--", "--target", "persistent-isolated"]);
   assert.deepEqual(labRunArguments(CATALOG[2], options), [
     "run", "data-table", "--variant", "column-reorder",
-    "--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "deepseek-flash",
+    "--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "deepseek-flash", "--authoring-mode", "legacy",
     "--llm-task", "create-flow", "--instruction-task", "table-read-reordered", ...CREATE_LIMIT_ARGS, "--target", "persistent-isolated",
   ]);
   assert.equal(labRunArguments(CATALOG[0], options).includes("--variant"), false);
@@ -81,4 +81,16 @@ test("a task whose instruction asks for an act is permitted exactly the classes 
   const overridden = labRunArguments(buyKettle, parseCampaignArgs(["--", "--llm-permit", "send_or_publish"]));
   assert.equal(overridden.filter((arg) => arg === "--llm-permit").length, 1);
   assert.equal(overridden[overridden.indexOf("--llm-permit") + 1], "send_or_publish");
+});
+
+test("every run names its Core's authoring mode: legacy by default, the campaign's --authoring-mode when given, never after --", () => {
+  for (const task of [CATALOG[0], REPAIRS[0]]) {
+    const args = labRunArguments(task, parseCampaignArgs([]));
+    assert.equal(args[args.indexOf("--authoring-mode") + 1], "legacy");
+    const candidate = labRunArguments(task, parseCampaignArgs(["--authoring-mode", "candidate"]));
+    assert.equal(candidate[candidate.indexOf("--authoring-mode") + 1], "candidate");
+    assert.equal(candidate.filter((arg) => arg === "--authoring-mode").length, 1);
+  }
+  assert.throws(() => parseCampaignArgs(["--", "--authoring-mode", "candidate"]), /sets --authoring-mode itself/u);
+  assert.throws(() => parseCampaignArgs(["--authoring-mode"]), /requires a value/u);
 });
