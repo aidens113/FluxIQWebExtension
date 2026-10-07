@@ -75,3 +75,7 @@ Downstream:
 ## Scope limits
 
 This proves separately bundled downstream domain-host provenance through a trusted local Core binding. It does not attest to the actually loaded external gateway-websocket server adapter. Existing extension adapter/contract digest remains a separate reached-artifact scope; no raw server adapter identity or paid success is claimed.
+
+## Supervisor merged-source verification
+
+Core source00987b83 and downstream59a32016 were merged with current dev before root checks. Independent Core binding/diagnostic6/6; Core source check27.8s and owning build39.9s passed. Sequential host generation, three22-file extension builds and runner compilation passed; domain source/test check18.9s and generator/cache/Lab21/21 passed. Root reran actual built-host headed Chromium134.0.6998.35 plus host/Core identity and runner wiring:55/55 zero skips9.27s, actual fixture7.89s. Real handler route reload remained bound to old host, changed rebinding caused zero IO mutation, fresh child matched; actual chat/provider calls0. Root Core audit0; downstream task integration audit follows. Intended regenerated host normalized artifact45182cdfd031ad946e3562604b88e609ac7e80516b569df7088da8a298cc2dd9; merged dependency inputs differ from worker's earlier stamp. Synthetic authenticated transport is explicitly not production Next/gateway pairing. External server adapter attestation remains pending. Authored Core/downstream architecture updated.
