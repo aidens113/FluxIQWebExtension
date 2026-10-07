@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Acceptance, extension/Core identity, Stop, candidate facade/infrastructure and typed/navigation fixes pushed; durable receipt restart verification and loaded-host identity underway; production promotion/live qualification pending.
+Status detail: Acceptance, extension/Core identity, Stop, candidate facade/infrastructure and typed/navigation fixes pushed; durable receipt restart verified; loaded-host identity independently verified; production promotion/live qualification pending.
 Created: 2026-10-05
 Last updated: 2026-10-07
 Owner: Senior supervisor agent
@@ -24,13 +24,16 @@ rebuilt current pair and repeated headed Stop build/run2/2, owning reauthor9/9,
 Core typecheck/build and both integration audits pass. Running Core-server identity
 is integrated/pushed (Corec8501c15/downstream267a4215), after independent
 Core/routes59/59, generator10/10, HTTP15/15 and headed identity/runner61/61.
-Loaded domain host remains t305. t299 candidate facade is integrated (Core7f9bae15/downstreamcb792dee)
+Loaded domain host t305 is independently verified (Core6/6, generator/cache21/21,
+headed actual built host/runner55/55); integration follows. t299 candidate facade is integrated (Core7f9bae15/downstreamcb792dee)
 after independent actualservice/API53/53, package/dependentweb types and audits.
 t300 receipt/detached infrastructure is integrated (Core386b4c15)
 with production joins pending. t301 typed readiness is integrated (b2ad00de);
 t303 navigation is integrated/pushed ddc8befd after owning114/114 and production
 Chromium1/1. t304 durable ledger passed independent52/52/types/build; literal
-owned child-process termination/restart checks passed2/2 independently.
+owned child-process termination/restart checks passed2/2 independently, pushed
+Core04b51050/downstream1c55b131. t306 meaningful assert/wait integrated and
+pushed after root33/33 and production Chromium1/1 (17.2s).
 No P0 completion
 or fresh A-D qualification is claimed.
 
@@ -490,3 +493,49 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Validation: root52/52 after current-dev merge, Corecheck0/build0/dependentwebcheck0; root actual kill/relaunch2/2 zero skips (6.66s), pending effect never repeated and committed draft reconciled with original receipt/run IDs. Core audit0; task integration audit follows. Initial provisioning overlapping worker source changes was not a frozen-source gate; final checks were on frozen merged source.
 - Outcome: Bounded durable infrastructure verified; production promotion stays unavailable.
 - Follow-up: graph import itself currently writes sequentially; move entire import to actual transaction with injected failure/concurrency regressions, then accepted topology/source/settings/all-writer authority migration. Reports p2-durable-receipts.md and p2-authority-migration-inventory.md preserve source owners/commands and unknowns. No paid runs or user panel.
+
+### Brief: p2-atomic-project-graph-import (task t307)
+- Repository: paired fxwork/t307 Core/downstream; Core storage change, existing public callers compatible. No accepting candidate promotion.
+- Task: Fix confirmed sequential importMonolithicFlowGraph partial-state risk with actual single project SQLite transaction. Make existing Flow upsert accept/use the transaction executor and keep every import SQL operation in that executor; no nested queued database calls/deadlocks.
+- Required reads: Current State; p2-authority-migration-inventory.md graph row; Core instructions; storage/project graph-store/database/unit-of-work and owning graph tests. Inspect all current import callers and transaction nesting before edits.
+- Owns after supervisor-approved exact list: graph-store.ts focused import/upsert executor changes, new owning graph import atomicity test file(s), focused Core storage/architecture paragraph, own downstream reports/p2-atomic-graph-import.md. No service/bootstrap/ledger/schema/shared docs/git/host/t305/publication/source-authority edits.
+- Definition of done: fail-first injected node/edge/region/revision/partition failure leaves no partially imported Flow/revision/entities/indexes; retry imports complete graph rather than false already_imported. Concurrent same-flow imports across real separate SQLite owners result one complete graph; preserve existing graph patch/inverse/ownership semantics and upsert compatibility. Entire already-imported decision+write must be inside transaction. Reconcile cancellation/storage uncertainty truthfully, no success from compile.
+- Validation: owning graph tests and real SQLite fail/reopen/concurrency cases, Core typecheck/owning build and structure audit; bounded fixtures with owned cleanup. Explain transaction boundaries and remaining whole-topology authority gaps. No full suites/provider/browser/userpanel or JSON/global atomicity claim. Proposed owners/caller analysis before edit; provisioning first, root signals ready for frozen checks.
+
+### 2026-10-07 - t305 loaded domain host independently verified
+- Agent: Codex supervisor.
+- Changed: immutable trusted native-module capture before host IO, owning normalized host stamp and full source inventory, mandatory pre-dispatch Lab gate and per-instance companion copy. Merged both current dev branches before checks; architecture updated.
+- Validation: Core binding/diagnostic6/6, generator/cache/Lab21/21, actual built-host headed Chromium/identity/runner55/55 zero skips9.27s, Core/domain/runner typechecks, sequential Core/host/three-target builds and Coreaudit0. Downstream integration audit follows. Full receipt reports/p0-domain-host-identity.md.
+- Outcome: Bounded loaded-host provenance verified; paired integration follows. No paid/provider calls or user panel management.
+- Follow-up: actual websocket server adapter stamp/retained closure; iframe/Firefox/Edge live identity and trusted P2 browser oracle/authority. t307 atomic graph import independently19/19, matching-stamp Coretypes/build/audit0; merge latest integrated pair before finish.
+
+### 2026-10-07 - t306 integrated verification
+- Agent: Codex supervisor.
+- Changed: malformed assertions/waits refuse promptly; valid whole-page text ignores unrelated focus and authored targeted predicates preserve resolution. Integrated after current-dev merge.
+- Validation: supervisor33/33 owning tests, affected source/test typechecks, audit0 and three22-file target builds; actual unpacked Chromium1/1 passed17.2s. Full handoff reports/p3-meaningful-assert-wait.md.
+- Outcome: Narrow P3 slice complete; no paid/site/Firefox/Edge qualification claim.
+- Follow-up: t305 loaded host and t307 graph import frozen; root reviewing merged source and repeating checks. Whole authority/promotion and trusted semantic browser proof remain incomplete.
+
+### Brief: p0-server-adapter-identity-design
+- Repository: main Core/downstream read-only; own report only.
+- Task: Locate the actual executing server websocket adapter and retained owner, then propose the smallest additive generic provenance/stamp/gate slice closing t305's explicit scope gap.
+- Owns: reports/p0-server-adapter-identity-design.md only; no shared/source/git/build/panel/provider/runtime-state edits.
+- Required reads: Current State, t305 report limits, Core instructions, actual server registration/module owners and build pipeline.
+- Definition of done: exact executable artifact and trusted retained capture, expected source/artifact inventory and route-reload/adapter-reload negatives; distinguish browser client package from server adapter. Return precise implementation owners for supervisor approval.
+- Validation: source inspection with paths/functions; no executing adapter identity claim from disk or mocks.
+
+### Brief: p2-authority-contract-slice
+- Repository: main Core/downstream read-only; own report only.
+- Task: Design the first bounded complete accepted-state project-SQL contract/storage foundation from the prior authority inventory, with coherent snapshot/CAS and explicit support limits. Do not enable promotion or cut over existing writers.
+- Owns: reports/p2-authority-contract-slice.md only; no shared/source/git/build/panel/provider/runtime-state edits.
+- Required reads: Current State, p2-promotion-design.md, p2-authority-migration-inventory.md and concrete existing graph/source/instruction/settings/reader owners.
+- Definition of done: exact minimal schema, complete source/settings/router/subflow/graph/instruction vector, stable authority/CAS/adoption invariants, unsupported publication-dependent/JSON scope, and precise new implementation owners/tests. List existing writers that must join before production cutover. No automatic user-data adoption.
+- Validation: source evidence and concrete contract proposal, not duplicate general inventory or atomicity proof.
+
+### Brief: p3-professional-paginator (next isolated task)
+- Repository: task worktree assigned by supervisor, shared Core read-only; fixture-only implementation.
+- Task: Fix confirmed Next initialPage+1 defect in professional-network fixture; preserve exact full collection oracle and promoted/repeated row behavior.
+- Owns: apps/scenario-lab/src/scenarios/professional-network/search/people-client.ts; existing professional-network/tests/honest-and-naive-paths.test.ts; own reports/p3-professional-paginator.md. No manifest/oracle/dataset/runtime/extension/Core edits.
+- Required reads: Current State and own proposal; relevant backlog16, owning client/tests/helper.
+- Definition of done: fail first with actual Chromium Next1?2?3, then use current+1 and retain full23unique/24includingrepeat expected dataset; naive promoted all-card extraction still rejected. Preserve challenge/attempt guard/history/Previous/filter semantics; do not claim rapid press/popstate coverage unless exercised.
+- Validation: owning scenario build/two Chromium tests, narrow scenario test, source/e2e typechecks/audit. No full suites/provider/userpanel/debugger/external site. Wait provisioning before checks, report honest limits and freeze for supervisor.

@@ -158,6 +158,7 @@ try {
     copyHostModule: async () => {
       await mkdir(path.dirname(paths.hostModule), { recursive: true });
       await copyFile(paths.sharedHostModule, paths.hostModule);
+      await copyFile(`${paths.sharedHostModule}.identity.json`, `${paths.hostModule}.identity.json`);
     }
   }), { onWait: owner => process.stderr.write(`[lab] waiting for the build lock held by process ${owner.pid}\n`) }));
 } catch (error) {
