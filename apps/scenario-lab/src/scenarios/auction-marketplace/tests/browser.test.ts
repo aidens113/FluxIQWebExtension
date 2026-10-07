@@ -1,3 +1,4 @@
+import { accessoryCleanupWorkflow } from "../qualification/index.js";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { after, before, test } from "node:test";
@@ -441,4 +442,30 @@ test("survey, whole chain: declining the survey when it comes, the recorded filt
     assert.equal((await serverState(run.lab)).surveyDismissed, true);
     assert.deepEqual(run.errors, []);
   } finally { await run.close(); }
+});
+
+
+test("qualification readiness: remove watched accessories and preserve the camera", { timeout: TEST_TIMEOUT_MS }, async () => {
+  const current = await session();
+  try {
+    const records = await runScript(current.page, current.lab.origin, accessoryCleanupWorkflow.recordingScript);
+    assert.deepEqual(records.get("extract-accessory-cleanup"), accessoryCleanupWorkflow.expected.extracted![0]!.records);
+    assert.deepEqual(await failingFacts(current.page, accessoryCleanupWorkflow.expected.finalState!), []);
+    const state = await serverState(current.lab);
+    assert.deepEqual(state.watched, [listingByHandle("m3").id]);
+    assert.deepEqual([state.bids, state.purchases, state.followed], [[], [], []]);
+    assert.deepEqual(current.errors, []);
+  } finally { await current.close(); }
+});
+
+test("qualification readiness: removing the camera too fails the independent account oracle", { timeout: TEST_TIMEOUT_MS }, async () => {
+  const current = await session();
+  try {
+    await runScript(current.page, current.lab.origin, accessoryCleanupWorkflow.recordingScript);
+    await current.page.locator(`li[data-itemid="${listingByHandle("m3").id}"] div:text-is("Remove")`).click();
+    await current.page.locator('ol[aria-label="Watchlist items"] > li').waitFor({ state: "detached" });
+    await current.page.reload();
+    assert.deepEqual((await serverState(current.lab)).watched, []);
+    assert.ok((await failingFacts(current.page, accessoryCleanupWorkflow.expected.finalState!)).some(({ id }) => id === "cleanup-watchlist"));
+  } finally { await current.close(); }
 });

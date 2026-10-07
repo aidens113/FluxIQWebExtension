@@ -52,6 +52,13 @@ if (place) place.addEventListener('click', async () => {
   const notes = allByClass('noteBox').map((box) => box.value).join('\n');
   const fax = qsa('input[name="fax_number"]').map((box) => box.value).join('');
   const result = await mutate('place-order', { note: notes, fax });
+  // Keep the readonly qualification fact current even when review only replaces main.
+  const accountFact = document.querySelector('[data-testid="coupon-only-account"]');
+  if (accountFact) accountFact.textContent = JSON.stringify({
+    platformCoupon: result.state.coupons.platform,
+    checkoutOpen: result.state.checkout !== null,
+    orders: result.state.orders.length,
+  });
   const order = result.state.orders[result.state.orders.length - 1];
   if (!order || result.state.checkout) { place.textContent = 'Place order'; tip.textContent = 'Something went wrong. Please try again.'; return; }
   if (order.status === 'review') {

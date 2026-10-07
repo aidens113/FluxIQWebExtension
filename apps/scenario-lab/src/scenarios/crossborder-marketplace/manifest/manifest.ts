@@ -1,3 +1,4 @@
+import { couponOnlyWorkflow } from "../qualification/index.js";
 import { createScenarioManifest } from "../../../types.js";
 import { MARKET_BUILDS } from "../styles/index.js";
 import { MARKET_SEED, orderRecord, spainHubRecords } from "./answers.js";
@@ -109,5 +110,6 @@ export const crossborderMarketplaceManifest = createScenarioManifest({
         allowedConsoleErrors: SITE_NOISE,
       },
     },
+    couponOnlyWorkflow,
   ],
 });
