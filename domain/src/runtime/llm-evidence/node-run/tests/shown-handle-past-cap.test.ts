@@ -121,3 +121,53 @@ test("a handle from the packet a press returned is pressed next, though the next
   assert.equal(pressed.resultCode, "web.action.succeeded", JSON.stringify(pressed.evidence));
   assert.deepEqual(page.clicked, ["#control-1", VOLTBAY]);
 });
+
+// U-B3-3 (lane B round 3, `run-mux6pndp-16feb842`, step 0038): a rerun put the
+// product page back at its address without `?variant=`, and its press on the
+// size chip -- a handle shown on the variant page -- ran from a look that did
+// not describe the chip. The step result's `control` and the call's words (the
+// draft's `does.target`, the chat and the overlay) read the resolved identity's
+// captured text, "12 Double Rolls$16.47", where the page reads two lines.
+const PRODUCT = "https://shop.test/ip/towels/418830127";
+const CHIP = "#size-12";
+
+function productPage() {
+  const clicked: string[] = [];
+  let looks = 0;
+  const chip: Element = { tagName: "button", selector: CHIP, visibleText: "12 Double Rolls$16.47", readableText: "12 Double Rolls $16.47" };
+  const add: Element = { tagName: "button", selector: "#add", visibleText: "Add to cart" };
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.click") {
+        clicked.push(String((command.parameters as { selector?: unknown }).selector));
+        return { status: "succeeded", payload: { value: "ok" } };
+      }
+      looks += 1;
+      const snapshot: JsonObject = looks === 1
+        ? { url: `${PRODUCT}?variant=5510202`, title: "Towels", interactiveElements: [chip, add] }
+        : { url: PRODUCT, title: "Towels", interactiveElements: [add] };
+      return { status: "succeeded", payload: { snapshot } };
+    }
+  };
+  return { gateway, clicked };
+}
+
+test("a control pressed from an earlier look, absent from the look before the press, is named by its readable words", async () => {
+  const page = productPage();
+  const runtime = createWebAutomationLlmEvidenceRuntime(page.gateway);
+  const shown = await look(runtime);
+  const chip = shownHandle(shown, "12 Double Rolls $16.47");
+  const call = { node: CLICK, parameters: { target: { handle: chip } }, consequences: [] };
+
+  assert.deepEqual(runtime.describeCall({ ...PROJECT, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: call }), { target: "12 Double Rolls $16.47" });
+  const pressed = await press(runtime, "press-chip", chip);
+
+  assert.equal(pressed.resultCode, "web.action.succeeded", JSON.stringify(pressed.evidence));
+  assert.deepEqual(page.clicked, [CHIP]);
+  assert.equal((pressed.evidence as JsonObject & { control?: string }).control, "12 Double Rolls $16.47");
+  assert.equal(pressed.draft?.control, "12 Double Rolls $16.47");
+  // The identity the Flow keeps is the captured text, which the page compares.
+  const element = (pressed.draft?.ranWith?.parameters as { element?: { visibleText?: string } }).element;
+  assert.equal(element?.visibleText, "12 Double Rolls$16.47");
+});

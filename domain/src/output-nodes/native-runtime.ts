@@ -12,6 +12,7 @@ import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
 import type { WebAutomationActionType } from "../actions/types";
 import { webAutomationOutputNodeDefinitions } from "./definitions";
 import { webAutomationExtractListDispatch } from "./extract-list";
+import { webAutomationNextPageDispatch } from "./next-page";
 import { webAutomationOutputNodeParameterContracts } from "./parameter-contracts";
 import { webAutomationScopedToRow } from "./targets";
 
@@ -67,9 +68,11 @@ export function createWebAutomationOutputNodeImplementationBundle(
  * gets it: its nodes are these, and nothing recorded them.
  *
  * The list extraction also owes Core the dataset its rows are saved into, and
- * refuses to read a list it could not save (`extract-list/dispatch.ts`). That
- * refusal is about the node's own configuration, decided before anything runs,
- * not a guess at the command's outcome.
+ * refuses to read a list it could not save (`extract-list/dispatch.ts`). The
+ * next page refuses a request that does not parse, and sends its timeout as the
+ * dispatch's own (`next-page/dispatch.ts`). Each refusal is about the node's own
+ * configuration, decided before anything runs, not a guess at the command's
+ * outcome.
  */
 function createOutputNodeImplementation(outputId: WebAutomationActionType): AutomationStudioNativeNodeImplementation {
   return (context): AutomationNodeExecutionResult => {
@@ -77,6 +80,10 @@ function createOutputNodeImplementation(outputId: WebAutomationActionType): Auto
       // The pass's row, when a For Each hands one, scopes the recorded control
       // to that row (`./targets/row-scope.ts`).
       const parameters = webAutomationScopedToRow(compactJsonObject(context.parameters), context.inputs?.item);
+      if (outputId === "web.dom.next_page") {
+        const move = webAutomationNextPageDispatch(parameters);
+        return move.ok ? dispatching({ outputId, ...move.payload }) : move.result;
+      }
       if (outputId !== "web.dom.extract_list") return dispatching({ outputId, parameters: webAutomationCheckWaitParameters(outputId, parameters) });
       const extraction = webAutomationExtractListDispatch(parameters);
       return extraction.ok ? dispatching({ outputId, ...extraction.payload }) : extraction.result;
@@ -90,7 +97,7 @@ function createOutputNodeImplementation(outputId: WebAutomationActionType): Auto
  * A throw out of this implementation, turned into the failed result Core can act
  * on.
  *
- * **Every one of this repository's eighteen output nodes runs outside Core's only
+ * **Every one of this repository's nineteen output nodes runs outside Core's only
  * try/catch.** Core holds no `definition.execute` for `web.dom.click` and the
  * rest, so execution goes through `options.nativeNodeExecutor`
  * (`AS/runtime/executor/node-execution.ts:87`), which sits *outside* the try

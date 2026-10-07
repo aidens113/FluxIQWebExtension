@@ -34,6 +34,8 @@ const GRAMMAR_KEYS: ReadonlySet<string> = new Set([
   // `where.0.matches` is one a model can act on where `where.0.1` is not.
   "where", "read", ...WEB_AUTOMATION_EXTRACT_CONDITION_KEYS,
   "mode", "next", "control", "pages", "maxPages", "maxScrolls",
+  // The Next page step's request (`next-page-slot.ts`): its handle form and its literal.
+  "nextPage", "list", "pagination",
   "parameters", "extractList", "target", "element", "recordOutput", "outputId",
   // Which duplicates to drop and what order to return (`actions/extraction/order-request.ts`).
   "dedupe", "sort", "by", "order", "as"

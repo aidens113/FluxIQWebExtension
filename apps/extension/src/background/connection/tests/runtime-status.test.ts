@@ -48,6 +48,7 @@ const confirmations: Record<BrowserActionType, Confirmation> = {
   "web.dom.check": { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.checkboxToggled },
   "web.dom.assert": undefined,
   "web.dom.extract_list": undefined,
+  "web.dom.next_page": undefined,
   // The recorder reports a file input's change as `dom.change`, which the domain
   // maps to the files input, so an upload node waits for it.
   "web.dom.upload": { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.filesChosen },

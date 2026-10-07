@@ -126,9 +126,11 @@ export function webWrittenStep(input: WebWrittenStepInput): WebLlmEvidenceToolEx
     control: input.control,
     interruption: undefined,
     written: true,
-    // Never ran, so it flipped nothing (`./press-effect/toggle.ts`) and read no list (`./list-read/code.ts`).
+    // Never ran, so it flipped nothing (`./press-effect/toggle.ts`), read no list
+    // (`./list-read/code.ts`) and changed no line (`./press-effect/change/statement.ts`).
     toggle: undefined,
-    reads: undefined
+    reads: undefined,
+    changed: undefined
   });
   // Nothing was sent, so the page the call found is the page it left.
   return withCallStates(toolExecution(outcome as unknown as JsonValue, false, WEB_NODE_WRITTEN_RESULT_CODE, undefined, draft, {

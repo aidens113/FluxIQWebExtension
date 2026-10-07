@@ -19,19 +19,17 @@
 // Said only where the two pages are the same page: a call that moved the page
 // elsewhere changed everything, and the page it left says so. Not for a look,
 // a navigation, a read or a replay, none of which change the page in place.
+// Read from the one walk (`./change/walk.ts`) the draft statement's change list
+// is read from too (`./change/statement.ts`, t285), so the two never disagree.
 
 import type { WebLlmSnapshotBinding } from "../../sanitize";
-import { quotedWords, webLlmLineFacts, type WebLlmLineFact } from "../../page-view";
+import { quotedWords, type WebLlmLineFact } from "../../page-view";
 import type { WebRunnableNode } from "../catalog";
-import { webMovesThePage } from "../start-location";
+import { webChangeWords, webPageChangeWalk, type WebPageChange } from "./change";
 import { webIsTextLine as isText } from "./text-line";
 
 /** At most this many changes are named; the rest are counted. */
 const MOST_CHANGES = 8;
-/** About how long one entry may be; the line's words are cut to fit. */
-const ENTRY_LENGTH = 120;
-/** The fewest characters of words an entry keeps, however long the rest of it is. */
-const LEAST_WORDS = 24;
 
 /**
  * The state tokens a change is said of. A paired state says only where it now
@@ -51,50 +49,19 @@ export function webNodePageChanges(
   before: WebLlmSnapshotBinding | undefined,
   after: WebLlmSnapshotBinding | undefined
 ): string[] | undefined {
-  if (node.effect !== "mutate" || webMovesThePage(node)) return undefined;
-  if (before === undefined || after === undefined) return undefined;
-  if (before.evidence.location !== after.evidence.location) return undefined;
-  const entries = changedLines(webLlmLineFacts(before.evidence), webLlmLineFacts(after.evidence));
+  const entries = (webPageChangeWalk(node, before, after) ?? []).flatMap((change) => {
+    const said = entryOf(change);
+    return said === undefined ? [] : [said];
+  });
   if (entries.length === 0) return undefined;
   if (entries.length <= MOST_CHANGES) return entries;
   return [...entries.slice(0, MOST_CHANGES), `and ${entries.length - MOST_CHANGES} more changes`];
 }
 
-/**
- * Every change, in page order: the two line lists are walked together, so a
- * line that went is said where it stood, among the lines that stayed.
- */
-function changedLines(before: readonly WebLlmLineFact[], after: readonly WebLlmLineFact[]): string[] {
-  const beforeByHandle = new Map(before.map((line) => [line.handle, line]));
-  const afterHandles = new Set(after.map((line) => line.handle));
-  const entries: string[] = [];
-  const said = (entry: string | undefined) => {
-    if (entry !== undefined) entries.push(entry);
-  };
-  let i = 0;
-  for (const line of after) {
-    // The lines before this one that are no longer on the page at all.
-    while (i < before.length && !afterHandles.has(before[i]!.handle)) said(gone(before[i++]!));
-    const was = beforeByHandle.get(line.handle);
-    if (was === undefined) said(appeared(line));
-    else {
-      said(changed(was, line));
-      if (before[i]?.handle === line.handle) i++;
-    }
-  }
-  while (i < before.length) {
-    const line = before[i++]!;
-    if (!afterHandles.has(line.handle)) said(gone(line));
-  }
-  return entries;
-}
-
-function gone(line: WebLlmLineFact): string | undefined {
-  return isText(line) ? entry(line, "gone") : undefined;
-}
-
-function appeared(line: WebLlmLineFact): string | undefined {
-  return isText(line) ? entry(line, "appeared") : undefined;
+/** The entry for one changed line, or nothing where it is not a change said here: only text and states are. */
+function entryOf(change: WebPageChange): string | undefined {
+  if (change.kind === "both") return changed(change.was, change.now);
+  return isText(change.line) ? entry(change.line, change.kind === "went" ? "gone" : "appeared") : undefined;
 }
 
 /** A line on both pages: the states it gained or lost, or, for text, the words it now reads. */
@@ -106,7 +73,7 @@ function changed(was: WebLlmLineFact, now: WebLlmLineFact): string | undefined {
     return entry(named, states.join(", "));
   }
   if (isText(was) && isText(now) && was.words !== now.words && now.words !== undefined) {
-    return entry(now, `was ${quotedWords(cut(was.words ?? "", LEAST_WORDS))}`);
+    return entry(now, webChangeWords.was(was.words));
   }
   return undefined;
 }
@@ -130,13 +97,7 @@ function stateChanges(was: readonly string[], now: readonly string[]): string[] 
 
 /** One entry: the handle, the line's words (or its kind, where it has none) cut to fit, and what changed. */
 function entry(line: WebLlmLineFact, what: string): string {
-  const fixed = `${line.handle}  ${what}`.length;
-  const named = line.words === undefined
-    ? line.kind
-    : quotedWords(cut(line.words, Math.max(LEAST_WORDS, ENTRY_LENGTH - fixed - 2)));
+  const words = webChangeWords.quoted(line, what);
+  const named = words === undefined ? line.kind : quotedWords(words);
   return [line.handle, named, what].filter((part) => part !== undefined).join(" ");
-}
-
-function cut(words: string, most: number): string {
-  return words.length <= most ? words : `${words.slice(0, most - 1)}…`;
 }

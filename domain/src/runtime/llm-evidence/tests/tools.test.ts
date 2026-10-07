@@ -159,12 +159,15 @@ test("binds from the production host seam and selects the sole trusted web clien
   // And it says what the node does when conditions reject everything, since a
   // model that read an empty answer as an empty page would repair nothing.
   assert.match(detectDescription, /returns what it read and says so in its report/u);
-  // A detected pager may propose only one page; true/omission keep that bound.
-  assert.match(detectDescription, /paginationBound/u);
-  assert.match(detectDescription, /absent keeps the detected bound/u);
-  assert.match(detectDescription, /true reads every page/u);
-  assert.match(detectDescription, /paginate: \{maxPages: N\}/u);
-  assert.match(detectDescription, /paginate: \{maxScrolls: N\}/u);
+  // S4 of the read-list redesign: the read reads one page and never goes
+  // through pages by itself, so the description teaches no `paginate` (a read
+  // that carries one is refused `paginate_retired`). `pagination` says how the
+  // list continues, and every page is Next page on the same handle with repeat.
+  assert.doesNotMatch(detectDescription, /paginate|maxPages|maxScrolls/u);
+  assert.match(detectDescription, /pagination says how the list continues/u);
+  assert.match(detectDescription, /Next page on the same handle/u);
+  assert.match(detectDescription, /nextPage: \{list: handle\}/u);
+  assert.match(detectDescription, /repeat/u);
   const validationEvidence = sanitizeWebLlmSnapshot({
     url: "https://example.test/form",
     title: "Form",

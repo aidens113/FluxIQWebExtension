@@ -9,4 +9,5 @@ export * from "./parameter-contract";
 export * from "./parameters";
 export * from "./reconciled-record-output";
 export * from "./record-output";
+export * from "./record-output-process";
 export * from "./records-path";

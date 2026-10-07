@@ -60,6 +60,16 @@
 // on the Delete column instead (`run-murwcaj0-40e56557`, R2). The page view
 // prints that handle's words, so no value and no selector is added. A field
 // whose element cannot be told has no `at`.
+//
+// **A list that continues is told as Next page on the same handle.** The read
+// reads the page shown (S4, `read-list-collect-design.md` 6.1), so the
+// packet no longer says how far a read would page: `paginationBound`, the
+// detected read bound, is gone, and `pagination` says only how the list
+// continues. Beside any pagination but `none`, `nextPageNote` says once, in
+// this module's words, how every page is read: a Next page step naming this
+// handle as `nextPage: {list}`, and a repeat on the read through it. The
+// binding keeps the detected pagination, because Next page reads the way to
+// the next page from it (`plan-resolution/next-page-slot.ts`).
 
 import {
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
@@ -81,7 +91,8 @@ export const WEB_LLM_STRUCTURE_SCHEMA_VERSION = "web-llm-structure.v1" as const;
  * How the list continues past what the page shows now, in words a model can
  * act on: `next_link` and `numbered_pages` are controls that move to another
  * page, `load_more_button` appends to this one, `infinite_scroll` appends as
- * the page scrolls, and `none` means nothing was detected.
+ * the page scrolls, and `none` means nothing was detected. Each but `none` is
+ * followed by Next page, whatever the control (`nextPageNote`).
  */
 export const WEB_LLM_STRUCTURE_PAGINATION_MODES = ["none", "next_link", "load_more_button", "infinite_scroll", "numbered_pages"] as const;
 
@@ -92,6 +103,16 @@ const RECORD_NOTE = "record is the one item you aimed at, read as a one-row tabl
 
 /** What the packet says of `at`, once, when a field carries one: domain text. */
 const AT_NOTE = "a field's at is the handle of that column's element in the first item that has it; its line in the page view shows what the column holds. at is that item's own element, so acting on it acts on that item only; to act on the rows a listing keeps, use the control inside one of the rows it keeps";
+
+/**
+ * What the packet says of a list that continues: domain text around the
+ * list's own handle, so the step that moves it names the same list the read
+ * names. No control, selector or page value: Next page finds its way from the
+ * handle's binding.
+ */
+function nextPageNote(handle: string): string {
+  return `this list goes on past this page, and a read reads this page only; for every page, add Next page with nextPage: {list: "${handle}"} after the read, then repeat the read through Next page while it succeeds`;
+}
 
 /** What the packet says of a section's link to more: domain text around the link's closed-phrase label. */
 function continuesNote(label: string): string {
@@ -165,8 +186,8 @@ export type WebLlmRepeatingStructure = {
   itemCount: number;
   fields: WebLlmStructureField[];
   pagination: WebLlmStructurePaginationMode;
-  /** The detected read bound: absent paginate keeps it; true reads to the domain bound. No control or page value is exposed. */
-  paginationBound?: { maxPages: number } | { maxScrolls: number };
+  /** How every page of a list that continues is read: Next page on this handle, and a repeat. A sentence of this module; absent when `pagination` is `none`. */
+  nextPageNote?: string;
   /** How sure the detection is, from 0 to 1. */
   confidence: number;
   /** The one item the target belongs to, when it lies outside the list above. */
@@ -222,6 +243,7 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     : boundList(input, input.recordHandle, record, recordReadable, boundPagination(record.pagination, false), true);
 
   const paginate = boundPagination(proposal.pagination, infiniteScroll);
+  const pagination = paginationMode(proposal.pagination, infiniteScroll);
   const packet = present<WebLlmRepeatingStructure>({
     schemaVersion: WEB_LLM_STRUCTURE_SCHEMA_VERSION,
     trust: "untrusted-page-evidence",
@@ -231,8 +253,8 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     list: input.list,
     itemCount: proposal.itemCount,
     fields: readable.map((field) => field.shown),
-    pagination: paginationMode(proposal.pagination, infiniteScroll),
-    paginationBound: paginate === undefined ? undefined : paginate.mode === "scroll" ? { maxScrolls: paginate.maxScrolls } : { maxPages: paginate.maxPages },
+    pagination,
+    nextPageNote: pagination === "none" ? undefined : nextPageNote(input.handle),
     confidence: proposal.confidence,
     record: recordBinding === undefined ? undefined : {
       handle: recordBinding.handle,
@@ -295,6 +317,7 @@ function boundList(
       paginate,
       maxItems: undefined,
       minItems: undefined,
+      answer: undefined,
       // A detection describes a list; which of its items a read wants is the
       // plan's to say, and `plan-resolution/extraction/conditions.ts` writes it there (C5).
       where: undefined,
@@ -342,8 +365,8 @@ function paginationMode(pagination: WebAutomationExtractListPagination | undefin
 }
 
 /**
- * The pagination the handle keeps. A detected control keeps what the page
- * proposed. A feed the page only declared keeps a scroll bounded like the
+ * The pagination the handle keeps, which Next page reads its way from and the
+ * read never does. A detected control keeps what the page proposed. A feed the page only declared keeps a scroll bounded like the
  * picker bounds a control the page advertises no count for: by the domain's
  * own page bound, which the page-side reader stops short of when the feed ends.
  * A record is one item and continues nowhere, so the feed is never its.

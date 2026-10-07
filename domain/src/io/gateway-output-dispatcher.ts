@@ -29,13 +29,20 @@ export async function dispatchWebAutomationOutput(
     // Core reads it as the result's own `clearedWait`, never off the payload, so
     // it is lifted here through the same bound; malformed or absent adds nothing.
     const clearedWait = webAutomationClearedCheckWaitValue(isRecord(result.payload) ? result.payload.checkWait : undefined);
+    // A next-page step whose list has no next page answers `route: "ended"` on
+    // the client's payload (`client/gateway-mapping.ts`). Core takes a
+    // dispatched action's route from the top of the dispatch payload when the
+    // node declares an output of that id (contract C1), so it is lifted there:
+    // only that literal, and nothing otherwise. `runtime/adapter.ts` returns
+    // this payload to Core as it is, so the runtime path carries it too.
+    const route = isRecord(result.payload) && result.payload.route === "ended" ? "ended" : undefined;
     return {
       // `ok` stays the success flag; `status` is the command's own outcome, so
       // Core sees `timed_out` or `cancelled` rather than a bare failure.
       ok: succeeded,
       outputId: request.outputId,
       status: result.status,
-      payload: compact({ status: result.status, message: result.message, result: result.payload }),
+      payload: compact({ status: result.status, message: result.message, result: result.payload, route }),
       // Core's IO path builds the node message from `error` alone
       // (`failedDispatchResult`), so a command that failed with only a message
       // — the usual shape of a client-side timeout or cancellation — would

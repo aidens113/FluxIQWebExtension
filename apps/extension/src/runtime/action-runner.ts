@@ -27,7 +27,7 @@ import { sendClickCheckingLanding } from "./click-landing";
 import { closesOpenedTabs, frameIdForAction, frameUrlPathForAction, opensNewTab, tabIdForAction } from "./command-options";
 import { fluxiqOpenedTabs } from "./fluxiq-opened-tabs";
 import { waitForFrameChoice } from "./frame-address";
-import { sendExtractListAcrossDocuments } from "./extract-list-continuation";
+import { sendExtractListAcrossDocuments, sendNextPageAcrossDocuments } from "./extract-list-continuation";
 import { readLandedPage, type LandedPageReading } from "./landed-challenge";
 import {
   checkWaitBudgetMs,
@@ -507,8 +507,11 @@ const RESENT_ACROSS_NAVIGATION: ReadonlySet<string> = new Set(["web.dom.assert",
  * A paginated `web.dom.extract_list` presses controls and reads, so it is
  * neither case: it is carried into each document its pagination loads by
  * `extract-list-continuation.ts`, which re-sends it only from a checkpoint the
- * page took before pressing anything. With a pace, every page it loads is
- * booked on it first, and the result says what the pace held.
+ * page took before pressing anything. `web.dom.next_page` is carried the same
+ * way: its press may load a new document, which is then asked, from the mark
+ * the page left before pressing, whether the list arrived. With a pace, every
+ * page either loads is booked on it first, and the result says what the pace
+ * held.
  */
 async function sendAction(
   action: BrowserActionCommand,
@@ -517,10 +520,11 @@ async function sendAction(
   frameId: number,
   pace: OriginPace | undefined
 ): Promise<BrowserActionResult> {
-  if (action.actionType === "web.dom.extract_list" && action.extractList?.paginate !== undefined) {
-    const read = () => sendExtractListAcrossDocuments(action, tabId, message, frameId, { send: sendToTab, makeReady: ensureContentScript });
-    if (pace === undefined) return await read();
-    const { value, tally } = await withPagePace(pace, tabId, frameId, read);
+  const across = acrossDocuments(action);
+  if (across !== undefined) {
+    const send = () => across(action, tabId, message, frameId, { send: sendToTab, makeReady: ensureContentScript });
+    if (pace === undefined) return await send();
+    const { value, tally } = await withPagePace(pace, tabId, frameId, send);
     return withPaceNote(value, tally);
   }
   try {
@@ -530,6 +534,12 @@ async function sendAction(
     await waitForTabReady(tabId);
     return await sendToTab<BrowserActionResult>(tabId, message, frameId);
   }
+}
+
+/** How the action is carried into the documents it loads, or `undefined` for an action sent once (`sendAction`). */
+function acrossDocuments(action: BrowserActionCommand): typeof sendExtractListAcrossDocuments | undefined {
+  if (action.actionType === "web.dom.next_page") return sendNextPageAcrossDocuments;
+  return action.actionType === "web.dom.extract_list" && action.extractList?.paginate !== undefined ? sendExtractListAcrossDocuments : undefined;
 }
 
 /**

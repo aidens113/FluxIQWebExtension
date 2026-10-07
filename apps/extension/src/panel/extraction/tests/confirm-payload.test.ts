@@ -14,8 +14,7 @@ import {
   extractionDraftFromProposal,
   renameExtractionField,
   setExtractionFieldHandling,
-  setExtractionFieldKind,
-  setExtractionPaginate
+  setExtractionFieldKind
 } from "../view-model";
 import { PLANTED_VALUE, proposalFixture } from "./proposal-fixture";
 
@@ -60,10 +59,12 @@ test("attribute and header are written only under the kind that reads them", () 
   assert.equal(payloadField(untouched, "sku").attribute, "data-sku");
 });
 
-test("following pages is sent only when the user asked for it", () => {
+test("a recorded read reads one page: the confirm message carries no paginate member, even where the picker found a next-page control", () => {
+  // S5: a read reads one page, and a Flow reaches the next page with a Next
+  // page step. The "Read every page" checkbox, and the member it set, are gone.
   const opened = extractionDraftFromProposal(proposalFixture(), "Products");
-  assert.equal(extractionConfirmPayload(opened).paginate, undefined);
-  assert.deepEqual(extractionConfirmPayload(setExtractionPaginate(opened, true)).paginate, { next: "a.next", maxPages: 5 });
+  assert.deepEqual(opened.pagination, { next: "a.next", maxPages: 5 });
+  assert.equal("paginate" in extractionConfirmPayload(opened), false);
 });
 
 test("no value read from the page reaches the confirm message", () => {

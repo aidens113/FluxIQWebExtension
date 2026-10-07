@@ -36,7 +36,8 @@ const extractList = {
     { field: "price", lessThan: 50 },
     { field: "name", contains: ["ear tips", "charging case"], not: true }
   ],
-  paginate: { next: "a.next", maxPages: 5 },
+  // One page, which is all a read now reads (read-list redesign S4).
+  paginate: { next: "a.next", maxPages: 1 },
   dedupe: { by: ["url"] },
   minItems: 0
 };
@@ -69,7 +70,9 @@ function dispatched(parameters: JsonObject): { extractList: WebAutomationExtract
 }
 
 function storedColumns(recordOutputValue: JsonObject, row: JsonObject): string[] {
-  const parsed = parseAutomationStudioRecordOutput(recordOutputValue);
+  // Core's parser does not take `process` until S1 lands; the capture copies rows by the schema alone.
+  const { process: _process, ...bare } = recordOutputValue;
+  const parsed = parseAutomationStudioRecordOutput(bare);
   assert.equal(parsed.ok, true, JSON.stringify(parsed));
   if (!parsed.ok) throw new Error("unreachable");
   const validated = validateAutomationStudioRecords([row], parsed.output.schema, { maxRecords: parsed.output.maxRecords });
@@ -93,8 +96,12 @@ test("run 11: the read and the schema keep only the four declared columns, and e
     { field: "price", lessThan: 50 },
     { field: "name", contains: ["ear tips", "charging case"], not: true }
   ]);
-  assert.deepEqual(sent.extractList.paginate, extractList.paginate);
-  assert.deepEqual(sent.extractList.dedupe, extractList.dedupe);
+  // A one-page paginate is dropped, and the dedupe now runs over the run's
+  // collection, from the record output's process (read-list redesign C3); a
+  // minimum of zero stays on the page as well.
+  assert.equal(Object.hasOwn(sent.extractList, "paginate"), false);
+  assert.equal(Object.hasOwn(sent.extractList, "dedupe"), false);
+  assert.deepEqual(sent.recordOutput.process, { dedupe: extractList.dedupe, minRows: 0 });
   assert.equal(sent.extractList.minItems, 0);
   // The narrowed read is one the dispatch's own reader reads back unchanged.
   assert.deepEqual(webAutomationExtractListRequestValue(sent.extractList), sent.extractList);
@@ -102,7 +109,10 @@ test("run 11: the read and the schema keep only the four declared columns, and e
   assert.deepEqual(storedColumns(sent.recordOutput, sixColumnRow), ["name", "price", "rating", "url"]);
 });
 
-test("a helper an ordering names stays in the read and is left out of what is stored", () => {
+// Read-list redesign C3: an ordering runs over the stored rows, so the column it
+// orders by has to be stored. Until S4 the page ordered the rows and the helper
+// was left out of the schema.
+test("a helper an ordering names stays in the read, and is stored for the ordering to run over", () => {
   const sorted = { ...extractList, sort: [{ field: "plus", order: "desc" }] };
   const sent = dispatched({ extractList: sorted, recordOutput });
   assert.deepEqual(Object.keys(sent.extractList.fields), ["name", "price", "rating", "url", "plus"]);
@@ -111,7 +121,8 @@ test("a helper an ordering names stays in the read and is left out of what is st
     { read: { kind: "text", selector: ".sponsored-label" }, is: "absent" },
     { field: "plus", is: "present" }
   ]);
-  assert.deepEqual(storedColumns(sent.recordOutput, sixColumnRow), ["name", "price", "rating", "url"]);
+  assert.deepEqual((sent.recordOutput.process as JsonObject).sort, [{ field: "plus", order: "desc" }]);
+  assert.deepEqual(storedColumns(sent.recordOutput, sixColumnRow), ["name", "price", "rating", "url", "plus"]);
 });
 
 test("a helper no condition reads leaves the read and the schema too", () => {
@@ -127,9 +138,11 @@ test("no declared schema, a schema naming a column the read does not take, or on
   for (const authored of [undefined, null, "not an object", { ...recordOutput, schema: undefined }, { ...recordOutput, schema: { schemaVersion: "0.1", fields: [] } }, renamed]) {
     assert.equal(webAutomationDeclaredColumnsRead(authored as never, request), undefined, JSON.stringify(authored));
   }
-  // And the dispatch then sends the read exactly as written.
+  // And the dispatch then sends the read as written, less what left the page
+  // (read-list redesign C3), and asking for the rows it kept.
+  const { paginate: _paginate, dedupe: _dedupe, ...onePage } = extractList;
   for (const authored of [null, renamed]) {
-    assert.deepEqual(dispatched({ extractList, recordOutput: authored as never }).extractList, extractList);
+    assert.deepEqual(dispatched({ extractList, recordOutput: authored as never }).extractList, { ...onePage, answer: "kept" });
   }
 });
 

@@ -415,3 +415,38 @@ async function readsOf(location: string, parameters: JsonObject): Promise<unknow
   assert.equal(result.effectApplied, true);
   return (result.draft as { reads?: string } | undefined)?.reads;
 }
+
+// t285 (week report W1): an in-place press states what it changed on its draft
+// statement (`changed`, `../press-effect/change/statement.ts`) -- the same walk as
+// the outcome's own `changed` -- so Core reads which step did an act from what the
+// step did. Run `run-muqiho5c-e830ce01` named its add-to-cart act on "Not now".
+test("an in-place press's draft statement says which lines it changed, as its outcome does; a look says nothing", async () => {
+  let added = false;
+  const cartPage = (): JsonObject => ({
+    url: "https://shop.test/item/7",
+    title: "Item",
+    viewport: { width: 1000, height: 1000, scrollX: 0, scrollY: 0 },
+    interactiveElements: [
+      { tagName: "a", selector: "#cart", visibleText: added ? "Cart (3)" : "Cart (2)", href: "https://shop.test/cart" },
+      { tagName: "button", selector: "#add", visibleText: "Add to cart" },
+      ...(added ? [{ tagName: "span", selector: "#added", visibleText: "Added to cart" }] : [])
+    ]
+  });
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: cartPage() } };
+      if (command.actionType === "web.dom.click") added = true;
+      return { status: "succeeded", payload: { value: "ok" } };
+    }
+  };
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  assert.equal(looked.draft !== undefined && "changed" in looked.draft, false);
+  const handle = shownPageLines(looked.evidence).find((line) => line.words === "Add to cart")!.target;
+  const pressed = await runtime.executeTool({ ...PROJECT, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle } }, consequences: [] } });
+  assert.equal(pressed.resultCode, "web.action.succeeded");
+  assert.deepEqual((pressed.draft as { changed?: unknown } | undefined)?.changed, [{ words: "Cart (3)", how: "rose" }, { words: "Added to cart", how: "appeared" }]);
+  // The outcome says the line that appeared, from the same walk.
+  assert.deepEqual(((pressed.evidence as JsonObject).changed as string[]).map((entry) => entry.replace(/^t\d+ /u, "")), ["\"Added to cart\" appeared"]);
+});
