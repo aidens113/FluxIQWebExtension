@@ -1,3 +1,4 @@
+import { exerciseRequiredWebDispatch } from "../../io/tests/required-context";
 // T1 for Phase 1.2 step 5 and Phase 1.5 steps 3 and 4 on the runtime path.
 //
 // Phase 1.5 half: every command that did not succeed leaves the adapter with a
@@ -20,6 +21,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import type { FluxIQ } from "fluxiq";
+import { ClientGatewayCommandContext } from "fluxiq/client-gateway";
 import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import {
   parseAutomationStudioFailureRecord,
@@ -340,4 +342,10 @@ test("an unusable snapshot costs the packet, never the failure it was meant to e
   assert.equal(result.failure?.code, "web.action.failed", "the failure is reported anyway");
   assert.equal(result.failure?.evidenceDigest, undefined);
   assert.equal((result.metadata as JsonObject | undefined)?.failureDiagnostics !== undefined, true, "the URL and target still ride with it");
+});
+
+test("actual required runtime domain owner forwards service-issued context through durable gateway", async () => { await exerciseRequiredWebDispatch("runtime"); });
+test("required Runtime refuses copied context before selecting/sending", async () => {
+  const adapter = createWebAutomationRuntimeAdapter({ fluxiq: { programs: {} } as unknown as FluxIQ });
+  await assert.rejects(() => Promise.resolve(adapter.executeWithCommandContext!(clickCommand, { commandContext: {} as ClientGatewayCommandContext })));
 });

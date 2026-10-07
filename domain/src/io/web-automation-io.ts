@@ -46,7 +46,11 @@ export function createWebAutomationDomainIo(fluxiq: FluxIQ): DomainIoRegistratio
     outputs: WEB_AUTOMATION_ACTION_TYPES.map((outputId) => defineOutput({
       definition: webAutomationManifestOutputs.find((output) => output.id === outputId)!,
       mode: "request",
-      dispatch: (request) => dispatchWebAutomationOutput(fluxiq, request)
+      dispatch: (request) => dispatchWebAutomationOutput(fluxiq, request),
+      dispatchWithCommandContext: (request) => {
+        if (!Object.hasOwn(request, "commandContext")) throw new Error("web.required_context_missing");
+        return dispatchWebAutomationOutput(fluxiq, request);
+      }
     }))
   });
 }
