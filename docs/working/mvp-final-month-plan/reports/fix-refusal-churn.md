@@ -13,8 +13,8 @@ Trees: `fxwork/t287/` (Core and downstream, branch `task/t287-fix-refusal-churn`
 | W2: every refusal / no-change answer names the exact way out (audit) | week report W2 | worker B | done, verified |
 | W10 `mustvzvg` C3: a rerun merges over the refused attempt | `run-mustvzvg-99695308.md` C3 | worker A | done, verified |
 | W10 `murdouox` R3: a left-out key of a restated map is kept | `run-murdouox-*.md` R3 | worker A | done, verified |
-| Lane C R3-2: an unchanged rerun is answered `applied` / `draftState: changed` | `run-mux6naez-6c20f26e.md` R3-2 | worker C (not run) | open (group 2) |
-| W2: refusals of one kind 3 in a row end the round and test what exists | week report W2 | worker C (not run) | open (group 2) |
+| Lane C R3-2: an unchanged rerun is answered `applied` / `draftState: changed` | `run-mux6naez-6c20f26e.md` R3-2 | lead | done (group 2) |
+| W2: refusals of one kind 3 in a row end the round and test what exists | week report W2 | lead | done (group 2) |
 
 ## Lane B cause 6 (lead, done)
 
@@ -55,12 +55,58 @@ Trees: `fxwork/t287/` (Core and downstream, branch `task/t287-fix-refusal-churn`
   send; a rerun of a refused read that restates its `extractList` no longer carries the refused key; a column map
   restated without a column loses it; keeps beside a drop of a step already out hear "keep adds nothing".
 
-## Remaining (group 2)
+## Group 2 (R3-2, W2 stop, owed ways out): lead, 2026-10-06
 
-- Lane C R3-2: an unchanged rerun answered `applied` / `draftState: changed`; reruns with the same result counted as
-  progress. Files: `R/llm/decision-handlers/amendment.ts`, a new file under `R/llm/evidence-loop/` or
-  `decision-handlers/`, and the smallest possible edit in `R/llm/evidence-loop.ts` (supervisor's request: lane A's
-  b181f4bc changed it).
-- W2 stop: refusals of one kind 3 decisions in a row end the round and test what exists (new module, wired in
-  `amendment.ts`, `refused-repeat.ts`, and one call site in `evidence-loop.ts`).
-- Worker C's brief was written but not run: the dispatch hit the concurrent-subagent limit.
+Done by the lead (agent limit blocked workers). All Core, `R` as above.
+
+- **R3-2, the unchanged rerun's answer.** Cause: the amend_draft row is recorded before its rerun runs, as
+  `draft_rerun`, appliedCount 1, `draftState: changed`, and nothing corrected it once
+  `automationStudioLlmEvidenceSettleHeldAmendments` found the rerun unchanged; the rerun's own tool row also recorded
+  `draftChanged` from the new step id. Fix: `decision-handlers/amendment.ts` `correctRerunRow` sets
+  `resultReason: rerun_changed_nothing`, `amended`/`appliedCount` to what else landed, `draftState: unchanged`, and
+  rewrites the step-log answer; `evidence-loop.ts` records the rerun's row `draftChanged` false when settled unchanged
+  (line-neutral). `step-log/answer-step.ts` (no stream owns it): an explicit `AUTOMATION_STUDIO_LLM_STEP_LOG_ANSWER_REWRITE`
+  rewrites a written row with verdict, applied and reason recomputed from the row; a `draft_rerun` row reads `ignored`
+  only once it carries `rerun_changed_nothing`. The model's own history already said "unchanged" (checked in
+  `run-mux6naez` 0041's request); the wrong words were in the trace row and answer folder.
+- **R3-2, near-identical reruns finding the same rows.** In `run-mux6naez` the rerun answers 0036-0062 differ only in
+  `read.commandId/startedAt/finishedAt` (checked by key diff, no page data read). New `decision-handlers/rerun-result.ts`
+  compares a rerun's answer with its step's earlier answer with those keys and Core's `rerunPlace` removed (no key
+  for a `rerunCheck`); the same answer counts as no progress (through `RerunChangedNothing`) and the model is told
+  under `core.rerun_result` that the change made no difference to what the step found.
+- **W2 stop, refusals of one kind 3 in a row.** New `evidence-progress/refusal-run.ts` (counter, max 3) and
+  `decision-handlers/refusal-run.ts`: kinds are an amendment decision that changed nothing (its refusal reasons
+  sorted, or `keep_adds_nothing`), a rerun that changed nothing or found the same, and a mutating or proposing call
+  the page refused with nothing applied (by result code, except retry-later codes; looks excluded). Anything between
+  breaks the run. At 2 the model gets `core.refusal_run` ("one more ... ends this exploration ... tested and judged as it
+  stands"); at 3 the round stalls through `unusableDecisions.stalled` with `draft_amendments_refused` or
+  `repeat_refused`, so `not-done.ts` needs no change. An edit that undid itself is left to the no-progress guard.
+  Hooks: `amendment.ts`, `refused-repeat.ts`, one line-neutral call in `evidence-loop.ts` (still 800 lines).
+  `repeat-guard/retry-later.ts` now holds the retry-later pattern, used by `outcomes.ts` and the run.
+- **Owed ways out.** `repeat-guard/feedback.ts`: a refused rerun that did not work now names `rerun step N` with
+  the rerun shape, and that a key the patch does not write stays (set it to null). `tool-failure.ts` +
+  `decision-handlers/failed-call.ts`: a failed call names the draft step it became and the rerun to send.
+  `unusable-decision.ts` `amend_not_offered`: says why editing was not offered and to run a tool call with add true,
+  or complete.
+- Integration fix: `decision-handlers/tests/refusal-way-out.test.ts` lacked `settings_rewrite_run` in its exhaustive
+  record after the dev merge (`fluxiq:check` TS2741); added.
+- Tests (fail-first observed for each): `decision-handlers/tests/rerun-unchanged-told.test.ts` (new, 3; 2 failed first),
+  `evidence-progress/tests/refusal-run.test.ts` (new, 3) and `decision-handlers/tests/refusals-of-one-kind.test.ts`
+  (new, 4; 6 of 7 failed first), `step-log/tests/answer-step.test.ts` (rewrite case), `tests/evidence-loop-tool-failure.test.ts`
+  and `evidence-loop/tests/repeat-guard.test.ts` (wording; failed first), `refusal-way-out.test.ts` (amend_not_offered;
+  failed first). Changed expectations: `repeat-guard.test.ts` t227 and run-36 cases now stall one decision sooner
+  (the first rerun found the read's rows; three `act_already_named` in a row), each commented.
+- Validation (Core t287 tree):
+  - `npx vitest run src/programs/automation-studio/runtime/llm`: 162 files, 1609 tests passed.
+  - `flow-bootstrap`, `recovery`, `activity`, `result-verification`, `runtime/tests`: 294 of 298 files passed. The
+    failures were 15 s timeouts in service tests, a different set on each of two runs. The 20 service files that
+    failed in either run, run alone: 20 files, 112 passed (the P3/P4 load timeouts, t289's item).
+  - `node scripts/build-cache/cli.mjs fluxiq:check`: exit 0. `structure-audit:check`: passed (267 warnings, 349 baselined).
+  - `pnpm.cmd build`: exit 0.
+- What a live run should see: an identical rerun's answer folder says `ignored` / `rerun_changed_nothing` and
+  `draftState: unchanged`; a rerun whose rows match its step's gets `core.rerun_result` and counts toward the stop;
+  the second same-kind refusal in a row carries `core.refusal_run`, and the third ends the round with the Flow tested;
+  a failed call names its step and rerun.
+- Not done / owed: `flow-draft/amendment/schema.ts:24` (supervisor). Recording `resultReason` on draft steps
+  (`evidence-loop.ts` `draftRecord`, `R/flow-draft/step.ts`) so C4 can quote it -- not done: `evidence-loop.ts` is at its
+  800-line budget. The UI (`R/activity/**`, t288) reads trace rows live and does not see the post-settle correction.
