@@ -7,7 +7,8 @@ import { previousRun } from "../ledger-queries.mjs";
 /** @param {import("./guard-state.mjs").GuardState} state */
 export function checkUnchangedRerun(state) {
   const { instance, task } = state.launch;
-  const previous = previousRun(state.entries, (entry) => entry.instance === instance && entry.task === task);
+  // A run killed before it ended says nothing about whether this source fails, so the run before it is the one compared.
+  const previous = previousRun(state.entries, (entry) => entry.instance === instance && entry.task === task && entry.killed !== true);
   if (previous === null || previous.verdict === "passed" || typeof previous.fingerprint !== "string") return null;
   if (previous.fingerprint !== state.fingerprint) return null;
   return {

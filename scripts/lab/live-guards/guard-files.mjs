@@ -15,7 +15,8 @@ export const DEFAULT_LAB_SLOTS_DIRECTORY = path.join(os.homedir(), "FluxStuff", 
 
 /**
  * @param {string} directory the lab-slots directory
- * @returns {{ directory: string, ledger: string, stopBalance: string, override: (rule: string) => string }}
+ * @returns {{ directory: string, ledger: string, stopBalance: string, override: (rule: string) => string, labRuns: string }}
+ *   `labRuns`: the machine-wide run folder beside it (`packages/test-runner/src/lab-runs/runs-root.ts`), read for a killed run's step log
  */
 export function guardFiles(directory) {
   return {
@@ -23,5 +24,6 @@ export function guardFiles(directory) {
     ledger: path.join(directory, "spend-ledger.jsonl"),
     stopBalance: path.join(directory, "STOP-balance"),
     override: (rule) => path.join(directory, `OVERRIDE-${rule}`),
+    labRuns: path.join(path.dirname(directory), "lab-runs"),
   };
 }
