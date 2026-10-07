@@ -235,6 +235,7 @@ function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | nu
   const outcome = outcomeOf(event) ?? (unit.check ? "waiting" : null);
   const working = outcome === null;
   const headline = activityHeadline(subjectKind, outcome, {
+    stopped: event.final === true && (event.label === "Build stopped" || event.label === "Run cancelled"),
     // A run pressing a failed step again is not a repair (D12).
     repairing: unit.repairing && retry.repairing,
     waitingOn: event.phase === "waiting_permission" ? "answer" : "check"

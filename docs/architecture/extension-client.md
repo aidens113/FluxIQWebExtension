@@ -2078,3 +2078,16 @@ Core API: http://127.0.0.1:3000
 Navigation and click landing results retain a self-clearing check's elapsed milliseconds even when the destination or subsequent navigation verdict fails. The gateway payload keeps the domain's `checkWait`; the outer gateway result also carries the screened generic `clearedWait` for Core's transport runtime path. Direct domain dispatch and runtime adapters preserve the same fact independently of success. Core resolves the check card as `waited_out` while the action keeps its own failure.
 
 Core also settles durably parked run asks as `timed_out` at their deadline and as `cancelled` before project deletion. A service restart detects overdue sessions when they are read; indefinite waits keep waiting.
+
+### Stop builds and runs from the extension chat
+
+The chat composer dock exposes Stop build or Stop run while the raw activity
+subject is active, including waits for a person. It targets the subject's project
+and Flow for a build, or its run ID for execution. Settled events remove the
+control. Stop requests stay visibly pending until final activity; a relay failure
+allows retry. Disconnected/stale-owner controls cannot send requests.
+
+The existing panelStopRun relay accepts an optional Flow ID for a build and
+calls Core's `cancel-flow-bootstrap`; a run still uses `cancel-runtime-session`.
+Supplying both target IDs is refused. No target retains the legacy active-run
+scan. Cancellation does not promise rollback of actions already sent to a page.
