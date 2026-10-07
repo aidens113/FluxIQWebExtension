@@ -85,10 +85,14 @@ test("two columns with the same header do not make a schema Core refuses", () =>
   assert.equal(parsed.ok, true, parsed.ok ? "" : parsed.issues.join(", "));
 });
 
-test("the rows one run keeps follow the request, held to Core's ceiling", () => {
+test("one capture keeps Core's default number of rows, whatever the request's maxItems", () => {
+  // `maxItems` bounds every row the run collects, so dispatch declares it as
+  // the output's `process.limit` (`output-nodes/extract-list/one-page-read.ts`,
+  // read-list redesign C3); `maxRecords` bounds one capture, one page's read.
   assert.equal(webAutomationRecordOutput(definition()).maxRecords, 1_000, "the default when the request names no maximum");
-  assert.equal(webAutomationRecordOutput(definition({ request: { item: "tr", fields: { name: "td" }, maxItems: 200 } })).maxRecords, 200);
-  assert.equal(webAutomationRecordOutput(definition({ request: { item: "tr", fields: { name: "td" }, maxItems: 50_000 } })).maxRecords, 10_000, "Core's ceiling");
+  assert.equal(webAutomationRecordOutput(definition({ request: { item: "tr", fields: { name: "td" }, maxItems: 200 } })).maxRecords, 1_000);
+  assert.equal(webAutomationRecordOutput(definition({ request: { item: "tr", fields: { name: "td" }, maxItems: 50_000 } })).maxRecords, 1_000);
+  assert.equal("process" in webAutomationRecordOutput(definition({ request: { item: "tr", fields: { name: "td" }, maxItems: 200 } })), false, "the limit is dispatch's to add");
 });
 
 test("a paginated read appends, so later pages do not replace the rows earlier ones stored", () => {
