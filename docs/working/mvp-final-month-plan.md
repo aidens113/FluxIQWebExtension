@@ -23,7 +23,8 @@ t298 cancellation is integrated as downstream43e5e54b/Core2ee06482. Supervisor
 rebuilt current pair and repeated headed Stop build/run2/2, owning reauthor9/9,
 Core typecheck/build and both integration audits pass. Running Core-server identity
 remains t302; t299 candidate facade, t300 requirement receipts/detached executor
-and t301 typed readiness remain isolated. No P0 completion
+remain isolated; t300 receipt/detached infrastructure is integrated (Core386b4c15)
+with production joins pending. t301 typed readiness is integrated (b2ad00de). No P0 completion
 or fresh A-D qualification is claimed.
 
 **Planning review completed locally 2026-10-06.**
@@ -371,3 +372,10 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Validation: supervisor production Chromium typed checks2/2 (23.9s), four owning extension files19/19 and real Core permission seam12/12. Domain test typecheck0; extension test typecheck found shared Core still at7717ff42 missing t298 buildCancellation API. Task provisioning advances/rebuilds the read-only shared dependency before repeating; do not change product to satisfy stale declarations.
 - Outcome: Partial integration pending current dependency types and audits.
 - Follow-up: integrate typed fixes, then navigation slice; broader extraction/corpus and P2 promotion joins remain open. No paid calls.
+
+### 2026-10-06 - Candidate infrastructure and typed blockers integrated
+- Agent: Codex supervisor.
+- Changed: t300 Core386b4c15 and paired downstream0befce51; t301 downstreamb2ad00de. P4 [feasibility record](./mvp-final-month-plan/reports/p4-script-request-feasibility.md) adds supported API/permission/timeout and requests-OFF requirements without enabling arbitrary execution.
+- Validation: t300 post-dev-merge58/58 and packagecheck0; final export check0/audit0, both task audits0. t301 independent browser2/2, extension19/19, real Core permission12/12, domain/extension source+test checks0 after shared dependency refresh; taskaudit0. No paid call.
+- Outcome: Accepted bounded infrastructure and typed fixes, not full P0/P2/P3.
+- Follow-up: t299 facade, t302 server identity, t303 navigation; durable receipt/promotion/semantic/browser proof joins and breadth still pending. Paired push next; no main/release changes.
