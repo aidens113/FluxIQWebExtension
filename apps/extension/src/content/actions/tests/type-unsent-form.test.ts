@@ -31,7 +31,7 @@ async function installPlatform(t: TestContext) {
 
 /** A text field, in `form` when one is given. */
 function field(form: unknown): Element {
-  return Object.assign(Object.create(FakeInputElement.prototype as object) as object, { tagName: "INPUT", type: "search", value: "", form, getAttribute: () => null }) as unknown as Element;
+  return Object.assign(Object.create(FakeInputElement.prototype as object) as object, { tagName: "INPUT", type: "search", isConnected: true, value: "", form, getAttribute: () => null }) as unknown as Element;
 }
 
 /** A form whose submit control is `submit`, or that has none. */
