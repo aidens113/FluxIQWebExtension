@@ -351,3 +351,164 @@ so the branch pointers are still one merge commit behind dev.
     `confirm-requests-build` added, gave `53 passed (53)`, `365 passed (365)`.
   - `fluxiq:check` exit 0; Core audit `passed (265 warning(s), 349 baselined)`; Core `pnpm.cmd build` exit 0.
 - Uncommitted. No Lab, browser or provider call.
+
+## Round 4 (lead dispatch 2026-10-07 ~03:35 UTC; off-peak window opens 04:00 UTC)
+
+Tree `task/t275-live-lane-d` downstream `5cad8286` (= dev), Core `ffbdea7e` (= Core dev); both contain `dev`
+(`git merge-base --is-ancestor dev HEAD`). Rebuilt by the supervisor ~03:01 UTC (`fxwork/t275/rebuild-*.log`: Core
+web build, domain, extension, test-runner). Slot 4 (`lab-slots/slot-4/owner` = lane D), instance `t275-slot-4`,
+workspace `t275-d`. No `STOP-balance`. Previous live run of the instance `run-mux6nxst-c9bca37c` has its debug in
+the tree; the source fingerprint changed since (every fix-everything workstream landed), so `debug` and `unchanged`
+admit one run.
+
+### Expectations for round 4 (written 2026-10-07 03:37 UTC, before the dry run and any launch)
+
+Unchanged from rounds 1-3: the instruction, fixture facts, the correct chain, the exact oracle of four records in
+list order `{Amara Osei, "23 mutual friends"}`, `{Jonas Weber, "Aisha Khan and 4 other mutual friends"}`, `{Lin
+Zhao, "11 mutual friends"}`, `{Freya Holm, "5 mutual friends"}`; Tom, Priya, Diego, Marta untouched (Confirm/Delete
+still shown, no "Request accepted", no "Request removed"); no permission ask (`modify_existing` on the
+instruction's authority; `permittedConsequences []`); 48 calls, $0.10 Lab ceiling, `deepseek-flash`, headed, chat
+build.
+
+The Flow a correct build proposes: navigate `~/` (or straight at `~/friends/requests/`); decline cookies, dismiss
+notifications, close chat (optional/remembered); reach `~/friends/requests/` (Friends -> Friend requests / See all);
+**listing** of the 8 cards `{name, mutualFriends}` with a `where` keeping >= 5 mutual friends that reads "and 4
+other" as 5 (the count condition, not a hand-written regex) -> exactly Amara, Jonas, Lin, Freya; **Confirm**
+repeated over that listing, re-found per row; **a second read of the list after the Confirm step**, `where` the row
+shows "Request accepted", `{name, mutualFriends}` -> the Flow's answer. No Next page step (one page, 8 cards). No
+`delete` declared anywhere.
+
+New on this source since round 3, each checked in the debug:
+- **D3-2 read after the act**: a `changes_nothing` rerun of the listing that a later act already repeats over is
+  answered "a read of the rows after the act is a new step ... `core.run_node` with add true"; a node run says
+  `addable`, only a written step `inFlow`. Expect the model to add the after-read in round 0, not 19 decisions of
+  reruns. Rule (b) of `flow-draft/second-copy.ts` admits a read of the same list after a kept press; a
+  `second_copy` refusal of the after-read would be a defect.
+- **D3-5 + round funding**: a lone first yes whose confirming call never came is `model_unconfirmed`, never a pass;
+  no round opens without room for its first decision plus the judge pair. **Must be seen: no wrong Flow accepted**
+  (round 3 accepted a Flow without the after-read on one unpaired yes).
+- **D3-1**: Core's `totalProviderCallCount` equals calls actually sent; the Lab budget check and the campaign's
+  count agree with the step folders.
+- **D3-3/D3-4 (t279, t280)**: detect fields carry readable labels and sample values (the "Request accepted" column
+  nameable); node definitions given on first use (expect the listing `where` as the count condition).
+- t285 act claims judged by the page change the step caused (`act_not_done_there`, `step_only_chooses` /
+  `_arrives` / `_clears_the_way` / `_opens_its_choices`): the Confirm press must be credited to the Confirm step,
+  never to the Friends/Friend requests clicks.
+- t287: every amendment refusal names its way out; three same-kind refusals in a row end the round (warned at two);
+  identical reruns count as no progress. t281: a settings rewrite of a ran step refused; no second copy.
+- t286 judges see only what this run changed; the re-author may end "nothing to change".
+- Read-list S1-S6/S3: the read reads one page; collected rows processed into the answer (whole-row dedupe); the build
+  test and both judges read the processed answer. D's after-read must answer 4 rows (1 in build tests where only
+  Amara was pressed live, with `afterWithheld: [<Confirm step>]`, C1).
+- **Playback (first time for D, if reached)**: the Lab resets the fixture; four presses in list order; the fourth
+  inside 15 s meets "You're going too fast". `content/action-runtime/rate-limit-notice.ts` should report
+  `rate_limited` with the notice's wait, and the node re-run after the wait confirms Freya. **Predicted main risk
+  at playback**: a press reported done when refused (three rows read, oracle 3 of 4), or OK pressed and moved on.
+- On a pass: two `lab replay` runs with zero model calls, 4 records each, same SHA-256; then a second independent
+  live pass.
+
+Must be seen (round-4 notes): the listing read after the confirms where the instruction asks for the result; the
+Confirm repeat over exactly the qualifying rows; no wrong Flow accepted.
+
+UI checkpoints (t288 `reports/fix-ui.md` "Next live UI review must see", plus rounds 1-3): "Starting…" from the send
+in panel and page; repeated identical reruns fold into one card "(N times)"; a two-field list name never cut (round
+3's "name and..."); "Judging the Flow" says how many steps the test ran; no quote cut inside a word; a written step
+reads "Added to the Flow, not run yet"; build list read cards "Done: N rows from M pages"; thoughts never end on
+";", no "reading the list handle"; repair headings without step numbers; a failed creation build never reads
+"Couldn't fix your Flow"; per-row test cards "Confirm · <name>" checked, not pressed; no previous thread at start
+(t289, round 3's R2-U-10); overlay visible throughout, no flicker; on success the chat reports the Flow and its table.
+
+### 2026-10-07 — round 4 dry runs (03:38-03:41 UTC)
+
+- `FLUXIQ_TEST_ENV_FILES=none FLUXIQ_LAB_INSTANCE=t275-slot-4 pnpm.cmd lab:campaign social-network-feed-confirm-requests
+  --dry-run --max-attempts 1 -- --target persistent-isolated --workspace t275-d --llm-cost-ceiling-usd 0.10` printed the
+  same `pnpm lab run social-network-feed --live-llm ... --llm-max-calls 48 ... --llm-cost-ceiling-usd 0.10` as rounds 2-3.
+  Its `--llm-max-output-tokens 8000` is the reply reservation that mirrors Core's DeepSeek model limits
+  (`scripts/lab/live-campaign/lab-run/command.mjs`: input = the window less the reply), not an added output cap.
+- `node scripts/lab/run-lab.mjs run ... --dry-run` with that command: exit 0, `status ready`, `providerCallCount 0`,
+  `buildEntry chat`, `persistent-isolated`, workflow `confirm-requests` judged by `expected-dataset` step
+  `extract-confirmed`; `deepseek-flash` (= `coreDefaultModel`), `build_and_adapt`, 48 calls, 25 s per call,
+  `maxEstimatedCostUsd 0.1`, `permittedConsequences []`, key by name from `.env.local`. Prelude rebuilt the slot's
+  `scenario-lab`, `domain:host-build`, `extension:build`, `test-runner:build` (66 s); Core web `2bde75a1...` not cached.
+
+### 2026-10-07 — round 4 live run `run-muxky54f-fadb9d03`: FAILED (calls exhausted, no Flow); debugging
+
+- One launch 04:00:42 UTC (off-peak), guard `admitted` (fingerprint `sha256:5fd1e5e4...`), headed, chat build
+  04:03:40-04:08:41. Campaign: `failed (run-muxky54f-fadb9d03), judgement not measured`, `providerCalls 49`,
+  **$0.064741** (build $0.064567 of $0.10). Core trace: four judged tests, every pair `verdict=no calls=2`; round 3's
+  second decision threw `flow_bootstrap.run_budget_calls_exhausted`. `flowCreated: false`: no playback, no oracle, no
+  replay. Debug follows.
+- Findings (lead, from `test-runs/instances/t275-slot-4/run-muxky54f-fadb9d03/steps`, 158 folders):
+  - **D4-1, round 0 (Core `R/llm/evidence-loop/rerun-request.ts` + `R/llm/repeat-guard/outcomes.ts`)**: step 11
+    (0021) read the list `where atLeast 5` and was left taken; step 12 (0023) read it again with no `where` and was
+    kept as the listing. Five decisions (0025, 0027, 0033, 0035, 0037) sent `12 rerun +where atLeast 5`. Each made
+    0021's exact call on the same page, which the guard had recorded `changed_nothing` (a list read is not a
+    "look", and a read never changes the page), so each was refused `changes_nothing` unrun: "Step 12's identical
+    request was not sent again". The Flow kept the unfiltered listing (judge 0054/0055: "no mutual-friend filter").
+  - **D4-2, round 0 (Core claim check + `R/llm/draft-amendment-feedback.ts` `rowAct`)**: with the listing stuck,
+    Core's own `next` (0034, 0036) said "Step 14 is the first step after step 12 that changes something ... add step
+    14 with its act, then send repeat over 12". Step 14 was the Close-chat press (0031). At 0037 `14 add act a1` and
+    `14 repeat over 12` were both applied, though the checklist at the next decision says
+    `todo: step_only_clears_the_way` for a1 on that step. Knock-on: round 1's rerun of that step as Amara's Confirm
+    (0063) was sent as a check of a done act (0067 `replay: "verify"`, "it was not run"), so nothing was confirmed
+    live until 0112 in round 2, after every detect.
+  - D4-3, rounds 2-3 (no column for the accepted state): the detects (0093, 0097) ran before any Confirm was pressed, so
+    they offered no "Request accepted" column (fields: name link, mutual line, "2w", Confirm button, Delete button). After
+    pressing Amara live (0112) the model never re-detected. Round 2 used the Confirm-button column `is absent`
+    (keeps exactly the accepted rows, plus an extra `status` column). Round 3 changed it to `contains "Request accepted"`
+    on that same column, which keeps none (Amara's value is "").
+  - D4-4, judges rounds 2-3: all four judges called the listing's `atLeast 5` on the mutual-friends text wrong
+    ("tested the raw text", "would wrongly exclude Jonas") while the test showed it kept exactly Amara, Jonas, Lin and
+    Freya. Judge 0137 blamed the three withheld rows despite `afterWithheld` in its packet (C1 reasoning lost). Judge
+    0158 read the 8 rows a read rejected (`readRows.rows` when a read keeps none) as rows it returned.
+  - Must-see items: **no wrong Flow accepted: held** (every pair no; the r0 Close-chat Flow was refused). Confirm repeat
+    over exactly the qualifying rows: from round 1 on (listing kept 4, Jonas included). Listing read after the
+    confirms: added at 0072 as a live read with `add: true` (D3-2's way taken); its `where` never right (D4-3).
+- D4-5 (found in the UI review, verified at moment 18): a read that keeps none returns its rejected rows as
+  `readRows.rows`; judge 0158 and the check card ("12 rows would be stored" = step 6's 4 + step 8's 8 rejected) count
+  them as stored. Open.
+- Read count (supervisor's question): `dom-extract_list` ran 20 times (4 live, 7 applied reruns, 2 put-back replays,
+  7 in tests); 6 detects; 4 snapshots run, 2 refused `already_answered`; 8 read reruns refused `changes_nothing` (5 on
+  the listing = D4-1; 3 true identical reruns of the after-read, which ended round 2). Per-read reasons: debug "Every
+  read of the list".
+- UI review (worker `r4-d-ui-review`, report `reports/r4-d-ui-review.md`; lead checked moments 1 and 18 against the
+  pictures): overlay visible 284/288 samples; fixed: "Starting…" on the overlay, "Done: N rows from M pages", step count
+  in "Judging the Flow" (#15), "Checked, not pressed", the ending names the 48-call limit, no "ran, or could run", no
+  "Couldn't fix your Flow". Not fixed: the previous build's thread at the start (#1), list name cut "name and mutual",
+  internal words. New: mid-label cuts ("Close ... · Tom Becker"), "Reading your instruction gave no answer for ...",
+  "The build stopped ..." mid-build, overlay "Fixing your Flow" in a creation build.
+
+### 2026-10-07 — round 4 fixes D4-1 and D4-2 (in tree, uncommitted; no second paid run)
+
+Two workers in parallel on disjoint Core files (reports `reports/r4-d4-1-read-rerun.md`,
+`reports/r4-d4-2-clearing-press-claim.md`). `R` = `fxwork/t275/!FluxIQ/packages/fluxiq/src/programs/automation-studio/runtime`.
+
+- **D4-1** (worker-high): `R/llm/evidence-loop/rerun-request.ts`: `ranAlready` now returns the guard's outcome; a
+  rerun of a read step (`effect: "observe"`) whose merged input differs from the step's own runs unless the identical
+  call `failed`; the identical rerun, a failed call and any mutate step are still refused `changes_nothing`.
+  `R/llm/decision-handlers/amendment.ts` passes `context.repeats.blocks(...)` itself (one line). Tests extend
+  `R/llm/evidence-loop/tests/rerun-request.test.ts` (unit + a loop-level case: the rerun runs and replaces the kept
+  step). The execution path does not refuse it again (`evidence-loop.ts` skips `blocks` while rerunning).
+- **D4-2** (worker-high): `R/flow-bootstrap/instructed-acts/claim-verdict.ts`: for todos about a step's place
+  (`act_needs_repeat`, `span_stops_short`, `step_is_optional`, `act_consequence_undeclared`) the verdict reads what the
+  step did instead (`act-evidence.ts`) and refuses with the checklist's sentence (decision 0037 replayed is refused
+  `act_not_done_there`; a row's Confirm claimed before its repeat still stands). `R/llm/draft-amendment-feedback.ts`
+  `rowAct` skips presses with `interruption: true` (the draft steps reach it unprojected: `amendment.ts` passes
+  `context.draftSteps`). Tests extend `instructed-acts/tests/claim-verdict.test.ts` and
+  `llm/tests/draft-amendment-feedback.test.ts`.
+- Lead verification (`fxwork/t275/!FluxIQ`, 04:20-04:27 UTC):
+  - Fail-first, the three fixed sources set back to HEAD (copies, no stash): `npx vitest run` on the three changed
+    test files gave `Test Files 3 failed (3)`, `Tests 6 failed | 88 passed (94)`, every failure a new test (3 claim
+    verdict, 2 rerun request, 1 rowAct). Sources restored byte-identical (`cmp`); `git diff --stat` unchanged
+    (7 files, 246+, 16-).
+  - After: `npx vitest run` over `llm/evidence-loop/tests`, `llm/repeat-guard`, `llm/decision-handlers/tests`,
+    `llm/tests/draft-amendment-feedback.test.ts`, `flow-bootstrap/instructed-acts/tests`, `flow-draft`,
+    `llm/harness-options`: `Test Files 94 passed (94)`, `Tests 1241 passed (1241)`, exit 0.
+  - `node scripts/build-cache/cli.mjs fluxiq:check` exit 0 (stamp matches the final inputs);
+    `node scripts/structure-audit.mjs` exit 0, "passed (278 warning(s), 349 baselined)".
+  - Diffs read by the lead: D4-1 changes only the `changes_nothing` branch; D4-2 adds the not-settled branch and the
+    `rowAct` filter. No downstream file changed.
+- Not done: Core `pnpm build` (the supervisor rebuilds after merging; the Lab's stale-dist guard will refuse this tree
+  until then); D4-2b (`repeat` on an `interruption` step, `flow-draft/amendment/apply.ts`), D4-3, D4-4, D4-5 open.
+- Stopped per the brief: a failure returns with the fix; no second launch. Debug
+  `docs/working/language-driven-flow-loop-plan/debugs/run-muxky54f-fadb9d03.md`.
