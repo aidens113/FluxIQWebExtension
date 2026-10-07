@@ -1,3 +1,4 @@
+import { soldSavesAccountFacts } from "../qualification/index.js";
 import { fixtureClient, page } from "../../../html.js";
 import { fnv, RADIUS_OPTIONS, SORT_OPTIONS } from "../catalog/index.js";
 import { SHELL_SCRIPT } from "../client/index.js";
@@ -54,6 +55,15 @@ export function classifiedsDocument(build: PageBuild, state: ClassifiedsState, t
     timing: build.timing,
     ...extra,
   };
-  const script = [fixtureClient(build.runToken, "local-classifieds"), `const cfg = ${JSON.stringify(config).replaceAll("<", "\\u003c")};`, SHELL_SCRIPT, ...scripts].join("\n");
-  return page(title, `${body}<style>${classifiedsStylesheet(build.sheet.keys)}</style>`, script);
+  const script = [fixtureClient(build.runToken, "local-classifieds"), `// Readonly fixture account fact follows actual mutation responses; visible UI is unchanged.
+const qualificationAccountFacts = ${soldSavesAccountFacts.toString()};
+const qualificationMutation = mutate;
+mutate = async (operation, payload = {}) => {
+  const result = await qualificationMutation(operation, payload);
+  const fact = document.querySelector('[data-testid="classifieds-sold-saves-account"]');
+  if (fact) fact.textContent = qualificationAccountFacts(result.state);
+  return result;
+};
+const cfg = ${JSON.stringify(config).replaceAll("<", "\\u003c")};`, SHELL_SCRIPT, ...scripts].join("\n");
+  return page(title, `${body}<script type="application/json" data-testid="classifieds-sold-saves-account">${soldSavesAccountFacts(state).replaceAll("<", "\\u003c")}</script><style>${classifiedsStylesheet(build.sheet.keys)}</style>`, script);
 }

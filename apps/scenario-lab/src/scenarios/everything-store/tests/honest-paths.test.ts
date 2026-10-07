@@ -1,3 +1,4 @@
+import { restoreClothsWorkflow } from "../qualification/index.js";
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { resolveScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
@@ -154,6 +155,30 @@ describe("an honest shopper passes every oracle", { concurrency: true }, () => {
       await Promise.all([page.waitForEvent("load"), page.getByRole("button", { name: "Continue shopping" }).click()]);
       await page.getByTestId("cart-count").waitFor();
       assert.equal(await page.getByTestId("robot-check").count(), 0);
+    } finally { await session.close(); }
+  });
+
+  it("qualification preservation: restore existing saved S1 cloths and keep all other lines", async () => {
+    const session = await kit.openStore();
+    try {
+      const { page } = session;
+      assert.deepEqual(await kit.factFailures(page, restoreClothsWorkflow.expected.pageFacts!), []);
+      for (const step of restoreClothsWorkflow.recordingScript) {
+        const target = step.target?.startsWith("role:dialog:") ? page.getByRole("dialog", { name: step.target.slice(12), exact: true })
+          : step.target?.startsWith("role:button:") ? page.getByRole("button", { name: step.target.slice(12), exact: true }) : page.locator(step.target ?? "body");
+        if (step.operation === "navigate") await page.goto(`${session.lab.origin}${step.path!}`);
+        else if (step.operation === "click") await target.click();
+        else if (step.operation === "waitForState") await target.waitFor({ state: "visible", timeout: step.timeoutMs ?? 5000 });
+        else if (step.operation === "extract") assert.deepEqual(await kit.readCart(page), restoreClothsWorkflow.expected.extracted![0]!.records);
+        else if (step.operation !== "checkpoint") throw new Error(`Unexpected restore operation ${step.operation}`);
+      }
+      assert.deepEqual(await kit.factFailures(page, restoreClothsWorkflow.expected.finalState!), []);
+      const account = JSON.parse((await page.getByTestId("everything-saved-cloths-account").textContent())!);
+      assert.deepEqual(account.cart.map(({ lineId }: { lineId: string }) => lineId), ["S1", "L2", "L1"]);
+      assert.deepEqual(account.saved.map(({ lineId }: { lineId: string }) => lineId), ["S2"]);
+      assert.equal(account.nextLine, 3);
+      await page.reload();
+      assert.deepEqual(await kit.factFailures(page, restoreClothsWorkflow.expected.finalState!), []);
     } finally { await session.close(); }
   });
 });
