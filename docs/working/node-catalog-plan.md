@@ -1,9 +1,9 @@
 # Node Catalog Plan
 
 Status: Active
-Status detail: Four audits reconciled; three shared blockers integrated/verified, bounded tab/landing/navigation fixes underway; broader catalog qualification pending.
+Status detail: Four audits reconciled; three shared blockers integrated/verified, tab/landing/navigation slice integrated; broader catalog qualification pending.
 Created: 2026-10-07
-Last updated: 2026-10-06
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: A full audit of the web extension's node catalog — every existing node's contract, implementation, tests and live failures — then fixes and extensions so each node is robust, and new nodes for what the realistic sites need. It does not cover the general tools (script, request; `structural-agent-plan.md` stage 1) except where a node would replace a script use the Lab reports.
 Paired document: none (web domain and extension; Core control nodes are referenced, not owned)
@@ -24,8 +24,11 @@ browser qualification. t301 controlled check, in-place Next and type-submit
 permission fixes are integrated/pushed (b2ad00de), with supervisor Chromium2/2,
 extension19/19, Core permission12/12 and current-dependency types/audit passing.
 The controlled fixture simulates component application state; React/Firefox/Edge
-parity is unexercised. t303 handles tab repeat safety, explicit-open landing and
-HTTPS downgrade next; other backlog rows remain pending.
+parity is unexercised. t303 tab repeat safety, explicit-open landing and
+HTTPS downgrade are integrated/pushed ddc8befd after independent owning114/114,
+affected types/audit/builds and production Chromium1/1. Missing evidence remains
+unvalidated; no live TLS downgrade, Firefox/Edge session or paid qualification.
+Other backlog rows remain pending.
 
 Supervisor independently counted57current task definitions across ten sites.
 The requested67scope has10unaccounted tasks, not10passes or retired rows;
@@ -98,3 +101,10 @@ Read-only: no source, test or other doc edits; no builds, tests, Lab, browser or
 - Validation: independently observed Chromium2/2, extension19/19, actual Core permission12/12; domain and current-extension typecheck0/taskaudit0.
 - Outcome: Partial catalog implementation.
 - Follow-up: t303 tab/landing/HTTPS; remaining ranked fixes/new nodes and67scope reconciliation. No paid live-task passes claimed.
+
+### 2026-10-07 - t303 slice integrated
+- Agent: Codex supervisor.
+- Changed: tab mutation metadata, shared navigate/explicit-open landing checks, downgrade refusal; current dev/t301 integrated before validation.
+- Validation: extension96/96 + domain18/18, source/test types/audit0, three-target22-file builds and Chromium1/1 (8.4s). Report in mvp-final-month-plan/reports/p3-browser-navigation-readiness.md.
+- Outcome: Verified bounded slice; broader catalog pending.
+- Follow-up: missing ten task definitions requested asynchronously; source-only browser hypotheses/new nodes still pending.

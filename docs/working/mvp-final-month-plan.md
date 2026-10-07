@@ -1,9 +1,9 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Acceptance, extension identity, Stop, candidate receipt/executor infrastructure and typed fixes pushed; candidate facade pushed; Core identity/receipts isolated, navigation verified; live and promotion pending.
+Status detail: Acceptance, extension/Core identity, Stop, candidate facade/infrastructure and typed/navigation fixes pushed; durable receipt restart verification and loaded-host identity underway; production promotion/live qualification pending.
 Created: 2026-10-05
-Last updated: 2026-10-06
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: The ordered plan from 2026-10-05 to the polished-MVP deadline of 2026-11-10: what is done, what is held on unmerged branches or dirty trees, what must be integrated and pushed, and the week-by-week work to pass the 30-day plan's Final MVP Acceptance Test. It does not redo intake already recorded in the 2026-10-03 handoff, and it does not itself run live provider calls.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/mvp-final-month-plan.md
@@ -22,10 +22,16 @@ match/mismatch checks, 22/22 owning tests and runner typecheck after integration
 t298 cancellation is integrated as downstream43e5e54b/Core2ee06482. Supervisor
 rebuilt current pair and repeated headed Stop build/run2/2, owning reauthor9/9,
 Core typecheck/build and both integration audits pass. Running Core-server identity
-remains t302. t299 candidate facade is integrated (Core7f9bae15/downstreamcb792dee)
+is integrated/pushed (Corec8501c15/downstream267a4215), after independent
+Core/routes59/59, generator10/10, HTTP15/15 and headed identity/runner61/61.
+Loaded domain host remains t305. t299 candidate facade is integrated (Core7f9bae15/downstreamcb792dee)
 after independent actualservice/API53/53, package/dependentweb types and audits.
 t300 receipt/detached infrastructure is integrated (Core386b4c15)
-with production joins pending. t301 typed readiness is integrated (b2ad00de). No P0 completion
+with production joins pending. t301 typed readiness is integrated (b2ad00de);
+t303 navigation is integrated/pushed ddc8befd after owning114/114 and production
+Chromium1/1. t304 durable ledger passed independent52/52/types/build; literal
+owned child-process termination/restart checks are underway before integration.
+No P0 completion
 or fresh A-D qualification is claimed.
 
 **Planning review completed locally 2026-10-06.**
@@ -446,3 +452,26 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Owns: only the named report. No source, shared working docs, git, provider/browser/server commands, baseline or migrations.
 - Definition of done: concrete owner/function table for instruction source/revision saves/deletes, settings, flow/router/subflow/graph reads/writes, publication/revision dependency mutation, caches; show which uses project SQL transaction versus JSON/global projection. Recommend the smallest executable migration phases that do not let an ordinary writer evade CAS, and required restart/concurrency negatives. Distinguish unresolved reader/writer authority from proposed design.
 - Validation: source inspection with paths/function names; no atomicity success claim. Return status, inspected files, own report path and exact unresolved seams.
+
+### Brief: p0-loaded-domain-host-identity (task t305)
+- Repository: paired fxwork/t305/!FluxIQ and !FluxIQWebExtension; main user panel is not managed. Core generic provenance changes remain additive and legacy calls stay usable; missing provenance refuses Lab admission.
+- Task: Attest the actual separately bundled web domain host loaded by the retained Core service, not its latest disk file or extension-bundled domain contracts. Extend t302's authenticated gate with bounded loaded module identity.
+- Required reads: Current State; t302 identity report/modules/tests; domain/scripts/build-web-panel-host.mjs and domain/src/web-panel-host.ts; Core bindNativeNodeRuntime and existing route classification; downstream build-cache domain:host-build, Core-process host loading.
+- Proposed seam: optional immutable generic module build identity on existing trusted native-runtime binding, captured in service-owned registry/WeakMap by focused Core helper. No browser concepts in Core. Preserve method budget. Bound host must register its embedded identity BEFORE any host registration/IO mutation. Rebinding changed loaded identity must refuse; uninstrumented binding must never attest old provenance. Discuss exact owners/design with supervisor before editing.
+- Owns after approval: focused Core build-identity module registry/types/tests, existing native-runtime binding signature/body and diagnostics projection/tests; downstream host build generator/embedded reader/build-cache inputs + owning tests, host registration, Lab expected/verify gate + tests. Own report reports/p0-domain-host-identity.md. New folders require barrels/owning tests. No storage/controller/t304/shared docs/git edits.
+- Definition of done: immutable embedded normalized executable host digest plus source freshness/full matching inventory; intended artifacts independently regenerated; authenticated diagnostic returns actual retained binding; Lab refuses missing, stale, changed artifact/source/registration and retained old host after disk/route reload before chat/provider. Generic diagnostic remains read-only and bounded. Include actual loaded built-host retained/fresh process provider-free proof; use synthetic authenticated transport only if stated. No passing stamp from reading the latest disk on server.
+- Validation: narrow owner tests, affected Core/domain/runner typechecks and structure audit; rebuild owning Core/host/extension artifacts sequentially; precise browser/process/source identity receipts. No full suite, paid Lab, user panel, debugger or fabricated loaded server-adapter claim. Provisioning first; wait for supervisor before frozen checks. Return file inventory/report/commands/limits.
+
+### Brief: p2-receipt-process-restart-probe (task t304 continuation)
+- Repository: paired t304 Core (latest dev merged; root built/check and observed52/52) and own downstream p2-durable-receipts.md.
+- Task: Add a literal owned child-process termination/relaunch fixture for the durable session and real project SQLite ledger; close the reopened-connection-only validation gap. No product changes.
+- Owns: verification/tests/process-restart.test.ts (focused helper under tests if necessary, barrel where required); append only own p2-durable-receipts.md. No service/storage/source/shared docs/git/browser/provider/panel changes.
+- Definition of done: actual built internal session/store imports in owned child process; kill after synthetic command marker is written but before execution-stage commit, restart another child/session with same immutable attempt, assert unknown and no second start/marker. Also kill after actual finish COMMIT before acknowledgement and reconcile original committed draft without re-execution. Inspect persisted status/stages and counters; no accepted promotion or browser/power-loss claim.
+- Validation: independently runnable narrow vitest file + affected package typecheck; bounded child startup/IPC timeouts, cleanup only owned child/temp directories; output bounded packets without original source/page/secrets. Existing build available; source tests excluded from runtime identity. Supervisor repeats before integration.
+
+### 2026-10-07 - Paired identity push and next proofs
+- Agent: Codex supervisor.
+- Changed: t302 pushed downstream267a4215/Corec8501c15. t305 paired tree provision completed0; additive loaded-domain-host provenance work authorized. t304 source merged latest dev, root reviewed controller/store/session/migration and observed owning52/52. Actual child termination/relaunch negatives now assigned before integration.
+- Validation: t302 receipt above; t304 Corecheck0 (37.6s)/build0 (45.5s)/audit0 and owning52/52 (16.5s). Core task lifecycle used --skip-checks solely to avoid forbidden broad suite, after root-observed narrow gates. t305 provisioning completed before any worker edits; no frozen-source test claim from provisioning.
+- Outcome: Partial ordered implementation; no accepting promotion or paid qualification.
+- Follow-up: authoritative topology/source/settings/read/write/publication migration inventory report; domain-host proof; trusted interpreter/start/oracle/command receipts. User asked asynchronously whether to propose ten missing qualification tasks or use an existing omitted list; preserve67scope meanwhile. No user panel managed.
