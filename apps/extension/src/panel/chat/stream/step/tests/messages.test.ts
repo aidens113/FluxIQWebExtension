@@ -78,8 +78,11 @@ test("checks and repairs are messages with their verdict and diagnosis; a check 
   const messages = stepMessages(events, 100);
   assert.deepEqual(messages.map((message) => [message.kind, message.title, message.text]), [
     ["repair", "Fixing the search click", "The button moved after the banner closed."],
-    ["check", "Checked the result", "The quote form is open with the postcode filled."],
-    ["check", "The result didn't pass its check", "No price was shown."],
+    // Core's "Completion check" checks whether the proposed Flow is finished, never its result:
+    // "The result didn't pass its check" headed "Sent back because some steps weren't written in a
+    // way the Flow can run" (run-mux74k5q-1c3c2127 UI review).
+    ["check", "Checked the Flow is finished", "The quote form is open with the postcode filled."],
+    ["check", "The Flow isn't finished yet", "No price was shown."],
     ["step", "The build failed", undefined]
   ]);
   assert.equal(messages[1]!.key, "step:build-1#2", "the check keeps the key of the event that opened it");
@@ -548,4 +551,32 @@ test("a repeating cycle of identical cards with nothing new between them is one 
   assert.equal(mixed.length, 4, JSON.stringify(mixed));
   assert.match(mixed[0]!, /^Didn't work \(2 times\): /u);
   assert.match(mixed[3]!, /^Didn't work: /u);
+});
+
+// R3-U-5 of live-C-r3-ui-review (run-mux6naez-6c20f26e, moments 11-12 and 18-19): five or more
+// identical "Read list · name, price and 4 more / Done" cards stacked, one per rerun, and the
+// person could not tell whether anything changed. Identical successful cards in a row are one
+// card that counts them; a different result, or a failure between them, keeps them apart, and a
+// success never folds into a card before the one just shown, so the order still reads true.
+test("identical successful cards in a row are one card that counts them; another result or a failure between keeps them apart", () => {
+  const LIST = "Reading the list of “name, price and 4 more”";
+  const read = (sequence: number, status: "started" | "succeeded" | "failed", rows?: number) => tool(sequence, LIST, status,
+    status === "started" ? {} : status === "failed" ? { text: "Result: web.action.rejected.target_unobserved · Reason: malformed_handle · Node: web.output.dom-extract-list" } : { text: `Result: web.read.succeeded${rows === undefined ? "" : ` · Rows: ${rows}`} · Node: web.output.dom-extract-list` });
+  let sequence = 0;
+  const next = () => (sequence += 1);
+  const attempt = (status: "succeeded" | "failed" = "succeeded", rows?: number) => [decide(next()), read(next(), "started"), read(next(), status, rows)];
+  const outcomes = (messages: StepMessage[]) => messages.flatMap((message) => message.actions.map((card) => cardWords(card, false).outcome));
+
+  const five = stepMessages([...attempt(), ...attempt(), ...attempt(), ...attempt(), ...attempt()], 100);
+  assert.deepEqual(outcomes(five), ["Done (5 times)"]);
+  assert.equal(five.at(-1)!.latest, true);
+  assert.deepEqual(outcomes(stepMessages([...attempt("succeeded", 10), ...attempt("succeeded", 10)], 100)), ["Done (2 times): 10 rows"]);
+  // Another count is another result: both are shown.
+  assert.deepEqual(outcomes(stepMessages([...attempt("succeeded", 10), ...attempt("succeeded", 13)], 100)), ["Done: 10 rows", "Done: 13 rows"]);
+  // Done, failed, done reads in that order; it is not "Done (2 times)" then a failure.
+  const between = outcomes(stepMessages([...attempt(), ...attempt("failed"), ...attempt()], 100));
+  assert.deepEqual(between.map((outcome) => outcome?.replace(/:.*$/su, "")), ["Done", "Didn't work", "Done"]);
+  // A card still under way is never folded.
+  const working = stepMessages([...attempt(), decide(next()), read(next(), "started")], 100);
+  assert.deepEqual(working.flatMap((message) => message.actions.map((card) => card.outcome)), ["done", "working"]);
 });

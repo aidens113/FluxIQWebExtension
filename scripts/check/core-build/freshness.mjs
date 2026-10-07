@@ -1,4 +1,5 @@
-// Whether `pnpm check` may bundle the extension against FluxIQ Core's build.
+// Whether a downstream build, check or test may compile or bundle against
+// FluxIQ Core's build.
 //
 // The extension's check bundles every browser entry (apps/extension/scripts/
 // check-extension.mjs), and its Core imports resolve through Core's package
@@ -15,7 +16,10 @@
 //
 // Refused, not rebuilt. `pnpm check` is read-only, and the Core beside a task
 // worktree is usually the shared Core every sibling task and every running Lab
-// reads; a check that rebuilt it would delete modules under them.
+// reads; a check that rebuilt it would delete modules under them. The same
+// holds for the package builds and tests that run this gate first
+// (`tests/package-gates.test.mjs`): a downstream `pnpm build` writes this
+// repository's output, never Core's.
 
 import { CORE_PACKAGES } from "../../worktree/index.mjs";
 import { coreBuildMissing, coreBuildStaleness, scanCoreBuildEntries, scanCoreOutput, scanCoreSources } from "../../lab/core/index.mjs";
@@ -26,13 +30,14 @@ export const CORE_REBUILD_COMMAND = `pnpm ${CORE_PACKAGES.map((item) => `--filte
 /**
  * @param {string} coreRoot
  * @param {{ entries?: typeof scanCoreBuildEntries, sources?: typeof scanCoreSources, output?: typeof scanCoreOutput }} [scanners] replaced by tests
+ * @param {{ gate?: string }} [options] the command being refused, as the reader typed it (`gate-name.mjs`)
  * @returns {Promise<{ fresh: boolean, message: string | null }>}
  */
-export async function coreBuildFreshness(coreRoot, scanners = {}) {
+export async function coreBuildFreshness(coreRoot, scanners = {}, { gate = "pnpm check" } = {}) {
   const { entries = scanCoreBuildEntries, sources = scanCoreSources, output = scanCoreOutput } = scanners;
   const built = coreBuildMissing(await entries(coreRoot));
   if (!built.built) {
-    return { fresh: false, message: `pnpm check: refused before bundling the extension. ${built.message}` };
+    return { fresh: false, message: `${gate}: refused before compiling or bundling against FluxIQ Core. ${built.message}` };
   }
   const newestSource = await sources(coreRoot);
   const newestOutput = await output(coreRoot);
@@ -42,10 +47,10 @@ export async function coreBuildFreshness(coreRoot, scanners = {}) {
   return {
     fresh: false,
     message: [
-      `pnpm check: FluxIQ Core's build at ${coreRoot} is ${minutes === 0 ? "less than a minute" : `${minutes} minute(s)`} behind its source.`,
+      `${gate}: FluxIQ Core's build at ${coreRoot} is ${minutes === 0 ? "less than a minute" : `${minutes} minute(s)`} behind its source.`,
       `  Stale: ${newestSource.newestPath} is newer than anything in Core's dist (newest built file: ${newestOutput.newestPath}).`,
-      "  The extension check bundles against Core's COMPILED dist, so it would pass or fail on the old Core, not the one that will ship.",
-      `  Rebuild Core's libraries, then run pnpm check again: ${CORE_REBUILD_COMMAND} (in ${coreRoot}).`
+      "  It compiles or bundles against Core's COMPILED dist, so it would pass or fail on the old Core, not the one that will ship.",
+      `  Rebuild Core's libraries, then run ${gate} again: ${CORE_REBUILD_COMMAND} (in ${coreRoot}).`
     ].join("\n")
   };
 }

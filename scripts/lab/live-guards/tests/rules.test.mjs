@@ -3,9 +3,13 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkBalanceStop, checkBehindDev, checkPreviousDebug, checkRelaunchLoop, checkUnchangedRerun, evaluateLiveGuards, guardFiles } from "../index.mjs";
+import { checkBalanceStop, checkBehindDev, checkPeakHours, checkPreviousDebug, checkRelaunchLoop, checkUnchangedRerun, evaluateLiveGuards, guardFiles } from "../index.mjs";
 
-const NOW = new Date(2026, 8, 30, 12, 0, 0).getTime();
+// Wednesday 2026-09-30 12:00 UTC: off-peak in every time zone the tests run in,
+// so no rule but `peak` depends on when the suite runs.
+const NOW = Date.UTC(2026, 8, 30, 12, 0, 0);
+/** A UTC instant on 2026-09-30 (Wednesday) or, with `day`, another day of that week. */
+const utc = (hour, minute = 0, day = 30) => Date.UTC(2026, 8, day, hour, minute, 0);
 const at = (msAgo) => new Date(NOW - msAgo).toISOString();
 const MINUTE = 60_000;
 
@@ -37,7 +41,7 @@ test("balance: a STOP-balance file refuses every run, whatever override files ex
   assert.equal(refusal.rule, "balance");
   assert.match(refusal.why, /Insufficient Balance\.$/u);
   assert.match(refusal.remedy, /STOP-balance by hand/u);
-  assert.deepEqual(evaluateLiveGuards(stopped, new Set(["balance", "behind-dev", "loop", "debug", "unchanged"])).refusals.map((each) => each.rule), ["balance"]);
+  assert.deepEqual(evaluateLiveGuards(stopped, new Set(["balance", "peak", "behind-dev", "loop", "debug", "unchanged"])).refusals.map((each) => each.rule), ["balance"]);
 });
 
 test("unchanged: a failed task is not rerun on the same source, but is after a change, after a pass, or for another task", () => {
@@ -93,4 +97,35 @@ test("evaluation reports every refusing rule, in order, so one refusal names the
   const behind = { ...level("/web"), contains: false, lacking: 1 };
   const evaluated = evaluateLiveGuards(state({ stopBalance: "stopped", devAncestry: { repository: behind, core: level("/core") }, entries: [finish({}), start(1 * MINUTE), start(2 * MINUTE), start(3 * MINUTE)], hasDebug: () => false }), new Set());
   assert.deepEqual(evaluated.refusals.map((each) => each.rule), ["balance", "behind-dev", "loop", "debug", "unchanged"]);
+});
+
+test("peak: a weekday start inside 01:00-04:00 or 06:00-10:00 UTC is refused, naming the window, the next off-peak start and the override file", () => {
+  const early = checkPeakHours(state({ now: utc(2, 30) }));
+  assert.equal(early.rule, "peak");
+  assert.equal(early.overridable, true);
+  assert.match(early.why, /01:00-04:00 UTC/u);
+  assert.match(early.remedy, /2026-09-30T04:00:00\.000Z/u);
+  assert.ok(early.remedy.includes(guardFiles("/slots").override("peak")));
+  const morning = checkPeakHours(state({ now: utc(7, 15) }));
+  assert.match(morning.why, /06:00-10:00 UTC/u);
+  assert.match(morning.remedy, /2026-09-30T10:00:00\.000Z/u);
+});
+
+test("peak: each window's start is refused and its end admitted; the hours between and around them are off-peak", () => {
+  const refused = (now) => checkPeakHours(state({ now })) !== null;
+  assert.deepEqual([utc(1), utc(3, 59), utc(6), utc(9, 59)].map(refused), [true, true, true, true]);
+  assert.deepEqual([utc(0, 59), utc(4), utc(5, 59), utc(10), utc(23, 59)].map(refused), [false, false, false, false, false]);
+});
+
+test("peak: a Saturday or Sunday (UTC) is off-peak all day; Monday and Friday are weekdays", () => {
+  const refused = (day, hour) => checkPeakHours(state({ now: Date.UTC(2026, 9, day, hour, 0, 0) })) !== null;
+  // 2026-10-03 is a Saturday, 10-04 a Sunday, 10-05 a Monday, 10-02 a Friday.
+  assert.deepEqual([refused(3, 2), refused(3, 7), refused(4, 2), refused(4, 7)], [false, false, false, false]);
+  assert.deepEqual([refused(5, 2), refused(2, 7)], [true, true]);
+});
+
+test("peak: only the OVERRIDE-peak file lets a peak-hour run past, and the refusal is listed after balance", () => {
+  assert.deepEqual(evaluateLiveGuards(state({ now: utc(8) }), new Set(["peak"])), { refusals: [], overridden: ["peak"] });
+  const evaluated = evaluateLiveGuards(state({ now: utc(8), stopBalance: "stopped" }), new Set());
+  assert.deepEqual(evaluated.refusals.map((each) => each.rule), ["balance", "peak"]);
 });

@@ -65,15 +65,70 @@ test("a re-anchor puts the page back where the step found it with one navigation
   assert.equal(navigations[0]?.parameters.url, CHECKOUT);
 });
 
+// Run mux6n7m4 (lane A round 3, F1 fix 2): the swatch "Space Grey" was on the
+// page the step acted on, and the read before the press showed it as a
+// `clickable`, but the extension could not resolve it and answered not found.
+// That is a control the step could not find, not one the site remembered.
+const SWATCH: JsonObject = { tagName: "div", selector: "#fresh > div", accessibleName: "Space Grey", hasClickHandler: true };
+const swatchPress = (element: JsonObject): JsonObject => ({
+  replay: "step", node: CLICK, consequences: [], from: { location: CHECKOUT },
+  parameters: { selector: "#stale > div", element }
+});
+
+test("a replayed press the page still shows by name, but could not be found, fails rather than being remembered", async () => {
+  const site = stub(CHECKOUT, [SWATCH]);
+  const runtime = createWebAutomationLlmEvidenceRuntime(site.gateway);
+  const value = swatchPress({ tagName: "div", accessibleName: "Space Grey", selector: "#stale > div" });
+  const answered = await runtime.executeTool({ ...PROJECT, callId: "dryrun.1.17", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value });
+  assert.equal(answered.resultCode, "core.replay.failed");
+  assert.equal((answered.evidence as JsonObject).ok, false);
+  assert.match(String((answered.evidence as JsonObject).said ?? JSON.stringify(answered.evidence)), /Space Grey/u);
+});
+
+test("only a control named so counts: a label carrying the same words leaves the press remembered", async () => {
+  const label: JsonObject = { tagName: "span", selector: "#color", visibleText: "Space Grey" };
+  const site = stub(CHECKOUT, [label]);
+  const runtime = createWebAutomationLlmEvidenceRuntime(site.gateway);
+  const value = swatchPress({ tagName: "div", accessibleName: "Space Grey", selector: "#stale > div" });
+  const answered = await runtime.executeTool({ ...PROJECT, callId: "dryrun.1.17", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value });
+  assert.equal(answered.resultCode, "core.replay.remembered");
+});
+
+test("a press recorded in one record stays remembered when only another record shows a control of that name", async () => {
+  // Bigbox's store chooser (run-munri5gr): every card holds "Set as my store";
+  // the chosen card no longer does, and the others' buttons are not the step's.
+  const card = (store: string, index: number): JsonObject => ({
+    tagName: "button", selector: `li:nth-of-type(${index}) > button`, accessibleName: "Set as my store",
+    context: { record: { text: store } }
+  });
+  const site = stub(CHECKOUT, [card("Ashford", 1), card("Brookside", 2)]);
+  const runtime = createWebAutomationLlmEvidenceRuntime(site.gateway);
+  const value = swatchPress({ tagName: "button", accessibleName: "Set as my store", selector: "li:nth-of-type(3) > button", context: { record: { text: "Millbrook" } } });
+  const answered = await runtime.executeTool({ ...PROJECT, callId: "dryrun.1.8", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value });
+  assert.equal(answered.resultCode, "core.replay.remembered");
+  // The step's own card still holding its button is a control the step could not find.
+  const own = stub(CHECKOUT, [card("Ashford", 1), card("Millbrook", 3)]);
+  const again = await createWebAutomationLlmEvidenceRuntime(own.gateway).executeTool({ ...PROJECT, callId: "dryrun.1.8", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value });
+  assert.equal(again.resultCode, "core.replay.failed");
+});
+
+test("a press with no accessible name is unchanged: remembered on its own page though a control is shown", async () => {
+  const site = stub(CHECKOUT, [SWATCH]);
+  const runtime = createWebAutomationLlmEvidenceRuntime(site.gateway);
+  const value = swatchPress({ tagName: "div", selector: "#stale > div" });
+  const answered = await runtime.executeTool({ ...PROJECT, callId: "dryrun.1.17", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value });
+  assert.equal(answered.resultCode, "core.replay.remembered");
+});
+
 /** A page whose press target is gone, standing at `start` until a navigation moves it. */
-function stub(start: string) {
+function stub(start: string, elements?: JsonObject[]) {
   let at = start;
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
       commands.push({ actionType: command.actionType, parameters: command.parameters });
-      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page(at) } };
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page(at, elements) } };
       if (command.actionType === "web.browser.navigate") {
         at = String(command.parameters.url);
         return { status: "succeeded", payload: {} };
@@ -85,11 +140,11 @@ function stub(start: string) {
   return { gateway, commands };
 }
 
-function page(url: string): JsonObject {
+function page(url: string, elements?: JsonObject[]): JsonObject {
   return {
     url,
     title: "Fixture",
     viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
-    interactiveElements: [{ tagName: "button", selector: "#other", visibleText: "Place order" }]
+    interactiveElements: [{ tagName: "button", selector: "#other", visibleText: "Place order" }, ...(elements ?? [])]
   };
 }

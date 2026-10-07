@@ -346,8 +346,18 @@ relay:
   throws, when Core's answer does not say `response.execution.status:
   "started"` (`sendStartedWork`: Core answered in words, or the command
   finished or failed inside the answer), or when no activity followed within
-  `STARTING_HOLD_MS` (20 s). The answer is handed back to the panel unchanged.
-  The content script has no timer for it;
+  `STARTING_HOLD_MS` (20 s). A send made while the session is still
+  connecting puts the starting status up when the session becomes ready
+  (`noteSessionReady`), within `STARTING_HOLD_MS` of the send and unless Core
+  already spoke or answered without starting work: lanes A and B of round 3
+  sent before the session was live and showed "Sending your message" with no
+  overlay until Core's first activity (R2-U-5 of `run-mux6n7m4-8273e7a0` and
+  `run-mux6pndp-16feb842`; the cause is not established from their evidence).
+  A send that shows no starting status logs why in the worker's console ("FluxIQ
+  starting status not shown at send": no live session yet, or the id and phase
+  of work already running or waiting), which the Lab keeps in
+  `extension-start.local.json`. The answer is handed back to the panel
+  unchanged. The content script has no timer for it;
 - broadcasts `{ type: "fluxiq.activity.changed", state }` to the extension's
   pages when the event list, the display or the overlay preference changed;
 - sends `{ type: "fluxiq.activity.overlay", activity, display, overlay,
@@ -406,7 +416,10 @@ pacer keeps what Core says and changes how often it is said:
   the event's subject otherwise (`background/activity/ending-kind.ts`): live
   round 1's run A still ended a creation build on "Couldn't fix your Flow ·
   Build stopped: the Flow is not finished yet", and why that row read as a
-  run's is not established (t276). Core's activity does not say whether a
+  run's is not established (t276). A unit keeps the kind its settling row
+  named for every row after it in the same unit: a model's thought after a
+  build's ending took the run's headline again, "Couldn't fix your Flow ·
+  Build stopped: a budget ran out" (`run-mux74k5q-1c3c2127`). Core's activity does not say whether a
   build creates a Flow or extends one, so a creation build re-authoring its
   first Flow after its test was refuted also reads "Fixing your Flow".
   Every `repairing` event of a build is a repair. A run's is one only once Core works out a fix ("Working out what
@@ -669,7 +682,15 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     words added to the model's sentence: "Not done: <Core's reason>", or
     "Only partly done: ..." for an edit some of which landed, with a neutral
     mark, never "Didn't work", since nothing was tried and failed, and never
-    "Done" or "Working on it" whatever outcome the card carries. A card that
+    "Done" or "Working on it" whatever outcome the card carries. An edit done
+    in part says what landed first, then what did not and why: "Only partly
+    done: added "Read list"; not done: that step is already in the Flow" (the
+    refusal alone read as the work, `run-mux6naez-6c20f26e`). A step written
+    into the Flow without running it reads "Added to the Flow, not run yet",
+    never "Done" (Core's `activityActionTested`, `core.run_node.written`;
+    U-B3-1 of `run-mux6pndp-16feb842`), and a build's own list read says its
+    count, "Done: 20 rows from 1 page", from the read's own extraction count
+    when it sends no rows (F2). A card that
     did nothing -- a decision declined in whole, an action that didn't work --
     and repeats one shown since anything new happened (same unit, kind,
     target, test mark and words) is folded into that card, which says how many
@@ -680,7 +701,16 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     and B (3 times), and A B A C A reads A (2 times), B, C, A (U-8 of
     `run-muw60j7c-bb7c9a62`, three identical refusal cards in a row; R2-U-7 of
     `run-muwansvz-a2b4a987`, a refused rerun and a rerun Core did not send
-    alternating, one pair per attempt). The
+    alternating, one pair per attempt). A card that did its work folds only
+    into the card shown just before it, when that one says the same, result
+    and all, and says "Done (5 times)": five reruns of one list read stacked
+    five identical "Read list · ... / Done" cards (R3-U-5 of
+    `run-mux6naez-6c20f26e`); another row count is another result, and done,
+    failed, done stays three cards. A read card's target is Core's name for
+    its list whatever its shape, so it is never cut ("name and mutualFriends",
+    U-R3-1 of `run-mux6nxst-c9bca37c`). Core's completion check reads whether
+    a proposed Flow is finished, never a result: "Checking the Flow is
+    finished", "The Flow isn't finished yet" when it is sent back. The
     reasons are Core's (`ACTIVITY_ACTION_REFUSAL_WORDS` in `fluxiq/ui`), at
     most two, never a code (Core's
     `docs/architecture/automation-studio/client-gateway.md`, "Per-step

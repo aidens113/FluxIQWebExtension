@@ -627,3 +627,51 @@ test.describe("identity-drift near-miss: a label that contains the recorded one 
     await expect.poll(async () => (await harness.finalState()).state).toMatchObject({ saveCount: 1, discardCount: 0 });
   });
 });
+
+// Live run `run-mux6n7m4-8273e7a0` (reports/live-a-r3-f1.md): a colour swatch is
+// a role-less, text-less div named only by its `title`. Its recorded selector
+// hung off a rotating id, so it drifted by design; the fingerprint's name
+// lookup read only `aria-label`/`name`, its text fallback needs visible text,
+// and the swatch matches none of Level 2's candidate selectors. The page view
+// listed it as `clickable "Space Grey"`, and the resolver said not found. For a
+// target with no role the fingerprint now also scans for the recorded accessible
+// name, counted, so two swatches with one title are a tie rather than the first
+// in document order. A target with a role is still left to enumeration and
+// scoring (the `reworded-aria` rows above).
+test.describe("a control named only by its title resolves by that name once its selector drifts", () => {
+  async function injectSwatches(page: Page, titles: readonly string[]): Promise<void> {
+    await page.evaluate((names) => {
+      const swatches = names
+        .map((name) => `<div class="sw" title="${name}" style="width:40px;height:40px;cursor:pointer"><img alt=""></div>`)
+        .join("");
+      document.body.insertAdjacentHTML("beforeend", `<div id="g2">${swatches}</div>`);
+      document.querySelectorAll(".sw").forEach((element) => element.addEventListener("click", () => element.setAttribute("data-pressed", "yes")));
+    }, titles);
+  }
+
+  const STALE = "#g1 > div:nth-of-type(1)";
+  const swatch = { tagName: "div", accessibleName: "Space Grey", selector: STALE };
+
+  test("the stale selector misses and the title alone names the swatch, which is pressed", async ({ openHarness, page }) => {
+    const harness = await openHarness("basic-form");
+    await injectSwatches(page, ["Space Grey", "Silver"]);
+    await expect(page.locator(STALE)).toHaveCount(0);
+
+    const reply = await harness.runAction({ commandId: "title-named-swatch", actionType: "web.dom.click", selector: STALE, options: { element: swatch } });
+
+    expect(reply.status, reply.message).toBe("succeeded");
+    expect(reply.resolution).toMatchObject({ strategy: "fingerprint", candidateCount: 1 });
+    await expect(page.locator('[title="Space Grey"]')).toHaveAttribute("data-pressed", "yes");
+    await expect(page.locator('[title="Silver"]')).not.toHaveAttribute("data-pressed", "yes");
+  });
+
+  test("two swatches sharing the title are ambiguous, and neither is pressed", async ({ openHarness, page }) => {
+    const harness = await openHarness("basic-form");
+    await injectSwatches(page, ["Space Grey", "Space Grey", "Silver"]);
+
+    const reply = await harness.runAction({ commandId: "title-named-swatch-twins", actionType: "web.dom.click", selector: STALE, options: { element: swatch } });
+
+    expect(reply, reply.message).toMatchObject({ status: "failed", failure: TARGET_AMBIGUOUS, resolution: { strategy: "fingerprint", candidateCount: 2 } });
+    await expect(page.locator("[data-pressed]")).toHaveCount(0);
+  });
+});
