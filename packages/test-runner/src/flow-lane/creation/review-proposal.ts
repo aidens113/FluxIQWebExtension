@@ -1,3 +1,4 @@
+import { assertCreatedFlowVerificationReady } from "./readiness.js";
 // Approving and applying the proposal a live build left, through the same
 // `review-flow-adaptation` actions the panel's Approve and Apply buttons post.
 // Nothing reaches the Flow before this: a build only ever proposes.
@@ -22,6 +23,7 @@ export async function applyCreatedFlowProposal(
   control: CreatedFlowReviewControl,
   input: { projectId: string; flowId: string; adaptationId: string; authorizationPin: string },
 ): Promise<CreatedFlowReview> {
+  assertCreatedFlowVerificationReady();
   await control.approveFlowAdaptation(input);
   const applied = await control.applyFlowAdaptation(input);
   const appliedMutationCount = applied.appliedMutationCount ?? 0;

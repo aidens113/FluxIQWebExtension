@@ -15,7 +15,8 @@
  * - `became`: `build` when FluxIQ started a Flow build from the instruction,
  *   `no_build` when it answered without starting anything, `other_capability`
  *   when it ran something else (`otherCapability` names it).
- * - `ending`: `created` when the chat built the Flow and put the steps into it,
+ * - `ending`: `draft` when a saved candidate reference is observed; never execution proof.
+ *   `created` is retained for historical records that predate draft-only callers,
  *   `awaiting_permission` when the build finished still waiting on a question,
  *   `failed` for any other result, `no_result` when none arrived in time.
  * - `asks`: the questions the thread carried, by kind.
@@ -36,7 +37,7 @@ export type CreatedFlowChatRecord = Readonly<{
   readWithoutModel: boolean | null;
   became: "build" | "no_build" | "other_capability";
   otherCapability?: string;
-  ending: "created" | "awaiting_permission" | "failed" | "no_result";
+  ending: "draft" | "created" | "awaiting_permission" | "failed" | "no_result";
   asks: Readonly<{ permission: number; personCheck: number; other: number }>;
   secondsToEnding: number | null;
   said: string | null;
