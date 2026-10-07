@@ -27,3 +27,4 @@ export * from "./snapshot.js";
 
 export * from "./readiness.js";
 export * from "./candidate-draft.js";
+export * from "./candidate-outcome.js";

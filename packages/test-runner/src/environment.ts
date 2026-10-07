@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_CANDIDATE_START_HOOK_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV } from "fluxiq/automation-studio";
 import type { RunAllocation } from "./allocation.js";
 import { LAB_AUTHORING_MODE_ENV, LAB_COST_CEILING_ENV, LAB_COST_CEILING_SCOPE_ENV, LAB_DEFAULT_MODEL_ENV, labAuthoringModeValue, labBuildCallLimitEnvironment, labCostCeilingValue, labDefaultModelValue } from "./live-llm/index.js";
 
@@ -90,6 +90,15 @@ export function webPanelHostModulePath(repositoryRoot: string): string {
  * `FLUXIQ_AUTHORING_MODE` is always set, from the run's `--authoring-mode` or
  * Core's default `legacy` (`./live-llm/authoring-mode-env.ts`): an inherited value
  * is dropped, so the mode the run records is the mode its Core runs in.
+ *
+ * In `candidate` mode the Core also gets the candidate start hook (decision
+ * D1, t348): `FLUXIQ_CANDIDATE_START_URL` is this run's own Scenario Lab
+ * reset, `/__control/reset` on its loopback port -- the same atomic reset the
+ * lane runs before playback (t336, `flow-lane/reset-scenario-lab.ts`), not a
+ * new path -- and `FLUXIQ_CANDIDATE_START_TOKEN` the run's controller token
+ * that reset requires. Core then resets the fixture before each candidate
+ * trial. Legacy mode gets neither, and an inherited value of either is always
+ * dropped, so only a Core the Lab starts in candidate mode ever has the hook.
  */
 export function buildFluxIQEnvironment(allocation: RunAllocation, paths: TopologyPaths, base: NodeJS.ProcessEnv = process.env, args: readonly string[] = process.argv): NodeJS.ProcessEnv {
   const hostModulePath = paths.hostModulePath ?? webPanelHostModulePath(paths.repositoryRoot);
@@ -101,7 +110,7 @@ export function buildFluxIQEnvironment(allocation: RunAllocation, paths: Topolog
   // Core's authoring mode, from the run's --authoring-mode only; refused here when Core would refuse it.
   const authoringMode = labAuthoringModeValue(args);
   if (paths.modelProvidersEnabled !== undefined && typeof paths.modelProvidersEnabled !== "boolean") throw new Error("modelProvidersEnabled must be an explicit boolean");
-  const { FLUXIQ_MODEL_PROVIDERS_ENABLED: _inheritedModelAdmission, FLUXIQ_LLM_STEP_LOG_DIR: _inheritedStepLogDirectory, [LAB_DEFAULT_MODEL_ENV]: _inheritedDefaultModel, [LAB_AUTHORING_MODE_ENV]: _inheritedAuthoringMode, [AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV]: _inheritedCallLimit, [AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV]: _inheritedCallScope, ...inherited } = withoutProviderSecrets(base);
+  const { FLUXIQ_MODEL_PROVIDERS_ENABLED: _inheritedModelAdmission, FLUXIQ_LLM_STEP_LOG_DIR: _inheritedStepLogDirectory, [LAB_DEFAULT_MODEL_ENV]: _inheritedDefaultModel, [LAB_AUTHORING_MODE_ENV]: _inheritedAuthoringMode, [AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV]: _inheritedCallLimit, [AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV]: _inheritedCallScope, [AUTOMATION_STUDIO_CANDIDATE_START_HOOK_ENV.endpoint]: _inheritedStartHook, [AUTOMATION_STUDIO_CANDIDATE_START_HOOK_ENV.token]: _inheritedStartHookToken, ...inherited } = withoutProviderSecrets(base);
   return {
     FLUXIQ_BUILD_PROGRESS_TRACE: "1",
     ...inherited,
@@ -111,6 +120,7 @@ export function buildFluxIQEnvironment(allocation: RunAllocation, paths: Topolog
     ...(paths.modelProvidersEnabled === undefined ? {} : { FLUXIQ_MODEL_PROVIDERS_ENABLED: String(paths.modelProvidersEnabled) }),
     ...(defaultModel === undefined ? {} : { [LAB_DEFAULT_MODEL_ENV]: defaultModel }),
     [LAB_AUTHORING_MODE_ENV]: authoringMode,
+    ...labCandidateStartHookEnvironment(allocation, authoringMode),
     ...(paths.stepLogDirectory ? { FLUXIQ_LLM_STEP_LOG_DIR: paths.stepLogDirectory } : {}),
     PORT: String(allocation.webPort),
     FLUXIQ_ROOT: allocation.fluxiqRoot,
@@ -124,5 +134,18 @@ export function buildFluxIQEnvironment(allocation: RunAllocation, paths: Topolog
     FLUXIQ_CLIENT_GATEWAY_PORT: String(allocation.gatewayPort),
     FLUXIQ_CLIENT_GATEWAY_PATH: "/client",
     FLUXIQ_PUBLIC_CLIENT_WS_URL: `ws://127.0.0.1:${allocation.gatewayPort}/client`,
+  };
+}
+
+/**
+ * The candidate start hook (decision D1) a Lab-started Core gets in candidate
+ * mode: this run's Scenario Lab reset and the controller token it requires.
+ * Nothing in any other mode.
+ */
+export function labCandidateStartHookEnvironment(allocation: Pick<RunAllocation, "scenarioPort" | "controllerToken">, authoringMode: string): Record<string, string> {
+  if (authoringMode !== "candidate") return {};
+  return {
+    [AUTOMATION_STUDIO_CANDIDATE_START_HOOK_ENV.endpoint]: `http://127.0.0.1:${allocation.scenarioPort}/__control/reset`,
+    [AUTOMATION_STUDIO_CANDIDATE_START_HOOK_ENV.token]: allocation.controllerToken,
   };
 }

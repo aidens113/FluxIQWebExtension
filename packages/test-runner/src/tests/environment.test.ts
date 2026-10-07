@@ -144,3 +144,18 @@ test("a new-flow chat's resolved authorization reaches Core before there is a Fl
   }, { projectId: "test-project", authorizationPassword: "synthetic-password" })();
   assert.deepEqual(keyCalls, ["snapshot", "create-key"]);
 });
+
+test("a candidate-mode Core gets the start hook on this run's own Scenario Lab reset; a legacy one never does, and none is inherited (t348)", () => {
+  const paths = { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core" };
+  const inherited = { FLUXIQ_CANDIDATE_START_URL: "http://127.0.0.1:1/elsewhere", FLUXIQ_CANDIDATE_START_TOKEN: "someone-elses-token" };
+  const candidate = buildFluxIQEnvironment(allocation, paths, inherited, ["--authoring-mode", "candidate"]);
+  assert.equal(candidate.FLUXIQ_AUTHORING_MODE, "candidate");
+  assert.equal(candidate.FLUXIQ_CANDIDATE_START_URL, `http://127.0.0.1:${allocation.scenarioPort}/__control/reset`, "the same reset the lane runs before playback");
+  assert.equal(candidate.FLUXIQ_CANDIDATE_START_TOKEN, allocation.controllerToken);
+  for (const args of [[], ["--authoring-mode", "legacy"]]) {
+    const legacy = buildFluxIQEnvironment(allocation, paths, inherited, args);
+    assert.equal(legacy.FLUXIQ_AUTHORING_MODE, "legacy");
+    assert.equal("FLUXIQ_CANDIDATE_START_URL" in legacy, false, "a legacy Core has no start hook, inherited or not");
+    assert.equal("FLUXIQ_CANDIDATE_START_TOKEN" in legacy, false);
+  }
+});
