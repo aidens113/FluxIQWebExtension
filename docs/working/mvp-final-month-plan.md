@@ -171,6 +171,8 @@ Active file-owned tasks only. Prior briefs and exact receipts are preserved in t
 - Exact released worker owners: candidate/{contracts,submission,index,digest} and own tests; candidate-drafts/{record,store,index,source} and own tests; flow-bootstrap-commands/{generation-context,candidate-generation} and own tests. Schema1 remains historical readable/unverified, never bound by adding fields. Disk-only getVerificationSource exact reference/current source bytes fully recomputes source/plan/ref/base/settings, rejects v1/memory/tamper/stale; bound means byte consistency only, not pinned original authority/requirement completeness/start/acceptance. Root service owner enumeration/generator bridge is SERIAL after t331 and separately documented; no worker service edit. Actual generator/disk fail-first/restart/type tests before freeze, no model/provider/panel/qualification.
 
 
+- Root-only t333 additional owner: flow-bootstrap-commands/instruction-inventory.ts and owning test. Strict complete original-ID enumeration precedes any dedup/filter; actual service bridge stays serial after t331. Isolated helper4/4 pass is not actual caller/pinned-read proof. t331 public export review approves validating-only RequiredCommandContext.assertRequired/stop; private registration/issuance is never exported. Actual domain positives must obtain service-issued contexts.
+
 ## Work Ledger
 
 Earlier verified units, decisions and ledger detail moved intact to the [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
@@ -236,6 +238,11 @@ Earlier verified units, decisions and ledger detail moved intact to the [executi
 - Changed: reviewed website/chat draft-only callers, pure browser parser export and owning generated-output cleanup; qualification helpers refuse before this entry dispatches until actual acceptance joins exist. Core330b5338/down020bb826 source committed, merged current Core1b0e5278/down71384038 on task. Authored Core bootstrap contract updated.
 - Validation: root cleanup/registry14/14; current Core command/parser/browser67/67 zero skips27.19s, React50/50 zero skips13.02s; nonincremental Core/web/runner types0; owning fresh Core build0 (39.974s6142files), actual optimized Next build0 (135.110s2383files); emitted runner92/92 zero skips11.756s. Final structure audits0 (Core280/349, downstream174/117) and paired integration4db30a78/66a310cc completed.
 - Limits: build only/no panel; no browser/provider/semantic acceptance, all-writer/adoption/initialization, production Next process or qualification. Static readiness hold is interim and must be replaced by verified real joins. t331/t332/t333 remain active.
+
+### 2026-10-07 - executor, writer and original-source integration review
+- Changed: t331 legacy undefined-context compatibility corrected; approved validating-only public context boundary and authentic service-issued downstream test harness. t332 full Guard history validation now precedes actual SQL metadata/feed effects inside their transaction; bounded SQLite preflight precedes raw history allocation. Root reviewed source, committed Core540e32d7 and merged current dev66a310cc; combined independent gates running. t333 complete original inventory helper authored/root4/4, service bridge pending; full v2 accounting projection validation requested.
+- Validation: t332 worker final101/101 including16 built race/kill probes, build/types/audit0 are worker claims pending root combined validation. Root combined t332 audit0 (282warnings/349baseline); build/types and owning execution pending. t331 actual public service/controller16/16 worker observations precede public boundary correction; t333 actual v2 pipeline still failing, no success inferred from v1 compatibility.
+- Limits: none of these units activates whole-writer service/host selection, initialization/adoption/pinned reads, candidate semantic verification/promotion, actual native-web required execution or paid qualification. Next process authorization remains unanswered; no panel/provider/full sweep. Exact repros and remaining owners in individual reports.
 
 ## Open Questions
 
