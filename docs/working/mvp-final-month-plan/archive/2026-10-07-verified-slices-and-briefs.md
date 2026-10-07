@@ -1,7 +1,7 @@
 # Archived execution ledger and briefs through t308
 
 Status: Archived
-Scope: Exact pre-compaction plan text; current truth remains in ../mvp-final-month-plan.md.
+Scope: Exact pre-compaction plan text; relative links rebased for the archive; current truth remains in [the plan](../../mvp-final-month-plan.md).
 
 # MVP Final Month Plan
 
@@ -12,7 +12,7 @@ Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: The ordered plan from 2026-10-05 to the polished-MVP deadline of 2026-11-10: what is done, what is held on unmerged branches or dirty trees, what must be integrated and pushed, and the week-by-week work to pass the 30-day plan's Final MVP Acceptance Test. It does not redo intake already recorded in the 2026-10-03 handoff, and it does not itself run live provider calls.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/mvp-final-month-plan.md
-Related: [30-day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%20MVP%20Implementation%20Plan.md), [Claude handoff 2026-10-03](./claude-work-handoff-2026-10-03.md), [live loop](./language-driven-flow-loop-plan.md), [working index](./README.md)
+Related: [30-day MVP plan](../../../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%20MVP%20Implementation%20Plan.md), [Claude handoff 2026-10-03](../../claude-work-handoff-2026-10-03.md), [live loop](../../language-driven-flow-loop-plan.md), [working index](../../README.md)
 
 ---
 
@@ -46,7 +46,7 @@ server-adapter identity are isolated active tasks. No P0 completion or fresh A-D
 qualification is claimed.
 
 **Planning review completed locally 2026-10-06.**
-The [consultant review and revised execution detail](./mvp-final-month-plan/consultant-revision.md)
+The [consultant review and revised execution detail](../../mvp-final-month-plan/consultant-revision.md)
 is the current order of work. It supersedes the old schedule and structural
 stage ordering, preserves the November 10 deadline and October 29 freeze, and
 keeps the existing runtime rather than introducing a new Flow language.
@@ -55,8 +55,8 @@ keeps the existing runtime rather than introducing a new Flow language.
 at intake and pushed by Claude. Handoff 2026-10-07 05:10 UTC is October 6 locally.
 Read-list S1-S6 and fix-everything workstreams landed; round 4 failed A-D; round 5
 was cancelled. No lane has passed twice consecutively. The complete prior
-[Current State](./mvp-final-month-plan/archive/2026-10-06-claude-stopping-point.md)
-and [implementation ledger](./mvp-final-month-plan/archive/2026-10-06-pre-consultant-ledger.md)
+[Current State](../../mvp-final-month-plan/archive/2026-10-06-claude-stopping-point.md)
+and [implementation ledger](../../mvp-final-month-plan/archive/2026-10-06-pre-consultant-ledger.md)
 remain available; historical briefs are not active dispatch instructions.
 
 **Verified by source/history inspection.** Discovery and authoring still share
@@ -103,9 +103,9 @@ success used JS. No debugger for JS; network capture debugger only if absolutely
 needed with requests enabled. Full suites at most twice daily; narrow gates per
 change; no user-panel management unless explicitly authorized.
 
-**Audit reports.** [Working docs](./mvp-final-month-plan/reports/consultant-doc-context.md),
-[Core source](./mvp-final-month-plan/reports/consultant-core-audit.md),
-[browser/Lab source](./mvp-final-month-plan/reports/consultant-browser-lab-audit.md).
+**Audit reports.** [Working docs](../../mvp-final-month-plan/reports/consultant-doc-context.md),
+[Core source](../../mvp-final-month-plan/reports/consultant-core-audit.md),
+[browser/Lab source](../../mvp-final-month-plan/reports/consultant-browser-lab-audit.md).
 These record planning coverage and unverified hypotheses. Implementation checks
 and source changes are recorded separately below; no paid run has started. Identity
 and cancellation browser evidence must be independently reviewed before P0 closes.
@@ -114,7 +114,7 @@ and cancellation browser evidence must be independently reviewed before P0 close
 
 Implementation instructions, file seams, requirements/evidence contracts, negative
 cases and live command templates are in the
-[revised execution plan](./mvp-final-month-plan/consultant-revision.md).
+[revised execution plan](../../mvp-final-month-plan/consultant-revision.md).
 The following are targets subject to gates, not claimed completion dates.
 
 | Order | Work | Gate |
@@ -131,7 +131,7 @@ The following are targets subject to gates, not claimed completion dates.
 
 If adaptation is not green by October 23, bring an explicit qualification-scope
 proposal rather than silently relaxing success. Preserve the prior schedule as
-[historical reference](./mvp-final-month-plan/archive/2026-10-06-pre-consultant-schedule-and-briefs.md).
+[historical reference](../../mvp-final-month-plan/archive/2026-10-06-pre-consultant-schedule-and-briefs.md).
 
 ## Worker Briefs
 
@@ -231,7 +231,7 @@ not pending implementation assignments; the next brief is P0 in the revision.
 - Report to: docs/working/mvp-final-month-plan/reports/consultant-browser-lab-audit.md.
 
 
-Historical briefs: [Claude schedule and task briefs](./mvp-final-month-plan/archive/2026-10-06-pre-consultant-schedule-and-briefs.md).
+Historical briefs: [Claude schedule and task briefs](../../mvp-final-month-plan/archive/2026-10-06-pre-consultant-schedule-and-briefs.md).
 
 ## Work Ledger
 
@@ -302,7 +302,7 @@ Historical briefs: [Claude schedule and task briefs](./mvp-final-month-plan/arch
 - Outcome: Partial
 - Follow-up: supervisor verifies t296 and documents architecture; integrate downstream then Core; P1 implementation; identity/cancellation and remaining P0 receipt cases still open.
 
-Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-plan/archive/2026-10-06-pre-consultant-ledger.md).
+Earlier entries: [Claude implementation and handoff ledger](../../mvp-final-month-plan/archive/2026-10-06-pre-consultant-ledger.md).
 
 ### 2026-10-06 - Consultant audit started; historical ledger compacted
 - Agent: Codex supervisor, task t295.
@@ -393,7 +393,7 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 
 ### 2026-10-06 - Candidate infrastructure and typed blockers integrated
 - Agent: Codex supervisor.
-- Changed: t300 Core386b4c15 and paired downstream0befce51; t301 downstreamb2ad00de. P4 [feasibility record](./mvp-final-month-plan/reports/p4-script-request-feasibility.md) adds supported API/permission/timeout and requests-OFF requirements without enabling arbitrary execution.
+- Changed: t300 Core386b4c15 and paired downstream0befce51; t301 downstreamb2ad00de. P4 [feasibility record](../../mvp-final-month-plan/reports/p4-script-request-feasibility.md) adds supported API/permission/timeout and requests-OFF requirements without enabling arbitrary execution.
 - Validation: t300 post-dev-merge58/58 and packagecheck0; final export check0/audit0, both task audits0. t301 independent browser2/2, extension19/19, real Core permission12/12, domain/extension source+test checks0 after shared dependency refresh; taskaudit0. No paid call.
 - Outcome: Accepted bounded infrastructure and typed fixes, not full P0/P2/P3.
 - Follow-up: t299 facade, t302 server identity, t303 navigation; durable receipt/promotion/semantic/browser proof joins and breadth still pending. Paired push next; no main/release changes.
