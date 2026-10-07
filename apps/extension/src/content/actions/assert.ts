@@ -135,6 +135,9 @@ type ResolvedAssertionTarget = {
  * than falling back to the selector that names another row.
  */
 function assertionTarget(action: BrowserActionCommand, deps: ContentActionDependencies): ResolvedAssertionTarget {
+  // An absent claim must name its subject; an unscoped text claim reads the page.
+  // Generic action resolution can infer the focused field, which authors neither.
+  if ((action.assert?.kind === "absent" || action.assert?.kind === "text") && !hasAuthoredAssertionTarget(action)) return { target: {} };
   if (action.selector && !scopedToRow(action)) return { target: { selector: action.selector, shadowHosts: recordedShadowHosts(action) } };
   try {
     const resolved = deps.resolveTarget(action);
@@ -142,6 +145,12 @@ function assertionTarget(action: BrowserActionCommand, deps: ContentActionDepend
   } catch {
     return { target: {} };
   }
+}
+
+/** Target fields accepted by ordinary resolution, excluding its implicit focus fallback. */
+function hasAuthoredAssertionTarget(action: BrowserActionCommand): boolean {
+  if (action.selector?.trim() || action.coordinates || action.visualTarget?.documentBounds || action.visualTarget?.bounds || action.visualTarget?.anchor?.bounds) return true;
+  return [action.element, action.options?.element].some((value) => value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0);
 }
 
 /**

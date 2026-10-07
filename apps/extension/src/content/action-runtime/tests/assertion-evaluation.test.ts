@@ -93,3 +93,26 @@ test("a claim nothing could satisfy stops at once instead of burning the whole w
   assert.equal(outcome.waitExpired, false);
   assert.ok(Date.now() - started < 1_000, "a malformed claim must not wait");
 });
+
+test("absent without an authored target is malformed and does not poll", async () => {
+  const result = await evaluateAssertion({ kind: "absent", timeoutMs: 5_000 }, {});
+  assert.equal(result.held, false);
+  assert.equal(result.judged, false);
+  assert.equal(result.waitExpired, false);
+  assert.equal(result.attempts, 1);
+});
+
+test("text contains requires a nonblank expectation while literal null remains text", async () => {
+  Object.defineProperty(globalThis, "document", { configurable: true, value: { body: { tagName: "BODY", innerText: "literal null is present" } } });
+  try {
+    for (const expected of [undefined, "", " \t "]) {
+      const request = expected === undefined ? { kind: "text" as const, timeoutMs: 5_000 } : { kind: "text" as const, expected, timeoutMs: 5_000 };
+      const result = await evaluateAssertion(request, {});
+      assert.equal(result.held, false, JSON.stringify(expected));
+      assert.equal(result.judged, false);
+      assert.equal(result.waitExpired, false);
+      assert.equal(result.attempts, 1);
+    }
+    assert.equal((await evaluateAssertion({ kind: "text", expected: "null", timeoutMs: 0 }, {})).held, true);
+  } finally { delete (globalThis as { document?: unknown }).document; }
+});
