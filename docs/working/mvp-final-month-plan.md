@@ -56,7 +56,7 @@ hardening. In-flight t334 (click executor), t335 (installer, never compiled) and
 t337 (grammar for one sentence family) are WIP commits on their own branches, not
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
-**In flight.** t349 the saved instruction is the person's own words; sweep-1007 first full sweep (read-only); t348 U4 Lab candidate lane and start hook (worker). Next: a lane A candidate-versus-legacy probe.
+**In flight.** t349 the saved instruction is the person's own words; sweep-1007 first full sweep (read-only); t350 chat and overlay defects that persist in both modes; t348 U4 Lab candidate lane and start hook (worker). Next: a lane A candidate-versus-legacy probe.
 
 **Next order.**
 
@@ -135,6 +135,14 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
+
+### Brief: t350 chat and overlay defects that persist in both authoring modes
+- Worker: t350-chat-ui (worker). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t350\` (Core-paired, branch `task/t350-chat-ui-mode-independent`). Report: `docs/working/mvp-final-month-plan/reports/t350-chat-ui-mode-independent.md` in the t350 downstream tree.
+- Source: [round 2 UI review](./mvp-final-month-plan/reports/t342-r2-ui-review.md) of `run-muylu4pp-f9cb2121`; screenshots are in the t342 tree's run evidence. Fix only these, which survive the move to candidate mode: D4 click cards with no target name (the same step is named "Quantity" at the ending, so the name exists); D6 the overlay truncates a short control label ("Get coupons" to "Get…"); D7 each replay before a retry prints 4-6 full success cards again: fold repeated replays into one line that can expand; D9 no Stop control during "Starting…", and "Stop build" reads as plain text, not a button; D11 the overlay changes height and position between samples and covered the cookie-banner text; D12 the panel says "Changing the Flow" where the overlay says "Updating the Flow": one word per act. Leave D1, D2, D3, D5, D8 and D10 (legacy edit-language and ending wording) alone; they are revisited after the candidate probe.
+- User direction: the extension UI is chat-first, every step shows with its reason, plain words for a person (no step numbers, node names or internal phrases).
+- Owns: the extension panel chat and content overlay files the fixes need, and Core's activity wording module if a target name or verb is produced there (list the exact files in the report before editing), with tests.
+- Must not touch: `runtime/conversations/**` (t349), Core runtime host configuration and the downstream Lab (t348), candidate trial or authoring code, `docs/working/*.md`. No commits, provider calls or paid runs. Browser checks only on the ten realistic scenarios.
+- Definition of done: tests for each fix (fail-first where a unit can show it); extension build for all targets; affected typechecks; both structure audits. If a provider-free Lab run on a realistic scenario shows the panel or overlay, attach before and after screenshots; otherwise say what was not seen in a browser.
 
 ### Brief: t349 a build's instruction is the person's own words
 - Worker: t349-verbatim (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t349\` (Core-paired, branch `task/t349-instruction-verbatim`); edits in its `!FluxIQ` tree. Report: `docs/working/mvp-final-month-plan/reports/t349-instruction-verbatim.md` in the t349 downstream tree.
