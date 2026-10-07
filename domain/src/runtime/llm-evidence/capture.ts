@@ -255,6 +255,24 @@ export type WebLlmEvidenceToolExecution = {
      * Absent on every other node.
      */
     reads?: string;
+    /**
+     * What the call changed on the page it stayed on
+     * (`./node-run/press-effect/change/statement.ts`), read from the same walk as
+     * the outcome's own `changed` list, so the two never disagree: a text line
+     * that `appeared` or `went`, in the cut words the outcome's entry quotes,
+     * and a line of any kind with words on both sides whose words changed,
+     * with its words now -- `rose` when they differ only in one number that went
+     * up ("Cart (2)" to "Cart (3)", "1 item" to "2 items"), `reads` otherwise.
+     * Never a state-token change, never a line without words; at most sixteen
+     * lines, in page order. Said only where the outcome's list is: a node that
+     * changes the page in place, both pages read, on one location. Core reads
+     * which step did an act from what it changed, not from the model's label
+     * (`AS/runtime/flow-draft/step.ts`, `changed`; week report W1, run
+     * `run-muqiho5c-e830ce01`), and withholds a line whose words the call's
+     * evidence never showed. Core's key list for a statement is exact, so Core
+     * must learn `changed` before this side sends it.
+     */
+    changed?: Array<{ words: string; how: "appeared" | "went" | "reads" | "rose" }>;
   };
 };
 
