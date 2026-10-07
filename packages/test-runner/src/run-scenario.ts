@@ -28,6 +28,7 @@
 // share, because a lane assigns to six of them partway through and a module
 // returning its results instead would change what a mid-lane failure leaves in
 // the bundle.
+import { verifyRunningCoreIdentity, requiresCoreRuntimeIdentity } from "./run-scenario/browser-session/index.js";
 import { randomBytes } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
@@ -247,6 +248,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       topology = { ...topology, gatewayUrl: existingPreflight.gatewayUrl, control: existingControl };
     }
     topology.control?.recordProviderFailuresTo(providerFailures);
+    if (requiresCoreRuntimeIdentity(Boolean(live), flowLane, topology.control)) await verifyRunningCoreIdentity(topology.control, options.fluxiqRepositoryRoot, extensionPath, identity => bundle.writeStructured("snapshots/running-core-identity.json", identity));
     if (target.mode === "clone") {
       if (!topology.control || !topology.authorizationPin || !cloneState.clonePackage) throw new RunnerFailure("environment.missing", "Isolated clone destination did not provide authenticated Core control");
       const destinationControl = topology.control;

@@ -159,6 +159,10 @@ export class FluxIQControlClient {
     return this.request("/api/programs/automation-studio/execute-client-action", { sessionId, command, authorizationPin }, "action.dispatch");
   }
 
+  readRuntimeBuildIdentity(reachedInputs: string[]): Promise<unknown> {
+    return this.request("/api/programs/automation-studio/get-runtime-build-identity", { reachedInputs });
+  }
+
   protected async request(path: string, body?: unknown, category: RunnerFailureCategory = "process.startup", method = "POST", bounds: FluxIQHttpOptions = {}, operationStage: FluxIQHttpOperationStage = "control.request"): Promise<unknown> {
     const response = await this.authenticatedResponse(path, body, method, bounds, category, true, operationStage);
     const payload = await response.json().catch(() => undefined);
