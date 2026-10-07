@@ -1,3 +1,4 @@
+import { companyReviewAccountFacts } from "../qualification/index.js";
 import { buildClassNames } from "../../../build-classes.js";
 import type { RenderContext, ScenarioRouteResponse } from "../../../types.js";
 import { widgetScript, type WidgetData } from "../client/index.js";
@@ -59,7 +60,44 @@ body{margin:0;font:15px/1.45 system-ui,sans-serif;color:#1a1f36;background:#fff}
 .${w.error}{color:#b42318;min-height:1.2em}
 .${w.done}{text-align:center;padding:40px 0}
 </style></head>
-<body><div class="${w.shell}" id="slotwise-root"></div>
-<script type="module">${widgetScript(context.runToken, w, data)}</script></body></html>`;
+<body><script type="application/json" data-testid="company-review-account">${companyReviewAccountFacts(state).replaceAll("<", "\\u003c")}</script><div class="${w.shell}" id="slotwise-root"></div>
+<script type="module">
+const qualificationAccountFacts = ${companyReviewAccountFacts.toString()};
+const qualificationMutate = mutate;
+mutate = async (operation, payload = {}) => {
+  const result = await qualificationMutate(operation, payload);
+  const account = qualificationAccountFacts(result.state);
+  document.querySelector('[data-testid="company-review-account"]').textContent = account;
+  if (window.parent !== window) {
+    const nonce = crypto.randomUUID();
+    // Fixture documents suppress referrers. Authenticate the actual parent WindowProxy,
+    // bind its reported message origin, then use exact origins for every account byte.
+    const parentOrigin = await new Promise((resolve, reject) => {
+      const bind = (event) => {
+        if (event.source !== window.parent || !event.data || event.data.type !== 'qualification:company-parent-origin' || event.data.nonce !== nonce || typeof event.data.parentOrigin !== 'string' || event.origin !== event.data.parentOrigin) return;
+        try { if (new URL(event.data.parentOrigin).origin !== event.origin) return; } catch { return; }
+        clearTimeout(timer);
+        window.removeEventListener('message', bind);
+        resolve(event.origin);
+      };
+      const timer = setTimeout(() => { window.removeEventListener('message', bind); reject(new Error('Company account oracle parent-origin negotiation timed out')); }, 2000);
+      window.addEventListener('message', bind);
+      window.parent.postMessage({ type: 'qualification:company-hello', nonce }, '*');
+    });
+    await new Promise((resolve, reject) => {
+      const ack = (event) => {
+        if (event.source !== window.parent || event.origin !== parentOrigin || !event.data || event.data.type !== 'qualification:company-account-ack' || event.data.nonce !== nonce) return;
+        clearTimeout(timer);
+        window.removeEventListener('message', ack);
+        resolve();
+      };
+      const timer = setTimeout(() => { window.removeEventListener('message', ack); reject(new Error('Company account oracle acknowledgement timed out')); }, 2000);
+      window.addEventListener('message', ack);
+      window.parent.postMessage({ type: 'qualification:company-account', nonce, account }, parentOrigin);
+    });
+  }
+  return result;
+};
+${widgetScript(context.runToken, w, data)}</script></body></html>`;
   return { status: 200, headers: { "content-security-policy": WIDGET_CSP }, body };
 }

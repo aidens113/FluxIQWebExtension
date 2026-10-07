@@ -659,3 +659,80 @@ Earlier entries: [Claude implementation and handoff ledger](../../mvp-final-mont
 - Contract: exact literal independent row identities/order/quantities/full account state. Bigbox ensure total3 twice produces no added line/store change; everything transfers existing saved S1 without duplicate/newline and keeps S2; local removes Sold save without hidden/messages/offers. Actual current account facts, not stale readouts or just count/confirmation; explicit permission labels. Refresh only private instrumentation from actual mutation response if necessary, preserve visible fixture quirks. Wrongoutcomes fail before manual reload; also verify durable reload.
 - Validation: owning old+new unit/oracle tests, real isolated Chromium honest and deliberatewrongoutcome probes, source/e2etypes/owningbuild/audit. Literal authored records independent from renderer/filter code; record lifecycle/staticcodepin exactly. No provider/fullsuite/panel/git/shared docs. Freeze reports and source for independent root checks; no model/extension qualification claim.
 
+
+### Brief: original-project-authority-cutover-review (report only)
+- Worker: p0_cancel_control; main Core/downstream source inspection, own downstream reports/p2-original-project-authority-review.md only. No source/build/browser/provider/panel/git/shared docs.
+- Read Current State, consultant-revision P2 authority requirements, verified staged foundation report and prior p2-authority-cutover-brief.md. Prior asql reserved-namespace/new-project-only proposal remains UNAPPROVED and does not satisfy original-project candidate acceptance. Preserve existing IDs and user data.
+- Find a coherent explicit adoption/capture/read/all-writer cutover using actual project SQL snapshot owner and original IDs. Reuse schema, normal compiler/permissions, source/settings/membership and all actual production readers/writers; no second graph schema or shadow-only feature claim.
+- Inspect exact prior writer table owners and actual project pool/UoW/outbox/coordinator boundaries; identify minimum first implementable partition and full later activation gate. Specify race handling when legacy writer begins before adoption and completes after capture, cross-process writers, missing graph/global canonical writes, file/instruction/index revisions. A lookup-only marker or callback preflight is not atomic fencing.
+- Consider a project-SQL claim/guard that all legacy official writers acquire before effects and release only after full operation, with adoption refusing pending/unknown claims; if viable explain migration/admission/restart/compatibility and enumerate exact ingress/read joins. Unknown interrupted file/global write cannot silently activate from mixed capture. Refuse unsupported dependencies without silently creating a new project.
+- Return concrete owner/contract proposal plus unsupported assumptions. No namespace/source implementation authorized. Root owns acceptance of architecture and integration; report is not proof or activation.
+
+
+### Brief: typing-target-liveness (t319, supervisor)
+- Task branch in main checkout; owned private HTTP/production extension proof. Core source unchanged, current owning dependency build needed before unpacked extension build.
+- Own existing content/actions/type.ts, owning actions/tests/type-unsent-form.test.ts fake connected field property, existing e2e/runtime/tests/sanitized-field-typing.spec.ts actual removed/replaced-field negative, scoped architecture extension-client typing paragraph and reports/p3-typing-target-liveness.md.
+- Reproduce actual false success when input handler removes/replaces target but detached object retains requested value. Original resolved control must still be connected at immediate readback; refuse passed result and any submit Enter after detachment, even if old value matches. Do not silently resolve a replacement target or claim async application acceptance.
+- Preserve actual native whole-value/per-character semantics, redaction, form/permission behavior; no source change in keyboard/other nodes unless reproduction requires revised brief. Real content+background identities, wrong visible replacement value and zero submit/Enter evidence.
+- Fail-first browser proof before implementation, then source/e2e types, narrow owning content tests, owning all-target extension build, real unpacked Chromium proof and audit. No fullsuite/provider/panel/user-state/gitforce. Document exact results/limits before integration/push.
+
+
+## Retired verified t321 brief
+
+### Brief: typing-observation-window (t321, supervisor)
+- Root task branch in main checkout; owned extension fixture only. Own content/actions/type.ts, existing actions/tests/type-unsent-form.test.ts async test contract, existing e2e/runtime/tests/sanitized-field-typing.spec.ts delayed/microtask revert negatives, extension-client scoped paragraph and reports/p3-typing-observation-window.md.
+- Reproduce truthful readback gap after deferred application handlers. Execute already awaits typeAction, so use bounded50ms timer observation after typing as existing checkable-state does, then original connected-control value comparison. Recheck existing actionability before requested Enter after the await; no pre-dispatch refusal flag after text already typed. No silent replacement or retry.
+- Preserve per-character/native format/redaction, initial permission/actionability and form messages. Real-browser fail-first before fix, then named units/types/build/current identity/browser/audit. This finite window is not general asynchronous/server acceptance or React qualification. No Core/domain/schema changes/fullsuite/provider/panel/user-state reset.
+
+
+## Retired independently verified t318 brief
+
+### Brief: qualification-final-four (t318)
+- Worker: p0_build_identity; supervisor provisions separate downstream task/private read-only Core. No source until READY/exact owners approved. Preserve all original57 and prior six new tasks; final denominator67, no historical recovered IDs/pass claim.
+- Implement proposal sections3/6/8/10: company review without booking, job closed saved cleanup, photo existing collection union, social pending request audit. Read only Current State, these proposal sections and owning scenario conventions.
+- Name exact per-site manifest/live-tasks/qualification module+tests/browser owners and state-backed readout/bootstrap hook BEFORE editing. Company cross-frame review must provide positive exact review plus independently observed no bookings/deposits/quotes/newsletter on current page after wrong pay+leave; job exposes existing filled-heart accessible Unsave job label, delete point; photo literal full saved/collection/follow/liked/outbox state; social complete8 ordered literal requests no confirmation/delete/message.
+- Pure private fact formatter must read actual response.state and update current DOM before returning result, no stale badge/no secret body. Preserve existing controls/mutation/UI quirks; no generic fixture helper/state operation changes. Full membership/IDs; counts only complete baseline-zero forbidden collections. Actual cross-origin frame proof, no JS/network mutation bypass.
+- Exact datasets hand authored from proposal, unique workflows/columns, explicit start facts. Negative paths must preserve correct-looking requested table while forbidden side effects/full membership fail. Photo repeated union desired-state idempotence; social full8 vs home4 negative.
+- Own reports/qualification-final-four.md only plus approved per-site source; no shared inventory/docs/Core/domain/node changes. Supervisor owns original baseline and67 aggregate tests/classifications.
+- Narrow scenario source/e2e types/owning fixture build/owning tests/real isolated Chromium/audit, no fullsuite/provider/panel/git/real profile. Freeze with commands/source digest/actual measured failures/results/limits. Root independently verifies/integrates; fixture readiness is not model qualification.
+
+
+
+
+## Retired independently verified t317/t320 briefs
+
+### Brief: durable-gateway-production-seam (t317)
+- Worker: p0_acceptance; isolated paired fxwork/t317 trees, provision after verified t313 integration. No source edits until READY; identify exact added filenames before edits.
+- Read Current State and reports/p2-command-production-context-review.md Gateway-only first production partition; Core instructions. Foundation is receipt-only; no raw action/results/page secrets persisted.
+- Own Core generic: client-gateway/service/command-ledger/{contracts,controller,index}.ts, new {context,dispatch}.ts and owning tests; existing service/{commands,inbound,transport,types,index}.ts and client-gateway/service.ts narrow delegates; client-gateway/index.ts necessary exports. No client wire changes.
+- Own Core program: new automation-studio/runtime/service/command-context/{contracts,controller,index}.ts + tests; runtime/service.ts narrow readonly collaborator/constructor; programs/_shared/runtime.ts generic resolver injection using existing actual private pool and validated actual stored session. Own scoped architecture/automation-studio/client-gateway.md paragraph and downstream reports/p2-durable-gateway-production-seam.md only.
+- Implement opaque server-issued context, impossible to forge via JSON/model metadata; exact actual project/run/graph/invocation/attempt/effect ownership. Generic resolveCommandLedger(context) returns domain-neutral leased port+close; no generic program-storage import/exposed pool. Freeze actual request before await and compute bounded original digest.
+- Real ready selected client/session immutable claim before queue/send; revalidate readiness/signal after await. Receipt-only replay committed=>result_unavailable, pending/unknown=>outcome_unknown and no resend. Legacy context-free path retains behavior; malformed supplied context NEVER downgrades to legacy. SQL missing refuses before send.
+- Parse closed bounded actual sender result; status unknown/no acknowledgement/timeout/disconnect/cancel/send-after-effect throw stay uncertain. Compute original bounded resultDigest/server receive time; no client provenance authority. Serialize result/timeout/abort/disconnect races, commit/read exact receipt BEFORE public resolve or authoritative event; preserve right-session/duplicate protections and normal permissions.
+- Cover every ledger lease close/error path and gateway disposal. No automatic continuation/new command key for unknown. Program factory validates existing session/project; no LLM API/endpoint grants context issuance. Actual node/run-scope allocation, complete run scans/atomic same-run admission and executor/domain propagation remain next serial partition, not claimed here.
+- Validate provider-free real program pool+stored session+actual gateway/socket; delayed/failing claim zero sends, commit delayed before public resolve, wrong sender/forgery/malformed/oversize/duplicates, uncertain send, timeout/abort/disconnect/commit-loss races, legacy compatibility/permission denial/lease cleanup. Narrow types/build/owner tests/audits; no fullsuite/panel/provider/git/shared docs. Freeze before root independent proof.
+
+
+
+
+### Brief: original-project-authority-guard (t320, bounded contracts first)
+- Worker: p0_cancel_control; paired isolated fxwork/t320 trees provisioned by root. Read Current State and own p2-original-project-authority-review.md first foundation partition. Source HOLD until provision READY and exact contracts approved; original IDs, no reserved namespace/new project substitute.
+- Own new Core storage/project/authority-guard/{contracts,migration,validation,store,index}.ts + owning tests/process probe, additive project/index.ts only. Scoped architecture persistence paragraph: name exact existing doc before editing. Own downstream reports/p2-original-project-authority-guard.md only; no shared docs/git.
+- Propose closed bounded original-project/operation key/request/owner/revision/capture contracts first. Next local migration0028 after0027; no old checksum edits. Durable pre-effect claim COMMIT separate from external-operation callback. Serialize per-project topology claims and block capturing mode; pending/unknown persists across error/process death and never expires. Same key original request joins, conflicts/foreign borrowed records refuse.
+- Successful whole-operation completion increments legacy revision once with immutable receipt, never a nested helper's first SQL write. Same owner/key replay cannot repeat external sentinel; completion lost COMMIT ack reconciles original record. Atomic beginCapture compares completed revision and no pending/unknown inside same actual transaction; later legacy claim refuses; recorded capture key/revision/protocol/owner remain immutable across restart.
+- No active/tombstone/adoption endpoint or snapshot activation method. Capture release/reconcile requires exact recorded read-only capture owner; do not accept arbitrary caller success/no-effects fields as independent proof. Store is infrastructure/trusted owner port only; actual all-writer wiring/global ownership/capture/compiler/pinned readers/promotion stay unavailable.
+- Use existing project pool/UoW direct context.sql, no nested queued transaction or uncommitted started row pretending pre-effect durability. Store-issued timestamps and strict original owner/operation/request/result/historical joins. No raw page/source/secret payload persisted.
+- Narrow real SQLite two owners/concurrent legacy-vs-capture, preclaim rollback zeroeffects, uncertain synthetic multi-store sentinel, revision/key conflicts/corrupt/borrowed receipts; literal child kill after external sentinel+pending and aftercompletion beforeack then reopen/no repeat. Provider-free explicit probe; source/e2etypes/owning build/audits, no fullsuite/panel/user data. Freeze then root independently reviews/runs.
+- One-time old uninstrumented writer drain remains separate authorization/deployment gate; no code can attest it from marker/PID/TTL. No actual original-project authority/candidate acceptance claim from this foundation.
+
+
+## Retired t322 discovery brief
+
+### Brief: original-writer-coverage (t322, read-only discovery)
+- Worker: p0_build_identity. Main checkout task/t322-original-writer-coverage; no source/build/test/git/shared doc edits. Own only reports/p2-original-project-writer-coverage.md. Read Current State and reports/p2-original-project-authority-review.md exact checklist.
+- Investigate actual Core source in sibling MAIN !FluxIQ read-only; do not use stale flat task buddy. t320 foundation still isolated/unintegrated; do not assume production guards exist.
+- Enumerate actual original-project SQL, global canonical/resource, file/projection/private repair and public facade writer entrypoints, ownership routing and pin readers. Distinguish whole-operation effect boundaries from nested TX/repair reads; identify bypasses, missing/deleted resource routing and injectable ports.
+- Propose smallest coherent next implementation partition with exact existing/new paths and closed interfaces. Canonical global companion owner protocol must preserve original IDs and tombstones, bounded scopes, atomic allocation and owner joins; no caller-selected project authority, marker/TTL/readonly-open proof.
+- Identify actual graph/source/settings/membership capture inputs, unsupported dependencies and mandatory old-process drain; no adoption endpoint or alternative namespace. Provide source evidence and concrete provider-free verification matrix, including two-process races/kill boundaries/foreign-resource and >100 membership tests.
+- Write concise report with findings/unknowns/limitations and candidate first partition; no implementation or executable proof claim. Return exact paths and unresolved design decisions for supervisor review.
+

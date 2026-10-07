@@ -1,3 +1,4 @@
+import { studioUnionWorkflow } from "./qualification/index.js";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
 import { giveawayEntries, mostLiked } from "./answers/index.js";
@@ -204,5 +205,6 @@ export const photoSocialManifest = createScenarioManifest({
         allowedConsoleErrors: [],
       },
     },
+    studioUnionWorkflow,
   ],
 });

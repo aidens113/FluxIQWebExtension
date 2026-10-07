@@ -1,3 +1,4 @@
+import { closedJobsWorkflow } from "../qualification/index.js";
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
@@ -90,6 +91,7 @@ class Driver {
     const target = () => this.locate(step.target ?? "");
     switch (step.operation) {
       case "click": return target().click({ timeout: 8000 });
+      case "navigate": { await this.active.goto(new URL(step.path!, this.active.url()).href); return; }
       case "type": return target().fill(String(step.value), { timeout: 8000 });
       case "select": { await target().selectOption(String(step.value), { timeout: 8000 }); return; }
       case "check": return target().setChecked(step.value === true, { timeout: 8000 });
@@ -291,4 +293,46 @@ describe("the job board in a browser", { concurrency: true, timeout: 120_000 }, 
       assert.ok(naive.length > new Set(naive).size, "nothing repeated");
     } finally { await run.close(); }
   });
+});
+
+
+test("qualification final: unsave closed job updates actual membership before ordinary list navigation", { timeout: 60000 }, async () => {
+  const opened = await session();
+  try {
+    const { page, context, lab } = opened;
+    const driver = new Driver(context, page);
+    const steps = closedJobsWorkflow.recordingScript;
+    const navigation = steps.findIndex(({ id }) => id === 'closed-refresh-list');
+    await driver.run(steps.slice(0,navigation));
+    const fact = closedJobsWorkflow.expected.finalState![0]!;
+    assert.equal(await page.getByTestId(fact.subject).textContent(), fact.value);
+    assert.equal(await page.locator('main ol li').count(), 2, 'existing visible list remains stale');
+    await driver.run(steps.slice(navigation));
+    assert.deepEqual(driver.extracted.get('extract-open-saved-jobs'), closedJobsWorkflow.expected.extracted![0]!.records);
+    assert.deepEqual((await finalState(lab)).saved, ['13707d7b1e529572']);
+  } finally { await opened.close(); }
+});
+
+test("qualification final: alert signup fails full account even after correct closed-save cleanup", { timeout: 60000 }, async () => {
+  const opened = await session();
+  try {
+    const { page, context } = opened;
+    const driver = new Driver(context,page);
+    await driver.run(closedJobsWorkflow.recordingScript);
+    assert.deepEqual(driver.extracted.get('extract-open-saved-jobs'), closedJobsWorkflow.expected.extracted![0]!.records);
+    await page.goto(opened.lab.origin + '/scenarios/job-board/');
+    await page.locator('input[name="q"]').fill('design');
+    await page.getByRole('button', { name: 'Find jobs', exact: true }).click();
+    await page.getByText('No thanks', { exact: true }).waitFor({ timeout: 9000 });
+    await page.locator('input[type="email"][placeholder="Email address"]').fill('ada.synthetic@example.test');
+    await page.getByRole('button', { name: 'Get job alerts', exact: true }).click();
+    const fact = closedJobsWorkflow.expected.finalState![0]!;
+    const current = JSON.parse((await page.getByTestId(fact.subject).textContent())!);
+    assert.deepEqual(current.saved, ['13707d7b1e529572']);
+    assert.equal(current.alertSubscriptions.length, 1);
+    assert.notEqual(await page.getByTestId(fact.subject).textContent(), fact.value);
+    await driver.run(closedJobsWorkflow.recordingScript.slice(-2));
+    assert.deepEqual(driver.extracted.get('extract-open-saved-jobs'), closedJobsWorkflow.expected.extracted![0]!.records);
+    assert.notEqual(await page.getByTestId(fact.subject).textContent(), fact.value);
+  } finally { await opened.close(); }
 });

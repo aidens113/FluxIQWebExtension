@@ -1,0 +1,9 @@
+import type { ScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
+import { studioUnionExpected } from "./expected.js";
+
+export const studioUnionWorkflow: ScenarioWorkflow = {
+  id: "extend-studio-inspo",
+  description: "extend studio inspo",
+  recordingScript: [{"id":"union-consent","operation":"click","target":"testid:cookie-policy-manage-dialog-decline-button"},{"id":"union-notifications","operation":"waitForState","target":"role:button:Not Now","timeoutMs":6000},{"id":"union-no-notifications","operation":"click","target":"role:button:Not Now"},{"id":"union-first","operation":"navigate","path":"/scenarios/photo-social/p/DNcepNICLlQ/"},{"id":"union-dock","operation":"waitForState","target":"fl-dock [part=\"collapse-button\"]","timeoutMs":9000},{"id":"union-collapse","operation":"click","target":"fl-dock [part=\"collapse-button\"]"},{"id":"union-save-0","operation":"click","target":"role:button:Save"},{"id":"union-offer-0","operation":"click","target":"role:button:Save to collection"},{"id":"union-add-0","operation":"click","target":"[role=\"dialog\"] [role=\"button\"]:has-text(\"Studio inspo\")"},{"id":"union-close-0","operation":"click","target":"role:button:Close"},{"id":"union-second","operation":"navigate","path":"/scenarios/photo-social/p/D5ESx9wGf76/"},{"id":"union-save-1","operation":"click","target":"role:button:Save"},{"id":"union-offer-1","operation":"click","target":"role:button:Save to collection"},{"id":"union-add-1","operation":"click","target":"[role=\"dialog\"] [role=\"button\"]:has-text(\"Studio inspo\")"},{"id":"union-close-1","operation":"click","target":"role:button:Close"},{"id":"union-saved","operation":"navigate","path":"/scenarios/photo-social/tamsin.reyes/saved/"},{"id":"extract-studio-inspo","operation":"extract","target":"main a[href$=\"/saved/studio-inspo/\"]","fields":{"collection":":scope > span:first-of-type","posts":":scope > span:last-of-type > span"}}],
+  expected: studioUnionExpected,
+};

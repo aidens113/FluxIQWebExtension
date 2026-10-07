@@ -34,7 +34,7 @@ export function savedListText(state: JobBoardState): string {
 export function renderMyJobsPage(state: JobBoardState, context: RenderContext): string {
   const c = classesFor(context);
   const saved = savedPostings(state);
-  const rows = saved.map((posting) => `<li class="${c.savedRow}" data-jk="${posting.key}"><a href="${viewJobHref(posting)}">${escapeHtml(posting.title)}</a><span>${escapeHtml(posting.company)}</span><span>${escapeHtml(posting.location)}</span><span class="${c.status}">${savedStatus(state, posting)}</span><span class="${c.heart} ${c.heartOn}">${HEART_SVG}</span></li>`).join("");
+  const rows = saved.map((posting) => `<li class="${c.savedRow}" data-jk="${posting.key}"><a href="${viewJobHref(posting)}">${escapeHtml(posting.title)}</a><span>${escapeHtml(posting.company)}</span><span>${escapeHtml(posting.location)}</span><span class="${c.status}">${savedStatus(state, posting)}</span><span class="${c.heart} ${c.heartOn}" role="button" tabindex="0" aria-label="Unsave job">${HEART_SVG}</span></li>`).join("");
   const body = `<h1>My jobs</h1>
 <nav class="${c.tabs}"><a class="${c.tab} ${c.tabOn}" href="#">Saved</a><a class="${c.tab}" href="#">Applied</a><a class="${c.tab}" href="#">Interviews</a><a class="${c.tab}" href="#">Archived</a></nav>
 <p class="${c.savedSummary}" data-testid="saved-summary">${savedSummaryText(saved.length)}</p>

@@ -1,3 +1,4 @@
+import { closedJobsWorkflow } from "./qualification/index.js";
 import type { ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
 import { APPLICATION_FRAME_TITLE } from "./ats/index.js";
@@ -197,5 +198,6 @@ export const jobBoardManifest = createScenarioManifest({
         },
       }],
     },
+    closedJobsWorkflow,
   ],
 });

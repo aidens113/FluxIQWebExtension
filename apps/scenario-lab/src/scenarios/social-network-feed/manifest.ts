@@ -1,3 +1,4 @@
+import { requestAuditWorkflow } from "./qualification/index.js";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
 import { communityBySlug, feedPlanFor, FRIEND_REQUESTS, fullDateText, MAYA, OPEN_DAY_POST, personBySlug, type FeedPost } from "./content/index.js";
@@ -229,6 +230,7 @@ export const socialNetworkFeedManifest = createScenarioManifest({
         allowedConsoleErrors: [],
       },
     },
+    requestAuditWorkflow,
   ],
 });
 
