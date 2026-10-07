@@ -634,6 +634,14 @@ The user wants to know what exactly failed most over 2026-09-29..2026-10-06, the
 - Outcome: Accepted
 - Follow-up: S3 (t291), t292 small gaps, S6 (t290), sweep; round 4 for A, B, D at 04:00 UTC with lane trees synced to dev and rebuilt; C after S3.
 
+### 2026-10-07 — Sweep 1 of the day; t292 small gaps and the sweep's stale tests landed
+- Agent: supervisor; worker t292; worker for the sweep failures (t293).
+- Changed: t292 (Core `f72eaccf`, downstream `12e069a5`; merges `b42881f0` / `538b943f`): held amendments go through the claim judge; claim refusals use the model's step numbers; a toggle drop's reversal runs after the strand check; the observer closes the proposed-Flow check note on the nothing-to-change ending; live list reruns carry `readRowsKey: "read.extracted"`. Sweep fixes (Core `0bf1086a`, downstream `d5126586`; merges `799de6e0` / `c6805149`): three stale tests, no product change (the record-output test predated S4's `process.limit`; the login attempt-bound test leaked state when a case was abandoned by a full-suite timeout; the PageElement stand-in lacked `parentNode` for t289's selector speed-up). Pushed.
+- Why: the twice-daily sweep on the integrated dev before round 4.
+- Validation: sweep 1 of 2026-10-07 on dev at 01:48 UTC in worktree t293 (logs in scratchpad `sweep-2026-10-07/`): Core build 0, check 0; Core test: fluxiq 821 files, 7954 passed, 1 skipped, 0 failed (no load timeouts: t289's per-file timeouts hold); web 356 files, 2922 passed, 2 failed (login bound, stale test); downstream check 0, build 0, test: domain 1564/1565 (record-output, stale test) and the run stopped there; the worker's `-r --no-bail` run: every other package passed except extension (3 failures, the stand-in), then `test-extension` 2558/2558 after the fix. t292 merged: `.../llm .../flow-draft .../activity` 217 files, 2204 passed; checks, audits, build exit 0. After the sweep merge, on dev: login test `Tests 8 passed (8)` twice; domain and extension checks, both audits exit 0. Process slip, twice tonight: a landing command continued to merge and push after a non-zero exit (here the web test's stale-dist refusal); the code was verified correct afterwards. Gates now stop at the first non-zero exit.
+- Outcome: Accepted
+- Follow-up: round 4 at 04:00 UTC for A, B, D; S3 and S6 in progress; sweep 2 of the day after the read-list stages land.
+
 ## Open Questions
 
 - Is demonstrate/record an MVP acceptance requirement after the 2026-09-22 scope ruling? Owner: user. Default taken: supported, unmeasured, one smoke proof.
