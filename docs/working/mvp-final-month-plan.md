@@ -22,7 +22,8 @@ match/mismatch checks, 22/22 owning tests and runner typecheck after integration
 t298 cancellation is integrated as downstream43e5e54b/Core2ee06482. Supervisor
 rebuilt current pair and repeated headed Stop build/run2/2, owning reauthor9/9,
 Core typecheck/build and both integration audits pass. Running Core-server identity
-remains t302; t299 candidate facade remains isolated.
+remains t302. t299 candidate facade is integrated (Core7f9bae15/downstreamcb792dee)
+after independent actualservice/API53/53, package/dependentweb types and audits.
 t300 receipt/detached infrastructure is integrated (Core386b4c15)
 with production joins pending. t301 typed readiness is integrated (b2ad00de). No P0 completion
 or fresh A-D qualification is claimed.
@@ -400,3 +401,26 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Source will be one paired unit after plan approval; focused new receipt/promoter owner and narrow existing storage/apply hooks, no service budget/baseline growth or broad refactor.
 - Production requirement interpreter/start/independent browser oracle/domain command acknowledgements remain separate ports; report exactly which joins exist and which do not.
 - No provider/live/full suites/git/shared docs; owning negatives/narrow types/audits and source freeze, supervisor verifies/integrates.
+
+### Brief: p2-durable-receipt-ledger (t304)
+- Worker: p0_acceptance; paired fxwork/t304/{!FluxIQ,!FluxIQWebExtension}, task/t304-durable-candidate-receipts.
+- Read: main Current State, own p2-promotion-design.md (now preserved main), consultant P2 and relevant Core instructions.
+- Approved scope: first bounded receipt-ledger unit described in promotion design, production promotion explicitly unavailable.
+- Own: new storage/project/candidate-verification/{contracts,migration,store,index}.ts + owning tests; required focused migration/export registration after exact file proposal.
+- Own: flow-bootstrap/verification/durable-session.ts + owning tests/barrel; candidate-drafts/store.ts narrow uncached read; own reports/p2-durable-receipts.md only.
+- Send exact existing controller stagehook/migration files before edits if required; no broad accepted-topology/service changes.
+- Durable envelope includes candidateId/revision/digest/base/settings/original instruction source+requirements and permission/compiler/version binding; bounded IDs/digests, no public builder receipt issuance input.
+- Commit pending claim before any start/execute. Duplicate or restarted pending attempt returns outcome_unknown and never repeats irreversible actions. Conflicting same key/payload refuses; committed known stages recover truthfully.
+- Persist trusted controller/observer receipts only through private issuance seam. Unknown/partial/stale/cancel/corrupt joins cannot prepare mutation.
+- Preparation must return explicit unsupported storage authority and change no accepted graph; do not provide fake successful promote callback or claim P2 complete.
+- JSON promotion refuses; SQL ledger uses actual project transaction/idempotency and survives reopen. No automatic migration/reset of user data.
+- Real storage tests: simultaneous/duplicate/conflicting claims, restart pending, crash before/after stage write, malformed/mismatched refs, uncached draft freshness, unchanged accepted files and no repeated start/execute.
+- No provider/live/full suites/git/shared docs/user panel. Narrow owning tests/types/audits; freeze and report exact product joins/limits.
+- Provisioning running; discovery only until supervisor signals built dependencies.
+
+### 2026-10-06 - Candidate draft facade integrated; durable receipts next
+- Agent: Codex supervisor.
+- Changed: t299 paired merges Core7f9bae15/downstreamcb792dee; exact atomic-topology prerequisite investigation preserved. Pairedt304 receipt ledger provisioned, no accepting promoter authorized by this bounded brief.
+- Validation: post-dev53/53 independently observed; Corecheck/build0, dependentwebcheck0 and both integration audits0. Core lifecycle full sweep skipped only after observed narrow gates, preserving daily suite limit. No paid calls.
+- Outcome: Accepted opt-in draft slice, partial overall plan.
+- Follow-up: t302 loadedserver identity inventory refinement/rebuild, t303 navigation, t304 durable receipts; authoritative topology transaction and interpreter/start/oracle/command acknowledgements still required. Paired push next.
