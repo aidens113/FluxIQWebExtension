@@ -40,6 +40,7 @@
 // Core opens such a build by running the node `runsNodes.arrival` names
 // (`../tools.ts`), so the step that reaches the page is the Flow's first.
 
+import type { JsonObject } from "fluxiq/core";
 import type { WebAutomationActionType } from "../../../actions/types";
 import { rejectionDetail, type WebLlmToolRejectionDetail } from "../tool-rejection";
 import type { WebRunnableNode } from "./catalog";
@@ -81,4 +82,14 @@ export function webStartLocationRefusal(startLocation: string): WebLlmToolReject
  */
 export function webScopeAnchor(currentLocation: string | undefined, startLocation: string | undefined): string | undefined {
   return currentLocation ?? startLocation;
+}
+
+/** Whether a navigation would leave the origin the exploration is on (`./run.ts` asks before it lets one run). */
+export function webNodeCrossOrigin(node: WebRunnableNode, parameters: JsonObject, location: string | undefined): boolean {
+  if (node.actionType !== WEB_NAVIGATION_ACTION || typeof parameters.url !== "string" || location === undefined) return false;
+  try {
+    return new URL(parameters.url).origin !== new URL(location).origin;
+  } catch {
+    return false;
+  }
 }

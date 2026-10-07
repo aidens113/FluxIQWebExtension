@@ -67,7 +67,7 @@ import { WEB_LLM_EXTRACTION_HANDLE_PATTERN } from "../structure";
 import { RecoverableToolRejection, rejectionDetail, toolRejection, type WebLlmToolRejectionCode } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE, WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
-import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION, type WebRunnableNode } from "./catalog";
+import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION } from "./catalog";
 import { withClearedWait } from "./cleared-wait";
 import { webCoveredTarget } from "./covered-target";
 import type { WebNodeRun } from "./context";
@@ -78,7 +78,7 @@ import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./reject
 import { webNodeHeldFlow } from "./arrival";
 import { webUnshownAddressRefusal } from "./shown-addresses";
 import { webNodeCallWithDeclarationBeside } from "./nested-consequences";
-import { webMovesThePage, webScopeAnchor, webStartLocationRefusal, WEB_NAVIGATION_ACTION } from "./start-location";
+import { webMovesThePage, webNodeCrossOrigin, webScopeAnchor, webStartLocationRefusal } from "./start-location";
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
@@ -340,7 +340,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // Exploration stays where it started. The URL is the node's own parameter
     // and is run as written; where it may go is this domain's scope policy,
     // which the authoring navigation has always had.
-    const leaving = crossOrigin(node, ran, webScopeAnchor(current?.evidence.location, run.request.startLocation));
+    const leaving = webNodeCrossOrigin(node, ran, webScopeAnchor(current?.evidence.location, run.request.startLocation));
     if (leaving) {
       return refusal(undefined, "cross_origin", rejectionDetail({ reason: "another_origin", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), record);
     }
@@ -739,16 +739,6 @@ function elementHandle(value: JsonValue | undefined): string | undefined {
   if (typeof value === "string") return canonicalWebLlmTargetHandle(value);
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   return canonicalWebLlmTargetHandle((value as JsonObject).handle);
-}
-
-/** Whether a navigation would leave the origin the exploration is on. */
-function crossOrigin(node: WebRunnableNode, parameters: JsonObject, location: string | undefined): boolean {
-  if (node.actionType !== WEB_NAVIGATION_ACTION || typeof parameters.url !== "string" || location === undefined) return false;
-  try {
-    return new URL(parameters.url).origin !== new URL(location).origin;
-  } catch {
-    return false;
-  }
 }
 
 /**
