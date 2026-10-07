@@ -38,7 +38,8 @@ const baseSettings: FluxIQSettings = {
   autoReconnect: true,
   captureMutations: true,
   captureInputValues: true,
-  captureSnapshots: true
+  captureSnapshots: true,
+  requestsEnabled: false
 };
 
 function harness(settings: FluxIQSettings = baseSettings) {

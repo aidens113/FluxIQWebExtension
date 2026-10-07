@@ -28,7 +28,7 @@ export function createSettingsForm(): SettingsForm {
   }));
   const toggles = SETTING_FIELDS.toggles.map((field) => ({
     field,
-    input: createElement("input", { id: field.id, attrs: { type: "checkbox", "aria-describedby": `${field.id}Hint` } })
+    input: createElement("input", { id: field.id, attrs: { type: "checkbox", "aria-describedby": `${field.id}Hint`, ...(field.disabled ? { disabled: "" } : {}) } })
   }));
 
   const element = createElement("div", { className: "settings-form" }, [
@@ -48,12 +48,12 @@ export function createSettingsForm(): SettingsForm {
     read() {
       const values = {} as FluxIQSettings;
       for (const { field, input } of addresses) values[field.key] = input.value;
-      for (const { field, input } of toggles) values[field.key] = input.checked;
+      for (const { field, input } of toggles) values[field.key] = field.disabled ? false : input.checked;
       return values;
     },
     fill(settings) {
       for (const { field, input } of addresses) input.value = settings[field.key];
-      for (const { field, input } of toggles) input.checked = settings[field.key];
+      for (const { field, input } of toggles) input.checked = field.disabled ? false : settings[field.key];
     },
     markInvalid(invalid) {
       for (const { field, input } of addresses) {

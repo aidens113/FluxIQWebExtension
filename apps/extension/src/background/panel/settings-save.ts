@@ -16,7 +16,7 @@ const SWITCH_FIELDS = ["autoReconnect", "captureMutations", "captureInputValues"
  * no connection can be made to it; an unknown or mistyped field is dropped.
  */
 export function mergeSettings(current: FluxIQSettings, requested: unknown): FluxIQSettings {
-  const next: FluxIQSettings = { ...current };
+  const next: FluxIQSettings = { ...current, requestsEnabled: false };
   if (!requested || typeof requested !== "object" || Array.isArray(requested)) return next;
   const record = requested as Record<string, unknown>;
   for (const field of TEXT_FIELDS) {

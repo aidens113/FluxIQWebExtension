@@ -8,7 +8,8 @@ export function defaultSettings(): FluxIQSettings {
     autoReconnect: true,
     captureMutations: true,
     captureInputValues: true,
-    captureSnapshots: true
+    captureSnapshots: true,
+    requestsEnabled: false
   };
 }
 

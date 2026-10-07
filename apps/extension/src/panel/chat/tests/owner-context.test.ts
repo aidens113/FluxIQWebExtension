@@ -3,7 +3,7 @@ import test from "node:test";
 import { createChatOwnerContext } from "../owner-context";
 import { statusWith } from "../../tests/status-fixture";
 import type { ExtensionStatus } from "../../../shared/protocol";
-const status = () => statusWith({ paired: true, projectId: "project-a", settings: { coreApiUrl: "http://core.invalid", gatewayUrl: "ws://gateway.invalid", autoReconnect: true, captureMutations: false, captureInputValues: false, captureSnapshots: false } });
+const status = () => statusWith({ paired: true, projectId: "project-a", settings: { coreApiUrl: "http://core.invalid", gatewayUrl: "ws://gateway.invalid", autoReconnect: true, captureMutations: false, captureInputValues: false, captureSnapshots: false, requestsEnabled: false } });
 for (const field of ["gateway", "core", "client", "project", "paired"] as const) test(`owner lease changes for confirmed ${field}`, () => {
   const context = createChatOwnerContext(async <T>() => ({ ok: true, value: {} as T })); const original = status(); context.observe(original); const lease = context.capture();
   const next: ExtensionStatus = { ...original, ...(field === "gateway" ? { gatewayUrl: "ws://different.invalid" } : field === "core" ? { settings: { ...original.settings!, coreApiUrl: "http://different.invalid" } } : field === "client" ? { clientId: "different" } : field === "project" ? { projectId: "different" } : { paired: false }) };

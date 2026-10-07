@@ -15,7 +15,8 @@ const settings: FluxIQSettings = {
   autoReconnect: true,
   captureMutations: true,
   captureInputValues: true,
-  captureSnapshots: true
+  captureSnapshots: true,
+  requestsEnabled: false
 };
 
 const browser: BrowserDescriptor = {

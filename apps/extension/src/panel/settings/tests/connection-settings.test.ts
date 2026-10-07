@@ -25,7 +25,7 @@ const values = (extra: Partial<FluxIQSettings> = {}): FluxIQSettings => ({ ...de
 
 test("the settings carry the labels the audit pins and the Lab fills", () => {
   assert.deepEqual(SETTING_FIELDS.addresses.map((field) => field.label), ["FluxIQ connection address", "FluxIQ web address"]);
-  assert.deepEqual(SETTING_FIELDS.toggles.map((field) => field.label), ["Reconnect automatically", "Record page changes", "Record what I type", "Record page snapshots"]);
+  assert.deepEqual(SETTING_FIELDS.toggles.map((field) => field.label), ["Reconnect automatically", "Record page changes", "Record what I type", "Record page snapshots", "Allow direct requests"]);
   assert.equal(SETTING_FIELDS.toggles[2]!.hint, "Needed to replay typing. Passwords are never recorded.");
   for (const field of [...SETTING_FIELDS.addresses, ...SETTING_FIELDS.toggles]) assert.ok(field.hint.length > 0, `${field.label} has a hint`);
 });
@@ -66,4 +66,29 @@ test("parseConnectionDraft trusts only a whole, well-typed set of settings", () 
   assert.equal(parseConnectionDraft({ ...draft, autoReconnect: "yes" }), undefined);
   const { coreApiUrl: _dropped, ...partial } = draft;
   assert.equal(parseConnectionDraft(partial), undefined);
+});
+
+
+test("requests are visibly unavailable and saved drafts cannot enable them", () => {
+  const field = SETTING_FIELDS.toggles.find(field => field.key === "requestsEnabled");
+  assert.ok(field);
+  assert.equal(field.disabled, true);
+  assert.equal(field.hint, "Unavailable in this version.");
+  assert.equal(parseConnectionDraft({ ...values(), requestsEnabled: true })?.requestsEnabled, false);
+});
+
+
+test("actual draft writes cannot persist an attempted enabled request preference", async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "chrome");
+  let saved: unknown;
+  Object.defineProperty(globalThis, "chrome", { configurable: true, value: { runtime: {}, storage: { local: {
+    set: (items: object, done: () => void) => { saved = items; done(); }
+  } } } });
+  try {
+    const { writeConnectionDraft, CONNECTION_DRAFT_KEY } = await import("../draft-store");
+    writeConnectionDraft(values({ requestsEnabled: true }));
+    assert.equal((saved as Record<string, FluxIQSettings>)[CONNECTION_DRAFT_KEY]!.requestsEnabled, false);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "chrome", previous); else Reflect.deleteProperty(globalThis, "chrome");
+  }
 });

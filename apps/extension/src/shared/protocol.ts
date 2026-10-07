@@ -62,6 +62,8 @@ export type FluxIQSettings = {
   captureMutations: boolean;
   captureInputValues: boolean;
   captureSnapshots: boolean;
+  /** Reserved preference: forced OFF until the executable broker is available. */
+  requestsEnabled: boolean;
 };
 
 export type FluxIQSession = {

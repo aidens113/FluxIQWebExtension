@@ -20,10 +20,12 @@ export type SavedReading<T> = { value: T; repaired: string[] };
 const SETTINGS_FLAGS = ["autoReconnect", "captureMutations", "captureInputValues", "captureSnapshots"] as const;
 
 export function readSavedSettings(stored: unknown, defaults: FluxIQSettings): SavedReading<FluxIQSettings> {
+  defaults = { ...defaults, requestsEnabled: false };
   if (stored === undefined) return { value: { ...defaults }, repaired: [] };
   if (!isRecord(stored)) return { value: { ...defaults }, repaired: ["settings"] };
   const repaired: string[] = [];
   const value: FluxIQSettings = { ...defaults };
+  if (stored.requestsEnabled !== false) repaired.push("requestsEnabled");
   const gatewayUrl = stored.gatewayUrl;
   if (gatewayUrl !== undefined) {
     if (isAddress(gatewayUrl, ["ws:", "wss:"])) value.gatewayUrl = gatewayUrl;
