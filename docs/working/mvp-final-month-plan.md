@@ -57,7 +57,7 @@ t337 (grammar for one sentence family) are WIP commits on their own branches, no
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
 **In flight.** t340 candidate trial runner, judge and promotion (slice U2, Core);
-t344 Lab panel build serves Core's real identity (blocks every Lab run); t345 Lab refuses non-realistic scenarios; t346 loops and bindings in candidate submissions (lanes C and D need them); t342 live lane A
+t347 saved-Flow playback timeout on crossborder-marketplace (blocks paid runs); t346 loops and bindings in candidate submissions (lanes C and D need them); t342 live lane A
 baseline in legacy mode (lead, one supervised run, debug, report only).
 
 **Next order.**
@@ -137,6 +137,14 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
+
+### Brief: t347 saved-Flow playback times out on crossborder-marketplace (provider-free)
+- Worker: t347-playback (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t347-flow-playback-timeout` (branch `task/t347-flow-playback-timeout`, shared Core). Report: `docs/working/mvp-final-month-plan/reports/t347-flow-playback-timeout.md` in that tree.
+- Fact: the first Lab run to pass the Core identity check since t302 (t344's provider-free `FLUXIQ_LAB_INSTANCE=t344-identity FLUXIQ_TEST_ENV_FILES=none node scripts/lab/run-lab.mjs run crossborder-marketplace --flow`, run `run-muykc54t-0cefc7eb`) then failed in the Flow lane: three wait-for-element steps, then `web.action.timeout`, while the final-state check passed. Its artifacts (read only) are in `C:\Users\osrs_\FluxStuff\fxwork\t344-lab-core-identity\test-runs\instances\t344-identity\run-muykc54t-0cefc7eb\` (events.ndjson, logs, snapshots, screenshots, summary.json). A paid lane A run ends with exactly this kind of playback, so this must be understood before any paid run.
+- Goal: find the root cause from the artifacts, then reproduce with the same provider-free command in your tree (use your own `FLUXIQ_LAB_INSTANCE`, headed browser, realistic scenarios only). Decide whether it is a product defect (extension action runtime, domain plan or Core executor), a stale or wrong saved Flow, or a Lab defect; trace to the regression or cause, not the symptom. Fix it in its owning module with a regression test, then rerun the same command until the Flow lane passes.
+- Owns: the files the fix needs, listed in the report before editing. If the fix is in FluxIQ Core, stop and report the exact change instead (Core is concurrently edited by t340 and t346).
+- Must not touch: Core; `docs/working/*.md`. No commits, provider calls, override files, or scenarios outside the ten.
+- Definition of done: cause with evidence (event lines, file:line); fail-first regression test; owning tests, affected typechecks, extension build if the extension changed, structure audit; the provider-free run passing the Flow lane with its run id. If it passes only some of the time, say how often over at least three runs.
 
 ### Brief: t340 U3 chat and API carry a promoted candidate (same branch as U2)
 - Worker: the t340 worker, continuing in `C:\Users\osrs_\FluxStuff\fxwork\t340\` on `task/t340-candidate-trial-runner`, on top of its uncommitted U2 work. Report: append a U3 section to its t340 report.
@@ -353,6 +361,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: t340 (uncommitted on its branch) adds `service/candidate-trial/`: the trial runs the exact submitted candidate through the normal runtime with the same run options as any run, the build-test judge sees only trial evidence, and two confirmed yeses become a proposed adaptation with `candidateTrial` audit detail and stale and digest checks; the D1 start hook exists. Partial because three candidate-mode cases in Core `extension-chat.test.ts` fail until the chat accepts a candidate `proposed` result (U3), so U3 continues on the same branch and they merge together. t346 was re-briefed to own the authoring grammar after the worker showed the brief named the JSON plan parser; it also found candidate submissions skip the draft-step loop and binding checks (`candidate/submission.ts:12`).
 - Validation: supervisor confirmed consequence gating: Core has no execution-time consequence gate for any run; lasting consequences are gated when a step is authored and at approval, and the candidate submission passes `permissionFor: permissions.planStep` (`runtime/service.ts:1557`), so a candidate with a money, delete or send step still asks before it is accepted and trialed. `npx vitest run` on Core dev `e5f25177` of `result-verification/build-test/tests/judge.test.ts` -> 1 failed ("yes, then unknown ... leaves the yes standing"), so that failure predates t340 and encodes pre-t296 behavior. Worker-reported (not yet re-run by the supervisor): Core typecheck exit 0, structure audit passed, 841 passed and 1 failed on the run-session-wide set.
 - Limits: nothing from t340 is merged. Trial steps show only as rows of the build's activity, and trial sessions appear in the Flow's run list marked only by `metadata.candidateTrial`.
+
+### 2026-10-07 - t344 and t345 merged: the Lab passes Core identity and runs only realistic scenarios; t347 dispatched
+- Changed: downstream `265fa048`, pushed. t344: the staged panel build drops Core's `paths` into `src`, so the panel serves Core's stamped identity; `BUILD_LAYOUT_VERSION` 2 -> 3; publication refuses a build still holding the placeholder; the panel key hashes the gateway generator's sources, so a dry run and a run agree; the campaign no longer calls a Core HTTP failure a possible memory fault; the stale cli-llm warm dry-run fixture is fixed. t345: one realistic-scenario list feeds every Lab launch entry, each refusing other scenarios before starting anything; bench corpora, default ui:e2e journeys, the adversarial lane and demo browser lanes are now refused until ported or retired (user rule). Campaign `--kind` and `--all` narrow to realistic tasks rather than refusing. t347 debugs the playback timeout the first identity-passing run reached.
+- Validation: supervisor in the t344 tree: `node --test` core-web-build tests -> 43 pass; `dist/tests` -> 353 pass, 0 fail (the cli-llm cache test now passes); live-campaign tests -> 74 pass; audit passed; run `run-muykc54t-0cefc7eb` (provider-free, crossborder-marketplace) wrote four `running-*-identity.json` files, all `verified: true`, expected equal to actual for Core, host and server adapter. t345 after merging dev: test-runner build exit 0; `dist/tests`, realistic-scenarios, core-web-build and chat-check tests -> 411 pass, 0 fail; scenario-guard, live-campaign and lab script tests -> 99 pass, 0 fail; audit exit 0.
+- Limits: that same run then failed in the Flow lane (`web.action.timeout` after three wait-for-element steps), so no paid run until t347 explains it. The t344 worktree is kept for its run artifacts.
 
 ## Open Questions
 
