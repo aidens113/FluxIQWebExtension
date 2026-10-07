@@ -1,7 +1,7 @@
 # Node Catalog Plan
 
 Status: Active
-Status detail: Audit stage dispatched 2026-10-07 (four read-only leads by node family); implementation stages follow the audits.
+Status detail: Interaction and reading audits done; navigation and gaps audits stopped at the Codex handoff and must be rerun.
 Created: 2026-10-07
 Last updated: 2026-10-07
 Owner: Senior supervisor agent
@@ -17,7 +17,7 @@ User's order (2026-10-07): a full audit of the node catalog; robust nodes with p
 
 Catalog today (domain `domain/src/output-nodes/`, `domain/src/actions/`; extension `apps/extension/src/content/actions/`): navigate, click, type, select, check, clear, upload, keypress, dialog, scroll, extract, extract_list, next_page, assert, capture_snapshot, wait_for_selector, wait_for_text; observation tools detect_repeating_structure and find_on_page.
 
-In progress: four audit leads (briefs below). Next: merge their findings into one ranked fix/extend/new list, then implementation stages partitioned by file.
+Done: `reports/node-audit-interaction.md` (18 ranked fixes, 8 proposed nodes; top: unarmed native dialogs hang a run, `check` sets `.checked` without a click so React checkboxes stay unchanged, number and date fields lose characters, `scroll` only moves the window, a press nothing answered still succeeds) and `reports/node-audit-reading.md` (18 fixes, 7 nodes; top: Next page misses in-place re-renders, Next page with no detected way should try every way, one shared disabled rule including ancestors and classes, verifying nodes must verify something, waits and asserts judge every match). Not done: the navigation and gaps audits were stopped at the Codex handoff (2026-10-07 05:10 UTC); rerun them from their briefs. Pending user decision from the interaction audit: trusted input for hover menus needs the debugger channel, which the user ruled out except for network capture. Next: rerun the two audits, merge all four into one ranked list, then implementation stages partitioned by file.
 
 ## Worker Briefs
 
@@ -46,6 +46,14 @@ Read-only: no source, test or other doc edits; no builds, tests, Lab, browser or
 - Outcome: Accepted
 - Follow-up: merge the four audits into one ranked plan.
 
+### 2026-10-07 — Two audits done; two stopped at handoff
+- Agent: supervisor; audit leads.
+- Changed: `reports/node-audit-interaction.md`, `reports/node-audit-reading.md` (committed with the plan).
+- Why: the user's ordered node audit.
+- Validation: not validated (read-only audits; nothing run).
+- Outcome: Partial
+- Follow-up: rerun the navigation and gaps audits; one ranked plan.
+
 ## Open Questions
 
-- None yet.
+- Trusted input (hover menus, sites that ignore synthetic events) needs the debugger channel. Owner: user. Recommended default: no debugger; send the full synthetic pointer sequence (pointerover/enter/move/down/up/click at the element's coordinates) and report sites where that fails as JS-or-node work.

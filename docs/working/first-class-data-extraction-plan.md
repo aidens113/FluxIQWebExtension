@@ -1,9 +1,9 @@
 # First-Class Data Extraction Plan
 
 Status: Active
-Status detail: Extraction, picker-to-recording, durable datasets, preview/export, and no-reload Runtime Debug refresh are built; a fresh integrated pushed-dev UI scrape/restart/reuse smoke is in progress.
+Status detail: Read-list redesign S1-S6 on dev (one-page read, Next page node, do-while repeat, run-end processing); live proof and S7 pending.
 Created: 2026-09-15
-Last updated: 2026-09-15
+Last updated: 2026-10-07
 Owner: Senior supervisor agent
 Scope: Make structured data extraction a fundamental FluxIQ capability: Core owns generic datasets (schema, per-run persistence, preview, CSV/JSON export, iteration) and their UI; the web domain and extension own DOM extraction, element picking, repeating-structure and field detection, and pagination; extraction is recordable and compiles to ordinary Flow nodes; the Testing Lab measures FluxIQ's own extraction.
 Paired document: `F:\!FluxIQ\docs\working\first-class-data-extraction-plan.md`
@@ -12,6 +12,8 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 ---
 
 ## Current State
+
+**Update 2026-10-07 (read-list redesign, user direction 2026-10-06; supersedes the read node paging below).** The read reads one page; a new Next page node (`web.output.dom-next_page`: success / ended / failed) moves the list on; a Flow pages with a do-while repeat (read, any custom steps, Next page, again while Next page succeeds); every read's rows collect into its own dataset in the run and Core processes them at run end into the answer (whole-row dedupe by default, then the read's declared dedupe, sort and limit); the build test and both judges read the answer. Stages S1-S6 are on dev (design and stage reports under `first-class-data-extraction-plan/reports/`: `read-list-collect-design.md`, `s1-collection.md`, `s2-loop.md`, `s3-judges.md`, `s45-next-page.md`, `s6-migration.md`); proof 1 passes lane C's 5-page shape provider-free (collected 17, answer 13). Not done: the live proof (lane C round 4 was invalid: the Lab ran a cached extension worker without Next page, fixed by the Lab since), then S7 (retire the read's own paging; removal list in `s6-migration.md`). Owner of the live work: `mvp-final-month-plan.md`.
 
 **Update 2026-09-20:** the picker and its recording path are complete. A live
 t027 production panel/extension run selected a repeating structure, captured

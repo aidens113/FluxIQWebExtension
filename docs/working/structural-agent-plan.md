@@ -1,7 +1,7 @@
 # Structural Agent Plan
 
 Status: Active
-Status detail: Plan agreed with the user's direction on 2026-10-07; stage 1 and stage 2 designs dispatched; nothing built yet.
+Status detail: Plan agreed with the user 2026-10-07; stage 1 and 2 designs were stopped at the Codex handoff before writing reports and must be rerun; nothing built.
 Created: 2026-10-07
 Last updated: 2026-10-07
 Owner: Senior supervisor agent
@@ -17,7 +17,7 @@ User's direction (2026-10-07, after round 4): "Tiny things like exact node funct
 
 Done: nothing of this plan is built. Groundwork already on dev: page-change evidence on every draft step (t285), node definitions on first use (t280), readable field labels (t279), every refusal names its way out and three same-kind refusals end the round (t287), judges see only this run's changes (t286), read-list collection and run-end processing (S1-S6).
 
-In progress: stage 2 design (evidence-acts, lead-xhigh, brief in mvp-final-month-plan "Brief: evidence-acts design"), widened to include the small edit language and cheap recovery; stage 1 design (general tools, brief below).
+Not started (handoff 2026-10-07 05:10 UTC): both design leads were stopped before writing their reports when the user handed off to Codex. Rerun stage 1 from "Brief: general-tools design" below (with the user's decisions) and stage 2 from `mvp-final-month-plan.md` "Brief: evidence-acts design", widened to the small edit language (draft = steps that ran and worked; edits remove, redo, move, make optional, repeat) and cheap recovery (Core redoes a wrong step from its start page; a stuck build ends early or asks in the chat).
 
 Next: accept both designs (bring the user any decision with a recommended default), build stages 1 and 2 in parallel by file, then stage 3, then live rounds on A-D plus new realistic sites.
 
@@ -61,7 +61,16 @@ Stage 2's design brief: `mvp-final-month-plan.md` "Brief: evidence-acts design" 
 - Outcome: Accepted
 - Follow-up: designs back; decisions to the user; build stages 1 and 2.
 
+### 2026-10-07 — Handoff to Codex; designs stopped
+- Agent: supervisor
+- Changed: this document (Current State).
+- Why: the user handed off to Codex; one supervisor at a time.
+- Validation: not validated (no design report was written; both leads stopped).
+- Outcome: Blocked
+- Follow-up: rerun both designs.
+
 ## Open Questions
 
 - Script execution channel per browser (debugger bar vs CSP-limited alternatives). Owner: user. Default taken: debugger channel on Chrome/Edge; the stage 1 design recommends Firefox's.
 - Cross-origin requests. Owner: user. Default taken: allowed to any origin; mutating methods gated.
+
