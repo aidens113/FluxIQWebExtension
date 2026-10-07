@@ -521,3 +521,11 @@ Earlier entries: [Claude implementation and handoff ledger](./mvp-final-month-pl
 - Required reads: Current State, p2-promotion-design.md, p2-authority-migration-inventory.md and concrete existing graph/source/instruction/settings/reader owners.
 - Definition of done: exact minimal schema, complete source/settings/router/subflow/graph/instruction vector, stable authority/CAS/adoption invariants, unsupported publication-dependent/JSON scope, and precise new implementation owners/tests. List existing writers that must join before production cutover. No automatic user-data adoption.
 - Validation: source evidence and concrete contract proposal, not duplicate general inventory or atomicity proof.
+
+### Brief: p3-professional-paginator (next isolated task)
+- Repository: task worktree assigned by supervisor, shared Core read-only; fixture-only implementation.
+- Task: Fix confirmed Next initialPage+1 defect in professional-network fixture; preserve exact full collection oracle and promoted/repeated row behavior.
+- Owns: apps/scenario-lab/src/scenarios/professional-network/search/people-client.ts; existing professional-network/tests/honest-and-naive-paths.test.ts; own reports/p3-professional-paginator.md. No manifest/oracle/dataset/runtime/extension/Core edits.
+- Required reads: Current State and own proposal; relevant backlog16, owning client/tests/helper.
+- Definition of done: fail first with actual Chromium Next1?2?3, then use current+1 and retain full23unique/24includingrepeat expected dataset; naive promoted all-card extraction still rejected. Preserve challenge/attempt guard/history/Previous/filter semantics; do not claim rapid press/popstate coverage unless exercised.
+- Validation: owning scenario build/two Chromium tests, narrow scenario test, source/e2e typechecks/audit. No full suites/provider/userpanel/debugger/external site. Wait provisioning before checks, report honest limits and freeze for supervisor.
