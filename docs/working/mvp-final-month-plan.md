@@ -56,7 +56,7 @@ hardening. In-flight t334 (click executor), t335 (installer, never compiled) and
 t337 (grammar for one sentence family) are WIP commits on their own branches, not
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
-**In flight.** t342 live lane A baseline, round 2 (lead, legacy mode, one supervised run, debug, report only). Next: U4 (Lab candidate lane), then a lane A candidate-versus-legacy probe.
+**In flight.** t342 live lane A baseline, round 2 (lead, legacy mode, one supervised run, debug, report only). t348 U4 Lab candidate lane and start hook (worker). Next: a lane A candidate-versus-legacy probe.
 
 **Next order.**
 
@@ -135,6 +135,15 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
+
+### Brief: t348 U4 Lab candidate lane and the start hook
+- Worker: t348-candidate-lane (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t348\` (Core-paired, branch `task/t348-lab-candidate-lane`). Report: `docs/working/mvp-final-month-plan/reports/t348-lab-candidate-lane.md` in the t348 downstream tree.
+- Context: [t339 design](./mvp-final-month-plan/reports/t339-candidate-slice-design.md) unit U4 and decision D1; t340 (merged) gives Core `capabilities.candidateTrial` in generation readiness and a service option `prepareCandidateStart` that only service-level readiness reports; t338 gives the campaign `--authoring-mode` and the readiness hold that refuses candidate mode.
+- Goal, Core side (small): the runtime host the Lab boots passes `prepareCandidateStart` from deployment configuration (an environment variable naming a deployment-trusted endpoint, with whatever credential the scenario lab's control API needs), unset by default; the API readiness reports whether it is set. Product deployments leave it unset.
+- Goal, Lab side: candidate mode is admitted only when Core reports `candidateTrial` and the hook is set; the Lab boots its Core with the hook pointed at its own fixture reset for the scenario (reuse t336's atomic reset, no new reset path); a draft outcome fails `runtime.behavior` with the candidate id and verdicts; a promoted outcome continues to the existing reset, playback and private oracle unchanged; the run evidence records authoring mode, candidate id, trials and verdicts and the promoted proposal. Legacy mode unchanged.
+- Owns: Core runtime host configuration where the service is constructed for the panel (propose the exact files first) and its tests; downstream `packages/test-runner/src/flow-lane/creation/**`, `creation/chat/**`, `packages/test-runner/src/environment.ts`, evidence and snapshot types they need, the campaign's readiness plumbing, and their tests; testing-facility doc's candidate section.
+- Must not touch: candidate authoring, trial, judge or chat code in Core (merged, stable); `docs/working/*.md`. No commits, provider calls, paid runs or override files. Lab or browser runs only on the ten realistic scenarios.
+- Definition of done: fail-first tests (readiness refuses candidate without the capability or without the hook, before any provider; draft fails with id and verdicts; promoted outcome reaches playback and oracle; evidence fields recorded; hook unset in product configuration). Owning tests in both repositories, Core and test-runner typechecks, both structure audits. A provider-free `lab:campaign crossborder-marketplace-hub-to-cart --dry-run --authoring-mode candidate` that reports ready with the hook set.
 
 ### Brief: t347 saved-Flow playback times out on crossborder-marketplace (provider-free)
 - Worker: t347-playback (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t347-flow-playback-timeout` (branch `task/t347-flow-playback-timeout`, shared Core). Report: `docs/working/mvp-final-month-plan/reports/t347-flow-playback-timeout.md` in that tree.
