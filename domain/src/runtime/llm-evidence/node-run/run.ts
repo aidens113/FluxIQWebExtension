@@ -73,7 +73,7 @@ import { webCoveredTarget } from "./covered-target";
 import type { WebNodeRun } from "./context";
 import type { WebNodeOutcome } from "./outcome";
 import { webLabelledIdentity, webObservedControl } from "./observed-control";
-import { webAnsweredLayer, webNodeNoticedDetail, webNodePageChanges, webPressChoice, webPressToggle } from "./press-effect";
+import { webAnsweredLayer, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPressChoice, webPressToggle } from "./press-effect";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
 import { webNodeHeldFlow } from "./arrival";
 import { webUnshownAddressRefusal } from "./shown-addresses";
@@ -225,7 +225,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
-        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined, reads: undefined }),
+        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined, reads: undefined, changed: undefined }),
         // A look that worked refuses nothing, so it says neither why it refused
         // nor which node it would have named: the draft statement beside it
         // already carries `actionId`, and a successful call is not the row a
@@ -513,7 +513,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // second-copy.ts`, `run-muq4oaof-464f5bce`). Made from the page the read
         // ran on and the list as it was resolved, never the model's handle
         // (`./list-read/code.ts`); absent on every other node.
-        reads: webListReadCode(node.definitionId, current?.evidence.location ?? after?.evidence.location, ran)
+        reads: webListReadCode(node.definitionId, current?.evidence.location ?? after?.evidence.location, ran),
+        // What it changed on the page it stayed on, from the same walk as the outcome's
+        // `changed` above: Core reads which step did an act from it, not from the
+        // model's label (`./press-effect/change/statement.ts`, week report W1).
+        changed: webNodePageChangeStatement(node, current, after)
       }),
       // The node ran and nothing was refused, so neither of the refusal fields
       // is said: the draft statement above already names the node under
@@ -582,6 +586,7 @@ function refusal(
     written: undefined,
     toggle: undefined,
     reads: undefined,
+    changed: undefined,
     // Whether a call of this kind belongs in a result, which is a property of
     // the node and not of this attempt. That it did not work is said by
     // `effectApplied: false`, and the two are held apart so a failed step stays
@@ -622,7 +627,7 @@ function refusal(
 function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
   const input = record.standing?.input ?? safeCall(record.call ?? {}, record.parameters ?? {});
   if (!record.acted || record.standing === undefined) {
-    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined, reads: undefined });
+    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined, control: undefined, interruption: undefined, written: undefined, toggle: undefined, reads: undefined, changed: undefined });
   }
   return present<WebNodeDraftStatement>({
     actionId: record.actionId,
@@ -635,7 +640,9 @@ function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
     interruption: undefined,
     written: undefined,
     toggle: undefined,
-    reads: record.standing.reads
+    reads: record.standing.reads,
+    // The page after it was the robot check, compared with nothing: no line is said changed, as no toggle is.
+    changed: undefined
   });
 }
 
