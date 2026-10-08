@@ -56,7 +56,7 @@ hardening. In-flight t334 (click executor), t335 (installer, never compiled) and
 t337 (grammar for one sentence family) are WIP commits on their own branches, not
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
-**In flight.** t361 lasting-act follow-ups (exploration aligned to the single lasting-act rule); t363 the overlay describes a candidate trial as a test. Next: lane A round 5 (candidate) at 04:00 UTC off-peak once both merge.
+**In flight.** t342 round 5, lane A candidate-mode probe with every round 4 fix (lead, live, launches after 04:00 UTC).
 
 **Next order.**
 
@@ -588,6 +588,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: Core `b34c07e2`, downstream `1fb6dbd3`, both pushed. A run of refused but readable submissions no longer ends as an "unusable answer" and the no-progress stop has its own words; a candidate failure keeps the latest accepted version as an unverified draft and names the candidate and each trial's verdict on its diagnostic (optional `candidate` field), which the chat ending and the Lab both read; candidate tools read as plain acts in the chat with no revision numbers or tool ids. The trial overlay text ("Fixing your Flow · Step 2 of 8") comes from the extension background and goes to t363. t361 is finishing an alignment so exploration uses t359's single lasting-act definition (plain typing and navigation keep their retries).
 - Validation: supervisor on merged t362 trees: Core vitest over activity, conversations, flow-bootstrap, service, llm -> 397 files, 4354 passed, 3 skipped; Core tsc exit 0; Core audit exit 0; Core libraries rebuilt; web activity, conversation, authoring 318 passed; web tsc exit 0; test-runner flow-lane, creation, chat 408 pass, 0 fail; downstream audit exit 0; extension `pnpm test` 2607 pass, 0 fail.
 - Limits: no fail-first run was recorded by the worker; the direct-path failure has no test of its own.
+
+### 2026-10-08 - t363 and t361 merged: trial overlay says testing; one lasting-act rule on every path; round 5 launched
+- Changed: Core `a318edb5`, downstream `3e72200a`, both pushed. t363: the overlay identifies a trial from the build's `core.test_candidate` activity row (no wire change) and shows "Testing your Flow", "A step didn't work in the test: <why>" and a verdict line with what comes next. t361: a send refused before it reached the page is stated `unacted` and retried (`apps/extension/src/runtime/page-delivery.ts`); the domain's `runtime/lasting-act-statement.ts` is the one lasting-act rule for playback, exploration and test replays (only committing actions or non-empty declared consequences last); plain typing, select, check and navigation keep the first attempt plus 3 retries even after a failed read-back or verification (two supervisor re-briefs: exploration had treated every page-changing node as lasting, and t355 had made every verification failure final); exploration tells the model an uncertain outcome in plain words; Core's chat failure reason has words for it. Lane A round 5 (candidate) launched on t342 trees synced to these heads; the lead launches only after the guard admits it at 04:00 UTC.
+- Validation: supervisor. t363 merged tree: extension `pnpm test` 2616 pass, 0 fail; extension build verified 22 files for each of three targets; audit exit 0. t361 merged tree: Core vitest activity-action, activity, executor -> 71 files, 878 passed; Core tsc exit 0; Core audit exit 0; `pnpm docs:check` failed after the dev merge (stale reference), regenerated and committed, then current; domain `pnpm test` 1628 pass and both domain tsconfigs exit 0; extension `pnpm test` 2620 pass, 0 fail; extension build verified 22 files x3; test-runner flow-lane, creation, chat 408 pass, 0 fail; downstream audit exit 0. Worker's provider-free run `run-muyxtqss-b3bbdd5d`: same known recording-lane stop, 0 calls.
+- Limits: a live read-back mismatch has not been seen retried in a browser; Core still emits recovery-ladder rows during a trial ("Trying again didn't fix the step"), a Core activity-wording follow-up after round 5.
 
 ## Open Questions
 
