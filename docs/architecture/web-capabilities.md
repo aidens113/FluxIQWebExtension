@@ -140,11 +140,75 @@ the act-twice gates are Core's alone. The model sees the final outcome, with
 failure. A test replay looks for a press's target four times before it calls
 the step remembered. A press the page refused as busy or too fast is one of
 the faults the loop above leaves to this layer, which honours the wait the page
-named (`retryAfterMs`). A press that may have landed is never pressed again:
-the runtime adapter sends a mutating action's failure found after it acted, at
-verification or confirmation, to Core as not retryable (`runtime/adapter.ts`).
-A target that never appears therefore costs about 23 s before the node fails:
-four in-page waits of about 5 s, plus 3.25 s of backoff.
+named (`retryAfterMs`). A target that never appears therefore costs about 23 s
+before the node fails: four in-page waits of about 5 s, plus 3.25 s of backoff.
+
+**A lasting act is checked, never blindly repeated** (user rule 2026-10-07;
+t359, t361). Which acts commit is this domain's fact: a click, a key press, a
+dialog answer, and typing that sends its form, the same set a Flow step must
+declare consequences for (`webPlanStepMustDeclare`). The runtime adapter
+(`runtime/adapter.ts`) states on such an act's failure record whether it
+happened:
+
+- `effect: "unacted"` when nothing was dispatched: the target was not resolved
+  yet (stage `target_resolution`), the command was refused before dispatch, the
+  page turned the press away as busy or too fast (`rate_limited`), or the client
+  said so. The client says so in two places: an actionability refusal before
+  the press (covered, hidden, disabled), and a send the browser refused before
+  it reached the page, in its own words "Receiving end does not exist" (the new
+  document's content script is not in yet, the commonest failure straight after
+  a navigation), "No frame with id" or "No tab with id"
+  (`apps/extension/src/runtime/page-delivery.ts`, t361). Only the action's own
+  sends count, and only when every one of them was refused that way.
+- `effect: "ambiguous"` for everything else: the press was sent and only its
+  answer is missing. A send that reached the page and then lost its channel
+  ("The message port closed before a response was received", the page
+  unloading under it) states nothing, so it is ambiguous.
+
+Every other action is stated nothing beyond a client-stated `unacted`, and its
+record keeps its own `retryable` wherever the failure was found: a field whose
+read-back does not match (typed "3", reads "1"), a tick or a choice that did
+not take, a navigation not confirmed are made again under the first attempt
+and three retries. Until t361 such a failure found at verification or
+confirmation went to Core as not retryable (t355), so lane A's quantity field
+was never typed twice. A step that declared a lasting consequence is still
+held back, by Core, from the declaration on its node.
+
+Core decides once, for every path (`executor/defensive/lasting-act.ts`). A node
+acts lastingly when it is marked as acting (`metadata.effect: "mutate"`), when
+the step it was built from declared a lasting consequence
+(`metadata.declaredConsequences` holding any class; `[]` is none), or when its
+failure record says `effect: "ambiguous"`. Exploration and test replays
+describe their node to Core as a saved Flow's web node is described, never with
+a blanket `mutate` marker: a read says `effect: "observe"`, a page-changing
+node carries only the consequences its call declared, under Core's
+`AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY`, and every failure gets
+the statement the adapter makes (`runtime/lasting-act-statement.ts`, read by
+both `runtime/adapter.ts` and `node-run/retries/dispatch.ts`, t361). So plain
+typing, choosing, ticking, navigating, waiting and reading keep the first
+attempt and three retries after any retryable failure, wherever it was found,
+on every path; only
+a committing act, or one whose call declared a lasting consequence, is held
+back when its effect is unknown. Such an act is made again only when
+its failure shows it did not happen (`unacted`), or when an effect check shows
+it did not land; otherwise the fault is marked `actUncertain` and the act is
+not repeated. A graph run that stops on it says `Outcome uncertain: ...`, a
+Flow does not walk past it, and the ladder's wait and clear-interference rungs
+do not press it again. On the graph path the existing satisfied-node rung is
+the effect check: a step whose expected state already holds counts as done.
+
+A build is told the same thing in plain words (t361). While it explores, a
+lasting call Core left uncertain comes back as a refusal under the failure's
+own code with the reason `outcome_uncertain`, whose `next` says that the step
+was sent, its answer does not show whether it took effect, it was not made
+again automatically because making it twice could do it twice, and to look at
+the page (which the refusal carries) before making the same call again. A test
+replay of such a step answers `core.replay.failed` with that reason and says
+the same in `said` (`domain/src/runtime/llm-evidence/node-run/retries/uncertain-outcome.ts`).
+Neither passes an effect check of its own yet, so on those two paths an
+uncertain act is never settled as landed. A chat card words that reason as
+"FluxIQ couldn't tell whether it took effect, so it didn't do it again" (Core's
+`ui/activity-action/failure-reason.ts`).
 
 The loop is deliberately narrower for an action that can change the page.
 Clicks, typing and the other mutating verbs retry only a target miss that

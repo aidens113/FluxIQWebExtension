@@ -41,7 +41,6 @@
 // step it would be (`./written-step.ts`).
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import { webActionFailureRefusal } from "../action-failure";
 import {
   assertActive,
   captureAfterAction,
@@ -83,7 +82,7 @@ import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type We
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
 import { webListReadCode } from "./list-read";
-import { webNodeDispatchWithRetries } from "./retries";
+import { webNodeDispatchWithRetries, webNodeFailureRefusal } from "./retries";
 
 const EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 /**
@@ -366,7 +365,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     record.acted = true;
     // A list read also asks for a few of the rows its conditions turned down,
     // on this command only: the Flow keeps `ran` (`./rejected-rows.ts`).
-    const { result, attempts } = await webNodeDispatchWithRetries(run, node, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, record);
+    const { result, attempts, lastingAct } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared: value.consequences }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, record);
     assertActive(run.request.signal);
     if (result.status !== "succeeded") {
       // The node's own failure, under the node's own name. The page comes with
@@ -379,7 +378,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // (`../action-failure/read-shortfall.ts`). From nowhere there is no such
       // page, and where the Flow has not reached its start location that is the
       // whole of what can honestly be said, whatever the page then answered.
-      const refused = webActionFailureRefusal(result);
+      // A lasting act Core left uncertain and did not repeat says that instead (`./retries/uncertain-outcome.ts`, t361).
+      const refused = webNodeFailureRefusal(result, lastingAct);
       throw current
         ? await pageRefusal(run.gateway, run.sessionId, run.request, current, refused, run.request.signal)
         : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""), undefined, refused.personNeeded);

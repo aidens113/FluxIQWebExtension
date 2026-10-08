@@ -171,7 +171,7 @@ test("a committing press states whether it was dispatched, so Core repeats only 
   assert.equal((await after("web.action.rate_limited", "action_failed", "execution", { effect: "unacted" }))?.effect, "unacted");
   const covered = await runCommand({ commandId: "client.covered", status: "failed", message: "Covered.", failure: { category: "unexpected_state", code: "web.target.not_actionable", retryable: false, stage: "execution", actual: "covered: a layer", effect: "unacted" } });
   assert.equal(covered.failure?.effect, "unacted", "the client stood nearest the page and stated nothing was pressed");
-  // Typing that sends its form commits; typing alone keeps t355's rule.
+  // Typing that sends its form commits; typing alone is stated nothing, and keeps its retries (t361).
   const typeCommand = (submit: boolean): FluxIQRuntimeCommand => ({ kind: "execute_action", commandId: "command.type", outputId: "web.dom.type", parameters: { selector: "#q", text: "lamp", submit } });
   assert.equal((await after("web.action.failed", "action_failed", "execution", {}, typeCommand(true)))?.effect, "ambiguous");
   const typed = await after("web.action.failed", "action_failed", "execution", {}, typeCommand(false));

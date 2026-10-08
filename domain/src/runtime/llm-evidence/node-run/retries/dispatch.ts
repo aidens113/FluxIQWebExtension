@@ -23,12 +23,24 @@
 //    `AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY`). This file only says how to
 //    dispatch the node and how to read its answer.
 //
-// **A lasting act is checked, never blindly repeated.** The node is described
-// to Core by this domain's one read-or-change fact (`webAutomationActionEffect`
-// via the catalog's `effect`), so a press whose failure was found after it acted,
-// or whose effect is unknown, is not dispatched again; a press the page turned
-// away before it landed (`effect: "unacted"` -- too fast, busy, not drawn yet)
-// is, because nothing happened to repeat.
+// **A lasting act is checked, never blindly repeated, by the one definition
+// playback uses (t361).** The node is described to Core as a saved Flow's web
+// node is: a read says it reads (`effect: "observe"`), and a node that changes
+// the page carries the consequences its call declared
+// (`AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY`), never a blanket
+// "acts" marker. Each failure then carries this domain's statement about the
+// act behind it (`../../../lasting-act-statement.ts`, the runtime adapter's
+// own): a committing act -- a press, a key press, a dialog answer, typing that
+// sends its form -- is `ambiguous` unless the failure shows nothing was
+// dispatched. So Core holds back exactly what it holds back in playback: a
+// committing act, or one whose call declared a lasting consequence, whose
+// failure leaves its effect unknown. Plain typing, choosing, ticking,
+// navigating and waiting keep the first attempt and three retries after any
+// retryable failure, a read-back that did not match included; a press the page turned away before it landed
+// (`effect: "unacted"` -- too fast, busy, not drawn yet, never delivered) is
+// made again, because nothing happened to repeat. Until t361 every
+// page-changing node was marked `effect: "mutate"` here, which held back
+// typing and navigation too: a second definition, stricter than playback's.
 //
 // **An uncertain press says so (t359).** When a press's failure leaves its
 // effect unknown, Core asks the caller's effect check when it gives one
@@ -37,8 +49,10 @@
 // says `lastingAct: "uncertain"` so the caller can tell the model the step's
 // outcome is uncertain rather than that it failed.
 
-import { automationStudioDispatchWithNodeRetries, type AutomationStudioFailureRecord, type AutomationStudioLastingActCheck, type AutomationStudioNodeRetryReading } from "fluxiq/automation-studio";
-import type { JsonObject } from "fluxiq/core";
+import { AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY, automationStudioDispatchWithNodeRetries, type AutomationStudioFailureRecord, type AutomationStudioLastingActCheck, type AutomationStudioNodeRetryReading } from "fluxiq/automation-studio";
+import type { JsonObject, JsonValue } from "fluxiq/core";
+import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../../../actions/types";
+import { webLastingActStatement } from "../../../lasting-act-statement";
 import type { WebLlmEvidenceGateway } from "../../capture";
 import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
@@ -59,22 +73,23 @@ export type WebNodeRetriedDispatch = { result: WebNodeDispatchResult; attempts: 
  * Dispatches one node command, and dispatches it again after each fault Core's
  * default policy absorbs. The answer is the last attempt's own.
  *
- * `node` is the catalog's description of the node: its definition id, and
- * whether running it changes the page. `noted`, when given, is told how many
- * attempts there were.
+ * `node` is the catalog's description of the node: its definition id,
+ * whether running it changes the page, and the consequences the call declared
+ * (`declared`, as the call wrote them; absent on a read and on a call that
+ * declared none). `noted`, when given, is told how many attempts there were.
  */
 export async function webNodeDispatchWithRetries(
   run: Pick<WebNodeRun, "gateway" | "sessionId" | "request">,
-  node: { definitionId: string; effect: "observe" | "mutate" },
+  node: { definitionId: string; effect: "observe" | "mutate"; declared?: JsonValue | undefined },
   command: { actionType: string; parameters: JsonObject; metadata: JsonObject },
   noted?: { attempts?: number },
   checkEffect?: AutomationStudioLastingActCheck<WebNodeDispatchResult>
 ): Promise<WebNodeRetriedDispatch> {
   const outcome = await automationStudioDispatchWithNodeRetries<WebNodeDispatchResult>({
-    node: { id: node.definitionId, definitionId: node.definitionId, metadata: { effect: node.effect } },
+    node: { id: node.definitionId, definitionId: node.definitionId, metadata: nodeMetadata(node) },
     // Core sends nothing more once the build is cancelled between attempts.
     dispatch: async () => await run.gateway.executeAction(run.sessionId, command),
-    read: webNodeRetryReading,
+    read: (result) => webNodeRetryReading(result, command),
     checkEffect,
     delay: webNodeRetryWait,
     signal: run.request.signal
@@ -90,10 +105,31 @@ export async function webNodeDispatchWithRetries(
  * a bare `timed_out`, a dropped channel with no record -- is not guessed at,
  * so it is the answer.
  */
-function webNodeRetryReading(result: WebNodeDispatchResult): AutomationStudioNodeRetryReading {
+function webNodeRetryReading(result: WebNodeDispatchResult, command: { actionType: string; parameters: JsonObject }): AutomationStudioNodeRetryReading {
   if (result.status === "succeeded") return { ok: true };
   const failure = failureRecord(result.failure);
-  return failure ? { ok: false, failure } : { ok: false };
+  if (!failure) return { ok: false };
+  // With this domain's statement about the act behind it, as the runtime adapter states it for playback.
+  const actionType = webActionType(command.actionType);
+  return { ok: false, failure: actionType === undefined ? failure : webLastingActStatement(actionType, command.parameters, failure, failure) };
+}
+
+/**
+ * The node as Core's act-twice gates read it, written as a saved Flow's web
+ * node is: a read says it reads, and a node that changes the page carries only
+ * the consequences its call declared -- the plain strings, `[]` for none --
+ * under Core's own key. Never `effect: "mutate"`, which would make every
+ * page-changing node a lasting act (`automationStudioNodeActLasts`).
+ */
+function nodeMetadata(node: { effect: "observe" | "mutate"; declared?: JsonValue | undefined }): JsonObject {
+  if (node.effect === "observe") return { effect: "observe" };
+  const declared = Array.isArray(node.declared) ? node.declared.filter((entry): entry is string => typeof entry === "string" && entry !== "") : [];
+  return { [AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY]: declared };
+}
+
+/** The command's verb when it is one of this domain's, which is when the domain can state anything about it. */
+function webActionType(actionType: string): WebAutomationActionType | undefined {
+  return (WEB_AUTOMATION_ACTION_TYPES as readonly string[]).includes(actionType) ? actionType as WebAutomationActionType : undefined;
 }
 
 /**
