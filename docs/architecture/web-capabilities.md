@@ -127,6 +127,25 @@ and 500 ms. The whole loop is capped at five seconds and checks the command's
 own deadline again after every wait, so a backoff never grants time the command
 did not have.
 
+Around that loop, every node is also attempted again as a whole: the first
+attempt and three retries, at Core's 250 ms, 1 s and 2 s
+(`AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY`, user rule 2026-10-07, t355).
+That holds on every path a node runs on: a saved Flow's playback, a build's
+candidate trial, every call a build makes while exploring (`core.run_node`),
+and every step its own test runs replay. The last two go through
+`domain/src/runtime/llm-evidence/node-run/retries/`, which hands the dispatch to
+Core's `automationStudioDispatchWithNodeRetries`, so the number, the waits and
+the act-twice gates are Core's alone. The model sees the final outcome, with
+`attempts` beside it when there was more than one, never a first attempt's
+failure. A test replay looks for a press's target four times before it calls
+the step remembered. A press the page refused as busy or too fast is one of
+the faults the loop above leaves to this layer, which honours the wait the page
+named (`retryAfterMs`). A press that may have landed is never pressed again:
+the runtime adapter sends a mutating action's failure found after it acted, at
+verification or confirmation, to Core as not retryable (`runtime/adapter.ts`).
+A target that never appears therefore costs about 23 s before the node fails:
+four in-page waits of about 5 s, plus 3.25 s of backoff.
+
 The loop is deliberately narrower for an action that can change the page.
 Clicks, typing and the other mutating verbs retry only a target miss that
 happened before dispatch. Read-only verbs may retry the full browser-retryable

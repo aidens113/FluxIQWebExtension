@@ -512,6 +512,12 @@ export type WebLlmToolRejection = {
   detail?: WebLlmToolRejectionDetail;
   /** The page as it stands after a refusal the page caused, as the model reads every page (t223); absent on every other refusal. */
   page?: WebLlmPublishedPage;
+  /**
+   * How many times the node was dispatched before the page's last refusal,
+   * said only when it was more than once: Core's default retries were spent on
+   * a fault that did not clear (`node-run/node-retries.ts`, t355).
+   */
+  attempts?: number;
 };
 
 export class RecoverableToolRejection extends Error {
@@ -704,7 +710,11 @@ function wholeCount(value: number | undefined): number | undefined {
 /**
  * A refusal, with the page it was refused on when the page caused it. The page
  * goes out as the compact view; the structured packet stays in the domain.
+ * `attempts` is said only when the node went out more than once (t355).
  */
-export function toolRejection(code: WebLlmToolRejectionCode, page?: WebLlmPageEvidence, detail?: WebLlmToolRejectionDetail): WebLlmToolRejection {
-  return present<WebLlmToolRejection>({ schemaVersion: WEB_LLM_TOOL_RESULT_SCHEMA_VERSION, ok: false, code, detail, page: page === undefined ? undefined : publishedWebLlmPage(page) });
+export function toolRejection(code: WebLlmToolRejectionCode, page?: WebLlmPageEvidence, detail?: WebLlmToolRejectionDetail, attempts?: number): WebLlmToolRejection {
+  return present<WebLlmToolRejection>({
+    schemaVersion: WEB_LLM_TOOL_RESULT_SCHEMA_VERSION, ok: false, code, detail, page: page === undefined ? undefined : publishedWebLlmPage(page),
+    attempts: attempts !== undefined && attempts > 1 ? attempts : undefined
+  });
 }
