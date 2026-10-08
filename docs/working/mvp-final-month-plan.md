@@ -56,7 +56,7 @@ hardening. In-flight t334 (click executor), t335 (installer, never compiled) and
 t337 (grammar for one sentence family) are WIP commits on their own branches, not
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
-**In flight.** t355 every node retries automatically on every path, 3 retries by default (user rule, includes trials' one-attempt limit); t356 a candidate build never gives up (durable pre-act locators, re-test after a transient failure, recovery sentences, plain trial feedback). Next: lane A round 5 (candidate) once all three merge.
+**In flight.** t355 every node retries automatically on every path, 3 retries by default (user rule, includes trials' one-attempt limit); t358 candidate submissions resolve handles from exploration's view history. Next: lane A round 5 (candidate) once all three merge.
 
 **Next order.**
 
@@ -137,6 +137,14 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
+
+### Brief: t358 a candidate submission can reference controls from pages exploration has left
+- Worker: t358-view-history (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t358\` (Core-paired, branch `task/t358-submission-resolves-view-history`). Report: `docs/working/mvp-final-month-plan/reports/t358-submission-resolves-view-history.md` in the t358 downstream tree.
+- Fact: in lane A round 4 (`run-muyrpbnk-fef374e7`, t342 report round 4) twelve submissions were refused `web.handle.unknown:target` because nodes 1 and 2 named start-page popup handles (t478, t488) that exploration had seen but left; t356 (merged, see its report) made refusals name the handles and a recovery, and made identity survive a label change, but such handles stay unknown because exploration and submission share one resolver that knows only the current page. A Flow's first steps nearly always act on the start page the model has since left, so candidate mode cannot write them.
+- Goal: at submission, each handle resolves from exploration's view history to its durable, pre-act locator description (t356's identity rule), so a candidate may name any control exploration was shown; exploration's own actions (`core.run_node` and discovery tools) still act only on the current page. Refuse a handle no view ever showed, naming it. Record in the submission which view each handle came from.
+- Owns: domain `domain/src/runtime/llm-evidence/plan-resolution/**` and its tests; Core `runtime/flow-bootstrap/candidate/**` and the plan-parameter resolution call it uses (list exact files before editing), with tests.
+- Must not touch: the action runtime and retry policy (`apps/extension/src/content/**`, domain native runtime attempt budgets, Core `runtime/flow-bootstrap/verification/detached-execution.ts`; t355 owns them), `docs/working/*.md`. No commits, provider, Lab or panel. No new `as never` casts.
+- Definition of done: fail-first tests: a candidate naming a start-page popup handle after exploration moved on validates and resolves to that control's durable locator; exploration's run_node on a handle from a left page is still refused; a never-shown handle is refused by name; legacy unchanged. Owning domain and Core tests, domain and Core typechecks, both audits.
 
 ### Brief: t357 candidate scripts can mark optional steps and choose options by desired state
 - Worker: t357-optional-choose (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t357\` (Core-paired, branch `task/t357-candidate-optional-and-choose`); edits in its `!FluxIQ` tree. Report: `docs/working/mvp-final-month-plan/reports/t357-candidate-optional-and-choose.md` in the t357 downstream tree.
@@ -516,6 +524,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: Core `086eb8d2`, downstream `d671eb64`, both pushed. `optional: yes` assembles to the drafted optional shape (failed and success edges into a Merge), which `absent-step.ts` already treats as sometimes present; a plan node has no metadata field, so `sometimesPresent` itself was not used. The candidate-only example teaches choices as desired state (`web.dom.select`, `web.dom.check` on the box or radio behind a swatch). Supervisor change before merge: every instructed option keeps its own desired-state step even when the page arrives with it chosen (the worker's text said such a choice needs no step, which conflicts with the instructed-acts check and with fixture variants). Legacy format and schema byte-identical, pinned by a sha256 test.
 - Validation: supervisor in the t357 Core tree after the wording change: vitest authoring, plan, candidate, flow-bootstrap-commands, conversations -> 71 files, 624 passed; `npx tsc --noEmit -p tsconfig.json` exit 0; Core audit exit 0; Core dev unchanged since the branch.
 - Limits: whether the page view offers a handle for a radio hidden under a swatch (needed by `web.dom.check`) is unverified; optional steps are checked at the absent-step level, not in a live trial.
+
+### 2026-10-08 - t356 merged: candidate builds re-test transient failures and name their recovery; t358 dispatched
+- Changed: Core `01751e68`, downstream `a721901c`, both pushed. The trial gate owns re-testing (`retry_allowed` after execution_failed or not_judged, at most 3 trials per revision); a refused submission names its stale handles and a recovery step, and a third identical refusal in a row ends the round (`candidate/submission-refusal.ts`); trial feedback names each step's control and outcome in plain words; a re-viewed handle drops a label its views disagree on and keeps its stable attributes (domain `plan-resolution/element-identity.ts`, `target-packets.ts`), so "Get coupons" and "Collected" match the same control. Supervisor accepted dropping the disputed label over keeping the pre-act one, since the page's identity veto would otherwise refuse an exploration re-press. Gap: handles for controls on pages exploration left stay unknown, so t358 makes submissions resolve from view history.
+- Validation: supervisor on the merged t356 trees: Core vitest over flow-bootstrap, candidate-trial, llm, flow-bootstrap-commands, conversations, activity -> 330 files, 3748 passed, 2 skipped; Core tsc exit 0; Core audit exit 0; after rebuilding Core libraries, domain `pnpm test` -> 1585 pass, 0 fail; domain `tsc --noEmit` on tsconfig.json and tsconfig.test.json exit 0; downstream audit exit 0.
+- Limits: extension identity veto with a label-less identity checked by reading only; activity wording for the new refusal codes not traced.
 
 ## Open Questions
 
