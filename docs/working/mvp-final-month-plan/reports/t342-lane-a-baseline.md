@@ -379,3 +379,88 @@ Predictive risks for the next candidate run, untested because no trial ran:
 - The run's debug exists under the run id. The `unchanged` guard refuses this instance and task until source changes.
 - Slot 2 is still claimed by t342.
 - No Lab process is running.
+
+## Round 4 (2026-10-07/08, 23:54-00:20 UTC, off-peak): candidate mode after t354
+
+The tree `fxwork/t342` was at downstream b9e0c352 (contains dev ea2366b9) and Core 0c53a16c (= Core dev), both clean.
+Same instance, slot 2 and workspace. Dry run: ready, 0 calls, candidate mode, `candidateTrial {trialRunner: true,
+startReset: true}`, 48 calls, $0.10. Guard admitted at 23:57:35 UTC. Run debug:
+`docs/working/language-driven-flow-loop-plan/debugs/run-muyrpbnk-fef374e7.md`.
+
+### In plain English
+
+**Failed: $0.039, two trials, neither got past its second step, nothing promoted, no further paid run.**
+
+t354's three fixes held: no reply was lost, and the spend was recorded. This time the candidate machinery really ran.
+The model explored, wrote a whole Flow as a script, and Core test-ran it twice from a freshly reset page. Both trials
+broke on the same step, collecting the store coupon, for two different reasons, and neither reason was the model's
+fault:
+
+1. **The script pointed at the coupon button as it looked after exploration had already pressed it.** The button says
+   "Get coupons" on a fresh page and "Collected" afterwards. Core recorded the step against "Collected", so on the
+   reset page the trial could not find it.
+2. **When the target was right, the page answered the first press with "Network busy, please try again".** A normal
+   run retries such a press up to three times. A trial allows one attempt, so it failed.
+
+The model then had no way out:
+
+- The script language has no way to say "retry this" or "optional".
+- Its request to simply try the trial again was refused as a repeat.
+- The trial told it only "step 2 failed: rate limited", without the page's own words.
+
+It then guessed that pop-ups were in the way and added steps using buttons it had seen on a different page. Core
+refused that twelve times with a sentence that never named the buttons or the page, until the no-progress guard
+stopped the build. The ending then told the person "the model's answer could not be used" and that the Flow "has no
+steps yet". Both are untrue: the answers were usable and four drafts were saved.
+
+### Rounds 2, 3 and 4 side by side (same task, instance and model)
+
+| | Round 2, legacy | Round 3, candidate | Round 4, candidate + t354 |
+| --- | --- | --- | --- |
+| Run | `run-muylu4pp-f9cb2121` | `run-muyqgopm-1bfa7054` | `run-muyrpbnk-fef374e7` |
+| Outcome | failed honestly after test, judges, repair | failed at the first submission (one bad reply) | failed after two trials, both stopped at step 2 |
+| Calls / cost | 38 / $0.056718 | 18 / $0.020980 (recorded $0) | 34 / $0.039318 (recorded $0.039248) |
+| Split | chat 1, exploration 28, judges 2, repair 7 | chat 1, exploration 17 | chat 1, exploration 14, submissions 16, trial requests 3, judges 0 |
+| Churn | 20 amendment answers, 13 with refusals | 1 unusable reply (fatal) | 16 submissions, 12 refused; 3 trial requests, 1 refused as repeat; 0 completions |
+| Furthest point | Flow tested and judged twice | exploration only | two trials from a reset page, step 2 of 8 |
+| Quantity | "+" once (2), accepted as three | typed 3 | typed 3 |
+| Space Grey | toggle kept, colour un-chosen | press in script (untested) | press in script (never reached) |
+| Instruction saved | paraphrase | own words | own words |
+
+### Causes, reproduction and the file to change
+
+| # | Cause | Reproduction | File to change | Verified by |
+| --- | --- | --- | --- | --- |
+| C1 | Script handles bind to the control as exploration last saw it, after its own act ("Collected" for "Get coupons") | page views 0012 vs 0016/0026 (`t925`); trial 1 (0032) step 2 `web.target.not_found`; overlay moment 5 "Clicking “Collected”"; revision 7 `changedPaths ... element.visibleText` | downstream `domain/src/runtime/llm-evidence/plan-resolution/element-identity.ts:113` (identity text from the newest view); choose the view before the acting step | lead (views, trial record); selection point not traced |
+| C2 | A trial allows one attempt per step; a normal run retries three times | trial 2 (0048) step 2 `web.action.rate_limited` (retryable, domain `failure/codes.ts:283`) on the page's first-press "Network busy" | Core `flow-bootstrap/verification/detached-execution.ts:75-76` (`retryPolicy {maxAttempts: 1}`, `maxRetriesPerAction: 0`) against `executor/retry-policy.ts` default; keep model recovery at zero | lead, code |
+| C3 | `web.handle.unknown` refusals name no handle or location; 12 refusals of start-page handles `t478`/`t488` | 0037-0044, 0053-0068; the handles appear only in 0004's start page view | downstream `domain/src/runtime/llm-evidence/node-run/run.ts` and the candidate submission diagnostics | lead |
+| C4 | Trial feedback has only step number and code | 0032, 0048 `feedback.steps` | Core `runtime/service/candidate-trial/feedback.ts`: add control words, the page's notice, a screened end view | lead |
+| C5 | Retrying a trial after a retryable failure is refused as a repeat | 0049/0050 `repeat_refused` | Core `llm/repeat-guard/outcomes.ts` | lead |
+| C6 | No-progress ending worded "the model's answer could not be used"; "has no steps yet" with four drafts saved; Lab `candidate: null` | `build.chat.said`, `snapshots/flow-lane.json` | Core candidate failure staging in `runtime/service.ts`, `conversations/commands/progress.ts`, `conversations/commands/create-here.ts`; downstream `flow-lane/creation/candidate-outcome.ts` | lead |
+| gap | The script format has no retry or optional key | 0051 resubmission identical (`changedPaths: []`) | Core `flow-bootstrap/plan/flow-script-format.ts` (only after C2: with normal retries the model need not write one) | lead |
+
+Order that matters: C2 then C1. Every lane A candidate meets the busy coupon after a reset, and every candidate that
+collects the coupon in exploration meets C1. After those, round 2's Space Grey trap is still in every script the
+model wrote (C2 of round 2, unfixed).
+
+### UI review (8 moments, lead)
+
+- Internal names reach the person: "Using “Test candidate”", "Using “Submit candidate”", "Revision 7", "rate limit"
+  (05, 07, 08).
+- Moment 5 says "Trying again didn't fix the step", although trials never retry.
+- The overlay says "Step 2 of 8" and "Fixing your Flow" during a trial.
+- Fixed since round 3: the unusable-reply words, the Stop button, overlay placement.
+- The ending is wrong (C6).
+
+### Not run, not verified
+
+- The trial judge, promotion, chat apply, playback and the oracle: never reached.
+- Replay and second candidate run: not run (no pass), as briefed.
+- Fixes are designs; no tests written (no source edits).
+
+### Guard and slot state left behind (round 4)
+
+- Ledger: `start` and `finish` for `run-muyrpbnk-fef374e7` (failed, $0.039318). Its debug exists under the run id. The
+  `unchanged` guard refuses this instance and task until source changes.
+- Slot 2 is still claimed by t342.
+- No Lab process is running.
