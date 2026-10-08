@@ -98,6 +98,7 @@ import {
 import type { WebNodeRun } from "./context";
 import { webMovesThePage } from "./start-location";
 import { verifyWebOutputNode } from "./verify";
+import { webNodeDispatchWithRetries, webNodeLookUntilPresent } from "./retries";
 
 /** The reserved key Core marks a replay call with, and what it may ask for. */
 export const WEB_LLM_REPLAY_KEY = "replay";
@@ -346,11 +347,19 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // page before it, so a refusal can quote what the page then wrote and a step
   // that ran can say what it changed. Not shown to the model; only compared.
   const inPlace = node.effect === "mutate" && !webMovesThePage(node);
-  const before = inPlace ? await replayPage(run, false) : undefined;
-  if (before !== undefined && targetAbsentBefore(before, ran, run.request.value)) {
+  // A target the read does not show is looked for again under the default
+  // retries before the step is called remembered (`./retries/`, t355):
+  // one look straight after the step before it decided on a page still drawing.
+  const looked = inPlace
+    ? await webNodeLookUntilPresent(run, node.definitionId, async () => await replayPage(run, false), (page) => page !== undefined && targetAbsentBefore(page, ran, run.request.value))
+    : undefined;
+  const before = looked?.seen;
+  if (looked?.absent === true) {
     return await webNodeReplayMissingTarget(run, "step", { resultReason: undefined, nodeId: node.definitionId, assumed }, "target_not_found");
   }
-  const result = await run.gateway.executeAction(run.sessionId, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) });
+  // Under Core's default retries, as playback and a trial run the step
+  // (`./retries/`, t355); a lasting act is never blindly repeated.
+  const { result } = await webNodeDispatchWithRetries(run, node, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) });
   assertActive(run.request.signal);
   if (result.status !== "succeeded") {
     const refused = webActionFailureRefusal(result);
