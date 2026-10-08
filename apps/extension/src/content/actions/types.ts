@@ -13,6 +13,7 @@ import type {
   AssertionOutcome,
   AssertionTarget,
   CheckableStateOutcome,
+  ClickPoint,
   DialogControl,
   ExtractedElementValue,
   FileInputOutcome,
@@ -70,8 +71,8 @@ export type ContentActionDependencies = {
   checkActionability(element: Element): ActionabilityReport;
   /** Per-character typing and key presses that perform a trusted event's default action. */
   keyboard: KeyboardCapability;
-  /** Sets a checkbox or radio to a state rather than toggling it. */
-  setCheckedState(element: Element, checked: boolean): CheckableStateOutcome | Promise<CheckableStateOutcome>;
+  /** Sets a checkbox, a radio, or a control whose chosen state the page shows, to a state rather than toggling it; `point` is where a press lands. */
+  setCheckedState(element: Element, checked: boolean, point?: ClickPoint): CheckableStateOutcome | Promise<CheckableStateOutcome>;
   /**
    * Detects the repeating structure around an element, or the page's largest,
    * as the picker would propose it. Reads nothing but structure, and waits,

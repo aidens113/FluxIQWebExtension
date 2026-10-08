@@ -1,4 +1,6 @@
-// The check verb: set a checkbox or radio to a requested state.
+// The check verb: set a checkbox or radio -- or any control whose chosen state
+// the page shows, such as a swatch drawn apart when chosen -- to a requested
+// state.
 //
 // The point of a verb separate from click is idempotence: a click toggles, so
 // replaying one against a page whose state already moved leaves the control in
@@ -27,6 +29,11 @@
 // with no box of its own is not out of reach: the label is what is pressed and
 // what an overlay would cover, so the label is what is judged. Only a hidden
 // control with no label at all is refused as hidden.
+//
+// A control the page draws itself (t364) is set by the chosen state it shows
+// (`../action-runtime/checkable-state/chosen-state.ts`): already chosen succeeds pressing
+// nothing, otherwise one press at the point the gate judged, then the state
+// read back. Its result says "chosen" rather than "checked", and what showed it.
 
 import type { ActionabilityReport } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
@@ -54,7 +61,7 @@ export async function checkAction(action: BrowserActionCommand, deps: ContentAct
     });
   }
 
-  const outcome = await deps.setCheckedState(element, requested);
+  const outcome = await deps.setCheckedState(element, requested, report.point);
   // Described after the attempt, so the evidence shows the state the page was left in.
   const evidence = { element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution };
   if (!outcome.ok) {
@@ -62,6 +69,13 @@ export async function checkAction(action: BrowserActionCommand, deps: ContentAct
     return deps.rejected(action, startedAt, code, expected, outcome.reason, evidence);
   }
 
+  if (outcome.kind === "option") {
+    const wanted = `the option is ${chosenWord(requested)}`;
+    const shown = `the option is ${chosenWord(outcome.checked)} (${outcome.shownBy})`;
+    const verdict = outcome.checked === requested ? ({ status: "passed", expected: wanted, actual: shown } as const) : ({ status: "failed", expected: wanted, actual: shown } as const);
+    const message = outcome.changed ? `Option ${chosenWord(requested)}.` : `Option already ${chosenWord(requested)}; nothing pressed.`;
+    return deps.success(action, startedAt, message, verdict, evidence);
+  }
   const actual = `the ${outcome.kind} is ${stateWord(outcome.checked)}`;
   const validation = outcome.checked === requested
     ? ({ status: "passed", expected, actual } as const)
@@ -102,6 +116,10 @@ function pressedInstead(element: Element): Element | undefined {
 function cssEscape(value: string): string {
   const api = (globalThis as { CSS?: { escape?: (value: string) => string } }).CSS;
   return typeof api?.escape === "function" ? api.escape(value) : value.replace(/["\\]/gu, "\\$&");
+}
+
+function chosenWord(chosen: boolean): string {
+  return chosen ? "chosen" : "not chosen";
 }
 
 function stateWord(checked: boolean): string {

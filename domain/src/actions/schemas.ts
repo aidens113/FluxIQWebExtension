@@ -308,7 +308,7 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
   {
     actionType: "web.dom.check",
     label: "Set Checked",
-    description: "Set a checkbox or radio to a checked state.",
+    description: "Set a checkbox, a radio, or an option the page shows chosen (a swatch or chip drawn apart from its like options, or a control with aria-checked, aria-pressed or aria-selected) to a requested state, pressing only when the state differs.",
     parameterSchema: {
       type: "object",
       required: ["selector"],

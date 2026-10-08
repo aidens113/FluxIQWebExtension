@@ -128,17 +128,25 @@ test("a build's repair of a refuted answer outside any trial is still 'Fixing yo
   assert.equal(h.now().headline, "Fixing your Flow");
 });
 
-test("the trial is opened and closed only by the build's core.test_candidate row", () => {
+test("a test is opened by the build's core.test_candidate row, its decision to test, or its run's first step, and closed by the build's own next work", () => {
   const trial = new CandidateTrial();
-  assert.equal(trial.observe(event({ phase: "exploring", label: "Saving the Flow's steps", detail: { kind: "tool", title: "Saving the Flow's steps", status: "started", ref: "core.submit_candidate" } })).testing, false);
-  assert.deepEqual(trial.observe(trialStarted()), { testing: true, startedNow: true, endedNow: false, line: null });
-  assert.equal(trial.observe(trialStep(1, "Opening the start page")).testing, true);
-  // A new unit of work starts outside any trial.
-  assert.equal(trial.observe(trialStep(1, "Opening the start page", "other")).testing, false);
-  assert.deepEqual(trial.observe(trialStarted("b3")).startedNow, true);
-  // A unit that settles with its trial open closes it.
-  assert.equal(trial.observe(event({ phase: "failed", label: "Build failed", final: true }, "build", "b3")).testing, false);
-  assert.equal(trial.observe(trialStep(1, "Opening the start page", "b3")).testing, false);
+  assert.equal(trial.observe(event({ phase: "exploring", label: "Saving the Flow's steps", detail: { kind: "tool", title: "Saving the Flow's steps", status: "started", ref: "core.submit_candidate" } }), "build").testing, false);
+  assert.deepEqual(trial.observe(trialStarted(), "build"), { testing: true, startedNow: true, endedNow: false, line: null });
+  assert.equal(trial.observe(trialStep(1, "Opening the start page"), "build").testing, true);
+  // A new unit of work starts outside any test; a build's run step there opens its own (t366: Core sends no core.test_candidate row).
+  assert.deepEqual(trial.observe(event({ phase: "exploring", label: "Using core.run_node" }, "build", "other"), "build"), { testing: false, startedNow: false, endedNow: false, line: null });
+  assert.deepEqual(trial.observe(trialStep(1, "Opening the start page", "other"), "build"), { testing: true, startedNow: true, endedNow: false, line: null });
+  // The build's next decision closes it, with no line of its own.
+  assert.deepEqual(trial.observe(event({ phase: "thinking", label: "Deciding the next step", detail: { kind: "thought", title: "Deciding the next step", status: "started" } }, "build", "other"), "build"), { testing: false, startedNow: false, endedNow: true, line: null });
+  // The decision to test opens it with Core's words for the test, and a loop tool row closes it.
+  assert.deepEqual(trial.observe(event({ phase: "exploring", label: TITLE, detail: { kind: "thought", title: TITLE, text: "Testing revision 2.", status: "succeeded" } }, "build", "other"), "build"), { testing: true, startedNow: true, endedNow: false, line: TITLE });
+  assert.equal(trial.observe(event({ phase: "exploring", label: "Looking over the whole page", detail: { kind: "tool", title: "Looking over the whole page", status: "started", ref: "web.find_on_page" } }, "build", "other"), "build").endedNow, true);
+  // A saved Flow's run step is the run itself, never a test.
+  assert.equal(trial.observe(trialStep(1, "Opening the start page", "r1"), "run").testing, false);
+  assert.deepEqual(trial.observe(trialStarted("b3"), "build").startedNow, true);
+  // A unit that settles with its test open closes it.
+  assert.equal(trial.observe(event({ phase: "failed", label: "Build failed", final: true }, "build", "b3"), "build").testing, false);
+  assert.equal(trial.observe(event({ phase: "exploring", label: "Using core.run_node" }, "build", "b3"), "build").testing, false);
 });
 
 test("the headline names a test above a repair, and a failed test is never a failed fix", () => {
