@@ -117,3 +117,29 @@ Tests (fail-first, observed below):
 4. **The exploration covered-target refusal** (`node-run/run.ts`, `webCoveredTarget`) still refuses on one look, by design (C4: it hands the layer to the model). Layer 1 would clear such a layer automatically if the press were sent. That was left as it is.
 5. **Core structure audit:** "1 baseline entries can be lowered" is printed. I did not run `pnpm structure:baseline`, because it rewrites a shared file.
 6. **Docs to update** with the new default and the floor: `docs/architecture/testing-facility.md` (if it states three attempts), Core's executor or defensive-policy docs, and the Current State user rule. These are supervisor-owned.
+
+## Follow-up after the dev merge: the Lab's Flow-run bound, and the docs
+
+**Cause.** `packages/test-runner/src/flow-lane/terminal-run-wait.ts` already derived its bound from Core's published constants, from one source: `TERMINAL_DETAIL_NODE_WAIT_MS = READINESS_CAP_MS x DEFAULT.maxAttempts + every backoff`. So with the new policy it moved by itself, from 91,250 ms to 123,250 ms per node (4 x 30 s + 250 + 1,000 + 2,000 ms). Only the four tests, and the comments, still stated the old literals.
+
+**Changed:**
+- `flow-lane/terminal-run-wait.ts`: comments only. The per-node figure is now 4 x 30 s + 3.25 s = 123.25 s. The cap now binds from six nodes; it was seven. The paragraph on why the 10-minute cap still holds is added (below).
+- `flow-lane/tests/terminal-run-wait.test.ts`: states 4 attempts, 123,250 ms, and 3,250 ms of backoff. Five nodes = 583,000 ms (9.7 min), still under the cap; six nodes reaches the cap.
+- `flow-lane/tests/persisted-flow-run.test.ts`: the "node count earns" case uses five nodes, 583,000 ms. Six is now the cap.
+
+**The cap still makes sense.** The derived bound is the worst case: every attempt spends its full 30 s readiness ceiling. What a node really costs when its target never appears is about 23 s: four in-page waits of about 4-5 s plus 3.25 s of backoff. `run-muyta37c-a9368bca` showed four attempts of about 4.0 s each. A nineteen-node Flow in which every node met that would finish in about 7.3 min, under the 10-minute cap. Only readiness ceilings that are spent in full at six nodes in a row reach the cap, and that run is stuck.
+
+**Docs.**
+- Downstream `docs/architecture/web-capabilities.md` ("Default browser recovery"): adds the node-level layer (the first attempt plus 3 retries on every path, the domain `retries/` seam, `attempts` shown to the model, the lasting-act rule, about 23 s per never-appearing target).
+- Core `docs/architecture/automation-studio.md`: the default paragraph said "three attempts". It now describes the first attempt plus 3 retries as a floor on every path, the outside-graph helper, and `maxRetriesPerAction` 3.
+- Core `model/policies.ts` `RetryPolicy` comment: its example ("3 means two retries") now shows the floor.
+- Core `docs/reference/framework-reference.md` (and the package copy) regenerated with `pnpm docs:reference`. The diff is large (534+/381-) because the reference was already stale against dev; it is generated, never hand-edited.
+- No downstream doc stated three attempts. `testing-facility.md` does not state the per-node figure.
+
+**Commands run and observed results:**
+- `pnpm build` (packages/fluxiq) passed. `pnpm build` (test-runner) passed.
+- `node --test dist/flow-lane/tests/*.test.js` printed `# tests 252 # pass 252 # fail 0`. The coordinator reported 4 failures before this change.
+- `pnpm check` (test-runner) passed. Its first run refused because Core's build was stale after the `policies.ts` comment edit; after the rebuild it passed.
+- `pnpm check` (packages/fluxiq) passed.
+- Core `pnpm docs:check` printed "Deterministic framework reference is current".
+- Both structure audits passed: downstream `176 warning(s), 182 baselined`, Core `288 warning(s), 508 baselined`.

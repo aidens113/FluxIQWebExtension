@@ -14,13 +14,14 @@ import { awaitTerminalRunDetail, LIVE_LLM_RUN_WAIT_MS, TERMINAL_DETAIL_BASE_WAIT
 
 test("one node's allowance is every attempt's readiness ceiling plus every retry's backoff, as Core defines them", () => {
   // Core awaits readiness once per attempt and sleeps a backoff before each
-  // attempt after the first: 3 x 30 s, then 250 ms and 1 s.
-  assert.equal(AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY.maxAttempts, 3);
+  // attempt after the first. Since t355 (user rule, 2026-10-07) that is the
+  // first attempt and three retries: 4 x 30 s, then 250 ms, 1 s and 2 s.
+  assert.equal(AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY.maxAttempts, 4);
   assert.equal(AUTOMATION_STUDIO_READINESS_CAP_MS, 30_000);
-  assert.equal(TERMINAL_DETAIL_NODE_WAIT_MS, 91_250);
+  assert.equal(TERMINAL_DETAIL_NODE_WAIT_MS, 123_250);
   // Stated the other way round, so a Core that moves a ceiling moves this and
   // does not leave a literal behind.
-  assert.equal(TERMINAL_DETAIL_NODE_WAIT_MS - AUTOMATION_STUDIO_READINESS_CAP_MS * AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY.maxAttempts, 1_250);
+  assert.equal(TERMINAL_DETAIL_NODE_WAIT_MS - AUTOMATION_STUDIO_READINESS_CAP_MS * AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY.maxAttempts, 3_250);
 });
 
 test("a Flow of one node keeps the load-proven 90 seconds, and a caller that names no count gets it", () => {
@@ -35,20 +36,21 @@ test("a Flow of one node keeps the load-proven 90 seconds, and a caller that nam
 
 test("every node after the first adds its own allowance, so a multi-node Flow is not failed for still running", () => {
   assert.equal(terminalDetailWaitMs(2), TERMINAL_DETAIL_BASE_WAIT_MS + TERMINAL_DETAIL_NODE_WAIT_MS);
-  assert.equal(terminalDetailWaitMs(6), 90_000 + 5 * 91_250);
-  // The six-node case is the one the plan names, and it is 9.1 minutes: more
-  // than six times the bound that would have failed it.
-  assert.ok(terminalDetailWaitMs(6) > 6 * TERMINAL_DETAIL_BASE_WAIT_MS);
+  assert.equal(terminalDetailWaitMs(5), 90_000 + 4 * 123_250);
+  // Five nodes is 9.7 minutes: more than six times the bound that would have
+  // failed it. The six-node case the plan names now reaches the cap.
+  assert.ok(terminalDetailWaitMs(5) > 6 * TERMINAL_DETAIL_BASE_WAIT_MS);
 });
 
 test("the derived bound is capped at the longest run this facility allows", () => {
   assert.equal(TERMINAL_DETAIL_MAX_WAIT_MS, LIVE_LLM_RUN_WAIT_MS);
   assert.equal(terminalDetailWaitMs(20), TERMINAL_DETAIL_MAX_WAIT_MS);
   assert.equal(terminalDetailWaitMs(Number.MAX_SAFE_INTEGER), TERMINAL_DETAIL_MAX_WAIT_MS);
-  // Seven nodes is where Core's own per-node worst case reaches the cap, so
-  // the count still governs every Flow smaller than that.
-  assert.ok(terminalDetailWaitMs(6) < TERMINAL_DETAIL_MAX_WAIT_MS);
-  assert.equal(terminalDetailWaitMs(7), TERMINAL_DETAIL_MAX_WAIT_MS);
+  // Six nodes is where Core's own per-node worst case reaches the cap since the
+  // fourth attempt (it was seven), so the count still governs every Flow
+  // smaller than that.
+  assert.ok(terminalDetailWaitMs(5) < TERMINAL_DETAIL_MAX_WAIT_MS);
+  assert.equal(terminalDetailWaitMs(6), TERMINAL_DETAIL_MAX_WAIT_MS);
 });
 
 // A node that ran and was then judged wrong is a node that ran.
