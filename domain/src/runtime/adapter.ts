@@ -24,6 +24,7 @@ import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../actions/types";
+import { webAutomationTextSightingValue, type WebAutomationTextSighting } from "../actions/text-sighting";
 import { dispatchWebAutomationOutput } from "../io/gateway-output-dispatcher";
 import { outputTargetFromPayload } from "../output-nodes";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
@@ -137,7 +138,7 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
     // Both guards keep the payload's top level, so a next-page step's
     // `route: "ended"`, which the dispatcher lifted there (contract C1), reaches
     // Core on this path exactly as on the IO path.
-    const readable = sensitiveTarget ? dispatchPayloadWithoutExtracted(result.payload) : result.payload;
+    const readable = dispatchPayloadWithScreenedSighting(sensitiveTarget ? dispatchPayloadWithoutExtracted(result.payload) : result.payload);
     runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(readable) : readable;
   }
   const target = outputTargetFromPayload(payload as JsonObject);
@@ -316,6 +317,21 @@ function dispatchPayloadWithoutExtracted(payload: JsonObject): JsonObject {
 }
 
 /**
+ * The dispatch payload with a failed text wait's sighting held to its shape
+ * and its snippets screened, as `failureDiagnostics` reports it: the payload
+ * crossed the WebSocket, and a snippet of shown text the secret screen would
+ * change must not reach Core this way either. A payload without one is
+ * returned as it came.
+ */
+function dispatchPayloadWithScreenedSighting(payload: JsonObject): JsonObject {
+  const actionResult = jsonObject(payload.result);
+  if (!actionResult || (!("textPresence" in actionResult) && !("visibleNear" in actionResult))) return payload;
+  const { textPresence: _presence, visibleNear: _near, ...rest } = actionResult;
+  const sighting = screenedTextSighting(webAutomationTextSightingValue(actionResult.textPresence, actionResult.visibleNear));
+  return { ...payload, result: sighting ? { ...rest, textPresence: sighting.textPresence, visibleNear: sighting.visibleNear } : rest };
+}
+
+/**
  * The dispatch payload with the action result's own post-condition withheld.
  *
  * `webAutomationActionResultPayload` already withholds it where the payload is
@@ -386,6 +402,13 @@ type FailureDiagnostics = {
  * string cannot ride into the attempt trace.
  * Nothing here can throw into the dispatch path: an unusable snapshot costs the
  * packet, never the failure it was meant to explain.
+ *
+ * A failed text wait or text assertion also says whether the text was hidden or
+ * absent, and what the page showed that most resembles it (t369,
+ * `actions/text-sighting.ts`): `textPresence` and `visibleNear`, as the client
+ * sent them, except that a snippet the secret screen would change is dropped
+ * rather than rewritten -- the content script already never reads one from a
+ * sensitive control, and this is the second fence the evidence packet has too.
  */
 function failureDiagnostics(status: FluxIQRuntimeCommandStatus, payload: JsonObject | undefined): FailureDiagnostics | undefined {
   if (status === "succeeded") return undefined;
@@ -395,6 +418,7 @@ function failureDiagnostics(status: FluxIQRuntimeCommandStatus, payload: JsonObj
   // Of the page as it rides on the attempt, the compact view (t223), so the
   // record names exactly what a reader of `metadata.failureEvidence` holds.
   const evidenceDigest = evidence === undefined ? undefined : createHash("sha256").update(JSON.stringify(publishedWebLlmPage(evidence))).digest("hex");
+  const sighting = screenedTextSighting(webAutomationTextSightingValue(actionResult.textPresence, actionResult.visibleNear));
   const report = compact({
     url: screenedEvidenceUrl(actionResult.url),
     title: screenedTitle(actionResult.title),
@@ -404,10 +428,18 @@ function failureDiagnostics(status: FluxIQRuntimeCommandStatus, payload: JsonObj
     // says the same thing and addresses nothing.
     failedTarget: evidence?.failedTarget,
     failedTargetMissing: evidence?.failedTargetMissing,
-    evidenceDigest
+    evidenceDigest,
+    textPresence: sighting?.textPresence,
+    visibleNear: sighting?.visibleNear
   });
   if (Object.keys(report).length === 0) return undefined;
   return { report, ...(evidence ? { evidence } : {}), ...(evidenceDigest ? { evidenceDigest } : {}) };
+}
+
+/** The sighting with every snippet the secret screen would change left out. */
+function screenedTextSighting(sighting: WebAutomationTextSighting | undefined): WebAutomationTextSighting | undefined {
+  if (!sighting) return undefined;
+  return { textPresence: sighting.textPresence, visibleNear: sighting.visibleNear.filter((snippet) => screenedWebLlmText(snippet) === snippet) };
 }
 
 /**

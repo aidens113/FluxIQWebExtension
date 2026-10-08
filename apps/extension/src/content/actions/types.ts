@@ -45,6 +45,7 @@ import type {
   WebAutomationStructureDetectionRequest,
   WebAutomationUploadFile
 } from "../types";
+import type { WebAutomationTextSighting } from "@fluxiq-web-extension/domain/client";
 
 export type ContentActionDependencies = {
   /** The page as it is now; `includeHidden` also lists what is not rendered, flagged `hidden`. */
@@ -95,6 +96,12 @@ export type ContentActionDependencies = {
   evaluateAssertion(request: WebAutomationAssertRequest, target: AssertionTarget): Promise<AssertionOutcome>;
   /** Waits for visible, enabled, absent, a URL, or the page to go quiet. */
   waitForCondition(request: WaitConditionRequest): Promise<WaitConditionOutcome>;
+  /**
+   * After a text wait or text assertion failed: whether the document holds the
+   * text hidden or not at all, and the shown text most like it; `undefined`
+   * when the page shows the text. Evidence only -- it never decides an outcome.
+   */
+  sightText(text: string): WebAutomationTextSighting | undefined;
   /**
    * Starts watching a link's document, from the moment of the press, for the
    * answer a page gives a link click it handles in script: a new address, or

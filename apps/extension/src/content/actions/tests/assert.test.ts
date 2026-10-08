@@ -122,6 +122,9 @@ function dependencies(held: boolean, expected: string, actual: string, wait: Stu
       attempts: 5
     }),
     captureSnapshot: () => ({ url: "https://example.test/order", title: "Order", elements: [] }),
+    // A failed text claim asks where its text is (t369); these rows are about
+    // the record, so the page shows it elsewhere and no sighting is added.
+    sightText: () => undefined,
     success: build("succeeded"),
     timedOut: build("timed_out")
   } as unknown as ContentActionDependencies, {
