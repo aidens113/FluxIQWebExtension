@@ -29,10 +29,18 @@
 // or whose effect is unknown, is not dispatched again; a press the page turned
 // away before it landed (`effect: "unacted"` -- too fast, busy, not drawn yet)
 // is, because nothing happened to repeat.
+//
+// **An uncertain press says so (t359).** When a press's failure leaves its
+// effect unknown, Core asks the caller's effect check when it gives one
+// (`checkEffect`): a press that landed counts as done, one that did not is
+// made again, and without an answer the press is not repeated and the result
+// says `lastingAct: "uncertain"` so the caller can tell the model the step's
+// outcome is uncertain rather than that it failed.
 
-import { automationStudioDispatchWithNodeRetries, type AutomationStudioFailureRecord, type AutomationStudioNodeRetryReading } from "fluxiq/automation-studio";
+import { automationStudioDispatchWithNodeRetries, type AutomationStudioFailureRecord, type AutomationStudioLastingActCheck, type AutomationStudioNodeRetryReading } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import type { WebLlmEvidenceGateway } from "../../capture";
+import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
 import type { WebNodeRun } from "../context";
 import { webNodeRetryWait } from "./wait";
@@ -40,8 +48,12 @@ import { webNodeRetryWait } from "./wait";
 /** What the gateway answers one command with. */
 export type WebNodeDispatchResult = Awaited<ReturnType<WebLlmEvidenceGateway["executeAction"]>>;
 
-/** The node's answer after its retries, and how many times it was dispatched. */
-export type WebNodeRetriedDispatch = { result: WebNodeDispatchResult; attempts: number };
+/**
+ * The node's answer after its retries, how many times it was dispatched, and
+ * how a lasting act whose effect the failure left unknown was settled: `landed`
+ * (it counts as done) or `uncertain` (it was not made again). Absent otherwise.
+ */
+export type WebNodeRetriedDispatch = { result: WebNodeDispatchResult; attempts: number; lastingAct?: "landed" | "uncertain" };
 
 /**
  * Dispatches one node command, and dispatches it again after each fault Core's
@@ -55,19 +67,21 @@ export async function webNodeDispatchWithRetries(
   run: Pick<WebNodeRun, "gateway" | "sessionId" | "request">,
   node: { definitionId: string; effect: "observe" | "mutate" },
   command: { actionType: string; parameters: JsonObject; metadata: JsonObject },
-  noted?: { attempts?: number }
+  noted?: { attempts?: number },
+  checkEffect?: AutomationStudioLastingActCheck<WebNodeDispatchResult>
 ): Promise<WebNodeRetriedDispatch> {
   const outcome = await automationStudioDispatchWithNodeRetries<WebNodeDispatchResult>({
     node: { id: node.definitionId, definitionId: node.definitionId, metadata: { effect: node.effect } },
     // Core sends nothing more once the build is cancelled between attempts.
     dispatch: async () => await run.gateway.executeAction(run.sessionId, command),
     read: webNodeRetryReading,
+    checkEffect,
     delay: webNodeRetryWait,
     signal: run.request.signal
   });
   // On the call's own record too, when one is given, so a refusal raised after the retries says how many there were.
   if (noted) noted.attempts = outcome.attempts;
-  return { result: outcome.result, attempts: outcome.attempts };
+  return present<WebNodeRetriedDispatch>({ result: outcome.result, attempts: outcome.attempts, lastingAct: outcome.lastingAct });
 }
 
 /**
