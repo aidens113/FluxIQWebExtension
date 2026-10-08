@@ -37,13 +37,8 @@
 // carries them, and pages that disagree on them give none.
 //
 // A handle's element in a child frame also keeps the path of the document the
-// frame held when the element was shown (`frameUrlPath`), read off the frame
-// address the merge published with the element (`data-fluxiq-frame-url`). The
-// frame id names nothing once a Flow reloads the page -- Chrome renumbers a
-// frame when it navigates -- and the path finds the same document again, as it
-// does for a recorded node (`output-nodes/payloads.ts`). The pathname only: the
-// origin differs run to run and the query may carry a token. Pages that agree on
-// a bare handle keep the newest path any of them gave.
+// frame held when it was shown (`frameUrlPath`, `frame-url-path.ts`). Pages that
+// agree on a bare handle keep the newest path any of them gave.
 //
 // A look the model is not shown -- the one a node run takes before it acts --
 // is remembered too, and when it was cut short it is only added: its handles
@@ -81,17 +76,28 @@
 // changed is dropped, never adopted. A handle the newer view no longer shows
 // still leaves the page with it, as above.
 //
+// **A candidate submission may name a control from any view (t358).** The
+// store also keeps each Flow's view history (`view-history.ts`): every handle
+// any capture carried, as its views agree it is (`acrossView`). Only a caller
+// that asks (`resolve`'s `reach`, `view_history`: a candidate submission)
+// reaches it, and only for a handle the current pages call `unknown` or
+// `stale` without a reload's renumbering; exploration's own acts keep the
+// current pages alone, since a control that left the page is not there to
+// press. Under `view_history` a resolution says which view it came from
+// (`shownIn`), where a capture is on record.
+//
 // Bounded twice: a Flow keeps its newest `RETAINED_PAGES_PER_FLOW` pages, and
 // the store keeps its newest `RETAINED_FLOWS` Flows. A page let go makes its
 // handles `stale` for that Flow; another Flow's handles are `unknown`, as they
-// are for the extraction handles (`structure/handles.ts`).
+// are for the extraction handles (`structure/handles.ts`). The view history
+// has bounds of its own (`view-history.ts`).
 
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
-import { webAutomationUrlPath } from "../../../output-nodes";
-import type { WebLlmEvidenceElement } from "../elements";
 import { present } from "../present";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webPlanElementIdentity, webPlanElementIdentityAcrossViews, webPlanElementWords, type WebPlanElementIdentity } from "./element-identity";
+import { webLlmFrameUrlPath } from "./frame-url-path";
+import { createWebLlmViewHistory, type WebLlmTargetView, type WebLlmViewHistory } from "./view-history";
 
 const RETAINED_PAGES_PER_FLOW = 8;
 const RETAINED_FLOWS = 32;
@@ -99,6 +105,13 @@ const RETAINED_FLOWS = 32;
 const REMEMBERED_STALE_PAGES = 64;
 
 export type WebLlmTargetScope = { projectId: string; flowId: string };
+
+/**
+ * Which views a handle may resolve from (header): absent, the pages as this
+ * Flow's exploration last saw them; `view_history`, any view it took, which is
+ * for a candidate submission alone.
+ */
+export type WebLlmTargetReach = "view_history";
 
 export type WebLlmTargetResolution =
   | {
@@ -109,6 +122,8 @@ export type WebLlmTargetResolution =
       element: WebPlanElementIdentity;
       /** The words a person reads for the element, when they differ from its identity's name by spacing alone (header). Display only. */
       words?: string;
+      /** Under `view_history` only: the newest view that carried the handle (on the page named, when one was). */
+      shownIn?: WebLlmTargetView;
     }
   | { ok: false; code: "unknown" | "stale" | "ambiguous" | "not_unique"; renumberedByReload?: true };
 
@@ -117,20 +132,24 @@ export type WebLlmTargetPackets = {
   remember(scope: WebLlmTargetScope, binding: WebLlmSnapshotBinding): void;
   /** Remember a look the model was not shown: as `remember` when it describes the whole page, else its handles only join the page's. */
   rememberLook(scope: WebLlmTargetScope, binding: WebLlmSnapshotBinding): void;
-  resolve(scope: WebLlmTargetScope, handle: string, location: string | undefined): WebLlmTargetResolution;
+  resolve(scope: WebLlmTargetScope, handle: string, location: string | undefined, reach?: WebLlmTargetReach): WebLlmTargetResolution;
 };
 
 type PageTarget = { selector: string; frameId: number | undefined; frameUrlPath: string | undefined; element: WebPlanElementIdentity; words: string | undefined; shared: boolean };
 type PageTargets = Map<string, PageTarget>;
-/** `renumbered`: per page, the handles a reload dropped while showing their control under another (see the header). */
-type FlowPages = { pages: Map<string, PageTargets>; letGo: Set<string>; renumbered: Map<string, Set<string>> };
+/**
+ * `renumbered`: per page, the handles a reload dropped while showing their
+ * control under another (see the header). `history`: every handle any capture
+ * carried (header).
+ */
+type FlowPages = { pages: Map<string, PageTargets>; letGo: Set<string>; renumbered: Map<string, Set<string>>; history: WebLlmViewHistory<PageTarget> };
 
 export function createWebLlmTargetPackets(): WebLlmTargetPackets {
   const flows = new Map<string, FlowPages>();
   /** The Flow's pages, made the newest Flow remembered. */
   const flowOf = (scope: WebLlmTargetScope): FlowPages => {
     const key = scopeKey(scope);
-    const flow = flows.get(key) ?? { pages: new Map<string, PageTargets>(), letGo: new Set<string>(), renumbered: new Map<string, Set<string>>() };
+    const flow = flows.get(key) ?? { pages: new Map<string, PageTargets>(), letGo: new Set<string>(), renumbered: new Map<string, Set<string>>(), history: createWebLlmViewHistory(acrossView) };
     flows.delete(key);
     flows.set(key, flow);
     for (const oldest of flows.keys()) {
@@ -143,6 +162,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
     remember(scope, binding) {
       const flow = flowOf(scope);
       const targets = targetsOf(binding);
+      flow.history.record(binding.evidence.location, targets);
       markRenumbered(flow, binding, targets);
       keep(flow, binding.evidence.location, acrossViews(flow.pages.get(binding.evidence.location), targets));
     },
@@ -150,6 +170,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const flow = flowOf(scope);
       const location = binding.evidence.location;
       const seen = targetsOf(binding);
+      flow.history.record(location, seen);
       // A look that described every control says which have gone, as a shown
       // packet does; one the browser's capture cut short (`captureTruncated`)
       // cannot, so it only adds. Since t200 nothing else cuts a look.
@@ -163,43 +184,63 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       for (const [handle, target] of acrossViews(before, seen)) targets.set(handle, target);
       keep(flow, location, targets);
     },
-    resolve(scope, written, location) {
+    resolve(scope, written, location, reach) {
       const handle = canonicalWebLlmTargetHandle(written) ?? written;
       const flow = flows.get(scopeKey(scope));
       if (!flow) return { ok: false, code: "unknown" };
-      if (location !== undefined) {
-        const page = flow.pages.get(location);
-        if (!page) return { ok: false, code: flow.letGo.has(location) ? "stale" : "unknown" };
-        const target = page.get(handle);
-        if (target === undefined) return missing("unknown", flow.renumbered.get(location)?.has(handle) === true);
-        return target.shared ? { ok: false, code: "not_unique" } : resolved(target);
+      const current = resolveCurrent(flow, handle, location);
+      if (reach !== "view_history") return current;
+      // What its views agreed it names, as the newest view that carried it --
+      // on the page named, when one was -- left it.
+      const found = flow.history.find(handle, location);
+      if (current.ok || found === undefined) {
+        if (current.ok && found !== undefined) current.shownIn = found.shownIn;
+        return current;
       }
-      const seen = new Map<string, PageTarget>();
-      for (const page of flow.pages.values()) {
-        const target = page.get(handle);
-        if (target === undefined) continue;
-        const address = addressOf(target);
-        const known = seen.get(address);
-        // One page sharing the selector makes the handle not unique wherever
-        // else it agrees, and the identity is only what every page said. A new
-        // record, so the pages' own stay as they were shown.
-        const element = known === undefined ? target.element : agreedIdentity(known.element, target.element);
-        seen.set(address, known === undefined ? target : {
-          selector: known.selector,
-          frameId: known.frameId,
-          frameUrlPath: target.frameUrlPath ?? known.frameUrlPath,
-          element,
-          words: known.words === target.words ? spacedName(element, known.words) : undefined,
-          shared: known.shared || target.shared
-        });
-      }
-      if (seen.size > 1) return { ok: false, code: "ambiguous" };
-      const only = [...seen.values()][0];
-      if (only?.shared) return { ok: false, code: "not_unique" };
-      if (only !== undefined) return resolved(only);
-      return missing(flow.letGo.size > 0 ? "stale" : "unknown", [...flow.renumbered.values()].some((marked) => marked.has(handle)));
+      // A reload that renumbered the handle shows its control under another
+      // one now; `ambiguous` and `not_unique` name no one control (header).
+      if ((current.code !== "unknown" && current.code !== "stale") || current.renumberedByReload === true) return current;
+      if (found.target.shared) return { ok: false, code: "not_unique" };
+      const earlier = resolved(found.target);
+      earlier.shownIn = found.shownIn;
+      return earlier;
     },
   };
+}
+
+/** A handle against the pages as this Flow's exploration last saw them (header). */
+function resolveCurrent(flow: FlowPages, handle: string, location: string | undefined): WebLlmTargetResolution {
+  if (location !== undefined) {
+    const page = flow.pages.get(location);
+    if (!page) return { ok: false, code: flow.letGo.has(location) ? "stale" : "unknown" };
+    const target = page.get(handle);
+    if (target === undefined) return missing("unknown", flow.renumbered.get(location)?.has(handle) === true);
+    return target.shared ? { ok: false, code: "not_unique" } : resolved(target);
+  }
+  const seen = new Map<string, PageTarget>();
+  for (const page of flow.pages.values()) {
+    const target = page.get(handle);
+    if (target === undefined) continue;
+    const address = addressOf(target);
+    const known = seen.get(address);
+    // One page sharing the selector makes the handle not unique wherever
+    // else it agrees, and the identity is only what every page said. A new
+    // record, so the pages' own stay as they were shown.
+    const element = known === undefined ? target.element : agreedIdentity(known.element, target.element);
+    seen.set(address, known === undefined ? target : {
+      selector: known.selector,
+      frameId: known.frameId,
+      frameUrlPath: target.frameUrlPath ?? known.frameUrlPath,
+      element,
+      words: known.words === target.words ? spacedName(element, known.words) : undefined,
+      shared: known.shared || target.shared
+    });
+  }
+  if (seen.size > 1) return { ok: false, code: "ambiguous" };
+  const only = [...seen.values()][0];
+  if (only?.shared) return { ok: false, code: "not_unique" };
+  if (only !== undefined) return resolved(only);
+  return missing(flow.letGo.size > 0 ? "stale" : "unknown", [...flow.renumbered.values()].some((marked) => marked.has(handle)));
 }
 
 /** Each described element's target in one capture, marked shared where the capture gave its address to several. */
@@ -241,16 +282,19 @@ function spacedName(identity: WebPlanElementIdentity, words: string | undefined)
 function acrossViews(before: PageTargets | undefined, targets: PageTargets): PageTargets {
   if (before === undefined) return targets;
   const kept: PageTargets = new Map();
-  for (const [handle, target] of targets) {
-    const earlier = before.get(handle);
-    if (earlier === undefined || addressOf(earlier) !== addressOf(target)) {
-      kept.set(handle, target);
-      continue;
-    }
-    const element = webPlanElementIdentityAcrossViews(earlier.element, target.element);
-    kept.set(handle, { ...target, element, words: earlier.words === target.words ? spacedName(element, target.words) : undefined });
-  }
+  for (const [handle, target] of targets) kept.set(handle, acrossView(before.get(handle), target));
   return kept;
+}
+
+/**
+ * `target`, a newer view of one handle, keeping only the identity it and
+ * `earlier` agree on when both show it at one address; whole when the earlier
+ * view did not show it, or showed another element under it.
+ */
+function acrossView(earlier: PageTarget | undefined, target: PageTarget): PageTarget {
+  if (earlier === undefined || addressOf(earlier) !== addressOf(target)) return target;
+  const element = webPlanElementIdentityAcrossViews(earlier.element, target.element);
+  return { ...target, element, words: earlier.words === target.words ? spacedName(element, target.words) : undefined };
 }
 
 /** A handle that names nothing, marked when a reload renumbered it. */
@@ -323,28 +367,11 @@ function addressOf(target: PageTarget): string {
 }
 
 /** A resolution whose identity is the caller's own copy, so nothing done to it reaches the store. */
-function resolved(target: PageTarget): WebLlmTargetResolution {
+function resolved(target: PageTarget): Extract<WebLlmTargetResolution, { ok: true }> {
   const resolution: Extract<WebLlmTargetResolution, { ok: true }> = { ok: true, selector: target.selector, frameId: target.frameId, element: structuredClone(target.element) };
   if (target.frameUrlPath !== undefined) resolution.frameUrlPath = target.frameUrlPath;
   if (target.words !== undefined) resolution.words = target.words;
   return resolution;
-}
-
-/** The attribute the frame merge publishes a child frame's element with: its frame document's URL, screened as a link is. */
-const FRAME_URL_ATTRIBUTE = "data-fluxiq-frame-url";
-
-/**
- * The pathname of the document a child frame's element was shown in, by the
- * rule a recorded node's path follows (`output-nodes/url-path.ts`); nothing for
- * the top frame, for a frame whose document is not http(s), or for an element
- * published without its frame's address.
- */
-function webLlmFrameUrlPath(element: WebLlmEvidenceElement): string | undefined {
-  if (element.frameId === undefined || element.frameId <= 0) return undefined;
-  const url = element.attributes?.find(([name]) => name.toLowerCase() === FRAME_URL_ATTRIBUTE)?.[1];
-  if (url === undefined || !URL.canParse(url)) return undefined;
-  const parsed = new URL(url);
-  return parsed.protocol === "http:" || parsed.protocol === "https:" ? webAutomationUrlPath(parsed.pathname) : undefined;
 }
 
 /**
