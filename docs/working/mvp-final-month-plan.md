@@ -56,7 +56,7 @@ hardening. In-flight t334 (click executor), t335 (installer, never compiled) and
 t337 (grammar for one sentence family) are WIP commits on their own branches, not
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
-**In flight.** t342 round 4, lane A candidate-mode probe with t354's retry and spend fix (lead, live).
+**In flight.** t355 every node retries automatically on every path (user rule); t356 a candidate build never gives up on a recoverable failure; t342 round 4 lead finishing its debug.
 
 **Next order.**
 
@@ -85,6 +85,8 @@ replays, exact oracles and truthful product acceptance. Up to four headed,
 supervised, one-attempt chat-started lanes after the first representative slice;
 no relaunch loop. Off-peak guard, flash default and $0.10 Lab ceiling stay binding.
 Unknown, withheld or unperformed outcomes and old-revision evidence cannot promote.
+
+**User rule (2026-10-07): nodes retry automatically everywhere.** Every web action node waits for its target and retries transient failures within a bound, in exploration, trials, tests and playback alike; a build must not give up on a recoverable failure. Lasting acts are checked, never blindly repeated.
 
 **User decisions preserved.** Recording is evidence beside mandatory instruction
 and waits for A-D. Direct requests OFF by default in config and Settings. Typed
@@ -135,6 +137,23 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
+
+### Brief: t355 every node retries automatically, in every execution path (user rule)
+- Worker: t355-node-retry (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t355` (Core-paired, branch `task/t355-node-auto-retry`). Report: `docs/working/mvp-final-month-plan/reports/t355-node-auto-retry.md` in the t355 downstream tree.
+- User rule (2026-10-07, angry): nodes retry automatically, even while exploring; a step must never fail on one too-early attempt or just give up. Evidence, lane A round 4 `run-muyrpbnk-fef374e7` (read only, `C:\Users\osrs_\FluxStuff\fxwork\t342\!FluxIQWebExtension\test-runs\instances\t342-slot-2\run-muyrpbnk-fef374e7\steps`): trial step 2 `web.output.dom-click` failed `web.target.not_found` immediately after step 1's navigate (0032 result.json, whole trial 7.9 s); exploration's `core.run_node` click got `refused_by_page` / `page_busy_try_later` ("Network busy, please try again") with no automatic retry (0014). t347 found playback already retries that busy refusal; t352 found content actions have an attempt loop bounded by a deadline (`content/actions/tests/execute.test.ts`).
+- First map, with file:line: for each web action node (click, type, select, check, read list, next page, navigate and the rest) and each path (exploration `core.run_node` and discovery actions, mid-build tests, candidate trials, saved-Flow playback), what waits for the target (present, visible, enabled, stable, page settled after navigation), what retries a transient failure (not found yet, detached, covered, intercepted, page-busy refusal), with what bound, and where paths differ. Explain why trial step 2 got none.
+- Goal: one retry policy, owned in one place, applied on every path: wait for actionability after the page settles, retry transient failures within a bounded budget, then report. A lasting act whose effect is uncertain is checked, never blindly repeated (existing desired-state checks). Exploration gets the same policy; the model sees the final outcome with the attempts counted, not a first-attempt failure.
+- Owns: the action runtime and its policy in `apps/extension/src/content/**` (except the activity overlay), the domain native runtime and plan resolution that set attempt budgets, and the Core executor or node-run options only if the policy is decided there (list exact files before editing), with tests.
+- Must not touch: Core `runtime/flow-bootstrap/candidate/**`, `runtime/llm/**` repeat guard, `runtime/service/candidate-trial/**` (t356 owns them), the panel chat and overlay, `docs/working/*.md`. No commits, provider calls or paid runs. Lab or browser runs only provider-free on the ten realistic scenarios.
+- Definition of done: fail-first tests for each path showing a target that appears late or a busy refusal that clears is retried and succeeds, and a target that never appears fails only after the bounded budget with the attempts reported; a lasting act is not repeated when its effect landed. Owning tests, extension build, affected typechecks, both audits. A provider-free crossborder-marketplace Lab run showing the late-target and busy cases pass.
+
+### Brief: t356 a candidate build never gives up on a recoverable failure
+- Worker: t356-no-give-up (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t356` (Core-paired, branch `task/t356-candidate-no-give-up`); edits in its `!FluxIQ` tree. Report: `docs/working/mvp-final-month-plan/reports/t356-candidate-no-give-up.md` in the t356 downstream tree.
+- Evidence, lane A round 4 `run-muyrpbnk-fef374e7` (read only, `C:\Users\osrs_\FluxStuff\fxwork\t342\!FluxIQWebExtension\test-runs\instances\t342-slot-2\run-muyrpbnk-fef374e7\steps`): after trial 0032 failed with `execution_failed` (a transient click failure), the model's second `core.test_candidate` was refused by the generic repeat guard (0050, `llm_evidence_loop.repeat_refused`), although the trial gate allows re-testing a transient verdict. The trial's start reset reloaded the page, so the handles the model used died: nine resubmissions (0038-0068) were refused `flow_bootstrap.evidence_completion_parameters_unresolved` with `web.handle.unknown:target`, with no instruction on how to recover, until the budget ran out. Consultant P1.5 requires persisting locator descriptions, not `tN` handles.
+- Goal: (1) the repeat guard does not refuse `core.test_candidate` after a transient verdict (execution_failed, not_judged); the trial gate stays the one owner of when a revision may be re-tested. (2) a candidate's targets survive a page reset: at submission Core resolves each handle to its durable locator description (the existing identity fingerprints), so later revisions and trials do not depend on page-session handles. (3) every submission refusal names the recovery (for example re-observe the page for fresh targets), and the same refusal repeated ends the round early instead of spending the purse.
+- Owns: Core `runtime/flow-bootstrap/candidate/**`, `runtime/llm/evidence-loop/**` (the repeat guard only), `runtime/service/candidate-trial/**`, `runtime/flow-bootstrap/plan/issue-feedback.ts`, and the handle-to-locator resolution module (list it before editing), with tests.
+- Must not touch: the extension and domain action runtime and retry policy (t355 owns them), conversations, `docs/working/*.md`. No commits, provider, Lab or panel. No new `as never` casts.
+- Definition of done: fail-first tests: re-test after execution_failed is admitted; a revision submitted after a trial reset with the same targets validates; a repeated identical refusal ends early with a recovery instruction; legacy unchanged. Owning tests, Core nonincremental typecheck, Core audit.
 
 ### Brief: t354 a candidate build survives an unusable reply and accounts for its spend
 - Worker: t354-candidate-resilience (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t354\` (Core-paired, branch `task/t354-candidate-loop-resilience`); edits in its `!FluxIQ` tree. Report: `docs/working/mvp-final-month-plan/reports/t354-candidate-loop-resilience.md` in the t354 downstream tree.
