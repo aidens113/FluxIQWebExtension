@@ -91,13 +91,16 @@ export async function readCreatedFlowCandidatePromotion(control: CandidateContro
   const detail = field(field(created, "detail"), "candidateTrial"), trial = field(detail, "trial");
   const candidateId = identifier(field(detail, "candidateId"));
   if (candidateId === null) return null;
+  const verdict = field(trial, "verdict") === "yes" ? "yes" : "unknown", trialRunId = identifier(field(trial, "runId"));
+  // Core names the verdict of the trial that promoted it, and only that one; the others' stay unsaid (`null`).
+  const sessions = await readCandidateTrials(control, subject, candidateId);
+  const trials = sessions === null || verdict !== "yes" || trialRunId === null ? sessions : Object.freeze(sessions.map((run) => run.runId === trialRunId ? Object.freeze({ ...run, verdict }) : run));
   return Object.freeze({
     authoringMode: "candidate", outcome: "promoted", draft: null, candidateId,
     revision: whole(field(detail, "revision")), digest: identifier(field(detail, "digest")),
-    verdict: field(trial, "verdict") === "yes" ? "yes" : "unknown",
-    trialRunId: identifier(field(trial, "runId")), codes: Object.freeze([]),
+    verdict, trialRunId, codes: Object.freeze([]),
     judgeCalls: whole(field(trial, "calls")), trialCount: whole(field(detail, "trials")),
-    trials: await readCandidateTrials(control, subject, candidateId),
+    trials,
     promotedAdaptationId: adaptationId,
   });
 }
