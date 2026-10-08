@@ -402,3 +402,17 @@ never import this repository or depend on its scenarios.
 Run artifacts and browser profiles are disposable. Keep them in ignored
 run-scoped directories; never commit captures or expose credentials, cookies,
 authorization headers, pairing tokens, or recorded page data.
+
+**Lab and browser test runs use only the ten realistic scenarios** (user,
+2026-09-29): everything-store, crossborder-marketplace, bigbox-retail,
+job-board, local-classifieds, auction-marketplace, photo-social,
+social-network-feed, company-website and professional-network. This covers
+live and provider-free Lab runs, ui:e2e, demo-workspace, and Playwright specs
+(the extension's content harness included), whether or not an LLM is called.
+Other fixtures and synthetic pages are for unit tests that never open a
+browser. The Lab refuses other scenarios at its launch entries.
+
+**Every node retries automatically** (user, 2026-10-07): the first attempt plus
+3 retries on every path (exploration, mid-build tests, candidate trials,
+playback), waiting for the target first; only a lasting act whose effect is
+uncertain is held back, and a build never gives up on a recoverable failure.
