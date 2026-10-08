@@ -14,6 +14,7 @@ export {
   type WebPlanHandleIssue,
   type WebPlanHandleIssueCode,
   type WebPlanHandleStores,
+  type WebPlanHandleView,
   type WebPlanNodeOutcome,
   type WebPlanNodeResolution,
   type WebPlanNodeResolutionInput
@@ -33,6 +34,9 @@ export { isWebPlanStateBinding } from "./state-binding";
 export {
   createWebLlmTargetPackets,
   type WebLlmTargetPackets,
+  type WebLlmTargetReach,
   type WebLlmTargetResolution,
   type WebLlmTargetScope
 } from "./target-packets";
+// What one Flow's exploration was shown, kept after it moved on, for a candidate submission (t358).
+export { createWebLlmViewHistory, type WebLlmTargetView, type WebLlmViewHistory } from "./view-history";

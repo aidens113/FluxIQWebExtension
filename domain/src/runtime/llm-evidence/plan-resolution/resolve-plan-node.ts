@@ -76,6 +76,17 @@
 // already gated that call against the page the model is looking at, and says so
 // with `gatedByCaller`, so one act is not put to the gate twice under two
 // different rules.
+//
+// **A candidate submission resolves from the whole view history (t358).** A
+// Flow's first steps act on the start page exploration has long since left, and
+// lane A round 4 (`run-muyrpbnk-fef374e7`) had twelve submissions refused
+// `web.handle.unknown` for the start page's popup controls. Core says when a
+// resolution is for a candidate submission (`handleReach: "view_history"`), and
+// then a target handle resolves from any view this Flow's exploration took, to
+// the identity its views agree on (`target-packets.ts`), and the resolved answer
+// says which view each handle came from (`handleViews`). Without it -- a node
+// run, a rerun, a legacy completion -- a handle resolves against the current
+// pages exactly as before, and the answer carries nothing beside its parameters.
 
 import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
@@ -94,7 +105,7 @@ import { webPlanPositionCode } from "./issue-position";
 import { webPlanOwnExtractionList } from "./own-extraction-list";
 import { resolveWebNextPageSlot } from "./next-page-slot";
 import { webPlanStepPermission, type WebPlanStepIssueCode } from "./step-permission";
-import type { WebLlmTargetPackets } from "./target-packets";
+import type { WebLlmTargetPackets, WebLlmTargetReach } from "./target-packets";
 
 /**
  * Every code a refusal is made of, in the order a refusal lists them: why the
@@ -197,7 +208,17 @@ export type WebPlanNodeResolutionInput = {
    * this whole seam exists to close.
    */
   gatedByCaller?: true;
+  /**
+   * Which views a target handle may resolve from (header). Absent, the pages as
+   * exploration last saw them; `view_history`, any view it took, which Core asks
+   * for a candidate submission alone. Only then does a resolved answer carry
+   * `handleViews`.
+   */
+  handleReach?: WebLlmTargetReach | undefined;
 };
+
+/** The view one target handle of a node resolved from: its number in the Flow's captures and the page it showed (`target-packets.ts`). */
+export type WebPlanHandleView = { handle: string; view: number; location: string };
 
 /**
  * The answer Core reads, and **nothing beside it**.
@@ -209,11 +230,14 @@ export type WebPlanNodeResolutionInput = {
  * added here would not be quietly dropped -- it would refuse every resolved
  * node of every plan. What this resolution assumed on the way therefore travels
  * beside it, on `WebPlanNodeOutcome`, and `resolveWebPlanNode` is the one place
- * the two are separated.
+ * the two are separated. The one exception is `handleViews`, which Core accepts
+ * only on an answer to a resolution that asked for the view history
+ * (`handleReach`), and which is written only then.
  */
 export type WebPlanNodeResolution =
   | { status: "unchanged" }
-  | { status: "resolved"; parameters: JsonObject }
+  /** `handleViews` only when Core asked for the view history (`handleReach`), and only for a node whose handles resolved from a view. */
+  | { status: "resolved"; parameters: JsonObject; handleViews?: WebPlanHandleView[] }
   | { status: "refused"; issueCodes: readonly (WebPlanHandleIssue | WebPlanStepIssueCode)[] }
   /** A person must answer this one. `requestId` is null where there was nobody to ask. */
   | { status: "needs_permission"; missing: readonly AutomationStudioActionConsequence[]; requestId: string | null };
@@ -352,12 +376,13 @@ function lowerCase(value: JsonValue | undefined): string | undefined {
 }
 
 type Scope = { projectId: string; flowId: string };
-type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string };
+type Scoped = Scope & { reach: WebLlmTargetReach | undefined };
+type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string; views?: WebPlanHandleView[] };
 /** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control -- or the shape that fits the key -- instead when one does. */
 type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath; fits?: WebPlanHandleIssueCode | undefined };
 type NodeOutcome =
   | { status: "unchanged" }
-  | { status: "resolved"; parameters: JsonObject; assumed: WebLlmNameAssumptionSaid[] }
+  | { status: "resolved"; parameters: JsonObject; assumed: WebLlmNameAssumptionSaid[]; views: WebPlanHandleView[] }
   | { status: "refused"; refusals: Refusal[] };
 
 const TARGET_ISSUES = {
@@ -381,7 +406,7 @@ export async function resolveWebPlanNodeParameters(input: WebPlanNodeResolutionI
 
 /** The answer, and every name it assumed to reach it (`WebPlanNodeOutcome`). */
 export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stores: WebPlanHandleStores): Promise<WebPlanNodeOutcome> {
-  const scope = { projectId: input.projectId, flowId: input.flowId };
+  const scope: Scoped = { projectId: input.projectId, flowId: input.flowId, reach: input.handleReach };
   const outcome = input.nodeDefinitionId === RUN_OUTPUT_NODE_ID
     ? resolveRunOutput(input.parameters, scope, stores)
     : resolveNode(input.nodeDefinitionId, input.parameters, scope, stores);
@@ -392,7 +417,7 @@ export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stor
   // one more key refuses the node outright.
   const assumed = outcome.status === "resolved" ? outcome.assumed : [];
   const resolved: WebPlanNodeResolution = outcome.status === "resolved"
-    ? { status: "resolved", parameters: outcome.parameters }
+    ? withHandleViews({ status: "resolved", parameters: outcome.parameters }, input.handleReach, outcome.views)
     : { status: "unchanged" };
   // The step is asked about with the parameters it would really run with, so
   // the request names the control the model was shown rather than a handle.
@@ -421,6 +446,29 @@ export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stor
   return answered(resolved, assumed);
 }
 
+/**
+ * A resolved answer, with the views its handles came from when Core asked for
+ * the view history (header) and there are any. Nothing beside its parameters
+ * otherwise, since Core refuses any other key on an answer it did not ask for.
+ */
+function withHandleViews(
+  answer: Extract<WebPlanNodeResolution, { status: "resolved" }>,
+  reach: WebLlmTargetReach | undefined,
+  views: readonly WebPlanHandleView[]
+): WebPlanNodeResolution {
+  if (reach !== "view_history" || views.length === 0) return answer;
+  const seen = new Set<string>();
+  const handleViews: WebPlanHandleView[] = [];
+  for (const entry of views) {
+    const key = `${entry.handle}\u0000${entry.view}\u0000${entry.location}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    handleViews.push({ handle: entry.handle, view: entry.view, location: entry.location });
+  }
+  answer.handleViews = handleViews;
+  return answer;
+}
+
 /** The outcome, with its assumptions screened for what may leave this domain (`../name-assumption.ts`). */
 function answered(resolution: WebPlanNodeResolution, assumed: readonly WebLlmNameAssumptionSaid[]): WebPlanNodeOutcome {
   return { resolution, assumed: webLlmNameAssumptions(assumed) };
@@ -438,7 +486,7 @@ function actingStep(nodeDefinitionId: string, parameters: JsonObject): { nodeDef
   return { nodeDefinitionId: webAutomationOutputNodeId(parameters.outputId), parameters: isJsonRecord(payload) ? payload as JsonObject : {} };
 }
 
-function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Scope, stores: WebPlanHandleStores): NodeOutcome {
+function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Scoped, stores: WebPlanHandleStores): NodeOutcome {
   const refusals: Refusal[] = [];
   const assumed: WebLlmNameAssumptionSaid[] = [];
   const replaced = new Map<string, Resolved>();
@@ -446,8 +494,12 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
   const nextPageNode = nodeDefinitionId === NEXT_PAGE_NODE_ID;
   for (const [key, value] of Object.entries(parameters)) {
     if (nextPageNode && key === "nextPage") {
-      const slot = resolveWebNextPageSlot(value, scope, stores.targets, stores.extractions);
-      if (slot.status === "resolved") replaced.set(key, { value: slot.request, frameId: slot.frameId, frameUrlPath: slot.frameUrlPath, element: undefined });
+      const slot = resolveWebNextPageSlot(value, scope, stores.targets, stores.extractions, scope.reach);
+      if (slot.status === "resolved") {
+        const resolved: Resolved = { value: slot.request, frameId: slot.frameId, frameUrlPath: slot.frameUrlPath, element: undefined };
+        if (slot.controlView !== undefined) resolved.views = [slot.controlView];
+        replaced.set(key, resolved);
+      }
       // The short literal runs in whatever frame the node already names.
       else if (slot.status === "written") replaced.set(key, { value: slot.request, frameId: declaredFrame(parameters.browserFrameId), frameUrlPath: undefined, element: undefined });
       else if (slot.status === "refused") {
@@ -568,7 +620,8 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
     resolved.browserFrameId = frameId;
     if (frameUrlPath !== undefined) resolved.browserFrameUrlPath = frameUrlPath;
   }
-  return { status: "resolved", parameters: resolved, assumed };
+  const views = [...replaced.values()].flatMap((entry) => entry.views ?? []);
+  return { status: "resolved", parameters: resolved, assumed, views };
 }
 
 /** Exact supported state grammar; the public Core guard also accepts extras. */
@@ -593,7 +646,7 @@ function sameTargetIdentity(left: JsonValue | undefined, right: JsonValue | unde
 }
 
 /** Core's Run Output node: a web output's payload resolved as that output's own node, and a handle anywhere else misplaced. */
-function resolveRunOutput(parameters: JsonObject, scope: Scope, stores: WebPlanHandleStores): NodeOutcome {
+function resolveRunOutput(parameters: JsonObject, scope: Scoped, stores: WebPlanHandleStores): NodeOutcome {
   const { outputId, parameters: payload } = parameters;
   const inner = isWebOutputId(outputId) && isJsonRecord(payload)
     ? resolveNode(webAutomationOutputNodeId(outputId), payload as JsonObject, scope, stores)
@@ -625,7 +678,7 @@ function resolveRunOutput(parameters: JsonObject, scope: Scope, stores: WebPlanH
   // `parameters.extractList.…` on this node and a reader holding the Run Output
   // node's authored parameters finds it exactly there.
   const assumed = inner?.status === "resolved" ? inner.assumed.map((entry) => nested(entry)) : [];
-  return { status: "resolved", parameters: resolved, assumed };
+  return { status: "resolved", parameters: resolved, assumed, views: inner?.status === "resolved" ? inner.views : [] };
 }
 
 /** One assumption of a payload, said as a position on the node that carries the payload. */
@@ -633,15 +686,18 @@ function nested(entry: WebLlmNameAssumptionSaid): WebLlmNameAssumptionSaid {
   return { path: ["parameters", ...entry.path], written: entry.written, field: entry.field, how: entry.how, score: entry.score };
 }
 
-function resolveTarget(value: Record<string, unknown>, scope: Scope, targets: WebLlmTargetPackets): Resolved | WebPlanHandleIssueCode {
+function resolveTarget(value: Record<string, unknown>, scope: Scoped, targets: WebLlmTargetPackets): Resolved | WebPlanHandleIssueCode {
   if (Object.keys(value).some((key) => key !== "handle" && key !== "location")) return "web.handle.malformed";
   const kind = webPlanHandleKind(value.handle);
   if (kind === "extraction") return "web.handle.misplaced";
   if (kind !== "target" || typeof value.handle !== "string") return "web.handle.malformed";
   if (value.location !== undefined && (typeof value.location !== "string" || value.location === "")) return "web.handle.malformed";
-  const resolution = targets.resolve(scope, canonicalWebLlmTargetHandle(value.handle) ?? value.handle, value.location as string | undefined);
+  const handle = canonicalWebLlmTargetHandle(value.handle) ?? value.handle;
+  const resolution = targets.resolve({ projectId: scope.projectId, flowId: scope.flowId }, handle, value.location as string | undefined, scope.reach);
   if (!resolution.ok) return resolution.renumberedByReload === true ? "web.handle.renumbered_by_reload" : TARGET_ISSUES[resolution.code];
-  return { value: resolution.selector, frameId: resolution.frameId, frameUrlPath: resolution.frameUrlPath, element: resolution.element as unknown as JsonObject };
+  const resolved: Resolved = { value: resolution.selector, frameId: resolution.frameId, frameUrlPath: resolution.frameUrlPath, element: resolution.element as unknown as JsonObject };
+  if (resolution.shownIn !== undefined) resolved.views = [{ handle, view: resolution.shownIn.view, location: resolution.shownIn.location }];
+  return resolved;
 }
 
 /** A handle slot's value written as a handle: any object with a `handle` key. Its shape is judged by the slot. */
