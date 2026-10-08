@@ -131,9 +131,10 @@ test("the client's structured failure record reaches the runtime result", async 
     message: "Expected the value to be team, but it stayed starter.",
     failure
   });
-  // A press whose confirmation was lost after it acted is not offered to Core's
-  // retry (t355): the record is the client's but for the retryable flag.
-  assert.deepEqual(result.failure, { ...failure, retryable: false }, "Core classifies from the record before it matches the message");
+  // A press whose confirmation was lost after it acted says so (t359): the
+  // record is the client's, stating the act may have landed, and Core does not
+  // press again.
+  assert.deepEqual(result.failure, { ...failure, effect: "ambiguous" }, "Core classifies from the record before it matches the message");
   assert.equal(result.message, "Expected the value to be team, but it stayed starter.");
 });
 
@@ -153,6 +154,29 @@ test("a press the page turned away before it landed keeps its retry, and the wai
   const missing: AutomationStudioFailureRecord = { category: "target_not_found", code: "web.target.not_found", retryable: true, stage: "target_resolution" };
   const late = await runCommand({ commandId: "client.command.late", status: "failed", message: "Not drawn yet.", failure: missing });
   assert.equal(late.failure?.retryable, true);
+});
+
+test("a committing press states whether it was dispatched, so Core repeats only a press that never happened (t359)", async () => {
+  const after = async (code: string, category: AutomationStudioFailureRecord["category"], stage: AutomationStudioFailureRecord["stage"], extra: Partial<AutomationStudioFailureRecord> = {}, command: FluxIQRuntimeCommand = clickCommand) =>
+    (await runCommand({ commandId: `client.${code}`, status: "failed", message: "The press failed.", failure: { category, code, retryable: true, ...(stage ? { stage } : {}), ...extra } }, command)).failure;
+  // Sent, and only the answer is missing: the verb threw, the page changed under it, the acknowledgement timed out.
+  for (const [code, category] of [["web.action.failed", "action_failed"], ["web.page.changed", "page_changed"], ["web.action.timeout", "timeout"]] as const) {
+    const failure = await after(code, category, "execution");
+    assert.equal(failure?.effect, "ambiguous", `${code} after the press may have landed`);
+    assert.equal(failure?.retryable, true, "Core decides, from the statement, not from a flag cleared here");
+    assert.deepEqual(parseAutomationStudioFailureRecord(failure), failure);
+  }
+  // Nothing was dispatched: not resolved yet, turned away as busy, or refused by the gate before the press.
+  assert.equal((await after("web.target.not_found", "target_not_found", "target_resolution"))?.effect, "unacted");
+  assert.equal((await after("web.action.rate_limited", "action_failed", "execution", { effect: "unacted" }))?.effect, "unacted");
+  const covered = await runCommand({ commandId: "client.covered", status: "failed", message: "Covered.", failure: { category: "unexpected_state", code: "web.target.not_actionable", retryable: false, stage: "execution", actual: "covered: a layer", effect: "unacted" } });
+  assert.equal(covered.failure?.effect, "unacted", "the client stood nearest the page and stated nothing was pressed");
+  // Typing that sends its form commits; typing alone keeps t355's rule.
+  const typeCommand = (submit: boolean): FluxIQRuntimeCommand => ({ kind: "execute_action", commandId: "command.type", outputId: "web.dom.type", parameters: { selector: "#q", text: "lamp", submit } });
+  assert.equal((await after("web.action.failed", "action_failed", "execution", {}, typeCommand(true)))?.effect, "ambiguous");
+  const typed = await after("web.action.failed", "action_failed", "execution", {}, typeCommand(false));
+  assert.equal(typed?.effect, undefined, "typing into a field is not a committing act");
+  assert.equal(typed?.retryable, true);
 });
 
 test("a client record naming a code this domain does not own becomes UNKNOWN, carrying the code it used", async () => {
@@ -347,7 +371,8 @@ test("a client's own failure record survives the hop and only gains the digest",
     actual: "nothing matched"
   };
   const result = await runCommand({ commandId: "client.command.twelve", status: "failed", message: "Nothing matched #pay.", failure, payload: failedPayload() });
-  assert.deepEqual({ ...result.failure, evidenceDigest: undefined }, { ...failure, evidenceDigest: undefined }, "the producer stood nearest the page, so its record is not relabelled");
+  // A press states that a target never resolved means nothing was pressed (t359).
+  assert.deepEqual({ ...result.failure, evidenceDigest: undefined }, { ...failure, effect: "unacted", evidenceDigest: undefined }, "the producer stood nearest the page, so its record is not relabelled");
   assert.match(String(result.failure?.evidenceDigest), /^[a-f0-9]{64}$/u);
 });
 

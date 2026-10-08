@@ -26,7 +26,7 @@ import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../actions/types";
 import { webAutomationActionEffect } from "../actions/effect";
 import { dispatchWebAutomationOutput } from "../io/gateway-output-dispatcher";
-import { outputTargetFromPayload } from "../output-nodes";
+import { outputTargetFromPayload, webAutomationOutputNodeId } from "../output-nodes";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
 import { webAutomationRuntimeCapabilities } from "./capabilities";
 import { webAutomationRequestPolicies, type WebAutomationRequestPolicyInput } from "../requests";
@@ -40,6 +40,7 @@ import {
   type WebAutomationFailureRecord
 } from "./failure";
 import { publishedWebLlmPage, sanitizeWebLlmSnapshot, screenedEvidenceUrl, screenedWebLlmText, type WebLlmPageEvidence } from "./llm-evidence";
+import { webPlanStepMustDeclare } from "./llm-evidence/plan-resolution";
 
 export type WebAutomationRuntimeAdapterOptions = {
   fluxiq: FluxIQ;
@@ -111,7 +112,7 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
   const clientResult = jsonObject(result.payload?.result);
   const sensitiveTarget = isSensitiveElementDescriptor(clientResult?.element);
   const withholdComparison = sensitiveTarget && !producerDeclaredRedaction(clientResult?.validation);
-  const failure = commandFailure(status, outputId as WebAutomationActionType, message, result.failure, diagnostics?.evidenceDigest, withholdComparison);
+  const failure = commandFailure(status, outputId as WebAutomationActionType, payload as JsonObject, message, result.failure, diagnostics?.evidenceDigest, withholdComparison);
   const runtimeResult: FluxIQRuntimeCommandResult = {
     commandId: command.commandId ?? `web.${Date.now()}`,
     status,
@@ -200,6 +201,7 @@ function rejected(command: FluxIQRuntimeCommand, message: string, code: WebAutom
 function commandFailure(
   status: FluxIQRuntimeCommandStatus,
   actionType: WebAutomationActionType,
+  parameters: JsonObject,
   message: string | undefined,
   reported: AutomationStudioFailureRecord | undefined,
   evidenceDigest: string | undefined,
@@ -217,32 +219,55 @@ function commandFailure(
   };
   const classified = classifyWebAutomationFailure(undefined, outcome);
   if (classified === undefined) return undefined;
-  const failure = lastingActChecked(actionType, classified);
+  const failure = lastingActStated(actionType, parameters, reported, classified);
   if (evidenceDigest === undefined || failure.evidenceDigest !== undefined) return failure;
   return { ...failure, evidenceDigest };
 }
 
 /**
- * A press, a type or a choice whose failure was found after it acted is not
- * offered to Core's retry (t355).
+ * What this domain states about the act behind a failure, where Core decides
+ * whether making it again would be a second act (t359, Core
+ * `executor/defensive/lasting-act.ts`).
  *
- * Core's defensive policy refuses to repeat such a failure only for a node it
- * can see acts on the world (`automationStudioNodeRepeatCannotAct`), and a Flow's
- * web node carries none of this domain's definition metadata, so to Core every
- * web output looked as if repeating it could act on nothing. With retries now
- * on for every path -- a candidate trial ran each step once until t355 -- a press
- * whose confirmation was lost (`output_not_observed`, found at `verification`)
- * would have been pressed again. Which actions change the page is this
- * domain's one fact (`webAutomationActionEffect`), so it is applied here, where
- * the record leaves for Core: a lasting act whose effect is uncertain is
- * checked by the Flow's own state, never blindly repeated. A failure found
- * before anything was dispatched, or one the producer proved unacted, keeps its
- * retries.
+ * **A committing act** -- a press, a key press, a dialog answer, or typing that
+ * sends its form: the actions whose effect is the page's to decide, the same
+ * set a Flow step must declare consequences for (`webPlanStepMustDeclare`) --
+ * says on its record whether it happened:
+ *
+ *  - `effect: "unacted"` when the failure shows nothing was dispatched: the
+ *    target was not resolved yet, the command was refused before dispatch, the
+ *    page turned the press away as too fast or busy, or the client itself
+ *    stated it (an actionability refusal: covered, hidden, disabled before the
+ *    press). Core makes it again, because nothing happened to repeat.
+ *  - `effect: "ambiguous"` for everything else: the press was sent and only
+ *    its answer is missing -- the verb threw after the gesture, the page
+ *    changed under it, the acknowledgement timed out or the confirmation was
+ *    not observed. Core does not press again; the step's outcome is uncertain
+ *    unless the Flow's own state shows it landed.
+ *
+ * A Flow's web node carries none of this domain's definition metadata, so
+ * without the statement every press looked to Core like a read and was
+ * pressed again after a lost acknowledgement -- a second item in a cart, a
+ * message sent twice. Which actions commit is this domain's fact; what to do
+ * about an uncertain act is Core's, decided once.
+ *
+ * **Every other action that changes the page** keeps t355's rule: a failure
+ * found after it acted is not offered to Core's retry. Typing, choosing or
+ * ticking sets a state rather than committing one, so it is not uncertain in
+ * this sense; a client-stated `unacted` is still carried.
  */
-function lastingActChecked(actionType: WebAutomationActionType, failure: WebAutomationFailureRecord): WebAutomationFailureRecord {
-  if (!failure.retryable || failure.effect === "unacted" || webAutomationActionEffect(actionType) !== "mutate") return failure;
-  if (failure.stage !== "verification" && failure.stage !== "confirmation") return failure;
-  return { ...failure, retryable: false };
+function lastingActStated(
+  actionType: WebAutomationActionType,
+  parameters: JsonObject,
+  reported: AutomationStudioFailureRecord | undefined,
+  failure: WebAutomationFailureRecord
+): WebAutomationFailureRecord {
+  const unacted = failure.effect === "unacted" || reported?.effect === "unacted" || failure.stage === "target_resolution" || failure.stage === "dispatch";
+  if (webPlanStepMustDeclare(webAutomationOutputNodeId(actionType), parameters)) return { ...failure, effect: unacted ? "unacted" : "ambiguous" };
+  const stated: WebAutomationFailureRecord = reported?.effect === "unacted" ? { ...failure, effect: "unacted" } : failure;
+  if (!stated.retryable || stated.effect === "unacted" || webAutomationActionEffect(actionType) !== "mutate") return stated;
+  if (stated.stage !== "verification" && stated.stage !== "confirmation") return stated;
+  return { ...stated, retryable: false };
 }
 
 /**
