@@ -75,10 +75,14 @@ export async function assertAction(action: BrowserActionCommand, deps: ContentAc
 
     const { target, resolution } = assertionTarget(action, deps);
     const outcome = await deps.evaluateAssertion(request, target);
+    // A text claim that did not hold says what the page held of the text
+    // (t369): hidden or absent, and the shown text most like it.
+    const textSighting = !outcome.held && request.kind === "text" && request.expected?.trim() ? deps.sightText(request.expected) : undefined;
     const evidence = {
       ...(target.element ? { element: deps.describeElement(target.element) } : {}),
       snapshot: deps.captureSnapshot(),
-      ...(resolution ? { resolution } : {})
+      ...(resolution ? { resolution } : {}),
+      ...(textSighting ? { textSighting } : {})
     };
 
     const validation = outcome.held

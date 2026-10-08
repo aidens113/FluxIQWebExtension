@@ -44,7 +44,8 @@ import {
   classifyWebAutomationFailure,
   isWebAutomationFailureCode,
   webAutomationFailureRecord,
-  type WebAutomationFailureCode
+  type WebAutomationFailureCode,
+  type WebAutomationTextSighting
 } from "@fluxiq-web-extension/domain/client";
 import { captureSettings } from "../capture-settings";
 import { captureSnapshot } from "../dom-snapshot";
@@ -93,6 +94,12 @@ export type ActionResultEvidence = {
   /** A snapshot asked to detect a structure: what it found, or why nothing. Structure only, never a value (D3). */
   structure?: BrowserActionResult["structure"];
   resolution?: BrowserActionTargetResolution | undefined;
+  /**
+   * A failed text wait's or text assertion's account of the text it wanted:
+   * hidden or absent, and the shown text most like it (`text-sighting.ts`).
+   * Copied onto the result as `textPresence` and `visibleNear`.
+   */
+  textSighting?: WebAutomationTextSighting | undefined;
   /**
    * Where the hit test landed on something other than the target, for a target
    * refused as `covered`. It decides what covered it (`blocking-dialog.ts`) and
@@ -575,5 +582,9 @@ function buildResult(
   if (evidence.dialog) result.dialog = evidence.dialog;
   if (evidence.structure) result.structure = evidence.structure;
   if (evidence.resolution) result.resolution = evidence.resolution;
+  if (evidence.textSighting && core.status !== "succeeded") {
+    result.textPresence = evidence.textSighting.textPresence;
+    result.visibleNear = [...evidence.textSighting.visibleNear];
+  }
   return result;
 }
