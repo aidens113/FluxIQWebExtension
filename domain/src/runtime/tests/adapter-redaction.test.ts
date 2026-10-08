@@ -99,6 +99,7 @@ test("a client's failure record for a sensitive control leaves without its compa
   assert.equal(JSON.stringify(result).includes(producerSentinel), false, "nothing the producer failed to withhold reaches an attempt trace");
   assert.equal(result.failure?.code, "web.validation.output_not_observed", "the classification is untouched: only the two strings are");
   assert.equal(result.failure?.category, "output_not_observed");
+  // Plain typing whose read-back did not match is typed again under Core's retries (t361; t355 had set it not retryable).
   assert.equal(result.failure?.retryable, true);
   assert.equal(result.failure?.expected, WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT);
   assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure, "Core keeps the withheld record whole");

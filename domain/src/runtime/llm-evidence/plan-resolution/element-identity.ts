@@ -118,6 +118,53 @@ export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector:
 }
 
 /**
+ * The identity one handle keeps when a newer view of its page shows its control
+ * again (t356, C1): what the views agree on, so a control's own act never
+ * becomes its identity.
+ *
+ * Lane A round 4 (`run-muyrpbnk-fef374e7`): exploration pressed the store
+ * coupon's "Get coupons", the page relabelled it "Collected", and the newer view
+ * replaced the page's handles, so the candidate script's `target: t925` was bound
+ * to "Collected". On the trial's freshly reset page the button read "Get coupons"
+ * again and the step failed `web.target.not_found` (0032). A Flow runs on the
+ * page as it is before its steps act, and exploration acts on what it looks at,
+ * so the words a later view shows may be the act's, not the control's.
+ *
+ * So a handle whose newer view is the same control -- same tag, role, selector
+ * and shadow hosts -- keeps only the fields both views agree on: its tag, role,
+ * selector and every attribute that stayed the same, never the label the act
+ * put there. The label is dropped rather than kept as first shown, because the
+ * same handle also serves exploration on the page as it now is: a second press
+ * of the "Collected" control carrying "Get coupons" would be refused by the
+ * page's identity veto for contradicting it
+ * (`apps/extension/src/content/identity/veto.ts`), while an identity that names
+ * no label asks nothing the page contradicts, on the reset page or this one.
+ * Once a field is dropped it stays dropped. A newer view whose handle names
+ * another element (tag, role or address changed) replaces it whole.
+ */
+export function webPlanElementIdentityAcrossViews(earlier: WebPlanElementIdentity, newer: WebPlanElementIdentity): WebPlanElementIdentity {
+  const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+  if (!same(earlier.tagName, newer.tagName) || !same(earlier.role, newer.role) || !same(earlier.selector, newer.selector)
+    || !same(earlier.context?.shadowHosts, newer.context?.shadowHosts)) return newer;
+  const agreed = <T>(a: T, b: T): T | undefined => (same(a, b) ? a : undefined);
+  const context = present<WebPlanElementContext>({
+    formId: agreed(earlier.context?.formId, newer.context?.formId),
+    listPosition: agreed(earlier.context?.listPosition, newer.context?.listPosition),
+    shadowHosts: newer.context?.shadowHosts,
+    record: agreed(earlier.context?.record, newer.context?.record)
+  });
+  return present<WebPlanElementIdentity>({
+    tagName: newer.tagName,
+    role: newer.role,
+    accessibleName: agreed(earlier.accessibleName, newer.accessibleName),
+    visibleText: agreed(earlier.visibleText, newer.visibleText),
+    selector: newer.selector,
+    inputType: agreed(earlier.inputType, newer.inputType),
+    context: Object.keys(context).length > 0 ? context : undefined
+  });
+}
+
+/**
  * The words a person reads for the element `identity` was made from: the
  * identity's own name -- its accessible name, else its visible text -- spelled
  * as the packet's readable words when the two differ by spacing alone; nothing

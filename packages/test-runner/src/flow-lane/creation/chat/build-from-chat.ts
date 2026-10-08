@@ -16,10 +16,10 @@
 // answers it in the chat (`person-simulation/`), by the task's permission
 // point, as the person sitting at the panel would.
 
-import type { AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
+import { parseAutomationStudioFlowBootstrapFailureDiagnostic, type AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../../../failure.js";
 import { assertCreatedFlowVerificationReady, type CreatedFlowCandidateTrialReadiness } from "../readiness.js";
-import { createdFlowChatCandidateDraftOutcome, readCreatedFlowCandidatePromotion } from "../candidate-outcome.js";
+import { createdFlowChatCandidateDraftOutcome, createdFlowFailedCandidateOutcome, readCreatedFlowCandidatePromotion } from "../candidate-outcome.js";
 import { createdFlowBuildFromDiagnostic, failedCreatedFlowBuild, readCreatedFlowBuild, type CreatedFlowBuild, type CreatedFlowBuildControl } from "../build-proposal.js";
 import type { CreatedFlowChatRecord } from "./chat-record.js";
 import { chatConversationIds, chatThreadTurns, projectFlowIds, type CreatedFlowChatScope, type CreatedFlowChatTurn } from "./chat-thread.js";
@@ -193,7 +193,7 @@ export async function buildCreatedFlowFromChat(
     // The build ended without leaving a change behind. Core told the person in
     // words, and keeps the build's diagnostic -- what it spent, how far it got --
     // for a reader that started it this way (`get-flow-bootstrap-failure`).
-    const build = await failedBuildOf(control, scope, flowId, durationMs);
+    const build = await failedBuildOf(control, scope, flowId, durationMs, input.authoringMode === "candidate");
     return Object.freeze({ build: Object.freeze({ ...build, chat: ending({ ending: "failed" }) }), flowId, applied: null, said });
   }
   const read = await readCreatedFlowBuild(control, { projectId: input.projectId, flowId }, proposal.adaptationId, { recoveredAfterTimeout: false, durationMs, statuses: ["proposed", "validated", "applied"] });
@@ -216,9 +216,11 @@ export async function buildCreatedFlowFromChat(
  * Core's own code first among its causes. Live run `run-muq3ubys-4b4dbf5b`
  * spent $0.227 and the spend ledger recorded $0, because this read nothing.
  * A Core that keeps no diagnostic, or does not answer, leaves today's record:
- * a failure whose spend is unknown.
+ * a failure whose spend is unknown. In candidate mode the candidate the
+ * diagnostic names, its trials and their verdicts go on the record as well
+ * (`candidateOutcome`, t362): round 4 recorded `candidate: null` here.
  */
-async function failedBuildOf(control: CreatedFlowChatControl, scope: CreatedFlowChatScope, flowId: string, durationMs: number): Promise<CreatedFlowBuild> {
+async function failedBuildOf(control: CreatedFlowChatControl, scope: CreatedFlowChatScope, flowId: string, durationMs: number, candidateMode: boolean): Promise<CreatedFlowBuild> {
   const chatFailure = { code: "lab.chat_build_failed", stage: "chat" as const, httpStatus: null };
   let kept: unknown;
   try {
@@ -230,7 +232,9 @@ async function failedBuildOf(control: CreatedFlowChatControl, scope: CreatedFlow
   const build = kept ? createdFlowBuildFromDiagnostic(kept, durationMs, null) : undefined;
   if (!build) return failedCreatedFlowBuild(chatFailure, "unknown", durationMs);
   const causes = [build.failure!.code, ...(build.failure!.issueCodes ?? [])];
-  return Object.freeze({ ...build, outcome: "failed" as const, failure: { ...chatFailure, issueCodes: [...new Set(causes)] } });
+  const candidate = candidateMode ? parseAutomationStudioFlowBootstrapFailureDiagnostic(kept)?.candidate : undefined;
+  const candidateOutcome = candidate ? await createdFlowFailedCandidateOutcome(control, { projectId: scope.projectId, flowId }, candidate) : undefined;
+  return Object.freeze({ ...build, outcome: "failed" as const, failure: { ...chatFailure, issueCodes: [...new Set(causes)] }, ...(candidateOutcome ? { candidateOutcome } : {}) });
 }
 
 /** Every person turn in the project's threads whose words are `text`, with its thread. */

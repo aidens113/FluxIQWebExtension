@@ -130,3 +130,58 @@ test("a resolution names a control by its readable words beside an identity that
     assert.equal(secret.element.accessibleName, undefined);
   }
 });
+
+// Lane A round 4 (`run-muyrpbnk-fef374e7`, t356 C1): exploration pressed the store coupon's "Get coupons", the page
+// relabelled it "Collected", and the newer view replaced the handle's identity, so the candidate script's `t925` was
+// bound to "Collected" and the trial's freshly reset page, which says "Get coupons", had no such control (0032,
+// `web.target.not_found`). A re-viewed handle keeps only what its views agree on: never the label its act put there.
+
+const COUPON = (label: string): JsonObject => ({ tagName: "button", selector: "#coupon", visibleText: label });
+
+test("a handle whose control an act relabelled keeps no label from after the act, on this page or a reloaded one", () => {
+  const targets = createWebLlmTargetPackets();
+  const scope = { projectId: "project.one", flowId: "flow.coupon" };
+  targets.remember(scope, view(undefined, [COUPON("Get coupons")]));
+  const before = targets.resolve(scope, "t1", undefined);
+  assert.equal(before.ok && before.element.visibleText, "Get coupons", "first shown with its own label");
+  targets.remember(scope, view(undefined, [COUPON("Collected")]));
+  const after = targets.resolve(scope, "t1", undefined);
+  assert.equal(after.ok, true);
+  if (!after.ok) return;
+  assert.equal(after.selector, "#coupon");
+  assert.equal(after.element.tagName, "button");
+  assert.equal(after.element.visibleText, undefined, "the label the press put there is not the control's identity");
+  assert.equal(after.element.accessibleName, undefined);
+  assert.ok(!JSON.stringify(after).includes("Collected"));
+  // The trial's reset page shows "Get coupons" again: still the same control, still no label either view disagreed on.
+  targets.rememberLook(scope, view("reload", [COUPON("Get coupons")]));
+  const reset = targets.resolve(scope, "t1", ITEM);
+  assert.equal(reset.ok && reset.selector, "#coupon");
+  assert.equal(reset.ok ? reset.element.visibleText : "refused", undefined, "once dropped, a disputed label stays dropped");
+});
+
+test("a re-viewed handle keeps every field its views agree on, and a handle that now names another element takes the newer view whole", () => {
+  const targets = createWebLlmTargetPackets();
+  const scope = { projectId: "project.one", flowId: "flow.same" };
+  targets.remember(scope, view(undefined, [COUPON("Get coupons")]));
+  targets.remember(scope, view(undefined, [COUPON("Get coupons")]));
+  const same = targets.resolve(scope, "t1", ITEM);
+  assert.equal(same.ok && same.element.visibleText, "Get coupons", "a label both views showed stays");
+  targets.remember(scope, view(undefined, [{ tagName: "a", selector: "#coupon", visibleText: "Coupon centre" }]));
+  const other = targets.resolve(scope, "t1", ITEM);
+  assert.equal(other.ok && other.element.tagName, "a");
+  assert.equal(other.ok && other.element.visibleText, "Coupon centre", "another element under the handle is not merged with the old one");
+});
+
+test("a look the capture cut short merges its re-viewed handles the same way, and keeps the page's other handles", () => {
+  const targets = createWebLlmTargetPackets();
+  const scope = { projectId: "project.one", flowId: "flow.truncated" };
+  targets.remember(scope, view(undefined, [COUPON("Get coupons"), SPEC("Space Grey", "#grey")]));
+  const cut = view(undefined, [COUPON("Collected")]);
+  cut.evidence.truncated = true;
+  targets.rememberLook(scope, cut);
+  const coupon = targets.resolve(scope, "t1", ITEM);
+  assert.equal(coupon.ok && coupon.selector, "#coupon");
+  assert.equal(coupon.ok ? coupon.element.visibleText : "refused", undefined);
+  assert.equal(targets.resolve(scope, "t2", ITEM).ok, true, "a cut-short look forgets nothing");
+});

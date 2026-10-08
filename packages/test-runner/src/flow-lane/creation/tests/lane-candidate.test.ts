@@ -63,7 +63,7 @@ test("a promoted candidate reaches the reset, playback and oracle unchanged, and
   assert.equal(core.calls[0], "get-flow-bootstrap-generation-readiness");
   for (const step of ["approve", "apply", "reset:/__control/reset", "run", "oracle", "publish"]) assert.ok(core.calls.includes(step), `${step} happens for a promoted candidate`);
   assert.equal(outcome.authoringMode, "candidate");
-  assert.deepEqual({ ...outcome.build.candidateOutcome, trials: outcome.build.candidateOutcome?.trials?.map((trial) => trial.runId) }, { authoringMode: "candidate", outcome: "promoted", candidateId: "candidate.lab", revision: 2, digest: DIGEST, verdict: "yes", trialRunId: "trial.two", codes: [], judgeCalls: 2, trialCount: 2, trials: ["trial.one", "trial.two"], promotedAdaptationId: ADAPTATION_ID });
+  assert.deepEqual({ ...outcome.build.candidateOutcome, trials: outcome.build.candidateOutcome?.trials?.map((trial) => trial.runId) }, { authoringMode: "candidate", outcome: "promoted", draft: null, candidateId: "candidate.lab", revision: 2, digest: DIGEST, verdict: "yes", trialRunId: "trial.two", codes: [], judgeCalls: 2, trialCount: 2, trials: ["trial.one", "trial.two"], promotedAdaptationId: ADAPTATION_ID });
   const snapshot = createdFlowLaneSnapshot(evidence[0]!);
   assert.equal(snapshot.authoringMode, "candidate");
   assert.equal(snapshot.candidate?.promotedAdaptationId, ADAPTATION_ID);

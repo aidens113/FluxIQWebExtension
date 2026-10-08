@@ -292,10 +292,21 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   Not retryable by anything the model can write.
  * - `channel_to_page_failed`: the verb was never reached -- the content script
  *   was not in the frame yet, the port closed, the frame was replaced. Nothing
- *   is wrong with the call; run it again.
+ *   is wrong with the call; run it again. A lasting act whose channel closed
+ *   after it was sent is not this but `outcome_uncertain`, below.
  * - `parameter_not_readable`: a parameter arrived in a shape the client could
  *   not read, so the command was refused before it was dispatched. Write the
  *   node's own parameter shape.
+ *
+ * What a lasting act left unknown (any code the failure had):
+ * - `outcome_uncertain`: the act -- a press, a key press, an entry, a move --
+ *   was sent to the page, and its failure does not show whether it took effect
+ *   (its answer was lost, the page changed under it, the check after it did
+ *   not see its result). Core does not make such an act again by itself,
+ *   because making it twice could act twice: a second item in a cart, a
+ *   message sent twice (t359). `next` says so in plain words. Look at the page
+ *   the refusal carries to see whether it took effect before making the same
+ *   call again (t361).
  *
  * What the page answered a press with (`refused_by_page`):
  * - `page_needs_something_first`: the page wrote beside the control that it
@@ -370,6 +381,7 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "page_not_scriptable",
   "channel_to_page_failed",
   "parameter_not_readable",
+  "outcome_uncertain",
   "page_needs_something_first",
   "page_busy_try_later",
   "answered_the_same_again",
@@ -512,6 +524,12 @@ export type WebLlmToolRejection = {
   detail?: WebLlmToolRejectionDetail;
   /** The page as it stands after a refusal the page caused, as the model reads every page (t223); absent on every other refusal. */
   page?: WebLlmPublishedPage;
+  /**
+   * How many times the node was dispatched before the page's last refusal,
+   * said only when it was more than once: Core's default retries were spent on
+   * a fault that did not clear (`node-run/node-retries.ts`, t355).
+   */
+  attempts?: number;
 };
 
 export class RecoverableToolRejection extends Error {
@@ -662,6 +680,7 @@ export function rejectionDetail(fields: {
     next: reason === "covered_by_layer" ? (fields.closeWith?.length ? COVERED_NEXT_CLOSE : COVERED_NEXT)
       // Read off the codes, so a repeat that passes them back says it again.
       : reason === "handle_not_in_packet" && fields.instead?.includes(WEB_LLM_HANDLE_RENUMBERED_BY_RELOAD) === true ? RENUMBERED_NEXT
+      : reason === "outcome_uncertain" ? UNCERTAIN_NEXT
       : undefined,
     missing: fields.missing === undefined ? undefined : [...fields.missing],
     requestId: fields.requestId,
@@ -696,6 +715,12 @@ const COVERED_NEXT = "Nothing was done. The layer in instead covers the target: 
  */
 const RENUMBERED_NEXT = "Nothing was done. The page was reloaded (put back) since the view this handle came from, and the reload renumbered its controls, so the handle names nothing now. Look at the page again and use the control's current handle from that view.";
 
+/**
+ * What to do about a lasting act whose outcome is uncertain (t359, t361): it
+ * was sent, nothing showed whether it took effect, and it was not made again.
+ */
+const UNCERTAIN_NEXT = "Outcome uncertain: this step was sent to the page, but its answer does not show whether it took effect, so it was not made again automatically -- making it twice could do it twice. Look at the page to see whether it took effect before making the same call again.";
+
 /** A count fit to put on the wire, or nothing. */
 function wholeCount(value: number | undefined): number | undefined {
   return value !== undefined && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
@@ -704,7 +729,11 @@ function wholeCount(value: number | undefined): number | undefined {
 /**
  * A refusal, with the page it was refused on when the page caused it. The page
  * goes out as the compact view; the structured packet stays in the domain.
+ * `attempts` is said only when the node went out more than once (t355).
  */
-export function toolRejection(code: WebLlmToolRejectionCode, page?: WebLlmPageEvidence, detail?: WebLlmToolRejectionDetail): WebLlmToolRejection {
-  return present<WebLlmToolRejection>({ schemaVersion: WEB_LLM_TOOL_RESULT_SCHEMA_VERSION, ok: false, code, detail, page: page === undefined ? undefined : publishedWebLlmPage(page) });
+export function toolRejection(code: WebLlmToolRejectionCode, page?: WebLlmPageEvidence, detail?: WebLlmToolRejectionDetail, attempts?: number): WebLlmToolRejection {
+  return present<WebLlmToolRejection>({
+    schemaVersion: WEB_LLM_TOOL_RESULT_SCHEMA_VERSION, ok: false, code, detail, page: page === undefined ? undefined : publishedWebLlmPage(page),
+    attempts: attempts !== undefined && attempts > 1 ? attempts : undefined
+  });
 }

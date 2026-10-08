@@ -8,7 +8,8 @@ import type { ClientGatewayActivityPhase } from "@fluxiq/client-gateway-websocke
  *
  * - `headline` names the unit of work and stays put while it runs ("Building
  *   your Flow", "Running your Flow", "Fixing your Flow" once Core repairs
- *   it); it changes only when the work changes, settles ("Flow ready", "Build
+ *   it, "Testing your Flow" while a candidate build test-runs the Flow it
+ *   submitted, which is never a repair); it changes only when the work changes, settles ("Flow ready", "Build
  *   failed", "Run finished", "Run failed", "Couldn't fix your Flow" for a run
  *   whose repair failed; a build that fails says "Build failed" even
  *   mid-repair) or needs the person ("Waiting for you: finish the check on

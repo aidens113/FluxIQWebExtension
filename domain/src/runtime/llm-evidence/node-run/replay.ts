@@ -70,7 +70,7 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_CLOSE_OPENED_TABS_PARAMETER } from "../../../client";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import { webAutomationExtractListAloneRowsAsked, webAutomationScopedToRow } from "../../../output-nodes";
-import { webActionFailureRefusal, webActionNeedsPerson } from "../action-failure";
+import { webActionNeedsPerson } from "../action-failure";
 import { assertActive, toolMetadata, withNodeOutputs, withPersonNeeded, type WebLlmEvidenceToolExecution } from "../capture";
 import { present } from "../present";
 import { webActionPermission } from "../permission";
@@ -98,6 +98,7 @@ import {
 import type { WebNodeRun } from "./context";
 import { webMovesThePage } from "./start-location";
 import { verifyWebOutputNode } from "./verify";
+import { webNodeDispatchWithRetries, webNodeFailureRefusal, webNodeLookUntilPresent } from "./retries";
 
 /** The reserved key Core marks a replay call with, and what it may ask for. */
 export const WEB_LLM_REPLAY_KEY = "replay";
@@ -346,14 +347,24 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // page before it, so a refusal can quote what the page then wrote and a step
   // that ran can say what it changed. Not shown to the model; only compared.
   const inPlace = node.effect === "mutate" && !webMovesThePage(node);
-  const before = inPlace ? await replayPage(run, false) : undefined;
-  if (before !== undefined && targetAbsentBefore(before, ran, run.request.value)) {
+  // A target the read does not show is looked for again under the default
+  // retries before the step is called remembered (`./retries/`, t355):
+  // one look straight after the step before it decided on a page still drawing.
+  const looked = inPlace
+    ? await webNodeLookUntilPresent(run, node.definitionId, async () => await replayPage(run, false), (page) => page !== undefined && targetAbsentBefore(page, ran, run.request.value))
+    : undefined;
+  const before = looked?.seen;
+  if (looked?.absent === true) {
     return await webNodeReplayMissingTarget(run, "step", { resultReason: undefined, nodeId: node.definitionId, assumed }, "target_not_found");
   }
-  const result = await run.gateway.executeAction(run.sessionId, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) });
+  // Under Core's default retries, as playback and a trial run the step
+  // (`./retries/`, t355); a lasting act is never blindly repeated.
+  const { result, lastingAct } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared: value.consequences }, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) });
   assertActive(run.request.signal);
   if (result.status !== "succeeded") {
-    const refused = webActionFailureRefusal(result);
+    // A lasting act Core left uncertain and did not repeat says so, reason
+    // `outcome_uncertain`, rather than the failure's own (`./retries/uncertain-outcome.ts`, t361).
+    const refused = webNodeFailureRefusal(result, lastingAct);
     const failure = refused.code;
     // The reason, where this domain has one for what the page answered
     // (`../action-failure/refusal.ts`), and nothing where it does not: a page
@@ -383,7 +394,9 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // one the site remembered (`./named-control-shown.ts`, run mux6n7m4).
     const notFound = result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND;
     const shownByName = notFound && before !== undefined ? webNodeNamedControlShown(before, ran, value) : undefined;
-    const answered = shownByName !== undefined
+    const answered = lastingAct === "uncertain"
+      ? await failedOnPage(run, `the step was sent, and whether it took effect is uncertain (${failure}): it was not made again, since making it twice could do it twice`, about, undefined)
+      : shownByName !== undefined
       ? await failedOnPage(run, `the page shows a control named "${shownByName}" but the step could not find it (${failure})`, about, undefined)
       : notFound
       ? await webNodeReplayMissingTarget(run, "step", about, failure)

@@ -289,7 +289,7 @@ test("a candidate the chat promoted and applied carries the candidate and trial 
   const made = await buildCreatedFlowFromChat(control, chat, CANDIDATE_SCOPE, wait);
   assert.equal(made.build.outcome, "proposed");
   assert.deepEqual(made.applied, { adaptationId: ADAPTATION, appliedMutationCount: 3 });
-  assert.deepEqual({ ...made.build.candidateOutcome, trials: made.build.candidateOutcome?.trials?.map((trial) => trial.runId) }, { authoringMode: "candidate", outcome: "promoted", candidateId: CANDIDATE_ID, revision: 2, digest: "d".repeat(64), verdict: "yes", trialRunId: "trial.two", codes: [], judgeCalls: 2, trialCount: 2, trials: ["trial.two"], promotedAdaptationId: ADAPTATION });
+  assert.deepEqual({ ...made.build.candidateOutcome, trials: made.build.candidateOutcome?.trials?.map((trial) => trial.runId) }, { authoringMode: "candidate", outcome: "promoted", draft: null, candidateId: CANDIDATE_ID, revision: 2, digest: "d".repeat(64), verdict: "yes", trialRunId: "trial.two", codes: [], judgeCalls: 2, trialCount: 2, trials: ["trial.two"], promotedAdaptationId: ADAPTATION });
   // The same chat in legacy mode reads no candidate.
   const legacy = fakeChat({ answer: "build", ending: "created" });
   assert.equal((await buildCreatedFlowFromChat(legacy.control, legacy.chat, SCOPE, legacy.wait)).build.candidateOutcome, undefined);
@@ -302,4 +302,44 @@ test("candidate mode refuses a Core without the trial runner, or without the sta
     await assert.rejects(buildCreatedFlowFromChat(control, { ...chat, type: async (text) => { typed += 1; await chat.type(text); } }, { ...SCOPE, authoringMode: "candidate", candidateTrial }, wait), (error: unknown) => error instanceof RunnerFailure && error.category === "facility.contract" && error.details?.code === code && error.details?.stage === "before_provider");
     assert.equal(typed, 0);
   }
+});
+
+// Lane A round 4 (run-muyrpbnk-fef374e7, C6): a candidate build the chat
+// started stopped for no progress after two trials, and the Lab recorded
+// `candidate: null`. Core's failure now names the candidate, its kept draft and
+// each trial's verdict, and the Lab records them beside the trial sessions (t362).
+test("a candidate build that failed in the chat is recorded with its candidate, kept draft, trials and verdicts (t362)", async () => {
+  const kept = {
+    code: "flow_bootstrap.evidence_repeat_without_progress", stage: "provider_output_validation", retryable: false, providerInvocation: "attempted", providerResponse: "received",
+    accounting: { requestId: "candidate.request", estimatedInputTokens: 10, provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 718_858, outputTokens: 7_971, totalTokens: 726_829, estimatedCostUsd: 0.0392 },
+    issueCodes: ["flow_bootstrap.evidence_completion_parameters_unresolved"],
+    candidate: { candidateId: CANDIDATE_ID, draft: "saved", revision: 7, digest: "d".repeat(64), trialCount: 2,
+      trials: [{ revision: 2, verdict: "execution_failed", trialRunId: "trial.one", code: "web.target.not_found" }, { revision: 4, verdict: "execution_failed", trialRunId: "trial.two", code: "web.action.rate_limited" }] },
+  };
+  const sessions = [
+    trialSession("trial.two", 20, { revision: 4, execution: "failed", code: "web.action.rate_limited" }),
+    trialSession("trial.one", 10, { revision: 2, execution: "failed", code: "web.target.not_found" }),
+  ];
+  const { control, chat, wait } = fakeChat({ answer: "build", ending: "failed", kept, runtimeSessions: sessions });
+  const made = await buildCreatedFlowFromChat(control, chat, CANDIDATE_SCOPE, wait);
+  assert.equal(made.build.outcome, "failed");
+  assert.equal(made.build.failure?.code, "lab.chat_build_failed");
+  assert.equal(made.build.accounting?.estimatedCostUsd, 0.0392, "the spend is still read");
+  const outcome = made.build.candidateOutcome;
+  assert.deepEqual({ ...outcome, trials: outcome?.trials?.map((trial) => [trial.runId, trial.revision, trial.execution, trial.code, trial.verdict]) }, {
+    authoringMode: "candidate", outcome: "failed", draft: "saved", candidateId: CANDIDATE_ID, revision: 7, digest: "d".repeat(64),
+    verdict: "execution_failed", trialRunId: "trial.two", codes: ["web.action.rate_limited"], judgeCalls: null, trialCount: 2,
+    trials: [["trial.one", 2, "failed", "web.target.not_found", "execution_failed"], ["trial.two", 4, "failed", "web.action.rate_limited", "execution_failed"]],
+    promotedAdaptationId: null,
+  });
+  assert.doesNotMatch(JSON.stringify(outcome), /page words/u, "nothing of a trial's Flow document is kept");
+
+  // A candidate that never had a version accepted is still named, with no trials and nothing kept.
+  const none = fakeChat({ answer: "build", ending: "failed", kept: { ...kept, code: "flow_bootstrap.evidence_unusable_decision", issueCodes: ["llm_output.invalid_evidence_decision"], candidate: { candidateId: CANDIDATE_ID, draft: "none", trialCount: 0, trials: [] } }, runtimeSessions: [] });
+  const noneMade = await buildCreatedFlowFromChat(none.control, none.chat, CANDIDATE_SCOPE, none.wait);
+  assert.deepEqual([noneMade.build.candidateOutcome?.outcome, noneMade.build.candidateOutcome?.draft, noneMade.build.candidateOutcome?.verdict, noneMade.build.candidateOutcome?.trialCount, noneMade.build.candidateOutcome?.trials], ["failed", "none", "not_tested", 0, []]);
+
+  // In legacy mode the same failure records no candidate.
+  const legacy = fakeChat({ answer: "build", ending: "failed", kept });
+  assert.equal((await buildCreatedFlowFromChat(legacy.control, legacy.chat, SCOPE, legacy.wait)).build.candidateOutcome, undefined);
 });

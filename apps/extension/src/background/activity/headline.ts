@@ -29,6 +29,10 @@
 //   on the page".
 // - **A question.** Core's own waiting state (`waiting_permission`, a run
 //   paused on an ask) reads "Waiting for you: answer in the FluxIQ panel".
+// - **A test.** While a candidate build test-runs the Flow it submitted, once
+//   from its start (`candidate-trial.ts`), the work reads "Testing your Flow",
+//   whatever its run reports: a trial repairs nothing, so a step that fails in
+//   it is never "Fixing your Flow" (lane A round 4, `run-muyrpbnk-fef374e7`).
 
 import type { ActivityDisplay } from "../../shared/activity/index";
 
@@ -40,6 +44,8 @@ export type ActivityHeadlineSituation = {
   readonly stopped?: boolean;
   /** Core is repairing the Flow in this unit of work. */
   readonly repairing?: boolean;
+  /** A candidate build is test-running the Flow it submitted; outweighs `repairing`. */
+  readonly testing?: boolean;
   /** Why the work waits, when `outcome` is `waiting`. */
   readonly waitingOn?: ActivityWaitReason;
 };
@@ -65,6 +71,7 @@ const WAITING: Readonly<Record<ActivityWaitReason, string>> = Object.freeze({
 });
 
 const REPAIRING = "Fixing your Flow";
+const TESTING = "Testing your Flow";
 /** Only a run's failed repair: a build that fails in its repair says the build failed. */
 const REPAIR_FAILED = "Couldn't fix your Flow";
 
@@ -73,6 +80,7 @@ export function activityHeadline(kind: ActivityDisplay["subjectKind"], outcome: 
   if (outcome === "failed" && situation.stopped) return kind === "build" ? "Build stopped" : "Run stopped";
   if (outcome === "waiting") return WAITING[situation.waitingOn ?? "answer"];
   if (outcome === "done") return DONE[kind];
-  if (outcome === "failed") return kind === "run" && situation.repairing ? REPAIR_FAILED : FAILED[kind];
+  if (outcome === "failed") return kind === "run" && situation.repairing && !situation.testing ? REPAIR_FAILED : FAILED[kind];
+  if (situation.testing) return TESTING;
   return situation.repairing ? REPAIRING : WORKING[kind];
 }

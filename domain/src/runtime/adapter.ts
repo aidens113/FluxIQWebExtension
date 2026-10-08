@@ -39,6 +39,7 @@ import {
   type WebAutomationFailureRecord
 } from "./failure";
 import { publishedWebLlmPage, sanitizeWebLlmSnapshot, screenedEvidenceUrl, screenedWebLlmText, type WebLlmPageEvidence } from "./llm-evidence";
+import { webLastingActStatement } from "./lasting-act-statement";
 
 export type WebAutomationRuntimeAdapterOptions = {
   fluxiq: FluxIQ;
@@ -110,7 +111,7 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
   const clientResult = jsonObject(result.payload?.result);
   const sensitiveTarget = isSensitiveElementDescriptor(clientResult?.element);
   const withholdComparison = sensitiveTarget && !producerDeclaredRedaction(clientResult?.validation);
-  const failure = commandFailure(status, outputId as WebAutomationActionType, message, result.failure, diagnostics?.evidenceDigest, withholdComparison);
+  const failure = commandFailure(status, outputId as WebAutomationActionType, payload as JsonObject, message, result.failure, diagnostics?.evidenceDigest, withholdComparison);
   const runtimeResult: FluxIQRuntimeCommandResult = {
     commandId: command.commandId ?? `web.${Date.now()}`,
     status,
@@ -199,6 +200,7 @@ function rejected(command: FluxIQRuntimeCommand, message: string, code: WebAutom
 function commandFailure(
   status: FluxIQRuntimeCommandStatus,
   actionType: WebAutomationActionType,
+  parameters: JsonObject,
   message: string | undefined,
   reported: AutomationStudioFailureRecord | undefined,
   evidenceDigest: string | undefined,
@@ -214,8 +216,10 @@ function commandFailure(
     ...(message === undefined ? {} : { message }),
     ...(client === undefined ? {} : { failure: client })
   };
-  const failure = classifyWebAutomationFailure(undefined, outcome);
-  if (failure === undefined) return undefined;
+  const classified = classifyWebAutomationFailure(undefined, outcome);
+  if (classified === undefined) return undefined;
+  // What this domain states about the act behind it (`./lasting-act-statement.ts`).
+  const failure = webLastingActStatement(actionType, parameters, reported, classified);
   if (evidenceDigest === undefined || failure.evidenceDigest !== undefined) return failure;
   return { ...failure, evidenceDigest };
 }
@@ -260,7 +264,10 @@ function clientReportedFailure(reported: AutomationStudioFailureRecord | undefin
   const { evidenceDigest } = reported;
   const expected = secretSafeComparisonText(reported.expected, withholdComparison);
   const actual = secretSafeComparisonText(reported.actual, withholdComparison);
-  if (isWebAutomationFailureCode(reported.code)) return webAutomationFailureRecord(reported.code, { expected, actual, evidenceDigest });
+  // The wait a page named ("try again in 12 seconds") is the sender's to know
+  // and is carried too: Core's retry honours it, bounded (t355). It was dropped
+  // here, so a playback retried a too-fast press on its backoff table instead.
+  if (isWebAutomationFailureCode(reported.code)) return webAutomationFailureRecord(reported.code, { expected, actual, evidenceDigest, retryAfterMs: reported.retryAfterMs });
   const unnamed = `unrecognized web automation failure code: ${reported.code}`;
   return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, {
     expected,

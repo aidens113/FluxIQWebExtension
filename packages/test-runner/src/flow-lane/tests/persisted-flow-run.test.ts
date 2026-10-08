@@ -752,13 +752,14 @@ function neverSettles(nodes: number) {
 }
 
 test("a Flow that outlasted its request is read back for the bound its own node count earns", async () => {
-  const six = neverSettles(6);
-  await assert.rejects(six.run, /timed out/u);
-  // 90 s for the run itself, then Core's per-node worst case for each of the
-  // five nodes after the first: 9.1 minutes, not 90 seconds.
-  assert.equal(six.clock.value, terminalDetailWaitMs(6));
-  assert.equal(six.clock.value, 546_250);
-  assert.ok(six.reads() > 1, "the run was read back until its deadline, not once");
+  const five = neverSettles(5);
+  await assert.rejects(five.run, /timed out/u);
+  // 90 s for the run itself, then Core's per-node worst case (four attempts'
+  // readiness ceilings and three backoffs, t355) for each of the four nodes
+  // after the first: 9.7 minutes, not 90 seconds.
+  assert.equal(five.clock.value, terminalDetailWaitMs(5));
+  assert.equal(five.clock.value, 583_000);
+  assert.ok(five.reads() > 1, "the run was read back until its deadline, not once");
 
   const one = neverSettles(1);
   await assert.rejects(one.run, /timed out/u);
