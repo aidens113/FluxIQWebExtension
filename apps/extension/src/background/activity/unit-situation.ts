@@ -56,16 +56,21 @@ export class UnitSituation {
   private rebuilding = false;
   private check = false;
 
-  /** Folds `event` in and answers the unit's state after it. */
-  observe(event: ClientGatewayActivity): UnitState {
+  /**
+   * Folds `event` in and answers the unit's state after it. An event of a
+   * candidate trial (`inTrial`, `candidate-trial.ts`) starts no repair: the
+   * trial's run repairs nothing, though its failed step reports the
+   * `repairing` phase as any run's does.
+   */
+  observe(event: ClientGatewayActivity, inTrial = false): UnitState {
     if (event.activityId !== this.activityId) {
       this.activityId = event.activityId;
       this.repairing = false;
       this.rebuilding = false;
       this.check = false;
     }
-    if (event.phase === "repairing") this.repairing = true;
-    if (repairsTheFlow(event)) this.rebuilding = true;
+    if (event.phase === "repairing" && !inTrial) this.repairing = true;
+    if (repairsTheFlow(event) && !inTrial) this.rebuilding = true;
     const runMovedOn = event.phase === "running" && event.step !== undefined;
     if (runMovedOn || resultCheckPassed(event)) this.repairing = false;
     if (runMovedOn) this.rebuilding = false;
