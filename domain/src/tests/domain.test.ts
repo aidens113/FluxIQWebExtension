@@ -290,7 +290,9 @@ const selectedBootstrapActions = new Set(bootstrapContext.nodeCatalog.flatMap((e
 for (const action of ["web.dom.type", "web.dom.select", "web.dom.click"]) assert.equal(selectedBootstrapActions.has(action), true, `bootstrap catalog omitted ${action}; selected=${[...selectedBootstrapActions].join(",")}; used=${bootstrapContext.catalogSelection.usedBytes}`);
 assert.equal(["web.dom.wait_for_text", "web.dom.wait_for_selector", "web.dom.extract"].some((action) => selectedBootstrapActions.has(action)), true, "bootstrap catalog omitted a verify/assert equivalent");
 
-const missingSelectRegistry = new AutomationStudioNodeRegistry(outputNodeDefinitions.filter((definition) => definition.outputAction?.fixedOutputId !== "web.dom.select"));
+// Since t364 `web.dom.check` chooses an option too (any control with a readable chosen state), so the
+// catalog misses "choose" only when every node that chooses is gone, not just select.
+const missingSelectRegistry = new AutomationStudioNodeRegistry(outputNodeDefinitions.filter((definition) => definition.outputAction?.fixedOutputId !== "web.dom.select" && definition.outputAction?.fixedOutputId !== "web.dom.check"));
 const incompleteBootstrapContext = buildAutomationStudioFlowBootstrapContext({
   registry: missingSelectRegistry,
   resolution: bootstrapResolution,
