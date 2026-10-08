@@ -19,7 +19,7 @@
 import { parseAutomationStudioFlowBootstrapFailureDiagnostic, type AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../../../failure.js";
 import { assertCreatedFlowVerificationReady, type CreatedFlowCandidateTrialReadiness } from "../readiness.js";
-import { createdFlowChatCandidateDraftOutcome, createdFlowFailedCandidateOutcome, readCreatedFlowCandidatePromotion } from "../candidate-outcome.js";
+import { createdFlowChatCandidateDraftOutcome, createdFlowFailedCandidateOutcome } from "../candidate-outcome.js";
 import { createdFlowBuildFromDiagnostic, failedCreatedFlowBuild, readCreatedFlowBuild, type CreatedFlowBuild, type CreatedFlowBuildControl } from "../build-proposal.js";
 import type { CreatedFlowChatRecord } from "./chat-record.js";
 import { chatConversationIds, chatThreadTurns, projectFlowIds, type CreatedFlowChatScope, type CreatedFlowChatTurn } from "./chat-thread.js";
@@ -196,14 +196,14 @@ export async function buildCreatedFlowFromChat(
     const build = await failedBuildOf(control, scope, flowId, durationMs, input.authoringMode === "candidate");
     return Object.freeze({ build: Object.freeze({ ...build, chat: ending({ ending: "failed" }) }), flowId, applied: null, said });
   }
-  const read = await readCreatedFlowBuild(control, { projectId: input.projectId, flowId }, proposal.adaptationId, { recoveredAfterTimeout: false, durationMs, statuses: ["proposed", "validated", "applied"] });
+  // In candidate mode the proposal's `candidateTrial` audit is read with it, and a promoted candidate's stands in for the legacy evidence audit (t367).
+  const read = await readCreatedFlowBuild(control, { projectId: input.projectId, flowId }, proposal.adaptationId, { recoveredAfterTimeout: false, durationMs, statuses: ["proposed", "validated", "applied"], authoringMode: input.authoringMode });
   if (read.build.outcome === "permission_required") {
     return Object.freeze({ build: Object.freeze({ ...read.build, chat: ending({ ending: "awaiting_permission" }) }), flowId, applied: null, said });
   }
   if (read.build.outcome === "proposed" && read.status === "applied") {
-    // A candidate the chat applied: the candidate and trial behind it, from the proposal's audit.
-    const candidateOutcome = input.authoringMode === "candidate" ? await readCreatedFlowCandidatePromotion(control, { projectId: input.projectId, flowId }, proposal.adaptationId) : null;
-    return Object.freeze({ build: Object.freeze({ ...read.build, ...(candidateOutcome ? { candidateOutcome } : {}), chat: ending({ ending: "created" }) }), flowId, applied: Object.freeze({ adaptationId: proposal.adaptationId, appliedMutationCount: read.appliedMutationCount ?? 0 }), said });
+    // A candidate the chat applied carries the candidate and trial behind it (`read.build.candidateOutcome`), from the proposal's audit.
+    return Object.freeze({ build: Object.freeze({ ...read.build, chat: ending({ ending: "created" }) }), flowId, applied: Object.freeze({ adaptationId: proposal.adaptationId, appliedMutationCount: read.appliedMutationCount ?? 0 }), said });
   }
   // A well-formed proposal the chat did not put into the Flow: its own apply failed, and the thread says why.
   const failure = read.build.failure ?? { code: "lab.chat_not_applied", stage: "review", httpStatus: null };

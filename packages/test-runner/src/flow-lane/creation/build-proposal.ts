@@ -369,12 +369,6 @@ export async function buildCreatedFlowProposal(
 ): Promise<CreatedFlowBuild> {
   assertCreatedFlowVerificationReady(input.authoringMode, input.candidateTrial);
   const now = wait.now ?? Date.now;
-  // A promoted candidate is an ordinary proposal; the candidate behind it is read from its audit.
-  const withCandidate = async (build: CreatedFlowBuild): Promise<CreatedFlowBuild> => {
-    if (input.authoringMode !== "candidate" || build.adaptationId === null) return build;
-    const candidateOutcome = await readCreatedFlowCandidatePromotion(control, input, build.adaptationId);
-    return candidateOutcome ? Object.freeze({ ...build, candidateOutcome }) : build;
-  };
   const saved = record(await control.automationStudioCall("save-flow-generation-instruction", { projectId: input.projectId, flowId: input.flowId, instruction: input.instruction }, bounds));
   if (record(saved.instruction).status !== "active") throw new RunnerFailure("runtime.behavior", "Core did not make the task's instruction the Flow's active instruction");
   const { permittedConsequences } = await input.authorize(input.flowId);
@@ -405,7 +399,7 @@ export async function buildCreatedFlowProposal(
     if (!isBoundedHttpFailure(error)) throw error;
     const adaptationId = await awaitProposal(control, input, startedAt, wait);
     if (adaptationId === undefined) return failed({ code: "lab.generation_unfinished", stage: null, httpStatus: null }, "unknown", now() - startedAt);
-    return withCandidate(await proposed(control, input, adaptationId, true, now() - startedAt));
+    return proposed(control, input, adaptationId, true, now() - startedAt);
   }
   if (!envelope.ok) {
     // A candidate build that failed names its candidate, trials and verdicts on its diagnostic (t362).
@@ -415,7 +409,7 @@ export async function buildCreatedFlowProposal(
   }
   const adaptation = isRecord(envelope.payload) && isRecord(envelope.payload.adaptation) ? envelope.payload.adaptation : undefined;
   if (adaptation?.projectId === input.projectId && adaptation.flowId === input.flowId && adaptation.status === "proposed" && typeof adaptation.adaptationId === "string") {
-    return withCandidate(await proposed(control, input, adaptation.adaptationId, false, now() - startedAt));
+    return proposed(control, input, adaptation.adaptationId, false, now() - startedAt);
   }
   // A candidate Core kept as a draft: its trial did not stand. Kept as an
   // unverified draft with its verdict, never as a Flow that could be run or pass.
@@ -443,12 +437,11 @@ async function awaitProposal(control: CreatedFlowBuildControl, input: { projectI
 
 /**
  * A proposal, as Core's review surface describes it. It must be the pending
- * Flow bootstrap the build was asked for, and its audit must show that the
- * build explored the page and counted its provider calls: a proposal without
- * either cannot be shown to be what was paid for.
+ * Flow bootstrap the build was asked for, and its audit must show what was
+ * paid for (`readCreatedFlowBuild`).
  */
-async function proposed(control: CreatedFlowBuildControl, input: { projectId: string; flowId: string }, adaptationId: string, recoveredAfterTimeout: boolean, durationMs: number): Promise<CreatedFlowBuild> {
-  return (await readCreatedFlowBuild(control, input, adaptationId, { recoveredAfterTimeout, durationMs, statuses: ["proposed"] })).build;
+async function proposed(control: CreatedFlowBuildControl, input: { projectId: string; flowId: string; authoringMode: AutomationStudioAuthoringMode }, adaptationId: string, recoveredAfterTimeout: boolean, durationMs: number): Promise<CreatedFlowBuild> {
+  return (await readCreatedFlowBuild(control, input, adaptationId, { recoveredAfterTimeout, durationMs, statuses: ["proposed"], authoringMode: input.authoringMode })).build;
 }
 
 /** A build read off the proposal it left: the record, and the status and applied change count Core reports for the proposal now. */
@@ -460,12 +453,26 @@ export type CreatedFlowBuildRead = Readonly<{ build: CreatedFlowBuild; status: s
  * the Lab asked for and has yet to review; `applied` as well for one the
  * extension's chat started, which approves and applies its own proposal on a
  * new Flow (`create-here.ts` in Core). Any other state is a refusal.
+ *
+ * What the build was paid for is shown one of two ways. A legacy build's
+ * proposal carries its evidence loop's audit: the provider calls it counted and
+ * the page evidence it read. In candidate mode (`authoringMode: "candidate"`) a
+ * promoted candidate's proposal carries, instead, the `candidateTrial` audit
+ * Core's promotion records (`service/candidate-trial/promotion.ts`): the
+ * candidate, its revision and digest, and the trial whose judged yes promoted
+ * it. That record is read here and kept on the build (`candidateOutcome`), and
+ * it stands in for the evidence-loop audit only when it is whole: a judged yes,
+ * a trial run, a revision, a digest and at least one judge call. Lane A round 6
+ * (`run-muz2cj6p-80eb2179`) was refused as `lab.proposal_without_evidence_audit`
+ * here although Core had tested, judged, promoted and applied its candidate, so
+ * the Lab's own reset, playback and oracle never ran (t367). A legacy build, and
+ * a candidate-mode proposal with no such record, still need the loop's audit.
  */
 export async function readCreatedFlowBuild(
   control: Pick<CreatedFlowBuildControl, "getFlowAdaptation" | "automationStudioCall">,
   input: { projectId: string; flowId: string },
   adaptationId: string,
-  read: { recoveredAfterTimeout: boolean; durationMs: number; statuses: readonly string[] },
+  read: { recoveredAfterTimeout: boolean; durationMs: number; statuses: readonly string[]; authoringMode?: AutomationStudioAuthoringMode },
 ): Promise<CreatedFlowBuildRead> {
   const detail = await control.getFlowAdaptation(input.projectId, input.flowId, adaptationId);
   const { recoveredAfterTimeout, durationMs } = read;
@@ -488,19 +495,27 @@ export async function readCreatedFlowBuild(
     permissionRequest: request ? permissionRequestOf(request) : null,
     judged: await createdFlowBuildJudged(control, input, adaptationId),
   };
+  // A promoted candidate's record, read from the same audit event; kept on every ending, a refused one too.
+  const candidateOutcome = read.authoringMode === "candidate" ? await readCreatedFlowCandidatePromotion(control, input, adaptationId) : null;
+  const kept = candidateOutcome ? { ...base, candidateOutcome } : base;
   const problem = !read.statuses.includes(detail.status) || detail.adaptationKind !== "flow_bootstrap" ? "lab.proposal_not_pending_bootstrap"
-    : !loop ? "lab.proposal_without_evidence_audit"
+    : !loop ? (isWholeCandidatePromotion(candidateOutcome) ? undefined : "lab.proposal_without_evidence_audit")
       : loop.providerCallCount === undefined ? "lab.proposal_without_call_count"
         : loop.toolCallCount < 1 || loop.evidenceBytes < 1 ? "lab.proposal_without_page_evidence"
           : undefined;
   const found = { status: detail.status, appliedMutationCount: detail.appliedMutationCount ?? null };
-  if (problem) return Object.freeze({ ...found, build: Object.freeze({ ...base, outcome: "failed" as const, failure: { code: problem, stage: null, httpStatus: null } }) });
+  if (problem) return Object.freeze({ ...found, build: Object.freeze({ ...kept, outcome: "failed" as const, failure: { code: problem, stage: null, httpStatus: null } }) });
   // The proposal exists and is well formed, and a person still has to answer
   // before anything may be done with it. Read here rather than discovered when
   // the review call is refused, so the ending is the product's own answer and
   // not an HTTP status.
-  if (request) return Object.freeze({ ...found, build: Object.freeze({ ...base, outcome: "permission_required" as const, failure: { code: "flow_bootstrap.permission_required", stage: "review", httpStatus: null } }) });
-  return Object.freeze({ ...found, build: Object.freeze({ ...base, outcome: "proposed" as const, failure: null }) });
+  if (request) return Object.freeze({ ...found, build: Object.freeze({ ...kept, outcome: "permission_required" as const, failure: { code: "flow_bootstrap.permission_required", stage: "review", httpStatus: null } }) });
+  return Object.freeze({ ...found, build: Object.freeze({ ...kept, outcome: "proposed" as const, failure: null }) });
+}
+
+/** A promoted candidate's audit that can stand in for the evidence loop's: a judged yes for a named trial of a named revision, by at least one judge call. */
+function isWholeCandidatePromotion(outcome: CreatedFlowCandidateOutcome | null): boolean {
+  return outcome !== null && outcome.outcome === "promoted" && outcome.verdict === "yes" && outcome.trialRunId !== null && outcome.revision !== null && outcome.digest !== null && (outcome.judgeCalls ?? 0) >= 1;
 }
 
 /**

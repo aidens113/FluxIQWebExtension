@@ -6,11 +6,12 @@ import { RunnerFailure } from "../../../failure.js";
 import type { DeclaredSecret } from "../../declared-secrets.js";
 import type { PersistedFlowLlmExecution } from "../../persisted-flow-run.js";
 import type { CreatedFlowBuild } from "../build-proposal.js";
-import { runCreatedFlowLane, withSettledBuild, type CreatedFlowLaneEntry, type CreatedFlowSettledBuild } from "../lane.js";
+import { runCreatedFlowLane, withSettledBuild, type CreatedFlowSettledBuild } from "../lane.js";
 import { resolveCreatedFlowRequest } from "../request.js";
 import type { UnheldFact } from "../final-state-facts.js";
 import { createdFlowLaneSnapshot } from "../snapshot.js";
 import { ADAPTATION_ID, EXTRACTING_NODES, FLOW_ID, PROJECT_ID, fakeCreationCore, type FakeCreationCoreOptions } from "./fake-creation-core.js";
+import { chatCore } from "./chat-core.js";
 import { runLane } from "./lane-harness.js";
 import { permissionRequiredDiagnostic } from "./permission-required-diagnostic.js";
 import { catalogScenario, datasetTask, goalTask } from "./scenario-fixture.js";
@@ -528,46 +529,6 @@ test("a build started from the extension's chat runs and is judged like any othe
   assert.equal(outcome.observation.reportedVerdict, "passed");
   assert.equal(createdFlowLaneSnapshot(outcome).buildEntry, "chat");
 });
-
-/** A fake Core with a chat in front of it: the typed instruction makes, builds and applies the Flow, as Core's chat command does. */
-function chatCore(options: FakeCreationCoreOptions = {}): { core: ReturnType<typeof fakeCreationCore>; entry: CreatedFlowLaneEntry; typed: string[] } {
-  const core = fakeCreationCore({ adaptationStatus: "applied", ...options });
-  const base = core.control;
-  const turns: Array<Record<string, unknown>> = [];
-  let made = false;
-  const typed: string[] = [];
-  core.control = {
-    ...base,
-    automationStudioCall: async (endpoint, payload, bounds, domainId) => {
-      if (endpoint === "list-flows") { core.calls.push(endpoint); return { flows: made ? [{ flow: { flowId: FLOW_ID, metadata: {} } }] : [] }; }
-      if (endpoint === "list-conversations") return { conversations: [{ conversationId: "conversation.chat", pendingAskCount: 0, subject: { kind: "project", id: PROJECT_ID } }] };
-      if (endpoint === "get-conversation") return { conversation: { turns, hasMore: false } };
-      return base.automationStudioCall(endpoint, payload, bounds, domainId);
-    },
-    listFlowAdaptations: async (projectId, flowId) => (made ? [{ adaptationId: ADAPTATION_ID, projectId, flowId, status: "applied" }] : []),
-    getFlowAdaptation: async (projectId, flowId, adaptationId) => ({ ...await base.getFlowAdaptation(projectId, flowId, adaptationId), appliedMutationCount: 2 }),
-  };
-  const entry: CreatedFlowLaneEntry = {
-    kind: "chat",
-    authorizeChat: async () => { core.calls.push("authorize-chat"); },
-    chat: {
-      panelInput: "view-dom",
-      type: async (text) => {
-        typed.push(text);
-        turns.push({ turnId: "t1", ordinal: 1, author: "person", text, ask: null, attachment: null });
-        turns.push({ turnId: "t2", ordinal: 2, author: "automation", text: 'Doing "Create an automation here".', ask: null, attachment: null });
-        // Core's own apply, made inside the chat's command, which the fake records as a call; it is not one the lane made.
-        await base.applyFlowAdaptation({ projectId: PROJECT_ID, flowId: FLOW_ID, adaptationId: ADAPTATION_ID, authorizationPin: "" });
-        core.calls.splice(core.calls.lastIndexOf("apply"), 1);
-        made = true;
-        turns.push({ turnId: "t3", ordinal: 3, author: "automation", text: 'Created the Flow "x".', ask: null, attachment: { kind: "panel-capability-result", ref: "flow.createHere" } });
-      },
-      shows: async () => "",
-    },
-    wait: { pollMs: 1 },
-  };
-  return { core, entry, typed };
-}
 
 /** `run-murzln6g-11debe1d`, `S/0015/decision.json`: the reading its build made before any page evidence. */
 const MURZLN6G_READ = [
