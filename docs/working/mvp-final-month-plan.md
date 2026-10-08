@@ -56,7 +56,7 @@ hardening. In-flight t334 (click executor), t335 (installer, never compiled) and
 t337 (grammar for one sentence family) are WIP commits on their own branches, not
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
-**In flight.** t355 every node retries automatically on every path (user rule); t356 a candidate build never gives up on a recoverable failure; t342 round 4 lead finishing its debug.
+**In flight.** t355 every node retries automatically on every path, 3 retries by default (user rule, includes trials' one-attempt limit); t356 a candidate build never gives up (durable pre-act locators, re-test after a transient failure, recovery sentences, plain trial feedback); t357 optional steps and desired-state choice in candidate scripts. Next: lane A round 5 (candidate) once all three merge.
 
 **Next order.**
 
@@ -137,6 +137,14 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
+
+### Brief: t357 candidate scripts can mark optional steps and choose options by desired state
+- Worker: t357-optional-choose (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t357\` (Core-paired, branch `task/t357-candidate-optional-and-choose`); edits in its `!FluxIQ` tree. Report: `docs/working/mvp-final-month-plan/reports/t357-candidate-optional-and-choose.md` in the t357 downstream tree.
+- Evidence (lane A rounds 2-4, t342 report): the candidate script format has no way to mark a step that is only sometimes needed (a consent banner or popup that may be absent), although Core's runtime already skips an absent step whose node carries `metadata.sometimesPresent`; and every lane A script presses the Space Grey option, which is already chosen when the page opens, so a click can toggle it off (round 2's C2 trap). A choice should be written as the desired state using the existing nodes that read and set state (check, select and the domain's choose-option nodes), not as a blind click.
+- Goal: (1) a candidate script line can mark a step optional, assembling to the existing `metadata.sometimesPresent`, validated by the one existing checker (`authoring/`), legacy unchanged; (2) the candidate-only format text and examples teach desired-state choice for options and toggles with the nodes that already exist, and say when a click is right instead. No new graph format and no new runtime behavior.
+- Owns: Core `runtime/flow-bootstrap/authoring/{parse,contracts,assemble,assemble-draft}.ts` and `authoring/tests/**`, `runtime/flow-bootstrap/plan/flow-script-format.ts` (candidate-only constants beside U1's and t346's) and its tests.
+- Must not touch: `runtime/flow-bootstrap/candidate/**`, `runtime/llm/**`, `runtime/service/**`, `runtime/flow-bootstrap/verification/**` (t355 and t356 own them), the extension and domain, `docs/working/*.md`. No commits, provider, Lab or panel. No new `as never` casts.
+- Definition of done: fail-first tests: an optional line assembles to `sometimesPresent` and an invalid placement is refused with a path-specific diagnostic; the format text contains the desired-state guidance and examples; legacy prompt and schema bytes unchanged. Owning tests, Core nonincremental typecheck, Core audit.
 
 ### Brief: t355 every node retries automatically, in every execution path (user rule)
 - Worker: t355-node-retry (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t355` (Core-paired, branch `task/t355-node-auto-retry`). Report: `docs/working/mvp-final-month-plan/reports/t355-node-auto-retry.md` in the t355 downstream tree.
@@ -498,6 +506,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: Core `0c53a16c`, downstream `ea2366b9`, both pushed. Legacy and candidate loops build their unusable-reply retry and stall handling from one helper (`service/flow-bootstrap-commands/unusable-decisions.ts`); C2 and C3 shared one cause (the unusable error escaped while the stage was still `provider_request`, dropping stage and spend), so a candidate that keeps getting unusable replies now ends as `evidence_unusable_decision` at `provider_output_validation`, and every failed build carries its whole spend (`failure-spend.ts`). Lane A round 4 (candidate probe with the fix) launched on t342 trees synced to these heads.
 - Validation: supervisor on the merged t354 trees: Core vitest over flow-bootstrap-commands, flow-bootstrap, candidate-trial, conversations, llm, service-bootstrap, api -> 351 files, 3763 passed, 2 skipped; Core tsc exit 0; Core audit exit 0; test-runner built against it, creation and chat tests 155 pass, 0 fail.
 - Limits: a stalled candidate does not keep its latest submission as a draft; the purse counts a call that got no answer at the amount it held, so it can read slightly above the failure's spend.
+
+### 2026-10-08 - Lane A round 4 (candidate) reached two trials, both died at step 2; user rule: nodes retry automatically (3 retries); t355-t357 dispatched
+- Changed: `run-muyrpbnk-fef374e7`, candidate mode, admitted 23:57 UTC 2026-10-07, 34 calls, $0.039318, ended `flow_bootstrap.evidence_repeat_without_progress`. t354 held (no reply lost, spend recorded, wording right). Both trials started from the reset and failed at the coupon press: C2 (decisive) a trial allows one attempt per step (`runtime/flow-bootstrap/verification/detached-execution.ts:75-76`) where a normal run retries three times, so the page's first-press "Network busy" ended trial 2; C1 handles bind to the control as exploration last saw it after pressing it ("Collected" instead of "Get coupons", domain `plan-resolution/element-identity.ts:113`); C3 twelve submissions refused for stale handles with no recovery sentence; C4 trial feedback is only a step number and a code; C5 the re-test was refused as a repeat; C6 ending wording and the Lab's `candidate: null`. The user watched it live and set the rule that every node retries automatically on every path, by default 3 retries, and that a build never gives up on a recoverable failure (Current State). t355 owns the retry policy including C2; t356 owns C1, C3, C4, C5; t357 adds optional steps and desired-state choice to the candidate format. C6 and the UI's internal names ("Using Test candidate", "Revision 7") are queued after.
+- Validation: lead's run evidence: candidate dry run ready with `trialRunner` and `startReset` true; trial results at steps 0032 and 0048 (`execution_failed`, step 2 `web.target.not_found` then `web.action.rate_limited`); 0050 `llm_evidence_loop.repeat_refused`; 0038-0068 `web.handle.unknown:target`. Supervisor read the step files 0014, 0032, 0038, 0054, 0068 directly.
+- Limits: trial judge, promotion, chat apply, playback and oracle still never reached live. Every lane A script still presses the already-chosen Space Grey option (t357's desired-state guidance).
 
 ## Open Questions
 
