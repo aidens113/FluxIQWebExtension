@@ -56,7 +56,7 @@ hardening. In-flight t334 (click executor), t335 (installer, never compiled) and
 t337 (grammar for one sentence family) are WIP commits on their own branches, not
 merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
 
-**In flight.** t361 lasting-act follow-ups (undelivered presses, exploring model told, docs); t362 candidate endings, chat wording and Lab evidence. Next: lane A round 5 (candidate) at 04:00 UTC off-peak once both merge.
+**In flight.** t361 lasting-act follow-ups (exploration aligned to the single lasting-act rule); t363 the overlay describes a candidate trial as a test. Next: lane A round 5 (candidate) at 04:00 UTC off-peak once both merge.
 
 **Next order.**
 
@@ -137,6 +137,14 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 Active file-owned tasks only. Prior briefs and exact receipts are preserved in the
 [execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
+
+### Brief: t363 the on-page overlay describes a candidate trial as a test, not a repair
+- Worker: t363-overlay-words (worker). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t363-trial-overlay-words` (branch `task/t363-trial-overlay-words`, shared Core). Report: `docs/working/mvp-final-month-plan/reports/t363-trial-overlay-words.md` in that tree.
+- Fact: during a candidate creation build's trial in lane A round 4 (`run-muyrpbnk-fef374e7`; t342 report round 4 in the t342 tree, read only), the on-page overlay said "Fixing your Flow · Step 2 of 8" and "Trying again didn't fix the step". Nothing was being repaired: Core was test-running the new candidate once from its start. t362 (merged) made the chat name candidate tools plainly, but the overlay text comes from the extension background.
+- Goal: the overlay tells the person what is happening in plain words for each run kind it shows: building (exploring), testing a candidate from its start, running a saved Flow, repairing a saved Flow; a test that fails says the test failed and what is next, never "fix". Take the run kind from the activity Core already sends (trial sessions carry `metadata.candidateTrial`); add nothing to the wire protocol unless the kind is truly absent, in which case stop and report what is missing.
+- Owns: `apps/extension/src/background/**` overlay and activity wording files (list exact files before editing) and the content activity overlay's text, with tests.
+- Must not touch: `apps/extension/src/runtime/**` and domain `node-run/**` (t361), Core, the panel chat stream wording (t350 and t362, merged), `docs/working/*.md`. No commits, provider calls or paid runs. No new `as never` casts or import cycles.
+- Definition of done: tests for each run kind's overlay words, including a failed trial; no "fix" or "repair" wording reaches a trial; extension build for all targets; extension typecheck; structure audit.
 
 ### Brief: t361 lasting-act follow-ups: undelivered presses, the exploring model told, docs
 - Worker: t361-lasting-followups (worker-high). Worktree `C:\Users\osrs_\FluxStuff\fxwork\t361\` (Core-paired, branch `task/t361-lasting-act-followups`). Report: `docs/working/mvp-final-month-plan/reports/t361-lasting-act-followups.md` in the t361 downstream tree.
@@ -575,6 +583,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: Core `8310ea74`, downstream `1af27da0`, both pushed. t360: `plan-node-handles.ts` and `plan-parameter-resolution.ts` import their constants from their owner, and a load-order test proves the handle check refuses unknown handles either way; the new `import-cycles` audit rule (Core first, mirrored) baselines today's cycles (Core 10, largest 108 modules in runtime/llm with flow-bootstrap; downstream 8, largest 36) and fails a new one; the barrel rule no longer insists on a barrel that leads back to the importer; `code-structure.md` documents it (supervisor addition). The built package still throws when entered at a harness-options module (`llm/deepseek/output-schema.js`), though production entries load. t359: one rule in Core's defensive assess decides when an act lasts (node marked as acting, non-empty declared consequences, or the domain's `effect: "ambiguous"` for click, keypress, dialog, type with submit) and retries a lasting act only when nothing was dispatched or the effect check shows it did not land; an undeterminable effect ends uncertain.
 - Validation: supervisor. t360 merged tree: audit tests 226 pass in each repository; both audits exit 0; Core vitest runtime/llm and flow-bootstrap -> 270 files, 3233 passed; Core tsc exit 0. t359 merged tree: both audits (with the new cycle rule) exit 0; Core vitest over executor, flow-bootstrap, service, recovery, llm and executor.test -> 435 files, 4942 passed, 3 skipped; Core tsc exit 0; `pnpm docs:check` first failed (reference stale after the dev merge), regenerated with `pnpm docs:reference` and committed, then current; domain `pnpm test` 1608 pass, both domain tsconfigs exit 0; test-runner flow-lane, creation, chat 407 pass, 0 fail. Worker's provider-free run `run-muyv4y5m-1bee7e07`: a busy press was retried and succeeded on attempt 2; a not-found press made 4 attempts, stated `effect: "unacted"`.
 - Limits: t359 follow-ups (undelivered sends, the exploring model told about uncertain outcomes, docs) go to t361; round 4's ending wording, chat internal names and Lab candidate evidence go to t362. Breaking up the 108-module runtime/llm cycle is a later task. Live runs so far today: four lane A rounds, about $0.117 in all, no pass.
+
+### 2026-10-08 - t362 merged: candidate endings name their cause, plain chat, Lab records the candidate; t363 dispatched
+- Changed: Core `b34c07e2`, downstream `1fb6dbd3`, both pushed. A run of refused but readable submissions no longer ends as an "unusable answer" and the no-progress stop has its own words; a candidate failure keeps the latest accepted version as an unverified draft and names the candidate and each trial's verdict on its diagnostic (optional `candidate` field), which the chat ending and the Lab both read; candidate tools read as plain acts in the chat with no revision numbers or tool ids. The trial overlay text ("Fixing your Flow · Step 2 of 8") comes from the extension background and goes to t363. t361 is finishing an alignment so exploration uses t359's single lasting-act definition (plain typing and navigation keep their retries).
+- Validation: supervisor on merged t362 trees: Core vitest over activity, conversations, flow-bootstrap, service, llm -> 397 files, 4354 passed, 3 skipped; Core tsc exit 0; Core audit exit 0; Core libraries rebuilt; web activity, conversation, authoring 318 passed; web tsc exit 0; test-runner flow-lane, creation, chat 408 pass, 0 fail; downstream audit exit 0; extension `pnpm test` 2607 pass, 0 fail.
+- Limits: no fail-first run was recorded by the worker; the direct-path failure has no test of its own.
 
 ## Open Questions
 
