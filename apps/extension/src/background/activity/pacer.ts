@@ -53,6 +53,10 @@
 //   again"), through the recovery choice that follows it, which is a thought
 //   (D12 of the t174 review). Only Core working out a repair heads it "Fixing
 //   your Flow" (`run-retry.ts`).
+// - A candidate build test-running the Flow it submitted is headed "Testing
+//   your Flow" while the trial runs, its failed step said as a step that
+//   didn't work in the test, and its ending as the test's verdict and what
+//   comes next -- never as a repair (`candidate-trial.ts`).
 // - A settling row that names the work it ends -- "Build stopped: ...", "Run
 //   failed" -- heads the status by that name, whatever the event's subject
 //   says: a creation build's ending read "Couldn't fix your Flow" (U4 of
@@ -74,6 +78,7 @@
 // Pure apart from the injected clock: no browser API, no network.
 
 import { activityWording, cutAtWord, isHeadlineEcho, isModelThought, type ActivityDisplay, type ClientGatewayActivity } from "../../shared/activity/index";
+import { CandidateTrial, type TrialState } from "./candidate-trial";
 import type { ActivityClock, ActivityTimer } from "./clock";
 import { endingKindOf } from "./ending-kind";
 import { activityHeadline } from "./headline";
@@ -121,6 +126,7 @@ export class ActivityPacer {
   private pending: ActivityDisplay | undefined;
   private readonly situation = new UnitSituation();
   private readonly retry = new RunRetry();
+  private readonly trial = new CandidateTrial();
   /** The shown display came from a decision still being made, whatever line it holds. */
   private shownDeciding = false;
   private pendingDeciding = false;
@@ -142,7 +148,8 @@ export class ActivityPacer {
     const now = this.options.clock.now();
     // Every event passes through both, thoughts included, so a repair, a
     // check or a retry that a thought begins or ends still counts.
-    const unit = this.situation.observe(event);
+    const trial = this.trial.observe(event);
+    const unit = this.situation.observe(event, trial.testing || trial.endedNow);
     const retry = this.retry.observe(event, subjectKindOf(event));
     const latest = this.pending ?? this.shown;
     // A unit that settled -- failed or done -- is over: a row Core says in it
@@ -151,10 +158,10 @@ export class ActivityPacer {
     // build's ending turned "Build failed" back into "Fixing your Flow").
     if (latest !== null && latest.activityId === event.activityId && (latest.outcome === "failed" || latest.outcome === "done") && outcomeOf(event) === null) return;
     if (isModelThought(event)) {
-      this.acceptThought(thoughtDisplayFor(event, latest, unit, retry), now);
+      this.acceptThought(thoughtDisplayFor(event, latest, unit, retry, trial), now);
       return;
     }
-    const next = holdMeaningfulLine(event, displayFor(event, this.shown, unit, retry), latest);
+    const next = holdMeaningfulLine(event, displayFor(event, this.shown, unit, retry, trial), latest);
     const atOnce = opensStage(event) || (this.shownDeciding && startsStep(event));
     this.offer(next, isDeciding(event), atOnce, now);
   }
@@ -223,7 +230,7 @@ export class ActivityPacer {
   }
 }
 
-function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | null, unit: UnitState, retry: RetryState): ActivityDisplay {
+function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | null, unit: UnitState, retry: RetryState, trial: TrialState): ActivityDisplay {
   // A settling row names the work it ends, which outweighs the subject
   // (`ending-kind.ts`), and the unit keeps that name for every row after it:
   // a thought after a build's ending took the run's headline again, "Couldn't
@@ -236,23 +243,29 @@ function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | nu
   const working = outcome === null;
   const headline = activityHeadline(subjectKind, outcome, {
     stopped: event.final === true && (event.label === "Build stopped" || event.label === "Run cancelled"),
-    // A run pressing a failed step again is not a repair (D12).
-    repairing: unit.repairing && retry.repairing,
+    // A run pressing a failed step again is not a repair (D12), and nor is
+    // anything a candidate trial's run reports (`candidate-trial.ts`).
+    repairing: unit.repairing && retry.repairing && !trial.testing,
+    testing: trial.testing,
     waitingOn: event.phase === "waiting_permission" ? "answer" : "check"
   });
   // The person's own answer is said in the thread (the ask and its card); as
   // the status it would be the third telling of one press (D7).
-  const detail = personAnswered(event) ? null : bounded(unit.checkReportedNow ? CHECK_DETAIL : retry.line ?? statusSentence(event));
+  const detail = personAnswered(event) ? null : bounded(unit.checkReportedNow ? CHECK_DETAIL : trial.line ?? retry.line ?? statusSentence(event));
   const sameUnit = previous !== null && previous.activityId === event.activityId;
   // A run's step events carry the step; the events between them ("Run
   // started", a note) keep the step last said, so the count does not blink out
   // -- but not into a repair of the Flow itself, which is on no step of the
-  // run (U2 of t194: "Step 5 of 5" for a four-minute re-author).
-  const step = working ? stepOf(event.step) ?? (sameUnit && !unit.rebuilding ? previous.step : null) : null;
+  // run (U2 of t194: "Step 5 of 5" for a four-minute re-author), and not
+  // across either end of a candidate trial, whose run counts its own steps.
+  const carried = sameUnit && !unit.rebuilding && !trial.startedNow && !trial.endedNow ? previous.step : null;
+  const step = working ? stepOf(event.step) ?? carried : null;
   return {
     activityId: event.activityId,
     subjectKind,
-    phase: event.phase,
+    // A trial's failed step reports Core's `repairing` phase; the trial is
+    // still only running the Flow, so it is coloured as running.
+    phase: trial.testing && event.phase === "repairing" ? "running" : event.phase,
     headline,
     detail: isHeadlineEcho(headline, detail) ? null : detail,
     step,
@@ -270,9 +283,9 @@ function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | nu
  * run's retry line is FluxIQ's own status, not the model's words: a recovery
  * choice keeps it up, and the thought that ends the retry takes it down.
  */
-function thoughtDisplayFor(event: ClientGatewayActivity, base: ActivityDisplay | null | undefined, unit: UnitState, retry: RetryState): ActivityDisplay {
+function thoughtDisplayFor(event: ClientGatewayActivity, base: ActivityDisplay | null | undefined, unit: UnitState, retry: RetryState, trial: TrialState): ActivityDisplay {
   const kept = base && base.activityId === event.activityId ? base : null;
-  const own = displayFor(event, kept, unit, retry);
+  const own = displayFor(event, kept, unit, retry, trial);
   const keptLine = kept && kept.detail !== retry.ended ? kept.detail : null;
   const line = retry.line ?? keptLine;
   return {
