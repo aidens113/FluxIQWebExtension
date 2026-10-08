@@ -36,7 +36,7 @@ test("a direct build's draft carries its own verdict, run and codes, and the tri
 });
 
 test("a draft fails the lane as the product's outcome, with the candidate id and its verdicts (t348)", () => {
-  const failure = createdFlowCandidateDraftFailure({ authoringMode: "candidate", outcome: "draft", candidateId: "candidate", revision: 2, digest: null, verdict: "no", trialRunId: "trial.two", codes: ["candidate.trial_no"], judgeCalls: null, trialCount: 2, trials: [{ runId: "trial.one", revision: 1, digest: null, start: "reset", execution: "failed", code: "web.action.timeout" }, { runId: "trial.two", revision: 2, digest: null, start: "reset", execution: "succeeded", code: null }], promotedAdaptationId: null }, "Its test run from the start was judged not to do what you asked.");
+  const failure = createdFlowCandidateDraftFailure({ authoringMode: "candidate", outcome: "draft", draft: null, candidateId: "candidate", revision: 2, digest: null, verdict: "no", trialRunId: "trial.two", codes: ["candidate.trial_no"], judgeCalls: null, trialCount: 2, trials: [{ runId: "trial.one", revision: 1, digest: null, start: "reset", execution: "failed", code: "web.action.timeout", verdict: null }, { runId: "trial.two", revision: 2, digest: null, start: "reset", execution: "succeeded", code: null, verdict: null }], promotedAdaptationId: null }, "Its test run from the start was judged not to do what you asked.");
   assert.ok(failure instanceof RunnerFailure);
   assert.equal(failure.category, "runtime.behavior");
   assert.match(failure.message, /judged no \(candidate candidate; candidate\.trial_no\)/u);

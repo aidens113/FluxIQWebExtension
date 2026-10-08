@@ -1,6 +1,6 @@
 import { assertCreatedFlowVerificationReady, type CreatedFlowCandidateTrialReadiness } from "./readiness.js";
 import { createdFlowCandidateDraft } from "./candidate-draft.js";
-import { createdFlowCandidateDraftOutcome, readCreatedFlowCandidatePromotion, type CreatedFlowCandidateOutcome } from "./candidate-outcome.js";
+import { createdFlowCandidateDraftOutcome, createdFlowFailedCandidateOutcome, readCreatedFlowCandidatePromotion, type CreatedFlowCandidateOutcome } from "./candidate-outcome.js";
 import type { AutomationStudioAuthoringMode, AutomationStudioCandidateAuthoringResult } from "fluxiq/automation-studio";
 // The one paid step of a created-Flow run: give Core the task's instruction,
 // ready the Flow's LLM settings, and ask Core to explore the live page and
@@ -407,7 +407,12 @@ export async function buildCreatedFlowProposal(
     if (adaptationId === undefined) return failed({ code: "lab.generation_unfinished", stage: null, httpStatus: null }, "unknown", now() - startedAt);
     return withCandidate(await proposed(control, input, adaptationId, true, now() - startedAt));
   }
-  if (!envelope.ok) return refused(envelope, now() - startedAt);
+  if (!envelope.ok) {
+    // A candidate build that failed names its candidate, trials and verdicts on its diagnostic (t362).
+    const build = refused(envelope, now() - startedAt);
+    const candidate = input.authoringMode === "candidate" && isRecord(envelope.payload) ? parseAutomationStudioFlowBootstrapFailureDiagnostic(envelope.payload.diagnostic)?.candidate : undefined;
+    return candidate ? Object.freeze({ ...build, candidateOutcome: await createdFlowFailedCandidateOutcome(control, input, candidate) }) : build;
+  }
   const adaptation = isRecord(envelope.payload) && isRecord(envelope.payload.adaptation) ? envelope.payload.adaptation : undefined;
   if (adaptation?.projectId === input.projectId && adaptation.flowId === input.flowId && adaptation.status === "proposed" && typeof adaptation.adaptationId === "string") {
     return withCandidate(await proposed(control, input, adaptation.adaptationId, false, now() - startedAt));
