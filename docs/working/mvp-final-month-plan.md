@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Chat creation restored in legacy mode (t338, merged); candidate slice U1 merged, U2 (t340) in progress; re-author regression (t341) and live lane A baseline (t342) running.
+Status detail: Lane A has its first Lab-verified pass in candidate mode (one of the two consecutive passes needed); all fixes merged; lanes A-D prepared for the 10:00 UTC off-peak window.
 Created: 2026-10-05
 Last updated: 2026-10-07
 Owner: Senior supervisor agent
@@ -13,80 +13,85 @@ Related: [30-day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 
 ## Current State
 
-**Where we are (2026-10-07, Claude intake after Codex).** Deadline November 10,
-feature freeze October 29. Product source on `dev` is Codex's last pushed pair
-(downstream `b8a158f8`, Core `a2672def`); later downstream commits are
-documentation. No A-D lane has passed twice; round 4 (October 6) failed all four,
-and no paid run has happened since October 6 21:08.
+**Where we are (2026-10-08 07:15 UTC, Claude supervisor).** Deadline November 10,
+feature freeze October 29. Heads on `dev`: Core `10d29a67`, downstream `ae403ecc`,
+both pushed. Lane A has its first fully Lab-verified pass in candidate mode
+(qualifying run 1, `run-muz3cqdh-927fd2f1`: trial yes, both judges yes, promoted and
+applied, the Lab's own playback held all four oracle facts, zero-call replay passed,
+$0.021). Qualifying run 2 on the same product pair failed on a model-invented final
+check, so lane A is not yet qualified (two consecutive passes on one product pair
+are required). Lanes B, C and D have not yet run in candidate mode.
 
-**Creation works again in legacy mode (t338, merged 2026-10-07).** Codex's t330 had
-switched every chat and panel creation build to candidate mode, which only saves an
-unverified draft, so nothing could make a runnable Flow and every Lab creation lane
-refused. One Core setting, `FLUXIQ_AUTHORING_MODE`, now decides: `legacy` (default)
-builds, judges, applies and says the automation is ready, as at the baseline;
-`candidate` stays draft-only until the trial runner (t340) and chat wiring (U3) land.
-The Lab picks the mode per run and refuses candidate creation before any provider call.
-Evidence: [product path](./mvp-final-month-plan/reports/intake-1007/product-path.md).
+**How a build works now (candidate mode).** The model explores, then writes the whole
+Flow as a script (loops, optional steps and desired-state choices included) and
+submits it; Core tests the exact submission once through the normal runtime from a
+freshly reset start; the build judge reads only that test's evidence and needs a
+confirming second yes; a passing candidate is promoted through the normal proposal
+and apply path and the chat says it is ready. Legacy mode remains, chosen by
+`FLUXIQ_AUTHORING_MODE` (default `legacy`); the Lab chooses the mode per run with
+`--authoring-mode`. Candidate mode is not yet the product default: switch it once
+lane A qualifies in candidate mode (see Next order).
 
-**What t296-t337 gave us.**
+**Reliability rules in force (user).** Every node makes its first attempt plus 3
+automatic retries on every path (exploration, mid-build tests, trials, playback),
+waiting for its target first; a lasting act whose effect is uncertain is never
+repeated; a build never gives up on a recoverable failure (re-tests, recovery
+sentences, early stop on repeated identical refusals). Optional steps never fail a
+trial or a playback. Both rules and the realistic-scenarios rule are in AGENTS.md.
 
-| Units | What it gives | On the default path? | Still missing |
-| --- | --- | --- | --- |
-| t296 | Build judge needs a second affirmative verdict; unsupported held-repair shapes refused before applying | Yes (legacy judge) | Judges still see exploration's leftovers |
-| t297, t302, t305, t310 | Extension, Core, domain host and server report their build identity | Reporting yes; the check is Lab-only | A live check on the final pair |
-| t298 | Stop and cancel a build from the chat | Yes | Charge after an uncooperative provider stop is unknown |
-| t301, t303, t306, t315, t319, t321 | Typed browser fixes: checkbox state, list change, navigation outcome, assert and wait, typing liveness | Yes | Remaining rows of the ranked node backlog |
-| t307, t311, t327 | Atomic graph import; a result from the wrong session cannot settle a command; completion only from the awaited dispatch | Yes | None |
-| t308, t312, t316, t318, t336 | Fixture paginator, ten new tasks (67 in all), atomic fixture reset | Lab only | None |
-| t324 | Requests OFF policy and a disabled Settings field | Yes | Executable requests, later, under the user's policy |
-| t299, t333 | Candidate authoring (`core.submit_candidate`) bound to the full original instruction | Yes since t330, always ends as a draft | Execution, verification, promotion |
-| t300, t304, t309, t313, t317, t320, t323, t325, t329, t331, t332 | About 8,000 Core lines: candidate verifier, durable receipts, staged snapshots, durable command journal, "required mode" executor, canonical SQLite owner, writer guards | No: test-only, or opt-in required mode that nothing turns on | Parked, below |
+**What landed on 2026-10-07/08 (all merged, verified by the supervisor, pushed).**
 
-**Parked: the production-integrity chain.** Codex had defined about thirteen more
-links before any promotion or live run: required-mode execution for every web node
-type (only click was started), a closed writer host covering every storage writer,
-original-ID adoption, all-writer capture, pinned reads, a hand-written grammar per
-task family for reading requirements, and a single CAS promoter. Two links exist,
-two are partial, the rest are absent: roughly ten to twenty more units. The closed
-host, adoption, all-writer and pinned-read links are not in the consultant
-revision, the command journal belongs to the October 29 - November 4 hardening
-window, and required mode refuses repair runs. Decision (2026-10-07, supervisor):
-park the chain and leave landed code dormant; revisit the command journal in
-hardening. In-flight t334 (click executor), t335 (installer, never compiled) and
-t337 (grammar for one sentence family) are WIP commits on their own branches, not
-merged. Evidence: [infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
+| Area | Units | Result |
+| --- | --- | --- |
+| Creation path | t338 | Chat and panel builds work again (t330 had made them draft-only) |
+| Candidate mode | t339 U1, t340 U2+U3, t346, t348, t354, t356-t358, t362, t364, t365, t367-t370, t373 | Format, trial, judge, promotion, chat apply, loops, optional steps, desired-state choice on any chosen-state control, view-history handles, plain endings and cards, Lab admission and checks |
+| Retries and lasting acts | t355, t359, t361, t371 | 3 retries everywhere; lasting acts checked before any retry; optional steps skipped without spending budget |
+| Lab | t344, t345, t347, t353, t363, t366, t367 | Core identity check passes; only the ten realistic scenarios run; Flow runs start on their own tab; stale-Core merges refused; trial overlay says testing |
+| Hygiene | t341, t343, t351, t352, t360, t372, t374 | Stale tests fixed; new `as never` casts and new import cycles fail the build; fresh-tree `pnpm check` works; the framework reference changes only with the public surface |
 
-**In flight.** t371 playback past every optional step; t372 stable framework reference; t373 chat cards for candidate tools; sweep-1008 second full sweep. Next, at the 10:00 UTC off-peak window: lane A qualifying runs 8 and 9 and first candidate probes on lanes B, C and D (four live lanes allowed).
+Sweeps: sweep-1007 found 10 Core and 4 extension failures plus a fresh-tree check
+failure (all fixed); sweep-1008 found downstream fully clean and 12 Core failures in
+one file from an import cycle (fixed in t374).
+
+**Parked: Codex's production-integrity chain** (closed writer host, original-ID
+adoption, all-writer capture, pinned reads, single CAS promoter, per-family
+requirement grammar, required-mode executor). Landed code stays dormant; t334, t335
+and t337 are WIP commits on their branches. The durable command journal belongs to the
+October 29 - November 4 hardening window. Evidence:
+[infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
+
+**In flight.** Nothing in code. Lanes are prepared for the 10:00 UTC off-peak window:
+A in `fxwork/t342` (slot 2), B in `fxwork/t262` (slot 3), C in `fxwork/t274`
+(slot 1), D in `fxwork/t275` (slot 4), all synced to the heads above.
 
 **Next order.**
 
-1. Done 2026-10-07: t338 legacy default restored, Lab admits legacy creation.
-2. Re-establish the live baseline: rebuild a lane tree on the new pair, assert the
-   running identity, then one supervised lane A run started from the extension
-   chat (off-peak, flash, $0.10). Debug it fully before anything else is paid for.
-3. The consultant's P1/P2 vertical slice on lane A, in candidate mode behind the
-   setting: show the model the Flow format with examples; let it test-run its
-   candidate; execute the candidate from the declared start through the normal
-   runtime (not required mode); judge what the candidate run did, never
-   exploration's leftovers (t296 stays fail-closed); promote with one
-   base-revision check. Provider-free tests first, then one bounded live probe,
-   compared with legacy on the same task.
-4. Make candidate the default only when it matches or beats legacy on lane A. Then
-   A-D rounds: two consecutive passes per lane on one build pair, plus zero-call
-   replays.
-5. Alongside: remaining typed browser blockers from the
-   [ranked node backlog](./node-catalog-plan/ranked-backlog.md), and the week
-   review's open causes (act-claim trust, judges reading exploration's leftovers,
-   refusal churn, list-reading mistakes).
+1. 10:00 UTC: lane A qualifying runs on this product pair (two consecutive passes
+   plus zero-call replays), and first candidate probes on lanes B, C and D in
+   parallel (four live lanes allowed). Product source stays frozen while lane A's
+   streak is open.
+2. Debug every run fully; fix causes on task branches; merge between streaks, never
+   inside one.
+3. When lane A qualifies in candidate mode, make candidate the default authoring
+   mode; then qualify B, C and D (two consecutive passes each).
+4. Then Phase 1b (other realistic tasks, recording beside instructions), the
+   adaptation chain (create, drift, diagnose, repair, verify, persist, resume,
+   reuse on three sites), breadth across the ten sites and the 67 tasks, UX, the
+   October 29 freeze, hardening, and the November 5-10 release candidate.
+
+**Known follow-ups (queued, not started).** Trial records keep only the deciding
+trial's verdict (Core promotion change); `metadata.optional` alone is outside the
+optional-step rule; the 108-module `runtime/llm` import cycle should be broken up;
+the candidate view record is not persisted on the stored draft; the recording lane's
+repeated busy press needs Core recording import to carry `sometimesPresent`; the
+Lab's `unchanged` guard treats a Lab-side failure as a product failure (design).
 
 **Live acceptance stays strict.** Each A-D lane needs two consecutive independent
 creation passes on the same source/build pair plus separate zero-call saved-Flow
 replays, exact oracles and truthful product acceptance. Up to four headed,
-supervised, one-attempt chat-started lanes after the first representative slice;
-no relaunch loop. Off-peak guard, flash default and $0.10 Lab ceiling stay binding.
-Unknown, withheld or unperformed outcomes and old-revision evidence cannot promote.
-
-**User rule (2026-10-07): nodes retry automatically everywhere.** Every web action node waits for its target and retries transient failures, by default 3 retries after the first attempt (one named default), in exploration, trials, tests and playback alike; a build must not give up on a recoverable failure. Lasting acts are checked, never blindly repeated.
+supervised, one-attempt chat-started lanes; no relaunch loop. Off-peak guard, flash
+default and $0.10 Lab ceiling stay binding. Unknown, withheld or unperformed outcomes
+and old-revision evidence cannot promote.
 
 **User decisions preserved.** Recording is evidence beside mandatory instruction
 and waits for A-D. Direct requests OFF by default in config and Settings. Typed
@@ -96,10 +101,9 @@ absolutely needed with requests enabled. Full suites at most twice daily; narrow
 gates per change; no user-panel management unless explicitly authorized.
 
 **Pointers.** Order of work: [consultant revision](./mvp-final-month-plan/consultant-revision.md).
-What failed and why up to October 6: [week review](./mvp-final-month-plan/reports/week-review/report.md).
-Codex's full Current State, receipts and parked briefs:
-[2026-10-07 archive](./mvp-final-month-plan/archive/2026-10-07-codex-current-state-and-parked-briefs.md)
-and [verified slices](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
+Live lane evidence: the t342 report in `fxwork/t342` (rounds 1-7) and its debug
+files. Codex's Current State and parked briefs:
+[2026-10-07 archive](./mvp-final-month-plan/archive/2026-10-07-codex-current-state-and-parked-briefs.md).
 Working documents audit: [intake C](./mvp-final-month-plan/reports/intake-1007/working-docs-audit.md).
 
 ---
@@ -718,6 +722,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: Core `feb476d2`, downstream `22d5f7d5`, both pushed. t370: "Reading your instruction gave no answer" no longer appears in candidate builds and asks plainly in legacy; the candidate ready line reads "I explored <site>, wrote its steps, and checked it with a test run from the start" (supervisor simplified the worker's "judged, twice" wording). t369: a failed wait or assert for text reports `textPresence` (hidden or absent) and up to three nearby visible snippets, screened, forwarded at `metadata.failureDiagnostics` and `payload.result`. t368: trial feedback for a failed check uses that detail; the candidate guidance discourages invented confirmation checks; trials take an optional step's failed route (their recovery and reroute budgets had been 0); a repeated deterministic failure ends re-testing of that revision. AGENTS.md now states the realistic-scenarios-only rule (Playwright included) and the automatic-retry rule, because spawned agents never read the supervisor's memory: t342's lead ran basic-form and t369 ran synthetic Playwright content specs. Dispatched: t371 (playback goes on past every optional step), t372 (stable framework reference), t373 (chat cards for candidate tools), sweep-1008.
 - Validation: supervisor. t370 merged tree: Core vitest conversations, flow-bootstrap, service -> 2446 passed, 3 skipped; Core tsc, audit, docs:check (after regenerating) exit 0; web conversation and authoring 318 passed; test-runner flow-lane and prove tests 458 pass. t369 merged tree: extension `pnpm test` 2647 pass; domain `pnpm test` 1637 pass, both tsconfigs exit 0; extension build verified x3; audit exit 0 (no Playwright run by the supervisor). t368 merged tree: Core vitest flow-bootstrap, candidate-trial, flow-bootstrap-commands, executor, conversations -> 183 files, 2320 passed, 2 skipped; Core tsc, audit, docs:check (after regenerating) exit 0; test-runner flow-lane 456 pass.
 - Limits: the qualifying streak restarts on this product pair; lane A runs 8 and 9 plus first candidate probes on lanes B, C and D are planned for the 10:00 UTC off-peak window.
+
+### 2026-10-08 - t372, t371, t374, t373 merged; second sweep; Current State rewritten; lanes A-D prepared
+- Changed: Core `10d29a67`, downstream `ae403ecc`, both pushed. t372: the framework reference names each export's owning file without line numbers, so it changes only with the public surface; its test now runs in Core's `pnpm check` (supervisor wired it). t371: one definition of an optional step (`executor/step-skip/optional-step.ts`) for the absent-step skip, the recovery ladder, the budget count and trials; optional steps never spend recovery budget; a trial's budget counts only written on-failed branches. t374 (supervisor): `api/handlers/llm-generation.ts` imports its values from their owners instead of the runtime barrel, which sweep-1008 showed handing it undefined in one load order. t373: candidate submissions and trials appear as plain chat cards through Core's activity observer. Sweep-1008 (Core `feb476d2`, downstream `22d5f7d5`): downstream `pnpm check`, `pnpm test` (0 failures in all ten packages) and `pnpm build` passed; Core build and check passed, `pnpm test` had 12 failures in `api/handlers/tests/runtime-execution.test.ts`, fixed by t374. Current State rewritten for the morning's position. Lane trees A (t342, slot 2), B (t262, slot 3), C (t274, slot 1), D (t275, slot 4) synced to the heads above.
+- Validation: supervisor. t372: `node --test scripts/tests/*.test.mjs` 10 pass; docs:check current; audit exit 0. t371 after merging dev (reference conflict resolved by taking dev's files and regenerating): Core vitest executor, flow-bootstrap, candidate-trial, runtime-adaptation -> 157 files, 2213 passed, 2 skipped; tsc, audit, docs:check exit 0. t374: Core vitest api and generation-failure -> 32 files, 484 passed (runtime-execution.test.ts included); tsc, audit, docs:check exit 0. t373 after merging dev: Core vitest ui, activity, flow-bootstrap, flow-bootstrap-commands, candidate-trial, conversations, api -> 207 files, 2500 passed, 2 skipped; tsc, audit, docs:check exit 0 (no regeneration needed); web automation-studio 1833 passed; extension `pnpm test` 2647 pass; downstream audit exit 0. Lane sync: each lane tree's downstream and Core branches contain dev (checked with `git merge-base --is-ancestor`).
+- Limits: product source is frozen from the 10:00 UTC lane A streak until it qualifies or breaks.
 
 ## Open Questions
 
