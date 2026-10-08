@@ -38,7 +38,8 @@ import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import type { WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
-import type { WebLlmTargetPackets } from "./target-packets";
+import type { WebLlmTargetPackets, WebLlmTargetReach } from "./target-packets";
+import type { WebLlmTargetView } from "./view-history";
 
 /** Why a `nextPage` names no one list, or no way to its next page. Each is a plan resolver issue code. */
 export type WebNextPageSlotIssue =
@@ -56,7 +57,11 @@ export type WebNextPageSlotResolution =
   /** The literal `{item, next}` written as the request it means. Its frame is the node's own. */
   | { status: "written"; request: JsonObject }
   /** A detected list's request, in the frame the list was detected in. */
-  | { status: "resolved"; request: JsonObject; frameId: number | undefined; frameUrlPath: string | undefined }
+  | {
+      status: "resolved"; request: JsonObject; frameId: number | undefined; frameUrlPath: string | undefined;
+      /** Under `view_history` only: the named control's handle and the view it resolved from (`target-packets.ts`). */
+      controlView?: WebLlmTargetView & { handle: string };
+    }
   /** `path` is where inside the value it was refused. */
   | { status: "refused"; issue: WebNextPageSlotIssue; path: WebPlanValuePath };
 
@@ -79,7 +84,9 @@ export function resolveWebNextPageSlot(
   value: unknown,
   scope: WebLlmExtractionHandleScope,
   targets: WebLlmTargetPackets,
-  extractions: WebLlmExtractionHandles
+  extractions: WebLlmExtractionHandles,
+  /** Which views the control's handle may resolve from (`target-packets.ts`); the current pages when absent. */
+  reach?: WebLlmTargetReach
 ): WebNextPageSlotResolution {
   if (!isJsonRecord(value)) return typeof value === "string" && webPlanHandleKind(value) !== undefined ? refused("web.handle.malformed", []) : { status: "literal" };
   if (!Object.hasOwn(value, "list") && !Object.hasOwn(value, "control")) return literalRequest(value);
@@ -98,12 +105,15 @@ export function resolveWebNextPageSlot(
   if (list.location !== undefined && list.location !== binding.location) return refused("web.handle.unknown", ["list", "location"]);
 
   let way: JsonObject | undefined = detectedWay(binding.extractList.paginate);
+  let controlView: (WebLlmTargetView & { handle: string }) | undefined;
   if (control !== undefined) {
-    const pressed = targets.resolve(scope, canonicalWebLlmTargetHandle(control.handle) ?? control.handle, control.location);
+    const handle = canonicalWebLlmTargetHandle(control.handle) ?? control.handle;
+    const pressed = targets.resolve(scope, handle, control.location, reach);
     if (!pressed.ok) return refused(TARGET_ISSUES[pressed.code], ["control"]);
     // The control moves this list only if it is on the list's document.
     if ((pressed.frameId ?? 0) !== (binding.frameId ?? 0)) return refused("web.handle.frame_mismatch", ["control"]);
     way = { next: pressed.selector };
+    if (pressed.shownIn !== undefined) controlView = { handle, view: pressed.shownIn.view, location: pressed.shownIn.location };
   }
 
   const request: JsonObject = { item: binding.extractList.item };
@@ -113,7 +123,9 @@ export function resolveWebNextPageSlot(
   // into a request the node would not send.
   const checked = webAutomationNextPageRequestValue(request);
   if (checked === undefined) return refused("web.handle.malformed", ["list"]);
-  return { status: "resolved", request: checked as unknown as JsonObject, frameId: binding.frameId, frameUrlPath: binding.frameUrlPath };
+  const resolution: Extract<WebNextPageSlotResolution, { status: "resolved" }> = { status: "resolved", request: checked as unknown as JsonObject, frameId: binding.frameId, frameUrlPath: binding.frameUrlPath };
+  if (controlView !== undefined) resolution.controlView = controlView;
+  return resolution;
 }
 
 /**
