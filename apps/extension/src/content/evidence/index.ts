@@ -33,6 +33,7 @@ export { formEvidence } from "./forms";
 export { frontLayerTest } from "./front-layer";
 export { forgetInteractedElements, recentlyInteractedElements, rememberInteractedElement } from "./interactions";
 export { isLeadStatement } from "./lead-statements";
+export { likeOptions, type LikeOptions } from "./like-options";
 export { loadingEvidence } from "./loading";
 export { navigationEvidence } from "./navigation";
 export { overlayEvidence } from "./overlays";
