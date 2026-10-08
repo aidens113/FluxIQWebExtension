@@ -86,7 +86,7 @@ supervised, one-attempt chat-started lanes after the first representative slice;
 no relaunch loop. Off-peak guard, flash default and $0.10 Lab ceiling stay binding.
 Unknown, withheld or unperformed outcomes and old-revision evidence cannot promote.
 
-**User rule (2026-10-07): nodes retry automatically everywhere.** Every web action node waits for its target and retries transient failures within a bound, in exploration, trials, tests and playback alike; a build must not give up on a recoverable failure. Lasting acts are checked, never blindly repeated.
+**User rule (2026-10-07): nodes retry automatically everywhere.** Every web action node waits for its target and retries transient failures, by default 3 retries after the first attempt (one named default), in exploration, trials, tests and playback alike; a build must not give up on a recoverable failure. Lasting acts are checked, never blindly repeated.
 
 **User decisions preserved.** Recording is evidence beside mandatory instruction
 and waits for A-D. Direct requests OFF by default in config and Settings. Typed
