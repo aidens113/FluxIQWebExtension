@@ -677,3 +677,102 @@ F3 in detail:
 - Slot 2 is still claimed by t342. Workspace `t342-a` holds the applied Flow (project `b35b7fd6-...`, Flow
   `flow.d1642aeb-...`).
 - No Lab process is running.
+
+## Round 7 (2026-10-08, 05:21-05:55 UTC, off-peak): lane A qualifying runs in candidate mode
+
+The tree `fxwork/t342` was at downstream 61add9df (contains dev 6f8019da, t367) and Core 97772aeb (= Core dev, the
+same product pair as round 6). Only the test-runner was rebuilt; the Core panel build was reused from round 6's key
+`df51d8f7...`. Dry run at 05:23: ready, 0 calls, candidate mode, `trialRunner` and `startReset` true.
+
+Run debugs:
+
+- `debugs/run-muz3cqdh-927fd2f1.md` (qualifying run 1);
+- `debugs/run-muz3jyz8-1d363a69.md` (qualifying run 2).
+
+### In plain English
+
+**Qualifying run 1 passed end to end. Qualifying run 2 failed, so lane A does not yet have its two passes in a row.**
+
+**Run 1** did everything right:
+
+- it built the Flow from the chat and test-ran it from a reset page; the second test passed;
+- both judges said yes; Core made it the real Flow; the chat said it was ready;
+- this time the Lab accepted it, reset the shop, played the saved Flow on its own tab, and checked the private oracle;
+- all four facts held: three Voltbay hubs in Space Grey, 7-in-1, from Spain, the coupon collected, nothing bought;
+- a replay with no model at all passed too.
+
+Cost: $0.0214.
+
+**Run 2**, on the same product, did all the real work correctly in each of its six test runs. Each time it then failed
+on the last line of its own script: a check it invented, waiting for the words "Cart (3)". Those words only exist
+inside the mini-cart panel, which stays closed unless someone opens it. The test report only said "the text did not
+appear in time", so the model never learned why. It eventually stopped without a Flow, $0.0332. Run 1 had passed its
+own check only because it waited for the bare word "cart", which is always on the page.
+
+So the product's actions are now reliable on lane A: 8 of 8 trials across both runs did every act correctly. What
+decides pass or fail is the model's own confirmation step. That step should either get useful feedback or not be
+needed.
+
+### Rounds 2-7 side by side (same task, instance and model)
+
+| | R2 legacy | R3 | R4 | R5 | R6 | R7 run 1 | R7 run 2 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Run | `muylu4pp` | `muyqgopm` | `muyrpbnk` | `muz0f12h` | `muz2cj6p` | `muz3cqdh` | `muz3jyz8` |
+| Product outcome | failed | failed | failed | failed | passed | **passed** | failed (own self-check) |
+| Lab verdict | failed | failed | failed | failed | failed (Lab defect) | **passed (oracle 4/4)** | failed |
+| Zero-call replay | n/a | n/a | n/a | n/a | passed | **passed** | n/a |
+| Calls / cost | 38 / $0.0567 | 18 / $0.0210 | 34 / $0.0393 | 22 / $0.0226 | 23 / $0.0267 | 18 / $0.0214 | 30 / $0.0332 |
+| Trials (yes) | n/a | 0 | 2 (0) | 2 (0) | 4 (1) | 2 (1) | 6 (0) |
+
+### Evidence
+
+**Run 1 `run-muz3cqdh-927fd2f1`:**
+
+- Guard admitted at 05:23:45. Trial 1, revision 1: every act succeeded; `wait_for_text "added to cart"` timed out.
+  Trial 2, revision 2 (waits for "cart"): all succeeded, verdict yes.
+- Judges 0029/0030 yes. Promoted `adaptation.bootstrap.f38dcd3f...`; the chat applied it and said ready.
+- The Lab recorded the candidate (2 trials, 2 judge calls), reset, and played 11 steps on the Flow's own tab. The
+  coupon failed once and then succeeded; the result check was confirmed.
+- Oracle 4/4 held, final state held, 0 harness activations.
+- Replay `replay-muz3idd0-d170048d`: passed; 0 calls, 0 interventions, 0 harness activations; hash `6e9a6cd8...`
+  unchanged.
+
+**Run 2 `run-muz3jyz8-1d363a69`:**
+
+- Guard admitted at 05:29:22. Six trials (revisions 1, 1, 2, 3, 4, 7). All acts succeeded in each; each failed at
+  `wait_for_text` ("added to cart", then "Cart (3)") after 4 attempts.
+- Completions refused: 2 as `trial_required`, 4 as `trial_execution_failed`. The no-progress guard ended the build.
+- Ending honest.
+- Supervision note: the lead's step watcher attached to run 1's folder, so run 2 was followed through its campaign
+  log, not step by step. It stayed within its ceiling.
+
+### Causes and findings, with the file to change
+
+| # | Finding | Reproduction | File to change | Verified by |
+| --- | --- | --- | --- | --- |
+| Q1 | A model-invented confirmation wait decides the trial; the text "Cart (3)" exists only in the collapsed mini-cart (`markup/flyouts.ts:23`); the feedback says only "did not appear before the timeout" | run 2 trials 0018-0052; run 1 trial 0024 | Core `runtime/service/candidate-trial/feedback.ts` plus the domain wait result: say present-but-hidden (which control) or absent, with the nearest visible text; and/or the candidate guidance (`flow-bootstrap/plan/flow-script-format.ts`): no confirmation wait needed, the judge checks the end state. Design question: send a trial whose acts all succeeded to the judge despite a failed self-check | lead, trial records, scripts, fixture |
+| Q2 | The model claimed to drop the wait but resubmitted it | run 2 0039 | none (model error) | lead |
+| W1 | Run 1's own check is always true ("cart") | run 1 revision 2 | same as Q1 (guidance) | lead |
+| U1 | Playback cards show the choice steps as "Click" while the overlay says "Ticking"; the Type and Wait cards name nothing; the coupon and dismissal lines name no control | run 1 panel 13, overlay | Core activity wording / extension panel cards | lead |
+
+Seen working:
+
+- t367: the Lab accepts the promoted candidate, records it, plays it, measures the oracle.
+- t364-t366: the colour check, per-step feedback with attempts, "Testing your Flow", "Flow ready", "Running your Flow",
+  "Run finished".
+- The coupon retry in trials and in playback.
+
+### Streak and guard state
+
+- The streak is run 1 passed, run 2 failed: not two consecutive passes. Lane A needs two new consecutive passes.
+- The ledger has `finish` lines for both runs ($0.021437 passed, $0.033156 failed). Both debugs exist under their run
+  ids.
+- The `unchanged` guard now refuses this instance and task until source changes, because run 2 failed. Round 8 on the
+  **same** product pair needs a source change (which makes a new pair) or a user override. A fix for Q1 would change
+  the source and start a new pair.
+- Slot 2 is still claimed by t342. No Lab process is running.
+
+### Not run, not verified
+
+- A third creation run: the window ended, and the guard would refuse it anyway.
+- Q1's fix is a design; no tests were written (no source edits).
