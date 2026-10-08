@@ -7,6 +7,13 @@
 // waits for the text to appear, `absent` for it to go, and `url` and `stable`
 // are about the page rather than either. As with wait-for-selector, running out
 // of time reports `timed_out`, not `failed`.
+//
+// A wait for text to appear (`present` or `visible`) that ran out of time also
+// says what the page held of it (t369): `hidden` when the document has the text
+// but does not show it -- round 7 waited for "Cart (3)", which the page keeps
+// only in a closed mini-cart -- or `absent`, with the shown text most like it.
+// Read through `sightText` once the wait has failed, so a wait that succeeds is
+// exactly what it was.
 
 import type { BrowserActionCommand, BrowserActionResult, WebAutomationWaitCondition } from "../types";
 import type { ContentActionDependencies } from "./types";
@@ -27,8 +34,10 @@ export async function waitForTextAction(action: BrowserActionCommand, deps: Cont
   });
   const phrases = phrasesFor(condition, text, url);
   if (!outcome.ok) {
+    const textSighting = (condition === "present" || condition === "visible") && text.trim() ? deps.sightText(text) : undefined;
     return deps.timedOut(action, startedAt, phrases.timedOut, { status: "failed", expected: phrases.expected, actual: outcome.actual }, {
-      snapshot: deps.captureSnapshot()
+      snapshot: deps.captureSnapshot(),
+      ...(textSighting ? { textSighting } : {})
     });
   }
   return deps.success(action, startedAt, phrases.satisfied, { status: "passed", expected: phrases.expected, actual: outcome.actual }, {

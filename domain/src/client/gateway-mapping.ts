@@ -20,6 +20,7 @@ import { webAutomationExtractionSummaryValue, webAutomationRecordedExtraction, t
 import { webAutomationStructureDetectionValue } from "../extraction";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
+import { webAutomationTextSightingValue } from "../actions/text-sighting";
 import { webAutomationNextPageAnswerValue } from "../actions/next-page";
 import { adaptedTargetSupersedesRecording, elementFingerprint, webAutomationUnresolvedSecretParameters, webAutomationUploadBindingPath } from "../output-nodes";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../runtime/failure";
@@ -299,6 +300,11 @@ function elementFingerprintSources(target: JsonObject, parameters: JsonObject): 
  * number of milliseconds within ten minutes, said only when a robot check stood
  * on the landed page and cleared by itself, untouched.
  *
+ * `textPresence` and `visibleNear` are copied the same way
+ * (`actions/text-sighting.ts`): a known presence and up to three bounded
+ * snippets, and only on a result that did not succeed -- they explain a failed
+ * text wait or text assertion, and a success has nothing to explain.
+ *
  * `nextPage` is copied the same way (`actions/next-page/answer-value.ts`): an
  * outcome, one closed word, and a page number, nothing else. `route` travels
  * only as the literal `ended`, and only beside an answer that ended (contract
@@ -308,6 +314,7 @@ function elementFingerprintSources(target: JsonObject, parameters: JsonObject): 
  */
 export function webAutomationActionResultPayload(result: WebAutomationActionResult): JsonObject {
   const nextPage = webAutomationNextPageAnswerValue(result.nextPage);
+  const sighting = result.status === "succeeded" ? undefined : webAutomationTextSightingValue(result.textPresence, result.visibleNear);
   return compactJsonObject({
     commandId: result.commandId,
     actionType: result.actionType,
@@ -325,6 +332,8 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     structure: webAutomationStructureDetectionValue(result.structure),
     resolution: result.resolution,
     checkWait: webAutomationClearedCheckWaitValue(result.checkWait),
+    textPresence: sighting?.textPresence,
+    visibleNear: sighting?.visibleNear,
     nextPage,
     route: result.route === "ended" && nextPage?.outcome === "ended" ? "ended" : undefined,
     startedAt: result.startedAt,

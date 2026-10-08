@@ -26,6 +26,7 @@ import { setInputFiles } from "./file-input";
 import { dialogControl } from "./dialog-control";
 import { evaluateAssertion } from "./assertion-evaluation";
 import { waitForCondition } from "./wait-conditions";
+import { sightText } from "./text-sighting";
 import { watchInPlaceEffect } from "./in-place-effect";
 import { watchIgnoredPress } from "./ignored-press";
 import { watchRateLimitNotice } from "./rate-limit-notice";
@@ -52,6 +53,7 @@ export async function executeAction(action: BrowserActionCommand, extractionCont
     dialogControl,
     evaluateAssertion,
     waitForCondition,
+    sightText: (text) => sightText(text),
     watchInPlaceEffect,
     watchRateLimitNotice: (pressed) => watchRateLimitNotice(pressed),
     watchRobotCheck: (pressed) => watchRobotCheck(pressed),
