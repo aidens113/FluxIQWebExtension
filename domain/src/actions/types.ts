@@ -358,7 +358,7 @@ export type WebAutomationActionCommand = {
   wait?: WebAutomationWaitRequest | undefined;
   /** `web.dom.keypress`. */
   modifiers?: WebAutomationKeyModifiers | undefined;
-  /** `web.dom.check`: the state to leave the checkbox or radio in. */
+  /** `web.dom.check`: the state to leave the checkbox, radio or chosen-state option in. */
   checked?: boolean | undefined;
   /**
    * `web.dom.type`: after the text, send the field's form as Enter does. Typing
