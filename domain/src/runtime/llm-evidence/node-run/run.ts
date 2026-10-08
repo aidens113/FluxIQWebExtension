@@ -83,6 +83,7 @@ import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type We
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
 import { webListReadCode } from "./list-read";
+import { webNodeDispatchWithRetries } from "./retries";
 
 const EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 /**
@@ -158,6 +159,7 @@ type WebNodeCallRecord = {
    * (`personDraft`).
    */
   standing?: { input: JsonObject; ranWith: JsonObject; replay: WebNodeReplayStatement; control: string | undefined; reads: string | undefined };
+  attempts?: number; // how many times the command went out, Core's default retries included (`./retries/`)
 };
 
 /** Run the node a call named, and answer with what it did. */
@@ -221,7 +223,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       run.shown(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, choice: undefined, changed: undefined, control: undefined, read: undefined, addable: false, inFlow: undefined })),
+        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, choice: undefined, changed: undefined, control: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
@@ -364,7 +366,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     record.acted = true;
     // A list read also asks for a few of the rows its conditions turned down,
     // on this command only: the Flow keeps `ran` (`./rejected-rows.ts`).
-    const result = await run.gateway.executeAction(run.sessionId, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) });
+    const { result, attempts } = await webNodeDispatchWithRetries(run, node, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, record);
     assertActive(run.request.signal);
     if (result.status !== "succeeded") {
       // The node's own failure, under the node's own name. The page comes with
@@ -443,7 +445,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       control: control.name,
       read,
       addable: node.proposes,
-      inFlow: undefined
+      inFlow: undefined, attempts: attempts > 1 ? attempts : undefined
     });
     // The state the node found is the read before it acted, and the state it
     // left is the read after -- unsaid where the page could not be read in time.
@@ -564,8 +566,8 @@ function refusal(
   detail: ReturnType<typeof rejectionDetail> | undefined,
   record: WebNodeCallRecord
 ): WebLlmEvidenceToolExecution {
-  // The refusal carries the whole page it found, whenever it has one.
-  const value = page ? toolRejection(code, page.evidence, detail) : toolRejection(code, undefined, detail);
+  // The refusal carries the whole page it found, whenever it has one, and the attempts Core's retries spent (`./retries/`).
+  const value = page ? toolRejection(code, page.evidence, detail, record.attempts) : toolRejection(code, undefined, detail, record.attempts);
   // What the refusal found is the page the call read before doing anything.
   // What it left is that same page when nothing was sent to it, and otherwise
   // only a page captured after the attempt: a command that failed may still

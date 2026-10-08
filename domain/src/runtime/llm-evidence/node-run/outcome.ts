@@ -60,4 +60,12 @@ export type WebNodeOutcome = {
   addable?: boolean;
   /** Only on a written step (`write` true), which writing adds to the Flow (`./written-step.ts`). */
   inFlow?: true;
+  /**
+   * How many times the node was dispatched before this answer, said only when
+   * it was more than once: the first attempt met a transient fault -- a target
+   * not drawn yet, a page that said it was busy -- and Core's default retries
+   * absorbed it (`./node-retries.ts`, t355). The model sees the final outcome
+   * with the attempts counted, never the first attempt's failure.
+   */
+  attempts?: number;
 };

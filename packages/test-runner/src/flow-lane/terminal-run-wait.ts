@@ -50,11 +50,12 @@ export const TERMINAL_DETAIL_POLL_MS = 250;
  * named `<node>.attempt.<n>` inside the attempt loop (Core
  * `runtime/executor/graph-run.ts`) -- under the ceiling
  * `AUTOMATION_STUDIO_READINESS_CAP_MS`. Retries are on by default
- * (`AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY`: three attempts), and the
- * ladder sleeps `automationStudioRetryBackoffMs` before each attempt after the
- * first. So the most one node can spend inside Core's own waits is every
- * attempt's readiness ceiling plus every retry's backoff: 3 x 30 s, plus
- * 250 ms and 1 s, which is 91.25 s.
+ * (`AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY`: the first attempt and three
+ * retries since the user's rule of 2026-10-07, t355), and the ladder sleeps
+ * `automationStudioRetryBackoffMs` before each attempt after the first. So the
+ * most one node can spend inside Core's own waits is every attempt's readiness
+ * ceiling plus every retry's backoff: 4 x 30 s, plus 250 ms, 1 s and 2 s,
+ * which is 123.25 s. It was 91.25 s under the old three attempts.
  *
  * Every term is Core's published constant, applied by Core's own rule, so a
  * Core that changes its ceilings moves this bound with it instead of leaving a
@@ -82,13 +83,23 @@ export const LIVE_LLM_RUN_WAIT_MS = 600_000;
  * The ceiling on the derived bound: the live-run deadline above, already this
  * package's bound for a live run (`persisted-flow-run.ts`).
  *
- * It binds from seven nodes up, and it should. The per-node figure is the worst
- * case Core permits, not what a node costs -- a node that resolves its target
- * and runs takes seconds -- so uncapped it would let one stuck run hold a
- * scenario for half an hour and a nineteen-row campaign for nine, which is the
- * arithmetic `RECOVERY_RECORD_WAIT_MS` was cut for. Ten minutes is the longest
- * any run in this facility is allowed to be in flight, so a deterministic run
- * still unfinished after it is not a run that was merely taking long.
+ * It binds from six nodes up (seven before t355's fourth attempt), and it
+ * should. The per-node figure is the worst case Core permits, not what a node
+ * costs -- a node that resolves its target and runs takes seconds -- so uncapped
+ * it would let one stuck run of nineteen nodes hold a scenario for nearly forty
+ * minutes and a nineteen-row campaign for twelve hours, which is the arithmetic
+ * `RECOVERY_RECORD_WAIT_MS` was cut for. Ten minutes is the longest any run in
+ * this facility is allowed to be in flight, so a deterministic run still
+ * unfinished after it is not a run that was merely taking long.
+ *
+ * The cap still holds with four attempts. What a node really costs when its
+ * target never appears is about 23 s: four attempts of the extension's own
+ * in-page wait of about 5 s, plus Core's 3.25 s of backoff (`run-muyta37c-a9368bca`,
+ * four attempts of about 4 s each). A nineteen-node Flow in which every node
+ * met that would still finish in about 7.3 minutes, inside the cap, and a
+ * real Flow meets it at one node, not at every node. Only the readiness
+ * ceilings, which a recorded state that never holds can spend in full, reach
+ * the cap, and a run that spends them at six nodes in a row is stuck.
  */
 export const TERMINAL_DETAIL_MAX_WAIT_MS = LIVE_LLM_RUN_WAIT_MS;
 

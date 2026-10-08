@@ -131,8 +131,28 @@ test("the client's structured failure record reaches the runtime result", async 
     message: "Expected the value to be team, but it stayed starter.",
     failure
   });
-  assert.deepEqual(result.failure, failure, "Core classifies from the record before it matches the message");
+  // A press whose confirmation was lost after it acted is not offered to Core's
+  // retry (t355): the record is the client's but for the retryable flag.
+  assert.deepEqual(result.failure, { ...failure, retryable: false }, "Core classifies from the record before it matches the message");
   assert.equal(result.message, "Expected the value to be team, but it stayed starter.");
+});
+
+test("a read whose post-condition did not hold keeps its retry, because reading again acts on nothing (t355)", async () => {
+  const failure: AutomationStudioFailureRecord = { category: "output_not_observed", code: "web.validation.output_not_observed", retryable: true, stage: "verification" };
+  const read: FluxIQRuntimeCommand = { kind: "execute_action", commandId: "command.read", outputId: "web.dom.extract", parameters: { selector: "#price" } };
+  const result = await runCommand({ commandId: "client.command.read", status: "failed", message: "Nothing to read yet.", failure }, read);
+  assert.deepEqual(result.failure, failure);
+});
+
+test("a press the page turned away before it landed keeps its retry, and the wait the page named (t355)", async () => {
+  const failure: AutomationStudioFailureRecord = { category: "action_failed", code: "web.action.rate_limited", retryable: true, stage: "execution", effect: "unacted", retryAfterMs: 4_000 };
+  const result = await runCommand({ commandId: "client.command.busy", status: "failed", message: "Network busy, please try again.", failure });
+  assert.equal(result.failure?.retryable, true);
+  assert.equal(result.failure?.effect, "unacted");
+  assert.equal(result.failure?.retryAfterMs, 4_000, "Core's retry honours the page's own wait");
+  const missing: AutomationStudioFailureRecord = { category: "target_not_found", code: "web.target.not_found", retryable: true, stage: "target_resolution" };
+  const late = await runCommand({ commandId: "client.command.late", status: "failed", message: "Not drawn yet.", failure: missing });
+  assert.equal(late.failure?.retryable, true);
 });
 
 test("a client record naming a code this domain does not own becomes UNKNOWN, carrying the code it used", async () => {

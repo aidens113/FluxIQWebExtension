@@ -24,6 +24,7 @@ import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../actions/types";
+import { webAutomationActionEffect } from "../actions/effect";
 import { dispatchWebAutomationOutput } from "../io/gateway-output-dispatcher";
 import { outputTargetFromPayload } from "../output-nodes";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
@@ -214,10 +215,34 @@ function commandFailure(
     ...(message === undefined ? {} : { message }),
     ...(client === undefined ? {} : { failure: client })
   };
-  const failure = classifyWebAutomationFailure(undefined, outcome);
-  if (failure === undefined) return undefined;
+  const classified = classifyWebAutomationFailure(undefined, outcome);
+  if (classified === undefined) return undefined;
+  const failure = lastingActChecked(actionType, classified);
   if (evidenceDigest === undefined || failure.evidenceDigest !== undefined) return failure;
   return { ...failure, evidenceDigest };
+}
+
+/**
+ * A press, a type or a choice whose failure was found after it acted is not
+ * offered to Core's retry (t355).
+ *
+ * Core's defensive policy refuses to repeat such a failure only for a node it
+ * can see acts on the world (`automationStudioNodeRepeatCannotAct`), and a Flow's
+ * web node carries none of this domain's definition metadata, so to Core every
+ * web output looked as if repeating it could act on nothing. With retries now
+ * on for every path -- a candidate trial ran each step once until t355 -- a press
+ * whose confirmation was lost (`output_not_observed`, found at `verification`)
+ * would have been pressed again. Which actions change the page is this
+ * domain's one fact (`webAutomationActionEffect`), so it is applied here, where
+ * the record leaves for Core: a lasting act whose effect is uncertain is
+ * checked by the Flow's own state, never blindly repeated. A failure found
+ * before anything was dispatched, or one the producer proved unacted, keeps its
+ * retries.
+ */
+function lastingActChecked(actionType: WebAutomationActionType, failure: WebAutomationFailureRecord): WebAutomationFailureRecord {
+  if (!failure.retryable || failure.effect === "unacted" || webAutomationActionEffect(actionType) !== "mutate") return failure;
+  if (failure.stage !== "verification" && failure.stage !== "confirmation") return failure;
+  return { ...failure, retryable: false };
 }
 
 /**
@@ -260,7 +285,10 @@ function clientReportedFailure(reported: AutomationStudioFailureRecord | undefin
   const { evidenceDigest } = reported;
   const expected = secretSafeComparisonText(reported.expected, withholdComparison);
   const actual = secretSafeComparisonText(reported.actual, withholdComparison);
-  if (isWebAutomationFailureCode(reported.code)) return webAutomationFailureRecord(reported.code, { expected, actual, evidenceDigest });
+  // The wait a page named ("try again in 12 seconds") is the sender's to know
+  // and is carried too: Core's retry honours it, bounded (t355). It was dropped
+  // here, so a playback retried a too-fast press on its backoff table instead.
+  if (isWebAutomationFailureCode(reported.code)) return webAutomationFailureRecord(reported.code, { expected, actual, evidenceDigest, retryAfterMs: reported.retryAfterMs });
   const unnamed = `unrecognized web automation failure code: ${reported.code}`;
   return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, {
     expected,
