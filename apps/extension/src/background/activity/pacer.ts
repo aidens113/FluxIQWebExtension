@@ -48,15 +48,15 @@
 //   headlines and opens a unit of work like any other event, and it still
 //   passes through `UnitSituation` and `RunRetry`.
 // - A run that presses a failed step again is still running the Flow, not
-//   fixing it: Core's recovery ladder keeps the headline "Running your Flow"
-//   and the detail says why it tries again ("The page was busy, trying
-//   again"), through the recovery choice that follows it, which is a thought
-//   (D12 of the t174 review). Only Core working out a repair heads it "Fixing
-//   your Flow" (`run-retry.ts`).
-// - A candidate build test-running the Flow it submitted is headed "Testing
-//   your Flow" while the trial runs, its failed step said as a step that
-//   didn't work in the test, and its ending as the test's verdict and what
-//   comes next -- never as a repair (`candidate-trial.ts`).
+//   fixing it: Core's recovery ladder keeps the headline "Running your Flow",
+//   the failed step's row says why it failed ("The page was busy"), and the
+//   ladder's choice to press it again -- a thought -- adds that it tries again
+//   ("The page was busy, trying again"; D12 of the t174 review). A refusal the
+//   ladder does not retry never reads "trying again" (t366). Only Core working
+//   out a repair heads it "Fixing your Flow" (`run-retry.ts`).
+// - A build test-running its Flow (a candidate's trial) is headed "Testing
+//   your Flow", its failed step and retries told as a run's, never as a
+//   repair, and its step count ends with it (`candidate-trial.ts`, t366).
 // - A settling row that names the work it ends -- "Build stopped: ...", "Run
 //   failed" -- heads the status by that name, whatever the event's subject
 //   says: a creation build's ending read "Couldn't fix your Flow" (U4 of
@@ -148,9 +148,11 @@ export class ActivityPacer {
     const now = this.options.clock.now();
     // Every event passes through both, thoughts included, so a repair, a
     // check or a retry that a thought begins or ends still counts.
-    const trial = this.trial.observe(event);
+    const kind = subjectKindOf(event);
+    const trial = this.trial.observe(event, kind);
     const unit = this.situation.observe(event, trial.testing || trial.endedNow);
-    const retry = this.retry.observe(event, subjectKindOf(event));
+    // A build's test runs its Flow as a run does, so its retries are told as a run's are.
+    const retry = this.retry.observe(event, trial.testing ? "run" : kind);
     const latest = this.pending ?? this.shown;
     // A unit that settled -- failed or done -- is over: a row Core says in it
     // afterwards, a late thought or a step's echo, does not reopen it as work
@@ -287,7 +289,8 @@ function thoughtDisplayFor(event: ClientGatewayActivity, base: ActivityDisplay |
   const kept = base && base.activityId === event.activityId ? base : null;
   const own = displayFor(event, kept, unit, retry, trial);
   const keptLine = kept && kept.detail !== retry.ended ? kept.detail : null;
-  const line = retry.line ?? keptLine;
+  // A test's opening line is FluxIQ's own words too (`candidate-trial.ts`).
+  const line = retry.line ?? (trial.startedNow ? trial.line : null) ?? keptLine;
   return {
     ...own,
     phase: kept?.phase ?? own.phase,

@@ -311,6 +311,10 @@ test("a run retrying a step the page was too busy for stays 'Running your Flow' 
   h2.pacer.accept(event({ phase: "running", label: "Running step 2 of 3: Clicking “Next”", step: { index: 2, count: 3 } }, "run", "r2"));
   h2.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
   h2.pacer.accept(event({ phase: "repairing", label: "Recovering from a failed step: Next", detail: { kind: "step", title: "Step failed", status: "failed", ref: "n2" } }, "run", "r2"));
+  // Until the ladder chooses to press it again, the line says only that it failed (t366).
+  assert.deepEqual([h2.pacer.display()?.headline, h2.pacer.display()?.detail], ["Running your Flow", "That step didn't work"]);
+  h2.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
+  h2.pacer.accept(event({ phase: "repairing", label: "Trying the step again", detail: { kind: "thought", title: "Trying the step again", text: "The step didn't work, and a step like this often works on a second try, so FluxIQ is trying it once more.", status: "succeeded", ref: "n2" } }, "run", "r2"));
   assert.deepEqual([h2.pacer.display()?.headline, h2.pacer.display()?.detail], ["Running your Flow", "That step didn't work, trying again"]);
 });
 
