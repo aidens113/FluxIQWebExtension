@@ -70,6 +70,17 @@
 // a reload (`renumberedByReload`). A handle shown again loses its mark; a
 // control that left the page, or a drop with no reload, is never marked.
 //
+// **A re-viewed handle keeps only what its views agree on (t356, C1).** A newer
+// view of a page replaces its handles, and used to replace each handle's
+// identity with the newest one: after exploration pressed "Get coupons" the page
+// relabelled it "Collected", and the candidate script bound `t925` to
+// "Collected", which the trial's freshly reset page never shows
+// (`run-muyrpbnk-fef374e7`, 0032 `web.target.not_found`). Now a handle the newer
+// view shows as the same control keeps the identity both views agree on
+// (`element-identity.ts` `webPlanElementIdentityAcrossViews`): a label the act
+// changed is dropped, never adopted. A handle the newer view no longer shows
+// still leaves the page with it, as above.
+//
 // Bounded twice: a Flow keeps its newest `RETAINED_PAGES_PER_FLOW` pages, and
 // the store keeps its newest `RETAINED_FLOWS` Flows. A page let go makes its
 // handles `stale` for that Flow; another Flow's handles are `unknown`, as they
@@ -80,7 +91,7 @@ import { webAutomationUrlPath } from "../../../output-nodes";
 import type { WebLlmEvidenceElement } from "../elements";
 import { present } from "../present";
 import type { WebLlmSnapshotBinding } from "../sanitize";
-import { webPlanElementIdentity, webPlanElementWords, type WebPlanElementIdentity } from "./element-identity";
+import { webPlanElementIdentity, webPlanElementIdentityAcrossViews, webPlanElementWords, type WebPlanElementIdentity } from "./element-identity";
 
 const RETAINED_PAGES_PER_FLOW = 8;
 const RETAINED_FLOWS = 32;
@@ -133,7 +144,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const flow = flowOf(scope);
       const targets = targetsOf(binding);
       markRenumbered(flow, binding, targets);
-      keep(flow, binding.evidence.location, targets);
+      keep(flow, binding.evidence.location, acrossViews(flow.pages.get(binding.evidence.location), targets));
     },
     rememberLook(scope, binding) {
       const flow = flowOf(scope);
@@ -142,13 +153,14 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       // A look that described every control says which have gone, as a shown
       // packet does; one the browser's capture cut short (`captureTruncated`)
       // cannot, so it only adds. Since t200 nothing else cuts a look.
+      const before = flow.pages.get(location);
       if (!binding.evidence.truncated) {
         markRenumbered(flow, binding, seen);
-        keep(flow, location, seen);
+        keep(flow, location, acrossViews(before, seen));
         return;
       }
-      const targets = new Map(flow.pages.get(location) ?? []);
-      for (const [handle, target] of seen) targets.set(handle, target);
+      const targets = new Map(before ?? []);
+      for (const [handle, target] of acrossViews(before, seen)) targets.set(handle, target);
       keep(flow, location, targets);
     },
     resolve(scope, written, location) {
@@ -219,6 +231,26 @@ function spacedName(identity: WebPlanElementIdentity, words: string | undefined)
   const name = identity.accessibleName ?? identity.visibleText;
   if (words === undefined || name === undefined || words === name) return undefined;
   return webPlanElementWords({ readable: words }, identity) === words ? words : undefined;
+}
+
+/**
+ * `targets`, a newer view of a page, with each handle `before` showed at the same
+ * address keeping only the identity both views agree on (see the header). A new
+ * record each, so the views' own stay as they were shown.
+ */
+function acrossViews(before: PageTargets | undefined, targets: PageTargets): PageTargets {
+  if (before === undefined) return targets;
+  const kept: PageTargets = new Map();
+  for (const [handle, target] of targets) {
+    const earlier = before.get(handle);
+    if (earlier === undefined || addressOf(earlier) !== addressOf(target)) {
+      kept.set(handle, target);
+      continue;
+    }
+    const element = webPlanElementIdentityAcrossViews(earlier.element, target.element);
+    kept.set(handle, { ...target, element, words: earlier.words === target.words ? spacedName(element, target.words) : undefined });
+  }
+  return kept;
 }
 
 /** A handle that names nothing, marked when a reload renumbered it. */
