@@ -557,10 +557,67 @@ for (const actionType of ["web.dom.click", "web.dom.type", "web.dom.extract", "w
 
 test("an assert refused for any other reason is sent once", async () => {
   const action: BrowserActionCommand = { commandId: "c-other", actionType: "web.dom.assert", selector: "#welcome", tabId: TAB_ID };
-  const { outcome, timeline } = await runAgainstRefusals(action, [`No tab with id: ${TAB_ID}.`]);
+  const { outcome, timeline } = await runAgainstRefusals(action, ["Extension context invalidated."]);
   assert.deepEqual(timeline, ["wait", "send"]);
   assert.ok(outcome instanceof Error);
-  assert.equal(outcome.message, `No tab with id: ${TAB_ID}.`);
+  assert.equal(outcome.message, "Extension context invalidated.");
+});
+
+// t361: a press whose send the browser refused before it reached the page
+// ("Receiving end does not exist": the new document's content script was not
+// in yet) was not made, and says so -- `effect: "unacted"` -- so Core makes it
+// again instead of ending it uncertain (t359). One that reached the page and
+// lost its answer says nothing of the kind, and Core does not press it again.
+test("a press whose send never reached the page fails saying it was not made, and is sent once", async () => {
+  for (const actionType of ["web.dom.click", "web.dom.keypress", "web.dom.type"] as const) {
+    const action: BrowserActionCommand = { commandId: "c-undelivered", actionType, selector: "#add", key: "Enter", text: "Enter", submit: true, tabId: TAB_ID };
+    const { outcome, sent } = await runAgainstRefusals(action, [CONNECTION_ERROR]);
+    assert.equal(sent.length, 1, actionType);
+    const run = outcome as Awaited<ReturnType<typeof runBrowserActionCommand>>;
+    assert.equal(run.result.status, "failed", actionType);
+    assert.deepEqual(run.result.failure, {
+      category: "action_failed",
+      code: "web.transport.transient",
+      retryable: true,
+      stage: "execution",
+      expected: "the action to run",
+      actual: CONNECTION_ERROR,
+      effect: "unacted"
+    }, actionType);
+    // Core's parser keeps the statement, which is what lets the retry through.
+    assert.deepEqual(parseAutomationStudioFailureRecord(run.result.failure), run.result.failure);
+    assert.equal(run.tabId, TAB_ID);
+  }
+});
+
+test("a send addressed to a tab or frame the browser no longer has was never delivered either", async () => {
+  for (const refusal of [`No tab with id: ${TAB_ID}.`, `No frame with id 3 in tab ${TAB_ID}.`]) {
+    const action: BrowserActionCommand = { commandId: "c-gone", actionType: "web.dom.click", selector: "#add", tabId: TAB_ID };
+    const { outcome } = await runAgainstRefusals(action, [refusal]);
+    const run = outcome as Awaited<ReturnType<typeof runBrowserActionCommand>>;
+    assert.equal(run.result.failure?.effect, "unacted", refusal);
+  }
+});
+
+test("a press delivered to a page that unloaded before answering states nothing, so its outcome stays Core's to call uncertain", async () => {
+  for (const refusal of [PORT_CLOSED_ERROR, CHANNEL_CLOSED_ERROR]) {
+    const action: BrowserActionCommand = { commandId: "c-delivered", actionType: "web.dom.click", selector: "#add", tabId: TAB_ID };
+    const { outcome, sent } = await runAgainstRefusals(action, [refusal]);
+    assert.equal(sent.length, 1);
+    // Thrown, as before, to the command router, whose record carries no effect.
+    assert.ok(outcome instanceof Error);
+    assert.equal(browserActionFailure(action, outcome.message).failure?.effect, undefined, refusal);
+  }
+});
+
+test("a read sent twice is unacted only when neither send reached the page", async () => {
+  const action: BrowserActionCommand = { commandId: "c-look-twice", actionType: "web.dom.assert", selector: "#welcome", tabId: TAB_ID };
+  const neither = await runAgainstRefusals(action, [CONNECTION_ERROR, CONNECTION_ERROR]);
+  assert.equal(neither.sent.length, 2);
+  assert.equal((neither.outcome as Awaited<ReturnType<typeof runBrowserActionCommand>>).result.failure?.effect, "unacted");
+  // The first reached the page and lost its answer: the second's refusal does not undo that.
+  const first = await runAgainstRefusals(action, [CHANNEL_CLOSED_ERROR, CONNECTION_ERROR]);
+  assert.ok(first.outcome instanceof Error);
 });
 
 test("an assert refused on both sends is sent exactly twice, and the second refusal is reported", async () => {

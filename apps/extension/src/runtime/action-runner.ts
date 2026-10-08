@@ -2,6 +2,7 @@ import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, webBrowserApi
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import { allTabFrames, ensureContentScript, sendToTab, unreachableFrameReason } from "../background/tabs";
 import { paceNavigation, withPagePace, withPaceNote, type OriginPace } from "../background/page-pace";
+import { trackActionDelivery, type ActionDelivery } from "./page-delivery";
 import {
   workerActionFailedFailure,
   workerActionResult,
@@ -117,7 +118,17 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   if (!await consumeSnapshotReadiness(tabId)) await waitForTabReady(tabId);
   await request.attachTabForRecording(tabId);
   const addressed = frameId !== undefined || frameUrlPathForAction(action) !== undefined;
-  const inFrame = await runActionInFrame(action, startedAt, tabId, frameId, request.pace);
+  // A throw is reported by the command router as the browser worded it; one
+  // whose action never reached the page also says nothing was done
+  // (`page-delivery.ts`), so Core may make it again.
+  const delivery = trackActionDelivery(sendToTab);
+  let inFrame: BrowserActionRunResult;
+  try {
+    inFrame = await runActionInFrame(action, startedAt, tabId, frameId, request.pace, delivery);
+  } catch (error) {
+    if (delivery.mayHaveReachedPage()) throw error;
+    return withTarget(undeliveredActionFailure(action, error), tabId, frameId);
+  }
   const run = await lookAcrossFrames(action, inFrame, addressed, startedAt, request.mergeFrameSnapshots);
   if (action.actionType === "web.dom.capture_snapshot" && run.result.status === "succeeded") {
     await noteSnapshotReadiness(tabId, run.result.snapshot?.url ?? await readTabUrl(tabId));
@@ -146,6 +157,20 @@ export function browserActionFailure(action: BrowserActionCommand, message: stri
     validation: { status: "failed", expected, actual: message },
     failure: workerActionFailedFailure(code, expected, message)
   });
+}
+
+/**
+ * The failed result for an action whose command never reached the page: the
+ * browser refused every send before delivery, or none was made. It is
+ * `browserActionFailure`'s record plus the one fact only this side knows, that
+ * the act did not happen (`effect: "unacted"`), which the domain carries to
+ * Core for every action (`domain/src/runtime/adapter.ts`). Without it a press
+ * met by "Receiving end does not exist" -- a page whose content script was not
+ * in yet -- ended uncertain and was never made again (t359's report).
+ */
+function undeliveredActionFailure(action: BrowserActionCommand, error: unknown): BrowserActionResult {
+  const result = browserActionFailure(action, error instanceof Error ? error.message : "Runtime action failed.");
+  return result.failure === undefined ? result : { ...result, failure: { ...result.failure, effect: "unacted" } };
 }
 
 /**
@@ -282,7 +307,8 @@ async function runActionInFrame(
   startedAt: number,
   tabId: number,
   recordedFrameId: number | undefined,
-  pace: OriginPace | undefined
+  pace: OriginPace | undefined,
+  delivery: ActionDelivery
 ): Promise<BrowserActionRunResult> {
   const choice = await waitForFrameChoice(
     { listFrames: () => allTabFrames(tabId), now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
@@ -304,7 +330,7 @@ async function runActionInFrame(
     }
   }
   const message = { type: "executeAction", action, frameId: targetFrameId, topFrameOnly: frameId === undefined };
-  const send = () => sendAction(action, tabId, message, targetFrameId, pace);
+  const send = () => sendAction(action, tabId, message, targetFrameId, pace, delivery);
   const drivenBefore = currentAutomationTabId();
   const result = await sendClickCheckingLanding(action, tabId, send, LANDED_TAB_ACCESS, pace);
   // A click that opened its page in a tab of its own made that tab the one the
@@ -350,21 +376,22 @@ async function sendAction(
   tabId: number,
   message: Record<string, unknown>,
   frameId: number,
-  pace: OriginPace | undefined
+  pace: OriginPace | undefined,
+  delivery: ActionDelivery
 ): Promise<BrowserActionResult> {
   const across = acrossDocuments(action);
   if (across !== undefined) {
-    const send = () => across(action, tabId, message, frameId, { send: sendToTab, makeReady: ensureContentScript });
+    const send = () => across(action, tabId, message, frameId, { send: delivery.send, makeReady: ensureContentScript });
     if (pace === undefined) return await send();
     const { value, tally } = await withPagePace(pace, tabId, frameId, send);
     return withPaceNote(value, tally);
   }
   try {
-    return await sendToTab<BrowserActionResult>(tabId, message, frameId);
+    return await delivery.send<BrowserActionResult>(tabId, message, frameId);
   } catch (error) {
     if (!RESENT_ACROSS_NAVIGATION.has(action.actionType) || !metNavigatingPage(error)) throw error;
     await waitForTabReady(tabId);
-    return await sendToTab<BrowserActionResult>(tabId, message, frameId);
+    return await delivery.send<BrowserActionResult>(tabId, message, frameId);
   }
 }
 
