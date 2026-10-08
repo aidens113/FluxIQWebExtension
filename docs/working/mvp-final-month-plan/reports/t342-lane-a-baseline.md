@@ -566,3 +566,114 @@ Seen working this round, each checked by the lead in the trial records or the ch
   `unchanged` guard refuses this instance and task until source changes.
 - Slot 2 is still claimed by t342.
 - No Lab process is running.
+
+## Round 6 (2026-10-08, 04:52-05:20 UTC, off-peak): candidate mode with round 5's causes fixed
+
+The tree `fxwork/t342` was at downstream ee7a2895 (contains dev ab771df2) and Core 97772aeb (= Core dev), both clean.
+
+- Rebuild and dry run at 04:52-04:54: ready, 0 calls, candidate mode, `candidateTrial {trialRunner: true, startReset:
+  true}`, 48 calls, $0.10.
+- The guard admitted the run at 04:55:34.
+
+Run debug: `docs/working/language-driven-flow-loop-plan/debugs/run-muz2cj6p-80eb2179.md`.
+
+### In plain English
+
+**The product passed lane A in candidate mode for the first time. The Lab still marked the run failed, because of a
+defect in the Lab itself.**
+
+The build explored the page, wrote the Flow as a script and test-ran it from a freshly reset page four times:
+
+- **Trials 1-3** each did the real work: the coupon (retried once when the page was busy), Space Grey left as it was
+  because it was already chosen, 7-in-1, Spain, quantity 3 and Add to cart. Each then failed only on its last line, a
+  check that waited for wording that disappears or never shows.
+- **Trial 4** opened the mini-cart first, and everything passed.
+
+Then:
+
+- Both judges said yes, describing exactly what the private oracle checks: three hubs in Space Grey, 7-in-1, from
+  Spain, the coupon collected, nothing bought.
+- Core turned the tested Flow into the real one, and the chat applied it and said the automation is ready.
+
+The Lab then refused to go on. It requires an audit record that only legacy builds produce, so it never played the
+saved Flow or checked the oracle itself.
+
+I therefore ran the zero-call replay, which costs nothing and needs no model. The saved Flow ran from start to finish
+with no model and no help, and the oracle held.
+
+The second creation run was refused by the guard, because the Lab recorded this run as failed and the source has not
+changed. It needs the Lab fix, or the user's override, which I did not create.
+
+Cost: $0.026698 for 23 calls. The cheapest build to get this far.
+
+### Rounds 2-6 side by side (same task, instance and model)
+
+| | Round 2, legacy | Round 3, candidate | Round 4, candidate | Round 5, candidate | Round 6, candidate |
+| --- | --- | --- | --- | --- | --- |
+| Run | `run-muylu4pp-f9cb2121` | `run-muyqgopm-1bfa7054` | `run-muyrpbnk-fef374e7` | `run-muz0f12h-eae63685` | `run-muz2cj6p-80eb2179` |
+| Product outcome | failed honestly | failed (bad reply) | failed (coupon) | failed (colour) | **passed: tested, judged yes twice, promoted, applied, "ready"** |
+| Lab verdict | failed | failed | failed | failed | failed (`lab.proposal_without_evidence_audit`, a Lab defect) |
+| Oracle | not measured | not measured | not measured | not measured | **held on a zero-call replay** |
+| Calls / cost | 38 / $0.0567 | 18 / $0.0210 | 34 / $0.0393 | 22 / $0.0226 | 23 / $0.0267 |
+| Trials | n/a | 0 | 2 (both stopped at step 2) | 2 (stopped at colour or Add to cart) | 4 (3 failed at the final check, 1 yes) |
+| Churn | 13 of 20 amendment answers with refusals | 1 fatal bad reply | 12 of 16 submissions refused | 0 of 2 refused; 8 looks | 0 of 4 submissions refused; 1 wasted re-test |
+
+### Evidence of the pass
+
+- **Trial 4** (`trial.26f46af5...`, revision 4, `start: "reset"`):
+  - navigate;
+  - two optional dismissals skipped as absent;
+  - coupon "succeeded after 2 attempts";
+  - `dom-check` Space Grey, 7-in-1 and Spain succeeded;
+  - quantity typed;
+  - Add to cart;
+  - mini-cart opened;
+  - `wait_for_text "Cart (3)"` succeeded.
+- **Judges 0041/0042:** `answersRequest: yes`, confidence 0.9 each. They cite Cart (3), the line "Space Grey · 7-in-1 ·
+  Ships from Spain" × 3, the coupon collected and no purchase.
+- **Promotion and apply:** adaptation `adaptation.bootstrap.1f6b3177...`. Chat: "Your automation ... is ready ... a
+  test run of the whole Flow from its start was judged, twice, to do what you asked." Overlay: "Flow ready | Your Flow
+  is ready".
+- **Zero-call replay** `replay-muz2npvw-b51023b7`: verdict passed; 0 provider calls, 0 interventions, 0 harness
+  activations; model providers disabled; Flow hash `9f513eb7...` unchanged; run succeeded; `playbackGoalHeld: true`.
+- **Second creation run, 05:05:52:** refused by the `unchanged` rule, $0.
+
+### Causes and findings, with the file to change
+
+| # | Finding | Reproduction | File to change | Verified by |
+| --- | --- | --- | --- | --- |
+| L1 | The Lab refuses a promoted candidate for lacking the legacy evidence audit; the candidate record is never read | `snapshots/flow-lane.json` `build.failure.code` `lab.proposal_without_evidence_audit`, `candidate: null`, `adaptationId` present | downstream `packages/test-runner/src/flow-lane/creation/build-proposal.ts:490-494` (accept a candidate proposal by its `candidateTrial` audit), or Core `runtime/service/candidate-trial/promotion.ts` (attach the candidate loop's evidence counts); `chat/build-from-chat.ts:199-210` reads the promotion only after the build passes | lead, code and snapshot |
+| L2 | The `unchanged` guard treats a Lab-defect failure as a product failure, blocking the second pass | refused launch at 05:05:52 | `scripts/lab/live-guards/` rule `unchanged` (design question: judge "did not pass" by the product's verdict, or allow when the run's product outcome was accepted) | lead |
+| F1 | An optional `wait_for_text` that times out still fails the trial | trial 3 (0036), revision 3 step marked `optional: yes` | Core optional routing (t357) for failures other than an absent target; not traced | lead (trial record); cause not traced |
+| F2 | A deterministic timeout invited a re-test of the same revision | trial 2 (0030) = trial 1's failure | Core trial gate (t356) re-test rule | lead |
+| F3 | UI words | panel 18; overlay moments 12, 16 | Core ending and activity wording | lead |
+
+F3 in detail:
+
+- "Reading your instruction gave no answer for ..." still appears just before the ready message;
+- the ready line keeps legacy words ("I tried its steps on the page you had open and put the ones that worked into
+  it");
+- the overlay headline switches between "Building" and "Testing" while the model decides;
+- the coupon and dismissal lines name no control.
+
+**Next order:**
+
+1. L1 (small), then L2 or a user override.
+2. Then the second candidate creation run on the same pair, and that run's own zero-call replay, for lane A's
+   two-pass qualification.
+
+### Not run, not verified
+
+- The Lab's own reset, playback and oracle after creation (L1 blocked them). The oracle was measured by the replay
+  instead.
+- The second creation run: refused by the guard.
+- Fixes are designs; no tests were written (no source edits).
+
+### Guard and slot state left behind (round 6)
+
+- Ledger: `start` and `finish` for `run-muz2cj6p-80eb2179` (failed, $0.026698). Its debug exists under the run id.
+- The replay is recorded at `test-runs/instances/t342-slot-2/replays/replay-muz2npvw-b51023b7.json`.
+- The `unchanged` guard refuses this instance and task until source changes.
+- Slot 2 is still claimed by t342. Workspace `t342-a` holds the applied Flow (project `b35b7fd6-...`, Flow
+  `flow.d1642aeb-...`).
+- No Lab process is running.
