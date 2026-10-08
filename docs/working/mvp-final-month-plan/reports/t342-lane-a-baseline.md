@@ -464,3 +464,105 @@ model wrote (C2 of round 2, unfixed).
   `unchanged` guard refuses this instance and task until source changes.
 - Slot 2 is still claimed by t342.
 - No Lab process is running.
+
+## Round 5 (2026-10-08, 03:03-04:25 UTC; launched off-peak at 04:01): candidate mode with the round 4 fixes
+
+The tree `fxwork/t342` was at downstream 069af09a (contains dev 3e72200a; local `dev` later moved two documentation
+files ahead) and Core a318edb5 (= Core dev), both clean.
+
+- Rebuild and dry run at 03:03-03:05: ready, 0 calls, candidate mode, `candidateTrial {trialRunner: true, startReset:
+  true}`, 48 calls, $0.10.
+- Waited out peak pricing; the guard admitted the run at 04:01:28.
+
+Run debug: `docs/working/language-driven-flow-loop-plan/debugs/run-muz0f12h-eae63685.md`.
+
+### In plain English
+
+**Failed: $0.023, two trials, nothing promoted, no further paid run.**
+
+Round 4's two blockers are gone. The coupon button was found on the reset page, and when the page said "busy" the
+press was retried and worked, in both trials. The second trial ran almost the whole Flow: coupon, 7-in-1, Spain and
+quantity 3. Then Add to cart was refused with "please select a colour".
+
+The one thing left is Space Grey, round 2's trap. Space Grey is already chosen when the page opens, and its swatch is
+a plain box, not a checkbox:
+
+- The "make sure it is chosen" step the model wrote first is refused, because that step only works on checkboxes.
+- A plain click, its second try, un-chooses the colour.
+- Leaving the step out is not offered: the build asks for a step for every option the person named.
+
+The model worked out exactly what was wrong ("no Color was selected"). It spent its last eight decisions looking for
+a hidden checkbox that does not exist, until the look limit stopped it.
+
+The trial report also told it the coupon press had failed when it had in fact succeeded on its retry: it numbers
+attempts as steps.
+
+The ending was honest and plain this time, and the Lab recorded the candidate and both trials.
+
+### Rounds 2-5 side by side (same task, instance and model)
+
+| | Round 2, legacy | Round 3, candidate | Round 4, candidate + t354 | Round 5, candidate + t355-t363 |
+| --- | --- | --- | --- | --- |
+| Run | `run-muylu4pp-f9cb2121` | `run-muyqgopm-1bfa7054` | `run-muyrpbnk-fef374e7` | `run-muz0f12h-eae63685` |
+| Furthest point | Flow tested and judged twice | exploration only | two trials, step 2 of 8 | two trials, trial 2 reached Add to cart |
+| What stopped it | Add to cart left out; Space Grey toggled; quantity 2 | one bad reply | coupon target and busy page | Space Grey cannot be set |
+| Calls / cost | 38 / $0.0567 | 18 / $0.0210 | 34 / $0.0393 | 22 / $0.0226 |
+| Churn | 13 of 20 amendment answers with refusals | 1 fatal bad reply | 12 of 16 submissions refused | 0 of 2 submissions refused; 8 looks at the end |
+| Coupon | done in exploration | done in exploration | failed in both trials | found and retried to success in both trials |
+| Space Grey | toggled off | press in script | press in script | check refused (div), then click toggled it off |
+| Quantity | 2 | typed 3 | typed 3 | typed 3 (ran in trial 2) |
+| Ending words | honest | wrong ("could not be reached") | wrong ("answer could not be used") | honest, names the cause |
+
+### Causes, reproduction and the file to change
+
+- **C1 (decisive): a preselected toggle swatch has no expressible desired state.**
+  - Reproduction: trial 1 attempt 8 `web.dom-check` on Space Grey refused `not_checkable: <div> is not a checkbox or a
+    radio`. Trial 2 attempt 8: the Space Grey click un-chose the colour, and attempt 12 (Add to cart) was refused "needs
+    something first".
+  - File to change:
+    - extension `apps/extension/src/content/actions/check.ts` (`:13`, `:61`): honour the chosen state that the domain
+      reads for any pressable choice (`domain/src/runtime/llm-evidence/node-run/press-effect/chosen-state.ts`,
+      `page-view/element/state-tokens.ts`). Already chosen means nothing to do; otherwise press once and confirm.
+    - and/or round 2's checklist rule: an option already marked needs no step.
+  - Verified by the lead, from the trial records and the code header.
+- **C2: trial feedback numbers attempts as steps, and reports a retried success as a failure.**
+  - Reproduction: trial 1's feedback has 8 entries for 7 nodes; "step 6 failed rate_limited" is attempt 6 of node s6,
+    whose attempt 7 succeeded. Trial 2 has 12 entries for 11 nodes in the same way.
+  - File to change: Core `runtime/service/candidate-trial/feedback.ts`. Give one entry per node with its final outcome
+    and attempt count, and name every control.
+  - Verified by the lead: the workspace's trial event streams against the feedback.
+- **C3: stuck on an inexpressible step, the model looks until the guard stops it.** Eight finds and describes,
+  0029-0044. This is a consequence of C1; nothing to change. Verified by the lead.
+
+Seen working this round, each checked by the lead in the trial records or the chat:
+
+- the coupon's identity across its label change, and the busy press retried, `unacted` (t355, t356, t359);
+- optional popup steps skipped where absent (t357, t358);
+- plain trial headings, and controls named on most cards (t356, t363);
+- an honest ending, and the Lab's candidate record (t362).
+
+### UI review (7 moments, lead)
+
+- **Good:** plain headings ("Saving the Flow's steps", "Testing the whole Flow from the start"); no internal tool names;
+  cards name Add to cart, 7-in-1, Spain; the Stop button; an honest ending.
+- **Still to fix:**
+  - the overlay during trials reads "Building your Flow" / "Fixing your Flow | Step N of 10", not "Testing your Flow";
+  - "Trying again didn't fix the step" after a refusal that is not retryable;
+  - Type and Look cards name no target;
+  - a card label is cut in the middle ("Choice ... on every Choice item");
+  - the ending does not say what blocked the build (the colour could not be chosen).
+- **Script risk:** the "close the welcome popup" step pressed a promo banner (`t68` "Choice Day · free returns on every
+  Choice item"). It was skipped here, but it would navigate away where present.
+
+### Not run, not verified
+
+- The trial judge, promotion, chat apply, playback and the oracle: not reached.
+- Replay and second candidate run: not run (no pass), as briefed.
+- Fixes are designs; no tests were written (no source edits).
+
+### Guard and slot state left behind (round 5)
+
+- Ledger: `start` and `finish` for `run-muz0f12h-eae63685` (failed, $0.022649). Its debug exists under the run id. The
+  `unchanged` guard refuses this instance and task until source changes.
+- Slot 2 is still claimed by t342.
+- No Lab process is running.
