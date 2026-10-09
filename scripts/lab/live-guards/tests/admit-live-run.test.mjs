@@ -29,7 +29,7 @@ async function fixture() {
   const env = { FLUXIQ_LAB_INSTANCE: "slot-1" };
   const runs = path.join(root, "test-runs", "instances", "slot-1");
   let digest = "sha256:first";
-  // Wednesday 12:00 UTC, off-peak wherever the suite runs; the peak test moves it.
+  // Wednesday 12:00 UTC.
   let clock = Date.UTC(2026, 8, 30, 12, 0, 0);
   const admit = (overrides = {}) => admitLiveRun({ args: ARGS, env, repositoryRoot: root, coreRoot: path.join(directory, "core"), slotsDirectory: slots, now: clock, isAlive: () => true, fingerprint: async () => ({ digest, files: 1 }), devAncestry: level, ...overrides });
   const writeRun = async (runId, { startedAt, cost, failures, verdict = "failed", liveLlm = { observed: { totalEstimatedCostUsd: cost } } }) => {
@@ -199,23 +199,6 @@ test("a ledger that cannot be read fails the admission instead of admitting", as
     await writeFile(path.join(lab.slots, "spend-ledger.jsonl"), "not json\n", "utf8");
     await assert.rejects(lab.admit(), /not JSON/u);
     assert.equal(existsSync(path.join(lab.slots, "STOP-balance")), false);
-  } finally {
-    await lab.cleanup();
-  }
-});
-
-test("a peak-hour start is refused at admission until the user creates OVERRIDE-peak, and the admitted run records the override", async () => {
-  const lab = await fixture();
-  try {
-    // Wednesday 08:00 UTC, inside the 06:00-10:00 peak window.
-    lab.advance(-4 * 60 * MINUTE);
-    const refused = await lab.admit({ env: { FLUXIQ_LAB_INSTANCE: "slot-1", FLUXIQ_LAB_OVERRIDE_PEAK: "1" } });
-    assert.deepEqual(refused.refusals.map((refusal) => refusal.rule), ["peak"]);
-    assert.ok(refused.refusals[0].remedy.includes(path.join(lab.slots, "OVERRIDE-peak")));
-    await writeFile(path.join(lab.slots, "OVERRIDE-peak"), "created by the user", "utf8");
-    const admitted = await lab.admit();
-    assert.deepEqual(admitted.refusals, []);
-    assert.deepEqual(admitted.overridden, ["peak"]);
   } finally {
     await lab.cleanup();
   }

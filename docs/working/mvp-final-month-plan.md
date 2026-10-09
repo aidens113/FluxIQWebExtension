@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Lane A has one Lab-verified pass in candidate mode (two consecutive are needed); every known fix is merged and pushed; lanes A-D are prepared for the next off-peak window.
+Status detail: Lane A has one Lab-verified pass in candidate mode (two consecutive are needed); every known fix is merged and pushed; lanes A-D are prepared for the next round.
 Created: 2026-10-05
 Last updated: 2026-10-08
 Owner: Senior supervisor agent
@@ -68,8 +68,7 @@ synced to the heads above; re-sync them if dev has moved before launching.
 
 **Next order.**
 
-1. Next session, in an off-peak window the Lab's guard admits (DeepSeek peak is
-   weekdays 01:00-04:00 and 06:00-10:00 UTC): lane A qualifying runs on this product pair (two consecutive passes
+1. Lane A qualifying runs on this product pair (two consecutive passes
    plus zero-call replays), and first candidate probes on lanes B, C and D in
    parallel (four live lanes allowed). Product source stays frozen while lane A's
    streak is open.
@@ -92,7 +91,7 @@ Lab's `unchanged` guard treats a Lab-side failure as a product failure (design).
 **Live acceptance stays strict.** Each A-D lane needs two consecutive independent
 creation passes on the same source/build pair plus separate zero-call saved-Flow
 replays, exact oracles and truthful product acceptance. Up to four headed,
-supervised, one-attempt chat-started lanes; no relaunch loop. Off-peak guard, flash
+supervised, one-attempt chat-started lanes; no relaunch loop. Flash
 default and $0.10 Lab ceiling stay binding. Unknown, withheld or unperformed outcomes
 and old-revision evidence cannot promote.
 
@@ -148,7 +147,7 @@ Active and reusable briefs only. Retired briefs: [2026-10-08 archive](./mvp-fina
 - Replaces the lanes B-D first-probe brief and the t342 rounds 8-9 brief, both run on 2026-10-09 at 04:00 UTC (text in git history at `6c79c021`).
 - Leads: one `lead-xhigh` per lane in its existing tree and slot, both repos synced to dev by the supervisor before dispatch: A `fxwork/t342` (slot 2), B `fxwork/t262` (slot 3), C `fxwork/t274` (slot 1), D `fxwork/t275` (slot 4). Report: append a round section to the lane's report from round 1 (A `t342-lane-a-baseline.md`, B/C/D `lane-<b|c|d>-candidate.md`). Never touch another lane's tree, slot or processes.
 - What changed since round 1 (check each is in effect): Flow listings read only their rows and saved traces keep each input once (t377); Lab reads before the chat send retry (t377); refusals name the model's own script line and the format matches the checks; identical resubmissions get the original issues; a missing closing brace is repaired; interruptions are named in trial feedback, a guarded step in a loop and a pace are expressible, and `builtin.timing.wait` pauses; rows acted on are narrowed in the read (t378); Stop, Take over/Hand back, onboarding, the switch to Chat when a run starts, the neutral record button (t376); plain run endings (t375).
-- Each lead: rebuild Core libraries, Core panel, domain, test-runner and extension; candidate dry run shows `candidateTrial` with `trialRunner` and `startReset` true; assert running identities; then the paid run(s), started from the extension chat, admitted by the Lab's guards (off-peak; no paid launch within 15 minutes of a peak window), flash model, $0.10 ceiling, headed browser, one attempt each, no relaunch. Lane A: a qualifying run; if the Lab's oracle passed and the product accepted it, its zero-call replay, then a second run on the same pair and its replay (two consecutive passes qualify the lane). Lanes B, C, D: one run; if it passes, its zero-call replay. Any failure: debug fully and stop.
+- Each lead: rebuild Core libraries, Core panel, domain, test-runner and extension; candidate dry run shows `candidateTrial` with `trialRunner` and `startReset` true; assert running identities; then the paid run(s), started from the extension chat, admitted by the Lab's guards (no time-of-day rule since 2026-10-09), flash model, $0.10 ceiling, headed browser, one attempt each, no relaunch. Lane A: a qualifying run; if the Lab's oracle passed and the product accepted it, its zero-call replay, then a second run on the same pair and its replay (two consecutive passes qualify the lane). Lanes B, C, D: one run; if it passes, its zero-call replay. Any failure: debug fully and stop.
 - Debug completely: exploration, every submission (did a refusal name the script line, and did the model fix that line?), every trial (start reset, each step and attempts, interruptions met and what the feedback said), judge verdicts against the private oracle, promotion, chat apply, the Lab's playback and oracle, cost and calls. Lane D first: the user's rule that a rate-limit popup makes the build add a guarded wait/dismiss/continue step in the loop and a pace that grows, kept in the saved Flow; say whether it happened and why not.
 - Early cause (supervisor, 2026-10-09, to shorten the fix loop): the moment a run fails and its decisive cause is known with the file to change, send the supervisor a message of at most 5 lines (run id, how far it got, the cause, the file, the evidence path); then finish the full debug.
 - UI review at every moment (chat, cards, overlay, Automations): the onboarding at start, the switch to Chat when the Flow runs, Stop and Take over present, the record button neutral, card and ending wording.

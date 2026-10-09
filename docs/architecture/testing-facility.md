@@ -3053,20 +3053,12 @@ variable moves it.
 | Rule | Refuses when | Satisfied by |
 | --- | --- | --- |
 | `balance` | `STOP-balance` exists | The user topping the account up and deleting the file; no override |
-| `peak` | The UTC day is a weekday (Monday to Friday) and the UTC time is inside 01:00-04:00 or 06:00-10:00 (start inclusive, end exclusive), DeepSeek's peak pricing hours | Launching at or after the next off-peak start, which the refusal names (the window's end, 04:00 or 10:00 UTC); `OVERRIDE-peak` |
 | `behind-dev` | This checkout's HEAD does not contain its local `dev` (`git merge-base --is-ancestor dev HEAD`), or the FluxIQ Core it builds against (`FLUXIQ_CORE_ROOT`, else `../!FluxIQ`, as the Lab resolves it) does not contain Core's local `dev`, unless every file `dev` changed since is documentation (`docs/` or Markdown, which the source fingerprint also leaves out); or git cannot answer, for example no local `dev` branch | `git merge dev` in the named checkout, then rebuilding Core's libraries and the extension; `OVERRIDE-behind-dev` |
 | `loop` | The instance already started 3 live runs in the last 30 minutes | Waiting, with the relaunch loop stopped; `OVERRIDE-loop` |
 | `debug` | The instance's previous live run has no `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` in the tree it runs from | Writing that debug; `OVERRIDE-debug` |
 | `unchanged` | The previous live run of the same instance and task did not pass and the source fingerprint is unchanged. A run killed before it ended, or one that ended in a facility failure before any provider call, is not counted; the run before it is compared | Changing the source; `OVERRIDE-unchanged` |
 
-`peak` is the user's rule that paid runs launch off-peak: inside those windows
-DeepSeek's peak pricing halves the decisions a run's $0.10 per-build ceiling
-buys, so a run measures the price rather than the product. The refusal names the
-window it fell in, the next off-peak start in UTC and the override file. The
-rule reads only the admission's clock (`admitLiveRun`'s `now`, the current time
-in `run-lab.mjs`), so tests inject it; like every rule here, only the file
-`lab-slots/OVERRIDE-peak` lets a run past it, never a flag or a variable. It
-judges the start only: a run admitted at 00:59 UTC is not stopped at 01:00.
+There is no time-of-day rule: the user removed the peak-hours guard on 2026-10-09 ("that should not be a constraint of any kind"). A run's cost is still counted in billed dollars against its $0.10 ceiling.
 
 `unchanged` counts only runs that reached the product. A run that failed on the
 facility before any provider call tested nothing of the source: lane A's
