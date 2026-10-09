@@ -3,7 +3,7 @@ import test from "node:test";
 import { resolveScenarioWorkflow, scenarioPageFactSchedule, validateWebScenario } from "@fluxiq-web-extension/test-contracts";
 import { AD_ONLY_LISTINGS, listingById, ORGANIC_LISTINGS, searchResults, STORES, VOLTBAY_LOOKALIKE_ID, VOLTBAY_OFFICIAL_ID, type SearchQuery } from "../catalog/index.js";
 import { formatMoney } from "../locale/index.js";
-import { cartLineText, crossborderMarketplaceManifest as manifest, MARKET_SEED, orderRecord, spainHubRecords } from "../manifest/index.js";
+import { cartLineText, crossborderMarketplaceManifest as manifest, INTERRUPTIONS, MARKET_SEED, orderRecord, spainHubRecords } from "../manifest/index.js";
 import { crossborderMarketplaceScenario as scenario } from "../scenario.js";
 import { marketModes, orderNumber, type MarketMode, type MarketState } from "../state/index.js";
 import { marketClasses } from "../styles/index.js";
@@ -50,19 +50,32 @@ function selections(): Selection[] {
   });
 }
 
-test("the manifest is valid, with four workflows and three variants, each arming one mode and judged on succeeding", () => {
+/** The interruption switch's variants, by id: each arms the shipped build with one switch. */
+const INTERRUPTION_VARIANTS: Readonly<Record<string, unknown>> = {
+  "flash-deal-on-arrival": INTERRUPTIONS.onArrival,
+  "flash-deal-second-item": INTERRUPTIONS.secondItem,
+  "flash-deal-stuck": INTERRUPTIONS.stuck,
+};
+
+test("the manifest is valid, with four workflows and six variants, each arming one mode or one interruption, and only the stuck interruption judged on failing", () => {
   const result = validateWebScenario(manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
   assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["spain-hubs", "place-order", "collect-official-coupon-only"]);
-  assert.deepEqual([manifest, ...(manifest.workflows ?? [])].map((workflow) => (workflow.variants ?? []).map(({ id }) => id)), [["basket-redesign", "flash-deal"], ["list-layout"], [], []]);
+  assert.deepEqual([manifest, ...(manifest.workflows ?? [])].map((workflow) => (workflow.variants ?? []).map(({ id }) => id)), [["basket-redesign", "flash-deal", ...Object.keys(INTERRUPTION_VARIANTS)], ["list-layout"], [], []]);
   for (const variant of [...(manifest.variants ?? []), ...(manifest.workflows ?? []).flatMap(({ variants }) => variants ?? [])]) {
+    const interruption = INTERRUPTION_VARIANTS[variant.id];
+    if (interruption !== undefined) {
+      assert.deepEqual(variant.arm, { operation: "set-mode", payload: { mode: "baseline", interruption } });
+      continue;
+    }
     assert.deepEqual(variant.arm, { operation: "set-mode", payload: { mode: variant.id } });
     assert.ok((marketModes as readonly string[]).includes(variant.id));
   }
   for (const selection of selections()) {
     const { expected } = resolveScenarioWorkflow(manifest, selection);
     assert.ok((expected.finalState ?? []).length > 0, JSON.stringify(selection));
-    assert.equal(expected.failure, undefined, JSON.stringify(selection));
+    if (selection.variantId === "flash-deal-stuck") assert.deepEqual(expected.failure, { category: "unexpected_state", code: "web.target.not_actionable" });
+    else assert.equal(expected.failure, undefined, JSON.stringify(selection));
     const { atLoad, afterArm } = scenarioPageFactSchedule(manifest, selection, "arms-after-loading");
     assert.ok(atLoad.length > 0);
     if (selection.variantId !== undefined) assert.ok(afterArm.length > 0);
