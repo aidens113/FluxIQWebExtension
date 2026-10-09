@@ -17,6 +17,13 @@ export type RunSummary = {
   updatedAt?: number | undefined;
   interventionCount?: number | undefined;
   adaptationCount?: number | undefined;
+  /**
+   * Whether the run changed what later runs of its automation do, as Core's run
+   * list says it. A run started elsewhere (the chat's "run it", a playback
+   * through the API) is only ever seen in the list, so this is the only place
+   * the row learns it from.
+   */
+  durableBehaviorChanged?: boolean | undefined;
 };
 
 /** One saved automation and its newest run. */
