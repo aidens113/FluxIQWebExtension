@@ -416,3 +416,11 @@ browser. The Lab refuses other scenarios at its launch entries.
 3 retries on every path (exploration, mid-build tests, candidate trials,
 playback), waiting for the target first; only a lasting act whose effect is
 uncertain is held back, and a build never gives up on a recoverable failure.
+
+**Model guidance never teaches to the test** (supervisor, 2026-10-09): the
+instructions, examples and feedback text the product gives a model (Core's
+script format, tool descriptions, catalog text, trial feedback) never mirror a
+realistic scenario's task, site, products, names or answer. The Lab measures
+whether FluxIQ generalises; an example shaped like lane D's friend requests
+would make a pass mean nothing. Examples use a different kind of site and act
+with the same structure.
