@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Lane A has one Lab-verified pass in candidate mode (two consecutive are needed); every known fix is merged and pushed; lanes A-D are prepared for the next off-peak window.
+Status detail: Lane A has one Lab-verified pass in candidate mode (two consecutive are needed); every known fix is merged and pushed; lanes A-D are prepared for the next round.
 Created: 2026-10-05
 Last updated: 2026-10-08
 Owner: Senior supervisor agent
@@ -68,8 +68,7 @@ synced to the heads above; re-sync them if dev has moved before launching.
 
 **Next order.**
 
-1. Next session, in an off-peak window the Lab's guard admits (DeepSeek peak is
-   weekdays 01:00-04:00 and 06:00-10:00 UTC): lane A qualifying runs on this product pair (two consecutive passes
+1. Lane A qualifying runs on this product pair (two consecutive passes
    plus zero-call replays), and first candidate probes on lanes B, C and D in
    parallel (four live lanes allowed). Product source stays frozen while lane A's
    streak is open.
@@ -92,7 +91,7 @@ Lab's `unchanged` guard treats a Lab-side failure as a product failure (design).
 **Live acceptance stays strict.** Each A-D lane needs two consecutive independent
 creation passes on the same source/build pair plus separate zero-call saved-Flow
 replays, exact oracles and truthful product acceptance. Up to four headed,
-supervised, one-attempt chat-started lanes; no relaunch loop. Off-peak guard, flash
+supervised, one-attempt chat-started lanes; no relaunch loop. Flash
 default and $0.10 Lab ceiling stay binding. Unknown, withheld or unperformed outcomes
 and old-revision evidence cannot promote.
 
@@ -148,8 +147,9 @@ Active and reusable briefs only. Retired briefs: [2026-10-08 archive](./mvp-fina
 - Replaces the lanes B-D first-probe brief and the t342 rounds 8-9 brief, both run on 2026-10-09 at 04:00 UTC (text in git history at `6c79c021`).
 - Leads: one `lead-xhigh` per lane in its existing tree and slot, both repos synced to dev by the supervisor before dispatch: A `fxwork/t342` (slot 2), B `fxwork/t262` (slot 3), C `fxwork/t274` (slot 1), D `fxwork/t275` (slot 4). Report: append a round section to the lane's report from round 1 (A `t342-lane-a-baseline.md`, B/C/D `lane-<b|c|d>-candidate.md`). Never touch another lane's tree, slot or processes.
 - What changed since round 1 (check each is in effect): Flow listings read only their rows and saved traces keep each input once (t377); Lab reads before the chat send retry (t377); refusals name the model's own script line and the format matches the checks; identical resubmissions get the original issues; a missing closing brace is repaired; interruptions are named in trial feedback, a guarded step in a loop and a pace are expressible, and `builtin.timing.wait` pauses; rows acted on are narrowed in the read (t378); Stop, Take over/Hand back, onboarding, the switch to Chat when a run starts, the neutral record button (t376); plain run endings (t375).
-- Each lead: rebuild Core libraries, Core panel, domain, test-runner and extension; candidate dry run shows `candidateTrial` with `trialRunner` and `startReset` true; assert running identities; then the paid run(s), started from the extension chat, admitted by the Lab's guards (off-peak; no paid launch within 15 minutes of a peak window), flash model, $0.10 ceiling, headed browser, one attempt each, no relaunch. Lane A: a qualifying run; if the Lab's oracle passed and the product accepted it, its zero-call replay, then a second run on the same pair and its replay (two consecutive passes qualify the lane). Lanes B, C, D: one run; if it passes, its zero-call replay. Any failure: debug fully and stop.
+- Each lead: rebuild Core libraries, Core panel, domain, test-runner and extension; candidate dry run shows `candidateTrial` with `trialRunner` and `startReset` true; assert running identities; then the paid run(s), started from the extension chat, admitted by the Lab's guards (no time-of-day rule since 2026-10-09), flash model, $0.10 ceiling, headed browser, one attempt each, no relaunch. Lane A: a qualifying run; if the Lab's oracle passed and the product accepted it, its zero-call replay, then a second run on the same pair and its replay (two consecutive passes qualify the lane). Lanes B, C, D: one run; if it passes, its zero-call replay. Any failure: debug fully and stop.
 - Debug completely: exploration, every submission (did a refusal name the script line, and did the model fix that line?), every trial (start reset, each step and attempts, interruptions met and what the feedback said), judge verdicts against the private oracle, promotion, chat apply, the Lab's playback and oracle, cost and calls. Lane D first: the user's rule that a rate-limit popup makes the build add a guarded wait/dismiss/continue step in the loop and a pace that grows, kept in the saved Flow; say whether it happened and why not.
+- Early cause (supervisor, 2026-10-09, to shorten the fix loop): the moment a run fails and its decisive cause is known with the file to change, send the supervisor a message of at most 5 lines (run id, how far it got, the cause, the file, the evidence path); then finish the full debug.
 - UI review at every moment (chat, cards, overlay, Automations): the onboarding at start, the switch to Chat when the Flow runs, Stop and Take over present, the record button neutral, card and ending wording.
 - Binding: AGENTS.md rules (the ten realistic scenarios only; automatic retries) and Current State live-acceptance rules. Must not: edit product source, commit, create override files, manage the user's panel; leave no Lab processes running.
 - Return at most 12 lines: verdict per run first (passed or failed, why, how far it got), judge versus oracle, cost and calls, distinct causes with exact reproduction and the file to change, UI findings, report path.
@@ -213,6 +213,12 @@ Active and reusable briefs only. Retired briefs: [2026-10-08 archive](./mvp-fina
 - Find the cause of each, not a bigger timeout: measure each test's time alone and inside `pnpm test`'s parallel run; look for database handles or files left open (the EBUSY says something still holds `global.sqlite`), files shared between tests or workers, real waits or sleeps, and work repeated per test that could be shared. Fix the cause in the test or its helper (or in product code if the product leaks a handle, which is then a product defect to name). A timeout may be raised only where the measured cost alone justifies it, with that number in a comment.
 - Prove it: run each fixed file 5 times in a row alone, and the whole `packages/fluxiq` test run once; report times before and after.
 - Owns those test files and their helpers. Must not commit; never touch other `fxwork/` trees. Return at most 10 lines.
+
+### Brief: t381 storage keeps its connections (worker-high)
+- Tree `fxwork/t381` (Core `!FluxIQ` on `task/t381-sqlite-connection-reuse`; downstream holds only the report). Report: `docs/working/mvp-final-month-plan/reports/t381-sqlite-connection-reuse.md` in the downstream tree. Merges after the lanes A-D round 2.
+- Finding (t380, `fxwork/t380/.../reports/t380-load-sensitive-tests.md` item 1 and lines 20-40): `SQLiteRepository` (`packages/fluxiq/src/programs/database-manager/storage/sqlite-repository.ts`) opens a new connection on every call; each open re-runs `pragma journal_mode=WAL` and two `create ... if not exists`; each close of the last connection checkpoints and deletes the WAL and SHM files. One canonical Flow create or save is about 400 sequential statements and 25 `global.sqlite` opens (one creation round about 1,300 statements and 62 open/close cycles); global writes use `synchronous=FULL` where the project DB uses `NORMAL` in WAL.
+- Goal: a process keeps one connection per database file (opened lazily, closed on dispose or exit), runs table DDL and pragmas once per connection, and a multi-statement write runs in one transaction. Keep correctness across processes (the Lab, the web panel and Core can open the same files: WAL, busy timeout, no stale reads). Decide `synchronous` for global writes with a reason. Measure statements, opens and wall time for one Flow create and save before and after.
+- Owns `database-manager/storage/**` and the callers that must change to use a transaction; tests beside each. Prove: storage tests, the canonical-authority and flows tests, and the whole `packages/fluxiq` run once; a test that two connections in two processes see each other's committed writes. Must not commit; never touch other `fxwork/` trees. Return at most 10 lines.
 
 ## Work Ledger
 
@@ -519,6 +525,16 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: Core `dcaf8f9f`, downstream `9c9d2c8a`, both pushed (Core 106 modified and 48 new files, downstream 33 and 13). Every candidate refusal names the script step and line and the fix, with a test that fails when a refusal reaches the model without a line; the format matches the checks (`consequences: none` on a submitting type, `repeat most:` beside `repeat while:`, acted-on rows narrowed with `extractList.where`), each rule with a parsed example; identical resubmissions get the original issues; repeats are keyed on code@line; a reply missing only its closing brace is repaired; never-shown handles and acts on plain text are refused naming the step; interruptions are named in trial feedback (row, wait), the wait counts time already passed, `builtin.timing.wait` pauses, a guarded optional step inside a loop, `only after:` and `repeat pace:` (`metadata.paceMs`, kept through promotion, lengthened after a rate limit) are expressible; cards name the control, kind and row (`step.row` on the client-gateway step). Lead raised the legacy prompt ratchet 6,000 -> 6,100 bytes for the corrected consequence sentence (reason recorded in the tests). Supervisor review found the slow-down example mirrored lane D's task; the lead replaced four mirrored examples (tasks in a tracker, gardening books, overdue invoices, archiving newsletter mail) and added a test that fails when an example names a realistic scenario's site, goods or act; AGENTS.md now states the rule (`218e2925`). Supervisor verification found a regression (`provider-unavailable.test.ts`, passes on dev `c97bf143`, fails on t378): a retitled failed-decision row never closed the started one; fixed in `activity/observer.ts`. Merge of Core dev conflicted in `executor/graph-run.ts` (t377's shared-inputs wrapper vs t378's pace summary; both kept, 791 lines) and the framework references (regenerated).
 - Validation: supervisor in t378 after merging dev. Core vitest over flow-bootstrap, llm, executor, service, activity, conversations, flow-change, recovery, runtime/tests, src/ui and api -> 663 files, 6757 passed, 1 failed (the regression); after the fix: provider-unavailable 3/3, and service-bootstrap, activity, flow-bootstrap, conversations, llm -> 360 files, 3944 passed. apps/web automation-studio 267 files, 1837 passed. Core `fluxiq:check` clean, audit passed (295 warnings, 708 baselined), docs:check current. Downstream: extension 2731/2731, test-runner creation and chat 165/165, domain 1652/1652, extension/domain/test-runner `tsc --noEmit` clean, audit passed. Finish gates passed (downstream audit; Core `pnpm check`).
 - Limits: whether the model follows the new text, and lane D's adaptation, need the live round. Supervisor error corrected: the first sweep-1009 worktree command had created worktrees inside both checkouts (relative paths under `git -C`); both were clean and unused and were removed with `git worktree remove`.
+
+### 2026-10-09 - t380 committed on its branch (load-sensitive tests); t381 opened for per-call SQLite connections; lane trees synced
+- Changed: t380 (Core `ebc3a1b3`, downstream `2311decf`, task branch; merges after the lane round so the Lab's `behind-dev` guard does not stop lane A's second run): no leaked handle, sleep or lock contention; the tests ran 1,000-1,300 sequential statements each, stretched up to 15x by load; shared setup built once per file and copied, cleanup retries (whole-sql 13.1 s -> 3.0 s under the same load); no timeout raised. Its product finding opened t381: `SQLiteRepository` opens a connection per call and re-runs DDL and pragmas each time (62 open/close cycles and about 1,300 statements per Flow creation). Lane trees: round 1 evidence committed on each lane branch, dev (`57094df4` / Core `dcaf8f9f`) merged into all eight branches.
+- Validation: t380 worker: whole `packages/fluxiq` `npx vitest run` 8864 passed, 0 failed; each fixed file 5 runs alone, all exit 0; tsc and structure check clean (supervisor has not rerun it; it merges after the round). Lane sync: `git merge-base --is-ancestor dev HEAD` true on all eight branches.
+- Limits: creation can still time out under heavy parallel load until t381 lands.
+
+### 2026-10-09 - sweep-1009b on dev with t375-t379 and t378: all green; lanes A-D round 2 dispatched for 10:00 UTC
+- Changed: second full sweep of the day (downstream `57094df4`, Core `dcaf8f9f`). Four `lead-xhigh` lane leads dispatched on the round 2 brief (trees synced, see the entry above); paid launches only from 10:00 UTC.
+- Validation: sweep report `fxwork/sweep-1009b/.../reports/sweep-1009b.md`: all 8 commands exit 0; Core `pnpm test` fluxiq 9063 passed (7 skipped), contracts 127, gateway-websocket 10, web 2977; downstream `pnpm check`, `pnpm test` (0 failures) and `pnpm build` (cache reuse) passed; the three load-sensitive files and `lane.test.ts` did not fail.
+- Limits: downstream build was a cache reuse, not a cold rebuild.
 
 ## Open Questions
 
