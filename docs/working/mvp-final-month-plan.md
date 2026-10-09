@@ -210,6 +210,13 @@ Active and reusable briefs only. Retired briefs: [2026-10-08 archive](./mvp-fina
 - Validation: tests beside each change, typechecks, structure audits, docs:check; provider-free reproductions of B's and C's refused scripts now refused with line-named issues (or accepted where the format allows them). No paid run; never touch a lane tree, slot or process, or `fxwork/t377`.
 - Must not commit, merge or push; leave changes uncommitted. Return at most 12 lines: per unit done or not with cause, validation commands and output, what still needs a live run, report path.
 
+### Brief: t379 paired tokens reach only what the pairing approved (worker-high)
+- Tree `fxwork/t379` (Core `!FluxIQ` on `task/t379-paired-token-project-scope`; the downstream side holds only the report). Report: `docs/working/mvp-final-month-plan/reports/t379-paired-token-scope.md` in the downstream tree.
+- Finding (t376 lead, 2026-10-09): a paired client's token is scoped to its domain at the program route (`apps/web/src/lib/program-route.ts:51-54`), not to a project; t376 added the run-control endpoints to that allowlist, so pause/resume inherit it.
+- First establish the pairing contract from source and docs (Core client-gateway pairing, the approval screen, the extension's project chooser in `apps/extension/src/panel`): does a person approve a browser for one project, or for their account in a domain? Quote the evidence.
+- If pairing binds a project: refuse at the route any token call whose payload or URL names another project, for every allowlisted endpoint, with tests (allowed, other project refused, missing project). If pairing is per account by design: change nothing in behaviour; write the contract into the route's header comment and `docs/architecture/automation-studio/client-gateway.md`, and test that a token cannot reach another person's project.
+- Owns `program-route.ts`, its tests and the client-gateway doc; read anything. Validation: the route's tests, `apps/web` typecheck, Core structure audit, docs:check. Must not commit; never touch other `fxwork/` trees. Return at most 10 lines.
+
 ## Work Ledger
 
 Earlier verified units, decisions and ledger detail remain in [the execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
