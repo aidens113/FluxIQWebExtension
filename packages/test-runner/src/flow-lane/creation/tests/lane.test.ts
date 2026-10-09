@@ -640,7 +640,8 @@ test("a chat build whose settlement refused keeps FluxIQ's ending words on the i
 
 test("an unrecognized authoring mode refuses before any control work, and candidate mode only reads Core's readiness before refusing", async () => {
   const calls: string[] = [];
-  const control = new Proxy({}, { get: (_target, key) => { calls.push(String(key)); return async () => { calls.push("effect"); }; } });
+  // The control has no `readClock`, so its reads wait on the real clock (t377); every other member is recorded.
+  const control = new Proxy({}, { get: (_target, key) => { if (key === "readClock") return undefined; calls.push(String(key)); return async () => { calls.push("effect"); }; } });
   for (const input of [{ control }, { control, authoringMode: true }, { control, authoringMode: "candidate" }]) {
     await assert.rejects(async () => { await runCreatedFlowLane(input as never); }, (error: unknown) => !!error && typeof error === "object" && "details" in error && (error.details as Record<string, unknown>)?.code === "lab.candidate_verification_unavailable");
   }
