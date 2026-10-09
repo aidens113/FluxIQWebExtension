@@ -50,6 +50,19 @@ test("a change tried and not applied is being checked, or did not hold", () => {
   assert.deepEqual(runSummaryLines({ changesTried: 0 }), []);
 });
 
+// A re-author Core kept after a judged re-run (item 24): runFacts gives
+// learned 1 and future runs updated, with no adaptation id behind it.
+test("a kept re-author reads as learned, and a rejected change as not held", () => {
+  assert.deepEqual(
+    runSummaryLines({ outcome: "completed", durationMs: 14_200, aiActivations: 2, learned: 1, changesTried: 0, futureRunsUpdated: true }),
+    ["Completed in 14.2s", "AI activated 2 times", "Learned 1 new page variation", "Future runs updated"]
+  );
+  assert.deepEqual(
+    runSummaryLines({ outcome: "completed", learned: 0, changesTried: 1, validated: false, futureRunsUpdated: false }),
+    ["Completed", "The change didn't hold up, so future runs stay the same"]
+  );
+});
+
 test("no line carries an id, selector or trace", () => {
   const runs: RunFacts[] = [{ outcome: "completed", durationMs: 1, aiActivations: 2, learned: 3, futureRunsUpdated: true }, { changesTried: 2 }, { changesTried: 1, validated: false }];
   for (const facts of runs) {

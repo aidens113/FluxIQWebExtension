@@ -19,6 +19,8 @@ export {
   type WebPlanNodeResolution,
   type WebPlanNodeResolutionInput
 } from "./resolve-plan-node";
+// The first target handle a node call's parameters name: the control the call acts on.
+export { webPlanFirstTargetHandle } from "./first-target-handle";
 // The key a step's argument carries its row under, declared to Core (`rowContextKeys`).
 export { WEB_LLM_ROW_CONTEXT_KEYS } from "./row-context-keys";
 // What a step says its own action would lastingly do, and Core's answer.

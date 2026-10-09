@@ -38,6 +38,9 @@ export const RUNTIME_MESSAGES = {
   panelConversationSend: "fluxiq.panel.conversationSend",
   panelConversationAnswer: "fluxiq.panel.conversationAnswer",
   panelStopRun: "fluxiq.panel.stopRun",
+  // Take over / Hand back: pause a run with the page handed to the person, and let it go on.
+  panelTakeOverRun: "fluxiq.panel.takeOverRun",
+  panelHandBackRun: "fluxiq.panel.handBackRun",
   // "Report Problem": a redacted diagnostic bundle (`background/diagnostics/`).
   panelReportProblem: "fluxiq.panel.reportProblem",
   // Automation panel's relays (`background/automation-relay/`); `AUTOMATION_PANEL_MESSAGES`

@@ -15,12 +15,13 @@ test("Open in FluxIQ follows the currently selected automation, including its fa
       return { ok: true, value: undefined };
     }) as PanelStore["request"];
     const controller: AutomationsController = {
-      state: () => ({ mode: "list", rows: [{ flowId: "flow.two", name: "Two", lines: [], datasets: [], running: false, exporting: false, notice: { sentence: "Open its details", openFluxIQ: true } }], working: false, runInFlight: false, ownerRevision: 0 }),
+      state: () => ({ mode: "list", rows: [{ flowId: "flow.two", name: "Two", lines: [], datasets: [], running: false, stoppable: false, exporting: false, notice: { sentence: "Open its details", openFluxIQ: true } }], working: false, runInFlight: false, ownerRevision: 0 }),
       observe: () => false,
       setWorking: () => undefined,
       refresh: async () => undefined,
       focus: async () => undefined,
       run: async () => undefined,
+      stop: async () => undefined,
       exportDataset: async () => undefined
     };
     const strip = createAutomationStrip(request, controller);

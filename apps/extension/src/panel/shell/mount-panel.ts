@@ -22,8 +22,23 @@
 //   panel/open-fluxiq/    the Open FluxIQ button
 //   panel/copy/, dom/, theme/tokens.css, extraction/, chat/
 //
+// The empty latest chat's "Extract data from this page" shows the Automations
+// tab and presses the extraction entry there (`#extractDataButton`, mounted by
+// `panel/recording` inside New automation, or in the recording bar while a
+// recording runs), so the sheet opens exactly as its own button opens it.
+// When the entry cannot be pressed now, it gets the focus instead, beside the
+// line saying why.
+//
 // Nothing here shows the steps of a run: what FluxIQ decides and does is the
 // chat's to show, and internal page reads are never steps.
+//
+// A run that starts shows the Chat tab, from Automations or Settings alike,
+// so each step is watched live (`run-follow.ts` says when). Builds never move
+// the panel, a recording keeps it, and a field the person types in keeps it
+// until they stop. The chat then shows that run's steps: a chat open on a
+// thread that would not show them (another automation's, a question's) opens
+// the run's automation, the latest chat, or the run's own thread
+// (`chat/stream/run-target.ts`), waiting while the person types a message.
 //
 // Record, extract and Run wait while FluxIQ works. That is read from the
 // shell's own activity feed (the paced display the chat shows), held steady
@@ -42,6 +57,7 @@ import { createRecordingControls, createRecordingReview } from "../recording";
 import { createSettingsView } from "../settings";
 import { createPanelStore } from "../state";
 import type { PanelContext, PanelSurface } from "./contracts";
+import { createRunFollow } from "./run-follow";
 import { INITIAL_SHELL, reduceShell, shellScreen, type ShellEvent, type ShellScreen } from "./screen-state";
 import { createTopBar, screenId, tabId } from "./top-bar";
 import { createWorkingHold } from "./working-hold";
@@ -61,10 +77,11 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
   let visible = true;
   let connected = false;
   let activatedRow: HTMLElement | undefined;
+  const runFollow = createRunFollow();
 
   const recording = createRecordingControls(context);
   const review = createRecordingReview(context);
-  const chat = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style));
+  const chat = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style), { onExtract: () => openExtraction() });
   const automations = createAutomationsTab(context, {
     choose: (row) => {
       const source = activatedRow;
@@ -110,6 +127,7 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
       if (!current()) return;
       if (next.snapshot().reach === "unsupported") activityUnsupported = true;
       observeWorking();
+      followRun();
     });
     function current(): boolean { return activity === next && lease.current(); }
     activity = next;
@@ -120,6 +138,32 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
 
   function observeWorking(): void {
     working.observe(workingInput(store.current(), activityCurrent() ? activity?.snapshot() : undefined));
+  }
+
+  /** Shows the Chat tab when a run of the chosen project starts (`run-follow.ts`). */
+  function followRun(): void {
+    if (screen === undefined) return;
+    const feed = activityCurrent() ? activity?.snapshot() : undefined;
+    if (feed?.reach !== "ready") return;
+    const status = store.current();
+    const doc = root.ownerDocument;
+    const focused = doc.hasFocus() ? doc.activeElement : null;
+    const away = focused !== null && focused !== doc.body && !chatScreen.contains(focused) && main.contains(focused) ? focused as HTMLElement : undefined;
+    const follow = runFollow.observe({
+      current: feed.state.current,
+      projectId: chat.target().projectId ?? (typeof status?.projectId === "string" ? status.projectId : undefined),
+      recording: status?.recordingState === "recording" || status?.recordingState === "paused",
+      typing: away !== undefined && typingIn(away)
+    });
+    if (!follow || feed.state.current === null) return;
+    dispatch({ type: "tab", tab: "chat" });
+    // The chat opens a thread that shows this run's steps when the one on screen would not (`chat/stream/run-target.ts`).
+    chat.followRun(feed.state.current);
+    // Focus left on a control the switch just hid goes to the Chat tab, never into a field.
+    if (away !== undefined && !navigationVisible(away)) {
+      const tab = topBar.element.querySelector<HTMLButtonElement>(`#${tabId("chat")}`);
+      if (tab && !tab.disabled && navigationVisible(tab)) tab.focus({ preventScroll: true });
+    }
   }
 
   const start = createStartView(context, () => dispatch({ type: "gear" }));
@@ -149,6 +193,15 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
     activatedRow = source && automations.element.contains(source) && source === doc.activeElement && navigationVisible(source) && doc.hasFocus() && doc.visibilityState === "visible" ? source : undefined;
     queueMicrotask(() => { activatedRow = undefined; });
   }, true);
+
+  function openExtraction(): void {
+    dispatch({ type: "tab", tab: "automations" });
+    const entry = recording.newAutomation.querySelector<HTMLButtonElement>(`#${EXTRACTION_ENTRY_ID}`)
+      ?? recording.bar.querySelector<HTMLButtonElement>(`#${EXTRACTION_ENTRY_ID}`);
+    if (entry === null) return;
+    if (!entry.disabled) entry.click();
+    else entry.focus({ preventScroll: true });
+  }
 
   function openInChat(target: ChatTarget): void {
     chat.open(target);
@@ -248,12 +301,29 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
   draw();
 }
 
+/** The extraction entry's id, kept from the single-file popup (`panel/extraction/panel-elements.ts`). */
+const EXTRACTION_ENTRY_ID = "extractDataButton";
+
 /** The background's broadcasts to this page, for the shell's activity feed. */
 function listenToPushes(listener: (message: unknown) => void): () => void {
   const handler = (message: unknown): void => listener(message);
   chrome.runtime.onMessage.addListener(handler);
   return () => chrome.runtime.onMessage.removeListener(handler);
 }
+
+/** A field that takes typing: a text-like input, a textarea, a select, or editable content. */
+function typingIn(element: HTMLElement): boolean {
+  const tag = element.tagName.toLowerCase();
+  if (tag === "textarea" || tag === "select") return !(element as HTMLTextAreaElement).disabled;
+  if (tag === "input") {
+    const input = element as HTMLInputElement;
+    return !input.disabled && !NOT_TYPED.has((input.type || "text").toLowerCase());
+  }
+  return element.isContentEditable === true;
+}
+
+/** Input types a person presses rather than types in. */
+const NOT_TYPED = new Set(["button", "submit", "reset", "checkbox", "radio", "range", "color", "file", "image"]);
 
 function navigationVisible(element: HTMLElement): boolean {
   return element.isConnected && !element.closest("[hidden], [inert]") && element.getClientRects().length > 0;

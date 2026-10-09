@@ -115,3 +115,19 @@ test("a build waiting at a robot check shows Core's ask as its sentence, under '
   assert.equal(view?.mark, "attention");
   assert.equal(view?.fades, false, "waiting for the person does not fade");
 });
+
+test("a run held for the person is drawn as paused, never fades, and says how to let it go on", () => {
+  const paused = activityOverlayView(display({ working: false, outcome: "waiting", phase: "paused", headline: "Paused: your turn on the page", detail: null, step: { index: 3, count: 5 } }), "expanded");
+  assert.deepEqual(paused, {
+    mode: "expanded",
+    mark: "attention",
+    accent: ACTIVITY_PHASE_APPEARANCE.paused.accent,
+    headline: "Paused: your turn on the page",
+    detail: "Open FluxIQ and press Hand back",
+    step: "",
+    fades: false
+  });
+  assert.equal(ACTIVITY_PHASE_APPEARANCE.paused.name, "Paused");
+  const running = activityOverlayView(display({ phase: "paused" }), "expanded");
+  assert.equal(running?.detail, "Running step 2 of 5: Open the cart", "only a held run, not a stray phase on working display, takes the paused words");
+});
