@@ -2,7 +2,13 @@
 
 ## Current State
 
-Status: done for this round (2026-10-09 ~04:17 UTC). One paid run, `run-mv0fu9pb-57454dc4`: **failed at its first
+Round 2 (2026-10-09 ~08:34 UTC): **preflight complete, paid run not launched.** First came the supervisor's
+session-end order. When that was reversed, Claude Code's permission system refused the paid launch (see "08:33 UTC"
+below). The run is ready to launch with the command under "Round 2" below, by the user or once the user allows it;
+nothing needs rebuilding unless product source on dev moves. The free practice run failed on Core's slow recording
+writes (finding R2), which is the recording lane, not this probe.
+
+Round 1 status: done (2026-10-09 ~04:17 UTC). One paid run, `run-mv0fu9pb-57454dc4`: **failed at its first
 submission, no Flow**, $0.043458, 33 calls. Cause: Core's script format tells the model a typing step never needs a
 `consequences:` line, the domain requires it on a search that submits, and the refusal names plan node indices the
 model cannot map to its steps (optional steps add merge nodes), so it resubmitted unchanged until the repeat stop
@@ -178,3 +184,75 @@ run debug.
 - Slot 3 still claimed by t262 lane B. No Lab or browser process from `fxwork/t262` is running; nothing was killed.
 - Lane tree: no source edits; ignored outputs only (builds, `test-runs/`, the logs `fxwork/t262/*-1009.log`,
   `campaign-c1.log`).
+
+## Round 2 (2026-10-09, brief `### Brief: lanes A-D round 2 in candidate mode (one lead per lane)`)
+
+Lead: lane B live lead (Claude, `lead-xhigh`). Same task, instruction and oracle as round 1 (instruction sha256
+`8da0b9f6...43d3`, unchanged). Tree `fxwork/t262`: downstream `94b4d59b` (dev `ba87bc0f`, the peak-hours guard
+removed, merged in by the supervisor at ~08:20 UTC; that merge changed only `scripts/lab/live-guards/**` and docs), Core
+`dcaf8f9f` = Core dev. t375, t376, t377, t378 and t379 merges are present in both repos (`git log --merges`); C1 spot
+check: `flow-script-format.ts:163` now says a typing step with `submit: true` needs `consequences: none`.
+
+**Outcome: no paid run.** The supervisor ended the session at ~08:30 UTC before launch ("do not launch your paid
+run"). Zero provider calls, $0 spent this round. No ledger entry was added for slot 3.
+
+### Preflight (zero calls)
+
+| UTC | Step | Result |
+| --- | --- | --- |
+| 08:13 | Slot 3 claim refreshed | `lab-slots/slot-3/owner` t262 lane B, `claimedAt` 08:13:57 |
+| 08:14-08:17 | Core libraries, in build slot b1 (`heavy.sh ... node scripts/build-cache/cli.mjs contracts:build fluxiq:build client-gateway-websocket:build`) | `EXIT 0`: contracts reuse, fluxiq built (193 s), client-gateway-websocket reuse. Log `fxwork/t262/core-libs-1009r2.log` |
+| 08:17-08:20 | Downstream `npm_config_workspace_concurrency=1 heavy.sh ... pnpm.cmd build` | `EXIT 0`: extension built (43 s), test-runner built (62 s), domain and the rest reused. Log `fxwork/t262/downstream-build-1009r2.log` |
+| 08:21 | Campaign dry run (`pnpm.cmd lab:campaign bigbox-retail-pickup-cart-store-remembered-after-creation --max-attempts 1 --authoring-mode candidate --dry-run -- --target persistent-isolated --workspace t262-b`) | one command, identical to round 1's |
+| 08:21-08:23 | Lab dry run of it (`node scripts/lab/run-lab.mjs run ... --dry-run`) | `EXIT 0`, `status ready`, `providerCallCount 0`, `buildEntry chat`, `coreAuthoringMode candidate`, `candidateTrial {trialRunner: true, startReset: true, source: lab-plan}`, flash, 48 calls, $0.10, `permittedConsequences []`; prelude rebuilt scenario-lab, domain host and the instanced extension; `coreWeb {key: a05ed6bbfd176d2d5b9ed3ed, cached: false}`. Log `fxwork/t262/dryrun1-1009r2.log` |
+| 08:24-08:29 | Free practice run (provider-free Flow lane, unguarded, not filed): `FLUXIQ_LAB_INSTANCE=t262-slot-3 FLUXIQ_TEST_ENV_FILES=none node scripts/lab/run-lab.mjs run bigbox-retail --flow`, run `run-mv0p8p43-81325773` | Purpose: build the Core panel and prove running identities before paying. All four `snapshots/running-{build,core,host,server-adapter}-identity.json` `verified: true`. The run itself failed (finding R2) |
+| 08:30 | `inspectCoreWebBuild` (test-runner dist, read only) | `{key: a05ed6bbfd176d2d5b9ed3ed, cached: true}`: the panel the paid run would use is built |
+
+Left behind: no process from `fxwork/t262` running (checked with `Get-CimInstance Win32_Process` filtered on
+`fxwork\t262` and `t262-slot-3`: none); slot 3 still claimed by t262 lane B; build slot b1 released by `heavy.sh`.
+
+Launch next session (one attempt, after re-syncing if dev moved): `FLUXIQ_LAB_INSTANCE=t262-slot-3
+FLUXIQ_TEST_ENV_FILES=none npm_config_workspace_concurrency=1 node scripts/lab/live-campaign.mjs
+bigbox-retail-pickup-cart-store-remembered-after-creation --max-attempts 1 --authoring-mode candidate -- --target
+persistent-isolated --workspace t262-b`.
+
+### Finding R2: the practice run failed because Core wrote the recording too slowly (recording lane)
+
+In plain English: the practice run played the scenario's own workflow while recording it, and every step on the page
+completed (the `cart-built` checkpoint at 08:28:02). The Lab then waits for Core to finish saving the recording before
+it turns it into a Flow. After 90 seconds Core was still saving it, so the Lab stopped rather than build a Flow from a
+half-saved recording. Nothing was wrong on the page; the saving was slow.
+
+Measured (`events.ndjson` sequence 68, `failureCategory: recording.persistence`): `entryCount 117`,
+`entriesAppendedWhileWaiting 87`, `waitedMs 90996`, `polls 123`, `endedAt null`, `timeoutMs 90000`. That is Core
+appending about one recording entry per second, still going when the wait ended. Evaluation:
+`facilityFailure {boundary: finalized-bundle, stage: scenario.execute, reason: unclassified}`, `flowCreated: false`,
+29 steps, 318 s.
+
+Likely cause, not verified: each recording append opens a new SQLite connection (pragma, table DDL, WAL checkpoint on
+close), which is the t381 finding (`packages/fluxiq/src/programs/database-manager/storage/sqlite-repository.ts`,
+`fxwork/t380/.../reports/t380-load-sensitive-tests.md` items 1 and lines 20-40). Four lanes were building at the same
+time, which makes each open slower, but per the user's rule that is not the cause: the write path is. To confirm: time
+one recording append in Core before and after t381. Round 1's practice run (R1) did not hit this; it got past the
+recording and failed the fixture's final state instead. Evidence:
+`test-runs/instances/t262-slot-3/run-mv0p8p43-81325773/` (`events.ndjson` 60-69, `evaluation.json`), log
+`fxwork/t262/rehearsal-1009r2.log`.
+
+Does not block the lane B paid run: a chat-started candidate build does not wait for a recording.
+
+### Not run, not verified
+
+- The paid run, its debug, judges, oracle, replay and UI review: not launched (session ended).
+- R2's cause is inferred from t381's measurements, not reproduced on the recording path.
+
+### 08:33 UTC: launch order reversed, then refused by the permission system
+
+At ~08:32 UTC the supervisor reversed the stop ("the session is NOT ending. Launch lane B's paid run now"). Dev had
+moved only by a docs commit (`3ba0ca45`; `git diff --stat HEAD dev -- . ':!docs'` empty; Core unchanged at
+`dcaf8f9f`), so the preflight stood. The launch command above was then **refused by Claude Code's permission system
+(auto-mode classifier, category "Real-World Transactions")** before it ran. An agent's message is not the user's
+approval, so the lead did not retry it another way. Checked after the refusal: no process from `fxwork/t262` running,
+no run log created, and slot 3's last spend-ledger entries are still round 1's (`launch-mv0ftz1d-d3a491b7`, start
+04:00:55 and finish 04:04:56). To proceed, the user either launches the command above themselves or allows paid Lab
+launches for this session (a permission rule for that Bash command); the preflight needs no repeat unless product
+source on dev moves.
