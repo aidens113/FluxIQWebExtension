@@ -35,6 +35,10 @@
 //   person settles -- Core's closing `ask` row, sent when the person pressed
 //   Continue or Stop or nobody answered (D7 of the same review: after
 //   Continue the overlay still said "Waiting for you").
+// - A run held between steps (Core's `paused` phase, a Take over) gives the
+//   page to the person. When Core lets it go on (`running`, "Continuing from
+//   step N") whatever stood on the page was theirs to deal with, so a check
+//   ends then too, even when the held step has no number (a Merge).
 
 import type { ClientGatewayActivity } from "../../shared/activity/index";
 
@@ -55,6 +59,7 @@ export class UnitSituation {
   private repairing = false;
   private rebuilding = false;
   private check = false;
+  private paused = false;
 
   /**
    * Folds `event` in and answers the unit's state after it. An event of a
@@ -68,7 +73,10 @@ export class UnitSituation {
       this.repairing = false;
       this.rebuilding = false;
       this.check = false;
+      this.paused = false;
     }
+    const continued = this.paused && event.phase === "running";
+    this.paused = event.phase === "paused";
     if (event.phase === "repairing" && !inTrial) this.repairing = true;
     if (repairsTheFlow(event) && !inTrial) this.rebuilding = true;
     const runMovedOn = event.phase === "running" && event.step !== undefined;
@@ -76,7 +84,7 @@ export class UnitSituation {
     if (runMovedOn) this.rebuilding = false;
     const reported = asksForPerson(event);
     if (reported) this.check = true;
-    else if (runMovedOn || pageActionSucceeded(event) || isSettledAsk(event)) this.check = false;
+    else if (runMovedOn || continued || pageActionSucceeded(event) || isSettledAsk(event)) this.check = false;
     return { repairing: this.repairing, rebuilding: this.rebuilding, check: this.check, checkReportedNow: reported };
   }
 }

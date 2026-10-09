@@ -3,11 +3,18 @@
 // way FluxIQ's own panel reads them (`list-conversations`, `get-conversation`),
 // and the project's own Flows (`list-flows`), so the Flow the chat made is the
 // one that was not there before the instruction was sent.
+//
+// Every one of these reads is safe to repeat, so each is retried
+// (`../retried-read.ts`): lane A's run `run-mv0fu9uq-107ab0de` died on one
+// unretried 10 s `list-flows` before the instruction was ever typed.
 
 import type { FluxIQHttpOptions } from "../../../http-control/index.js";
+import { retriedRead } from "../retried-read.js";
 
 export type CreatedFlowChatReadControl = {
   automationStudioCall(endpoint: string, payload: Record<string, unknown>, bounds?: FluxIQHttpOptions, domainId?: string): Promise<unknown>;
+  /** How the reader tells time and waits between tries; the real clock when absent. Tests pass a fake. */
+  readClock?: Readonly<{ now(): number; sleep(ms: number): Promise<void> }>;
 };
 
 /** Where the chat is read: the run's project and the domain Core holds it to. */
@@ -31,7 +38,7 @@ const MAX_PAGES = 20;
 
 /** Every chat thread of the project, by id. */
 export async function chatConversationIds(control: CreatedFlowChatReadControl, scope: CreatedFlowChatScope): Promise<string[]> {
-  const listed = record(await control.automationStudioCall("list-conversations", { projectId: scope.projectId }, READ_BOUNDS, scope.domainId));
+  const listed = record(await chatRead(control, scope, "list-conversations", { projectId: scope.projectId }));
   return (Array.isArray(listed.conversations) ? listed.conversations : []).flatMap((thread) => isRecord(thread) && typeof thread.conversationId === "string" ? [thread.conversationId] : []);
 }
 
@@ -40,7 +47,7 @@ export async function chatThreadTurns(control: CreatedFlowChatReadControl, scope
   const turns: CreatedFlowChatTurn[] = [];
   let sinceTurnId: string | undefined;
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    const payload = record(await control.automationStudioCall("get-conversation", { projectId: scope.projectId, conversationId, limit: TURN_PAGE, ...(sinceTurnId ? { sinceTurnId } : {}) }, READ_BOUNDS, scope.domainId));
+    const payload = record(await chatRead(control, scope, "get-conversation", { projectId: scope.projectId, conversationId, limit: TURN_PAGE, ...(sinceTurnId ? { sinceTurnId } : {}) }));
     const thread = record(payload.conversation);
     const read = (Array.isArray(thread.turns) ? thread.turns : []).flatMap(turnOf);
     turns.push(...read);
@@ -57,12 +64,17 @@ export async function chatThreadTurns(control: CreatedFlowChatReadControl, scope
  * several of those, so they are left out: the count is of Flows a person made.
  */
 export async function projectFlowIds(control: CreatedFlowChatReadControl, scope: CreatedFlowChatScope): Promise<string[]> {
-  const listed = record(await control.automationStudioCall("list-flows", { projectId: scope.projectId }, READ_BOUNDS, scope.domainId));
+  const listed = record(await chatRead(control, scope, "list-flows", { projectId: scope.projectId }));
   return (Array.isArray(listed.flows) ? listed.flows : []).flatMap((entry) => {
     const flow = isRecord(entry) && isRecord(entry.flow) ? entry.flow : entry;
     if (!isRecord(flow) || typeof flow.flowId !== "string") return [];
     return isRecord(flow.metadata) && flow.metadata.subflowGraph === true ? [] : [flow.flowId];
   });
+}
+
+/** One read with the chat's bound, retried (`../retried-read.ts`). */
+function chatRead(control: CreatedFlowChatReadControl, scope: CreatedFlowChatScope, endpoint: string, payload: Record<string, unknown>): Promise<unknown> {
+  return retriedRead(endpoint, () => control.automationStudioCall(endpoint, payload, READ_BOUNDS, scope.domainId), control.readClock);
 }
 
 function turnOf(value: unknown): CreatedFlowChatTurn[] {

@@ -87,6 +87,23 @@
 // says which view each handle came from (`handleViews`). Without it -- a node
 // run, a rerun, a legacy completion -- a handle resolves against the current
 // pages exactly as before, and the answer carries nothing beside its parameters.
+// Only a handle some evidence printed resolves that way (t378, lane B C4): one
+// the store holds in a numbering gap the page view left -- lane B's `t551`,
+// `t560` and `t570` -- is `not_shown` there (`target-packets.ts`) and refused
+// `web.handle.unknown`, which is what it is to the model: a handle no packet it
+// read carried.
+//
+// **A candidate's press names a control (t378, lane D).** A candidate step that
+// presses a handle whose element the page view prints as plain text -- lane D's
+// `t860`, a chat message, pressed in place of the "Close chat" button above
+// it, by both trials -- is refused `web.handle.not_a_control`. A control the
+// page draws itself, the words inside a control, a layer and a label are all
+// pressed (`pressable-targets.ts`); every other node is left alone.
+// Exploration's own presses are not held to it: the model may press anything a
+// person could, and a press listener the capture cannot see (one a framework
+// adds at the document) makes words a control the view cannot tell from text.
+// For the same reason a candidate may press words exploration pressed and saw
+// change the page (`target-packets.ts` `pressed`, W13).
 
 import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
@@ -105,7 +122,7 @@ import { webPlanPositionCode } from "./issue-position";
 import { webPlanOwnExtractionList } from "./own-extraction-list";
 import { resolveWebNextPageSlot } from "./next-page-slot";
 import { webPlanStepPermission, type WebPlanStepIssueCode } from "./step-permission";
-import type { WebLlmTargetPackets, WebLlmTargetReach } from "./target-packets";
+import type { WebLlmTargetPackets, WebLlmTargetReach, WebLlmTargetResolution } from "./target-packets";
 
 /**
  * Every code a refusal is made of, in the order a refusal lists them: why the
@@ -126,6 +143,11 @@ export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   "web.handle.frame_mismatch",
   "web.handle.unknown_field",
   "web.handle.extraction_required",
+  // A candidate's press on an element the page view prints as plain text, which
+  // no press acts on (`./pressable-targets.ts`, t378; lane D,
+  // run-mv0fuual-f9e6f089, `t860`). Not `wrong_control`: that one says the
+  // handle is right and the node is wrong, and names the node that fits.
+  "web.handle.not_a_control",
   // The handle names a real control, and it is not a control this step can act
   // on: a choice step handed a button, an entry step handed a link. Refused
   // here rather than at run time, where it arrives as
@@ -389,8 +411,13 @@ const TARGET_ISSUES = {
   unknown: "web.handle.unknown",
   stale: "web.handle.stale",
   ambiguous: "web.handle.ambiguous",
-  not_unique: "web.handle.not_unique"
-} as const satisfies Record<"unknown" | "stale" | "ambiguous" | "not_unique", WebPlanHandleIssueCode>;
+  not_unique: "web.handle.not_unique",
+  // Held but never printed: to the model, a handle no packet it read carried (header).
+  not_shown: "web.handle.unknown"
+} as const satisfies Record<Extract<WebLlmTargetResolution, { ok: false }>["code"], WebPlanHandleIssueCode>;
+
+/** The node that presses its target, the only one a candidate's step is held to naming a control with (header). */
+const PRESS_NODE_ID = webAutomationOutputNodeId("web.dom.click");
 
 /**
  * The answer alone, which is what Core's binding asks for and all it accepts
@@ -492,6 +519,8 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
   const replaced = new Map<string, Resolved>();
   const extractionNode = nodeDefinitionId === EXTRACT_LIST_NODE_ID;
   const nextPageNode = nodeDefinitionId === NEXT_PAGE_NODE_ID;
+  // Only a candidate's press (header).
+  const press = nodeDefinitionId === PRESS_NODE_ID && scope.reach === "view_history";
   for (const [key, value] of Object.entries(parameters)) {
     if (nextPageNode && key === "nextPage") {
       const slot = resolveWebNextPageSlot(value, scope, stores.targets, stores.extractions, scope.reach);
@@ -540,7 +569,7 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
         refusals.push({ code: "web.handle.malformed", kind: "target", path: [key] });
         continue;
       }
-      const outcome = resolveTarget(state.fallback, scope, stores.targets);
+      const outcome = resolveTarget(state.fallback, scope, stores.targets, press);
       if (typeof outcome !== "string") replaced.set(key, {
         value: outcome.value, frameId: outcome.frameId, frameUrlPath: outcome.frameUrlPath, element: outcome.element, statePath: state.path
       });
@@ -548,7 +577,7 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
       continue;
     }
     if (isTargetSlot(key, nodeDefinitionId) && isHandleObject(value)) {
-      const outcome = resolveTarget(value, scope, stores.targets);
+      const outcome = resolveTarget(value, scope, stores.targets, press);
       if (typeof outcome !== "string") replaced.set(key, outcome);
       // A target slot refuses only an extraction handle as misplaced.
       else refusals.push({ code: outcome, kind: outcome === "web.handle.misplaced" ? "extraction" : "target", path: [key] });
@@ -686,7 +715,8 @@ function nested(entry: WebLlmNameAssumptionSaid): WebLlmNameAssumptionSaid {
   return { path: ["parameters", ...entry.path], written: entry.written, field: entry.field, how: entry.how, score: entry.score };
 }
 
-function resolveTarget(value: Record<string, unknown>, scope: Scoped, targets: WebLlmTargetPackets): Resolved | WebPlanHandleIssueCode {
+/** A target handle made real, or why not; `press` holds it to naming a control (header). */
+function resolveTarget(value: Record<string, unknown>, scope: Scoped, targets: WebLlmTargetPackets, press: boolean): Resolved | WebPlanHandleIssueCode {
   if (Object.keys(value).some((key) => key !== "handle" && key !== "location")) return "web.handle.malformed";
   const kind = webPlanHandleKind(value.handle);
   if (kind === "extraction") return "web.handle.misplaced";
@@ -695,6 +725,7 @@ function resolveTarget(value: Record<string, unknown>, scope: Scoped, targets: W
   const handle = canonicalWebLlmTargetHandle(value.handle) ?? value.handle;
   const resolution = targets.resolve({ projectId: scope.projectId, flowId: scope.flowId }, handle, value.location as string | undefined, scope.reach);
   if (!resolution.ok) return resolution.renumberedByReload === true ? "web.handle.renumbered_by_reload" : TARGET_ISSUES[resolution.code];
+  if (press && resolution.notAControl === true) return "web.handle.not_a_control";
   const resolved: Resolved = { value: resolution.selector, frameId: resolution.frameId, frameUrlPath: resolution.frameUrlPath, element: resolution.element as unknown as JsonObject };
   if (resolution.shownIn !== undefined) resolved.views = [{ handle, view: resolution.shownIn.view, location: resolution.shownIn.location }];
   return resolved;

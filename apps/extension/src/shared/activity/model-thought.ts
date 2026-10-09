@@ -11,21 +11,23 @@
 // run-musp4h2f-72e8ed99 UI review), so the pacer never makes such a row its
 // detail and does not count it as a change (`background/activity/pacer.ts`).
 //
-// Core's own deciding row ("Deciding the next step", `runtime/activity/
-// observer.ts`) is a thought too, but it is the action: with no text while the
-// decision is made, and with Core's own sentence when the model provider did
-// not answer. It is status, and is drawn.
+// Core's own deciding rows (`runtime/activity/observer.ts`) are thoughts too,
+// but they are the action, so they are status and are drawn: "Deciding the
+// next step", with no text while the decision is made, and "Asking the AI
+// model again" (failed, with Core's own sentence) when the model provider did
+// not answer or its answer could not be used (t378 W4). An older Core said the
+// latter under the deciding title, which stays status too.
 //
 // Pure: no browser API.
 
 import type { ClientGatewayActivity } from "@fluxiq/client-gateway-websocket";
 
-/** The title of Core's own deciding row. */
-const DECIDING = "Deciding the next step";
+/** The titles of Core's own deciding rows: the decision being made, and one asked for again. */
+const CORE_DECIDING_TITLES: ReadonlySet<string> = new Set(["Deciding the next step", "Asking the AI model again"]);
 
 /** True when `event` carries the model's words -- a reason, a refusal, a recovery choice -- and not an action. */
 export function isModelThought(event: ClientGatewayActivity): boolean {
   const detail = event.detail;
-  if (detail?.kind !== "thought" || detail.title === DECIDING) return false;
+  if (detail?.kind !== "thought" || CORE_DECIDING_TITLES.has(detail.title.trim())) return false;
   return typeof detail.text === "string" && detail.text.trim() !== "";
 }

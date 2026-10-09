@@ -58,7 +58,7 @@ import { publishedWebLlmPage } from "../page-view";
 import { present } from "../present";
 import { webBuildRefusalDiagnostic } from "../refusal-diagnostic";
 import { webActionPermission } from "../permission";
-import { resolveWebPlanNode } from "../plan-resolution";
+import { resolveWebPlanNode, webPlanFirstTargetHandle } from "../plan-resolution";
 import { WEB_DECLINED_PRESS_INSTEAD } from "../press";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
@@ -288,12 +288,12 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       }), record);
     }
     // A control named only by the label beside it is named by that label in the node it keeps (`./observed-control.ts`).
-    const ran = webLabelledIdentity(resolved.status === "resolved" ? resolved.parameters : written, current?.evidence, firstHandle(written));
+    const ran = webLabelledIdentity(resolved.status === "resolved" ? resolved.parameters : written, current?.evidence, webPlanFirstTargetHandle(written));
     // A press on a control the look just taken shows covered is not sent: it
     // would land on the cover (`./covered-target.ts`, C4). The refusal names
     // the cover and carries the page it is on, so the layer can be dealt with
     // first -- a popup that opened on a timer is named this way (C9).
-    const covered = current && node.effect === "mutate" && !writing ? webCoveredTarget(current.evidence, firstHandle(written)) : undefined;
+    const covered = current && node.effect === "mutate" && !writing ? webCoveredTarget(current.evidence, webPlanFirstTargetHandle(written)) : undefined;
     if (current && covered) {
       run.shown(current);
       return refusal(current, covered.code, rejectionDetail({
@@ -303,7 +303,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // No page, no control to have observed: the move that goes to the start
     // location acts on the browser rather than on anything in front of it.
     // The words the packet store keeps for the handle, for a control the look before acting does not describe (`./observed-control.ts`).
-    const control = current ? webObservedControl(current.evidence, firstHandle(written), ran, shownWords(run, written)) : { name: undefined, kind: "step" };
+    const control = current ? webObservedControl(current.evidence, webPlanFirstTargetHandle(written), ran, shownWords(run, written)) : { name: undefined, kind: "step" };
     // A node that acts must say what acting would lastingly do, `[]` included.
     // Saying nothing is not the same as saying it causes nothing: a step that
     // declared nothing would be waved past the gate every time the Flow ran,
@@ -419,12 +419,17 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // Arriving from nowhere changed the page by definition: there was none. A
     // page that could not be read was not compared, so it is not said.
     const changed = after === undefined ? undefined : current === undefined || JSON.stringify(after.evidence) !== JSON.stringify(current.evidence);
+    // A press that changed the page acts on what it pressed, whatever that
+    // prints as: words a listener the capture cannot see makes a control
+    // (`../plan-resolution/target-packets.ts` `pressed`, t378 W13).
+    const pressedHandle = changed === true && node.definitionId === PRESS_NODE_ID ? webPlanFirstTargetHandle(written) : undefined;
+    if (pressedHandle !== undefined) run.stores.targets.pressed({ projectId: run.request.projectId, flowId: run.request.flowId }, pressedHandle);
     // Whether the press answered a layer that stood in front of the page, one
     // this build did not open itself (`./press-effect/answered-layer.ts`,
     // `./own-layers/memory.ts`); then, whichever layers this press opened are the
     // build's own from here on. Never a look, a navigation or a read.
     const pressedOnPage = node.effect === "mutate" && !webMovesThePage(node);
-    const interruption = pressedOnPage && webAnsweredLayer(current?.evidence, after?.evidence, firstHandle(written), (layer) => run.layers.owns(buildOf(run), layer));
+    const interruption = pressedOnPage && webAnsweredLayer(current?.evidence, after?.evidence, webPlanFirstTargetHandle(written), (layer) => run.layers.owns(buildOf(run), layer));
     if (pressedOnPage) run.layers.pressed(buildOf(run), current?.evidence, after?.evidence);
     // The page, with what the node did to it written on the same result rather
     // than around it. One shape, the one every other page has: the compact
@@ -439,7 +444,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       unchangedPress: changed === false && node.definitionId === PRESS_NODE_ID ? PRESS_AGAIN : undefined,
       pageUnreadable: after === undefined ? true : undefined,
       // A press that un-chose (or chose) the control it pressed says so first (`./press-effect/choice.ts`).
-      choice: webPressChoice(node, current, after, firstHandle(written)),
+      choice: webPressChoice(node, current, after, webPlanFirstTargetHandle(written)),
       // Which lines it changed, on the same page only (`./press-effect/page-changes.ts`, t174/F37).
       changed: webNodePageChanges(node, current, after),
       control: control.name,
@@ -509,7 +514,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         written: undefined,
         // The press flipped whether its control is chosen, under the control's handle: Core
         // takes it out with a later press that flips it back (`./press-effect/toggle.ts`).
-        toggle: webPressToggle(node, current, after, firstHandle(written)),
+        toggle: webPressToggle(node, current, after, webPlanFirstTargetHandle(written)),
         // Which list on which page a list read read, as an opaque code: Core
         // refuses a second kept read of one list (`AS/runtime/flow-draft/
         // second-copy.ts`, `run-muq4oaof-464f5bce`). Made from the page the read
@@ -663,7 +668,7 @@ function unknownNode(named: unknown) {
 function handleRefusal(parameters: JsonObject, issueCodes: readonly string[]) {
   return rejectionDetail({
     reason: "parameters_not_resolved",
-    target: firstHandle(parameters),
+    target: webPlanFirstTargetHandle(parameters),
     // The codes, and then the shapes a handle is accepted in. A live build was
     // refused `web.handle.extraction_required` fifteen times and never once
     // corrected the shape, because a code is a name for a mistake and not a
@@ -681,28 +686,10 @@ function handleRefusal(parameters: JsonObject, issueCodes: readonly string[]) {
  * (`../tools.ts`, `describeCall`); nothing for a call that names no handle.
  */
 function shownWords(run: WebNodeRun, written: JsonObject): string | undefined {
-  const handle = firstHandle(written);
+  const handle = webPlanFirstTargetHandle(written);
   if (handle === undefined) return undefined;
   const resolution = run.stores.targets.resolve({ projectId: run.request.projectId, flowId: run.request.flowId }, handle, undefined);
   return resolution.ok ? resolution.words : undefined;
-}
-
-function firstHandle(value: JsonValue | undefined, depth = 0): string | undefined {
-  if (depth > 6 || value === undefined || value === null) return undefined;
-  if (typeof value === "string") return canonicalWebLlmTargetHandle(value);
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const found = firstHandle(entry, depth + 1);
-      if (found) return found;
-    }
-    return undefined;
-  }
-  if (typeof value !== "object") return undefined;
-  for (const entry of Object.values(value)) {
-    const found = firstHandle(entry as JsonValue, depth + 1);
-    if (found) return found;
-  }
-  return undefined;
 }
 
 /**

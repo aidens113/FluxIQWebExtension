@@ -39,11 +39,24 @@
 // build's first decisions are still there after it settles, placed by time
 // among the thread's turns.
 //
+// Under the stream, beside the composer: Stop for the work of the moment
+// (`stop-control.ts`) and, for a run, Take over / Hand back (`hold-control.ts`).
+// A run the shell followed here (`followRun`) is shown: when the thread on
+// screen would not show its steps, the chat opens one that does
+// (`stream/run-target.ts`), but not while the person types a message.
+//
 // A read that fails is retried quietly; only one that keeps failing shows the
 // read notice, naming what failed, with a Retry (`conversation/read-notice.ts`).
 //
 // New content is followed only while the person is at the bottom; scrolled
 // up, the view stays put and "Jump to latest" shows (`createScrollFollower`).
+//
+// Empty and connected, the latest chat is the onboarding (`view/empty-state-model.ts`):
+// what FluxIQ does, "Describe what you want" (puts the caret in the composer,
+// sends nothing) and "Extract data from this page" (`onExtract`: the shell
+// shows the extraction sheet), and, when `onboarding/` reads that no model key
+// is enabled, a line saying so with Open FluxIQ. The keys are read each time
+// the empty latest chat comes on screen; a failed read says nothing.
 //
 // `fallback` (a background without the conversation relays, or a FluxIQ that
 // refuses this browser's token) swaps the stream and composer for "Talk to
@@ -51,13 +64,16 @@
 
 import { createElement } from "../dom";
 import type { PanelStore } from "../state";
+import type { ClientGatewayActivity } from "../../shared/activity";
 import type { ExtensionStatus } from "../../shared/protocol";
 import { createComposer, createConversationController, createReadNotice, type ConversationState, type CoreTurn } from "./conversation";
 import { createActivityFeed, listenToRuntime, threadRefreshWanted } from "./feed";
 import { sameThread } from "./same-thread";
+import { createHoldControl } from "./hold-control";
 import { createStopControl } from "./stop-control";
 import { createChatOwnerContext, type ChatOwner } from "./owner-context";
-import { activityForTarget, buildChatStream, createTurnClock, type QuestionTarget } from "./stream";
+import { readModelReadiness, type ModelReadiness } from "./onboarding";
+import { activityForTarget, buildChatStream, createTurnClock, followedRunTarget, threadKey, type QuestionTarget } from "./stream";
 import type { ChatTarget } from "./target";
 import { CHAT_PROJECT_NAVIGATION, createProjectDraftOwner } from "./project-navigation";
 import {
@@ -90,6 +106,12 @@ export type ChatPanel = {
   target(): ChatTarget;
   /** Hears every change of target, including the person's own "Latest chat". Answers an unsubscribe. */
   onTargetChange(listener: (target: ChatTarget) => void): () => void;
+  /**
+   * Shows `run`'s steps live: when the thread on screen would not show them,
+   * opens one that does (`stream/run-target.ts`), waiting while the person
+   * types in the composer and never during a recording.
+   */
+  followRun(run: ClientGatewayActivity): void;
 };
 
 /** An Open FluxIQ control. */
@@ -111,6 +133,8 @@ export type ChatPanelOptions = {
    * chat itself passes false, so the name is not said twice.
    */
   contextLine?: boolean;
+  /** The empty latest chat's "Extract data from this page": the panel shows its extraction sheet. */
+  onExtract?: () => void;
 };
 
 /** Creates the chat, talking to the background through `request`. */
@@ -132,6 +156,10 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
   // The thread holding the question the work waits on, while it is not the one on screen.
   let answerIn: QuestionTarget | null = null;
   let thread = createThreadView();
+  // The model-key line's Open FluxIQ, moved into each empty state the chat builds.
+  const keyOpener = openFluxIQ({ label: "Open FluxIQ", look: "small", canOpen: () => owner.current() && actionsAllowed() });
+  let readiness: ModelReadiness = "unknown";
+  let readinessAsk: object | null = null;
   let empty = createEmptyState(() => undefined);
   let readNotice = createReadNotice(() => undefined);
   const column = createElement("div", { className: "chat-column" }, [empty.element, thread.element, readNotice.element]);
@@ -151,7 +179,10 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
   });
   const main = createElement("div", { className: "chat-main" }, [scroller, jump]);
   const stop = createStopControl((message) => owner.request(message), () => connected && actionsAllowed());
-  const dock = createElement("div", { className: "chat-dock" }, [stop.element, composer.element]);
+  // Take over and Hand back sit beside Stop, for runs only (`hold-control.ts`).
+  const hold = createHoldControl((message) => owner.request(message), () => connected && actionsAllowed());
+  const runControls = createElement("div", { className: "chat-run-controls" }, [hold.element, stop.element]);
+  const dock = createElement("div", { className: "chat-dock" }, [runControls, composer.element]);
   const fallback = createElement("div", { className: "chat-fallback", hidden: true }, [
     createElement("p", { className: "chat-empty-title", text: "Talk to FluxIQ in the FluxIQ window." }),
     createElement("p", { className: "chat-empty-line", text: "This browser can't hold the conversation here. Open FluxIQ from the top of this panel." })
@@ -178,6 +209,11 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
   let questionKey = "";
   let timer: ReturnType<typeof setInterval> | undefined;
   let debounce: ReturnType<typeof setTimeout> | undefined;
+  // The run the shell followed to this chat, until a thread showing it is on screen (`followRun`).
+  let followed: ClientGatewayActivity | null = null;
+  // The conversation id of each thread this chat has read, and each automation's name it has shown.
+  const knownThreads = new Map<string, string>();
+  const flowNames = new Map<string, string>();
 
   function actionsAllowed(): boolean { return owner.current() && (active || (!activationObserved && !replaced)); }
   function makeController(captured: ChatOwner) {
@@ -204,7 +240,14 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
       });
       context.element.insertBefore(back, oldBack); oldBack.remove();
     }
-    empty = createEmptyState((text) => { if (eligible()) composer.fill(text); });
+    empty = createEmptyState((text) => { if (eligible()) composer.fill(text); }, {
+      keyAction: keyOpener.element,
+      start: (start) => {
+        if (!eligible()) return;
+        if (start === "describe") composer.focus();
+        else options.onExtract?.();
+      }
+    });
     readNotice = createReadNotice(() => { if (eligible()) void destination.retry(); });
     thread = createThreadView(() => { if (eligible() && answerIn !== null) open(answerIn); });
     column.replaceChildren(empty.element, thread.element, readNotice.element);
@@ -227,7 +270,9 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     owner = next; replaced ||= !initial;
     controller = makeController(owner); feed = makeFeed(owner);
     shownTarget = { kind: "latest" }; answerIn = null; questionKey = "";
+    followed = null; knownThreads.clear(); flowNames.clear();
     clock = createTurnClock(); historyTaken = false; seen = undefined; turnOpeners = [];
+    readiness = "unknown"; readinessAsk = null;
     composer.setOwner(draftOwners.capture(owner, shownTarget.projectId, latestStatus?.projectId ?? undefined)); composer.setPlaceholder("Message FluxIQ"); context.update(shownTarget); refreshControls(true);
     renderAll();
     if (!initial) for (const listener of [...targetListeners]) listener(shownTarget);
@@ -238,6 +283,7 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     if (sameTarget(next, shownTarget)) return;
     const threadChanges = !sameThread(next, shownTarget);
     shownTarget = next;
+    if (next.kind === "automation" && next.name.trim() !== "") flowNames.set(next.flowId, next.name);
     composer.setOwner(draftOwners.capture(owner, next.projectId, latestStatus?.projectId ?? undefined));
     if (threadChanges) {
       // Another thread: its first read is history again, and nothing of the last one stays.
@@ -277,7 +323,10 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     const ended = paced?.activityId === raw?.activityId && (paced?.outcome === "done" || paced?.outcome === "failed");
     const projectId = shownTarget.projectId ?? latestStatus?.projectId;
     // Stop is offered from the send's "Starting…" on, before Core names the work (`stop-control.ts`, D9).
-    stop.update(raw && !ended && (projectId === undefined || raw.subject.projectId === projectId) ? raw : null, paced?.kind === "starting");
+    const live = raw && !ended && (projectId === undefined || raw.subject.projectId === projectId) ? raw : null;
+    stop.update(live, paced?.kind === "starting");
+    hold.update(live);
+    if (followed !== null && followRunNow()) return;
     let state = controller.state();
     if (state.fallbackReason === "unsupported") unsupported = true;
     if (unsupported) state = { ...state, mode: connected ? "fallback" : "offline", fallbackReason: "unsupported" };
@@ -314,7 +363,10 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
       (turn) => turnControls(turn, state),
       working
     );
-    empty.update(emptyStateModel(state.mode, shownTarget), anything);
+    // The keys are read once each time the connected, empty latest chat comes on screen.
+    if (!(connected && shownTarget.kind === "latest" && state.mode === "empty" && actionsAllowed())) readinessAsk = null;
+    else if (readinessAsk === null) askReadiness();
+    empty.update(emptyStateModel(state.mode, shownTarget, readiness), anything);
     turnOpeners = turnOpeners.filter((opener) => opener.element.isConnected);
     follower.contentChanged();
 
@@ -323,8 +375,38 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
       hadTurns = hasTurns;
       onConversation(hasTurns);
     }
+    if (state.conversationId !== undefined && (state.mode === "thread" || state.mode === "empty")) knownThreads.set(threadKey(shownTarget), state.conversationId);
     // Only an unsupported background is for good; a refused token can come back after pairing again.
     if (state.fallbackReason === "unsupported") stopTimer();
+  }
+
+  /**
+   * Opens a thread that shows the followed run, once nothing holds it back;
+   * true when it opened one (and so rendered already). A run that ended, a
+   * recording, or a thread on screen that already shows it lets it go; the
+   * person typing in the composer, or a thread not read yet, keeps it waiting.
+   */
+  function followRunNow(): boolean {
+    const raw = feed.snapshot().state.current;
+    const run = raw?.activityId === followed!.activityId ? raw : followed!;
+    const recording = latestStatus?.recordingState === "recording" || latestStatus?.recordingState === "paused";
+    if (run.final === true || run.phase === "done" || run.phase === "failed" || recording || !actionsAllowed()) { followed = null; return false; }
+    const box = composer.element.querySelectorAll("textarea")[0];
+    if (box !== undefined && document.activeElement === box && box.value.trim() !== "") return false;
+    const state = controller.state();
+    if (state.mode === "loading" || (state.reading && state.conversationId === undefined && state.mode !== "offline")) return false;
+    followed = null;
+    const next = followedRunTarget({
+      run,
+      target: shownTarget,
+      conversationId: state.conversationId,
+      flowName: run.subject.flowId === undefined ? undefined : flowNames.get(run.subject.flowId),
+      known: knownThreads
+    });
+    if (next === null) return false;
+    const before = shownTarget;
+    open(next);
+    return shownTarget !== before;
   }
 
   function turnControls(turn: CoreTurn, state: ConversationState): TurnControls {
@@ -355,6 +437,15 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     };
   }
 
+  function askReadiness(): void {
+    const ask = readinessAsk = {}, captured = owner;
+    void readModelReadiness(captured.request).then((next) => {
+      if (ask !== readinessAsk || captured !== owner || !captured.current() || next === readiness) return;
+      readiness = next;
+      renderAll();
+    });
+  }
+
   function stopTimer(): void {
     if (timer !== undefined) clearInterval(timer);
     timer = undefined;
@@ -375,6 +466,7 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
       if (observation.changed) resetOwner(owners.capture(), observation.initial);
       else composer.setOwner(draftOwners.capture(owner, shownTarget.projectId, latestStatus?.projectId ?? undefined));
       for (const opener of turnOpeners) opener.observe(status);
+      keyOpener.observe(status);
       controller.setConnected(next && actionsAllowed() && !unsupported);
       if (changed) renderAll();
       if (observation.changed || changed) startReads();
@@ -408,6 +500,11 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     onTargetChange(listener) {
       targetListeners.add(listener);
       return () => targetListeners.delete(listener);
+    },
+    followRun(run) {
+      if (run.subject.kind !== "run") return;
+      followed = run;
+      renderAll();
     }
   };
 }

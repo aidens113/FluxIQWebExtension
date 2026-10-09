@@ -10,7 +10,8 @@
 // - `headline` names the unit of work ("Building your Flow", "Running your
 //   Flow", "Fixing your Flow") and changes only when the work changes,
 //   settles ("Flow ready", "Build failed") or needs the person ("Waiting for
-//   you: finish the check on the page"). Those changes show at once, however
+//   you: finish the check on the page", "Paused: your turn on the page" while
+//   Core holds a run the person took over). Those changes show at once, however
 //   recently the detail changed (`headline.ts`, `unit-situation.ts`).
 // - `detail` is Core's latest event in a person's words (`activityWording`:
 //   no tool id or result code ever reaches it). It changes at most once per
@@ -57,6 +58,14 @@
 // - A build test-running its Flow (a candidate's trial) is headed "Testing
 //   your Flow", its failed step and retries told as a run's, never as a
 //   repair, and its step count ends with it (`candidate-trial.ts`, t366).
+// - A stopped ending -- "Run stopped", "Build stopped" -- is read from Core's
+//   `stopped` field on the final event, set from the cancellation itself, never
+//   from its words.
+// - A run Core holds (`paused`) waits on the person like a question does: its
+//   headline shows at once and is not paced, the work is not `working`, and
+//   the detail is left empty (Core's "Paused: you have the page" only repeats
+//   the headline; the overlay and the chat say what to do). The `running`
+//   event Core sends when the run continues clears it at once.
 // - A settling row that names the work it ends -- "Build stopped: ...", "Run
 //   failed" -- heads the status by that name, whatever the event's subject
 //   says: a creation build's ending read "Couldn't fix your Flow" (U4 of
@@ -244,16 +253,16 @@ function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | nu
   const outcome = outcomeOf(event) ?? (unit.check ? "waiting" : null);
   const working = outcome === null;
   const headline = activityHeadline(subjectKind, outcome, {
-    stopped: event.final === true && (event.label === "Build stopped" || event.label === "Run cancelled"),
+    stopped: event.stopped === true,
     // A run pressing a failed step again is not a repair (D12), and nor is
     // anything a candidate trial's run reports (`candidate-trial.ts`).
     repairing: unit.repairing && retry.repairing && !trial.testing,
     testing: trial.testing,
-    waitingOn: event.phase === "waiting_permission" ? "answer" : "check"
+    waitingOn: event.phase === "waiting_permission" ? "answer" : event.phase === "paused" ? "paused" : "check"
   });
   // The person's own answer is said in the thread (the ask and its card); as
   // the status it would be the third telling of one press (D7).
-  const detail = personAnswered(event) ? null : bounded(unit.checkReportedNow ? CHECK_DETAIL : trial.line ?? retry.line ?? statusSentence(event));
+  const detail = personAnswered(event) || event.phase === "paused" ? null : bounded(unit.checkReportedNow ? CHECK_DETAIL : trial.line ?? retry.line ?? statusSentence(event));
   const sameUnit = previous !== null && previous.activityId === event.activityId;
   // A run's step events carry the step; the events between them ("Run
   // started", a note) keep the step last said, so the count does not blink out
@@ -261,7 +270,8 @@ function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | nu
   // run (U2 of t194: "Step 5 of 5" for a four-minute re-author), and not
   // across either end of a candidate trial, whose run counts its own steps.
   const carried = sameUnit && !unit.rebuilding && !trial.startedNow && !trial.endedNow ? previous.step : null;
-  const step = working ? stepOf(event.step) ?? carried : null;
+  // A held run keeps the step it will continue from, so the chat can say it.
+  const step = working || event.phase === "paused" ? stepOf(event.step) ?? carried : null;
   return {
     activityId: event.activityId,
     subjectKind,
@@ -366,7 +376,7 @@ function opensStage(event: ClientGatewayActivity): boolean {
 
 function outcomeOf(event: ClientGatewayActivity): ActivityDisplay["outcome"] {
   if (event.phase === "failed") return "failed";
-  if (event.phase === "waiting_permission") return "waiting";
+  if (event.phase === "waiting_permission" || event.phase === "paused") return "waiting";
   if (event.phase === "done" || event.final === true) return "done";
   return null;
 }

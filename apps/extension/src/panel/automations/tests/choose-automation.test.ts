@@ -22,7 +22,7 @@ test("choosing an automation calls chat.open with its flow, then shows the chat 
 
 test("only the flow's id and name reach the chat, whatever else the row carries", () => {
   const opened: ChatTarget[] = [];
-  const row = { flowId: "flow-1", name: "Invoices", lines: ["Completed in 2.0s"], running: false, exporting: false, datasets: [] };
+  const row = { flowId: "flow-1", name: "Invoices", lines: ["Completed in 2.0s"], running: false, stoppable: false, exporting: false, datasets: [] };
   chooseAutomation(row, { open: (next) => opened.push(next), showChat: () => undefined });
   assert.deepEqual(opened, [{ kind: "automation", flowId: "flow-1", name: "Invoices" }]);
 });

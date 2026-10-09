@@ -247,6 +247,46 @@
 }
 .chat-example:hover { background: var(--hover); }
 .chat-example:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+/* The latest chat's onboarding: the concept reads as a left-aligned paragraph;
+   the two starts sit side by side (two 150px buttons fit the 380px popup) and
+   stack when narrower; the model-key line wraps its Open FluxIQ under it. */
+.chat-empty[data-onboarding] .chat-empty-line { max-width: 420px; text-align: left; }
+.chat-starts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; max-width: 420px; margin-top: 6px; }
+.chat-starts:empty { display: none; }
+.chat-start {
+  flex: 1 1 150px;
+  min-height: 38px;
+  border: 1px solid var(--divider);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  cursor: pointer;
+}
+.chat-start:hover { background: var(--hover); }
+.chat-start-primary { border-color: var(--accent); background: var(--accent); color: #ffffff; }
+.chat-start-primary:hover { background: var(--accent); filter: brightness(1.08); }
+.chat-start:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.chat-key-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 10px;
+  max-width: 420px;
+  margin-top: 4px;
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  color: var(--warning-text);
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.chat-key-line[hidden] { display: none; }
 .chat-read-notice { margin: 0; }
 
 /* Jump to latest: floats over the stream while the person is scrolled up. */
@@ -391,3 +431,32 @@
 .chat-stop:disabled { opacity: .6; cursor: default; }
 .chat-stop:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .chat-stop-status { color: var(--muted); font-size: 12px; }
+
+/* Take over / Hand back beside Stop (`hold-control.ts`): one centred, wrapping
+   row under the held sentence, so both buttons fit a 380 px popup. */
+.chat-run-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 10px; max-width: var(--chat-column); margin: 0 auto; }
+.chat-run-controls > .chat-stop-control { margin: 0; }
+.chat-hold-control { display: contents; }
+.chat-hold-control[hidden] { display: none; }
+.chat-hold-sentence { flex: 1 0 100%; margin: 6px 0 0; text-align: center; color: var(--text); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.chat-hold-sentence[hidden] { display: none; }
+.chat-hold {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  border: 1px solid var(--divider);
+  border-radius: 999px;
+  padding: 5px 16px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chat-hold:hover:not(:disabled) { background: var(--hover); }
+.chat-hold:disabled { opacity: .6; cursor: default; }
+.chat-hold:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.chat-hold-status { flex: 1 0 100%; text-align: center; color: var(--muted); font-size: 12px; }
+.chat-hold-status:empty { display: none; }

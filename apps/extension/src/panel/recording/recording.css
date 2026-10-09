@@ -4,8 +4,8 @@
    notices use the shared .card, .primary-button, .small-button and .notice
    from panel/shell/shell.css. */
 
-.record-button { color: var(--danger); }
-.record-button:disabled { color: var(--muted); }
+/* The top bar's record button is neutral while idle (panel/shell/shell.css,
+   .top-actions .record-button) and red only on hover or keyboard focus. */
 
 .recording-bar { display: grid; gap: 6px; border-bottom: 1px solid var(--divider); background: var(--danger-soft); padding: 6px var(--space-3); }
 .recording-bar-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px var(--space-2); }

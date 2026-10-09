@@ -302,3 +302,59 @@ test("a goal-only re-author replay that misses the fixture goal fails the run", 
   assert.equal(fake.written[0]?.value.replays[0]?.datasetsReproduced, null);
   assert.equal(fake.published[0]?.repair, "result_reauthor");
 });
+
+// A held re-author (t267) that Core then did not keep. Core approves the edit,
+// holds it unapplied for the run's judged whole run, and rejects it when that
+// run is refuted -- or leaves it held when the run never settles. The lane used
+// to keep only an `applied` re-author, so it dropped this one, found no
+// proposal and passed with 0 replays: a repair that was never kept read as one
+// that was proven.
+const notKept = (fields: Record<string, unknown>): RunHarnessRecovery => ({
+  attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [],
+  resultReauthor: { routed: true, refusal: null, adaptationId: REAUTHORED, applied: false, failureCode: null, held: true, ...fields },
+} as RunHarnessRecovery);
+
+for (const [label, fields, reason, message] of [
+  ["Core rejected after its judged run", { notAppliedReason: "refuted" }, "refuted", /^The run re-wrote the Flow, but the re-write was not kept \(refuted\), so there is no repair to replay$/u],
+  ["Core left held and unsettled", {}, null, /^The run re-wrote the Flow and held the re-write for its judged run, but it was never settled, so it was not kept and there is no repair to replay$/u],
+] as const) {
+  test(`a re-author ${label} is never a proven repair: the record says so, is published, and the run fails`, async (t) => {
+    const recovery = notKept(fields);
+    const fake = lane({ replays: 2, recovery });
+    t.after(fake.restore);
+    await assert.rejects(
+      runLiveRepairLane(fake.control, { ...fake.input, expectation: DECLARED, lane: { flowId: "flow-1", run: { harnessRecovery: recovery, extracted: JUDGED } } }),
+      (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && message.test(error.message),
+    );
+    assert.deepEqual(fake.written.map((entry) => entry.path), ["snapshots/repair-lane.json"], "the record is written before the run fails");
+    assert.deepEqual(fake.written[0]?.value, {
+      task: "repair", purpose: "explore_and_adapt", repair: "result_reauthor",
+      resultReauthor: { adaptationId: REAUTHORED, kept: false, held: true, notAppliedReason: reason },
+      application: null, replaysRequested: 2, replays: [],
+    });
+    assert.deepEqual(fake.published, [{ repair: "result_reauthor", kept: false, held: true, notAppliedReason: reason, application: null, replaysRequested: 2, replays: [] }]);
+    assert.deepEqual(fake.reset, [], "nothing is replayed");
+    assert.deepEqual(fake.endpoints, [], "nothing is judged, approved or applied: there is nothing kept to apply");
+  });
+}
+
+test("an applied held re-author is unchanged: replayed N times without the model", async (t) => {
+  const recovery = notKept({ applied: true });
+  const fake = lane({ replays: 3, recovery });
+  t.after(fake.restore);
+  const proof = await runLiveRepairLane(fake.control, { ...fake.input, lane: { flowId: "flow-1", run: { harnessRecovery: recovery, extracted: [] } } });
+  assert.ok(proof);
+  assert.equal(proof.application.outcome, "applied");
+  assert.equal(proof.replays.length, 3);
+  assert.deepEqual(proof.replays.map((replay) => replay.providerCalls), [0, 0, 0]);
+  assert.equal(fake.published[0]?.repair, "result_reauthor");
+});
+
+test("no re-author marker and no proposal is unchanged: recorded as no_proposal, 0 replays, and the run does not fail", async (t) => {
+  const fake = lane({ replays: 2, recovery: REFUSED });
+  t.after(fake.restore);
+  const proof = await runLiveRepairLane(fake.control, fake.input);
+  assert.equal(proof?.application.outcome, "no_proposal");
+  assert.deepEqual(proof?.replays, []);
+  assert.equal("resultReauthor" in (fake.written[0]?.value ?? {}), false);
+});
