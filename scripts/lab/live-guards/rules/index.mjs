@@ -4,7 +4,6 @@
 export { checkBalanceStop } from "./balance.mjs";
 export { checkBehindDev } from "./behind-dev.mjs";
 export { checkPreviousDebug } from "./debug.mjs";
-export { checkPeakHours, PEAK_WINDOWS_UTC } from "./peak.mjs";
 export { RULE_NAMES } from "./guard-state.mjs";
 export { checkRelaunchLoop, LOOP_MAX_STARTS, LOOP_WINDOW_MS } from "./loop.mjs";
 export { checkUnchangedRerun } from "./unchanged.mjs";
