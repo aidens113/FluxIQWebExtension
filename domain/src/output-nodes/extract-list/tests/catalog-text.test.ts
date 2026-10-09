@@ -87,6 +87,16 @@ test("the shape a model copies shows a mark and a bound over a column under the 
   assert.equal(Object.hasOwn(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, "where"), true, "the example declares where, or a model cannot write it beside extractList");
 });
 
+test("the grammar says the rows a later step acts on are narrowed by where, not later", () => {
+  // t378, lane D (`run-mv0fuual-f9e6f089`): told only to "narrow later", the build
+  // filtered at the end of the run, which never changes the rows a repeat presses,
+  // and confirmed all eight friend requests where four were asked.
+  const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
+  assert.match(grammar, /rows a later step acts on \(a repeat over\) are narrowed here, by where/u);
+  assert.equal(grammar.indexOf("narrow later") < grammar.indexOf("rows a later step acts on"), true, "the exception follows the default it qualifies");
+  assert.equal(grammar.length <= 700, true, `${grammar.length} characters`);
+});
+
 test("the grammar says a badge column filters by presence", () => {
   // An icon badge is a detected column holding its name where the badge is and
   // null where it is not, so presence is all a condition can ask of it. The

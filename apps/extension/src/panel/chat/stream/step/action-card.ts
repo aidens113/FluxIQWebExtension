@@ -35,6 +35,12 @@ export type ActionCard = ActivityAction & {
   times?: number;
   /** The steps done again this card stands for, itself first, when it is one line for them (`done-again.ts`); absent otherwise. */
   again?: readonly ActionCard[];
+  /**
+   * On a step that worked when tried again: which try it was (2 for the
+   * second), and why the first did not work; the failed card is taken into it
+   * (`retried.ts`). Absent otherwise.
+   */
+  retried?: { tries: number; why: string | null };
 };
 
 /**
@@ -56,6 +62,8 @@ export function actionCard(event: ClientGatewayActivity, key: string): ActionCar
   const asked = detail.kind === "ask";
   return {
     kind: action.kind,
+    // The act a person would name where it is narrower than the kind ("Choose", "Tick", "Next page"; Core's `activityActionOf`).
+    ...(action.name === undefined ? {} : { name: action.name }),
     target: action.target,
     outcome: action.outcome,
     why: action.why,

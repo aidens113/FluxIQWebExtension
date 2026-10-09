@@ -86,6 +86,35 @@
 // press. Under `view_history` a resolution says which view it came from
 // (`shownIn`), where a capture is on record.
 //
+// **A candidate names only what evidence printed (t378, lane B C4).** A capture
+// holds every element, and the page view prints only those with words or a
+// control; the rest keep their handles in the numbering gaps. Lane B's
+// candidate named `t551`, `t560` and `t570`, between a printed `t550` and
+// `t555` (`run-mv0fu9pb-57454dc4`, 0058), and each resolved through the view
+// history to a search-page card wrapper the model was never shown. So each Flow
+// also keeps the handles evidence printed (`printed-handles.ts`): the lines of
+// every capture's page view -- a look's too, since a node run's answer can name
+// the controls of the look it took -- a failure packet's repair candidates, and
+// every tool result the model read (`printed`, fed by `../tools.ts` where each
+// answer leaves the runtime): a search's matches, a description, a node run's
+// answer, and a detection's columns, whose `at` names an element the page view
+// may have left out for having no words (W13). Under `view_history` a handle
+// none of them printed is `not_shown`, whatever the store holds for it (the
+// resolver refuses it as `web.handle.unknown`); exploration's own acts are not
+// held to it.
+//
+// **Each target says whether a press acts on it (t378, lane D).** A plain text
+// line is not a control, and a press on one -- lane D's `t860`, a chat message
+// printed under the chat's "Close chat" button -- presses words
+// (`pressable-targets.ts`). Such a resolution is marked `notAControl`, and
+// the resolver refuses a candidate's press on it; pages that disagree make it
+// pressable. So does a press exploration ran on it that changed the page
+// (`pressed`, from `../node-run/run.ts`, W13): a listener the capture cannot
+// see makes words a control that prints as text, and the model may press
+// anything a person could, so a press shown to work is never refused for its
+// looks. A press that changed nothing proves nothing, and lane D's message
+// pressed so stays refused.
+//
 // Bounded twice: a Flow keeps its newest `RETAINED_PAGES_PER_FLOW` pages, and
 // the store keeps its newest `RETAINED_FLOWS` Flows. A page let go makes its
 // handles `stale` for that Flow; another Flow's handles are `unknown`, as they
@@ -96,13 +125,20 @@ import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { present } from "../present";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webPlanElementIdentity, webPlanElementIdentityAcrossViews, webPlanElementWords, type WebPlanElementIdentity } from "./element-identity";
+import { webLlmPageText } from "../page-view";
 import { webLlmFrameUrlPath } from "./frame-url-path";
+import { webLlmPressableTargets } from "./pressable-targets";
+import { webLlmPrintedTargetHandles } from "./printed-handles";
 import { createWebLlmViewHistory, type WebLlmTargetView, type WebLlmViewHistory } from "./view-history";
 
 const RETAINED_PAGES_PER_FLOW = 8;
 const RETAINED_FLOWS = 32;
 /** Let-go pages remembered per Flow, by location only, so a handle on one reads as stale rather than unknown. */
 const REMEMBERED_STALE_PAGES = 64;
+/** Handles one Flow remembers being printed; the one printed longest ago goes first. Above the view history's own bound. */
+const PRINTED_PER_FLOW = 16_384;
+/** Handles one Flow remembers a press changing the page for; the one pressed longest ago goes first. */
+const PRESSED_PER_FLOW = 4096;
 
 export type WebLlmTargetScope = { projectId: string; flowId: string };
 
@@ -124,32 +160,53 @@ export type WebLlmTargetResolution =
       words?: string;
       /** Under `view_history` only: the newest view that carried the handle (on the page named, when one was). */
       shownIn?: WebLlmTargetView;
+      /** The element is no control a press acts on: plain text, a heading (header). */
+      notAControl?: true;
     }
-  | { ok: false; code: "unknown" | "stale" | "ambiguous" | "not_unique"; renumberedByReload?: true };
+  /** `not_shown`: under `view_history`, a handle the store holds that no evidence printed (header). */
+  | { ok: false; code: "unknown" | "stale" | "ambiguous" | "not_unique" | "not_shown"; renumberedByReload?: true };
 
 export type WebLlmTargetPackets = {
   /** Remember a packet the model was just shown, as the newest view of its page. */
   remember(scope: WebLlmTargetScope, binding: WebLlmSnapshotBinding): void;
   /** Remember a look the model was not shown: as `remember` when it describes the whole page, else its handles only join the page's. */
   rememberLook(scope: WebLlmTargetScope, binding: WebLlmSnapshotBinding): void;
+  /**
+   * A tool's result the model read: each handle it printed at the start of a
+   * line -- a page line, a search match, a description, a detection's `at`, an
+   * answer's handle field -- that a capture of this Flow held is printed
+   * (header). A handle `echoed` names -- a refused call's own input, which a
+   * refusal hands back as the handle it could not use -- is not printed by it.
+   */
+  printed(scope: WebLlmTargetScope, result: unknown, echoed?: unknown): void;
+  /** Exploration pressed `handle` and the page changed: a press acts on it, whatever its element prints as (header). */
+  pressed(scope: WebLlmTargetScope, handle: string): void;
   resolve(scope: WebLlmTargetScope, handle: string, location: string | undefined, reach?: WebLlmTargetReach): WebLlmTargetResolution;
 };
 
-type PageTarget = { selector: string; frameId: number | undefined; frameUrlPath: string | undefined; element: WebPlanElementIdentity; words: string | undefined; shared: boolean };
+type PageTarget = { selector: string; frameId: number | undefined; frameUrlPath: string | undefined; element: WebPlanElementIdentity; words: string | undefined; shared: boolean; pressable: boolean };
 type PageTargets = Map<string, PageTarget>;
 /**
  * `renumbered`: per page, the handles a reload dropped while showing their
  * control under another (see the header). `history`: every handle any capture
- * carried (header).
+ * carried (header). `printed`: every handle evidence printed (header). `pressed`: every handle
+ * a press of exploration's changed the page for (header).
  */
-type FlowPages = { pages: Map<string, PageTargets>; letGo: Set<string>; renumbered: Map<string, Set<string>>; history: WebLlmViewHistory<PageTarget> };
+type FlowPages = { pages: Map<string, PageTargets>; letGo: Set<string>; renumbered: Map<string, Set<string>>; history: WebLlmViewHistory<PageTarget>; printed: Set<string>; pressed: Set<string> };
 
 export function createWebLlmTargetPackets(): WebLlmTargetPackets {
   const flows = new Map<string, FlowPages>();
   /** The Flow's pages, made the newest Flow remembered. */
   const flowOf = (scope: WebLlmTargetScope): FlowPages => {
     const key = scopeKey(scope);
-    const flow = flows.get(key) ?? { pages: new Map<string, PageTargets>(), letGo: new Set<string>(), renumbered: new Map<string, Set<string>>(), history: createWebLlmViewHistory(acrossView) };
+    const flow = flows.get(key) ?? {
+      pages: new Map<string, PageTargets>(),
+      letGo: new Set<string>(),
+      renumbered: new Map<string, Set<string>>(),
+      history: createWebLlmViewHistory(acrossView),
+      printed: new Set<string>(),
+      pressed: new Set<string>()
+    };
     flows.delete(key);
     flows.set(key, flow);
     for (const oldest of flows.keys()) {
@@ -163,6 +220,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const flow = flowOf(scope);
       const targets = targetsOf(binding);
       flow.history.record(binding.evidence.location, targets);
+      printedBy(flow, binding);
       markRenumbered(flow, binding, targets);
       keep(flow, binding.evidence.location, acrossViews(flow.pages.get(binding.evidence.location), targets));
     },
@@ -171,6 +229,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const location = binding.evidence.location;
       const seen = targetsOf(binding);
       flow.history.record(location, seen);
+      printedBy(flow, binding);
       // A look that described every control says which have gone, as a shown
       // packet does; one the browser's capture cut short (`captureTruncated`)
       // cannot, so it only adds. Since t200 nothing else cuts a look.
@@ -184,28 +243,80 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       for (const [handle, target] of acrossViews(before, seen)) targets.set(handle, target);
       keep(flow, location, targets);
     },
+    printed(scope, result, echoed) {
+      // Only a Flow with captures holds a handle to have printed.
+      const flow = flows.get(scopeKey(scope));
+      if (flow === undefined) return;
+      const held = { has: (handle: string): boolean => flow.history.find(handle, undefined) !== undefined };
+      const echo = webLlmPrintedTargetHandles(echoed, held, "anywhere");
+      keepNewest(flow.printed, [...webLlmPrintedTargetHandles(result, held, "line_start")].filter((handle) => !echo.has(handle)), PRINTED_PER_FLOW);
+    },
+    pressed(scope, written) {
+      const handle = canonicalWebLlmTargetHandle(written);
+      const flow = flows.get(scopeKey(scope));
+      if (flow === undefined || handle === undefined || flow.history.find(handle, undefined) === undefined) return;
+      keepNewest(flow.pressed, [handle], PRESSED_PER_FLOW);
+    },
     resolve(scope, written, location, reach) {
       const handle = canonicalWebLlmTargetHandle(written) ?? written;
       const flow = flows.get(scopeKey(scope));
       if (!flow) return { ok: false, code: "unknown" };
       const current = resolveCurrent(flow, handle, location);
-      if (reach !== "view_history") return current;
-      // What its views agreed it names, as the newest view that carried it --
-      // on the page named, when one was -- left it.
-      const found = flow.history.find(handle, location);
-      if (current.ok || found === undefined) {
-        if (current.ok && found !== undefined) current.shownIn = found.shownIn;
-        return current;
-      }
-      // A reload that renumbered the handle shows its control under another
-      // one now; `ambiguous` and `not_unique` name no one control (header).
-      if ((current.code !== "unknown" && current.code !== "stale") || current.renumberedByReload === true) return current;
-      if (found.target.shared) return { ok: false, code: "not_unique" };
-      const earlier = resolved(found.target);
-      earlier.shownIn = found.shownIn;
-      return earlier;
+      if (reach !== "view_history") return pressedBefore(flow, handle, current);
+      const reached = resolveFromHistory(flow, handle, location, current);
+      // A candidate names only what evidence printed (header).
+      return reached.ok && !flow.printed.has(handle) ? { ok: false, code: "not_shown" } : pressedBefore(flow, handle, reached);
     },
   };
+}
+
+/** A handle under `view_history`: as the current pages resolve it, or else as the views that carried it agreed (header). */
+function resolveFromHistory(flow: FlowPages, handle: string, location: string | undefined, current: WebLlmTargetResolution): WebLlmTargetResolution {
+  // What its views agreed it names, as the newest view that carried it --
+  // on the page named, when one was -- left it.
+  const found = flow.history.find(handle, location);
+  if (current.ok || found === undefined) {
+    if (current.ok && found !== undefined) current.shownIn = found.shownIn;
+    return current;
+  }
+  // A reload that renumbered the handle shows its control under another
+  // one now; `ambiguous` and `not_unique` name no one control (header).
+  if ((current.code !== "unknown" && current.code !== "stale") || current.renumberedByReload === true) return current;
+  if (found.target.shared) return { ok: false, code: "not_unique" };
+  const earlier = resolved(found.target);
+  earlier.shownIn = found.shownIn;
+  return earlier;
+}
+
+/**
+ * Keep the handles `binding`'s evidence printed (header): the lines of its page
+ * view and its repair candidates. What a tool printed of it arrives with the
+ * tool's result (`printed`).
+ */
+function printedBy(flow: FlowPages, binding: WebLlmSnapshotBinding): void {
+  const held = binding.selectors;
+  keepNewest(flow.printed, [
+    ...webLlmPrintedTargetHandles(webLlmPageText(binding.evidence), held, "line_start"),
+    ...webLlmPrintedTargetHandles(binding.evidence.repairCandidates, held, "anywhere")
+  ], PRINTED_PER_FLOW);
+}
+
+/** `handles` made the newest of `kept`, letting the oldest go past `bound`. */
+function keepNewest(kept: Set<string>, handles: Iterable<string>, bound: number): void {
+  for (const handle of handles) {
+    kept.delete(handle);
+    kept.add(handle);
+  }
+  for (const oldest of kept) {
+    if (kept.size <= bound) break;
+    kept.delete(oldest);
+  }
+}
+
+/** `resolution`, no longer marked `notAControl` when a press of exploration's on `handle` changed the page (header). */
+function pressedBefore(flow: FlowPages, handle: string, resolution: WebLlmTargetResolution): WebLlmTargetResolution {
+  if (resolution.ok && resolution.notAControl === true && flow.pressed.has(handle)) delete resolution.notAControl;
+  return resolution;
 }
 
 /** A handle against the pages as this Flow's exploration last saw them (header). */
@@ -233,7 +344,8 @@ function resolveCurrent(flow: FlowPages, handle: string, location: string | unde
       frameUrlPath: target.frameUrlPath ?? known.frameUrlPath,
       element,
       words: known.words === target.words ? spacedName(element, known.words) : undefined,
-      shared: known.shared || target.shared
+      shared: known.shared || target.shared,
+      pressable: known.pressable || target.pressable
     });
   }
   if (seen.size > 1) return { ok: false, code: "ambiguous" };
@@ -247,6 +359,7 @@ function resolveCurrent(flow: FlowPages, handle: string, location: string | unde
 function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
   const targets: PageTargets = new Map();
   const uses = new Map<string, number>();
+  const pressable = webLlmPressableTargets(binding.evidence.elements);
   for (const element of binding.evidence.elements) {
     const selector = binding.selectors.get(element.target);
     if (selector === undefined) continue;
@@ -257,7 +370,8 @@ function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
       frameUrlPath: webLlmFrameUrlPath(element),
       element: identity,
       words: spacedName(identity, webPlanElementWords(element, identity)),
-      shared: false
+      shared: false,
+      pressable: pressable.has(element.target)
     };
     const address = addressOf(target);
     uses.set(address, (uses.get(address) ?? 0) + 1);
@@ -371,6 +485,7 @@ function resolved(target: PageTarget): Extract<WebLlmTargetResolution, { ok: tru
   const resolution: Extract<WebLlmTargetResolution, { ok: true }> = { ok: true, selector: target.selector, frameId: target.frameId, element: structuredClone(target.element) };
   if (target.frameUrlPath !== undefined) resolution.frameUrlPath = target.frameUrlPath;
   if (target.words !== undefined) resolution.words = target.words;
+  if (!target.pressable) resolution.notAControl = true;
   return resolution;
 }
 

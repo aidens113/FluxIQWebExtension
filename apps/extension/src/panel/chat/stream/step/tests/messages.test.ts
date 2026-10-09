@@ -67,6 +67,24 @@ test("a decision still being made, a pure status change, a build's start and fin
   assert.deepEqual(stepMessages(events, 100), []);
 });
 
+// t378 W4: Core's "Asking the AI model again" row (failed, with Core's sentence)
+// is FluxIQ's own status, not the model's reason: told as a note, never as a
+// decision, and the action the next decision leads to is not its card.
+test("Core's asking-again row is a note, not a decision, and owns no card", () => {
+  const again = "The AI model's answer didn't make sense, so FluxIQ is asking it again. If that keeps happening, the build stops.";
+  const events = [
+    decide(1),
+    activityEvent(2, { phase: "thinking", label: "The AI model's answer couldn't be used", detail: { kind: "thought", title: "Asking the AI model again", status: "failed", text: again } }),
+    decide(3),
+    tool(4, QUOTE, "started")
+  ];
+  const messages = stepMessages(events, 100);
+  assert.deepEqual(messages.map((message) => [message.kind, message.title, message.text, message.actions.length]), [
+    ["note", "Asking the AI model again", again, 0],
+    ["action", QUOTE, undefined, 1]
+  ]);
+});
+
 test("checks and repairs are messages with their verdict and diagnosis; a check that started is updated in place", () => {
   const events = [
     thought(1, "Fixing the search click", "The button moved after the banner closed.", "repairing"),
@@ -411,7 +429,28 @@ const recoveryThought = (sequence: number, node: string) => playback(sequence, {
   detail: { kind: "thought", title: "Trying the step again", text: "The page said it was busy, so I'm trying the press again.", status: "succeeded", ref: node }
 });
 
+// The site's slow-down is "the site asked FluxIQ to slow down" in Core's shared reading (lane D
+// finding 1); a Core built before t378 said "the page was busy".
+const SLOWED = /the site asked FluxIQ to slow down|the page was busy/u;
+
 test("a playback step that failed says why, from the code on the row that settles it, and that row is no message of its own", () => {
+  const events = [
+    playStep(1, 1, "n1.open", "Open the item"),
+    playStep(2, 2, "n3.coupon", "Get coupons"),
+    recovering(3, "n3.coupon", "Get coupons", "web.action.rate_limited"),
+    recoveryThought(4, "n3.coupon")
+  ];
+  const messages = stepMessages(events, 100);
+  assert.deepEqual(messages.map((message) => message.title), ["Step 1: Open the item", "Step 2: Get coupons", "Trying the step again"]);
+  const failed = messages[1]!.actions[0]!;
+  assert.equal(failed.outcome, "failed");
+  assert.match(failed.why ?? "", SLOWED);
+  assert.match(cardWords(failed, false).outcome ?? "", SLOWED);
+});
+
+// Lane D (run-mv0fuual-f9e6f089, finding 2): a refused press and its retry read as a red card and a
+// green one, with nothing saying they were the same press.
+test("a playback step that worked when tried again is one card that says on which try, and why the first didn't work", () => {
   const events = [
     playStep(1, 1, "n1.open", "Open the item"),
     playStep(2, 2, "n3.coupon", "Get coupons"),
@@ -421,11 +460,34 @@ test("a playback step that failed says why, from the code on the row that settle
     playStep(6, 3, "n4.cart", "Add to cart")
   ];
   const messages = stepMessages(events, 100);
-  assert.deepEqual(messages.map((message) => message.title), ["Step 1: Open the item", "Step 2: Get coupons", "Trying the step again", "Step 2: Get coupons", "Step 3: Add to cart"]);
-  const failed = messages[1]!.actions[0]!;
-  assert.deepEqual([failed.outcome, failed.why], ["failed", "the page was busy"]);
-  assert.match(cardWords(failed, false).outcome ?? "", /the page was busy/u);
-  assert.deepEqual(messages[3]!.actions.map((card) => [card.outcome, card.why]), [["done", null]], "the retry that worked is done");
+  assert.deepEqual(messages.map((message) => message.title), ["Step 1: Open the item", "Trying the step again", "Step 2: Get coupons", "Step 3: Add to cart"]);
+  const retried = messages[2]!.actions;
+  assert.equal(retried.length, 1);
+  assert.equal(retried[0]!.outcome, "done");
+  assert.equal(retried[0]!.retried?.tries, 2);
+  assert.match(retried[0]!.retried?.why ?? "", SLOWED);
+  const outcome = cardWords(retried[0]!, false).outcome ?? "";
+  assert.match(outcome, /^Done on the 2nd try\. The first try didn't work: /u);
+  assert.equal(messages.flatMap((message) => message.actions).filter((card) => card.outcome === "failed").length, 0, "no red card is left for the press that worked");
+});
+
+test("a retry that failed again stays failed, and a different step after a failure takes nothing in", () => {
+  const again = stepMessages([
+    playStep(1, 2, "n3.coupon", "Get coupons"),
+    recovering(2, "n3.coupon", "Get coupons", "web.action.rate_limited"),
+    recoveryThought(3, "n3.coupon"),
+    playStep(4, 2, "n3.coupon", "Get coupons"),
+    recovering(5, "n3.coupon", "Get coupons", "web.action.rate_limited")
+  ], 100);
+  assert.deepEqual(again.flatMap((message) => message.actions).map((card) => [card.outcome, card.retried]), [["failed", undefined], ["failed", undefined]], "neither try worked");
+  const other = stepMessages([
+    playStep(1, 2, "n3.coupon", "Get coupons"),
+    recovering(2, "n3.coupon", "Get coupons", "web.action.rate_limited"),
+    recoveryThought(3, "n3.coupon"),
+    playStep(4, 3, "n4.cart", "Add to cart"),
+    playStep(5, 4, "n5.pay", "Pay")
+  ], 100);
+  assert.deepEqual(other.flatMap((message) => message.actions).map((card) => [card.target, card.outcome]), [["Get coupons", "failed"], ["Add to cart", "done"], ["Pay", "working"]]);
 });
 
 test("a failed playback step whose settling row names no code still reads as failed, with no reason", () => {

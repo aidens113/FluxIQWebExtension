@@ -76,7 +76,7 @@ test("each mode has a fixed box, so no text can resize the pill, and the text is
     const expanded = [surfaceNode.style.getPropertyValue("width"), surfaceNode.style.getPropertyValue("height")];
     surface.update(view({ detail: "a much longer sentence ".repeat(8) }));
     assert.deepEqual([surfaceNode.style.getPropertyValue("width"), surfaceNode.style.getPropertyValue("height")], expanded);
-    assert.deepEqual(expanded, ["384px", "66px"]);
+    assert.deepEqual(expanded, ["384px", "84px"]);
     const fonts = hostOf(surface).descendants().map((node) => node.style.getPropertyValue("font")).filter(Boolean);
     assert.ok(fonts.some((font) => font.startsWith("600 14px")), "a 14-pixel headline");
     assert.ok(fonts.some((font) => font.startsWith("400 13px")), "a 13-pixel detail");
@@ -99,9 +99,14 @@ test("a line too long for the card is cut where a word ends, never inside one", 
     const headline = "Couldn't fix your Flow because every one of its repair rounds ran out";
     surface.update(view({ headline, detail }));
     const texts = hostOf(surface).descendants().filter((node) => node.children.length === 0 && node.textContent !== "").map((node) => node.textContent);
-    // 352 - 24 (the mark and its gap) - 2 (slack) leaves 326 pixels: 46 characters.
-    assert.ok(texts.includes("Trying again: typing \"wireless earbuds\" into…"), texts.join(" | "));
+    // 352 - 24 (the mark and its gap) - 2 (slack) leaves 326 pixels: 46 characters a line. The
+    // detail wraps onto its second line whole (lane D finding 9: "A step didn't work in the test: the…").
+    assert.ok(texts.includes(detail), texts.join(" | "));
     assert.ok(texts.includes("Couldn't fix your Flow because every one of…"), texts.join(" | "));
+    // A detail too long for both lines keeps its whole sentences that fit, never half of one.
+    surface.update(view({ headline, detail: "The AI model's reply couldn't be read or used. Asking it again; the build stops if its replies keep being unusable." }));
+    const shortened = hostOf(surface).descendants().filter((node) => node.children.length === 0 && node.textContent !== "").map((node) => node.textContent);
+    assert.ok(shortened.includes("The AI model's reply couldn't be read or used."), shortened.join(" | "));
     // A line that fits is drawn whole, and one that cannot be measured is left to the style's ellipsis.
     surface.update(view({ headline: "Building your Flow", detail: "Deciding the next step" }));
     assert.ok(hostOf(surface).shadow!.textContent.includes("Deciding the next step"));
@@ -246,7 +251,7 @@ test("a page with every corner busy keeps a pill with its text, never a dot, dra
       const [width, height] = [surfaceNode.style.getPropertyValue("width"), surfaceNode.style.getPropertyValue("height")];
       assert.notEqual(width, "30px", "not a dot");
       assert.ok(Number.parseInt(width, 10) >= 240, `wide enough to read a line (${width})`);
-      assert.equal(height, "66px", "the expanded card's height: the detail line is kept");
+      assert.equal(height, "84px", "the expanded card's height: the detail's two lines are kept");
       for (const line of ["Building your Flow", "Step 1 of 3", "Deciding the next step"]) {
         const node = nodes.find((candidate) => candidate.children.length === 0 && candidate.textContent === line);
         assert.ok(node, `${line} is drawn`);

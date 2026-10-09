@@ -7,7 +7,10 @@
 //
 // - three "Edit the Flow · run the step again / Not done: that step was
 //   already tried exactly this way ..." cards in a row read as three pieces of
-//   work (U-8 of the run-muw60j7c-bb7c9a62 UI review);
+//   work (U-8 of the run-muw60j7c-bb7c9a62 UI review), as three "Send the Flow
+//   again / Not done: the same Flow was already sent exactly like this ..."
+//   cards would (lane C, run-mv0fuotv-805294d7, where a whole Flow sent again
+//   read "Change the Flow · run the step again");
 // - a refused rerun and the rerun of a list read that Core did not send
 //   alternated, "Edit the Flow / Not done" then "Read list / Didn't work", one
 //   pair per attempt (R2-U-7 of the run-muwansvz-a2b4a987 UI review, steps
@@ -104,7 +107,7 @@ function settledWork(card: ActionCard): boolean {
 
 /** What a card that did its work says, result and all, but for its count. */
 function doneWords(card: ActionCard): string {
-  return JSON.stringify([card.kind, card.target, card.testing === true, "done", card.check, card.said ?? null, card.result?.trim() || null, card.tested ?? null, card.answer ?? null]);
+  return JSON.stringify([card.kind, card.name ?? null, card.target, card.testing === true, "done", card.check, card.said ?? null, card.result?.trim() || null, card.tested ?? null, card.answer ?? null, card.retried ?? null]);
 }
 
 /** A decision Core declined in whole, or an action that didn't work: nothing came of it. */
@@ -115,7 +118,7 @@ function nothingDone(card: ActionCard): boolean {
 
 /** What the card says, but for its count: two cards with the same are the same card shown twice. */
 function sameWords(card: ActionCard): string {
-  const named = [card.kind, card.target, card.testing === true];
+  const named = [card.kind, card.name ?? null, card.target, card.testing === true];
   // A refusal says only that it was not done and why, whatever outcome the card carries (`card-words.ts`).
   if (card.refused !== undefined) return JSON.stringify([...named, "refused", card.refused.because]);
   return JSON.stringify([...named, card.check, card.why, card.why === null ? card.said ?? null : null, card.answer ?? null]);
