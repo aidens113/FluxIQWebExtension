@@ -3057,7 +3057,7 @@ variable moves it.
 | `behind-dev` | This checkout's HEAD does not contain its local `dev` (`git merge-base --is-ancestor dev HEAD`), or the FluxIQ Core it builds against (`FLUXIQ_CORE_ROOT`, else `../!FluxIQ`, as the Lab resolves it) does not contain Core's local `dev`, unless every file `dev` changed since is documentation (`docs/` or Markdown, which the source fingerprint also leaves out); or git cannot answer, for example no local `dev` branch | `git merge dev` in the named checkout, then rebuilding Core's libraries and the extension; `OVERRIDE-behind-dev` |
 | `loop` | The instance already started 3 live runs in the last 30 minutes | Waiting, with the relaunch loop stopped; `OVERRIDE-loop` |
 | `debug` | The instance's previous live run has no `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` in the tree it runs from | Writing that debug; `OVERRIDE-debug` |
-| `unchanged` | The previous live run of the same instance and task did not pass and the source fingerprint is unchanged | Changing the source; `OVERRIDE-unchanged` |
+| `unchanged` | The previous live run of the same instance and task did not pass and the source fingerprint is unchanged. A run killed before it ended, or one that ended in a facility failure before any provider call, is not counted; the run before it is compared | Changing the source; `OVERRIDE-unchanged` |
 
 `peak` is the user's rule that paid runs launch off-peak: inside those windows
 DeepSeek's peak pricing halves the decisions a run's $0.10 per-build ceiling
@@ -3067,6 +3067,17 @@ rule reads only the admission's clock (`admitLiveRun`'s `now`, the current time
 in `run-lab.mjs`), so tests inject it; like every rule here, only the file
 `lab-slots/OVERRIDE-peak` lets a run past it, never a flag or a variable. It
 judges the start only: a run admitted at 00:59 UTC is not stopped at 01:00.
+
+`unchanged` counts only runs that reached the product. A run that failed on the
+facility before any provider call tested nothing of the source: lane A's
+`run-mv0fu9uq-107ab0de` timed out on the Lab's own `list-flows` read before the
+instruction was typed, and the rule then refused its task as though the product
+had failed. Such a run's ledger `finish` carries `facilityFailureBeforeProvider`
+(its stage, reason and Core endpoint), written only when the bundle's
+`evaluation.json` names a `facilityFailure` and counts zero model calls, the run
+recorded no cost, and its step log holds no provider call. Anything less certain
+leaves the field out and the run counts as a failure. A killed run is skipped
+the same way. Either still asks for its debug.
 
 `behind-dev` is the user's rule of 2026-10-01: live testing runs on code synced
 to the integrated `dev` line. A lane worktree that missed a merge round tests
@@ -3090,7 +3101,8 @@ before the runner is spawned, with the instance, the task
 (`<scenario>/<instruction task or llm task>[/workflow=..][/variant=..]`), the
 pid and the source fingerprint; a `finish` line is written for each run the
 launch produced, with its runId, verdict and `snapshots/live-llm.json`
-`observed.totalEstimatedCostUsd`, so the ledger records spend for reporting;
+`observed.totalEstimatedCostUsd` (and `facilityFailureBeforeProvider` for a
+run that failed on the facility before any provider call), so the ledger records spend for reporting;
 no rule limits it. The loop rule counts starts, so a crashed run still counts. A start whose launcher died, or
 that is older than six hours, is closed from its run directory
 (`"reconciled": true`) before the next admission. When a finished run's
