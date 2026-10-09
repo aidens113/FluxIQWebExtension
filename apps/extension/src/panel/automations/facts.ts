@@ -9,6 +9,12 @@
 // adaptation ids and their statuses known it is the number applied; when Core
 // said nothing durable changed it is 0; otherwise it stays undefined. The
 // summary's `adaptationCount` (created, applied or not) does not feed it.
+//
+// One exception raises it: when Core says durable behaviour changed and no
+// applied id accounts for it (the count is 0 or unknown), `learned` is 1. That
+// is a re-author Core kept after a judged re-run: a Flow Bootstrap adaptation,
+// so no adaptation id of the run names it, yet the stored Flow did change. An
+// applied id already counted is not counted again.
 
 import type { RunFacts, RunOutcome, RunSummary } from "./types";
 
@@ -47,9 +53,11 @@ export function runFacts(input: RunFactsInput): RunFacts {
   const statuses = ids === undefined || input.adaptationStatuses === undefined
     ? []
     : ids.map((id) => input.adaptationStatuses?.get(id));
-  const learned = ids !== undefined && input.adaptationStatuses !== undefined
+  const applied = ids !== undefined && input.adaptationStatuses !== undefined
     ? statuses.filter((status) => status === "applied").length
     : input.durableBehaviorChanged === false ? 0 : undefined;
+  // A kept re-author changes the stored Flow without an applied id behind it.
+  const learned = input.durableBehaviorChanged === true && (applied === undefined || applied === 0) ? 1 : applied;
   // Every change the run tried, kept or not: what is still being checked, or did not hold.
   const changesTried = ids?.length ?? run.adaptationCount;
   const known = statuses.filter((status): status is string => status !== undefined);
