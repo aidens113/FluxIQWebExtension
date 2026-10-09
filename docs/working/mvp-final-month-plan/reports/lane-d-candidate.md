@@ -259,3 +259,107 @@ tab throughout, no "Fixing your Flow", no "Reading your instruction gave no answ
 - A trial with `extractList.where` on the listing (B1's fix) and the row-scoped Confirm on a narrowed list.
 - Any of A1-A6: designs only, no tests written.
 - What spends the extension's 2.5-4.1 s on a refused press, and the snapshot's 2.7-4.6 s.
+
+---
+
+# Round 2 (candidate mode, after t375-t379), 2026-10-09
+
+Lead: lane D live lead (`lead-xhigh`), dispatched ~08:10 UTC. Brief: `### Brief: lanes A-D round 2 in candidate mode
+(one lead per lane)` in the supervisor's `docs/working/mvp-final-month-plan.md`.
+
+## Round 2 header
+
+- Trees: downstream `fxwork/t275/!FluxIQWebExtension` on `task/t275-live-lane-d` at `fddca582` (merges dev
+  `57094df4`); dev is now `e299e2c6`, which adds only `docs/working/README.md` and
+  `docs/working/mvp-final-month-plan.md` (`git diff --stat HEAD...e299e2c6`: 2 files), so the `behind-dev` guard's
+  docs-only exemption (`scripts/lab/live-guards/dev-ancestry.mjs:45-63`: every changed file under `docs/` or `.md`)
+  admits it. Core `fxwork/t275/!FluxIQ` on `task/t275-live-lane-d` at `dcaf8f9f` = Core dev (t375-t379 merged).
+  Both clean.
+- Slot 4 owner unchanged (`{"task":"t275","lane":"D","instance":"t275-slot-4",...}`); no `STOP-balance`, no
+  override files. Scenario unchanged since round 1 (`git diff --stat 1d04a11a HEAD --
+  apps/scenario-lab/src/scenarios/social-network-feed`: empty); `CONFIRM_RATE_LIMIT {max: 3, windowMs: 15000}`.
+- Previous live run `run-mv0fuual-f9e6f089` (round 1, failed) has its debug in this tree; source has changed since
+  (t375-t379), so `debug` and `unchanged` should admit one run.
+- Window: DeepSeek peak 06:00-10:00 UTC Friday; paid launch at or after 10:00 when the guard admits.
+
+## Round 2 expectations (written 08:15 UTC, before the dry run and any launch)
+
+What t378 put in place for this lane (read in the Core tree): trial feedback lists each absorbed refusal with the
+pass, row, asked wait, wait taken and pace (`service/candidate-trial/absorbed.ts`, `feedback.ts:78-100`); the retry
+wait credits time already passed (`executor/defensive/planned-retry-wait.ts`); `metadata.paceMs` is raised after a
+hinted failure and held for later passes (`executor/pacing/pace-keeper.ts`); a trial's learned paces are written into
+the saved Flow at promotion (`candidate-trial/learned-paces.ts`, `promotion.ts:70-96`); the script may write an
+`optional: yes` step inside a span, `only after: <label>` steps after it, and `repeat pace:`
+(`plan/flow-script-format.ts:308-310`, example `:349-375`); `builtin.timing.wait` pauses and continues; rows acted on
+are narrowed with the listing's `extractList.where` (`:312`).
+
+The candidate a correct build submits: navigate; optional dismissals; reach `~/friends/requests/`; listing read with
+`extractList.where: [{"field": "mutualFriends", "atLeast": 5}]` keeping Amara, Jonas, Lin, Freya; Confirm `repeat
+over` that listing, row-scoped; an after-read of the rows shown accepted, `{name, mutualFriends}`.
+
+The user's rule, predicted step by step:
+
+- U-P1. The trial presses four Confirms. If they start within 15 s, the fourth (Freya Holm, pass 4) meets "You're
+  going too fast"; the runtime waits the asked time less the time passed, closes the notice, presses again, and raises
+  the Confirm node's pace to at least the asked wait.
+- U-P2. The trial feedback names it: "The site asked the run to slow down on pass 4 (Freya Holm) ...", plus a `paces`
+  entry.
+- U-P3 (design prediction). **If both judges say yes, the build promotes without returning to the model**: no code
+  path sends a passing trial's absorbed interruption back for adaptation (grep of `candidate-trial`,
+  `flow-bootstrap-commands`, `flow-bootstrap/candidate`: `absorbed` is used only in feedback). The saved Flow then
+  carries the learned `paceMs` on the Confirm node (the pace half of the rule) but **no guarded dismiss/wait step**
+  unless the model wrote one before any trial. The guarded-step half is reached only through a failed trial.
+- U-P4. If a trial fails for another reason, the next submission should add, inside the span, an `optional: yes`
+  close of the notice, an `only after:` `builtin.timing.wait` of at least the asked wait, and `repeat pace:` on the
+  Confirm step.
+- U-R1 (structural risk). The format's example closes the notice by a page handle (`target: t30`). The model never
+  sees the dialog while exploring (round 1 pressed no Confirm while exploring), and t378 unit 5 refuses a handle the
+  model was never shown, so the guarded close step may be unwritable without exploring into the limit.
+- U-R2. With only four presses the limit may not be met at all (round 1's iterations took about 3.7-5.5 s each); then
+  nothing is learned and the rule is not exercised.
+
+Other risks: R1 the after-read's accepted condition on an unseen field; R2 the listing without `where` (round 1's
+cause B, format now fixed); R3 the count on "Aisha Khan and 4 other mutual friends"; R4 an invented final self-check;
+R5 the optional "close chat" step on plain text t860 (now refused naming the step, t378 unit 5); R6 mixed reads in
+the run dataset.
+
+Budget: candidate mode, `deepseek-flash`, $0.10 Lab ceiling, the campaign's call limit, headed browser, chat-started
+build, one attempt, no relaunch. If it passes: the zero-call replay.
+
+UI checkpoints (t375, t376, t378): onboarding at start; switch to Chat when the Flow runs; Stop and Take over present;
+record button neutral (grey, not red, when idle); Confirm cards name the row; the slow-down said in plain words, not
+"the page was busy"; refusal cards name the step; ending names its cause; overlay sentences not cut; "Flow ready" and
+the table on success.
+
+## Round 2 ledger
+
+### 2026-10-09 08:13-08:26 UTC: preflight (0 calls)
+
+- Rebuild in the lane trees, logs `fxwork/t275/r2-rebuild-*.log`: Core `pnpm build` (contracts, fluxiq, client
+  gateway, web), then domain, test-runner and extension builds: `core exit 0`, `domain exit 0`, `test-runner exit 0`,
+  `extension exit 0` (08:13-08:23).
+- 08:23 supervisor message: the user removed the time-of-day rule; the Lab's `peak` guard is gone (dev `ba87bc0f`,
+  t382), merged into this branch by the supervisor (`0064c9bf`; `git diff --stat fddca582 HEAD`: only
+  `scripts/lab/live-guards/**` and docs). Launch as soon as the preflight is ready. Dev is now `3ba0ca45`, docs only
+  beyond this head (`docs/working/README.md`, `mvp-final-month-plan.md`). Core unchanged at `dcaf8f9f`.
+- Campaign dry run (`FLUXIQ_TEST_ENV_FILES=none FLUXIQ_LAB_INSTANCE=t275-slot-4 pnpm.cmd lab:campaign
+  social-network-feed-confirm-requests --dry-run --authoring-mode candidate --max-attempts 1 -- --target
+  persistent-isolated --workspace t275-d --llm-cost-ceiling-usd 0.10`) printed the same Lab command as round 1
+  (`--llm-model deepseek-flash --authoring-mode candidate --llm-max-calls 48 ... --llm-cost-ceiling-usd 0.10`).
+- That command through `node scripts/lab/run-lab.mjs run ... --dry-run` (log `fxwork/t275/r2-dryrun-candidate.log`):
+  `exit 0`, `"status":"ready"`, `"providerCallCount":0`, `"lane":"created-flow"`, `"buildEntry":"chat"`,
+  `"target":"persistent-isolated"`, `"candidateTrial":{"trialRunner":true,"startReset":true,"source":"lab-plan"}`,
+  `"coreAuthoringMode":"candidate"`, `"model":"deepseek-flash"`, `"maxCalls":48`, `"maxEstimatedCostUsd":0.1`,
+  `"permittedConsequences":[]`, judge `expected-dataset` step `extract-confirmed`, instruction sha256
+  `6c11d20a...7f8d3` (same as round 1), `"coreWeb":{"key":"224f5e630024ffeac87efdef","cached":false}`.
+
+### 2026-10-09 08:26 UTC: launch
+
+- Launched 08:26 (`FLUXIQ_TEST_ENV_FILES=none FLUXIQ_LAB_INSTANCE=t275-slot-4 pnpm.cmd lab:campaign
+  social-network-feed-confirm-requests --authoring-mode candidate --max-attempts 1 -- --target persistent-isolated
+  --workspace t275-d --llm-cost-ceiling-usd 0.10`, log `fxwork/t275/live-candidate-2.log`). Guard
+  `{"lab":"live-guard","state":"admitted","instance":"t275-slot-4",...,"fingerprint":"sha256:28ceef28...9d46"}` at
+  08:26:48; run `run-mv0pcfaf-cd251bdc`; `[lab] live panel: side-panel (verified open)`.
+- ~08:30 supervisor message: the user is ending the session; launch nothing further; a run already started is
+  finished and debugged. This run had started; no other run will be launched.
+
