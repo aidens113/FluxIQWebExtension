@@ -63,3 +63,27 @@ test("an absent record is absent, an unreadable one is null, and neither is a st
   // A marker that says the result never entered names no node it entered on.
   assert.deepEqual(issuesOf({ ...none, resultRepair: { attempted: false, nodeId: "node.bootstrap.04b8.main.s6", code: null } }), ["$.resultRepair.nodeId must be null for a result that was never taken through the failure entry point"]);
 });
+
+// A held re-author (t267) is approved and validated but unapplied until the
+// run's judged whole run settles it. One that was then rejected, or never
+// settled, was never kept -- and without these two members a reader saw only
+// `applied: false` beside an adaptation id and could not tell a repair Core
+// threw away from one it never built.
+test("a held re-author carries whether it was held and, when not kept, Core's closed reason", () => {
+  const { harnessResultReauthorNotAppliedReasons } = contracts;
+  assert.deepEqual([...harnessResultReauthorNotAppliedReasons], ["not_rerun", "run_cancelled", "run_failed", "refuted", "not_judged", "run_parked", "run_errored", "apply_failed", "store_unavailable", "superseded"]);
+  for (const notAppliedReason of harnessResultReauthorNotAppliedReasons) {
+    assert.deepEqual(issuesOf({ ...none, resultReauthor: routed({ adaptationId: ADAPTATION_ID, held: true, notAppliedReason }) }), [], notAppliedReason);
+  }
+  assert.deepEqual(issuesOf({ ...none, resultReauthor: routed({ adaptationId: ADAPTATION_ID, held: true }) }), [], "held and unsettled");
+  assert.deepEqual(issuesOf({ ...none, resultReauthor: routed({ adaptationId: ADAPTATION_ID, held: true, applied: true }) }), [], "held and kept");
+});
+
+test("a not-kept reason is a closed code on a taken, unapplied route, and nothing else", () => {
+  const reasons = "not_rerun, run_cancelled, run_failed, refuted, not_judged, run_parked, run_errored, apply_failed, store_unavailable, superseded";
+  assert.deepEqual(issuesOf({ ...none, resultReauthor: routed({ adaptationId: ADAPTATION_ID, notAppliedReason: "The judged run did not answer." }) }), [`$.resultReauthor.notAppliedReason must be one of ${reasons}`]);
+  assert.deepEqual(issuesOf({ ...none, resultReauthor: routed({ adaptationId: ADAPTATION_ID, notAppliedReason: ADAPTATION_ID }) }), [`$.resultReauthor.notAppliedReason must be one of ${reasons}`]);
+  assert.deepEqual(issuesOf({ ...none, resultReauthor: routed({ adaptationId: ADAPTATION_ID, applied: true, notAppliedReason: "refuted" }) }), ["$.resultReauthor.notAppliedReason must be absent for an edit that was applied"]);
+  assert.deepEqual(issuesOf({ ...none, resultReauthor: { ...refused("flow_unavailable"), held: true, notAppliedReason: "refuted" } }), ["$.resultReauthor.held belongs to a route that was taken", "$.resultReauthor.notAppliedReason belongs to a route that was taken"]);
+  assert.deepEqual(issuesOf({ ...none, resultReauthor: routed({ held: "yes" }) }), ["$.resultReauthor.held must be a boolean"]);
+});

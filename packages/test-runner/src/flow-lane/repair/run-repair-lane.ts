@@ -26,8 +26,15 @@
 // no proposal, so nothing is approved; its replays reproduce the rows the run
 // stored when it stored any, and a run that stored none, such as a form task, is
 // replayed on its goal alone.
+//
+// A re-author that was made and *not* kept is the opposite case, and is never
+// a proven repair (`unkeptReauthorOf`). Core holds each re-author unapplied for
+// the run's judged whole run and then applies it or rejects it with a closed
+// reason; one it rejected, or left held and unsettled, changed nothing. The
+// lane writes and publishes that, replays nothing, and fails the run.
 
-import type { ScenarioStep } from "@fluxiq-web-extension/test-contracts";
+import type { RunHarnessResultReauthor, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
+import { RunnerFailure } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
 import { declaredSecretBindingInputs, flowSecretRequests, type DeclaredSecret } from "../declared-secrets.js";
 import { declaredUploadInputs, flowUploadRequests } from "../declared-uploads.js";
@@ -93,6 +100,8 @@ export type LiveRepairLaneInput = {
  * `undefined` when the run asked for no replays or produced no repairable
  * proposal. With an `expectation`, a proposal judged anything but `repaired` is
  * recorded with `application: null` and fails the run before it is applied.
+ * A re-author the run made and did not keep is recorded the same way, with
+ * its closed reason, and fails the run before anything is judged or applied.
  */
 export async function runLiveRepairLane(
   control: ProveLiveRepairControl,
@@ -101,6 +110,18 @@ export async function runLiveRepairLane(
 ): Promise<LiveRepairProof | undefined> {
   if (input.replays === undefined || !input.live?.repairsFlow) return undefined;
   const described = input.live.describeRepair();
+  const unkept = unkeptReauthorOf(input.lane.run);
+  if (unkept) {
+    // Checked before anything else: a declared repair, a proposal or an
+    // approval beside it would be judged against a Flow the run's own repair
+    // did not change. The record is written and published first, as below.
+    const stated = { kept: false, held: unkept.held ?? null, notAppliedReason: unkept.notAppliedReason ?? null };
+    await input.bundle.writeStructured("snapshots/repair-lane.json", { task: described.task, purpose: described.purpose, repair: "result_reauthor", resultReauthor: { adaptationId: unkept.adaptationId, ...stated }, application: null, replaysRequested: input.replays, replays: [] });
+    await input.publish({ repair: "result_reauthor", ...stated, application: null, replaysRequested: input.replays, replays: [] });
+    throw new RunnerFailure("runtime.behavior", unkeptMessage(unkept), {
+      details: { repair: "result_reauthor", ...stated, ...(unkept.failureCode ? { failureCode: unkept.failureCode } : {}), replaysRequested: input.replays, replays: 0 },
+    });
+  }
   const resultRepair = resultRepairOf(input.lane.run);
   // A declared repair describes a runtime patch -- the control a target
   // override should land on -- and says nothing about an answer the re-author
@@ -177,6 +198,30 @@ function resultRepairOf(run: LiveRepairLaneInput["lane"]["run"]): { adaptationId
   const reauthor = run.harnessRecovery.resultReauthor;
   if (reauthor?.applied !== true || !reauthor.adaptationId) return undefined;
   return { adaptationId: reauthor.adaptationId, ...(run.extracted && run.extracted.length > 0 ? { datasets: run.extracted } : {}) };
+}
+
+/**
+ * The re-author Core made inside the run and did not keep: the marker names an
+ * adaptation on a taken route, and it is not `applied`. Core holds every
+ * re-author (`held: true`) until the run's judged whole run settles it, then
+ * applies it or records `notAppliedReason`; a held one with neither was never
+ * settled. Any of these changed nothing, so it is never a repair to replay --
+ * and without this the lane found no proposal and passed with 0 replays.
+ *
+ * A route that built no adaptation is not this case: there is no re-write to
+ * have kept, and it is read as before.
+ */
+function unkeptReauthorOf(run: LiveRepairLaneInput["lane"]["run"]): (RunHarnessResultReauthor & { adaptationId: string }) | undefined {
+  const reauthor = run.harnessRecovery.resultReauthor;
+  if (!reauthor?.routed || !reauthor.adaptationId || reauthor.applied === true) return undefined;
+  return reauthor as RunHarnessResultReauthor & { adaptationId: string };
+}
+
+/** Why there is no repair to replay, in plain words and Core's closed codes only. */
+function unkeptMessage(reauthor: RunHarnessResultReauthor): string {
+  if (reauthor.notAppliedReason) return `The run re-wrote the Flow, but the re-write was not kept (${reauthor.notAppliedReason}), so there is no repair to replay`;
+  if (reauthor.held) return "The run re-wrote the Flow and held the re-write for its judged run, but it was never settled, so it was not kept and there is no repair to replay";
+  return `The run re-wrote the Flow, but the re-write was not applied${reauthor.failureCode ? ` (${reauthor.failureCode})` : ""}, so there is no repair to replay`;
 }
 
 /**

@@ -47,7 +47,7 @@ test("learned is 0 when nothing durable changed, and unknown when only creation 
   assert.equal(runFacts({ run: base, createdAdaptationIds: ["a1"], durableBehaviorChanged: false }).learned, 0);
   assert.equal(runFacts({ run: { ...base, adaptationCount: 4 }, durableBehaviorChanged: false }).learned, 0);
   assert.equal(runFacts({ run: base, createdAdaptationIds: ["a1"] }).learned, undefined, "created is not applied");
-  assert.equal(runFacts({ run: base, createdAdaptationIds: ["a1"], durableBehaviorChanged: true }).learned, undefined);
+  assert.equal(runFacts({ run: base, createdAdaptationIds: ["a1"], durableBehaviorChanged: true }).learned, 1, "Core said the stored Flow changed");
   assert.equal(runFacts({ run: { ...base, adaptationCount: 4 } }).learned, undefined, "the summary's created count is not learned");
 });
 
@@ -75,4 +75,34 @@ test("durableBehaviorChanged is taken as said", () => {
   assert.equal(runFacts({ run: base, durableBehaviorChanged: true }).futureRunsUpdated, true);
   assert.equal(runFacts({ run: base, durableBehaviorChanged: false }).futureRunsUpdated, false);
   assert.equal(runFacts({ run: base }).futureRunsUpdated, undefined);
+});
+
+// A re-author Core kept after a judged re-run is a Flow Bootstrap adaptation, so
+// no adaptation id of the run names it; Core's durableBehaviorChanged does (item 24).
+test("a kept re-author is learned once, from durableBehaviorChanged", () => {
+  const statuses = (entries: [string, string][]) => new Map(entries);
+  const kept = { run: base, durableBehaviorChanged: true };
+  assert.equal(runFacts(kept).learned, 1, "no ids");
+  assert.equal(runFacts({ ...kept, createdAdaptationIds: [] }).learned, 1, "empty ids");
+  assert.equal(runFacts({ ...kept, createdAdaptationIds: [], adaptationStatuses: statuses([]) }).learned, 1, "statuses known and empty");
+  assert.equal(runFacts({ ...kept, adaptationIds: [], adaptationStatuses: statuses([]) }).futureRunsUpdated, true);
+  assert.equal(
+    runFacts({ ...kept, createdAdaptationIds: ["a1"], adaptationStatuses: statuses([["a1", "rejected"]]) }).learned, 1,
+    "a rejected patch beside the kept re-author"
+  );
+});
+
+test("an applied patch is counted once when durableBehaviorChanged is also true", () => {
+  const statuses = new Map([["a1", "applied"]]);
+  assert.equal(runFacts({ run: base, createdAdaptationIds: ["a1"], adaptationStatuses: statuses, durableBehaviorChanged: true }).learned, 1);
+  assert.equal(
+    runFacts({ run: base, createdAdaptationIds: ["a1", "a2"], adaptationStatuses: new Map([["a1", "applied"], ["a2", "applied"]]), durableBehaviorChanged: true }).learned, 2
+  );
+});
+
+test("a rejected change with nothing durable is not learned", () => {
+  const facts = runFacts({ run: base, createdAdaptationIds: ["a1"], adaptationStatuses: new Map([["a1", "rejected"]]), durableBehaviorChanged: false });
+  assert.deepEqual([facts.learned, facts.validated, facts.futureRunsUpdated], [0, false, false]);
+  assert.equal(runFacts({ run: base, createdAdaptationIds: [], adaptationStatuses: new Map(), durableBehaviorChanged: false }).learned, 0);
+  assert.equal(runFacts({ run: base, createdAdaptationIds: ["a1"], adaptationStatuses: new Map([["a1", "proposed"]]) }).learned, 0, "unapplied is never learned");
 });
