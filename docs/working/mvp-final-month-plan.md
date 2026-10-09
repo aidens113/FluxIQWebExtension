@@ -164,6 +164,31 @@ Active and reusable briefs only. Retired briefs: [2026-10-08 archive](./mvp-fina
 - Must not: edit product source, commit, create override files, manage the user's panel, or run scenarios outside the ten. Leave no Lab processes running.
 - Return at most 12 lines: verdict per run first (passed or failed, why, how far it got), streak state, judge versus oracle, cost and calls, distinct causes with exact reproduction and the file to change, UI findings, report path.
 
+### Brief: t375 adaptation unblock (lead)
+- Lead: `lead-xhigh`. Trees `fxwork/t375` (downstream and Core, both on `task/t375-adaptation-unblock`). Report: `docs/working/mvp-final-month-plan/reports/t375-adaptation-unblock.md` in the downstream tree. Merges only after lane A's streak ends; product source on dev stays frozen meanwhile.
+- Source: [adaptation loop audit](./mvp-final-month-plan/reports/adaptation-loop-audit.md) (2026-10-05), blockers 1-6. First re-verify each blocker and file:line against current dev; candidate mode changed the build path since.
+- Units, in order:
+  1. Product runs can repair (blocker 1): the chat's "run it" (`conversations/commands/run-flow.ts`) and the extension's Automations Run (`background/automation-relay/automation-relay.ts`, Core `api/handlers/runtime-execution.ts`) carry the person's caller and `runIntent`. Check first and prove with a test: a run whose steps all succeed makes zero model calls, including the scheduled result check (item 23). User rule: no grants for model calls.
+  2. Lab playback lets a repair promote (blocker 2): `test-runner/src/flow-lane/persisted-flow-run.ts`.
+  3. Repair lane counts only replayed repairs (blocker 3): `flow-lane/repair/prove-repair.ts`, `run-repair-lane.ts`.
+  4. Blocker 4: read one candidate-built saved Flow (lane A's `run-muz3cqdh-927fd2f1` evidence in `fxwork/t342`, read-only) for a verification basis. If trials on its nodes would be `unverifiable`, implement the audit's design (the judged whole run is the evidence).
+  5. Re-authored Flows apply only after their re-run is judged (blocker 5).
+  6. Item 24: the chat's run answer says in plain words what ran and what was learned, no raw run id; the Automations row counts only applied adaptations (`panel/automations/facts.ts`, `summary-copy.ts`).
+- Owns those files and their tests, plus Core `runtime/service.ts` if a unit needs it. Must not edit files t376 owns (run-control, activity, client-gateway contracts, panel chat, overlay).
+- Validation: the tests beside each change, each touched package's typecheck, the structure audit; no full suites; no paid Lab run; provider-free runs only on the ten realistic scenarios and never in a lane's tree or slot.
+- Must not commit, merge or push (leave changes uncommitted; the supervisor commits), create override files, or manage the user's panel.
+- Return at most 12 lines: per unit done or not, with cause; validation commands and observed output; what still needs a live proof; report path.
+
+### Brief: t376 run controls and onboarding (lead)
+- Lead: `lead`. Trees `fxwork/t376` (downstream and Core, both on `task/t376-run-controls-onboarding`). Report: `docs/working/mvp-final-month-plan/reports/t376-run-controls-onboarding.md` in the downstream tree. Merges only after lane A's streak ends.
+- Source: [UX MVP design](./mvp-final-month-plan/reports/ux-mvp-design.md) (2026-10-05) Units 1-3 (onboarding after connect, Stop, take over and hand back) and its work units W-A, W-C, W-D, the Stop part of W-E, and W-G. t264 and t265 are merged, so all of these can start. Re-verify the design against current dev first; t373 added candidate chat cards in `panel/chat`.
+- Owns: Core `runtime/run-control/**`, `runtime/executor/graph-run.ts`, `runtime/activity/**`, `api/handlers/run-control.ts`, `contracts/src/client-gateway.ts`, `apps/web/src/lib/program-route.ts`; extension `background/panel/**`, `background/activity/**`, `shared/{constants,protocol}.ts`, `shared/activity/**`, `panel/chat/**`, `panel/shell/**`, `content/activity-overlay/**`, `panel/automations/**` except `facts.ts` and `summary-copy.ts`; the new Lab panel-control helper; `docs/architecture/extension-client.md`.
+- Must not edit `runtime/service.ts`, `conversations/commands/run-flow.ts`, `api/handlers/runtime-execution.ts` or `automation-relay.ts` (t375). If stopping a build needs `service.ts`, design it in the report and stop there.
+- Chrome side panel and Firefox popup stay aligned. Words are plain (the chat-first UI rule).
+- Validation: the tests beside each change, typechecks, the structure audit, the extension build; provider-free browser checks only on the ten realistic scenarios, never in a lane's tree or slot; no paid run.
+- Must not commit, merge or push (leave changes uncommitted; the supervisor commits), create override files, or manage the user's panel.
+- Return at most 12 lines: per unit done or not, with cause; validation commands and observed output; what still needs a live check; report path.
+
 ## Work Ledger
 
 Earlier verified units, decisions and ledger detail remain in [the execution archive](./mvp-final-month-plan/archive/2026-10-07-verified-slices-and-briefs.md).
@@ -424,6 +449,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: supervisor resumed at 03:02 UTC (peak until 04:00). No Lab run since round 7 (spend ledger: last `finish` 2026-10-08 05:38, `run-muz3jyz8-1d363a69`). Dev had moved by docs and baseline commits only (downstream `1d04a11a`, Core `52d7ac3a`); merged dev into both branches of each lane tree (t342 A slot 2, t262 B slot 3, t274 C slot 1, t275 D slot 4). Lane A brief rewritten for qualifying runs 8 and 9 on the new product pair (t368-t373 changed source since round 7); the B-D brief names its trees and the window (no paid launch after 05:45 UTC). Four `lead-xhigh` leads dispatched; preflight builds run during peak at zero calls, paid launches only at or after 04:00.
 - Validation: `git merge-base --is-ancestor <dev> HEAD` true for all eight lane branches; `git status --porcelain` empty in each before the merge.
 - Limits: no run has started; results are recorded per lane as they come in.
+
+### 2026-10-09 - t375 and t376 opened beside the lanes: adaptation unblock, run controls and onboarding
+- Changed: two Core-paired task worktrees opened (`pnpm task start <slug> --worktree --core`): t375 adaptation unblock (`lead-xhigh`, the audit's blockers 1-6) and t376 run controls and onboarding (`lead`, UX Units 1-3). Files partitioned between them in the briefs. Reason: the gap map's largest unproven areas are adaptation (items 12-24), onboarding (item 2) and Stop/Pause (item 10); their designs exist from 2026-10-05, their prerequisites t264 and t265 are merged, and none of their files is in a lane tree. Both merge after lane A's streak ends.
+- Validation: pending the worktree builds.
+- Limits: no live proof is possible inside these tasks; the chained adaptation run needs a paid Lab round after they merge.
 
 ## Open Questions
 
