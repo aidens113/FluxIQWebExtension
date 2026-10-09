@@ -184,6 +184,7 @@ Active and reusable briefs only. Retired briefs: [2026-10-08 archive](./mvp-fina
 - Source: [UX MVP design](./mvp-final-month-plan/reports/ux-mvp-design.md) (2026-10-05) Units 1-3 (onboarding after connect, Stop, take over and hand back) and its work units W-A, W-C, W-D, the Stop part of W-E, and W-G. t264 and t265 are merged, so all of these can start. Re-verify the design against current dev first; t373 added candidate chat cards in `panel/chat`.
 - Owns: Core `runtime/run-control/**`, `runtime/executor/graph-run.ts`, `runtime/activity/**`, `api/handlers/run-control.ts`, `contracts/src/client-gateway.ts`, `apps/web/src/lib/program-route.ts`; extension `background/panel/**`, `background/activity/**`, `shared/{constants,protocol}.ts`, `shared/activity/**`, `panel/chat/**`, `panel/shell/**`, `content/activity-overlay/**`, `panel/automations/**` except `facts.ts` and `summary-copy.ts`; the new Lab panel-control helper; `docs/architecture/extension-client.md`.
 - Must not edit `runtime/service.ts`, `conversations/commands/run-flow.ts`, `api/handlers/runtime-execution.ts` or `automation-relay.ts` (t375). If stopping a build needs `service.ts`, design it in the report and stop there.
+- Added 2026-10-09 (user): the panel switches to the Chat tab whenever a run of the chosen project starts (Automations Run, the chat's "run it", a Lab playback through the API), unless a recording is in progress, so the person watches each step live. The idle "Start recording" button is neutral, not red; red only while a recording runs (`panel/recording/**` is also owned; the accessible name "Start recording" stays exact for the Lab).
 - Chrome side panel and Firefox popup stay aligned. Words are plain (the chat-first UI rule).
 - Validation: the tests beside each change, typechecks, the structure audit, the extension build; provider-free browser checks only on the ten realistic scenarios, never in a lane's tree or slot; no paid run.
 - Must not commit, merge or push (leave changes uncommitted; the supervisor commits), create override files, or manage the user's panel.
@@ -454,6 +455,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: two Core-paired task worktrees opened (`pnpm task start <slug> --worktree --core`): t375 adaptation unblock (`lead-xhigh`, the audit's blockers 1-6) and t376 run controls and onboarding (`lead`, UX Units 1-3). Files partitioned between them in the briefs. Reason: the gap map's largest unproven areas are adaptation (items 12-24), onboarding (item 2) and Stop/Pause (item 10); their designs exist from 2026-10-05, their prerequisites t264 and t265 are merged, and none of their files is in a lane tree. Both merge after lane A's streak ends.
 - Validation: pending the worktree builds.
 - Limits: no live proof is possible inside these tasks; the chained adaptation run needs a paid Lab round after they merge.
+
+### 2026-10-09 - User: runs show on the Chat tab; the idle record button must not look like a recording light
+- Changed: the user saw "something about a recording" during Lab runs and asked that runs show on the Chat tab. Supervisor checked round 7's UI review (`run-muz3cqdh-927fd2f1.ui-review.local`, shots 11-13): build, playback and end were all on the Chat tab with per-step cards and Stop run; the likely source is the top bar's idle record button, red whenever it can be pressed (`panel/recording/recording.css:7`). Both items added to t376 (brief updated, lead messaged).
+- Validation: screenshots 11-before-flow-run, 12-flow-run and 13-end read by the supervisor: Chat tab selected in each; red record button in 11 (idle), grey in 12 (working).
+- Limits: not checked which window the user was watching; every run-start path is t376's to verify.
 
 ## Open Questions
 
