@@ -26,5 +26,6 @@ export * from "./lane.js";
 export * from "./snapshot.js";
 
 export * from "./readiness.js";
+export * from "./retried-read.js";
 export * from "./candidate-draft.js";
 export * from "./candidate-outcome.js";
