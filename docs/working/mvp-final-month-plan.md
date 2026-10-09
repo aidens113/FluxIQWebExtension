@@ -116,7 +116,9 @@ this document as you go. Cline asks the user before each command, which also cov
 
 **Planned 2026-10-09, not started:** [state-aware recovery plan](./state-aware-recovery-plan.md) (handlers,
 subflow entries, safe state routing, unit repair); its R1/B1/B6 briefs touch no file the briefs above own, its R2
-wiring waits for t388 and its R4a for t383, and it must not delay lanes round 3.
+wiring waits for t388 and its R4a for t383, and it must not delay lanes round 3. **Started 2026-10-09:** t383 (this
+plan's brief) and the run follow-ups brief (named t388 below) now run as t383 and t384; task ids are allocated in
+sequence, so the unstarted briefs t385-t391 below get new ids when started (t385-t391 are the recovery plan's units).
 
 **Pointers.** Order of work: [consultant revision](./mvp-final-month-plan/consultant-revision.md). Gap map:
 [mvp-gap-map](./mvp-final-month-plan/reports/mvp-gap-map.md) (2026-10-05). Adaptation:

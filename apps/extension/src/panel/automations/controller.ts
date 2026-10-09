@@ -138,7 +138,9 @@ export function createAutomationsController(
     return runFacts({
       run,
       createdAdaptationIds: reply?.createdAdaptationIds,
-      durableBehaviorChanged: reply?.durableBehaviorChanged,
+      // A run started here answers in its reply; any other run (the chat's
+      // "run it", a playback through the API) says it in the run list.
+      durableBehaviorChanged: reply?.durableBehaviorChanged ?? run.durableBehaviorChanged,
       adaptationIds: detail?.adaptationIds,
       adaptationStatuses: detail?.adaptationStatuses
     });
@@ -261,14 +263,15 @@ export function createAutomationsController(
     if (row !== undefined && run !== undefined && needsDetail(run)) await loadDetail(row.flowId, run.runId);
   }
 
-  // The id of this automation's run in progress: from what is on screen, or
-  // for a Run from this panel (whose reply carries the id only once the run
-  // ends) from a fresh read of the runs. Undefined when neither names one.
+  // The id of this automation's run in progress: from what is on screen, else
+  // from a fresh read of the runs. A Run from this panel names its run only in
+  // its reply, once the run ends, and a run started elsewhere (the chat's "run
+  // it", a playback through the API) never answers here at all, so the run list
+  // is where both are found. Undefined when neither names one.
   async function runningRunId(flowId: string): Promise<string | undefined> {
     const row = rowFor(flowId);
     const shown = row === undefined ? undefined : lastRun(row);
     if (shown !== undefined && factsOf(shown).outcome === "running") return shown.runId;
-    if (runningFlowId !== flowId) return undefined;
     const result = await request<unknown>({ type: MESSAGES.listAutomations });
     const listed = result.ok ? automationRows(readCore.record(readCore.record(result.value)?.payload)).find((candidate) => candidate.flowId === flowId)?.lastRun : undefined;
     return listed !== undefined && runFacts({ run: listed }).outcome === "running" ? listed.runId : undefined;
@@ -300,7 +303,14 @@ export function createAutomationsController(
       if (replaced || changedConnection) hooks.onChange();
       return connected && (replaced || changedConnection);
     },
-    setWorking(next) { if (next !== working) { working = next; hooks.onChange(); } },
+    // FluxIQ starting or finishing work is when a run started elsewhere begins
+    // or ends, so the list is read again: the open automation's row then shows
+    // the run in progress, with Stop, and afterwards how it went.
+    setWorking(next) {
+      if (next === working) return;
+      working = next; hooks.onChange();
+      if (connected && !listUnsupported) void refresh();
+    },
     refresh,
     async focus(flowId, owner) {
       if (!leased(owner)) return;

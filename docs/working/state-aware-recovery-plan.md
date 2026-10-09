@@ -1,7 +1,7 @@
 # State-Aware Recovery Plan
 
 Status: Active
-Status detail: Planned 2026-10-09 from the consultant's proposal, adjusted to the code and revised so model repair happens inside the live run on a true failure only; nothing implemented; R1, B1 and B6 briefs ready on the user's go-ahead.
+Status detail: Wave 1 dispatched 2026-10-09 (t383-t391, nine workers); nothing merged yet; waves 2-3 follow in dependency order.
 Created: 2026-10-09
 Last updated: 2026-10-09
 Owner: Senior supervisor agent
@@ -68,9 +68,12 @@ those files and can start now. This work must not delay lanes A-D round 3: lane 
 between rounds, and a merge that changes behaviour for existing Flows (R3's routing guards) lands between rounds with
 the lanes' saved Flows replayed provider-free first.
 
-**Next.** On the user's go-ahead: dispatch R1-lifecycle-core and R1-gate (Core), B1-facts and B6-perturbations
-(downstream) in parallel, each on its own task branch and worktree; R1-call-subflow after R1-lifecycle-core merges.
-Briefs are below. Record each dispatch and result in the Work Ledger.
+**In progress (2026-10-09, user: "use max subagents and implement this fast").** Wave 1 dispatched, nine workers in
+their own worktrees (dispatch record below): t383 and t384 (the MVP briefs that block R4 and R2), t385 lifecycle core,
+t386 requirement gate, t387 safe state routing, t388 script grammar, t389 fact evaluation, t390 Lab perturbations,
+t391 Core run log. Nothing merged yet. Next: verify each report, merge in dependency order (t385 first), then wave 2
+(R1-call-subflow; R2-trace once t384/t387 have merged `executor/contracts.ts` changes; R2-wiring after t384 and
+t385), then wave 3 (B5 chat cards, R3 entries and checkpoint preference, R4b in-run repair).
 
 **Binding rules every unit keeps** (the user's, from `mvp-final-month-plan.md` Current State, and Core's
 architecture): state routing stays a global runtime behaviour that precedes any model call; every node keeps first
@@ -229,8 +232,8 @@ structure audit, docs:check where docs change; no full suites; no paid run; neve
   `CLIENT_GATEWAY_PROTOCOL_VERSION` and refuse a major mismatch. Flows without `requires` run unchanged.
 - Required reads: Core document C10; `runtime/service/runtime-session/graph-options.ts:45-50`; client-gateway
   `service/inbound.ts:60-61`; `packages/contracts/src/client-gateway.ts:4-25`.
-- Owns: `graph-options.ts` and a requirement-check module beside it; the inbound version check; the contracts file's
-  capability-id constants; tests beside each.
+- Owns: `graph-options.ts` and a requirement-check module beside it (the capability-id constants live there); the
+  inbound version check; tests beside each. Not `packages/contracts/src/client-gateway.ts` (R2-trace owns it).
 - Must not touch: `service.ts` beyond one wiring call; `runtime/executor/**`.
 - Definition of done: tests for allowed, missing capability refused (reason names it), no `requires` unchanged,
   version mismatch refused; typechecks and structure audit pass.
@@ -278,7 +281,64 @@ structure audit, docs:check where docs change; no full suites; no paid run; neve
 - Definition of done: switches covered by scenario tests; one provider-free headed check per new switch showing the
   interruption at the chosen point; report with the per-row assignments and feasibility notes.
 
-Later briefs (R2-R5) are written here before their dispatch, against the code as it then stands.
+### Brief: R3-safe-state-routing (worker-high; started early, needs no new type)
+- Repository: Core.
+- Task: Core C6 "Safe state routing", the two guards that need nothing from R1: (a) a forward route is refused when
+  a skipped node produces a value that a node on the route's path reads and that value is unbound; move the check in
+  `executor/defensive/continuation.ts:157-169` into one shared module that continuation and the routing decision
+  both call; (b) a backward route is refused when the walk from the target back to the failing node would repeat a
+  completed lasting act that is not `RepeatIsSafe`, unless the host's effect check says it did not land. A refused
+  candidate is dropped and the next ranked one tried; none left -> `none`, and the ladder runs as before. The trace's
+  `stateRouting` record names the guard that refused (closed codes). Checkpoint preference and fact confirmation
+  come later with R1/B1.
+- Required reads: Core document C6; `executor/state-routing/**`, `executor/defensive/continuation.ts`,
+  `defensive/lasting-act.ts`, `defensive/node-side-effect.ts`, `route-state/signatures/effect.ts`.
+- Owns: `executor/state-routing/**`, `executor/defensive/continuation.ts`, the new shared data-dependency module, the
+  `service/summaries/state-routing.ts` record if a new code must appear there, tests beside each.
+- Must not touch: `graph-run.ts`, `step-skip/**`, `lifecycle/**`, `frames/**`.
+- Definition of done: tests for each guard (refused, allowed, next candidate taken); existing state-routing and
+  continuation tests pass (any changed expectation explained in the report); typecheck; structure audit.
+
+### Brief: R4a-script-parts-handlers (worker-high; grammar against the contract names)
+- Repository: Core.
+- Task: Core C12 grammar in the candidate script, compiled to the C1/C2/C4/C9 shapes by their contract names
+  (`builtin.control.call-subflow`, `builtin.control.handler`, `builtin.control.handler-end`, metadata
+  `fluxiq.entry`, `fluxiq.checkpoint`, `FactCondition`), which R1 implements in parallel. A block without `when:`
+  that a step calls with `call: <block label>` is a callable part (today `subflow_unreachable`); `run subflow` becomes
+  `call:`; `input:` / `output:` lines; `start at: <step label>` + `when:`; `checkpoint: yes`; `on <before|retry|fail|
+  start|next> [for <step labels> | for this part | everywhere]: <situation>` + `when:` + steps + `then: carry on |
+  go to <checkpoint step> | use <output bindings> | give up` + `end`. A fact `when:` names a kind (exists, absent,
+  visible, enabled, text, value, count, dialog), a target handle or dialog kind and name, and an optional op and
+  value (`$input.x` allowed). A Flow using any of these gets `metadata.requires` (`flow.handlers@1`, `web.facts@1`).
+  Format text gains one-line examples per rule; three worked examples (state-aware entry, interruption handler,
+  verified alternative) on kinds of sites no realistic scenario uses; interruption guidance: predictable ->
+  inline `optional:`/`only after:`, can appear at several places or any loop pass -> handler.
+- Required reads: Core document C1, C2, C4, C9, C12; `flow-bootstrap/plan/flow-script-format.ts`,
+  `flow-bootstrap/authoring/parse.ts`, `assemble.ts`, `script-statements/guarded-steps.ts`.
+- Owns: `flow-bootstrap/plan/**`, `flow-bootstrap/authoring/**`, `flow-bootstrap/script-statements/**`, tests.
+- Must not touch: `flow-bootstrap/candidate/**` and `runtime/llm/**` (t383), `executor/**`, `nodes/**`.
+- Definition of done: parse/assemble tests for every new statement and every example; refusals name the script line
+  (t378's rule); the Lab-mirroring guard test covers the new examples; existing script tests pass; typecheck;
+  structure audit.
+
+### Dispatch record, 2026-10-09
+Ids are allocated in sequence, so the MVP plan's unstarted briefs no longer own t384-t391 by name.
+
+| Task | Slug | Brief |
+| --- | --- | --- |
+| t383 | candidate-wrapup-refusal | MVP plan brief t383 |
+| t384 | run-follow-ups | MVP plan brief "t388 run follow-ups" |
+| t385 | lifecycle-core | R1-lifecycle-core |
+| t386 | requirement-gate | R1-gate |
+| t387 | safe-state-routing | R3-safe-state-routing |
+| t388 | script-parts-handlers | R4a-script-parts-handlers |
+| t389 | fact-evaluation | B1-facts |
+| t390 | lab-perturbations | B6-perturbations |
+| t391 | core-run-log | Core run log shows routing, skips, retries, pace and later the lifecycle records (B7/C11 MVP slice) |
+
+Wave 2, after t385 merges: R1-call-subflow; R2-trace (C11, owns `packages/contracts/src/client-gateway.ts`); after
+t384 too: R2-wiring. Wave 3: B5 chat cards, the Core run log, R3 entries and checkpoint preference, R4b in-run repair.
+Their briefs are written here before dispatch, against the code as it then stands.
 
 ## Work Ledger
 
@@ -297,6 +357,14 @@ Later briefs (R2-R5) are written here before their dispatch, against the code as
 - Validation: documents only: `node scripts/structure-audit.mjs --rule working-docs --rule docs-links` -> "passed (0 warning(s), 2 baselined)" here and "passed (0 warning(s), 16 baselined)" in Core; Core `node scripts/docs-reference.mjs --check` -> "Deterministic framework reference is current"
 - Outcome: Accepted
 - Follow-up: R4b joins the MVP cut after t383; dispatch R1/B1/B6 on the user's go-ahead
+
+### 2026-10-09 - Wave 1 dispatched
+- Agent: senior supervisor agent (Claude)
+- Changed: task branches and worktrees t383-t391 (both repos where Core-paired); this document's briefs (R3-safe-state-routing, R4a-script-parts-handlers, R1-gate no longer owns the contracts file) and dispatch record
+- Why: the user asked to implement the plan fast with as many subagents as possible; t383 and t384 (MVP briefs) unblock R4 and R2
+- Validation: not validated (dispatch only); `pnpm task list` shows t383-t391 on `task/t3NN-<slug>` branches
+- Outcome: Partial
+- Follow-up: verify each worker's report and tests, merge t385 first, then wave 2
 
 ## Open Questions
 
