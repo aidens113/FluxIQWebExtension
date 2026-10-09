@@ -79,7 +79,10 @@ export async function proveLiveRepair(
  * behaviour under test, not a fault of the rig.
  */
 export function assertLiveRepairProof(proof: LiveRepairProof): void {
-  // Nothing was proposed. A refusal task ends here, correctly.
+  // Nothing was proposed. A refusal task ends here, correctly. A re-author the
+  // run made and did not keep never reaches this point: the lane fails it
+  // first (`run-repair-lane.ts`, `unkeptReauthorOf`), because "no proposal"
+  // would read a repair that was thrown away as one that was never needed.
   if (proof.application.outcome === "no_proposal") return;
   if (proof.application.outcome !== "applied") {
     const statuses = proof.application.adaptations.map((item) => item.statusAfter ?? "unreported");

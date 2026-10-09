@@ -1661,6 +1661,15 @@ run stored when it stored any; a run that stored none, such as a form task,
 is replayed on its goal alone, with zero provider calls
 (`flow-lane/repair/run-repair-lane.ts`).
 
+Core holds every re-author unapplied until the run's judged whole run settles
+it. The marker then says `applied: true`, or carries `notAppliedReason`, one of
+Core's closed codes (`refuted`, `run_failed`, `not_judged` and so on). The
+Lab's `RunHarnessResultReauthor` carries `held` and `notAppliedReason`, and
+only a closed code passes through. A re-author that was made but not kept,
+whether rejected or still held and unsettled, changed nothing. The lane writes
+`snapshots/repair-lane.json` saying so, replays nothing and fails the run. It
+never reads that outcome as `no_proposal`, which passes.
+
 ### What a list read says about itself
 
 A read of zero records is the same record, everywhere else in the bundle,

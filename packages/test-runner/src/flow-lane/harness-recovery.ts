@@ -1,4 +1,4 @@
-import { harnessRecoveryRungs, isCoreCode, isCoreIdentifier, isCoreKind, validateRunHarnessRecovery, type HarnessRecoveryRung, type RunHarnessPatchAttempt, type RunHarnessRecovery, type RunHarnessRecoveryContextSections, type RunHarnessResultReauthor, type RunHarnessResultRepair } from "@fluxiq-web-extension/test-contracts";
+import { harnessRecoveryRungs, harnessResultReauthorNotAppliedReasons, isCoreCode, isCoreIdentifier, isCoreKind, validateRunHarnessRecovery, type HarnessRecoveryRung, type RunHarnessPatchAttempt, type RunHarnessRecovery, type HarnessResultReauthorNotAppliedReason, type RunHarnessRecoveryContextSections, type RunHarnessResultReauthor, type RunHarnessResultRepair } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
 import type { FluxIQHttpOptions } from "../http-control/index.js";
@@ -223,7 +223,19 @@ function resultReauthor(value: unknown): RunHarnessResultReauthor | null | undef
     ...(routed && isCoreKind(record.providerInvocation) ? { providerInvocation: record.providerInvocation } : {}),
     ...(routed && isCoreKind(record.providerResponse) ? { providerResponse: record.providerResponse } : {}),
     ...(routed && Number.isSafeInteger(record.providerStatus) ? { providerStatus: record.providerStatus as number } : {}),
+    // Whether the edit was held for the run's judged whole run, and, for one
+    // that was then not kept, Core's closed reason (t267,
+    // `recovery/refuted-result/held-reauthor.ts`). The reason travels only as
+    // one of those codes and never beside an applied edit: anything else Core
+    // wrote under the key -- a sentence, an id -- is dropped, never carried.
+    ...(routed && typeof record.held === "boolean" ? { held: record.held } : {}),
+    ...(routed && record.applied !== true && isNotAppliedReason(record.notAppliedReason) ? { notAppliedReason: record.notAppliedReason } : {}),
   };
+}
+
+/** One of Core's closed codes for a held re-author that was not kept. */
+function isNotAppliedReason(value: unknown): value is HarnessResultReauthorNotAppliedReason {
+  return typeof value === "string" && (harnessResultReauthorNotAppliedReasons as readonly string[]).includes(value);
 }
 
 /** Core's `resultRepair` marker: whether the result entered the failure entry point, the node it was filed against, and the verdict code that sent it there. */

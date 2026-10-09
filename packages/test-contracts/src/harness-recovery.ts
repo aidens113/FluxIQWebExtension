@@ -176,7 +176,32 @@ export type RunHarnessResultReauthor = {
   providerInvocation?: string;
   providerResponse?: string;
   providerStatus?: number;
+  /**
+   * Whether Core held the edit -- approved, validated, unapplied -- for the
+   * run's judged whole run instead of applying it inside the build (t267, Core
+   * `recovery/refuted-result/held-reauthor.ts`). Absent where Core did not
+   * write it. A held edit that is still not `applied` was never kept.
+   */
+  held?: boolean;
+  /**
+   * Why a held edit was settled unapplied, as one of Core's closed codes
+   * (`harnessResultReauthorNotAppliedReasons`, Core
+   * `service/runtime-adaptation/judged-reauthor.ts`). Absent while the edit is
+   * held and unsettled, once it is applied, and wherever Core wrote something
+   * that is not one of those codes: no free text, id or page data travels here.
+   */
+  notAppliedReason?: HarnessResultReauthorNotAppliedReason;
 };
+
+/**
+ * Core's closed codes for why a held re-author was not kept
+ * (`AutomationStudioJudgedReauthorReason`: `AutomationStudioJudgedPromotionReason`
+ * plus `superseded`). Unlike a refusal word, membership is the gate: the reason
+ * travels only when it is one of these, so nothing Core writes beside it -- a
+ * sentence, an identifier, page text -- can ride along under the key.
+ */
+export const harnessResultReauthorNotAppliedReasons = ["not_rerun", "run_cancelled", "run_failed", "refuted", "not_judged", "run_parked", "run_errored", "apply_failed", "store_unavailable", "superseded"] as const;
+export type HarnessResultReauthorNotAppliedReason = (typeof harnessResultReauthorNotAppliedReasons)[number];
 
 /**
  * Core's words for why a refuted run did not re-enter the build loop
