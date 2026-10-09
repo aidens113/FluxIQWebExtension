@@ -514,7 +514,7 @@ pacer keeps what Core says and changes how often it is said:
   and a thought that changes it is paced like an action. Core's own deciding
   row ("Deciding the next step") is status, and so is the row Core sends when
   the model's answer could not be used or its provider did not answer
-  ("Asking the AI model again", with Core's sentence; since t378), whose
+  (the same title, failed, with Core's sentence; since t378), whose
   sentence is shown; but a decision being made does not
   replace a meaningful line: the step it ran or the stage it is in is held
   through the decision, and "Deciding the next step" shows only when nothing
@@ -694,8 +694,9 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   note is words only, and a note with no words is no message: Core's own look
   before the first decision and a dry run's reset are said by the live line
   while they run, never as a bare heading (live runs 34 and 35 showed "Looking
-  at the page" twice that way). Core's "Asking the AI model again" row is a
-  note with Core's sentence, never a decision of the model's, and the actions
+  at the page" twice that way). Core's failed deciding row with a sentence (the
+  model's answer could not be used, or its provider did not answer) is a
+  note with Core's sentence, headed in the present tense, never a decision of the model's, and the actions
   after it start their own message (since t378, `isModelThought`). There are no folds, disclosures or step counts,
   and no raw tool or node id is shown (`stream/step/words.ts`).
 - **Every action is a card** (`stream/step/action-card.ts`,

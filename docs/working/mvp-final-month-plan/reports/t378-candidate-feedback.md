@@ -157,3 +157,33 @@ in the saved Flow, then playback), and the new card, ending and overlay words on
     their accepted shape: `record_output.process_invalid_dedupe` and `record_output.process_unknown_field` (`where`
     on `sponsored`/`plus`, which are not saved columns).
 - Not run: any Lab, live or provider run; full suites (`pnpm check`, `pnpm test`, Core's whole vitest run).
+
+### 2026-10-09 - before merge: examples off the Lab tasks; provider-unavailable regression (lead, on HEAD b97d5215)
+- Examples (coordinator: the slow-down example mirrored lane D's task). Verdicts on every example the model is shown:
+  the three legacy examples (rename a member, orders awaiting dispatch, export this week's orders) mirror no task,
+  so they are kept. Four candidate examples mirrored tasks and were replaced, same nodes, edges, bindings and numbers:
+  - two shirts with a colour and size into a basket (everything-store kettles, lanes A and B) became a task tracker:
+    search, open, High priority chip, status, estimate, save;
+  - earbuds under 50 on every page (lane C) became gardening books since 2015 in a library catalogue;
+  - friend requests confirmed per row (lane D) became marking overdue invoices as reminded in a billing tool;
+  - the slow-down friend-request loop (lane D) became archiving the Garden Club newsletter's messages in a mail
+    inbox, with the optional notice close, `only after:` wait and `repeat pace: 6 s`.
+  The inline `rating atLeast 4` (lane C's "rated 4.0 or higher") became `amount atLeast 100`. New guard in
+  `plan/tests/flow-script-format.test.ts`: no example script may contain a realistic scenario's site, goods or act
+  word. Fail-first on HEAD's file: "Tests 4 failed | 3 passed" (exactly the four mirrored examples), green after.
+  The framework reference was regenerated (the loop constant's doc comment changed).
+- Regression: `runtime/tests/service-bootstrap/tests/provider-unavailable.test.ts:113` (0 failed "Deciding the next
+  step" rows, expected 3). Cause: t378 W4 retitled the failed decision row "Asking the AI model again", so the
+  started "Deciding the next step" row was no longer closed under its own title, the contract `decisionFailed`
+  exists for. The repeat guard, the brace repair and the decision handlers are not involved. Fix in
+  `activity/observer.ts`: the closing row keeps the title "Deciding the next step" (failed) with W4's plainer label
+  and text. The extension (W12) already heads a failed deciding row in the present tense and treats it as status.
+  `activity/tests/observer.test.ts` now expects the restored title; its own name says it "closes the decision row".
+  `docs/architecture/extension-client.md` is corrected to match.
+- Validation: `npx vitest run .../provider-unavailable.test.ts` -> "Tests 3 passed (3)". `npx vitest run` on
+  `tests/service-bootstrap`, `activity`, `conversations/commands/tests`, `flow-bootstrap`, `llm/deepseek` and
+  `llm/tests/evidence-loop-provider.test.ts` -> "Test Files 188 passed | 1 skipped (189)", "Tests 2267 passed | 2
+  skipped (2269)". Core `tsc --noEmit` exit 0; Core audit "passed (295 warning(s), 708 baselined)"; `pnpm
+  docs:check` "Deterministic framework reference is current."; downstream audit "passed (184 warning(s), 257
+  baselined)". Core dist not rebuilt after these edits; the extension tests were not re-run (they do not read
+  Core's title).
