@@ -9,7 +9,16 @@ export { dispatchClickGesture } from "./click-gesture";
 export { executeAction } from "./execute-action";
 export { pressAgain } from "./ignored-press";
 export { recordedShadowHosts } from "./recorded-shadow-hosts";
-export { TargetResolutionError } from "./resolve-target";
+export { resolveTarget, TargetResolutionError } from "./resolve-target";
+// The assertion's own page reads, shared with the fact check (`../facts/`).
+export {
+  firstMatch as firstMatchInScope,
+  isEnabled as isEnabledControl,
+  isInsideClosedContainer,
+  isVisible as isVisibleElement,
+  readText as readElementText
+} from "./assertion-evaluation";
+export { readChosenState } from "./checkable-state";
 export { actionFailure } from "./results";
 
 export type { ActionResultEvidence } from "./results";

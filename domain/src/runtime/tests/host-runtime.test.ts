@@ -233,10 +233,11 @@ test("a snapshot that never arrived produces no ref rather than a ref pointing a
 // `action-dispatch` is what Core asks of a host before a runtime repair that
 // re-points an acting step may run; without it every executed target override
 // was refused at preflight, in the Lab and the panel alike.
-test("the boundary declares what it can answer, including action dispatch and the expectation seam", () => {
+test("the boundary declares what it can answer, including action dispatch, the expectation seam and fact evaluation", () => {
   const boundary = createWebAutomationHostRuntime(gateway([]).gateway);
-  assert.deepEqual([...boundary.capabilities], ["action-dispatch", "state-snapshot", "state-diff", "expectation-evaluation", "route-state"]);
+  assert.deepEqual([...boundary.capabilities], ["action-dispatch", "state-snapshot", "state-diff", "expectation-evaluation", "fact-evaluation", "route-state"]);
   assert.equal(typeof boundary.expectationEvaluator, "function");
+  assert.equal(typeof boundary.factEvaluator, "function");
   assert.equal(typeof boundary.inspectStateDiff, "function");
 });
 

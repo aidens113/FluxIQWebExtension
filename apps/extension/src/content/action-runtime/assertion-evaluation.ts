@@ -47,6 +47,11 @@
 //     always was. That is how a control withdrawn once its effect is in place
 //     looks -- a "Follow" hidden beside the "Following" that replaced it.
 //
+// The single-element queries below -- the first match in a recorded shadow
+// scope, an element's text, visible, enabled, inside a closed container -- are
+// exported so the zero-wait fact check (`../facts/`) reads the page by the
+// same rules a claim here is judged by, rather than by a second copy of them.
+//
 // The outcome carries its timing as well as its verdict, because without it the
 // verb cannot tell a claim that was false immediately from one that was false
 // for the whole window, and a test cannot tell a wait that ran from a wait that
@@ -195,7 +200,7 @@ function currentElement(target: AssertionTarget): Element | undefined {
  * recorded inside a shadow root -- in the roots its host chain reaches now,
  * resolved again on every attempt so a widget that renders late is still found.
  */
-function firstMatch(selector: string, hosts: readonly string[] | undefined): Element | undefined {
+export function firstMatch(selector: string, hosts: readonly string[] | undefined): Element | undefined {
   if (!hosts?.length) return document.querySelector(selector) ?? undefined;
   for (const root of resolveShadowScope(hosts).roots) {
     const found = root.querySelector(selector);
@@ -221,7 +226,7 @@ function textOutcome(wanted: string, target: AssertionTarget, found: Element | u
 }
 
 /** A field's text is what it holds, not what it renders: `innerText` of an input is empty. */
-function readText(element: Element): string {
+export function readText(element: Element): string {
   const tagName = element.tagName;
   const value = tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT"
     ? (element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).value
@@ -245,7 +250,7 @@ function urlOutcome(expected: string | undefined): AssertionAttempt {
 }
 
 /** Visible as a person would judge it: a box with area, not `display:none`, `visibility:hidden`, or fully transparent. */
-function isVisible(element: Element): boolean {
+export function isVisible(element: Element): boolean {
   const rect = element.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return false;
   const style = viewOf(element).getComputedStyle(element);
@@ -257,7 +262,7 @@ function isVisible(element: Element): boolean {
  * whatever its own style says. The header names the three ways a container
  * closes; anything else that hides an element is the element's own.
  */
-function isInsideClosedContainer(element: Element): boolean {
+export function isInsideClosedContainer(element: Element): boolean {
   const view = viewOf(element);
   const parent = composedParent(element);
   // Visibility is inherited, so an element that is not visible while its parent
@@ -282,7 +287,7 @@ function viewOf(element: Element): Pick<Window, "getComputedStyle"> {
 }
 
 /** `:disabled` covers an ancestor `<fieldset disabled>`; `aria-disabled` covers a control the page only claims is off. */
-function isEnabled(element: Element): boolean {
+export function isEnabled(element: Element): boolean {
   return !element.matches(":disabled") && element.getAttribute("aria-disabled") !== "true";
 }
 
