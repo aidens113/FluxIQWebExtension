@@ -536,6 +536,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Validation: sweep report `fxwork/sweep-1009b/.../reports/sweep-1009b.md`: all 8 commands exit 0; Core `pnpm test` fluxiq 9063 passed (7 skipped), contracts 127, gateway-websocket 10, web 2977; downstream `pnpm check`, `pnpm test` (0 failures) and `pnpm build` (cache reuse) passed; the three load-sensitive files and `lane.test.ts` did not fail.
 - Limits: downstream build was a cache reuse, not a cold rebuild.
 
+### 2026-10-09 - t382 merged: no time-of-day rule for live runs (user); round 2 launches when ready
+- Changed: downstream `ba87bc0f`, pushed. The user: off-peak "should not be a constraint of any kind". The `peak` rule had been an agent's inference from 2026-10-06, later documented as the user's; it cost about 2.5 hours of today's 5-6 hour round (04:00 and 10:00 waits). Removed: `scripts/lab/live-guards/rules/peak.mjs`, its registration, its five tests and override; testing-facility doc, plan Current State and the round 2 brief updated. Lane downstream branches merged dev; the four round 2 leads told to launch as soon as their preflight is ready. Supervisor memory replaced and a global lesson recorded in the brain (`never-present-agent-rules-as-the-users`). Also told the user what the 5-6 hours were: about 3 hours of real work (mostly t378), about 2.5 hours waiting on the peak guard, 30 minutes of a full test run before relaunching.
+- Validation: `node --test scripts/lab/live-guards/tests/*.test.mjs` -> 38/38 pass (43 before, minus the five peak tests); audit passed after regenerating the index; finish gate passed; each lane tree contains dev and has no `peak.mjs`.
+- Limits: none.
+
 ## Open Questions
 
 - Carried over from general-flow-authoring-plan (marked Complete 2026-10-07): P5 binding to an earlier step's output (`$step`) is still refused, and F7, a stored Flow node keeping no `consequences` for the stored-run permission gate, is still open. Schedule them only if an A-D or Phase 1b task needs them.
