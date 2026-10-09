@@ -17,4 +17,4 @@
  */
 
 /** Every rule's name, in the order the rules are asked. */
-export const RULE_NAMES = ["balance", "peak", "behind-dev", "loop", "debug", "unchanged"];
+export const RULE_NAMES = ["balance", "behind-dev", "loop", "debug", "unchanged"];
