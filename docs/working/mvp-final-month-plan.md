@@ -531,6 +531,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Validation: t380 worker: whole `packages/fluxiq` `npx vitest run` 8864 passed, 0 failed; each fixed file 5 runs alone, all exit 0; tsc and structure check clean (supervisor has not rerun it; it merges after the round). Lane sync: `git merge-base --is-ancestor dev HEAD` true on all eight branches.
 - Limits: creation can still time out under heavy parallel load until t381 lands.
 
+### 2026-10-09 - sweep-1009b on dev with t375-t379 and t378: all green; lanes A-D round 2 dispatched for 10:00 UTC
+- Changed: second full sweep of the day (downstream `57094df4`, Core `dcaf8f9f`). Four `lead-xhigh` lane leads dispatched on the round 2 brief (trees synced, see the entry above); paid launches only from 10:00 UTC.
+- Validation: sweep report `fxwork/sweep-1009b/.../reports/sweep-1009b.md`: all 8 commands exit 0; Core `pnpm test` fluxiq 9063 passed (7 skipped), contracts 127, gateway-websocket 10, web 2977; downstream `pnpm check`, `pnpm test` (0 failures) and `pnpm build` (cache reuse) passed; the three load-sensitive files and `lane.test.ts` did not fail.
+- Limits: downstream build was a cache reuse, not a cold rebuild.
+
 ## Open Questions
 
 - Carried over from general-flow-authoring-plan (marked Complete 2026-10-07): P5 binding to an earlier step's output (`$step`) is still refused, and F7, a stored Flow node keeping no `consequences` for the stored-run permission gate, is still open. Schedule them only if an A-D or Phase 1b task needs them.
