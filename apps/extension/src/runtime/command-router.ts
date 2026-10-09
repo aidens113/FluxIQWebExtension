@@ -1,6 +1,10 @@
-import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
+import { webAutomationFactCheckResultPayload, type WebAutomationFactCheckCommand } from "@fluxiq-web-extension/domain/client";
+import type { BrowserActionCommand, BrowserActionResult, ClientGatewayActionResult } from "../shared/protocol";
 import { SESSION_PAGE_LOAD_PACE } from "../background/page-pace";
+import { sendToTab } from "../background/tabs";
 import { browserActionFailure, runBrowserActionCommand } from "./action-runner";
+import { currentAutomationTabId } from "./automation-tab";
+import { runFactCheck } from "./fact-check-runner";
 import type { MergeFrameSnapshots } from "./look-across-frames";
 import { runSnapshotCapture } from "./snapshot-runner";
 
@@ -12,6 +16,12 @@ export type ExtensionRuntimeCommandRouterOptions = {
   attachTabForRecording(tabId: number): Promise<void>;
   captureActiveSnapshot(label: string): Promise<void>;
   sendActionResult(result: BrowserActionResult, tabId?: number, frameId?: number): Promise<void>;
+  /**
+   * Sends a fact check's answer (plan B1) as the gateway result it is. A fact
+   * check is not a browser action, so it has no runtime status, chat card or
+   * recorded event, and does not pass through `sendActionResult`.
+   */
+  sendGatewayResult?(result: ClientGatewayActionResult): Promise<void>;
   /** The background worker's frame merge, which a look that names no frame answers with. */
   mergeFrameSnapshots?: MergeFrameSnapshots;
 };
@@ -45,5 +55,26 @@ export class ExtensionRuntimeCommandRouter {
     } catch (error) {
       await this.options.sendActionResult(browserActionFailure(action, error instanceof Error ? error.message : "Runtime action failed."));
     }
+  }
+
+  /**
+   * Answers a fact check from the page the run stands on -- the automation tab,
+   * or the active one before any action has driven a tab -- with no wait
+   * (`fact-check-runner.ts`). The route never fails the command: a page that
+   * could not be read answers its claims `unknown`, which is the answer.
+   */
+  async evaluateFacts(check: WebAutomationFactCheckCommand): Promise<void> {
+    const startedAt = Date.now();
+    const result = await runFactCheck(check.request, {
+      tabId: currentAutomationTabId() ?? this.options.activeTabId(),
+      send: (tabId, message, frameId) => sendToTab(tabId, message, frameId)
+    });
+    await this.options.sendGatewayResult?.({
+      commandId: check.commandId,
+      status: "succeeded",
+      startedAt,
+      completedAt: Date.now(),
+      payload: webAutomationFactCheckResultPayload(result)
+    });
   }
 }

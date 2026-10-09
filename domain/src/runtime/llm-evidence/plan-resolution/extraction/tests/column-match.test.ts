@@ -116,7 +116,7 @@ test("a column with no plausible candidate is still an honest failure", () => {
   }
   // A name written as a header, where nothing has a header at all.
   assert.deepEqual(keptColumns({ name: "column:Name" }), { ok: false, issue: "web.handle.unknown_field", path: ["fields", "name"] });
-  assert.deepEqual(conditions([{ field: "banana", is: "absent" }]), { ok: false, issue: "web.handle.unknown_field", path: ["where", 0] });
+  assert.deepEqual(conditions([{ field: "banana", is: "absent" }]), { ok: false, issue: "web.handle.unknown_field", path: ["where", 0, "field"] });
 });
 
 test("two columns one name answers to are told apart by the shape the comparison needs", () => {

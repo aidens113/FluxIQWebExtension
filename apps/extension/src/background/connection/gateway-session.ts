@@ -26,6 +26,7 @@ import {
   type JsonObject,
   type ServerCommandPayload
 } from "../../shared/protocol";
+import { webAutomationFactCheckFromGatewayCommand } from "@fluxiq-web-extension/domain/client";
 import { browserActionFromGatewayCommand, gatewayActionResultFromRejection, isWebAutomationActionRejection } from "../../runtime";
 import { compactObject } from "./value-readers";
 
@@ -311,6 +312,19 @@ export class GatewaySession {
     client.on("stop_recording", ({ message }) => handlers.onCommand({ ...message.payload, command: "stop_recording" }, message.id));
     client.on("capture_snapshot", ({ message }) => handlers.onCommand({ ...message.payload, command: "capture_snapshot" }, message.id));
     client.on("execute_action", ({ message }) => {
+      // A fact check is not a web action: it is answered by its own route
+      // (`runtime/fact-check-runner.ts`), or refused here when unreadable.
+      const facts = webAutomationFactCheckFromGatewayCommand(message.payload);
+      if (facts !== undefined) {
+        if (isWebAutomationActionRejection(facts)) {
+          void this.send("client.action_result", gatewayActionResultFromRejection(facts)).catch((error: unknown) => {
+            this.deps.reportError(error instanceof Error ? error.message : "Could not report a rejected fact check.");
+          });
+          return;
+        }
+        handlers.onCommand({ command: "evaluate_facts", check: facts }, message.id);
+        return;
+      }
       const action = browserActionFromGatewayCommand(message.payload);
       // An unknown action type is answered here; nothing is dispatched to the page.
       if (isWebAutomationActionRejection(action)) {
