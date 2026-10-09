@@ -230,9 +230,6 @@
     "imports": {
       "domain/src/index.ts": 2,
       "domain/src/web-panel-host.ts": 2,
-      "apps/extension/src/runtime/action-runner.ts": 1,
-      "domain/src/actions/capabilities.ts": 1,
-      "domain/src/client/index.ts": 1,
       "domain/src/host.ts": 1
     },
     "naming": {
