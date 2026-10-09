@@ -1,9 +1,9 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: Lane A has one Lab-verified pass in candidate mode (two consecutive are needed); every known fix is merged and pushed; lanes A-D are prepared for the next round.
+Status detail: Lane A passed once more in candidate mode today (round 2 run 1) but its second run failed, so no lane is qualified; t375-t379 and t382 merged; the round 2 causes and t380/t381 are next; work continues in Cline.
 Created: 2026-10-05
-Last updated: 2026-10-08
+Last updated: 2026-10-09
 Owner: Senior supervisor agent
 Scope: The ordered plan from 2026-10-05 to the polished-MVP deadline of 2026-11-10: what is done, what is held on unmerged branches or dirty trees, what must be integrated and pushed, and the week-by-week work to pass the 30-day plan's Final MVP Acceptance Test. It does not redo intake already recorded in the 2026-10-03 handoff, and it does not itself run live provider calls.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/mvp-final-month-plan.md
@@ -13,100 +13,111 @@ Related: [30-day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 
 ## Current State
 
-**Where we are (2026-10-08 07:30 UTC, Claude supervisor, session handed off).** Deadline November 10,
-feature freeze October 29. Heads on `dev`: Core `10d29a67`, downstream `ae403ecc`,
-both pushed. Lane A has its first fully Lab-verified pass in candidate mode
-(qualifying run 1, `run-muz3cqdh-927fd2f1`: trial yes, both judges yes, promoted and
-applied, the Lab's own playback held all four oracle facts, zero-call replay passed,
-$0.021). Qualifying run 2 on the same product pair failed on a model-invented final
-check, so lane A is not yet qualified (two consecutive passes on one product pair
-are required). Lanes B, C and D have not yet run in candidate mode.
+**Where we are (2026-10-09 08:50 UTC, Claude supervisor; the user is moving the work to Cline).** Deadline
+November 10, feature freeze October 29. Core `dev` `dcaf8f9f`, downstream `dev` as pushed with this entry; both
+clean and pushed. No agent, Lab run, build or test process is running. About 5-6 of the 26 Final MVP Acceptance
+items are proven live, all on one site (crossborder). Today added onboarding, Stop / Take over / Hand back, the
+adaptation unblock and the build-feedback fixes in code; none of those is proven live yet.
 
-**How a build works now (candidate mode).** The model explores, then writes the whole
-Flow as a script (loops, optional steps and desired-state choices included) and
-submits it; Core tests the exact submission once through the normal runtime from a
-freshly reset start; the build judge reads only that test's evidence and needs a
-confirming second yes; a passing candidate is promoted through the normal proposal
-and apply path and the chat says it is ready. Legacy mode remains, chosen by
-`FLUXIQ_AUTHORING_MODE` (default `legacy`); the Lab chooses the mode per run with
-`--authoring-mode`. Candidate mode is not yet the product default: switch it once
-lane A qualifies in candidate mode (see Next order).
+**How a build works (candidate mode).** The model explores, writes the whole Flow as a script and submits it;
+Core tests it once from a reset start; the build judge reads that test's evidence and needs a confirming second
+yes; a passing candidate is promoted through the normal proposal path. The product default is still
+`FLUXIQ_AUTHORING_MODE=legacy`; the Lab picks candidate with `--authoring-mode candidate`. Switch the default once
+lane A qualifies.
 
-**Reliability rules in force (user).** Every node makes its first attempt plus 3
-automatic retries on every path (exploration, mid-build tests, trials, playback),
-waiting for its target first; a lasting act whose effect is uncertain is never
-repeated; a build never gives up on a recoverable failure (re-tests, recovery
-sentences, early stop on repeated identical refusals). Optional steps never fail a
-trial or a playback. Both rules and the realistic-scenarios rule are in AGENTS.md.
+**Live results today ($0.124 round 1 at 04:00 UTC, $0.282 round 2 at 08:25 UTC; no lane qualified).**
 
-**What landed on 2026-10-07/08 (all merged, verified by the supervisor, pushed).**
-
-| Area | Units | Result |
+| Lane | Round 1 | Round 2 |
 | --- | --- | --- |
-| Creation path | t338 | Chat and panel builds work again (t330 had made them draft-only) |
-| Candidate mode | t339 U1, t340 U2+U3, t346, t348, t354, t356-t358, t362, t364, t365, t367-t370, t373 | Format, trial, judge, promotion, chat apply, loops, optional steps, desired-state choice on any chosen-state control, view-history handles, plain endings and cards, Lab admission and checks |
-| Retries and lasting acts | t355, t359, t361, t371 | 3 retries everywhere; lasting acts checked before any retry; optional steps skipped without spending budget |
-| Lab | t344, t345, t347, t353, t363, t366, t367 | Core identity check passes; only the ten realistic scenarios run; Flow runs start on their own tab; stale-Core merges refused; trial overlay says testing |
-| Hygiene | t341, t343, t351, t352, t360, t372, t374 | Stale tests fixed; new `as never` casts and new import cycles fail the build; fresh-tree `pnpm check` works; the framework reference changes only with the public surface |
+| A crossborder hub-to-cart | `run-mv0fu9uq` $0: Lab stop, Core's `list-flows` too slow (fixed, t377) | run 1 `run-mv0pb9sm-248ba49f` **passed** (oracle 4/4, accepted, zero-call replay passed, $0.045); run 2 `run-mv0plabe-f0616c26` failed ($0.091): the script opened the item with `t14` (home page) instead of `t647`, because a superseded view entry keeps an act's words but not its handle (Core `runtime/llm/context-window.ts` ~66-80); its trials stopped at step 4 |
+| B bigbox pickup | `run-mv0fu9pb` $0.043: first script refused (format vs checks; fixed, t378) | not launched: Claude Code's permission system refused the lead's paid launch; preflight ready, command in `fxwork/t262/.../reports/lane-b-candidate.md` |
+| C everything-store earbuds | `run-mv0fuotv` $0.033: `repeat most:` refused (fixed, t378) | `run-mv0pa79q-ef91811b` $0.086: explored all 5 pages, never submitted; at 3 decisions left the wrap-up offers no tools, so `core.submit_candidate` was withdrawn (`runtime/llm/evidence-loop.ts:641-642`) |
+| D social-feed confirm requests | `run-mv0fuual` $0.047: confirmed all 8 rows; rate limit absorbed but unlearned (fixed, t378) | `run-mv0pcfaf-cd251bdc` $0.061: the listing `where` worked; a `web.handle.unknown_field` issue got the not-seen-handle advice (`flow-bootstrap/candidate/submission-refusal.ts:51`, :138-142) and the domain never named the bad field, so the same script was resent 4 times |
 
-Sweeps: sweep-1007 found 10 Core and 4 extension failures plus a fresh-tree check
-failure (all fixed); sweep-1008 found downstream fully clean and 12 Core failures in
-one file from an import cycle (fixed in t374).
+Evidence is committed on each lane branch: A `fxwork/t342` (report `t342-lane-a-baseline.md` rounds 1-8 and the
+debugs for `run-mv0pb9sm` and `run-mv0plabe`; its round 2 section was not written before the stop), B
+`fxwork/t262` (`lane-b-candidate.md`), C `fxwork/t274` (`lane-c-candidate.md`, `lane-c-candidate-ui-r2.md`), D
+`fxwork/t275` (`lane-d-candidate*.md`, `lane-d-r2-*.md`); debugs under
+`docs/working/language-driven-flow-loop-plan/debugs/` in each lane tree.
 
-**Parked: Codex's production-integrity chain** (closed writer host, original-ID
-adoption, all-writer capture, pinned reads, single CAS promoter, per-family
-requirement grammar, required-mode executor). Landed code stays dormant; t334, t335
-and t337 are WIP commits on their branches. The durable command journal belongs to the
-October 29 - November 4 hardening window. Evidence:
-[infrastructure chain](./mvp-final-month-plan/reports/intake-1007/infra-chain.md).
+**Merged today (verified, pushed).** t375 adaptation unblock; t376 run controls and onboarding (Chat tab during
+runs, neutral record button); t377 workspace reads (Flow listing 10.8 s -> 64 ms, traces store each input once,
+Lab reads retry); t378 candidate refusals name the script line, the format matches the checks, interruptions
+adapt the Flow (guarded step in a loop, `only after:`, `repeat pace:`), guidance examples never mirror a Lab task
+(guard test); t379 paired tokens held to their bound domain (the user's extension must be approved once more);
+t382 removed the Lab's peak-hours guard; the `lane.test.ts` clock fix. Full suites: sweep-1009 (one stale test,
+fixed) and sweep-1009b (all 8 commands green).
 
-**In flight.** Nothing: no worker or Lab process is running. The session ended before
-the 10:00 UTC off-peak window, so the four lanes did not launch (paid runs need a
-live supervisor). Lane trees are prepared: A in `fxwork/t342` (slot 2), B in
-`fxwork/t262` (slot 3), C in `fxwork/t274` (slot 1), D in `fxwork/t275` (slot 4), all
-synced to the heads above; re-sync them if dev has moved before launching.
+**Open branches.**
+- t380 `task/t380-load-sensitive-tests` (Core `ebc3a1b3`, downstream `2311decf`, tree `fxwork/t380`): verified
+  (its three fixed files 23/23 again today; the worker's whole `packages/fluxiq` run 8864 passed). Ready:
+  `pnpm task finish t380` here, then the same in Core.
+- t381 `task/t381-sqlite-connection-reuse` (Core `08eafd1a` WIP, tree `fxwork/t381`): a Flow create/save opens
+  `global.sqlite` once instead of 24-25 times (about 30-40% faster); 111 narrow tests pass, including a
+  two-process test. Owed before merge: rebuild Core's dist, the canonical-authority process tests, one whole
+  `packages/fluxiq` run. Also the likely cure for lane B's practice run, whose recording save outlasted the
+  Lab's 90 s wait.
+- Lane branches `task/t342-lane-a-baseline`, `task/t262-mvp-live-continuation`, `task/t274-live-lane-c`,
+  `task/t275-live-lane-d` (both repos each) hold evidence only.
 
 **Next order.**
+1. One Core task fixing the round 2 causes, partitioned by file: C's wrap-up keeps `core.submit_candidate` and
+   starts early enough to submit (`evidence-loop.ts:641-642`, wording `loop-budget.ts:133-135`); D's refusal
+   advice per code (`submission-refusal.ts:51`, :138-142) and the domain naming the bad field and the step's
+   columns (`domain/.../plan-resolution/extraction/conditions.ts` ~216, `columns.ts:265`); A's superseded view
+   entries keep each act's handle (`context-window.ts` ~66-80) and trial feedback says when a step ran on a
+   different page; C's R2-2 to R2-5 (`authoring-loop.ts:44` names the submit tool; one page plus one Next page is
+   enough, domain `system-instructions/instructions.ts:53`; `core.submit_candidate` is not `observe`,
+   `look-withdrawal.ts:85`; endings name their cause, `refusal-codes.ts`, `conversations/commands/progress.ts:163`);
+   A run 1's plain-text consent paragraph saved as the chat launcher (domain `plan-resolution/target-packets.ts`).
+   The t383 brief below holds C's and D's parts.
+2. Merge t380; finish and merge t381.
+3. Lanes round 3 on the new dev: A needs two consecutive passes on one product pair (run 2 right after a passing
+   run 1); B's first candidate run; C and D. Paid launches need the user's approval of the Lab command.
+4. Dispatch the briefs t384-t391 below (Open in FluxIQ and Firefox popup; adaptation live proof; candidate
+   follow-ups; recorder targets in shadow roots, seen today in lane A's free practice run; run follow-ups;
+   extraction UI; install and release proof; breadth plan). The `runtime/llm` 108-module import cycle waits until
+   the item 1 task merges.
+5. After lane A qualifies: candidate becomes the default authoring mode; then the adaptation chain on three
+   sites, breadth across the ten sites and 67 tasks, UX, the October 29 freeze, hardening, RC November 5-10.
 
-1. Lane A qualifying runs on this product pair (two consecutive passes
-   plus zero-call replays), and first candidate probes on lanes B, C and D in
-   parallel (four live lanes allowed). Product source stays frozen while lane A's
-   streak is open.
-2. Debug every run fully; fix causes on task branches; merge between streaks, never
-   inside one.
-3. When lane A qualifies in candidate mode, make candidate the default authoring
-   mode; then qualify B, C and D (two consecutive passes each).
-4. Then Phase 1b (other realistic tasks, recording beside instructions), the
-   adaptation chain (create, drift, diagnose, repair, verify, persist, resume,
-   reuse on three sites), breadth across the ten sites and the 67 tasks, UX, the
-   October 29 freeze, hardening, and the November 5-10 release candidate.
+**Standing user rules (binding on any agent; several lived only in Claude's private memory until today).**
+- No time-of-day rule for live runs (2026-10-09); launch when ready. Peak pricing matters only when debugging a
+  ceiling stop. A rule an agent derived is never presented as the user's.
+- A Flow may spend at most $0.10 (`FLUXIQ_LLM_RUN_COST_CEILING_USD`), counted in billed dollars; never cap model
+  output. Paid runs only with a live supervisor; stop at the first balance error; no relaunch loops.
+- Live runs: only the ten realistic scenarios; headed, visible browsers; started by typing into the real extension
+  chat; one attempt per launch; every run debugged fully (every step logged as files) before a rerun; lane trees
+  synced to dev and rebuilt first; up to four lanes at once; a live failure is a product or Lab defect, never
+  machine load; review the UI in every live loop.
+- Every node: first attempt plus 3 automatic retries on every path; a lasting act with an uncertain effect is
+  never blindly repeated; a build never gives up on a recoverable failure.
+- When a test run meets an interruption (a "going too fast" popup), the build adapts the Flow: a guarded
+  wait/dismiss/continue step inside the loop and a pace that grows after a rate limit, kept in the saved Flow.
+- The extension is chat-first: every step is its own message with its reasoning and a card with an icon naming
+  what it acted on; the panel switches to the Chat tab when a run starts; a red dot only means recording.
+- Recording is evidence beside mandatory instructions, never blind replay; recording-built Flows wait until A-D.
+- Flows are authored as general structure (loops, row-bound steps, parameters); runtime routes by page state.
+- No permission grants for model calls; only genuinely risky acts (move money, delete, send) ask the person.
+- Typed nodes first; JS only after about three typed failures, scored as partial success; requests OFF by
+  default; no debugger for JS.
+- Model guidance never mirrors a realistic scenario's task (AGENTS.md; guard test in Core).
+- Full suites at most twice a day, in the background; each change gets only the tests beside it, its packages'
+  typechecks and the structure audit.
+- Status reports in plain English; answer a direct question first; announce before acting; act on a
+  recommendation instead of asking; keep going until the work is done.
 
-**Known follow-ups (queued, not started).** Trial records keep only the deciding
-trial's verdict (Core promotion change); `metadata.optional` alone is outside the
-optional-step rule; the 108-module `runtime/llm` import cycle should be broken up;
-the candidate view record is not persisted on the stored draft; the recording lane's
-repeated busy press needs Core recording import to carry `sometimesPresent`; the
-Lab's `unchanged` guard treats a Lab-side failure as a product failure (design).
+**Continuing in Cline.** `.clinerules/fluxiq.md` (this commit) points Cline at `AGENTS.md`, the global rules in
+`F:\!AgentBrain`, this Current State and the briefs. Cline has no worker or lead subagents: where AGENTS.md says
+"dispatch a worker", do the work yourself on a task branch (`pnpm task start <slug> --worktree --core`, then
+`pnpm task finish <id>` here and in Core), one unit at a time, and record findings, decisions and validation in
+this document as you go. Cline asks the user before each command, which also covers paid Lab launches.
 
-**Live acceptance stays strict.** Each A-D lane needs two consecutive independent
-creation passes on the same source/build pair plus separate zero-call saved-Flow
-replays, exact oracles and truthful product acceptance. Up to four headed,
-supervised, one-attempt chat-started lanes; no relaunch loop. Flash
-default and $0.10 Lab ceiling stay binding. Unknown, withheld or unperformed outcomes
-and old-revision evidence cannot promote.
-
-**User decisions preserved.** Recording is evidence beside mandatory instruction
-and waits for A-D. Direct requests OFF by default in config and Settings. Typed
-nodes first; JS last resort after about three typed failures, scored as partial
-success that used JS. No debugger for JS; network capture debugger only if
-absolutely needed with requests enabled. Full suites at most twice daily; narrow
-gates per change; no user-panel management unless explicitly authorized.
-
-**Pointers.** Order of work: [consultant revision](./mvp-final-month-plan/consultant-revision.md).
-Live lane evidence: the t342 report in `fxwork/t342` (rounds 1-7) and its debug
-files. Codex's Current State and parked briefs:
-[2026-10-07 archive](./mvp-final-month-plan/archive/2026-10-07-codex-current-state-and-parked-briefs.md).
-Working documents audit: [intake C](./mvp-final-month-plan/reports/intake-1007/working-docs-audit.md).
+**Pointers.** Order of work: [consultant revision](./mvp-final-month-plan/consultant-revision.md). Gap map:
+[mvp-gap-map](./mvp-final-month-plan/reports/mvp-gap-map.md) (2026-10-05). Adaptation:
+[audit](./mvp-final-month-plan/reports/adaptation-loop-audit.md) and
+[t375 report](./mvp-final-month-plan/reports/t375-adaptation-unblock.md). UX designs:
+[ux-mvp-design](./mvp-final-month-plan/reports/ux-mvp-design.md). Lab rules: `docs/architecture/testing-facility.md`.
 
 ---
 
@@ -552,6 +563,11 @@ Earlier verified units, decisions and ledger detail remain in [the execution arc
 - Changed: downstream `ba87bc0f`, pushed. The user: off-peak "should not be a constraint of any kind". The `peak` rule had been an agent's inference from 2026-10-06, later documented as the user's; it cost about 2.5 hours of today's 5-6 hour round (04:00 and 10:00 waits). Removed: `scripts/lab/live-guards/rules/peak.mjs`, its registration, its five tests and override; testing-facility doc, plan Current State and the round 2 brief updated. Lane downstream branches merged dev; the four round 2 leads told to launch as soon as their preflight is ready. Supervisor memory replaced and a global lesson recorded in the brain (`never-present-agent-rules-as-the-users`). Also told the user what the 5-6 hours were: about 3 hours of real work (mostly t378), about 2.5 hours waiting on the peak guard, 30 minutes of a full test run before relaunching.
 - Validation: `node --test scripts/lab/live-guards/tests/*.test.mjs` -> 38/38 pass (43 before, minus the five peak tests); audit passed after regenerating the index; finish gate passed; each lane tree contains dev and has no `peak.mjs`.
 - Limits: none.
+
+### 2026-10-09 - Handoff to Cline: round 2 results, everything stopped and written down
+- Changed: round 2 (08:25 UTC, no time-of-day rule): lane A run 1 `run-mv0pb9sm-248ba49f` passed (oracle 4/4, accepted, zero-call replay passed, $0.045), run 2 `run-mv0plabe-f0616c26` failed ($0.091, wrong item handle from a superseded view); lane C `run-mv0pa79q-ef91811b` failed ($0.086, wrap-up withdrew the submit tool); lane D `run-mv0pcfaf-cd251bdc` failed ($0.061, wrong refusal advice for `web.handle.unknown_field`); lane B not launched (Claude Code's permission system refused the lead's paid launch). The user asked for full development, then stopped the session to continue in Cline. Stopped: t381 (WIP committed `08eafd1a`), the t383-t386 starts (no work yet; abandoned with `pnpm task abandon`, briefs kept), lane leads A and D mid-debug (evidence committed on lane branches), the worktree-creation job and both monitors. Current State rewritten for a Cline session: open branches, next order, and every standing user rule written into this document (several were only in Claude's private memory). Added `.clinerules/fluxiq.md`.
+- Validation: supervisor. `node scripts/structure-audit.mjs` (downstream) -> "passed (184 warning(s), 257 baselined)"; Core `node scripts/structure-audit.mjs` -> "passed (295 warning(s), 708 baselined)"; `git status --porcelain` empty in both checkouts and every remaining task and lane tree after the evidence commits; `dev` equals `origin/dev` in both repositories before this commit; PowerShell process query for node.exe with fxwork or FluxIQ in its command line -> none.
+- Limits: lane A's round 2 report section was not written (its debugs are committed); t381's whole-package run is owed; no lane qualified.
 
 ## Open Questions
 
