@@ -12,6 +12,11 @@
 // or the person hides the overlay, and waiting for the person never fades.
 // A detail that only repeats the headline is not drawn (U2, `isHeadlineEcho`).
 //
+// A run held for the person (Take over: `waiting` in phase `paused`) is drawn
+// as paused, and its detail says how to let it go on. The overlay takes no
+// input by design, and Firefox's popup is closed while the person works on the
+// page, so the words point back to the panel.
+//
 // The mark and its colour follow the headline, not Core's phase: a build is
 // amber and a run blue for as long as it works, and only settling changes
 // them. Core's phase flips between thinking and exploring every second or two
@@ -20,6 +25,9 @@
 
 import { cutAtWord, isHeadlineEcho, type ActivityDisplay, type ActivityOverlayPreference } from "../../shared/activity";
 import { ACTIVITY_PHASE_APPEARANCE, type ActivityPhaseAppearance, type ActivityPhaseMark } from "./phase-appearance";
+
+/** The overlay's detail while a run is held for the person. */
+const PAUSED_DETAIL = "Open FluxIQ and press Hand back";
 
 /** The most characters of one line the overlay renders, cut where a word ends. The background already bounds it; this bounds a misbehaving sender. */
 const MAX_LINE = 160;
@@ -42,7 +50,7 @@ export function activityOverlayView(display: ActivityDisplay | null, preference:
   if (!display || preference === "hidden") return null;
   const appearance = appearanceOf(display);
   const headline = bounded(display.headline) || appearance.name;
-  const detail = bounded(display.detail);
+  const detail = isHeld(display) ? PAUSED_DETAIL : bounded(display.detail);
   return {
     mode: preference === "collapsed" ? "collapsed" : "expanded",
     mark: appearance.mark,
@@ -56,9 +64,15 @@ export function activityOverlayView(display: ActivityDisplay | null, preference:
 
 function appearanceOf(display: ActivityDisplay): ActivityPhaseAppearance {
   if (display.outcome === "failed") return ACTIVITY_PHASE_APPEARANCE.failed;
+  if (isHeld(display)) return ACTIVITY_PHASE_APPEARANCE.paused;
   if (display.outcome === "waiting") return ACTIVITY_PHASE_APPEARANCE.waiting_permission;
   if (display.outcome === "done") return ACTIVITY_PHASE_APPEARANCE.done;
   return display.subjectKind === "run" ? ACTIVITY_PHASE_APPEARANCE.running : ACTIVITY_PHASE_APPEARANCE.building;
+}
+
+/** A run Core holds for the person: waiting, in the paused phase. */
+function isHeld(display: ActivityDisplay): boolean {
+  return display.outcome === "waiting" && display.phase === "paused";
 }
 
 /**

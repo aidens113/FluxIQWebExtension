@@ -19,7 +19,8 @@
 // next successful read. A run, a run's detail and an export each fail into
 // their own row, never into the list.
 
-import { AUTOMATION_PANEL_MESSAGES as MESSAGES, type ExtensionStatus } from "../../shared/protocol";
+import { RUNTIME_MESSAGES } from "../../shared/constants";
+import { AUTOMATION_PANEL_MESSAGES as MESSAGES, type ExtensionStatus, type PanelRelayResponse } from "../../shared/protocol";
 import type { PanelStore } from "../state";
 import { automationRows } from "./rows";
 import type { AutomationRow, RunDataset, RunDetail, RunReply, RunSummary } from "./types";
@@ -42,9 +43,15 @@ export type AutomationRowView = {
   datasets: readonly RunDataset[];
   runId?: string | undefined;
   running: boolean;
+  /** A run of this automation is in progress, from this panel's Run or as FluxIQ last listed it, so Stop is offered. */
+  stoppable: boolean;
+  /** Stop's state while `stoppable`: sending, sent and waiting for the run to end, or failed. */
+  stop?: AutomationStopState | undefined;
   exporting: boolean;
   notice?: AutomationRowNotice | undefined;
 };
+
+export type AutomationStopState = "stopping" | "requested" | "failed";
 
 export type AutomationsState = {
   /** Local rendered-control lease; never sent to FluxIQ. */
@@ -71,6 +78,12 @@ export type AutomationsController = {
   /** The automation the person opened, whose last run's detail is read; undefined for none. */
   focus(flowId: string | undefined, owner?: number): Promise<void>;
   run(flowId: string, owner?: number): Promise<void>;
+  /**
+   * Stops this automation's run in progress: by its run id when known, else
+   * (a Run from this panel, whose id arrives only with its reply) every active
+   * run of the project, which is one run at a time.
+   */
+  stop(flowId: string, owner?: number): Promise<void>;
   exportDataset(flowId: string, runId: string, datasetId: string, format: ExportFormat, owner?: number): Promise<void>;
 };
 
@@ -105,6 +118,7 @@ export function createAutomationsController(
   let runningFlowId: string | undefined;
   let focused: string | undefined;
   const exporting = new Map<string, Operation>();
+  const stops = new Map<string, { op: Operation; state: AutomationStopState }>();
   const notices = new Map<string, AutomationRowNotice>();
   const replies = new Map<string, RunReply>();
   const details = new Map<string, RunDetail>();
@@ -133,6 +147,7 @@ export function createAutomationsController(
   function rowView(row: AutomationRow): AutomationRowView {
     const run = lastRun(row);
     const running = runningFlowId === row.flowId;
+    const stoppable = running || (run !== undefined && factsOf(run).outcome === "running");
     const lines = running ? ["Running..."] : run === undefined ? ["Not run yet"] : runSummaryLines(factsOf(run));
     return {
       flowId: row.flowId,
@@ -141,6 +156,8 @@ export function createAutomationsController(
       datasets: running || run === undefined ? [] : details.get(run.runId)?.datasets ?? [],
       runId: run?.runId,
       running,
+      stoppable,
+      stop: stoppable ? stops.get(row.flowId)?.state : undefined,
       exporting: exporting.has(row.flowId),
       notice: notices.get(row.flowId)
     };
@@ -173,6 +190,7 @@ export function createAutomationsController(
     running = undefined;
     runningFlowId = undefined;
     exporting.clear();
+    stops.clear();
     for (const id of detailReads.keys()) if (!details.has(id)) detailsAsked.delete(id);
     detailReads.clear();
   }
@@ -243,6 +261,19 @@ export function createAutomationsController(
     if (row !== undefined && run !== undefined && needsDetail(run)) await loadDetail(row.flowId, run.runId);
   }
 
+  // The id of this automation's run in progress: from what is on screen, or
+  // for a Run from this panel (whose reply carries the id only once the run
+  // ends) from a fresh read of the runs. Undefined when neither names one.
+  async function runningRunId(flowId: string): Promise<string | undefined> {
+    const row = rowFor(flowId);
+    const shown = row === undefined ? undefined : lastRun(row);
+    if (shown !== undefined && factsOf(shown).outcome === "running") return shown.runId;
+    if (runningFlowId !== flowId) return undefined;
+    const result = await request<unknown>({ type: MESSAGES.listAutomations });
+    const listed = result.ok ? automationRows(readCore.record(readCore.record(result.value)?.payload)).find((candidate) => candidate.flowId === flowId)?.lastRun : undefined;
+    return listed !== undefined && runFacts({ run: listed }).outcome === "running" ? listed.runId : undefined;
+  }
+
   function exportable(flowId: string, runId: string, datasetId: string): boolean {
     const row = rowFor(flowId);
     return row !== undefined && lastRun(row)?.runId === runId && details.get(runId)?.datasets?.some((data) => data.datasetId === datasetId) === true;
@@ -283,7 +314,7 @@ export function createAutomationsController(
     async run(flowId, owner) {
       if (!leased(owner) || running || working || !connected || !rowFor(flowId)) return;
       if (runUnsupported) { notices.set(flowId, { sentence: "Run it in FluxIQ.", openFluxIQ: true }); hooks.onChange(); return; }
-      const op = operation(); running = op; runningFlowId = flowId; notices.delete(flowId); hooks.onChange();
+      const op = operation(); running = op; runningFlowId = flowId; notices.delete(flowId); stops.delete(flowId); hooks.onChange();
       if (!current(op) || running !== op) return;
       let reply: RunReply | undefined;
       try {
@@ -299,11 +330,28 @@ export function createAutomationsController(
       } catch {
         if (current(op) && running === op) notices.set(flowId, { sentence: "Couldn't run this automation. Try again.", openFluxIQ: false });
       } finally {
-        if (running === op) { running = undefined; runningFlowId = undefined; hooks.onChange(); }
+        if (running === op) { running = undefined; runningFlowId = undefined; stops.delete(flowId); hooks.onChange(); }
       }
       if (!current(op)) return;
       await refresh(op.owner);
       if (current(op) && op.focus === focusRevision && reply && !detailsAsked.has(reply.run.runId) && !detailUnsupported) await loadDetail(flowId, reply.run.runId);
+    },
+    async stop(flowId, owner) {
+      const row = rowFor(flowId);
+      const held = stops.get(flowId)?.state;
+      if (!leased(owner) || !connected || row === undefined || !rowView(row).stoppable || held === "stopping" || held === "requested") return;
+      const op = operation(); const entry = { op, state: "stopping" as AutomationStopState }; stops.set(flowId, entry); hooks.onChange();
+      const live = () => current(op) && stops.get(flowId) === entry;
+      try {
+        const runId = await runningRunId(flowId);
+        if (!live()) return;
+        const result = await request<PanelRelayResponse>({ type: RUNTIME_MESSAGES.panelStopRun, ...(runId === undefined ? {} : { runId }) });
+        if (!live()) return;
+        entry.state = result.ok && result.value?.ok === true ? "requested" : "failed";
+      } catch {
+        if (live()) entry.state = "failed";
+      }
+      if (live()) hooks.onChange();
     },
     async exportDataset(flowId, runId, datasetId, format, owner) {
       if (!leased(owner) || !connected || exporting.has(flowId) || !exportable(flowId, runId, datasetId)) return;

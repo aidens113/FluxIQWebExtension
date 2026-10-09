@@ -240,6 +240,23 @@ export type PanelStopRunRequest = {
   flowId?: string | undefined;
 };
 
+/**
+ * `panelTakeOverRun` (`pause-runtime-session` with `takeControl: true`) and
+ * `panelHandBackRun` (`resume-runtime-session` with `afterManualAction: true`).
+ * The run must be named; the project defaults to the paired one. The reply is
+ * Core's run-control answer `{ runId, sessionStatus, live, runControl, progress }`.
+ */
+export type PanelTakeOverRunRequest = {
+  projectId?: string | undefined;
+  runId: string;
+};
+
+/** `panelHandBackRun`: see `PanelTakeOverRunRequest`. */
+export type PanelHandBackRunRequest = {
+  projectId?: string | undefined;
+  runId: string;
+};
+
 /** `panelSaveSettings`: settings to store without connecting. */
 export type PanelSaveSettingsRequest = { settings: Partial<FluxIQSettings> };
 

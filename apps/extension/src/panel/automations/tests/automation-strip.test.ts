@@ -34,10 +34,10 @@ async function focused(body: (doc: { activeElement: FakeElement; focusCalls: num
 }
 
 function setup() {
-  let state: AutomationsState = { ownerRevision: 0, mode: "list", working: false, runInFlight: false, rows: [{ flowId: "f", name: "Orders", runId: "r", lines: ["Done"], running: false, exporting: false, datasets: [{ datasetId: "a", label: "Alpha" }, { datasetId: "b", label: "Beta" }] }] };
+  let state: AutomationsState = { ownerRevision: 0, mode: "list", working: false, runInFlight: false, rows: [{ flowId: "f", name: "Orders", runId: "r", lines: ["Done"], running: false, stoppable: false, exporting: false, datasets: [{ datasetId: "a", label: "Alpha" }, { datasetId: "b", label: "Beta" }] }] };
   const calls: unknown[][] = [];
   const controller: AutomationsController = {
-    state: () => state, observe: () => false, setWorking: () => {}, refresh: async () => {}, focus: async () => {}, run: async () => {},
+    state: () => state, observe: () => false, setWorking: () => {}, refresh: async () => {}, focus: async () => {}, run: async () => {}, stop: async () => {},
     exportDataset: async (...args) => { calls.push(args.slice(0, 4)); state = { ...state, rows: state.rows.map((row) => ({ ...row, exporting: true })) }; strip.draw(); }
   };
   let requestCalls = 0;
@@ -99,11 +99,11 @@ test("new run identity gets current arguments and removal selects next surviving
 test("disabled Run falls back to Open and external/hidden focus is untouched", async () => focused((doc) => {
   const view = setup();
   view.exports()[0]!.focus();
-  view.update({ running: true });
+  view.update({ running: true, stoppable: true });
   assert.equal(doc.activeElement, view.root.byClass("open-fluxiq")[0]!.children[0]);
   const outside = fake(document.createElement("input"));
   outside.focus();
-  view.update({ running: false });
+  view.update({ running: false, stoppable: false });
   assert.equal(doc.activeElement, outside);
   const button = view.exports()[0]!;
   button.focus();

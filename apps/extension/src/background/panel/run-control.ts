@@ -7,8 +7,15 @@
 // them: a person pressing Stop means "stop what FluxIQ is doing here", and a
 // project runs one adaptive run at a time. Stopping removes nothing, so no
 // permission is asked (Core registers it as `authoring`).
+//
+// Take over and Hand back hold a live run with the page handed to the person
+// (`pause-runtime-session`, `takeControl: true`) and let it go on from where it
+// stopped (`resume-runtime-session`, `afterManualAction: true`). Both need the
+// run named: unlike Stop there is no "every run" reading, because handing the
+// page over is about one run the person is watching. Only the named fields are
+// sent; anything else in the panel's message stays here.
 
-import type { PanelRelayResponse, PanelStopRunRequest } from "../../shared/protocol";
+import type { PanelHandBackRunRequest, PanelRelayResponse, PanelStopRunRequest, PanelTakeOverRunRequest } from "../../shared/protocol";
 import type { PanelRelayContext } from "./relay-context";
 import { relayFailure } from "./relay-failure";
 
@@ -44,6 +51,29 @@ export async function stopRun(message: Partial<PanelStopRunRequest>, context: Pa
     runtimeSessions.push((stopped.payload as { runtimeSession?: unknown } | null)?.runtimeSession ?? null);
   }
   return { ok: true, payload: { runtimeSessions } };
+}
+
+export async function takeOverRun(message: Partial<PanelTakeOverRunRequest>, context: PanelRelayContext): Promise<PanelRelayResponse> {
+  const target = await runTarget(message, context, "Take over needs the run it is for.");
+  if (!target.ok) return target.failure;
+  return context.call("pause-runtime-session", { projectId: target.projectId, runId: target.runId, takeControl: true });
+}
+
+export async function handBackRun(message: Partial<PanelHandBackRunRequest>, context: PanelRelayContext): Promise<PanelRelayResponse> {
+  const target = await runTarget(message, context, "Hand back needs the run it is for.");
+  if (!target.ok) return target.failure;
+  return context.call("resume-runtime-session", { projectId: target.projectId, runId: target.runId, afterManualAction: true });
+}
+
+type RunTarget = { ok: true; projectId: string; runId: string } | { ok: false; failure: PanelRelayResponse };
+
+/** The run a hold names, refused before Core is called when the run or the project is missing. */
+async function runTarget(message: { projectId?: unknown; runId?: unknown }, context: PanelRelayContext, missingRun: string): Promise<RunTarget> {
+  const runId = text(message.runId);
+  if (!runId) return { ok: false, failure: relayFailure("invalid_request", missingRun) };
+  const projectId = text(message.projectId) ?? text(await context.projectId());
+  if (!projectId) return { ok: false, failure: relayFailure("no_project") };
+  return { ok: true, projectId, runId };
 }
 
 function text(value: unknown): string | undefined {

@@ -1,8 +1,8 @@
 // The open automation, compactly, above its chat: what its last run did, Run,
-// the last run's data to export, and Open in FluxIQ for everything else. A
-// slim strip, not a card: the chat keeps the panel, and the chat's own header
-// names the automation and leads back to the latest chat. Hidden while the
-// chat shows no automation.
+// Stop while its run is in progress, the last run's data to export, and Open
+// in FluxIQ for everything else. A slim strip, not a card: the chat keeps the
+// panel, and the chat's own header names the automation and leads back to the
+// latest chat. Hidden while the chat shows no automation.
 
 import type { ExtensionStatus } from "../../shared/protocol";
 import { createElement } from "../dom";
@@ -27,13 +27,16 @@ export type AutomationStrip = {
 /** Builds the strip over `controller`. */
 export function createAutomationStrip(request: PanelStore["request"], controller: AutomationsController): AutomationStrip {
   let run = createElement("button", { className: "small-button strip-run", text: "Run", attrs: { type: "button" } });
+  let stop = stopButton();
+  const stopStatus = createElement("span", { className: "strip-stop-status", attrs: { role: "status", "aria-live": "polite" } });
   const open = createOpenFluxIQButton(request, { label: "Open in FluxIQ", look: "link" }, () => shown?.flowId);
   const lines = createElement("p", { className: "strip-lines" });
   const hint = createElement("p", { className: "strip-hint", hidden: true });
   const exports = createElement("span", { className: "strip-exports", hidden: true });
   const notice = createElement("div", { className: "notice", hidden: true, attrs: { role: "status" } });
   const element = createElement("section", { className: "automation-strip", hidden: true, attrs: { "aria-label": "Open automation" } }, [
-    createElement("div", { className: "strip-head" }, [lines, run]),
+    createElement("div", { className: "strip-head" }, [lines, run, stop]),
+    stopStatus,
     hint,
     createElement("div", { className: "strip-links" }, [exports, open.element]),
     notice
@@ -55,12 +58,26 @@ export function createAutomationStrip(request: PanelStore["request"], controller
   }
   bindRun(run, renderedOwner);
 
+  function stopButton(): HTMLButtonElement {
+    return createElement("button", { className: "small-button strip-stop", text: "Stop run", hidden: true, attrs: { type: "button" } });
+  }
+  // A press from a retired owner's button, or a second press while one is in flight, does nothing.
+  function bindStop(button: HTMLButtonElement, owner: number): void {
+    button.addEventListener("click", () => {
+      if (!button.disabled && !button.hidden && !element.hidden && button === stop && owner === controller.state().ownerRevision && shown !== undefined) void controller.stop(shown.flowId, owner);
+    });
+  }
+  bindStop(stop, renderedOwner);
+
   function retireOwner(owner: number): void {
     shown = undefined; renderedOwner = owner; datasets.clear(); exports.replaceChildren();
     noticeButton?.element.remove(); noticeButton = undefined; noticeKey = undefined;
     noticeText.textContent = ""; notice.hidden = true; lines.textContent = ""; hint.textContent = "";
     const nextRun = createElement("button", { className: "small-button strip-run", text: "Run", attrs: { type: "button" } });
     run.parentNode?.insertBefore(nextRun, run); run.remove(); run = nextRun; bindRun(run, owner);
+    const nextStop = stopButton();
+    stop.parentNode?.insertBefore(nextStop, stop); stop.remove(); stop = nextStop; bindStop(stop, owner);
+    stopStatus.textContent = "";
     element.hidden = true;
   }
 
@@ -119,6 +136,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     const previous = controls();
     const active = element.ownerDocument.activeElement;
     const index = previous.findIndex((button) => button === active);
+    const stopFocused = active === stop;
     const ownedFocus = index >= 0 && visible(element) && element.ownerDocument.visibilityState === "visible" && element.ownerDocument.hasFocus();
     element.hidden = false;
     const row = state.rows.find((candidate) => candidate.flowId === shown?.flowId);
@@ -127,10 +145,16 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     const unavailable = (state.mode === "list" || state.mode === "empty") && state.readError === undefined;
     lines.textContent = row === undefined
       ? (state.mode === "offline" ? "Connect to FluxIQ to see its runs." : unavailable ? "This automation is unavailable in the current list." : "")
-      : row.running || row.runId === undefined ? row.lines.join(" · ") : `Last run: ${row.lines.join(" · ")}`;
-    const blocked = row?.running ? undefined : state.working || state.runInFlight ? "Wait for FluxIQ to finish." : undefined;
-    run.textContent = row?.running ? "Running..." : "Run";
-    run.disabled = row === undefined || row.running || blocked !== undefined || state.mode !== "list";
+      : row.stoppable || row.runId === undefined ? row.lines.join(" · ") : `Last run: ${row.lines.join(" · ")}`;
+    const blocked = row?.stoppable ? undefined : state.working || state.runInFlight ? "Wait for FluxIQ to finish." : undefined;
+    run.textContent = row?.stoppable ? "Running..." : "Run";
+    run.disabled = row === undefined || row.stoppable || blocked !== undefined || state.mode !== "list";
+    stop.hidden = row?.stoppable !== true;
+    stop.disabled = row?.stop === "stopping" || row?.stop === "requested";
+    stop.textContent = stop.disabled ? "Stopping…" : "Stop run";
+    stop.setAttribute("aria-label", `Stop ${row?.name ?? shown.name}`);
+    stopStatus.textContent = row?.stop === "failed" ? "Couldn't stop the run. Try again."
+      : row?.stop === "requested" ? "Stop requested. Waiting for the run to finish." : "";
     run.setAttribute("aria-label", `Run ${row?.name ?? shown.name}`);
     hint.textContent = blocked ?? "";
     hint.hidden = blocked === undefined;
@@ -166,6 +190,8 @@ export function createAutomationStrip(request: PanelStore["request"], controller
           ?? current.find(available) ?? (available(run) ? run : open.element.querySelector<HTMLButtonElement>("button"));
       if (target !== null && target !== undefined && available(target) && element.ownerDocument.activeElement !== target) target.focus({ preventScroll: true });
     }
+    // Stop goes away when the run ends; focus moves to Run rather than being lost.
+    if (stopFocused && stop.hidden && !run.disabled && visible(run)) run.focus({ preventScroll: true });
     if (renamed) for (const listener of [...nameListeners]) listener(renamed);
   }
 

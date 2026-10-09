@@ -98,6 +98,8 @@ const PHASE_ACTIONS: Readonly<Record<ClientGatewayActivityPhase, string>> = Obje
   exploring: "Working on the page",
   building: "Building the Flow",
   running: "Running the Flow",
+  // A run held between steps (Take over, or a pause): Core's own label says which.
+  paused: "Paused",
   extracting: "Saving what was found",
   verifying: "Checking the Flow does what you asked",
   repairing: "Fixing a step that didn't work",

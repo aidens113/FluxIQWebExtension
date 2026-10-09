@@ -8,6 +8,7 @@ export {
   createAutomationsController,
   type AutomationRowNotice,
   type AutomationRowView,
+  type AutomationStopState,
   type AutomationsController,
   type AutomationsMode,
   type AutomationsState,

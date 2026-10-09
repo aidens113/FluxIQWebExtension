@@ -75,8 +75,14 @@ the gear and Open FluxIQ) and, under it, exactly one screen
 (`panel/shell/screen-state.ts`):
 
 - **Chat**, the default, with the whole panel. While it shows one automation's
-  thread, a slim strip above it gives that automation's last run, Run, the
-  run's data to export and Open in FluxIQ.
+  thread, a slim strip above it gives that automation's last run, Run, Stop,
+  the run's data to export and Open in FluxIQ. When a run of the chosen
+  project starts, the panel switches to Chat (`panel/shell/run-follow.ts`):
+  once per run, on its first event, never on its final event, never for a
+  run that starts while a recording runs or is paused, and not while the
+  person types in a field the switch would hide (it waits for a later event
+  of the same run). Builds do not switch the panel. The chat then retargets
+  to a thread that shows the run (`ChatPanel.followRun`, below).
 - **Automations**, the person's saved automations, newest first. Choosing one
   calls `chat.open({ kind: "automation", flowId, name })` and shows the chat.
   Below the list, "New automation" offers "Record a new automation" and
@@ -136,6 +142,19 @@ pairing token in the URL.
 Each screen imports its own stylesheet, and the build emits one `index.css`
 per page entry beside its `index.js` (`scripts/build-extension.mjs`, which
 fails if a page's stylesheet is missing).
+
+The record button is neutral (`--muted`, like the other top-bar icons) while
+idle and turns `--danger` only on hover or keyboard focus. While a recording
+runs or is paused it is hidden, and the red recording bar shows the state.
+
+The strip's Stop shows while a Run from this panel is in flight or the
+automation's newest known run reads as running, so a run started from the
+chat can be stopped there too. It sends `panelStopRun` with the run id: the
+run on screen if it is running, otherwise this Flow's newest running run from
+one fresh `listAutomations` read. With no id it sends `{}`, the background's
+stop of every active run of the project. A second press does nothing; the
+status line says "Stop requested. Waiting for the run to finish." or
+"Couldn't stop the run. Try again.". A cancelled run then reads "Stopped".
 
 The names the Lab presses are kept: the gear's "Settings", the settings labels,
 "Save" and "Saved.", "Forget this pairing" and "Forget", the getting-started
@@ -626,6 +645,24 @@ as the detail under "Waiting for you". The expanded overlay draws it whole,
 because it fits the line, and does not fade. The collapsed pill shows only the
 headline.
 
+**Paused for the person.** When a person takes over a run, Core sends one
+`phase: "paused"` event ("Paused: you have the page", or "Paused" for a plain
+pause) naming the held step, and one `running` event ("Continuing from step
+N") when the run continues. The pacer shows "Paused: your turn on the page"
+at once as a wait (outcome `waiting`, no detail, no timer, no fade) and keeps
+the held step. The overlay draws it with the "Paused" appearance and the
+detail "Open FluxIQ and press Hand back". A stopped run that was held ends
+through the normal final event.
+
+**Stopped endings.** Core sets `stopped: true` only on the final event of work
+a person or caller cancelled. The pacer reads "Run stopped" or "Build stopped"
+from that field, never from the label text.
+
+**The toolbar badge** (`toolbar-badge.ts`) shows "!" (colour `#b26a00`) while
+the display's outcome is `waiting`: a paused run, a question, or a check on
+the page. REC wins over "!", and "!" wins over "...". `ActivityRelay`'s
+`onDisplay` hook re-evaluates it when waiting starts or stops.
+
 **The panel's chat** (`panel/chat/`) fills the panel and has no header. It
 shows Core's thread (the latest, one automation's, or the thread a build or a
 run asked its question in) and FluxIQ's work in one stream, like a chat app:
@@ -780,6 +817,17 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   shrinks while the newest grows (the content's height unchanged, so no
   ResizeObserver fires), and before t174-w117 that parked the chat above the
   hand-off question and the build's ending with nobody touching it (D16).
+
+**The empty latest chat is the onboarding** (`view/empty-state-model.ts`):
+the title "What can FluxIQ do for you?", a concept paragraph that ends "You
+can stop it, or take over the page, at any time.", two starts and the
+fill-only examples. Describe focuses the composer and sends nothing; Extract
+switches to Automations and presses "Extract Data From This Page" (or
+focuses it beside the line saying why it is unavailable). Model readiness is
+read once each time the connected, empty latest chat appears
+(`onboarding/model-readiness.ts`, through `modelReadiness`); only when no key
+is enabled does a key line show, with Open FluxIQ. A failed read shows no key
+line. Automation, question and project chats have no starts.
 
 The composer sends typed instructions through `panelConversationSend`. The
 box and its kept draft empty the moment the message is sent
@@ -2089,9 +2137,10 @@ Navigation and click landing results retain a self-clearing check's elapsed mill
 
 Core also settles durably parked run asks as `timed_out` at their deadline and as `cancelled` before project deletion. A service restart detects overdue sessions when they are read; indefinite waits keep waiting.
 
-### Stop builds and runs from the extension chat
+### Stop, take over and hand back from the extension chat
 
-The chat composer dock exposes Stop build or Stop run while the raw activity
+The chat dock is the run controls (the hold control, then Stop) above the
+composer. The chat composer dock exposes Stop build or Stop run while the raw activity
 subject is active, including waits for a person. It targets the subject's project
 and Flow for a build, or its run ID for execution. Settled events remove the
 control. Stop requests stay visibly pending until final activity; a relay failure
@@ -2101,6 +2150,35 @@ The existing panelStopRun relay accepts an optional Flow ID for a build and
 calls Core's `cancel-flow-bootstrap`; a run still uses `cancel-runtime-session`.
 Supplying both target IDs is refused. No target retains the legacy active-run
 scan. Cancellation does not promise rollback of actions already sent to a page.
+
+While a run works, the hold control (`panel/chat/hold-control.ts`) shows
+**Take over**. While the run is paused it says "You have the page. FluxIQ
+continues from step N when you hand back." and shows **Hand back**, with Stop
+beside it. Builds never show it. A press reads "Taking over…" or "Handing
+back…" and stays disabled until Core's activity moves into or out of
+`paused`; a failure says "Couldn't take over. Try again." or "Couldn't hand
+back. Try again.". A reply for an older run or owner changes nothing.
+
+| Panel message | Core endpoint and request |
+| --- | --- |
+| `fluxiq.panel.stopRun` (`panelStopRun`) | `{ runId }`: `cancel-runtime-session`; `{ flowId }`: `cancel-flow-bootstrap`; `{}`: every active run of the project |
+| `fluxiq.panel.takeOverRun` (`panelTakeOverRun`) | `pause-runtime-session` `{ projectId, runId, takeControl: true }` |
+| `fluxiq.panel.handBackRun` (`panelHandBackRun`) | `resume-runtime-session` `{ projectId, runId, afterManualAction: true }` |
+
+Take over and hand back take `{ projectId?, runId }`; `projectId` defaults to
+the paired project. Only the named fields are sent. A missing or blank
+`runId` is refused with `invalid_request` and a missing project with
+`no_project`, before Core is called. Only control pages may send them
+(`PANEL_MESSAGES`). The reply is Core's run-control answer, unchanged. Core
+accepts the pairing token on `pause-runtime-session`,
+`resume-runtime-session` and `get-runtime-run-control`.
+
+When the panel follows a run (`stream/run-target.ts`), the chat keeps the
+thread on screen if it already shows the run; otherwise it opens the Flow's
+automation thread, then the latest chat, when that shows the run, and
+otherwise the run's own thread ("Run of <name>"). It waits while the person
+types or the thread is loading, and drops the run if it ends, a recording
+runs, or the chat loses its owner. The draft is kept.
 
 ### Native structured field typing
 

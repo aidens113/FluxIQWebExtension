@@ -3,6 +3,7 @@
 export type { PanelContext, PanelSurface } from "./contracts";
 export { mountPanel } from "./mount-panel";
 export { INITIAL_SHELL, reduceShell, shellScreen, type ShellEvent, type ShellScreen, type ShellState, type ShellTab } from "./screen-state";
+export { createRunFollow, type RunFollow, type RunFollowInput } from "./run-follow";
 export { createTopBar, screenId, tabId, type TopBar, type TopBarParts } from "./top-bar";
 export { createWorkingHold, WORKING_OFF_MS, WORKING_ON_MS, type WorkingClock, type WorkingHold } from "./working-hold";
 export { workingInput } from "./working-input";

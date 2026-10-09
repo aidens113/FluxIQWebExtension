@@ -7,6 +7,7 @@ import { RUNTIME_MESSAGES as M } from "../../../shared/constants";
 import { AUTOMATION_PANEL_MESSAGES as S } from "../../../shared/protocol";
 import { mountPanel } from "../mount-panel";
 import { CHAT_PROJECT_NAVIGATION } from "../../chat/project-navigation";
+import { ACTIVITY_MESSAGES, type ClientGatewayActivity } from "../../../shared/activity/index";
 
 const settle = async () => { for (let i = 0; i < 25; i++) await Promise.resolve(); };
 
@@ -51,7 +52,7 @@ async function mounted(body: (view: Awaited<ReturnType<typeof create>>) => void 
       Object.defineProperties(el, { ownerDocument: { value: doc }, parentElement: { get: () => el.parentNode }, isConnected: { get: () => el === doc.body || doc.body?.descendants().includes(el) } });
       const closest = (selector: string) => { for (let node: FakeElement | null = el; node; node = node.parentNode) if (matches(node, selector)) return node; return null; };
       Object.assign(el, {
-        contains: (node: FakeElement) => node === el || el.descendants().includes(node), closest,
+        contains: (node: FakeElement) => node === el || el.descendants().includes(node), closest, click: () => el.dispatch("click"),
         getClientRects: () => el.isConnected && !closest("[hidden], [inert]") ? [{}] : [],
         querySelectorAll: (selector: string) => el.descendants().filter((node) => matches(node, selector)),
         querySelector: (selector: string) => el.descendants().find((node) => matches(node, selector)) ?? null,
@@ -103,7 +104,9 @@ async function create(doc: { body: FakeElement; activeElement: FakeElement; focu
   const tab = byId("panelTab-automations"); tab.focus(); tab.dispatch("click"); await settle();
   const row = root.byClass("automation-row")[0]!;
   assert.ok(row, "actual shell loaded automation rows");
-  return { root, doc, row, core, byId, messages, navigate: (detail: unknown) => (globals.window as EventTarget).dispatchEvent(new CustomEvent(CHAT_PROJECT_NAVIGATION.event, { detail })), pendingRun: () => { runs = [{ runId: "r", flowId: "f", status: "completed", adaptationCount: 1 }]; }, refuse: () => { refuseChat = true; }, push: () => { for (const listener of listeners) listener({ type: M.statusChanged, status }); }, refreshRows: async (next: typeof flows) => { flows = next; for (const timer of [...intervals.values()]) if (timer.ms === 30_000) timer.run(); await settle(); } };
+  return { root, doc, row, core, byId, messages, navigate: (detail: unknown) => (globals.window as EventTarget).dispatchEvent(new CustomEvent(CHAT_PROJECT_NAVIGATION.event, { detail })), pendingRun: () => { runs = [{ runId: "r", flowId: "f", status: "completed", adaptationCount: 1 }]; }, refuse: () => { refuseChat = true; }, push: () => { for (const listener of listeners) listener({ type: M.statusChanged, status }); },
+    status,
+    activity: (current: ClientGatewayActivity | null) => { for (const listener of listeners) listener({ type: ACTIVITY_MESSAGES.changed, state: { current, display: null, recent: current ? [current] : [], overlay: "expanded", live: true } }); }, refreshRows: async (next: typeof flows) => { flows = next; for (const timer of [...intervals.values()]) if (timer.ms === 30_000) timer.run(); await settle(); } };
 }
 
 test("focused row descendant activation opens target, shows Chat, then focuses enabled composer", async () => mounted(async ({ row, core, byId, doc }) => {
@@ -232,4 +235,112 @@ test("passive marker does not suppress different reentrant flow or later explici
   assert.equal(root.byClass("strip-run")[0]!.getAttribute("aria-label"), "Run Second", "different reentrant navigation reaches strip during marker");
   row.dispatch("click"); await settle();
   assert.equal(root.byClass("strip-run")[0]!.getAttribute("aria-label"), "Run Renamed first", "marker is restored before later explicit navigation");
+}));
+
+test("the empty latest chat's Extract shows Automations with the extraction sheet open, under its kept ids", async () => mounted(async ({ root, doc, byId, messages }) => {
+  // The open sheet moves itself to the body (`panel/extraction/dialog-focus.ts`) and watches it.
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const observer = globals.MutationObserver;
+  globals.MutationObserver = class { observe(): void {} disconnect(): void {} };
+  const inBody = (id: string) => doc.body.descendants().find((node) => node.id === id);
+  byId("panelTab-chat").dispatch("click"); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, false);
+  assert.ok(messages.some((message) => message.type === M.panelModelReadiness), "the empty latest chat read the model keys");
+  const extract = root.byClass("chat-start").find((button) => button.getAttribute("data-start") === "extract")!;
+  assert.equal(extract.textContent, "Extract data from this page");
+  assert.equal(byId("extractionPanel").hidden, true);
+  try {
+    extract.dispatch("click"); await settle();
+    assert.equal(byId("panelScreen-automations").hidden, false);
+    assert.equal(byId("panelScreen-chat").hidden, true);
+    assert.equal(byId("panelTab-automations").getAttribute("aria-selected"), "true");
+    assert.equal(inBody("extractionPanel")?.hidden, false, "the sheet is open");
+    for (const id of ["extractDataButton", "extractionStatus", "extractionCloseButton", "extractionConfirmButton"]) assert.ok(inBody(id), id);
+  } finally {
+    inBody("extractionCloseButton")?.dispatch("click");
+    globals.MutationObserver = observer;
+  }
+}));
+
+function runEvent(id: string, sequence: number, fields: Partial<ClientGatewayActivity> = {}): ClientGatewayActivity {
+  return { activityId: `run:${id}`, sequence, subject: { kind: "run", id, projectId: "p", flowId: "f" }, phase: "running", label: "Running step 1 of 2", at: "2026-10-08T00:00:00.000Z", ...fields };
+}
+
+test("a run that starts while Automations shows switches to Chat once, not on every event", async () => mounted(async ({ byId, activity }) => {
+  assert.equal(byId("panelScreen-chat").hidden, true);
+  activity(runEvent("r1", 1)); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, false);
+  assert.equal(byId("panelTab-chat").getAttribute("aria-selected"), "true");
+  byId("panelTab-automations").dispatch("click"); await settle();
+  activity(runEvent("r1", 2)); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, true, "a later event of the same run leaves the person's tab alone");
+  activity(runEvent("r1", 3, { final: true })); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, true);
+  activity(runEvent("r2", 4)); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, false, "the next run is followed again");
+}));
+
+test("a run that starts while Settings shows closes them and shows Chat; a build does not", async () => mounted(async ({ byId, activity }) => {
+  byId("settingsButton").dispatch("click"); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, true);
+  assert.equal(byId("panelScreen-automations").hidden, true);
+  activity({ ...runEvent("f", 1), activityId: "build:f", subject: { kind: "build", id: "f", projectId: "p", flowId: "f" } }); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, true, "a build started elsewhere never moves the panel");
+  activity(runEvent("r", 2)); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, false);
+}));
+
+test("a run that starts during a recording, or for another project, does not switch", async () => mounted(async ({ byId, activity, status, push }) => {
+  Object.assign(status, { recordingState: "recording", projectId: "p" }); push(); await settle();
+  activity(runEvent("during", 1)); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, true);
+  Object.assign(status, { recordingState: "paused" }); push(); await settle();
+  activity(runEvent("paused", 2)); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, true);
+  Object.assign(status, { recordingState: "idle" }); push(); await settle();
+  assert.equal(byId("panelScreen-automations").hidden, false, "the ended recording is reviewed on Automations");
+  activity({ ...runEvent("elsewhere", 3), subject: { kind: "run", id: "elsewhere", projectId: "q", flowId: "f" } }); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, true, "another project's run is not this panel's");
+}));
+
+test("typing in a Settings field holds the switch until the person leaves the field", async () => mounted(async ({ byId, activity, doc }) => {
+  byId("settingsButton").dispatch("click"); await settle();
+  const field = byId("gatewayUrl"); field.focus();
+  assert.ok(doc.activeElement === field);
+  activity(runEvent("r", 1)); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, true);
+  assert.ok(doc.activeElement === field, "the field keeps the focus");
+  doc.body.focus(); doc.activeElement = doc.body;
+  activity(runEvent("r", 2)); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, false);
+}));
+
+test("focus on a control the switch hides moves to the Chat tab", async () => mounted(async ({ byId, activity, doc, row: control }) => {
+  const tab = byId("panelTab-automations");
+  control.focus();
+  assert.ok(doc.activeElement === control);
+  activity(runEvent("r", 1)); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, false);
+  assert.ok(doc.activeElement === byId("panelTab-chat"));
+  assert.notEqual(tab.getAttribute("aria-selected"), "true");
+}));
+
+test("a followed run of another automation shows its steps: the chat leaves that automation's thread for the latest", async () => mounted(async ({ row, byId, activity, doc }) => {
+  row.children[0]!.dispatch("click"); await settle();
+  const box = byId("conversationInput");
+  assert.match(box.placeholder, /Orders/u, "the chat is on the Orders automation's thread");
+  doc.activeElement = doc.body;
+  byId("panelTab-automations").dispatch("click"); await settle();
+  activity({ ...runEvent("other", 1), subject: { kind: "run", id: "other", projectId: "p", flowId: "g" } }); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, false);
+  assert.equal(box.placeholder, "Message FluxIQ", "the latest chat shows a run that speaks through no thread");
+}));
+
+test("a followed run of the automation on screen keeps its thread", async () => mounted(async ({ row, byId, activity, doc }) => {
+  row.children[0]!.dispatch("click"); await settle();
+  doc.activeElement = doc.body;
+  byId("panelTab-automations").dispatch("click"); await settle();
+  activity(runEvent("same", 1)); await settle();
+  assert.equal(byId("panelScreen-chat").hidden, false);
+  assert.match(byId("conversationInput").placeholder, /Orders/u);
 }));

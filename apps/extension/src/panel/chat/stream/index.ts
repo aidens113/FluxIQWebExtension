@@ -19,5 +19,6 @@ export {
   type StepWords
 } from "./step";
 export { buildChatStream, CHAT_STEP_MESSAGE_LIMIT, type ChatStream, type ChatStreamItem } from "./stream-items";
+export { followedRunTarget, threadKey, type RunTargetInput } from "./run-target";
 export { activityForTarget, type TargetActivity } from "./target-activity";
 export { createTurnClock, type StampedTurn, type TurnClock } from "./turn-clock";

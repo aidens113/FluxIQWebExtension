@@ -1,5 +1,6 @@
 // Coverage of toolbar-badge.ts and toolbar-indicator.ts: what the toolbar says
-// while recording and running, that "..." survives the gap between two steps
+// while recording and running, "!" while the work waits on the person (a run
+// held for them, a question, a check), that "..." survives the gap between two steps
 // and then clears on its own, and that the badge is written only on a change.
 
 import assert from "node:assert/strict";
@@ -100,4 +101,26 @@ test("recording replaces ... and clears when the recording ends", () => {
   indicator.update({ recordingState: "recording", runtime: { state: "idle" } });
   indicator.update(idle);
   assert.deepEqual(written, ["...", "REC", ""]);
+});
+
+test("! while the work waits on the person, over ...; REC keeps priority", () => {
+  const waiting = { outcome: "waiting" as const };
+  assert.deepEqual(toolbarBadge(idle, 0, waiting), { text: "!" });
+  assert.deepEqual(toolbarBadge(running, 0, waiting), { text: "!" });
+  assert.deepEqual(toolbarBadge({ recordingState: "recording", runtime: { state: "idle" } }, 0, waiting), { text: "REC" });
+  assert.deepEqual(toolbarBadge(running, 0, { outcome: null }), { text: "..." });
+  assert.deepEqual(toolbarBadge(idle, 0, { outcome: "failed" }), { text: "" });
+});
+
+test("the indicator shows ! when the activity starts waiting and clears it when the run continues", () => {
+  const written: string[] = [];
+  const indicator = new ToolbarIndicator((text) => written.push(text), clock().timers);
+  indicator.update(running);
+  indicator.activity({ outcome: null });
+  indicator.activity({ outcome: "waiting" });
+  indicator.activity({ outcome: "waiting" });
+  indicator.update(idle);
+  indicator.activity({ outcome: null });
+  indicator.activity(null);
+  assert.deepEqual(written, ["...", "!", ""]);
 });

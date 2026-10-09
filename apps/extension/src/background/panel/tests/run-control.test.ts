@@ -1,12 +1,13 @@
 // Coverage of run-control.ts: Stop with a run named, and Stop with none, which
-// asks Core which of the project's runs have not ended and stops each.
+// asks Core which of the project's runs have not ended and stops each; and
+// Take over / Hand back, which forward only the named fields and need a run.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { PanelRelayResponse } from "../../../shared/protocol";
+import type { PanelHandBackRunRequest, PanelRelayResponse, PanelTakeOverRunRequest } from "../../../shared/protocol";
 import type { PanelRelayContext } from "../relay-context";
-import { stopRun } from "../run-control";
+import { handBackRun, stopRun, takeOverRun } from "../run-control";
 
 function context(answer: (endpoint: string, payload: Record<string, unknown>) => PanelRelayResponse, projectId: string | null = "project-1") {
   const calls: Array<{ endpoint: string; payload: Record<string, unknown> }> = [];
@@ -80,6 +81,44 @@ test("a refused listing or stop comes back as Core said it", async () => {
 test("with no project known, Stop is refused before Core is called", async () => {
   const c = context(() => ({ ok: true, payload: null }), null);
   assert.deepEqual(await stopRun({ runId: "run-1" }, c.value), {
+    ok: false, code: "no_project", error: "FluxIQ has not said which project this browser belongs to yet. Connect, then try again."
+  });
+  assert.deepEqual(c.calls, []);
+});
+
+test("Take over pauses the named run with the page handed to the person, sending only the named fields", async () => {
+  const answer = { runId: "run-1", sessionStatus: "running", live: true, runControl: { state: "paused" }, progress: null };
+  const c = context(() => ({ ok: true, payload: answer }));
+  const reply = await takeOverRun({ runId: " run-1 ", reason: "x", takeControl: false, extra: 1 } as Partial<PanelTakeOverRunRequest>, c.value);
+  assert.deepEqual(c.calls, [{ endpoint: "pause-runtime-session", payload: { projectId: "project-1", runId: "run-1", takeControl: true } }]);
+  assert.deepEqual(reply, { ok: true, payload: answer });
+  await takeOverRun({ projectId: "project-9", runId: "run-2" }, c.value);
+  assert.deepEqual(c.calls[1], { endpoint: "pause-runtime-session", payload: { projectId: "project-9", runId: "run-2", takeControl: true } });
+});
+
+test("Hand back resumes the named run after the person's own actions, sending only the named fields", async () => {
+  const c = context(() => ({ ok: true, payload: { runId: "run-1", live: true } }));
+  const reply = await handBackRun({ runId: "run-1", note: "done", afterManualAction: false } as Partial<PanelHandBackRunRequest>, c.value);
+  assert.deepEqual(c.calls, [{ endpoint: "resume-runtime-session", payload: { projectId: "project-1", runId: "run-1", afterManualAction: true } }]);
+  assert.deepEqual(reply, { ok: true, payload: { runId: "run-1", live: true } });
+});
+
+test("Take over and Hand back with no run named are refused before Core is called", async () => {
+  // What a panel page could send: the relay must not trust the declared type.
+  for (const runId of [undefined, "", "   ", 7] as Array<string | number | undefined>) {
+    const c = context(() => ({ ok: true, payload: null }));
+    const taken = await takeOverRun({ runId } as Partial<PanelTakeOverRunRequest>, c.value);
+    const handed = await handBackRun({ runId } as Partial<PanelHandBackRunRequest>, c.value);
+    assert.deepEqual(taken, { ok: false, code: "invalid_request", error: "Take over needs the run it is for." });
+    assert.deepEqual(handed, { ok: false, code: "invalid_request", error: "Hand back needs the run it is for." });
+    assert.deepEqual(c.calls, []);
+  }
+});
+
+test("Take over and Hand back with no project known are refused before Core is called", async () => {
+  const c = context(() => ({ ok: true, payload: null }), null);
+  assert.equal((await takeOverRun({ runId: "run-1" }, c.value)).ok, false);
+  assert.deepEqual(await handBackRun({ runId: "run-1" }, c.value), {
     ok: false, code: "no_project", error: "FluxIQ has not said which project this browser belongs to yet. Connect, then try again."
   });
   assert.deepEqual(c.calls, []);

@@ -29,6 +29,11 @@
 //   on the page".
 // - **A question.** Core's own waiting state (`waiting_permission`, a run
 //   paused on an ask) reads "Waiting for you: answer in the FluxIQ panel".
+// - **A pause.** A run Core holds between steps -- the person pressed Take
+//   over, or the run was paused -- reads "Paused: your turn on the page". It
+//   is a wait on the person, so it shows at once and never fades, and it
+//   clears when Core says the run continues ("Continuing from step N") or the
+//   run ends.
 // - **A test.** While a candidate build test-runs the Flow it submitted, once
 //   from its start (`candidate-trial.ts`), the work reads "Testing your Flow",
 //   whatever its run reports: a trial repairs nothing, so a step that fails in
@@ -37,7 +42,7 @@
 import type { ActivityDisplay } from "../../shared/activity/index";
 
 /** What the person is being waited on for. */
-export type ActivityWaitReason = "answer" | "check";
+export type ActivityWaitReason = "answer" | "check" | "paused";
 
 export type ActivityHeadlineSituation = {
   /** A terminal cancellation reported by Core. */
@@ -67,7 +72,8 @@ const FAILED: Readonly<Record<ActivityDisplay["subjectKind"], string>> = Object.
 
 const WAITING: Readonly<Record<ActivityWaitReason, string>> = Object.freeze({
   answer: "Waiting for you: answer in the FluxIQ panel",
-  check: "Waiting for you: finish the check on the page"
+  check: "Waiting for you: finish the check on the page",
+  paused: "Paused: your turn on the page"
 });
 
 const REPAIRING = "Fixing your Flow";
