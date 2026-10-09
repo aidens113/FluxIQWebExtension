@@ -74,6 +74,14 @@ test("a 401 or 403 is refused, with Core's sentence; any other failure is failed
   assert.deepEqual(await callCoreProgram(credentials, "get-conversation", {}), { ok: false, code: "failed", httpStatus: 502, error: "FluxIQ answered 502." });
 });
 
+test("a project outside the paired domain is a failed call with Core's sentence, not a refused pairing", async (t) => {
+  const sentence = "This project belongs to another part of FluxIQ, so this browser cannot use it.";
+  stubFetch(t, () => json(403, { ok: false, error: sentence, errorCode: "authorization.project_domain" }));
+  assert.deepEqual(await callCoreProgram(credentials, "run-runtime-session", { projectId: "project.other" }), {
+    ok: false, code: "failed", httpStatus: 403, error: sentence
+  });
+});
+
 test("an unreachable FluxIQ is unreachable, and no failure ever carries the token", async (t) => {
   stubFetch(t, () => { throw new TypeError(`fetch failed for Bearer ${TOKEN}`); });
   const reply = await callCoreProgram(credentials, "append-turn", { text: "hello" });

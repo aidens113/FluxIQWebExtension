@@ -28,6 +28,7 @@
 import { AUTOMATION_STUDIO_ENDPOINTS, AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS, parseAutomationStudioFlowBootstrapGenerationReadiness, type AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
+import { retriedRead } from "./retried-read.js";
 
 /**
  * What the Core under test can do with a candidate. `trialRunner`: Core tests a
@@ -73,11 +74,17 @@ export function labCandidateTrialReadiness(target: { startsCore: boolean }): Cre
  * runner, or one older than the start-hook field -- has no trial runner.
  */
 export async function readCreatedFlowCandidateTrialReadiness(
-  control: { automationStudioCall(endpoint: string, payload: Record<string, unknown>, bounds?: FluxIQHttpOptions, domainId?: string): Promise<unknown> },
+  control: {
+    automationStudioCall(endpoint: string, payload: Record<string, unknown>, bounds?: FluxIQHttpOptions, domainId?: string): Promise<unknown>;
+    /** How the read tells time and waits between tries; the real clock when absent. Tests pass a fake. */
+    readClock?: Readonly<{ now(): number; sleep(ms: number): Promise<void> }>;
+  },
   domainId: string,
   bounds: FluxIQHttpOptions = {},
 ): Promise<CreatedFlowCandidateTrialReadiness> {
-  const answer = await control.automationStudioCall(AUTOMATION_STUDIO_ENDPOINTS.getFlowBootstrapGenerationReadiness, {}, bounds, domainId);
+  // A safe read, so it is retried like every other one (`./retried-read.ts`).
+  const endpoint = AUTOMATION_STUDIO_ENDPOINTS.getFlowBootstrapGenerationReadiness;
+  const answer = await retriedRead(endpoint, () => control.automationStudioCall(endpoint, {}, bounds, domainId), control.readClock);
   const readiness = parseAutomationStudioFlowBootstrapGenerationReadiness(answer !== null && typeof answer === "object" ? (answer as { readiness?: unknown }).readiness : undefined);
   return Object.freeze({ trialRunner: readiness !== null, startReset: readiness?.capabilities.candidateTrial.startReset === true, source: "core" });
 }

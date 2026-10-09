@@ -106,6 +106,9 @@ export async function uploadStateAsset(
 /** How long a program call may take. `append-turn` waits for FluxIQ to read and answer the message, which is a model call. */
 const CORE_PROGRAM_CALL_TIMEOUT_MS = 120_000;
 
+/** The code Core's program route puts on a call naming a project outside the paired domain. */
+const PROJECT_DOMAIN_ERROR_CODE = "authorization.project_domain";
+
 /**
  * One call to a Core program endpoint -- Automation Studio's unless another
  * program is named -- with the pairing token as
@@ -154,6 +157,12 @@ export async function callCoreProgram(
     return { ok: false, code: "unreachable", error: "FluxIQ could not be reached." };
   }
   const body = objectValue(parseJsonBody(bodyText));
+  // A project outside the domain this browser was paired for is refused with
+  // its own code and a sentence the person can act on; the pairing itself is
+  // fine, so it is a failed call, not a refused token (t379).
+  if (status === 403 && body?.errorCode === PROJECT_DOMAIN_ERROR_CODE) {
+    return { ok: false, code: "failed", httpStatus: status, error: stringValue(body?.error) ?? "This project is not in the area FluxIQ paired this browser for." };
+  }
   if (status === 401 || status === 403) {
     return { ok: false, code: "refused", httpStatus: status, error: stringValue(body?.error) ?? "FluxIQ refused this browser's pairing." };
   }
