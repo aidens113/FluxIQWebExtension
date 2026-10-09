@@ -19,6 +19,8 @@ export const ACTIVITY_PHASE_APPEARANCE: Readonly<Record<ClientGatewayActivityPha
   exploring: { name: "Exploring", accent: "#5cc8fa", mark: "pulse" },
   building: { name: "Building", accent: "#f5b94a", mark: "pulse" },
   running: { name: "Running", accent: "#7cb2fb", mark: "pulse" },
+  // Held for the person (Take over): it needs them as a wait does, so it is marked as one.
+  paused: { name: "Paused", accent: "#f7d354", mark: "attention" },
   extracting: { name: "Extracting", accent: "#4fdcc4", mark: "pulse" },
   verifying: { name: "Verifying", accent: "#a0a8fb", mark: "pulse" },
   repairing: { name: "Repairing", accent: "#fca468", mark: "pulse" },

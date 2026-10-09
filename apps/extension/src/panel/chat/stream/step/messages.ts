@@ -12,7 +12,8 @@
 //   step      a run's step ("Step 2 of 5: Open results"), its card saying
 //             how it went, and a build's failure marker
 //   ask       what Core asked the person: a card waiting on them
-//   note      what Core noted, in words
+//   note      what Core noted, in words, and Core's own deciding row with
+//             its sentence ("Asking the AI model again"), which is status
 //   action    an action with no decision before it (a Core that does not
 //             explain its steps yet): its card
 //
@@ -55,7 +56,9 @@
 // (`apps/web/.../conversation/activity/steps/messages.ts` in FluxIQ Core).
 //
 // A card that did nothing and repeats one shown since anything new happened
-// is no new card: the card it repeats counts it (`card-repeats.ts`). Steps
+// is no new card: the card it repeats counts it (`card-repeats.ts`). A step
+// that didn't work and then did when the run tried it again is one card that
+// says on which try (`retried.ts`). Steps
 // done again before a retry, already shown as done, are one card that holds
 // them (`done-again.ts`).
 //
@@ -65,9 +68,10 @@
 // or Core's shared reading of the action, never a raw id.
 
 import { activityActionKey } from "fluxiq/ui";
-import { isInternalStep, type ClientGatewayActivity } from "../../../../shared/activity/index";
+import { isInternalStep, isModelThought, type ClientGatewayActivity } from "../../../../shared/activity/index";
 import { actionCard, type ActionCard } from "./action-card";
 import { foldRepeatedCards } from "./card-repeats";
+import { foldRetriedCards } from "./retried";
 import { foldDoneAgain } from "./done-again";
 import { stepWords } from "./words";
 
@@ -114,6 +118,19 @@ type Unit = {
   /** A robot-check card still waiting for its other half: the ask, or the tool that met the check. */
   check: { place: Place; from: "ask" | "tool" } | undefined;
 };
+
+/**
+ * `next` with what `before` named and `next` does not: a kind of its own, the
+ * act's name that goes with it, and a target. A call's end is said after the
+ * page moved, and a name the start gave it is not lost ("Click · No thanks"
+ * became "Click · the page", t193).
+ */
+function withEarlierNames(before: ActionCard, next: ActionCard): ActionCard {
+  const card: ActionCard = { ...next, kind: next.kind === "other" ? before.kind : next.kind, target: next.target ?? before.target };
+  const named = next.kind === "other" ? before.name : next.name;
+  delete card.name;
+  return named === undefined ? card : { ...card, name: named };
+}
 
 /** A robot check still waiting on the person: the only card the other half of a check joins. */
 function waitsOnPerson(card: Pick<ActionCard, "kind" | "outcome">): boolean {
@@ -170,7 +187,7 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
   const mark = (place: Place, next: ActionCard, sequence: number): void => {
     const draft = drafts[place.message]!;
     const before = cardAt(place);
-    draft.actions[place.card] = { ...next, key: before.key, kind: next.kind === "other" ? before.kind : next.kind, target: next.target ?? before.target };
+    draft.actions[place.card] = { ...withEarlierNames(before, next), key: before.key };
     draft.sequence = Math.max(draft.sequence, sequence);
   };
   /** The unit's robot-check card waiting for the other half named by `from`, while it still waits. */
@@ -212,6 +229,14 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
 
     if (detail.kind === "thought") {
       if (words.text === undefined) continue;
+      // Core's own deciding row with its sentence ("Asking the AI model again")
+      // is status, not the model's reason: a note, and no decision the next
+      // actions belong to (`isModelThought`, t378 W4).
+      if (!isModelThought(event)) {
+        unit.decision = undefined;
+        add(event, detail, "note", at, null);
+        continue;
+      }
       unit.decision = add(event, detail, event.phase === "repairing" ? "repair" : "decision", at, null);
       continue;
     }
@@ -239,7 +264,7 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
         // The end keeps what the start named: a call's end is said after the
         // page moved, and a name the start gave it is not lost
         // ("Click · No thanks" became "Click · the page", t193).
-        if (card !== null && before !== undefined) draft.actions[owner.card] = { ...card, kind: card.kind === "other" ? before.kind : card.kind, target: card.target ?? before.target };
+        if (card !== null && before !== undefined) draft.actions[owner.card] = withEarlierNames(before, card);
         draft.sequence = event.sequence;
         if (draft.kind !== "decision" && draft.kind !== "repair") {
           draft.title = words.title;
@@ -332,8 +357,9 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
   }
 
   // Repeated refusals and failures are one card each that counts them (U-8, R2-U-7, `card-repeats.ts`),
-  // and steps done again before a retry are one line that holds them (D7, `done-again.ts`).
-  const folded = foldDoneAgain(foldRepeatedCards(drafts));
+  // a step that worked when tried again is one card that says on which try (lane D finding 2,
+  // `retried.ts`), and steps done again before a retry are one line that holds them (D7, `done-again.ts`).
+  const folded = foldDoneAgain(foldRetriedCards(foldRepeatedCards(drafts)));
   const kept = limit > 0 ? folded.slice(-limit) : [];
   const newest = new Map<string, StepMessage>();
   for (const draft of kept) newest.set(draft.activityId, draft);

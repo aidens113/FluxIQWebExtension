@@ -5,6 +5,7 @@
 // builds and updates the parts, and `settings/` holds the on-page status
 // preference for the panel's settings to mount.
 export { createChatPanel, type ChatPanel, type ChatPanelOptions, type OpenFluxIQControl, type OpenFluxIQFactory } from "./chat-panel";
+export { createHoldControl } from "./hold-control";
 export { createStopControl } from "./stop-control";
 export {
   createActivityFeed,
@@ -22,12 +23,14 @@ export {
   cardWords,
   CHAT_STEP_MESSAGE_LIMIT,
   createTurnClock,
+  followedRunTarget,
   stepMessages,
   stepWords,
   type ActionCard,
   type CardWords,
   type ChatStream,
   type ChatStreamItem,
+  type RunTargetInput,
   type StepMessage
 } from "./stream";
 export type { ChatTarget } from "./target";

@@ -2,8 +2,11 @@
 // (`toolbar-badge.ts` decides what it says). It writes only when the text
 // changes, because status is emitted many times a second while recording, and
 // it re-reads the last status when a run's hold runs out, since no status
-// change arrives to clear it.
+// change arrives to clear it. The activity display comes separately
+// (`activity`), from the activity relay, because a wait on the person is not
+// part of the extension's status.
 
+import type { ActivityDisplay } from "../../shared/activity/index";
 import type { ExtensionStatus } from "../../shared/protocol";
 import { toolbarBadge, type ToolbarBadge } from "./toolbar-badge";
 
@@ -18,6 +21,7 @@ type Timers = {
 
 const BADGE_COLORS: Record<Exclude<ToolbarBadge["text"], "">, string> = {
   REC: "#c62828",
+  "!": "#b26a00",
   "...": "#1565c0"
 };
 
@@ -32,6 +36,7 @@ export const browserToolbarBadge: ToolbarBadgeWriter = (text) => {
 export class ToolbarIndicator {
   private shown: ToolbarBadge["text"] | undefined;
   private last: Pick<ExtensionStatus, "recordingState" | "runtime"> | undefined;
+  private display: Pick<ActivityDisplay, "outcome"> | null = null;
   private timer: unknown;
 
   constructor(
@@ -39,9 +44,19 @@ export class ToolbarIndicator {
     private readonly timers: Timers = { now: () => Date.now(), setTimeout: (callback, delayMs) => setTimeout(callback, delayMs), clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>) }
   ) {}
 
+  /** The activity display shown now; the badge says "!" while it waits on the person. */
+  activity(display: Pick<ActivityDisplay, "outcome"> | null): void {
+    if ((display?.outcome === "waiting") === (this.display?.outcome === "waiting")) {
+      this.display = display;
+      return;
+    }
+    this.display = display;
+    this.update(this.last ?? { recordingState: "idle" });
+  }
+
   update(status: Pick<ExtensionStatus, "recordingState" | "runtime">): void {
     this.last = status;
-    const badge = toolbarBadge(status, this.timers.now());
+    const badge = toolbarBadge(status, this.timers.now(), this.display);
     if (badge.text !== this.shown) {
       this.shown = badge.text;
       this.write(badge.text);

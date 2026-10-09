@@ -75,8 +75,14 @@ the gear and Open FluxIQ) and, under it, exactly one screen
 (`panel/shell/screen-state.ts`):
 
 - **Chat**, the default, with the whole panel. While it shows one automation's
-  thread, a slim strip above it gives that automation's last run, Run, the
-  run's data to export and Open in FluxIQ.
+  thread, a slim strip above it gives that automation's last run, Run, Stop,
+  the run's data to export and Open in FluxIQ. When a run of the chosen
+  project starts, the panel switches to Chat (`panel/shell/run-follow.ts`):
+  once per run, on its first event, never on its final event, never for a
+  run that starts while a recording runs or is paused, and not while the
+  person types in a field the switch would hide (it waits for a later event
+  of the same run). Builds do not switch the panel. The chat then retargets
+  to a thread that shows the run (`ChatPanel.followRun`, below).
 - **Automations**, the person's saved automations, newest first. Choosing one
   calls `chat.open({ kind: "automation", flowId, name })` and shows the chat.
   Below the list, "New automation" offers "Record a new automation" and
@@ -136,6 +142,19 @@ pairing token in the URL.
 Each screen imports its own stylesheet, and the build emits one `index.css`
 per page entry beside its `index.js` (`scripts/build-extension.mjs`, which
 fails if a page's stylesheet is missing).
+
+The record button is neutral (`--muted`, like the other top-bar icons) while
+idle and turns `--danger` only on hover or keyboard focus. While a recording
+runs or is paused it is hidden, and the red recording bar shows the state.
+
+The strip's Stop shows while a Run from this panel is in flight or the
+automation's newest known run reads as running, so a run started from the
+chat can be stopped there too. It sends `panelStopRun` with the run id: the
+run on screen if it is running, otherwise this Flow's newest running run from
+one fresh `listAutomations` read. With no id it sends `{}`, the background's
+stop of every active run of the project. A second press does nothing; the
+status line says "Stop requested. Waiting for the run to finish." or
+"Couldn't stop the run. Try again.". A cancelled run then reads "Stopped".
 
 The names the Lab presses are kept: the gear's "Settings", the settings labels,
 "Save" and "Saved.", "Forget this pairing" and "Forget", the getting-started
@@ -493,8 +512,10 @@ pacer keeps what Core says and changes how often it is said:
   for it, so the action after a thought shows on time. A run's retry line is
   FluxIQ's own status, not the model's words: a recovery choice keeps it up,
   and a thought that changes it is paced like an action. Core's own deciding
-  row ("Deciding the next step") is status, and its sentence when the model
-  provider did not answer is shown; but a decision being made does not
+  row ("Deciding the next step") is status, and so is the row Core sends when
+  the model's answer could not be used or its provider did not answer
+  (the same title, failed, with Core's sentence; since t378), whose
+  sentence is shown; but a decision being made does not
   replace a meaningful line: the step it ran or the stage it is in is held
   through the decision, and "Deciding the next step" shows only when nothing
   meaningful is up (U9 of the `run-musp39u8-9ac026ab` UI review, where each
@@ -544,9 +565,9 @@ never reach the page whatever the background sent, and the starting status is
 drawn like any other display. It is on the page whenever FluxIQ works, from
 the person's send to the work settling. It is a `<fluxiq-activity-overlay>`
 host on `document.documentElement` with a closed shadow root styled through the
-CSSOM and no `innerHTML`. `expanded` is a 384 by 66 pixel card: a mark, a
+CSSOM and no `innerHTML`. `expanded` is a 384 by 84 pixel card: a mark, a
 14-pixel headline, "Step N of M" (just "Step N" when N passes M) while a run
-works, and the detail as one 13-pixel line; the text is white and near-white
+works, and the detail in 13-pixel type on up to two lines; the text is white and near-white
 (`#d8dde6`) on a near-black card of its own, with a light hairline inside for
 dark pages and a dark ring outside for light ones. `collapsed` is a 300 by 36
 pixel pill with the mark and the headline; `hidden` removes the host. The mark
@@ -583,11 +604,16 @@ product image the left midpoint would cover (D5 of the `run-musp4h2f-72e8ed99`
 UI review). It never becomes
 a text-less dot, because a status the person cannot read is no status (a feed
 with a sticky header and fixed bottom bars made the dot the common case, t195
-`run-murdouox-c5294247`, U3). A line too long for the card is measured in its
+`run-murdouox-c5294247`, U3). A headline too long for the card is measured in its
 own font (an `OffscreenCanvas`) against its line's width and cut after the
 last whole word that fits, then an ellipsis, closing a quote the cut left
 open ("into “Search…”"); it is measured again when the card changes width
-(`fit-line.ts`, `text-measure.ts`). The browser's own ellipsis cut inside
+(`fit-line.ts`, `text-measure.ts`). The detail wraps instead of being cut
+(since t378, `fit-lines.ts`): it is measured as the browser will wrap it
+across the card's two lines; when it still does not fit, the whole sentences
+that do are kept, and only when not even one does is it cut where a word
+ends ("A step didn't work in the test: the…" lost its sentence). The style's
+own two-line clamp is the backstop. The browser's own ellipsis cut inside
 words ("Search Bri…", "trying another w…", U-4 of the
 `run-muw60j7c-bb7c9a62` UI review) and is only the backstop where nothing can
 be measured. `PlacementKeeper`
@@ -626,6 +652,24 @@ as the detail under "Waiting for you". The expanded overlay draws it whole,
 because it fits the line, and does not fade. The collapsed pill shows only the
 headline.
 
+**Paused for the person.** When a person takes over a run, Core sends one
+`phase: "paused"` event ("Paused: you have the page", or "Paused" for a plain
+pause) naming the held step, and one `running` event ("Continuing from step
+N") when the run continues. The pacer shows "Paused: your turn on the page"
+at once as a wait (outcome `waiting`, no detail, no timer, no fade) and keeps
+the held step. The overlay draws it with the "Paused" appearance and the
+detail "Open FluxIQ and press Hand back". A stopped run that was held ends
+through the normal final event.
+
+**Stopped endings.** Core sets `stopped: true` only on the final event of work
+a person or caller cancelled. The pacer reads "Run stopped" or "Build stopped"
+from that field, never from the label text.
+
+**The toolbar badge** (`toolbar-badge.ts`) shows "!" (colour `#b26a00`) while
+the display's outcome is `waiting`: a paused run, a question, or a check on
+the page. REC wins over "!", and "!" wins over "...". `ActivityRelay`'s
+`onDisplay` hook re-evaluates it when waiting starts or stops.
+
 **The panel's chat** (`panel/chat/`) fills the panel and has no header. It
 shows Core's thread (the latest, one automation's, or the thread a build or a
 run asked its question in) and FluxIQ's work in one stream, like a chat app:
@@ -650,7 +694,10 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   note is words only, and a note with no words is no message: Core's own look
   before the first decision and a dry run's reset are said by the live line
   while they run, never as a bare heading (live runs 34 and 35 showed "Looking
-  at the page" twice that way). There are no folds, disclosures or step counts,
+  at the page" twice that way). Core's failed deciding row with a sentence (the
+  model's answer could not be used, or its provider did not answer) is a
+  note with Core's sentence, headed in the present tense, never a decision of the model's, and the actions
+  after it start their own message (since t378, `isModelThought`). There are no folds, disclosures or step counts,
   and no raw tool or node id is shown (`stream/step/words.ts`).
 - **Every action is a card** (`stream/step/action-card.ts`,
   `view/action-card-view.ts`). The actions Core took for a decision (the
@@ -665,8 +712,18 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     28 px round mark. The mark is tinted by the outcome: accent while
     working, success when done, danger when failed, warning while waiting,
     and neutral once settled.
-  - **Head line.** The kind's name and what it acted on: "Click · Get a free
-    quote". An action on the page that named no control says "the page"; a
+  - **Head line.** The act's name and what it acted on: "Click · Get a free
+    quote". The name is the act itself where it is narrower than its kind
+    (since t378; Core's `ACTIVITY_ACTION_VERB_NAMES`, carried as the card's
+    `name`): "Choose", "Tick", "Press key", "Search", "Clear field", "Next
+    page" and the like beside "Click" and "Type"; the kind still picks the
+    icon. A Click or Type card names its control from the name the evidence
+    the model was shown printed for the handle (Core's
+    `runtime/activity/call-context.ts`) when Core's domain words name none. A
+    step a list loop's pass ran also names its row, once, from Core's
+    `step.row` ("Confirm · Jonas Weber"). A target that only repeats the
+    name is dropped ("Next page", not "Next page · Next page"). An action on
+    the page that named no control says "the page"; a
     test run, an edit to the Flow, a wait, a robot check or a permission
     names no target. A long target is cut from the middle where words end,
     never inside one; a path is cut where one of its parts ends
@@ -716,7 +773,15 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     and all, and says "Done (5 times)": five reruns of one list read stacked
     five identical "Read list · ... / Done" cards (R3-U-5 of
     `run-mux6naez-6c20f26e`); another row count is another result, and done,
-    failed, done stays three cards. A read card's target is Core's name for
+    failed, done stays three cards. A step tried again and then done reads
+    as one card (since t378, `stream/step/retried.ts`): a done card takes in
+    the failed card just before it in its unit of work when both are the
+    same act (kind, name, target with its row, test mark) on a named target,
+    both are steps a run or a test of the Flow ran, and only the run's own
+    notes or repairs came between; it reads "Done on the 2nd try. The first
+    try didn't work: the site asked FluxIQ to slow down". A decision,
+    another card, a refusal, a check or a test run between them keeps them
+    apart. A read card's target is Core's name for
     its list whatever its shape, so it is never cut ("name and mutualFriends",
     U-R3-1 of `run-mux6nxst-c9bca37c`). Core's completion check reads whether
     a proposed Flow is finished, never a result: "Checking the Flow is
@@ -780,6 +845,17 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
   shrinks while the newest grows (the content's height unchanged, so no
   ResizeObserver fires), and before t174-w117 that parked the chat above the
   hand-off question and the build's ending with nobody touching it (D16).
+
+**The empty latest chat is the onboarding** (`view/empty-state-model.ts`):
+the title "What can FluxIQ do for you?", a concept paragraph that ends "You
+can stop it, or take over the page, at any time.", two starts and the
+fill-only examples. Describe focuses the composer and sends nothing; Extract
+switches to Automations and presses "Extract Data From This Page" (or
+focuses it beside the line saying why it is unavailable). Model readiness is
+read once each time the connected, empty latest chat appears
+(`onboarding/model-readiness.ts`, through `modelReadiness`); only when no key
+is enabled does a key line show, with Open FluxIQ. A failed read shows no key
+line. Automation, question and project chats have no starts.
 
 The composer sends typed instructions through `panelConversationSend`. The
 box and its kept draft empty the moment the message is sent
@@ -2089,9 +2165,10 @@ Navigation and click landing results retain a self-clearing check's elapsed mill
 
 Core also settles durably parked run asks as `timed_out` at their deadline and as `cancelled` before project deletion. A service restart detects overdue sessions when they are read; indefinite waits keep waiting.
 
-### Stop builds and runs from the extension chat
+### Stop, take over and hand back from the extension chat
 
-The chat composer dock exposes Stop build or Stop run while the raw activity
+The chat dock is the run controls (the hold control, then Stop) above the
+composer. The chat composer dock exposes Stop build or Stop run while the raw activity
 subject is active, including waits for a person. It targets the subject's project
 and Flow for a build, or its run ID for execution. Settled events remove the
 control. Stop requests stay visibly pending until final activity; a relay failure
@@ -2101,6 +2178,35 @@ The existing panelStopRun relay accepts an optional Flow ID for a build and
 calls Core's `cancel-flow-bootstrap`; a run still uses `cancel-runtime-session`.
 Supplying both target IDs is refused. No target retains the legacy active-run
 scan. Cancellation does not promise rollback of actions already sent to a page.
+
+While a run works, the hold control (`panel/chat/hold-control.ts`) shows
+**Take over**. While the run is paused it says "You have the page. FluxIQ
+continues from step N when you hand back." and shows **Hand back**, with Stop
+beside it. Builds never show it. A press reads "Taking over…" or "Handing
+back…" and stays disabled until Core's activity moves into or out of
+`paused`; a failure says "Couldn't take over. Try again." or "Couldn't hand
+back. Try again.". A reply for an older run or owner changes nothing.
+
+| Panel message | Core endpoint and request |
+| --- | --- |
+| `fluxiq.panel.stopRun` (`panelStopRun`) | `{ runId }`: `cancel-runtime-session`; `{ flowId }`: `cancel-flow-bootstrap`; `{}`: every active run of the project |
+| `fluxiq.panel.takeOverRun` (`panelTakeOverRun`) | `pause-runtime-session` `{ projectId, runId, takeControl: true }` |
+| `fluxiq.panel.handBackRun` (`panelHandBackRun`) | `resume-runtime-session` `{ projectId, runId, afterManualAction: true }` |
+
+Take over and hand back take `{ projectId?, runId }`; `projectId` defaults to
+the paired project. Only the named fields are sent. A missing or blank
+`runId` is refused with `invalid_request` and a missing project with
+`no_project`, before Core is called. Only control pages may send them
+(`PANEL_MESSAGES`). The reply is Core's run-control answer, unchanged. Core
+accepts the pairing token on `pause-runtime-session`,
+`resume-runtime-session` and `get-runtime-run-control`.
+
+When the panel follows a run (`stream/run-target.ts`), the chat keeps the
+thread on screen if it already shows the run; otherwise it opens the Flow's
+automation thread, then the latest chat, when that shows the run, and
+otherwise the run's own thread ("Run of <name>"). It waits while the person
+types or the thread is loading, and drops the run if it ends, a recording
+runs, or the chat loses its owner. The draft is kept.
 
 ### Native structured field typing
 

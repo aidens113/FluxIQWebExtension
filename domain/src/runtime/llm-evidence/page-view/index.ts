@@ -4,7 +4,7 @@
 
 export * from "./element";
 export { webLlmPageHeader } from "./header";
-export { chosenWebLlmLines, renderedWebLlmLines, webLlmLineFacts, webLlmLineKind, type WebLlmLineFact } from "./line";
+export { chosenWebLlmLines, renderedWebLlmLines, webLlmControlHolders, webLlmLineFacts, webLlmLineKind, type WebLlmLineFact } from "./line";
 export { webLlmLinkRepeats } from "./link-repeats";
 export { webLlmLinkWriter, type WebLlmLinkWriter } from "./link-writer";
 export { webLlmPageText } from "./page-text";

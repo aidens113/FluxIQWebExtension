@@ -386,10 +386,16 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
     // "naming it", "when"/"opaque" before the target handle, "the comparison"
     // after "no number fails", "really", and the closing "Name a column the
     // detection showed", now said inside the condition clause itself.
+    //
+    // **Rows a repeat presses are narrowed by the read's where (t378).** Lane
+    // D's build (`run-mv0fuual-f9e6f089`) took "narrow excess later" as leave
+    // to filter at the end of the run, which never changes the rows a repeat
+    // visits, and confirmed all eight requests where four were asked. The
+    // clause fitted inside the 2,000 the paging sentences returned.
     tools: [
       {
         toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
-        description: "Detect a repeating list or table around target handle, else the page's largest list. Returns extraction handle, field keys/labels/kinds/coverage, item count, pagination and paginationBound. Observes only, never a step of the Flow. Run the extraction node with extractList: {handle, fields?: {yourKey: \"fieldKey\" | \"fieldKey@attr\"}, where?: [{field: \"fieldKey\", is: \"absent\"}], minItems?: 0}. The read reads the page shown. pagination says how the list continues: every page is Next page on the same handle (nextPage: {list: handle}) after the read, with repeat on the read through it. Narrow the page first for a partial list; minItems: 0 allows no rows. where is optional: leave it out and every item is a row, the right first attempt when unsure; narrow excess later. Every condition must hold and names a detected column, never guessed item text. It may name a column fields does not keep: keep only the columns asked for, never a mark used only to filter. Presence: {field, is: \"present\"} or {field, is: \"absent\"} for a column only some items have. Number: atLeast, atMost, lessThan, greaterThan or equals, using its first number ($49 is 49, 3.7 out of 5 is 3.7); no number fails. Text: contains, startsWith, endsWith, equals, or matches for a regex, ignoring case; one value or a list meaning any. not: true keeps what the condition rejects: {field: \"title\", contains: [\"ear tips\", \"charging case\"], not: true} drops accessories. If conditions reject every item, the node returns what it read and says so in its report. Lists mix ads with results: coverage below 1 often marks ads, excluded with is: \"absent\".",
+        description: "Detect a repeating list or table around target handle, else the page's largest list. Returns extraction handle, field keys/labels/kinds/coverage, item count, pagination and paginationBound. Observes only, never a step of the Flow. Run the extraction node with extractList: {handle, fields?: {yourKey: \"fieldKey\" | \"fieldKey@attr\"}, where?: [{field: \"fieldKey\", is: \"absent\"}], minItems?: 0}. The read reads the page shown. pagination says how the list continues: every page is Next page on the same handle (nextPage: {list: handle}) after the read, with repeat on the read through it. Narrow the page first for a partial list; minItems: 0 allows no rows. where is optional: leave it out and every item is a row, the right first attempt when unsure; narrow excess later. But rows a later step acts on, a press repeated over the read, are narrowed here by where: a condition saved with the answer never changes which rows a repeat visits. Every condition must hold and names a detected column, never guessed item text. It may name a column fields does not keep: keep only the columns asked for, never a mark used only to filter. Presence: {field, is: \"present\"} or {field, is: \"absent\"} for a column only some items have. Number: atLeast, atMost, lessThan, greaterThan or equals, using its first number ($49 is 49, 3.7 out of 5 is 3.7); no number fails. Text: contains, startsWith, endsWith, equals, or matches for a regex, ignoring case; one value or a list meaning any. not: true keeps what the condition rejects: {field: \"title\", contains: [\"ear tips\", \"charging case\"], not: true} drops accessories. If conditions reject every item, the node returns what it read and says so in its report. Lists mix ads with results: coverage below 1 often marks ads, excluded with is: \"absent\".",
         inputSchema: { type: "object", properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
         effect: "observe",
       },
@@ -447,8 +453,16 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
       // its own and answers with it, while a detection and the resolver throw
       // past to the block below. A repeat that was only noticed on one of the
       // two would miss whichever half the next build spent itself on.
-      const answered = (answer: WebLlmEvidenceToolExecution): WebLlmEvidenceToolExecution =>
-        repeatedRefusals.answered(evidenceScope(input, sessionId), input.toolId, answer);
+      //
+      // It is also where the model reads every answer, so what the answer
+      // printed -- a search's matches, a description, a node run's answer, a
+      // detection's column `at` -- is what a candidate may name from it
+      // (`./plan-resolution/target-packets.ts` `printed`, t378 W13). A refusal
+      // hands back the handle the call named, which that does not print.
+      const answered = (answer: WebLlmEvidenceToolExecution): WebLlmEvidenceToolExecution => {
+        targetPackets.printed({ projectId: input.projectId, flowId: input.flowId }, answer.evidence, answer.resultReason === undefined ? undefined : input.value);
+        return repeatedRefusals.answered(evidenceScope(input, sessionId), input.toolId, answer);
+      };
       // The page a detection read the state in, kept here because a detection
       // refuses by throwing, past the result it would have carried it on. A
       // node run reports its own states (`./node-run/run.ts`).

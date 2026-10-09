@@ -13,7 +13,8 @@ import type { ClientGatewayActivityPhase } from "@fluxiq/client-gateway-websocke
  *   failed", "Run finished", "Run failed", "Couldn't fix your Flow" for a run
  *   whose repair failed; a build that fails says "Build failed" even
  *   mid-repair) or needs the person ("Waiting for you: finish the check on
- *   the page", "Waiting for you: answer in the FluxIQ panel"). Those changes
+ *   the page", "Waiting for you: answer in the FluxIQ panel", "Paused: your
+ *   turn on the page" while a run is held for the person). Those changes
  *   show at once (`background/activity/headline.ts`).
  * - `detail` is Core's latest event in a person's words (`activityWording`),
  *   never a tool id or result code, changed at most once per 1.6 s
@@ -42,11 +43,14 @@ export type ActivityDisplay = {
   phase: ClientGatewayActivityPhase;
   headline: string;
   detail: string | null;
-  /** 1-based step of M, from the run's step events; kept between them, null for a build and once settled. */
+  /** 1-based step of M, from the run's step events; kept between them and while a run is held (`paused`: the step it continues from), null for a build and once settled. */
   step: { index: number; count: number } | null;
   /** True while the work runs; false once it settled or while it waits for the person (`outcome` says which). */
   working: boolean;
-  /** Null while working; otherwise done, failed, or waiting for the person (which is not final: work may resume). */
+  /**
+   * Null while working; otherwise done, failed, or waiting for the person (which is not final: work may resume).
+   * A run Core holds for the person (Take over) is `waiting` with `phase: "paused"`.
+   */
   outcome: "done" | "failed" | "waiting" | null;
   /** The Core sequence of the newest event folded into this display; 0 for the starting status. */
   sequence: number;

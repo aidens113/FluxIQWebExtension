@@ -20,6 +20,16 @@
 // reaches the ledger, an empty balance it hit still stops later launches, and
 // the debug rule still asks for its debug. Once its bundle exists, the bundle
 // is read instead.
+//
+// A run that failed on the facility before any provider call never tested the
+// product: lane A's `run-mv0fu9uq-107ab0de` timed out on the Lab's own
+// `list-flows` read before the instruction was typed, and the `unchanged` rule
+// then refused its task on that source as though the product had failed. Such
+// a run carries `facilityFailureBeforeProvider`, read from the bundle's
+// `evaluation.json` (`facilityFailure`, `llm.calls`) and checked against its
+// step log, which must hold no provider call either. Anything less certain --
+// no evaluation, a call count it did not record, a step log with a call --
+// leaves the field null, and the run counts as it always did.
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
@@ -35,7 +45,8 @@ const KILLED_VERDICT = "killed";
 const SKEW_MS = 5_000;
 
 /**
- * @typedef {{ runId: string, startedAt: string | null, verdict: string | null, totalEstimatedCostUsd: number | null, buildCeilingUsd: number | null, maxBuildCostUsd: number | null, buildsOverCeiling: number | null, balanceFailure: ReturnType<typeof detectBalanceFailure>, killed?: true }} RunOutcome
+ * @typedef {{ stage: string, reason: string, endpoint?: string }} FacilityFailureBeforeProvider
+ * @typedef {{ runId: string, startedAt: string | null, verdict: string | null, totalEstimatedCostUsd: number | null, buildCeilingUsd: number | null, maxBuildCostUsd: number | null, buildsOverCeiling: number | null, balanceFailure: ReturnType<typeof detectBalanceFailure>, facilityFailureBeforeProvider: FacilityFailureBeforeProvider | null, killed?: true }} RunOutcome
  */
 
 /**
@@ -72,13 +83,15 @@ export async function readRunOutcomes(runsDirectory, { sinceMs, knownRunIds, lab
     const startedAt = typeof run?.startedAt === "string" ? run.startedAt : new Date(parseInt(named[1], 36)).toISOString();
     const liveLlm = await readJson(path.join(directory, "snapshots", "live-llm.json"));
     const failures = await readJson(path.join(directory, "provider-failures.local.json"));
+    const verdict = typeof run?.verdict === "string" ? run.verdict : typeof run?.status === "string" ? run.status : null;
     outcomes.push({
       runId: name,
       startedAt,
-      verdict: typeof run?.verdict === "string" ? run.verdict : typeof run?.status === "string" ? run.status : null,
+      verdict,
       totalEstimatedCostUsd: costOf(liveLlm),
       ...perBuildOf(liveLlm),
       balanceFailure: failures === null ? null : detectBalanceFailure(failures),
+      facilityFailureBeforeProvider: verdict === "passed" ? null : await facilityFailureBeforeProvider(directory, name, liveLlm, labRunsDirectory),
     });
   }
   return outcomes.sort((left, right) => String(left.startedAt).localeCompare(String(right.startedAt)));
@@ -96,6 +109,7 @@ async function killedOutcome(runId, startMs, labRunsDirectory) {
     maxBuildCostUsd: null,
     buildsOverCeiling: null,
     balanceFailure: logged?.balanceFailure ?? null,
+    facilityFailureBeforeProvider: null,
     killed: true,
   };
 }
@@ -106,6 +120,32 @@ function perBuildOf(liveLlm) {
   return spend === null
     ? { buildCeilingUsd: null, maxBuildCostUsd: null, buildsOverCeiling: null }
     : { buildCeilingUsd: spend.ceilingUsd, maxBuildCostUsd: spend.maxBuildCostUsd, buildsOverCeiling: spend.overCeiling };
+}
+
+const CODE = /^[A-Za-z0-9._-]{1,64}$/u;
+const ENDPOINT = /^\/api\/[a-z0-9/-]{1,120}$/u;
+
+/**
+ * The facility failure a finalized run ended on, when it is certain no
+ * provider call was made: the evaluation names a facility failure and counts
+ * zero model calls, the run recorded no cost, and its step log, when it has
+ * one, holds no provider call. Only the diagnostic's closed codes are kept.
+ */
+async function facilityFailureBeforeProvider(directory, runId, liveLlm, labRunsDirectory) {
+  const evaluation = await readJson(path.join(directory, "evaluation.json"));
+  const facility = evaluation?.facilityFailure;
+  if (facility === null || typeof facility !== "object") return null;
+  if (evaluation.llm?.calls !== 0) return null;
+  const cost = costOf(liveLlm);
+  if (cost !== null && cost !== 0) return null;
+  const logged = labRunsDirectory === null ? null : await readStepLogOutcome(labRunsDirectory, runId);
+  if (logged !== null && logged.calls !== 0) return null;
+  if (typeof facility.stage !== "string" || !CODE.test(facility.stage) || typeof facility.reason !== "string" || !CODE.test(facility.reason)) return null;
+  return {
+    stage: facility.stage,
+    reason: facility.reason,
+    ...(typeof facility.endpoint === "string" && ENDPOINT.test(facility.endpoint) ? { endpoint: facility.endpoint } : {}),
+  };
 }
 
 function costOf(liveLlm) {
