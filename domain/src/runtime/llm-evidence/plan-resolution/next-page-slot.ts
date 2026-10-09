@@ -38,7 +38,7 @@ import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import type { WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
-import type { WebLlmTargetPackets, WebLlmTargetReach } from "./target-packets";
+import type { WebLlmTargetPackets, WebLlmTargetReach, WebLlmTargetResolution } from "./target-packets";
 import type { WebLlmTargetView } from "./view-history";
 
 /** Why a `nextPage` names no one list, or no way to its next page. Each is a plan resolver issue code. */
@@ -76,8 +76,10 @@ const TARGET_ISSUES = {
   unknown: "web.handle.unknown",
   stale: "web.handle.stale",
   ambiguous: "web.handle.ambiguous",
-  not_unique: "web.handle.not_unique"
-} as const satisfies Record<"unknown" | "stale" | "ambiguous" | "not_unique", WebNextPageSlotIssue>;
+  not_unique: "web.handle.not_unique",
+  // Held but never printed: to the model, a handle no packet it read carried (`target-packets.ts`).
+  not_shown: "web.handle.unknown"
+} as const satisfies Record<Extract<WebLlmTargetResolution, { ok: false }>["code"], WebNextPageSlotIssue>;
 
 /** What `value`, a Next page node's `nextPage`, runs as, or why it cannot run. */
 export function resolveWebNextPageSlot(

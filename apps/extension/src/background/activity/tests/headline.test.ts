@@ -26,3 +26,8 @@ test("a build that fails while it repairs settles on the build's own failure hea
   assert.equal(activityHeadline("build", "failed", { repairing: true }), "Build failed");
   assert.equal(activityHeadline("build", "failed"), "Build failed");
 });
+
+test("a run held for the person reads 'Paused: your turn on the page'", () => {
+  assert.equal(activityHeadline("run", "waiting", { waitingOn: "paused" }), "Paused: your turn on the page");
+  assert.equal(activityHeadline("run", "waiting", { waitingOn: "check" }), "Waiting for you: finish the check on the page");
+});

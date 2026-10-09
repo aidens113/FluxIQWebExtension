@@ -588,6 +588,10 @@ const HANDLE_ISSUE_REASONS: ReadonlyMap<string, WebLlmToolRejectionReason> = new
   ["web.handle.frame_mismatch", "handle_in_another_frame"],
   ["web.handle.unknown_field", "column_not_in_detected_list"],
   ["web.handle.extraction_required", "extraction_handle_required"],
+  // A candidate's press on an element the page view prints as plain text
+  // (`plan-resolution/pressable-targets.ts`, t378): a real element, and not a
+  // control a press acts on.
+  ["web.handle.not_a_control", "handle_wrong_kind_of_control"],
   ["web.handle.wrong_control", "handle_wrong_kind_of_control"]
 ] as const satisfies ReadonlyArray<readonly [string, WebLlmToolRejectionReason]>);
 

@@ -52,6 +52,7 @@ async function buildConnection(): Promise<FluxIQConnection> {
   const built = new FluxIQConnection(settings, session);
   connection = built;
   let watched: string | undefined;
+  built.onActivityDisplay((display) => toolbar.activity(display));
   built.subscribe((status) => {
     toolbar.update(status);
     problemNoticer.observe(status);

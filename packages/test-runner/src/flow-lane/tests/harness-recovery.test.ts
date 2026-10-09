@@ -513,6 +513,32 @@ test("a wrong answer that did re-enter the build loop records the adaptation, wh
   }
 });
 
+// A held re-author (t267): Core approves the edit, holds it unapplied for the
+// run's judged whole run, and then writes `applied` or why not. Without `held`
+// and `notAppliedReason` the repair lane saw `applied: false` and nothing else,
+// dropped the re-author, found no proposal and passed with 0 replays.
+test("a held re-author carries whether it was held and Core's closed reason it was not kept, and drops a reason that is not one", async (t) => {
+  const { control, serve } = await core(t);
+  const base = { routed: true, refusal: null, adaptationId: ADAPTATION_ID, applied: false, failureCode: null };
+  const cases = [
+    ["held and rejected", { routed: true, adaptationId: ADAPTATION_ID, held: true, notAppliedReason: "refuted" }, { ...base, held: true, notAppliedReason: "refuted" }],
+    ["held and superseded", { routed: true, adaptationId: ADAPTATION_ID, held: true, notAppliedReason: "superseded" }, { ...base, held: true, notAppliedReason: "superseded" }],
+    ["held and unsettled", { routed: true, adaptationId: ADAPTATION_ID, held: true }, { ...base, held: true }],
+    ["held and kept", { routed: true, adaptationId: ADAPTATION_ID, held: true, applied: true }, { ...base, applied: true, held: true }],
+    ["a sentence for a reason", { routed: true, adaptationId: ADAPTATION_ID, held: true, notAppliedReason: "PRIVATE-ISSUE: the judged run did not answer" }, { ...base, held: true }],
+    ["an id for a reason", { routed: true, adaptationId: ADAPTATION_ID, held: true, notAppliedReason: ADAPTATION_ID }, { ...base, held: true }],
+    ["a reason beside an applied edit", { routed: true, adaptationId: ADAPTATION_ID, applied: true, notAppliedReason: "refuted" }, { ...base, applied: true }],
+    ["a refusal holds nothing", { routed: false, code: "flow_unavailable", held: true, notAppliedReason: "refuted" }, { routed: false, refusal: "flow_unavailable", adaptationId: null, applied: false, failureCode: null }],
+  ] as const;
+  for (const [name, written, published] of cases) {
+    serve(refutedRun({ resultReauthor: written }));
+    const outcome = await run(control);
+    assert.deepEqual(outcome.harnessRecovery?.resultReauthor, published, name);
+    assert.deepEqual(validateRunHarnessRecovery(outcome.harnessRecovery), { valid: true, value: outcome.harnessRecovery }, name);
+    assert.equal(JSON.stringify(snapshotOf(outcome)).includes("PRIVATE"), false, `${name}: Core's sentence stays behind`);
+  }
+});
+
 // Absent, not a fabricated "not attempted". A run Core never took to the route
 // and a run Core refused are different facts, and a default record would report
 // the first as the second -- which is the misattribution this pair exists to

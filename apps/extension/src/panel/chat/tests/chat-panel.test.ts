@@ -14,6 +14,7 @@ import type { PanelMessage, PanelResult } from "../../state";
 import { createChatPanel, type ChatPanel } from "../chat-panel";
 import { targetCore, type TargetCore } from "../conversation/tests/target-core";
 import type { ChatTarget } from "../target";
+import { MODEL_KEY_LINE, ONBOARDING_CONCEPT } from "../view";
 import { fake, withFakeDocument, type FakeElement } from "./fake-dom";
 
 const CONNECTED = { connectionState: "connected" } as unknown as ExtensionStatus;
@@ -275,5 +276,78 @@ test("a settled build's every decision stays as its own message, with its reason
       chat.setActive(false);
       globals.chrome = before;
     }
+  });
+});
+
+test("the empty latest chat is the onboarding: Describe puts the caret in the composer and sends nothing", async () => {
+  await withFakeDocument(async () => {
+    const core = targetCore([]);
+    const chat = mount(core);
+    await settle();
+    const root = fake(chat.element);
+    assert.equal(root.byClass("chat-empty")[0]!.hidden, false);
+    assert.equal(root.byClass("chat-empty-line")[0]!.textContent, ONBOARDING_CONCEPT);
+    const starts = root.byClass("chat-start");
+    assert.deepEqual(starts.map((start) => start.textContent), ["Describe what you want", "Extract data from this page"]);
+    assert.equal(root.byClass("chat-example").length, 3, "the examples stay as fill-only chips");
+    const box = root.descendants().find((element) => element.id === "conversationInput")!;
+    let focused = 0;
+    box.focus = () => { focused += 1; };
+    starts[0]!.dispatch("click");
+    assert.equal(focused, 1, "the caret is in the composer");
+    assert.equal(box.value, "");
+    await settle();
+    assert.equal(core.sent.some((message) => message.type === RUNTIME_MESSAGES.panelConversationSend), false, "nothing was sent");
+  });
+});
+
+test("the empty latest chat asks for the model keys once, says when none is enabled, and Extract still goes to the panel", async () => {
+  for (const [reply, line] of [
+    [{ ok: true, value: { ok: true, payload: { keys: [{ kind: "model", provider: "deepseek", enabled: false }] } } }, MODEL_KEY_LINE],
+    [{ ok: true, value: { ok: true, payload: { keys: [{ kind: "model", provider: "deepseek", enabled: true }] } } }, null],
+    [{ ok: false, sentence: "FluxIQ is not connected." }, null]
+  ] as const) {
+    await withFakeDocument(async () => {
+      const core = targetCore([]);
+      let asked = 0;
+      let extracted = 0;
+      const request = async <T>(message: PanelMessage): Promise<PanelResult<T>> => {
+        if (message.type !== RUNTIME_MESSAGES.panelModelReadiness) return core.request<T>(message);
+        asked += 1;
+        return reply as unknown as PanelResult<T>;
+      };
+      const opener = () => ({ element: document.createElement("a") as HTMLElement, observe: () => undefined });
+      const chat = createChatPanel(request, opener, { onExtract: () => { extracted += 1; } });
+      chat.render(CONNECTED);
+      await settle();
+      await settle();
+      const root = fake(chat.element);
+      const key = root.byClass("chat-key-line")[0]!;
+      assert.equal(asked, 1, "read once while the empty latest chat is on screen");
+      assert.equal(key.hidden, line === null, String(line));
+      if (line !== null) {
+        assert.equal(root.byClass("chat-key-text")[0]!.textContent, line);
+        assert.equal(key.children.some((child) => child.tagName === "A"), true, "Open FluxIQ sits beside the line");
+      }
+      root.byClass("chat-start")[1]!.dispatch("click");
+      assert.equal(extracted, 1, "Extract needs no model, so it is always offered");
+      chat.render(CONNECTED);
+      await settle();
+      assert.equal(asked, 1, "a status redraw does not ask again");
+    });
+  }
+});
+
+test("an automation's empty chat neither offers the starts nor reads the model keys", async () => {
+  await withFakeDocument(async () => {
+    const core = targetCore([]);
+    const chat = mount(core);
+    chat.open({ kind: "automation", flowId: "flow-9", name: "Job alerts" });
+    const before = core.sent.filter((message) => message.type === RUNTIME_MESSAGES.panelModelReadiness).length;
+    await settle();
+    const root = fake(chat.element);
+    assert.equal(root.byClass("chat-start").length, 0);
+    assert.equal(root.byClass("chat-key-line")[0]!.hidden, true);
+    assert.equal(core.sent.filter((message) => message.type === RUNTIME_MESSAGES.panelModelReadiness).length, before);
   });
 });

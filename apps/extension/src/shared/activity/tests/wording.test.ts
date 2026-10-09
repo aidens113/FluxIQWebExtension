@@ -91,11 +91,11 @@ test("result codes become a short outcome, never the code", () => {
     ["web.action.rejected.target_covered", "succeeded", "not tried: a popup or banner on the page was covering it"],
     ["web.action.target_not_found", "succeeded", "couldn't find it on the page"],
     ["web.structure.not_detected", "succeeded", "couldn't find it on the page"],
-    ["web.action.timeout", "succeeded", "that didn't work, trying another way"],
-    ["web.action.failed", "succeeded", "that didn't work, trying another way"],
+    ["web.action.timeout", "succeeded", "that didn't work: the page took too long"],
+    ["web.action.failed", "succeeded", "that didn't work"],
     ["web.something.new", "succeeded", "done"],
     [undefined, "succeeded", "done"],
-    [undefined, "failed", "that didn't work, trying another way"]
+    [undefined, "failed", "that didn't work"]
   ];
   for (const [code, status, outcome] of cases) {
     const input = tool("web.detect_repeating_structure", status, code);
@@ -108,7 +108,7 @@ test("result codes become a short outcome, never the code", () => {
 
 test("the draft tool's end reads as the Flow changed", () => {
   assert.equal(activityWording(tool("core.flow_draft", "succeeded")).sentence, "Changing the Flow — done");
-  assert.equal(activityWording(tool("core.flow_draft", "failed")).sentence, "Changing the Flow — that didn't work, trying another way");
+  assert.equal(activityWording(tool("core.flow_draft", "failed")).sentence, "Changing the Flow — that didn't work");
 });
 
 test("an event that carries only Core's sentence is read from it", () => {
@@ -279,4 +279,22 @@ test("a call Core rejected before sending it says it was not tried, and why when
   }
   // A call that ran and missed its target still says so.
   assert.equal(rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.target_not_found · Node: web.output.dom-click").outcome, "couldn't find it on the page");
+});
+
+// Lane C (run-mv0fuotv-805294d7, defect 3): "Not done: saving the Flow's steps — that didn't work,
+// trying another way" was said before the same Flow was sent again unchanged and the build ended.
+test("a failed or refused call never says what FluxIQ does next", () => {
+  const resent = activityWording(event({
+    phase: "building",
+    label: "Not done: saving the Flow's steps",
+    detail: { kind: "tool", title: "Saving the Flow's steps", status: "failed", ref: "core.submit_candidate", text: "Result: llm_evidence_loop.repeat_refused · Reason: failed" }
+  }));
+  assert.match(resent.sentence, /^Not done: saving the Flow's steps — \S/u);
+  assert.doesNotMatch(resent.sentence, /trying another way|— not done/u);
+  assertHuman(resent, resent.sentence);
+  const slowed = activityWording(tool("core.run_node", "failed", "web.action.rate_limited"));
+  assert.match(slowed.outcome ?? "", /^that didn't work: /u);
+  for (const wording of [slowed, activityWording(tool("core.flow_draft", "failed")), activityWording(tool("core.run_node", "failed", "web.action.failed"))]) {
+    assert.doesNotMatch(wording.sentence, /trying another way/u);
+  }
 });

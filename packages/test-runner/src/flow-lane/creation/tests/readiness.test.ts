@@ -66,3 +66,35 @@ test("once Core runs, its own generation readiness says whether it has the trial
   }
   assert.deepEqual(reads[0], { endpoint: "get-flow-bootstrap-generation-readiness", payload: {}, domainId: "web-automation" });
 });
+
+test("the readiness read is retried like every safe read: first try plus 3 on a timeout, and a refusal is not retried", async () => {
+  const path = "/api/programs/automation-studio/get-flow-bootstrap-generation-readiness";
+  const timedOut = () => new RunnerFailure("environment.missing", "FluxIQ HTTP operation timed out", { details: { bounded: "timeout", operationStage: "control.request", timeoutMs: 30_000, path } });
+  const fake = (answers: unknown[]) => {
+    let clock = 0;
+    const pauses: number[] = [];
+    let calls = 0;
+    return {
+      pauses, calls: () => calls,
+      control: {
+        automationStudioCall: async () => { calls += 1; clock += 30_000; const answer = answers.length > 1 ? answers.shift() : answers[0]; if (answer instanceof Error) throw answer; return answer; },
+        readClock: { now: () => clock, sleep: async (ms: number) => { pauses.push(ms); clock += ms; } },
+      },
+    };
+  };
+  const answered = fake([timedOut(), timedOut(), timedOut(), { readiness: AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS }]);
+  assert.equal((await readCreatedFlowCandidateTrialReadiness(answered.control, "web-automation")).trialRunner, true);
+  assert.equal(answered.calls(), 4);
+  assert.deepEqual(answered.pauses, [500, 1_000, 2_000]);
+
+  const never = fake([timedOut()]);
+  await assert.rejects(readCreatedFlowCandidateTrialReadiness(never.control, "web-automation"), (error: unknown) => error instanceof RunnerFailure
+    && error.message === "FluxIQ HTTP operation timed out" && error.details?.path === path
+    && error.details?.endpoint === "get-flow-bootstrap-generation-readiness" && error.details?.attempts === 4);
+  assert.equal(never.calls(), 4);
+
+  const refusal = new RunnerFailure("facility.contract", "Core refused a value the Lab sent", { details: { path, status: 400 } });
+  const refused = fake([refusal]);
+  await assert.rejects(readCreatedFlowCandidateTrialReadiness(refused.control, "web-automation"), (error: unknown) => error === refusal);
+  assert.equal(refused.calls(), 1);
+});

@@ -1,4 +1,4 @@
-import { harnessChangeVerdictBases, harnessChangeVerdictOutcomes, harnessPatchPermissionOutcomes, harnessRecoveryContextOmissionReasons, harnessRecoveryRungs, harnessResultRepairOutcomes, harnessResultRepairPhases, type RunHarnessRecovery, type RunHarnessResultReauthor, type RunHarnessResultRepair } from "./harness-recovery.js";
+import { harnessChangeVerdictBases, harnessChangeVerdictOutcomes, harnessPatchPermissionOutcomes, harnessRecoveryContextOmissionReasons, harnessRecoveryRungs, harnessResultReauthorNotAppliedReasons, harnessResultRepairOutcomes, harnessResultRepairPhases, type RunHarnessRecovery, type RunHarnessResultReauthor, type RunHarnessResultRepair } from "./harness-recovery.js";
 import { add, array, enumeration, keys, object, result, uniqueStrings, type JsonObject } from "./runtime-validation.js";
 import type { ValidationIssue, ValidationResult } from "./validation.js";
 
@@ -12,7 +12,7 @@ const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
 const IDENTIFIER_MAX_LENGTH = 256;
 
 const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode", "refusalRung", "contextSections", "resultReauthor", "resultRepair", "resultChecks"] as const satisfies readonly (keyof RunHarnessRecovery)[];
-const resultReauthorKeys = ["routed", "refusal", "adaptationId", "applied", "failureCode", "failureStage", "failureRetryable", "providerInvocation", "providerResponse", "providerStatus"] as const satisfies readonly (keyof RunHarnessResultReauthor)[];
+const resultReauthorKeys = ["routed", "refusal", "adaptationId", "applied", "failureCode", "failureStage", "failureRetryable", "providerInvocation", "providerResponse", "providerStatus", "held", "notAppliedReason"] as const satisfies readonly (keyof RunHarnessResultReauthor)[];
 const resultRepairKeys = ["attempted", "nodeId", "code", "phase", "outcome"] as const satisfies readonly (keyof RunHarnessResultRepair)[];
 const contextSectionKeys = ["included", "omitted"] as const;
 const contextOmissionKeys = ["section", "reason"] as const;
@@ -148,6 +148,18 @@ function checkResultReauthor(input: unknown, path: string, issues: ValidationIss
   }
   if (value.failureRetryable !== undefined && typeof value.failureRetryable !== "boolean") add(issues, `${path}.failureRetryable`, "must be a boolean");
   if (value.providerStatus !== undefined && !Number.isSafeInteger(value.providerStatus)) add(issues, `${path}.providerStatus`, "must be a whole number");
+  // Whether the edit was held for the judged whole run, and why a held edit was
+  // not kept. Both belong to a taken route; the reason is one of Core's closed
+  // codes and never stands beside an edit that was applied.
+  if (value.held !== undefined) {
+    if (typeof value.held !== "boolean") add(issues, `${path}.held`, "must be a boolean");
+    if (value.routed === false) add(issues, `${path}.held`, "belongs to a route that was taken");
+  }
+  if (value.notAppliedReason !== undefined) {
+    enumeration(value.notAppliedReason, harnessResultReauthorNotAppliedReasons, `${path}.notAppliedReason`, issues);
+    if (value.routed === false) add(issues, `${path}.notAppliedReason`, "belongs to a route that was taken");
+    if (value.applied === true) add(issues, `${path}.notAppliedReason`, "must be absent for an edit that was applied");
+  }
 }
 
 /** Core's marker that the result reached the failure entry point: a flag, the node it was filed against, and the verdict code that sent it there. */
