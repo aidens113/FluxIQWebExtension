@@ -776,3 +776,90 @@ Seen working:
 
 - A third creation run: the window ended, and the guard would refuse it anyway.
 - Q1's fix is a design; no tests were written (no source edits).
+
+## Round 8 (2026-10-09, from 03:06 UTC; paid launch at or after 04:00): lane A qualifying runs on a new pair
+
+The tree `fxwork/t342` was at downstream ed65545f (contains dev 1d04a11a; local dev 128d907e is one
+documentation-only commit ahead) and Core 52d7ac3a (= Core dev). The pair is new since round 7 (Core t368, t370,
+t371, t373, t374), so the streak starts at zero.
+
+### Preflight (0 provider calls, 03:06-03:21 UTC)
+
+- Core libraries current (fluxiq rebuilt, 181.8 s); downstream `pnpm build` exit 0.
+- Lab `--dry-run`: `status ready`, 0 calls, candidate, `candidateTrial {trialRunner: true, startReset: true}`, flash,
+  48 calls, $0.10, `permittedConsequences []`, instruction sha256 `2e6f5e7d...a405`.
+- Free rehearsal `run-mv0e7y85-70073a70` (`lab run crossborder-marketplace --flow`, no `--live-llm`, so not guarded
+  or ledgered): built the Core panel (key `972850d2...`) and verified all four running identities. The browser is
+  headed (side panel).
+- Side finding R8-S1: that rehearsal's recorded Flow (the manifest workflow's recording, not the created Flow) fails
+  on the store coupon: `web.target.not_found`, a `div` selector inside the `fb-store-coupon` shadow root, after 5
+  attempts. Recording lane only; recording waits for A-D. Reproduce with the command above (free).
+
+Run debug: `docs/working/language-driven-flow-loop-plan/debugs/run-mv0fu9uq-107ab0de.md`.
+
+### In plain English
+
+**Run 8 failed before it began, at no cost, so lane A has no pass on this pair and no run 9 was launched.**
+
+The Lab started Core, the extension and the shop, opened the chat and was about to type the instruction. Just
+before typing, it asks Core for the project's list of Flows, so that it can later tell which Flow the chat made. Core
+did not answer within the Lab's 10 seconds, and the Lab gives that question only one try. The run ended there: no
+message typed, no model call, $0.
+
+Why Core was so slow to list the Flows of a brand-new, empty project:
+
+- Core keeps everything in one database table per workspace. To list one project's Flows it reads and decodes the
+  **entire** table, four times over, and keeps only the matching rows.
+- In this workspace that table is now 193 MB after about eight runs. Almost all of it is the records of test runs
+  of candidate Flows, 10-15 MB each, because each step's record carries a full copy of every earlier step's result,
+  including whole page snapshots.
+- Decoding the table once takes 3-4 seconds on this machine. Four times is about 10-13 seconds.
+- The same moment of every run in this workspace has been getting slower: 1.9 s in round 6, 7.2 s and 10.6 s in round
+  7's two runs. Today all four lanes started at once, which slowed the machine about threefold, and pushed it over.
+
+So this is a product defect (Flow listing costs grow with everything the workspace has ever stored, and test-run
+records grow quadratically with their step count), exposed by a fragile Lab check (one 10-second try on a read that
+is safe to retry). A person with a well-used workspace would see the same slowness in the panel's Automations tab.
+
+### Measured
+
+| | Run 8 |
+| --- | --- |
+| Run | `run-mv0fu9uq-107ab0de`, guard admitted 04:00:08, started 04:01:09, ended 04:03:00 |
+| Verdict | failed, `environment.missing`: `http.timeout` 10,000 ms on `list-flows`, stage `scenario.execute` |
+| Calls / cost | 0 / $0 (no steps, `costUsd: null`) |
+| Reached | identities, project created, panel connected; not the chat send |
+| Judge vs oracle | not reached |
+| Start-up timing | Core ready 4.5 s (rehearsal 1.4 s); extension worker at 36.3 s (round 7: 9.5-11.3 s) |
+
+### Causes and findings, with the file to change
+
+| # | Finding | Reproduction | File to change | Verified by |
+| --- | --- | --- | --- | --- |
+| P1 | Flow listing reads and `JSON.parse`s the whole `automation.state` table, four times per cold `list-flows` | copy the workspace DB; `select id, kind, data from "automation.state"` + `JSON.parse`: 3.1-3.9 s per pass for 4 matching rows | Core `programs/_shared/storage.ts:179-201` (listing and `deletePath`) with a prefix query in `programs/database-manager/storage/sqlite-repository.ts:41`; caller `runtime/service/legacy/store.ts:93-110` | lead: code path and timing on a copy |
+| P2 | A persisted trial session's attempts copy every earlier step's result with its page snapshot: 15.2 MB for 19 attempts, 10.9 MB of it `attempts[].inputs` | `automation.state` rows `projects/*/runtime/sessions/trial.*` | Core `runtime/executor/node-execution/attempt.ts:120`, `executor/attempt-trace.ts` | lead: row breakdown |
+| L3 | The Lab's pre-send `list-flows` read has one 10 s attempt; a timeout ends the run | this run | downstream `packages/test-runner/src/flow-lane/creation/chat/chat-thread.ts:26` (`READ_BOUNDS`), `build-from-chat.ts:111` | lead: code and run record |
+| L2 | (again) The `unchanged` guard counts a run that never reached the product as a product failure | ledger `finish` failed, cost null | `scripts/lab/live-guards/` rule `unchanged` | lead |
+| R8-S1 | Recording lane: the recorded Flow cannot find the store coupon inside the `fb-store-coupon` shadow root | free rehearsal above | not traced (recording waits for A-D) | lead: run record |
+
+UI: only the start was reached (panel connected, empty chat). Round 7's U1 was not exercised; its likely cause is
+located: `fluxiq/src/ui/activity-action/verb.ts:20-21` maps `select` and `check` to kind `click`, and `names.ts`
+labels a card by its kind.
+
+t368 and t369 (the wait guidance and the hidden-or-absent feedback) were not exercised: no candidate was written.
+
+### Streak and guard state
+
+- Streak on the new pair: 0 passes, 1 failed launch. No run 9 (the brief stops on any failure; `unchanged` would
+  refuse it anyway).
+- Ledger: `start` and `finish` for `run-mv0fu9uq-107ab0de` (failed, cost null); its debug exists under the run id.
+- Workspace `t342-a` carries the 193 MB database. A fix to P1 or L3 changes the fingerprint and starts a new pair; a
+  fresh workspace alone would avoid the slow read but not the guard.
+- Slot 2 is still claimed by t342. No lane A process is running (checked by command line).
+
+### Not run, not verified
+
+- Everything after the chat send: exploration, submissions, trials, judges, promotion, apply, playback, oracle,
+  replay, run 9.
+- The P1, P2 and L3 fixes are designs; no tests were written (no source edits).
+- Lanes B, C and D's workspace sizes, and whether their own reads came close to the bound.
