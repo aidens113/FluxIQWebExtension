@@ -228,10 +228,17 @@ export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
  * now work over: every row the read collects in the run, which the domain
  * declares on the record output rather than sending to the page
  * (`./one-page-read.ts`).
+ *
+ * **Rows a later step acts on are narrowed here (t378).** "Omit it, narrow
+ * later" stays right for a read whose rows are only the answer, but the rows a
+ * `repeat over` presses are the rows this read keeps: Core's end-of-run
+ * processing shapes only the saved answer. Lane D's build, told to narrow
+ * later, confirmed all eight friend requests where four were asked
+ * (`run-mv0fuual-f9e6f089`). Paging's returned room paid for the clause.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
   `{handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}]};`,
-  "where is optional: omit it, keep every item, narrow later. atMost/greaterThan/equals, contains/startsWith/endsWith/matches (text); list = any; not: true inverts; badge: is: \"present\".",
+  "where is optional: omit it, keep every item, narrow later; but rows a later step acts on (a repeat over) are narrowed here, by where. atMost/greaterThan/equals, contains/startsWith/endsWith/matches (text); list = any; not: true inverts; badge: is: \"present\".",
   "link=absolute URL, @href=raw href.",
   "Or {item: css, fields: {key: css|css@attribute|column:<header>}}.",
   `Reads this page only. Over every row it collects in the run: dedupe?: true|key, sort?: "key desc", minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`

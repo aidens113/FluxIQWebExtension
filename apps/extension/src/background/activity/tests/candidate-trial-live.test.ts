@@ -109,7 +109,7 @@ for (const [name, stop] of [["round 5's ladder words", oldStop], ["t366's ladder
     assert.equal(refused[0]!.detail, "A step didn't work in the test: the page turned it down");
     // The busy coupon press that was tried again says so, and only once the ladder chose to.
     const busy = shown.slice(4, 6).map((display) => display.detail);
-    assert.deepEqual(busy, ["A step didn't work in the test: the page was busy", "The page was busy, trying again"]);
+    assert.deepEqual(busy, ["A step didn't work in the test: the site asked FluxIQ to slow down", "The site asked FluxIQ to slow down, trying again"]);
   });
 }
 
@@ -130,5 +130,5 @@ test("a saved Flow's run never says 'trying again' for a refusal its ladder does
   // One it does retry says so once the ladder chose to.
   const h2 = harness();
   const retried = h2.feed(step(4, "Clicking “Get coupons”", "run", "r6"), recovering(4, "Get coupons", "Clicking “Get coupons”", "web.action.rate_limited", "run", "r6"), retryChoice(4, "run", "r6"));
-  assert.deepEqual(retried.map((display) => display.detail), ["Running step 4 of 10: Clicking “Get coupons”", "The page was busy", "The page was busy, trying again"]);
+  assert.deepEqual(retried.map((display) => display.detail), ["Running step 4 of 10: Clicking “Get coupons”", "The site asked FluxIQ to slow down", "The site asked FluxIQ to slow down, trying again"]);
 });

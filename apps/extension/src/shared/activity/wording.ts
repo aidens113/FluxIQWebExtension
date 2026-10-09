@@ -12,9 +12,14 @@
 //   ("Deciding the next step"), and once made by the model's own stated reason
 //   for it; the completion check by what it checks;
 // - a tool's result code becomes a short outcome ("done", "couldn't find it
-//   on the page", "that didn't work, trying another way"); a call FluxIQ
+//   on the page", "that didn't work: the page took too long"); a call FluxIQ
 //   declined to send (`web.action.rejected.*`) is "not tried", with why when
-//   the row says (`not-tried.ts`), never a page miss;
+//   the row says (`not-tried.ts`), never a page miss; a decision Core declined
+//   before doing it (a call or a whole Flow refused as a repeat, an edit
+//   refused) is "not done", with Core's reason. None of them says what comes
+//   next: "that didn't work, trying another way" was said before the same
+//   Flow was sent again unchanged, and before the build ended (lane C,
+//   run-mv0fuotv-805294d7, defect 3);
 // - Core's own sentence is kept when it is already human ("Running step 2 of
 //   5: Open search", "Saved 12 records"), and replaced by the phase's plain
 //   wording when it carries an id.
@@ -29,7 +34,7 @@
 // Pure: no browser API, no clock. Nothing here matches `RAW_ID`.
 
 import type { ClientGatewayActivity, ClientGatewayActivityPhase } from "@fluxiq/client-gateway-websocket";
-import { activityActionFailureReason } from "fluxiq/ui";
+import { activityActionFailureReason, activityActionOf } from "fluxiq/ui";
 import { notTriedOutcome } from "./not-tried";
 
 export type ActivityWording = {
@@ -64,7 +69,10 @@ const TOOL_ACTIONS: Readonly<Record<string, string>> = Object.freeze({
 
 const OUTCOME_DONE = "done";
 const OUTCOME_NOT_FOUND = "couldn't find it on the page";
-const OUTCOME_RETRY = "that didn't work, trying another way";
+/** A call that did not work. It never says what FluxIQ does next, which this row cannot know. */
+const OUTCOME_FAILED = "that didn't work";
+/** A sentence that already says it was not done ("Not done: saving the Flow's steps"). */
+const SAID_NOT_DONE = /^not done\b/iu;
 const OUTCOME_NOT_REPEATED = "it didn't work the same way again";
 /**
  * Core's newer words for a passed completion check: what the Flow does matches
@@ -129,7 +137,7 @@ function wordsOf(event: ClientGatewayActivity): readonly [string, string | null]
     const action = toolAction(toolId, event, code);
     // A call FluxIQ declined to send was not tried, whatever its code's last words say of the page (R2-U-6).
     const declined = code === undefined ? undefined : notTriedOutcome(code, detail?.text, action);
-    return [action, ended ? testedOutcome(event, code) ?? declined ?? toolOutcome(detail?.status, code) : null];
+    return [action, ended ? testedOutcome(event, code) ?? declined ?? refusedOutcome(event, action) ?? toolOutcome(detail?.status, code) : null];
   }
   if (event.phase === "thinking" || detail?.kind === "thought") return [thoughtAction(event), null];
   if (detail?.title === "Completion check" || /^(Checking the proposed (result|Flow)|The proposed (result|Flow))/u.test(event.label)) {
@@ -244,6 +252,21 @@ function testedOutcome(event: ClientGatewayActivity, code: string | undefined): 
   return said && said !== OUTCOME_DONE ? said : undefined;
 }
 
+/**
+ * A decision Core declined before doing it, in Core's words as its card says
+ * them (`activityActionOf`'s `refused`): "not done: the same Flow was already
+ * sent exactly like this and was not accepted", or the reason alone after a
+ * sentence that already says "Not done". Undefined for anything else, and for
+ * an edit some of which landed.
+ */
+function refusedOutcome(event: ClientGatewayActivity, action: string): string | undefined {
+  const refused = activityActionOf(event)?.refused;
+  if (refused === undefined || !refused.all) return undefined;
+  const because = refused.because.trim();
+  if (SAID_NOT_DONE.test(action)) return because || undefined;
+  return because ? `not done: ${because}` : "not done";
+}
+
 function toolOutcome(status: "started" | "succeeded" | "failed" | undefined, code: string | undefined): string {
   if (code) {
     // Core's reason for the code, as the step's card says it, so the status line
@@ -251,10 +274,13 @@ function toolOutcome(status: "started" | "succeeded" | "failed" | undefined, cod
     // Core has none for.
     if (/^core\.replay\.(changed|unreproducible)/u.test(code)) return activityActionFailureReason(code) ?? OUTCOME_NOT_REPEATED;
     if (/not_found|unobserved|missing|no_match|not_visible|absent|not_detected|none_found|empty/u.test(code)) return OUTCOME_NOT_FOUND;
-    if (/rejected|failed|error|timeout|timed_out|refused|denied|invalid|blocked|aborted/u.test(code)) return OUTCOME_RETRY;
+    if (/rejected|failed|error|timeout|timed_out|refused|denied|invalid|blocked|aborted|rate_limited|throttled/u.test(code)) {
+      const why = activityActionFailureReason(code);
+      return why ? `${OUTCOME_FAILED}: ${why}` : OUTCOME_FAILED;
+    }
     return OUTCOME_DONE;
   }
-  return status === "failed" ? OUTCOME_RETRY : OUTCOME_DONE;
+  return status === "failed" ? OUTCOME_FAILED : OUTCOME_DONE;
 }
 
 /** "Running step N of M: label", said as Core says it; the label only when it is an authored one, not a node id. */

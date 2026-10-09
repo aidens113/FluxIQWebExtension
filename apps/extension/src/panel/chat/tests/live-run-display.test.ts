@@ -149,8 +149,8 @@ test("U-A1: the step a run failed on reads as failed, with why, and the steps it
       const press = shown.find((card) => card.target.includes("Set as my store"))!;
       assert.match(press.outcome, /^Didn't work/u, "the failed press never says Done");
       assert.equal(shown.find((card) => card.target.includes("Reject all"))!.outcome, "Done");
-      // D8 (t174-w90): the busy page is said on the card, from the code on the row that settles it.
-      if (!announcedMerge) assert.match(press.outcome, /the page was busy/u);
+      // D8 (t174-w90): the slow-down a rate-limited press met is said on the card (t378; before, "the page was busy"), from the code on the row that settles it.
+      if (!announcedMerge) assert.match(press.outcome, /the site asked FluxIQ to slow down/u);
       if (!announcedMerge) assert.equal(root.byClass("chat-step-title").some((title) => title.textContent.includes("Recovery started") || title.textContent === "Set as my store"), false, "the row that settles the press is no message");
     });
   }

@@ -22,6 +22,18 @@ test("Core's own deciding row is status, even when it carries Core's sentence; s
   assert.equal(isModelThought(event({ kind: "thought", title: "Clicking “X”", text: "   ", status: "succeeded" })), false);
 });
 
+// t378 W4: Core heads a decision it must ask for again "Asking the AI model
+// again" (failed, with Core's sentence). That is FluxIQ's own status, never the
+// model's words: drawn as the live line, not told as the model's message.
+test("Core's asking-again row is status, whether the provider gave no answer or an unusable one", () => {
+  for (const [label, text] of [
+    ["The AI model's answer couldn't be used", "The AI model's answer didn't make sense, so FluxIQ is asking it again. If that keeps happening, the build stops."],
+    ["The AI model provider did not answer", "The AI model provider didn't answer, so FluxIQ is asking it again. If it keeps not answering, the build stops."]
+  ] as const) {
+    assert.equal(isModelThought(event({ kind: "thought", title: "Asking the AI model again", status: "failed", text }, label)), false, label);
+  }
+});
+
 test("tool, note and check rows, and a row with no detail, are never thoughts", () => {
   assert.equal(isModelThought(event(undefined)), false);
   assert.equal(isModelThought(event({ kind: "tool", title: "Clicking “X”", text: "Result: web.action.succeeded", status: "succeeded", ref: "core.run_node" })), false);

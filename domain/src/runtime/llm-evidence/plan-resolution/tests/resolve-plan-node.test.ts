@@ -425,6 +425,7 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
     "web.handle.frame_mismatch",
     "web.handle.unknown_field",
     "web.handle.extraction_required",
+    "web.handle.not_a_control",
     "web.handle.wrong_control",
     EXTRACTION_HINT,
     "web.handle.expected.extract_list.next_page",

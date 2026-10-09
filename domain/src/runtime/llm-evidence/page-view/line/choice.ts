@@ -41,6 +41,7 @@ import { meaningfulWords, normalisedWords, webLlmElementWords, webLlmViewTraits 
 import { mergedWebLlmFragments } from "../fragment-merge";
 import type { WebLlmPageTree } from "../page-tree";
 import type { WebLlmViewLine } from "../view-line";
+import { webLlmControlHolders } from "./control-holders";
 
 /** The page view's element lines, in document order. */
 export function chosenWebLlmLines(elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageTree): WebLlmViewLine[] {
@@ -52,7 +53,7 @@ export function chosenWebLlmLines(elements: readonly WebLlmEvidenceElement[], tr
 function firstPass(elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageTree): WebLlmViewLine[] {
   const lines: WebLlmViewLine[] = [];
   const lined = new Map<WebLlmEvidenceElement, WebLlmViewLine>();
-  const delegates = controlHolders(elements, tree);
+  const delegates = webLlmControlHolders(elements, tree);
   for (const [index, element] of elements.entries()) {
     const delegate = delegates.has(element);
     const traits = webLlmViewTraits(element, delegate);
@@ -68,20 +69,6 @@ function firstPass(elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageT
     lined.set(element, line);
   }
   return lines;
-}
-
-/** Every element with a visible control under it: the ones a press listener or a cursor alone does not make a control. */
-function controlHolders(elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageTree): ReadonlySet<WebLlmEvidenceElement> {
-  const holders = new Set<WebLlmEvidenceElement>();
-  for (const element of elements) {
-    const traits = webLlmViewTraits(element);
-    if (!traits.visible || !traits.control) continue;
-    for (const ancestor of tree.ancestors(element)) {
-      if (holders.has(ancestor)) break;
-      holders.add(ancestor);
-    }
-  }
-  return holders;
 }
 
 /** Rule 5: the alts of the visible images under a wordless control, in order, which follow it in document order. */

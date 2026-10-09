@@ -152,6 +152,10 @@ test("binds from the production host seam and selects the sole trusted web clien
   assert.match(detectDescription, /where is optional/u);
   assert.match(detectDescription, /leave it out and every item is a row/u);
   assert.equal(detectDescription.indexOf("where is optional") < detectDescription.indexOf("atLeast"), true, "optional comes before the vocabulary that narrows");
+  // t378, lane D (`run-mv0fuual-f9e6f089`): "narrow excess later" read as leave to
+  // filter at the run's end, which never changes the rows a repeat presses.
+  assert.match(detectDescription, /But rows a later step acts on, a press repeated over the read, are narrowed here by where/u);
+  assert.match(detectDescription, /never changes which rows a repeat visits/u);
   // A condition may test a column the plan does not keep, and the text says so:
   // live run `run-muq4oaof-464f5bce` kept `plus` and `ad` only to filter on them,
   // stored six columns where four were asked, and the judge paired no row.

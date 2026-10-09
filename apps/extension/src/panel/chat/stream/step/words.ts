@@ -49,7 +49,11 @@ const PAGE_ACTION: Tense = { now: "Working on the page", done: "Worked on the pa
 
 /** Titles Core writes in words, turned to the tense the step is in. */
 const TITLES: Readonly<Record<string, Tense>> = {
-  "deciding the next step": { now: "Deciding the next step", done: "Decided the next step" },
+  // A decision that failed decided nothing: it read "Decided the next step — The AI model's reply
+  // couldn't be read or used" (lane C, run-mv0fuotv-805294d7, defect 6). Core heads one it asks for
+  // again "Asking the AI model again" itself (t378 W4), kept as written; its own failed "Deciding
+  // the next step" is a decision that stopped, so it is not said as asked again either.
+  "deciding the next step": { now: "Deciding the next step", done: "Decided the next step", failed: "Deciding the next step" },
   "amending the draft flow": TOOLS["core.flow_draft"]!,
   "completion check": TOOLS["core.completion_check"]!,
   "build started": { now: "Started building", done: "Started building" },
