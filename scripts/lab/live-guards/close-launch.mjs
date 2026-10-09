@@ -41,6 +41,7 @@ export async function closeLaunch(files, start, entries, { exitCode, now, reconc
       maxBuildCostUsd: outcome.maxBuildCostUsd,
       buildsOverCeiling: outcome.buildsOverCeiling,
       balanceFailure: outcome.balanceFailure,
+      ...(outcome.facilityFailureBeforeProvider ? { facilityFailureBeforeProvider: outcome.facilityFailureBeforeProvider } : {}),
       ...(outcome.killed ? { killed: true } : {}),
       ...marker,
     }));
