@@ -108,10 +108,15 @@ fixed) and sweep-1009b (all 8 commands green).
   recommendation instead of asking; keep going until the work is done.
 
 **Continuing in Cline.** `.clinerules/fluxiq.md` (this commit) points Cline at `AGENTS.md`, the global rules in
-`F:\!AgentBrain`, this Current State and the briefs. Cline has no worker or lead subagents: where AGENTS.md says
-"dispatch a worker", do the work yourself on a task branch (`pnpm task start <slug> --worktree --core`, then
+`F:\!AgentBrain`, this Current State and the briefs. Cline's subagents are read-only (research and reports, no file writes):
+use them for discovery; where AGENTS.md says "dispatch a worker" to edit code, do the work yourself (or in a
+separate Cline CLI instance per task worktree) on a task branch (`pnpm task start <slug> --worktree --core`, then
 `pnpm task finish <id>` here and in Core), one unit at a time, and record findings, decisions and validation in
 this document as you go. Cline asks the user before each command, which also covers paid Lab launches.
+
+**Planned 2026-10-09, not started:** [state-aware recovery plan](./state-aware-recovery-plan.md) (handlers,
+subflow entries, safe state routing, unit repair); its R1/B1/B6 briefs touch no file the briefs above own, its R2
+wiring waits for t388 and its R4a for t383, and it must not delay lanes round 3.
 
 **Pointers.** Order of work: [consultant revision](./mvp-final-month-plan/consultant-revision.md). Gap map:
 [mvp-gap-map](./mvp-final-month-plan/reports/mvp-gap-map.md) (2026-10-05). Adaptation:
