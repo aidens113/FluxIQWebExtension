@@ -42,8 +42,8 @@ test("headlines for every outcome of a build and a run", () => {
     [event({ phase: "failed", label: "Build failed", final: true }, "build", "x2"), "Build failed", "failed", null],
     [event({ phase: "running", label: "Run started" }, "run", "x3"), "Running your Flow", null, "Run started"],
     [event({ phase: "done", label: "Run finished", final: true }, "run", "x4"), "Run finished", "done", null],
-    [event({ phase: "failed", label: "Run cancelled", final: true }, "run", "x5"), "Run stopped", "failed", "Run cancelled"],
-    [event({ phase: "failed", label: "Build stopped", final: true }, "build", "x7"), "Build stopped", "failed", null],
+    [event({ phase: "failed", label: "Run cancelled", final: true, stopped: true }, "run", "x5"), "Run stopped", "failed", "Run cancelled"],
+    [event({ phase: "failed", label: "Build stopped", final: true, stopped: true }, "build", "x7"), "Build stopped", "failed", null],
     [event({ phase: "waiting_permission", label: "Run is waiting for an answer" }, "run", "x6"), "Waiting for you: answer in the FluxIQ panel", "waiting", "Run is waiting for an answer"]
   ];
   for (const [input, headline, outcome, detail] of cases) {
@@ -642,4 +642,66 @@ test("a unit of work whose first event is a thought shows its headline with no d
   const outage = "The AI model provider did not answer this request. Asking it again; the build stops if it keeps not answering.";
   h.pacer.accept(event({ phase: "thinking", label: "The AI model provider did not answer", detail: { kind: "thought", title: "Deciding the next step", status: "failed", text: outage } }, "build", "fresh"));
   assert.equal(h.pacer.display()?.detail, outage, "Core's own sentence about its deciding row is status");
+});
+
+// t376: a stopped ending is read from Core's `stopped` field, never from its words.
+test("a stopped ending comes from Core's stopped field, not from the label", () => {
+  const stopped = harness();
+  stopped.pacer.accept(event({ phase: "running", label: "Run started" }, "run", "s1"));
+  stopped.pacer.accept(event({ phase: "failed", label: "Run ended early", final: true, stopped: true }, "run", "s1"));
+  assert.equal(stopped.pacer.display()?.headline, "Run stopped");
+  const build = harness();
+  build.pacer.accept(event({ phase: "failed", label: "Build ended early", final: true, stopped: true }, "build", "s2"));
+  assert.equal(build.pacer.display()?.headline, "Build stopped");
+  for (const [label, kind, headline] of [["Run cancelled", "run", "Run failed"], ["Build stopped", "build", "Build failed"]] as const) {
+    const h = harness();
+    h.pacer.accept(event({ phase: "failed", label, final: true }, kind, "s3"));
+    assert.equal(h.pacer.display()?.headline, headline, `${label} without the field is not a stop`);
+  }
+});
+
+test("a run held for the person shows 'Paused: your turn on the page' at once, keeps its step, and clears when it continues", () => {
+  const h = harness();
+  h.pacer.accept(event({ phase: "running", label: "Running step 2 of 4: Open search", step: { index: 2, count: 4, nodeId: "n2" } }, "run", "p1"));
+  h.clock.advance(100);
+  h.pacer.accept(event({ phase: "paused", label: "Paused: you have the page", step: { index: 3, count: 4, nodeId: "n3" } }, "run", "p1"));
+  const paused = h.shown.at(-1)!;
+  assert.equal(paused.at, 1_100, "shown at once, inside the interval");
+  assert.equal(paused.display.headline, "Paused: your turn on the page");
+  assert.equal(paused.display.outcome, "waiting");
+  assert.equal(paused.display.working, false);
+  assert.equal(paused.display.phase, "paused");
+  assert.equal(paused.display.detail, null, "Core's label only repeats the headline");
+  assert.deepEqual(paused.display.step, { index: 3, count: 4 }, "the step it continues from");
+  const count = h.shown.length;
+  h.clock.advance(60_000);
+  assert.equal(h.shown.length, count, "nothing changes on its own while held: no fade, no timer");
+  h.pacer.accept(event({ phase: "running", label: "Continuing from step 3", step: { index: 3, count: 4, nodeId: "n3" } }, "run", "p1"));
+  const resumed = h.pacer.display()!;
+  assert.equal(resumed.headline, "Running your Flow");
+  assert.equal(resumed.outcome, null);
+  assert.equal(resumed.working, true);
+  assert.equal(h.shown.at(-1)!.at, 61_100, "the continuation shows at once");
+});
+
+test("a held run that is stopped ends 'Run stopped'; a plain pause reads the same paused headline", () => {
+  const h = harness();
+  h.pacer.accept(event({ phase: "paused", label: "Paused" }, "run", "p2"));
+  assert.equal(h.pacer.display()?.headline, "Paused: your turn on the page");
+  h.pacer.accept(event({ phase: "failed", label: "Run cancelled", final: true, stopped: true }, "run", "p2"));
+  assert.equal(h.pacer.display()?.headline, "Run stopped");
+  assert.equal(h.pacer.display()?.outcome, "failed");
+});
+
+test("a check on the page ends when the held run continues, even from a step with no number", () => {
+  const h = harness();
+  const check = { kind: "tool" as const, title: "Using core.run_node", status: "succeeded" as const, ref: "core.run_node", text: "Result: web.intervention.required" };
+  h.pacer.accept(event({ phase: "running", label: "Run started" }, "run", "p3"));
+  h.pacer.accept(event({ phase: "exploring", label: "Using core.run_node: web.intervention.required", detail: check }, "run", "p3"));
+  assert.equal(h.pacer.display()?.outcome, "waiting");
+  h.pacer.accept(event({ phase: "paused", label: "Paused: you have the page" }, "run", "p3"));
+  assert.equal(h.pacer.display()?.headline, "Paused: your turn on the page", "the hold outweighs the check");
+  h.pacer.accept(event({ phase: "running", label: "Continuing the run" }, "run", "p3"));
+  assert.equal(h.pacer.display()?.outcome, null);
+  assert.equal(h.pacer.display()?.headline, "Running your Flow");
 });

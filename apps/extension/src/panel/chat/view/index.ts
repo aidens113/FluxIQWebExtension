@@ -5,8 +5,8 @@
 export { createActionCardView, type ActionCardView } from "./action-card-view";
 export { createContextLine, type ContextLine } from "./context-line";
 export { createDoneAgainView, type DoneAgainView } from "./done-again-view";
-export { createEmptyState, type EmptyState } from "./empty-state";
-export { emptyStateModel, type EmptyStateModel } from "./empty-state-model";
+export { createEmptyState, type EmptyState, type EmptyStateHooks } from "./empty-state";
+export { emptyStateModel, MODEL_KEY_LINE, ONBOARDING_CONCEPT, type EmptyStart, type EmptyStateModel } from "./empty-state-model";
 export { createLiveLine, type LiveLine } from "./live-line";
 export { liveLineModel, type LiveLineModel } from "./live-line-model";
 export { createMessageView, type MessageView } from "./message-view";

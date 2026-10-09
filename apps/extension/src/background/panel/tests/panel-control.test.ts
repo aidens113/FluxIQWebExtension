@@ -1,4 +1,4 @@
-// Coverage of panel-control.ts: who may send the panel's requests (the six
+// Coverage of panel-control.ts: who may send the panel's requests (the eight
 // that reach Core and the two activity ones), what saving settings and opening
 // FluxIQ do, and which overlay preferences are accepted. The load-bearing test is the
 // first: a content script, another extension, or a sender with no page must be
@@ -28,6 +28,8 @@ const PANEL_TYPES = [
   RUNTIME_MESSAGES.panelConversationSend,
   RUNTIME_MESSAGES.panelConversationAnswer,
   RUNTIME_MESSAGES.panelStopRun,
+  RUNTIME_MESSAGES.panelTakeOverRun,
+  RUNTIME_MESSAGES.panelHandBackRun,
   ACTIVITY_MESSAGES.read,
   ACTIVITY_MESSAGES.setOverlay
 ];
@@ -219,6 +221,21 @@ test("the conversation and Stop messages reach Core through the relay, and Core'
     handled: true, response: { ok: true, payload: { from: "cancel-runtime-session" } }
   });
   assert.deepEqual(h.calls.map((entry) => entry.endpoint), ["list-conversations", "answer-ask", "cancel-runtime-session"]);
+});
+
+test("Take over and Hand back reach Core's pause and resume like Stop does, and Core's payload comes back unchanged", async () => {
+  installChrome();
+  const h = harness();
+  assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelTakeOverRun, runId: "run-1" }, sidepanel, h.deps), {
+    handled: true, response: { ok: true, payload: { from: "pause-runtime-session" } }
+  });
+  assert.deepEqual(await handlePanelControl({ type: RUNTIME_MESSAGES.panelHandBackRun, runId: "run-1" }, popup, h.deps), {
+    handled: true, response: { ok: true, payload: { from: "resume-runtime-session" } }
+  });
+  assert.deepEqual(h.calls.map((entry) => [entry.endpoint, entry.payload.takeControl ?? entry.payload.afterManualAction]), [
+    ["pause-runtime-session", true],
+    ["resume-runtime-session", true]
+  ]);
 });
 
 test("the panel reads the live activity state and sets the overlay preference", async () => {

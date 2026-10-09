@@ -4,7 +4,7 @@ import { fake, withFakeDocument } from "../../chat/tests/fake-dom";
 import type { AutomationRowView } from "../controller";
 import { automationRowElement } from "../row-element";
 
-const row: AutomationRowView = { flowId: "flow-a", name: "Orders", lines: ["Not run yet"], datasets: [], running: false, exporting: false };
+const row: AutomationRowView = { flowId: "flow-a", name: "Orders", lines: ["Not run yet"], datasets: [], running: false, stoppable: false, exporting: false };
 
 test("row updates retain the li/button/text nodes and choose the entire latest view", async () => withFakeDocument(() => {
   const chosen: AutomationRowView[] = [];
@@ -12,7 +12,7 @@ test("row updates retain the li/button/text nodes and choose the entire latest v
   const button = fake(mounted.button);
   const name = button.byClass("automation-row-name")[0]!;
   const line = button.byClass("automation-row-line")[0]!;
-  const next: AutomationRowView = { ...row, name: "New orders", lines: ["Running..."], running: true, exporting: true, runId: "run-new", datasets: [{ datasetId: "data-new", label: "Orders" }] };
+  const next: AutomationRowView = { ...row, name: "New orders", lines: ["Running..."], running: true, stoppable: true, exporting: true, runId: "run-new", datasets: [{ datasetId: "data-new", label: "Orders" }] };
   mounted.update(next);
   assert.equal(fake(mounted).children[0], button);
   assert.equal(button.byClass("automation-row-name")[0], name);

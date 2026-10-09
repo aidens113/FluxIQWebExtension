@@ -34,7 +34,7 @@ import type {
   RecordingEventPayload,
   RecordingLogPage
 } from "../shared/protocol";
-import type { ActivityOverlayPreference, ExtensionActivityState } from "../shared/activity/index";
+import type { ActivityDisplay, ActivityOverlayPreference, ExtensionActivityState } from "../shared/activity/index";
 import { activeTab, allTabFrames, allTabs, ensureContentScript, sendToTab } from "./tabs";
 import { captureActionBoundary } from "./action-evidence";
 import { DEFAULT_CORE_API_URL } from "../shared/constants";
@@ -68,10 +68,12 @@ import {
 } from "./connection/index";
 
 type StatusListener = (status: ExtensionStatus) => void;
+type ActivityDisplayListener = (display: ActivityDisplay | null) => void;
 
 export class FluxIQConnection {
   private lastError: string | undefined;
   private readonly listeners = new Set<StatusListener>();
+  private readonly activityDisplayListeners = new Set<ActivityDisplayListener>();
 
   private readonly activityLog = new ActivityLog();
   private readonly recordedSteps = new RecordedStepIndex();
@@ -289,7 +291,8 @@ export class FluxIQConnection {
         await ensureContentScript(tabId);
         await sendToTab(tabId, message, 0);
       },
-      live: () => this.gateway.state() === "connected"
+      live: () => this.gateway.state() === "connected",
+      onDisplay: (display) => { for (const listener of this.activityDisplayListeners) listener(display); }
     });
   }
 
@@ -325,6 +328,12 @@ export class FluxIQConnection {
     if (this.lastError) status.lastError = this.lastError;
     if (gateway.lastMessageAt !== undefined) status.lastMessageAt = gateway.lastMessageAt;
     return status;
+  }
+
+  /** Calls `listener` whenever the work's display may have changed (the toolbar's "!" while FluxIQ waits on the person). */
+  onActivityDisplay(listener: ActivityDisplayListener): () => void {
+    this.activityDisplayListeners.add(listener);
+    return () => this.activityDisplayListeners.delete(listener);
   }
 
   subscribe(listener: StatusListener): () => void {

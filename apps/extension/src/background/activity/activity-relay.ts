@@ -90,6 +90,12 @@ export type ActivityRelayDeps = {
   readonly live: () => boolean;
   /** Defaults to the worker's own clock. */
   readonly clock?: ActivityClock;
+  /**
+   * Told the display whenever it may have changed, synchronously, so the
+   * toolbar badge can say "!" while the work waits on the person
+   * (`ToolbarIndicator.activity`). Absent: nobody outside is told.
+   */
+  readonly onDisplay?: (display: ActivityDisplay | null) => void;
 };
 
 /** A send's claim on the starting status: `open` while it may still put it up, `started` once it did. */
@@ -306,6 +312,7 @@ export class ActivityRelay {
 
   /** What the page draws changed: the display, or the overlay preference. The panels show both too. */
   private displayChanged(): void {
+    this.deps.onDisplay?.(this.display());
     this.panelStale = true;
     this.panelGate.request();
     this.pageGate.request();

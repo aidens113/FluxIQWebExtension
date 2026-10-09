@@ -1,11 +1,11 @@
 // The worker half of the panel's own requests: saving settings, opening
-// FluxIQ, the conversation, Stop, and FluxIQ's live activity.
+// FluxIQ, the conversation, Stop, Take over / Hand back, and FluxIQ's live activity.
 //
 // Shaped like `extraction/control.ts`: one `handled` / `response` answer per
 // message, so `background/index.ts` gains two lines.
 //
 // **Only the panel may ask.** Every one of these is accepted from the side
-// panel or the popup and from nothing else (`control-page.ts`). Four of them
+// panel or the popup and from nothing else (`control-page.ts`). Six of them
 // spend the pairing token, and a page under test that could send them would be
 // able to talk to FluxIQ as the person who paired this browser, read their
 // threads, answer a question FluxIQ asked them, or stop their run. Saving
@@ -22,14 +22,14 @@
 
 import { ACTIVITY_MESSAGES, type ActivityOverlayPreference, type ExtensionActivityState } from "../../shared/activity/index";
 import { RUNTIME_MESSAGES } from "../../shared/constants";
-import type { ExtensionStatus, FluxIQSettings, PanelStopRunRequest } from "../../shared/protocol";
+import type { ExtensionStatus, FluxIQSettings, PanelHandBackRunRequest, PanelStopRunRequest, PanelTakeOverRunRequest } from "../../shared/protocol";
 import { isActivityOverlayPreference } from "../activity/index";
 import { isControlPage } from "../control-page";
 import { relayConversation } from "./conversation-relay";
 import { fluxIQWebAddress } from "./open-fluxiq";
 import type { PanelRelayContext } from "./relay-context";
 import { relayFailure } from "./relay-failure";
-import { stopRun } from "./run-control";
+import { handBackRun, stopRun, takeOverRun } from "./run-control";
 import { mergeSettings } from "./settings-save";
 
 type ControlResult = { readonly handled: false } | { readonly handled: true; readonly response: unknown };
@@ -60,6 +60,8 @@ const PANEL_MESSAGES: ReadonlySet<string> = new Set([
   RUNTIME_MESSAGES.panelConversationSend,
   RUNTIME_MESSAGES.panelConversationAnswer,
   RUNTIME_MESSAGES.panelStopRun,
+  RUNTIME_MESSAGES.panelTakeOverRun,
+  RUNTIME_MESSAGES.panelHandBackRun,
   ACTIVITY_MESSAGES.read,
   ACTIVITY_MESSAGES.setOverlay
 ]);
@@ -99,6 +101,8 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
     return { ok: true, state: await deps.activity.setOverlay(message.overlay) };
   }
   if (message.type === RUNTIME_MESSAGES.panelStopRun) return stopRun(message as Partial<PanelStopRunRequest>, deps.relay);
+  if (message.type === RUNTIME_MESSAGES.panelTakeOverRun) return takeOverRun(message as Partial<PanelTakeOverRunRequest>, deps.relay);
+  if (message.type === RUNTIME_MESSAGES.panelHandBackRun) return handBackRun(message as Partial<PanelHandBackRunRequest>, deps.relay);
   if (message.type === RUNTIME_MESSAGES.panelConversationSend && message.kind !== "open" && deps.activity.sending) {
     return deps.activity.sending(() => relayConversation(message, deps.relay));
   }

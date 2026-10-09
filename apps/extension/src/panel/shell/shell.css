@@ -75,8 +75,9 @@ h2 { font-size: 13px; }
 .top-actions .icon-button { width: 30px; min-height: 30px; border-color: transparent; background: transparent; color: var(--muted); font-size: 15px; }
 .top-actions .icon-button:hover:not(:disabled) { background: var(--hover); color: var(--text); }
 .top-actions .icon-button.active { background: var(--surface-raised); color: var(--text); }
-.top-actions .record-button { color: var(--danger); }
-.top-actions .record-button:disabled { color: var(--muted); }
+/* Idle record is neutral like its neighbours: red would read as "recording now".
+   It is hidden while a recording runs; the recording bar says so then. */
+.top-actions .record-button:hover:not(:disabled), .top-actions .record-button:focus-visible:not(:disabled) { color: var(--danger); }
 .top-dot { margin: 0 5px; width: 8px; height: 8px; }
 /* The Open FluxIQ icon's failure line drops below the bar instead of widening it. */
 .top-actions .open-fluxiq { position: static; }
