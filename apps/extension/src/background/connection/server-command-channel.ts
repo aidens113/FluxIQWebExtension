@@ -179,6 +179,13 @@ export class ServerCommandChannel {
       });
       return;
     }
+    if (payload.command === "evaluate_facts") {
+      // A fact check is a read of the page as it stands, not a step: no
+      // runtime status opens, no evidence boundary is captured, nothing is
+      // recorded, and its answer goes straight back as the gateway result.
+      await this.runtimeRouter().evaluateFacts(payload.check);
+      return;
+    }
     if (payload.command === "execute_action") {
       this.applyStart(this.deps.runtimeStatus.startAction(payload.action));
       await this.deps.captureActionBoundary("before", payload.action);
@@ -200,6 +207,7 @@ export class ServerCommandChannel {
       attachTabForRecording: (tabId) => this.deps.attachment.attachTabForRecording(tabId),
       captureActiveSnapshot: (label) => this.deps.evidence.captureActiveSnapshot(label),
       sendActionResult: (result, tabId, frameId) => this.sendActionResult(result, tabId, frameId),
+      sendGatewayResult: (result) => this.deps.send("client.action_result", result),
       // The look takes in every frame (t200), merged exactly as a recorded
       // event's snapshot is, around the top frame's own capture.
       // A search's look asks every child frame for its hidden elements too.

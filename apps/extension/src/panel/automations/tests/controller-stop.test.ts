@@ -128,3 +128,34 @@ test("a stale owner's stop does nothing, and an owner change drops the answer", 
   stopReply.resolve({ ok: false, sentence: "synthetic" }); await stopping;
   assert.equal(view.row().stop, undefined);
 });
+
+// t384: a run started elsewhere (the chat's "run it", a playback through the
+// API) never answers this panel. FluxIQ starting work is when the list is read
+// again, so the row shows the run with Stop and its id, and finishing work reads
+// how it went.
+test("a run started elsewhere shows Stop once FluxIQ is working, and stops by the id the list names", async () => {
+  let runs: unknown[] = [done];
+  const view = setup((message) => message.type === RUNTIME_MESSAGES.panelStopRun ? ok({ runtimeSession: {} }) : list(runs));
+  view.controller.observe(connected); await view.controller.refresh();
+  assert.equal(view.row().stoppable, false);
+  runs = [live, done];
+  view.controller.setWorking(true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(view.row().stoppable, true);
+  assert.equal(view.row().runId, "r1");
+  await view.controller.stop("f1");
+  assert.deepEqual(view.stops(), [{ type: RUNTIME_MESSAGES.panelStopRun, runId: "r1" }]);
+  assert.equal(view.row().stop, "requested");
+  runs = [cancelled, done];
+  view.controller.setWorking(false);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(view.row().stoppable, false);
+  assert.equal(view.row().lines[0], "Stopped");
+});
+
+test("FluxIQ's working signal reads nothing while offline", async () => {
+  const view = setup(() => list([live]));
+  view.controller.setWorking(true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(view.sent.length, 0);
+});

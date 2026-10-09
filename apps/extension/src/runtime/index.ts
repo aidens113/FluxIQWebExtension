@@ -4,6 +4,7 @@ export * from "./automation-tab";
 export * from "./browser-download";
 export * from "./browser-tab";
 export * from "./command-router";
+export * from "./fact-check-runner";
 export * from "./look-across-frames";
 export * from "./navigating-page";
 export * from "./navigation";

@@ -53,6 +53,7 @@ import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { dispatchWebAutomationOutput } from "../io/gateway-output-dispatcher";
 import { webAutomationOutputNodeId } from "../output-nodes";
 import { createWebAutomationExpectationEvaluator, type WebAutomationExpectationDispatch } from "./expectation";
+import { createWebAutomationFactEvaluator, type WebAutomationFactEvaluator } from "./facts";
 import { publishedWebLlmPage, sanitizeWebLlmSnapshot, screenedEvidenceUrl } from "./llm-evidence";
 import {
   compareWebAutomationRouteSignatures,
@@ -70,6 +71,15 @@ import { webAutomationStateDiff } from "./state-diff";
  * restated here, where a copy would silently drift.
  */
 export type WebAutomationHostRuntimeBoundary = Parameters<FluxIQ["programs"]["automationStudio"]["bindHostRuntime"]>[0];
+
+/**
+ * The boundary plus what Core's interface does not declare yet: `factEvaluator`
+ * (plan B1, Core C9), a batched, zero-wait, three-valued check of fact
+ * conditions, offered under the capability `fact-evaluation`. Core's R2 adds
+ * the method to its boundary type; until then a caller holding this type can
+ * call it, and Core ignores what it does not know.
+ */
+export type WebAutomationHostRuntime = WebAutomationHostRuntimeBoundary & { factEvaluator: WebAutomationFactEvaluator };
 
 /**
  * How the boundary reaches the paired browser; the expectation evaluator
@@ -109,10 +119,11 @@ const POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
  * in the Lab and in the panel alike, since both bind this one boundary
  * (`registerWebAutomationRuntime`).
  */
-const HOST_RUNTIME_CAPABILITIES = Object.freeze(["action-dispatch", "state-snapshot", "state-diff", "expectation-evaluation", "route-state"] as const);
+const HOST_RUNTIME_CAPABILITIES = Object.freeze(["action-dispatch", "state-snapshot", "state-diff", "expectation-evaluation", "fact-evaluation", "route-state"] as const);
 
-export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntimeGateway): WebAutomationHostRuntimeBoundary {
+export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntimeGateway): WebAutomationHostRuntime {
   const evaluate = createWebAutomationExpectationEvaluator(gateway.dispatch);
+  const factEvaluator = createWebAutomationFactEvaluator(gateway.dispatch);
   let captures = 0;
   return {
     capabilities: HOST_RUNTIME_CAPABILITIES,
@@ -184,7 +195,8 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       }
       return webAutomationStateDiff(input.before?.summary, input.after?.summary, input.before?.stateRef, input.after?.stateRef);
     },
-    expectationEvaluator: (conditions, mode, timeoutMs, context) => evaluate(conditions, mode, timeoutMs, context)
+    expectationEvaluator: (conditions, mode, timeoutMs, context) => evaluate(conditions, mode, timeoutMs, context),
+    factEvaluator
   };
 }
 

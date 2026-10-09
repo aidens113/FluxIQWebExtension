@@ -36,14 +36,27 @@ async function findTestEntries(directory, suffix = ".test.ts") {
   return found;
 }
 
-const entryPoints = (await findTestEntries(sourceRoot)).sort();
-if (entryPoints.length === 0) throw new Error("No extension tests found under src/**/tests/");
+// Path fragments on the command line narrow the run to the entries whose
+// package-relative path contains one of them, so a change is validated with the
+// tests beside it (`node scripts/test-extension.mjs panel/automations/tests`).
+// A fragment that matches nothing is refused rather than reported as a pass.
+const filters = process.argv.slice(2).map((filter) => filter.split(path.sep).join("/"));
+const selectedBy = (entries) => filters.length === 0
+  ? entries
+  : entries.filter((entry) => filters.some((filter) => path.relative(root, entry).split(path.sep).join("/").includes(filter)));
+
+const entryPoints = selectedBy((await findTestEntries(sourceRoot)).sort());
+const scriptEntries = selectedBy((await findTestEntries(path.join(root, "scripts"), ".test.mjs")).sort());
+if (filters.length > 0 && entryPoints.length + scriptEntries.length === 0) {
+  throw new Error(`No extension test entry matches ${filters.map((filter) => JSON.stringify(filter)).join(", ")}`);
+}
+if (filters.length === 0 && entryPoints.length === 0) throw new Error("No extension tests found under src/**/tests/");
 
 // Only this label's directory is cleared, so a deleted test leaves no stale
 // bundle behind and a concurrent run under another label is untouched.
 await rm(outdir, { recursive: true, force: true });
 await mkdir(outdir, { recursive: true });
-await build({
+if (entryPoints.length > 0) await build({
   entryPoints,
   outdir,
   outbase: sourceRoot,
@@ -72,6 +85,6 @@ for (const entry of entryPoints) {
 // The build and release scripts' own tests (scripts/**/tests/*.test.mjs) run in
 // the same node:test run: the build stamp, target verification and store
 // packaging are gates, so they are tested with the rest.
-for (const entry of (await findTestEntries(path.join(root, "scripts"), ".test.mjs")).sort()) {
+for (const entry of scriptEntries) {
   await import(pathToFileURL(entry).href);
 }

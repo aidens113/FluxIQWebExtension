@@ -2,10 +2,32 @@ import { CLIENT_GATEWAY_ACTIVITY_CAPABILITY_ID, type ClientGatewayCapability } f
 import type { FluxIQRuntimeCapability } from "fluxiq/runtime";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
+import { WEB_AUTOMATION_FACT_CHECK_ACTION_TYPE } from "../actions/fact-check";
 import { WEB_AUTOMATION_INPUT_IDS } from "../io/input-model";
 
 /** The gateway capability a client declares when its snapshot answers `detectStructure`. */
 export const WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID = "web.structure.detection";
+
+/**
+ * The gateway capability a client declares when it answers the batched,
+ * zero-wait fact check (plan B1, Core C9) under
+ * `WEB_AUTOMATION_FACT_CHECK_ACTION_TYPE`. A Flow that gates on facts declares
+ * `web.facts@1` in `metadata.requires` (Core C10).
+ */
+export const WEB_AUTOMATION_FACTS_CAPABILITY_ID = "web.facts";
+
+/** The fact kinds `web.facts` version 1 answers, as a fact condition's `fact` names them. */
+export const WEB_AUTOMATION_FACT_KINDS = Object.freeze([
+  "exists", "absent", "visible", "enabled", "text", "url", "value", "count", "dialog", "checked", "selected"
+] as const);
+
+const FACTS_CAPABILITY_METADATA = {
+  domainId: WEB_AUTOMATION_DOMAIN_ID,
+  version: 1,
+  actionType: WEB_AUTOMATION_FACT_CHECK_ACTION_TYPE,
+  kinds: [...WEB_AUTOMATION_FACT_KINDS],
+  dialogKinds: ["consent", "rate_limit", "robot_check", "promotion", "assistant"]
+};
 
 export type WebAutomationClientGatewayCapability = ClientGatewayCapability & {
   domainId?: string | null;
@@ -35,6 +57,13 @@ export const webAutomationRuntimeCapabilities: FluxIQRuntimeCapability[] = [
     kind: "state",
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState, WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
+  },
+  {
+    id: WEB_AUTOMATION_FACTS_CAPABILITY_ID,
+    label: "Web facts",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: FACTS_CAPABILITY_METADATA
   },
   {
     id: "web.flow-runtime",
@@ -73,6 +102,17 @@ export const webAutomationGatewayCapabilities: WebAutomationClientGatewayCapabil
     kind: "snapshot",
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, actionType: "web.dom.capture_snapshot", parameter: "detectStructure" }
+  },
+  {
+    // The batched fact check (plan B1). Its command travels under its own
+    // action type and is answered without a wait, a chat card or a recorded
+    // event; like structure detection it lists no action type, so declaring it
+    // makes nothing a Flow could author or run as a step.
+    id: WEB_AUTOMATION_FACTS_CAPABILITY_ID,
+    label: "Web facts",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: FACTS_CAPABILITY_METADATA
   },
   {
     id: "web.recording.events",
