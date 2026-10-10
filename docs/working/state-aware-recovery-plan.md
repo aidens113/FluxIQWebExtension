@@ -68,21 +68,26 @@ those files and can start now. This work must not delay lanes A-D round 3: lane 
 between rounds, and a merge that changes behaviour for existing Flows (R3's routing guards) lands between rounds with
 the lanes' saved Flows replayed provider-free first.
 
-**In progress (2026-10-09, user: "use max subagents and implement this fast").** Merged into both `dev`s and
-verified by the supervisor (tests beside each change, typechecks, structure audits; Core's finish ran `pnpm check`):
-t383 (candidate wrap-up keeps submit/test, per-code refusal advice), t384 (satisfied step reads as done; Automations
-learned count and Stop for runs started elsewhere), t385 (lifecycle contracts: frames, handlers, scopes,
-continuations, true failure, incident budget, fact conditions, handler nodes, validation), t386 (requirement gate,
-protocol version check), t387 (state routing refuses routes that skip needed data or repeat a completed lasting act),
-t388 (candidate script: parts, `call:`, start points, checkpoints, handlers, fact `when:`, `requires`; wired into
-adaptation and candidate mode), t389 (downstream `web.page.facts`: batched, zero-wait, three-valued), t391 (Core run
-log says what the runtime did). Tooling on dev: the domain and extension unit-test runners take path fragments.
-Verified, waiting to merge: t390 (crossborder flash-deal variants for matrix rows 4-5; row assignments in its
-report), held until t393 finishes because both use the shared Core. Running: t392 executor integration lead
-(`lead-xhigh`: Call Subflow, trace, handler wiring, entries/checkpoints, in-run repair), t393 (browser half of B3:
-in-flight command record, interrupted/unknown after restart, dedupe, domain effect check). Next: B5 chat cards once
-t392 publishes the activity `recovery` contract; Lab mechanisms for matrix rows 9 and 11; then the provider-free
-matrix and the two paid proofs (user approval).
+**In progress (2026-10-09, user: "use max subagents and implement this fast").** Merged into both `dev`s, pushed,
+and verified by the supervisor (tests beside each change, typechecks, structure audits; Core's finish runs `pnpm
+check`): t383 candidate wrap-up and refusal advice; t384 satisfied step reads as done, Automations learned count and
+Stop; t385 lifecycle contracts (frames, handlers, scopes, continuations, true failure, incident budget, fact
+conditions, handler nodes, validation); t386 requirement gate and protocol version check; t387 safe state routing
+guards; t388 candidate script parts, `call:`, start points, checkpoints, handlers, fact `when:`, `requires`; t389
+`web.page.facts` (batched, zero-wait, three-valued); t390 crossborder flash-deal variants (matrix rows 4-5; row
+assignments in its report); t391 Core run log; t393 in-flight command record, interrupted/unknown after a worker
+restart, dedupe, domain effect check; t394 Lab perturbations drop-action-result and stop-service-worker (rows 9, 11);
+t395 editor views (handler area, hook badges, start and checkpoint markers, effective handlers); t397 audit rule
+`statement-packing` (two workers had packed statements onto one line to stay under a file budget; existing
+occurrences baselined, may only shrink). Direct dev fixes: domain and extension test runners take path fragments;
+dialog facts read the saved form (`2c2371fc`, found by the t392 lead).
+Running: t392 executor integration lead (`lead-xhigh`): A Call Subflow and B trace/activity `recovery` contract
+verified in its tree; C handler wiring, D entries/checkpoints, E in-run repair, F Core side of reconciliation and the
+orphaned-run sweep in progress. t398: saved handler and step labels; the editor passes the recovery role. Verified,
+waiting: t396 chat recovery cards (merges after t392, whose `step-recovery.ts` it takes).
+Next: merge t392 and t396; the provider-free acceptance matrix on the realistic scenarios; then the two paid proofs
+(R4a creation with an interruption variant, R4b in-run repair on a drift variant), each needing the user's approval
+of the Lab command.
 
 **Binding rules every unit keeps** (the user's, from `mvp-final-month-plan.md` Current State, and Core's
 architecture): state routing stays a global runtime behaviour that precedes any model call; every node keeps first
