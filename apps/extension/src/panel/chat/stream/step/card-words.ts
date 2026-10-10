@@ -32,7 +32,9 @@
 //   outcome  "Working on it" and "Waiting for you" only while it is the
 //            action of the moment (the newest of work still under way);
 //            "Done", or "Done: 13 rows from 5 pages" when Core said what a
-//            finished action came to (its `result`), "Passed", "Didn't work:
+//            finished action came to (its `result`), "Already done" for a
+//            run step Core skipped because this run had already done its act
+//            (`already-done.ts`), "Passed", "Didn't work:
 //            it wasn't on the page",
 //            "Didn't pass: no price was shown"; "Not confirmed: ..." for a
 //            result check Core could not confirm, which is no failure: an
@@ -122,6 +124,8 @@ function outcomeOf(card: ActionCard, current: boolean): [CardWords["state"], str
     case "done":
       // Identical successful cards in a row are one that counts them (`card-repeats.ts`): "Done (5 times)".
       if (card.answer !== undefined) return ["done", `${counted("Done", card.times)}. ${card.answer}`];
+      // A step whose act this run had already done: skipped, and no failure (`already-done.ts`).
+      if (card.already) return ["done", counted("Already done", card.times)];
       if (card.tested !== undefined) return ["done", resultOf(card) === undefined ? counted(card.tested, card.times) : `${counted(card.tested, card.times)} — ${resultOf(card)}`];
       if (card.retried !== undefined) return ["done", retriedWords(card.retried, resultOf(card))];
       return ["done", card.check ? joined(counted("Passed", card.times), card.said) : joined(counted("Done", card.times), resultOf(card))];
