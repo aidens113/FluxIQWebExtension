@@ -3,6 +3,8 @@ import { chromium, type Browser, type BrowserContext, type Frame, type Locator, 
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
 import { closeLabSession } from "../../tests/close-lab-session.js";
+import { diagnoseAction } from "../../tests/diagnose-action.js";
+import { withinPageTime } from "../../tests/within-page-time.js";
 import type { CompanyWebsiteState } from "../types.js";
 
 /**
@@ -81,25 +83,30 @@ export function locate(page: Page, target: string): Locator {
   return page.locator(target);
 }
 
+/** A step with no `timeoutMs` of its own gets this much of the page's own time (`withinPageTime`). */
+const DEFAULT_BUDGET_MS = 10_000;
+
 /** Runs a recording script as the Lab's recording lane would, returning what each extract step read. */
 export async function runScript(page: Page, steps: readonly ScenarioStep[]): Promise<Record<string, Array<Record<string, string>>>> {
   const extracted: Record<string, Array<Record<string, string>>> = {};
   for (const step of steps) {
-    const timeout = step.timeoutMs ?? 10_000;
+    const budget = step.timeoutMs ?? DEFAULT_BUDGET_MS;
+    const target = () => locate(page, step.target!);
+    const act = (action: () => Promise<unknown>) => withinPageTime(page, budget, `${step.operation} ${step.target}`, action, () => diagnoseAction(target()));
     try {
       switch (step.operation) {
-        case "click": await locate(page, step.target!).click({ timeout }); break;
-        case "type": await locate(page, step.target!).fill(String(step.value ?? ""), { timeout }); break;
-        case "check": await locate(page, step.target!).setChecked(step.value === true, { timeout }); break;
+        case "click": await act(() => target().click({ timeout: 0 })); break;
+        case "type": await act(() => target().fill(String(step.value ?? ""), { timeout: 0 })); break;
+        case "check": await act(() => target().setChecked(step.value === true, { timeout: 0 })); break;
         case "scroll": await page.mouse.wheel(0, Number(step.value ?? 500)); await page.waitForTimeout(300); break;
-        case "waitForState": await locate(page, step.target!).waitFor({ state: "visible", timeout }); break;
+        case "waitForState": await withinPageTime(page, budget, `waitForState ${step.target}`, () => target().waitFor({ state: "visible", timeout: 0 })); break;
         case "navigate": await page.goto(new URL(step.path!, page.url()).href); break;
         case "extract": extracted[step.id] = await extract(page, step); break;
         case "checkpoint": break;
         default: throw new Error(`site-driver does not run ${step.operation}`);
       }
     } catch (error) {
-      throw new Error(`step ${step.id} failed: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
+      throw new Error(`step ${step.id} failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   return extracted;
