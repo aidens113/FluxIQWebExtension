@@ -236,11 +236,18 @@ export class GatewaySession {
    * The result the offline queue holds for a command id, when it holds one: a
    * command whose result was queued while the socket was down is answered with
    * it, never run again (`in-flight/command-reconciliation.ts`, plan B3).
+   *
+   * The wire lets a client report `interrupted` (Core's contract, C8); this
+   * extension still reports a leftover as `unknown` or `failed` with the
+   * payload marker, so a queued `interrupted` is read as `unknown`: never as
+   * "did not act".
    */
   async queuedActionResult(commandId: string): Promise<ClientGatewayActionResult | undefined> {
     const queued = await this.deps.queue.readQueuedEvents();
     for (const message of queued) {
-      if (message.type === "client.action_result" && message.payload.commandId === commandId) return message.payload;
+      if (message.type !== "client.action_result" || message.payload.commandId !== commandId) continue;
+      const { status, ...rest } = message.payload;
+      return { ...rest, status: status === "interrupted" ? "unknown" : status };
     }
     return undefined;
   }
