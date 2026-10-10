@@ -76,6 +76,7 @@ test("qualification additions preserve the complete ordered original 57 tasks", 
     "bigbox-retail-ensure-soap-quantity",
     "company-website-review-service-without-booking",
     "crossborder-marketplace-collect-official-coupon-only",
+    "crossborder-marketplace-hub-to-cart-flash-deal-during-build",
     "everything-store-restore-saved-cloths",
     "job-board-remove-closed-saved-jobs",
     "local-classifieds-remove-sold-saves",
@@ -83,5 +84,5 @@ test("qualification additions preserve the complete ordered original 57 tasks", 
     "professional-network-audit-stale-requests",
     "social-network-feed-audit-pending-requests",
   ]);
-  assert.equal(REALISTIC_SITE_LIVE_TASKS.length, 67);
+  assert.equal(REALISTIC_SITE_LIVE_TASKS.length, 68);
 });

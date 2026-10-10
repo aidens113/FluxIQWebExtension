@@ -31,7 +31,7 @@ import { startRunPerturbation, type PerturbationReport, type RunPerturbationSess
 import { openReplayBrowser, providerCredentialVariables, type ReplayBrowser } from "../../saved-flow-replay/index.js";
 import { assertExpectedFacts, playwrightScenarioFactProbe } from "../../scenario-assertions.js";
 import { loadScenarioManifest } from "../../scenarios.js";
-import { MATRIX_CHECKS, stepOfNode, type MatrixCaseEvidence, type MatrixCheckResult } from "../checks/index.js";
+import { MATRIX_CHECKS, matrixRunStopCode, stepOfNode, type MatrixCaseEvidence, type MatrixCheckResult } from "../checks/index.js";
 import { compileMatrixFlow, MatrixAuthoringGap, type CompiledMatrixFlow } from "../compile/index.js";
 import * as flows from "../flows/index.js";
 import type { RecoveryMatrixCase, RecoveryMatrixRow } from "../matrix-row.js";
@@ -144,7 +144,7 @@ export async function runMatrixCase(row: RecoveryMatrixRow, matrixCase: Recovery
     perturbationReport = perturbation ? await perturbation.close() : null;
     perturbation = undefined;
     const evidence: MatrixCaseEvidence = {
-      run: { status: run.status, failure: run.failure ? { category: run.failure.category, code: run.failure.code ?? null } : null },
+      run: { status: run.status, failure: run.failure ? { category: run.failure.category, code: run.failure.code ?? null } : null, stopCode: matrixRunStopCode(runDetail) },
       attempts: matrixAttemptRecords(runDetail),
       steps: compiled.steps,
       primarySubflowKey: compiled.subflows.find(subflow => subflow.role === "primary")?.key ?? "",

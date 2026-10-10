@@ -8,7 +8,11 @@ import type { RecoveryExecutorFeature } from "../matrix-row.js";
 import type { MatrixAttemptRecord, SiteReading } from "../records/index.js";
 
 export type MatrixCaseEvidence = Readonly<{
-  run: Readonly<{ status: "succeeded" | "failed" | "cancelled" | "unknown"; failure: Readonly<{ category: string; code: string | null }> | null }>;
+  /**
+   * `failure` is the failed attempt's own failure; `stopCode` the run's own stop
+   * code from its run detail (`run-stop-code.ts`), null when Core recorded none.
+   */
+  run: Readonly<{ status: "succeeded" | "failed" | "cancelled" | "unknown"; failure: Readonly<{ category: string; code: string | null }> | null; stopCode: string | null }>;
   attempts: readonly MatrixAttemptRecord[];
   steps: readonly MatrixFlowStep[];
   /** The key of the Subflow the Router runs when no situation block applies: where a cold start begins. */
