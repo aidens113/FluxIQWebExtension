@@ -18,6 +18,26 @@
 // that is `worker.started` (headed, Chromium 134 listed the successor under
 // the stopped worker's own target id). The network guard proves the successor like any new
 // worker (`network-guard.ts`).
+//
+// **The target list cannot prove the stop (t413).** Matrix round 1's watch
+// ended `gone: false, started: false`: Chrome listed the restarted worker under
+// the stopped one's target id before a 250 ms poll could see the id leave, so
+// a stopped worker and one that never stopped read the same. What does tell
+// them apart is the worker's own global scope: every start of a service worker
+// is a new one, with its own `performance.timeOrigin`. So each extension
+// worker's time origin is read just before the stop (`worker.instance`), and
+// every listed worker's again while watching: an origin
+// none of the stopped workers had is `worker.restarted` -- the proof that the
+// stopped instance is gone and a new one runs -- and a stopped worker's own
+// origin answering after the close is `worker.still-running`, the proof that
+// the stop did not take.
+//
+// The origin is read over CDP, by attaching to the worker's target for one
+// `Runtime.evaluate` and detaching at once (`targetInstance`), not through
+// Playwright's worker handle: matrix run rmx-2026-10-10T08-51-29-821Z-d17662
+// read the stopped worker's origin through its handle, but Playwright never
+// handed out one for the successor Chrome listed under the same target id, so
+// the restart went unseen for 30 s although the target list showed it.
 
 import type { BrowserContext, CDPSession, Page, Request } from "@playwright/test";
 import type { PerturbationLog } from "./perturbation-log.js";
@@ -37,6 +57,8 @@ export type ServiceWorkerStopInput = {
 type TargetInfo = { targetId: string; type: string; url: string };
 
 const WATCH = { intervalMs: 250, forMs: 30_000 };
+/** How long one read of a worker's time origin may take before it counts as no answer: a stopped worker's handle may hang rather than throw. */
+const INSTANCE_READ_MS = 1_000;
 
 /** Arms the stop; `disarm` removes the listeners, ends the watch and detaches the CDP session. */
 export async function armServiceWorkerStop(input: ServiceWorkerStopInput): Promise<{ disarm(): Promise<void> }> {
@@ -49,13 +71,28 @@ export async function armServiceWorkerStop(input: ServiceWorkerStopInput): Promi
   let disarmed = false;
 
   const extensionWorkers = async (): Promise<TargetInfo[]> => ((await session.send("Target.getTargets")) as { targetInfos: TargetInfo[] }).targetInfos.filter(isExtensionWorker);
+  /** The time origin of each listed extension worker that answered, one target after another. */
+  const instances = async (workers: readonly TargetInfo[]): Promise<number[]> => {
+    const origins: number[] = [];
+    for (const worker of workers) {
+      const reading = await targetInstance(session, worker.targetId, INSTANCE_READ_MS);
+      if ("origin" in reading) origins.push(reading.origin);
+    }
+    return origins;
+  };
 
-  /** Reads the target list until the stopped workers are gone and a successor is up, or the watch ends. */
-  const watchFate = async (stopped: ReadonlySet<string>): Promise<void> => {
+  /**
+   * Watches until a worker with a new global scope answers (the stop is
+   * proven), or the watch ends. The target list's view is recorded beside it,
+   * as before, for what it shows.
+   */
+  const watchFate = async (stopped: ReadonlySet<string>, stoppedInstances: ReadonlySet<number>, stoppedAtMs: number): Promise<void> => {
     let gone = false;
     let started = false;
+    let restarted = false;
+    let stillRunning = false;
     const deadline = Date.now() + watch.forMs;
-    while (!disarmed && !(gone && started) && Date.now() < deadline) {
+    while (!disarmed && !restarted && Date.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, watch.intervalMs));
       const workers = await extensionWorkers();
       if (!gone && !workers.some(worker => stopped.has(worker.targetId))) {
@@ -68,8 +105,18 @@ export async function armServiceWorkerStop(input: ServiceWorkerStopInput): Promi
         started = true;
         log.record("worker.started", { target: successor.targetId.slice(0, 8), sameTarget: stopped.has(successor.targetId) });
       }
+      for (const origin of await instances(workers)) {
+        if (stoppedInstances.has(origin) && !stillRunning) {
+          stillRunning = true;
+          log.record("worker.still-running", { afterMs: Date.now() - stoppedAtMs });
+        }
+        if (!stoppedInstances.has(origin) && !restarted) {
+          restarted = true;
+          log.record("worker.restarted", { afterMs: Date.now() - stoppedAtMs, sameTarget: workers.some(worker => stopped.has(worker.targetId)), stillRunning });
+        }
+      }
     }
-    if (!gone || !started) log.record("worker.watch-ended", { gone, started, disarmed });
+    if (!restarted) log.record("worker.watch-ended", { gone, started, restarted, stillRunning, disarmed });
   };
 
   const stop = async (request: Request): Promise<void> => {
@@ -78,13 +125,15 @@ export async function armServiceWorkerStop(input: ServiceWorkerStopInput): Promi
       log.record("fault.missed", { reason: "no extension service worker was running", path: new URL(request.url()).pathname });
       return;
     }
+    const before = new Set(await instances(workers));
+    log.record("worker.instance", { read: before.size, workers: workers.length });
     const stopped = new Set<string>();
     for (const worker of workers) {
       stopped.add(worker.targetId);
       const { success } = await session.send("Target.closeTarget", { targetId: worker.targetId }) as { success?: boolean };
       log.fire("worker.stopped", { target: worker.targetId.slice(0, 8), closed: success !== false, workers: workers.length });
     }
-    await watchFate(stopped);
+    await watchFate(stopped, before, Date.now());
   };
 
   /** A stop that could not be made is recorded as missed, with why; the run goes on unperturbed and its record says so. */
@@ -117,6 +166,51 @@ export async function armServiceWorkerStop(input: ServiceWorkerStopInput): Promi
       await session.detach().catch((error: unknown) => log.record("worker-stop.detach-failed", { reason: error instanceof Error ? error.message.split("\n")[0]! : String(error) }));
     },
   };
+}
+
+/** What one read of a worker's global scope answered: its time origin, or why there was none. */
+type WorkerInstanceReading = { origin: number } | { none: "closed" | "silent" | "unreadable" };
+
+/** The one message sent to an attached worker, and the id its answer comes back under. */
+const READ_ORIGIN = { id: 1, method: "Runtime.evaluate", params: { expression: "performance.timeOrigin", returnByValue: true } } as const;
+
+/**
+ * A worker target's global scope, named by its time origin; or why it has
+ * none to name -- a target that cannot be attached or written to (`closed`),
+ * one that does not answer within `timeoutMs` (`silent`), an answer that is
+ * no time origin (`unreadable`). Attached without flattening, so the answer
+ * comes back on this session as `Target.receivedMessageFromTarget`; detached
+ * again whatever the answer.
+ */
+async function targetInstance(session: CDPSession, targetId: string, timeoutMs: number): Promise<WorkerInstanceReading> {
+  let attachedId: string | undefined;
+  let timer: NodeJS.Timeout | undefined;
+  let listener: ((event: { sessionId: string; message: string }) => void) | undefined;
+  const answered = new Promise<WorkerInstanceReading>(resolve => {
+    timer = setTimeout(resolve, timeoutMs, { none: "silent" });
+    listener = event => {
+      if (attachedId === undefined || event.sessionId !== attachedId) return;
+      const reply = JSON.parse(event.message) as { id?: number; result?: { result?: { value?: unknown } } };
+      if (reply.id !== READ_ORIGIN.id) return;
+      const value = reply.result?.result?.value;
+      resolve(typeof value === "number" && Number.isFinite(value) ? { origin: value } : { none: "unreadable" });
+    };
+    session.on("Target.receivedMessageFromTarget", listener);
+  });
+  const asked = session.send("Target.attachToTarget", { targetId, flatten: false }).then(
+    async ({ sessionId }): Promise<WorkerInstanceReading | undefined> => {
+      attachedId = sessionId;
+      await session.send("Target.sendMessageToTarget", { sessionId, message: JSON.stringify(READ_ORIGIN) });
+      return undefined;
+    },
+    (): WorkerInstanceReading => ({ none: "closed" }),
+  ).then(reading => reading, (): WorkerInstanceReading => ({ none: "closed" }));
+  const refused = await asked;
+  const reading = refused ?? await answered;
+  clearTimeout(timer);
+  if (listener) session.off("Target.receivedMessageFromTarget", listener);
+  if (attachedId !== undefined) await session.send("Target.detachFromTarget", { sessionId: attachedId }).catch(/* best-effort: a worker gone since the read has nothing left to detach */ () => undefined);
+  return reading;
 }
 
 function isExtensionWorker(info: TargetInfo): boolean {

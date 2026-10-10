@@ -33,6 +33,12 @@
 //   `.b` in its shadow root. Its first claim of a visit always answers "Network
 //   busy"; the extension reports that as a busy refusal and the node's own
 //   retry claims it again.
+// - The add-to-cart step says what the page shows once it worked (t413): the
+//   mini-cart flyout's count, `Cart (3)` (`markup/flyouts.ts`, the scenario's
+//   own `cartCount` fact). It is hidden until hovered, and a hidden element's
+//   text is still read. It is the node's expected state, so when the add's
+//   answer is lost -- row 11 stops the extension's worker as it reaches the
+//   site -- the run settles it from the page instead of stopping uncertain.
 export const HUB_TO_CART = String.raw`flow: Put three Voltbay USB-C hubs, Space Grey, 7-in-1, shipped from Spain, in the cart with the store's coupon
 step: decline the welcome coupons if they are still offered
   node: web.dom.click
@@ -92,6 +98,7 @@ step: collect the store's coupon
   element.context.shadowHosts: ["fb-store-coupon"]
   consequences: modify_existing
 step: add to cart
+  done when: text at "[data-testid=mini-cart-count]" is "Cart (3)"
   node: web.dom.click
   selector: [data-testid="add-to-cart"]
   consequences: modify_existing`;
