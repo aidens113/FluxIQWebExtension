@@ -9,7 +9,7 @@ const attempt = (step: string, status: string, retry = false): MatrixAttemptReco
 
 function evidence(attempts: MatrixAttemptRecord[], status: MatrixCaseEvidence["run"]["status"]): MatrixCaseEvidence {
   return {
-    run: { status, failure: null }, attempts,
+    run: { status, failure: null, stopCode: null }, attempts,
     steps: [{ subflowKey: "main", nodeKey: "s9", definitionId: "builtin.control.end", lasting: false, endStatus: "failed" }],
     primarySubflowKey: "main", site: { held: true, reasons: [], duplicatedActs: 0, observed: {} }, goalHeld: null,
     model: { calls: 0, interventions: 0, harnessActivations: 0 }, faultFired: null,
