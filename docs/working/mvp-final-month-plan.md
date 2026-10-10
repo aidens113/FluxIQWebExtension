@@ -102,6 +102,9 @@ fixed) and sweep-1009b (all 8 commands green).
 - Typed nodes first; JS only after about three typed failures, scored as partial success; requests OFF by
   default; no debugger for JS.
 - Model guidance never mirrors a realistic scenario's task (AGENTS.md; guard test in Core).
+- Every saved element carries a full multi-signal fingerprint (user, 2026-10-10): element type, visible text,
+  label, id, name, classes, role and other stable attributes; matching weighs them together so a changed id or
+  class never breaks a Flow on its own. Applies to recorded, model-built and repaired steps alike (t422, t425).
 - Full suites at most twice a day, in the background; each change gets only the tests beside it, its packages'
   typechecks and the structure audit.
 - Status reports in plain English; answer a direct question first; announce before acting; act on a
