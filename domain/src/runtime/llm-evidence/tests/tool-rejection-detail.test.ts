@@ -137,7 +137,7 @@ test("each way a handle stops naming one control is a different reason, and the 
   // and not `handle_not_in_packet`: looking again would not help, because what
   // was written is not the shape a handle is written in.
   assert.equal(codeOf(malformed), "target_unobserved");
-  assert.deepEqual(detailOf(malformed), { reason: "malformed_handle", instead: ["web.handle.malformed", "web.handle.expected.selector.handle_location", "web.handle.malformed:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.deepEqual(detailOf(malformed), { reason: "malformed_handle", instead: ["web.handle.malformed", "web.handle.expected.target.handle_location", "web.handle.malformed:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'] });
 
   assert.deepEqual(clicks, [], "nothing was pressed on a handle that named nothing");
 });

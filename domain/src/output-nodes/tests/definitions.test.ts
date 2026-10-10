@@ -17,7 +17,6 @@ import {
 import { webAutomationActionDefinitions } from "../../actions/schemas";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../actions/types";
 import { createWebAutomationOutputNodeDefinition, webAutomationOutputNodeDefinitions, webAutomationOutputNodeId } from "../definitions";
-import { webAutomationExtractListIssues } from "../extract-list";
 
 const nodes = webAutomationOutputNodeDefinitions;
 
@@ -282,21 +281,17 @@ test("the list extraction describes its request for a model to write one", () =>
   // Every pagination mode is named, because a model that cannot name the one
   // this page uses writes the one it can.
   //
-  // Not every field kind is, and that changed on 2026-09-24. The kinds are
-  // reachable only through the spec form `{kind: ...}`, which belongs to the
-  // literal branch -- the path this text exists to steer a model away from --
-  // and no live run has failed for want of it. The characters it held went to
-  // the filtering vocabulary, after a run whose instruction carried five
-  // conditions into a Flow that expressed none of them
-  // (`run-mug1z9k9-ef625d8b`, 55 rows for 13 wanted, 0 matching). The string
-  // grammar still names the three kinds a model writes without the spec form,
-  // and `value` -- a form control's live value, inside a repeating list -- is
-  // the one that left. The reader accepts all five exactly as before
+  // The field kinds are not named: they are reachable only through the literal
+  // request, which since t432 the grammar no longer offers -- it asked for
+  // selectors a model is never shown (user, 2026-10-10). The handle form keeps
+  // a detected column, or its link's href, under the plan's own key. The reader
+  // accepts every kind exactly as before for a hand-authored Flow
   // (`actions/extraction/read-request.ts`).
-  const namedKinds = WEB_AUTOMATION_EXTRACT_FIELD_KINDS.filter((kind) => kind !== "value");
-  for (const term of ["item", "fields", "css@attr", "column:", "minItems", "maxItems", ...namedKinds]) {
+  for (const term of ["handle", "fields", "colKey@href", "link", "minItems", "maxItems"]) {
     assert.equal(grammar.includes(term), true, `the extractList description does not mention ${term}`);
   }
+  assert.equal(WEB_AUTOMATION_EXTRACT_FIELD_KINDS.includes("column"), true, "the reader still takes the literal kinds");
+  assert.doesNotMatch(grammar, /\bcss\b|selector|item:/iu, "the grammar offers no literal request");
   assert.equal(grammar.includes("paginate"), false, "paginate left the read's grammar");
   // What a condition may say is named, or it is not writable: the grammar and
   // the detect tool's description are the only places a model reads it.
@@ -304,9 +299,10 @@ test("the list extraction describes its request for a model to write one", () =>
     assert.equal(grammar.includes(term), true, `the extractList description does not mention ${term}`);
   }
   assert.equal(grammar.includes(String(WEB_AUTOMATION_EXTRACT_MAX_ITEMS)), true);
-  // Its example is a request the page would run, and one with no issues.
-  assert.notEqual(webAutomationExtractListRequestValue(extractList?.example), undefined);
-  assert.deepEqual(webAutomationExtractListIssues(extractList?.example), []);
+  // Its example is the handle form a model writes (t432), which plan resolution
+  // makes the request the page runs; it is not itself a literal request.
+  assert.equal((extractList?.example as { handle?: unknown } | undefined)?.handle, "extraction.1");
+  assert.equal(webAutomationExtractListRequestValue(extractList?.example), undefined);
   // Every definition gets its own copy, so no caller can change another's.
   const again = createWebAutomationOutputNodeDefinition(webAutomationActionDefinitions.find((candidate) => candidate.actionType === "web.dom.extract_list")!);
   assert.notEqual(again.parameters.find((candidate) => candidate.id === "extractList")?.example, extractList?.example);

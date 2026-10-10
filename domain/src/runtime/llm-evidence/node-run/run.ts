@@ -58,7 +58,7 @@ import { publishedWebLlmPage } from "../page-view";
 import { present } from "../present";
 import { webBuildRefusalDiagnostic } from "../refusal-diagnostic";
 import { webActionPermission } from "../permission";
-import { resolveWebPlanNode, webPlanFirstTargetHandle } from "../plan-resolution";
+import { resolveWebPlanNode, webPlanFirstTargetHandle, type WebPlanNodeResolutionInput } from "../plan-resolution";
 import { WEB_DECLINED_PRESS_INSTEAD } from "../press";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
@@ -191,6 +191,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   if (!continuing && run.request.startLocation !== undefined) run.arrivals.opening(buildOf(run), run.request.callId);
   if (!continuing) run.addresses.opening(buildOf(run), run.request.callId);
   if (!continuing) run.layers.opening(buildOf(run), run.request.callId);
+  if (!continuing) run.held.opening(buildOf(run), run.request.callId);
+  else run.held.hold(buildOf(run), continuing.calls);
   for (const address of continuing?.addresses ?? []) {
     run.addresses.held(buildOf(run), address, run.request.startLocation);
     if (run.request.startLocation !== undefined) run.arrivals.arrive(buildOf(run));
@@ -262,11 +264,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // `resolveWebPlanNode` rather than the narrow answer Core asks for, because
     // this is a record of a call: a column name the resolution had to guess at
     // is the difference between a wrong answer nobody can explain and one whose
-    // cause is written down (`../name-assumption.ts`).
-    const { resolution: resolved, assumed } = await resolveWebPlanNode(
-      { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters: written, gatedByCaller: true },
-      run.stores
-    );
+    // cause is written down (`../name-assumption.ts`). What the model wrote of the call names an element only
+    // by handle (t432); a rerun keeps what the held Flow saved, which it did not write (`./held-literals/`).
+    const resolving: WebPlanNodeResolutionInput = { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters: written, gatedByCaller: true };
+    run.held.author(resolving, buildOf(run));
+    const { resolution: resolved, assumed } = await resolveWebPlanNode(resolving, run.stores);
     record.assumed = assumed;
     if (resolved.status === "refused") {
       // The handle codes say which way the handle stopped naming one control,

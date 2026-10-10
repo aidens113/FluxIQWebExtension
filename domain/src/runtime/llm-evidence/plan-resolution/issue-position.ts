@@ -26,6 +26,8 @@ const PARAMETER_ID = /^[a-z][A-Za-z0-9]{0,39}$/u;
 const GRAMMAR_KEYS: ReadonlySet<string> = new Set([
   "handle", "location", "item", "itemElement", "fields", "columns", "paginate", "minItems", "maxItems",
   "key", "field", "column", "header", "attribute", "required", "kind", "selector",
+  // An expected state's locator conditions, refused when a model wrote one (`written-literals.ts`, t432).
+  "conditions",
   // Which items are records (C5): the clause, the key that names its value,
   // and every spelling of what it may say about it, taken from the grammar
   // that reads them (`actions/extraction/condition-grammar.ts`) so the two

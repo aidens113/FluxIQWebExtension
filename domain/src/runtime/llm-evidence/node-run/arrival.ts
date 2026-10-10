@@ -38,7 +38,7 @@
 // another flow has nothing to remember here, and letting its slot go costs at
 // most one refused call before the navigation that re-arrives.
 
-import type { JsonObject } from "fluxiq/core";
+import type { JsonObject, JsonValue } from "fluxiq/core";
 import { isJsonRecord } from "../untrusted-json";
 import { webRunnableNode } from "./catalog";
 import { webMovesThePage } from "./start-location";
@@ -79,7 +79,7 @@ const HELD_KEY = "held";
  * same id under another, so no call the model writes can say what the Flow
  * holds. Anywhere else `held` is an unexpected key and refused as one.
  */
-export function webNodeHeldFlow(request: { callId: string; toolId: string; value: JsonObject }): { look: JsonObject; addresses: string[] } | undefined {
+export function webNodeHeldFlow(request: { callId: string; toolId: string; value: JsonObject }): { look: JsonObject; addresses: string[]; calls: JsonValue[] } | undefined {
   const held = request.value[HELD_KEY];
   if (request.callId !== `${OPENING_CALL_PREFIX}${request.toolId}` || !Array.isArray(held)) return undefined;
   const { [HELD_KEY]: _held, ...look } = request.value;
@@ -88,7 +88,8 @@ export function webNodeHeldFlow(request: { callId: string; toolId: string; value
     const url = isJsonRecord(call) && isJsonRecord(call.parameters) ? call.parameters.url : undefined;
     return node && webMovesThePage(node) && typeof url === "string" ? [url] : [];
   });
-  return { look, addresses };
+  // The calls themselves, for what the Flow holds that the model never wrote (`./held-literals/`, t432).
+  return { look, addresses, calls: held as JsonValue[] };
 }
 
 /** The build a call belongs to, as this memory keys it. */

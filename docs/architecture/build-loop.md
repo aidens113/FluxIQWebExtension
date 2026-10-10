@@ -57,6 +57,71 @@ look is answered as an ordinary look. Bindings are supported at parameter-leaf
 level only: a `$state` inside an `extractList` `where` condition value is not
 supported: the extraction's condition readers do not resolve bindings.
 
+## Elements Are Named By Handle Only
+
+The user's rule (2026-10-10, t432): every saved element carries the full
+multi-signal fingerprint ([element identity](element-identity.md)), and the
+model "shouldnt have to worry about any of that, that's all handled by
+extension". The model names an element by the handle the page view printed and
+by nothing else; the domain turns the handle into the address and the identity
+the step runs with.
+
+**What the model reads.** An element node's `selector`, `element` and
+`visualTarget` are declared `shownToModel: false`
+(`domain/src/output-nodes/definitions.ts`), so Core's catalog and
+`core.describe_nodes` never list them and a refusal never gives their shape
+(Core's `llm-flow-bootstrap.md`, "The catalog an evidence decision is shown").
+The node still declares them, so a saved Flow that holds them runs. The one
+element parameter the model sees is `target`, described as "named only by the
+handle the page view printed for it ... `{"handle": "t5"}`; in a Flow script,
+`target: t5`", with `{"handle": "t5"}` as its example. `expectedState` is
+described as the step's `done when:` line, which names its element by handle;
+its locator `conditions` form is not described. The wait node keeps its id,
+`web.output.dom-wait_for_selector`, because saved Flows name it; its label is
+**Wait For Element** and its description names the element by its target
+handle. The list read's grammar and example and the Next page's grammar and
+example are the handle form only (`extraction.N`, `{list, control?}`); the
+literal `{item: css, ...}` requests stay valid for a hand-authored Flow and are
+no longer offered. A guard test fails if any catalog text asks for a selector,
+a locator, CSS or XPath (`domain/src/output-nodes/tests/model-facing-catalog.test.ts`).
+
+**What the model writes.** Plan resolution judges what the model wrote
+(`runtime/llm-evidence/plan-resolution/written-literals.ts`) and refuses, at
+its position:
+
+- `web.handle.not_a_handle`: a `selector`, `target` or `element` holding
+  anything but a handle reference (a `target` bound to state whose fallback is a
+  handle is one), a `visualTarget`, or a `selector` inside an
+  `expectedState` condition. A literal written beside a handle is refused, not
+  silently replaced;
+- `web.handle.required`: a node the model wrote whole that cannot run without
+  an element (its schema requires `selector`) and names none;
+- `web.handle.extraction_required` for a literal list read, and
+  `web.handle.not_a_handle` (with `web.handle.expected.next_page.list_control`)
+  for a literal Next page request, unless the read is the Flow's own detected list.
+
+Both new codes are placement reasons, so a refusal also names
+`web.handle.expected.target.handle_location` -- the code that was
+`web.handle.expected.selector.handle_location` until t432. Exploration maps both
+to the tool rejection reason `target_not_a_handle` (`tool-rejection.ts`).
+
+**Who wrote what.** Only the model's writing is judged:
+
+- Core passes `writtenByModel: true` for a candidate submission, a reply's plan,
+  the no-exploration bootstrap and an in-run repair's steps;
+- Core passes `modelWrittenParameters` for a plan built from the draft: the
+  parameters an `amend_draft` decision's `settings` wrote over a step, which
+  are judged, while what the step ran with stands;
+- exploration (`node-run/run.ts`) treats every parameter of a call as the
+  model's, except, in a round that continues a Flow, a parameter whose value is
+  the one the Flow already holds for that node -- or a list request with the
+  held item -- which a rerun merged from the saved step
+  (`node-run/held-literals/`, fed by the round's opening look's `held` calls).
+
+A step the draft ran, a recorded step, a step the Flow already holds and a
+hand-authored Flow (the Lab's recovery matrix, the demo workspace) are never
+flagged, so their literal selectors still resolve `unchanged` and run.
+
 ## Choice Changes And Stable Handles
 
 A live press that changes a control's chosen state on the same page sends

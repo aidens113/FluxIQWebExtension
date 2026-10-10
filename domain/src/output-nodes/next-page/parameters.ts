@@ -1,5 +1,5 @@
 import type { AutomationNodeParameter, AutomationNodePort } from "fluxiq/automation-studio/nodes";
-import { WEB_AUTOMATION_NEXT_PAGE_GRAMMAR } from "./catalog-text";
+import { WEB_AUTOMATION_NEXT_PAGE_EXAMPLE, WEB_AUTOMATION_NEXT_PAGE_GRAMMAR } from "./catalog-text";
 
 /**
  * How long a next-page step may take, by default: the press, the wait for the
@@ -21,7 +21,7 @@ export function webAutomationNextPageParameters(): AutomationNodeParameter[] {
       label: "Next page",
       description: WEB_AUTOMATION_NEXT_PAGE_GRAMMAR,
       valueType: "object",
-      example: { item: "li.result", pagination: { mode: "next", next: "a.next" } },
+      example: { list: WEB_AUTOMATION_NEXT_PAGE_EXAMPLE.list, control: WEB_AUTOMATION_NEXT_PAGE_EXAMPLE.control },
       ui: { control: "value" }
     },
     {
