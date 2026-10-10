@@ -592,7 +592,13 @@ const HANDLE_ISSUE_REASONS: ReadonlyMap<string, WebLlmToolRejectionReason> = new
   // (`plan-resolution/pressable-targets.ts`, t378): a real element, and not a
   // control a press acts on.
   ["web.handle.not_a_control", "handle_wrong_kind_of_control"],
-  ["web.handle.wrong_control", "handle_wrong_kind_of_control"]
+  ["web.handle.wrong_control", "handle_wrong_kind_of_control"],
+  // A Flow step's control found by one attribute alone (t425,
+  // `element-fingerprint/shortfall.ts`): one that cannot be told apart from
+  // the rest of the page once that attribute changes. Only a step a Flow saves
+  // is judged, so a tool's own call never meets it; it is here so the table
+  // names every code the resolver can refuse with.
+  ["web.handle.unidentifiable", "target_ambiguous"]
 ] as const satisfies ReadonlyArray<readonly [string, WebLlmToolRejectionReason]>);
 
 /**

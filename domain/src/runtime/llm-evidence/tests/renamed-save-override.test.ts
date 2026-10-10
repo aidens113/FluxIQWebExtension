@@ -150,9 +150,14 @@ test("accepts an override naming the renamed Save, and resolves it fingerprint f
       handles: { element: "t2" },
       handleResolution: "named",
       tagName: "button",
+      implicitRole: "button",
       // The accessible name, which Core's matcher weighs above visible text. The
       // packet omits visible text that repeats the name, so the fingerprint does too.
       accessibleName: "Apply changes",
+      // The rest of what the packet published for the control (t425): its class
+      // tokens, each its own signal, and the attributes that describe it.
+      classNames: ["ui-button", "ui-button--accent"],
+      attributes: { class: "ui-button ui-button--accent", type: "submit" },
       selector: RENAMED_SAVE_SELECTOR,
       metadata: { controlType: "submit", formId: "settings-form" }
     },

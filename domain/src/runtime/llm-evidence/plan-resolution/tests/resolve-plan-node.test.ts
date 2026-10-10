@@ -432,7 +432,8 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
     "web.handle.expected.next_page.list_control",
     TARGET_HINT,
     USE_CLICK,
-    USE_SELECT
+    USE_SELECT,
+    "web.handle.unidentifiable"
   ]);
 });
 
