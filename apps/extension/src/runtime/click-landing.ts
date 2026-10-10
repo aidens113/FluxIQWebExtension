@@ -60,6 +60,20 @@
 //   may not be listening yet at its commit, so an unread answer is asked again
 //   for up to LANDING_READ_MS; one still unread leaves the click as it was.
 //
+// A check or a choice that navigates its page (t407) -- `web.dom.check` and
+// `web.dom.select`, which declare a state rather than press -- is watched the
+// same way, but only for a reply lost to that navigation, and only in the top
+// frame: a check or choice that answered is judged by its own read-back, and
+// pays nothing here. Its landing is judged first, as a press's is: a robot
+// check, a refusal for coming too fast, a refused page fail it in the same
+// words with "check" or "choice" for "click". A landing nothing speaks against
+// is then asked whether the requested state holds on the new document
+// (`requested-state/`): it does, and the step succeeded; the control is there
+// in the other state, and it fails OUTPUT_NOT_OBSERVED, as the verb's own
+// read-back does; nothing can say, and it fails ACTION_FAILED, retryable as
+// the lost reply was until t407. Setting the state again is the retry's
+// business, and a retry of a declared state is "already set" when it holds.
+//
 // A landing served 429 or 503 is not a page refused for good but the site
 // saying "not now", as it is for a navigation (`rate-limited-landing.ts`): the
 // click fails RATE_LIMITED, retryable and stating its load did not happen, the
@@ -99,7 +113,7 @@ import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxi
 import type { OriginPace } from "../background/page-pace";
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import type { WorkerActionOutcome } from "./action-results";
-import { boundWorkerValidation, navigationChallengeFailure, navigationUnexpectedFailure, workerActionResult } from "./action-results";
+import { boundWorkerValidation, navigationChallengeFailure, navigationUnexpectedFailure, workerActionFailedFailure, workerActionResult } from "./action-results";
 import { forgetAutomationTab, readTabTitle, readTabUrl, setAutomationTab, waitForTabReady } from "./automation-tab";
 import { fluxiqOpenedTabs } from "./fluxiq-opened-tabs";
 import { watchOpenedTab } from "./opened-tab";
@@ -108,6 +122,7 @@ import { landedPath } from "./quoted-path";
 import { checkWaitBudgetMs, clearedCheckWait, settleLandedReading, standingCheckWords, type LandedCheckWait, type LandedTabAccess } from "./landed-check-wait";
 import { unloadedUnderDeliveredMessage } from "./navigating-page";
 import { noteRateLimitedLanding, type RateLimitedLanding } from "./rate-limited-landing";
+import { readRequestedState, type RequestedStateReading } from "./requested-state";
 import { servedStatus, type ServedStatus } from "./served-status";
 
 /** The id the browser always gives a tab's main frame. */
@@ -122,7 +137,19 @@ const NAVIGATION_END_TIMEOUT_MS = 10_000;
 /** The lowest HTTP status that means the server refused the page. */
 const FIRST_ERROR_STATUS = 400;
 
-const EXPECTED = "the page the click leads to loads";
+/** What a landing is judged against: the page the act leads to loads. */
+function expectedLanding(noun: ActNoun): string {
+  return `the page the ${noun} leads to loads`;
+}
+
+/**
+ * Which act a landing is judged for: a press, whose landing is its outcome, or
+ * a state-setting act, whose landing is judged only when its reply was lost.
+ */
+type LandingKind = "press" | "state";
+
+/** What a record calls the act: every press is "click", as it always was. */
+type ActNoun = "click" | "check" | "choice";
 
 /** A top-frame commit: where the tab landed, and the document that landed there. */
 type Commit = { url: string; documentId: string | undefined };
@@ -173,17 +200,23 @@ const LANDING_READ_RETRY_MS = 150;
  * clears by itself has been waited out; one that took it to a page served 429
  * or 503 failed as RATE_LIMITED, told to `pace`, and its tab taken back to the
  * page it was pressed on; and one that took it to a page the server answered
- * with any other HTTP 400 or above failed as `navigation_unexpected`. Every
- * other action is sent and returned untouched.
+ * with any other HTTP 400 or above failed as `navigation_unexpected`. A check
+ * or a choice in the top frame (`frameId`) whose reply is lost to its page's
+ * navigation is judged by the same landing, and then by whether its requested
+ * state holds on the new document (see the file comment). Every other action
+ * is sent and returned untouched.
  */
 export async function sendClickCheckingLanding(
   action: BrowserActionCommand,
   tabId: number,
   send: () => Promise<BrowserActionResult>,
   access: LandedTabAccess,
-  pace?: OriginPace
+  pace?: OriginPace,
+  frameId: number = TOP_FRAME_ID
 ): Promise<BrowserActionResult> {
-  if (!pressMayLand(action)) return await send();
+  const kind = landingKind(action, frameId);
+  if (kind === undefined) return await send();
+  if (kind === "state") return await sendStateCheckingLanding(action, tabId, send, access, pace);
   const watch = watchTopFrameNavigation(tabId);
   const opened = watchOpenedTab(tabId);
   try {
@@ -194,7 +227,7 @@ export async function sendClickCheckingLanding(
     try {
       reply = await send();
     } catch (error) {
-      const verdict = await judgeLanding(action, tabId, watch, access, pressed);
+      const verdict = await judgeLanding(action, tabId, watch, access, pressed, "click");
       if (verdict === undefined) throw error;
       if (verdict.kind === "failed") {
         const failed = workerActionResult(action, watch.startedAt, verdict.outcome);
@@ -211,7 +244,7 @@ export async function sendClickCheckingLanding(
     // Read together, so a click that opens no tab waits no longer than the
     // grace its own tab's landing is given anyway.
     const [verdict, openedTabId] = await Promise.all([
-      judgeLanding(action, tabId, watch, access, pressed),
+      judgeLanding(action, tabId, watch, access, pressed, "click"),
       opened.settle(NAVIGATION_START_GRACE_MS)
     ]);
     if (verdict === undefined && openedTabId !== undefined) {
@@ -229,11 +262,58 @@ export async function sendClickCheckingLanding(
   }
 }
 
-/** Whether an action is a press whose page may navigate: a click, a typed entry sent with Enter, or Enter itself. */
-function pressMayLand(action: BrowserActionCommand): boolean {
-  if (action.actionType === "web.dom.click") return true;
-  if (action.actionType === "web.dom.type") return action.submit === true;
-  return action.actionType === "web.dom.keypress" && (action.key ?? action.text) === "Enter";
+/**
+ * A check or a choice, sent with its tab's top frame watched. A reply that
+ * arrives is its own verdict, whatever the tab did next. A reply lost because
+ * the page unloaded under the delivered message is judged by the landing, as
+ * a click's is, and a landing nothing speaks against by whether the requested
+ * state now holds there. Any other refusal, and a lost reply with no committed
+ * navigation, rethrows unchanged for the command router.
+ */
+async function sendStateCheckingLanding(
+  action: BrowserActionCommand,
+  tabId: number,
+  send: () => Promise<BrowserActionResult>,
+  access: LandedTabAccess,
+  pace: OriginPace | undefined
+): Promise<BrowserActionResult> {
+  const noun: ActNoun = action.actionType === "web.dom.select" ? "choice" : "check";
+  const watch = watchTopFrameNavigation(tabId);
+  try {
+    const pressed: PressedPage = { url: await readTabUrl(tabId), pace };
+    try {
+      return await send();
+    } catch (error) {
+      // Undelivered, the act never reached the page; refused otherwise, it is
+      // the act's own failure. Neither is the navigation's doing.
+      if (!unloadedUnderDeliveredMessage(error)) throw error;
+      const verdict = await judgeLanding(action, tabId, watch, access, pressed, noun);
+      if (verdict === undefined) throw error;
+      if (verdict.kind === "failed") {
+        const failed = workerActionResult(action, watch.startedAt, verdict.outcome);
+        return verdict.wait ? clickAfterClearedCheck(failed, verdict.wait) : failed;
+      }
+      const state = await readRequestedState(action, tabId, access);
+      const read = workerActionResult(action, watch.startedAt, requestedStateOutcome(noun, state));
+      return verdict.kind === "check_cleared" ? clickAfterClearedCheck(read, verdict.wait) : read;
+    }
+  } finally {
+    watch.stop();
+  }
+}
+
+/**
+ * Which landing an action is judged for: a press -- a click, a typed entry
+ * sent with Enter, or Enter itself -- wherever it ran; a check or a choice only
+ * in the top frame, since only the top frame's navigation is watched and the
+ * state is read from the top document.
+ */
+function landingKind(action: BrowserActionCommand, frameId: number): LandingKind | undefined {
+  if (action.actionType === "web.dom.click") return "press";
+  if (action.actionType === "web.dom.type") return action.submit === true ? "press" : undefined;
+  if (action.actionType === "web.dom.keypress") return (action.key ?? action.text) === "Enter" ? "press" : undefined;
+  if (action.actionType === "web.dom.check" || action.actionType === "web.dom.select") return frameId === TOP_FRAME_ID ? "state" : undefined;
+  return undefined;
 }
 
 /** The tab a click was pressed in, the tab it opened, and when the click began. */
@@ -261,14 +341,14 @@ async function driveOpenedTab(
   const path = landedPath(landed ?? "");
   const first = await readCommittedLanding(tabs.openedTabId, access.send);
   const settled = await settleLandedReading(first, tabs.openedTabId, access, checkWaitBudgetMs(action, tabs.startedAt));
-  if (settled.reading?.kind === "robot_check") return failedClick(reply, checkLandingOutcome(path, settled.checkWait));
+  if (settled.reading?.kind === "robot_check") return failedClick(reply, checkLandingOutcome(path, settled.checkWait, "click"));
   const served = await servedStatus(tabs.openedTabId, undefined);
   const rateLimited = noteRateLimitedLanding(landed, settled.reading, served, pressed.pace);
   if (rateLimited !== undefined) {
     const back = await closeOpenedTab(tabs, pressed.url);
-    return failedClick(reply, rateLimitedLandingOutcome(path, rateLimited, back));
+    return failedClick(reply, rateLimitedLandingOutcome(path, rateLimited, back, "click"));
   }
-  if ("status" in served && served.status >= FIRST_ERROR_STATUS) return failedClick(reply, refusedLandingOutcome({ status: served.status, path }));
+  if ("status" in served && served.status >= FIRST_ERROR_STATUS) return failedClick(reply, refusedLandingOutcome({ status: served.status, path }, "click"));
   const title = await readTabTitle(tabs.openedTabId);
   const page = { ...(landed !== undefined ? { url: landed } : {}), ...(title ? { title } : {}) };
   const validation = reply.validation;
@@ -313,22 +393,23 @@ async function judgeLanding(
   tabId: number,
   watch: NavigationWatch,
   access: LandedTabAccess,
-  pressed: PressedPage
+  pressed: PressedPage,
+  noun: ActNoun
 ): Promise<LandingVerdict | undefined> {
   const commit = await watch.landing();
   if (commit === undefined) return undefined;
   const first = await readCommittedLanding(tabId, access.send);
   const settled = await settleLandedReading(first, tabId, access, checkWaitBudgetMs(action, watch.startedAt));
-  if (settled.reading?.kind === "robot_check") return { kind: "failed", outcome: checkLandingOutcome(landedPath(commit.url), settled.checkWait) };
+  if (settled.reading?.kind === "robot_check") return { kind: "failed", outcome: checkLandingOutcome(landedPath(commit.url), settled.checkWait, noun) };
   const cleared = settled.checkWait?.outcome === "cleared" ? { wait: settled.checkWait } : {};
   const served = await servedStatus(tabId, commit.documentId);
   const rateLimited = noteRateLimitedLanding(commit.url, settled.reading, served, pressed.pace);
   if (rateLimited !== undefined) {
     const back = await returnToPressedPage(tabId, pressed.url);
-    return { kind: "failed", outcome: rateLimitedLandingOutcome(landedPath(commit.url), rateLimited, back), ...cleared };
+    return { kind: "failed", outcome: rateLimitedLandingOutcome(landedPath(commit.url), rateLimited, back, noun), ...cleared };
   }
   const refused = refusedLanding(served, commit);
-  if (refused !== undefined) return { kind: "failed", outcome: refusedLandingOutcome(refused), ...cleared };
+  if (refused !== undefined) return { kind: "failed", outcome: refusedLandingOutcome(refused, noun), ...cleared };
   return settled.checkWait?.outcome === "cleared" ? { kind: "check_cleared", wait: settled.checkWait } : { kind: "stood" };
 }
 
@@ -459,27 +540,29 @@ function withoutFragment(url: string): string {
  * with the pace's wait as `retryAfterMs`, and a record naming the status, the
  * landed path without its query, whether the tab was taken back, and the wait.
  */
-function rateLimitedLandingOutcome(path: string, limited: RateLimitedLanding, back: PressedPageReturn): WorkerActionOutcome {
+function rateLimitedLandingOutcome(path: string, limited: RateLimitedLanding, back: PressedPageReturn, noun: ActNoun): WorkerActionOutcome {
   const { status, retryAfterMs } = limited;
+  const expected = expectedLanding(noun);
   const actual = `the server answered HTTP ${status} for ${path}: the site refused the load for now and nothing was loaded; ` +
-    `${returnWords(back)}; the same click may be made again after ${retryAfterMs} ms`;
+    `${returnWords(back, noun)}; the same ${noun} may be made again after ${retryAfterMs} ms`;
   return {
     status: "failed",
-    message: `The click was refused by the site for now: HTTP ${status} for ${path}; ${returnMessage(back)} the click may be made again after ${retryAfterMs} ms.`,
-    validation: { status: "failed", expected: EXPECTED, actual },
-    failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { expected: EXPECTED, actual, retryAfterMs })
+    message: `The ${noun} was refused by the site for now: HTTP ${status} for ${path}; ${returnMessage(back)} the ${noun} may be made again after ${retryAfterMs} ms.`,
+    validation: { status: "failed", expected, actual },
+    failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { expected, actual, retryAfterMs })
   };
 }
 
 /** The return as the record's `actual` says it. */
-function returnWords(back: PressedPageReturn): string {
+function returnWords(back: PressedPageReturn, noun: ActNoun): string {
+  const made = noun === "click" ? "pressed" : "made";
   switch (back.kind) {
     case "returned":
-      return `the tab was taken back to the page the click was pressed on (${back.path})`;
+      return `the tab was taken back to the page the ${noun} was ${made} on (${back.path})`;
     case "unconfirmed":
-      return `the tab was taken back to ${back.path}, but whether that is the page the click was pressed on is unconfirmed, because the address before the click went unread`;
+      return `the tab was taken back to ${back.path}, but whether that is the page the ${noun} was ${made} on is unconfirmed, because the address before the ${noun} went unread`;
     case "not_returned":
-      return `the tab was not taken back to the page the click was pressed on: ${back.why}${back.stayed ? ", so it still shows the refused page" : ""}`;
+      return `the tab was not taken back to the page the ${noun} was ${made} on: ${back.why}${back.stayed ? ", so it still shows the refused page" : ""}`;
   }
 }
 
@@ -497,13 +580,14 @@ function returnMessage(back: PressedPageReturn): string {
   }
 }
 
-function refusedLandingOutcome(landing: RefusedLanding): WorkerActionOutcome {
+function refusedLandingOutcome(landing: RefusedLanding, noun: ActNoun): WorkerActionOutcome {
+  const expected = expectedLanding(noun);
   const actual = `the server answered HTTP ${landing.status} for ${landing.path}`;
   return {
     status: "failed",
-    message: `The click landed on ${landing.path}, which the server answered with HTTP ${landing.status}.`,
-    validation: { status: "failed", expected: EXPECTED, actual },
-    failure: navigationUnexpectedFailure(EXPECTED, actual)
+    message: `The ${noun} landed on ${landing.path}, which the server answered with HTTP ${landing.status}.`,
+    validation: { status: "failed", expected, actual },
+    failure: navigationUnexpectedFailure(expected, actual)
   };
 }
 
@@ -513,13 +597,14 @@ function refusedLandingOutcome(landing: RefusedLanding): WorkerActionOutcome {
  * record says so, so the step can stand once the person has answered, and
  * names the landed path without its query, as a refused landing's does.
  */
-function checkLandingOutcome(path: string, checkWait: LandedCheckWait | undefined): WorkerActionOutcome {
-  const actual = `the click was made and landed on a robot check at ${path}`;
+function checkLandingOutcome(path: string, checkWait: LandedCheckWait | undefined, noun: ActNoun): WorkerActionOutcome {
+  const expected = expectedLanding(noun);
+  const actual = `the ${noun} was made and landed on a robot check at ${path}`;
   return {
     status: "failed",
-    message: `The click was made and landed on a robot check at ${path}, which only a person can answer.`,
-    validation: { status: "failed", expected: EXPECTED, actual },
-    failure: navigationChallengeFailure(EXPECTED, `the click was made, and ${standingCheckWords(`the page it landed on (${path})`, checkWait)}`)
+    message: `The ${noun} was made and landed on a robot check at ${path}, which only a person can answer.`,
+    validation: { status: "failed", expected, actual },
+    failure: navigationChallengeFailure(expected, `the ${noun} was made, and ${standingCheckWords(`the page it landed on (${path})`, checkWait)}`)
   };
 }
 
@@ -533,8 +618,29 @@ function navigatedBeforeAnsweringOutcome(): WorkerActionOutcome {
   return {
     status: "succeeded",
     message: "The click navigated its page before it could answer.",
-    validation: { status: "passed", expected: EXPECTED, actual: "the click navigated its page before it could answer, and the page it landed on loaded" }
+    validation: { status: "passed", expected: expectedLanding("click"), actual: "the click navigated its page before it could answer, and the page it landed on loaded" }
   };
+}
+
+/**
+ * A check or a choice whose page navigated before it could answer, judged by
+ * the requested state on the page it landed on: it holds, and the act stood;
+ * the control shows the other state, and it is the verb's own failed
+ * read-back, OUTPUT_NOT_OBSERVED; nothing could say, and it is ACTION_FAILED,
+ * the code the lost reply was reported with before t407. Both failures are
+ * retryable, and a retry of a declared state presses nothing when it holds.
+ */
+function requestedStateOutcome(noun: ActNoun, state: RequestedStateReading): WorkerActionOutcome {
+  const expected = `the requested state holds on the page the ${noun} led to`;
+  const actual = `the ${noun} navigated its page before it could answer; ${state.actual}`;
+  if (state.kind === "landed") {
+    return { status: "succeeded", message: `The ${noun} navigated its page before it could answer, and the requested state holds there.`, validation: { status: "passed", expected, actual } };
+  }
+  const code = state.kind === "not_landed" ? WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED : WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED;
+  const message = state.kind === "not_landed"
+    ? `The ${noun} navigated its page before it could answer, and the requested state does not hold there.`
+    : `The ${noun} navigated its page before it could answer, and whether the requested state holds there could not be read.`;
+  return { status: "failed", message, validation: { status: "failed", expected, actual }, failure: workerActionFailedFailure(code, expected, actual) };
 }
 
 /** The frame's reply keeps what it says about the click itself; only its verdict is replaced. */

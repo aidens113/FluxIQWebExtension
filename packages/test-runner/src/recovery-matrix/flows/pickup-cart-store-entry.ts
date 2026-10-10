@@ -20,9 +20,12 @@
 // close glyph (`css-1ywuhio > css-0kpe9hw`) inside `vr-assist`; and the buy
 // bar's `data-testid="atc"`.
 //
-// **Authoring gap.** The entry's condition is a fact about the store chip,
-// which the candidate grammar can name only by an evidence handle;
-// `store-chip` is a placeholder for it, and the runner refuses the Flow.
+// The entry's condition names its element by a locator (`at "<css>"`, t402),
+// since a hand-authored Flow has no evidence handle. The header chip that
+// shows the store is inside `vr-fulfillment-picker`'s shadow root, which a
+// locator cannot reach, so the fact reads the mini cart's store line
+// (`data-testid="mini-cart-store"`, "Pickup store: <name>") in the light DOM;
+// the flyout is hidden, and a hidden element's text is still its text.
 export const PICKUP_CART_STORE_ENTRY = String.raw`flow: Put two packs of the 12 Double Rolls Select-A-Size paper towels in a pickup cart at Millbrook Crossing Supercenter
 step: accept the privacy choices if they are still asked
   node: web.dom.click
@@ -46,7 +49,7 @@ step: set Millbrook Crossing Supercenter as my store
   element.context.shadowHosts: ["vr-fulfillment-picker"]
   consequences: modify_existing
 start at: search
-when: text store-chip contains "Millbrook Crossing Supercenter"
+when: text at "[data-testid='mini-cart-store']" contains "Millbrook Crossing Supercenter"
 step search: search for the paper towels
   node: web.dom.type
   selector: input[type="search"]

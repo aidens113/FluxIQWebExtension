@@ -59,7 +59,7 @@ export async function startRunPerturbation<T extends { gatewayUrl?: string }>(pe
   let nextTopology = topology;
   if (perturbation.kind === "drop-action-result") {
     if (!topology.gatewayUrl) throw new Error("A drop-action-result perturbation needs the run's gateway URL");
-    relay = await startDropActionResultRelay({ gatewayUrl: topology.gatewayUrl, afterCommittingActs: perturbation.afterCommittingActs, log });
+    relay = await startDropActionResultRelay({ gatewayUrl: topology.gatewayUrl, ...("onTargetSelector" in perturbation ? { onTargetSelector: perturbation.onTargetSelector } : { afterCommittingActs: perturbation.afterCommittingActs }), log });
     nextTopology = { ...topology, gatewayUrl: relay.url };
   }
   let disarm: (() => Promise<void>) | undefined;

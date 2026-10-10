@@ -20,7 +20,10 @@ import { attemptNodeId } from "../../flow-lane/index.js";
 
 export type MatrixLifecycleRecord = Readonly<{
   event: string;
+  /** The handler's node id: Core writes `<graphFlowId>/<nodeId>`, and this is the part after the last `/`. */
   handlerId: string | null;
+  /** The whole `<graphFlowId>/<nodeId>` as Core wrote it, which tells two graphs' handlers apart; `null` when unreadable. */
+  handlerRef: string | null;
   disposition: string | null;
   /** `true`, `false` or `unknown`: what the handler's completion check came to; `null` when none was evaluated. */
   completionCheck: "true" | "false" | "unknown" | null;
@@ -109,10 +112,26 @@ function lifecycleOf(value: unknown): MatrixLifecycleRecord | null {
   const disposition = record(lifecycle.disposition)?.kind ?? lifecycle.disposition;
   return {
     event: lifecycle.event,
-    handlerId: typeof lifecycle.handlerId === "string" ? attemptNodeId(lifecycle.handlerId) ?? frameName(lifecycle.handlerId) : null,
+    ...handlerOf(lifecycle.handlerId),
     disposition: typeof disposition === "string" && DISPOSITIONS.has(disposition) ? disposition : null,
     completionCheck: checkResult(record(lifecycle.completionCheck)?.result ?? lifecycle.completionCheck),
   };
+}
+
+/**
+ * A handler as Core names it, `<graphFlowId>/<nodeId>` (the graph its
+ * registration is stored in, then the handler node). Until t404 this was read
+ * as one node id, which no handler id is, so every handler read as `null` and
+ * a check that a handler did not run passed whatever ran.
+ */
+function handlerOf(value: unknown): Pick<MatrixLifecycleRecord, "handlerId" | "handlerRef"> {
+  if (typeof value !== "string") return { handlerId: null, handlerRef: null };
+  const cut = value.lastIndexOf("/");
+  const nodePart = cut < 0 ? value : value.slice(cut + 1);
+  const graphPart = cut < 0 ? null : value.slice(0, cut);
+  const handlerId = attemptNodeId(nodePart) ?? frameName(nodePart);
+  const graph = graphPart === null ? null : frameName(graphPart);
+  return { handlerId, handlerRef: handlerId === null ? null : graph === null ? (cut < 0 ? handlerId : null) : `${graph}/${handlerId}` };
 }
 
 function checkResult(value: unknown): MatrixLifecycleRecord["completionCheck"] {

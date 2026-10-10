@@ -115,6 +115,8 @@ function inactiveHandler(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatri
   const runs = lifecycle(evidence.attempts);
   if (!runs.length) return result(reasons, ["handlers"], { handlerRuns: 0 });
   const quiet = matrixCase.quietSubflow;
+  // A handler whose id cannot be read cannot be shown not to be the inactive part's: the check fails rather than pass on nothing (t404).
+  if (runs.some(record => record.handlerId === null)) reasons.push("a handler ran whose id the run's records do not name, so the inactive part's handler cannot be ruled out");
   if (!quiet) reasons.push("the case names no inactive Subflow to watch");
   else if (runs.some(record => record.handlerId?.includes(`.${quiet}.`))) reasons.push(`a handler of the inactive part ${quiet} ran`);
   return result(reasons, [], { handlerRuns: runs.length });
