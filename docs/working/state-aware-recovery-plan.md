@@ -96,10 +96,19 @@ is never pressed twice (t413), already-done wording (t415). Paid-proof commands 
 `reports/t414-paid-proof-prep.md`): R4a crossborder hub-to-cart with the flash deal during the build, R4b crossborder
 basket-redesign after creation; both admitted by the guards, zero calls in dry run; all four Lab slots are assigned to
 lanes A-D, so one must be lent.
-Running: t417 matrix round 2 (full provider-free pass on the final dev); t416 (activity `skipped` field, unhandled
-reason in the stream record).
-Next: on a green round 2, the two paid proofs with the user's approval of each command; then lanes A-D round 3 on
-the new dev.
+Matrix round 2 (t417): 14 of 14 cases pass provider-free, 0 model calls, 0 wrong routes, 0 duplicated acts, 0 false
+successes. Paid R4a (approved by the user with R4b) failed twice, about $0.13 in all: attempt 1 (run-mv2nlh9l) saved the
+quantity box by a per-load id; attempt 2 (run-mv2pgqkj) saved it without its label, pressed a promotion's offer in an
+optional step, and looped on a clear step the page undid. Fixes merged: t419 (absent id tokens never count), t420
+(trial feedback when the control is still on the page), t421/t424 (chat wording), t422 (a model-built step saves the
+full fingerprint the recorded path saves), t423 (an interruption is dismissed through its way out, consent banners
+excepted; typing replaces a value). New user rules (2026-10-10): every saved element carries a full multi-signal
+fingerprint, and the model never sees or handles fingerprints.
+Running: t425 (full fingerprint on the recording and repair save paths, and a save-time refusal of a step with fewer
+than two identity signals); t426 (no selector, id, class, score, "address" or "fingerprint" in any text the model
+reads, enforced by a test).
+Next: merge t425 and t426, the day's second sweep, recovery-matrix case 1 provider-free, then ask the user before a
+third paid R4a attempt; then R4b; then lanes A-D round 3.
 
 **Binding rules every unit keeps** (the user's, from `mvp-final-month-plan.md` Current State, and Core's
 architecture): state routing stays a global runtime behaviour that precedes any model call; every node keeps first
@@ -423,6 +432,14 @@ Their briefs are written here before dispatch, against the code as it then stand
 - Validation: `pnpm lab run crossborder-marketplace --variant flash-deal ... --authoring-mode candidate --workspace t418-r4a --replays 1` -> verdict failed, flowCreated false, cost $0.0525 (ceiling $0.10); the model met and closed the flash deal itself; trial nodes 1-8 succeeded, node 9 (quantity, t964) `web.target.not_found` best 0.27: its saved id `#fb1l6ufkg` is minted per load and not judged generated (`content/selector/volatile-identifier.ts:139-144`); the model never retested, looped clearing the box, three repeat refusals ended it. No state-aware feature failed
 - Outcome: Blocked
 - Follow-up: t419 (absent id tokens never contradict), t420 (trial feedback: handle still present, test again), t421 (chat wording from the UI review); relaunch R4a after they merge, then R4b
+
+### 2026-10-10 - R4a attempt 2 failed; fingerprint and interruption fixes merged (t419-t424)
+- Agent: senior supervisor agent (Claude)
+- Changed: `Merge task` t419, t420, t421, t422, t423, t424 in both repos where paired; t425 and t426 dispatched
+- Why: R4a attempt 2 (run-mv2pgqkj-f3552c70, $0.0779) failed: the quantity step's saved identity dropped its label, an optional step pressed a promotion's offer under `consequences: none`, and a clear step looped on a box the page refills; 19 of 48 decisions were wasted. The user then set the full-fingerprint rule and the rule that the model never handles fingerprints
+- Validation: t422 domain plan-resolution 192/192, extension identity+action-runtime 418/418, content spec `created-identity` "1 passed (51.6s)", Core candidate-trial 64/64; t423 Core flow-bootstrap+activity wording vitest "276 passed" (26 files), extension wording 37/37, both typechecks exit 0; after t423 merged, extension activity+chat tests 495/495 on dev once Core's contracts and fluxiq builds were refreshed (the two failures before were the stale Core build); `pnpm task finish` "passed":true both repos for each
+- Outcome: Accepted
+- Follow-up: t425, t426; second sweep; ask the user before R4a attempt 3
 
 ## Open Questions
 
