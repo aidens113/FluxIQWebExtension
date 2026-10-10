@@ -338,10 +338,10 @@ test("a repair carries every signal the packet published for its control, and ne
   assert.equal(repaired.name, "qty");
   assert.equal(repaired.testId, "quantity");
   assert.deepEqual(repaired.classNames, ["qty-input", "form-control"]);
-  assert.equal(repaired.inputType, "text");
+  assert.equal(repaired.inputType, undefined, "a text field's default type is no signal; the packet leaves it out");
   assert.equal(repaired.selector, "#fb8y7yz1");
-  // The describing attributes only: never the box's value, never a style.
-  assert.deepEqual(repaired.attributes, { id: "fb8y7yz1", class: "qty-input form-control", type: "text", name: "qty", "data-testid": "quantity" });
+  // The identifying attributes only, in the builder's one list: never the box's value, its input mode or a style.
+  assert.deepEqual(repaired.attributes, { name: "qty", "data-testid": "quantity" });
   assert.equal(JSON.stringify(repaired).includes("\"1\""), false, "what the box holds is not its identity");
 });
 

@@ -51,7 +51,7 @@ Proof: matrix cases 1 and 2 compiled and played, provider-free and headed, and b
 | **Runtime repair** (`runtime/llm-evidence/target/override.ts`, used for a temporary override and the durable `edit_action_target`) | 4 identity signals: tag, role, accessibleName, visibleText. Plus a selector hint and `metadata` (frame, inputType, controlType, formId, listIndex, listTotal). The packet's label, id, name, classes, test id and placeholder were never read. | Full fingerprint through the builder, flat: adds implicitRole, label, id, name, classNames, testId, inputType, href, and the attributes that describe the control. Field contents are dropped. A thin identity is refused. `metadata` is unchanged, and no `context` is written, so the recording's record still wins (`withRecordedRecord`). |
 | **Core `runtime/live-patch*` and durable `edit_action_target`** | Core stores the domain's resolved target unchanged (`live-patch.ts:601` → `graph-flow-patch.ts:43`), bounded at 4,000 serialized characters (`isAutomationStudioRuntimeTargetOverrideTarget`). | Inherits the full fingerprint with no Core change. When the target would exceed 3,800 characters, the domain drops `attributes` and `classNames` first. |
 | **In-run repair `replace_unit` / `add_handler` (t392)**, and `temporary_action_sequence` steps | Core writes each step's `parameters` as the model wrote them (`live-patch/step-insert.ts:73`, `handler-build.ts`, `unit-replace.ts`). Only bootstrap paths call `resolvePlanNodeParameters`. These steps store **no fingerprint**. A handle written there is not resolved by any domain code. | **Not changed.** Open questions, item 1. |
-| **Model-built steps** (`plan-resolution/element-identity.ts`, owned by t422) | tag, role, accessibleName, visibleText (not for content controls), selector, inputType, context {formId, listPosition, shadowHosts, record}. No label, id, name, class or test id. | Not touched. The builder is exported as `webPacketElementFingerprint(element, { selector, context })` from `runtime/llm-evidence/target`, for t422 to adopt. |
+| **Model-built steps** (`plan-resolution/element-identity.ts`, owned by t422) | tag, role, accessibleName, visibleText (not for content controls), selector, inputType, context {formId, listPosition, shadowHosts, record}. No label, id, name, class or test id. | t422 gave it label, id, name, classes, test id and allowlisted attributes. Since the follow-up, it is a view over the one packet reader and the one builder (see "Follow-up" below). |
 | **Lab and demo** (`packages/test-runner/src/demo-workspace/flow-document.ts`; `recovery-matrix/compile/compile-flow-script.ts`) | Selector-only nodes such as `[data-testid=…]`, and literal-selector scripts with no domain resolution. | Not owned and not changed. These pass no guarded seam. |
 
 ### 2. Shared builder: new directory `domain/src/element-fingerprint/`
@@ -63,7 +63,7 @@ Proof: matrix cases 1 and 2 compiled and played, provider-free and headed, and b
 | `from-descriptor.ts` | `webElementFingerprintFromDescriptor(wire)`: a recorded element through `elementFingerprint`, then the builder. Used by `output-nodes/payloads.ts`. |
 | `signals.ts` | `webElementIdentitySignals(fp)`. |
 | `shortfall.ts` | `webElementIdentityShortfall(fp)`, plus `WEB_ELEMENT_IDENTITY_MINIMUM_SIGNALS = 2` and the closed code `web.target.unidentifiable`. |
-| `runtime/llm-evidence/target/packet-fingerprint.ts` | `webPacketElementFingerprint(element, { selector, context })`: a packet element through the builder. It keeps only the attributes that describe the control (id, name, class, type, role, placeholder, aria-label, title, alt, test ids) and skips withheld strings. |
+| `runtime/llm-evidence/packet-fingerprint/` | `webPacketElementFingerprint(element, { selector, shadowHosts })`: the one packet reader (moved here in the follow-up; see below). |
 
 **What the builder carries:**
 - tag, role, implicitRole and inputType (taken from `type` when absent);
@@ -223,8 +223,65 @@ is 1 minute(s) behind its source"). Both passing runs above were made after the 
    - **Select option words:** I dropped them, the same as t422, though recordings used to keep them. This could
      weaken a recorded select that has no label, name or id.
    - **The repair refusal word:** it reuses `target_indistinguishable` rather than a new Core reason.
-4. **For t422:** adopting `webPacketElementFingerprint` gives model-built steps the label, id, name, classes and test
+4. **For t422 (superseded by the follow-up below):** adopting `webPacketElementFingerprint` gives model-built steps the label, id, name, classes and test
    id that R4a lacked. The guard then passes the quantity box on its label and class, even though its regenerated id
    is quoted by its selector.
 5. **Docs not updated:** `docs/architecture/` is not in this brief's ownership. The guard and builder need a paragraph
    there, next to the recording and repair contracts.
+
+## Follow-up: one builder with t422 (merged tree `dbe9dab8` plus working changes)
+
+After the coordinator merged dev, which now includes t422, there were two packet-to-identity builders:
+- t422's `webPlanElementIdentity`, with its own attribute allowlist and secret and withheld screens, normalised through
+  `output-nodes/targets` `elementFingerprint`;
+- t425's `target/packet-fingerprint.ts`, with a second allowlist and second screens.
+
+**Now there is one owner per concern.**
+
+| Concern | Owner | What it holds |
+| --- | --- | --- |
+| **The identity rules** | `domain/src/element-fingerprint/build.ts` `webElementFingerprint` | The one attribute allowlist, `IDENTITY_ATTRIBUTES`: `name`, `type` (not on an `<input>`, whose type is its `inputType`), `placeholder`, `aria-label`, `title`, `data-testid`, `data-test`, `data-cy`, `data-qa`. What a field holds, the state attributes, and what a secret control keeps. The id, class tokens and test id are read out of the attributes into fields of their own. `inputType` is taken only as the path reported it, never derived from `type`, so a text field gains no "text". Every save path goes through it: recording, build and repair. |
+| **Reading a packet element** | `runtime/llm-evidence/packet-fingerprint/` `webPacketElementFingerprint(element, { selector, shadowHosts })` | Moved out of `target/` and absorbs t422's packet-specific reading: attribute pairs to a record, the one withheld screen, secret by `inputType`, `controlType`, `autocomplete` and `data-sensitive`, and context (form, landmark, list and table position, shadow hosts, record). It writes no href, as t422 did not. |
+| **The build path** | `plan-resolution/element-identity.ts` `webPlanElementIdentity` | Now a typed view (`WebPlanElementIdentity`) over the packet reader. `webPlanElementIdentityAcrossViews` and `webPlanElementWords` are unchanged. t422's second allowlist, `CONTENT_TAGS`, secret, withheld, `classTokens`, `contextOf` and `recordOf` code was **moved** into the reader or the builder. Nothing was extracted and dropped. |
+| **The repair path** | `target/override.ts` | Imports the same reader. It writes no `context` and no href. The guard is unchanged. |
+| **The recording path** | `element-fingerprint/from-descriptor.ts` | Unchanged route. It now also gets the one allowlist: a recorded node's `attributes` no longer carry the page's whole map. |
+
+**Why `domain/src/element-fingerprint/` plus one reader under `llm-evidence`, and not one file.** The builder must
+serve the recording path, which has no packet. The packet's own concepts (attribute pairs, the withheld marker, the
+placement fields) belong next to the packet. So the builder has one copy of each identity rule, and the reader has one
+copy of each packet rule.
+
+**One behaviour that changed against t422, deliberately.** A secret control (by `autocomplete` or `data-sensitive`)
+now keeps the author's description of it: its label, id, `name`, classes and identifying attributes. It still keeps no
+words that could be its contents.
+- *Why:* this is the rule the recording path always had (`gateway-payloads.ts`, `action-target.ts`). The recording
+  path is where secret controls actually occur; the packet never describes one. Taking t422's stricter rule would have
+  left every recorded login field found by its address alone.
+- *Where:* `identity-stable-facts.test.ts` was updated with a comment. `cc-number` still never appears.
+
+**Tests updated, each with a comment:**
+- `node-run/tests/draft-control.test.ts`, at the coordinator's request: under the full-fingerprint rule, the "Units"
+  field keeps both `accessibleName` "Units" and `label` "Quantity". The draft's words are still "Units".
+- `tests/tools.test.ts`: a button keeps `attributes: { type: "button" }`.
+- `renamed-save-override.test.ts`: the attributes are now `{ type: "submit" }`.
+- My `build`, `from-descriptor` and `override` tests now expect the allowlist only and no derived `inputType`.
+
+### Merged-tree results
+
+Paths below are relative to `fxwork/t425/!FluxIQWebExtension`.
+
+| Command | Result |
+| --- | --- |
+| `npx tsc -p tsconfig.json --noEmit` and `npx tsc -p tsconfig.test.json --noEmit` in `domain` | both clean |
+| `npx tsc -p tsconfig.json --noEmit` in `apps/extension` | clean |
+| `DOMAIN_TEST_BUILD_LABEL=t425 node scripts/test-domain.mjs src/runtime/llm-evidence src/tests/ src/output-nodes src/element-fingerprint src/io src/client src/recording` | `tests 1327, pass 1324, fail 3` |
+| `node scripts/structure-audit.mjs` | `passed (184 warning(s), 651 baselined)` |
+| `pnpm test:content e2e/content/tests/created-identity` in `apps/extension` (t422's crossborder spec) | `1 passed` ("a step built from the quantity box's handle is found after its label, its id or its class changes, and not found once all have") |
+| `FLUXIQ_TEST_ENV_FILES=none pnpm lab recovery-matrix --case 1` (headed, provider-free) | `rmx-2026-10-10T19-38-38-109Z-89d3c9`, case 1 **passed** |
+
+**About the 3 test failures.** They are the `node-run/retries` tests (dispatch #469, lasting-act #485 and #487). They
+also fail on the base code. The coordinator reports they are fixed on dev (`dispatch.ts` `nodeMetadata`), which this
+tree has not merged yet. They are not caused by t425.
+
+**On the structure audit.** The first unification placed the reader at `runtime/llm-evidence/packet-fingerprint.ts`,
+which put that directory at 26 files against its limit of 25. Moving it to its own directory fixed that.

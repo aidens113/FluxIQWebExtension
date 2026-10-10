@@ -34,7 +34,7 @@ test("a recorded text field keeps its whole description and none of what was typ
     inputType: "search",
     accessibleName: "Search",
     label: "Search the store",
-    attributes: { id: "q", name: "q", class: "search-box wide", placeholder: "What are you looking for?" },
+    attributes: { name: "q", placeholder: "What are you looking for?" },
     context: { formId: "search", landmark: "search" }
   });
 });

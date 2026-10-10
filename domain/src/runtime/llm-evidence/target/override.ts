@@ -60,7 +60,7 @@ import {
 } from "../repairable-parameters";
 import type { WebLlmPageEvidence } from "../sanitize";
 import { webRepairEquivalenceRefusal } from "./equivalence";
-import { webPacketElementFingerprint } from "./packet-fingerprint";
+import { webPacketElementFingerprint } from "../packet-fingerprint";
 import type {
   AutomationStudioRuntimeTargetOverrideEvidenceValidation,
   AutomationStudioRuntimeTargetOverrideFailedAction,
@@ -185,7 +185,7 @@ function proposedHandles(target: AutomationStudioRuntimeTargetOverrideTarget): R
  * existed for a list extraction and nothing read it.
  *
  * Its signals are the full fingerprint the builder makes of the packet element
- * (`./packet-fingerprint.ts`): the tag, role and input type, the words, the
+ * (`../packet-fingerprint/`): the tag, role and input type, the words, the
  * label, the authored id, `name`, class tokens and test id, and the attributes
  * that describe the control. Not where it sat: the record the recording named
  * stays the node's (`output-nodes/targets/targets.ts` `withRecordedRecord`), so
@@ -215,7 +215,6 @@ type WebResolvedRepairTarget = {
   classNames?: string[];
   testId?: string;
   inputType?: string;
-  href?: string;
   attributes?: Record<string, string>;
   /** A hint, not the identity, and absent where the binding is gone. Only valid inside `metadata.browserFrameId`'s frame. */
   selector?: string;
@@ -264,7 +263,6 @@ function resolvedTarget(resolved: WebLlmEvidenceElement, fingerprint: WebAutomat
     classNames: fingerprint.classNames,
     testId: fingerprint.testId,
     inputType: fingerprint.inputType,
-    href: fingerprint.href,
     attributes: fingerprint.attributes,
     // The hint, and only where the caller still holds the binding that issued
     // the handle. The packet has not carried a selector since `.v2`, so a repair

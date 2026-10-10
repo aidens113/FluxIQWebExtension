@@ -157,7 +157,7 @@ test("accepts an override naming the renamed Save, and resolves it fingerprint f
       // The rest of what the packet published for the control (t425): its class
       // tokens, each its own signal, and the attributes that describe it.
       classNames: ["ui-button", "ui-button--accent"],
-      attributes: { class: "ui-button ui-button--accent", type: "submit" },
+      attributes: { type: "submit" },
       selector: RENAMED_SAVE_SELECTOR,
       metadata: { controlType: "submit", formId: "settings-form" }
     },

@@ -15,9 +15,12 @@
 // **What it carries:** the tag, the role and the implied role, the input type,
 // the visible text, the label, the accessible name, the authored id, the `name`
 // attribute, each class token as its own entry, a test id, a link's
-// destination, the author's other descriptive attributes (a placeholder, an
-// `aria-label`, a title), and where the control sat. The selector and xpath ride
-// as locators, never as the identity.
+// destination, and where the control sat. The selector and xpath ride as
+// locators, never as the identity. Of the attributes the page wrote, only the
+// ones that say which control this is are kept (`IDENTITY_ATTRIBUTES`, the one
+// list every path uses): never the whole map, which holds a control's state
+// and a framework's data as well as its identity. The id and the class are
+// read out of it into fields of their own, and so is a test id.
 //
 // **What it never carries is what the control holds.** A text field's,
 // textarea's or select's text and value are its contents, not its name, so they
@@ -41,8 +44,16 @@ type ContractFields<T> = { [K in keyof Required<T>]: T[K] };
 /** Input types pressed rather than filled: their value is the author's word for them, not something a person entered. */
 const AUTHORED_VALUE_INPUT_TYPES: ReadonlySet<string> = new Set(["button", "submit", "reset", "image", "checkbox", "radio"]);
 
-/** Attributes that state what a control holds or how it is set, never what it is. */
-const STATE_ATTRIBUTES: ReadonlySet<string> = new Set(["checked", "selected", "aria-checked", "aria-selected", "aria-pressed", "aria-valuenow", "aria-valuetext"]);
+/**
+ * The attributes a saved identity keeps, by the name the page wrote: the ones
+ * that say which control this is. `type` says what a button does (a reset
+ * discards), which the repair check reads (`runtime/llm-evidence/target/
+ * equivalence.ts`); an input's type is its `inputType` and is not repeated
+ * here. A `placeholder`, an `aria-label` and a `title` are the author's words
+ * for it; the rest are test ids. Never a value, a checked or selected state, a
+ * pressed or expanded state, a style or a data blob.
+ */
+const IDENTITY_ATTRIBUTES: readonly string[] = ["name", "type", "placeholder", "aria-label", "title", "data-testid", "data-test", "data-cy", "data-qa"];
 
 /** Attributes an author writes as a test id, in the order the recorder prefers them. */
 const TEST_ID_ATTRIBUTES = ["data-testid", "data-test", "data-cy", "data-qa"] as const;
@@ -51,7 +62,8 @@ const TEST_ID_ATTRIBUTES = ["data-testid", "data-test", "data-cy", "data-qa"] as
 export function webElementFingerprint(source: WebElementFingerprintSource): WebAutomationElementFingerprint {
   const attributes = source.attributes;
   const tagName = source.tagName;
-  const inputType = filled(source.inputType) ?? (tagName.toLowerCase() === "input" ? filled(attributes?.type)?.toLowerCase() : undefined);
+  // Only as the path reported it: a text field's default type is no signal, and the packet leaves it out (`runtime/llm-evidence/elements.ts`).
+  const inputType = filled(source.inputType);
   const holdsContents = holdsWhatWasEntered(tagName, inputType);
   const words = !source.secret && !holdsContents;
   // In the order the wire reader writes them (`output-nodes/targets/targets.ts`
@@ -76,7 +88,7 @@ export function webElementFingerprint(source: WebElementFingerprintSource): WebA
     testId: filled(source.testId) ?? TEST_ID_ATTRIBUTES.map((key) => filled(attributes?.[key])).find((value) => value !== undefined),
     accessibleName: source.secret ? undefined : filled(source.accessibleName) ?? filled(attributes?.["aria-label"]),
     label: filled(source.label),
-    attributes: describingAttributes(attributes, holdsContents || source.secret),
+    attributes: identityAttributes(attributes, tagName),
     context: source.context,
     // Core's remaining signals. A web page has no source for the first four,
     // `url` names the page rather than the control, and `bounds` are the
@@ -100,11 +112,15 @@ function holdsWhatWasEntered(tagName: string, inputType: string | undefined): bo
   return tag === "input" && !AUTHORED_VALUE_INPUT_TYPES.has(inputType ?? "text");
 }
 
-/** The attributes the page wrote, less a control's state and, on a control that holds what was entered, its value. */
-function describingAttributes(attributes: Readonly<Record<string, string>> | undefined, withholdValue: boolean): Record<string, string> | undefined {
-  if (attributes === undefined) return undefined;
-  const kept = Object.entries(attributes).filter(([name, value]) => typeof value === "string" && !STATE_ATTRIBUTES.has(name) && !(withholdValue && name === "value"));
-  return kept.length > 0 ? Object.fromEntries(kept) : undefined;
+/** The identifying attributes the page gave a value, in `IDENTITY_ATTRIBUTES`' order; nothing when it gave none. */
+function identityAttributes(attributes: Readonly<Record<string, string>> | undefined, tagName: string): Record<string, string> | undefined {
+  const kept: Record<string, string> = {};
+  for (const key of IDENTITY_ATTRIBUTES) {
+    if (key === "type" && tagName.toLowerCase() === "input") continue;
+    const value = filled(attributes?.[key]);
+    if (value !== undefined) kept[key] = value;
+  }
+  return Object.keys(kept).length > 0 ? kept : undefined;
 }
 
 /** Each class token once, blanks dropped; nothing when no token is left. */

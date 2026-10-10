@@ -2,8 +2,8 @@
 // (`build.ts`, fed by `source.ts`), its reading of a recorded element
 // (`from-descriptor.ts`), and the save-time guard that refuses a control found
 // by one attribute alone (`signals.ts`, `shortfall.ts`). A packet element is
-// read in `runtime/llm-evidence/target/packet-fingerprint.ts`, beside the packet
-// it comes from.
+// read in `runtime/llm-evidence/packet-fingerprint/`, beside the packet
+// it comes from, for a build's step and a runtime repair alike.
 
 export { webElementFingerprint } from "./build";
 export { webElementFingerprintFromDescriptor } from "./from-descriptor";

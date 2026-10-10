@@ -135,8 +135,13 @@ test("the identifying attributes ride: a name, a placeholder, an aria-label and 
   assert.equal((element?.attributes as JsonObject | undefined)?.["data-testid"], "search-box", "where the page's first lookup reads a test id");
 });
 
-test("a control whose autocomplete says it holds a secret keeps no label, name, id, class or attribute", () => {
+test("a control whose autocomplete says it holds a secret keeps the author's description of it and none of its words", () => {
   // The packet never describes such a control; this is the identity's own rule, should one ever reach it.
+  // Since t425 it is the one rule every save path follows (`element-fingerprint/build.ts`), the
+  // recording's included, where secret controls are recorded every day: a control's contents never
+  // cross, and the author's description of it does -- its label, id, `name`, classes and identifying
+  // attributes -- because withholding them would leave every login form's fields found by their
+  // address alone, which the user's full-fingerprint rule (2026-10-10) forbids, while protecting nothing.
   const binding = sanitizeWebLlmSnapshotWithBindings({ url: ITEM_URL, interactiveElements: [] });
   binding.evidence.elements.push({
     target: "t1",
@@ -150,7 +155,22 @@ test("a control whose autocomplete says it holds a secret keeps no label, name, 
   const scope = { projectId: "project.one", flowId: "flow.one" };
   targets.remember(scope, binding);
   const resolution = targets.resolve(scope, "t1", undefined);
-  assert.deepEqual(resolution, { ok: true, selector: "#card", frameId: undefined, element: { tagName: "input", implicitRole: "textbox", selector: "#card" } });
+  assert.deepEqual(resolution, {
+    ok: true,
+    selector: "#card",
+    frameId: undefined,
+    element: {
+      tagName: "input",
+      implicitRole: "textbox",
+      label: "Card number",
+      selector: "#card",
+      id: "card",
+      classNames: ["card-field"],
+      name: "cardnumber",
+      attributes: { name: "cardnumber", placeholder: "1234 5678" }
+    }
+  });
+  assert.equal(JSON.stringify(resolution).includes("cc-number"), false, "a secret's kind of contents is not one of the identifying attributes");
 });
 
 test("a label a newer view of the same handle changed is dropped, and one both views show is kept", async () => {

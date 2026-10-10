@@ -9,6 +9,7 @@ test("a control the page describes many ways is saved with every one of them", (
   const fingerprint = webElementFingerprint({
     tagName: "input",
     selector: "#fb1l6ufkg",
+    inputType: "text",
     label: "Quantity",
     attributes: { id: "fb1l6ufkg", name: "qty", class: "qty-input  form-control", type: "text", inputmode: "numeric", placeholder: "1", "aria-label": "How many", "data-testid": "quantity" },
     context: { formId: "add-to-cart", listPosition: { index: 2, total: 3 } },
@@ -24,7 +25,10 @@ test("a control the page describes many ways is saved with every one of them", (
     testId: "quantity",
     accessibleName: "How many",
     label: "Quantity",
-    attributes: { id: "fb1l6ufkg", name: "qty", class: "qty-input  form-control", type: "text", inputmode: "numeric", placeholder: "1", "aria-label": "How many", "data-testid": "quantity" },
+    // The identifying attributes only, in the builder's one list: the id and
+    // class are fields of their own, an input's type is its `inputType`, and
+    // `inputmode` says how the box behaves, not which box it is.
+    attributes: { name: "qty", placeholder: "1", "aria-label": "How many", "data-testid": "quantity" },
     context: { formId: "add-to-cart", listPosition: { index: 2, total: 3 } }
   });
 });
@@ -52,7 +56,8 @@ test("a field's contents and a control's state are never its identity", () => {
 
   const toggled = webElementFingerprint({ tagName: "input", inputType: "checkbox", value: "newsletter", attributes: { checked: "", "aria-checked": "true", value: "newsletter" }, label: "Send me news", secret: false });
   assert.equal(toggled.checked, undefined);
-  assert.deepEqual(toggled.attributes, { value: "newsletter" }, "a checkbox's value is the author's word for it; its state is not");
+  assert.equal(toggled.attributes, undefined, "neither its state nor its value is one of the identifying attributes");
+  assert.equal(toggled.value, "newsletter", "a checkbox's value is the author's word for it, and rides as `value`");
 
   // A button input's value is the words on it, not something a person entered.
   const go = webElementFingerprint({ tagName: "input", inputType: "submit", value: "Go", accessibleName: "Go", secret: false });
@@ -73,7 +78,7 @@ test("a secret control keeps the author's description of it and none of its word
   assert.equal(JSON.stringify(password).includes("hunter2"), false);
   assert.equal(password.label, "Password");
   assert.equal(password.id, "pw");
-  assert.deepEqual(password.attributes, { id: "pw", placeholder: "Your password" });
+  assert.deepEqual(password.attributes, { placeholder: "Your password" });
 });
 
 test("blank strings and blank class tokens say nothing", () => {
