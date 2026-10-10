@@ -181,7 +181,9 @@ test("every top-frame node's parameters are byte-identical to what they were bef
     ["web.dom.select", { element: plan, url, inputValue: "team", browserFrameId: 0 }, "{\"selector\":\"select#plan\",\"value\":\"team\",\"element\":{\"selector\":\"select#plan\",\"id\":\"plan\",\"tagName\":\"select\"},\"browserFrameId\":0}"],
     ["web.dom.keypress", { element: email, url, key: "Enter", browserFrameId: 0 }, "{\"selector\":\"#email\",\"key\":\"Enter\",\"element\":{\"selector\":\"#email\",\"id\":\"email\",\"tagName\":\"input\",\"inputType\":\"email\"},\"browserFrameId\":0}"],
     ["web.dom.scroll", { url, scroll: { x: 0, y: 640 }, browserFrameId: 0 }, "{\"x\":0,\"y\":640,\"browserFrameId\":0}"],
-    ["web.dom.check", { element: { ...checkbox, checked: true }, url, inputValue: "on", browserFrameId: 0 }, "{\"selector\":\"input#terms\",\"checked\":true,\"element\":{\"selector\":\"input#terms\",\"id\":\"terms\",\"tagName\":\"input\",\"inputType\":\"checkbox\",\"checked\":true},\"browserFrameId\":0}"]
+    // The box's recorded state is the node's `checked`, never its identity (t425,
+    // `element-fingerprint/build.ts`): the fingerprint stopped carrying it.
+    ["web.dom.check", { element: { ...checkbox, checked: true }, url, inputValue: "on", browserFrameId: 0 }, "{\"selector\":\"input#terms\",\"checked\":true,\"element\":{\"selector\":\"input#terms\",\"id\":\"terms\",\"tagName\":\"input\",\"inputType\":\"checkbox\"},\"browserFrameId\":0}"]
   ];
   for (const [outputId, recorded, json] of exact) {
     assert.equal(JSON.stringify(webAutomationOutputPayload(outputId, recorded as never)), json, outputId);

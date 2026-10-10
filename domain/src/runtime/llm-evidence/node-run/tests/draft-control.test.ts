@@ -144,7 +144,7 @@ test("a field named only by its label is named by the words its view line prints
   assert.equal((sent.parameters.element as JsonObject).label, "Quantity");
 });
 
-test("a control the page already names keeps its identity as it was: no label is added beside its name", async () => {
+test("a control the page already names keeps both its name and its label, and the draft still calls it by its name", async () => {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
@@ -160,8 +160,13 @@ test("a control the page already names keeps its identity as it was: no label is
   const typed = await runtime.executeTool({ ...PROJECT, callId: "call.type", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: TYPE, parameters: { target: { handle: field.target }, text: "3" }, consequences: [] } });
   assert.equal(typed.draft?.control, "Units");
   const kept = (typed.draft?.ranWith?.parameters as JsonObject).element as JsonObject;
+  // The user's full-fingerprint rule (2026-10-10): a saved identity keeps every
+  // signal the page offers, so a field named "Units" and labelled "Quantity" is
+  // found by either if the other changes. The one builder every save path uses
+  // keeps both (`element-fingerprint/build.ts`, t422 and t425); the words the
+  // draft reads for the control are still its name.
   assert.equal(kept.accessibleName, "Units");
-  assert.equal("label" in kept, false);
+  assert.equal(kept.label, "Quantity");
 });
 
 function stub(options: { failClick?: boolean } = {}) {

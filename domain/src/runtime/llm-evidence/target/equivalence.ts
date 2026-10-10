@@ -240,9 +240,15 @@ function recordedNames(fingerprint: WebAutomationElementFingerprint): string[] {
  * The names the packet gives an element. The packet cuts no string (t200); a
  * name it withheld as shaped like a secret (`../withheld.ts`) is not the
  * element's name at all, so it is compared for nothing.
+ *
+ * The label is one of them (t425): a field a page names only by the words laid
+ * beside it -- R4a's quantity box, "Quantity" in a sibling `<div>` and no
+ * accessible name (`reports/r4a-debug-run-mv2pgqkj.md`) -- has its label as its
+ * only name, and the recording names it by that label too, so without it a
+ * repair to the very same box read as unanchored.
  */
 function evidenceNames(element: WebLlmEvidenceElement): string[] {
-  return [element.name, element.text].flatMap((value) => text(value) === undefined || isWithheldText(value) ? [] : [value as string]);
+  return [element.name, element.label, element.text].flatMap((value) => text(value) === undefined || isWithheldText(value) ? [] : [value as string]);
 }
 
 /** Words that join a second action to the first. */
