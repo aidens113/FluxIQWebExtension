@@ -18,9 +18,11 @@
 // between them: Core's recovery says "Trying the step again" as a repair, and
 // a note says what it did meanwhile. Another card, or a decision of the model's,
 // ends it: a decision's words may say why the first did not work, and it would
-// lose the card it speaks of. A refusal is no try, and a result check or a
-// test run is no step, so neither is taken in. A message left with no card and
-// no words of its own is gone. No DOM.
+// lose the card it speaks of. A recovery Core reported meanwhile (a step done
+// before trying again, `recovery-message.ts`) is passed over: it is no try of
+// the step, and it neither ends the retry nor is taken in. A refusal is no
+// try, and a result check or a test run is no step, so neither is taken in. A
+// message left with no card and no words of its own is gone. No DOM.
 
 import type { ActionCard } from "./action-card";
 import type { StepMessage } from "./messages";
@@ -41,6 +43,11 @@ export function foldRetriedCards(messages: readonly StepMessage[]): StepMessage[
   const emptied = new Set<StepMessage>();
   const failed = new Map<string, Failed>();
   for (const message of messages) {
+    // A recovery done around the step is passed over, its card and all.
+    if (message.kind === "recovery") {
+      kept.push({ ...message, actions: [...message.actions] });
+      continue;
+    }
     // The model's words end it, and so does any other message with nothing to try again.
     if (message.kind === "decision" || (message.actions.length === 0 && !BETWEEN.has(message.kind))) failed.delete(message.activityId);
     const copy: StepMessage = { ...message, actions: [] };

@@ -10,7 +10,8 @@
 //
 // A message that is an action itself (an action with no reason before it, a
 // check, a question to the person, a run's step) is only its card; a note,
-// or anything with no card, is only its words.
+// or anything with no card, is only its words. A recovery on a run step is
+// both: what happened and why, then its card.
 //
 // While the unit of work is under way or waiting, its newest card says
 // "Working on it" or "Waiting for you", and so does any card still waiting on
@@ -36,7 +37,7 @@ export type StepMessageView = {
 };
 
 /** Messages whose words are shown beside their cards: the reasoning, not the act. */
-const SPOKEN: ReadonlySet<StepMessage["kind"]> = new Set<StepMessage["kind"]>(["decision", "repair", "note"]);
+const SPOKEN: ReadonlySet<StepMessage["kind"]> = new Set<StepMessage["kind"]>(["decision", "repair", "recovery", "note"]);
 
 /** Creates an empty message. */
 export function createStepMessageView(): StepMessageView {
