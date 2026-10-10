@@ -71,9 +71,18 @@ const OUTCOME_DONE = "done";
 const OUTCOME_NOT_FOUND = "couldn't find it on the page";
 /** A call that did not work. It never says what FluxIQ does next, which this row cannot know. */
 const OUTCOME_FAILED = "that didn't work";
+/** A result code for a step that ran and whose effect did not show (Core's `failure-reason.ts`). */
+const RAN_UNSEEN = /(?:^|[._])(?:output_not_observed|not_observed|state_mismatch)$/u;
 /** A sentence that already says it was not done ("Not done: saving the Flow's steps"). */
 const SAID_NOT_DONE = /^not done\b/iu;
 const OUTCOME_NOT_REPEATED = "it didn't work the same way again";
+/**
+ * A Flow sent back because a step answering a popup pressed its offer rather
+ * than its way out (t423, Core's `flow-bootstrap/script-statements/way-out-steps.ts`),
+ * read from the refusal's result code, which may carry a digest after a colon.
+ */
+const WAY_OUT_REFUSED = /^candidate\.way_out_refused(?::|$)/u;
+const OUTCOME_WAY_OUT = "a step would accept the offer instead of closing it, so it was sent back";
 /**
  * Core's newer words for a passed completion check: what the Flow does matches
  * the request, and the test from the start that follows can still refuse it.
@@ -137,7 +146,7 @@ function wordsOf(event: ClientGatewayActivity): readonly [string, string | null]
     const action = toolAction(toolId, event, code);
     // A call FluxIQ declined to send was not tried, whatever its code's last words say of the page (R2-U-6).
     const declined = code === undefined ? undefined : notTriedOutcome(code, detail?.text, action);
-    return [action, ended ? testedOutcome(event, code) ?? declined ?? refusedOutcome(event, action) ?? toolOutcome(detail?.status, code) : null];
+    return [action, ended ? testedOutcome(event, code) ?? declined ?? wayOutOutcome(code) ?? refusedOutcome(event, action) ?? toolOutcome(event, detail?.status, code) : null];
   }
   if (event.phase === "thinking" || detail?.kind === "thought") return [thoughtAction(event), null];
   if (detail?.title === "Completion check" || /^(Checking the proposed (result|Flow)|The proposed (result|Flow))/u.test(event.label)) {
@@ -267,8 +276,21 @@ function refusedOutcome(event: ClientGatewayActivity, action: string): string | 
   return because ? `not done: ${because}` : "not done";
 }
 
-function toolOutcome(status: "started" | "succeeded" | "failed" | undefined, code: string | undefined): string {
+/** The outcome of a Flow sent back for pressing a popup's offer, said without its code; undefined for any other code. */
+function wayOutOutcome(code: string | undefined): string | undefined {
+  return code !== undefined && WAY_OUT_REFUSED.test(code) ? OUTCOME_WAY_OUT : undefined;
+}
+
+function toolOutcome(event: ClientGatewayActivity, status: "started" | "succeeded" | "failed" | undefined, code: string | undefined): string {
   if (code) {
+    // A step that ran and whose effect did not show: Core's card words, worded
+    // for the step's kind ("it ran, but the site set the box back" for a clear
+    // or a typing step). `web.validation.output_not_observed` matched nothing
+    // here and read "done" (R4a attempt 2, `run-mv2pgqkj-f3552c70`, moment 12).
+    if (RAN_UNSEEN.test(code)) {
+      const why = activityActionOf(event)?.why ?? activityActionFailureReason(code);
+      return why ? `${OUTCOME_FAILED}: ${why}` : OUTCOME_FAILED;
+    }
     // Core's reason for the code, as the step's card says it, so the status line
     // and the card cannot disagree (t174-lead-1003); the old words for a code
     // Core has none for.
