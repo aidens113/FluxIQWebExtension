@@ -19,13 +19,18 @@ const confirm = (sequence: number, index: number, row: string) => run(sequence, 
   step: { index, count: 6, nodeId: "n4.confirm", label: "Confirm", row },
   detail: { kind: "step", title: "Clicking “Confirm”", status: "started", ref: "n4.confirm", text: "Node: web.click" }
 });
-/** Core's row for the same confirm skipped as already done, as `already-done.ts` in Core emits it. */
-const alreadyDone = (sequence: number, index: number, row: string | undefined) => run(sequence, {
+/** Core's row for the same confirm skipped as already done, as `already-done.ts` in a Core from before t416 emits it: no `skipped` field. */
+const olderAlreadyDone = (sequence: number, index: number, row: string | undefined) => run(sequence, {
   phase: "running",
   label: row ? `Already done for ${row}` : "Already done: Confirm",
   step: { index, count: 6, nodeId: "n4.confirm", label: "Confirm", ...(row ? { row } : {}) },
   detail: { kind: "step", title: row ? `Already done for ${row}` : "Already done: Confirm", status: "succeeded", ref: "n4.confirm" }
 });
+/** The same row as Core emits it since t416, with the closed `skipped` field. */
+const alreadyDone = (sequence: number, index: number, row: string | undefined) => {
+  const event = olderAlreadyDone(sequence, index, row);
+  return { ...event, detail: { ...event.detail!, skipped: { reason: "already_done" as const, subject: row ?? "Confirm" } } };
+};
 const failedConfirm = (sequence: number) => run(sequence, {
   phase: "repairing",
   label: "Recovering from a failed step: Confirm",
@@ -40,6 +45,22 @@ test("only Core's already-done row is read as one: a started step, a recovery ro
   assert.equal(isAlreadyDoneStep(run(1, { phase: "running", step: { index: 4, count: 6, nodeId: "n4.confirm" }, detail: { kind: "step", title: "Confirm", status: "succeeded", ref: "n4.confirm", text: "Node: web.click" } })), false);
   assert.equal(isAlreadyDoneStep(run(1, { phase: "done", final: true, detail: { kind: "step", title: "Run finished", status: "succeeded" } })), false);
   assert.equal(isAlreadyDoneStep(run(1, { phase: "running", detail: { kind: "step", title: "Recovered", status: "succeeded", ref: "n4.confirm", recovery: { kind: "route", subject: "Requests", outcome: "succeeded" } } })), false);
+});
+
+test("the skipped field decides, not the row's shape: an older Core's row without it still reads by its shape", () => {
+  assert.equal(isAlreadyDoneStep(olderAlreadyDone(1, 4, "Lin Zhao")), true);
+  assert.equal(isAlreadyDoneStep(olderAlreadyDone(1, 4, undefined)), true);
+  const now = alreadyDone(1, 4, "Lin Zhao");
+  // A field that says already done wins even where the shape would not.
+  assert.equal(isAlreadyDoneStep({ ...now, detail: { ...now.detail, text: "Node: web.click" } }), true);
+  // Another reason, or a value outside the contract, is never taken for already done from the shape.
+  assert.equal(isAlreadyDoneStep({ ...now, detail: { ...now.detail, skipped: { reason: "state_routed" } } }), false);
+  assert.equal(isAlreadyDoneStep({ ...now, detail: { ...now.detail, skipped: { reason: "guessed" } } } as unknown as ClientGatewayActivity), false);
+});
+
+test("an older Core's already-done rows still give Already done cards", () => {
+  const messages = stepMessages([confirm(1, 4, "Lin Zhao"), olderAlreadyDone(2, 4, "Lin Zhao")], 100);
+  assert.deepEqual(messages.map((message) => cardWords(message.actions[0]!, false).outcome), ["Done", "Already done"]);
 });
 
 test("an already-done step is a short step message whose card says Already done for its row, after the steps that did the work", () => {
