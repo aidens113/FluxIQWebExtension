@@ -74,7 +74,7 @@ test("the manifest is valid, with four workflows and six variants, each arming o
   for (const selection of selections()) {
     const { expected } = resolveScenarioWorkflow(manifest, selection);
     assert.ok((expected.finalState ?? []).length > 0, JSON.stringify(selection));
-    if (selection.variantId === "flash-deal-stuck") assert.deepEqual(expected.failure, { category: "unexpected_state", code: "web.target.not_actionable" });
+    if (selection.variantId === "flash-deal-stuck") assert.deepEqual(expected.failure, { category: "unexpected_state", code: "web.action.blocked_by_dialog" });
     else assert.equal(expected.failure, undefined, JSON.stringify(selection));
     const { atLoad, afterArm } = scenarioPageFactSchedule(manifest, selection, "arms-after-loading");
     assert.ok(atLoad.length > 0);

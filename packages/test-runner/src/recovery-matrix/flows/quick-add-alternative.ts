@@ -9,6 +9,9 @@
 // has a quick-add, `listing/tile.ts`) -- and stands in for the failed call's
 // output with the second part's. Each part ends by reading the mini cart's
 // summary line, so either way hands back the same thing.
+// Both parts hand back `cart`: a Flow's ports are keyed per Flow since t405
+// (before it, the second `cart` failed to save, `UNIQUE constraint failed:
+// flow_ports.port_id`, t404).
 //
 // No selector here names a generated class: the redesign renames every class
 // on the site. A tile is found by its `data-item-id`, an ad being the tile that
@@ -62,8 +65,8 @@ part quick-add: add the soap from the results tile
   step: search for dish soap again
     node: web.dom.type
     selector: input[type="search"]
-  element.tagName: input
-  element.attributes: {"type": "search", "name": "q"}
+    element.tagName: input
+    element.attributes: {"type": "search", "name": "q"}
     text: dish soap
     submit: true
     consequences: none

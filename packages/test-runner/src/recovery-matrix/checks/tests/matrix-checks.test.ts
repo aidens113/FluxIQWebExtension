@@ -46,7 +46,7 @@ test("a row whose mechanism wrote no record is not proven, naming what is missin
 });
 
 test("a handler that resumed with its completion check true proves row 4", () => {
-  const handled = attempt("s2", "succeeded", { lifecycle: { event: "before", handlerId: `${NODE}.h1-s1`, disposition: "resume", completionCheck: "true" } });
+  const handled = attempt("s2", "succeeded", { lifecycle: { event: "before", handlerId: `${NODE}.h1-s1`, handlerRef: null, disposition: "resume", completionCheck: "true" } });
   assert.equal(MATRIX_CHECKS["popup-handled"](evidence({ attempts: [attempt("s1", "succeeded"), handled] }), caseOf("4a")).verdict, "passed");
 });
 
@@ -60,4 +60,12 @@ test("a deliberate stop ends failed on the End the Flow marked failed, after a s
   const stopped = [attempt("s1", "succeeded"), attempt("s2", "failed"), attempt("s3", "failed")];
   assert.equal(MATRIX_CHECKS["deliberate-stop"](evidence({ run: { status: "failed", failure: null }, attempts: stopped }), caseOf("13b")).verdict, "passed");
   assert.equal(MATRIX_CHECKS["deliberate-stop"](evidence({ run: { status: "failed", failure: null }, attempts: stopped.slice(0, 2) }), caseOf("13b")).verdict, "failed");
+});
+
+test("row 7 fails when a handler of the inactive part ran, and when a handler ran whose id cannot be read", () => {
+  const run = (handlerId: string | null) => attempt("s2", "succeeded", { lifecycle: { event: "before", handlerId, handlerRef: null, disposition: "resume", completionCheck: "true" } });
+  assert.equal(MATRIX_CHECKS["inactive-handler"](evidence({ attempts: [attempt("s1", "succeeded"), run(`${NODE}.h1-s1`)] }), caseOf("7")).verdict, "passed");
+  assert.equal(MATRIX_CHECKS["inactive-handler"](evidence({ attempts: [attempt("s1", "succeeded"), run("node.bootstrap.0123456789abcdef.store.h1-s1")] }), caseOf("7")).verdict, "failed");
+  // Before t404 every handler id read as null, and this passed whatever ran.
+  assert.equal(MATRIX_CHECKS["inactive-handler"](evidence({ attempts: [attempt("s1", "succeeded"), run(null)] }), caseOf("7")).verdict, "failed");
 });

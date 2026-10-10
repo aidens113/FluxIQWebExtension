@@ -12,11 +12,15 @@ const NOTHING_IN_CART: RecoverySiteExpectation = { kind: "crossborder-cart", ...
 /** social-network-feed's friend requests from people with at least five mutual friends: Amara Osei, Jonas Weber, Lin Zhao, Freya Holm. */
 const QUALIFYING_REQUESTS = ["rq_8b41c7", "rq_c7a0e5", "rq_e24f90", "rq_7a95b3"] as const;
 
+/**
+ * Jonas Weber's Confirm, the second confirm, exactly as `CONFIRM_QUALIFYING` targets it: row 9 loses this press's
+ * acknowledgement. Named by its target, not by a count of presses, since the optional dismissals before it may or may
+ * not be pressed (t404's first launch counted to "Not now").
+ */
+const JONAS_CONFIRM = '[role="listitem"]:has(a[href$="/people/jonas-weber/"]) [aria-label="Confirm"]';
+
 /** The bigbox shopper's cart as every visit starts it: one bottle of dish soap kept from the last visit. */
 const SOAP_ONLY = { productId: "418832007", qty: 1 } as const;
-
-/** Elements a script can only name by an evidence handle, which no hand-authored Flow has. */
-const ELEMENT_FACT_GAP = "A fact about an element (`exists`, `visible`, `value`, `text`) names it by an evidence handle in the candidate script grammar (Core `flow-bootstrap/script-statements/fact-condition.ts`), and a hand-authored Flow has no exploration to issue one. The web host already evaluates a fact whose target is a literal `selector` (`domain/src/runtime/facts/query.ts`), so the gap is the grammar alone.";
 
 export const RECOVERY_MATRIX_ROWS: readonly RecoveryMatrixRow[] = [
   {
@@ -29,21 +33,18 @@ export const RECOVERY_MATRIX_ROWS: readonly RecoveryMatrixRow[] = [
     row: 2,
     scenario: "Step already done: eligible entry, inputs bound",
     needs: ["entries"],
-    authoringGap: ELEMENT_FACT_GAP,
     cases: [{ caseId: "2", title: "with the pickup store already remembered, the Flow begins at the entry past the store choice", scenarioId: "bigbox-retail", variantId: "store-remembered", flow: "PICKUP_CART_STORE_ENTRY", check: "eligible-entry", skippedStep: "s4", site: { kind: "bigbox-cart", lines: [SOAP_ONLY, { productId: "418830127", qty: 2 }], storeId: "1187" }, goalFacts: false }],
   },
   {
     row: 3,
     scenario: "Similar page, wrong filters: shortcut refused",
     needs: ["entries"],
-    authoringGap: ELEMENT_FACT_GAP,
     cases: [{ caseId: "3", title: "on page 2 of the towel results with every filter dropped by the Next arrow, the read-from-here entry is refused", scenarioId: "bigbox-retail", workflowId: "pickup-towels", flow: "TOWELS_FILTER_ENTRY", check: "shortcut-refused", site: { kind: "bigbox-cart", lines: [SOAP_ONLY], storeId: null }, goalFacts: false }],
   },
   {
     row: 4,
     scenario: "Popup before the first action and midway",
     needs: ["handlers"],
-    authoringGap: ELEMENT_FACT_GAP,
     cases: [
       { caseId: "4a", title: "the flash deal stands over the home page before the first action", scenarioId: "crossborder-marketplace", variantId: "flash-deal-on-arrival", flow: "HUB_TO_CART_PROMOTION_HANDLER", check: "popup-handled", site: HUB_IN_CART, goalFacts: true },
       { caseId: "4b", title: "the flash deal opens over the product page while options are chosen", scenarioId: "crossborder-marketplace", variantId: "flash-deal", flow: "HUB_TO_CART_PROMOTION_HANDLER", check: "popup-handled", site: HUB_IN_CART, goalFacts: true },
@@ -53,14 +54,12 @@ export const RECOVERY_MATRIX_ROWS: readonly RecoveryMatrixRow[] = [
     row: 5,
     scenario: "Popup removal fails: no loop, honest end",
     needs: ["handlers"],
-    authoringGap: ELEMENT_FACT_GAP,
-    cases: [{ caseId: "5", title: "the flash deal's close glyph does nothing; the handler runs within its budget and the run ends with the declared failure", scenarioId: "crossborder-marketplace", variantId: "flash-deal-stuck", flow: "HUB_TO_CART_PROMOTION_HANDLER", check: "popup-honest-end", declaredFailure: { category: "unexpected_state", code: "web.target.not_actionable" }, site: NOTHING_IN_CART, goalFacts: false }],
+    cases: [{ caseId: "5", title: "the flash deal's close glyph does nothing; the handler runs within its budget and the run ends with the declared failure", scenarioId: "crossborder-marketplace", variantId: "flash-deal-stuck", flow: "HUB_TO_CART_PROMOTION_HANDLER", check: "popup-honest-end", declaredFailure: { category: "unexpected_state", code: "web.action.blocked_by_dialog" }, site: NOTHING_IN_CART, goalFacts: false }],
   },
   {
     row: 6,
     scenario: "Node and automation handlers both match: node wins, trace shows why",
     needs: ["handlers"],
-    authoringGap: ELEMENT_FACT_GAP,
     cases: [{ caseId: "6", title: "a handler on the first step and one for the whole automation both match the arrival promotion; the step's runs", scenarioId: "crossborder-marketplace", variantId: "flash-deal-on-arrival", flow: "HUB_TO_CART_TWO_HANDLERS", check: "handler-precedence", expectHandler: "h1-", site: HUB_IN_CART, goalFacts: true }],
   },
   {
@@ -79,7 +78,7 @@ export const RECOVERY_MATRIX_ROWS: readonly RecoveryMatrixRow[] = [
     row: 9,
     scenario: "Committing act's outcome lost: reconcile first",
     needs: ["reconciliation"],
-    cases: [{ caseId: "9", title: "the acknowledgement of the second confirm never reaches Core; the confirm is reconciled, not repeated", scenarioId: "social-network-feed", workflowId: "confirm-requests", perturbation: { kind: "drop-action-result", afterCommittingActs: 2 }, flow: "CONFIRM_QUALIFYING", check: "outcome-reconciled", site: { kind: "social-confirmed", requestIds: QUALIFYING_REQUESTS, rateLimitedAtLeast: 0 }, goalFacts: false }],
+    cases: [{ caseId: "9", title: "the acknowledgement of the second confirm never reaches Core; the confirm is reconciled, not repeated", scenarioId: "social-network-feed", workflowId: "confirm-requests", perturbation: { kind: "drop-action-result", onTargetSelector: JONAS_CONFIRM }, flow: "CONFIRM_QUALIFYING", check: "outcome-reconciled", site: { kind: "social-confirmed", requestIds: QUALIFYING_REQUESTS, rateLimitedAtLeast: 0 }, goalFacts: false }],
   },
   {
     row: 10,
