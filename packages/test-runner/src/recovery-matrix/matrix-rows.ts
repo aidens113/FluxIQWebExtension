@@ -38,7 +38,8 @@ export const RECOVERY_MATRIX_ROWS: readonly RecoveryMatrixRow[] = [
   {
     row: 3,
     scenario: "Similar page, wrong filters: shortcut refused",
-    needs: ["entries"],
+    // The shortcut is the called part's own entry, so the proof needs the part's frame (t404, t406).
+    needs: ["entries", "call-subflow"],
     cases: [{ caseId: "3", title: "on page 2 of the towel results with every filter dropped by the Next arrow, the read-from-here entry is refused", scenarioId: "bigbox-retail", workflowId: "pickup-towels", flow: "TOWELS_FILTER_ENTRY", check: "shortcut-refused", site: { kind: "bigbox-cart", lines: [SOAP_ONLY], storeId: null }, goalFacts: false }],
   },
   {

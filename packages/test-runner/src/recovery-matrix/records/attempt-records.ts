@@ -27,7 +27,19 @@ export type MatrixLifecycleRecord = Readonly<{
   disposition: string | null;
   /** `true`, `false` or `unknown`: what the handler's completion check came to; `null` when none was evaluated. */
   completionCheck: "true" | "false" | "unknown" | null;
+  /** Why an `unhandled` disposition was unhandled, as Core's closed reason code (t411); `null` otherwise or when absent. */
+  unhandledReason: string | null;
+  /** The route guard that refused a route, when that is why it was unhandled; `null` otherwise. */
+  unhandledGuard: string | null;
 }>;
+
+/**
+ * Why the run passed over a step rather than ran it, as the run detail says:
+ * `target_absent`, `state_routed`, or `already_done` -- a lasting act this run
+ * had already completed, which the run's ledger skipped rather than repeat
+ * (t411). The row's name is page text and is not kept.
+ */
+export type MatrixSkippedRecord = Readonly<{ reason: "target_absent" | "state_routed" | "already_done"; code: string | null }>;
 
 export type MatrixEntryRecord = Readonly<{ kind: string; id: string | null }>;
 
@@ -50,10 +62,16 @@ export type MatrixAttemptRecord = Readonly<{
   lifecycle: MatrixLifecycleRecord | null;
   entry: MatrixEntryRecord | null;
   stateRouting: MatrixStateRoutingRecord | null;
+  skipped: MatrixSkippedRecord | null;
+  /** When the attempt began and ended, in epoch milliseconds as Core recorded them; `null` when absent. */
+  startedAt: number | null;
+  finishedAt: number | null;
 }>;
 
 const EVENTS = new Set(["start", "before", "retry", "fail", "before_next"]);
 const DISPOSITIONS = new Set(["resume", "route", "resolve", "unhandled"]);
+const SKIP_REASONS = new Set(["target_absent", "state_routed", "already_done"]);
+const UNHANDLED_WORD = /^[a-z][a-z_]{0,63}$/u;
 const ENTRY_KINDS = new Set(["default", "entry", "checkpoint", "resume"]);
 const ROUTING_OUTCOMES = new Set(["effect_holds", "routed", "no_match", "unobserved", "no_pre_states", "guard_stopped"]);
 const GUARDS = new Set(["unbound_value", "repeats_lasting_act", "frame", "checkpoint_when", "ready_state"]);
@@ -82,6 +100,9 @@ export function matrixAttemptRecords(runDetail: Readonly<Record<string, unknown>
         lifecycle: lifecycleOf(attempt.lifecycle ?? metadata.lifecycle),
         entry: entryOf(attempt.entry ?? metadata.entry),
         stateRouting: stateRoutingOf(attempt.stateRouting ?? metadata.stateRouting),
+        skipped: skippedOf(attempt.skipped ?? metadata.skipped),
+        startedAt: epochMs(attempt.startedAt),
+        finishedAt: epochMs(attempt.finishedAt),
       };
     });
 }
@@ -109,13 +130,32 @@ function frameName(value: string): string | null {
 function lifecycleOf(value: unknown): MatrixLifecycleRecord | null {
   const lifecycle = record(value);
   if (!lifecycle || typeof lifecycle.event !== "string" || !EVENTS.has(lifecycle.event)) return null;
-  const disposition = record(lifecycle.disposition)?.kind ?? lifecycle.disposition;
+  const dispositionRecord = record(lifecycle.disposition);
+  const disposition = dispositionRecord?.kind ?? lifecycle.disposition;
+  const unhandled = disposition === "unhandled" ? dispositionRecord : undefined;
   return {
     event: lifecycle.event,
     ...handlerOf(lifecycle.handlerId),
     disposition: typeof disposition === "string" && DISPOSITIONS.has(disposition) ? disposition : null,
     completionCheck: checkResult(record(lifecycle.completionCheck)?.result ?? lifecycle.completionCheck),
+    unhandledReason: closedWord(unhandled?.reason),
+    unhandledGuard: closedWord(unhandled?.guard),
   };
+}
+
+function epochMs(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function closedWord(value: unknown): string | null {
+  return typeof value === "string" && UNHANDLED_WORD.test(value) ? value : null;
+}
+
+function skippedOf(value: unknown): MatrixSkippedRecord | null {
+  const skipped = record(value);
+  if (!skipped || typeof skipped.reason !== "string" || !SKIP_REASONS.has(skipped.reason)) return null;
+  const code = typeof skipped.code === "string" && skipped.code.length <= 120 && CODE.test(skipped.code) ? skipped.code : null;
+  return { reason: skipped.reason as MatrixSkippedRecord["reason"], code };
 }
 
 /**
