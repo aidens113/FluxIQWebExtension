@@ -109,7 +109,9 @@ test.describe("company-website: the defence spares the layer the step is working
     await expect(page.locator(FAUX_SELECT)).toBeVisible();
     const reply = await harness.runAction({ commandId: "option-hidden", actionType: "web.dom.click", selector: COMBI });
     expect(reply.status).toBe("failed");
-    expect(reply.failure?.code, "the drawer the option sits in is not a dialog in its way").toBe("web.action.rejected");
+    // The gate's hidden refusal under its own code since t193 (2026-10-03): a
+    // target that is there and not shown. Never `blocked_by_dialog`.
+    expect(reply.failure?.code, "the drawer the option sits in is not a dialog in its way").toBe("web.target.not_shown");
     expect(await drawerOpen(page), "a refused press inside the form leaves the form open").toBe(true);
   });
 

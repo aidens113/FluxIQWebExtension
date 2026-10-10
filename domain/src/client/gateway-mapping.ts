@@ -20,6 +20,7 @@ import { webAutomationExtractionSummaryValue, webAutomationRecordedExtraction, t
 import { webAutomationStructureDetectionValue } from "../extraction";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
+import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
 import { webAutomationTextSightingValue } from "../actions/text-sighting";
 import { webAutomationNextPageAnswerValue } from "../actions/next-page";
 import { adaptedTargetSupersedesRecording, elementFingerprint, webAutomationUnresolvedSecretParameters, webAutomationUploadBindingPath } from "../output-nodes";
@@ -300,6 +301,10 @@ function elementFingerprintSources(target: JsonObject, parameters: JsonObject): 
  * number of milliseconds within ten minutes, said only when a robot check stood
  * on the landed page and cleared by itself, untouched.
  *
+ * `clearedLayers` is copied the same way (`actions/cleared-layers.ts`): each
+ * layer the interference clearing closed as two closed words, its kind and the
+ * dismissal pressed, and nothing a producer put beside them.
+ *
  * `textPresence` and `visibleNear` are copied the same way
  * (`actions/text-sighting.ts`): a known presence and up to three bounded
  * snippets, and only on a result that did not succeed -- they explain a failed
@@ -332,6 +337,7 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     structure: webAutomationStructureDetectionValue(result.structure),
     resolution: result.resolution,
     checkWait: webAutomationClearedCheckWaitValue(result.checkWait),
+    clearedLayers: webAutomationClearedLayersValue(result.clearedLayers),
     textPresence: sighting?.textPresence,
     visibleNear: sighting?.visibleNear,
     nextPage,

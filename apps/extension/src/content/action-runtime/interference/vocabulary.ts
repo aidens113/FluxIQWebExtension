@@ -61,6 +61,15 @@
 // "Try again" is on no list: pressing it does the refused act on the page's
 // initiative, and the node's own re-run, after the wait the notice named, is
 // what does the act (`../rate-limit-notice.ts`).
+//
+// **A way out is also read for what pressing it would do (t401).** The anchored
+// lists decide which *label* may be pressed; `isActingWording`
+// (`press-guard/acting-wording.ts`) is read over the rest of the control a press reaches,
+// so a dismissal label cannot carry a press into a control whose own name
+// retries, confirms, submits or accepts (`press-guard/`). The deny-list
+// both read lives in `consequential-word.ts`.
+
+import { hasConsequentialWord } from "./consequential-word";
 
 /**
  * Longer text than this is prose that happens to start with a dismissal word,
@@ -78,18 +87,6 @@ const DISMISS_LABEL = /^(?:close|dismiss|minimi[sz]e|hide|not now|no,? thanks?|n
 const CLOSE_GLYPH = /^[×✕✖╳xX]$/u;
 
 /**
- * A verb whose press acts on the world in a way looking away does not undo, or
- * a thing a person owns that such a verb would act on. Matched on word
- * boundaries anywhere in the label, so a dismissal phrase cannot smuggle one in
- * behind it.
- *
- * `pay` is absent on purpose and the file comment says why; `payment`,
- * `purchase`, `buy` and `checkout` carry the same meaning where it is a press
- * rather than a turn of phrase.
- */
-const CONSEQUENTIAL_WORD = /\b(?:delete|deletes|deleting|remove|removes|removing|erase|erases|discard|discards|destroy|destroys|wipe|wipes|deactivate|deactivates|deactivating|unsubscribe|unsubscribes|cancel|cancels|cancelling|canceling|buy|buys|buying|purchase|purchases|purchasing|checkout|check-out|pay(?:ment|ments)|subscribe|subscribes|subscribing|upgrade|upgrades|downgrade|downgrades|withdraw|withdraws|transfer|transfers|donate|donates|publish|publishes|account|accounts|subscription|subscriptions|membership|memberships)\b/iu;
-
-/**
  * Whether this label may be pressed to clear what it sits on.
  *
  * Both guards, in one answer, so no caller can apply the allow-list and forget
@@ -101,7 +98,7 @@ export function isDismissalLabel(label: string): boolean {
   if (label.length === 0 || label.length > DISMISS_LABEL_MAX) return false;
   if (CLOSE_GLYPH.test(label)) return true;
   if (!DISMISS_LABEL.test(label)) return false;
-  return !CONSEQUENTIAL_WORD.test(label);
+  return !hasConsequentialWord(label);
 }
 
 /**
@@ -127,7 +124,7 @@ export function isConsentDeclineLabel(label: string): boolean {
   if (label.length === 0 || label.length > DISMISS_LABEL_MAX) return false;
   if (!CONSENT_DECLINE_LABEL.test(label)) return false;
   if (CONSENT_ACCEPT_WORD.test(label.replace(/^continue without accepting/iu, ""))) return false;
-  return !CONSEQUENTIAL_WORD.test(label);
+  return !hasConsequentialWord(label);
 }
 
 /** Whether a layer's own bounded text says it is a cookie or consent prompt. */
@@ -198,5 +195,5 @@ export function isRateLimitLayerText(text: string): boolean {
 export function isRateLimitAcknowledgeLabel(label: string): boolean {
   if (label.length === 0 || label.length > DISMISS_LABEL_MAX) return false;
   if (!RATE_LIMIT_ACKNOWLEDGE_LABEL.test(label)) return false;
-  return !CONSEQUENTIAL_WORD.test(label);
+  return !hasConsequentialWord(label);
 }
