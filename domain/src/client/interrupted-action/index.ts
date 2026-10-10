@@ -3,4 +3,5 @@
 export { webAutomationActionCommits } from "./commits";
 export { webAutomationInterruptedDispatchReading } from "./dispatch-reading";
 export { webAutomationInterruptedOutcome, type WebAutomationInterruptedOutcome } from "./outcome";
+export { webAutomationUnansweredOutcome } from "./unanswered-outcome";
 export { WEB_AUTOMATION_INTERRUPTED_STATUS, webAutomationInterruptedActionResult, type WebAutomationInFlightCommand } from "./result";
