@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { CLIENT_GATEWAY_ACTIVITY_CAPABILITY_ID } from "@fluxiq/client-gateway-websocket";
-import { webAutomationGatewayCapabilities } from "../capabilities";
+import { WEB_AUTOMATION_FACT_KINDS, WEB_AUTOMATION_FACTS_CAPABILITY_ID, webAutomationGatewayCapabilities, webAutomationRuntimeCapabilities } from "../capabilities";
 
 test("the client declares the live-activity stream once, under Core's id", () => {
   assert.equal(CLIENT_GATEWAY_ACTIVITY_CAPABILITY_ID, "fluxiq.activity");
@@ -24,4 +24,15 @@ test("declaring the activity stream makes nothing executable and claims no input
 test("every capability id is declared once", () => {
   const ids = webAutomationGatewayCapabilities.map((capability) => capability.id);
   assert.deepEqual([...new Set(ids)], ids);
+});
+
+test("the client declares web.facts with its version and kinds, and it makes nothing executable", () => {
+  const [facts] = webAutomationGatewayCapabilities.filter((capability) => capability.id === WEB_AUTOMATION_FACTS_CAPABILITY_ID);
+  assert.equal(WEB_AUTOMATION_FACTS_CAPABILITY_ID, "web.facts");
+  assert.equal(facts?.actionTypes, undefined);
+  assert.equal(facts?.outputIds, undefined);
+  assert.equal(facts?.metadata?.version, 1);
+  assert.equal(facts?.metadata?.actionType, "web.page.facts");
+  assert.deepEqual(facts?.metadata?.kinds, [...WEB_AUTOMATION_FACT_KINDS]);
+  assert.ok(webAutomationRuntimeCapabilities.some((capability) => capability.id === WEB_AUTOMATION_FACTS_CAPABILITY_ID));
 });

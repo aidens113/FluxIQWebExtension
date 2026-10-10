@@ -938,6 +938,13 @@ derives from:
 `web.browser.navigate`, `web.browser.tab`, and `web.browser.download` run in
 the background worker; every other action runs in the tab's content script.
 
+One gateway command type travels the same `execute_action` channel without
+being an action: `web.page.facts`, the batched, zero-wait fact check (plan B1).
+`gateway-session.ts` splits it off before the action path, the command router
+answers it through `runtime/fact-check-runner.ts` and the content script's
+`content/facts/`, and it opens no runtime status, chat card or recorded event
+([Fact checks](web-capabilities.md#fact-checks-webpagefacts)).
+
 Server action commands use the current gateway shape:
 
 ```json

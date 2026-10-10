@@ -793,6 +793,61 @@ Two condition shapes are accepted, because two producers write them: the flat
 a seventh assert kind stops `conditions.ts` compiling rather than being
 silently dropped as unreadable.
 
+### Fact Checks (`web.page.facts`)
+
+Core's fact conditions (state-aware recovery plan, Core C9; browser contract
+B1) are answered by a second host seam beside the expectation seam: the host
+runtime's `factEvaluator`, offered under the host capability
+`fact-evaluation` (`domain/src/runtime/host-runtime.ts`), and declared to Core
+by the client as the gateway capability `web.facts` with `version: 1` and its
+kinds (`domain/src/runtime/capabilities.ts`). Until Core's R2 declares the
+method on its boundary, the domain types it (`WebAutomationHostRuntime`) and
+C9's shapes are declared in `domain/src/runtime/facts/condition.ts`.
+
+It differs from the expectation seam in three ways, each on purpose:
+
+- **One round trip, no wait.** A whole batch is one gateway command of the
+  action type `web.page.facts`. The background worker
+  (`runtime/fact-check-runner.ts`) sends each frame the batch names its share
+  once, as `fluxiq.evaluateFacts`, and the content script
+  (`content/facts/`) answers synchronously from the document as it stands.
+  Nothing polls, waits for readiness, re-injects or retries.
+- **Three values.** Each condition is `true`, `false` or `unknown`, with
+  evidence and `capturedAt`. `false` needs a positive observation in a fully
+  read document; a frame that does not answer, a capture that throws, a
+  document still `loading` (except for the address), a document other than the
+  one Core last saw (`documentTimeOrigin`), an ambiguous target, a sensitive
+  control, a Flow input Core did not bind, or a shape that names no claim is
+  `unknown` with a closed reason. `web.dom.assert`'s timed-out-means-false
+  path is unchanged.
+- **Not a Flow action.** `web.page.facts` is not one of
+  `WEB_AUTOMATION_ACTION_TYPES`: no output node, schema, catalog entry, chat
+  card, runtime status or recorded event. The extension takes it off the
+  action path before `normalizeWebAutomationActionType`, which would refuse it
+  (`domain/src/client/fact-check-mapping.ts`,
+  `background/connection/gateway-session.ts`).
+
+Kinds, by the condition's `fact`: `exists`/`absent`, `visible`, `enabled`,
+`checked`, `selected` (an element's state), `text` (an element's or the page's
+shown text), `url`, `value` (a field's value, or a choice's chosen label),
+each compared `equals`, `contains` or `matches` against a literal, a Flow
+input (`{ input }`) or a bound value (`{ value }`) Core supplies; `count` (how
+many elements a selector matches, with `= != > >= < <=`); and `dialog` or
+`dialog.<kind>` (an open page dialog, of a page-evidence kind, whose name
+contains the value). The page reads by the assertion's own queries
+(`content/action-runtime/assertion-evaluation.ts`), the action resolver
+(`resolve-target.ts`) for an element description, the chosen-state reader, and
+page evidence's dialogs. A sensitive control's text, value or checked state is
+never read; evidence is an element's identity (tag, role, id, test id, name,
+accessible name, selector) and at most 120 characters of what was read,
+rebuilt field by field on the wire and secret-screened again by the domain.
+
+One gap is known: the interference classifiers produce no `promotion` or
+`assistant` kind (`content/action-runtime/interference/layer-kind.ts`), so a
+claim about either kind is `unknown` while any unclassified dialog is open
+(proven on everything-store's `deal-wheel`,
+`e2e/content/tests/facts/tests/deal-wheel-facts.spec.ts`).
+
 ### Browser landing verification and tab repeats
 
 Tab output nodes are mutating for repeat classification: another open creates

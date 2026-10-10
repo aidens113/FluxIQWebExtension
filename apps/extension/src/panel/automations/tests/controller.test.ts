@@ -211,3 +211,18 @@ test("export: inline saves the file, too large points to FluxIQ, a failure says 
   assert.equal(controller.state().rows[0]?.notice?.sentence, "FluxIQ isn't answering.");
   assert.equal(saved.length, 1);
 });
+
+// t384: a run started elsewhere (the chat's "run it", a playback through the
+// API) never answers this panel, so the run list is where its row learns that it
+// changed later runs.
+test("a listed run that changed later runs says so in its row, without a reply from this panel", async () => {
+  const { controller } = setup(() => list([{ ...newRun, durableBehaviorChanged: true }]));
+  controller.observe(connected); await controller.refresh();
+  assert.deepEqual(controller.state().rows[0]?.lines, ["Completed in 14.2s", "AI activated once", "Learned 1 new page variation", "Future runs updated"]);
+});
+
+test("a listed run that changed nothing durable is not read as learned", async () => {
+  const { controller } = setup(() => list([{ ...newRun, adaptationCount: 0, durableBehaviorChanged: false }]));
+  controller.observe(connected); await controller.refresh();
+  assert.deepEqual(controller.state().rows[0]?.lines, ["Completed in 14.2s", "AI activated once"]);
+});

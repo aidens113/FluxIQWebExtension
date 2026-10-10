@@ -8,7 +8,7 @@ import test from "node:test";
 // Importing the runner must not start a test run; the module refuses to be
 // loaded any other way than as the entry point unless this says so.
 process.env.DOMAIN_TEST_BUILD_IMPORT_ONLY = "1";
-const { assertTestBuildOutdirIsRemovable, cleanTestBuildOutdir, resolveTestBuildOutdir } =
+const { assertTestBuildOutdirIsRemovable, cleanTestBuildOutdir, resolveTestBuildOutdir, selectTestEntries } =
   await import("../test-domain.mjs");
 
 // A package root the guards reason about as a path; nothing is written under
@@ -129,4 +129,12 @@ test("a label that is not kebab-case never becomes a path", () => {
       `${JSON.stringify(label)} must be refused`
     );
   }
+});
+
+test("path fragments narrow a run to the matching entries, and a fragment matching nothing is refused", () => {
+  const entries = ["src/a/tests/one.test.ts", "src/b/tests/two.test.ts"].map((relative) => path.join(ROOT, ...relative.split("/")));
+  assert.deepEqual(selectTestEntries(entries, [], ROOT), entries);
+  assert.deepEqual(selectTestEntries(entries, ["b/tests/two"], ROOT), [entries[1]]);
+  assert.deepEqual(selectTestEntries(entries, ["a/tests", "two.test"], ROOT), entries);
+  assert.throws(() => selectTestEntries(entries, ["nowhere"], ROOT), /No domain test entry matches "nowhere"/);
 });

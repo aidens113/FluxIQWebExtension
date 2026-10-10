@@ -39,7 +39,8 @@ export const readCore = {
       finishedAt: readCore.time(record.finishedAt),
       updatedAt: readCore.time(record.updatedAt),
       interventionCount: readCore.count(record.interventionCount),
-      adaptationCount: readCore.count(record.adaptationCount)
+      adaptationCount: readCore.count(record.adaptationCount),
+      durableBehaviorChanged: typeof record.durableBehaviorChanged === "boolean" ? record.durableBehaviorChanged : undefined
     };
   },
   dataset(value: unknown): RunDataset | undefined {

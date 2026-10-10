@@ -3,6 +3,7 @@
 // state it shows (t364). `checkable-state.ts` sets; `chosen-state.ts` reads.
 
 export { setCheckedState } from "./checkable-state";
+export { readChosenState } from "./chosen-state";
 
 export type { CheckableStateOutcome } from "./checkable-state";
 export type { ChosenStateReading } from "./chosen-state";
