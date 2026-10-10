@@ -143,7 +143,9 @@ function boundValue(value: WebAutomationFactCondition["value"], context: WebAuto
  */
 function targetValue(value: JsonObject | undefined): WebAutomationFactTarget | undefined {
   if (!value) return undefined;
-  const selector = nonEmpty(value.selector);
+  // Core's candidate script writes a hand-authored literal target as an opaque
+  // `locator` the host interprets; this host reads it as a CSS selector.
+  const selector = nonEmpty(value.selector) ?? nonEmpty(value.locator);
   const described = elementFingerprint(value.element ?? value.fingerprint);
   const element = described && Object.keys(described).length ? described : undefined;
   if (!selector && !element) return undefined;
