@@ -48,8 +48,8 @@
 // same way: the model was never shown one, so it can only be a guess.
 //
 // Nothing is guessed. A node with no handle is `unchanged` -- a literal
-// selector the model wrote stays exactly as it wrote it and is never reported
-// as resolved -- with one exception: once this Flow's exploration was shown a
+// selector a hand-authored or drafted step holds stays exactly as written and
+// is never reported as resolved -- with one exception: once this Flow's exploration was shown a
 // detected list, a literal `extractList` can only be a guess at selectors the
 // model was never shown, and live every one of them read no field
 // (`run-mu4wwkbc-df6cfe60`), so it is refused as `extraction_required` --
@@ -76,6 +76,8 @@
 // already gated that call against the page the model is looking at, and says so
 // with `gatedByCaller`, so one act is not put to the gate twice under two
 // different rules.
+//
+// **What the model wrote names an element by handle only (t432):** anything else is refused (`written-literals.ts`).
 //
 // **A candidate submission resolves from the whole view history (t358).** A
 // Flow's first steps act on the start page exploration has long since left, and
@@ -123,6 +125,7 @@ import { webPlanPositionCode } from "./issue-position";
 import { webPlanOwnExtractionList } from "./own-extraction-list";
 import { resolveWebNextPageSlot } from "./next-page-slot";
 import { webPlanStepPermission, type WebPlanStepIssueCode } from "./step-permission";
+import { webPlanModelWrote, webPlanModelWroteAny, webPlanWrittenLiterals, type WebPlanAuthorship } from "./written-literals";
 import type { WebLlmTargetPackets, WebLlmTargetReach, WebLlmTargetResolution } from "./target-packets";
 
 /**
@@ -133,6 +136,9 @@ import type { WebLlmTargetPackets, WebLlmTargetReach, WebLlmTargetResolution } f
 export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   "web.handle.malformed",
   "web.handle.misplaced",
+  // A model-written element named other than by handle, or not named (`./written-literals.ts`).
+  "web.handle.not_a_handle",
+  "web.handle.required",
   "web.handle.unknown",
   // A handle shown before a reload (a rerun puts its page back that way) whose
   // control the reloaded page numbers anew (`./target-packets.ts`,
@@ -172,8 +178,8 @@ export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   // list's handle, and optionally the page's own Next control by its
   // handle (`next-page-slot.ts`).
   "web.handle.expected.next_page.list_control",
-  // An element node's `selector` as `{ handle, location? }`.
-  "web.handle.expected.selector.handle_location",
+  // An element node's `target` as `{ handle, location? }` (`selector` until t432).
+  "web.handle.expected.target.handle_location",
   // Beside `web.handle.wrong_control`: the node that does act on the control
   // the handle names, so the same call can be made again with that node and
   // the same handle. Live, a store chooser's "Set as my store" button was
@@ -240,6 +246,9 @@ export type WebPlanNodeResolutionInput = {
    * `handleViews`.
    */
   handleReach?: WebLlmTargetReach | undefined;
+  /** Every parameter, or only those named, is the model's own writing (Core's `writtenByModel`, `modelWrittenParameters`; t432). */
+  writtenByModel?: true | undefined;
+  modelWrittenParameters?: readonly string[] | undefined;
 };
 
 /** The view one target handle of a node resolved from: its number in the Flow's captures and the page it showed (`target-packets.ts`). */
@@ -295,9 +304,9 @@ const MAX_ISSUE_CODES = 16;
 /** Where a handle of each kind is accepted, named for a refusal that is about where or how it was written. */
 const EXPECTED_PLACEMENT = {
   extraction: "web.handle.expected.extract_list.handle_fields",
-  target: "web.handle.expected.selector.handle_location"
+  target: "web.handle.expected.target.handle_location"
 } as const satisfies Record<WebPlanHandleKind, WebPlanHandleIssueCode>;
-const PLACEMENT_REASONS: ReadonlySet<WebPlanHandleIssueCode> = new Set(["web.handle.malformed", "web.handle.misplaced", "web.handle.unknown_field", "web.handle.extraction_required"]);
+const PLACEMENT_REASONS: ReadonlySet<WebPlanHandleIssueCode> = new Set(["web.handle.malformed", "web.handle.misplaced", "web.handle.unknown_field", "web.handle.extraction_required", "web.handle.not_a_handle", "web.handle.required"]);
 
 /**
  * A fact's target, as Core presents it for resolution: owned by Core (the
@@ -416,7 +425,7 @@ function lowerCase(value: JsonValue | undefined): string | undefined {
 
 type Scope = { projectId: string; flowId: string };
 /** `step`: the resolution is of a step a Flow will save, not of a call the caller gated itself (`gatedByCaller`) or a fact's target. */
-type Scoped = Scope & { reach: WebLlmTargetReach | undefined; step: boolean };
+type Scoped = Scope & WebPlanAuthorship & { reach: WebLlmTargetReach | undefined; step: boolean };
 type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string; views?: WebPlanHandleView[] };
 /** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control -- or the shape that fits the key -- instead when one does. */
 type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath; fits?: WebPlanHandleIssueCode | undefined };
@@ -452,7 +461,7 @@ export async function resolveWebPlanNodeParameters(input: WebPlanNodeResolutionI
 /** The answer, and every name it assumed to reach it (`WebPlanNodeOutcome`). */
 export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stores: WebPlanHandleStores): Promise<WebPlanNodeOutcome> {
   const step = input.gatedByCaller !== true && input.nodeDefinitionId !== FACT_TARGET_NODE_ID;
-  const scope: Scoped = { projectId: input.projectId, flowId: input.flowId, reach: input.handleReach, step };
+  const scope: Scoped = { projectId: input.projectId, flowId: input.flowId, reach: input.handleReach, step, model: input.writtenByModel === true, modelKeys: input.modelWrittenParameters };
   const outcome = input.nodeDefinitionId === RUN_OUTPUT_NODE_ID
     ? resolveRunOutput(input.parameters, scope, stores)
     : resolveNode(input.nodeDefinitionId, input.parameters, scope, stores);
@@ -542,6 +551,8 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
   const nextPageNode = nodeDefinitionId === NEXT_PAGE_NODE_ID;
   // Only a candidate's press (header).
   const press = nodeDefinitionId === PRESS_NODE_ID && scope.reach === "view_history";
+  // An element the model named other than by handle, or did not name (header).
+  if (webPlanModelWroteAny(scope)) for (const literal of webPlanWrittenLiterals(nodeDefinitionId, parameters, SELECTOR_NODE_IDS.has(nodeDefinitionId), scope)) refusals.push({ code: literal.code, kind: "target", path: literal.path });
   for (const [key, value] of Object.entries(parameters)) {
     if (nextPageNode && key === "nextPage") {
       const slot = resolveWebNextPageSlot(value, scope, stores.targets, stores.extractions, scope.reach);
@@ -550,6 +561,8 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
         if (slot.controlView !== undefined) resolved.views = [slot.controlView];
         replaced.set(key, resolved);
       }
+      // A literal request is a guess at what the model was never shown (header).
+      else if (webPlanModelWrote(scope, key) && (slot.status === "written" || slot.status === "literal")) refusals.push({ code: "web.handle.not_a_handle", kind: undefined, path: [key], fits: NEXT_PAGE_SHAPE });
       // The short literal runs in whatever frame the node already names.
       else if (slot.status === "written") replaced.set(key, { value: slot.request, frameId: declaredFrame(parameters.browserFrameId), frameUrlPath: undefined, element: undefined });
       else if (slot.status === "refused") {
@@ -579,7 +592,7 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
         const frameId = declaredFrame(parameters.browserFrameId);
         const own = webPlanOwnExtractionList(value, frameId, scope, stores.extractions);
         if (own !== undefined && own !== value) replaced.set(key, { value: own, frameId, frameUrlPath: undefined, element: undefined });
-        else if (own === undefined && stores.extractions.issuedFor(scope)) refusals.push({ code: "web.handle.extraction_required", kind: "extraction", path: [key] });
+        else if (own === undefined && (webPlanModelWrote(scope, key) || stores.extractions.issuedFor(scope))) refusals.push({ code: "web.handle.extraction_required", kind: "extraction", path: [key] });
       }
       continue;
     }
@@ -702,7 +715,7 @@ function sameTargetIdentity(left: JsonValue | undefined, right: JsonValue | unde
 function resolveRunOutput(parameters: JsonObject, scope: Scoped, stores: WebPlanHandleStores): NodeOutcome {
   const { outputId, parameters: payload } = parameters;
   const inner = isWebOutputId(outputId) && isJsonRecord(payload)
-    ? resolveNode(webAutomationOutputNodeId(outputId), payload as JsonObject, scope, stores)
+    ? resolveNode(webAutomationOutputNodeId(outputId), payload as JsonObject, webPlanModelWrote(scope, "parameters") ? { ...scope, model: true } : scope, stores)
     : undefined;
   const refusals: Refusal[] = [];
   for (const [key, value] of Object.entries(parameters)) {

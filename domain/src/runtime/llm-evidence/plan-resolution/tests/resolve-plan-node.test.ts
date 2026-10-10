@@ -86,7 +86,7 @@ async function resolve(runtime: WebAutomationLlmEvidenceRuntime, nodeDefinitionI
 }
 
 const EXTRACTION_HINT = "web.handle.expected.extract_list.handle_fields";
-const TARGET_HINT = "web.handle.expected.selector.handle_location";
+const TARGET_HINT = "web.handle.expected.target.handle_location";
 /** The node that fits a control a refused node could not act on, as a refusal names it. */
 const USE_CLICK = "web.handle.expected.node.web.output.dom-click";
 const USE_SELECT = "web.handle.expected.node.web.output.dom-select";
@@ -417,6 +417,8 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
   assert.deepEqual([...WEB_PLAN_HANDLE_ISSUE_CODES], [
     "web.handle.malformed",
     "web.handle.misplaced",
+    "web.handle.not_a_handle",
+    "web.handle.required",
     "web.handle.unknown",
     "web.handle.renumbered_by_reload",
     "web.handle.stale",

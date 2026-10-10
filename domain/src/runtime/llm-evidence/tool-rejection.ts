@@ -598,7 +598,12 @@ const HANDLE_ISSUE_REASONS: ReadonlyMap<string, WebLlmToolRejectionReason> = new
   // the rest of the page once that attribute changes. Only a step a Flow saves
   // is judged, so a tool's own call never meets it; it is here so the table
   // names every code the resolver can refuse with.
-  ["web.handle.unidentifiable", "target_ambiguous"]
+  ["web.handle.unidentifiable", "target_ambiguous"],
+  // An element the call named by something other than a handle, or an element
+  // node naming none (t432, `plan-resolution/written-literals.ts`): the reason
+  // a node naming no handle was already given, with the shape a handle takes.
+  ["web.handle.not_a_handle", "target_not_a_handle"],
+  ["web.handle.required", "target_not_a_handle"]
 ] as const satisfies ReadonlyArray<readonly [string, WebLlmToolRejectionReason]>);
 
 /**
