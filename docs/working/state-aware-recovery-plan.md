@@ -1,7 +1,7 @@
 # State-Aware Recovery Plan
 
 Status: Active
-Status detail: All units except the executor integration (t392) and its dependants merged and pushed; matrix runner live; t401/t402 fixing what it found.
+Status detail: Every unit implemented, verified and merged (t383-t403); provider-free matrix round 1 and the full sweep running; two paid proofs await the user's approval.
 Created: 2026-10-09
 Last updated: 2026-10-09
 Owner: Senior supervisor agent
@@ -68,35 +68,31 @@ those files and can start now. This work must not delay lanes A-D round 3: lane 
 between rounds, and a merge that changes behaviour for existing Flows (R3's routing guards) lands between rounds with
 the lanes' saved Flows replayed provider-free first.
 
-**In progress (2026-10-09, user: "use max subagents and implement this fast").** Merged into both `dev`s, pushed,
-and verified by the supervisor (tests beside each change, typechecks, structure audits; Core's finish runs `pnpm
-check`): t383 candidate wrap-up and refusal advice; t384 satisfied step reads as done, Automations learned count and
-Stop; t385 lifecycle contracts (frames, handlers, scopes, continuations, true failure, incident budget, fact
-conditions, handler nodes, validation); t386 requirement gate and protocol version check; t387 safe state routing
-guards; t388 candidate script parts, `call:`, start points, checkpoints, handlers, fact `when:`, `requires`; t389
-`web.page.facts` (batched, zero-wait, three-valued); t390 crossborder flash-deal variants (matrix rows 4-5; row
-assignments in its report); t391 Core run log; t393 in-flight command record, interrupted/unknown after a worker
-restart, dedupe, domain effect check; t394 Lab perturbations drop-action-result and stop-service-worker (rows 9, 11);
-t395 editor views (handler area, hook badges, start and checkpoint markers, effective handlers); t397 audit rule
-`statement-packing` (two workers had packed statements onto one line to stay under a file budget; existing
-occurrences baselined, may only shrink). Direct dev fixes: domain and extension test runners take path fragments;
-dialog facts read the saved form (`2c2371fc`, found by the t392 lead).
-Also merged: t398 (saved steps and handlers carry their written words; validation knows the recovery role), t399
-(`pnpm lab recovery-matrix`, the provider-free matrix runner: rows 1 and 13b pass on dev with zero model calls), t400
-(the domain resolves a fact's `{ handle }` target, node id `fluxiq.fact.target`).
-Matrix findings (t399): row 13a found two extension defects, fixed in t401: the in-page interference clearing pressed
-a rate-limit notice's "Try again", confirming outside the Flow, and it closes the very dialog a step targets. Rows 2-6
-need a selector form for facts in hand-authored Flows (t402, not shown to the model). Rows 7-11 wait for t392.
-Running: t392 executor integration lead (`lead-xhigh`). Verified in its tree: A Call Subflow, B trace and activity
-`recovery` contract, C0 graph-run cut from 796 to 431 lines, C1 host fact evaluator, C2 handlers fire at start,
-before, retry, fail and before_next (`flow.handlers@1` granted), D1 safe routing uses only the frame's checkpoints, G
-t388's call shape, fact handles and `requires` at save, F1 late results recorded and never applied, `interrupted` in
-the contract, orphaned-run sweep. In progress: D2 entries and success check, F1b, F2 effect check before retry or
-route, then E2 in-run repair. Decision (lead): an attempt's `failureClass` is stamped only with a Handler in scope so
-a Flow without handlers keeps an identical trace; incidents mark true failure in every run, and the run summary counts
-the classes from incidents. Merged since: t401 safe interference clearing (only dismiss controls, never the step's own dialog, `clearedLayers` on results), t402 locator facts (`at "<locator>"`, opaque to Core) and refusal code `run.requirement_missing`, t403 two stale content specs fixed and the matrix confirm Flows corrected (row 13a 10/10 provider-free).
-Verified, waiting: t396 chat recovery cards (merges after t392).
-Next: merge t392, t396, t401, t402; run every matrix row; then the two paid proofs (user approval of each command).
+**Implemented (2026-10-09/10, user: "use max subagents and implement this fast").** Every unit is merged into both
+`dev`s and pushed, each verified by the supervisor (tests beside each change, typechecks, structure audits; Core's
+finish runs `pnpm check`). Core: t385 lifecycle contracts; t386 requirement gate and protocol check; t387 safe routing
+guards; t388 candidate script parts, `call:`, start points, checkpoints, handlers, facts, `requires`; t391 run log; t392
+executor integration (Call Subflow with frames; trace and `detail.recovery` wire contract incl. `interference`; handlers
+fire at start/before/retry/fail/before_next with one batched fact check per boundary and none without registrations;
+entries, checkpoint-only Routes and success check; in-run repair on a true failure that holds at the failing step and
+carries on, saving only after the judged end, a deliberate stop never calling a model; lost-command handling, effect
+check before retry/route/repair, orphaned-run sweep; graph-run cut from 796 to 431 lines; 44 tests moved from after-run
+to in-run repair, each tied to its plan clause); t395 editor views; t397 `statement-packing` audit rule; t398 handler
+and step labels, recovery role; t402 locator facts (`at "<locator>"`) and refusal code. Downstream: t389 page facts;
+t390 Lab variants; t393 in-flight command record and dedupe; t394 Lab fault injection; t396 chat recovery cards; t399
+`pnpm lab recovery-matrix`; t400 fact handle resolution; t401 safe interference clearing (`clearedLayers`); t403 stale
+specs and matrix Flows; direct dev fixes (dialog fact form, locator reader, `clearedLayers` lift, test-runner path
+filters). t383/t384 (MVP briefs) unblocked R4 and R2.
+Verification of t392 by the supervisor: Core vitest over the touched areas, 579 files and 5495 tests passed (7
+skipped); extension and domain typechecks clean; extension tests 313/313.
+Running: t404 matrix round 1 (every provider-free row, rows 2-6 Flows authored with locator facts); sweep-1010 (the
+first full sweep of the day). Provider-free matrix so far: rows 1, 13a (10/10), 13b pass with zero model calls.
+Next: fix what the matrix round finds; then the two paid proofs, each needing the user's approval of its Lab
+command: R4a (a creation on a realistic scenario with an interruption variant whose saved Flow holds a part, entry
+or handler, then a zero-call replay) and R4b (a run on a drift variant fixed in the run that carries on, saved after
+the judged end, then a zero-call replay). Live checks the lead says are owed: handlers on a real page, in-run repair
+with a real provider under the cost ceiling, Call Subflow through the extension, the effect check after a worker
+restart, the orphan sweep after a Core kill, cleared-layer rows in the chat.
 
 **Binding rules every unit keeps** (the user's, from `mvp-final-month-plan.md` Current State, and Core's
 architecture): state routing stays a global runtime behaviour that precedes any model call; every node keeps first
@@ -396,6 +392,14 @@ Their briefs are written here before dispatch, against the code as it then stand
 - Validation: per task, the supervisor's own runs: t383 Core vitest 811/811, domain `test-domain.mjs extraction/tests/ resolve-plan-node` 168/168; t384 Core vitest 1244/1244, extension automations/shell/relay 189/189; t385 vitest 413/413; t386 vitest 76/76; t387 vitest 540/540; t388 vitest 1746/1746 (2 skipped); t389 domain 206/206, extension 674/674, extension build "verified 22 files" x3; t391 web vitest 160/160; each Core `tsc --noEmit` exit 0 and `structure-audit: passed`; Core `pnpm task finish` -> `"passed":true` for each. Core `pnpm check` failed once during t391's finish under parallel load and passed on rerun (failing test not captured)
 - Outcome: Accepted
 - Follow-up: merge t390 with t393; t392 lead running; B5 after t392's unit B
+
+### 2026-10-10 - Executor integration merged; sweep-1010; matrix-driven fixes
+- Agent: senior supervisor agent (Claude)
+- Changed: `Merge task t392`, `t396`, `t399`-`t403` (both repos where paired); direct Core fixes `02d0cc82` (requirement gate grants `name@N` from a bare id at `metadata.version >= N`), `61f6adbf` (a step declaring no lasting consequence is retried after an ambiguous timeout), `dcc63bca` + `7a7fba52` (graph controller test follows t398's role argument); downstream `d9e1fcea` (`clearedLayers` lifted to the dispatch payload top), `4651c298` (locator facts)
+- Why: t392 verified; the provider-free matrix (t404) found the gate's id mismatch (rows 2-7, 10 refused), the declared-none refusal (row 9) and the port key collision (row 8, t405); sweep-1010 found the stale web test
+- Validation: t392 Core vitest over touched areas -> "579 passed | 3 skipped" files, "5495 passed | 7 skipped" tests; extension `test-extension.mjs shared/activity background/connection` -> 313/313; sweep-1010 (Core e396d489, downstream 4132eea2): Core install/build/check pass, Core `pnpm test` exit 1 (one web source-text test, now 10/10 after the fix), downstream check/build pass, downstream `pnpm test` exit 1 (row 8 save test, `UNIQUE constraint failed: flow_ports.port_id`, fixed by t405); gate test 12/12, defensive+executor tests 421/421
+- Outcome: Partial
+- Follow-up: merge t405; finish matrix round 1 (t404); paid proofs on the user's approval
 
 ## Open Questions
 

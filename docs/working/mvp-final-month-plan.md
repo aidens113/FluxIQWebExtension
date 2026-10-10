@@ -114,8 +114,8 @@ separate Cline CLI instance per task worktree) on a task branch (`pnpm task star
 `pnpm task finish <id>` here and in Core), one unit at a time, and record findings, decisions and validation in
 this document as you go. Cline asks the user before each command, which also covers paid Lab launches.
 
-**Planned 2026-10-09, not started:** [state-aware recovery plan](./state-aware-recovery-plan.md) (handlers,
-subflow entries, safe state routing, unit repair); its R1/B1/B6 briefs touch no file the briefs above own, its R2
+**Implemented 2026-10-09/10 (merged, provider-free matrix running, paid proofs pending):** [state-aware recovery
+plan](./state-aware-recovery-plan.md) (handlers, subflow entries, safe state routing, in-run repair); its R1/B1/B6 briefs touch no file the briefs above own, its R2
 wiring waits for t388 and its R4a for t383, and it must not delay lanes round 3. **Started 2026-10-09:** t383 (this
 plan's brief) and the run follow-ups brief (named t388 below) now run as t383 and t384; task ids are allocated in
 sequence, so the unstarted briefs t385-t391 below get new ids when started (t385-t391 are the recovery plan's units).
