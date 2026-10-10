@@ -238,7 +238,18 @@ test("the boundary declares what it can answer, including action dispatch, the e
   assert.deepEqual([...boundary.capabilities], ["action-dispatch", "state-snapshot", "state-diff", "expectation-evaluation", "fact-evaluation", "route-state"]);
   assert.equal(typeof boundary.expectationEvaluator, "function");
   assert.equal(typeof boundary.factEvaluator, "function");
+  assert.equal(typeof boundary.actLanded, "function");
   assert.equal(typeof boundary.inspectStateDiff, "function");
+});
+
+test("whether a press whose answer was lost landed is asked of the page as one fact about the pressed control (t430)", async () => {
+  const { gateway: seam, calls } = gateway([{ ok: true, status: "succeeded", payload: { status: "succeeded", result: { answers: [{ result: "false", capturedAt: 1 }] } } }]);
+  const boundary = createWebAutomationHostRuntime(seam);
+  const node = { id: "s2", definitionId: "web.output.dom-click", parameterValues: { selector: "#not-now" }, metadata: { declaredConsequences: [] } };
+  assert.equal(await boundary.actLanded!({ node, attemptId: "s2.attempt.1", timeoutMs: 1_000 }), "landed");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.outputId, "web.page.facts");
+  assert.equal(calls[0]?.metadata.attemptId, "s2.attempt.1");
 });
 
 test("the route state a Router tests is the sanitized packet projected: location, dialog and control names, never a value or a secret", async () => {
