@@ -68,6 +68,13 @@ test("dialog facts name an optional kind in the path and an optional name in the
   assert.deepEqual(asked({ fact: "dialog", op: "contains", value: "Spin to win" }), { kind: "dialog", expected: true, nameContains: "Spin to win" });
   assert.deepEqual(asked({ fact: "dialog.rate_limit", op: "exists", value: "slow down" }), { kind: "dialog", expected: true, dialogKind: "rate_limit", nameContains: "slow down" });
   assert.equal(refused({ fact: "dialog.newsletter", op: "exists" }), "unsupported");
+});
+
+test("dialog facts read the form Core's candidate script saves: visible, with the name in a dialog target", () => {
+  assert.deepEqual(asked({ fact: "dialog", op: "visible", target: { kind: "dialog", role: "alertdialog", name: "Too fast" } }), { kind: "dialog", expected: true, nameContains: "Too fast" });
+  assert.deepEqual(asked({ fact: "dialog", op: "absent", target: { kind: "dialog", role: "dialog", name: "Join us" } }), { kind: "dialog", expected: false, nameContains: "Join us" });
+  assert.deepEqual(asked({ fact: "dialog", op: "visible", value: "Spin", target: { kind: "dialog", name: "ignored" } }), { kind: "dialog", expected: true, nameContains: "Spin" });
+  assert.deepEqual(asked({ fact: "dialog", op: "visible", target: { kind: "dialog", role: "dialog" } }), { kind: "dialog", expected: true });
   assert.equal(refused({ fact: "dialog", op: "contains" }), "unsupported");
   assert.equal(refused({ fact: "dialog", op: "equals", value: true }), "unsupported");
 });
