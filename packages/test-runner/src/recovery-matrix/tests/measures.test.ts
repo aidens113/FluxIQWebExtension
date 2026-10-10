@@ -5,7 +5,7 @@ import { matrixCaseMeasures } from "../measures.js";
 import type { MatrixAttemptRecord } from "../records/index.js";
 
 const NODE = "node.bootstrap.0123456789abcdef.main";
-const attempt = (step: string, status: string, retry = false): MatrixAttemptRecord => ({ order: 0, nodeId: `${NODE}.${step}`, definitionId: null, status, retry, failure: null, framePath: null, lifecycle: null, entry: null, stateRouting: null });
+const attempt = (step: string, status: string, retry = false): MatrixAttemptRecord => ({ order: 0, nodeId: `${NODE}.${step}`, definitionId: null, status, retry, failure: null, framePath: null, lifecycle: null, entry: null, stateRouting: null, skipped: null, startedAt: null, finishedAt: null });
 
 function evidence(attempts: MatrixAttemptRecord[], status: MatrixCaseEvidence["run"]["status"]): MatrixCaseEvidence {
   return {

@@ -18,11 +18,21 @@ const FLOWS: Record<string, string> = { CONFIRM_QUALIFYING, CONFIRM_THEN_STOP, C
 const SOURCE_ONLY = /\[data-(?:lb|uid|db)\b/u;
 
 test("every friend-request Flow opens with the shared opening", () => {
-  for (const [name, flow] of Object.entries(FLOWS)) {
-    // The checkpoint Flow marks the opening's last step as its checkpoint, so its first four steps are what is shared.
-    const shared = name === "CONFIRM_WITH_CHECKPOINT" ? CONFIRM_OPENING.slice(0, CONFIRM_OPENING.indexOf("step: see all friend requests")) : CONFIRM_OPENING;
-    assert.ok(flow.includes(shared), name);
-  }
+  for (const [name, flow] of Object.entries(FLOWS)) assert.ok(flow.includes(CONFIRM_OPENING), name);
+});
+
+// A route back lands on the checkpoint, so the checkpoint must run on the page the confirms are on. On "see all
+// friend requests", a press only the Friends home allows, the route never got back to the confirms (t411).
+test("row 10's checkpoint is a wait for the requests page, before the first confirm", () => {
+  const steps = CONFIRM_WITH_CHECKPOINT.split(/\n(?=step)/u);
+  const checkpoints = steps.filter((step) => /^\s*checkpoint: yes$/mu.test(step));
+  assert.equal(checkpoints.length, 1);
+  const checkpoint = checkpoints[0]!;
+  assert.match(checkpoint, /^step requests: /u);
+  assert.match(checkpoint, /^\s*node: web\.dom\.wait_for_selector$/mu);
+  assert.ok(checkpoint.includes(`selector: [role="main"] a[href$="/friends/requests/sent/"]`));
+  assert.doesNotMatch(checkpoint, /^\s*consequences:/mu);
+  assert.match(steps[steps.indexOf(checkpoint) + 1] ?? "", /^step amara: confirm Amara Osei/u);
 });
 
 test("no friend-request Flow targets an attribute the feed's script strips", () => {

@@ -8,13 +8,16 @@ test("attempts are read in Core's order, with only closed words and ids kept", (
   const records = matrixAttemptRecords({
     actionAttempts: [
       { order: 2, nodeId: `${NODE}.s2`, status: "failed", failure: { category: "target_not_found", code: "web.target.not_found", expected: "page text that must not leave" }, metadata: { retry: { attempt: 2 } } },
-      { order: 1, nodeId: `${NODE}.s1`, definitionId: "web.output.dom-click", status: "succeeded", entry: { kind: "default", evidence: "page words" } },
+      { order: 1, nodeId: `${NODE}.s1`, definitionId: "web.output.dom-click", status: "succeeded", entry: { kind: "default", evidence: "page words" }, startedAt: 1760000000000, finishedAt: 1760000000250 },
     ],
   });
   assert.deepEqual(records.map(record => record.nodeId), [`${NODE}.s1`, `${NODE}.s2`]);
   assert.deepEqual(records[0]!.entry, { kind: "default", id: null });
   assert.deepEqual(records[1]!.failure, { category: "target_not_found", code: "web.target.not_found" });
   assert.equal(records[1]!.retry, true);
+  assert.equal(records[0]!.startedAt, 1760000000000);
+  assert.equal(records[0]!.finishedAt, 1760000000250);
+  assert.equal(records[1]!.startedAt, null);
   assert.ok(!JSON.stringify(records).includes("page"));
 });
 
@@ -26,7 +29,7 @@ test("lifecycle and routing records are read from the attempt or its metadata, a
       { order: 3, nodeId: `${NODE}.s4`, status: "strange", lifecycle: { event: "whenever" }, entry: { kind: "teleport" } },
     ],
   });
-  assert.deepEqual(handled!.lifecycle, { event: "before", handlerId: `${NODE}.h1-s1`, handlerRef: `${NODE}.h1-s1`, disposition: "resume", completionCheck: "true" });
+  assert.deepEqual(handled!.lifecycle, { event: "before", handlerId: `${NODE}.h1-s1`, handlerRef: `${NODE}.h1-s1`, disposition: "resume", completionCheck: "true", unhandledReason: null, unhandledGuard: null });
   assert.deepEqual(routed!.stateRouting, { outcome: "no_match", toNodeId: null, refused: [{ guard: "unbound_value", toNodeId: `${NODE}.s5` }] });
   assert.equal(odd!.status, "unknown");
   assert.equal(odd!.lifecycle, null);
@@ -50,4 +53,20 @@ test("a handler id as Core writes it, graph then node, is read as its node id, a
   assert.notEqual(automationWide!.lifecycle!.handlerRef, inBlock!.lifecycle!.handlerRef);
   assert.equal(unreadable!.lifecycle!.handlerId, null);
   assert.equal(unreadable!.lifecycle!.handlerRef, null);
+});
+
+test("an act already done and an unhandled handler's reason are read in closed words, the row's name dropped", () => {
+  const [skipped, unhandled, odd] = matrixAttemptRecords({
+    actionAttempts: [
+      { order: 1, nodeId: `${NODE}.s9`, status: "succeeded", skipped: { reason: "already_done", code: "executor.act.already_done", attemptId: "a-1", row: "Amara Osei" } },
+      { order: 2, nodeId: `${NODE}.s12`, status: "failed", lifecycle: { event: "retry", handlerId: `${NODE}.h1-s1`, disposition: { kind: "unhandled", reason: "route_refused", guard: "passes_uncertain_act" }, completionCheck: "true" } },
+      { order: 3, nodeId: `${NODE}.s13`, status: "succeeded", skipped: { reason: "made_up", code: "x.y" }, lifecycle: { event: "retry", handlerId: `${NODE}.h1-s1`, disposition: { kind: "resume", reason: "route_refused" } } },
+    ],
+  });
+  assert.deepEqual(skipped!.skipped, { reason: "already_done", code: "executor.act.already_done" });
+  assert.ok(!JSON.stringify(skipped).includes("Amara"));
+  assert.equal(unhandled!.lifecycle!.unhandledReason, "route_refused");
+  assert.equal(unhandled!.lifecycle!.unhandledGuard, "passes_uncertain_act");
+  assert.equal(odd!.skipped, null);
+  assert.equal(odd!.lifecycle!.unhandledReason, null);
 });

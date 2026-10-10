@@ -129,7 +129,8 @@ function knownAlternative(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatr
   const runs = lifecycle(evidence.attempts).filter(record => record.event === "fail");
   if (!lifecycle(evidence.attempts).length) return result(reasons, ["handlers", "call-subflow"], { failHandlerRuns: 0 });
   if (!runs.some(record => record.disposition === "resolve")) reasons.push("no fail handler resolved the failed step with the alternative's outputs");
-  if (!evidence.attempts.some(attempt => (attempt.framePath?.length ?? 0) > 1)) reasons.push("no attempt ran in a called part's frame");
+  // A part's own step in a nested frame: a handler body's frame is nested too, but its steps are the calling block's (t404, t406).
+  if (!evidence.attempts.some(attempt => (attempt.framePath?.length ?? 0) > 1 && inPart(evidence, attempt))) reasons.push("no attempt ran in a called part's frame");
   return result(reasons, [], { failHandlerRuns: runs.length });
 }
 
@@ -150,15 +151,29 @@ function uncertainStop(evidence: MatrixCaseEvidence): boolean {
   return evidence.run.stopCode === "run.outcome_uncertain";
 }
 
-/** Row 10: a handler routed the run back to a checkpoint and no completed confirmation was repeated. */
+/**
+ * Row 10: a handler routed the run back to a checkpoint, and every lasting act
+ * completed before the route was passed over as already done when the run came
+ * back to it (t411's ledger), never done again. The site's counts say no
+ * request was confirmed twice; the `already_done` skips say why.
+ */
 function checkpointRoute(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatrixCase): MatrixCheckResult {
   const reasons = floor(evidence, matrixCase);
   succeeded(evidence, reasons);
   const runs = lifecycle(evidence.attempts);
   if (!runs.length) return result(reasons, ["handlers", "checkpoints"], { routes: 0 });
   const routes = runs.filter(record => record.disposition === "route");
+  const unhandled = runs.filter(record => record.disposition === "unhandled").map(record => `${record.unhandledReason ?? "no reason"}${record.unhandledGuard ? `/${record.unhandledGuard}` : ""}`);
   if (!routes.length) reasons.push("no handler routed the run to a checkpoint");
-  return result(reasons, [], { routes: routes.length });
+  const firstRoute = evidence.attempts.findIndex(attempt => attempt.lifecycle?.disposition === "route");
+  const lasting = (attempt: MatrixAttemptRecord) => stepOfNode(evidence.steps, attempt.nodeId)?.lasting === true;
+  const done = (attempt: MatrixAttemptRecord) => attempt.status === "succeeded" && attempt.skipped === null;
+  const doneBefore = new Set(firstRoute < 0 ? [] : evidence.attempts.slice(0, firstRoute).filter(attempt => lasting(attempt) && done(attempt)).map(attempt => attempt.nodeId!));
+  const skippedAfter = new Set(firstRoute < 0 ? [] : evidence.attempts.slice(firstRoute + 1).filter(attempt => attempt.skipped?.reason === "already_done").map(attempt => attempt.nodeId!));
+  for (const nodeId of doneBefore) if (!skippedAfter.has(nodeId)) reasons.push(`the act at ${stepOfNode(evidence.steps, nodeId)?.nodeKey ?? nodeId}, done before the route, was not passed over as already done after it`);
+  const twice = [...attemptsPerNode(evidence.attempts.filter(attempt => lasting(attempt) && done(attempt))).entries()].filter(([, count]) => count > 1);
+  for (const [nodeId] of twice) reasons.push(`the lasting act at ${stepOfNode(evidence.steps, nodeId)?.nodeKey ?? nodeId} succeeded more than once`);
+  return result(reasons, [], { routes: routes.length, unhandled, completedBeforeRoute: doneBefore.size, alreadyDone: skippedAfter.size });
 }
 
 /** Row 11: the extension's worker was stopped mid-act; the act landed once and the run reached an honest end. */
@@ -200,6 +215,12 @@ function floor(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatrixCase): st
 
 function succeeded(evidence: MatrixCaseEvidence, reasons: string[]): void {
   if (evidence.run.status !== "succeeded") reasons.push(`Core reported the run ${evidence.run.status}${evidence.run.failure ? ` with ${evidence.run.failure.category}/${evidence.run.failure.code ?? "no code"}` : ""}`);
+}
+
+/** The attempt was on a step of a Subflow other than the primary one: a called part's. */
+function inPart(evidence: MatrixCaseEvidence, attempt: MatrixAttemptRecord): boolean {
+  const step = stepOfNode(evidence.steps, attempt.nodeId);
+  return step !== undefined && step.subflowKey !== evidence.primarySubflowKey;
 }
 
 function lifecycle(attempts: readonly MatrixAttemptRecord[]) {

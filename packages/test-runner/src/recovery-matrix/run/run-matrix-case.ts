@@ -63,8 +63,12 @@ export type MatrixCaseResult = Readonly<{
   observed: Readonly<Record<string, unknown>>;
   compiled: CompiledMatrixFlow | null;
   run: Readonly<{ runtimeRunId: string; status: string; failure: Readonly<{ category: string; code: string | null }> | null; attempts: number }> | null;
-  /** Every attempt in Core's order, by step key: what a failed case is debugged from. */
-  attempts: readonly Readonly<{ order: number; step: string | null; status: string; retry: boolean; failure: string | null; lifecycle: string | null; entry: string | null; stateRouting: string | null }>[];
+  /**
+   * Every attempt in Core's order, by step key: what a failed case is debugged from, and what the round's timing
+   * measures (handler-check overhead, handler run time) are read from once a passed case's workspace is removed.
+   * `frameDepth` is the attempt's frame path length (1 for the run's own frame); `handler` the handler's node key.
+   */
+  attempts: readonly Readonly<{ order: number; step: string | null; status: string; retry: boolean; failure: string | null; lifecycle: string | null; handler: string | null; entry: string | null; stateRouting: string | null; skipped: string | null; frameDepth: number | null; startedAt: number | null; finishedAt: number | null }>[];
   /** Core's own account of the run's model calls, and where it came from (`../records/model-calls.ts`). */
   accounting: MatrixModelCalls | null;
   /** A case that did not pass keeps its workspace (Core's store and logs) here for debugging; `null` once removed. */
@@ -210,10 +214,22 @@ function attemptSummaries(evidence: MatrixCaseEvidence): MatrixCaseResult["attem
     status: attempt.status,
     retry: attempt.retry,
     failure: attempt.failure ? `${attempt.failure.category ?? "unknown"}/${attempt.failure.code ?? "no code"}` : null,
-    lifecycle: attempt.lifecycle ? `${attempt.lifecycle.event}:${attempt.lifecycle.disposition ?? "none"}` : null,
+    lifecycle: attempt.lifecycle ? lifecycleSummary(attempt.lifecycle) : null,
+    handler: attempt.lifecycle?.handlerId?.split(".").pop() ?? null,
     entry: attempt.entry?.kind ?? null,
     stateRouting: attempt.stateRouting?.outcome ?? null,
+    skipped: attempt.skipped?.reason ?? null,
+    frameDepth: attempt.framePath?.length ?? null,
+    startedAt: attempt.startedAt,
+    finishedAt: attempt.finishedAt,
   }));
+}
+
+/** `event:disposition`, and for an unhandled one why: `retry:unhandled:route_refused/passes_uncertain_act`. */
+function lifecycleSummary(lifecycle: NonNullable<MatrixCaseEvidence["attempts"][number]["lifecycle"]>): string {
+  const head = `${lifecycle.event}:${lifecycle.disposition ?? "none"}`;
+  if (lifecycle.disposition !== "unhandled" || lifecycle.unhandledReason === null) return head;
+  return `${head}:${lifecycle.unhandledReason}${lifecycle.unhandledGuard ? `/${lifecycle.unhandledGuard}` : ""}`;
 }
 
 /** How long the model gate's record may follow the run's answer: Core writes it with the result verdict, in a later save. */
