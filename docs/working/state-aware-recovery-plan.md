@@ -111,11 +111,20 @@ identity signals is refused at save; hand-authored literal-selector steps are no
 (the chat says what follows a failed step: the Flow's fail path, carrying on, an in-run fix, or stopping). A direct
 dev fix (1ea9b038): the exploration retry path wrote `declaredConsequences: []` for a press that declared nothing,
 so after 61f6adbf an undeclared lasting press could be retried; it now writes no key.
-Running: t427 (an interrupted durable command reaches reconcile and the effect check); t429 (in-run repair steps
-are saved with raw handles and no fingerprint: `replace_unit`, `add_handler`, `temporary_action_sequence`; resolve
-them through the domain before overlay). t429 blocks R4b.
-Next: merge t427 and t429, the day's second sweep, then ask the user before a third paid R4a attempt; then R4b; then
-lanes A-D round 3.
+Also merged: t427 (a lost durable command is asked about by id before it is called unknown; a required run whose
+outcome stays unknown keeps its exactly-once latch and stops `run.outcome_uncertain`, worded from the page check:
+supervisor decision (a), 2026-10-10, because required mode proves outcomes and a page check is evidence, not a
+receipt); t429 (in-run repair steps and handler facts resolve through the domain before the overlay; an unknown or
+thin handle is refused); t431 (a failed control is named to the model by its own words through one helper,
+`runtime/llm/model-facing/control-words.ts`; a resolved identity's name attribute is never read).
+Sweep-1010b (second of the day, on downstream 7ad7278f / Core 8500e1a2): Core build and check pass, Core test one
+failure (repair brief lost the control's words after t426; fixed by t431), downstream check and build pass,
+downstream test: domain 2 failures (`runtime/tests/lasting-act-statement.test.ts`, the supervisor's 61f6adbf let a
+step's `consequences: none` unlock a second press of a committing act; t430), extension 2862/2862, test-runner
+2216/2216, scenario-lab 8 failures that pass 22/22 alone (t433).
+Running: t430 (verification on the merged tree), t432 (the model is never asked for or allowed to write a
+selector), t433 (honest-path waits under load), t434 (a required run on Core's own transport fails before sending).
+Next: merge t430 and t432, then ask the user before a third paid R4a attempt; then R4b; then lanes A-D round 3.
 
 **Binding rules every unit keeps** (the user's, from `mvp-final-month-plan.md` Current State, and Core's
 architecture): state routing stays a global runtime behaviour that precedes any model call; every node keeps first
@@ -455,6 +464,14 @@ Their briefs are written here before dispatch, against the code as it then stand
 - Validation: domain `test-domain.mjs src/runtime/llm-evidence/node-run` before the fix "pass 36, fail 3" (retries), after "302 pass, 1 fail" (the draft-control label test, fixed in t425); t425 merged tree `DOMAIN_TEST_BUILD_LABEL=t425 node domain/scripts/test-domain.mjs src/runtime/llm-evidence src/tests/ src/output-nodes src/element-fingerprint src/io src/client src/recording` -> "1328 pass, 0 fail", domain and extension tsc clean, worker's `created-identity` spec "1 passed" and recovery-matrix case 1 passed; t426 Core vitest over candidate-trial, llm/model-facing, recovery, flow-bootstrap/candidate -> "734 passed", Core check exit 0; t428 Core vitest activity + step-loop -> "334 passed"; recovery-matrix case 1 on dev (rmx-2026-10-10T19-16-39-962Z-b2d0a6) passed; every `pnpm task finish` "passed":true
 - Outcome: Accepted
 - Follow-up: t427, t429; second sweep; ask the user before R4a attempt 3
+
+### 2026-10-10 - Sweep-1010b; durable reconcile, repair fingerprints, repair brief words; a declared-none override withdrawn
+- Agent: senior supervisor agent (Claude)
+- Changed: `Merge task` t427, t429, t431 in both repos; t430, t432, t433, t434 dispatched
+- Why: sweep-1010b's failures (see Current State); t425's finding that in-run repair steps were saved raw; t427's open question 1, decided (a)
+- Validation: sweep-1010b commands and exits: Core `pnpm install` 0, downstream `pnpm install` 0, Core `pnpm build` 0, Core `pnpm check` 0, Core `pnpm test` 1 ("1 failed | 1040 passed | 3 skipped" files, step-failure-port), downstream `pnpm check` 0, downstream `pnpm test` 1 (domain "pass 1740, fail 2"; then `pnpm -r --no-bail --filter '!@fluxiq-web-extension/domain' test`: extension "tests 2862, fail 0", test-runner "tests 2216, fail 0", scenario-lab "tests 694, fail 8"), downstream `pnpm build` 0; scenario-lab's two files alone "tests 22, pass 22"; t427 merged tree Core vitest client-gateway+executor+activity "1201 passed", domain io/runtime/client/node-run "486 pass, 2 fail" (the t430 pair); t429 merged tree Core recovery+runtime-session+in-run-repair+harness-options+live-patch "895 passed", domain llm-evidence "919 pass, 0 fail"; t431 Core "938 passed" after the supervisor restricted `name` to flat authored targets; each `pnpm task finish` "passed":true
+- Outcome: Accepted
+- Follow-up: t430, t432, t433, t434; consolidate the way-out label lists (extension vocabulary and t430's domain list)
 
 ## Open Questions
 

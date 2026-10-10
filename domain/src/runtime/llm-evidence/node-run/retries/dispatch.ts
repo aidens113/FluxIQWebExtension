@@ -121,10 +121,12 @@ function webNodeRetryReading(result: WebNodeDispatchResult, command: { actionTyp
  * under Core's own key. Never `effect: "mutate"`, which would make every
  * page-changing node a lasting act (`automationStudioNodeActLasts`).
  *
- * A call that declared nothing carries no key at all. `[]` is the author's
- * statement that nothing outlasts the step, which Core trusts to dispatch it
- * again after an ambiguous answer (`declared-no-lasting-act.ts`); writing it for
- * a call that never said so let an undeclared press be made twice.
+ * A call that declared nothing carries no key at all: `[]` is the author's
+ * statement that nothing outlasts the step, and writing it for a call that
+ * never said so put words in its mouth (1ea9b038). Neither ever unlocks a
+ * second press: which acts commit is this domain's statement on the failure
+ * record (`../../../lasting-act-statement.ts`), and Core holds a committing act
+ * whose answer was lost whatever the step declared (t430).
  */
 function nodeMetadata(node: { effect: "observe" | "mutate"; declared?: JsonValue | undefined }): JsonObject {
   if (node.effect === "observe") return { effect: "observe" };

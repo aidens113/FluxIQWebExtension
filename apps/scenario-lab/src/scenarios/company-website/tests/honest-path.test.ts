@@ -72,7 +72,9 @@ describe("the honest path passes every oracle", { concurrency: 4 }, () => {
   test("winter-notice: a person dismisses the notice and reads the same eight people", async () => withSite(async ({ page, consoleErrors }) => {
     const { recordingScript, expected } = workflow("gas-engineers", "winter-notice");
     assert.deepEqual(await failedFacts(page, expected.pageFacts ?? []), []);
-    const script = withStepsAfter(recordingScript, "accept-cookies", [{ id: "continue-past-notice", operation: "click", target: 'button:text-is("Continue to site")' }]);
+    // After the newsletter offer, not before it: the offer opens four seconds after consent over the notice, so a press on
+    // "Continue to site" made between the two raced the offer and, on a slow page, landed on its scrim.
+    const script = withStepsAfter(recordingScript, "decline-newsletter", [{ id: "continue-past-notice", operation: "click", target: 'button:text-is("Continue to site")' }]);
     const extracted = await runScript(page, script);
     assert.deepEqual(extracted["extract-gas-engineers"], GAS_ENGINEER_RECORDS);
     assert.deepEqual(await failedFacts(page, expected.finalState ?? []), []);
