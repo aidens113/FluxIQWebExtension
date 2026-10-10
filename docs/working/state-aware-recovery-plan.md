@@ -393,6 +393,14 @@ Their briefs are written here before dispatch, against the code as it then stand
 - Outcome: Accepted
 - Follow-up: merge t390 with t393; t392 lead running; B5 after t392's unit B
 
+### 2026-10-10 - Executor integration merged; sweep-1010; matrix-driven fixes
+- Agent: senior supervisor agent (Claude)
+- Changed: `Merge task t392`, `t396`, `t399`-`t403` (both repos where paired); direct Core fixes `02d0cc82` (requirement gate grants `name@N` from a bare id at `metadata.version >= N`), `61f6adbf` (a step declaring no lasting consequence is retried after an ambiguous timeout), `dcc63bca` + `7a7fba52` (graph controller test follows t398's role argument); downstream `d9e1fcea` (`clearedLayers` lifted to the dispatch payload top), `4651c298` (locator facts)
+- Why: t392 verified; the provider-free matrix (t404) found the gate's id mismatch (rows 2-7, 10 refused), the declared-none refusal (row 9) and the port key collision (row 8, t405); sweep-1010 found the stale web test
+- Validation: t392 Core vitest over touched areas -> "579 passed | 3 skipped" files, "5495 passed | 7 skipped" tests; extension `test-extension.mjs shared/activity background/connection` -> 313/313; sweep-1010 (Core e396d489, downstream 4132eea2): Core install/build/check pass, Core `pnpm test` exit 1 (one web source-text test, now 10/10 after the fix), downstream check/build pass, downstream `pnpm test` exit 1 (row 8 save test, `UNIQUE constraint failed: flow_ports.port_id`, fixed by t405); gate test 12/12, defensive+executor tests 421/421
+- Outcome: Partial
+- Follow-up: merge t405; finish matrix round 1 (t404); paid proofs on the user's approval
+
 ## Open Questions
 
 - User: approve the MVP cut (R1-R4b before the freeze, R5a in hardening, R4c/R5b after the RC) or move the whole
