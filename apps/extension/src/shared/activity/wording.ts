@@ -75,6 +75,13 @@ const OUTCOME_FAILED = "that didn't work";
 const SAID_NOT_DONE = /^not done\b/iu;
 const OUTCOME_NOT_REPEATED = "it didn't work the same way again";
 /**
+ * A Flow sent back because a step answering a popup pressed its offer rather
+ * than its way out (t423, Core's `flow-bootstrap/script-statements/way-out-steps.ts`),
+ * read from the refusal's result code, which may carry a digest after a colon.
+ */
+const WAY_OUT_REFUSED = /^candidate\.way_out_refused(?::|$)/u;
+const OUTCOME_WAY_OUT = "a step would accept the offer instead of closing it, so it was sent back";
+/**
  * Core's newer words for a passed completion check: what the Flow does matches
  * the request, and the test from the start that follows can still refuse it.
  * Said without Core's own "plan" (D3 of the t174 UI review of
@@ -137,7 +144,7 @@ function wordsOf(event: ClientGatewayActivity): readonly [string, string | null]
     const action = toolAction(toolId, event, code);
     // A call FluxIQ declined to send was not tried, whatever its code's last words say of the page (R2-U-6).
     const declined = code === undefined ? undefined : notTriedOutcome(code, detail?.text, action);
-    return [action, ended ? testedOutcome(event, code) ?? declined ?? refusedOutcome(event, action) ?? toolOutcome(detail?.status, code) : null];
+    return [action, ended ? testedOutcome(event, code) ?? declined ?? wayOutOutcome(code) ?? refusedOutcome(event, action) ?? toolOutcome(detail?.status, code) : null];
   }
   if (event.phase === "thinking" || detail?.kind === "thought") return [thoughtAction(event), null];
   if (detail?.title === "Completion check" || /^(Checking the proposed (result|Flow)|The proposed (result|Flow))/u.test(event.label)) {
@@ -265,6 +272,11 @@ function refusedOutcome(event: ClientGatewayActivity, action: string): string | 
   const because = refused.because.trim();
   if (SAID_NOT_DONE.test(action)) return because || undefined;
   return because ? `not done: ${because}` : "not done";
+}
+
+/** The outcome of a Flow sent back for pressing a popup's offer, said without its code; undefined for any other code. */
+function wayOutOutcome(code: string | undefined): string | undefined {
+  return code !== undefined && WAY_OUT_REFUSED.test(code) ? OUTCOME_WAY_OUT : undefined;
 }
 
 function toolOutcome(status: "started" | "succeeded" | "failed" | undefined, code: string | undefined): string {

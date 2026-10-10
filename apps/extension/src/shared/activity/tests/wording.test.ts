@@ -301,6 +301,18 @@ test("a failed or refused call never says what FluxIQ does next", () => {
   }
 });
 
+// t423: a Flow sent back because a step answering a popup pressed its offer, not its way out.
+test("a Flow sent back for pressing a popup's offer says so plainly, never with its code", () => {
+  const sentBack = activityWording(event({
+    phase: "building",
+    label: "Not done: saving the Flow's steps",
+    detail: { kind: "tool", title: "Saving the Flow's steps", status: "failed", ref: "core.submit_candidate", text: "Result: candidate.way_out_refused:1a2b3c4d · Reason: failed" }
+  }));
+  assert.equal(sentBack.outcome, "a step would accept the offer instead of closing it, so it was sent back");
+  assert.doesNotMatch(sentBack.sentence, /way_out|candidate\./u);
+  assertHuman(sentBack, sentBack.sentence);
+});
+
 // R4a (`run-mv2nlh9l-52e476da`, moment 10): the overlay read a bare "Build failed" while the
 // chat's ending said why. Core's ending row now says the reason, and the overlay's detail
 // line keeps it under the "Build failed" headline.
