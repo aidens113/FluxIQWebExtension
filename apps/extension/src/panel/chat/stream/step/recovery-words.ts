@@ -15,6 +15,11 @@
 //                Card "Carry on from · Basket / Done".
 //   alternative  another way to the same place, used when the usual one
 //                didn't work. Card "Other way · Basket link / Done".
+//   interference a notice the page put over itself, closed so the step could
+//                go on. Core's own words are the line ("Closed a notice the
+//                page put in the way"), so the card names no target: "Clear
+//                the page / Done". Never a failure: one Core could not close
+//                reads "Not done: it was still in the way".
 //   fixing       reserved for the step fixed inside the run after it truly
 //                failed (in-run repair, R4b): "Fixing a step", card "Fix step".
 //                Core reports it on no row yet; its words are here so that
@@ -48,12 +53,14 @@ export type RecoveryWords = {
   icon: ActivityActionKind;
   /** The card's short name, beside its icon. */
   name: string;
+  /** What the card names after its name: the recovery's subject, or nothing when the title already says it. */
+  target: string | null;
   /** Why it was not done, for a recovery held back before it ran; undefined otherwise. */
   because: string | undefined;
 };
 
 /** The card's short name for each case. */
-const NAMES: Readonly<Record<RecoveryCase, string>> = { handler: "Extra step", entry: "Start from", route: "Carry on from", alternative: "Other way", fixing: "Fix step" };
+const NAMES: Readonly<Record<RecoveryCase, string>> = { handler: "Extra step", entry: "Start from", route: "Carry on from", alternative: "Other way", interference: "Clear the page", fixing: "Fix step" };
 
 /** Words that open an extra step acting on a control, which Core's verbs do not name: closing a box is pressing its button. */
 const CONTROL_WORDS = /^(close|dismiss|accept|decline|reject|hide|confirm|allow|deny|cancel|skip)$/iu;
@@ -61,12 +68,13 @@ const CONTROL_WORDS = /^(close|dismiss|accept|decline|reject|hide|confirm|allow|
 /** Why a recovery was held back: by a guard on where the run may go, or by the run's limit on tries. */
 const HELD_BACK = "it was held back before it ran";
 const WOULD_SKIP = "it could have skipped something the run needs or repeated something already done";
+const STILL_THERE = "it was still in the way";
 
 /** `recovery` in words; `step` is the label of the step it was for, when the chat knows it. */
 export function recoveryWords(recovery: RecoveryRead, step: string | undefined): RecoveryWords {
   const named = step?.trim() ? `“${step.trim()}”` : undefined;
   const [title, text, because] = said(recovery, named);
-  return { title, text, icon: iconOf(recovery), name: NAMES[recovery.kind], because };
+  return { title, text, icon: iconOf(recovery), name: NAMES[recovery.kind], target: recovery.kind === "interference" ? null : recovery.subject, because };
 }
 
 function said(recovery: RecoveryRead, step: string | undefined): [title: string, text: string, because?: string] {
@@ -88,6 +96,12 @@ function said(recovery: RecoveryRead, step: string | undefined): [title: string,
       if (outcome === "failed") return ["The other way didn't work either", "Tried this way instead, and it didn't work."];
       if (outcome === "refused") return ["Didn't try another way", "It was held back before it ran, so nothing was done.", HELD_BACK];
       return ["Used another way", "The usual way didn't work, so used this one instead, and it worked."];
+    case "interference": {
+      // Core's own words are the line; clearing the page is never a failure.
+      const line = recovery.subject.trim();
+      if (outcome !== "succeeded") return [line, "It was still covering the page.", STILL_THERE];
+      return [line, "It was covering the page, so it was closed and the step went on."];
+    }
     case "fixing":
       if (outcome === "failed") return ["Fixing a step", "It didn't work however it was tried, and fixing it here didn't work either."];
       if (outcome === "refused") return ["Fixing a step", "It didn't work however it was tried, and fixing it here was held back.", HELD_BACK];
@@ -121,6 +135,8 @@ function handlerDone(event: ActivityStepRecovery["event"], step: string | undefi
  */
 function iconOf(recovery: RecoveryRead): ActivityActionKind {
   if (recovery.kind === "fixing") return "repair";
+  // Closing a notice is pressing its button.
+  if (recovery.kind === "interference") return "click";
   if (recovery.kind !== "handler") return "branch";
   const first = /^\p{L}+/u.exec(recovery.subject.trim())?.[0] ?? "";
   return activityActionVerb(first)?.kind ?? (CONTROL_WORDS.test(first) ? "click" : "other");

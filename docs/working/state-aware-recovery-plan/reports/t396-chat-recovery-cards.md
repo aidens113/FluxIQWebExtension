@@ -67,3 +67,18 @@ Done. Tree `C:/Users/osrs_/FluxStuff/fxwork/t396-chat-recovery-cards`, branch `t
 1. The brief says "keep the reader's local types as the lead wrote them", but the lead wrote none (see above). This causes a merge conflict on `step-recovery.ts`; take the lead's version.
 2. The overlay (`activityWording` and the background pacer) still says Core's label for these rows, e.g. "Recovered: Close the sign-up box" or "Recovery did not work: …". Background was out of scope and `wording.ts` needed no change, but the overlay's words differ from the chat card's title.
 3. Step titles elsewhere still read "Step 2: …", which conflicts with the "no step numbers" rule. That is outside this brief; recovery messages carry no number.
+
+## Follow-up pass: interference (after t392 merged)
+
+- **What changed.** Added the `interference` recovery kind in `recovery-words.ts`. The message title is Core's own subject ("Closed a notice the page put in the way"), and the reasoning is "It was covering the page, so it was closed and the step went on."
+- **The card.** It reads "Clear the page", with no target because the title already names what was closed. It uses the click icon. When the notice was closed it says "Done".
+- **No failure tone.** Core only sends `succeeded` for this kind. If it ever sends another outcome, the card reads "Not done: it was still in the way" and is not coloured as a failure.
+- **Where the target comes from.** `RecoveryWords` gained a `target` field, and `recovery-message.ts` now takes the card's target from it.
+- **Repeats.** The same notice closed on two attempts folds into a single card that reads "Done (2 times)".
+- **New test.** One test in `step/tests/recovery-message.test.ts` covers the interference card.
+
+**Checks run and what they printed:**
+- `EXTENSION_TEST_BUILD_LABEL=t396 node scripts/test-extension.mjs panel/chat shared/activity`: `# tests 367 # pass 367 # fail 0`.
+- `npx tsc -p tsconfig.json --noEmit`: exit 0.
+- Extension build: chrome, firefox and e2e-chromium each printed "verified 22 files".
+- `node scripts/structure-audit.mjs`: `structure-audit: passed (184 warning(s), 651 baselined).`

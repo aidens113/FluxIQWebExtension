@@ -21,7 +21,7 @@ export function recoveryMessage(event: ClientGatewayActivity, keys: RecoveryKeys
   const card: ActionCard = {
     kind: words.icon,
     name: words.name,
-    target: recovery.subject,
+    target: words.target,
     outcome: recovery.outcome === "succeeded" ? "done" : "failed",
     why: null,
     // Held back before it ran: nothing was tried, so "Not done", never "Didn't work".

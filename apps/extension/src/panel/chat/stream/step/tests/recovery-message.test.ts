@@ -182,3 +182,15 @@ test("the in-run fix still to come has its named words: Fixing a step", () => {
   assert.deepEqual([fixed.title, fixed.text, fixed.icon, fixed.name, fixed.because], ["Fixing a step", "It didn't work however it was tried, so it was fixed here and the run carried on.", "repair", "Fix step", undefined]);
   assert.equal(recoveryWords({ kind: "fixing", subject: "Add the kettle", outcome: "failed" }, undefined).title, "Fixing a step");
 });
+
+test("a notice the page put in the way, closed, is its own message in Core's words with a card that is never a failure", () => {
+  const cleared = recoveryAfterStep({ kind: "interference", subject: "Closed 2 notices the page put in the way", outcome: "succeeded" });
+  assert.deepEqual(read(cleared), ["recovery", "Closed 2 notices the page put in the way", "It was covering the page, so it was closed and the step went on.", "Clear the page", null, "done", "Done"]);
+  assert.equal(cleared.actions[0]!.kind, "click", "closing a notice is pressing its button");
+  const stuck = recoveryAfterStep({ kind: "interference", subject: "Closed a notice the page put in the way", outcome: "failed" });
+  assert.deepEqual(read(stuck).slice(3), ["Clear the page", null, "refused", "Not done: it was still in the way"], "no failure's colour or words");
+  const one = { kind: "interference", subject: "Closed a notice the page put in the way", outcome: "succeeded" } as const;
+  const twice = stepMessages([playStep(1, 2, "n2.add", "Add the kettle"), recoveryRow(2, "n2.add", one), recoveryRow(3, "n2.add", one)], 100);
+  assert.deepEqual(twice.map((message) => message.kind), ["step", "recovery"], "the same notice closed on two attempts is one card");
+  assert.equal(cardWords(twice[1]!.actions[0]!, false).outcome, "Done (2 times)");
+});
