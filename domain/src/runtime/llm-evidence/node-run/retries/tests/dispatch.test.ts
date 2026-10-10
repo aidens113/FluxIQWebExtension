@@ -62,12 +62,12 @@ function page(): JsonObject {
   };
 }
 
-async function pressCoupon(gateway: WebLlmEvidenceGateway) {
+async function pressCoupon(gateway: WebLlmEvidenceGateway, consequences: string[] = []) {
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const looked = await runtime.executeTool({ ...PROJECT, callId: "look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
   const coupon = shownHandle(looked.evidence, "Get coupons");
   return await runtime.executeTool({ ...PROJECT, callId: "collect.coupon", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
-    value: { node: CLICK, parameters: { target: { handle: coupon } }, consequences: [] } });
+    value: { node: CLICK, parameters: { target: { handle: coupon } }, consequences } });
 }
 
 test("the default is Core's: the first attempt and three retries", () => {
@@ -102,12 +102,23 @@ test("an exploring press whose target never appears fails after exactly four att
   assert.equal((pressed.evidence as Packet).attempts, 4);
 });
 
-test("an exploring press whose confirmation was lost after it acted is not pressed again", async () => {
+// A press whose confirmation was lost after it acted is made again only when
+// its call declared that nothing it does lasts (`consequences: none`, Core's
+// `declared-no-lasting-act.ts`): the user's rule retries every node and holds
+// back only a lasting act whose effect is uncertain.
+test("an exploring press whose confirmation was lost after it acted is not pressed again when it declared a lasting act", async () => {
   const site = itemPage([failed(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED), failed(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED)]);
-  const pressed = await pressCoupon(site.gateway);
+  const pressed = await pressCoupon(site.gateway, ["modify_existing"]);
   assert.equal(pressed.effectApplied, false);
   assert.deepEqual(site.presses, [1]);
   assert.equal((pressed.evidence as Packet).attempts, undefined);
+});
+
+test("an exploring press that declared nothing lasting is pressed again when its confirmation was lost", async () => {
+  const site = itemPage([failed(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED), failed(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED)]);
+  const pressed = await pressCoupon(site.gateway);
+  assert.equal(pressed.resultCode, "web.action.succeeded");
+  assert.deepEqual(site.presses, [1, 2, 3]);
 });
 
 test("a press answered once as a first attempt says no attempts at all", async () => {

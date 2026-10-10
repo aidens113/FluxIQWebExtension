@@ -116,6 +116,7 @@ import { webLlmNameAssumptions, type WebLlmNameAssumption, type WebLlmNameAssump
 import type { WebLlmExtractionHandles } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
 import { resolveWebExtractionSlot } from "./extraction";
+import { webPlanStepFoundByTooLittle } from "./identity-guard";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
 import { webPlanPositionCode } from "./issue-position";
@@ -182,7 +183,9 @@ export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   // element's own tag, role or input type says which node fits
   // (`fittingNodeCode`), and never otherwise.
   "web.handle.expected.node.web.output.dom-click",
-  "web.handle.expected.node.web.output.dom-select"
+  "web.handle.expected.node.web.output.dom-select",
+  // A Flow step's control found by one attribute alone (t425, `./identity-guard.ts`).
+  "web.handle.unidentifiable"
 ] as const;
 
 export type WebPlanHandleIssueCode = (typeof WEB_PLAN_HANDLE_ISSUE_CODES)[number];
@@ -412,7 +415,8 @@ function lowerCase(value: JsonValue | undefined): string | undefined {
 }
 
 type Scope = { projectId: string; flowId: string };
-type Scoped = Scope & { reach: WebLlmTargetReach | undefined };
+/** `step`: the resolution is of a step a Flow will save, not of a call the caller gated itself (`gatedByCaller`) or a fact's target. */
+type Scoped = Scope & { reach: WebLlmTargetReach | undefined; step: boolean };
 type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string; views?: WebPlanHandleView[] };
 /** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control -- or the shape that fits the key -- instead when one does. */
 type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath; fits?: WebPlanHandleIssueCode | undefined };
@@ -447,7 +451,8 @@ export async function resolveWebPlanNodeParameters(input: WebPlanNodeResolutionI
 
 /** The answer, and every name it assumed to reach it (`WebPlanNodeOutcome`). */
 export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stores: WebPlanHandleStores): Promise<WebPlanNodeOutcome> {
-  const scope: Scoped = { projectId: input.projectId, flowId: input.flowId, reach: input.handleReach };
+  const step = input.gatedByCaller !== true && input.nodeDefinitionId !== FACT_TARGET_NODE_ID;
+  const scope: Scoped = { projectId: input.projectId, flowId: input.flowId, reach: input.handleReach, step };
   const outcome = input.nodeDefinitionId === RUN_OUTPUT_NODE_ID
     ? resolveRunOutput(input.parameters, scope, stores)
     : resolveNode(input.nodeDefinitionId, input.parameters, scope, stores);
@@ -631,6 +636,9 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
   const firstNamed = named[0];
   if (firstNamed && actsOnTheWrongControl(nodeDefinitionId, element?.element)) {
     return { status: "refused", refusals: [{ code: "web.handle.wrong_control", kind: "target", path: [firstNamed.slot], fits: fittingNodeCode(element?.element) }] };
+  }
+  if (firstNamed && scope.step && ELEMENT_NODE_IDS.has(nodeDefinitionId) && webPlanStepFoundByTooLittle(element?.element)) {
+    return { status: "refused", refusals: [{ code: "web.handle.unidentifiable", kind: "target", path: [firstNamed.slot] }] };
   }
 
   const frameId = handleFrame([...replaced.values()]);

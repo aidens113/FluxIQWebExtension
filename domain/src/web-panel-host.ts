@@ -6,6 +6,8 @@ import { webAutomationCheckWaitNode } from "./actions/check-wait";
 import { webAutomationExtractListTimeoutMs, webAutomationRecordedExtraction } from "./actions/extraction";
 import { WEB_AUTOMATION_ACTION_TYPES } from "./actions/types";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS } from "./constants";
+import { webElementIdentityShortfall } from "./element-fingerprint";
+import { elementFingerprint } from "./output-nodes/targets";
 import { GatewayInputHub } from "./io/gateway-input-hub";
 import { dispatchWebAutomationOutput } from "./io/gateway-output-dispatcher";
 import { WEB_AUTOMATION_INPUT_IDS, webAutomationRecordedAction, webAutomationRecordsInputPayload, type WebAutomationRecordedAction } from "./io/input-model";
@@ -207,7 +209,21 @@ function candidate(outputId: string, parameters: JsonObject, sourceInputId: stri
   // given the room to wait it out on top of Core's default timeout
   // (`actions/check-wait.ts`); `checkWaitMs` says how much of it is that room.
   const node = webAutomationCheckWaitNode(outputId, { parameters });
-  return { outputId, parameters: compact(node.parameters), sourceInputIds: [sourceInputId], expectedConfirmation: { inputId: sourceInputId, timeoutMs: 5_000 }, ...(node.timeoutMs === undefined ? {} : { timeoutMs: node.timeoutMs }), ...(expectedState === undefined ? {} : { expectedState }), confidence: 0.9, label };
+  const shortfall = recordedIdentityShortfall(parameters);
+  return { outputId, parameters: compact(node.parameters), sourceInputIds: [sourceInputId], expectedConfirmation: { inputId: sourceInputId, timeoutMs: 5_000 }, ...(node.timeoutMs === undefined ? {} : { timeoutMs: node.timeoutMs }), ...(expectedState === undefined ? {} : { expectedState }), confidence: 0.9, label, ...(shortfall === undefined ? {} : { description: shortfall }) };
+}
+
+/**
+ * Why a recorded step's control may not be found again, for the person who
+ * reviews the proposal, or nothing when its saved identity carries enough
+ * (`element-fingerprint/shortfall.ts`, t425). A recorded step is still proposed:
+ * the person recorded it, and refusing it would drop an act they took without a
+ * word. A step with no element aims at no control and is not judged.
+ */
+function recordedIdentityShortfall(parameters: JsonObject): string | undefined {
+  const element = elementFingerprint(parameters.element);
+  if (element === undefined || typeof element.tagName !== "string") return undefined;
+  return webElementIdentityShortfall(element)?.reason;
 }
 
 /**
@@ -240,6 +256,7 @@ function recordedActionEntry(observation: AutomationStudioRecordingMapperObserva
   const confirmationInputId = readString(entry.confirmationInputId);
   const timeoutMs = entry.confirmationTimeoutMs;
   const node = webAutomationCheckWaitNode(outputId, { parameters: (readObject(entry.parameters) ?? {}) as JsonObject });
+  const shortfall = recordedIdentityShortfall(node.parameters);
   return {
     outputId,
     parameters: node.parameters,
@@ -248,7 +265,8 @@ function recordedActionEntry(observation: AutomationStudioRecordingMapperObserva
     ...(confirmationInputId ? { expectedConfirmation: { inputId: confirmationInputId, timeoutMs: typeof timeoutMs === "number" ? timeoutMs : 5_000 } } : {}),
     ...(expectedState === undefined ? {} : { expectedState }),
     confidence: 0.95,
-    label
+    label,
+    ...(shortfall === undefined ? {} : { description: shortfall })
   };
 }
 
