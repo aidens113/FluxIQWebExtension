@@ -73,7 +73,8 @@ const POLICY: AutomationStudioAdaptationPolicy = {
   updatedAt: 1
 };
 
-type Control = { selector: string; name: string; inDialog?: boolean };
+/** `described`: what else the capture says of the control, beside its tag, role and name. */
+type Control = { selector: string; name: string; inDialog?: boolean; described?: JsonObject };
 type Page = { path: string; dialog: boolean; controls: Control[] };
 
 /** The settings page as the save failed: a dialog covers it. */
@@ -112,13 +113,13 @@ function snapshot(page: Page): JsonObject {
     title: "Settings",
     viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
     evidence: page.dialog ? { dialogs: { open: [{ role: "dialog", modal: true }] } } : {},
-    interactiveElements: page.controls.map((control) => ({
+    interactiveElements: page.controls.map((control) => Object.assign({
       tagName: "button",
       selector: control.selector,
       role: "button",
       name: control.name,
       context: control.inDialog ? { landmark: "dialog" } : {}
-    }))
+    }, control.described))
   };
 }
 
@@ -291,4 +292,109 @@ test("a repair naming a handle a recovery search printed resolves with the selec
   // An edited search result is not one this runtime kept.
   const edited = { ...searched.packet, found: `${String(searched.packet.found)}\n(edited)` };
   assert.deepEqual(runtime.validateTargetOverrideEvidence(edited, { handles: { element: handle } }, recorded), { status: "absent", reason: "evidence_unrecognized" });
+});
+
+// A step a repair writes (a handler's body, a unit's replacement, steps
+// inserted before a node) names its control by a handle from the same
+// packets, and Core hands back the one packet the step's handles came from as
+// `handleEvidence` (t429, Core `recovery/annotation/step-evidence-resolution.ts`).
+// The step resolves from that packet alone, through the build's own
+// resolution: the selector and the full identity a built step is saved with,
+// or a refusal. It never resolves from the build's views, and a handle that
+// resolves to nothing is refused, never saved as written.
+
+/** Core's question about one repair step: a press of `handle`, from `packet`. */
+function askStep(runtime: WebAutomationLlmEvidenceRuntime, packet: JsonObject | undefined, handle: string) {
+  return runtime.resolvePlanNodeParameters({
+    projectId: SCOPE.projectId,
+    flowId: SCOPE.flowId,
+    nodeDefinitionId: CLICK.definitionId,
+    parameters: { target: { handle } },
+    declaredConsequences: [],
+    permission: async () => ({ permitted: true as const }),
+    handleEvidence: packet
+  });
+}
+
+type ResolvedStep = { selector?: string; element?: { tagName?: string; accessibleName?: string; visibleText?: string; role?: string } };
+
+function resolvedStep(answer: Awaited<ReturnType<typeof askStep>>): ResolvedStep {
+  if (answer.status !== "resolved") assert.fail(`expected a resolved step, got ${JSON.stringify(answer)}`);
+  return answer.parameters as ResolvedStep;
+}
+
+test("a repair's step naming a failure-packet handle resolves to its control and the identity a built step is saved with", async () => {
+  const { runtime, failure } = await dismissedDialog();
+
+  const step = resolvedStep(await askStep(runtime, failure, handleNamed(failure, "Keep editing")));
+
+  assert.equal(step.selector, "#keep");
+  assert.equal(step.element?.tagName, "button");
+  assert.equal(step.element?.role, "button");
+  assert.equal(step.element?.accessibleName ?? step.element?.visibleText, "Keep editing");
+  assert.doesNotMatch(JSON.stringify(step), /"handles?":/u);
+});
+
+test("a repair's step naming an explored handle resolves from that packet alone, never another with the same numbers", async () => {
+  const { runtime, failure, explored } = await dismissedDialog();
+  const revealed = explored[1]!.packet;
+  const handle = handleNamed(revealed, "Apply changes");
+
+  assert.equal(resolvedStep(await askStep(runtime, revealed, handle)).selector, "#apply");
+  // The same number in the failure packet is another control, and resolves to it.
+  assert.equal(resolvedStep(await askStep(runtime, failure, handle)).selector, "#close");
+  // Without its packet the step is a build's, and this build was shown nothing.
+  assert.deepEqual(await askStep(runtime, undefined, handle), { status: "refused", issueCodes: ["web.handle.unknown", "web.handle.unknown:target"] });
+});
+
+test("a repair's step naming a handle its packet never gave, or a packet this runtime never kept, is refused", async () => {
+  const { runtime, failure } = await dismissedDialog();
+
+  assert.deepEqual(await askStep(runtime, failure, "t99"), { status: "refused", issueCodes: ["web.handle.unknown", "web.handle.unknown:target"] });
+  const altered = { ...failure, page: `${String(failure.page)}\n(edited)` };
+  assert.deepEqual(await askStep(runtime, altered, handleNamed(failure, "Close")), { status: "refused", issueCodes: ["web.handle.unknown"] });
+});
+
+test("a repair's step naming a control known by too little to be found again is refused, as a build's is", async () => {
+  const { runtime } = site({ path: "/settings", dialog: false, controls: [{ selector: "#apply", name: "Apply changes" }, { selector: "#icon", name: "" }] });
+  const failure = await failurePacket(runtime);
+  const wordless = shownPageLines(failure).find((line) => line.words === undefined || line.words === "")?.target;
+  assert.ok(wordless, JSON.stringify(shownPageLines(failure)));
+
+  const answer = await askStep(runtime, failure, String(wordless));
+
+  assert.equal(answer.status, "refused");
+  assert.ok(answer.status === "refused" && answer.issueCodes.includes("web.handle.unidentifiable"), JSON.stringify(answer));
+  // The worded control beside it resolves.
+  assert.equal(resolvedStep(await askStep(runtime, failure, handleNamed(failure, "Apply changes"))).selector, "#apply");
+});
+
+test("a repair's step carries every signal the packet holds for its control, through the one builder a built step uses", async () => {
+  const quantity: Control = {
+    selector: "#qty-4f1",
+    name: "",
+    described: {
+      tagName: "input", role: "spinbutton", inputType: "number", label: "Quantity", id: "qty-4f1", value: "2",
+      attributes: { id: "qty-4f1", name: "quantity", class: "qty-box field", type: "number", "data-testid": "cart-qty", value: "2" }
+    }
+  };
+  const { runtime } = site({ path: "/cart", dialog: false, controls: [{ selector: "#apply", name: "Apply changes" }, quantity] });
+  const failure = await failurePacket(runtime);
+  const handle = shownHandle(failure, "Quantity");
+
+  const step = (await runtime.resolvePlanNodeParameters({
+    projectId: SCOPE.projectId, flowId: SCOPE.flowId, nodeDefinitionId: "web.output.dom-type", parameters: { target: { handle }, text: "3" }, declaredConsequences: [],
+    permission: async () => ({ permitted: true as const }),
+    handleEvidence: failure
+  }));
+  if (step.status !== "resolved") assert.fail(JSON.stringify(step));
+  const element = step.parameters.element as JsonObject;
+  assert.equal(step.parameters.selector, "#qty-4f1");
+  assert.equal(element.tagName, "input");
+  assert.equal(element.label, "Quantity");
+  assert.equal(element.name, "quantity");
+  assert.equal(element.testId, "cart-qty");
+  assert.deepEqual(element.classNames, ["qty-box", "field"]);
+  // What the field holds is never part of who it is.
+  assert.doesNotMatch(JSON.stringify(element), /"value"/u);
 });
