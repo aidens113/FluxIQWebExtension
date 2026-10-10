@@ -2,6 +2,7 @@ import type { FluxIQ, OutputDispatchRequest, OutputDispatchResult } from "fluxiq
 import type { JsonObject } from "fluxiq/core";
 import { ClientGatewayRequiredCommandContext } from "fluxiq/client-gateway";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
+import { webAutomationInterruptedDispatchReading } from "../client/interrupted-action";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { outputTargetFromPayload } from "../output-nodes";
 
@@ -29,8 +30,15 @@ export async function dispatchWebAutomationOutput(
       if (outcome.status !== "completed") { await ClientGatewayRequiredCommandContext.stop(request.commandContext!, outcome.status); throw new Error(`web.required_${outcome.status}`); }
       return outcome.result;
     })() : await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command);
-    const succeeded = result.status === "succeeded";
-    const message = stringValue(result.message);
+    // A command the browser lost in flight answers `interrupted` in its payload
+    // (plan B3). Its status and record are decided again here from the command
+    // this dispatch sent: a committing act is `unknown` and uncertain, any
+    // other act a failure that did nothing (`client/interrupted-action/`).
+    const interrupted = webAutomationInterruptedDispatchReading(request.outputId, request.payload, result.payload);
+    const status = interrupted?.status ?? result.status;
+    const failure = interrupted?.failure ?? result.failure;
+    const succeeded = status === "succeeded";
+    const message = interrupted?.message ?? stringValue(result.message);
     // A robot check that stood on the landed page and cleared by itself rides
     // the client's payload as `checkWait` (`actions/cleared-check-wait.ts`).
     // Core reads it as the result's own `clearedWait`, never off the payload, so
@@ -48,14 +56,14 @@ export async function dispatchWebAutomationOutput(
       // Core sees `timed_out` or `cancelled` rather than a bare failure.
       ok: succeeded,
       outputId: request.outputId,
-      status: result.status,
-      payload: compact({ status: result.status, message: result.message, result: result.payload, route }),
+      status,
+      payload: compact({ status, message, result: result.payload, route }),
       // Core's IO path builds the node message from `error` alone
       // (`failedDispatchResult`), so a command that failed with only a message
       // — the usual shape of a client-side timeout or cancellation — would
       // otherwise arrive with no reason. A success never gains an error.
       ...(result.error ? { error: result.error } : !succeeded && message ? { error: message } : {}),
-      ...(result.failure ? { failure: result.failure } : {}),
+      ...(failure ? { failure } : {}),
       ...(clearedWait ? { clearedWait } : {})
     };
   } catch (error) {
