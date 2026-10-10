@@ -40,5 +40,7 @@ export {
   type WebLlmTargetResolution,
   type WebLlmTargetScope
 } from "./target-packets";
+// One packet's handles alone, for a step a repair wrote from it (t429).
+export { webLlmPacketTargets } from "./packet-targets";
 // What one Flow's exploration was shown, kept after it moved on, for a candidate submission (t358).
 export { createWebLlmViewHistory, type WebLlmTargetView, type WebLlmViewHistory } from "./view-history";
