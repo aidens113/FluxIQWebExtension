@@ -122,9 +122,18 @@ failure (repair brief lost the control's words after t426; fixed by t431), downs
 downstream test: domain 2 failures (`runtime/tests/lasting-act-statement.test.ts`, the supervisor's 61f6adbf let a
 step's `consequences: none` unlock a second press of a committing act; t430), extension 2862/2862, test-runner
 2216/2216, scenario-lab 8 failures that pass 22/22 alone (t433).
-Running: t430 (verification on the merged tree), t432 (the model is never asked for or allowed to write a
-selector), t433 (honest-path waits under load), t434 (a required run on Core's own transport fails before sending).
-Next: merge t430 and t432, then ask the user before a third paid R4a attempt; then R4b; then lanes A-D round 3.
+Also merged: t430 (61f6adbf withdrawn: a step's `consequences: none` never unlocks a second press of a committing
+act; a step with no `done when:` asks the host's `actLanded`, where the pressed control gone means landed and a way
+out still shown means not landed); t432 (element parameters are shown to the model by handle only, Wait For
+Selector is shown as Wait For Element, and a selector or locator the model writes is refused on every path it writes
+steps, amend_draft included); t433 (honest-path steps budget in page time; one real race fixed); t434 (Core's own
+runtime transport sends required commands; a never-sent command is withdrawn and ends unacted); t435 (a runtime
+session run resolves its storage once and reuses one connection per database: 43 reads per run fell from about
+270 ms to 45 ms; the required-mode test hang was this cost under load, not t427). Direct fixes: downstream b12f0391
+(a timed test made order-based), Core 19bf1773 (an import-order crash in two test entries).
+Next: ask the user before a third paid R4a attempt (every agreed change is merged); then R4b; then lanes A-D round 3.
+Follow-ups: consolidate the way-out label lists (extension vocabulary, t430's domain list); bigbox "naive paths"
+stalls at 8 parallel copies (t433 open question); only runRuntimeSession keeps connections (t435).
 
 **Binding rules every unit keeps** (the user's, from `mvp-final-month-plan.md` Current State, and Core's
 architecture): state routing stays a global runtime behaviour that precedes any model call; every node keeps first
@@ -472,6 +481,14 @@ Their briefs are written here before dispatch, against the code as it then stand
 - Validation: sweep-1010b commands and exits: Core `pnpm install` 0, downstream `pnpm install` 0, Core `pnpm build` 0, Core `pnpm check` 0, Core `pnpm test` 1 ("1 failed | 1040 passed | 3 skipped" files, step-failure-port), downstream `pnpm check` 0, downstream `pnpm test` 1 (domain "pass 1740, fail 2"; then `pnpm -r --no-bail --filter '!@fluxiq-web-extension/domain' test`: extension "tests 2862, fail 0", test-runner "tests 2216, fail 0", scenario-lab "tests 694, fail 8"), downstream `pnpm build` 0; scenario-lab's two files alone "tests 22, pass 22"; t427 merged tree Core vitest client-gateway+executor+activity "1201 passed", domain io/runtime/client/node-run "486 pass, 2 fail" (the t430 pair); t429 merged tree Core recovery+runtime-session+in-run-repair+harness-options+live-patch "895 passed", domain llm-evidence "919 pass, 0 fail"; t431 Core "938 passed" after the supervisor restricted `name` to flat authored targets; each `pnpm task finish` "passed":true
 - Outcome: Accepted
 - Follow-up: t430, t432, t433, t434; consolidate the way-out label lists (extension vocabulary and t430's domain list)
+
+### 2026-10-10 - Committing acts, handle-only model, transports and storage: t430, t432-t435
+- Agent: senior supervisor agent (Claude)
+- Changed: `Merge task` t430, t432, t433, t434, t435 in both repos; downstream b12f0391, 0378531a (R4a debug files); Core 19bf1773
+- Why: sweep-1010b's domain failures (t430); the user's handle-only rule (t432); sweep-1010b's scenario-lab failures (t433); t427's open question 3 (t434); the required-mode service tests timing out on dev (t435, cause pre-existing)
+- Validation: t430 merged tree Core executor+runtime-session+in-run-repair "107 passed" files, "901 passed" tests (an earlier run under four workers' load had 4 files fail to load, 42 tests, not reproduced in two reruns; its error was not captured), domain "88 pass"; t432 merged tree Core "378 passed | 1 skipped" files, "4355 passed" tests, domain runtime+output-nodes+actions "1502 pass, 0 fail", domain and extension tsc exit 0; t433 scenario-lab "tests 697, pass 697"; t434 merged tree Core "1073 passed", 2 failed (the required-mode tests, then on dev too); t435 merged tree Core "421 passed | 2 skipped" files, "3121 passed" tests, the filtered required-mode tests "2 passed" three times; each `pnpm task finish` "passed":true
+- Outcome: Accepted
+- Follow-up: matrix cases 1, 2, 9 on final dev; then the user's approval for R4a attempt 3
 
 ## Open Questions
 
