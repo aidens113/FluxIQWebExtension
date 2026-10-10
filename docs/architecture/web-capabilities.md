@@ -848,6 +848,43 @@ claim about either kind is `unknown` while any unclassified dialog is open
 (proven on everything-store's `deal-wheel`,
 `e2e/content/tests/facts/tests/deal-wheel-facts.spec.ts`).
 
+### Commands In Flight (`web.actions.reconcile`)
+
+A committing act -- a press, a key press, a dialog answer, typing that submits
+(`domain/src/client/interrupted-action/commits.ts`, held equal to
+`webPlanStepMustDeclare` by its test) -- whose answer is lost must read as
+`unknown`, never as "did not happen", and is never made again blindly
+(state-aware recovery plan B3, Core C8). The client declares the gateway
+capability `web.actions.reconcile` with `version: 1`; it lists no action type,
+so nothing new is executable.
+
+- **The extension** keeps a session-storage record of every action in flight,
+  reports one an earlier worker lost after the next `session_ready`, and
+  answers a repeated command id with the result it already has
+  ([extension client](extension-client.md#staying-connected)).
+- **The wire.** Core's result statuses have no `interrupted`, and its durable
+  command ledger refuses any other word, so the browser's account rides in the
+  payload (`status: "interrupted"`, `effect: "unknown"`) and the wire status
+  says what Core does with it: `unknown` with `web.action.unknown`, effect
+  `ambiguous`, for a committing act, which Core holds as uncertain and checks
+  before any retry, route or alternative; `failed` with
+  `web.transport.transient`, effect `unacted`, for any other act, which keeps
+  its retries (`client/interrupted-action/outcome.ts`).
+- **The output dispatcher** decides committing again from the command it sent
+  and overrides the client's status and record with that answer
+  (`io/gateway-output-dispatcher.ts`), so the domain's rule is the one Core
+  acts on.
+- **The effect check.** A build's exploration and test replays pass Core's
+  retries an effect check (`runtime/llm-evidence/node-run/retries/effect-check.ts`):
+  the node's declared `expectedState`, judged on the live page by the
+  expectation evaluator, answers `landed` (every condition held; `any`: one),
+  `not_landed` (a judged condition did not hold; `any`: all judged, none held)
+  or `unknown` (no expected state, nothing the page could be asked, no answer,
+  or held conditions beside unjudged ones). An act the check shows landed
+  counts as done; one that did not land is made again; `unknown` leaves it
+  uncertain and not repeated, as before. The evaluator waits within each
+  claim's window, so a slow page is not read as an act that did not happen.
+
 ### Browser landing verification and tab repeats
 
 Tab output nodes are mutating for repeat classification: another open creates

@@ -98,7 +98,7 @@ import {
 import type { WebNodeRun } from "./context";
 import { webMovesThePage } from "./start-location";
 import { verifyWebOutputNode } from "./verify";
-import { webNodeDispatchWithRetries, webNodeFailureRefusal, webNodeLookUntilPresent } from "./retries";
+import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal, webNodeLookUntilPresent } from "./retries";
 
 /** The reserved key Core marks a replay call with, and what it may ask for. */
 export const WEB_LLM_REPLAY_KEY = "replay";
@@ -358,10 +358,13 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     return await webNodeReplayMissingTarget(run, "step", { resultReason: undefined, nodeId: node.definitionId, assumed }, "target_not_found");
   }
   // Under Core's default retries, as playback and a trial run the step
-  // (`./retries/`, t355); a lasting act is never blindly repeated.
-  const { result, lastingAct } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared: value.consequences }, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) });
+  // (`./retries/`, t355); a lasting act is never blindly repeated, and one
+  // whose answer was lost is checked against the step's own expected state
+  // first (`./retries/effect-check.ts`, plan B3).
+  const { result, lastingAct } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared: value.consequences }, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran));
   assertActive(run.request.signal);
-  if (result.status !== "succeeded") {
+  // One the check showed landed counts as done, whatever its lost answer said.
+  if (result.status !== "succeeded" && lastingAct !== "landed") {
     // A lasting act Core left uncertain and did not repeat says so, reason
     // `outcome_uncertain`, rather than the failure's own (`./retries/uncertain-outcome.ts`, t361).
     const refused = webNodeFailureRefusal(result, lastingAct);

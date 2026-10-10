@@ -1,5 +1,6 @@
 import type { SkuChoice } from "../catalog/index.js";
 import type { RegionCode } from "../locale/index.js";
+import type { Interruption } from "./interruption.js";
 
 /**
  * The renderings the fixture can be armed into. `baseline` is the site as it
@@ -53,6 +54,8 @@ export type MarketState = {
   notifications: "pending" | "later" | "allowed";
   chat: "pill" | "panel" | "minimized";
   flashDeal: "pending" | "closed";
+  /** The interruption switch an arm may add to any mode (`interruption.ts`); `null` when none is armed. */
+  interruption: Interruption | null;
   coupons: {
     /** Store ids whose coupon the buyer holds, in the order collected. */
     stores: string[];

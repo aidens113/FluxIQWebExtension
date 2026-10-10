@@ -29,6 +29,23 @@ const FACTS_CAPABILITY_METADATA = {
   dialogKinds: ["consent", "rate_limit", "robot_check", "promotion", "assistant"]
 };
 
+/**
+ * The gateway capability a client declares when it reconciles a command in
+ * flight (plan B3, Core C8): it keeps a record of every action it sends to a
+ * page, reports one its background worker lost as `interrupted` with its effect
+ * unknown after the next `session_ready`, and answers a repeated command id
+ * with the result it already has instead of acting again. A Flow that relies
+ * on it declares `web.actions.reconcile@1` in `metadata.requires` (Core C10).
+ */
+export const WEB_AUTOMATION_RECONCILE_CAPABILITY_ID = "web.actions.reconcile";
+
+const RECONCILE_CAPABILITY_METADATA = {
+  domainId: WEB_AUTOMATION_DOMAIN_ID,
+  version: 1,
+  interruptedStatus: "interrupted",
+  dedupe: "commandId"
+};
+
 export type WebAutomationClientGatewayCapability = ClientGatewayCapability & {
   domainId?: string | null;
   inputIds?: string[];
@@ -64,6 +81,13 @@ export const webAutomationRuntimeCapabilities: FluxIQRuntimeCapability[] = [
     kind: "state",
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     metadata: FACTS_CAPABILITY_METADATA
+  },
+  {
+    id: WEB_AUTOMATION_RECONCILE_CAPABILITY_ID,
+    label: "Web action reconciliation",
+    kind: "action",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: RECONCILE_CAPABILITY_METADATA
   },
   {
     id: "web.flow-runtime",
@@ -129,6 +153,16 @@ export const webAutomationGatewayCapabilities: WebAutomationClientGatewayCapabil
     actionTypes: WEB_AUTOMATION_ACTION_TYPES,
     outputIds: WEB_AUTOMATION_ACTION_TYPES,
     metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, outputIds: WEB_AUTOMATION_ACTION_TYPES }
+  },
+  {
+    // In-flight command reconciliation (plan B3). Like the fact check it lists
+    // no action type: it changes how the actions above are answered, and makes
+    // nothing new executable.
+    id: WEB_AUTOMATION_RECONCILE_CAPABILITY_ID,
+    label: "Web action reconciliation",
+    kind: "action",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: RECONCILE_CAPABILITY_METADATA
   },
   {
     // Asks Core for `server.activity`: what it is doing now, for the panel's

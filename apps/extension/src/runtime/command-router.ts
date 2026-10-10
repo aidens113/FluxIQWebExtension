@@ -24,6 +24,8 @@ export type ExtensionRuntimeCommandRouterOptions = {
   sendGatewayResult?(result: ClientGatewayActionResult): Promise<void>;
   /** The background worker's frame merge, which a look that names no frame answers with. */
   mergeFrameSnapshots?: MergeFrameSnapshots;
+  /** Told where a command is about to be sent, before it is (the in-flight record, plan B3). */
+  noteDispatch?(commandId: string, tabId: number, frameId: number): Promise<void>;
 };
 
 export class ExtensionRuntimeCommandRouter {
@@ -49,6 +51,8 @@ export class ExtensionRuntimeCommandRouter {
     const ownOrigins = this.options.ownOrigins?.();
     if (ownOrigins?.length) request.ownOrigins = ownOrigins;
     if (this.options.mergeFrameSnapshots) request.mergeFrameSnapshots = this.options.mergeFrameSnapshots;
+    const noteDispatch = this.options.noteDispatch;
+    if (noteDispatch) request.noteDispatch = async (tabId, frameId) => await noteDispatch(action.commandId, tabId, frameId);
     try {
       const { result, tabId, frameId } = await runBrowserActionCommand(request);
       await this.options.sendActionResult(result, tabId, frameId);
