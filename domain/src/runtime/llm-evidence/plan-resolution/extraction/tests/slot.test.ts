@@ -39,7 +39,7 @@ const EXTRACT_LIST_NODE = webAutomationOutputNodeId("web.dom.extract_list");
 const CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
 const CATALOG = CAPTURED_DETECTIONS["product-catalog-largest"];
 const EXTRACTION_HINT = "web.handle.expected.extract_list.handle_fields";
-const TARGET_HINT = "web.handle.expected.selector.handle_location";
+const TARGET_HINT = "web.handle.expected.target.handle_location";
 /** Beside a read that asks to page itself: the pages of a list are a Next page step on the same handle, and a repeat. */
 const NEXT_PAGE_HINT = "web.handle.expected.extract_list.next_page";
 

@@ -10,6 +10,7 @@ import type { WebLlmEvidenceGateway, WebLlmEvidenceToolRequest } from "../captur
 import type { WebPlanHandleStores } from "../plan-resolution";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import type { WebNodeArrivals } from "./arrival";
+import type { WebNodeHeldLiterals } from "./held-literals";
 import type { WebNodeOwnLayers } from "./own-layers";
 import type { WebNodeShownAddresses } from "./shown-addresses";
 
@@ -38,4 +39,6 @@ export type WebNodeRun = {
   addresses: WebNodeShownAddresses;
   /** The layers a press of this build opened, which closing is a step of the Flow and not an interruption (`./own-layers/memory.ts`). */
   layers: WebNodeOwnLayers;
+  /** What the Flow a round continues holds, which the model's call did not write (`./held-literals/`). */
+  held: WebNodeHeldLiterals;
 };

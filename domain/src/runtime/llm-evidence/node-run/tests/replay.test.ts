@@ -215,7 +215,8 @@ test("a replayed list read answers the rows the Flow's extract_list would produc
 // rows it kept, and the build's test replays the Flow, so a replayed read asks
 // the page for `answer: "kept"` as the Flow's dispatch does. Exploration is the
 // model looking, and keeps the read's floor of rejected rows: it never asks.
-test("a replayed list read asks for the kept rows alone, and an exploration read does not", async () => {
+// An exploration read by handle asks for no kept rows either (`./rejected-rows.test.ts`).
+test("a replayed list read asks for the kept rows alone, and an exploration read written out by hand never goes out", async () => {
   const extractList = { item: "li.request", fields: { name: ".name" } };
   const replayedStub = stub({ payload: { extracted: [{ name: "Amara Osei" }] } });
   const replayed = await createWebAutomationLlmEvidenceRuntime(replayedStub.gateway).executeTool({
@@ -231,9 +232,8 @@ test("a replayed list read asks for the kept rows alone, and an exploration read
     ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID,
     value: { node: EXTRACT_LIST, parameters: { extractList }, consequences: [] }
   });
-  const explored = exploringStub.commands.find((command) => command.actionType === "web.dom.extract_list");
-  assert.ok(explored, "the exploration read went out");
-  assert.equal(Object.hasOwn((explored.parameters.extractList as JsonObject | undefined) ?? {}, "answer"), false);
+  // The model reads a list only by its detected handle (t432): a literal read is refused before it goes out.
+  assert.equal(exploringStub.commands.some((command) => command.actionType === "web.dom.extract_list"), false);
 });
 
 // S4 (contract C1): a replayed Next page dispatches the request the Flow keeps.

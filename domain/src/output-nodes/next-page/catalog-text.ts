@@ -37,9 +37,18 @@ export const WEB_AUTOMATION_NEXT_PAGE_DESCRIPTION = [
   "Loop it after a one-page read and wire ended out of the loop."
 ].join(" ");
 
-/** The shape of `nextPage`, for a model to write one: the handle of a detected list first, then the literal request. */
+/**
+ * The shape of `nextPage`, for a model to write one: the handle of a detected
+ * list, and optionally the Next control's handle. Until t432 a literal request
+ * followed, `{item: css, pagination: ...}`, asking for selectors a model is
+ * never shown; it stays valid for a hand-authored Flow (`actions/next-page/`),
+ * and a model that writes one is refused
+ * (`runtime/llm-evidence/plan-resolution/written-literals.ts`).
+ */
 export const WEB_AUTOMATION_NEXT_PAGE_GRAMMAR = [
   `{list: "extraction.N", control?: "tN"}: the detected list, and optionally the page's own Next control by its handle.`,
-  "Or {item: css, pagination?: {mode: next|loadMore|scroll|numbered, next|control|pages: css}}.",
   "No maxPages: one step moves one page; loop for more."
 ].join(" ");
+
+/** The one request a model is shown: a detected list and the page's own Next control, both by handle (t432). */
+export const WEB_AUTOMATION_NEXT_PAGE_EXAMPLE = { list: "extraction.1", control: "t9" } as const;

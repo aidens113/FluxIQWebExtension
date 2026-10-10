@@ -124,16 +124,19 @@ test("Next page's catalog text holds Core's bounds: 240 for the description, 80 
   assert.doesNotMatch(`${description} ${definition.parameters.map((parameter) => parameter.description ?? "").join(" ")}`, /maxPages: \d|maxScrolls/u);
 });
 
-test("an exploration run of Next page dispatches its request as the Flow's node will", async () => {
+// A Next page request the model writes out by hand names the list's item and
+// its pager by selectors it was never shown, so since t432 it is refused before
+// it goes out; the model names the list by its detected handle. The request the
+// Flow keeps is dispatched as written by a replay (`./replay.test.ts`).
+test("an exploration run of Next page written out by hand is refused before it goes out", async () => {
   const stubbed = blankTab();
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
   await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, value: { node: NAVIGATE, parameters: { url: START }, consequences: [] } });
   const nextPage = { item: "li.result", pagination: { next: "a.next" } };
   const moved = await runtime.executeTool({ ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, value: { node: NEXT_PAGE, parameters: { nextPage }, consequences: [] } });
-  assert.equal(moved.resultCode, "web.action.succeeded");
-  const sent = stubbed.commands.find((command) => command.actionType === "web.dom.next_page");
-  assert.deepEqual(sent?.parameters.nextPage, nextPage);
-  assert.equal(moved.draft?.actionId, NEXT_PAGE);
+  assert.equal(moved.resultCode, "web.action.rejected.target_unobserved");
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.next_page"), false);
+  assert.equal(JSON.stringify(moved.evidence).includes("web.handle.not_a_handle"), true);
 });
 
 /** The blank tab and the one site it can reach (`./start-location.test.ts`). */

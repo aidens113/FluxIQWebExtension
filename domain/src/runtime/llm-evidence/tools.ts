@@ -66,7 +66,7 @@ import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "./denied-keys";
 import { WEB_LLM_VIEW_KEYS } from "./observed-state";
 import { WEB_LLM_SYSTEM_INSTRUCTIONS } from "./system-instructions";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
-import { createWebNodeArrivals, createWebNodeOwnLayers, createWebNodeShownAddresses, runWebOutputNode, webLlmCallWords, webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_NAVIGATION_ACTION, type WebLlmCallWords } from "./node-run";
+import { createWebNodeArrivals, createWebNodeHeldLiterals, createWebNodeOwnLayers, createWebNodeShownAddresses, runWebOutputNode, webLlmCallWords, webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_NAVIGATION_ACTION, type WebLlmCallWords } from "./node-run";
 import {
   createWebLlmTargetPackets,
   resolveWebPlanNodeParameters,
@@ -307,6 +307,8 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
   // Which layers a press of each build opened, so closing one is a step of the
   // Flow and not an interruption (`./node-run/own-layers/memory.ts`).
   const layers = createWebNodeOwnLayers();
+  // What the Flow each continuing round holds, which a rerun keeps without the model writing it (`./node-run/held-literals/`).
+  const held = createWebNodeHeldLiterals();
   const stable = (request: WebLlmEvidenceToolRequest, binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding =>
     stableHandles.restamp({ projectId: request.projectId, flowId: request.flowId }, binding);
   // Every packet an authoring tool shows the model: kept for the next repair
@@ -490,7 +492,8 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
             looked: (binding) => looked(input, sessionId, binding),
             arrivals,
             addresses,
-            layers
+            layers,
+            held
           }));
         }
         if (input.toolId === WEB_LLM_DETECT_STRUCTURE_TOOL_ID) {

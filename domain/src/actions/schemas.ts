@@ -278,8 +278,11 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
   },
   {
     actionType: "web.dom.wait_for_selector",
-    label: "Wait For Selector",
-    description: "Wait until an element is present, visible, enabled, or absent.",
+    // What a model reads (t432): the element is named by its handle, like every
+    // element step's, so neither the label nor the description speaks of how
+    // the page finds it. The action id is kept: saved Flows name it.
+    label: "Wait For Element",
+    description: "Wait until the element its target handle names is present, visible, enabled, or absent.",
     parameterSchema: waitForSelectorSchema
   },
   {
