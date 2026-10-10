@@ -2235,6 +2235,103 @@ after the site received the confirm request (row 11), and both sides were read
 afterwards. Evidence goes to `test-runs/perturbation-check/<stamp>-<kind>/`. It
 proves the fault, not FluxIQ's reconciliation after it.
 
+### The recovery acceptance matrix
+
+`lab recovery-matrix` runs the state-aware recovery plan's acceptance matrix
+(`docs/working/state-aware-recovery-plan.md`, "Acceptance matrix") provider-free
+and headed, on the realistic scenarios only. Row 12 is the paid proof and is not
+in it. The code is `packages/test-runner/src/recovery-matrix/`.
+
+```bash
+FLUXIQ_TEST_ENV_FILES=none pnpm lab recovery-matrix --list          # every row, its cases, and what it still waits for
+FLUXIQ_TEST_ENV_FILES=none pnpm lab recovery-matrix --ready         # every case a current Core can prove
+FLUXIQ_TEST_ENV_FILES=none pnpm lab recovery-matrix --row 4         # one row's cases
+FLUXIQ_TEST_ENV_FILES=none pnpm lab recovery-matrix --case 13b      # one case; repeatable
+```
+
+**Rows and cases.** `matrix-rows.ts` is the table: each row is one or more
+cases, and a case is one Flow, one switch (a scenario variant, a run
+perturbation from "Run perturbations" above, or neither), one check, and what
+the site's state must show afterwards. A row declares the executor capabilities
+its proof needs (`handlers`, `entries`, `checkpoints`, `call-subflow`,
+`reconciliation`); `--list` reports it `ready` when it needs none, `pending`
+with the capabilities otherwise, and `blocked` when it cannot be hand-authored
+as written (below).
+
+**Flows are candidate scripts saved through Core's own path.** Each case's Flow
+is a hand-authored candidate script under `recovery-matrix/flows/`, written
+against the scenario's own markup the way its recording script is. A case first
+opens a fresh persistent workspace once, so its Core sets up storage, the Lab
+identity and the project and records the fixture's port, and closes it. With
+that Core stopped, the script is assembled by
+`acceptAutomationStudioFlowBootstrapResult`, validated by
+`validateAutomationStudioFlowBootstrapPlan` against the web node library, and
+saved by `createFlowBootstrapAdaptation` with an approve and an apply, in this
+process against the workspace's FluxIQ root (`recovery-matrix/compile/`). No
+graph, node or edge is written by hand. Steps name elements by literal
+selectors, which the domain keeps as written; a typing step also carries an
+`element` identity, because without one Core reads the typed text as the
+field's identity and the browser refuses the right field. A Core whose library
+has no Call Subflow refuses a script that calls a part
+(`flow_script.call_unavailable`), and the case is reported `not-proven` for
+`call-subflow`.
+
+**Authoring gap.** A fact (`when:`, `done when:`, `start at:`) can name an
+element only by an evidence handle in the candidate grammar, and a hand-authored
+Flow has no exploration to issue one. A dialog fact (`dialog <kind> "<name>"`)
+needs none. A row whose proof needs an element fact is written with a
+placeholder handle naming the element, and the compile step refuses any plan
+that still names a handle anywhere (`compile/evidence-handles.ts`), node
+parameters or metadata, before Core saves it. Core's own check reads only node
+parameters, so an entry's handle would otherwise be saved and never resolve.
+The case is reported `blocked`. The web host already evaluates a fact whose
+target is a literal `selector` (`domain/src/runtime/facts/query.ts`); the gap is
+the script grammar alone.
+
+**The run.** The workspace is opened again. The fixture is reset, the case's
+variant armed and its perturbation started, the extension paired in a visible
+browser (`openReplayBrowser`, as `lab replay` does), and the saved Flow run
+deterministically. The owned Core is built with `modelProvidersEnabled: false`,
+the run carries no `llmExecution`, and a case refuses to start when its
+environment holds a provider credential. The case then reads:
+
+- Core's run detail: every attempt in closed words, including the C11 trace
+  records when Core writes them (`lifecycle`, `entry`, `stateRouting` with the
+  guards that refused a way on, `framePath`) (`records/attempt-records.ts`);
+- Core's model gate record for the call count (`records/model-calls.ts`). Core
+  writes a zero accounting in the same save as the result verdict, after the run
+  answers, so the case waits up to 30 seconds for it. A failed deterministic
+  run's gate declines with `invoked: false` and a code, which also reads as zero.
+  A run with no gate record has no count, and the case fails as unknown;
+- the site's state from `/__control/final-state`, judged against the case:
+  cart pieces and adds, coupons, confirmed requests and refused presses, with
+  any act beyond the expected one counted as a duplicated act
+  (`records/site-state.ts`);
+- the scenario's goal facts on the page, where the case judges by them.
+
+**The verdict.** Every check (`checks/matrix-checks.ts`) first requires zero
+model calls, zero interventions and zero harness activations, and the site's
+acts as expected. It then asks for the record that shows its behaviour, for
+example a `before` or `retry` handler that resumed with its completion check
+true for row 4. A case whose run wrote no record of the mechanism the row is
+about is `not-proven`, naming the missing capability, never `passed`. Every
+case also reports the plan's measures (`measures.ts`): incidents and how many
+closed without a model, retries, planned fails and true failures, model calls
+per true failure, state routes, duplicated acts and false successes. In-run
+fixes, avoidable escalations and learning cost are 0 by construction in a
+provider-free run, and handler-check overhead is `null` until the trace carries
+per-boundary timings.
+
+**The bundle** is `<runs>/recovery-matrix/<matrix-run-id>/`: `case-<id>.json`
+per case (verdict, reasons, missing records, the compiled Flow's steps and
+requirements, each attempt in closed words, the accounting and its source, the
+measures, the perturbation's report) and `summary.json` (every case's verdict
+and the matrix's status table). Cases run one at a time, each once per launch. A
+case that passed, or never ran, has its workspace removed. One that did not pass
+keeps it under `<runs>/persistent-isolated/rmx-<case>-<hex>/`, with Core's store
+holding the run's trace and the session's process logs, and names it as
+`retainedWorkspace`, so every failure is debugged from its run's files.
+
 ### Recording checks
 
 After Stop, on both lanes, the runner checks that Core holds the recording the
