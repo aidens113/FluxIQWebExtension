@@ -36,6 +36,11 @@ const FACTS_CAPABILITY_METADATA = {
  * unknown after the next `session_ready`, and answers a repeated command id
  * with the result it already has instead of acting again. A Flow that relies
  * on it declares `web.actions.reconcile@1` in `metadata.requires` (Core C10).
+ *
+ * `answersReconcile: true` (Core `CLIENT_GATEWAY_RECONCILE_ANSWER_METADATA_KEY`)
+ * says it also answers Core's `server.reconcile_command` -- what became of a
+ * command whose answer never came -- from that record, never by acting. Core
+ * asks only a session that declares it.
  */
 export const WEB_AUTOMATION_RECONCILE_CAPABILITY_ID = "web.actions.reconcile";
 
@@ -43,7 +48,8 @@ const RECONCILE_CAPABILITY_METADATA = {
   domainId: WEB_AUTOMATION_DOMAIN_ID,
   version: 1,
   interruptedStatus: "interrupted",
-  dedupe: "commandId"
+  dedupe: "commandId",
+  answersReconcile: true
 };
 
 export type WebAutomationClientGatewayCapability = ClientGatewayCapability & {
