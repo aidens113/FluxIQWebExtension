@@ -1,7 +1,7 @@
 # State-Aware Recovery Plan
 
 Status: Active
-Status detail: Wave 1 merged 2026-10-09 except t390 (held for the shared Core); executor integration lead (t392) and t393 running.
+Status detail: All units except the executor integration (t392) and its dependants merged and pushed; matrix runner live; t401/t402 fixing what it found.
 Created: 2026-10-09
 Last updated: 2026-10-09
 Owner: Senior supervisor agent
@@ -68,21 +68,35 @@ those files and can start now. This work must not delay lanes A-D round 3: lane 
 between rounds, and a merge that changes behaviour for existing Flows (R3's routing guards) lands between rounds with
 the lanes' saved Flows replayed provider-free first.
 
-**In progress (2026-10-09, user: "use max subagents and implement this fast").** Merged into both `dev`s and
-verified by the supervisor (tests beside each change, typechecks, structure audits; Core's finish ran `pnpm check`):
-t383 (candidate wrap-up keeps submit/test, per-code refusal advice), t384 (satisfied step reads as done; Automations
-learned count and Stop for runs started elsewhere), t385 (lifecycle contracts: frames, handlers, scopes,
-continuations, true failure, incident budget, fact conditions, handler nodes, validation), t386 (requirement gate,
-protocol version check), t387 (state routing refuses routes that skip needed data or repeat a completed lasting act),
-t388 (candidate script: parts, `call:`, start points, checkpoints, handlers, fact `when:`, `requires`; wired into
-adaptation and candidate mode), t389 (downstream `web.page.facts`: batched, zero-wait, three-valued), t391 (Core run
-log says what the runtime did). Tooling on dev: the domain and extension unit-test runners take path fragments.
-Verified, waiting to merge: t390 (crossborder flash-deal variants for matrix rows 4-5; row assignments in its
-report), held until t393 finishes because both use the shared Core. Running: t392 executor integration lead
-(`lead-xhigh`: Call Subflow, trace, handler wiring, entries/checkpoints, in-run repair), t393 (browser half of B3:
-in-flight command record, interrupted/unknown after restart, dedupe, domain effect check). Next: B5 chat cards once
-t392 publishes the activity `recovery` contract; Lab mechanisms for matrix rows 9 and 11; then the provider-free
-matrix and the two paid proofs (user approval).
+**In progress (2026-10-09, user: "use max subagents and implement this fast").** Merged into both `dev`s, pushed,
+and verified by the supervisor (tests beside each change, typechecks, structure audits; Core's finish runs `pnpm
+check`): t383 candidate wrap-up and refusal advice; t384 satisfied step reads as done, Automations learned count and
+Stop; t385 lifecycle contracts (frames, handlers, scopes, continuations, true failure, incident budget, fact
+conditions, handler nodes, validation); t386 requirement gate and protocol version check; t387 safe state routing
+guards; t388 candidate script parts, `call:`, start points, checkpoints, handlers, fact `when:`, `requires`; t389
+`web.page.facts` (batched, zero-wait, three-valued); t390 crossborder flash-deal variants (matrix rows 4-5; row
+assignments in its report); t391 Core run log; t393 in-flight command record, interrupted/unknown after a worker
+restart, dedupe, domain effect check; t394 Lab perturbations drop-action-result and stop-service-worker (rows 9, 11);
+t395 editor views (handler area, hook badges, start and checkpoint markers, effective handlers); t397 audit rule
+`statement-packing` (two workers had packed statements onto one line to stay under a file budget; existing
+occurrences baselined, may only shrink). Direct dev fixes: domain and extension test runners take path fragments;
+dialog facts read the saved form (`2c2371fc`, found by the t392 lead).
+Also merged: t398 (saved steps and handlers carry their written words; validation knows the recovery role), t399
+(`pnpm lab recovery-matrix`, the provider-free matrix runner: rows 1 and 13b pass on dev with zero model calls), t400
+(the domain resolves a fact's `{ handle }` target, node id `fluxiq.fact.target`).
+Matrix findings (t399): row 13a found two extension defects, fixed in t401: the in-page interference clearing pressed
+a rate-limit notice's "Try again", confirming outside the Flow, and it closes the very dialog a step targets. Rows 2-6
+need a selector form for facts in hand-authored Flows (t402, not shown to the model). Rows 7-11 wait for t392.
+Running: t392 executor integration lead (`lead-xhigh`). Verified in its tree: A Call Subflow, B trace and activity
+`recovery` contract, C0 graph-run cut from 796 to 431 lines, C1 host fact evaluator, C2 handlers fire at start,
+before, retry, fail and before_next (`flow.handlers@1` granted), D1 safe routing uses only the frame's checkpoints, G
+t388's call shape, fact handles and `requires` at save, F1 late results recorded and never applied, `interrupted` in
+the contract, orphaned-run sweep. In progress: D2 entries and success check, F1b, F2 effect check before retry or
+route, then E2 in-run repair. Decision (lead): an attempt's `failureClass` is stamped only with a Handler in scope so
+a Flow without handlers keeps an identical trace; incidents mark true failure in every run, and the run summary counts
+the classes from incidents. Merged since: t401 safe interference clearing (only dismiss controls, never the step's own dialog, `clearedLayers` on results), t402 locator facts (`at "<locator>"`, opaque to Core) and refusal code `run.requirement_missing`, t403 two stale content specs fixed and the matrix confirm Flows corrected (row 13a 10/10 provider-free).
+Verified, waiting: t396 chat recovery cards (merges after t392).
+Next: merge t392, t396, t401, t402; run every matrix row; then the two paid proofs (user approval of each command).
 
 **Binding rules every unit keeps** (the user's, from `mvp-final-month-plan.md` Current State, and Core's
 architecture): state routing stays a global runtime behaviour that precedes any model call; every node keeps first
@@ -389,4 +403,12 @@ Their briefs are written here before dispatch, against the code as it then stand
   effort after the RC so lanes A-D and adaptation keep the remaining weeks.
 - User: the paid R4a proof (one creation on a realistic scenario with an interruption variant) and the paid R4b proof
   (one run on a drift variant that is fixed in the run and carries on), each when its unit is ready.
-- Supervisor, at B6: which realistic scenario offers two genuine ways to the same result for matrix row 8.
+- Supervisor, at B6: which realistic scenario offers two genuine ways to the same result for matrix row 8 (t390
+  proposed bigbox `redesigned-buy-box` with the results tile's `+ Add`; to confirm when row 8 runs).
+- Supervisor: an extra confirm in t399's first row-13a run (Lin confirmed between 38.3 s and 45.6 s while no command
+  ran). t401 and t403 ruled out the click's second press, in-command retries, the clearing, a resent command, a
+  duplicate content script and other click paths; ten later runs passed. Next probe in
+  `reports/t403-committing-press-and-specs.md`; suspect the fixture replaying a queued request when its notice closes.
+- Supervisor: whether step declarations should reach the extension so a committing press never re-presses on a
+  missing signal. Not done (t403 reverted it): a committing press almost always fires a request, which already
+  blocks the re-press, and forcing it broke the deliberate ignored-first-press rows (auction sort, buy box).

@@ -57,7 +57,10 @@ test("the runner publishes safe finalization-wait details and preserves primary 
 
 test("the focused pairing lifecycle owns both timeout stages and publishes their safe details", async () => {
   const source = await runnerSource();
-  assert.match(source, /pairExtensionWithColdEpochRecovery\(\{/u);
+  // t394 moved the run's pairing out of the spine into `run-scenario/pair-run-extension.ts`.
+  assert.ok(source.includes("await pairRunExtension(extensionPage, topology, startTrace)"), "the spine pairs through the module");
+  const pairing = await readFile(path.join(root, "packages", "test-runner", "src", "run-scenario", "pair-run-extension.ts"), "utf8");
+  assert.match(pairing, /pairExtensionWithColdEpochRecovery\(\{/u);
   assert.ok(source.includes("const pairingWaitDetails = pairingStatusWaitFailureDetails(error);"));
   assert.ok(source.includes("...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {})"));
 });

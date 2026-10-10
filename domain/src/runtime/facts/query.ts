@@ -20,8 +20,10 @@
 //   count (target with a selector required)
 //     op = equals with a number, or count with "<cmp> <n>" (`>= 3`, `= 0`).
 //   dialog | dialog.<consent|rate_limit|robot_check|promotion|assistant>
-//     op = exists | absent, value = optional text the dialog's name contains;
-//     or contains, value = that text, asking that such a dialog is open.
+//     op = exists | visible | absent, value = optional text the dialog's name
+//     contains (or, without a value, the name of a `{ kind: "dialog", name }`
+//     target, the form Core's candidate script saves); or contains, value =
+//     that text, asking that such a dialog is open.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type {
@@ -88,9 +90,13 @@ function claimFor(condition: WebAutomationFactCondition, value: Literal): WebAut
   if (word === "dialog") {
     if (sub !== undefined && !LAYER_KINDS.has(sub)) return undefined;
     const dialogKind = sub as WebAutomationLayerKind | undefined;
-    const name = typeof value === "string" && value.trim() ? value : undefined;
-    if (value !== undefined && name === undefined) return undefined;
-    const expected = op === "exists" || op === "contains" ? true : op === "absent" ? false : undefined;
+    // Core's candidate script saves a dialog fact as `op: visible | absent`
+    // with the name in a `{ kind: "dialog", role, name }` target; the role
+    // cannot narrow a layer kind, so it reads as any dialog.
+    const named = value === undefined ? dialogTargetName(condition.target) : value;
+    const name = typeof named === "string" && named.trim() ? named : undefined;
+    if (named !== undefined && name === undefined) return undefined;
+    const expected = op === "exists" || op === "visible" || op === "contains" ? true : op === "absent" ? false : undefined;
     if (expected === undefined || (op === "contains" && !name)) return undefined;
     return { kind: "dialog", expected, ...(dialogKind ? { dialogKind } : {}), ...(name ? { nameContains: name } : {}) };
   }
@@ -137,7 +143,9 @@ function boundValue(value: WebAutomationFactCondition["value"], context: WebAuto
  */
 function targetValue(value: JsonObject | undefined): WebAutomationFactTarget | undefined {
   if (!value) return undefined;
-  const selector = nonEmpty(value.selector);
+  // Core's candidate script writes a hand-authored literal target as an opaque
+  // `locator` the host interprets; this host reads it as a CSS selector.
+  const selector = nonEmpty(value.selector) ?? nonEmpty(value.locator);
   const described = elementFingerprint(value.element ?? value.fingerprint);
   const element = described && Object.keys(described).length ? described : undefined;
   if (!selector && !element) return undefined;
@@ -169,6 +177,11 @@ function conditionValue(entry: unknown): WebAutomationFactCondition | undefined 
     ...(value === undefined ? {} : { value: value as WebAutomationFactCondition["value"] }),
     ...(target ? { target } : {})
   };
+}
+
+/** The name a saved `{ kind: "dialog", name }` target carries, if any. */
+function dialogTargetName(target: JsonObject | undefined): string | undefined {
+  return target?.kind === "dialog" && typeof target.name === "string" ? target.name : undefined;
 }
 
 function splitFact(fact: string): [string, string | undefined] {

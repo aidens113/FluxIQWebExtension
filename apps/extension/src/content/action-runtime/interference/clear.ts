@@ -34,25 +34,22 @@
 //
 // A fifth, narrower guard sits in `way-out.ts`: a "Not now" that is a link to
 // somewhere else is not pressed, because leaving the page is worse than the
-// dialog.
+// dialog. A sixth sits beside it (t401, `press-guard/`): a control whose
+// press acts -- it submits, toggles, retries, confirms, accepts or goes on -- is
+// never pressed, whatever the label that admitted it says.
 //
-// **It reports a count and nothing else.** What the dialog said stays on the
-// page: the account this feeds (`recovery/account.ts`) carries counts and words
-// from closed sets so that it can travel on any result without redaction.
+// **A layer the step works in is never cleared** (t401, `clearing-target.ts`):
+// the step's resolved target, its selector and the names it was recorded by
+// each mark the layer that holds it as the step's own.
+//
+// **It reports a count here, and words from closed sets beside it.** What the
+// dialog said stays on the page: the account this feeds (`recovery/account.ts`)
+// carries counts, and the result's record of each press
+// (`press-ways-out.ts`) carries the layer's kind and the dismissal's
+// allow-list word, so either can travel on any result without redaction.
 
-import { dispatchClickGesture } from "../click-gesture";
-import { overlaysOverPage } from "./overlays";
-import { pressableWayOut } from "./pressable-way-out";
-
-/**
- * At most this many overlays are dismissed in one intervention.
- *
- * More than one because a page that opens a consent sheet also opens a
- * newsletter modal, and clearing one to be stopped by the next is not clearing
- * anything. Bounded because a page that keeps producing dialogs is a page this
- * defence cannot win on, and the loop's own ladder is the place that gives up.
- */
-const MAX_DISMISSALS_PER_ATTEMPT = 3;
+import type { ClearingTarget } from "./clearing-target";
+import { pressWaysOut } from "./press-ways-out";
 
 /**
  * Presses the way out of whatever is standing over the page, and answers how
@@ -68,36 +65,11 @@ const MAX_DISMISSALS_PER_ATTEMPT = 3;
  * die on something recoverable, and a defence that can itself end the step is
  * not one.
  *
- * `spare` is the action's own target: a layer that holds it -- the form drawer
- * or the consent wall the step is working in -- is never cleared, only the
- * layers in its way (`overlays.ts`).
+ * `spare` is the action's own target -- the element it resolved to, or what the
+ * step says of it (`clearing-target.ts`): a layer that holds it -- the form
+ * drawer or the consent wall the step is working in, the prompt whose "Not now"
+ * it presses -- is never cleared, only the layers in its way (`overlays.ts`).
  */
-export function clearInterference(spare?: Element): number {
-  try {
-    return pressWaysOut(spare);
-  } catch {
-    return 0;
-  }
-}
-
-function pressWaysOut(spare: Element | undefined): number {
-  let dismissed = 0;
-  for (const overlay of overlaysOverPage(undefined, spare)) {
-    if (dismissed >= MAX_DISMISSALS_PER_ATTEMPT) break;
-    // Guard 1. A dialog that asks for what only a person can give is left
-    // alone, way out or no way out (`pressable-way-out.ts`, which
-    // `presence.ts` reads too, so what is cleared and what is looked for agree).
-    const control = pressableWayOut(overlay);
-    if (!control) continue;
-    if (press(control)) dismissed += 1;
-  }
-  return dismissed;
-}
-
-/** Presses the control at the centre of its own box, as a person would. False when it has no box to aim at. */
-function press(control: Element): boolean {
-  const box = control.getBoundingClientRect();
-  if (!(box.width > 0) || !(box.height > 0)) return false;
-  dispatchClickGesture(control, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
-  return true;
+export function clearInterference(spare?: Element | ClearingTarget): number {
+  return pressWaysOut(spare).length;
 }

@@ -20,15 +20,17 @@
 // It never throws, for the reason `clear.ts` gives: it runs inside the
 // defence, and in a Node test, where there is no document, it answers no.
 
+import type { ClearingTarget } from "./clearing-target";
 import { overlaysOverPage } from "./overlays";
 import { pressableWayOut } from "./pressable-way-out";
 
 /**
  * Whether any layer over the page carries a way out the defence may press,
- * leaving out a layer that holds `spare`, the action's own target, as the
- * clearing does (`clear.ts`).
+ * leaving out a layer that holds `spare`, the action's own target -- an element,
+ * or what the step says of it (`clearing-target.ts`) -- as the clearing does
+ * (`clear.ts`).
  */
-export function clearableLayerOverPage(spare?: Element): boolean {
+export function clearableLayerOverPage(spare?: Element | ClearingTarget): boolean {
   try {
     return overlaysOverPage(undefined, spare).some((overlay) => pressableWayOut(overlay) !== undefined);
   } catch {

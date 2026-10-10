@@ -24,6 +24,12 @@ test("an event is kept only on a handler recovery, and a route keeps its target"
   assert.deepEqual(stepRecovery(stepWith({ kind: "route", subject: "Back to the cart", outcome: "refused", event: "fail", targetId: "checkpoint.cart" })), { kind: "route", subject: "Back to the cart", outcome: "refused", targetId: "checkpoint.cart" });
 });
 
+test("a layer the extension closed is read as an interference recovery, without an event", () => {
+  const recovery = { kind: "interference", subject: "Closed a notice the page put in the way", outcome: "succeeded" } as const;
+  assert.deepEqual(stepRecovery(stepWith(recovery)), recovery);
+  assert.deepEqual(stepRecovery(stepWith({ ...recovery, event: "before" })), recovery);
+});
+
 test("a recovery outside the contract, without a subject, or on a row that is not a step is not read", () => {
   assert.equal(stepRecovery(stepWith({ kind: "teleport", subject: "x", outcome: "succeeded" })), undefined);
   assert.equal(stepRecovery(stepWith({ kind: "entry", subject: "x", outcome: "maybe" })), undefined);
