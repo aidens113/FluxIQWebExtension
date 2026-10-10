@@ -83,6 +83,7 @@ test("a click and a wait resolved from a handle inside a shadow root carry its h
   const clicked = await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "t2" } });
   assert.deepEqual(clicked.element, {
     tagName: "button",
+    implicitRole: "button",
     accessibleName: "Reject non-essential",
     // No `visibleText`: the packet does not repeat text that is the name.
     selector: reject.selector,

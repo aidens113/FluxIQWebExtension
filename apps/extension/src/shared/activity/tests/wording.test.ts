@@ -322,3 +322,20 @@ test("a failed build's ending says its reason under the headline, never only the
   assert.equal(ending.sentence, label);
   assert.equal(isHeadlineEcho("Build failed", ending.sentence), false);
 });
+
+// R4a attempt 2 (run-mv2pgqkj-f3552c70, trial 3, moment 12): the Flow's clear
+// step (`web.output.dom-clear`) failed with `web.validation.output_not_observed`,
+// the site putting "1" back in the quantity box. That code matched none of the
+// outcome words and read "done"; and R4a's exploration clear
+// (`web.action.rejected.output_not_observed`, run-mv2nlh9l-52e476da) read "not
+// tried: it ran, ..." though it ran. Both now say what the card says, worded
+// for the box.
+test("a clear or typing step the site set back says so, never done or not tried", () => {
+  const clear = (code: string) => activityWording(named({ phase: "exploring", title: "Clearing “Quantity”", label: "Clearing “Quantity”", status: "succeeded", text: `Result: ${code} · Node: web.output.dom-clear` }));
+  assert.equal(clear("web.validation.output_not_observed").sentence, "Clearing “Quantity” — that didn't work: it ran, but the site set the box back");
+  assert.equal(clear("web.action.rejected.output_not_observed").sentence, "Clearing “Quantity” — that didn't work: it ran, but the site set the box back");
+  const typed = activityWording(named({ phase: "exploring", title: "Typing \"3\" into “Quantity”", label: "Typing \"3\" into “Quantity”", status: "succeeded", text: "Result: web.validation.output_not_observed · Node: web.output.dom-type" }));
+  assert.equal(typed.outcome, "that didn't work: it ran, but the site set the box back");
+  const press = activityWording(named({ phase: "exploring", title: "Clicking “collect the store coupon”", label: "Clicking “collect the store coupon”", status: "succeeded", text: "Result: web.validation.output_not_observed · Node: web.output.dom-click" }));
+  assert.equal(press.outcome, "that didn't work: it ran, but the page didn't change the way it should have");
+});

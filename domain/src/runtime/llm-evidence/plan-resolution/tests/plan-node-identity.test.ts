@@ -111,12 +111,22 @@ test("a resolved type and click node carry the identity of the element the model
   assert.deepEqual(typed, {
     selector: NAME_SELECTOR,
     text: "Ada Lovelace",
-    element: { tagName: "input", accessibleName: "Name", selector: NAME_SELECTOR, context: { formId: "signup" } }
+    element: {
+      tagName: "input",
+      implicitRole: "textbox",
+      accessibleName: "Name",
+      selector: NAME_SELECTOR,
+      name: "name",
+      testId: "instruction-name",
+      // The identifying attributes only: `autocomplete` is how the field behaves, not which field it is.
+      attributes: { name: "name", "data-testid": "instruction-name" },
+      context: { formId: "signup", landmark: "main" }
+    }
   });
   const clicked = await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "t2" } });
   assert.deepEqual(clicked, {
     selector: submit.selector,
-    element: { tagName: "button", accessibleName: "Submit", selector: submit.selector }
+    element: { tagName: "button", implicitRole: "button", accessibleName: "Submit", selector: submit.selector }
   });
 
   // The shape is the recorded one: the normalizer a recorded node's element
@@ -193,7 +203,15 @@ test("a list item and a child frame's element keep their place in the identity",
   await inspect(runtime);
   assert.deepEqual(await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "t1" } }), {
     selector: '[data-testid="product-link"]',
-    element: { tagName: "a", accessibleName: "Lamp", selector: '[data-testid="product-link"]', context: { listPosition: { index: 2, total: 9 } } },
+    element: {
+      tagName: "a",
+      accessibleName: "Lamp",
+      selector: '[data-testid="product-link"]',
+      testId: "product-link",
+      // The frame stamp is the extension's, not the page's, and never part of an identity.
+      attributes: { "data-testid": "product-link" },
+      context: { listPosition: { index: 2, total: 9 } }
+    },
     browserFrameId: 4
   });
 });
@@ -223,6 +241,7 @@ test("the handle decides the identity: a model-written element beside it is repl
   const claimed: JsonObject = { accessibleName: "Delete account", testId: "danger" };
   assert.deepEqual((await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "t2" }, element: claimed })).element, {
     tagName: "button",
+    implicitRole: "button",
     accessibleName: "Submit",
     selector: submit.selector
   });
@@ -235,6 +254,7 @@ test("the handle decides the identity: a model-written element beside it is repl
   // selector's handle names.
   assert.deepEqual((await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "t2" }, element: { handle: "t2" } })).element, {
     tagName: "button",
+    implicitRole: "button",
     accessibleName: "Submit",
     selector: submit.selector
   });

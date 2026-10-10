@@ -62,7 +62,7 @@ test("a candidate trial is headed 'Testing your Flow' with its run's steps, and 
   assert.deepEqual([h.now().headline, h.now().step], ["Testing your Flow", { index: 2, count: 8 }]);
   h.feed(...trialStepFailed(2, "Clicking “Collected”"));
   const failedStep = h.now();
-  assert.deepEqual([failedStep.headline, failedStep.detail, failedStep.phase, failedStep.step], ["Testing your Flow", "A step didn't work in the test: it wasn't on the page", "running", { index: 2, count: 8 }]);
+  assert.deepEqual([failedStep.headline, failedStep.detail, failedStep.phase, failedStep.step], ["Testing your Flow", "A step didn't work in the test: FluxIQ couldn't find it where it was saved", "running", { index: 2, count: 8 }]);
   const during = h.shown.slice(1);
   assert.ok(during.every((display) => !REPAIR_WORDS.test(words(display))), during.map(words).join(" | "));
   assert.ok(during.every((display) => display.phase !== "repairing"), "a trial is coloured as running, not repairing");
