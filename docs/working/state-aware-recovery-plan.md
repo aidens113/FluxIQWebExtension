@@ -94,7 +94,7 @@ t388's call shape, fact handles and `requires` at save, F1 late results recorded
 the contract, orphaned-run sweep. In progress: D2 entries and success check, F1b, F2 effect check before retry or
 route, then E2 in-run repair. Decision (lead): an attempt's `failureClass` is stamped only with a Handler in scope so
 a Flow without handlers keeps an identical trace; incidents mark true failure in every run, and the run summary counts
-the classes from incidents. t401 safe interference clearing; t402 selector facts and a closed requirement-refusal code.
+the classes from incidents. Merged since: t401 safe interference clearing (only dismiss controls, never the step's own dialog, `clearedLayers` on results), t402 locator facts (`at "<locator>"`, opaque to Core) and refusal code `run.requirement_missing`, t403 two stale content specs fixed and the matrix confirm Flows corrected (row 13a 10/10 provider-free).
 Verified, waiting: t396 chat recovery cards (merges after t392).
 Next: merge t392, t396, t401, t402; run every matrix row; then the two paid proofs (user approval of each command).
 
@@ -403,4 +403,12 @@ Their briefs are written here before dispatch, against the code as it then stand
   effort after the RC so lanes A-D and adaptation keep the remaining weeks.
 - User: the paid R4a proof (one creation on a realistic scenario with an interruption variant) and the paid R4b proof
   (one run on a drift variant that is fixed in the run and carries on), each when its unit is ready.
-- Supervisor, at B6: which realistic scenario offers two genuine ways to the same result for matrix row 8.
+- Supervisor, at B6: which realistic scenario offers two genuine ways to the same result for matrix row 8 (t390
+  proposed bigbox `redesigned-buy-box` with the results tile's `+ Add`; to confirm when row 8 runs).
+- Supervisor: an extra confirm in t399's first row-13a run (Lin confirmed between 38.3 s and 45.6 s while no command
+  ran). t401 and t403 ruled out the click's second press, in-command retries, the clearing, a resent command, a
+  duplicate content script and other click paths; ten later runs passed. Next probe in
+  `reports/t403-committing-press-and-specs.md`; suspect the fixture replaying a queued request when its notice closes.
+- Supervisor: whether step declarations should reach the extension so a committing press never re-presses on a
+  missing signal. Not done (t403 reverted it): a committing press almost always fires a request, which already
+  blocks the re-press, and forcing it broke the deliberate ignored-first-press rows (auction sort, buy box).
