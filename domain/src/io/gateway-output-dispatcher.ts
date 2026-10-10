@@ -2,6 +2,7 @@ import type { FluxIQ, OutputDispatchRequest, OutputDispatchResult } from "fluxiq
 import type { JsonObject } from "fluxiq/core";
 import { ClientGatewayRequiredCommandContext } from "fluxiq/client-gateway";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
+import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
 import { webAutomationInterruptedDispatchReading } from "../client/interrupted-action";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { outputTargetFromPayload } from "../output-nodes";
@@ -51,13 +52,18 @@ export async function dispatchWebAutomationOutput(
     // only that literal, and nothing otherwise. `runtime/adapter.ts` returns
     // this payload to Core as it is, so the runtime path carries it too.
     const route = isRecord(result.payload) && result.payload.route === "ended" ? "ended" : undefined;
+    // What the extension's interference clearing pressed while this action ran
+    // (`actions/cleared-layers.ts`). Core reads it from the top of the dispatch
+    // payload, as it reads `route`, so it is lifted there: copied through its
+    // closed vocabulary, never passed through.
+    const clearedLayers = webAutomationClearedLayersValue(isRecord(result.payload) ? result.payload.clearedLayers : undefined);
     return {
       // `ok` stays the success flag; `status` is the command's own outcome, so
       // Core sees `timed_out` or `cancelled` rather than a bare failure.
       ok: succeeded,
       outputId: request.outputId,
       status,
-      payload: compact({ status, message, result: result.payload, route }),
+      payload: compact({ status, message, result: result.payload, route, clearedLayers }),
       // Core's IO path builds the node message from `error` alone
       // (`failedDispatchResult`), so a command that failed with only a message
       // — the usual shape of a client-side timeout or cancellation — would
