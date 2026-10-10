@@ -43,12 +43,16 @@
 // answered inside a refused step, and a field typed under a newsletter offer
 // had the defence press the quote drawer's own close glyph (company-website,
 // lane A `t174-w35`). A sibling layer -- the greeting, the offer -- is still
-// found and cleared. A target that cannot be resolved spares nothing, so a
-// wall that hides a target not yet drawn is cleared as before (`presence.ts`).
+// found and cleared. A target that cannot be resolved spares a layer only by
+// what the step says of it -- its selector matching inside the layer, or a
+// control there by the name it was recorded with (`clearing-target.ts`, t401)
+// -- so a wall that hides a target not yet drawn is cleared as before
+// (`presence.ts`), and the prompt a step's "Not now" is aimed at is not.
 
 import { isExtensionUiNode } from "../../picker-host";
 import { deepElementFromPoint } from "../../selector";
-import { composedClosest, composedContains, composedDescendants, composedParent, composedRoots, queryComposed } from "../../shadow-dom";
+import { composedClosest, composedDescendants, composedParent, composedRoots, queryComposed } from "../../shadow-dom";
+import { layerHoldsTarget, type ClearingTarget } from "./clearing-target";
 import { probePoints } from "./probe-points";
 import { hasDismissalControl } from "./way-out";
 
@@ -66,7 +70,7 @@ const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"], [aria-modal="tru
  * the covering layer at `blockedAt` when one was given -- less any that holds
  * `spare`, the target itself (see the file comment).
  */
-export function overlaysAt(blockedAt?: Point, spare?: Element): Element[] {
+export function overlaysAt(blockedAt?: Point, spare?: Element | ClearingTarget): Element[] {
   const modals = renderedModals();
   const layer = blockedAt ? coveringDialog(blockedAt) : undefined;
   return withoutHolders(layer && !modals.includes(layer) ? [...modals, layer] : modals, spare);
@@ -82,7 +86,7 @@ export function overlaysAt(blockedAt?: Point, spare?: Element): Element[] {
  * layers follow in probe order (`probe-points.ts`), deduplicated. A layer that
  * holds `spare`, the action's own target, is left out (see the file comment).
  */
-export function overlaysOverPage(blockedAt?: Point, spare?: Element): Element[] {
+export function overlaysOverPage(blockedAt?: Point, spare?: Element | ClearingTarget): Element[] {
   const found = renderedModals();
   const view = typeof window === "undefined" ? undefined : window;
   if (!view) return withoutHolders(found, spare);
@@ -93,10 +97,15 @@ export function overlaysOverPage(blockedAt?: Point, spare?: Element): Element[] 
   return withoutHolders(found, spare);
 }
 
-/** The layers, less every one that holds `spare` across shadow roots; all of them when there is nothing to spare. */
-function withoutHolders(layers: Element[], spare: Element | undefined): Element[] {
-  if (!spare || !spare.isConnected) return layers;
-  return layers.filter((layer) => !composedContains(layer, spare));
+/** The layers, less every one that holds the target across shadow roots (`clearing-target.ts`); all of them when there is nothing to spare. */
+function withoutHolders(layers: Element[], spare: Element | ClearingTarget | undefined): Element[] {
+  if (!spare) return layers;
+  const target: ClearingTarget = isElement(spare) ? { element: spare } : spare;
+  return layers.filter((layer) => !layerHoldsTarget(layer, target));
+}
+
+function isElement(value: Element | ClearingTarget): value is Element {
+  return typeof (value as { nodeType?: unknown }).nodeType === "number";
 }
 
 /** Every modal the page declares and the browser paints: ARIA's first, then `<dialog>`s opened with `showModal()`. */
