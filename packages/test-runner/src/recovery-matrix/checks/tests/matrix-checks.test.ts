@@ -13,7 +13,7 @@ function attempt(step: string, status: string, extra: Partial<MatrixAttemptRecor
 
 function evidence(overrides: Partial<MatrixCaseEvidence> = {}): MatrixCaseEvidence {
   return {
-    run: { status: "succeeded", failure: null },
+    run: { status: "succeeded", failure: null, stopCode: null },
     attempts: [attempt("s1", "succeeded"), attempt("s2", "succeeded")],
     steps: [{ subflowKey: "main", nodeKey: "s1", definitionId: "web.output.dom-click", lasting: false }, { subflowKey: "main", nodeKey: "s2", definitionId: "web.output.dom-click", lasting: true }, { subflowKey: "main", nodeKey: "s3", definitionId: "builtin.control.end", lasting: false, endStatus: "failed" }],
     primarySubflowKey: "main",
@@ -58,8 +58,8 @@ test("retries absorbed needs a retry and a successful run", () => {
 
 test("a deliberate stop ends failed on the End the Flow marked failed, after a step failed", () => {
   const stopped = [attempt("s1", "succeeded"), attempt("s2", "failed"), attempt("s3", "failed")];
-  assert.equal(MATRIX_CHECKS["deliberate-stop"](evidence({ run: { status: "failed", failure: null }, attempts: stopped }), caseOf("13b")).verdict, "passed");
-  assert.equal(MATRIX_CHECKS["deliberate-stop"](evidence({ run: { status: "failed", failure: null }, attempts: stopped.slice(0, 2) }), caseOf("13b")).verdict, "failed");
+  assert.equal(MATRIX_CHECKS["deliberate-stop"](evidence({ run: { status: "failed", failure: null, stopCode: null }, attempts: stopped }), caseOf("13b")).verdict, "passed");
+  assert.equal(MATRIX_CHECKS["deliberate-stop"](evidence({ run: { status: "failed", failure: null, stopCode: null }, attempts: stopped.slice(0, 2) }), caseOf("13b")).verdict, "failed");
 });
 
 test("row 7 fails when a handler of the inactive part ran, and when a handler ran whose id cannot be read", () => {
