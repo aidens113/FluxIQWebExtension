@@ -197,6 +197,9 @@ function judge(result: PerturbationCheckResult): void {
     const sent = at("site-request.sent");
     const stopped = at("worker.stopped");
     if (sent === undefined || stopped === undefined || stopped < sent) reasons.push("the worker was not stopped after the site received the act's request");
+    // The stop is proven only by a worker with a new global scope answering, never by the close call alone (`../stop-service-worker.ts`).
+    if (at("worker.restarted") === undefined) reasons.push("no worker with a new global scope answered after the stop, so the stop is not proven");
+    if (at("worker.still-running") !== undefined) reasons.push("the stopped worker still answered after it was closed, so the stop did not take");
   }
   if ((report?.afterFault.length ?? 0) < 1) reasons.push("nothing was read from the extension or Core after the fault");
   result.proven = reasons.length === 0;
