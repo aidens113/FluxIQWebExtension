@@ -1,7 +1,7 @@
 # State-Aware Recovery Plan
 
 Status: Active
-Status detail: Wave 1 merged 2026-10-09 except t390 (held for the shared Core); executor integration lead (t392) and t393 running.
+Status detail: All units except the executor integration (t392) and its dependants merged and pushed; matrix runner live; t401/t402 fixing what it found.
 Created: 2026-10-09
 Last updated: 2026-10-09
 Owner: Senior supervisor agent
@@ -81,13 +81,22 @@ t395 editor views (handler area, hook badges, start and checkpoint markers, effe
 `statement-packing` (two workers had packed statements onto one line to stay under a file budget; existing
 occurrences baselined, may only shrink). Direct dev fixes: domain and extension test runners take path fragments;
 dialog facts read the saved form (`2c2371fc`, found by the t392 lead).
-Running: t392 executor integration lead (`lead-xhigh`): A Call Subflow and B trace/activity `recovery` contract
-verified in its tree; C handler wiring, D entries/checkpoints, E in-run repair, F Core side of reconciliation and the
-orphaned-run sweep in progress. t398: saved handler and step labels; the editor passes the recovery role. Verified,
-waiting: t396 chat recovery cards (merges after t392, whose `step-recovery.ts` it takes).
-Next: merge t392 and t396; the provider-free acceptance matrix on the realistic scenarios; then the two paid proofs
-(R4a creation with an interruption variant, R4b in-run repair on a drift variant), each needing the user's approval
-of the Lab command.
+Also merged: t398 (saved steps and handlers carry their written words; validation knows the recovery role), t399
+(`pnpm lab recovery-matrix`, the provider-free matrix runner: rows 1 and 13b pass on dev with zero model calls), t400
+(the domain resolves a fact's `{ handle }` target, node id `fluxiq.fact.target`).
+Matrix findings (t399): row 13a found two extension defects, fixed in t401: the in-page interference clearing pressed
+a rate-limit notice's "Try again", confirming outside the Flow, and it closes the very dialog a step targets. Rows 2-6
+need a selector form for facts in hand-authored Flows (t402, not shown to the model). Rows 7-11 wait for t392.
+Running: t392 executor integration lead (`lead-xhigh`). Verified in its tree: A Call Subflow, B trace and activity
+`recovery` contract, C0 graph-run cut from 796 to 431 lines, C1 host fact evaluator, C2 handlers fire at start,
+before, retry, fail and before_next (`flow.handlers@1` granted), D1 safe routing uses only the frame's checkpoints, G
+t388's call shape, fact handles and `requires` at save, F1 late results recorded and never applied, `interrupted` in
+the contract, orphaned-run sweep. In progress: D2 entries and success check, F1b, F2 effect check before retry or
+route, then E2 in-run repair. Decision (lead): an attempt's `failureClass` is stamped only with a Handler in scope so
+a Flow without handlers keeps an identical trace; incidents mark true failure in every run, and the run summary counts
+the classes from incidents. t401 safe interference clearing; t402 selector facts and a closed requirement-refusal code.
+Verified, waiting: t396 chat recovery cards (merges after t392).
+Next: merge t392, t396, t401, t402; run every matrix row; then the two paid proofs (user approval of each command).
 
 **Binding rules every unit keeps** (the user's, from `mvp-final-month-plan.md` Current State, and Core's
 architecture): state routing stays a global runtime behaviour that precedes any model call; every node keeps first

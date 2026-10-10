@@ -98,3 +98,9 @@ test("anything that is not a condition is unsupported, never a guess", () => {
     assert.equal(refused(entry), "unsupported");
   }
 });
+
+test("a hand-authored literal target arrives as Core's opaque locator and is read as the selector", () => {
+  assert.deepEqual(asked({ fact: "exists", op: "exists", target: { locator: "#confirm" } }), { kind: "exists", target: { selector: "#confirm" }, expected: true });
+  assert.deepEqual(asked({ fact: "count", op: "count", value: ">= 2", target: { locator: "li.request" } }), { kind: "count", target: { selector: "li.request" }, comparison: ">=", expected: 2 });
+  assert.equal(refused({ fact: "exists", op: "exists", target: { locator: "  " } }), "unsupported");
+});
