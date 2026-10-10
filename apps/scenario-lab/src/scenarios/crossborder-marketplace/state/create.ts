@@ -17,6 +17,7 @@ export function createMarketState(seed: number, mode: MarketMode = "baseline"): 
     notifications: "pending",
     chat: "pill",
     flashDeal: "pending",
+    interruption: null,
     coupons: { stores: [], attempts: {}, platform: false },
     cart: [],
     nextLine: 1,

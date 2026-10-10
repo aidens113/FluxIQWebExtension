@@ -3,6 +3,7 @@ import { createScenarioManifest } from "../../../types.js";
 import { MARKET_BUILDS } from "../styles/index.js";
 import { MARKET_SEED, orderRecord, spainHubRecords } from "./answers.js";
 import { buildIs, cartCount, couponsHeld, FIRST_VISIT, HUB_IN_CART, NOTHING_BOUGHT, ordersShipped, RECORDED_ADD_TO_CART_GONE } from "./facts.js";
+import { INTERRUPTIONS } from "./interruptions.js";
 import { CART_SCRIPT, ORDER_SCRIPT, SPAIN_HUBS_SCRIPT } from "./steps.js";
 
 /**
@@ -70,6 +71,34 @@ export const crossborderMarketplaceManifest = createScenarioManifest({
       expected: {
         pageFacts: FIRST_VISIT,
         finalState: NOTHING_BOUGHT,
+      },
+    },
+    {
+      id: "flash-deal-on-arrival",
+      description: "The interruption switch, before the first action: the same flash-sale promotion stands over the home page from the moment it loads, before the welcome coupons and the consent banner can be answered, and comes back on every home page load until its close glyph is pressed. Closing it is enough; its big button goes to a different, sponsored hub.",
+      arm: { operation: "set-mode", payload: { mode: "baseline", interruption: INTERRUPTIONS.onArrival } },
+      expected: {
+        pageFacts: FIRST_VISIT,
+        finalState: NOTHING_BOUGHT,
+      },
+    },
+    {
+      id: "flash-deal-second-item",
+      description: "The interruption switch, on a chosen loop pass: the flash-sale promotion stands over the second product page the visit loads, from the moment it loads, and every product page after it until it is closed. A Flow that opens one listing never meets it, which makes this row the control for the recorded path; a Flow that loops over listings meets it on its second pass. Closing it is enough.",
+      arm: { operation: "set-mode", payload: { mode: "baseline", interruption: INTERRUPTIONS.secondItem } },
+      expected: {
+        pageFacts: FIRST_VISIT,
+        finalState: NOTHING_BOUGHT,
+      },
+    },
+    {
+      id: "flash-deal-stuck",
+      description: "The interruption switch with a broken way out: the flash-sale promotion stands over every product page from the first one's load, and its close glyph takes the click and does nothing, as a close handler that shipped broken does. Nothing behind it can be pressed and reloading brings it back, so no honest path fills the cart: a run must stop and say so, without pressing the close glyph for ever and without taking the sponsored deal.",
+      arm: { operation: "set-mode", payload: { mode: "baseline", interruption: INTERRUPTIONS.stuck } },
+      expected: {
+        pageFacts: FIRST_VISIT,
+        failure: { category: "unexpected_state", code: "web.target.not_actionable" },
+        finalState: [cartCount(0), couponsHeld(), ordersShipped(0)],
       },
     },
   ],

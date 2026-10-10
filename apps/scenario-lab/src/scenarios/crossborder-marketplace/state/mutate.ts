@@ -1,6 +1,7 @@
 import { isKnownChoice, listingById, skuStock, STORES, type ShipOrigin, type SkuChoice } from "../catalog/index.js";
 import { isRegionCode } from "../locale/index.js";
 import { createMarketState } from "./create.js";
+import { closeInterruption, countInterruptionLoad, readInterruption } from "./interruption.js";
 import { orderNumber, sessionTotals } from "./totals.js";
 import { marketModes, type CartLine, type MarketMode, type MarketState, type ShippingMethod } from "./types.js";
 
@@ -36,9 +37,9 @@ export function mutateMarketState(state: MarketState, operation: string, payload
 }
 
 const OPERATIONS: Readonly<Record<string, Operation>> = {
-  "set-mode": (state, { mode }) => (isMode(mode) ? createMarketState(state.seed, mode) : state),
-  "page-view": (state) => ({ ...state, views: state.views + 1 }),
-  beacon: (state) => ({ ...state, views: state.views + 1 }),
+  "set-mode": setMode,
+  "page-view": (state, { kind }) => ({ ...state, views: state.views + 1, interruption: countInterruptionLoad(state.interruption, kind) }),
+  beacon: (state) => ({ ...state, views: state.views + 1, interruption: countInterruptionLoad(state.interruption, "home") }),
   consent: (state, { choice }) => (choice === "all" || choice === "essential" ? { ...state, consent: choice } : state),
   welcome: (state, { action }) => {
     if (state.welcome !== "pending") return state;
@@ -49,6 +50,10 @@ const OPERATIONS: Readonly<Record<string, Operation>> = {
   notifications: (state, { answer }) => (state.notifications === "pending" && (answer === "later" || answer === "allowed") ? { ...state, notifications: answer } : state),
   chat: (state, { view }) => (view === "pill" || view === "panel" || view === "minimized" ? { ...state, chat: view } : state),
   "flash-deal": (state, { action }) => (action === "close" && state.flashDeal === "pending" ? { ...state, flashDeal: "closed" } : state),
+  interruption: (state, { action }) => {
+    const closed = action === "close" ? closeInterruption(state.interruption) : state.interruption;
+    return closed === state.interruption ? state : { ...state, interruption: closed };
+  },
   region: (state, { region }) => (isRegionCode(region) && region !== state.region ? { ...state, region } : state),
   "claim-coupon": claimCoupon,
   "add-to-cart": addToCart,
@@ -79,11 +84,23 @@ const OPERATIONS: Readonly<Record<string, Operation>> = {
     return { ...state, checkout: { ...state.checkout, paymentId: methodId } };
   },
   "place-order": placeOrder,
-  "search-load": (state) => ({ ...state, views: state.views + 1, search: { ...state.search, loadsSinceCheck: state.search.loadsSinceCheck + 1 } }),
+  "search-load": (state) => ({ ...state, views: state.views + 1, search: { ...state.search, loadsSinceCheck: state.search.loadsSinceCheck + 1 }, interruption: countInterruptionLoad(state.interruption, "search") }),
   "search-challenge": (state) => ({ ...state, views: state.views + 1, search: { ...state.search, challenged: true } }),
   "verify-human": (state) => (state.search.challenged ? { ...state, search: { loadsSinceCheck: 0, challenged: false, checksPassed: state.search.checksPassed + 1 } } : state),
   "feed-request": (state) => ({ ...state, feed: { requests: state.feed.requests + 1 } }),
 };
+
+/**
+ * Arms a rendering, starting the visit over. An `interruption` beside the mode
+ * adds the interruption switch to it (`interruption.ts`); one the switch cannot
+ * read leaves the state alone, as an unknown mode does.
+ */
+function setMode(state: MarketState, { mode, interruption }: Payload): MarketState {
+  if (!isMode(mode)) return state;
+  if (interruption === undefined) return createMarketState(state.seed, mode);
+  const armed = readInterruption(interruption);
+  return armed ? { ...createMarketState(state.seed, mode), interruption: armed } : state;
+}
 
 /** The first press of a store's claim button always fails ("Network busy"); the second collects the coupon. */
 function claimCoupon(state: MarketState, { storeId }: Payload): MarketState {
