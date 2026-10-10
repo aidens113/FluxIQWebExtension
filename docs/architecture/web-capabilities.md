@@ -195,7 +195,13 @@ it did not land; otherwise the fault is marked `actUncertain` and the act is
 not repeated. A graph run that stops on it says `Outcome uncertain: ...`, a
 Flow does not walk past it, and the ladder's wait and clear-interference rungs
 do not press it again. On the graph path the existing satisfied-node rung is
-the effect check: a step whose expected state already holds counts as done.
+the effect check: a step whose expected state already holds counts as done. A
+press whose step declares no expected state is judged from its own control
+(`runtime/act-landing/`, the host runtime's `actLanded`, t430): a control no
+longer shown landed; one still shown whose name is only a way out ("Not now",
+"Close chat", a close glyph) did not, and is pressed again; anything else is
+`unknown`. A step's declared `consequences: none` is never read there and never
+lets a committing act be made twice.
 
 A build is told the same thing in plain words (t361). While it explores, a
 lasting call Core left uncertain comes back as a refusal under the failure's

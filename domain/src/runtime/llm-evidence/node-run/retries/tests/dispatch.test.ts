@@ -102,23 +102,20 @@ test("an exploring press whose target never appears fails after exactly four att
   assert.equal((pressed.evidence as Packet).attempts, 4);
 });
 
-// A press whose confirmation was lost after it acted is made again only when
-// its call declared that nothing it does lasts (`consequences: none`, Core's
-// `declared-no-lasting-act.ts`): the user's rule retries every node and holds
-// back only a lasting act whose effect is uncertain.
-test("an exploring press whose confirmation was lost after it acted is not pressed again when it declared a lasting act", async () => {
-  const site = itemPage([failed(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED), failed(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED)]);
-  const pressed = await pressCoupon(site.gateway, ["modify_existing"]);
-  assert.equal(pressed.effectApplied, false);
-  assert.deepEqual(site.presses, [1]);
-  assert.equal((pressed.evidence as Packet).attempts, undefined);
-});
-
-test("an exploring press that declared nothing lasting is pressed again when its confirmation was lost", async () => {
-  const site = itemPage([failed(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED), failed(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED)]);
-  const pressed = await pressCoupon(site.gateway);
-  assert.equal(pressed.resultCode, "web.action.succeeded");
-  assert.deepEqual(site.presses, [1, 2, 3]);
+// A press whose confirmation was lost after it acted is a committing act whose
+// outcome is uncertain, and the domain says so on its record: it is not pressed
+// again whatever its call declared. A call's `consequences: none` never unlocks
+// a second press (t430) -- a model under-declares, as paid R4a's offer button
+// showed -- and a call that declared nothing carries no declaration at all
+// (1ea9b038). Only the page, through the effect check, may say it did not land.
+test("an exploring press whose confirmation was lost after it acted is not pressed again, whether it declared a lasting act or none", async () => {
+  for (const consequences of [["modify_existing"], []]) {
+    const site = itemPage([failed(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED), failed(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED)]);
+    const pressed = await pressCoupon(site.gateway, consequences);
+    assert.equal(pressed.effectApplied, false, JSON.stringify(consequences));
+    assert.deepEqual(site.presses, [1], JSON.stringify(consequences));
+    assert.equal((pressed.evidence as Packet).attempts, undefined, JSON.stringify(consequences));
+  }
 });
 
 test("a press answered once as a first attempt says no attempts at all", async () => {
