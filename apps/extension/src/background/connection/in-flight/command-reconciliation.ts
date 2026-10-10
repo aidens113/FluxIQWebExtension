@@ -18,10 +18,24 @@
 //    sent; the result still waiting in the offline queue; or, for a record an
 //    earlier worker left, the interrupted result. The window is the life of the
 //    record plus the queued result, and a short memory of results just sent.
+//  - **Core asking what became of a command** whose answer never reached it
+//    (`server.reconcile_command`, Core C8) is answered from the same knowledge,
+//    and never by acting (`reconcile`): `running`, `landed` with the result
+//    kept, `unknown` when a record or the memory of receiving it is all that is
+//    left, or `not_seen` when this browser never had it. An id answered
+//    `not_seen` is refused from then on, so a copy still on its way can never
+//    act after Core has made the act again.
 
-import { webAutomationActionCommits, webAutomationInterruptedActionResult } from "@fluxiq-web-extension/domain/client";
+import {
+  webAutomationActionCommits,
+  webAutomationInterruptedActionResult,
+  webAutomationNotSeenOutcome,
+  webAutomationReconcileAnswer,
+  type WebAutomationReconcileAnswer
+} from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, ClientGatewayActionResult, JsonObject } from "../../../shared/protocol";
 import type { InFlightCommandRecord, InFlightRecordStore } from "./record-store";
+import type { SeenCommandStore } from "./seen-store";
 
 export type CommandReconciliationDeps = {
   readonly store: InFlightRecordStore;
@@ -31,18 +45,28 @@ export type CommandReconciliationDeps = {
   readonly send: (result: ClientGatewayActionResult) => Promise<void>;
   /** The document a frame holds now (`./frame-document.ts`); absent, records name no document. */
   readonly documentOf?: (tabId: number, frameId: number) => Promise<string | undefined>;
+  /**
+   * The ids this browser has received, kept past their records (`./seen-store.ts`).
+   * Absent, a command whose result this worker no longer holds and whose record
+   * is gone reads as never received.
+   */
+  readonly seen?: SeenCommandStore;
   readonly now?: () => number;
 };
 
-/** How a repeated command id was answered: still running here, or its result sent again. */
-export type RepeatAnswer = "running" | "resent";
+/** How a repeated command id was answered: still running here, its result sent again, or refused as one answered `not_seen`. */
+export type RepeatAnswer = "running" | "resent" | "refused";
 
 /** How many results just sent are remembered, newest kept. */
 const RECENT_RESULTS = 16;
 
+/** How many ids answered `not_seen` are refused, newest kept. */
+const DISOWNED_LIMIT = 64;
+
 export class CommandReconciliation {
   private readonly running = new Set<string>();
   private readonly recent = new Map<string, ClientGatewayActionResult>();
+  private readonly disowned = new Set<string>();
 
   constructor(private readonly deps: CommandReconciliationDeps) {}
 
@@ -57,6 +81,7 @@ export class CommandReconciliation {
     };
     if (tabId !== undefined) record.tabId = tabId;
     await this.deps.store.write(record);
+    await this.deps.seen?.mark(action.commandId, record.startedAt);
   }
 
   /** Names the tab and document the command is being sent to, just before it is. */
@@ -86,24 +111,39 @@ export class CommandReconciliation {
     this.running.delete(commandId);
   }
 
-  /** Answers a command id this worker already has an answer for; `undefined` means it is new and may run. */
+  /**
+   * Answers a command id this worker already has an answer for; `undefined`
+   * means it is new and may run. A new id is claimed as running before the
+   * first wait, so Core asking about it meanwhile hears `running`, never
+   * `not_seen`.
+   */
   async answerRepeat(commandId: string): Promise<RepeatAnswer | undefined> {
+    if (this.disowned.has(commandId)) {
+      await this.deps.send(this.notSeenResult(commandId));
+      return "refused";
+    }
     if (this.running.has(commandId)) return "running";
-    const recent = this.recent.get(commandId);
-    if (recent !== undefined) {
-      await this.deps.send(recent);
-      return "resent";
-    }
-    const left = await this.deps.store.read(commandId);
-    if (left !== undefined) {
-      await this.reportInterrupted(left);
-      return "resent";
-    }
-    const queued = await this.deps.queuedResult(commandId);
-    if (queued === undefined) return undefined;
-    this.remember(queued);
-    await this.deps.send(queued);
-    return "resent";
+    this.running.add(commandId);
+    const answered = await this.answerFromKept(commandId);
+    if (answered) this.running.delete(commandId);
+    return answered ? "resent" : undefined;
+  }
+
+  /**
+   * What became of a command, for Core (`server.reconcile_command`), from what
+   * this browser kept and never by running anything. A `not_seen` id is
+   * refused from then on.
+   */
+  async reconcile(commandId: string): Promise<WebAutomationReconcileAnswer> {
+    if (this.disowned.has(commandId)) return webAutomationReconcileAnswer(commandId, { running: false, recordLeft: false, seen: false });
+    const running = this.running.has(commandId);
+    const kept = running ? undefined : this.recent.get(commandId) ?? await this.deps.queuedResult(commandId);
+    const recordLeft = running || kept !== undefined ? false : await this.deps.store.read(commandId) !== undefined;
+    const seen = running || kept !== undefined || recordLeft ? true : await this.deps.seen?.has(commandId) ?? false;
+    // A command that arrived during the reads above is running now, and is answered so.
+    const answer = webAutomationReconcileAnswer(commandId, { running: running || this.running.has(commandId), result: kept, recordLeft, seen });
+    if (answer.state === "not_seen") this.disown(commandId);
+    return answer;
   }
 
   /** Reports every record no running command owns -- a command an earlier worker lost -- and clears it. */
@@ -111,6 +151,40 @@ export class CommandReconciliation {
     const leftovers = (await this.deps.store.all()).filter((record) => !this.running.has(record.commandId));
     for (const record of leftovers) await this.reportInterrupted(record);
     return leftovers.length;
+  }
+
+  private async answerFromKept(commandId: string): Promise<boolean> {
+    const recent = this.recent.get(commandId);
+    if (recent !== undefined) {
+      await this.deps.send(recent);
+      return true;
+    }
+    const left = await this.deps.store.read(commandId);
+    if (left !== undefined) {
+      await this.reportInterrupted(left);
+      return true;
+    }
+    const queued = await this.deps.queuedResult(commandId);
+    if (queued === undefined) return false;
+    this.remember(queued);
+    await this.deps.send(queued);
+    return true;
+  }
+
+  /** The answer to a late copy of a command answered `not_seen`: it did not run, and never will. */
+  private notSeenResult(commandId: string): ClientGatewayActionResult {
+    const outcome = webAutomationNotSeenOutcome();
+    const at = this.now();
+    return { commandId, status: outcome.status, startedAt: at, completedAt: at, message: outcome.message, error: outcome.message, failure: outcome.failure, payload: { commandId, status: "not_seen" } };
+  }
+
+  private disown(commandId: string): void {
+    this.disowned.add(commandId);
+    while (this.disowned.size > DISOWNED_LIMIT) {
+      const oldest = this.disowned.values().next().value;
+      if (oldest === undefined) break;
+      this.disowned.delete(oldest);
+    }
   }
 
   private async reportInterrupted(record: InFlightCommandRecord): Promise<void> {
