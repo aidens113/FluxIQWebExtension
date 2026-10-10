@@ -4,6 +4,7 @@ import { parseRunPerturbation } from "../run-perturbation.js";
 
 test("each declared shape is read back as itself", () => {
   assert.deepEqual(parseRunPerturbation({ kind: "drop-action-result", afterCommittingActs: 2 }), { kind: "drop-action-result", afterCommittingActs: 2 });
+  assert.deepEqual(parseRunPerturbation({ kind: "drop-action-result", onTargetSelector: "[aria-label=\"Confirm\"]" }), { kind: "drop-action-result", onTargetSelector: "[aria-label=\"Confirm\"]" });
   assert.deepEqual(parseRunPerturbation({ kind: "stop-service-worker", onSiteRequest: "/api/*/confirm-request" }), { kind: "stop-service-worker", onSiteRequest: "/api/*/confirm-request" });
 });
 
@@ -14,6 +15,11 @@ test("anything else is refused rather than run unperturbed", () => {
     { kind: "drop-action-result", afterCommittingActs: 0 },
     { kind: "drop-action-result", afterCommittingActs: 1.5 },
     { kind: "drop-action-result", afterCommittingActs: 1, extra: true },
+    { kind: "drop-action-result", afterCommittingActs: 1, onTargetSelector: "#x" },
+    { kind: "drop-action-result", onTargetSelector: "" },
+    { kind: "drop-action-result", onTargetSelector: "   " },
+    { kind: "drop-action-result", onTargetSelector: 3 },
+    { kind: "drop-action-result", onTargetSelector: "x".repeat(1001) },
     { kind: "stop-service-worker", onSiteRequest: "api/confirm" },
     { kind: "stop-service-worker", onSiteRequest: "/api/confirm?x=1" },
     { kind: "stop-service-worker", onSiteRequest: "/api/confirm", afterCommittingActs: 1 },
