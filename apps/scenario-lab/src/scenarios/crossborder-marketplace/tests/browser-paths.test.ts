@@ -22,6 +22,7 @@ const c = marketClasses(MARKET_SEED, "baseline");
 const ALLOWED = manifest.expected.allowedConsoleErrors ?? [];
 const RATED_45 = [90, 92, 94, 96, 98, 100].map((width) => `[style="width:${width}%"]`).join(",");
 const GOAL = [...NOTHING_BOUGHT, ...HUB_IN_CART];
+const FLASH = 'text="⚡ Flash Deal"';
 
 const upTo = (script: readonly ScenarioStep[], lastId: string) => script.slice(0, script.findIndex((step) => step.id === lastId) + 1);
 /** Console and page errors the manifest does not allow, judged as the Lab's console watch judges them; failed responses are kept for diagnosis only. */
@@ -233,6 +234,52 @@ describe("crossborder-marketplace in a browser", { concurrency: true }, () => {
       const at = CART_SCRIPT.findIndex((step) => step.id === "listing-tab") + 1;
       await session.run([...CART_SCRIPT.slice(0, at), { id: "flash-arrives", operation: "waitForState", target: 'text="⚡ Flash Deal"', timeoutMs: 5000 }, { id: "close-flash", operation: "click", target: '[title="Close"]' }, ...CART_SCRIPT.slice(at)]);
       assert.deepEqual(await session.failingFacts(GOAL), []);
+      assert.deepEqual(unexpectedErrors(session), []);
+    });
+  });
+
+  test("flash-deal-on-arrival: the promotion is over the home page as it loads, before any step, and closing it is enough", async () => {
+    await withSession(async (session) => {
+      await session.armVariant("flash-deal-on-arrival");
+      await session.page.reload({ waitUntil: "domcontentloaded" });
+      await locate(session.page, FLASH).waitFor({ state: "visible", timeout: 1000 });
+      assert.equal(await session.page.locator('text="Welcome back, Mara!"').count(), 0, "it is there before the welcome coupons, the first thing the recorded path waits for");
+      assert.equal(await hitAt(session, await centreOf(session, 'text="Accept all"')), "scrim", "the consent banner, the first thing pressed, is under it");
+      await session.run([{ id: "close-flash", operation: "click", target: '[title="Close"]' }, ...CART_SCRIPT]);
+      assert.deepEqual(await session.failingFacts(GOAL), []);
+      assert.deepEqual(unexpectedErrors(session), []);
+    });
+  });
+
+  test("flash-deal-second-item: the first product page is clear, the second load of one carries the promotion at load, and closing it is enough", async () => {
+    await withSession(async (session) => {
+      await session.armVariant("flash-deal-second-item");
+      await session.page.reload();
+      await session.run(upTo(CART_SCRIPT, "chat-arrives"));
+      assert.equal(await locate(session.page, FLASH).count(), 0, "the first pass is clear");
+      await session.page.reload({ waitUntil: "domcontentloaded" });
+      await locate(session.page, FLASH).waitFor({ state: "visible", timeout: 1000 });
+      const from = CART_SCRIPT.findIndex((step) => step.id === "chat-arrives");
+      await session.run([{ id: "close-flash", operation: "click", target: '[title="Close"]' }, ...CART_SCRIPT.slice(from)]);
+      assert.deepEqual(await session.failingFacts(GOAL), []);
+      assert.deepEqual(unexpectedErrors(session), []);
+    });
+  });
+
+  test("flash-deal-stuck: the close glyph takes the click and nothing happens, the buy bar stays covered, and a reload brings it back", async () => {
+    await withSession(async (session) => {
+      await session.armVariant("flash-deal-stuck");
+      await session.page.reload();
+      await session.run(upTo(CART_SCRIPT, "listing-tab"));
+      await locate(session.page, FLASH).waitFor({ state: "visible", timeout: 1000 });
+      for (let press = 0; press < 3; press += 1) await locate(session.page, '[title="Close"]').click();
+      await session.page.waitForTimeout(500);
+      assert.equal(await locate(session.page, FLASH).isVisible(), true, "three presses later it is still there");
+      assert.equal(await hitAt(session, await centreOf(session, "testid:add-to-cart")), "scrim", "Add to cart stays covered");
+      await session.page.reload({ waitUntil: "domcontentloaded" });
+      await locate(session.page, FLASH).waitFor({ state: "visible", timeout: 1000 });
+      const state = (await session.finalState()) as unknown as MarketState;
+      assert.deepEqual([state.cart, state.interruption?.status], [[], "waiting"]);
       assert.deepEqual(unexpectedErrors(session), []);
     });
   });

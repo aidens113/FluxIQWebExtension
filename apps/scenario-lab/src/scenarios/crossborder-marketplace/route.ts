@@ -17,7 +17,8 @@ export const FEED_RETRY_AFTER_SECONDS = 3;
 
 /**
  * Every page under the storefront but the home page. Full page loads report
- * themselves (`page-view`), which is what makes element ids change from load
+ * themselves (`page-view`, naming the page kind so the interruption switch can
+ * count its loads), which is what makes element ids change from load
  * to load; a results page reports `search-load` instead, and every third one
  * since the last check is replaced by the "verify you are human" page
  * (`search-challenge`) until that page is answered. Fragments, frames, images
@@ -37,20 +38,20 @@ export function routeMarket(state: MarketState, request: ScenarioRouteRequest, c
   const item = ITEM.exec(subpath)?.[1];
   if (item !== undefined) {
     const listing = listingById(item);
-    return listing ? { status: 200, body: renderItemPage(state, context, c, listing), mutation: { operation: "page-view", payload: {} } } : undefined;
+    return listing ? { status: 200, body: renderItemPage(state, context, c, listing), mutation: { operation: "page-view", payload: { kind: "item" } } } : undefined;
   }
   const described = ITEM_DESCRIPTION.exec(subpath)?.[1];
   if (described !== undefined) {
     const listing = listingById(described);
     return listing ? { status: 200, body: renderItemDescription(listing) } : undefined;
   }
-  if (subpath === "cart") return { status: 200, body: renderCartPage(state, context, c), mutation: { operation: "page-view", payload: {} } };
-  if (subpath === "checkout") return { status: 200, body: renderCheckoutPage(state, context, c), mutation: { operation: "page-view", payload: {} } };
+  if (subpath === "cart") return { status: 200, body: renderCartPage(state, context, c), mutation: { operation: "page-view", payload: { kind: "cart" } } };
+  if (subpath === "checkout") return { status: 200, body: renderCheckoutPage(state, context, c), mutation: { operation: "page-view", payload: { kind: "checkout" } } };
   if (subpath === "checkout/payment") return { status: 200, body: renderPaymentFrame(state, context, c) };
   const orderNumber = ORDER.exec(subpath)?.[1];
   if (orderNumber !== undefined) {
     const order = state.orders.find((candidate) => candidate.number === orderNumber && candidate.status === "paid");
-    return order ? { status: 200, body: renderOrderPage(state, context, c, order), mutation: { operation: "page-view", payload: {} } } : undefined;
+    return order ? { status: 200, body: renderOrderPage(state, context, c, order), mutation: { operation: "page-view", payload: { kind: "order" } } } : undefined;
   }
   if (subpath === "flyouts") {
     return { status: 200, headers: { "content-type": "application/json; charset=utf-8" }, body: JSON.stringify({ account: accountFlyoutMarkup(state, c), miniCart: miniCartMarkup(state, c) }) };

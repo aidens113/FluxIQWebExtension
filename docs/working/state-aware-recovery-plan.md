@@ -1,7 +1,7 @@
 # State-Aware Recovery Plan
 
 Status: Active
-Status detail: Wave 1 dispatched 2026-10-09 (t383-t391, nine workers); nothing merged yet; waves 2-3 follow in dependency order.
+Status detail: Wave 1 merged 2026-10-09 except t390 (held for the shared Core); executor integration lead (t392) and t393 running.
 Created: 2026-10-09
 Last updated: 2026-10-09
 Owner: Senior supervisor agent
@@ -68,12 +68,21 @@ those files and can start now. This work must not delay lanes A-D round 3: lane 
 between rounds, and a merge that changes behaviour for existing Flows (R3's routing guards) lands between rounds with
 the lanes' saved Flows replayed provider-free first.
 
-**In progress (2026-10-09, user: "use max subagents and implement this fast").** Wave 1 dispatched, nine workers in
-their own worktrees (dispatch record below): t383 and t384 (the MVP briefs that block R4 and R2), t385 lifecycle core,
-t386 requirement gate, t387 safe state routing, t388 script grammar, t389 fact evaluation, t390 Lab perturbations,
-t391 Core run log. Nothing merged yet. Next: verify each report, merge in dependency order (t385 first), then wave 2
-(R1-call-subflow; R2-trace once t384/t387 have merged `executor/contracts.ts` changes; R2-wiring after t384 and
-t385), then wave 3 (B5 chat cards, R3 entries and checkpoint preference, R4b in-run repair).
+**In progress (2026-10-09, user: "use max subagents and implement this fast").** Merged into both `dev`s and
+verified by the supervisor (tests beside each change, typechecks, structure audits; Core's finish ran `pnpm check`):
+t383 (candidate wrap-up keeps submit/test, per-code refusal advice), t384 (satisfied step reads as done; Automations
+learned count and Stop for runs started elsewhere), t385 (lifecycle contracts: frames, handlers, scopes,
+continuations, true failure, incident budget, fact conditions, handler nodes, validation), t386 (requirement gate,
+protocol version check), t387 (state routing refuses routes that skip needed data or repeat a completed lasting act),
+t388 (candidate script: parts, `call:`, start points, checkpoints, handlers, fact `when:`, `requires`; wired into
+adaptation and candidate mode), t389 (downstream `web.page.facts`: batched, zero-wait, three-valued), t391 (Core run
+log says what the runtime did). Tooling on dev: the domain and extension unit-test runners take path fragments.
+Verified, waiting to merge: t390 (crossborder flash-deal variants for matrix rows 4-5; row assignments in its
+report), held until t393 finishes because both use the shared Core. Running: t392 executor integration lead
+(`lead-xhigh`: Call Subflow, trace, handler wiring, entries/checkpoints, in-run repair), t393 (browser half of B3:
+in-flight command record, interrupted/unknown after restart, dedupe, domain effect check). Next: B5 chat cards once
+t392 publishes the activity `recovery` contract; Lab mechanisms for matrix rows 9 and 11; then the provider-free
+matrix and the two paid proofs (user approval).
 
 **Binding rules every unit keeps** (the user's, from `mvp-final-month-plan.md` Current State, and Core's
 architecture): state routing stays a global runtime behaviour that precedes any model call; every node keeps first
@@ -365,6 +374,14 @@ Their briefs are written here before dispatch, against the code as it then stand
 - Validation: not validated (dispatch only); `pnpm task list` shows t383-t391 on `task/t3NN-<slug>` branches
 - Outcome: Partial
 - Follow-up: verify each worker's report and tests, merge t385 first, then wave 2
+
+### 2026-10-09 - Wave 1 verified and merged (t383-t389, t391)
+- Agent: senior supervisor agent (Claude)
+- Changed: Core and downstream `dev` via `Merge task t383..t391` (t390 held); tooling commits `9f4d883a`, `17b1b968`
+- Why: wave 1 of the plan; t386's `service.ts` one-line packing was replaced by extracting the Subflow ownership check, since `service.ts` may only shrink
+- Validation: per task, the supervisor's own runs: t383 Core vitest 811/811, domain `test-domain.mjs extraction/tests/ resolve-plan-node` 168/168; t384 Core vitest 1244/1244, extension automations/shell/relay 189/189; t385 vitest 413/413; t386 vitest 76/76; t387 vitest 540/540; t388 vitest 1746/1746 (2 skipped); t389 domain 206/206, extension 674/674, extension build "verified 22 files" x3; t391 web vitest 160/160; each Core `tsc --noEmit` exit 0 and `structure-audit: passed`; Core `pnpm task finish` -> `"passed":true` for each. Core `pnpm check` failed once during t391's finish under parallel load and passed on rerun (failing test not captured)
+- Outcome: Accepted
+- Follow-up: merge t390 with t393; t392 lead running; B5 after t392's unit B
 
 ## Open Questions
 
