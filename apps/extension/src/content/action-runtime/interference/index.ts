@@ -17,8 +17,13 @@
 // `layer-kind.ts` names what a layer is -- a robot check, a consent prompt, a
 // rate-limit notice -- for the snapshot's dialog and blocker evidence
 // (`../../evidence/`).
+// `press-ways-out.ts` is the press loop `clear.ts` counts, and it records each
+// press as the layer's kind and the dismissal's word (`control-word.ts`) for
+// the action result. `press-guard/` refuses a way out whose press would
+// act, and `clearing-target.ts` says which layer is the step's own (t401).
 
 export { clearInterference } from "./clear";
+export { pressWaysOut } from "./press-ways-out";
 export { clearableLayerOverPage } from "./presence";
 export { coveringLayerSentence } from "./covering-layer";
 export { overlaysAt, overlaysOverPage } from "./overlays";
@@ -28,3 +33,4 @@ export { dismissControlIn, hasDismissalControl } from "./way-out";
 export { isDismissalLabel, isPageRequirementText, isRateLimitLayerText, isTransientRefusalText, DISMISS_LABEL_MAX } from "./vocabulary";
 
 export type { Point } from "./overlays";
+export type { ClearingTarget } from "./clearing-target";
