@@ -3,7 +3,7 @@ import type { JsonObject } from "fluxiq/core";
 import { ClientGatewayRequiredCommandContext } from "fluxiq/client-gateway";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
 import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
-import { webAutomationInterruptedDispatchReading } from "../client/interrupted-action";
+import { webAutomationInterruptedDispatchReading, webAutomationUnansweredOutcome } from "../client/interrupted-action";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { outputTargetFromPayload } from "../output-nodes";
 
@@ -26,11 +26,18 @@ export async function dispatchWebAutomationOutput(
     };
     if (target) command.target = target;
     if (request.timeoutMs !== undefined) command.timeoutMs = request.timeoutMs;
-    const result = required ? await (async () => {
-      const outcome = await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command, { context: request.commandContext!, ...(request.signal ? { signal: request.signal } : {}) });
-      if (outcome.status !== "completed") { await ClientGatewayRequiredCommandContext.stop(request.commandContext!, outcome.status); throw new Error(`web.required_${outcome.status}`); }
-      return outcome.result;
-    })() : await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command);
+    const durable = required ? await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command, { context: request.commandContext!, ...(request.signal ? { signal: request.signal } : {}) }) : undefined;
+    if (durable && durable.status !== "completed") {
+      await ClientGatewayRequiredCommandContext.stop(request.commandContext!, durable.status);
+      // A required command whose outcome Core's ledger holds unknown -- its
+      // answer never came and the browser could not say what became of it --
+      // is reported with that record rather than thrown, so Core's run stops on
+      // it as Outcome uncertain after checking the page (t427). A receipt whose
+      // result is gone is not this dispatch's to read, and still throws.
+      if (durable.status !== "outcome_unknown") throw new Error(`web.required_${durable.status}`);
+      return unansweredResult(request.outputId);
+    }
+    const result = durable ? durable.result : await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command);
     // A command the browser lost in flight answers `interrupted` in its payload
     // (plan B3). Its status and record are decided again here from the command
     // this dispatch sent: a committing act is `unknown` and uncertain, any
@@ -76,6 +83,19 @@ export async function dispatchWebAutomationOutput(
     if (required) { await ClientGatewayRequiredCommandContext.stop(request.commandContext!, "web.required_dispatch_failed"); throw error; }
     return { ok: false, outputId: request.outputId, error: error instanceof Error ? error.message : "Web automation output dispatch failed." };
   }
+}
+
+/** The dispatch result of a required command whose outcome stayed unknown (`../client/interrupted-action/unanswered-outcome.ts`). */
+function unansweredResult(outputId: string): OutputDispatchResult<JsonObject> {
+  const unanswered = webAutomationUnansweredOutcome();
+  return {
+    ok: false,
+    outputId,
+    status: unanswered.status,
+    payload: { status: unanswered.status, message: unanswered.message },
+    error: unanswered.message,
+    failure: unanswered.failure
+  };
 }
 
 function targetSessionId(fluxiq: FluxIQ, metadata: JsonObject | undefined): string | undefined {
