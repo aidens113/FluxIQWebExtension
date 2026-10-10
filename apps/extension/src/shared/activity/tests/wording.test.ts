@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { activityWording, type ActivityWording, type ClientGatewayActivity } from "../index";
+import { activityWording, isHeadlineEcho, type ActivityWording, type ClientGatewayActivity } from "../index";
 
 const RAW_ID = /\b[a-z]+\.[a-z_]+/u;
 
@@ -89,7 +89,9 @@ test("result codes become a short outcome, never the code", () => {
     ["web.action.rejected.not_at_start_location", "succeeded", "not tried"],
     ["web.action.rejected.target_unobserved", "succeeded", "not tried: the step named something it hadn't seen on the page"],
     ["web.action.rejected.target_covered", "succeeded", "not tried: a popup or banner on the page was covering it"],
-    ["web.action.target_not_found", "succeeded", "couldn't find it on the page"],
+    // Looked up by what FluxIQ saved of it, and not found that way: never "not on the page" (R4a, moment 06).
+    ["web.action.target_not_found", "succeeded", "FluxIQ couldn't find it where it was saved"],
+    ["web.target.not_found", "succeeded", "FluxIQ couldn't find it where it was saved"],
     ["web.structure.not_detected", "succeeded", "couldn't find it on the page"],
     ["web.action.timeout", "succeeded", "that didn't work: the page took too long"],
     ["web.action.failed", "succeeded", "that didn't work"],
@@ -277,8 +279,8 @@ test("a call Core rejected before sending it says it was not tried, and why when
     assert.doesNotMatch(wording.sentence, /couldn't find|wasn't on the page|trying another way/u);
     assertHuman(wording, wording.sentence);
   }
-  // A call that ran and missed its target still says so.
-  assert.equal(rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.target_not_found · Node: web.output.dom-click").outcome, "couldn't find it on the page");
+  // A call that ran and missed its target still says so, by where FluxIQ saved it.
+  assert.equal(rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.target_not_found · Node: web.output.dom-click").outcome, "FluxIQ couldn't find it where it was saved");
 });
 
 // Lane C (run-mv0fuotv-805294d7, defect 3): "Not done: saving the Flow's steps — that didn't work,
@@ -297,4 +299,14 @@ test("a failed or refused call never says what FluxIQ does next", () => {
   for (const wording of [slowed, activityWording(tool("core.flow_draft", "failed")), activityWording(tool("core.run_node", "failed", "web.action.failed"))]) {
     assert.doesNotMatch(wording.sentence, /trying another way/u);
   }
+});
+
+// R4a (`run-mv2nlh9l-52e476da`, moment 10): the overlay read a bare "Build failed" while the
+// chat's ending said why. Core's ending row now says the reason, and the overlay's detail
+// line keeps it under the "Build failed" headline.
+test("a failed build's ending says its reason under the headline, never only the headline again", () => {
+  const label = "Build failed: it kept trying without getting any further, so it was stopped";
+  const ending = activityWording(event({ phase: "failed", label, final: true, detail: { kind: "step", title: label, status: "failed", text: "It kept trying without getting any further, so it was stopped." } }));
+  assert.equal(ending.sentence, label);
+  assert.equal(isHeadlineEcho("Build failed", ending.sentence), false);
 });
