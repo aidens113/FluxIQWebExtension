@@ -97,7 +97,7 @@ export const crossborderMarketplaceManifest = createScenarioManifest({
       arm: { operation: "set-mode", payload: { mode: "baseline", interruption: INTERRUPTIONS.stuck } },
       expected: {
         pageFacts: FIRST_VISIT,
-        failure: { category: "unexpected_state", code: "web.target.not_actionable" },
+        failure: { category: "unexpected_state", code: "web.action.blocked_by_dialog" },
         finalState: [cartCount(0), couponsHeld(), ordersShipped(0)],
       },
     },

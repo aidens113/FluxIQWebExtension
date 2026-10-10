@@ -38,8 +38,8 @@ subflow store: the run was asked to change the pickup store first
   step: search for dish soap
     node: web.dom.type
     selector: input[type="search"]
-  element.tagName: input
-  element.attributes: {"type": "search", "name": "q"}
+    element.tagName: input
+    element.attributes: {"type": "search", "name": "q"}
     text: dish soap
     submit: true
     consequences: none
