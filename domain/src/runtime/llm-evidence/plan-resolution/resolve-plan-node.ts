@@ -296,19 +296,33 @@ const EXPECTED_PLACEMENT = {
 } as const satisfies Record<WebPlanHandleKind, WebPlanHandleIssueCode>;
 const PLACEMENT_REASONS: ReadonlySet<WebPlanHandleIssueCode> = new Set(["web.handle.malformed", "web.handle.misplaced", "web.handle.unknown_field", "web.handle.extraction_required"]);
 
-/** The web nodes whose schema takes a `selector`: the only nodes a target handle may name one for. */
-const SELECTOR_NODE_IDS: ReadonlySet<string> = new Set(
-  webAutomationActionDefinitions
-    .filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "selector" in definition.parameterSchema.properties)
-    .map((definition) => webAutomationOutputNodeId(definition.actionType))
-);
+/**
+ * A fact's target, as Core presents it for resolution: owned by Core (the
+ * state-aware recovery plan, C9), which resolves each fact target at bootstrap
+ * completion as a node with this id, parameters `{ target: { handle } }`,
+ * declaring nothing lasting, and keeps the resolved parameters as the fact's
+ * durable target (`../../facts/query.ts` reads them). Its `target` resolves as
+ * a step's does, to `selector` and `element`, but it acts on nothing: no
+ * control check, no press check, and no permission gate, so a handle naming
+ * plain text -- a message, a heading -- resolves.
+ */
+const FACT_TARGET_NODE_ID = "fluxiq.fact.target";
 
-/** The web nodes whose schema takes an `element`: the only nodes a resolved target's identity is written onto. */
-const ELEMENT_NODE_IDS: ReadonlySet<string> = new Set(
-  webAutomationActionDefinitions
+/** The web nodes whose schema takes a `selector`, and a fact's target: the only nodes a target handle may name one for. */
+const SELECTOR_NODE_IDS: ReadonlySet<string> = new Set([
+  ...webAutomationActionDefinitions
+    .filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "selector" in definition.parameterSchema.properties)
+    .map((definition) => webAutomationOutputNodeId(definition.actionType)),
+  FACT_TARGET_NODE_ID
+]);
+
+/** The web nodes whose schema takes an `element`, and a fact's target: the only nodes a resolved target's identity is written onto. */
+const ELEMENT_NODE_IDS: ReadonlySet<string> = new Set([
+  ...webAutomationActionDefinitions
     .filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "element" in definition.parameterSchema.properties)
-    .map((definition) => webAutomationOutputNodeId(definition.actionType))
-);
+    .map((definition) => webAutomationOutputNodeId(definition.actionType)),
+  FACT_TARGET_NODE_ID
+]);
 
 /** The outputs this domain registers, which Core's Run Output node may name. */
 const WEB_OUTPUT_IDS: ReadonlySet<string> = new Set(webAutomationActionDefinitions.map((definition) => definition.actionType));
@@ -449,6 +463,8 @@ export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stor
   // The step is asked about with the parameters it would really run with, so
   // the request names the control the model was shown rather than a handle.
   if (input.gatedByCaller) return answered(resolved, assumed);
+  // A fact's target is read, never acted on: there is no step to gate (`FACT_TARGET_NODE_ID`).
+  if (input.nodeDefinitionId === FACT_TARGET_NODE_ID) return answered(resolved, assumed);
   const acting = actingStep(input.nodeDefinitionId, outcome.status === "resolved" ? outcome.parameters : input.parameters);
   const concrete = boundTargetState(acting.parameters.target);
   // The permission asks about the observed test control. Its identity stays
