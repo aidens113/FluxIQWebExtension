@@ -82,7 +82,7 @@ import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type We
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
 import { webListReadCode } from "./list-read";
-import { webNodeDispatchWithRetries, webNodeFailureRefusal } from "./retries";
+import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal } from "./retries";
 
 const EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 /**
@@ -365,9 +365,12 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     record.acted = true;
     // A list read also asks for a few of the rows its conditions turned down,
     // on this command only: the Flow keeps `ran` (`./rejected-rows.ts`).
-    const { result, attempts, lastingAct } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared: value.consequences }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, record);
+    // A lasting act whose answer was lost is checked against the step's own
+    // expected state before Core would make it again (`./retries/effect-check.ts`, plan B3).
+    const { result, attempts, lastingAct } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared: value.consequences }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, record, webNodeEffectCheck(run, ran));
     assertActive(run.request.signal);
-    if (result.status !== "succeeded") {
+    // One the check showed landed counts as done, whatever its lost answer said.
+    if (result.status !== "succeeded" && lastingAct !== "landed") {
       // The node's own failure, under the node's own name. The page comes with
       // it -- whatever stood in the way is on it, with a handle to act on --
       // captured to fit inside what this call was allowed, which is what

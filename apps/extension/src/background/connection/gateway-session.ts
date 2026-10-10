@@ -17,6 +17,7 @@ import { HEARTBEAT_INTERVAL_MS, RECONNECT_BASE_DELAY_MS, RECONNECT_MAX_DELAY_MS 
 import { browserDescriptor } from "../../shared/browser";
 import {
   browserExtensionCapabilities,
+  type ClientGatewayActionResult,
   type ClientGatewayClientHello,
   type ClientGatewayClientMessage,
   type ClientGatewayServerMessage,
@@ -230,6 +231,19 @@ export class GatewaySession {
     this.queueSize = await this.deps.queue.queueEvent(message);
     this.deps.emitStatus();
   };
+
+  /**
+   * The result the offline queue holds for a command id, when it holds one: a
+   * command whose result was queued while the socket was down is answered with
+   * it, never run again (`in-flight/command-reconciliation.ts`, plan B3).
+   */
+  async queuedActionResult(commandId: string): Promise<ClientGatewayActionResult | undefined> {
+    const queued = await this.deps.queue.readQueuedEvents();
+    for (const message of queued) {
+      if (message.type === "client.action_result" && message.payload.commandId === commandId) return message.payload;
+    }
+    return undefined;
+  }
 
   async flushQueue(): Promise<void> {
     if (!this.client?.connected) return;
