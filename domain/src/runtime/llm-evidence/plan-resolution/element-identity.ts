@@ -71,23 +71,71 @@
 // readable spelling is the packet's `readable`, taken only where it differs from
 // the identity's own name by spacing alone, so it is never words the identity
 // would not already carry: no name for a secret control, none that was withheld.
+//
+// **Every stable fact the packet has about the element rides, not only its
+// name** (t422). A created node's identity was the tag, role, name, text,
+// selector and input type, and nothing else. R4a (`run-mv2pgqkj-f3552c70`)
+// saved crossborder's quantity box as `{ tagName: "input", selector:
+// "#fb1l6ufkg" }`: the box has no accessible name and, being an input, no text
+// the identity keeps, and the page mints that id again on every load. Once the
+// page set aside an id no element carries (t419), nothing was left to find the
+// box by (`content/identity/score.ts` `hasIdentitySignal`), and both trials
+// failed `web.target.not_found` on a box in plain view. The packet had what
+// would have found it -- its label "Quantity" -- and this dropped it.
+//
+// So a created node's identity is now the fingerprint a recorded node's is
+// (user, 2026-10-10: every element is found by its fingerprint, never by one
+// attribute, so a changed id, class or text does not break a Flow while its
+// other signals hold). It is built by the recorded path's own normalizer,
+// `output-nodes/targets` `elementFingerprint`, from the packet element written
+// as the descriptor the recorder captures, so the two paths read one
+// vocabulary and cannot drift:
+//
+// - the tag, the role and the implied role, the input type;
+// - the accessible name, the label, and for a control that is not a text
+//   field or a select its visible text;
+// - the id and the class tokens, each a signal of its own and not only inside
+//   the selector -- the page sets aside an id no element carries any more
+//   (`content/identity/score.ts`), so a per-load id costs nothing once gone;
+// - the `name` attribute and a test id (`data-testid`, `data-test`,
+//   `data-cy`), and under `attributes` only the identifying ones: those, a
+//   `placeholder` and an `aria-label` -- never the packet's whole map, which
+//   holds the element's state as well as its identity;
+// - where it sat: its form, landmark, list and table position, shadow hosts
+//   and record.
+//
+// All of it is read from the packet the domain keeps for each handle, which
+// already holds every attribute the capture's descriptor carried
+// (`../elements.ts` `publishedAttributes`); none of it is new in what the
+// model is shown. The model names an element only by its handle.
+//
+// Never a value, a checked state, a selected option or a link target: those
+// are contents. A secret control -- by its type, its `autocomplete` or
+// `data-sensitive` -- carries no words and no attributes, only its kind,
+// address and place.
 
 import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../../../actions/types";
+import { elementFingerprint } from "../../../output-nodes/targets";
 import { isSensitiveFieldSignature } from "../../../sensitivity";
+import { attributeRecord } from "../attributes";
 import type { WebLlmEvidenceElement } from "../elements";
 import { webLlmReadableWords } from "../page-view";
 import { present } from "../present";
 import { isWithheldText } from "../withheld";
 
 /** The recorded fingerprint fields a handle's element can honestly fill. */
-export type WebPlanElementIdentity = Pick<WebAutomationElementFingerprint, "tagName" | "role" | "accessibleName" | "visibleText" | "selector" | "inputType"> & {
+export type WebPlanElementIdentity = Pick<WebAutomationElementFingerprint,
+  "tagName" | "role" | "implicitRole" | "accessibleName" | "label" | "visibleText" | "selector" | "inputType" | "id" | "classNames" | "name" | "testId" | "attributes"> & {
   context?: WebPlanElementContext | undefined;
 };
 
-type WebPlanElementContext = Pick<WebAutomationElementContext, "formId" | "listPosition" | "shadowHosts" | "record">;
+type WebPlanElementContext = Pick<WebAutomationElementContext, "formId" | "landmark" | "listPosition" | "tablePosition" | "shadowHosts" | "record">;
 
 /** Controls whose text is what they hold rather than what they are called. */
 const CONTENT_TAGS: ReadonlySet<string> = new Set(["input", "textarea", "select"]);
+
+/** The attributes an identity keeps: the ones that say which control this is, and none that say what state it is in. */
+const IDENTITY_ATTRIBUTES: readonly string[] = ["name", "placeholder", "aria-label", "data-testid", "data-test", "data-cy"];
 
 /**
  * The identity of one packet element, addressed by the selector its handle was
@@ -99,21 +147,46 @@ const CONTENT_TAGS: ReadonlySet<string> = new Set(["input", "textarea", "select"
  * that a click falls back on and a wait does not.
  */
 export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector: string, shadowHosts?: readonly string[]): WebPlanElementIdentity {
-  const secret = isSensitiveFieldSignature({ inputType: element.inputType, controlType: element.controlType });
-  const context = present<WebPlanElementContext>({
-    formId: whole(element.form),
-    listPosition: element.item === undefined ? undefined : { index: element.item.index, total: element.item.total },
-    shadowHosts: shadowHosts === undefined || shadowHosts.length === 0 ? undefined : [...shadowHosts],
-    record: recordOf(element)
-  });
-  return present<WebPlanElementIdentity>({
-    tagName: element.tag,
-    role: element.role,
-    accessibleName: secret ? undefined : whole(element.name),
-    visibleText: secret || CONTENT_TAGS.has(element.tag) ? undefined : whole(element.text),
-    selector,
+  const byName = attributeRecord(element.attributes ?? []);
+  const secret = isSensitiveFieldSignature({
     inputType: element.inputType,
-    context: Object.keys(context).length > 0 ? context : undefined
+    controlType: element.controlType,
+    autocomplete: byName.autocomplete,
+    dataSensitive: byName["data-sensitive"]
+  });
+  // The packet element, written as the descriptor the recorder captures, and read by the recorded path's normalizer.
+  const descriptor = present<WebPlanElementIdentity>({
+    tagName: element.tag,
+    selector,
+    role: element.role,
+    implicitRole: element.implicitRole,
+    inputType: element.inputType,
+    accessibleName: secret ? undefined : whole(element.name),
+    label: secret ? undefined : whole(element.label),
+    visibleText: secret || CONTENT_TAGS.has(element.tag) ? undefined : whole(element.text),
+    id: secret ? undefined : filled(byName.id),
+    classNames: secret ? undefined : classTokens(byName.class),
+    name: secret ? undefined : filled(byName.name),
+    testId: undefined,
+    attributes: secret ? undefined : identityAttributes(byName),
+    context: contextOf(element, shadowHosts)
+  });
+  const fingerprint = elementFingerprint(descriptor) ?? {};
+  return present<WebPlanElementIdentity>({
+    tagName: fingerprint.tagName,
+    role: fingerprint.role,
+    implicitRole: fingerprint.implicitRole,
+    accessibleName: fingerprint.accessibleName,
+    label: fingerprint.label,
+    visibleText: fingerprint.visibleText,
+    selector: fingerprint.selector,
+    inputType: fingerprint.inputType,
+    id: fingerprint.id,
+    classNames: fingerprint.classNames,
+    name: fingerprint.name,
+    testId: fingerprint.testId,
+    attributes: fingerprint.attributes,
+    context: fingerprint.context
   });
 }
 
@@ -149,19 +222,43 @@ export function webPlanElementIdentityAcrossViews(earlier: WebPlanElementIdentit
   const agreed = <T>(a: T, b: T): T | undefined => (same(a, b) ? a : undefined);
   const context = present<WebPlanElementContext>({
     formId: agreed(earlier.context?.formId, newer.context?.formId),
+    landmark: agreed(earlier.context?.landmark, newer.context?.landmark),
     listPosition: agreed(earlier.context?.listPosition, newer.context?.listPosition),
+    tablePosition: agreed(earlier.context?.tablePosition, newer.context?.tablePosition),
     shadowHosts: newer.context?.shadowHosts,
     record: agreed(earlier.context?.record, newer.context?.record)
   });
   return present<WebPlanElementIdentity>({
     tagName: newer.tagName,
     role: newer.role,
+    implicitRole: agreed(earlier.implicitRole, newer.implicitRole),
     accessibleName: agreed(earlier.accessibleName, newer.accessibleName),
+    label: agreed(earlier.label, newer.label),
     visibleText: agreed(earlier.visibleText, newer.visibleText),
     selector: newer.selector,
     inputType: agreed(earlier.inputType, newer.inputType),
+    id: agreed(earlier.id, newer.id),
+    // A class an act toggles (`active`, `selected`) is the act's; the tokens both views carry are the control's.
+    classNames: agreedTokens(earlier.classNames, newer.classNames),
+    name: agreed(earlier.name, newer.name),
+    testId: agreed(earlier.testId, newer.testId),
+    attributes: agreedAttributes(earlier.attributes, newer.attributes),
     context: Object.keys(context).length > 0 ? context : undefined
   });
+}
+
+/** The class tokens two views of one control both carry; nothing when they share none. */
+function agreedTokens(left: string[] | undefined, right: string[] | undefined): string[] | undefined {
+  if (left === undefined || right === undefined) return undefined;
+  const kept = left.filter((token) => right.includes(token));
+  return kept.length > 0 ? kept : undefined;
+}
+
+/** The identifying attributes two views of one control both gave the same value; nothing when they agree on none. */
+function agreedAttributes(left: Record<string, string> | undefined, right: Record<string, string> | undefined): Record<string, string> | undefined {
+  if (left === undefined || right === undefined) return undefined;
+  const kept = Object.fromEntries(Object.entries(left).filter(([key, value]) => right[key] === value));
+  return Object.keys(kept).length > 0 ? kept : undefined;
 }
 
 /**
@@ -176,10 +273,53 @@ export function webPlanElementWords(element: Pick<WebLlmEvidenceElement, "readab
   return name === undefined || name.trim() === "" ? undefined : webLlmReadableWords(element, name);
 }
 
+/**
+ * Where the element sat, in the recorded context's field names: its form, its
+ * landmark, its list and table position, the shadow hosts its handle's binding
+ * kept, and its record. Nothing when the packet placed it nowhere.
+ */
+function contextOf(element: WebLlmEvidenceElement, shadowHosts: readonly string[] | undefined): WebPlanElementContext | undefined {
+  const context = present<WebPlanElementContext>({
+    formId: whole(element.form),
+    landmark: element.landmark,
+    listPosition: element.item === undefined ? undefined : { index: element.item.index, total: element.item.total },
+    tablePosition: element.cell === undefined ? undefined : present<NonNullable<WebPlanElementContext["tablePosition"]>>({ row: element.cell.row, column: element.cell.column, columnHeader: whole(element.cell.header) }),
+    shadowHosts: shadowHosts === undefined || shadowHosts.length === 0 ? undefined : [...shadowHosts],
+    record: recordOf(element)
+  });
+  return Object.keys(context).length > 0 ? context : undefined;
+}
+
+/** The class attribute's tokens, each whole; nothing for a class the packet withheld or left blank. */
+function classTokens(value: string | undefined): string[] | undefined {
+  const tokens = filled(value)?.split(/\s+/u).filter((token) => token !== "");
+  return tokens !== undefined && tokens.length > 0 ? tokens : undefined;
+}
+
+/** A packet string that is the element's own and says something. */
+function filled(value: string | undefined): string | undefined {
+  const own = whole(value);
+  return own === undefined || own.trim() === "" ? undefined : own;
+}
+
 /** The record the packet named the element's row or card by, when it named one whole. */
 function recordOf(element: WebLlmEvidenceElement): WebPlanElementContext["record"] {
   const text = whole(element.within);
   return text === undefined ? undefined : { text };
+}
+
+/**
+ * The identifying attributes the packet published whole, under the names the
+ * page wrote them in; nothing when it published none. A blank value names
+ * nothing and is left out.
+ */
+function identityAttributes(byName: Record<string, string>): Record<string, string> | undefined {
+  const kept: Record<string, string> = {};
+  for (const key of IDENTITY_ATTRIBUTES) {
+    const value = filled(byName[key]);
+    if (value !== undefined) kept[key] = value;
+  }
+  return Object.keys(kept).length > 0 ? kept : undefined;
 }
 
 /** A packet string that is the element's own, rather than the marker the secret screen put in its place. */

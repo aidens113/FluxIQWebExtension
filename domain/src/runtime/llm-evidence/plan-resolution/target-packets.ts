@@ -499,10 +499,17 @@ function agreedIdentity(left: WebPlanElementIdentity, right: WebPlanElementIdent
   return present<WebPlanElementIdentity>({
     tagName: agreed(left.tagName, right.tagName),
     role: agreed(left.role, right.role),
+    implicitRole: agreed(left.implicitRole, right.implicitRole),
     accessibleName: agreed(left.accessibleName, right.accessibleName),
+    label: agreed(left.label, right.label),
     visibleText: agreed(left.visibleText, right.visibleText),
     selector: agreed(left.selector, right.selector),
     inputType: agreed(left.inputType, right.inputType),
+    id: agreed(left.id, right.id),
+    classNames: agreed(left.classNames, right.classNames),
+    name: agreed(left.name, right.name),
+    testId: agreed(left.testId, right.testId),
+    attributes: agreed(left.attributes, right.attributes),
     context: agreed(left.context, right.context)
   });
 }
