@@ -341,7 +341,9 @@ async function runActionInFrame(
   // The last moment before the page can act: the in-flight record names where it went.
   await noteDispatch?.(tabId, targetFrameId);
   const drivenBefore = currentAutomationTabId();
-  const result = await sendClickCheckingLanding(action, tabId, send, LANDED_TAB_ACCESS, pace);
+  // A check or a choice in the top frame whose reply is lost to its own
+  // navigation is judged by the state it asked for, read on the new document.
+  const result = await sendClickCheckingLanding(action, tabId, send, LANDED_TAB_ACCESS, pace, targetFrameId);
   // A click that opened its page in a tab of its own made that tab the one the
   // run drives (`click-landing.ts`), and the result names it, top frame.
   const drivenAfter = currentAutomationTabId();

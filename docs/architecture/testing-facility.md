@@ -1063,7 +1063,7 @@ Three reproduce larger application pages and carry no Week 1 corpus row:
 | `admin-console` | CRM console with a virtualised customer list that scrolls inside its own pane, client-side routing, inline editing of a record, and a settings switch inside a web component's shadow root. | Primary, variant `read-only`; `extract-customer-list`, variant `short-book`; `browse-to-customer`; `switch-settings-tab`, variant `light-dom-toggle`. |
 | `member-directory` | Members dashboard whose table carries generated class names, row action menus, an edit dialog, filters, and a bulk remove behind a confirmation. | Primary, variants `restyled` and `member-left`; `filter-members`, variant `sorted-by-activity`; `remove-invitations`, variant `support-drawer`. |
 | `everything-store` | An everything store (fictional Brightaisle) with class names and ids generated per seed, a consent banner, a delayed app banner and notifications modal, a shadow-DOM chat that opens over the buy box, placeholder results, a results tail that loads on scroll, sponsored cards and a sponsored carousel among results, results repeated across pages, a broken Next, prices written twice, `div` pickers, a buy box dead until hydrated, a Save for later that fails once, and a checkout preset to the store's preferences with a payment iframe. Its defences are a search-form honeypot, a 429 rate limit with `Retry-After`, a soft browser check, and a canvas robot check only a person can pass. | Primary (buy a kettle, the playback goal); `add-to-cart`, variant `redesigned-header` (repair); `first-page-earbuds`, variants `deal-wheel` (new popup) and `robot-check` (a hand-off to the person the Lab plays, required, then the workflow's own table; see [the Lab plays the person at a check](#the-lab-plays-the-person-at-a-check)); `plus-under-fifty`, judged only in the created-Flow lane because no recording can pass it. |
-| `crossborder-marketplace` | Cross-border marketplace (a signed-in buyer in Germany; 50 listings, 19 sellers, four warehouses): consent banner, delayed welcome coupons, notification prompt and flash-deal popup, a chat pill over Add to cart, results drawn as skeletons with lazy cards, paid placements mixed in and results repeated across pages, a broken Next, a "verify you are human" check on every third results page, items opening in a new tab, div-built option pickers, a shadow-root store coupon whose first claim fails, framed description and payment picker, a checkout honeypot, a rate-limited feed, per-seed class hashes, per-load ids, and locale-formatted prices and dates. | Primary (three hubs and a coupon in the cart, judged by playback goal), variants `basket-redesign` (the recorded repair task, and the created-Flow target-override proof `crossborder-marketplace-hub-to-cart-basket-redesign-after-creation`, armed only for playback) and `flash-deal`, and three variants of the interruption switch (`state/interruption.ts`), which adds the same flash deal to any mode on a chosen page (home, search, item, cart or checkout) from a chosen load of it onwards, opened at load unless the arm sets a delay, until it is closed: `flash-deal-on-arrival` (the home page's first load, before the first action), `flash-deal-second-item` (the second product page loaded, a chosen loop pass; the recorded path never meets it) and `flash-deal-stuck` (every product page, with a close glyph that does nothing and a server that refuses the close; expected failure `unexpected_state` / `web.target.not_actionable`); `spain-hubs` (13-record extraction), variant `list-layout`; `place-order` (consequential purchase that must end in a permission request unless the run is permitted to move money). |
+| `crossborder-marketplace` | Cross-border marketplace (a signed-in buyer in Germany; 50 listings, 19 sellers, four warehouses): consent banner, delayed welcome coupons, notification prompt and flash-deal popup, a chat pill over Add to cart, results drawn as skeletons with lazy cards, paid placements mixed in and results repeated across pages, a broken Next, a "verify you are human" check on every third results page, items opening in a new tab, div-built option pickers, a shadow-root store coupon whose first claim fails, framed description and payment picker, a checkout honeypot, a rate-limited feed, per-seed class hashes, per-load ids, and locale-formatted prices and dates. | Primary (three hubs and a coupon in the cart, judged by playback goal), variants `basket-redesign` (the recorded repair task, and the created-Flow target-override proof `crossborder-marketplace-hub-to-cart-basket-redesign-after-creation`, armed only for playback) and `flash-deal`, and three variants of the interruption switch (`state/interruption.ts`), which adds the same flash deal to any mode on a chosen page (home, search, item, cart or checkout) from a chosen load of it onwards, opened at load unless the arm sets a delay, until it is closed: `flash-deal-on-arrival` (the home page's first load, before the first action), `flash-deal-second-item` (the second product page loaded, a chosen loop pass; the recorded path never meets it) and `flash-deal-stuck` (every product page, with a close glyph that does nothing and a server that refuses the close; expected failure `unexpected_state` / `web.action.blocked_by_dialog`, the honest code a run reports when the deal stays in the way); `spain-hubs` (13-record extraction), variant `list-layout`; `place-order` (consequential purchase that must end in a permission request unless the run is permitted to move money). |
 | `bigbox-retail` | ValueRidge, a fictional big-box retailer: consent dialog, delayed email offer with a honeypot field, support widget and store picker in shadow roots lying over the buttons that matter, per-seed generated classes and ids, ads that repeat listings and ignore filters, prices drawn in pieces, a bot check on the third results page cleared by press-and-hold or waiting, a Next arrow that drops the filters, an Add to cart whose first press only wakes the page, a stale cart badge, a sign-in wall, rate-limited pickup times whose spinner clears only on retry, a cross-origin card frame, and new-tab links. | Primary (pickup cart for another store, playback goal), variant `redesigned-buy-box` (repair); variant `store-remembered` (step already done: the site remembers Millbrook, so `choose-millbrook` has no target and the page already shows its result); `pickup-towels` (nine listings over two filtered pages), variant `list-layout` (existing-Flow edge case); `pickup-order` (consequential guest order). |
 | `job-board` | Job board (Rolefinch) whose Apply hands off to an applicant-tracking site (Talentloom): a shadow-DOM consent wall, a delayed job-alert offer, a chat panel that opens over the job pane, a sign-in wall from the fourth job opened, sponsored cards that ignore filters and repeat real results, a fresh posting that shifts pagination between pages, a broken Next, a rate limiter with retry-after, a first save that fails, a pane that stalls until Retry, a stale badge, salaries in several formats and currencies, seed-rotated classes and ids, and a cross-origin application form in a new tab with a US-first location lookup, a pre-ticked talent pool, a honeypot and a person check. Only four oracle read-outs carry test ids. | Primary (save a week of one employer's jobs), variant `overflow-save`; `remote-rust-roles`, variant `no-exact-matches`; `apply-remote-rust-role`, variant `posting-closed` (expected failure `target_not_found`). |
 | `local-classifieds` | Kerbfind Marketplace, a fictional local-classifieds site in the style of the big social-network marketplaces: a cookie dialog that owns the page, a timed notification prompt, a chat window over Make offer, infinite scroll whose one failing batch loads only on Try again, adverts built from the listing card, a listing sent twice across batches, results outside the search straight after the real ones, a shadow-DOM radius picker whose Apply needs a second press, stale counts, a "checking your browser" pause, a contact rate limit, an offer-form honeypot, a cross-origin map frame, and per-seed atomic class names and ids. | Primary (a consequential offer), `bike-search`, variants `list-layout` and `location-check`; `save-dining-tables`, variant `moved-save`. |
@@ -2189,17 +2189,18 @@ the gateway. A run takes it as `RunScenarioOptions.perturbation` (read from
 untrusted input with `parseRunPerturbation`); without one nothing is started,
 armed or recorded, and the run is unchanged.
 
-- `{ kind: "drop-action-result", afterCommittingActs: n }` (row 9). Before the
-  browser launches, a loopback relay starts on an ephemeral port between the
-  extension and Core's gateway, and the run's `gatewayUrl` becomes the relay's,
-  so the browser's containment, the network guard and the extension's
-  `fluxiq.connect` all name it. The relay passes the upgrade on with `Host` set
-  to the gateway and no `Sec-WebSocket-Extensions` (so no frame is compressed),
-  then forwards every message as the bytes it arrived as. It counts the
-  committing acts Core sends in `server.execute_action` (the domain's own
-  definition: a press, a key press, a dialog answer, typing that submits) and
-  drops the first `client.action_result` of the `n`-th, counted from 1 across
-  reconnects. The connection stays open. It never records a frame body.
+- `{ kind: "drop-action-result", onTargetSelector: "<selector>" }` (row 9).
+  Before the browser launches, a loopback relay starts on an ephemeral port
+  between the extension and Core's gateway, and the run's `gatewayUrl` becomes
+  the relay's, so the browser's containment, the network guard and the
+  extension's `fluxiq.connect` all name it. The relay passes the upgrade on with
+  `Host` set to the gateway and no `Sec-WebSocket-Extensions` (so no frame is
+  compressed), then forwards every message as the bytes it arrived as. It drops
+  the first `client.action_result` of the first `server.execute_action` whose
+  target is exactly that selector (the step's own `selector`, as Core sends it),
+  whatever was pressed before it; a retry of that step is a new command and
+  passes. The connection stays open. It never records a frame body. (A count of
+  committing acts was tried first and struck a dismissal instead of the confirm.)
 - `{ kind: "stop-service-worker", onSiteRequest: "<path pattern>" }` (row 11).
   Once the extension's control page is open, the first page request to a
   scenario origin whose path matches the pattern (`*` is any run of
@@ -2276,17 +2277,16 @@ has no Call Subflow refuses a script that calls a part
 (`flow_script.call_unavailable`), and the case is reported `not-proven` for
 `call-subflow`.
 
-**Authoring gap.** A fact (`when:`, `done when:`, `start at:`) can name an
-element only by an evidence handle in the candidate grammar, and a hand-authored
-Flow has no exploration to issue one. A dialog fact (`dialog <kind> "<name>"`)
-needs none. A row whose proof needs an element fact is written with a
-placeholder handle naming the element, and the compile step refuses any plan
-that still names a handle anywhere (`compile/evidence-handles.ts`), node
-parameters or metadata, before Core saves it. Core's own check reads only node
-parameters, so an entry's handle would otherwise be saved and never resolve.
-The case is reported `blocked`. The web host already evaluates a fact whose
-target is a literal `selector` (`domain/src/runtime/facts/query.ts`); the gap is
-the script grammar alone.
+**Element facts without evidence.** A fact (`when:`, `done when:`, `start at:`)
+names an element by an evidence handle in the model's grammar, and a
+hand-authored Flow has no exploration to issue one. Such Flows name it with a
+host locator instead, `exists at "<css selector>"` (t402), which Core keeps
+opaque as `target: { locator }` and the web host reads as its selector
+(`domain/src/runtime/facts/query.ts`). A dialog fact (`dialog <kind> "<name>"`)
+needs neither. The compile step still refuses any plan that names an evidence
+handle anywhere (`compile/evidence-handles.ts`), node parameters or metadata,
+before Core saves it, since a saved handle would never resolve; a case is
+reported `blocked` only for that.
 
 **The run.** The workspace is opened again. The fixture is reset, the case's
 variant armed and its perturbation started, the extension paired in a visible

@@ -3,11 +3,17 @@
 // The extension is pointed at this relay instead of Core's gateway. The relay
 // passes the upgrade on (naming the gateway as `Host` and negotiating no
 // compression, `upgrade-request.ts`), then reads every frame both ways and
-// forwards each message as the exact bytes it arrived as. It counts the
+// forwards each message as the exact bytes it arrived as. It watches the
 // committing acts Core sends (`server.execute_action`, `committing-act.ts`)
-// and, for the `afterCommittingActs`-th, drops that command's first
+// and picks one: the first whose target is exactly `onTargetSelector`, or the
+// `afterCommittingActs`-th. It drops that command's first
 // `client.action_result` and nothing else. The connection stays open, so the
 // extension believes it answered and Core waits for an answer that never comes.
+//
+// Naming the act by its target is the exact form. Every press commits by the
+// domain's definition, so a count also counts the optional dismissals a run
+// may or may not press before the act meant (t404: a count of 2 dropped a
+// "Not now" instead of the second confirm).
 //
 // Frames carry the pairing token and page data. Nothing here records a frame
 // body: only message types, command ids, action types, result statuses and
@@ -25,10 +31,12 @@ export type DropActionResultRelay = {
   close(): Promise<void>;
 };
 
-export type DropActionResultRelayInput = {
+/** Which committing act loses its acknowledgement: the n-th, or the first whose `selector` parameter is exactly this. */
+export type DropActionResultTarget = { afterCommittingActs: number; onTargetSelector?: undefined } | { onTargetSelector: string; afterCommittingActs?: undefined };
+
+export type DropActionResultRelayInput = DropActionResultTarget & {
   /** Core's gateway, `ws://` on loopback. */
   gatewayUrl: string;
-  afterCommittingActs: number;
   log: PerturbationLog;
   /** Only for tests: which acts count as committing. Defaults to the domain's own definition. */
   isCommitting?: (actionType: string, parameters: unknown) => boolean;
@@ -56,11 +64,14 @@ export async function startDropActionResultRelay(input: DropActionResultRelayInp
     if (message?.type !== "server.execute_action") return;
     const commandId = String(message.payload?.commandId ?? "");
     const actionType = String(message.payload?.actionType ?? "");
-    const committing = isCommitting(actionType, message.payload?.parameters);
-    log.record("command.sent", { connection, commandId, actionType, committing });
+    const parameters = message.payload?.parameters;
+    const committing = isCommitting(actionType, parameters);
+    const named = input.onTargetSelector !== undefined && targetSelector(parameters) === input.onTargetSelector;
+    log.record("command.sent", { connection, commandId, actionType, committing, ...(named ? { namedTarget: true } : {}) });
     if (!committing) return;
     state.committing += 1;
-    if (state.committing === input.afterCommittingActs && state.target === undefined) {
+    const chosen = input.onTargetSelector !== undefined ? named : state.committing === input.afterCommittingActs;
+    if (chosen && state.target === undefined) {
       state.target = commandId;
       log.record("fault.armed", { connection, commandId, actionType, committingAct: state.committing });
     }
@@ -168,7 +179,7 @@ export async function startDropActionResultRelay(input: DropActionResultRelayInp
   const address = server.address();
   if (address === null || typeof address === "string") throw new Error("The action-result relay did not get a TCP port");
   const url = `ws://127.0.0.1:${address.port}${gateway.pathname}${gateway.search}`;
-  log.record("relay.listening", { relayOrigin: `ws://127.0.0.1:${address.port}`, gatewayOrigin: `ws://${gatewayHost}`, afterCommittingActs: input.afterCommittingActs });
+  log.record("relay.listening", { relayOrigin: `ws://127.0.0.1:${address.port}`, gatewayOrigin: `ws://${gatewayHost}`, ...(input.onTargetSelector !== undefined ? { onTargetSelector: true } : { afterCommittingActs: input.afterCommittingActs }) });
   return {
     url,
     close: async () => {
@@ -177,4 +188,11 @@ export async function startDropActionResultRelay(input: DropActionResultRelayInp
       await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())));
     },
   };
+}
+
+/** The `selector` a command's parameters carry, as Core sent it; never logged, since a selector can name page text. */
+function targetSelector(parameters: unknown): string | undefined {
+  if (parameters === null || typeof parameters !== "object" || Array.isArray(parameters)) return undefined;
+  const selector = (parameters as { selector?: unknown }).selector;
+  return typeof selector === "string" ? selector : undefined;
 }

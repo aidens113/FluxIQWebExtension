@@ -112,6 +112,47 @@ test("the n-th committing act's first result is dropped, and every other frame p
   }
 });
 
+test("the first committing act on the named target loses its result, whatever was pressed before it; its retry passes", async () => {
+  const gateway = await fakeGateway();
+  const target = '[role="listitem"]:has(a[href$="/people/jonas-weber/"]) [aria-label="Confirm"]';
+  const log = new PerturbationLog({ kind: "drop-action-result", onTargetSelector: target });
+  const relay = await startDropActionResultRelay({ gatewayUrl: gateway.url, onTargetSelector: target, log });
+  const client = new WebSocket(relay.url);
+  const fromCore: string[] = [];
+  client.addEventListener("message", event => {
+    const text = String(event.data);
+    fromCore.push(text);
+    client.send(JSON.stringify(result((JSON.parse(text) as { payload: { commandId: string } }).payload.commandId)));
+  });
+  const press = (commandId: string, selector: string) => ({ type: "server.execute_action", payload: { commandId, actionType: "web.dom.click", parameters: { selector } } });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      client.addEventListener("open", () => resolve());
+      client.addEventListener("error", () => reject(new Error("client did not open")));
+    });
+    await gateway.ready;
+    // Two dismissals and a first confirm go first: a count of 2 would have dropped "Not now".
+    const sent = [["d1", "#cookies"], ["d2", "#not-now"], ["a1", '[role="listitem"]:has(a[href$="/people/amara-osei/"]) [aria-label="Confirm"]'], ["j1", target], ["j2", target]] as const;
+    for (const [index, [id, selector]] of sent.entries()) {
+      gateway.send(press(id, selector));
+      await eventually(() => fromCore.length >= index + 1, `command ${id}`);
+    }
+    await eventually(() => gateway.received.length >= 4, "the forwarded results");
+    assert.deepEqual(gateway.received.map(text => (JSON.parse(text) as { payload: { commandId: string } }).payload.commandId), ["d1", "d2", "a1", "j2"]);
+    const report = log.report();
+    assert.equal(report.fired, true);
+    assert.equal(report.events.find(event => event.event === "fault.armed")?.detail?.commandId, "j1");
+    assert.equal(report.events.find(event => event.event === "fault.fired")?.detail?.commandId, "j1");
+    // The declaration keeps the selector, as the case wrote it; no event repeats it or any frame body.
+    assert.ok(!JSON.stringify(report.events).includes("jonas-weber"), "no event carries the selector");
+    assert.ok(!JSON.stringify(report).includes("pairing-token-value"), "no frame body reaches the record");
+  } finally {
+    client.close();
+    await relay.close();
+    await gateway.close();
+  }
+});
+
 test("only a loopback ws:// gateway can be relayed", async () => {
   const log = new PerturbationLog({ kind: "drop-action-result", afterCommittingActs: 1 });
   await assert.rejects(startDropActionResultRelay({ gatewayUrl: "wss://127.0.0.1:4877/client", afterCommittingActs: 1, log }));
