@@ -2180,6 +2180,61 @@ from the page as it was first presented, whatever the round trip cost. The
 probe records one `web.dom.extract` action timing, which is the recording
 lane's reported verdict unless the run fails at the facility.
 
+### Run perturbations
+
+`packages/test-runner/src/perturbations/` makes a run suffer one declared fault,
+for the state-aware recovery plan's acceptance-matrix rows 9 and 11. Neither can
+be a scenario variant: the Scenario Lab server has no handle on the browser or
+the gateway. A run takes it as `RunScenarioOptions.perturbation` (read from
+untrusted input with `parseRunPerturbation`); without one nothing is started,
+armed or recorded, and the run is unchanged.
+
+- `{ kind: "drop-action-result", afterCommittingActs: n }` (row 9). Before the
+  browser launches, a loopback relay starts on an ephemeral port between the
+  extension and Core's gateway, and the run's `gatewayUrl` becomes the relay's,
+  so the browser's containment, the network guard and the extension's
+  `fluxiq.connect` all name it. The relay passes the upgrade on with `Host` set
+  to the gateway and no `Sec-WebSocket-Extensions` (so no frame is compressed),
+  then forwards every message as the bytes it arrived as. It counts the
+  committing acts Core sends in `server.execute_action` (the domain's own
+  definition: a press, a key press, a dialog answer, typing that submits) and
+  drops the first `client.action_result` of the `n`-th, counted from 1 across
+  reconnects. The connection stays open. It never records a frame body.
+- `{ kind: "stop-service-worker", onSiteRequest: "<path pattern>" }` (row 11).
+  Once the extension's control page is open, the first page request to a
+  scenario origin whose path matches the pattern (`*` is any run of
+  characters), such as `/api/social-network-feed/confirm-request`, closes the
+  extension's `service_worker` CDP target (`Target.closeTarget`) while the
+  request is in flight. The target list is then polled for the stopped worker
+  leaving it (`worker.gone`) and an extension worker returning
+  (`worker.started`); Chromium 134 lists the successor under the same target
+  id, and neither Playwright's worker events nor CDP target discovery events
+  arrived for either.
+
+The bundle's `snapshots/perturbation.json` holds the perturbation, whether and
+when it fired (`fault.fired` with the dropped command id, or `worker.stopped`),
+every event around it in order, and two readings taken 2 and 10 seconds after
+the fault: the extension's status (connection, whether a session is held, queue
+size, the runtime command's state and id; no settings, client id, URLs or
+names) and Core's gateway snapshot (session statuses and times, and audit
+entries from 5 seconds before the fault: time, session, type and command id
+only). Reading the extension's status sends it a runtime message, which itself
+starts a stopped worker again, so a row-11 record's successor appears about 2
+seconds after the stop.
+
+`node packages/test-runner/dist/perturbations/check/cli.js --kind
+drop-action-result|stop-service-worker` is the headed, provider-free proof
+that each fault fires at the right moment. It reuses the extension chat
+check's browser session (isolated Core, Scenario Lab, headed Chromium with the
+e2e build and the network guard), pairs the extension, answers
+social-network-feed's own prompts as the person, and has Core press Confirm on
+Amara Osei's request through `execute-client-action`. It passes when the fault
+fired, the site shows the request accepted, Core never received a successful
+result, the dropped result is the armed act's (row 9) or the worker stopped
+after the site received the confirm request (row 11), and both sides were read
+afterwards. Evidence goes to `test-runs/perturbation-check/<stamp>-<kind>/`. It
+proves the fault, not FluxIQ's reconciliation after it.
+
 ### Recording checks
 
 After Stop, on both lanes, the runner checks that Core holds the recording the
