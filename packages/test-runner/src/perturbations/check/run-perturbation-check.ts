@@ -84,7 +84,10 @@ export async function runPerturbationCheck(options: PerturbationCheckOptions): P
   let perturbation: RunPerturbationSession | undefined;
   const evidence = evidenceWriter(options.evidenceDirectory, () => browser);
   const result: PerturbationCheckResult = { perturbation: options.perturbation, scenarioId: scenario.id, browserVersion: null, stage: "topology", sitePrompts: [], coreResult: null, siteTookTheAct: null, report: null, networkGuardViolations: null, proven: false, reasons: [], failure: null, evidenceDirectory: options.evidenceDirectory };
-  const stage = (name: string) => { result.stage = name; log(`[perturbation-check] ${options.perturbation.kind}: ${name}`); };
+  const stage = (name: string) => {
+    result.stage = name;
+    log(`[perturbation-check] ${options.perturbation.kind}: ${name}`);
+  };
   try {
     topology = await startTopology({
       repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot,
@@ -138,7 +141,10 @@ export async function runPerturbationCheck(options: PerturbationCheckOptions): P
     log(`[perturbation-check] failed at ${result.stage}: ${result.failure.split("\n")[0]}`);
     await evidence.shot(`failed-at-${result.stage.replace(/[^a-z0-9]+/giu, "-")}`).catch(/* best-effort: the failure itself is already recorded in the result */ () => undefined);
   } finally {
-    result.report = (await perturbation?.close().catch((error: unknown) => { result.reasons.push(`the perturbation did not close cleanly: ${String(error)}`); return perturbation?.report(); })) ?? null;
+    result.report = (await perturbation?.close().catch((error: unknown) => {
+      result.reasons.push(`the perturbation did not close cleanly: ${String(error)}`);
+      return perturbation?.report();
+    })) ?? null;
     judge(result);
     await evidence.json(`result-${options.perturbation.kind}`, result).catch((error: unknown) => log(`[perturbation-check] the result could not be written: ${error instanceof Error ? error.message : String(error)}`));
     await browser?.close().catch(/* best-effort: cleanup after the result is written */ () => undefined);

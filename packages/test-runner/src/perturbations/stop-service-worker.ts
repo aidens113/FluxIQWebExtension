@@ -58,17 +58,26 @@ export async function armServiceWorkerStop(input: ServiceWorkerStopInput): Promi
     while (!disarmed && !(gone && started) && Date.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, watch.intervalMs));
       const workers = await extensionWorkers();
-      if (!gone && !workers.some(worker => stopped.has(worker.targetId))) { gone = true; log.record("worker.gone", {}); }
+      if (!gone && !workers.some(worker => stopped.has(worker.targetId))) {
+        gone = true;
+        log.record("worker.gone", {});
+      }
       // Chrome may list the restarted worker under the stopped one's target id, so once that left the list any extension worker is the successor.
       const successor = gone ? workers[0] : workers.find(worker => !stopped.has(worker.targetId));
-      if (!started && successor) { started = true; log.record("worker.started", { target: successor.targetId.slice(0, 8), sameTarget: stopped.has(successor.targetId) }); }
+      if (!started && successor) {
+        started = true;
+        log.record("worker.started", { target: successor.targetId.slice(0, 8), sameTarget: stopped.has(successor.targetId) });
+      }
     }
     if (!gone || !started) log.record("worker.watch-ended", { gone, started, disarmed });
   };
 
   const stop = async (request: Request): Promise<void> => {
     const workers = await extensionWorkers();
-    if (workers.length === 0) { log.record("fault.missed", { reason: "no extension service worker was running", path: new URL(request.url()).pathname }); return; }
+    if (workers.length === 0) {
+      log.record("fault.missed", { reason: "no extension service worker was running", path: new URL(request.url()).pathname });
+      return;
+    }
     const stopped = new Set<string>();
     for (const worker of workers) {
       stopped.add(worker.targetId);

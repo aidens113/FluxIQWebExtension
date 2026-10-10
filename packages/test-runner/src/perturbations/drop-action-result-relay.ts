@@ -83,15 +83,24 @@ export async function startDropActionResultRelay(input: DropActionResultRelayInp
   };
 
   const readEnvelope = (unit: Extract<WebSocketUnit, { kind: "message" }>, connection: number): Envelope | undefined => {
-    if (unit.compressed && !state.unreadableNoted) { state.unreadableNoted = true; log.record("frames.unreadable", { connection, reason: "compressed" }); }
+    if (unit.compressed && !state.unreadableNoted) {
+      state.unreadableNoted = true;
+      log.record("frames.unreadable", { connection, reason: "compressed" });
+    }
     if (unit.text === undefined) return undefined;
-    try { return JSON.parse(unit.text) as Envelope; } catch (error) { if (error instanceof SyntaxError) return undefined; throw error; }
+    try {
+      return JSON.parse(unit.text) as Envelope;
+    } catch (error) {
+      if (error instanceof SyntaxError) return undefined;
+      throw error;
+    }
   };
 
   const server = net.createServer(client => {
     const connection = ++connections;
     const upstream = net.connect({ host: gateway.hostname, port: gatewayPort });
-    sockets.add(client); sockets.add(upstream);
+    sockets.add(client);
+    sockets.add(upstream);
     log.record("relay.connection", { connection });
     const fromClient = new WebSocketUnitReader();
     const fromCore = new WebSocketUnitReader();
@@ -111,7 +120,10 @@ export async function startDropActionResultRelay(input: DropActionResultRelayInp
       for (const unit of fromClient.push(chunk)) if (passesToCore(unit, connection)) for (const frame of unit.frames) upstream.write(frame.bytes);
     });
     upstream.on("data", (chunk: Buffer) => {
-      if (coreRaw) { client.write(chunk); return; }
+      if (coreRaw) {
+        client.write(chunk);
+        return;
+      }
       if (coreHead) {
         coreHead = Buffer.concat([coreHead, chunk]);
         const end = coreHead.indexOf(HEAD_END);
@@ -121,14 +133,24 @@ export async function startDropActionResultRelay(input: DropActionResultRelayInp
         client.write(head);
         chunk = coreHead.subarray(head.length);
         coreHead = undefined;
-        if (!/^HTTP\/1\.1 101\b/u.test(statusLine)) { coreRaw = true; log.record("relay.upgrade-refused", { connection, status: statusLine.slice(9, 12) }); client.write(chunk); return; }
+        if (!/^HTTP\/1\.1 101\b/u.test(statusLine)) {
+          coreRaw = true;
+          log.record("relay.upgrade-refused", { connection, status: statusLine.slice(9, 12) });
+          client.write(chunk);
+          return;
+        }
       }
-      for (const unit of fromCore.push(chunk)) { inspectFromCore(unit, connection); for (const frame of unit.frames) client.write(frame.bytes); }
+      for (const unit of fromCore.push(chunk)) {
+        inspectFromCore(unit, connection);
+        for (const frame of unit.frames) client.write(frame.bytes);
+      }
     });
     const end = (side: "extension" | "core") => (hadError: boolean) => {
       log.record("relay.closed", { connection, side, hadError });
-      sockets.delete(client); sockets.delete(upstream);
-      client.destroy(); upstream.destroy();
+      sockets.delete(client);
+      sockets.delete(upstream);
+      client.destroy();
+      upstream.destroy();
     };
     client.once("close", end("extension"));
     upstream.once("close", end("core"));
@@ -136,7 +158,13 @@ export async function startDropActionResultRelay(input: DropActionResultRelayInp
     upstream.on("error", error => log.record("relay.error", { connection, side: "core", code: (error as NodeJS.ErrnoException).code ?? "unknown" }));
   });
 
-  await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", () => { server.off("error", reject); resolve(); }); });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
   const address = server.address();
   if (address === null || typeof address === "string") throw new Error("The action-result relay did not get a TCP port");
   const url = `ws://127.0.0.1:${address.port}${gateway.pathname}${gateway.search}`;

@@ -19,7 +19,13 @@ test("the extension is pointed at the run's gateway and Core, the pairing is app
   const topology = {
     gatewayUrl: "ws://127.0.0.1:5000/client",
     fluxiqOrigin: "http://127.0.0.1:5001",
-    control: { approvePairing: async (code: string) => { approved.push(code); paired = true; return {}; } },
+    control: {
+      approvePairing: async (code: string) => {
+        approved.push(code);
+        paired = true;
+        return {};
+      },
+    },
   } as unknown as RunningTopology;
   const trace = new ExtensionStartTrace({ secrets: [] });
   const status = await pairRunExtension(page, topology, trace);

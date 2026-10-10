@@ -16,7 +16,10 @@ for (const key of Object.keys(process.env)) if (!(key in scrubbed)) delete proce
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "..");
 const fluxiqRepositoryRoot = path.resolve(repositoryRoot, "..", "!FluxIQ");
 const args = process.argv.slice(2);
-const option = (name: string, fallback: string) => { const at = args.indexOf(name); return at >= 0 && args[at + 1] ? args[at + 1]! : fallback; };
+const option = (name: string, fallback: string) => {
+  const at = args.indexOf(name);
+  return at >= 0 && args[at + 1] ? args[at + 1]! : fallback;
+};
 
 /** The fault on the check's act: its acknowledgement, or the worker when the confirm request reaches the site. */
 const PERTURBATIONS: Record<string, RunPerturbation> = {

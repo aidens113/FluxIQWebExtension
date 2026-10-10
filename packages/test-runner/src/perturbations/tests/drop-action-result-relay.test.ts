@@ -49,7 +49,10 @@ async function fakeGateway() {
       const payload = Buffer.from(JSON.stringify(message));
       socket!.write(Buffer.concat([Buffer.from([0x81, payload.length < 126 ? payload.length : 126]), payload.length < 126 ? Buffer.alloc(0) : Buffer.from([payload.length >> 8, payload.length & 0xff]), payload]));
     },
-    close: () => { socket?.destroy(); return new Promise<void>(resolve => server.close(() => resolve())); },
+    close: () => {
+      socket?.destroy();
+      return new Promise<void>(resolve => server.close(() => resolve()));
+    },
   };
 }
 
@@ -78,7 +81,10 @@ test("the n-th committing act's first result is dropped, and every other frame p
     if (message.payload.commandId === "c2") client.send(JSON.stringify(result("c2"))); // A second answer to the dropped command passes.
   });
   try {
-    await new Promise<void>((resolve, reject) => { client.addEventListener("open", () => resolve()); client.addEventListener("error", () => reject(new Error("client did not open"))); });
+    await new Promise<void>((resolve, reject) => {
+      client.addEventListener("open", () => resolve());
+      client.addEventListener("error", () => reject(new Error("client did not open")));
+    });
     await gateway.ready;
     assert.match(gateway.head(), new RegExp(`\\r\\nHost: 127\\.0\\.0\\.1:${gateway.port}(\\r\\n|$)`, "u"));
     assert.doesNotMatch(gateway.head(), /sec-websocket-extensions/iu);

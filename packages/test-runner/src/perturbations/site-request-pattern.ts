@@ -9,7 +9,12 @@ export function siteRequestMatcher(pattern: string, origins: readonly string[]):
   const expression = new RegExp(`^${pattern.split("*").map(part => part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")).join(".*")}$`, "u");
   return url => {
     let parsed: URL;
-    try { parsed = new URL(url); } catch (error) { if (error instanceof TypeError) return false; throw error; }
+    try {
+      parsed = new URL(url);
+    } catch (error) {
+      if (error instanceof TypeError) return false;
+      throw error;
+    }
     return allowed.has(parsed.origin) && expression.test(parsed.pathname);
   };
 }

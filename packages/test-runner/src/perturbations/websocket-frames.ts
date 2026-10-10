@@ -26,7 +26,10 @@ export class WebSocketUnitReader {
     const units: WebSocketUnit[] = [];
     for (let frame = readFrame(this.buffer); frame; frame = readFrame(this.buffer)) {
       this.buffer = this.buffer.subarray(frame.bytes.length);
-      if (frame.opcode >= 0x8) { units.push({ kind: "control", frames: [frame] }); continue; }
+      if (frame.opcode >= 0x8) {
+        units.push({ kind: "control", frames: [frame] });
+        continue;
+      }
       this.pending.push(frame);
       if (!frame.fin) continue;
       const frames = this.pending;

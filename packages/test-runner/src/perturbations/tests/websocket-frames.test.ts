@@ -7,8 +7,14 @@ function frame(payload: Buffer, options: { opcode?: number; fin?: boolean; mask?
   const { opcode = 0x1, fin = true, mask = false, rsv1 = false } = options;
   const length = payload.length;
   const header = length < 126 ? Buffer.from([0, length]) : length < 65536 ? Buffer.alloc(4) : Buffer.alloc(10);
-  if (length >= 126 && length < 65536) { header[1] = 126; header.writeUInt16BE(length, 2); }
-  if (length >= 65536) { header[1] = 127; header.writeBigUInt64BE(BigInt(length), 2); }
+  if (length >= 126 && length < 65536) {
+    header[1] = 126;
+    header.writeUInt16BE(length, 2);
+  }
+  if (length >= 65536) {
+    header[1] = 127;
+    header.writeBigUInt64BE(BigInt(length), 2);
+  }
   header[0] = (fin ? 0x80 : 0) | (rsv1 ? 0x40 : 0) | opcode;
   if (!mask) return Buffer.concat([header, payload]);
   header[1] = header[1]! | 0x80;

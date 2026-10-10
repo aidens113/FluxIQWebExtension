@@ -97,7 +97,10 @@ export async function startRunPerturbation<T extends { gatewayUrl?: string }>(pe
     async close() {
       if (closed) return log.report();
       closed = true;
-      for (const timer of timers) { clearTimeout(timer); log.record("observation.skipped", { reason: "the run closed first" }); }
+      for (const timer of timers) {
+        clearTimeout(timer);
+        log.record("observation.skipped", { reason: "the run closed first" });
+      }
       timers.clear();
       await Promise.all([...reading]);
       await disarm?.();

@@ -42,11 +42,27 @@ function destination(definitions: ExistingNodeDefinition[], calls: string[]): Cl
   let persisted: CloneJsonObject | undefined;
   const envelope = (flow: unknown) => ({ ok: true, payload: { flow } });
   return {
-    async listNativeNodeDefinitions() { calls.push("list-definitions"); return definitions; },
-    async createProject() { calls.push("create-project"); return "project.destination"; },
-    async createFlow(input) { calls.push("create-flow"); return envelope({ ...sourceDocument, projectId: input.projectId, flowId: input.flowId, name: input.name, nodes: [], edges: [], createdAt: 100, updatedAt: 100 }); },
-    async saveFlow(input) { calls.push("save-flow"); persisted = { ...(input.flow as CloneJsonObject), updatedAt: 110 }; return envelope(persisted); },
-    async getFlow() { calls.push("get-flow"); return envelope(persisted); },
+    async listNativeNodeDefinitions() {
+      calls.push("list-definitions");
+      return definitions;
+    },
+    async createProject() {
+      calls.push("create-project");
+      return "project.destination";
+    },
+    async createFlow(input) {
+      calls.push("create-flow");
+      return envelope({ ...sourceDocument, projectId: input.projectId, flowId: input.flowId, name: input.name, nodes: [], edges: [], createdAt: 100, updatedAt: 100 });
+    },
+    async saveFlow(input) {
+      calls.push("save-flow");
+      persisted = { ...(input.flow as CloneJsonObject), updatedAt: 110 };
+      return envelope(persisted);
+    },
+    async getFlow() {
+      calls.push("get-flow");
+      return envelope(persisted);
+    },
     async selectExistingContext(projectId: string) { calls.push(`select:${projectId}`); },
   } as CloneDestinationControl;
 }

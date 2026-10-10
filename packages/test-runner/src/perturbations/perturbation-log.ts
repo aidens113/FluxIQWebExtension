@@ -47,7 +47,10 @@ export class PerturbationLog {
 
   /** Records the fault. A second fault is recorded as `fault.repeated` and changes nothing: each perturbation fires once. */
   fire(event: string, detail?: PerturbationDetail): void {
-    if (this.fired) { this.record("fault.repeated", { event, ...(detail ?? {}) }); return; }
+    if (this.fired) {
+      this.record("fault.repeated", { event, ...(detail ?? {}) });
+      return;
+    }
     const entry = this.record(event, detail);
     this.fired = entry;
     for (const listener of this.listeners.splice(0)) listener(entry);

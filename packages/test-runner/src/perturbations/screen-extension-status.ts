@@ -48,5 +48,10 @@ function bounded(value: unknown): string | null { return typeof value === "strin
 
 function originOf(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  try { return new URL(value).origin; } catch (error) { if (error instanceof TypeError) return null; throw error; }
+  try {
+    return new URL(value).origin;
+  } catch (error) {
+    if (error instanceof TypeError) return null;
+    throw error;
+  }
 }
