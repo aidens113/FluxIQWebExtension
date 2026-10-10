@@ -273,7 +273,11 @@ function toolOutcome(status: "started" | "succeeded" | "failed" | undefined, cod
     // and the card cannot disagree (t174-lead-1003); the old words for a code
     // Core has none for.
     if (/^core\.replay\.(changed|unreproducible)/u.test(code)) return activityActionFailureReason(code) ?? OUTCOME_NOT_REPEATED;
-    if (/not_found|unobserved|missing|no_match|not_visible|absent|not_detected|none_found|empty/u.test(code)) return OUTCOME_NOT_FOUND;
+    // A control looked up by what FluxIQ saved of it and not found that way:
+    // Core's words say so, never that it was missing from the page, as the
+    // quantity box stood in plain sight (R4a, `run-mv2nlh9l-52e476da`, moment 06).
+    if (/not_found|no_match/u.test(code)) return activityActionFailureReason(code) ?? OUTCOME_NOT_FOUND;
+    if (/unobserved|missing|not_visible|absent|not_detected|none_found|empty/u.test(code)) return OUTCOME_NOT_FOUND;
     if (/rejected|failed|error|timeout|timed_out|refused|denied|invalid|blocked|aborted|rate_limited|throttled/u.test(code)) {
       const why = activityActionFailureReason(code);
       return why ? `${OUTCOME_FAILED}: ${why}` : OUTCOME_FAILED;

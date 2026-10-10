@@ -262,6 +262,12 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
       if (timer !== handle || captured !== owner || !captured.current() || document.visibilityState !== "visible" || !active) return;
       if (!unsupported) void destination.refresh();
       if (!feedUnsupported && currentFeed.snapshot().reach === "failed") void currentFeed.read();
+      // A key added after the chat read "missing" (in FluxIQ, or by the Lab
+      // installing its key once the panel was already open) must lift the
+      // line: R4a's start card said no key was set while the build ran with
+      // one (`run-mv2nlh9l-52e476da`, moment 1). Asked again only while the
+      // empty latest chat is on screen and still says the key is missing.
+      if (readiness === "missing" && readinessAsk !== null) askReadiness();
     }, THREAD_POLL_MS);
   }
   function resetOwner(next: ChatOwner, initial: boolean): void {
@@ -363,7 +369,8 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
       (turn) => turnControls(turn, state),
       working
     );
-    // The keys are read once each time the connected, empty latest chat comes on screen.
+    // The keys are read each time the connected, empty latest chat comes on
+    // screen, and again on each poll while they read "missing" (`startReads`).
     if (!(connected && shownTarget.kind === "latest" && state.mode === "empty" && actionsAllowed())) readinessAsk = null;
     else if (readinessAsk === null) askReadiness();
     empty.update(emptyStateModel(state.mode, shownTarget, readiness), anything);

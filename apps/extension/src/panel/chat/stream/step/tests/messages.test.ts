@@ -196,7 +196,7 @@ test("an action that started keeps its card and its place when it ends; nothing 
   const later = stepMessages(events, 100);
   assert.equal(first[0]!.actions[0]!.key, later[0]!.actions[0]!.key);
   assert.deepEqual([first[0]!.actions[0]!.outcome, later[0]!.actions[0]!.outcome], ["working", "failed"]);
-  assert.equal(later[0]!.actions[0]!.why, "it wasn't on the page");
+  assert.equal(later[0]!.actions[0]!.why, "FluxIQ couldn't find it where it was saved");
   assert.equal(later[0]!.actions[0]!.said, undefined, "the observer's record is not words");
   assert.equal(later[0]!.actions.length, 1);
 });

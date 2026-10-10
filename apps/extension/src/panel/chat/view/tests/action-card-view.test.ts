@@ -117,7 +117,7 @@ test("a card is the same element, icon included, from started to done or failed;
     view.render(buildChatStream([], events), null, controls, "build-1");
     assert.equal(cards(root)[0], card);
     assert.deepEqual([card, ...card.descendants()], nodes, "updated in place, nothing remounted");
-    assert.deepEqual([card.getAttribute("data-state"), text(card, "chat-card-outcome")], ["failed", "Didn't work: it wasn't on the page"]);
+    assert.deepEqual([card.getAttribute("data-state"), text(card, "chat-card-outcome")], ["failed", "Didn't work: FluxIQ couldn't find it where it was saved"]);
 
     events.push(event(4, "exploring", { kind: "tool", title: "Clicking “Accept cookies”", ref: "core.run_node", status: "started" }));
     view.render(buildChatStream([], events), null, controls, "build-1");
