@@ -1,7 +1,7 @@
 # State-Aware Recovery Plan
 
 Status: Active
-Status detail: Every unit implemented, verified and merged (t383-t403); provider-free matrix round 1 and the full sweep running; two paid proofs await the user's approval.
+Status detail: Implemented and merged through t415; matrix round 1 drove 11 fixes; round 2 running; paid proofs prepared and awaiting the user's approval.
 Created: 2026-10-09
 Last updated: 2026-10-09
 Owner: Senior supervisor agent
@@ -85,14 +85,21 @@ specs and matrix Flows; direct dev fixes (dialog fact form, locator reader, `cle
 filters). t383/t384 (MVP briefs) unblocked R4 and R2.
 Verification of t392 by the supervisor: Core vitest over the touched areas, 579 files and 5495 tests passed (7
 skipped); extension and domain typechecks clean; extension tests 313/313.
-Running: t404 matrix round 1 (every provider-free row, rows 2-6 Flows authored with locator facts); sweep-1010 (the
-first full sweep of the day). Provider-free matrix so far: rows 1, 13a (10/10), 13b pass with zero model calls.
-Next: fix what the matrix round finds; then the two paid proofs, each needing the user's approval of its Lab
-command: R4a (a creation on a realistic scenario with an interruption variant whose saved Flow holds a part, entry
-or handler, then a zero-call replay) and R4b (a run on a drift variant fixed in the run that carries on, saved after
-the judged end, then a zero-call replay). Live checks the lead says are owed: handlers on a real page, in-run repair
-with a real provider under the cost ceiling, Call Subflow through the extension, the effect check after a worker
-restart, the orphan sweep after a Core kill, cleared-layer rows in the chat.
+Matrix round 1 (t404, merged): 10 of 14 cases passed provider-free (rows 1, 2, 4a, 4b, 5, 6, 7, 8, 13a, 13b), row 3
+not proven, rows 9-11 failed safely; 0 model calls, 0 duplicated acts, 0 wrong routes, 0 false successes, handler
+checks about +38 ms per boundary. Every cause it found is fixed and merged: requirement gate version form, declared-
+none retry, per-flow keys (t405), defaulted inputs and the entry completion check, child-frame projection (t406),
+navigating check reply (t407), plumbing boundaries and `run.outcome_uncertain` (t408, t412), reconcile by command id
+(t409), run-log parts (t410), completed-act ledger with already-done skips and slim handler inputs (t411; a handler
+run fell from 9-12 s to 11-32 ms), step `done when:` with page reconciliation and the rule that a landed lasting act
+is never pressed twice (t413), already-done wording (t415). Paid-proof commands are prepared and dry-run (t414,
+`reports/t414-paid-proof-prep.md`): R4a crossborder hub-to-cart with the flash deal during the build, R4b crossborder
+basket-redesign after creation; both admitted by the guards, zero calls in dry run; all four Lab slots are assigned to
+lanes A-D, so one must be lent.
+Running: t417 matrix round 2 (full provider-free pass on the final dev); t416 (activity `skipped` field, unhandled
+reason in the stream record).
+Next: on a green round 2, the two paid proofs with the user's approval of each command; then lanes A-D round 3 on
+the new dev.
 
 **Binding rules every unit keeps** (the user's, from `mvp-final-month-plan.md` Current State, and Core's
 architecture): state routing stays a global runtime behaviour that precedes any model call; every node keeps first
@@ -400,6 +407,14 @@ Their briefs are written here before dispatch, against the code as it then stand
 - Validation: t392 Core vitest over touched areas -> "579 passed | 3 skipped" files, "5495 passed | 7 skipped" tests; extension `test-extension.mjs shared/activity background/connection` -> 313/313; sweep-1010 (Core e396d489, downstream 4132eea2): Core install/build/check pass, Core `pnpm test` exit 1 (one web source-text test, now 10/10 after the fix), downstream check/build pass, downstream `pnpm test` exit 1 (row 8 save test, `UNIQUE constraint failed: flow_ports.port_id`, fixed by t405); gate test 12/12, defensive+executor tests 421/421
 - Outcome: Partial
 - Follow-up: merge t405; finish matrix round 1 (t404); paid proofs on the user's approval
+
+### 2026-10-10 - Matrix round 1 and its fixes merged (t404-t415)
+- Agent: senior supervisor agent (Claude)
+- Changed: `Merge task` t404-t415 in both repos where paired; direct Core fixes 02d0cc82, 61f6adbf, 6a750cab, ae826078; docs b4998e7a
+- Why: the provider-free matrix found real defects; each was fixed at its cause, two unsafe paths were closed (a landed lasting act re-pressed after a rejected expectation; a route refused instead of skipping completed acts)
+- Validation: per task, the supervisor's runs, among them t405 storage+flows vitest 731 passed (4 skipped); t408 executor+validation 764/764; t409 gateway+defensive 188/188, domain 54/54, extension 288/288; t411 executor+service 919/919; t413 2833 passed (2 skipped); t415 Core 390, web 173, extension 339; every Core `tsc --noEmit` exit 0 and `structure-audit: passed`; `pnpm task finish` `"passed":true` both repos each time
+- Outcome: Accepted
+- Follow-up: round 2 (t417); paid proofs on approval
 
 ## Open Questions
 

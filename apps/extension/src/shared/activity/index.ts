@@ -9,6 +9,7 @@ export { isModelThought } from "./model-thought.js";
 export { activityWording, type ActivityWording } from "./wording.js";
 export { notTriedOutcome } from "./not-tried.js";
 export { stepRecovery, type ActivityStepRecovery } from "./step-recovery.js";
+export { stepSkip, type ActivityStepSkip } from "./step-skip.js";
 export { longestWordCut } from "./word-cut.js";
 export {
   ACTIVITY_RECENT_LIMIT,
