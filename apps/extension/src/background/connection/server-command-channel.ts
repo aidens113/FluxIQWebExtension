@@ -35,7 +35,7 @@ import type { ContentAttachment } from "./content-attachment";
 import { captureMergedTabSnapshot, type DomSnapshotPayload } from "./dom-snapshot";
 import type { EventSequence } from "./event-sequence";
 import type { GatewayMessageSender, GatewaySession } from "./gateway-session";
-import { CommandReconciliation, frameDocumentId, inFlightRecordArea, InFlightRecordStore } from "./in-flight/index";
+import { CommandReconciliation, frameDocumentId, inFlightRecordArea, InFlightRecordStore, SeenCommandStore } from "./in-flight/index";
 import type { RecordingEvidenceReporter } from "./recording-evidence";
 import { classifyRecordingStartRefusal } from "./recording-start/index";
 import {
@@ -84,12 +84,7 @@ export class ServerCommandChannel {
   private readonly reconciliation: CommandReconciliation;
 
   constructor(private readonly deps: ServerCommandChannelDeps) {
-    this.reconciliation = deps.reconciliation ?? new CommandReconciliation({
-      store: new InFlightRecordStore(inFlightRecordArea()),
-      queuedResult: async (commandId) => await deps.gateway.queuedActionResult(commandId),
-      send: async (result) => await deps.send("client.action_result", result),
-      documentOf: frameDocumentId
-    });
+    this.reconciliation = deps.reconciliation ?? ownReconciliation(deps);
   }
 
   async handleMessage(message: ClientGatewayServerMessage): Promise<void> {
@@ -119,6 +114,13 @@ export class ServerCommandChannel {
     // and is never answered.
     if (message.type === "server.activity") {
       this.deps.acceptActivity(message.payload);
+      return;
+    }
+
+    // Core asking what became of a command whose answer never reached it (Core
+    // C8): answered from what this browser kept, never by running anything.
+    if (message.type === "server.reconcile_command") {
+      await this.answerReconcile(message.payload.commandId);
       return;
     }
 
@@ -223,6 +225,15 @@ export class ServerCommandChannel {
         this.reconciliation.release(commandId);
       }
     }
+  }
+
+  private async answerReconcile(commandId: string): Promise<void> {
+    const answer = await this.reconciliation.reconcile(commandId).catch((error: unknown) => {
+      this.inFlightRecordFailed(error);
+      // A browser that cannot read what it kept cannot say; `unknown` never lets Core act again.
+      return { commandId, state: "unknown" as const };
+    });
+    await this.deps.send("client.reconcile_result", answer);
   }
 
   /**
@@ -349,4 +360,16 @@ export class ServerCommandChannel {
     );
     this.deps.emitStatus();
   }
+}
+
+/** The channel's own reconciliation, over the browser's session storage: records, received ids, and the offline queue. */
+function ownReconciliation(deps: ServerCommandChannelDeps): CommandReconciliation {
+  const area = inFlightRecordArea();
+  return new CommandReconciliation({
+    store: new InFlightRecordStore(area),
+    seen: new SeenCommandStore(area),
+    queuedResult: async (commandId) => await deps.gateway.queuedActionResult(commandId),
+    send: async (result) => await deps.send("client.action_result", result),
+    documentOf: frameDocumentId
+  });
 }

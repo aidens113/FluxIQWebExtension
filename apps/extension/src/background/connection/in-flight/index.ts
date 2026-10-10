@@ -5,3 +5,4 @@ export { CommandReconciliation, type CommandReconciliationDeps, type RepeatAnswe
 export { frameDocumentId } from "./frame-document";
 export { inFlightRecordArea, workerMemoryRecordArea } from "./record-area";
 export { InFlightRecordStore, type InFlightCommandRecord, type InFlightRecordArea } from "./record-store";
+export { SeenCommandStore } from "./seen-store";
