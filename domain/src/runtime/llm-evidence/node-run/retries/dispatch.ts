@@ -75,8 +75,8 @@ export type WebNodeRetriedDispatch = { result: WebNodeDispatchResult; attempts: 
  *
  * `node` is the catalog's description of the node: its definition id,
  * whether running it changes the page, and the consequences the call declared
- * (`declared`, as the call wrote them; absent on a read and on a call that
- * declared none). `noted`, when given, is told how many attempts there were.
+ * (`declared`, as the call wrote them: `[]` for none; absent on a read and on a
+ * call that declared nothing). `noted`, when given, is told how many attempts there were.
  */
 export async function webNodeDispatchWithRetries(
   run: Pick<WebNodeRun, "gateway" | "sessionId" | "request">,
@@ -120,10 +120,16 @@ function webNodeRetryReading(result: WebNodeDispatchResult, command: { actionTyp
  * the consequences its call declared -- the plain strings, `[]` for none --
  * under Core's own key. Never `effect: "mutate"`, which would make every
  * page-changing node a lasting act (`automationStudioNodeActLasts`).
+ *
+ * A call that declared nothing carries no key at all. `[]` is the author's
+ * statement that nothing outlasts the step, which Core trusts to dispatch it
+ * again after an ambiguous answer (`declared-no-lasting-act.ts`); writing it for
+ * a call that never said so let an undeclared press be made twice.
  */
 function nodeMetadata(node: { effect: "observe" | "mutate"; declared?: JsonValue | undefined }): JsonObject {
   if (node.effect === "observe") return { effect: "observe" };
-  const declared = Array.isArray(node.declared) ? node.declared.filter((entry): entry is string => typeof entry === "string" && entry !== "") : [];
+  if (!Array.isArray(node.declared)) return {};
+  const declared = node.declared.filter((entry): entry is string => typeof entry === "string" && entry !== "");
   return { [AUTOMATION_STUDIO_DECLARED_CONSEQUENCES_METADATA_KEY]: declared };
 }
 
