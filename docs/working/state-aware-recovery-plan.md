@@ -416,6 +416,14 @@ Their briefs are written here before dispatch, against the code as it then stand
 - Outcome: Accepted
 - Follow-up: round 2 (t417); paid proofs on approval
 
+### 2026-10-10 - Paid proof R4a: failed at the trial's quantity step (run-mv2nlh9l-52e476da)
+- Agent: senior supervisor agent (Claude); run from `fxwork/t418` (Core 3b54f5b0, downstream 5a02110f), instance `t418-proofs` (no Lab slot file changed: the loan was refused by the permission system; no lane was running), approved by the user
+- Changed: nothing in product; debug report `state-aware-recovery-plan/reports/r4a-debug-run-mv2nlh9l.md`
+- Why: R4a, candidate creation of crossborder hub-to-cart with the flash deal during the build; a first launch (launch-mv2nkl12) stopped before any call on `--target persistent-isolated conflicts with FLUXIQ_TEST_TARGET=isolated` from the copied `.env.local` and was relaunched with the target set
+- Validation: `pnpm lab run crossborder-marketplace --variant flash-deal ... --authoring-mode candidate --workspace t418-r4a --replays 1` -> verdict failed, flowCreated false, cost $0.0525 (ceiling $0.10); the model met and closed the flash deal itself; trial nodes 1-8 succeeded, node 9 (quantity, t964) `web.target.not_found` best 0.27: its saved id `#fb1l6ufkg` is minted per load and not judged generated (`content/selector/volatile-identifier.ts:139-144`); the model never retested, looped clearing the box, three repeat refusals ended it. No state-aware feature failed
+- Outcome: Blocked
+- Follow-up: t419 (absent id tokens never contradict), t420 (trial feedback: handle still present, test again), t421 (chat wording from the UI review); relaunch R4a after they merge, then R4b
+
 ## Open Questions
 
 - User: approve the MVP cut (R1-R4b before the freeze, R5a in hardening, R4c/R5b after the RC) or move the whole
