@@ -104,11 +104,18 @@ optional step, and looped on a clear step the page undid. Fixes merged: t419 (ab
 full fingerprint the recorded path saves), t423 (an interruption is dismissed through its way out, consent banners
 excepted; typing replaces a value). New user rules (2026-10-10): every saved element carries a full multi-signal
 fingerprint, and the model never sees or handles fingerprints.
-Running: t425 (full fingerprint on the recording and repair save paths, and a save-time refusal of a step with fewer
-than two identity signals); t426 (no selector, id, class, score, "address" or "fingerprint" in any text the model
-reads, enforced by a test).
-Next: merge t425 and t426, the day's second sweep, recovery-matrix case 1 provider-free, then ask the user before a
-third paid R4a attempt; then R4b; then lanes A-D round 3.
+Also merged: t425 (one fingerprint builder, `domain/src/element-fingerprint/` with the packet reader
+`runtime/llm-evidence/packet-fingerprint/`, used by recording, build and target repair; a step with fewer than two
+identity signals is refused at save; hand-authored literal-selector steps are not judged); t426 (Core's model boundary
+`runtime/llm/model-facing/` drops locators, scores and finding words from every failure text the model reads); t428
+(the chat says what follows a failed step: the Flow's fail path, carrying on, an in-run fix, or stopping). A direct
+dev fix (1ea9b038): the exploration retry path wrote `declaredConsequences: []` for a press that declared nothing,
+so after 61f6adbf an undeclared lasting press could be retried; it now writes no key.
+Running: t427 (an interrupted durable command reaches reconcile and the effect check); t429 (in-run repair steps
+are saved with raw handles and no fingerprint: `replace_unit`, `add_handler`, `temporary_action_sequence`; resolve
+them through the domain before overlay). t429 blocks R4b.
+Next: merge t427 and t429, the day's second sweep, then ask the user before a third paid R4a attempt; then R4b; then
+lanes A-D round 3.
 
 **Binding rules every unit keeps** (the user's, from `mvp-final-month-plan.md` Current State, and Core's
 architecture): state routing stays a global runtime behaviour that precedes any model call; every node keeps first
@@ -440,6 +447,14 @@ Their briefs are written here before dispatch, against the code as it then stand
 - Validation: t422 domain plan-resolution 192/192, extension identity+action-runtime 418/418, content spec `created-identity` "1 passed (51.6s)", Core candidate-trial 64/64; t423 Core flow-bootstrap+activity wording vitest "276 passed" (26 files), extension wording 37/37, both typechecks exit 0; after t423 merged, extension activity+chat tests 495/495 on dev once Core's contracts and fluxiq builds were refreshed (the two failures before were the stale Core build); `pnpm task finish` "passed":true both repos for each
 - Outcome: Accepted
 - Follow-up: t425, t426; second sweep; ask the user before R4a attempt 3
+
+### 2026-10-10 - Fingerprint everywhere, model-facing text screened, a double-press regression fixed
+- Agent: senior supervisor agent (Claude)
+- Changed: `Merge task` t425, t426, t428 in both repos; downstream 1ea9b038 (exploration retry metadata); t429 dispatched
+- Why: the user's fingerprint rules; t425 found in-run repair steps saved raw; three domain safety tests (node-run/retries) failed on dev after 61f6adbf met the domain's `[]` for an undeclared press
+- Validation: domain `test-domain.mjs src/runtime/llm-evidence/node-run` before the fix "pass 36, fail 3" (retries), after "302 pass, 1 fail" (the draft-control label test, fixed in t425); t425 merged tree `DOMAIN_TEST_BUILD_LABEL=t425 node domain/scripts/test-domain.mjs src/runtime/llm-evidence src/tests/ src/output-nodes src/element-fingerprint src/io src/client src/recording` -> "1328 pass, 0 fail", domain and extension tsc clean, worker's `created-identity` spec "1 passed" and recovery-matrix case 1 passed; t426 Core vitest over candidate-trial, llm/model-facing, recovery, flow-bootstrap/candidate -> "734 passed", Core check exit 0; t428 Core vitest activity + step-loop -> "334 passed"; recovery-matrix case 1 on dev (rmx-2026-10-10T19-16-39-962Z-b2d0a6) passed; every `pnpm task finish` "passed":true
+- Outcome: Accepted
+- Follow-up: t427, t429; second sweep; ask the user before R4a attempt 3
 
 ## Open Questions
 
