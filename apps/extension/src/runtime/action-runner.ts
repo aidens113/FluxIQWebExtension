@@ -53,6 +53,12 @@ export type BrowserActionRunRequest = {
    * look is the top frame's alone.
    */
   mergeFrameSnapshots?: MergeFrameSnapshots;
+  /**
+   * Told the tab and frame the action is about to be sent to, and awaited
+   * before it is: the in-flight record then names where a command the worker
+   * loses was going (`background/connection/in-flight/`, plan B3).
+   */
+  noteDispatch?(tabId: number, frameId: number): Promise<void>;
 };
 
 export type BrowserActionRunResult = {
@@ -124,7 +130,7 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   const delivery = trackActionDelivery(sendToTab);
   let inFrame: BrowserActionRunResult;
   try {
-    inFrame = await runActionInFrame(action, startedAt, tabId, frameId, request.pace, delivery);
+    inFrame = await runActionInFrame(action, startedAt, tabId, frameId, request.pace, delivery, request.noteDispatch);
   } catch (error) {
     if (delivery.mayHaveReachedPage()) throw error;
     return withTarget(undeliveredActionFailure(action, error), tabId, frameId);
@@ -308,7 +314,8 @@ async function runActionInFrame(
   tabId: number,
   recordedFrameId: number | undefined,
   pace: OriginPace | undefined,
-  delivery: ActionDelivery
+  delivery: ActionDelivery,
+  noteDispatch: BrowserActionRunRequest["noteDispatch"]
 ): Promise<BrowserActionRunResult> {
   const choice = await waitForFrameChoice(
     { listFrames: () => allTabFrames(tabId), now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
@@ -331,6 +338,8 @@ async function runActionInFrame(
   }
   const message = { type: "executeAction", action, frameId: targetFrameId, topFrameOnly: frameId === undefined };
   const send = () => sendAction(action, tabId, message, targetFrameId, pace, delivery);
+  // The last moment before the page can act: the in-flight record names where it went.
+  await noteDispatch?.(tabId, targetFrameId);
   const drivenBefore = currentAutomationTabId();
   const result = await sendClickCheckingLanding(action, tabId, send, LANDED_TAB_ACCESS, pace);
   // A click that opened its page in a tab of its own made that tab the one the

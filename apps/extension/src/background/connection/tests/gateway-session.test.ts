@@ -5,7 +5,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { FluxIQSession, FluxIQSettings } from "../../../shared/protocol";
+import { createClientGatewayMessage } from "@fluxiq/client-gateway-websocket";
+import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings } from "../../../shared/protocol";
 import { GatewaySession, type GatewaySessionDeps } from "../gateway-session";
 
 function harness() {
@@ -127,4 +128,28 @@ test("a connect superseded by a newer one says nothing about the newer attempt",
     assert.equal(h.session.state(), "error");
     assert.equal(h.events.length, 1);
   });
+});
+
+// A command whose result waits in the offline queue is answered with it, never
+// run again (plan B3, `in-flight/command-reconciliation.ts`).
+test("the offline queue is asked for a command's result by its id, and only a result answers", async () => {
+  const queued: ClientGatewayClientMessage[] = [
+    createClientGatewayMessage("client.recording_event", { eventId: "cmd-1", domainId: "web-automation", eventType: "dom.click", timestamp: 1, payload: { commandId: "cmd-1" } }),
+    createClientGatewayMessage("client.action_result", { commandId: "cmd-2", status: "succeeded" })
+  ];
+  const deps: GatewaySessionDeps = {
+    settings: () => ({ gatewayUrl: "ws://gateway.test", autoReconnect: false }) as FluxIQSettings,
+    session: () => ({ clientId: "client-1" }) as FluxIQSession,
+    persistSession: async () => undefined,
+    emitStatus: () => undefined,
+    reportError: () => undefined,
+    clearError: () => undefined,
+    beforeConnect: async () => undefined,
+    queue: { queueEvent: async () => 0, readQueuedEvents: async () => queued, clearQueuedEvents: async () => undefined },
+    handlers: { onServerMessage: () => undefined, onPairingRequired: () => undefined, onSessionReady: () => undefined, onCommand: () => undefined, onHeartbeat: () => undefined }
+  };
+  const session = new GatewaySession(deps);
+  assert.deepEqual(await session.queuedActionResult("cmd-2"), { commandId: "cmd-2", status: "succeeded" });
+  assert.equal(await session.queuedActionResult("cmd-1"), undefined, "a recording event is not a result");
+  assert.equal(await session.queuedActionResult("cmd-3"), undefined);
 });

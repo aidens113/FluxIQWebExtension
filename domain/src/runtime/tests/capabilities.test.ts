@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { CLIENT_GATEWAY_ACTIVITY_CAPABILITY_ID } from "@fluxiq/client-gateway-websocket";
-import { WEB_AUTOMATION_FACT_KINDS, WEB_AUTOMATION_FACTS_CAPABILITY_ID, webAutomationGatewayCapabilities, webAutomationRuntimeCapabilities } from "../capabilities";
+import { WEB_AUTOMATION_FACT_KINDS, WEB_AUTOMATION_FACTS_CAPABILITY_ID, WEB_AUTOMATION_RECONCILE_CAPABILITY_ID, webAutomationGatewayCapabilities, webAutomationRuntimeCapabilities } from "../capabilities";
 
 test("the client declares the live-activity stream once, under Core's id", () => {
   assert.equal(CLIENT_GATEWAY_ACTIVITY_CAPABILITY_ID, "fluxiq.activity");
@@ -35,4 +35,14 @@ test("the client declares web.facts with its version and kinds, and it makes not
   assert.equal(facts?.metadata?.actionType, "web.page.facts");
   assert.deepEqual(facts?.metadata?.kinds, [...WEB_AUTOMATION_FACT_KINDS]);
   assert.ok(webAutomationRuntimeCapabilities.some((capability) => capability.id === WEB_AUTOMATION_FACTS_CAPABILITY_ID));
+});
+
+test("the client declares web.actions.reconcile version 1, and it makes nothing executable", () => {
+  const [reconcile] = webAutomationGatewayCapabilities.filter((capability) => capability.id === WEB_AUTOMATION_RECONCILE_CAPABILITY_ID);
+  assert.equal(WEB_AUTOMATION_RECONCILE_CAPABILITY_ID, "web.actions.reconcile");
+  assert.equal(reconcile?.metadata?.version, 1);
+  assert.equal(reconcile?.metadata?.interruptedStatus, "interrupted");
+  assert.equal(reconcile?.actionTypes, undefined);
+  assert.equal(reconcile?.outputIds, undefined);
+  assert.ok(webAutomationRuntimeCapabilities.some((capability) => capability.id === WEB_AUTOMATION_RECONCILE_CAPABILITY_ID && capability.actionTypes === undefined));
 });
