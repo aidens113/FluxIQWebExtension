@@ -107,7 +107,7 @@ function settledWork(card: ActionCard): boolean {
 
 /** What a card that did its work says, result and all, but for its count. */
 function doneWords(card: ActionCard): string {
-  return JSON.stringify([card.kind, card.name ?? null, card.target, card.testing === true, "done", card.check, card.said ?? null, card.result?.trim() || null, card.tested ?? null, card.answer ?? null, card.retried ?? null]);
+  return JSON.stringify([card.kind, card.name ?? null, card.target, card.testing === true, "done", card.check, card.said ?? null, card.result?.trim() || null, card.tested ?? null, card.answer ?? null, card.retried ?? null, card.already === true]);
 }
 
 /** A decision Core declined in whole, or an action that didn't work: nothing came of it. */

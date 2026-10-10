@@ -137,8 +137,17 @@ function knownAlternative(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatr
 function outcomeReconciled(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatrixCase): MatrixCheckResult {
   const reasons = floor(evidence, matrixCase);
   if (evidence.faultFired !== true) reasons.push("the perturbation never fired, so no acknowledgement was lost");
-  if (evidence.run.status !== "succeeded" && evidence.run.failure?.code?.endsWith("outcome_uncertain") !== true) reasons.push(`Core reported the run ${evidence.run.status} without an uncertain-outcome stop`);
-  return result(reasons, [], { faultFired: evidence.faultFired });
+  if (evidence.run.status !== "succeeded" && !uncertainStop(evidence)) reasons.push(`Core reported the run ${evidence.run.status} without an uncertain-outcome stop`);
+  return result(reasons, [], { faultFired: evidence.faultFired, stopCode: evidence.run.stopCode });
+}
+
+/**
+ * Whether Core stopped the run as Outcome uncertain: the run's own stop code
+ * from its run detail, matched exactly. The failed attempt's own failure (a
+ * timeout) never says it, and a code that only ends the same way is not it.
+ */
+function uncertainStop(evidence: MatrixCaseEvidence): boolean {
+  return evidence.run.stopCode === "run.outcome_uncertain";
 }
 
 /** Row 10: a handler routed the run back to a checkpoint and no completed confirmation was repeated. */
@@ -156,8 +165,8 @@ function checkpointRoute(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatri
 function workerRestart(evidence: MatrixCaseEvidence, matrixCase: RecoveryMatrixCase): MatrixCheckResult {
   const reasons = floor(evidence, matrixCase);
   if (evidence.faultFired !== true) reasons.push("the perturbation never fired, so the worker was never stopped mid-act");
-  if (evidence.run.status !== "succeeded" && evidence.run.failure?.code?.endsWith("outcome_uncertain") !== true) reasons.push(`Core reported the run ${evidence.run.status} without an uncertain-outcome stop`);
-  return result(reasons, [], { faultFired: evidence.faultFired });
+  if (evidence.run.status !== "succeeded" && !uncertainStop(evidence)) reasons.push(`Core reported the run ${evidence.run.status} without an uncertain-outcome stop`);
+  return result(reasons, [], { faultFired: evidence.faultFired, stopCode: evidence.run.stopCode });
 }
 
 /** Row 13a: the site refused a press for going too fast; the node's retry absorbed it, the run succeeded, and nothing was a true failure. */
