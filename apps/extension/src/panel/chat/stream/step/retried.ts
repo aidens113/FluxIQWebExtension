@@ -86,7 +86,8 @@ function retryable(card: ActionCard): boolean {
 
 /** A step that did its work, and no edit Core took only in part. */
 function worked(card: ActionCard): boolean {
-  return card.outcome === "done" && card.refused === undefined && !card.check && card.target !== null && !NOT_A_TRY.has(card.kind);
+  // A step already done was not tried again: it was skipped (`already-done.ts`).
+  return card.outcome === "done" && card.already === undefined && card.refused === undefined && !card.check && card.target !== null && !NOT_A_TRY.has(card.kind);
 }
 
 /** The same act on the same thing: what a person reads at the head of both cards is the same. */

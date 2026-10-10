@@ -4,6 +4,7 @@
 // words (`cardWords`), and any step, tool or check in a person's words rather
 // than an id (`stepWords`). No DOM.
 export { actionCard, type ActionCard } from "./action-card";
+export { isAlreadyDoneStep } from "./already-done";
 export { cardWords, type CardWords } from "./card-words";
 export { doneAgainWords } from "./done-again";
 export { stepMessages, type StepMessage, type StepMessageKind } from "./messages";
