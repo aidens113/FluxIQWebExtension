@@ -13,10 +13,11 @@
 // cursor (`./press-cursor.ts`). **Drawn apart** is carrying a class at most
 // half of the run carries. An element with no class, one whose own cursor
 // refuses a press, or one with no like sibling a person could press belongs to
-// no run.
+// no run. **Scarce** names the classes that draw a member apart, which a saved
+// fingerprint leaves out of the one member set apart (`./set-apart.ts`, t436).
 
-/** A run of like options and the members of it drawn apart from the rest. */
-export type LikeOptions = { run: readonly Element[]; apart: readonly Element[] };
+/** A run of like options, the members of it drawn apart from the rest, and the classes at most half of the run carries. */
+export type LikeOptions = { run: readonly Element[]; apart: readonly Element[]; scarce: ReadonlySet<string> };
 
 /** The run the element belongs to and its members drawn apart, or `undefined` when it belongs to none. */
 export function likeOptions(element: Element): LikeOptions | undefined {
@@ -27,8 +28,8 @@ export function likeOptions(element: Element): LikeOptions | undefined {
   for (const member of run) {
     for (const name of new Set(member.classList)) counts.set(name, (counts.get(name) ?? 0) + 1);
   }
-  const few = (name: string): boolean => (counts.get(name) ?? 0) * 2 <= run.length;
-  return { run, apart: run.filter((member) => [...member.classList].some(few)) };
+  const scarce = new Set([...counts.keys()].filter((name) => (counts.get(name) ?? 0) * 2 <= run.length));
+  return { run, apart: run.filter((member) => [...member.classList].some((name) => scarce.has(name))), scarce };
 }
 
 /** The element's cursor says it refuses a press. Unknown where nothing computes styles, as in a unit test's hand-built page. */
