@@ -34,10 +34,25 @@ it runs the node live, as it always has. With `write: true` the call takes the
 same path up to the point a live call would send its command: the node, the
 call's keys, the page and start location, the handle resolved into the frozen
 identity (`target_not_a_handle` otherwise), the control's words, the
-`consequences` a mutating node owes, the origin and the addresses shown. It
+`consequences` the node owes, the origin and the addresses shown. It
 skips the covered-target check, which is about where a press lands now, and the
 permission gate, because nothing is done; then
 `runtime/llm-evidence/node-run/written-step.ts` answers.
+
+**Which calls declare (t439).** One rule, the domain's
+`webPlanStepMustDeclare` (`plan-resolution/step-permission.ts`): a press, a
+key press, a dialog answer and a typing step with `submit: true` must carry
+`consequences` (`[]` for none), at plan time and on every live or written
+`core.run_node` call alike, and Core's Flow script format states the same.
+Any other node may declare and need not. Until t439 every acting node was
+held to it live, so a saved navigate, check or type -- written as the script
+format says -- was refused `missing_input_keys` on every rerun in a repair
+(`run-mv4912r9-53b05a51`). A press must declare even when the Flow saved it
+without one: undeclared, Core's permission gate would never be asked about it.
+The rule is one table, `actions/consequence-declaration.ts`, which each output
+node also states to Core as `metadata.consequenceDeclaration`, so Core
+schedules only the saved steps that need not declare (or did) to run as saved
+in a repair's test.
 
 - `webWrittenStepIssue` holds a written step to the node's own schema, since no
   page judges its parameters until the test: the declaration must read as the
@@ -117,10 +132,25 @@ to the tool rejection reason `target_not_a_handle` (`tool-rejection.ts`).
   the one the Flow already holds for that node -- or a list request with the
   held item -- which a rerun merged from the saved step
   (`node-run/held-literals/`, fed by the round's opening look's `held` calls).
+  A held value counts as held after the screen of denied keys too: the shown
+  copy of a saved element (its `selector` taken out) is put back to the saved
+  element, with the saved `selector` beside it, when the call names no handle
+  (t439).
 
 A step the draft ran, a recorded step, a step the Flow already holds and a
 hand-authored Flow (the Lab's recovery matrix, the demo workspace) are never
-flagged, so their literal selectors still resolve `unchanged` and run.
+flagged, so their literal selectors still resolve `unchanged` and run. A held
+step rerun as saved, its element held and no handle named, runs on its saved
+element rather than being refused `target_not_a_handle` (t439).
+
+**What a step keeps as its input (t439).** A call that named its element by a
+handle keeps `input` naming it by that handle alone: its `selector`, `element`
+and `visualTarget` are left out of `input` (`node-run/node-call.ts`), not
+screened, and stay in `ranWith`, which the Flow keeps. Screened, the saved
+element came back without its selector, and a rerun from it was refused as an
+element the model had written (`run-mv4912r9-53b05a51`, t942 and t870). A
+stale handle on such a rerun is answered by the handle refusals
+(`handle_not_in_packet`, `renumbered_by_reload`).
 
 ## Choice Changes And Stable Handles
 

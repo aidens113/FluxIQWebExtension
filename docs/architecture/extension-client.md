@@ -526,8 +526,8 @@ pacer keeps what Core says and changes how often it is said:
   FluxIQ declined to send (`web.action.rejected.*`) is "not tried", never a
   page miss, with why when the row carries the caller's reason (`Reason:` in
   its record): Core's words for it less their "FluxIQ didn't send it, as", a
-  list read naming a list ("not tried: the step didn't say which list to
-  read"), or the code's own last words when they are not a page miss ("not
+  list read naming a list ("not tried: the step didn't name its list the way
+  FluxIQ needs"), or the code's own last words when they are not a page miss ("not
   tried: a popup or banner on the page was covering it")
   (`shared/activity/not-tried.ts`; R2-U-6 of `run-muwansvz-a2b4a987`, where
   "couldn't find it on the page" was said of a list in plain sight);

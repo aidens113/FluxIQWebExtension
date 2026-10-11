@@ -265,9 +265,9 @@ test("a call Core rejected before sending it says it was not tried, and why when
   const read = "Trying again: reading the list of “name, price, rating and 3 more”";
   const rejected = (title: string, label: string, text: string) => activityWording(named({ phase: "repairing", title, label: `${label} — didn't work`, status: "succeeded", text }));
   const list = rejected("Reading the list of “name, price, rating and 3 more”", read, "Result: web.action.rejected.target_unobserved · Reason: malformed_handle · Node: web.output.dom-extract_list");
-  assert.equal(list.sentence, `${read} — not tried: the step didn't say which list to read`);
+  assert.equal(list.sentence, `${read} — not tried: the step didn't name its list the way FluxIQ needs`);
   const click = rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.rejected.target_unobserved · Reason: target_not_a_handle · Node: web.output.dom-click");
-  assert.equal(click.sentence, "Clicking “Add to cart” — not tried: the step didn't say which control on the page to use");
+  assert.equal(click.sentence, "Clicking “Add to cart” — not tried: the step didn't name its control the way FluxIQ needs");
   const older = rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.rejected.target_unobserved · Reason: handle_from_older_view · Node: web.output.dom-click");
   assert.equal(older.sentence, "Clicking “Add to cart” — not tried: FluxIQ was looking at an older view of the page");
   const bare = rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.rejected.target_unobserved · Node: web.output.dom-click");

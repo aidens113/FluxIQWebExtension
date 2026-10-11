@@ -95,3 +95,102 @@ test("a build that continues no Flow holds nothing, and a new build forgets what
   const forgotten = await call(again, "call.two", CLICK, { selector: "#renew-saved", element: SAVED_ELEMENT, target: { handle: "t1" } });
   assert.equal(forgotten.effectApplied, false);
 });
+
+// t439 (`run-mv4912r9-53b05a51`): a saved step rerun as saved runs on what the
+// Flow saved, whatever screen a copy of it went through, and whatever the Flow
+// declared for it.
+
+const CHECK = "web.output.dom-check";
+const NAVIGATE = "web.output.browser-navigate";
+/** The saved fingerprint, carrying its own selector as a saved element does. */
+const SAVED_CHIP: JsonObject = { tagName: "div", visibleText: "7-in-1", classNames: ["chip"], selector: "#chips > div:nth-of-type(2)" };
+/** A Flow written as a script: the press declared, the check and the navigate not (Core's script format). */
+const SCRIPTED: JsonObject[] = [
+  { node: NAVIGATE, parameters: { url: "https://example.test/tickets" } },
+  { node: CLICK, parameters: { selector: "#renew-saved", element: SAVED_ELEMENT }, consequences: [] },
+  { node: CHECK, parameters: { selector: "#chips > div:nth-of-type(2)", element: SAVED_CHIP, checked: true } }
+];
+/** A Flow that saved a press with no declaration, as a recorded Flow does. */
+const RECORDED: JsonObject[] = [{ node: CLICK, parameters: { selector: "#renew-saved", element: SAVED_ELEMENT } }];
+
+async function rerun(at: Site, callId: string, value: JsonObject) {
+  return await at.runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value });
+}
+
+/** The saved element as the model is shown it: the denied `selector` taken out. */
+function shown(element: JsonObject): JsonObject {
+  const { selector: _selector, ...rest } = element;
+  return rest;
+}
+
+test("a saved step's undeclared check reruns as saved, on its saved element, with no handle and no declaration", async () => {
+  const at = site();
+  await open(at, SCRIPTED);
+  const checked = await rerun(at, "rerun.3", { node: CHECK, parameters: { selector: "#chips > div:nth-of-type(2)", element: SAVED_CHIP, checked: true } });
+  assert.equal(checked.effectApplied, true, JSON.stringify(checked.evidence).slice(0, 400));
+  const command = at.commands.find((each) => each.actionType === "web.dom.check");
+  assert.equal(command?.parameters.selector, "#chips > div:nth-of-type(2)");
+  // The Flow keeps the saved address and fingerprint.
+  assert.deepEqual((checked.draft?.ranWith as JsonObject & { parameters: JsonObject }).parameters.element, SAVED_CHIP);
+});
+
+test("a held element shown without its selector is the saved one: it runs on the saved address, not as a literal the model wrote", async () => {
+  const at = site();
+  await open(at, SCRIPTED);
+  // What Core keeps of a step that ran as saved, merged back for a rerun: the element less its selector, no top-level selector.
+  const checked = await rerun(at, "rerun.4", { node: CHECK, parameters: { element: shown(SAVED_CHIP), checked: true }, consequences: [] });
+  assert.equal(checked.effectApplied, true, JSON.stringify(checked.evidence).slice(0, 400));
+  assert.equal(JSON.stringify(checked.evidence).includes("not_a_handle"), false);
+  const command = at.commands.find((each) => each.actionType === "web.dom.check");
+  assert.equal(command?.parameters.selector, "#chips > div:nth-of-type(2)");
+  assert.deepEqual((checked.draft?.ranWith as JsonObject & { parameters: JsonObject }).parameters.element, SAVED_CHIP);
+});
+
+test("an undeclared saved navigate reruns as saved", async () => {
+  const at = site();
+  await open(at, SCRIPTED);
+  const opened = await rerun(at, "rerun.1", { node: NAVIGATE, parameters: { url: "https://example.test/tickets" } });
+  assert.equal(opened.effectApplied, true, JSON.stringify(opened.evidence).slice(0, 400));
+});
+
+// Supervisor review of t439: a press must declare, saved or not. Undeclared,
+// Core's permission gate would never be asked about it, so a money, delete or
+// send press would pass unasked. The refusal tells the model to add it.
+test("a press the Flow saved with no declaration is refused on rerun until it declares, and nothing is pressed", async () => {
+  const at = site();
+  await open(at, RECORDED);
+  for (const parameters of [{ element: shown(SAVED_ELEMENT), selector: "#renew-saved" }, { target: { handle: "t1" } }]) {
+    const refused = await rerun(at, "rerun.1", { node: CLICK, parameters });
+    const evidence = refused.evidence as JsonObject & { code: string; detail: { reason: string; missing?: string[] } };
+    assert.equal(evidence.code, "invalid_input");
+    assert.deepEqual(evidence.detail.missing, ["consequences"]);
+  }
+  assert.equal(at.commands.some((each) => each.actionType === "web.dom.click"), false);
+  // Declared, it runs on the saved control, put to the gate like any press.
+  const declared = await rerun(at, "rerun.2", { node: CLICK, parameters: { element: shown(SAVED_ELEMENT), selector: "#renew-saved" }, consequences: [] });
+  assert.equal(declared.effectApplied, true, JSON.stringify(declared.evidence).slice(0, 400));
+});
+
+test("a step that ran with a handle is kept naming its element by that handle alone, and its kept input reruns unchanged", async () => {
+  const at = site();
+  await open(at, SCRIPTED);
+  // A rerun of the saved press with the model's handle merged over the saved address and fingerprint.
+  const pressed = await rerun(at, "rerun.2", { node: CLICK, parameters: { selector: "#renew-saved", element: SAVED_ELEMENT, target: { handle: "t1" } }, consequences: [] });
+  assert.equal(pressed.effectApplied, true, JSON.stringify(pressed.evidence).slice(0, 400));
+  assert.deepEqual(pressed.draft?.input, { node: CLICK, parameters: { target: { handle: "t1" } }, consequences: [] });
+  // The fingerprint and the address stay in what the Flow keeps.
+  const kept = (pressed.draft?.ranWith as JsonObject & { parameters: JsonObject }).parameters;
+  assert.equal(typeof kept.selector, "string");
+  assert.equal(typeof kept.element, "object");
+  const again = await rerun(at, "rerun.2.again", pressed.draft!.input as JsonObject);
+  assert.equal(again.effectApplied, true, JSON.stringify(again.evidence).slice(0, 400));
+});
+
+test("a model-written element is still refused beside the saved Flow's", async () => {
+  const at = site();
+  await open(at, SCRIPTED);
+  const guessed = await rerun(at, "call.guess", { node: CHECK, parameters: { element: { tagName: "div", visibleText: "Guessed" }, checked: true } });
+  assert.equal(guessed.effectApplied, false);
+  assert.equal(JSON.stringify(guessed.evidence).includes("not_a_handle"), true);
+  assert.equal(at.commands.some((each) => each.actionType === "web.dom.check"), false);
+});
