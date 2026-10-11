@@ -178,6 +178,15 @@ export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector:
  * no label asks nothing the page contradicts, on the reset page or this one.
  * Once a field is dropped it stays dropped. A newer view whose handle names
  * another element (tag, role or address changed) replaces it whole.
+ *
+ * **This is the identity exploration acts with, not the one a step saves
+ * (t442, F1).** Saved into a Flow, the agreement left the coupon step as
+ * `{div, class b}` with no words at all, which a done coupon matches as well
+ * as an undone one. A handle exploration acted on is saved, for a candidate
+ * submission, with the whole identity its control had in the view the act was
+ * made from (`target-packets.ts` `acted`), and the fields the act changed are
+ * the step's effect. The two uses no longer share one identity, so the veto
+ * concern above still holds for exploration and costs the saved step nothing.
  */
 export function webPlanElementIdentityAcrossViews(earlier: WebPlanElementIdentity, newer: WebPlanElementIdentity): WebPlanElementIdentity {
   const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);

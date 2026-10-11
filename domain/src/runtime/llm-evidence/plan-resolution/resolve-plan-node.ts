@@ -86,7 +86,8 @@
 // resolution is for a candidate submission (`handleReach: "view_history"`), and
 // then a target handle resolves from any view this Flow's exploration took, to
 // the identity its views agree on (`target-packets.ts`), and the resolved answer
-// says which view each handle came from (`handleViews`). Without it -- a node
+// says which view each handle came from (`handleViews`); a handle exploration acted
+// on, to its control as the act found it, never as the act left it (t442). Without it -- a node
 // run, a rerun, a legacy completion -- a handle resolves against the current
 // pages exactly as before, and the answer carries nothing beside its parameters.
 // Only a handle some evidence printed resolves that way (t378, lane B C4): one
