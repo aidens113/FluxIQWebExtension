@@ -131,7 +131,13 @@ runtime transport sends required commands; a never-sent command is withdrawn and
 session run resolves its storage once and reuses one connection per database: 43 reads per run fell from about
 270 ms to 45 ms; the required-mode test hang was this cost under load, not t427). Direct fixes: downstream b12f0391
 (a timed test made order-based), Core 19bf1773 (an import-order crash in two test entries).
-Next: ask the user before a third paid R4a attempt (every agreed change is merged); then R4b; then lanes A-D round 3.
+Paused (2026-10-10, end of session): the user approved R4a attempt 3 then R4b; attempt 3 (run-mv35459z-b5aa50cc,
+`fxwork/t418` synced to dev 527aae6b / Core 9aeba98c) was stopped mid-build by the supervisor when the user wrapped
+up, because a paid run never runs unsupervised. No verdict; a few cents spent. Debug note:
+`language-driven-flow-loop-plan/debugs/run-mv35459z-b5aa50cc.md`.
+Next: relaunch R4a attempt 3 (same command as `reports/t414-paid-proof-prep.md` with
+`FLUXIQ_LAB_INSTANCE=t418-proofs FLUXIQ_TEST_TARGET=persistent-isolated`, workspace `t418-r4a-4`) after syncing
+`fxwork/t418` to dev, and supervise it to its end; then R4b; then lanes A-D round 3.
 Follow-ups: consolidate the way-out label lists (extension vocabulary, t430's domain list); bigbox "naive paths"
 stalls at 8 parallel copies (t433 open question); only runRuntimeSession keeps connections (t435).
 
@@ -489,6 +495,14 @@ Their briefs are written here before dispatch, against the code as it then stand
 - Validation: t430 merged tree Core executor+runtime-session+in-run-repair "107 passed" files, "901 passed" tests (an earlier run under four workers' load had 4 files fail to load, 42 tests, not reproduced in two reruns; its error was not captured), domain "88 pass"; t432 merged tree Core "378 passed | 1 skipped" files, "4355 passed" tests, domain runtime+output-nodes+actions "1502 pass, 0 fail", domain and extension tsc exit 0; t433 scenario-lab "tests 697, pass 697"; t434 merged tree Core "1073 passed", 2 failed (the required-mode tests, then on dev too); t435 merged tree Core "421 passed | 2 skipped" files, "3121 passed" tests, the filtered required-mode tests "2 passed" three times; each `pnpm task finish` "passed":true
 - Outcome: Accepted
 - Follow-up: matrix cases 1, 2, 9 on final dev; then the user's approval for R4a attempt 3
+
+### 2026-10-10 - R4a attempt 3 launched and stopped at wrap-up
+- Agent: senior supervisor agent (Claude)
+- Changed: nothing in product; debug note `language-driven-flow-loop-plan/debugs/run-mv35459z-b5aa50cc.md`
+- Why: the user approved R4a attempt 3 then R4b; minutes in, the user asked to wrap up, and a paid run never runs without a live supervisor
+- Validation: before launch, `FLUXIQ_TEST_ENV_FILES=none pnpm lab recovery-matrix --case 1 --case 2 --case 9` on dev (rmx-2026-10-10T23-54-47-485Z-5ac142) -> cases 1, 2 and 9 passed; `fxwork/t418` fast-forwarded to dev in both repos and rebuilt (`pnpm build` Core, `pnpm -r build` downstream, exit 0). The run reached mid-build (eight UI-review snapshots) and was stopped; its Lab, Core web, scenario server and browser processes were ended (none left)
+- Outcome: Blocked
+- Follow-up: relaunch supervised, then R4b
 
 ## Open Questions
 
