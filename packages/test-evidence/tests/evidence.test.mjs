@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, open, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -13,6 +13,7 @@ import {
   CIRCULAR_REFERENCE_MARKER,
   DEFAULT_EVIDENCE_POLICY,
   EvidenceBundle,
+  EvidenceBundlePublicationError,
   EvidenceCaptureController,
   openEvidenceJournalWithRetry,
   RedactionFailure,
@@ -336,9 +337,28 @@ test("durably publishes only after synced artifacts and retries transient direct
     },
   });
   await exhaustedBundle.initialize();
-  await assert.rejects(() => exhaustedBundle.finalize({ verdict: "passed" }), { code: "EACCES" });
-  assert.equal(exhaustedAttempts, 4);
-  assert.deepEqual(exhaustedDelays, [10, 25, 50]);
+  // Every rename refused: the staging rename spends its ~15 s back-off, the copy is made, and its rename is refused too.
+  await assert.rejects(() => exhaustedBundle.finalize({ verdict: "passed" }), (error) => {
+    assert.ok(error instanceof EvidenceBundlePublicationError);
+    assert.equal(error.code, "EACCES");
+    assert.equal(error.renameCode, "EACCES");
+    assert.equal(error.stage, "rename-copy");
+    assert.equal(error.attempts, 15);
+    assert.equal(error.stagingPath, exhaustedBundle.stagingPath);
+    assert.match(error.message, /^Evidence bundle could not be published \(stage bundle\.publish, rename-copy\): rename EACCES, then rename of the copy EACCES after 15 attempts; the sealed bundle stays at /u);
+    assert.ok(error.message.endsWith(exhaustedBundle.stagingPath));
+    return true;
+  });
+  assert.equal(exhaustedAttempts, 30);
+  const backOff = [10, 25, 50, 100, 200, 400, 800, 1_600, 2_000, 2_000, 2_000, 2_000, 2_000, 2_000];
+  assert.deepEqual(exhaustedDelays, [...backOff, ...backOff]);
+  const budget = backOff.reduce((sum, value) => sum + value, 0);
+  assert.ok(budget >= 14_000 && budget <= 16_000, `about 15 s of back-off, got ${budget} ms`);
+  // The sealed bundle stays in staging and verifies; the abandoned copy is gone.
+  const sealedIndex = await readFile(path.join(exhaustedBundle.stagingPath, "artifact-index.json"));
+  assert.equal(JSON.parse(await readFile(path.join(exhaustedBundle.stagingPath, "bundle.complete.json"), "utf8")).artifactIndexSha256, sha256(sealedIndex));
+  await assert.rejects(() => stat(path.join(root, ".publishing-exhausted")), { code: "ENOENT" });
+  await assert.rejects(() => stat(path.join(root, "exhausted")), { code: "ENOENT" });
 
   let nonTransientAttempts = 0;
   const nonTransientBundle = new EvidenceBundle({
@@ -354,7 +374,7 @@ test("durably publishes only after synced artifacts and retries transient direct
     },
   });
   await nonTransientBundle.initialize();
-  await assert.rejects(() => nonTransientBundle.finalize({ verdict: "passed" }), { code: "ENOENT" });
+  await assert.rejects(() => nonTransientBundle.finalize({ verdict: "passed" }), { name: "EvidenceBundlePublicationError", code: "ENOENT", stage: "rename-staging", attempts: 1 });
   assert.equal(nonTransientAttempts, 1);
 
   let collisionRenameCalled = false;
@@ -381,6 +401,98 @@ test("durably publishes only after synced artifacts and retries transient direct
   });
   await unsupportedSyncBundle.initialize();
   await assert.doesNotReject(() => unsupportedSyncBundle.finalize({ verdict: "passed" }));
+});
+
+test("a reader that blocks the staging rename past its back-off still gets the bundle published, by copy", async (t) => {
+  const root = await temporaryRoot(t);
+  let stagingRenames = 0;
+  const bundle = new EvidenceBundle({
+    rootDirectory: root,
+    runId: "copied",
+    scenarioId: "publication-copy",
+    testHooks: {
+      async renameDirectory(source, destination) {
+        if (source.endsWith(".staging-copied")) {
+          stagingRenames += 1;
+          throw Object.assign(new Error("held by a reader"), { code: "EPERM" });
+        }
+        await rename(source, destination);
+      },
+      async wait() {},
+    },
+  });
+  await bundle.initialize();
+  await bundle.writeText("diagnostics.txt", "durable artifact");
+  const published = await bundle.finalize({ verdict: "failed" });
+  assert.equal(stagingRenames, 15);
+  assert.deepEqual(published.publication, { method: "copy", attempts: 15 });
+  await assert.rejects(() => stat(bundle.stagingPath), { code: "ENOENT" });
+  await assert.rejects(() => stat(path.join(root, ".publishing-copied")), { code: "ENOENT" });
+  const indexBytes = await readFile(path.join(published.path, "artifact-index.json"));
+  assert.equal(JSON.parse(await readFile(path.join(published.path, "bundle.complete.json"), "utf8")).artifactIndexSha256, sha256(indexBytes));
+  for (const artifact of JSON.parse(indexBytes.toString("utf8")).artifacts) {
+    assert.equal(sha256(await readFile(path.join(published.path, ...artifact.path.split("/")))), artifact.sha256);
+  }
+
+  // A staging folder that cannot be removed after the copy is left beside the bundle, and said so.
+  const kept = new EvidenceBundle({
+    rootDirectory: root,
+    runId: "kept",
+    scenarioId: "publication-copy-kept",
+    testHooks: {
+      async renameDirectory(source, destination) {
+        if (source.endsWith(".staging-kept")) throw Object.assign(new Error("held by a reader"), { code: "EBUSY" });
+        await rename(source, destination);
+      },
+      async removeDirectory(target) {
+        if (target.endsWith(".staging-kept")) throw Object.assign(new Error("held by a reader"), { code: "EBUSY" });
+        await rm(target, { recursive: true, force: true });
+      },
+      async wait() {},
+    },
+  });
+  await kept.initialize();
+  const keptPublished = await kept.finalize({ verdict: "passed" });
+  assert.deepEqual(keptPublished.publication, { method: "copy", attempts: 15, stagingLeftBehind: "EBUSY" });
+  assert.equal((await stat(kept.stagingPath)).isDirectory(), true);
+  assert.equal((await stat(keptPublished.path)).isDirectory(), true);
+
+  // A copy that fails names its own errno beside the rename's, and leaves no partial copy.
+  const uncopied = new EvidenceBundle({
+    rootDirectory: root,
+    runId: "uncopied",
+    scenarioId: "publication-copy-failed",
+    testHooks: {
+      async renameDirectory() { throw Object.assign(new Error("held by a reader"), { code: "EPERM" }); },
+      async copyDirectory(_source, destination) {
+        await mkdir(destination);
+        throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+      },
+      async wait() {},
+    },
+  });
+  await uncopied.initialize();
+  await assert.rejects(() => uncopied.finalize({ verdict: "passed" }), { name: "EvidenceBundlePublicationError", stage: "copy-staging", code: "ENOSPC", renameCode: "EPERM", message: /rename EPERM, then copy ENOSPC; the sealed bundle stays at /u });
+  await assert.rejects(() => stat(path.join(root, ".publishing-uncopied")), { code: "ENOENT" });
+  assert.equal((await stat(path.join(uncopied.stagingPath, "bundle.complete.json"))).isFile(), true);
+});
+
+test("a real open handle inside the staging folder does not stop publication", async (t) => {
+  const root = await temporaryRoot(t);
+  const bundle = new EvidenceBundle({ rootDirectory: root, runId: "held", scenarioId: "publication-held", testHooks: { async wait() {} } });
+  await bundle.initialize();
+  await bundle.appendEvent({ trigger: "step.start", summary: "tailed", correlation: correlation() });
+  // What a supervisor tailing events.ndjson holds: on Windows this blocks a directory rename with EPERM.
+  const reader = await open(path.join(bundle.stagingPath, "events.ndjson"), "r");
+  let readerOpen = true;
+  t.after(async () => { if (readerOpen) await reader.close(); });
+  const published = await bundle.finalize({ verdict: "failed" });
+  await reader.close();
+  readerOpen = false;
+  if (process.platform === "win32") assert.equal(published.publication.method, "copy");
+  assert.equal((await readFile(path.join(published.path, "events.ndjson"), "utf8")).includes("tailed"), true);
+  const indexBytes = await readFile(path.join(published.path, "artifact-index.json"));
+  assert.equal(JSON.parse(await readFile(path.join(published.path, "bundle.complete.json"), "utf8")).artifactIndexSha256, sha256(indexBytes));
 });
 
 test("deduplicates identical screenshots while retaining correlated events", async (t) => {
