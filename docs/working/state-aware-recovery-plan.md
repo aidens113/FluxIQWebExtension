@@ -456,6 +456,27 @@ Their briefs are written here before dispatch, against the code as it then stand
 - Outcome: Accepted
 - Follow-up: next session relaunches R4a attempt 3 supervised, then R4b, then lanes A-D round 3
 
+### 2026-10-11 - R4a relaunched and failed on our defects; four root causes; t436-t438 dispatched
+- Agent: senior supervisor agent (Claude); investigation workers (reports `state-aware-recovery-plan/reports/r4a-4-*.md`)
+- Changed: debug note `language-driven-flow-loop-plan/debugs/run-mv4912r9-53b05a51.md`; no product change yet
+- Why: R4a (run-mv4912r9-53b05a51, $0.1203) built a Flow whose trial passed, then the replay failed at step 6 "choose
+  7-in-1": a visible chip "not found where it was saved"; in-run repair took three rounds to the call cap. The user:
+  "the model isn't the issue" — these are our defects
+- Validation: supervisor verified in source: `element-finder.ts:46-49` returns the first class-set match and
+  `resolve-target.ts:491-497` returns on it, so the text scan never runs; `identity/candidates.ts:118-121` admits no
+  script-bound div. Recorded rule check: the user's words are "$0.1 per flow max" (2026-10-01), so Core's separate
+  creation and repair purses (`refuted-result/purse.ts:7-9` calls the split "the user's rule") are a defect.
+  The unpublished bundle was a Windows EPERM on the staging rename, most likely the supervisor's own `tail -F` of
+  `events.ndjson`; steps were in `~/FluxStuff/lab-runs/2026-10-11/run-mv4912r9-53b05a51/steps/`
+- Outcome: Revised
+- Follow-up: t436 resolver (A all class matches + text, B script-pressable candidates, C no chosen-state class
+  saved); t437 bundle publish survives a reader, sealed staging read as finished; t438 (Core-paired) one purse per
+  Flow; repair refusals root-caused (`r4a-4-repair-invalid-input.md`, verified at `repairable-parameters.ts:65-73`,
+  `run.ts:287` and `run.ts:316`): t439 (Core-paired) saved steps rerun as saved (handle-only kept input, one
+  domain-owned consequences rule, completion gate schedules unchanged steps, optional interruption never forced into a
+  press, true chat wording); t440 repairable actions derived from the schemas (Set Checked was missing). Then merge,
+  sync `fxwork/t418`, relaunch R4a. Supervisors must not tail files inside a `.staging-run-*` folder
+
 ## Open Questions
 
 - User: approve the MVP cut (R1-R4b before the freeze, R5a in hardening, R4c/R5b after the RC) or move the whole

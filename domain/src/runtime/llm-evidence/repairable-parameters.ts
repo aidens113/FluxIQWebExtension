@@ -33,7 +33,9 @@
 // click needs something clickable, and a read needs nothing at all beyond
 // being described.
 
-import { WEB_AUTOMATION_ACTION_TYPES } from "../../actions/types";
+import type { JsonObject } from "fluxiq/core";
+import { webAutomationActionDefinitions } from "../../actions/schemas";
+import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../actions/types";
 import { webAutomationOutputNodeId } from "../../output-nodes";
 import { actionableEvidenceElement, safeFillTag, type WebLlmEvidenceElement } from "./elements";
 
@@ -62,15 +64,70 @@ const ELEMENT_PARAMETER_DESCRIPTION = "the target handle of the one element the 
 /** Core's node definition for a recorded action. Core exports no constant for it. */
 const POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
 
-const ELEMENT_ROLE_BY_DEFINITION_ID: Record<string, WebRepairableParameterRole> = {
-  "web.output.dom-type": "fillable",
-  "web.output.dom-clear": "fillable",
-  "web.output.dom-select": "selectable",
-  "web.output.dom-click": "clickable",
-  "web.output.dom-keypress": "keyable",
-  "web.output.dom-wait_for_selector": "observable",
-  "web.output.dom-extract": "observable"
+/**
+ * The verb each action's element has to carry out, for every action in the
+ * vocabulary. Total by type, so a new action cannot be registered without
+ * saying what its element is for; `null` for an action that takes no element.
+ *
+ * Which actions are repairable is not decided here. It is read from each
+ * action's own schema below: an action whose parameters name an element is
+ * repairable, and this table only says what that element must be able to do.
+ * A hand-kept list of repairable node ids predated the D6 actions and left Set
+ * Checked and Upload out, so a correct in-run repair of a "Choose" step was
+ * refused `action_not_repairable` and the run could not carry on (r4a-4, F1).
+ *
+ * - A check sets a checkbox, a radio or an option the page shows chosen by
+ *   pressing it, so its element is one a press means something on.
+ * - An upload sets a file input's files. A file input is an `input` that a
+ *   press means something on, so it is held to the same role as a click; the
+ *   recorded control the repair must match (`target/equivalence.ts`) is what
+ *   tells a file input from a button where the recording kept its kind.
+ * - A scroll to an element and an assertion about one only need the element
+ *   described, as a wait or a read does.
+ */
+const ELEMENT_ROLE_BY_ACTION_TYPE: Readonly<Record<WebAutomationActionType, WebRepairableParameterRole | null>> = {
+  "web.browser.navigate": null,
+  "web.dom.click": "clickable",
+  "web.dom.type": "fillable",
+  "web.dom.clear": "fillable",
+  "web.dom.select": "selectable",
+  "web.dom.scroll": "observable",
+  "web.dom.keypress": "keyable",
+  "web.dom.wait_for_selector": "observable",
+  "web.dom.wait_for_text": null,
+  "web.dom.extract": "observable",
+  "web.dom.capture_snapshot": null,
+  "web.dom.check": "clickable",
+  "web.dom.assert": "observable",
+  "web.dom.extract_list": null,
+  "web.dom.next_page": null,
+  "web.dom.upload": "clickable",
+  "web.dom.dialog": null,
+  "web.browser.tab": null,
+  "web.browser.download": null
 };
+
+/** Whether an action's schema takes the one element a repair re-points. */
+function webActionSchemaTakesElement(parameterSchema: JsonObject): boolean {
+  const properties = parameterSchema.properties;
+  return typeof properties === "object" && properties !== null && !Array.isArray(properties) && Object.hasOwn(properties, WEB_REPAIRABLE_ELEMENT_PARAMETER);
+}
+
+/**
+ * The role of the element of every action whose schema takes one, keyed by
+ * the node it runs as. An action whose schema takes an element but whose verb
+ * was never given a role is a contradiction, and fails at load rather than
+ * leaving that action silently unrepairable.
+ */
+const ELEMENT_ROLE_BY_DEFINITION_ID: ReadonlyMap<string, WebRepairableParameterRole> = new Map(
+  webAutomationActionDefinitions
+    .filter((definition) => webActionSchemaTakesElement(definition.parameterSchema))
+    .map((definition) => {
+      const role = ELEMENT_ROLE_BY_ACTION_TYPE[definition.actionType];
+      if (role === null) throw new Error(`${definition.actionType} takes an element but declares no repairable role`);
+      return [webAutomationOutputNodeId(definition.actionType), role] as const;
+    })
+);
 
 /**
  * The web output node each registered output runs as, keyed by output id.
@@ -88,7 +145,7 @@ const OUTPUT_NODE_ID_BY_OUTPUT_ID: ReadonlyMap<string, string> = new Map(
  * them -- does not get its targets rewritten by a model.
  */
 export function webRepairableParameters(definitionId: string): WebRepairableParameter[] {
-  const elementRole = Object.hasOwn(ELEMENT_ROLE_BY_DEFINITION_ID, definitionId) ? ELEMENT_ROLE_BY_DEFINITION_ID[definitionId] : undefined;
+  const elementRole = ELEMENT_ROLE_BY_DEFINITION_ID.get(definitionId);
   return elementRole ? [elementParameter(elementRole)] : [];
 }
 

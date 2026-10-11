@@ -3223,6 +3223,18 @@ recorded no cost, and its step log holds no provider call. Anything less certain
 leaves the field out and the run counts as a failure. A killed run is skipped
 the same way. Either still asks for its debug.
 
+A killed run is a `.staging-run-*` folder with no seal. A staging folder whose
+`bundle.complete.json` matches its `artifact-index.json` finished and only
+failed to publish, so it is read like a published bundle (its real verdict, cost
+and per-build spend) and marked `unpublished` in the ledger; it counts under
+`unchanged` like any other run. Publication itself retries the staging rename
+for about 15 s and then publishes through a copy, because on Windows a folder
+cannot be renamed while any process holds a file in it open:
+run-mv4912r9-53b05a51 (2026-10-11) lost its bundle to a reader tailing
+`events.ndjson` and was recorded as killed. When it still fails, the error names
+the stage, the errno and the folder the sealed bundle stays in, and the run
+record is closed from that folder so its `steps/` link survives.
+
 `behind-dev` is the user's rule of 2026-10-01: live testing runs on code synced
 to the integrated `dev` line. A lane worktree that missed a merge round tests
 code `dev` has already replaced and spends real money measuring nothing. A
