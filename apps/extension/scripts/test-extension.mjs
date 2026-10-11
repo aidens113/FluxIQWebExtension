@@ -1,6 +1,7 @@
 import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { before } from "node:test";
 import { build } from "esbuild";
 
 // The extension's unit tests, on the domain's pattern (domain/scripts/test-domain.mjs):
@@ -77,14 +78,31 @@ if (entryPoints.length > 0) await build({
 
 // A failing assertion reports the test's source line, not the bundle's.
 process.setSourceMapsEnabled(true);
-for (const entry of entryPoints) {
-  const bundle = path.join(outdir, path.relative(sourceRoot, entry).replace(/\.ts$/, ".mjs"));
-  await import(pathToFileURL(bundle).href);
-}
 
-// The build and release scripts' own tests (scripts/**/tests/*.test.mjs) run in
-// the same node:test run: the build stamp, target verification and store
-// packaging are gates, so they are tested with the rest.
-for (const entry of scriptEntries) {
-  await import(pathToFileURL(entry).href);
+// No test starts until every file is loaded. node:test starts the first test a
+// file registers while that file is still being imported, so without this gate
+// the first files' tests ran while later bundles were evaluated, and
+// evaluating a bundle holds the event loop: a stall of about three seconds in
+// the content batch, during which no timer a running test had set could fire.
+// A test that waits on a real clock -- the assert verb's polling window --
+// then overran its window for reasons that had nothing to do with it. The gate
+// is a root `before` hook, so it is not counted as a test.
+let allLoaded;
+const loading = new Promise((resolve) => { allLoaded = resolve; });
+before(() => loading);
+
+try {
+  for (const entry of entryPoints) {
+    const bundle = path.join(outdir, path.relative(sourceRoot, entry).replace(/\.ts$/, ".mjs"));
+    await import(pathToFileURL(bundle).href);
+  }
+
+  // The build and release scripts' own tests (scripts/**/tests/*.test.mjs) run in
+  // the same node:test run: the build stamp, target verification and store
+  // packaging are gates, so they are tested with the rest.
+  for (const entry of scriptEntries) {
+    await import(pathToFileURL(entry).href);
+  }
+} finally {
+  allLoaded();
 }
