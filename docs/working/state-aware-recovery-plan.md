@@ -477,6 +477,31 @@ Their briefs are written here before dispatch, against the code as it then stand
   press, true chat wording); t440 repairable actions derived from the schemas (Set Checked was missing). Then merge,
   sync `fxwork/t418`, relaunch R4a. Supervisors must not tail files inside a `.staging-run-*` folder
 
+### 2026-10-11 - t436-t441 merged: saved controls found again, saved steps rerun as saved, one purse per Flow
+- Agent: senior supervisor agent (Claude); workers (reports `state-aware-recovery-plan/reports/t436..t441-*.md`)
+- Changed: t436 resolver (class set answers all matches + words scored; script-pressable Level 2 candidates; chosen-state
+  class not saved), `element-identity.md`; t437 bundle publish survives a reader, sealed staging read as finished,
+  `unpublished` in the ledger, `testing-facility.md`; t438 (Core-paired) one Lab-scope purse per Flow covering build,
+  repairs, re-authors, judge and the chat turn; t439 (Core-paired) one domain rule for declarations
+  (`actions/consequence-declaration.ts`), saved steps rerun as saved, undeclared presses never sent, optional steps
+  never forced, untested optional edits revert; t440 repairable actions from schemas; t441 two stale tests repaired
+- Why: R4a run-mv4912r9-53b05a51's four root causes; the user: "the model isn't the issue"
+- Validation (supervisor, each on its task branch): t440 `test-domain.mjs llm-evidence/tests/repairable-parameters
+  llm-evidence/target/tests` -> "# pass 51 # fail 0"; t437 evidence 19/19, live-guards 42/42, test-runner
+  facility-failure + lab-runs 44/44; t436 unit batch 341/342 (the one failure also on dev 327/328, fixed by t441),
+  headed resolver net 55/56 (the one failure `volatile-selector-replay:179` also fails on dev, fixed by t441); t441
+  batch "# pass 342 # fail 0", `volatile-selector-replay` headed "4 passed"; t438 Core vitest 54 files passed, tsc 0,
+  downstream live-llm 145/145, Lab row + guards 75/75, Core merge gate `pnpm check` passed; t439 Core vitest
+  "Test Files 183 passed, Tests 1873 passed", tsc 0, domain 766/766 after syncing to Core dev (t438+t439), extension
+  activity 38/38, Core merge gate `pnpm check` passed
+- Outcome: Accepted
+- Follow-ups: an optional step re-pointed to a non-way-out control that holds in the test is still saved (guard
+  optional steps to way-out presses; ties to consolidating the way-out label lists); why R4a's f2/f4/f6 lost their
+  scheduled candidates between repair rounds; Upload's repair role is `clickable` (a file-input role needs
+  `target/candidates.ts`); chat turns that neither build nor run are not charged to a Flow in Core; downstream post-run
+  check and test-runner comments still say per-build; t439 Core was finished before its downstream half (order slip,
+  no harm: downstream then synced to Core dev and re-validated)
+
 ## Open Questions
 
 - User: approve the MVP cut (R1-R4b before the freeze, R5a in hardening, R4c/R5b after the RC) or move the whole
