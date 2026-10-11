@@ -27,6 +27,9 @@
 
 import type { ElementFingerprintCandidate } from "fluxiq/automation-studio";
 import type { LookupRoot } from "../selector";
+// Past `../evidence`'s barrel on purpose: it leads back to this directory's (`evidence/controls.ts`).
+import { ownPressCursor } from "../evidence/press-cursor";
+import { pageListensForPress } from "../page-press";
 import { accessibleNameFor } from "./accessible-name";
 import { normalizedText } from "./normalized-text";
 import { implicitRole } from "./implicit-role";
@@ -111,9 +114,11 @@ const MAX_LABEL_LENGTH = 40;
 
 /**
  * The elements a resolver may choose between: anything a person can act on,
- * plus anything the page dressed as interactive. The list is deliberately not
- * "every element" -- a recorded target is a control, and scoring a page's
- * paragraphs against it wastes the budget on rows that can never win.
+ * plus anything the page dressed as interactive -- and, of the recorded tag,
+ * what the page made pressable without saying so (`drawnAsControls`). The
+ * list is deliberately not "every element" -- a recorded target is a control,
+ * and scoring a page's paragraphs against it wastes the budget on rows that
+ * can never win.
  */
 const CANDIDATE_SELECTOR = [
   "a[href]", "button", "input", "select", "textarea", "summary", "label",
@@ -148,15 +153,18 @@ const CANDIDATE_SELECTOR = [
 export function collectTargetCandidates(family: CandidateFamily, roots: readonly LookupRoot[] = [document], admits?: (element: Element) => boolean): TargetCandidatePool {
   const tagName = family.tagName?.toLowerCase();
   const role = family.role?.toLowerCase();
-  const lists = roots.map((root) => root.querySelectorAll(CANDIDATE_SELECTOR));
-  const total = lists.reduce((sum, list) => sum + list.length, 0);
+  const lists: Array<{ elements: ArrayLike<Element>; pressable: boolean }> = [
+    ...roots.map((root) => ({ elements: root.querySelectorAll(CANDIDATE_SELECTOR), pressable: false })),
+    ...(tagName ? roots.map((root) => ({ elements: drawnAsControls(root, tagName), pressable: true })) : [])
+  ];
+  const total = lists.reduce((sum, list) => sum + list.elements.length, 0);
   const candidates: TargetCandidate[] = [];
   let examined = 0;
-  for (const interactive of lists) {
-    for (const element of interactive) {
+  for (const { elements, pressable } of lists) {
+    for (const element of Array.from(elements)) {
       if (examined >= MAX_SCANNED) return { candidates, examined, truncated: true };
       examined += 1;
-      if (!inFamily(element, tagName, role)) continue;
+      if (pressable ? !pageMadePressable(element) : !inFamily(element, tagName, role)) continue;
       if (admits && !admits(element)) continue;
       // The index is across every root, so no two candidates share a fallback id.
       candidates.push({ element, fingerprint: candidateFingerprint(element, candidates.length) });
@@ -166,6 +174,30 @@ export function collectTargetCandidates(family: CandidateFamily, roots: readonly
     }
   }
   return { candidates, examined, truncated: false };
+}
+
+/**
+ * The recorded tag's elements in `root` that `CANDIDATE_SELECTOR` does not
+ * admit (t436). A page that binds its controls in script draws them as plain
+ * `<div>`s -- no role, no tabindex, no `onclick` -- so the crossborder item
+ * page's option chips were in no pool, and a saved chip whose exact lookup
+ * missed was reported as "0 controls of the same family" beside six of them.
+ * Which of these the page made pressable is asked lazily, under the caps.
+ */
+function drawnAsControls(root: LookupRoot, tagName: string): Element[] {
+  return [...root.querySelectorAll(tagName)].filter((element) => !element.matches(CANDIDATE_SELECTOR));
+}
+
+/**
+ * The page made the element a control: it listens for presses on it (the page
+ * world's probe, `../page-press.ts`), or it gives the element a pointer of its
+ * own (`../evidence/press-cursor.ts`) -- the two signs the snapshot already
+ * reads to call such an element clickable. A cursor is unknown where nothing
+ * computes styles, as on a unit test's hand-built page.
+ */
+function pageMadePressable(element: Element): boolean {
+  if (pageListensForPress(element)) return true;
+  return typeof getComputedStyle === "function" && ownPressCursor(element) === "pointer";
 }
 
 /**
