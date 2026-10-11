@@ -16,9 +16,25 @@ import {
 } from "../../actions/extraction";
 import { webAutomationActionDefinitions } from "../../actions/schemas";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../actions/types";
+import { webPlanStepMustDeclare } from "../../runtime/llm-evidence/plan-resolution";
 import { createWebAutomationOutputNodeDefinition, webAutomationOutputNodeDefinitions, webAutomationOutputNodeId } from "../definitions";
 
 const nodes = webAutomationOutputNodeDefinitions;
+
+// t439: Core reads which saved steps must declare off each node's definition,
+// and must read the same rule the domain's own gate applies.
+test("every node says whether its steps must declare consequences, by the domain's one rule", () => {
+  for (const actionType of WEB_AUTOMATION_ACTION_TYPES) {
+    const node = nodes.find((definition) => definition.outputAction?.fixedOutputId === actionType);
+    const rule = node?.metadata?.consequenceDeclaration;
+    for (const parameters of [{}, { submit: true }]) {
+      const required = rule === "required" || (typeof rule === "object" && rule !== null && !Array.isArray(rule) && (parameters as Record<string, unknown>)[(rule as { requiredWhen: string }).requiredWhen] === true);
+      assert.equal(required, webPlanStepMustDeclare(webAutomationOutputNodeId(actionType), parameters), `${actionType} ${JSON.stringify(parameters)}`);
+    }
+  }
+  assert.equal(nodes.find((definition) => definition.outputAction?.fixedOutputId === "web.dom.click")?.metadata?.consequenceDeclaration, "required");
+  assert.equal(nodes.find((definition) => definition.outputAction?.fixedOutputId === "web.dom.check")?.metadata?.consequenceDeclaration, "not_required");
+});
 
 test("tab operations cannot be classified as safe repeatable observation", () => {
   const tab = nodes.find((definition) => definition.outputAction?.fixedOutputId === "web.browser.tab");

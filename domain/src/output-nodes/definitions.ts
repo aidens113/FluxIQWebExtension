@@ -1,6 +1,7 @@
 import type { AutomationNodeParameter, AutomationNodePort } from "fluxiq/automation-studio/nodes";
 import type { AutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
+import { WEB_AUTOMATION_ACTION_CONSEQUENCE_DECLARATION } from "../actions/consequence-declaration";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import type { WebAutomationActionDefinition } from "../actions/schemas";
 import type { WebAutomationActionType } from "../actions/types";
@@ -268,6 +269,9 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
       // Read or change: the question Core's defensive policy asks before it
       // repeats an action. See WEB_AUTOMATION_ACTION_EFFECT above.
       effect: WEB_AUTOMATION_ACTION_EFFECT[definition.actionType],
+      // Which steps must declare their consequences, the domain's one rule (`../actions/consequence-declaration.ts`): Core
+      // schedules a saved step to run as saved in a repair's test only where its declaration is not required or present (t439).
+      consequenceDeclaration: WEB_AUTOMATION_ACTION_CONSEQUENCE_DECLARATION[definition.actionType],
       // Core's element-target preparation (`runtime/io-policy.ts`) resolves the
       // recorded fingerprint against the runtime candidates, and applies its
       // confidence floor, only for an output that declares this. The flag is
