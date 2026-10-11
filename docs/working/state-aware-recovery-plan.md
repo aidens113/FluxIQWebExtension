@@ -1,9 +1,9 @@
 # State-Aware Recovery Plan
 
 Status: Active
-Status detail: Implemented and merged through t415; matrix round 1 drove 11 fixes; round 2 running; paid proofs prepared and awaiting the user's approval.
+Status detail: Implemented and merged (t385-t435); matrix round 2 14/14; paid R4a failed twice and its causes are fixed; attempt 3 approved with R4b, stopped at wrap-up, to relaunch supervised.
 Created: 2026-10-09
-Last updated: 2026-10-09
+Last updated: 2026-10-10
 Owner: Senior supervisor agent
 Scope: State-aware subflows (Call Subflow, entries, checkpoints), scoped lifecycle handlers (On Start, On Before, On Retry, On Fail, On Before Next), the integrated recovery ladder with safe state routing, smallest-unit repair, and the browser side that serves them (fact checks, interruption facts, in-flight command reconciliation, chat cards, Lab perturbations), with the schedule, acceptance matrix and briefs. The domain-neutral contracts are owned by the Core paired document; this document does not restate them.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/state-aware-recovery-plan.md
@@ -13,143 +13,87 @@ Related: [consultant proposal](./state-aware-recovery-plan/consultant-proposal.m
 
 ## Current State
 
-**What this is (2026-10-09).** The user's consultant proposed making state-aware subflows, scoped event handlers and
-a deterministic recovery ladder the next structural change ([proposal](./state-aware-recovery-plan/consultant-proposal.md)).
-Six read-only maps checked it against Core `dcaf8f9f` and downstream `111ea1dc`: the executor and recovery, the Flow
-model and subflows, authoring and repair, the extension and domain, the editor and traces, and every overlapping
-design document. This plan adopts the proposal's goal and most of its semantics, with the adjustments below. The
-contracts (frames, Call Subflow, subflow contract, events, handlers, continuations, ladder, incident budget, fact
-conditions, requirement gate, traces, script grammar, unit repair) are sections C1-C12 of the Core document
-(`C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/state-aware-recovery-plan.md`, "the Core document" below).
+**What this is.** The user's consultant proposed state-aware subflows, scoped event handlers and a deterministic
+recovery ladder ([proposal](./state-aware-recovery-plan/consultant-proposal.md)). This plan adopted it with the
+adjustments below; the domain-neutral contracts are sections C1-C12 of the Core document
+(`C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/state-aware-recovery-plan.md`). The user's revisions (2026-10-09):
+model repair is the last rung **inside the live run** at the failing step, and the run carries on from where it was;
+only saving the fix waits for the judged end. The model is called only on a **true failure**: retries spent with no
+On Fail path to another node at any scope, or every On Fail path tried and failed (Core document C6).
 
-**Nothing is implemented.** No branch exists. Planning only: no code changed, no tests run, no provider calls.
+**Implemented and merged into both `dev`s, pushed (2026-10-09/10, user: "use max subagents and implement this
+fast").** Each unit was verified by the supervisor (tests beside each change, typechecks, structure audits).
+- Core: lifecycle contracts (t385); requirement gate and protocol check (t386); safe routing guards (t387); candidate
+  script parts, `call:`, start points, checkpoints, handlers, facts, `requires` (t388); run log (t391); executor
+  integration: Call Subflow with frames, handlers at start/before/retry/fail/before_next, entries, checkpoint-only
+  Routes, in-run repair that holds at the failing step and carries on, lost-command handling, effect check before
+  retry/route/repair, orphaned-run sweep (t392); editor views (t395); `statement-packing` audit rule (t397); labels and
+  recovery role (t398); locator facts (t402).
+- Downstream: page facts (t389); Lab variants (t390); in-flight command record (t393); Lab fault injection (t394);
+  chat recovery cards (t396); `pnpm lab recovery-matrix` (t399); fact handle resolution (t400); safe interference
+  clearing (t401); matrix Flows (t403).
+- Matrix-driven fixes (t404-t417): per-flow port keys, child-frame projection, navigating check reply, reconcile by
+  command id, completed-act ledger with already-done skips, step `done when:` with page reconciliation, a landed
+  lasting act never pressed twice. Matrix round 2: 14 of 14 cases pass provider-free, 0 model calls, 0 wrong routes,
+  0 duplicated acts, 0 false successes.
 
-**What the code already has, so the plan extends it rather than building beside it.** A recovery ladder (skip when
-satisfied, wait for the recorded state, clear interference, retry, failed route, then recorded-only patch/reroute/
-diagnosis); global state routing before the ladder with a progress guard; optional and guarded steps; named failure
-ports; the Router choosing one Subflow per run by `state.*` rules; Call Flow with typed inputs, outputs and error
-ports (for other published Flows only); regions with a declared `failed` handoff; one retry-policy owner (first
-attempt plus 3 retries); the lasting-act and uncertain-effect model; the domain's expectation evaluator (exists,
-absent, text, url, visible, enabled); typed dialog kinds (consent, rate limit, robot check, promotion, assistant);
-in-page dismissal of an allow-listed set of layers; the candidate script's Router situation blocks; repairs that apply
-only after a judged whole run.
+**After paid R4a's two failures and the user's fingerprint rules (2026-10-10), all merged:**
+- Fingerprint everywhere (user: every saved element carries a full multi-signal fingerprint): one builder
+  `domain/src/element-fingerprint/` and one packet reader `runtime/llm-evidence/packet-fingerprint/` for recorded,
+  model-built, repaired and in-run-repair steps (t422, t425, t429); absent id tokens never count (t419); a step with
+  fewer than two identity signals is refused at save.
+- The model never handles fingerprints (user): Core's boundary `runtime/llm/model-facing/` drops locators, scores and
+  finding words from failure text (t426) and names a control by its own words (t431); element parameters are shown by
+  handle only, Wait For Selector shows as Wait For Element, and a selector the model writes is refused on every path
+  (t432).
+- An interruption is dismissed through its way out, consent banners excepted; typing replaces a value (t423).
+- Committing acts stay the domain's fact: a step's `consequences: none` never unlocks a second press (t430, which
+  withdrew the supervisor's 61f6adbf); a step with no `done when:` asks the host's `actLanded`.
+- Lost durable commands are reconciled by id; an unknown required outcome keeps its exactly-once latch and stops
+  `run.outcome_uncertain`, worded from the page check (t427, supervisor decision (a)). Core's own transport sends
+  required commands; a never-sent command ends unacted (t434). A runtime session run reuses one storage connection
+  (t435: 43 reads per run from about 270 ms to 45 ms).
+- Chat and trial wording: not found where saved, the box set back, what follows a failed step (t420, t421, t424,
+  t428). Lab honest paths budget in page time (t433). Direct fixes 1ea9b038, b12f0391 (downstream), 19bf1773 (Core).
 
-**What is genuinely missing.** Subflow-to-subflow calls and invocation frames (a run executes exactly one Subflow;
-its input/output mappings are validated but never applied); any lifecycle handler; declared entries and checkpoints;
-data-dependency and side-effect guards on state routing (it picks the closest matching node by similarity); one
-budget across retries, handlers, routes and alternatives; a three-valued fact check (a timed-out check counts as
-false; nothing compares a field's value to a Flow input); deduplication or reconciliation of an in-flight browser
-command (lost when the service worker restarts); unit-scoped repair (the re-author rebuilds the whole graph); a Flow
-requirement gate against the connected extension (the protocol version is never compared).
+**Checks today.** Sweep-1010 and sweep-1010b (the day's two full sweeps) ran; every failure they found is fixed and
+merged (see the ledger). On final dev: recovery-matrix cases 1, 2 and 9 passed (rmx-2026-10-10T23-54-47-485Z-5ac142).
 
-**Recommended MVP cut** (deadline 2026-11-10, feature freeze 2026-10-29; see Schedule). Before the freeze: R1
-(contracts, frames, Call Subflow, pure dispatcher, requirement gate, validation), R2 (handlers live, hand-authored,
-provider-free proofs on realistic scenarios, chat cards), R3 (entries, checkpoints, safe state routing, known
-alternatives), R4a (the candidate script can author parts, entries and handlers; one paid proof), R4b (in-run
-repair: on a true failure the run holds at the failing step, the model fixes that unit on the live page, and the same
-run carries on; one paid proof). During hardening: R5a (in-flight command reconciliation, orphaned-run sweep). After
-the RC: R4c (post-run repair narrowed to the unit), R5b (editor), resume after a Core restart. **Decision gate
-2026-10-21:** if R2's gate is not met, R4b goes next (it needs only R2), R3 and R4a move after the RC, and R1-R2 ship
-dormant (a Flow without registrations runs exactly as today).
+**Paid proofs.** R4a attempt 1 (run-mv2nlh9l, $0.0525) and attempt 2 (run-mv2pgqkj, $0.0779) failed; their causes
+are fixed above. The user approved attempt 3 then R4b; attempt 3 (run-mv35459z-b5aa50cc) was stopped mid-build by the
+supervisor when the user wrapped up the session (a paid run never runs unsupervised): no verdict, a few cents. Debug
+notes for all three are in `language-driven-flow-loop-plan/debugs/`.
 
-**Revised the same day (user).** "Part of this is that it's supposed to fix things on the fly": model repair is the
-last rung **inside the live run**, at the step that fails, and the run carries on from exactly where it was (same
-loop pass, same row). Only saving the fix to the Flow waits for the judged end. "Redefine what is considered truly
-FAILING rather than just a retry or planned fail. EG if there is no edge from the on fail to some other node, THEN it
-calls model": a **true failure** is retries spent with no On Fail path to another node at any scope, or every On Fail
-path tried and failed; retries and planned fails never call the model (Core document C6).
+**Next.**
+1. Sync `fxwork/t418` (both repos) to dev and rebuild, then relaunch R4a attempt 3, supervised to its end:
+   `FLUXIQ_LAB_INSTANCE=t418-proofs FLUXIQ_TEST_TARGET=persistent-isolated pnpm lab run crossborder-marketplace
+   --variant flash-deal --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash
+   --authoring-mode candidate --llm-task create-flow --instruction-task
+   crossborder-marketplace-hub-to-cart-flash-deal-during-build --llm-max-input-tokens 992000 --llm-max-output-tokens
+   8000 --llm-max-total-tokens 1000000 --llm-max-calls 48 --target persistent-isolated --workspace t418-r4a-4
+   --replays 1` (R4b's command is in `reports/t414-paid-proof-prep.md`). If the unchanged-source guard refuses, the
+   stop was deliberate (see its debug note); ask the user.
+2. If R4a passes, R4b (in-run repair after the basket redesign), same supervision.
+3. Then lanes A-D round 3 on the new dev (lane trees synced and rebuilt first).
 
-**Conflicts with work in flight** (from the MVP plan's briefs): t388 owns `executor/graph-run.ts`, so R2's wiring
-starts after t388 merges; t386 owns `executor/step-skip/optional-step.ts` (R3 reads, does not edit it); t383 owns
-`runtime/llm/**` and `candidate/submission-refusal.ts`, so R4a and R4b start after t383 merges; t385 (adaptation live
-proof) exercises today's detached repair path, which R4b replaces for runs that can hold in place, so t385's evidence
-is the baseline R4b is measured against. R1, B1 and B6 touch none of
-those files and can start now. This work must not delay lanes A-D round 3: lane trees are synced to `dev` only
-between rounds, and a merge that changes behaviour for existing Flows (R3's routing guards) lands between rounds with
-the lanes' saved Flows replayed provider-free first.
+**Blockers.** None in code. The paid runs wait on the user's next session.
 
-**Implemented (2026-10-09/10, user: "use max subagents and implement this fast").** Every unit is merged into both
-`dev`s and pushed, each verified by the supervisor (tests beside each change, typechecks, structure audits; Core's
-finish runs `pnpm check`). Core: t385 lifecycle contracts; t386 requirement gate and protocol check; t387 safe routing
-guards; t388 candidate script parts, `call:`, start points, checkpoints, handlers, facts, `requires`; t391 run log; t392
-executor integration (Call Subflow with frames; trace and `detail.recovery` wire contract incl. `interference`; handlers
-fire at start/before/retry/fail/before_next with one batched fact check per boundary and none without registrations;
-entries, checkpoint-only Routes and success check; in-run repair on a true failure that holds at the failing step and
-carries on, saving only after the judged end, a deliberate stop never calling a model; lost-command handling, effect
-check before retry/route/repair, orphaned-run sweep; graph-run cut from 796 to 431 lines; 44 tests moved from after-run
-to in-run repair, each tied to its plan clause); t395 editor views; t397 `statement-packing` audit rule; t398 handler
-and step labels, recovery role; t402 locator facts (`at "<locator>"`) and refusal code. Downstream: t389 page facts;
-t390 Lab variants; t393 in-flight command record and dedupe; t394 Lab fault injection; t396 chat recovery cards; t399
-`pnpm lab recovery-matrix`; t400 fact handle resolution; t401 safe interference clearing (`clearedLayers`); t403 stale
-specs and matrix Flows; direct dev fixes (dialog fact form, locator reader, `clearedLayers` lift, test-runner path
-filters). t383/t384 (MVP briefs) unblocked R4 and R2.
-Verification of t392 by the supervisor: Core vitest over the touched areas, 579 files and 5495 tests passed (7
-skipped); extension and domain typechecks clean; extension tests 313/313.
-Matrix round 1 (t404, merged): 10 of 14 cases passed provider-free (rows 1, 2, 4a, 4b, 5, 6, 7, 8, 13a, 13b), row 3
-not proven, rows 9-11 failed safely; 0 model calls, 0 duplicated acts, 0 wrong routes, 0 false successes, handler
-checks about +38 ms per boundary. Every cause it found is fixed and merged: requirement gate version form, declared-
-none retry, per-flow keys (t405), defaulted inputs and the entry completion check, child-frame projection (t406),
-navigating check reply (t407), plumbing boundaries and `run.outcome_uncertain` (t408, t412), reconcile by command id
-(t409), run-log parts (t410), completed-act ledger with already-done skips and slim handler inputs (t411; a handler
-run fell from 9-12 s to 11-32 ms), step `done when:` with page reconciliation and the rule that a landed lasting act
-is never pressed twice (t413), already-done wording (t415). Paid-proof commands are prepared and dry-run (t414,
-`reports/t414-paid-proof-prep.md`): R4a crossborder hub-to-cart with the flash deal during the build, R4b crossborder
-basket-redesign after creation; both admitted by the guards, zero calls in dry run; all four Lab slots are assigned to
-lanes A-D, so one must be lent.
-Matrix round 2 (t417): 14 of 14 cases pass provider-free, 0 model calls, 0 wrong routes, 0 duplicated acts, 0 false
-successes. Paid R4a (approved by the user with R4b) failed twice, about $0.13 in all: attempt 1 (run-mv2nlh9l) saved the
-quantity box by a per-load id; attempt 2 (run-mv2pgqkj) saved it without its label, pressed a promotion's offer in an
-optional step, and looped on a clear step the page undid. Fixes merged: t419 (absent id tokens never count), t420
-(trial feedback when the control is still on the page), t421/t424 (chat wording), t422 (a model-built step saves the
-full fingerprint the recorded path saves), t423 (an interruption is dismissed through its way out, consent banners
-excepted; typing replaces a value). New user rules (2026-10-10): every saved element carries a full multi-signal
-fingerprint, and the model never sees or handles fingerprints.
-Also merged: t425 (one fingerprint builder, `domain/src/element-fingerprint/` with the packet reader
-`runtime/llm-evidence/packet-fingerprint/`, used by recording, build and target repair; a step with fewer than two
-identity signals is refused at save; hand-authored literal-selector steps are not judged); t426 (Core's model boundary
-`runtime/llm/model-facing/` drops locators, scores and finding words from every failure text the model reads); t428
-(the chat says what follows a failed step: the Flow's fail path, carrying on, an in-run fix, or stopping). A direct
-dev fix (1ea9b038): the exploration retry path wrote `declaredConsequences: []` for a press that declared nothing,
-so after 61f6adbf an undeclared lasting press could be retried; it now writes no key.
-Also merged: t427 (a lost durable command is asked about by id before it is called unknown; a required run whose
-outcome stays unknown keeps its exactly-once latch and stops `run.outcome_uncertain`, worded from the page check:
-supervisor decision (a), 2026-10-10, because required mode proves outcomes and a page check is evidence, not a
-receipt); t429 (in-run repair steps and handler facts resolve through the domain before the overlay; an unknown or
-thin handle is refused); t431 (a failed control is named to the model by its own words through one helper,
-`runtime/llm/model-facing/control-words.ts`; a resolved identity's name attribute is never read).
-Sweep-1010b (second of the day, on downstream 7ad7278f / Core 8500e1a2): Core build and check pass, Core test one
-failure (repair brief lost the control's words after t426; fixed by t431), downstream check and build pass,
-downstream test: domain 2 failures (`runtime/tests/lasting-act-statement.test.ts`, the supervisor's 61f6adbf let a
-step's `consequences: none` unlock a second press of a committing act; t430), extension 2862/2862, test-runner
-2216/2216, scenario-lab 8 failures that pass 22/22 alone (t433).
-Also merged: t430 (61f6adbf withdrawn: a step's `consequences: none` never unlocks a second press of a committing
-act; a step with no `done when:` asks the host's `actLanded`, where the pressed control gone means landed and a way
-out still shown means not landed); t432 (element parameters are shown to the model by handle only, Wait For
-Selector is shown as Wait For Element, and a selector or locator the model writes is refused on every path it writes
-steps, amend_draft included); t433 (honest-path steps budget in page time; one real race fixed); t434 (Core's own
-runtime transport sends required commands; a never-sent command is withdrawn and ends unacted); t435 (a runtime
-session run resolves its storage once and reuses one connection per database: 43 reads per run fell from about
-270 ms to 45 ms; the required-mode test hang was this cost under load, not t427). Direct fixes: downstream b12f0391
-(a timed test made order-based), Core 19bf1773 (an import-order crash in two test entries).
-Paused (2026-10-10, end of session): the user approved R4a attempt 3 then R4b; attempt 3 (run-mv35459z-b5aa50cc,
-`fxwork/t418` synced to dev 527aae6b / Core 9aeba98c) was stopped mid-build by the supervisor when the user wrapped
-up, because a paid run never runs unsupervised. No verdict; a few cents spent. Debug note:
-`language-driven-flow-loop-plan/debugs/run-mv35459z-b5aa50cc.md`.
-Next: relaunch R4a attempt 3 (same command as `reports/t414-paid-proof-prep.md` with
-`FLUXIQ_LAB_INSTANCE=t418-proofs FLUXIQ_TEST_TARGET=persistent-isolated`, workspace `t418-r4a-4`) after syncing
-`fxwork/t418` to dev, and supervise it to its end; then R4b; then lanes A-D round 3.
-Follow-ups: consolidate the way-out label lists (extension vocabulary, t430's domain list); bigbox "naive paths"
-stalls at 8 parallel copies (t433 open question); only runRuntimeSession keeps connections (t435).
+**Follow-ups (not started).** Consolidate the way-out label lists (extension interference vocabulary and t430's domain
+`act-landing/way-out-label.ts`); bigbox "naive paths" stalls at 8 parallel copies (t433 open question); only
+`runRuntimeSession` keeps storage connections (t435); a new matrix case for a timed-out dismiss press through
+`actLanded` (row 9 now strikes a Confirm, t430); reconciled flag in run detail; Core web chat "Already done" wording.
 
 **Binding rules every unit keeps** (the user's, from `mvp-final-month-plan.md` Current State, and Core's
 architecture): state routing stays a global runtime behaviour that precedes any model call; every node keeps first
 attempt plus 3 retries and a lasting act with an uncertain effect is never blindly repeated; the model is called
 only on a true failure, inside the live run at the failing step, and the run carries on when the fix holds; any fix
 (unit or whole) is saved to the Flow only after one judged whole run from the start; partial runs from a node are
-allowed in repair; no permission grants for model calls (only genuinely risky acts ask the person); tests and Lab runs use only the ten realistic scenarios, headed, started from the
-extension chat for live runs; paid runs only with a live supervisor, $0.10 per Flow, one attempt per launch, every
-run debugged before a rerun; the extension is chat-first and every step is its own message with a card in plain
-words; model guidance never mirrors a realistic scenario's task or site; full suites at most twice a day.
+allowed in repair; no permission grants for model calls (only genuinely risky acts ask the person); every saved
+element carries a full fingerprint and the model names elements by handle only; tests and Lab runs use only the ten
+realistic scenarios, headed, started from the extension chat for live runs; paid runs only with a live supervisor,
+$0.10 per Flow, one attempt per launch, every run debugged before a rerun; the extension is chat-first and every step
+is its own message with a card in plain words; model guidance never mirrors a realistic scenario's task or site; full
+suites at most twice a day.
 
 ---
 
@@ -503,6 +447,14 @@ Their briefs are written here before dispatch, against the code as it then stand
 - Validation: before launch, `FLUXIQ_TEST_ENV_FILES=none pnpm lab recovery-matrix --case 1 --case 2 --case 9` on dev (rmx-2026-10-10T23-54-47-485Z-5ac142) -> cases 1, 2 and 9 passed; `fxwork/t418` fast-forwarded to dev in both repos and rebuilt (`pnpm build` Core, `pnpm -r build` downstream, exit 0). The run reached mid-build (eight UI-review snapshots) and was stopped; its Lab, Core web, scenario server and browser processes were ended (none left)
 - Outcome: Blocked
 - Follow-up: relaunch supervised, then R4b
+
+### 2026-10-10 - Handoff: Current State rewritten; paid R4a paused
+- Agent: senior supervisor agent (Claude)
+- Changed: this document's Current State and header, rewritten as a summary of what is true now
+- Why: the user wrapped up the session ("we'll resume later"); R4a attempt 3 stopped and recorded
+- Validation: `node scripts/structure-audit.mjs` -> "structure-audit: passed (184 warning(s), 651 baselined)." (run after this edit, see the commit); no product change in this entry
+- Outcome: Accepted
+- Follow-up: next session relaunches R4a attempt 3 supervised, then R4b, then lanes A-D round 3
 
 ## Open Questions
 
