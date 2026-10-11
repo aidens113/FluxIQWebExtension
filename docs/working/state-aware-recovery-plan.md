@@ -502,6 +502,27 @@ Their briefs are written here before dispatch, against the code as it then stand
   check and test-runner comments still say per-build; t439 Core was finished before its downstream half (order slip,
   no harm: downstream then synced to Core dev and re-validated)
 
+### 2026-10-11 - R4a passed; R4b failed on new defects; t442-t446 dispatched
+- Agent: senior supervisor agent (Claude); investigation workers (reports `reports/r4-refused-submits-and-decisions.md`,
+  `r4b-coupon-step-identity.md`, `r4b-withheld-act-judge.md`)
+- Changed: debug notes `run-mv4dcf2j-cb68009a.md` (R4a) and `run-mv4dgmki-2b13db91.md` (R4b); no product change yet
+- Why: R4a (run-mv4dcf2j-cb68009a) passed: built in 81 s, trial passed, Lab replay on a fresh page passed with no
+  repair, $0.0365. R4b (run-mv4dgmki-2b13db91) failed, $0.0887: the in-run rung refused the renamed "Add to basket"
+  (`target_unanchored`); the re-author loop's rerun pressed it on a reloaded page with nothing redone, adding the wrong
+  item; the judge then refused. The coupon step saved a wordless identity (t356's merge of before/after views)
+- Validation: before both launches, provider-free `pnpm lab recovery-matrix --ready` then `--case 2 ... --case 11` in
+  fxwork/t418 -> every case (1, 2, 3, 4a, 4b, 5-11, 13a, 13b) passed; R4a launcher `{"verdict":"passed",
+  "totalEstimatedCostUsd":0.036523158, ... "buildsOverCeiling":0}`; R4b `{"verdict":"failed",
+  "totalEstimatedCostUsd":0.088691622, ... "buildsOverCeiling":0}`, bundle published, ledger verdict truthful
+- Outcome: Revised
+- Decisions (supervisor): D1 (a build test never repeats a lasting effect) stays; the rerun-place fix plus judge
+  evidence make one correct press provable. Approved: a step saves the control as it was when acted on, and words the
+  act changed are its effect, never its identity. Refused handles enter the submit-refusal key
+- Follow-up: t442 acted-control handle, pre-act identity, effect, save floor, refusal advice (Core-paired); t443 repair
+  rerun redoes earlier steps and the judge sees the real landing (Core); t444 requested acts never silently skipped,
+  done words count as done (Core); t445 unambiguous tool-call decisions accepted (Core); t446 renamed control accepted
+  by the in-run rung (domain). Then matrix, sync, relaunch R4b
+
 ## Open Questions
 
 - User: approve the MVP cut (R1-R4b before the freeze, R5a in hardening, R4c/R5b after the RC) or move the whole

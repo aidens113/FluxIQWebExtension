@@ -224,7 +224,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       run.shown(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, choice: undefined, changed: undefined, control: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
+        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, choice: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
@@ -430,11 +430,12 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // Arriving from nowhere changed the page by definition: there was none. A
     // page that could not be read was not compared, so it is not said.
     const changed = after === undefined ? undefined : current === undefined || JSON.stringify(after.evidence) !== JSON.stringify(current.evidence);
-    // A press that changed the page acts on what it pressed, whatever that
-    // prints as: words a listener the capture cannot see makes a control
-    // (`../plan-resolution/target-packets.ts` `pressed`, t378 W13).
-    const pressedHandle = changed === true && node.definitionId === PRESS_NODE_ID ? webPlanFirstTargetHandle(written) : undefined;
-    if (pressedHandle !== undefined) run.stores.targets.pressed({ projectId: run.request.projectId, flowId: run.request.flowId }, pressedHandle);
+    // The control this call acted on, named on its result by handle (`./outcome.ts` `controlHandle`, t442). A press that changed the page acts on what it
+    // pressed, whatever that prints as (`../plan-resolution/target-packets.ts` `pressed`, t378 W13); and a step later written for any control acted on
+    // saves it as this act found it, never as the act left it (`acted`, t442 F1).
+    const named = webMovesThePage(node) ? undefined : webPlanFirstTargetHandle(written);
+    if (changed === true && node.definitionId === PRESS_NODE_ID && named !== undefined) run.stores.targets.pressed(buildOf(run), named);
+    if (current && node.effect === "mutate" && named !== undefined) run.stores.targets.acted(buildOf(run), named, current);
     // Whether the press answered a layer that stood in front of the page, one
     // this build did not open itself (`./press-effect/answered-layer.ts`,
     // `./own-layers/memory.ts`); then, whichever layers this press opened are the
@@ -458,7 +459,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       choice: webPressChoice(node, current, after, webPlanFirstTargetHandle(written)),
       // Which lines it changed, on the same page only (`./press-effect/page-changes.ts`, t174/F37).
       changed: webNodePageChanges(node, current, after),
-      control: control.name,
+      control: control.name, controlHandle: named,
       read,
       addable: node.proposes,
       inFlow: undefined, attempts: attempts > 1 ? attempts : undefined
@@ -690,7 +691,6 @@ function handleRefusal(parameters: JsonObject, issueCodes: readonly string[]) {
   });
 }
 
-/** The first target handle a call's parameters name, wherever it wrote it. */
 /**
  * The words the packet store keeps beside the identity of the control
  * `written`'s handle names, resolved bare as the call's words are

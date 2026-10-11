@@ -76,6 +76,22 @@
 // changed is dropped, never adopted. A handle the newer view no longer shows
 // still leaves the page with it, as above.
 //
+// **A control exploration acted on is saved as the act found it (t442, F1).**
+// The agreement above serves exploration, which acts on the page as it now is.
+// Saved into a Flow it left R4a's and R4b's coupon step as `{div, class b}`:
+// "Get coupons" before the press, "Collected" after it, so no words survived,
+// and a wordless identity matches the done control as well as the undone one
+// (`r4b-coupon-step-identity.md`). So each handle exploration acted on also
+// keeps the identity its control had in the view the act was made from
+// (`acted`, from `../node-run/run.ts`; the first act's, since a Flow meets the
+// control as exploration first did). A candidate submission (`view_history`)
+// saves that identity in full; what the act changed -- the new words, the class
+// it toggled -- is the step's effect, never who the control is. Exploration's
+// own acts keep the agreed identity, so nothing it presses on the page as it
+// now is is vetoed for words the act took away. Only while the handle still
+// names the address it was acted on at; a handle nothing acted on keeps the
+// agreed identity everywhere.
+//
 // **A candidate submission may name a control from any view (t358).** The
 // store also keeps each Flow's view history (`view-history.ts`): every handle
 // any capture carried, as its views agree it is (`acrossView`). Only a caller
@@ -139,6 +155,8 @@ const REMEMBERED_STALE_PAGES = 64;
 const PRINTED_PER_FLOW = 16_384;
 /** Handles one Flow remembers a press changing the page for; the one pressed longest ago goes first. */
 const PRESSED_PER_FLOW = 4096;
+/** Handles one Flow remembers the acted-on identity of; the one acted on longest ago goes first. */
+const ACTED_PER_FLOW = 4096;
 
 export type WebLlmTargetScope = { projectId: string; flowId: string };
 
@@ -181,6 +199,8 @@ export type WebLlmTargetPackets = {
   printed(scope: WebLlmTargetScope, result: unknown, echoed?: unknown): void;
   /** Exploration pressed `handle` and the page changed: a press acts on it, whatever its element prints as (header). */
   pressed(scope: WebLlmTargetScope, handle: string): void;
+  /** Exploration acted on `handle` from the page `before` showed: a candidate's step saves its control as it was there (header). */
+  acted(scope: WebLlmTargetScope, handle: string, before: WebLlmSnapshotBinding): void;
   resolve(scope: WebLlmTargetScope, handle: string, location: string | undefined, reach?: WebLlmTargetReach): WebLlmTargetResolution;
 };
 
@@ -190,9 +210,13 @@ type PageTargets = Map<string, PageTarget>;
  * `renumbered`: per page, the handles a reload dropped while showing their
  * control under another (see the header). `history`: every handle any capture
  * carried (header). `printed`: every handle evidence printed (header). `pressed`: every handle
- * a press of exploration's changed the page for (header).
+ * a press of exploration's changed the page for (header). `acted`: each handle exploration acted
+ * on, as the view the first act was made from showed it (header).
  */
-type FlowPages = { pages: Map<string, PageTargets>; letGo: Set<string>; renumbered: Map<string, Set<string>>; history: WebLlmViewHistory<PageTarget>; printed: Set<string>; pressed: Set<string> };
+type FlowPages = {
+  pages: Map<string, PageTargets>; letGo: Set<string>; renumbered: Map<string, Set<string>>; history: WebLlmViewHistory<PageTarget>;
+  printed: Set<string>; pressed: Set<string>; acted: Map<string, PageTarget>;
+};
 
 export function createWebLlmTargetPackets(): WebLlmTargetPackets {
   const flows = new Map<string, FlowPages>();
@@ -205,7 +229,8 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       renumbered: new Map<string, Set<string>>(),
       history: createWebLlmViewHistory(acrossView),
       printed: new Set<string>(),
-      pressed: new Set<string>()
+      pressed: new Set<string>(),
+      acted: new Map<string, PageTarget>()
     };
     flows.delete(key);
     flows.set(key, flow);
@@ -257,6 +282,19 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       if (flow === undefined || handle === undefined || flow.history.find(handle, undefined) === undefined) return;
       keepNewest(flow.pressed, [handle], PRESSED_PER_FLOW);
     },
+    acted(scope, written, before) {
+      const handle = canonicalWebLlmTargetHandle(written);
+      const flow = flows.get(scopeKey(scope));
+      // The first act's view only (header); a look the capture cut short before the control says nothing of it.
+      if (flow === undefined || handle === undefined || flow.acted.has(handle)) return;
+      const target = targetsOf(before).get(handle);
+      if (target === undefined || target.shared) return;
+      flow.acted.set(handle, target);
+      for (const oldest of flow.acted.keys()) {
+        if (flow.acted.size <= ACTED_PER_FLOW) break;
+        flow.acted.delete(oldest);
+      }
+    },
     resolve(scope, written, location, reach) {
       const handle = canonicalWebLlmTargetHandle(written) ?? written;
       const flow = flows.get(scopeKey(scope));
@@ -264,8 +302,8 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const current = resolveCurrent(flow, handle, location);
       if (reach !== "view_history") return pressedBefore(flow, handle, current);
       const reached = resolveFromHistory(flow, handle, location, current);
-      // A candidate names only what evidence printed (header).
-      return reached.ok && !flow.printed.has(handle) ? { ok: false, code: "not_shown" } : pressedBefore(flow, handle, reached);
+      // A candidate names only what evidence printed, and saves a control acted on as the act found it (header).
+      return reached.ok && !flow.printed.has(handle) ? { ok: false, code: "not_shown" } : actedAs(flow, handle, pressedBefore(flow, handle, reached));
     },
   };
 }
@@ -316,6 +354,20 @@ function keepNewest(kept: Set<string>, handles: Iterable<string>, bound: number)
 /** `resolution`, no longer marked `notAControl` when a press of exploration's on `handle` changed the page (header). */
 function pressedBefore(flow: FlowPages, handle: string, resolution: WebLlmTargetResolution): WebLlmTargetResolution {
   if (resolution.ok && resolution.notAControl === true && flow.pressed.has(handle)) delete resolution.notAControl;
+  return resolution;
+}
+
+/**
+ * `resolution` with the identity, and the words, its control had where
+ * exploration first acted on `handle` (header): only while it names that same
+ * address, since another element under the handle is not the control acted on.
+ */
+function actedAs(flow: FlowPages, handle: string, resolution: WebLlmTargetResolution): WebLlmTargetResolution {
+  const acted = flow.acted.get(handle);
+  if (!resolution.ok || acted === undefined || addressOf(acted) !== addressOf(resolution)) return resolution;
+  resolution.element = structuredClone(acted.element);
+  if (acted.words === undefined) delete resolution.words;
+  else resolution.words = acted.words;
   return resolution;
 }
 
@@ -475,7 +527,7 @@ function keep(flow: FlowPages, location: string, targets: PageTargets): void {
  * the same selector inside their own roots, and those are two controls, not one
  * shared selector.
  */
-function addressOf(target: PageTarget): string {
+function addressOf(target: Pick<PageTarget, "selector" | "frameId" | "element">): string {
   const hosts = target.element.context?.shadowHosts;
   return `${target.frameId ?? 0}\0${hosts === undefined ? "" : hosts.join("\u001f")}\0${target.selector}`;
 }

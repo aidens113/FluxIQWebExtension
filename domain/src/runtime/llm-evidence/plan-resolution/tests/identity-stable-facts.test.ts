@@ -175,13 +175,25 @@ test("a control whose autocomplete says it holds a secret keeps the author's des
 
 test("a label a newer view of the same handle changed is dropped, and one both views show is kept", async () => {
   let label = "Quantity";
-  const runtime = runtimeOver(() => [searchBox, quantityBox("fb1l6ufkg", label)]);
+  const runtime = runtimeOver(() => [searchBox, quantityBox("fb1l6ufkg", label, "q7k2-qty qty-input")]);
   await look(runtime);
   await look(runtime);
   assert.equal(((await typedElement(runtime, "t2")).element as JsonObject).label, "Quantity");
   label = "Quantity (max 5)";
   await look(runtime);
   assert.equal(((await typedElement(runtime, "t2")).element as JsonObject).label, undefined);
+});
+
+// The cost of the F5 floor (t442), measured: a box nothing acted on, whose label two looks disagree on, is left with
+// its tag and one class, and a step naming it is refused at its line rather than saved that thin.
+test("a box left with its tag and one class once its label is dropped is refused, not saved", async () => {
+  let label = "Quantity";
+  const runtime = runtimeOver(() => [searchBox, quantityBox("fb1l6ufkg", label)]);
+  await look(runtime);
+  label = "Quantity (max 5)";
+  await look(runtime);
+  const answer = await runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: TYPE_NODE, parameters: { selector: { handle: "t2" }, text: "3" }, declaredConsequences: NOTHING_LASTING });
+  assert.deepEqual(answer, { status: "refused", issueCodes: ["web.handle.unidentifiable", "web.handle.unidentifiable:selector"] });
 });
 
 test("a class an act toggles is dropped across views, and the tokens both views carry are kept", async () => {

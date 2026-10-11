@@ -31,7 +31,17 @@
 //   counted unless the selector is addressed through it.
 // - **classNames**: the class tokens, as one signal however many there are --
 //   they are one attribute the page wrote -- counted while one token the
-//   selector does not quote is left.
+//   selector does not quote is left -- except a lone class beside a bare tag.
+//
+// **A tag and one class are one signal, not two (t442, F5).** R4a and R4b saved
+// crossborder's coupon as `{div, class b}`: no words, label, name, role, id or
+// test id, and the floor counted the tag and the one class as the two it asks
+// for. One short class token is how the page's stylesheet groups the control
+// with its look-alikes -- the coupon's done state wore the same `b` -- so it
+// says what the control looks like, not which one it is. So when the class set
+// is a single token and nothing else is said but the tag (with its implied role
+// or input type), the class is not counted; with a second token, an explicit
+// role, or any other signal beside it, it counts as before.
 //
 // Where the control sat -- its record, form, list position, landmark, shadow
 // roots -- is carried and gates the search, but names no control on its own,
@@ -53,7 +63,10 @@ export function webElementIdentitySignals(fingerprint: WebAutomationElementFinge
   if (said(fingerprint.id) && !quoted.has(comparable(fingerprint.id))) signals.push("id");
   if (said(fingerprint.testId) && !quoted.has(comparable(fingerprint.testId))) signals.push("testId");
   if (said(fingerprint.name) && !quoted.has(comparable(fingerprint.name))) signals.push("name");
-  if ((fingerprint.classNames ?? []).some((token) => said(token) && !quoted.has(comparable(token)))) signals.push("classNames");
+  const classes = (fingerprint.classNames ?? []).filter((token) => said(token) && !quoted.has(comparable(token)));
+  // One class beside a bare tag is not a second signal (header, t442 F5).
+  const loneClassOnBareTag = classes.length === 1 && signals.every((signal) => signal === "kind") && !said(fingerprint.role);
+  if (classes.length > 0 && !loneClassOnBareTag) signals.push("classNames");
   return signals;
 }
 
