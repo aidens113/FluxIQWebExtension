@@ -486,7 +486,7 @@ Their briefs are written here before dispatch, against the code as it then stand
   (`actions/consequence-declaration.ts`), saved steps rerun as saved, undeclared presses never sent, optional steps
   never forced, untested optional edits revert; t440 repairable actions from schemas; t441 two stale tests repaired
 - Why: R4a run-mv4912r9-53b05a51's four root causes; the user: "the model isn't the issue"
-- Validation (supervisor, each on its task branch): t440 `test-domain.mjs llm-evidence/tests/repairable-parameters
+- Validation: supervisor, each on its task branch: t440 `test-domain.mjs llm-evidence/tests/repairable-parameters
   llm-evidence/target/tests` -> "# pass 51 # fail 0"; t437 evidence 19/19, live-guards 42/42, test-runner
   facility-failure + lab-runs 44/44; t436 unit batch 341/342 (the one failure also on dev 327/328, fixed by t441),
   headed resolver net 55/56 (the one failure `volatile-selector-replay:179` also fails on dev, fixed by t441); t441
