@@ -14,12 +14,20 @@
 // under (`perBuildSpend`, the same reading the live campaign's rows use): the
 // ceiling, the most any one build spent, and how many builds went past it.
 //
-// A run killed before `finalize` renamed it is still a `.staging-run-*`
-// directory. It is read as that run, `verdict: "killed"`, with the cost and
-// balance failure its step log proves (`step-log-outcome.mjs`), so its spend
-// reaches the ledger, an empty balance it hit still stops later launches, and
-// the debug rule still asks for its debug. Once its bundle exists, the bundle
-// is read instead.
+// A run killed before `finalize` sealed it is still a `.staging-run-*`
+// directory with no `bundle.complete.json`. It is read as that run,
+// `verdict: "killed"`, with the cost and balance failure its step log proves
+// (`step-log-outcome.mjs`), so its spend reaches the ledger, an empty balance it
+// hit still stops later launches, and the debug rule still asks for its debug.
+// Once its bundle exists, the bundle is read instead.
+//
+// A staging directory that is sealed -- its `bundle.complete.json` holds the
+// hash of its `artifact-index.json` -- is a run that finished and could not be
+// published (`EvidenceBundlePublicationError`: run-mv4912r9-53b05a51's rename
+// was refused while a reader held a file). It is read exactly as a finalized
+// bundle, with its own verdict, cost and per-build spend, plus
+// `unpublished: true`. Read as killed it had skipped the `unchanged` rule,
+// which let a real product failure be relaunched on the same source.
 //
 // A run that failed on the facility before any provider call never tested the
 // product: lane A's `run-mv0fu9uq-107ab0de` timed out on the Lab's own
@@ -31,6 +39,7 @@
 // no evaluation, a call count it did not record, a step log with a call --
 // leaves the field null, and the run counts as it always did.
 
+import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { perBuildSpend } from "../live-campaign/row/index.mjs";
@@ -46,7 +55,7 @@ const SKEW_MS = 5_000;
 
 /**
  * @typedef {{ stage: string, reason: string, endpoint?: string }} FacilityFailureBeforeProvider
- * @typedef {{ runId: string, startedAt: string | null, verdict: string | null, totalEstimatedCostUsd: number | null, buildCeilingUsd: number | null, maxBuildCostUsd: number | null, buildsOverCeiling: number | null, balanceFailure: ReturnType<typeof detectBalanceFailure>, facilityFailureBeforeProvider: FacilityFailureBeforeProvider | null, killed?: true }} RunOutcome
+ * @typedef {{ runId: string, startedAt: string | null, verdict: string | null, totalEstimatedCostUsd: number | null, buildCeilingUsd: number | null, maxBuildCostUsd: number | null, buildsOverCeiling: number | null, balanceFailure: ReturnType<typeof detectBalanceFailure>, facilityFailureBeforeProvider: FacilityFailureBeforeProvider | null, killed?: true, unpublished?: true }} RunOutcome
  */
 
 /**
@@ -71,30 +80,60 @@ export async function readRunOutcomes(runsDirectory, { sinceMs, knownRunIds, lab
       const runId = staged[1];
       const startMs = parseInt(staged[2], 36);
       if (finalized.has(runId) || knownRunIds.has(runId) || !(startMs >= sinceMs - SKEW_MS)) continue;
-      if (!(await stat(path.join(runsDirectory, name))).isDirectory()) continue;
-      outcomes.push(await killedOutcome(runId, startMs, labRunsDirectory));
+      const directory = path.join(runsDirectory, name);
+      if (!(await stat(directory)).isDirectory()) continue;
+      outcomes.push(await isSealed(directory)
+        ? { ...(await finalizedOutcome(directory, runId, startMs, labRunsDirectory, true)), unpublished: true }
+        : await killedOutcome(runId, startMs, labRunsDirectory));
       continue;
     }
     const named = RUN_DIRECTORY.exec(name);
     if (named === null || knownRunIds.has(name) || !(parseInt(named[1], 36) >= sinceMs - SKEW_MS)) continue;
     const directory = path.join(runsDirectory, name);
     if (!(await stat(directory)).isDirectory()) continue;
-    const run = await readJson(path.join(directory, "run.json"));
-    const startedAt = typeof run?.startedAt === "string" ? run.startedAt : new Date(parseInt(named[1], 36)).toISOString();
-    const liveLlm = await readJson(path.join(directory, "snapshots", "live-llm.json"));
-    const failures = await readJson(path.join(directory, "provider-failures.local.json"));
-    const verdict = typeof run?.verdict === "string" ? run.verdict : typeof run?.status === "string" ? run.status : null;
-    outcomes.push({
-      runId: name,
-      startedAt,
-      verdict,
-      totalEstimatedCostUsd: costOf(liveLlm),
-      ...perBuildOf(liveLlm),
-      balanceFailure: failures === null ? null : detectBalanceFailure(failures),
-      facilityFailureBeforeProvider: verdict === "passed" ? null : await facilityFailureBeforeProvider(directory, name, liveLlm, labRunsDirectory),
-    });
+    outcomes.push(await finalizedOutcome(directory, name, parseInt(named[1], 36), labRunsDirectory, false));
   }
   return outcomes.sort((left, right) => String(left.startedAt).localeCompare(String(right.startedAt)));
+}
+
+/**
+ * A finalized run read from its bundle: the published `<runId>` folder, or a
+ * sealed staging folder that could not be published. An unpublished one may
+ * lack its local provider-failure sidecar (a runner before 2026-10-11 wrote it
+ * only into the published folder), so its balance failure falls back to the
+ * step log, as does a cost its bundle did not record.
+ */
+async function finalizedOutcome(directory, runId, startMs, labRunsDirectory, unpublished) {
+  const run = await readJson(path.join(directory, "run.json"));
+  const startedAt = typeof run?.startedAt === "string" ? run.startedAt : new Date(startMs).toISOString();
+  const liveLlm = await readJson(path.join(directory, "snapshots", "live-llm.json"));
+  const failures = await readJson(path.join(directory, "provider-failures.local.json"));
+  const verdict = typeof run?.verdict === "string" ? run.verdict : typeof run?.status === "string" ? run.status : null;
+  const logged = unpublished && (failures === null || costOf(liveLlm) === null) && labRunsDirectory !== null ? await readStepLogOutcome(labRunsDirectory, runId) : null;
+  return {
+    runId,
+    startedAt,
+    verdict,
+    totalEstimatedCostUsd: costOf(liveLlm) ?? logged?.totalEstimatedCostUsd ?? null,
+    ...perBuildOf(liveLlm),
+    balanceFailure: failures === null ? logged?.balanceFailure ?? null : detectBalanceFailure(failures),
+    facilityFailureBeforeProvider: verdict === "passed" ? null : await facilityFailureBeforeProvider(directory, runId, liveLlm, labRunsDirectory),
+  };
+}
+
+/** Whether a staging folder was sealed: its `bundle.complete.json` names the hash of the `artifact-index.json` beside it. */
+async function isSealed(directory) {
+  const marker = await readJson(path.join(directory, "bundle.complete.json"));
+  if (typeof marker?.artifactIndexSha256 !== "string") return false;
+  let index;
+  try {
+    index = await readFile(path.join(directory, "artifact-index.json"));
+  } catch (error) {
+    // A marker with no index is not a sealed bundle; it reads as the kill it is.
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+  return createHash("sha256").update(index).digest("hex") === marker.artifactIndexSha256;
 }
 
 /** A run killed before its bundle was finalized: what its step log proves it spent, or an unknown cost when it has none. */

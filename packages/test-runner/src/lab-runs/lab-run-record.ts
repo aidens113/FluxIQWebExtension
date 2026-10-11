@@ -95,7 +95,12 @@ export class LabRunRecord {
   /**
    * Files the finished run. Runs once; a second call does nothing, so a caller
    * may close again on a path that did not reach the first. Without a
-   * `bundlePath` only the verdict is recorded.
+   * `bundlePath` only the verdict is recorded. `bundlePath` is wherever the
+   * sealed bundle actually is: its final folder, or -- when publication failed
+   * (`EvidenceBundlePublicationError`) -- the `.staging-<runId>` folder it stays
+   * in, which `entry.json` then names, so the steps are linked and the cost read
+   * either way. Every close names the run's steps folder on the log, so the
+   * steps can be found whether or not a bundle exists.
    */
   async close(input: { verdict: string; bundlePath?: string | undefined }): Promise<void> {
     if (!this.opened || this.closed) return;
@@ -112,9 +117,10 @@ export class LabRunRecord {
     }
     let stepCount = 0;
     await this.attempt("count the run's steps", async () => { stepCount = await countSteps(steps); });
-    this.entry = { ...this.entry, verdict: input.verdict, costUsd, finishedAt: new Date().toISOString(), steps: stepCount };
+    this.entry = { ...this.entry, verdict: input.verdict, ...(bundlePath ? { bundlePath } : {}), costUsd, finishedAt: new Date().toISOString(), steps: stepCount };
     await this.attempt("update entry.json", () => this.writeEntry());
     await this.regenerate();
+    this.log(`[lab runs] this run's ${stepCount} step(s) are in ${steps}`);
   }
 
   private async writeEntry(): Promise<void> {
