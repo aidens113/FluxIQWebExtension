@@ -122,21 +122,21 @@ test("after the stop is cleared, a debug is written and the source changes, the 
   }
 });
 
-test("the ledger records each run's spend per build against its ceiling, beside the run's total", async () => {
+test("the ledger records each run's Flow against its ceiling, beside the run's total", async () => {
   const lab = await fixture();
   try {
     const admission = await lab.admit();
     const start = await recordLiveRunStart(admission, { now: lab.now(), pid: 4243 });
     lab.advance(20_000);
     const runId = runIdAt(lab.now() - 15_000, "0b1d0001");
-    // A build and its repair at $0.20 each: $0.40 for the run, and no build past $0.25.
+    // A build and its repair at $0.20 each: inside $0.25 each, and one Flow at $0.40 past it (t438).
     const builds = [{ phase: "build", attempt: null, estimatedCostUsd: 0.2, overCeiling: false }, { phase: "runtime", attempt: null, estimatedCostUsd: 0.2, overCeiling: false }];
     const liveLlm = { authorized: { maxTotalEstimatedCostUsd: 0.25 }, observed: { totalEstimatedCostUsd: 0.4, perBuild: { ceilingUsd: 0.25, builds, maxBuildCostUsd: 0.2, overCeiling: 0 } } };
     await lab.writeRun(runId, { startedAt: new Date(lab.now() - 15_000).toISOString(), liveLlm });
     const { finishes } = await recordLiveRunFinish(admission, start, { exitCode: 0, now: lab.now() });
-    assert.deepEqual([finishes[0].totalEstimatedCostUsd, finishes[0].buildCeilingUsd, finishes[0].maxBuildCostUsd, finishes[0].buildsOverCeiling], [0.4, 0.25, 0.2, 0]);
+    assert.deepEqual([finishes[0].totalEstimatedCostUsd, finishes[0].buildCeilingUsd, finishes[0].maxBuildCostUsd, finishes[0].buildsOverCeiling], [0.4, 0.25, 0.4, 1]);
     const ledgered = (await lab.ledger()).find((entry) => entry.event === "finish");
-    assert.deepEqual([ledgered.buildCeilingUsd, ledgered.maxBuildCostUsd, ledgered.buildsOverCeiling], [0.25, 0.2, 0]);
+    assert.deepEqual([ledgered.buildCeilingUsd, ledgered.maxBuildCostUsd, ledgered.buildsOverCeiling], [0.25, 0.4, 1]);
   } finally {
     await lab.cleanup();
   }

@@ -8,11 +8,13 @@
 // failure, if any, comes from `provider-failures.local.json`. A run that died
 // before writing a file has that field null, not zero.
 //
-// The cost is the run's sum, which a build followed by a repair may rightly
-// take past $0.25. What the user's rule bounds is each build, so the outcome
-// also carries the run's spend per build against the ceiling it was planned
-// under (`perBuildSpend`, the same reading the live campaign's rows use): the
-// ceiling, the most any one build spent, and how many builds went past it.
+// The cost is the run's sum. What the user's rule bounds is each Flow -- their
+// words (2026-10-01): "bring the ceiling down to $0.1 per flow max", the build,
+// its re-authors, its repairs and the judge together (t438) -- so the outcome
+// also carries the run's Flow against the ceiling it was planned under
+// (`perBuildSpend`, the same reading the live campaign's rows use): the
+// ceiling, what the Flow spent, and whether it went past it. The fields keep
+// their names (`maxBuildCostUsd`, `buildsOverCeiling`) for the ledger's readers.
 //
 // A run killed before `finalize` renamed it is still a `.staging-run-*`
 // directory. It is read as that run, `verdict: "killed"`, with the cost and
