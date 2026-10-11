@@ -113,7 +113,8 @@ test("a sealed staging run that could not be published is read as finalized, wit
     assert.equal(outcome.killed, undefined);
     assert.equal(outcome.unpublished, true);
     assert.equal(outcome.totalEstimatedCostUsd, 0.120331128, "the bundle's own cost, not the step log's");
-    assert.deepEqual([outcome.buildCeilingUsd, outcome.maxBuildCostUsd, outcome.buildsOverCeiling], [0.1, 0.0734, 0]);
+    // One purse per Flow (t438, "$0.1 per flow max"): the Flow's whole spend is its build figure, and it was over.
+    assert.deepEqual([outcome.buildCeilingUsd, outcome.maxBuildCostUsd, outcome.buildsOverCeiling], [0.1, 0.120331128, 1]);
     assert.equal(outcome.balanceFailure, null);
     assert.equal(outcome.facilityFailureBeforeProvider, null);
   } finally {
