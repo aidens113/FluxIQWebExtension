@@ -83,7 +83,7 @@ test("close links the bundle's steps to the central steps, copies only the key f
   }
 
   await record.close({ verdict: "passed", bundlePath: bundle });
-  assert.deepEqual(lines, []);
+  assert.deepEqual(lines, [`[lab runs] this run's 3 step(s) are in ${steps}`], "the full steps path is named, and nothing failed");
 
   // The junction reads as the central steps, and nothing is copied.
   assert.ok((await lstat(path.join(bundle, "steps"))).isSymbolicLink(), "the bundle's steps is a link");
@@ -115,8 +115,9 @@ test("close is best-effort and runs once: a missing bundle records the verdict, 
   const root = await scratch(t);
   const { record, lines } = await openRecord(root);
   await record.close({ verdict: "failed", bundlePath: path.join(root, "no-such-bundle") });
-  assert.equal(lines.length, 1, "the failed link is named once on the log");
+  assert.equal(lines.length, 2, "the failed link is named once on the log, then the steps folder");
   assert.match(lines[0]!, /could not link the bundle's steps/u);
+  assert.equal(lines[1], `[lab runs] this run's 0 step(s) are in ${record.stepsDirectory}`);
   await record.close({ verdict: "passed" });
   const entry = JSON.parse(await readFile(path.join(record.folder, "entry.json"), "utf8")) as LabRunEntry;
   assert.deepEqual([entry.verdict, entry.costUsd, entry.steps], ["failed", null, 0]);
@@ -133,4 +134,29 @@ test("a record that cannot open says so, gives Core no step folder, and does not
   record.watchSteps(async () => undefined);
   await record.close({ verdict: "passed" });
   assert.equal(lines.length, 1);
+});
+
+// Run run-mv4912r9-53b05a51: the bundle was sealed but its rename was refused, the close that links the steps was
+// skipped, and entry.json kept the final path the bundle never reached, with no cost. The sealed staging folder is
+// what the run is filed against now.
+test("a run whose sealed bundle could not be published is closed from its staging folder", async t => {
+  const root = await scratch(t);
+  const staging = path.join(root, "test-runs", ".staging-run-abc");
+  const { record, lines } = await openRecord(root, { bundlePath: path.join(root, "test-runs", "run-abc") });
+  const steps = record.stepsDirectory!;
+  await mkdir(path.join(steps, "0001-decide"), { recursive: true });
+  await mkdir(path.join(staging, "snapshots"), { recursive: true });
+  await writeFile(path.join(staging, "snapshots", "live-llm.json"), JSON.stringify({ observed: { totalEstimatedCostUsd: 0.1203 } }));
+  await writeFile(path.join(staging, "evaluation.json"), "{\"verdict\":\"failed\"}");
+  await writeFile(path.join(staging, "bundle.complete.json"), "{}");
+
+  await record.close({ verdict: "failed", bundlePath: staging });
+  await record.close({ verdict: "failed" });
+
+  assert.ok((await lstat(path.join(staging, "steps"))).isSymbolicLink(), "the staging folder links the steps");
+  assert.deepEqual(await readdir(path.join(staging, "steps")), ["0001-decide"]);
+  assert.equal(await readFile(path.join(record.folder, "evaluation.json"), "utf8"), "{\"verdict\":\"failed\"}");
+  const entry = JSON.parse(await readFile(path.join(record.folder, "entry.json"), "utf8")) as LabRunEntry;
+  assert.deepEqual([entry.verdict, entry.costUsd, entry.steps, entry.bundlePath], ["failed", 0.1203, 1, staging]);
+  assert.deepEqual(lines, [`[lab runs] this run's 1 step(s) are in ${steps}`]);
 });

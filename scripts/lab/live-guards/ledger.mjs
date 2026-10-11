@@ -21,7 +21,7 @@ import path from "node:path";
 
 /**
  * @typedef {{ event: "start", launchId: string, at: string, pid: number, instance: string, scenarioId: string, task: string, fingerprint: string, repositoryRoot: string, runsDirectory: string, overridden: string[] }} StartEntry
- * @typedef {{ event: "finish", launchId: string, at: string, runId: string | null, instance: string, task: string, verdict: string | null, totalEstimatedCostUsd: number | null, buildCeilingUsd?: number | null, maxBuildCostUsd?: number | null, buildsOverCeiling?: number | null, balanceFailure: Record<string, unknown> | null, facilityFailureBeforeProvider?: import("./run-outcomes.mjs").FacilityFailureBeforeProvider, fingerprint: string, exitCode: number | null, reconciled?: true, killed?: true }} FinishEntry
+ * @typedef {{ event: "finish", launchId: string, at: string, runId: string | null, instance: string, task: string, verdict: string | null, totalEstimatedCostUsd: number | null, buildCeilingUsd?: number | null, maxBuildCostUsd?: number | null, buildsOverCeiling?: number | null, balanceFailure: Record<string, unknown> | null, facilityFailureBeforeProvider?: import("./run-outcomes.mjs").FacilityFailureBeforeProvider, fingerprint: string, exitCode: number | null, reconciled?: true, killed?: true, unpublished?: true }} FinishEntry
  * @typedef {StartEntry | FinishEntry} LedgerEntry
  */
 

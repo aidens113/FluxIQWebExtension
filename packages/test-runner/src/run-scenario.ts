@@ -34,7 +34,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { BrowserContext, Page } from "@playwright/test";
 import { assertRunManifest, flowLaneExclusion, resolveScenarioWorkflow, scenarioPageFactSchedule, type FacilityFailureStage, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type RunEvaluation, type WebScenario, type ExpectedFact } from "@fluxiq-web-extension/test-contracts";
-import { EvidenceBundle, EvidenceCaptureController } from "@fluxiq-web-extension/test-evidence";
+import { EvidenceBundle, EvidenceBundlePublicationError, EvidenceCaptureController } from "@fluxiq-web-extension/test-evidence";
 import type { EvidenceMode } from "./commands.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "./coordinator.js";
 import { classifyRunnerFailure, RunnerFailure, type RunnerFailureCategory } from "./failure.js";
@@ -662,8 +662,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     // Core has stopped, so its step log is closed: the created Flow's playback commands join the build's steps. Best-effort, and said when it fails.
     if (topology && labRun?.stepsDirectory && playbackWindow) {
       await writePlaybackSteps({ attemptsDirectory: path.join(topology.allocation.storageDir, "artifacts", "runtime", "command-attempts"), stepsDirectory: labRun.stepsDirectory, since: playbackWindow.since, until: playbackWindow.until ?? Date.now(), redactionLiterals: redactionLiterals ?? [], skippedSteps: playbackSkips, stateRoutingSteps: playbackRoutings })
-        .then(written => process.stderr.write(`[lab] the Flow's playback is in steps/ as ${written.steps.length} step(s)
-`), (error: unknown) => process.stderr.write(`[lab] the Flow's playback could not be written into steps/: ${error instanceof Error ? error.message : String(error)}
+        .then(written => process.stderr.write(`[lab] the Flow's playback is in ${labRun.stepsDirectory} as ${written.steps.length} step(s)
+`), (error: unknown) => process.stderr.write(`[lab] the Flow's playback could not be written into ${labRun.stepsDirectory}: ${error instanceof Error ? error.message : String(error)}
 `));
     }
     // Core has stopped and its logs are in the bundle; the clone cleanup below
@@ -744,8 +744,20 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     if (evaluation) await bundle.writeStructured("evaluation.json", evaluation);
     if (benchReceipt) await bundle.writeStructured("bench-receipt.json", benchReceipt);
     bundle.registerEvidencePolicy(evidence.capture);
-    const finalized = await bundle.finalize({ verdict, metrics });
-    await writeProviderFailureSidecar({ runDirectory: finalized.path, runId, log: providerFailures }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined); await writeExtensionStartSidecar({ runDirectory: finalized.path, runId, trace: startTrace, secrets }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined); // After `finalize`, never before: the artifact index is a walk of the staging directory, so a file written there would be published. A clean run writes none.
+    // After `finalize`, never before: the artifact index is a walk of the staging directory, so a file written there would be published. A clean run writes none.
+    const writeSidecars = async (runDirectory: string) => {
+      await writeProviderFailureSidecar({ runDirectory, runId, log: providerFailures }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined);
+      await writeExtensionStartSidecar({ runDirectory, runId, trace: startTrace, secrets }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined);
+    };
+    let finalized: Awaited<ReturnType<EvidenceBundle["finalize"]>>;
+    try {
+      finalized = await bundle.finalize({ verdict, metrics });
+    } catch (error) {
+      // Sealed but not published (a reader held the staging folder past the back-off and the copy fallback): the run is filed from the staging folder it stays in, so its sidecars, steps link and cost are kept, and the error names stage, errno and folder.
+      if (error instanceof EvidenceBundlePublicationError) await writeSidecars(error.stagingPath).then(() => labRun?.close({ verdict, bundlePath: error.stagingPath }));
+      throw error;
+    }
+    await writeSidecars(finalized.path);
     await labRun?.close({ verdict, bundlePath: finalized.path }); // Best-effort, after `finalize` like the sidecars: links the bundle's `steps` to the run's, copies its key files, rebuilds `lab-runs/index.md`.
     return { runId, verdict, path: finalized.path, ...(observation ? { observation } : {}), ...(evaluation ? { evaluation } : {}), ...(failureCategory ? { failureCategory } : {}), ...(permissionStop ? { permissionStop: { verdict: "stopped_for_permission" as const, ...permissionStop } } : {}) };
   } finally {
