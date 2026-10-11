@@ -31,21 +31,17 @@
 //   (`actions/check-wait.ts`), as a recorded one is, which resolves it even
 //   when it names no handle.
 //
-// A handle's element in a child frame also writes `browserFrameId`, and a node
-// that already names a different frame is refused rather than silently moved.
-// Beside it goes `browserFrameUrlPath`, the path of the frame's document when
-// the element was shown, which is what finds the frame again once the page has
-// been reloaded and the id names nothing (`target-packets.ts`); an extraction
-// handle's list carries both the same way (`extraction/slot.ts`).
+// A handle's element in a child frame also writes `browserFrameId`, and a node that already names a different frame
+// is refused rather than silently moved. Beside it goes `browserFrameUrlPath`, the path of the frame's document when
+// the element was shown, which is what finds the frame again once the page has been reloaded and the id names nothing
+// (`target-packets.ts`); an extraction handle's list carries both the same way (`extraction/slot.ts`).
 //
-// A resolved selector handle also writes `element`: who the element the model
-// was shown is, in the shape a recorded node carries it
-// (`element-identity.ts`). Without it Core reads a type node's `text` as the
-// element's identity and the page refuses the right control. The handle is the
-// authority on that identity, so an `element` the model wrote beside a handle
-// is replaced; beside a literal selector it is the model's own and stays. A
-// literal selector the model wrote beside a `target` handle is replaced the
-// same way: the model was never shown one, so it can only be a guess.
+// A resolved selector handle also writes `element`: who the element the model was shown is, in the shape a recorded
+// node carries it (`element-identity.ts`). Without it Core reads a type node's `text` as the element's identity and
+// the page refuses the right control. The handle is the authority on that identity, so an `element` the model wrote
+// beside a handle is replaced; beside a literal selector it is the model's own and stays. A literal selector the
+// model wrote beside a `target` handle is replaced the same way: the model was never shown one, so it can only be a
+// guess.
 //
 // Nothing is guessed. A node with no handle is `unchanged` -- a literal
 // selector a hand-authored or drafted step holds stays exactly as written and
@@ -67,15 +63,12 @@
 // handle of that kind is accepted and in which shape, then `<reason>:<path>`
 // for each place it was refused at, quoted by position (`issue-position.ts`).
 //
-// Once the node's parameters are real, the step itself is put to Core's
-// permission gate (`step-permission.ts`), which is what makes a Flow that
-// publishes, buys, edits or deletes something a person is asked about rather
-// than something that happens every time it runs. That is a different answer
-// from a refusal and is reported as one: `needs_permission` is nobody's to
-// correct but the person's. A caller running a node against the live page has
-// already gated that call against the page the model is looking at, and says so
-// with `gatedByCaller`, so one act is not put to the gate twice under two
-// different rules.
+// Once the node's parameters are real, the step itself is put to Core's permission gate (`step-permission.ts`), which
+// is what makes a Flow that publishes, buys, edits or deletes something a person is asked about rather than something
+// that happens every time it runs. That is a different answer from a refusal and is reported as one:
+// `needs_permission` is nobody's to correct but the person's. A caller running a node against the live page has
+// already gated that call against the page the model is looking at, and says so with `gatedByCaller`, so one act is
+// not put to the gate twice under two different rules.
 //
 // **What the model wrote names an element by handle only (t432):** anything else is refused (`written-literals.ts`).
 //
@@ -87,7 +80,8 @@
 // then a target handle resolves from any view this Flow's exploration took, to
 // the identity its views agree on (`target-packets.ts`), and the resolved answer
 // says which view each handle came from (`handleViews`); a handle exploration acted
-// on, to its control as the act found it, never as the act left it (t442). Without it -- a node
+// on, to its control as the act found it, never as the act left it (t442), with what the act made true as the step's
+// `effect`, which Core keeps as the node's `routeSignatures.effect` (t447). Without it -- a node
 // run, a rerun, a legacy completion -- a handle resolves against the current
 // pages exactly as before, and the answer carries nothing beside its parameters.
 // Only a handle some evidence printed resolves that way (t378, lane B C4): one
@@ -265,14 +259,15 @@ export type WebPlanHandleView = { handle: string; view: number; location: string
  * added here would not be quietly dropped -- it would refuse every resolved
  * node of every plan. What this resolution assumed on the way therefore travels
  * beside it, on `WebPlanNodeOutcome`, and `resolveWebPlanNode` is the one place
- * the two are separated. The one exception is `handleViews`, which Core accepts
+ * the two are separated. The exceptions are `handleViews`, which Core accepts
  * only on an answer to a resolution that asked for the view history
- * (`handleReach`), and which is written only then.
+ * (`handleReach`), and which is written only then; and `effect`, a step's
+ * acted-on control's effect (header, t447), which Core writes onto the node.
  */
 export type WebPlanNodeResolution =
   | { status: "unchanged" }
-  /** `handleViews` only when Core asked for the view history (`handleReach`), and only for a node whose handles resolved from a view. */
-  | { status: "resolved"; parameters: JsonObject; handleViews?: WebPlanHandleView[] }
+  /** `handleViews` only when Core asked for the view history (`handleReach`), and only for a node whose handles resolved from a view; `effect`, what exploration's act on the step's control made true (header). */
+  | { status: "resolved"; parameters: JsonObject; handleViews?: WebPlanHandleView[]; effect?: JsonObject }
   | { status: "refused"; issueCodes: readonly (WebPlanHandleIssue | WebPlanStepIssueCode)[] }
   /** A person must answer this one. `requestId` is null where there was nobody to ask. */
   | { status: "needs_permission"; missing: readonly AutomationStudioActionConsequence[]; requestId: string | null };
@@ -427,12 +422,12 @@ function lowerCase(value: JsonValue | undefined): string | undefined {
 type Scope = { projectId: string; flowId: string };
 /** `step`: the resolution is of a step a Flow will save, not of a call the caller gated itself (`gatedByCaller`) or a fact's target. */
 type Scoped = Scope & WebPlanAuthorship & { reach: WebLlmTargetReach | undefined; step: boolean };
-type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string; views?: WebPlanHandleView[] };
+type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string; views?: WebPlanHandleView[]; effect?: JsonObject | undefined };
 /** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control -- or the shape that fits the key -- instead when one does. */
 type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath; fits?: WebPlanHandleIssueCode | undefined };
 type NodeOutcome =
   | { status: "unchanged" }
-  | { status: "resolved"; parameters: JsonObject; assumed: WebLlmNameAssumptionSaid[]; views: WebPlanHandleView[] }
+  | { status: "resolved"; parameters: JsonObject; assumed: WebLlmNameAssumptionSaid[]; views: WebPlanHandleView[]; effect?: JsonObject | undefined }
   | { status: "refused"; refusals: Refusal[] };
 
 const TARGET_ISSUES = {
@@ -473,7 +468,7 @@ export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stor
   // one more key refuses the node outright.
   const assumed = outcome.status === "resolved" ? outcome.assumed : [];
   const resolved: WebPlanNodeResolution = outcome.status === "resolved"
-    ? withHandleViews({ status: "resolved", parameters: outcome.parameters }, input.handleReach, outcome.views)
+    ? withHandleViews({ status: "resolved", parameters: outcome.parameters }, input.handleReach, outcome.views, outcome.effect)
     : { status: "unchanged" };
   // The step is asked about with the parameters it would really run with, so
   // the request names the control the model was shown rather than a handle.
@@ -506,14 +501,16 @@ export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stor
 
 /**
  * A resolved answer, with the views its handles came from when Core asked for
- * the view history (header) and there are any. Nothing beside its parameters
- * otherwise, since Core refuses any other key on an answer it did not ask for.
+ * the view history (header) and there are any, and a step's `effect` when its
+ * control was acted on (t447). Nothing else beside its parameters, since Core refuses any other key.
  */
 function withHandleViews(
   answer: Extract<WebPlanNodeResolution, { status: "resolved" }>,
   reach: WebLlmTargetReach | undefined,
-  views: readonly WebPlanHandleView[]
+  views: readonly WebPlanHandleView[],
+  effect: JsonObject | undefined
 ): WebPlanNodeResolution {
+  if (reach === "view_history" && effect !== undefined) answer.effect = effect;
   if (reach !== "view_history" || views.length === 0) return answer;
   const seen = new Set<string>();
   const handleViews: WebPlanHandleView[] = [];
@@ -606,7 +603,7 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
       }
       const outcome = resolveTarget(state.fallback, scope, stores.targets, press);
       if (typeof outcome !== "string") replaced.set(key, {
-        value: outcome.value, frameId: outcome.frameId, frameUrlPath: outcome.frameUrlPath, element: outcome.element, statePath: state.path
+        value: outcome.value, frameId: outcome.frameId, frameUrlPath: outcome.frameUrlPath, element: outcome.element, statePath: state.path, effect: outcome.effect
       });
       else refusals.push({ code: outcome, kind: outcome === "web.handle.misplaced" ? "extraction" : "target", path: [key, "$state", "fallback"] });
       continue;
@@ -688,7 +685,8 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
     if (frameUrlPath !== undefined) resolved.browserFrameUrlPath = frameUrlPath;
   }
   const views = [...replaced.values()].flatMap((entry) => entry.views ?? []);
-  return { status: "resolved", parameters: resolved, assumed, views };
+  // A step's effect is its element's (t447); a fact's target is read, never acted on, so it has none.
+  return { status: "resolved", parameters: resolved, assumed, views, effect: scope.step ? element?.effect : undefined };
 }
 
 /** Exact supported state grammar; the public Core guard also accepts extras. */
@@ -745,7 +743,7 @@ function resolveRunOutput(parameters: JsonObject, scope: Scoped, stores: WebPlan
   // `parameters.extractList.…` on this node and a reader holding the Run Output
   // node's authored parameters finds it exactly there.
   const assumed = inner?.status === "resolved" ? inner.assumed.map((entry) => nested(entry)) : [];
-  return { status: "resolved", parameters: resolved, assumed, views: inner?.status === "resolved" ? inner.views : [] };
+  return { status: "resolved", parameters: resolved, assumed, views: inner?.status === "resolved" ? inner.views : [], effect: inner?.status === "resolved" ? inner.effect : undefined };
 }
 
 /** One assumption of a payload, said as a position on the node that carries the payload. */
@@ -766,6 +764,7 @@ function resolveTarget(value: Record<string, unknown>, scope: Scoped, targets: W
   if (press && resolution.notAControl === true) return "web.handle.not_a_control";
   const resolved: Resolved = { value: resolution.selector, frameId: resolution.frameId, frameUrlPath: resolution.frameUrlPath, element: resolution.element as unknown as JsonObject };
   if (resolution.shownIn !== undefined) resolved.views = [{ handle, view: resolution.shownIn.view, location: resolution.shownIn.location }];
+  if (resolution.effect !== undefined) resolved.effect = resolution.effect;
   return resolved;
 }
 
