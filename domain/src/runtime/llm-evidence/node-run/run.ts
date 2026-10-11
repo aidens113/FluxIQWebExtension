@@ -432,10 +432,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     const changed = after === undefined ? undefined : current === undefined || JSON.stringify(after.evidence) !== JSON.stringify(current.evidence);
     // The control this call acted on, named on its result by handle (`./outcome.ts` `controlHandle`, t442). A press that changed the page acts on what it
     // pressed, whatever that prints as (`../plan-resolution/target-packets.ts` `pressed`, t378 W13); and a step later written for any control acted on
-    // saves it as this act found it, never as the act left it (`acted`, t442 F1).
+    // saves it as this act found it, never as the act left it, with what the act made true as its effect (`acted`, t442 F1, t447 F2).
     const named = webMovesThePage(node) ? undefined : webPlanFirstTargetHandle(written);
     if (changed === true && node.definitionId === PRESS_NODE_ID && named !== undefined) run.stores.targets.pressed(buildOf(run), named);
-    if (current && node.effect === "mutate" && named !== undefined) run.stores.targets.acted(buildOf(run), named, current);
+    if (current && node.effect === "mutate" && named !== undefined) run.stores.targets.acted(buildOf(run), named, current, after);
     // Whether the press answered a layer that stood in front of the page, one
     // this build did not open itself (`./press-effect/answered-layer.ts`,
     // `./own-layers/memory.ts`); then, whichever layers this press opened are the
