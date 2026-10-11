@@ -3,8 +3,8 @@
 // Two kinds of line. `start` is written immediately before the runner is
 // spawned, with the pid, the task and the source fingerprint; `finish` is
 // written once per run the launch produced, with its runId, verdict,
-// `observed.totalEstimatedCostUsd`, and its spend per build against the
-// per-build ceiling the run was planned under (`buildCeilingUsd`,
+// `observed.totalEstimatedCostUsd`, and its Flow's spend against the ceiling
+// the run was planned under, one purse per Flow (t438; `buildCeilingUsd`,
 // `maxBuildCostUsd`, `buildsOverCeiling`; null for a run that recorded no
 // ceiling, and absent on entries written before they were recorded), and, for a
 // run that failed on the facility before any provider call, that failure

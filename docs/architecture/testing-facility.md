@@ -1513,7 +1513,7 @@ What the chat cannot carry is refused before anything starts
 
 - `--llm-permit`. The chat sends no permit; the person answers at the point
   instead.
-- `--llm-max-cost-usd` below Core's per-build ceiling (below).
+- `--llm-max-cost-usd` below Core's per-Flow ceiling (below).
 - A model other than the default the run's Core was started with. That
   default is the run's `--llm-model`, which the Lab passes to Core (see "The
   default model" below), so `--llm-model deepseek-v4-pro` builds on it from
@@ -1522,7 +1522,7 @@ What the chat cannot carry is refused before anything starts
 
 Two limits come with the chat path:
 
-- Every build is held to one per-build ceiling however it is started:
+- Every Flow is held to one ceiling however it is started:
   Core's run cost ceiling, `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default $0.10,
   passed by the Lab to the run's Core), lowered by the Flow's own
   `maxEstimatedCostUsdPerRun`. Core computes it for every
@@ -1531,11 +1531,15 @@ Two limits come with the chat path:
   `live-llm-plan.ts`), lowered by `--llm-max-cost-usd`, and a direct build
   writes it onto its Flow. A chat build's Flow is made inside Core's command,
   so a lowered ceiling has no Flow to go onto: `--llm-max-cost-usd` below the
-  run's ceiling is refused for a chat build (`assertChatBuildable`). A run's
-  total is the sum of its builds, which is why a chat build plus the Flow's
-  repair can pass the ceiling with every build under it
+  run's ceiling is refused for a chat build (`assertChatBuildable`). The
+  ceiling is one purse per Flow (t438; the user, 2026-10-01: "bring the
+  ceiling down to $0.1 per flow max"): the build, its judge, the chat's
+  reading, the run's repairs and re-authors and its result check all draw on
+  it in the Lab's Core. Before it was, each part had the whole ceiling, and a
+  chat build plus the Flow's repair passed it with every part under it
   (`run-muq66ff9-cb3767a1`, under the earlier $0.25 ceiling: build $0.098,
-  reauthors $0.160, $0.043 and $0.011, result check $0.012).
+  reauthors $0.160, $0.043 and $0.011, result check $0.012;
+  `run-mv4912r9-53b05a51`, $0.1203 against $0.10).
 - A chat build that fails leaves no readable record of what it spent. Core's
   diagnostic reaches the thread's sentence only, so such a build's accounting
   is `null`.
@@ -3164,7 +3168,7 @@ Live-provider testing is an explicit opt-in lane and is not part of ordinary det
 
 The default Lab allowance is the model's whole context window: 992,000 input tokens, 8,000 output tokens and 1,000,000 total tokens per request (`DEFAULT_LLM_LAB_BUDGET`), with a 30-second timeout and Core's per-build estimated-cost ceiling (`FLUXIQ_LLM_RUN_COST_CEILING_USD`, default $0.10; see "Live-run waste guards"), which a run's options may only lower (each call inherits that ceiling). Validation rejects any request total above 1,000,000 tokens (`LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST`, mirroring Core's DeepSeek model limits). That number is what the model can read, not a budget: on 2026-09-30 the user ordered that no limit hide page information from the model, and a request over the window fails loudly rather than being trimmed. The allowance used to be 8,000/2,000/10,000 under a 50,000-token ceiling, then 48,000/8,000/56,000 under Core's 64,000-token ceiling, and each made a real page impossible to describe. A live run permits no retries.
 
-Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core run intent `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The live campaign (`scripts/lab/live-campaign`) passes no `--llm-max-run-tokens`: with whole-page requests a build may use more than a million tokens across its calls, and a run budget it outgrew would fail the run as `performance.budget` only after the money was spent, so what bounds a campaign run is its per-build spend ceiling, its call count and Core's stall guard. The spend ceiling is per build, whatever the build's call count, and it has one definition: Core's scoped ceiling resolver, activated by `FLUXIQ_LLM_RUN_COST_CEILING_SCOPE=test` and resolved from the Lab's `FLUXIQ_LLM_RUN_COST_CEILING_USD` (Lab default $0.10; ordinary user UI remains $0.25 and ignores the test variable), which the Lab resolves for each run with `liveLlmBuildCostCeilingUsd` (`packages/test-runner/src/live-llm/build-cost-ceiling.ts`): the same sources it passes Core, through Core's own resolver, so the plan and Core hold a build to one number. `--llm-max-cost-usd` is the whole build's ceiling, not a per-call figure: it may only lower Core's ceiling, is never multiplied by the call count, and the live campaign passes none. The ceiling is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings, so Core's loop budget holds the build, the run's recovery and each re-author build to it, each on its own. The Lab's post-run check holds each settled phase to it again, and every live run reports its spend per build against it: `snapshots/live-llm.json` `observed.perBuild`, the campaign row's `perBuildSpend` with the summary's `buildsOverCeiling`, and the spend ledger's `buildCeilingUsd`, `maxBuildCostUsd` and `buildsOverCeiling`. There is no spend budget across runs. The model is the Flow's `llmModel` setting.
+Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core run intent `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The live campaign (`scripts/lab/live-campaign`) passes no `--llm-max-run-tokens`: with whole-page requests a build may use more than a million tokens across its calls, and a run budget it outgrew would fail the run as `performance.budget` only after the money was spent, so what bounds a campaign run is its Flow's spend ceiling, its call count and Core's stall guard. The spend ceiling is one purse per Flow, whatever the call count -- the user's words (2026-10-01): "bring the ceiling down to $0.1 per flow max" -- and it has one definition: Core's scoped ceiling resolver, activated by `FLUXIQ_LLM_RUN_COST_CEILING_SCOPE=test` and resolved from the Lab's `FLUXIQ_LLM_RUN_COST_CEILING_USD` (Lab default $0.10; ordinary user UI remains $0.25 and ignores the test variable), which the Lab resolves for each run with `liveLlmBuildCostCeilingUsd` (`packages/test-runner/src/live-llm/build-cost-ceiling.ts`): the same sources it passes Core, through Core's own resolver, so the plan and Core hold a Flow to one number. `--llm-max-cost-usd` is the whole build's ceiling, not a per-call figure: it may only lower Core's ceiling, is never multiplied by the call count, and the live campaign passes none. The ceiling is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings. Because the Lab's Core runs with the ceiling Lab-scoped, Core holds the whole Flow to it as one purse (t438): the build and its judge, the chat's reading of the message that asked for the build or the run, the run's in-run repairs, its recovery after the run, its result check, its re-authors and their re-runs all draw on the Flow's one record (`creation-spend.json`), each call held against what the Flow has left and added to the record as it settles, whether the run succeeds or fails (Core `docs/architecture/automation-studio/llm-flow-bootstrap.md`, "One purse per Flow creation"). The record outlives the creation, so a later build of the same Flow in the Lab -- an extend after it was proposed -- carries everything the Flow has spent and may be refused on cost at once. The Lab's post-run check holds each settled phase to the ceiling again, and every live run reports its Flow's whole spend against it, every phase and every call its step log saw: `snapshots/live-llm.json` `observed.perBuild` (one `flow` entry, with its `parts` beside it), the campaign row's `perBuildSpend` with the summary's `buildsOverCeiling` (Flows over the ceiling), and the spend ledger's `buildCeilingUsd`, `maxBuildCostUsd` (the Flow's spend) and `buildsOverCeiling` (1 when the Flow passed the ceiling). The field names are kept for the ledger's readers. There is no spend budget across runs. The model is the Flow's `llmModel` setting.
 
 **Model calls need no grant.** Core resolves the provider from the caller's own unlocked Secret Keys session. The Lab installs the key, saves the Flow's LLM settings and spend ceiling, and then sends its build (`generate-flow-bootstrap-adaptation`) or run (`run-runtime-session` with a `runIntent`). The one thing the operator still allows is a consequence: `--llm-permit` names the classes (`move_money`, `delete`, `send_or_publish`, `modify_existing`, `create_new`) the run's actions may cause, and the Lab sends them as `permittedConsequences` on the build and the run only when it names any. Absent, a consequential act stops and asks a person (`permission_required`). A created-Flow build started from the extension's chat carries no permit at all, so `--llm-permit` is refused for it, and the Lab's person answers the question in the chat instead ("The build is started from the extension's chat window" above). `snapshots/live-llm.json` records the plan's `authorized` bounds and its `permittedConsequences`.
 
@@ -3297,7 +3301,7 @@ Never stop a Lab run by matching processes by command line. On 2026-10-01 a
 other lanes' runs (`docs/working/language-driven-flow-loop-plan/debugs/run-muq0in9r-0793b448.md`,
 Cause 1).
 
-#### The per-build cost ceiling
+#### The per-Flow cost ceiling
 
 The Lab's build/recovery ceiling is `FLUXIQ_LLM_RUN_COST_CEILING_USD`, in US
 dollars: $0.10 when unset. The user clarified on 2026-10-03 that this is only
@@ -3322,7 +3326,7 @@ bounds it by Core's largest configurable ceiling, $10
 ceiling itself.
 
 The Lab's plan, its post-run check (each call's cost and each build's total)
-and its spend reports use the same value Core gets:
+and its spend reports (each Flow's whole spend) use the same value Core gets:
 `liveLlmBuildCostCeilingUsd(repositoryRoot)` reads the same configuration and
 lowering flag and resolves the value through Core's own
 `resolveAutomationStudioLlmRunCostCeilingUsd` with explicit test scope, so a value Core would refuse at

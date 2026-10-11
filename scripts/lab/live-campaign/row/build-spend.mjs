@@ -1,22 +1,31 @@
-// What each build in a run spent, against the per-build ceiling.
+// What a run's Flow spent, against the ceiling.
 //
-// The user's rule is $0.25 per build, enforced; Core holds a build, a run's
-// recovery and each re-author build to it, each on its own. The row's
-// `reportedCostUsd` is the run's sum (`reported-spend.mjs`), which can rightly
-// exceed $0.25 when a build is followed by a repair, so it cannot say whether
-// any build broke the ceiling. This does: one entry per build, never summed
-// with another, each judged against the ceiling the run was planned under.
+// **One purse per Flow (t438).** The user's words (2026-10-01): "bring the
+// ceiling down to $0.1 per flow max" -- the build, its re-authors, its repairs
+// and the judge all count against one ceiling, in billed dollars. A Lab run is
+// one Flow, so its whole spend is judged once against the ceiling. This read
+// each build, the run's recovery and each re-author as a build of its own,
+// each allowed the whole ceiling, and so read `run-mv4912r9-53b05a51` ($0.1203
+// against $0.10) as inside it.
+//
+// The Flow's figure is the runner's, where it recorded one
+// (`observed.perBuild.builds`, one `flow` entry,
+// `packages/test-runner/src/live-llm/run-spend.ts`). A snapshot from before
+// that listed parts instead; its Flow is the larger of the run's recorded total
+// (`observed.totalEstimatedCostUsd`) and the sum of those parts, and so is an
+// older snapshot's build accounting and repair. A part whose cost was not
+// recorded leaves the Flow unrecorded unless the run's total says what it was.
 //
 // The ceiling is never written here. It is the run's own, read from its
 // live-LLM snapshot: `observed.perBuild.ceilingUsd` where the runner recorded
-// per-build spend (`packages/test-runner/src/live-llm/run-spend.ts`), or else
-// the plan's `authorized.maxTotalEstimatedCostUsd`, which the runner takes
-// from Core's `AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_USD`. A run that recorded
-// neither has no ceiling to report against, and reads `null`.
+// it, or else the plan's `authorized.maxTotalEstimatedCostUsd`, which the
+// runner takes from Core's run cost ceiling. A run that recorded neither has no
+// ceiling to report against, and reads `null`.
 
 /**
- * @typedef {{ phase: "build" | "runtime" | "reauthor", attempt: number | null, costUsd: number | null, overCeiling: boolean }} BuildSpend
- * @typedef {{ ceilingUsd: number, builds: BuildSpend[], maxBuildCostUsd: number | null, overCeiling: number, unrecorded: number }} PerBuildSpend
+ * @typedef {{ phase: string, attempt: number | null, costUsd: number | null }} FlowPart
+ * @typedef {{ phase: "flow", attempt: null, costUsd: number | null, overCeiling: boolean }} BuildSpend
+ * @typedef {{ ceilingUsd: number, builds: BuildSpend[], parts: FlowPart[], maxBuildCostUsd: number | null, overCeiling: number, unrecorded: number }} PerBuildSpend
  */
 
 /** @returns {PerBuildSpend | null} */
@@ -25,35 +34,48 @@ export function perBuildSpend(liveLlm, flowLane) {
   const recorded = liveLlm.observed?.perBuild;
   const ceilingUsd = number(recorded?.ceilingUsd) ?? number(liveLlm.authorized?.maxTotalEstimatedCostUsd);
   if (ceilingUsd === null) return null;
-  const builds = Array.isArray(recorded?.builds)
-    ? recorded.builds.map((item) => judged(ceilingUsd, item?.phase, number(item?.attempt), number(item?.estimatedCostUsd)))
-    : derivedBuilds(ceilingUsd, liveLlm, flowLane);
-  const costs = builds.map((item) => item.costUsd).filter((cost) => cost !== null);
+  const recordedFlow = Array.isArray(recorded?.builds) ? recorded.builds.find((item) => item?.phase === "flow") : undefined;
+  const parts = recordedFlow
+    ? (Array.isArray(recorded.parts) ? recorded.parts : []).map((item) => part(item?.phase, number(item?.attempt), number(item?.estimatedCostUsd)))
+    : Array.isArray(recorded?.builds)
+      ? recorded.builds.map((item) => part(item?.phase, number(item?.attempt), number(item?.estimatedCostUsd)))
+      : derivedParts(liveLlm, flowLane);
+  const costUsd = recordedFlow ? number(recordedFlow.estimatedCostUsd) : flowCost(parts, number(liveLlm.observed?.totalEstimatedCostUsd));
+  const builds = recordedFlow || parts.length > 0 ? [{ phase: "flow", attempt: null, costUsd, overCeiling: costUsd !== null && costUsd > ceilingUsd }] : [];
   return {
     ceilingUsd,
     builds,
-    maxBuildCostUsd: costs.length === 0 ? null : Math.max(...costs),
+    parts,
+    maxBuildCostUsd: builds.length === 0 ? null : costUsd,
     overCeiling: builds.filter((item) => item.overCeiling).length,
-    unrecorded: builds.length - costs.length,
+    unrecorded: builds.filter((item) => item.costUsd === null).length,
   };
 }
 
 /**
  * A snapshot from before the runner recorded per-build spend: the build's own
- * accounting, the repair run's calls, or a Flow run's own calls, each a build
- * of its own.
+ * accounting, the repair run's calls, or a Flow run's own calls, each a part
+ * of the one Flow.
  */
-function derivedBuilds(ceilingUsd, liveLlm, flowLane) {
+function derivedParts(liveLlm, flowLane) {
   const build = liveLlm.build ?? (flowLane?.lane === "created-flow" ? flowLane.build : null);
-  if (!build) return liveLlm.observed ? [judged(ceilingUsd, "runtime", null, observedCost(liveLlm.observed))] : [];
-  const builds = [judged(ceilingUsd, "build", null, number(build.accounting?.estimatedCostUsd))];
+  if (!build) return liveLlm.observed ? [part("runtime", null, observedCost(liveLlm.observed))] : [];
+  const parts = [part("build", null, number(build.accounting?.estimatedCostUsd))];
   const repair = liveLlm.repair?.observed;
-  if (repair && number(repair.calls) > 0) builds.push(judged(ceilingUsd, "runtime", null, observedCost(repair)));
-  return builds;
+  if (repair && number(repair.calls) > 0) parts.push(part("runtime", null, observedCost(repair)));
+  return parts;
 }
 
-function judged(ceilingUsd, phase, attempt, costUsd) {
-  return { phase, attempt, costUsd, overCeiling: costUsd !== null && costUsd > ceilingUsd };
+/** The Flow's cost from its parts and the run's recorded total: the larger, or `null` when neither is known whole. */
+function flowCost(parts, totalUsd) {
+  const whole = parts.length > 0 && parts.every((item) => item.costUsd !== null);
+  const known = whole ? Number(parts.reduce((sum, item) => sum + item.costUsd, 0).toFixed(9)) : null;
+  if (known === null) return totalUsd;
+  return totalUsd === null ? known : Math.max(known, totalUsd);
+}
+
+function part(phase, attempt, costUsd) {
+  return { phase: typeof phase === "string" ? phase : "unknown", attempt, costUsd };
 }
 
 function observedCost(observed) {
