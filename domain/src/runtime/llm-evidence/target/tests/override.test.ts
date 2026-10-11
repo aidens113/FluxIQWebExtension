@@ -364,3 +364,25 @@ test("a repair to a control found by one attribute alone is refused as one that 
   });
   assert.equal(validateWebRuntimeTargetOverrideEvidence(named.evidence, target({ element: "t1" }), clickAction, named.selectors).status, "resolved");
 });
+
+// Set Checked is the chat's "Choose". Its repair was refused
+// `action_not_repairable` because a hand-kept list left it out, so the run
+// could not carry on from the failing step (r4a-4, F1).
+test("a Set Checked override with a shown handle resolves, whether its node or a recorded action failed", () => {
+  const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings({
+    url: "https://example.test/options",
+    interactiveElements: [
+      { tagName: "input", inputType: "checkbox", selector: "#gift", name: "Gift wrap" },
+      { tagName: "button", selector: "#go", name: "Continue" },
+    ],
+  });
+  const recordedTarget = { element: { tagName: "input", inputType: "checkbox", accessibleName: "Gift wrap" } };
+  for (const failedAction of [
+    { nodeId: "gift", definitionId: "web.output.dom-check", recordedTarget },
+    { nodeId: "gift", definitionId: "builtin.policy.action", outputId: "web.dom.check", recordedTarget },
+  ]) {
+    const resolved = validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t1" }), failedAction, selectors);
+    assert.equal(resolved.status, "resolved", JSON.stringify(resolved));
+    assert.equal(resolved.status === "resolved" ? (resolved.target as { selector?: string }).selector : undefined, "#gift");
+  }
+});

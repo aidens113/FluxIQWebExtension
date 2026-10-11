@@ -8,6 +8,8 @@ import {
   type WebLlmEvidenceElement,
 } from "..";
 import { webFailedActionDefinitionId, webFailureRepairParameters } from "../repairable-parameters";
+import { webAutomationActionDefinitions } from "../../../actions/schemas";
+import { webAutomationOutputNodeDefinitions, webAutomationOutputNodeId } from "../../../output-nodes";
 
 const element = (fields: Partial<WebLlmEvidenceElement>): WebLlmEvidenceElement =>
   ({ target: "t1", tag: "div", ...fields });
@@ -38,6 +40,48 @@ test("every declared parameter name is a name Core will carry as a handle key, a
   for (const inherited of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
     assert.deepEqual(webRepairableParameters(inherited), [], inherited);
   }
+});
+
+// The repairable actions were once a hand-kept list that predated the D6
+// actions, so Set Checked and Upload were refused `action_not_repairable` and a
+// run could not carry on from a failed "Choose" step (r4a-4, F1). Every node
+// that takes an element -- by its schema, or by Core's element-target flag --
+// has to offer that element to a repair.
+test("every web node that takes an element offers it to a repair", () => {
+  const takesElement = new Set<string>();
+  for (const definition of webAutomationActionDefinitions) {
+    const properties = definition.parameterSchema.properties as Record<string, unknown> | undefined;
+    if (properties && Object.hasOwn(properties, "element")) takesElement.add(webAutomationOutputNodeId(definition.actionType));
+  }
+  for (const node of webAutomationOutputNodeDefinitions) {
+    if (node.metadata?.elementTarget === true) takesElement.add(node.id);
+  }
+  // The set is not empty by accident, and holds the actions the hand list left out.
+  for (const id of ["web.output.dom-click", "web.output.dom-check", "web.output.dom-upload", "web.output.dom-scroll", "web.output.dom-assert"]) {
+    assert.ok(takesElement.has(id), id);
+  }
+  for (const id of takesElement) {
+    const declared = webRepairableParameters(id);
+    assert.equal(declared.length, 1, `${id} takes an element but offers no repairable parameter`);
+    assert.equal(declared[0]!.name, WEB_REPAIRABLE_ELEMENT_PARAMETER, id);
+    assert.equal(declared[0]!.required, true, id);
+  }
+  // And nothing that takes no element is offered one.
+  for (const node of webAutomationOutputNodeDefinitions) {
+    if (!takesElement.has(node.id)) assert.deepEqual(webRepairableParameters(node.id), [], node.id);
+  }
+});
+
+test("a check and an upload carry a press's role, a scroll and an assertion only need the element described", () => {
+  const description = elementDescription();
+  assert.deepEqual(webRepairableParameters("web.output.dom-check"), [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: "clickable", required: true, description }]);
+  assert.deepEqual(webRepairableParameters("web.output.dom-upload"), [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: "clickable", required: true, description }]);
+  assert.deepEqual(webRepairableParameters("web.output.dom-scroll"), [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: "observable", required: true, description }]);
+  assert.deepEqual(webRepairableParameters("web.output.dom-assert"), [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: "observable", required: true, description }]);
+  // A recorded "Choose" is offered the element, not an empty map.
+  assert.deepEqual(webFailureRepairParameters({ definitionId: "builtin.policy.action", outputId: "web.dom.check" }), { [WEB_REPAIRABLE_ELEMENT_PARAMETER]: description });
+  assert.equal(elementFillsRepairableParameter(element({ tag: "input", inputType: "checkbox" }), "clickable"), true);
+  assert.equal(elementFillsRepairableParameter(element({ tag: "input", inputType: "file" }), "clickable"), true);
 });
 
 test("a one-target DOM output declares exactly one element parameter, with the verb it has to carry", () => {
