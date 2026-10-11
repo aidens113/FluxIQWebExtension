@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { RunnerFailure } from "../../failure.js";
-import { ProjectedFacilityError } from "../index.js";
+import { EvidenceBundlePublicationError } from "@fluxiq-web-extension/test-evidence";
+import { projectFacilityFailure, ProjectedFacilityError } from "../index.js";
 
 const GENERIC = "Scenario attempt failed outside a finalized bundle";
 const SENTINEL = "private-value-must-not-persist";
@@ -20,12 +21,30 @@ test("a runner-authored refusal keeps its reason after the generic sentence", ()
   assert.deepEqual(error.facilityFailure, DIAGNOSTIC);
 });
 
-test("any other error keeps only the generic sentence, because its text is not the runner's own", () => {
+test("any other error keeps its text out and names only the closed stage, reason and errno", () => {
   for (const cause of [new Error(SENTINEL), Object.assign(new TypeError(SENTINEL), { code: "ENOENT" }), SENTINEL, { message: SENTINEL }]) {
     const error = new ProjectedFacilityError(cause, DIAGNOSTIC);
-    assert.equal(error.message, GENERIC);
+    assert.equal(error.message, `${GENERIC} at scenario.load (unclassified)`);
     assert.equal(error.message.includes(SENTINEL), false);
   }
+  // Run run-mv4912r9-53b05a51 printed the bare sentence for a raw EPERM at publication; the closed diagnostic held the cause all along.
+  const denied = new ProjectedFacilityError(Object.assign(new Error(SENTINEL), { code: "EPERM" }), { boundary: "no-final-bundle", stage: "bundle.publish", reason: "path.denied", causeCode: "EPERM" });
+  assert.equal(denied.message, `${GENERIC} at bundle.publish (path.denied EPERM)`);
+  assert.equal(denied.category, "environment.missing");
+});
+
+test("a sealed bundle that could not be published prints its stage, errno and the folder it stays in", () => {
+  const stagingPath = "C:/runs/.staging-run-mv4912r9-53b05a51";
+  const cause = new EvidenceBundlePublicationError({ stage: "rename-copy", code: "EPERM", renameCode: "EPERM", attempts: 15, stagingPath, destination: "C:/runs/run-mv4912r9-53b05a51", cause: Object.assign(new Error(SENTINEL), { code: "EPERM" }) });
+  const error = new ProjectedFacilityError(cause, projectFacilityFailure(cause, "no-final-bundle", "bundle.publish"));
+  assert.equal(error.message, `${GENERIC}: Evidence bundle could not be published (stage bundle.publish, rename-copy): rename EPERM, then rename of the copy EPERM after 15 attempts; the sealed bundle stays at ${stagingPath}`);
+  assert.equal(error.category, "environment.missing");
+  assert.deepEqual(error.facilityFailure, { boundary: "no-final-bundle", stage: "bundle.publish", reason: "path.denied", causeCode: "EPERM" });
+  assert.equal(error.message.includes(SENTINEL), false);
+
+  const deep = "C:/Users/someone/FluxStuff/fxwork/t418-proofs/!FluxIQWebExtension/test-runs/lab-instances/t418-proofs/.staging-run-mv4912r9-53b05a51";
+  const long = new ProjectedFacilityError(new EvidenceBundlePublicationError({ stage: "rename-copy", code: "EPERM", renameCode: "EPERM", attempts: 15, stagingPath: deep, destination: deep, cause: undefined }), DIAGNOSTIC);
+  assert.ok(long.message.endsWith(deep), "the folder the bundle stays in is never cut off");
 });
 
 test("the carried reason is one bounded, redacted line", () => {

@@ -12,46 +12,76 @@ export type ElementFingerprint = {
 };
 
 /**
+ * What the stable half of a fingerprint matched in one root, and whether the
+ * strategy that answered names a set of elements rather than one (t436).
+ *
+ * A selector, an xpath, an id, a test id and an authored name each name one
+ * control. A class set does not: every option chip of a picker carries the same
+ * one, so the first in document order was a guess, and on the crossborder item
+ * page it was always the first chip whatever the recording named. The veto then
+ * rightly refused it, and because something had answered, the words that would
+ * have found the recorded chip were never asked (`reports/r4a-4-saved-chip-
+ * not-found.md`). So the class set answers with every element carrying it, up
+ * to `MAX_CLASS_SET_MATCHES`, and says it is `shared`: the resolver adds what
+ * the recording's words match and lets scoring choose.
+ */
+export type StableFingerprintMatches = { matches: Element[]; shared: boolean };
+
+/** Class-set matches handed on. The scorer is given no more than this (`identity/candidates.ts`), so more cannot change which one wins. */
+const MAX_CLASS_SET_MATCHES = 60;
+
+/**
  * Resolves the most stable available part of an element fingerprint, looking
  * in `root`: the document, or the shadow root a recorded target's host chain
  * reached (`selector/shadow/scope.ts`). A recorded xpath is written from the
  * top of the element's own tree, so it is evaluated only against a document --
  * the xpath of an element inside a shadow root names nothing XPath can walk to.
+ * The first match of the stable strategies, then the first element whose words
+ * are the recorded words.
  */
 export function findClosestFingerprint(fingerprint: ElementFingerprint, root: LookupRoot = document): Element | null {
+  const stable = stableFingerprintMatches(fingerprint, root).matches[0];
+  if (stable) return stable;
+  if (fingerprint.visibleText) {
+    const normalized = normalizeText(fingerprint.visibleText);
+    return [...root.querySelectorAll(fingerprint.tagName || "*")].find((element) => normalizeText(element.textContent ?? "") === normalized) ?? null;
+  }
+  return null;
+}
+
+/** Every element the first stable strategy that answers matches in `root`; see `StableFingerprintMatches`. */
+export function stableFingerprintMatches(fingerprint: ElementFingerprint, root: LookupRoot = document): StableFingerprintMatches {
+  const single = (element: Element): StableFingerprintMatches => ({ matches: [element], shared: false });
   const bySelector = query(root, fingerprint.selector);
-  if (bySelector) return bySelector;
+  if (bySelector) return single(bySelector);
   // Checked before it is handed over, because an expression XPath cannot parse
   // makes `document.evaluate` *throw* rather than match nothing -- and a throw
   // here leaves `resolveTarget` altogether and fails the step, where a strategy
   // that found nothing would have let the ones below it run.
   if (fingerprint.xpath && !isShadowRoot(root) && isReadableXpath(fingerprint.xpath)) {
     const result = document.evaluate(fingerprint.xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-    if (result instanceof Element) return result;
+    if (result instanceof Element) return single(result);
   }
   if (fingerprint.id) {
     const byId = root.getElementById(fingerprint.id);
-    if (byId) return byId;
+    if (byId) return single(byId);
   }
   const tag = fingerprint.tagName || "*";
   const testId = fingerprint.attributes?.["data-testid"];
   if (testId) {
     const byTestId = query(root, `[data-testid="${cssString(testId)}"]`);
-    if (byTestId) return byTestId;
+    if (byTestId) return single(byTestId);
   }
   if (fingerprint.name) {
     const byName = query(root, `${tag}[aria-label="${cssString(fingerprint.name)}"], ${tag}[name="${cssString(fingerprint.name)}"]`);
-    if (byName) return byName;
+    if (byName) return single(byName);
   }
   if (fingerprint.classNames?.length) {
-    const byClass = query(root, `${tag}${fingerprint.classNames.map((className) => `.${CSS.escape(className)}`).join("")}`);
-    if (byClass) return byClass;
+    const classSet = `${tag}${fingerprint.classNames.map((className) => `.${CSS.escape(className)}`).join("")}`;
+    // `query` has parsed it, so asking for every match cannot throw.
+    if (query(root, classSet)) return { matches: [...root.querySelectorAll(classSet)].slice(0, MAX_CLASS_SET_MATCHES), shared: true };
   }
-  if (fingerprint.visibleText) {
-    const normalized = normalizeText(fingerprint.visibleText);
-    return [...root.querySelectorAll(tag)].find((element) => normalizeText(element.textContent ?? "") === normalized) ?? null;
-  }
-  return null;
+  return { matches: [], shared: false };
 }
 
 /**
