@@ -43,6 +43,7 @@ export async function closeLaunch(files, start, entries, { exitCode, now, reconc
       balanceFailure: outcome.balanceFailure,
       ...(outcome.facilityFailureBeforeProvider ? { facilityFailureBeforeProvider: outcome.facilityFailureBeforeProvider } : {}),
       ...(outcome.killed ? { killed: true } : {}),
+      ...(outcome.unpublished ? { unpublished: true } : {}),
       ...marker,
     }));
   for (const finish of finishes) await appendLedgerEntry(files.ledger, finish);

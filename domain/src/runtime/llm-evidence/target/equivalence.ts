@@ -38,24 +38,32 @@
 //   The form anchor vouches only for a control's place, never for what its name
 //   adds, so a control it would accept is still held to the count.
 // - **Nothing that ties it to the recording.** A rename is only recognisable
-//   through something that survived it: the name itself, whole or shortened, or
-//   the recorded form with exactly one control of that kind left in it. Where
-//   neither survives -- a different button on a page with no form -- the
-//   proposal is a guess, and this refuses it rather than let the person find
-//   out by watching it run.
+//   through something that survived it: the name itself, whole or shortened, in
+//   the place the recording stated (`./control-place.ts`: the recorded name in
+//   another landmark, form or list row is a same-named control elsewhere, t446);
+//   the recorded form with exactly one control of that kind left in it; or
+//   the same kind of control in the same place whose name keeps the recorded
+//   action and renames only what it acts on (`./renamed-control.ts`, t446: R4b's
+//   "Add to cart" redesigned as "Add to basket"). Where none survives -- a
+//   different button on a page with no form -- the proposal is a guess, and
+//   this refuses it rather than let the person find out by watching it run.
 //
 // Each refusal is one of Core's closed words, so a refused live repair says
 // which of the four it was. English conjunctions are the one piece of language
 // knowledge here; a page in another language loses that rule and keeps the
-// other three.
+// other three. Whether an accepted repair's act may be taken is not asked here:
+// a lasting act still meets Core's permission gate and the domain's act-landing
+// record after this check.
 
 import type { JsonObject } from "fluxiq/core";
-import type { WebAutomationElementFingerprint } from "../../../actions/types";
+import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../../../actions/types";
 import { adaptedTargetSupersedesRecording, elementFingerprint, objectValue } from "../../../output-nodes/targets";
 import { type WebLlmEvidenceElement } from "../elements";
-import { isWithheldText } from "../withheld";
 import { elementFillsRepairableParameter, type WebRepairableParameterRole } from "../repairable-parameters";
 import type { AutomationStudioRuntimeTargetOverrideFailedAction } from "fluxiq/automation-studio";
+import { evidenceNames, NAME_CONJUNCTIONS, nameWords, namesAgree, recordedNames } from "./control-names";
+import { webControlPlace } from "./control-place";
+import { webRenamedControlVerdict } from "./renamed-control";
 
 /** What the failed node addressed, as Core carries it: the recorded element, the target, or both. */
 export type WebRecordedActionTarget = AutomationStudioRuntimeTargetOverrideFailedAction["recordedTarget"];
@@ -82,11 +90,15 @@ export function webRepairEquivalenceRefusal(input: {
   const namedLabels = evidenceNames(input.named);
   const recordedLabels = recordedNames(recorded.fingerprint);
   if (joinsAnotherActionToRecorded(namedLabels, recordedLabels)) return "target_not_equivalent";
-  if (namesAgree(namedLabels, recordedLabels)) return undefined;
+  // The recorded name in another landmark, form, or list row is a same-named
+  // control elsewhere, not the recorded one (t446).
+  if (namesAgree(namedLabels, recordedLabels)) return webControlPlace(recorded, input.named).conflicting ? "target_not_equivalent" : undefined;
   if (soleControlOfItsKindInRecordedForm(input.elements, input.named, namedKind, recorded.formId)) {
     return joinsMoreActions(namedLabels, recordedLabels) ? "target_not_equivalent" : undefined;
   }
-  return "target_unanchored";
+  const renamed = webRenamedControlVerdict({ elements: input.elements, named: input.named, role: input.role, recorded: { ...recorded, names: recordedLabels } });
+  if (renamed === "same") return undefined;
+  return renamed === "different" ? "target_not_equivalent" : "target_unanchored";
 }
 
 /** What a control is, in the distinctions a repair must not cross. A variant nobody stated is unknown, not wrong. */
@@ -95,6 +107,8 @@ type WebControlKind = { family: string; variant?: string };
 /** The recorded control: its identity, and the two signals a fingerprint does not carry as fields of its own. */
 type WebRecordedControl = {
   fingerprint: WebAutomationElementFingerprint;
+  /** Where it sat, as the recording described it (`./control-place.ts`). */
+  context?: WebAutomationElementContext | undefined;
   formId?: string | undefined;
   controlType?: string | undefined;
   /** Whether anything said what type of control it is, so an absent type reads as unknown rather than as a default. */
@@ -126,6 +140,7 @@ function recordedControl(recordedTarget: WebRecordedActionTarget): WebRecordedCo
     const controlType = text(fingerprint.attributes?.type) ?? text(metadata?.controlType);
     return {
       fingerprint,
+      context: fingerprint.context,
       formId: text(fingerprint.context?.formId) ?? text(fingerprint.context?.formName) ?? text(metadata?.formId),
       controlType,
       controlTypeKnown: controlType !== undefined || fingerprint.attributes !== undefined
@@ -229,25 +244,6 @@ function buttonKind(controlType: string | undefined, controlTypeKnown: boolean):
   return controlTypeKnown ? { family: "button", variant: "activate" } : { family: "button" };
 }
 
-/** Every name the recording knew the control by. The authored `name` attribute is a form key, not a label. */
-function recordedNames(fingerprint: WebAutomationElementFingerprint): string[] {
-  const attributes = fingerprint.attributes;
-  return [fingerprint.accessibleName, fingerprint.visibleText, fingerprint.text, fingerprint.label, attributes?.["aria-label"], attributes?.title]
-    .flatMap((value) => text(value) === undefined ? [] : [value as string]);
-}
-
-/**
- * The names the packet gives an element. The packet cuts no string (t200); a
- * name it withheld as shaped like a secret (`../withheld.ts`) is not the
- * element's name at all, so it is compared for nothing.
- */
-function evidenceNames(element: WebLlmEvidenceElement): string[] {
-  return [element.name, element.text].flatMap((value) => text(value) === undefined || isWithheldText(value) ? [] : [value as string]);
-}
-
-/** Words that join a second action to the first. */
-const CONJUNCTIONS: ReadonlySet<string> = new Set(["and", "then", "plus", "&", "+"]);
-
 /**
  * Whether a proposed name is the recorded action with another joined to it:
  * split at its conjunctions, it joins more parts than the recorded name did,
@@ -274,8 +270,8 @@ function joinsMoreActions(named: readonly string[], recorded: readonly string[])
 /** A name's words, split at its conjunctions into the parts they join. Empty parts are dropped. */
 function actionParts(name: string): string[][] {
   const parts: string[][] = [[]];
-  for (const word of words(name)) {
-    if (CONJUNCTIONS.has(word)) parts.push([]);
+  for (const word of nameWords(name)) {
+    if (NAME_CONJUNCTIONS.has(word)) parts.push([]);
     else parts[parts.length - 1]!.push(word);
   }
   return parts.filter((part) => part.length > 0);
@@ -287,23 +283,7 @@ function startsWith(value: readonly string[], prefix: readonly string[]): boolea
 }
 
 function conjunctionCount(names: readonly string[]): number {
-  return names.reduce((most, name) => Math.max(most, words(name).filter((word) => CONJUNCTIONS.has(word)).length), 0);
-}
-
-/**
- * Whether a name survived the change: the same name, or the recorded name
- * shortened from the front, which is how a label is cut down ("Save changes"
- * to "Save"). A name that keeps only a later word ("Changes") is not the
- * recorded control answering to less of its name.
- */
-function namesAgree(named: readonly string[], recorded: readonly string[]): boolean {
-  return named.some((candidate) => {
-    const proposed = words(candidate);
-    return proposed.length > 0 && recorded.some((value) => {
-      const known = words(value);
-      return known.length > 0 && proposed.every((word, index) => word === known[index]);
-    });
-  });
+  return names.reduce((most, name) => Math.max(most, nameWords(name).filter((word) => NAME_CONJUNCTIONS.has(word)).length), 0);
 }
 
 /**
@@ -326,11 +306,6 @@ function soleControlOfItsKindInRecordedForm(
 
 function sameControlKind(kind: WebControlKind | undefined, other: WebControlKind): boolean {
   return kind !== undefined && kind.family === other.family && kind.variant === other.variant;
-}
-
-/** A name as it is compared: case, spacing and punctuation are not identity; a conjunction sign is a word. */
-function words(value: string): string[] {
-  return value.normalize("NFKC").toLowerCase().match(/[\p{L}\p{N}]+|[&+]/gu) ?? [];
 }
 
 function text(value: unknown): string | undefined {

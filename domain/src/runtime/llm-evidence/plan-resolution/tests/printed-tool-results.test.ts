@@ -29,7 +29,7 @@ import {
   type WebLlmRepeatingStructure
 } from "../..";
 import { shownPageText } from "../../page-view/tests/shown-page-lines";
-import { createWebLlmTargetPackets } from "..";
+import { createWebLlmTargetPackets, type WebPlanNodeResolutionInput } from "..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import { createWebLlmStableTargetHandles } from "../../stable-handles";
 
@@ -96,21 +96,35 @@ test("a detection's column `at` that the page view never printed is one a candid
     permission: async () => ({ permitted: true as const }),
     handleReach: "view_history"
   });
-  assert.equal(candidate.status, "resolved", JSON.stringify(candidate));
-  if (candidate.status === "resolved") assert.equal(candidate.parameters.selector, `${CONTAINER} > div:nth-of-type(1) > div`);
+  // Printed, so never refused as a handle no evidence showed. Whether the step
+  // is then saved is the identity guard's question (t425,
+  // `element-fingerprint/shortfall.ts`): a wordless thumbnail is saved only
+  // when its identity carries a second signal beside its kind -- its class --
+  // which the model-built identity carries from t422 on. Either way the handle
+  // itself was accepted as printed.
+  if (candidate.status === "refused") assert.deepEqual(candidate.issueCodes.filter((code) => !code.startsWith("web.handle.unidentifiable")), [], JSON.stringify(candidate));
+  else {
+    assert.equal(candidate.status, "resolved", JSON.stringify(candidate));
+    if (candidate.status === "resolved") assert.equal(candidate.parameters.selector, `${CONTAINER} > div:nth-of-type(1) > div`);
+  }
 });
 
 test("a held handle a search only echoed mid-line is not printed by it", async () => {
   const runtime = runtimeOver();
   const looked = await runtime.executeTool({ ...SCOPE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const resolve = (handle: string, reach: "view_history" | undefined) => runtime.resolvePlanNodeParameters({
-    ...SCOPE,
-    nodeDefinitionId: CHECK,
-    parameters: { target: { handle }, checked: true },
-    declaredConsequences: [],
-    permission: async () => ({ permitted: true as const }),
-    handleReach: reach
-  });
+  // Without the view history it is exploration's own resolution, which gates
+  // itself and saves no step, so the identity guard does not judge it (t425).
+  const resolve = (handle: string, reach: "view_history" | undefined) => {
+    const input: WebPlanNodeResolutionInput = {
+      ...SCOPE,
+      nodeDefinitionId: CHECK,
+      parameters: { target: { handle }, checked: true },
+      declaredConsequences: [],
+      permission: async () => ({ permitted: true as const }),
+      handleReach: reach
+    };
+    return runtime.resolvePlanNodeParameters(reach === undefined ? { ...input, gatedByCaller: true } : input);
+  };
   // A handle the capture holds (exploration resolves it) that the view left out.
   const printed = new Set([...shownPageText(looked.evidence).matchAll(/^t[0-9]+/gmu)].map((match) => match[0]));
   let unprinted: string | undefined;

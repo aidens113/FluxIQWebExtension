@@ -17,6 +17,7 @@ import {
   type WebAutomationActionResult,
   type WebAutomationActionType,
   type WebAutomationActionVisualTarget,
+  type WebAutomationFactCheckCommand,
   type WebAutomationRecordedExtraction,
   type WebAutomationRecordedTab
 } from "@fluxiq-web-extension/domain/client";
@@ -625,6 +626,9 @@ export type ServerCommandPayload =
   | { command: "stop_recording"; recordingId?: string | undefined }
   | { command: "capture_snapshot"; kind?: string | undefined; metadata?: JsonObject | undefined }
   | { command: "execute_action"; action: BrowserActionCommand }
+  // A fact check (plan B1) arrives as an `execute_action` under its own action
+  // type and is split off before the action path, which would refuse it.
+  | { command: "evaluate_facts"; check: WebAutomationFactCheckCommand }
   | { command: "set_active_tab"; tabId: string }
   | { command: "disconnect"; reason?: string | undefined }
   | { command: "ping"; nonce?: string | undefined };

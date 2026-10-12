@@ -85,6 +85,8 @@ test("an exploring list read shows the model the rows each condition rejected, b
   // The one command that went out asked for the samples.
   const dispatched = stubbed.commands.find((command) => command.actionType === "web.dom.extract_list");
   assert.equal(dispatched?.parameters.rejectedSamples, true);
+  // An exploration read asks for every row, never the kept rows alone a replay asks for (`./replay.test.ts`).
+  assert.equal(Object.hasOwn((dispatched?.parameters.extractList as JsonObject | undefined) ?? {}, "answer"), false);
   const read = (ran.evidence as JsonObject).read as JsonObject;
   assert.deepEqual(read.extracted, [{ name: "Basic Earbuds", price: "$19" }]);
   // Only the condition that rejected something, by its position in `where`,

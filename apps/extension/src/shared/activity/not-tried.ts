@@ -11,7 +11,7 @@
 // own words for that reason (`activityActionFailureReason`, the words its card
 // says), less the "FluxIQ didn't send it, as" its card opens with, which "not
 // tried" already says. A step reading a list names the list, not a control
-// ("the step didn't say which list to read"). Without a reason, the code's own
+// ("the step didn't name its list the way FluxIQ needs"). Without a reason, the code's own
 // last words say why when they say something other than a page miss
 // ("a popup or banner on the page was covering it"); a page miss is never
 // said, since the page was not asked. Pure.
@@ -26,10 +26,17 @@ const REASON = /(?:^|·\s*)Reason:\s*([^\s·]+)/u;
 const PAGE_MISS = /\b(?:wasn't|was not|isn't) on the page\b|\bcouldn't find\b/u;
 /** The opening of Core's card words for a call it did not send: "FluxIQ didn't send it, as …". */
 const NOT_SENT = /^FluxIQ didn't \w+ it,? (?:(?:as|because|since) |(?=for ))/u;
-/** Core's words for a step that named no control from the page. */
-const NO_CONTROL = /^the step didn't say which (?:control|list) on the page to (?:use|read)$/u;
+/** Core's words for a step that did not name its control as FluxIQ needs (by a handle from the page, and only so). */
+const NO_CONTROL = /^the step didn't name its (?:control|list) the way FluxIQ needs$/u;
 /** An action reading a list: "Reading the list of …", "Trying again: reading the list of …". */
 const READS_LIST = /\blist\b/iu;
+/**
+ * A rejected code whose own words say the step ran and its effect did not
+ * show (`web.action.rejected.output_not_observed`: the site set a cleared box
+ * back). It was tried, and "not tried: it ran, but ..." said both (R4a). It is
+ * left to the outcome a failed step reads, in Core's card words.
+ */
+const RAN = /\.(?:output_not_observed|not_observed|state_mismatch)$/u;
 
 const NOT_TRIED = "not tried";
 
@@ -39,7 +46,7 @@ const NOT_TRIED = "not tried";
  * call does, in words, so a list read names a list.
  */
 export function notTriedOutcome(code: string, record: string | undefined, action: string): string | undefined {
-  if (!REJECTED.test(code)) return undefined;
+  if (!REJECTED.test(code) || RAN.test(code)) return undefined;
   const reason = REASON.exec(record ?? "")?.[1];
   const tail = code.split(".").at(-1) ?? "";
   const why = (reason ? activityActionFailureReason("", reason) : null) ?? (tail ? activityActionFailureReason(`web.${tail}`) : null);
@@ -47,5 +54,5 @@ export function notTriedOutcome(code: string, record: string | undefined, action
   if (!said || PAGE_MISS.test(said)) return NOT_TRIED;
   // A repeat Core could not trace to its first refusal (`answered_the_same_again`): "not tried, for the same reason as the time before".
   if (said.startsWith("for ")) return `${NOT_TRIED}, ${said}`;
-  return `${NOT_TRIED}: ${NO_CONTROL.test(said) && READS_LIST.test(action) ? "the step didn't say which list to read" : said}`;
+  return `${NOT_TRIED}: ${NO_CONTROL.test(said) && READS_LIST.test(action) ? "the step didn't name its list the way FluxIQ needs" : said}`;
 }

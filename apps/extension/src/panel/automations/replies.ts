@@ -7,7 +7,10 @@ import { readCore } from "./read-core";
 
 /** Reads the three replies a run and its data answer with. */
 export const readRunReplies = {
-  /** `runAutomation`: `{ payload: { runSummary, createdAdaptationIds, durableBehaviorChanged } }`. */
+  /**
+   * `runAutomation`: `{ payload: { runSummary, createdAdaptationIds, durableBehaviorChanged } }`.
+   * The reply's own `durableBehaviorChanged` is read first, then its run summary's.
+   */
   run(reply: unknown): RunReply | undefined {
     const payload = readCore.record(readCore.record(reply)?.payload);
     const run = readCore.run(payload?.runSummary);
@@ -16,7 +19,7 @@ export const readRunReplies = {
     return {
       run,
       createdAdaptationIds: readCore.texts(payload.createdAdaptationIds),
-      durableBehaviorChanged: typeof durable === "boolean" ? durable : undefined
+      durableBehaviorChanged: typeof durable === "boolean" ? durable : run.durableBehaviorChanged
     };
   },
   /** `runDetail`: `{ payload: { runDetail: { summary, adaptationIds, datasets }, adaptations } }`. */

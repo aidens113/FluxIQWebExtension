@@ -35,6 +35,23 @@
 // button:nth-of-type(1)` (`test-runs/run-muesyox4-930bef98`), and the token in
 // it belongs to one rendering of one page.
 //
+// **And a token no element carries means nothing, whatever its shape.** The
+// shape rule is a first filter, not a complete one: the crossborder item page
+// mints its quantity box's id as `fb` and a hash on every load, and
+// `fb1l6ufkg` -- two digits in nine, and a run "ufkg" that reads as a word --
+// is not judged generated, nor are 1053 of the scenario's 1960 such ids. R4a
+// (`run-mv2nlh9l-52e476da`) addressed the box by it, the trial's reset drew a
+// new one, and the stale id was charged as a contradiction at -0.8 x 26 against
+// a box whose only other signals are a label and a class: best score 0.27,
+// `web.target.not_found`. So a recorded id, and a recorded selector quoting an
+// identifier, that no element on the current page carries is dropped from
+// scoring outright (`page-tokens.ts`); it neither supports nor contradicts any
+// candidate. A token some element does carry -- the recorded control's, or a
+// neighbour's that now holds it -- keeps exactly the meaning it had, so a
+// different control wearing the recorded id is still contradicted. What was
+// dropped, and why, rides on the selection as `dropped`, so a failure can say
+// the recording's id was set aside rather than leaving a reader to guess.
+//
 // **The floor and the margin.** Core reports `normalizedScore` in [-1, 1]: the
 // share of the compared weight that agreed, minus the share that disagreed. The
 // floor is the point below which a candidate is not the recorded control but
@@ -55,9 +72,10 @@ import {
   type ElementFingerprint,
   type ElementFingerprintScore
 } from "fluxiq/automation-studio/fingerprinting";
-import { isVolatileIdentifier, selectorQuotesVolatileIdentifier } from "../selector";
+import { isVolatileIdentifier, quotedAnchors, selectorQuotesVolatileIdentifier } from "../selector";
 import type { TargetCandidate } from "./candidates";
 import { corroboratesExactly } from "./corroboration";
+import { pageTokens, type PageTokens } from "./page-tokens";
 import { agreesWithRecordedRecord, type RecordIdentity } from "./record";
 
 /** A candidate and what Core made of it. */
@@ -76,10 +94,23 @@ export type ScoredCandidate = {
  * resembles the recorded control closely enough to act on, or that the best of
  * it agrees exactly with nothing that says which control it is.
  */
-export type CandidateSelection =
+export type CandidateSelection = (
   | { outcome: "resolved"; chosen: ScoredCandidate; runnerUp: ScoredCandidate | undefined; ranked: ScoredCandidate[] }
   | { outcome: "ambiguous"; ranked: ScoredCandidate[] }
-  | { outcome: "unmatched"; ranked: ScoredCandidate[] };
+  | { outcome: "unmatched"; ranked: ScoredCandidate[] }
+) & {
+  /** The recorded identifiers left out of the comparison, when any were. */
+  dropped?: readonly DroppedToken[] | undefined;
+};
+
+/**
+ * A recorded identifier that was not handed to Core, and why: `absent`, no
+ * element on the page carries it; `generated`, its shape says a rendering drew
+ * it and no candidate still carries it. `token` is the id, or for a selector the
+ * identifier it quoted that is gone -- or, when its shape was the reason, the
+ * selector itself.
+ */
+export type DroppedToken = { signal: "id" | "selector"; token: string; because: "absent" | "generated" };
 
 /**
  * The identity signals a recorded target arrives with. A superset of what is
@@ -182,8 +213,9 @@ export function scoreTargetCandidates(target: RecordedIdentity, candidates: Targ
   const eligible = candidates.filter((candidate) => agreesWithRecordedRecord(target.context?.record, candidate.element));
   if (!eligible.length) return { outcome: "unmatched", ranked: [] };
   const elements = new Map(eligible.map((candidate) => [candidate.fingerprint, candidate.element]));
-  const fingerprint = comparableFingerprint(target, eligible);
-  if (!hasIdentitySignal(fingerprint)) return { outcome: "unmatched", ranked: [] };
+  const { fingerprint, dropped } = comparableFingerprint(target, eligible);
+  const measured = dropped.length ? { dropped } : {};
+  if (!hasIdentitySignal(fingerprint)) return { outcome: "unmatched", ranked: [], ...measured };
   const ranked = matcher
     // Core drops anything below zero by default. The full ranking is kept so a
     // refusal can report what it weighed; the floor below is what decides.
@@ -194,15 +226,15 @@ export function scoreTargetCandidates(target: RecordedIdentity, candidates: Targ
     });
 
   const chosen = ranked[0];
-  if (!chosen || chosen.score.normalizedScore < TARGET_SCORE_FLOOR) return { outcome: "unmatched", ranked };
+  if (!chosen || chosen.score.normalizedScore < TARGET_SCORE_FLOOR) return { outcome: "unmatched", ranked, ...measured };
   const runnerUp = ranked[1];
   if (runnerUp && chosen.score.normalizedScore - runnerUp.score.normalizedScore < TARGET_SCORE_MARGIN) {
-    return { outcome: "ambiguous", ranked };
+    return { outcome: "ambiguous", ranked, ...measured };
   }
   // A winner nothing distinguishing agrees with exactly is not an answer, however
   // far it leads. Checked last, so a tie is still reported as the tie it is.
-  if (!corroboratesExactly(chosen.score)) return { outcome: "unmatched", ranked };
-  return { outcome: "resolved", chosen, runnerUp, ranked };
+  if (!corroboratesExactly(chosen.score)) return { outcome: "unmatched", ranked, ...measured };
+  return { outcome: "resolved", chosen, runnerUp, ranked, ...measured };
 }
 
 /**
@@ -216,7 +248,7 @@ export function scoreTargetCandidates(target: RecordedIdentity, candidates: Targ
  * applies before ranking.
  */
 export function scoreTargetCandidate(target: RecordedIdentity, candidate: TargetCandidate): ElementFingerprintScore | undefined {
-  const fingerprint = comparableFingerprint(target, [candidate]);
+  const { fingerprint } = comparableFingerprint(target, [candidate]);
   if (!hasIdentitySignal(fingerprint)) return undefined;
   return matcher.scoreCandidate(fingerprint, candidate.fingerprint);
 }
@@ -232,12 +264,14 @@ export function scoreTargetCandidate(target: RecordedIdentity, candidate: Target
  * or from the attribute the recording carried it in, because the two paths
  * disagree about which one is filled.
  */
-function comparableFingerprint(target: RecordedIdentity, pool: readonly TargetCandidate[]): ElementFingerprint {
+function comparableFingerprint(target: RecordedIdentity, pool: readonly TargetCandidate[]): { fingerprint: ElementFingerprint; dropped: DroppedToken[] } {
   const testId = target.testId ?? target.attributes?.["data-testid"];
   const role = target.role?.trim() || target.implicitRole?.trim();
-  const id = comparableIdentifier(target.id, pool);
-  const selector = comparableSelector(target.selector, pool);
-  return {
+  const page = pageTokens(pool[0]?.element);
+  const dropped: DroppedToken[] = [];
+  const id = comparableIdentifier(target.id, pool, page, dropped);
+  const selector = comparableSelector(target.selector, pool, page, dropped);
+  const fingerprint: ElementFingerprint = {
     ...(target.visibleText ? { visibleText: target.visibleText } : {}),
     ...(target.accessibleName ? { accessibleName: target.accessibleName } : {}),
     ...(target.label ? { label: target.label } : {}),
@@ -248,28 +282,52 @@ function comparableFingerprint(target: RecordedIdentity, pool: readonly TargetCa
     ...(selector ? { selector } : {}),
     ...(target.classNames?.length ? { classNames: target.classNames } : {})
   };
+  return { fingerprint, dropped };
 }
 
 /**
- * The recorded id, unless a rendering generated it and no candidate still
- * carries that token.
+ * The recorded id, unless it says nothing about this page.
  *
- * The exception is the whole of the rule's safety. Where the token *is* still
- * on the page -- the ordinary same-build replay, where Level 1 matched by id
- * and the veto is asking whether to act on it -- nothing is dropped and the
- * comparison is the one it always was. Only a token the page no longer holds
- * anywhere is set aside, and that is exactly the case where Core would read a
- * rename as a contradiction.
+ * Two filters, the cheap one first. The shape rule: an id a rendering
+ * generated is kept only when a candidate in the pool still carries that very
+ * token -- the ordinary same-build replay, where Level 1 matched by id and the
+ * veto is asking whether to act on it. Then the page: an id no element on the
+ * page carries is dropped whatever its shape, because the page has stopped
+ * naming anything by it. An id some element still carries is kept, and Core
+ * compares it as it always has -- agreement on the element that holds it,
+ * contradiction on every other.
  */
-function comparableIdentifier(id: string | undefined, pool: readonly TargetCandidate[]): string | undefined {
-  if (!id || !isVolatileIdentifier(id)) return id;
-  return pool.some((candidate) => candidate.fingerprint.id === id) ? id : undefined;
+function comparableIdentifier(id: string | undefined, pool: readonly TargetCandidate[], page: PageTokens, dropped: DroppedToken[]): string | undefined {
+  if (!id) return undefined;
+  if (isVolatileIdentifier(id) && !pool.some((candidate) => candidate.fingerprint.id === id)) {
+    dropped.push({ signal: "id", token: id, because: "generated" });
+    return undefined;
+  }
+  if (page.carries("id", id) === false) {
+    dropped.push({ signal: "id", token: id, because: "absent" });
+    return undefined;
+  }
+  return id;
 }
 
-/** The recorded selector, under the same rule: dropped only where the token it is addressed through has gone. */
-function comparableSelector(selector: string | undefined, pool: readonly TargetCandidate[]): string | undefined {
-  if (!selector || !selectorQuotesVolatileIdentifier(selector)) return selector;
-  return pool.some((candidate) => candidate.fingerprint.selector === selector) ? selector : undefined;
+/**
+ * The recorded selector, under the same two filters: dropped where the token
+ * it is addressed through was generated and has gone, or where any identifier
+ * it quotes is carried by no element on the page -- a selector through a token
+ * nothing holds addresses nothing.
+ */
+function comparableSelector(selector: string | undefined, pool: readonly TargetCandidate[], page: PageTokens, dropped: DroppedToken[]): string | undefined {
+  if (!selector) return undefined;
+  if (selectorQuotesVolatileIdentifier(selector) && !pool.some((candidate) => candidate.fingerprint.selector === selector)) {
+    dropped.push({ signal: "selector", token: selector, because: "generated" });
+    return undefined;
+  }
+  const absent = quotedAnchors(selector).find((anchor) => page.carries(anchor.attribute, anchor.value) === false);
+  if (absent) {
+    dropped.push({ signal: "selector", token: absent.written, because: "absent" });
+    return undefined;
+  }
+  return selector;
 }
 
 /**

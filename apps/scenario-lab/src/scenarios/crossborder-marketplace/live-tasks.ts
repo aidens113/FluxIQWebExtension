@@ -22,6 +22,11 @@ const BUY_HUB ="On Farbazaar, buy two of the Voltbay USB-C hub sold by Voltbay O
  * - `-hub-to-cart` changes state and is judged by it: the header's cart and
  *   coupon flyouts, wherever the run ends. `-flash-deal` is the same job with
  *   a promotion popup the Flow never saw while it was being made.
+ *   `-flash-deal-during-build` arms the same promotion for the build as well,
+ *   so the model meets it while gathering evidence and can write what the run
+ *   does about it into the Flow (the state-aware recovery plan's R4a proof). A
+ *   candidate trial starts from the site's reset, which clears every armed
+ *   variant, so only discovery and playback meet it.
  *   `-basket-redesign-after-creation` is the same job after the product page's
  *   buy bar was redesigned (the control the Flow pressed lost its test id and
  *   reads Add to basket, with Buy now in its old place), which only a repair
@@ -70,6 +75,14 @@ export const CROSSBORDER_MARKETPLACE_LIVE_TASKS: readonly LiveInstructionTask[] 
     instruction: HUB_TO_CART,
     judgeBy: "playback-goal",
     variantArmedAfterBuild: true,
+  },
+  {
+    id: "crossborder-marketplace-hub-to-cart-flash-deal-during-build",
+    scenarioId: "crossborder-marketplace",
+    variantId: "flash-deal",
+    kind: "form",
+    instruction: HUB_TO_CART,
+    judgeBy: "playback-goal",
   },
   {
     id: "crossborder-marketplace-hub-to-cart-basket-redesign-after-creation",

@@ -109,7 +109,8 @@ test.describe("identity wire chain: a recorded click survives the wire and resol
       // a projection that drops the name and role fails here at 0.197.
       expect(reply, reply.message).toMatchObject({
         status: "succeeded",
-        resolution: { strategy: "scored-candidate", candidateCount: 2, bestScore: expect.closeTo(0.389, 3), confidence: expect.closeTo(0.366, 3) },
+        // 0.389 and 0.366 before t419: the recorded id and selector are on no element of the redesigned page, so they no longer count against it.
+        resolution: { strategy: "scored-candidate", candidateCount: 2, bestScore: expect.closeTo(0.602, 3), confidence: expect.closeTo(0.566, 3) },
         element: { tagName: "button", accessibleName: "Save changes", visibleText: "Save" }
       });
       await expect

@@ -6,6 +6,7 @@ export * from "./setup";
 export * from "./actions/types";
 export * from "./actions/schemas";
 export * from "./actions/capabilities";
+export * from "./actions/fact-check";
 export * from "./extraction";
 export * from "./io/web-automation-io";
 export * from "./output-nodes";

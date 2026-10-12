@@ -50,7 +50,7 @@ const NAME_SELECTOR = 'input[name="name"]';
 const nameField: JsonObject = { tagName: "input", selector: NAME_SELECTOR, inputType: "text", accessibleName: "Name", attributes: { name: "name", type: "text" } };
 const submit: JsonObject = { tagName: "button", selector: "#submit", visibleText: "Submit" };
 /** Who those two are, as a resolved node carries them. */
-const NAME_IDENTITY: JsonObject = { tagName: "input", accessibleName: "Name", selector: NAME_SELECTOR };
+const NAME_IDENTITY: JsonObject = { tagName: "input", accessibleName: "Name", selector: NAME_SELECTOR, name: "name", attributes: { name: "name" } };
 const SUBMIT_IDENTITY: JsonObject = { tagName: "button", visibleText: "Submit", selector: "#submit" };
 
 /** A click node resolved onto a described control that has only a tag, a selector and its text. */
@@ -86,7 +86,7 @@ async function resolve(runtime: WebAutomationLlmEvidenceRuntime, nodeDefinitionI
 }
 
 const EXTRACTION_HINT = "web.handle.expected.extract_list.handle_fields";
-const TARGET_HINT = "web.handle.expected.selector.handle_location";
+const TARGET_HINT = "web.handle.expected.target.handle_location";
 /** The node that fits a control a refused node could not act on, as a refusal names it. */
 const USE_CLICK = "web.handle.expected.node.web.output.dom-click";
 const USE_SELECT = "web.handle.expected.node.web.output.dom-select";
@@ -417,6 +417,8 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
   assert.deepEqual([...WEB_PLAN_HANDLE_ISSUE_CODES], [
     "web.handle.malformed",
     "web.handle.misplaced",
+    "web.handle.not_a_handle",
+    "web.handle.required",
     "web.handle.unknown",
     "web.handle.renumbered_by_reload",
     "web.handle.stale",
@@ -432,7 +434,8 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
     "web.handle.expected.next_page.list_control",
     TARGET_HINT,
     USE_CLICK,
-    USE_SELECT
+    USE_SELECT,
+    "web.handle.unidentifiable"
   ]);
 });
 
@@ -511,7 +514,7 @@ test("a selector the page gave to several controls is refused rather than acted 
   assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t2" } }), refusedAt("web.handle.not_unique", "selector"));
   assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t5", location: "https://example.test/other" } }), {
     status: "resolved",
-    parameters: { selector: '[data-testid="product-link"]', element: { tagName: "a", accessibleName: "one", selector: '[data-testid="product-link"]' } }
+    parameters: { selector: '[data-testid="product-link"]', element: { tagName: "a", accessibleName: "one", selector: '[data-testid="product-link"]', testId: "product-link", attributes: { "data-testid": "product-link" } } }
   });
   // In another frame, the same selector is a different address.
   const framedLink: JsonObject = { tagName: "a", selector: 'frame[4] >> [data-testid="product-link"]', accessibleName: "framed", attributes: { href: "/p/framed", "data-testid": "product-link", "data-fluxiq-frame-id": "4" } };
@@ -519,7 +522,7 @@ test("a selector the page gave to several controls is refused rather than acted 
   await inspect(runtime);
   assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t7", location: "https://example.test/framed" } }), {
     status: "resolved",
-    parameters: { selector: '[data-testid="product-link"]', element: { tagName: "a", accessibleName: "framed", selector: '[data-testid="product-link"]' }, browserFrameId: 4 }
+    parameters: { selector: '[data-testid="product-link"]', element: { tagName: "a", accessibleName: "framed", selector: '[data-testid="product-link"]', testId: "product-link", attributes: { "data-testid": "product-link" } }, browserFrameId: 4 }
   });
 });
 

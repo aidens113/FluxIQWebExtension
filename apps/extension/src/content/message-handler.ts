@@ -28,6 +28,11 @@ import { BUILD_IDENTITY_MESSAGE, currentBuildIdentity } from "../shared/build-id
 // second saying whether it clears by itself -- never with the page's text. A
 // document still being parsed answers once it has been.
 //
+// `fluxiq.evaluateFacts` judges a batch of claims about this document and
+// answers at once, from one synchronous pass with no wait (`./facts/`): a
+// fact check reads the page as it stands. It is addressed as `executeAction`
+// is, because the worker sends each frame only that frame's claims.
+//
 // The activity overlay's message (`content/activity-overlay/`) is top frame
 // only for the same reason: there is one status for the page the person is
 // watching. It is a display, so it is answered at once and changes nothing
@@ -41,6 +46,9 @@ import { inferListFromElement } from "./extraction";
 import { isTopFrame } from "./frame-geometry";
 import { extractionContentMessage, handleExtractionMessage } from "./picker";
 import { activityContentMessage, showActivityOverlay } from "./activity-overlay";
+import { domFactPage, evaluateFactBatch } from "./facts";
+import { webAutomationFactCheckRequestValue } from "@fluxiq-web-extension/domain/client";
+import { FACT_CHECK_MESSAGE, type FactCheckContentResponse } from "../shared/fact-check-message";
 import { EXTRACTION_PROPOSE_MESSAGE, type ExtractionProposeResponse } from "../shared/extraction-messages";
 import { PAGE_CHALLENGE_MESSAGE, type PageChallengeResponse } from "../shared/page-challenge-message";
 import type { BrowserActionCommand } from "./types";
@@ -77,7 +85,7 @@ function isAddressedToThisFrame(message: { frameId?: number; topFrameOnly?: bool
 
 export function installMessageHandler(): void {
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-    const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; action?: BrowserActionCommand; extraction?: unknown; commandId?: string; selector?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean; includeHidden?: unknown };
+    const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; action?: BrowserActionCommand; extraction?: unknown; commandId?: string; selector?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean; includeHidden?: unknown; request?: unknown };
     if (typed.type === "fluxiq.ping") {
       sendResponse({ ok: true, active: isActiveContentInstance(), version: CONTENT_SCRIPT_VERSION });
       return false;
@@ -109,6 +117,16 @@ export function installMessageHandler(): void {
         .then(sendResponse)
         .catch((error: unknown) => sendResponse(actionFailure(typed.action as BrowserActionCommand, error)));
       return true;
+    }
+    if (typed.type === FACT_CHECK_MESSAGE) {
+      if (!isAddressedToThisFrame(typed)) return false;
+      // Synchronous, so the channel closes with the reply already sent. A
+      // request with no query list is answered with none, which the worker
+      // reads as every claim unknown.
+      const reading = webAutomationFactCheckRequestValue(typed.request);
+      const reply: FactCheckContentResponse = reading ? evaluateFactBatch(reading, domFactPage()) : { answers: [] };
+      sendResponse(reply);
+      return false;
     }
     if (typed.type === PAGE_CHALLENGE_MESSAGE) {
       if (!isTopFrame()) return false;

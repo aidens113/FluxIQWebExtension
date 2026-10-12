@@ -15,21 +15,21 @@
 // present Core never reads `text`, and the page scores the element the model
 // was shown against the element it finds.
 //
-// What is copied is the fingerprint a runtime repair builds from the same
-// packet element (`../target-override.ts`): the tag, the role, the name, the
-// visible text, the form, the list position -- the frame rides on the node as
-// `browserFrameId`, as it does for a recorded one. Nothing else. The packet
-// already refuses to describe a secret control and carries no value; this adds
-// three rules of its own on top, because an identity is carried further than
-// the packet is:
+// It is the same fingerprint a runtime repair saves for the same packet
+// element (`../target/override.ts`): both are read by `../packet-fingerprint/`
+// and built by `domain/src/element-fingerprint/` -- the frame rides on the node
+// as `browserFrameId`, as it does for a recorded one. The packet already
+// refuses to describe a secret control and carries no value; the builder adds
+// rules of its own on top, because an identity is carried further than the
+// packet is:
 //
-// - a text control's or a select's text is its contents or its options, not
-//   its identity, and is left out;
+// - a text field's, textarea's or select's text is its contents or its
+//   options, not its identity, and is left out;
 // - a name or text the packet withheld as shaped like a secret
 //   (`../withheld.ts`) is not the element's, and is left out rather than
 //   compared as though it were;
-// - a control whose signature says it holds a secret carries no name or text
-//   at all, should one ever reach here.
+// - a control whose signature says it holds a secret carries no name or text,
+//   should one ever reach here.
 //
 // The packet's `name` is written here as `accessibleName`. It is the
 // extension's computed accessible name, falling back to the descriptor's
@@ -71,49 +71,86 @@
 // readable spelling is the packet's `readable`, taken only where it differs from
 // the identity's own name by spacing alone, so it is never words the identity
 // would not already carry: no name for a secret control, none that was withheld.
+//
+// **Every stable fact the packet has about the element rides, not only its
+// name** (t422). A created node's identity was the tag, role, name, text,
+// selector and input type, and nothing else. R4a (`run-mv2pgqkj-f3552c70`)
+// saved crossborder's quantity box as `{ tagName: "input", selector:
+// "#fb1l6ufkg" }`: the box has no accessible name and, being an input, no text
+// the identity keeps, and the page mints that id again on every load. Once the
+// page set aside an id no element carries (t419), nothing was left to find the
+// box by (`content/identity/score.ts` `hasIdentitySignal`), and both trials
+// failed `web.target.not_found` on a box in plain view. The packet had what
+// would have found it -- its label "Quantity" -- and this dropped it.
+//
+// So a created node's identity is now the fingerprint a recorded node's is
+// (user, 2026-10-10: every element is found by its fingerprint, never by one
+// attribute, so a changed id, class or text does not break a Flow while its
+// other signals hold). It is built by the one packet reader,
+// `../packet-fingerprint/`, through the one builder every save path uses --
+// the recording's and a repair's included (`domain/src/element-fingerprint/`,
+// t425) -- so the three cannot drift:
+//
+// - the tag, the role and the implied role, the input type;
+// - the accessible name, the label, and for a control that is not a text
+//   field or a select its visible text;
+// - the id and the class tokens, each a signal of its own and not only inside
+//   the selector -- the page sets aside an id no element carries any more
+//   (`content/identity/score.ts`), so a per-load id costs nothing once gone;
+// - the `name` attribute, a test id, and under `attributes` only the
+//   identifying ones (the builder's one list) -- never the packet's whole map,
+//   which holds the element's state as well as its identity;
+// - where it sat: its form, landmark, list and table position, shadow hosts
+//   and record.
+//
+// None of it is new in what the model is shown: the model names an element
+// only by its handle. Never a value, a checked state, a selected option or a
+// link target: those are contents.
 
 import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../../../actions/types";
-import { isSensitiveFieldSignature } from "../../../sensitivity";
 import type { WebLlmEvidenceElement } from "../elements";
+import { webPacketElementFingerprint } from "../packet-fingerprint";
 import { webLlmReadableWords } from "../page-view";
 import { present } from "../present";
-import { isWithheldText } from "../withheld";
 
 /** The recorded fingerprint fields a handle's element can honestly fill. */
-export type WebPlanElementIdentity = Pick<WebAutomationElementFingerprint, "tagName" | "role" | "accessibleName" | "visibleText" | "selector" | "inputType"> & {
+export type WebPlanElementIdentity = Pick<WebAutomationElementFingerprint,
+  "tagName" | "role" | "implicitRole" | "accessibleName" | "label" | "visibleText" | "selector" | "inputType" | "id" | "classNames" | "name" | "testId" | "attributes"> & {
   context?: WebPlanElementContext | undefined;
 };
 
-type WebPlanElementContext = Pick<WebAutomationElementContext, "formId" | "listPosition" | "shadowHosts" | "record">;
-
-/** Controls whose text is what they hold rather than what they are called. */
-const CONTENT_TAGS: ReadonlySet<string> = new Set(["input", "textarea", "select"]);
+type WebPlanElementContext = Pick<WebAutomationElementContext, "formId" | "landmark" | "listPosition" | "tablePosition" | "shadowHosts" | "record">;
 
 /**
  * The identity of one packet element, addressed by the selector its handle was
  * bound to -- and, for an element inside open shadow roots, by the host chain
- * the binding kept beside that selector. The chain is the key a recorded node
- * already carries (`context.shadowHosts`), so a created node's click and its
- * wait are scoped to the widget's root exactly as a recorded one's are, rather
- * than finding the element only through the page-side search of every root
- * that a click falls back on and a wait does not.
+ * the binding kept beside that selector (`../packet-fingerprint/`).
  */
 export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector: string, shadowHosts?: readonly string[]): WebPlanElementIdentity {
-  const secret = isSensitiveFieldSignature({ inputType: element.inputType, controlType: element.controlType });
-  const context = present<WebPlanElementContext>({
-    formId: whole(element.form),
-    listPosition: element.item === undefined ? undefined : { index: element.item.index, total: element.item.total },
-    shadowHosts: shadowHosts === undefined || shadowHosts.length === 0 ? undefined : [...shadowHosts],
-    record: recordOf(element)
-  });
+  const fingerprint = webPacketElementFingerprint(element, { selector, shadowHosts });
+  const context = fingerprint.context;
   return present<WebPlanElementIdentity>({
-    tagName: element.tag,
-    role: element.role,
-    accessibleName: secret ? undefined : whole(element.name),
-    visibleText: secret || CONTENT_TAGS.has(element.tag) ? undefined : whole(element.text),
-    selector,
-    inputType: element.inputType,
-    context: Object.keys(context).length > 0 ? context : undefined
+    tagName: fingerprint.tagName,
+    role: fingerprint.role,
+    implicitRole: fingerprint.implicitRole,
+    accessibleName: fingerprint.accessibleName,
+    label: fingerprint.label,
+    visibleText: fingerprint.visibleText,
+    selector: fingerprint.selector,
+    inputType: fingerprint.inputType,
+    id: fingerprint.id,
+    classNames: fingerprint.classNames,
+    name: fingerprint.name,
+    testId: fingerprint.testId,
+    attributes: fingerprint.attributes,
+    context: context === undefined ? undefined : present<WebPlanElementContext>({
+      formId: context.formId,
+      landmark: context.landmark,
+      listPosition: context.listPosition,
+      tablePosition: context.tablePosition,
+      shadowHosts: context.shadowHosts,
+      record: context.record
+    })
   });
 }
 
@@ -141,6 +178,15 @@ export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector:
  * no label asks nothing the page contradicts, on the reset page or this one.
  * Once a field is dropped it stays dropped. A newer view whose handle names
  * another element (tag, role or address changed) replaces it whole.
+ *
+ * **This is the identity exploration acts with, not the one a step saves
+ * (t442, F1).** Saved into a Flow, the agreement left the coupon step as
+ * `{div, class b}` with no words at all, which a done coupon matches as well
+ * as an undone one. A handle exploration acted on is saved, for a candidate
+ * submission, with the whole identity its control had in the view the act was
+ * made from (`target-packets.ts` `acted`), and the fields the act changed are
+ * the step's effect. The two uses no longer share one identity, so the veto
+ * concern above still holds for exploration and costs the saved step nothing.
  */
 export function webPlanElementIdentityAcrossViews(earlier: WebPlanElementIdentity, newer: WebPlanElementIdentity): WebPlanElementIdentity {
   const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
@@ -149,19 +195,43 @@ export function webPlanElementIdentityAcrossViews(earlier: WebPlanElementIdentit
   const agreed = <T>(a: T, b: T): T | undefined => (same(a, b) ? a : undefined);
   const context = present<WebPlanElementContext>({
     formId: agreed(earlier.context?.formId, newer.context?.formId),
+    landmark: agreed(earlier.context?.landmark, newer.context?.landmark),
     listPosition: agreed(earlier.context?.listPosition, newer.context?.listPosition),
+    tablePosition: agreed(earlier.context?.tablePosition, newer.context?.tablePosition),
     shadowHosts: newer.context?.shadowHosts,
     record: agreed(earlier.context?.record, newer.context?.record)
   });
   return present<WebPlanElementIdentity>({
     tagName: newer.tagName,
     role: newer.role,
+    implicitRole: agreed(earlier.implicitRole, newer.implicitRole),
     accessibleName: agreed(earlier.accessibleName, newer.accessibleName),
+    label: agreed(earlier.label, newer.label),
     visibleText: agreed(earlier.visibleText, newer.visibleText),
     selector: newer.selector,
     inputType: agreed(earlier.inputType, newer.inputType),
+    id: agreed(earlier.id, newer.id),
+    // A class an act toggles (`active`, `selected`) is the act's; the tokens both views carry are the control's.
+    classNames: agreedTokens(earlier.classNames, newer.classNames),
+    name: agreed(earlier.name, newer.name),
+    testId: agreed(earlier.testId, newer.testId),
+    attributes: agreedAttributes(earlier.attributes, newer.attributes),
     context: Object.keys(context).length > 0 ? context : undefined
   });
+}
+
+/** The class tokens two views of one control both carry; nothing when they share none. */
+function agreedTokens(left: string[] | undefined, right: string[] | undefined): string[] | undefined {
+  if (left === undefined || right === undefined) return undefined;
+  const kept = left.filter((token) => right.includes(token));
+  return kept.length > 0 ? kept : undefined;
+}
+
+/** The identifying attributes two views of one control both gave the same value; nothing when they agree on none. */
+function agreedAttributes(left: Record<string, string> | undefined, right: Record<string, string> | undefined): Record<string, string> | undefined {
+  if (left === undefined || right === undefined) return undefined;
+  const kept = Object.fromEntries(Object.entries(left).filter(([key, value]) => right[key] === value));
+  return Object.keys(kept).length > 0 ? kept : undefined;
 }
 
 /**
@@ -174,15 +244,4 @@ export function webPlanElementIdentityAcrossViews(earlier: WebPlanElementIdentit
 export function webPlanElementWords(element: Pick<WebLlmEvidenceElement, "readable">, identity: WebPlanElementIdentity): string | undefined {
   const name = identity.accessibleName ?? identity.visibleText;
   return name === undefined || name.trim() === "" ? undefined : webLlmReadableWords(element, name);
-}
-
-/** The record the packet named the element's row or card by, when it named one whole. */
-function recordOf(element: WebLlmEvidenceElement): WebPlanElementContext["record"] {
-  const text = whole(element.within);
-  return text === undefined ? undefined : { text };
-}
-
-/** A packet string that is the element's own, rather than the marker the secret screen put in its place. */
-function whole(value: string | undefined): string | undefined {
-  return value === undefined || isWithheldText(value) ? undefined : value;
 }

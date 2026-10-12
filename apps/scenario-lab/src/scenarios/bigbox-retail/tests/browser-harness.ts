@@ -3,6 +3,8 @@ import type { Browser, BrowserContext, FrameLocator, Locator, Page } from "@play
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
 import { closeLabSession } from "../../tests/close-lab-session.js";
+import { diagnoseAction } from "../../tests/diagnose-action.js";
+import { withinPageTime } from "../../tests/within-page-time.js";
 import type { BigboxState } from "../types.js";
 
 export type ExtractedRecord = Record<string, string>;
@@ -22,7 +24,10 @@ export type Harness = {
 type Scope = Pick<Page, "locator" | "getByRole" | "frameLocator"> | Pick<FrameLocator, "locator" | "getByRole" | "frameLocator"> | Pick<Locator, "locator" | "getByRole" | "frameLocator">;
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost"]);
+/** A step with no `timeoutMs` of its own gets this much of the page's own time (`withinPageTime`). */
 const DEFAULT_WAIT_MS = 10_000;
+/** How long a followed Next may take to replace the page it was pressed on. */
+const PAGE_REPLACED_MS = 15_000;
 
 /** A fresh lab on its own run token, and a browser context that may reach only it, sized as the Lab sizes one. */
 export async function openHarness(browser: Browser, seed = 239): Promise<Harness> {
@@ -105,12 +110,12 @@ export async function extractRecords(page: Page, step: Pick<ScenarioStep, "id" |
     const next = locate(page, pagination.next);
     if (await next.count() === 0) return records;
     const marker = await (items[0] ?? next).elementHandle();
-    await next.click({ timeout: step.timeoutMs ?? DEFAULT_WAIT_MS });
-    const deadline = Date.now() + 15_000;
-    while (await marker?.evaluate((node: { isConnected: boolean }) => node.isConnected).catch(() => false)) {
-      if (Date.now() > deadline) throw new Error(`${step.id}: page ${pageNumber} was never replaced`);
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
+    await withinPageTime(page, step.timeoutMs ?? DEFAULT_WAIT_MS, `${step.id}: Next from page ${pageNumber}`, () => next.click({ timeout: 0 }), () => diagnoseAction(next));
+    await withinPageTime(page, PAGE_REPLACED_MS, `${step.id}: page ${pageNumber} was never replaced`, async () => {
+      while (await marker?.evaluate((node: { isConnected: boolean }) => node.isConnected).catch(() => false)) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    });
     await page.waitForLoadState("domcontentloaded");
   }
 }
@@ -120,15 +125,16 @@ export async function runSteps(harness: Harness, steps: readonly ScenarioStep[])
   const { page } = harness;
   const extracted = new Map<string, ExtractedRecord[]>();
   for (const step of steps) {
-    const timeout = step.timeoutMs ?? DEFAULT_WAIT_MS;
+    const budget = step.timeoutMs ?? DEFAULT_WAIT_MS;
     const target = () => locate(page, step.target!);
+    const act = (action: () => Promise<unknown>) => withinPageTime(page, budget, `${step.operation} ${step.target}`, action, () => diagnoseAction(target()));
     try {
-      if (step.operation === "click") await target().click({ timeout });
-      else if (step.operation === "type") await target().fill(String(step.value ?? ""), { timeout });
-      else if (step.operation === "press") await target().press(String(step.value), { timeout });
-      else if (step.operation === "select") await target().selectOption(String(step.value), { timeout });
-      else if (step.operation === "check") await target().setChecked(step.value === true, { timeout });
-      else if (step.operation === "waitForState") await target().waitFor({ state: "visible", timeout });
+      if (step.operation === "click") await act(() => target().click({ timeout: 0 }));
+      else if (step.operation === "type") await act(() => target().fill(String(step.value ?? ""), { timeout: 0 }));
+      else if (step.operation === "press") await act(() => target().press(String(step.value), { timeout: 0 }));
+      else if (step.operation === "select") await act(() => target().selectOption(String(step.value), { timeout: 0 }));
+      else if (step.operation === "check") await act(() => target().setChecked(step.value === true, { timeout: 0 }));
+      else if (step.operation === "waitForState") await withinPageTime(page, budget, `waitForState ${step.target}`, () => target().waitFor({ state: "visible", timeout: 0 }));
       else if (step.operation === "navigate") await page.goto(`${harness.lab.origin}${step.path}`);
       else if (step.operation === "extract") extracted.set(step.id, await extractRecords(page, step));
       else if (step.operation !== "checkpoint") throw new Error(`the harness does not drive ${step.operation}`);

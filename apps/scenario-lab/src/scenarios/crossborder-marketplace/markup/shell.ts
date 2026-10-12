@@ -2,7 +2,7 @@ import { escapeHtml, fixtureClient } from "../../../html.js";
 import type { RenderContext } from "../../../types.js";
 import { shellScript } from "../client/index.js";
 import { REGIONS } from "../locale/index.js";
-import type { MarketState } from "../state/index.js";
+import { interruptionDue, type MarketState } from "../state/index.js";
 import { buildFor, marketStylesheet, type MarketClasses } from "../styles/index.js";
 import { accountFlyoutMarkup, miniCartMarkup } from "./flyouts.js";
 import { MARKET_ROOT } from "./links.js";
@@ -65,6 +65,7 @@ export function marketDocument(input: ShellInput): string {
     notifications: state.notifications,
     chat: state.chat,
     flashDeal: state.mode === "flash-deal" ? state.flashDeal : "none",
+    interruption: interruptionDue(state.interruption, input.kind) ? { dismiss: state.interruption!.dismiss, delayMs: state.interruption!.delayMs } : null,
     build: buildFor(state.mode),
   };
   return `<!doctype html>

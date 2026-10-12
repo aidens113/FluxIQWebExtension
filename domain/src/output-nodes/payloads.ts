@@ -1,9 +1,10 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationRecordedExtraction } from "../actions/extraction";
+import { webElementFingerprintFromDescriptor } from "../element-fingerprint";
 import { isSensitiveElementDescriptor } from "../sensitivity";
 import { webAutomationRecordedElementKey } from "./recorded-element-key";
 import { webAutomationSecretBinding } from "./secret-binding";
-import { compact, elementFingerprint, numberValue, objectValue, stringValue } from "./targets";
+import { compact, numberValue, objectValue, stringValue } from "./targets";
 import { webAutomationUploadBinding } from "./upload-binding";
 import { webAutomationUrlPath } from "./url-path";
 
@@ -64,7 +65,9 @@ function httpUrlPath(value: unknown): string | undefined {
 }
 
 function recordedOutputParameters(outputId: string, payload: JsonObject): JsonObject {
-  const element = elementFingerprint(payload.element);
+  // The one builder every save path uses (t425): every signal the recorder
+  // captured, and never what the control held or the state it was left in.
+  const element = webElementFingerprintFromDescriptor(payload.element);
   const selector = stringValue(element?.selector);
   const visualTarget = objectValue(payload.visualTarget);
   const target = compact({ ...(element ? { element } : {}), ...(visualTarget ? { visualTarget } : {}) });
