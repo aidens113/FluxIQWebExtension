@@ -554,6 +554,7 @@ export async function captureEvidence(
     selectors: sanitized.selectors,
     records: sanitized.records,
     shadowHosts: sanitized.shadowHosts,
+    dialogNames: sanitized.dialogNames,
     stateDigest: states.stateDigest,
     routeState: states.routeState,
     pageQuery: sanitized.pageQuery

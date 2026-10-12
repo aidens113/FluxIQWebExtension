@@ -119,15 +119,15 @@ export type WebPlanElementIdentity = Pick<WebAutomationElementFingerprint,
   context?: WebPlanElementContext | undefined;
 };
 
-type WebPlanElementContext = Pick<WebAutomationElementContext, "formId" | "landmark" | "listPosition" | "tablePosition" | "shadowHosts" | "record">;
+type WebPlanElementContext = Pick<WebAutomationElementContext, "formId" | "landmark" | "dialog" | "listPosition" | "tablePosition" | "shadowHosts" | "record">;
 
 /**
  * The identity of one packet element, addressed by the selector its handle was
  * bound to -- and, for an element inside open shadow roots, by the host chain
  * the binding kept beside that selector (`../packet-fingerprint/`).
  */
-export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector: string, shadowHosts?: readonly string[]): WebPlanElementIdentity {
-  const fingerprint = webPacketElementFingerprint(element, { selector, shadowHosts });
+export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector: string, shadowHosts?: readonly string[], dialog?: string): WebPlanElementIdentity {
+  const fingerprint = webPacketElementFingerprint(element, { selector, shadowHosts, dialog });
   const context = fingerprint.context;
   return present<WebPlanElementIdentity>({
     tagName: fingerprint.tagName,
@@ -146,6 +146,7 @@ export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector:
     context: context === undefined ? undefined : present<WebPlanElementContext>({
       formId: context.formId,
       landmark: context.landmark,
+      dialog: context.dialog,
       listPosition: context.listPosition,
       tablePosition: context.tablePosition,
       shadowHosts: context.shadowHosts,
@@ -196,6 +197,7 @@ export function webPlanElementIdentityAcrossViews(earlier: WebPlanElementIdentit
   const context = present<WebPlanElementContext>({
     formId: agreed(earlier.context?.formId, newer.context?.formId),
     landmark: agreed(earlier.context?.landmark, newer.context?.landmark),
+    dialog: agreed(earlier.context?.dialog, newer.context?.dialog),
     listPosition: agreed(earlier.context?.listPosition, newer.context?.listPosition),
     tablePosition: agreed(earlier.context?.tablePosition, newer.context?.tablePosition),
     shadowHosts: newer.context?.shadowHosts,

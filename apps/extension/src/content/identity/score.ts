@@ -76,6 +76,7 @@ import { isVolatileIdentifier, quotedAnchors, selectorQuotesVolatileIdentifier }
 import type { TargetCandidate } from "./candidates";
 import { corroboratesExactly } from "./corroboration";
 import { pageTokens, type PageTokens } from "./page-tokens";
+import { agreesWithRecordedDialog } from "./dialog";
 import { agreesWithRecordedRecord, type RecordIdentity } from "./record";
 
 /** A candidate and what Core made of it. */
@@ -120,13 +121,14 @@ export type DroppedToken = { signal: "id" | "selector"; token: string; because: 
  */
 export type RecordedIdentity = {
   /**
-   * Where the element sat, of which one field is read here: `context.record`,
-   * the record it belonged to. Nothing in it is *scored* -- Core's matcher has
-   * no positional or structural signal, as `candidates.ts` measures -- but the
-   * record is a gate applied before ranking, because a candidate in another row
-   * is not the recorded control at any score.
+   * Where the element sat, of which two fields are read here: `context.record`,
+   * the record it belonged to, and `context.dialog`, the name of the dialog it
+   * sat in (t469). Nothing in either is *scored* -- Core's matcher has no
+   * positional or structural signal, as `candidates.ts` measures -- but each is
+   * a gate applied before ranking, because a candidate in another row, or in
+   * another dialog, is not the recorded control at any score.
    */
-  context?: { record?: RecordIdentity | undefined } | undefined;
+  context?: { record?: RecordIdentity | undefined; dialog?: string | undefined } | undefined;
   visibleText?: string | undefined;
   accessibleName?: string | undefined;
   label?: string | undefined;
@@ -210,7 +212,11 @@ export function scoreTargetCandidates(target: RecordedIdentity, candidates: Targ
   // candidates tied". Applied here rather than at the two call sites so a third
   // one cannot forget it. When the recording named no record this returns every
   // candidate without reading the page.
-  const eligible = candidates.filter((candidate) => agreesWithRecordedRecord(target.context?.record, candidate.element));
+  //
+  // The dialog gate beside it, for the same reason (t469): with the chat panel
+  // gone, the notifications prompt's close button won the ranking by 0.6 as
+  // the chat's "Close chat", and was pressed.
+  const eligible = candidates.filter((candidate) => inRecordedPlace(target, candidate.element));
   if (!eligible.length) return { outcome: "unmatched", ranked: [] };
   const elements = new Map(eligible.map((candidate) => [candidate.fingerprint, candidate.element]));
   const { fingerprint, dropped } = comparableFingerprint(target, eligible);
@@ -235,6 +241,15 @@ export function scoreTargetCandidates(target: RecordedIdentity, candidates: Targ
   // far it leads. Checked last, so a tie is still reported as the tie it is.
   if (!corroboratesExactly(chosen.score)) return { outcome: "unmatched", ranked, ...measured };
   return { outcome: "resolved", chosen, runnerUp, ranked, ...measured };
+}
+
+/**
+ * Whether the element sits where the recording placed the control: in its
+ * record (`record.ts`) and in its dialog (`dialog.ts`). Both are gates, not
+ * weights, and both answer `true` when the recording named nothing.
+ */
+function inRecordedPlace(target: RecordedIdentity, element: Element): boolean {
+  return agreesWithRecordedRecord(target.context?.record, element) && agreesWithRecordedDialog(target.context?.dialog, element);
 }
 
 /**

@@ -281,6 +281,7 @@ test("an all-optional contract type is writable, and absent stays absent", () =>
     fieldsetLegend: undefined,
     landmark: undefined,
     landmarkName: undefined,
+    dialog: undefined,
     heading: undefined,
     listPosition: undefined,
     tablePosition: undefined,
@@ -297,6 +298,7 @@ test("an all-optional contract type is writable, and absent stays absent", () =>
     fieldsetLegend: undefined,
     landmark: "main",
     landmarkName: undefined,
+    dialog: undefined,
     heading: "Payment",
     listPosition: undefined,
     tablePosition: { row: 2, column: 3, columnHeader: "Amount" },
@@ -324,6 +326,7 @@ function theCompilerMustRejectEachOfTheseToo(): void {
     // @ts-expect-error - 'landmarc' is not a field of the contract
     landmarc: "main",
     landmarkName: undefined,
+    dialog: undefined,
     heading: undefined,
     listPosition: undefined,
     tablePosition: undefined
@@ -340,6 +343,7 @@ function theCompilerMustRejectEachOfTheseToo(): void {
     fieldsetLegend: undefined,
     landmark: undefined,
     landmarkName: undefined,
+    dialog: undefined,
     heading: undefined,
     listPosition: undefined
   });

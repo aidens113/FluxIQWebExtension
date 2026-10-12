@@ -30,7 +30,7 @@ import type { WebLlmEvidenceElement } from "../elements";
 import { present } from "../present";
 import { isWithheldText } from "../withheld";
 
-type PacketContext = Pick<WebAutomationElementContext, "formId" | "landmark" | "listPosition" | "tablePosition" | "shadowHosts" | "record">;
+type PacketContext = Pick<WebAutomationElementContext, "formId" | "landmark" | "dialog" | "listPosition" | "tablePosition" | "shadowHosts" | "record">;
 
 /**
  * The saved identity of one packet element: addressed by `selector` where the
@@ -41,7 +41,7 @@ type PacketContext = Pick<WebAutomationElementContext, "formId" | "landmark" | "
  */
 export function webPacketElementFingerprint(
   element: WebLlmEvidenceElement,
-  input: { selector?: string | undefined; shadowHosts?: readonly string[] | undefined } = {}
+  input: { selector?: string | undefined; shadowHosts?: readonly string[] | undefined; dialog?: string | undefined } = {}
 ): WebAutomationElementFingerprint {
   const attributes = screenedAttributes(element.attributes);
   return webElementFingerprint({
@@ -56,7 +56,7 @@ export function webPacketElementFingerprint(
     // A link's destination is where it goes, which a page changes per session and per row; it is no identity.
     href: undefined,
     attributes,
-    context: contextOf(element, input.shadowHosts),
+    context: contextOf(element, input.shadowHosts, input.dialog),
     secret: isSensitiveFieldSignature({
       inputType: element.inputType,
       controlType: element.controlType,
@@ -78,10 +78,11 @@ function screenedAttributes(pairs: ReadonlyArray<[string, string]> | undefined):
  * landmark, its list and table position, the shadow hosts its handle's binding
  * kept, and its record. Nothing when the packet placed it nowhere.
  */
-function contextOf(element: WebLlmEvidenceElement, shadowHosts: readonly string[] | undefined): WebAutomationElementContext | undefined {
+function contextOf(element: WebLlmEvidenceElement, shadowHosts: readonly string[] | undefined, dialog: string | undefined): WebAutomationElementContext | undefined {
   const context = present<PacketContext>({
     formId: whole(element.form),
     landmark: element.landmark,
+    dialog: whole(dialog),
     listPosition: element.item === undefined ? undefined : { index: element.item.index, total: element.item.total },
     tablePosition: element.cell === undefined ? undefined : present<NonNullable<PacketContext["tablePosition"]>>({ row: element.cell.row, column: element.cell.column, columnHeader: whole(element.cell.header) }),
     shadowHosts: shadowHosts === undefined || shadowHosts.length === 0 ? undefined : [...shadowHosts],

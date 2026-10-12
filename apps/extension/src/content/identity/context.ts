@@ -4,7 +4,8 @@
 // told apart by this, which is what a corpus row like "the second Continue
 // button" needs (Phase 1.3). A landmark is reported by its role and, where the
 // page named it, by its name: two `region`s on one page share the role, and
-// only the name separates them (B5).
+// only the name separates them (B5). A dialog is not a landmark, so the dialog
+// an element sits in is reported by its own name (`dialog.ts`, t469).
 //
 // Every lookup is bounded. The context is computed for every described
 // element, and a snapshot describes every rendered element of the page (t200),
@@ -37,6 +38,7 @@ import { shadowHostChain } from "../selector";
 import { textOutsideSensitiveControls } from "../sensitive-text";
 import type { DomElementContext } from "../types";
 import { normalizedText } from "./normalized-text";
+import { dialogName } from "./dialog";
 import { recordIdentity } from "./record";
 
 const HEADING_SELECTOR = "h1,h2,h3,h4,h5,h6,[role='heading']";
@@ -78,6 +80,10 @@ export function elementContext(element: Element): DomElementContext | undefined 
     fieldsetLegend: fieldsetLegend(element),
     landmark: landmark?.role,
     landmarkName: landmark ? landmarkName(landmark.element) : undefined,
+    // A dialog is not a landmark, and two dialogs' close buttons are the same
+    // control by every other signal: which dialog is what a replay checks its
+    // answer against (`dialog.ts`, t469).
+    dialog: dialogName(element),
     heading: nearestHeading(element),
     listPosition: listPosition(element),
     tablePosition: tablePosition(element),

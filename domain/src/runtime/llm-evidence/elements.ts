@@ -12,7 +12,7 @@ import type { WebLlmLayerMarks } from "./layer-marks";
 import { evidenceHref } from "./location";
 import { present } from "./present";
 import { countValue, isJsonRecord, pageText, trueFlag } from "./untrusted-json";
-import { screenedPageText, screenedText } from "./withheld";
+import { isWithheldText, screenedPageText, screenedText } from "./withheld";
 
 /**
  * A merged tab snapshot rewrites a child frame's selector as
@@ -155,6 +155,13 @@ export type DescribedEvidenceElement = {
   position: { top: number; left: number } | undefined;
   /** The open shadow hosts around it, outermost first: the other half of its selector's address. Never in the packet. */
   shadowHosts: readonly string[] | undefined;
+  /**
+   * The name of the dialog it sits in, as the page named it
+   * (`apps/extension/src/content/identity/dialog.ts`), screened. Never in the
+   * packet: a step saved on it carries it, and the page refuses a replay's
+   * candidate in another dialog (t469).
+   */
+  dialog: string | undefined;
 };
 
 /** Separates a record address's parts: a unit separator, which page keys and text do not use. */
@@ -272,7 +279,8 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     // Document coordinates only: a viewport box is in another space, and one
     // look-alike measured in each would be put in the wrong order.
     position: documentPosition(raw.documentBounds),
-    shadowHosts: shadowHostChain(raw.context)
+    shadowHosts: shadowHostChain(raw.context),
+    dialog: dialogName(raw.context)
   };
 }
 
@@ -319,6 +327,18 @@ function shadowHostChain(context: unknown): string[] | undefined {
   if (hosts.length === 0) return undefined;
   const readable = hosts.every((host) => typeof host === "string" && host.trim() !== "");
   return readable ? hosts as string[] : undefined;
+}
+
+/**
+ * The dialog the element sits in, by its name, screened -- or nothing where the
+ * screen withheld any of it. A name with the withheld marker in it is no name
+ * the page will ever show, so saving it would refuse every replay; with none
+ * saved the page checks no dialog, as before t469.
+ */
+function dialogName(context: unknown): string | undefined {
+  if (!isJsonRecord(context)) return undefined;
+  const name = screenedPageText(context.dialog);
+  return name === undefined || isWithheldText(name) ? undefined : name;
 }
 
 /**
