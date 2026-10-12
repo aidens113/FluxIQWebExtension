@@ -19,7 +19,8 @@ import { resolveScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import type { PersistentRunAllocation } from "../allocation.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "../coordinator.js";
 import { classifyRunnerFailure, RunnerFailure } from "../failure.js";
-import { createdFlowActionTypes, createdFlowDatasetHolds, createdFlowSecretInputs, executeRecordedFlowRun, judgeCreatedFlowDataset, loadCreatedFlowRequest, readFlowNodes, resetScenarioLab, resolveCreatedFlowSecrets, type FlowRunRoute, type PersistedFlowRunOutcome } from "../flow-lane/index.js";
+import { createdFlowActionTypes, createdFlowDatasetHolds, createdFlowSecretInputs, judgeCreatedFlowDataset, loadCreatedFlowRequest, readFlowNodes, resetScenarioLab, resolveCreatedFlowSecrets, type FlowRunRoute, type PersistedFlowRunOutcome } from "../flow-lane/index.js";
+import { runProviderFreeReplayFlow } from "./run-flow.js";
 import { armScenarioVariant } from "../lab-control/index.js";
 import { resolveLabPaths } from "../lab-instance/index.js";
 import { finalStateFacts } from "../lane-rules/index.js";
@@ -171,7 +172,7 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
     if (workflow.variant) await armScenarioVariant(scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
     await browser.openStart();
     // No `llmExecution`: `runPersistedFlow` then asks Core for `adaptiveMode: "deterministic"`.
-    const run = await executeRecordedFlowRun(control, { projectId, flowId: options.flowId, facilityRunId: replayId, actionTypes, inputs: { ...secretInputs, scenarioId: request.task.scenarioId, facilityRunId: replayId } });
+    const run = await runProviderFreeReplayFlow(control, { projectId, flowId: options.flowId, facilityRunId: replayId, actionTypes, inputs: { ...secretInputs, scenarioId: request.task.scenarioId, facilityRunId: replayId } });
     state.run = run;
     const detail = await control.getRunDetail(projectId, run.runId);
     state.usage = liveLlmObservedUsage(detail);
