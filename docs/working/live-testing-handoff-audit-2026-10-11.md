@@ -274,6 +274,29 @@ isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day
 
 ## Work Ledger
 
+### 2026-10-12 - t471-t474 merged; correction on B round 9; round 10 prepared
+
+- Agent: Claude senior supervisor; t471-t474 workers.
+- Changed: t471 the model's reset is sound (undo counted only when its effect is gone at the act's own page; an
+  undo's delete allowance used only by a landed undo; acts the site cannot reverse kept as `startedWith.cannotUndo`
+  and told to the judge; permission-refused calls not retried; the trace prints the diagnostic's code); t472 the
+  Lab's between-trial fixture reset back on by default, `--model-reset-only` to prove the model's reset; t473 the
+  build judge gets the build's timeout, temporary judge failures are re-asked, `not_judged` is never a no, a
+  not_judged trial is re-judged on its evidence; t474 checked-rows advice, zero-pass on compiled graphs (value
+  ports), reads in execution-failed feedback, resubmission compared with the last accepted revision.
+- Correction (supervisor, to the user): in B round 9 the gate was right. The napkins undo was admitted (0048); the
+  refused press (0052) removed the pre-existing dish soap under a misattributed `undoes`; the real defect was a
+  navigation using up act-2's delete allowance, and the ending did carry a code (only the trace printed `code=-`).
+- Validation: supervisor, each on its branch after merging dev: t472 runner 337/337 and the dry-run receipt
+  `"fixtureResetBetweenTrials":true` by default; t474 Core "168 files, 1514 tests"; t473 Core "110 files, 885
+  tests" after resolving t474's import conflict in `candidate-trial/run.ts`; t471 Core "413 files, 4609 tests",
+  domain 212/212; every typecheck exit 0; Core merges gated by `pnpm check`. Pushed: Core `93949d68`, downstream
+  `4ed544f2`.
+- Outcome: Accepted.
+- Follow-up: round 10 for B, C, D (two builds each, fixture reset on); the executor still fails a step on a row
+  already done when a trial starts with an irreversible act (D on a real site), and near-identical reads past the
+  repeat guard (C); prove the model's own reset in a dedicated `--model-reset-only` run once round 10 qualifies.
+
 ### 2026-10-12 - t468-t470 merged; round 9 build 1 failed in B, C and D; t471-t474 dispatched
 
 - Agent: Claude senior supervisor; debug workers; t468-t470 workers.
