@@ -42,7 +42,8 @@ export type TopologyPaths = {
   stepLogDirectory?: string;
   /**
    * Whether a candidate-mode Core resets the fixture before each candidate
-   * trial (t470): true, or absent, gives it the start hook as before; false
+   * trial (t470, t472): true, or absent, gives it the start hook; false, for a
+   * `--model-reset-only` run,
    * gives it none, so each trial starts from what the model's own reset left
    * (`flow-lane/creation/readiness.ts` `labCandidateTrialFixtureReset`).
    */
@@ -107,10 +108,11 @@ export function webPanelHostModulePath(repositoryRoot: string): string {
  * trial. Legacy mode gets neither, and an inherited value of either is always
  * dropped, so only a Core the Lab starts in candidate mode ever has the hook.
  *
- * A live (paid) candidate build gets no hook either (t470, `paths.
- * candidateTrialFixtureReset` false): since t462 the model resets the site to
- * the build's start before every trial through the site's own controls, and a
- * fixture reset between trials would hide whether that reset works. The
+ * A candidate build started with `--model-reset-only` gets no hook either
+ * (t470, t472, `paths.candidateTrialFixtureReset` false): since t462 the model
+ * resets the site to the build's start before every trial through the site's
+ * own controls, and a fixture reset between trials would hide whether that
+ * reset works. Every other candidate build, live or not, keeps the hook. The
  * fixture still starts seeded, and the lane still resets it before playback.
  */
 export function buildFluxIQEnvironment(allocation: RunAllocation, paths: TopologyPaths, base: NodeJS.ProcessEnv = process.env, args: readonly string[] = process.argv): NodeJS.ProcessEnv {
