@@ -1379,6 +1379,25 @@ gets the hook); the dry run reports that answer as `candidateTrial` with
 `get-flow-bootstrap-generation-readiness`, before it builds anything, and the
 chat build, direct build and approve/apply refuse without that answer.
 
+**Proving the model's own reset: `--model-reset-only` (t470, t472).** The
+fixture reset between trials hides whether the model's reset works. t470 turned
+it off for every live (paid) candidate build; lane D round 9
+(`run-mv5q4j2n-25784472`) then showed the model's reset is not yet sound (it
+judged a dirty site clean), so every trial measured leftovers, and t472 turned
+it back on. Every candidate build, live or not, now gets the hook by default.
+`lab run ... --llm-task create-flow --authoring-mode candidate
+--model-reset-only` is the explicit way to turn it off for a run meant to prove
+the model's reset: its Core is started with no start hook, so each trial starts
+from what the model's reset left. Core's reset gate runs and logs its evidence
+either way; only the fixture reset after it changes. The flag is refused
+without `--llm-task create-flow` or without `--authoring-mode candidate`. A
+`--model-reset-only` run is admitted only when its Core has no hook
+(`startReset` false); a Core that would still reset between trials is refused
+before any provider call with `lab.candidate_start_hook_set`. The dry run's and
+the lane's `candidateTrial.fixtureResetBetweenTrials` says which the run does.
+Provider-free paths, replays, the fixture's initial seed and the lane's reset
+before playback are unchanged.
+
 The hook is Core deployment configuration: `FLUXIQ_CANDIDATE_START_URL`, an
 http(s) address Core POSTs an empty JSON object to before each trial, with the
 optional `FLUXIQ_CANDIDATE_START_TOKEN` as a bearer token (Core

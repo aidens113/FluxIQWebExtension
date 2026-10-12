@@ -51,11 +51,13 @@ test("before Core starts, the Lab says the linked Core has the trial runner and 
   assert.throws(() => assertCreatedFlowVerificationReady("candidate", labCandidateTrialReadiness({ startsCore: false, fixtureResetBetweenTrials: true })), refusedBeforeProvider("candidate", "lab.candidate_start_hook_unset"));
 });
 
-// t470: since t462 the model resets the site before every trial, and a fixture reset between trials hid whether it
-// worked. A live (paid) build runs with no start hook, is admitted only by a Core with none, and its receipt says so.
-test("a live build's trials start from the model's own reset: no hook, admitted only by a Core with none, and the receipt says so", () => {
-  assert.equal(labCandidateTrialFixtureReset({ live: true }), false);
-  assert.equal(labCandidateTrialFixtureReset({ live: false }), true);
+// t470, t472: since t462 the model resets the site before every trial, and a fixture reset between trials hides whether
+// it worked. The reset stays on by default (that model reset is not yet sound, t472); only a --model-reset-only run gets
+// no start hook, is admitted only by a Core with none, and its receipt says so.
+test("the fixture reset between trials is on by default; a --model-reset-only build has no hook, is admitted only by a Core with none, and the receipt says so", () => {
+  assert.equal(labCandidateTrialFixtureReset({ modelResetOnly: false }), true);
+  assert.equal(labCandidateTrialFixtureReset({ modelResetOnly: true }), false);
+  assert.deepEqual(labCandidateTrialReadiness({ startsCore: true, fixtureResetBetweenTrials: labCandidateTrialFixtureReset({ modelResetOnly: false }) }), { trialRunner: true, startReset: true, fixtureResetBetweenTrials: true, source: "lab-plan" });
   for (const startsCore of [true, false]) {
     const planned = labCandidateTrialReadiness({ startsCore, fixtureResetBetweenTrials: false });
     assert.deepEqual(planned, { trialRunner: true, startReset: false, fixtureResetBetweenTrials: false, source: "lab-plan" });

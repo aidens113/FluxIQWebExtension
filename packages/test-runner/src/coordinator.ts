@@ -32,7 +32,7 @@ export type TopologyOptions = {
   hostModulePath?: string;
   /** Optional resolved Lab allowance for the owned Core child, never an inherited default. */
   buildCallLimit?: number;
-  /** False for a live (paid) candidate build: its Core gets no fixture reset between trials (`environment.ts`, t470). Absent, as before. */
+  /** False for a `--model-reset-only` candidate build: its Core gets no fixture reset between trials (`environment.ts`, t470, t472). Absent, the reset. */
   candidateTrialFixtureReset?: boolean;
   /**
    * Receives the run's logs directory when startup fails, after the run's

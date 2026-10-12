@@ -274,6 +274,32 @@ isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day
 
 ## Work Ledger
 
+### 2026-10-12 - t468-t470 merged; round 9 build 1 failed in B, C and D; t471-t474 dispatched
+
+- Agent: Claude senior supervisor; debug workers; t468-t470 workers.
+- Changed: t468 dev's failing tests (candidate-verification migration id `0029`, the Lab's own `legacy` default,
+  flow-scoped-keys order assertion, extraction-vocabulary limit); t469 dialog-bound identity end to end; t470 the trial
+  feedback names an interruption's way-out handle, live builds dropped the Lab's between-trial reset. Pushed: Core
+  `b31142ce`, downstream `9a41e384`.
+- Round 9 (pair downstream 9a41e384 / Core b31142ce; matrix all 14 cases passed; dry runs ready, $0.25,
+  `fixtureResetBetweenTrials:false`): B `run-mv5q4j33-d04ac463` failed $0.0503: t462's reset gate asked for three
+  undos, the model undid one, the second (remove the napkins line, `consequences:["delete"]`, `undoes:"act-3"`) was
+  refused `permission_required`, the repeat guard refused it three times and the build threw with no code. D
+  `run-mv5q4j2n-25784472` failed $0.1098 (passed in round 8): with the fixture reset off, t462's reset judged a dirty
+  site clean (an undo counted on a click of "Request accepted", the start check compared only the start page),
+  confirmed requests cannot be un-confirmed, and t466's zero-pass exemption fails on compiled graphs with `item` data
+  edges. C `run-mv5q4j5c-49bfb5e2` failed $0.0903, not a regression: the build judge gets the 20 s default timeout
+  (not the build's 45 s) and a timed-out judge call is never retried, wasting a correct trial; the build hit its 540 s
+  limit one revision short; plus "not supported" advice for correct advice.
+- Validation: supervisor read each run's step index and core log; worker debugs in the lane trees
+  (`debugs/run-mv5q4j33-d04ac463.md` pending in t471's report, `run-mv5q4j2n-25784472.md`, `run-mv5q4j5c-49bfb5e2.md`).
+- Outcome: Revised. Supervisor decision: the Lab's between-trial fixture reset comes back on by default for
+  qualification (t472) until the model's reset is sound (t471); a switch keeps runs that prove the model's reset.
+- Follow-up: t471 undo admission + sound reset (each act's page, undo counted only when its effect is gone, acts the
+  site cannot reverse recorded as `startedWith`) + named endings; t472 fixture reset back on by default; t473 judge
+  timeout and retry; t474 checked-rows advice, zero-pass on compiled graphs, reads in execution-failed feedback, the
+  t464 resubmit gap. Near-identical reads slipping past the repeat guard (C, ~71 s) is a follow-up.
+
 ### 2026-10-12 - t462-t467 merged; correction on B trial 2; t468-t470 dispatched
 
 - Agent: Claude senior supervisor; t462 lead; t463-t467 workers.
