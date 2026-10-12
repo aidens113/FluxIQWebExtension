@@ -138,3 +138,36 @@ Provider credential environment count0/provider calls0; no Core host/panel/model
 ## Supervisor acceptance
 
 Root independently inspected source and observed Core72/domain78/extension83 owning tests, all cache-free affected typechecks and both native audits passed. Headed Chrome134 T2 packet/hash/DOM/schema-order checks passed independently; no background transport, model verdict, continuation or live withholding claimed. Current-dev integration and combined-source narrow gates still required before publication.
+
+## Current-dev post-merge downstream narrow gates
+
+Validated frozen paired heads Down `5b9c8307d4442680a11afcdfae9c9f3808f9ed26` / Core `6a0ce84bdd8792b342a6e370b36a0c56ba321b56` after supervisor integration; C owning forced Core build completed72.493s before downstream start. No source edits, full suites, providers/browser/panel, branch operations, commits or pushes by worker.
+
+Owning commands:
+
+    pnpm.cmd --filter @fluxiq-web-extension/domain build
+    pnpm.cmd --filter @fluxiq-web-extension/extension build
+    pnpm.cmd --filter @fluxiq-web-extension/test-runner build
+
+Domain fresh native0,15.924s/1143files/3,447,104bytes (`a-postmerge-domain-build.log`); actual Core freshness gate passed. Extension rebuilt46.179s/80files/46,233,084bytes, Chrome/Firefox/e2e targets each22files. Existing Firefox placeholder addon-id warning made PowerShell report shell1 despite completed build/cache publication; no source error was present. Explicit-LASTEXITCODE normal owner freshness rerun native0/currentCore/inputs+outputs stamp match815ms (`a-postmerge-extension-freshness.log`); original emit evidence remains `a-postmerge-extension-build.log`. Runner current native0,46.873s/1970files/6,598,076bytes (`a-postmerge-runner-build.log`), domain stamp reused after current Core gate. Extension/runner builds ran concurrently only after domain emit finished; source frozen, distinct output owners.
+
+Exact owner test commands (DOMAIN_TEST_BUILD_LABEL/EXTENSION_TEST_BUILD_LABEL=t461-combined):
+
+    node domain/scripts/test-domain.mjs actions/extraction/tests/rejected-samples.test.ts actions/extraction/tests/summary.test.ts node-run/tests/replay-read-account.test.ts output-nodes/extract-list/tests/reconciled-record-output.test.ts output-nodes/extract-list/tests/declared-columns.test.ts output-nodes/extract-list/tests/record-output-process.test.ts output-nodes/extract-list/tests/derived-record-output.test.ts output-nodes/extract-list/tests/issues.test.ts output-nodes/extract-list/tests/dispatch-alone-rows.test.ts
+    node apps/extension/scripts/test-extension.mjs content/extraction/tests/item-filter.test.ts content/extraction/tests/rejected-samples.test.ts content/extraction/tests/list-reader.test.ts content/extraction/continued-read/tests/read-checkpoint.test.ts shared/tests/extraction-continuation.test.ts content/actions/tests/extract-list.test.ts content/actions/tests/extract-list-rejected-samples.test.ts
+    node --test packages/test-runner/dist/saved-flow-replay/tests/run-flow.test.js packages/test-runner/dist/flow-lane/tests/replay-settlement.test.js packages/test-runner/dist/saved-flow-replay/provider/tests/free-accounting.test.js
+
+All native0, actual discovered counts78domain/83extension/7runner, no failures/skips; logs `a-postmerge-domain-tests.log` / `a-postmerge-extension-tests.log` / `a-postmerge-runner-tests.log`. Runner tests use newly emitted current output; strict accounting four cases included. Whole55 t460 suite not repeated.
+
+Cache-free commands:
+
+    pnpm.cmd --filter @fluxiq-web-extension/domain exec tsc -p tsconfig.json --noEmit --incremental false
+    pnpm.cmd --filter @fluxiq-web-extension/domain exec tsc -p tsconfig.test.json --noEmit --incremental false
+    pnpm.cmd --filter @fluxiq-web-extension/extension exec tsc -p tsconfig.json --noEmit --incremental false
+    pnpm.cmd --filter @fluxiq-web-extension/test-runner exec tsc -p tsconfig.json --noEmit --incremental false
+
+All actual native0; `a-postmerge-domain-source-types.log`, `a-postmerge-domain-test-types.log`, `a-postmerge-extension-types.log`, `a-postmerge-runner-types.log`. These are actual tsc invocations, not cached check wrapper reuse.
+
+    node scripts/structure-audit.mjs
+
+Final audit ran after supervisor's latest round-eight brief/index regeneration and doc-freeze signal; native0/184warnings/646baselined (`a-postmerge-structure-final.log`, explicit NATIVE_EXIT=0). Prior audit printed pass but PowerShell treated advisory stderr as shell1; final native evidence supersedes it without changing budgets/baselines. All own processes ended. Supervisor independent current stamps/log review pending; earlier headed proof remains its bounded seam rather than new post-merge browser evidence.

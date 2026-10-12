@@ -1,7 +1,7 @@
 # Live Testing Handoff Audit — 2026-10-11
 
 Status: Active
-Status detail: t460 pushed; B/D repair replays passed; t461 observations/order independently checked; headed proof passed; combined-source integration pending. B/C/D qualification open.
+Status detail: t460 pushed; B/D repair replays passed; t461 observations/order independently checked; headed proof passed; combined-source gates passed; owning paired integration pending. B/C/D qualification open.
 Created: 2026-10-11
 Last updated: 2026-10-12
 Owner: Codex senior supervisor
@@ -47,8 +47,13 @@ closed readerkind tokens/original condition index/passive page/item ordinals, no
 null=unknown, capture once, conflicting duplicate reads survive, privacy before flattening. Never infer
 eligibility or force judge approval. Workerclaims column38/domain23/extension78+8/Core72tests pass; Core
 current65.447s7262output build/cache-free types pass, parser annotation corrected/retested. A corrected
-file-count/packed-statement findings, refroze source and passed types/current domain-extension builds. Combined types/audits/root independent
-acceptance/browser producer evidence remain owed; no t461 commit/push/live semantic pass.
+file-count/packed-statement findings, refroze source and passed types/current domain-extension builds. Supervisor independently observed72Core/78domain/83extension tests0, cache-free types0 and both native audits0.
+Headed Chrome134 T2 proof passed; root checked retained actual packets/artifact hashes/20kept rows in exact
+column order/3absent+4present DOM witnesses/Core alignment/sparse indices1,2. No background transport,
+model verdict, live continuation or withholding claim. Both earlier driver failures retained unchanged.
+Source committed/current dev merged; combined146Core/78domain/83extension/7replay tests passed, all affected
+cache-free types/native audits0; current Core inventory/reached110 rootverified, digest9a6b1e41.
+Fresh owning Core/domain/extension/runner builds passed; t461 owning integration/push stillpending.
 
 Future live launches use process FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25 AND CLI maxcost0.25; verify both ready
 purses. Existing64build questions/48millionpost-run Lab token check/per-request992000/8000/1000000 unchanged.
@@ -67,8 +72,8 @@ samehost/PIDnamespace only; live/unknown/reusedlive refuse, identical complete u
 ambiguous. Does not prove old91s browser/gateway drain; t381 poolWIP08eafd1a unmerged. Parked UI/integrity
 t334/t335/t337 not resumed. Historical details retained in archive/reports.
 
-Next finish both free repair probes, independently accept t461 including feasible headed producer proof with
-limits, integrate downstreamfirst/Coresecond and pushbothdev. Freeze new pair for B/C/D:2creations each,
+Next finish combined-source narrow gates/current builds, then owning downstreamfirst/Coresecond integration
+and pushbothdev. Freeze new pair for B/C/D:2creations each,
 each full debug/exact oracle+separate disabled replay unchanged hash/all5zero; firstreplay before second.
 Failure stopslane until debug/changedsource; no shortcut from modelyes/rowcount/compilation. Then recording
 live persistence/three-site adaptation/breadth/UX/release remain planned. User panel not started bydefault;
@@ -242,7 +247,43 @@ isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day
 
 
 
+### Worker brief: round-eight changed-source qualification
+
+- Starts only after supervisor owning paired integration/push and explicit frozen-head clearance. No paid launch
+  until root independently accepts each new zero-call ready receipt and current owner inventories.
+- A-review owns B/t262 slot3, own reports/b-round-eight.md only; bigbox-retail, original task
+  bigbox-retail-pickup-cart-store-remembered-after-creation, variant store-remembered, t262-slot-3/t262-b.
+- C-validation owns C/t451 slot1, own reports/c-round-eight.md only; everything-store, original task
+  everything-store-plus-earbuds-under-50, instance t451-slot-1/workspace t451-c.
+- B-debug owns D/t275 slot4, own reports/d-round-eight.md only; social-network-feed, original task
+  social-network-feed-confirm-requests, instance t275-slot-4/workspace t275-d.
+- Supervisor syncs nested Core/downstream clean lanes to frozen paired dev. Workers use normal owning builds
+  and persistent-isolated/headed Lab dry-run, separate new evidence/log names; never overwrite prior receipts.
+- Process ceiling0.25 AND CLI maxcost0.25; current lab-create-flow/deepseek/deepseek-flash/candidate/create-flow
+  unchanged; perrequest992000/8000/1000000, calls64, max-run-tokens48000000; no time/default/guard override.
+- Ready must show calls0, original unchanged instruction/oracle digest, both purses0.25, candidate/reset/trials
+  and current owner inventories. Root clears exactly one paid attempt, verifies actual four running identities.
+- Fully debug every step/packet/UI/accepted candidate/oracle/runtime/cost before reporting success. Failure
+  stops lane, full debug required and relevant source change before paid relaunch; balance error stops allpaid.
+- Passing creation requires separate provider-disabled replay original IDs/hash, actual all5counters0/full
+  settled ledger/keys preserved; first replay passes before root clears second same-frozen-pair creation.
+- No source/shared-doc/commit/merge/push/fullsuite/userpanel/profile/key/original task mutation. Preserve all
+  artifacts/profiles/recordings; don't copy task answers into guidance. Two passing pairs required, not assumed.
+
 ## Work Ledger
+
+### 2026-10-12 - t461 independently accepted on combined dev
+
+- Agent: Codex senior supervisor; A/B/C workers.
+- Changed: optional passive rejection witnesses through extension/domain/Core, original predicate indices,
+  repeated-pass/privacy handling and authored column order; current dev merged in both task branches.
+- Validation: root independent72Core/78domain/83extension +cache-free types/native audits0; headed Chrome134
+  T2 retained packets/hash/DOM/20rows/order/3absent+4present/Core/sparse indices verified. Combined146Core/
+  78domain/83extension/7replay tests/types/native audits0; current owner inventories/reached110 rootverified.
+- Limits: no full background transport, model verdict, live continuation/withholding or paid semantic pass.
+- Outcome: ready for owning downstreamfirst/Coresecond integration/push; original driver failures preserved.
+- Follow-up: freeze new pair, zero-call .25 readiness and one paid creation per open lane before replay gates.
+
 
 ### 2026-10-11 — Round-seven results independently checked; t460 repairs assigned
 

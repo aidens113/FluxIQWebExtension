@@ -51,3 +51,20 @@ Supervisor coordination update: authored Core/downstream documentation is frozen
 ## Supervisor acceptance
 
 Root independently inspected source and observed Core72/domain78/extension83 owning tests, all cache-free affected typechecks and both native audits passed. Headed Chrome134 T2 packet/hash/DOM/schema-order checks passed independently; no background transport, model verdict, continuation or live withholding claimed. Current-dev integration and combined-source narrow gates still required before publication.
+
+## Combined committed-source gates after supervisor GO
+
+Observed against task Core HEAD 6a0ce84bdd8792b342a6e370b36a0c56ba321b56 after source commit 1d90033e and dev merge including t460. No worker source mutation or branch operations. Supervisor-authored working documentation remained dirty; product source stayed frozen. All process native exits observed, not inferred from empty logs:
+
+| Gate | Native exit | Observed result |
+| --- | --- | --- |
+| Forced owning fluxiq build | 0 | 72.493 seconds; 7262 outputs / 21,135,572 bytes |
+| Seven t461 owners plus four t460 final-slot owners | 0 | 146 tests / 11 files passed; 26.18 seconds |
+| Actual nonincremental Core tsc | 0 | Explicit wrapper reported Core actual tsc exit: 0; underlying type output empty |
+| Native node scripts/structure-audit.mjs | 0 | No blocking failures; existing advisory/baseline output retained |
+| Full current source/artifact stamp inventory check | 0 | All 1853 source entries and 1851 executing artifact entries match disk stamp; normalized reader payload and aggregate digest match |
+| git diff --check | 0 | Only LF/CRLF notices for supervisor-authored working documents |
+
+Current artifactDigest: 9a6b1e41b35ff43d41fac943b39cff002472a025e8dcfb661a06bf369ca542c8. Check independently enumerated contracts/fluxiq source and JS trees, excluded test directories under owning stamp convention, hashed current contents and manifests, applied owning normalizedIdentityReader for only its embedded payload, and recomputed sorted executing-artifact aggregate. It did not regenerate or modify runtime state/output.
+
+Ignored logs in test-runs/t461-combined-gates/: core-build.log, core-owner-tests.log, core-types.log, core-structure.log, core-stamp.log, core-whitespace.log. Owning build completion immediately sent to A/root so downstream gates could use current output. All checks ended; no further repetitions or source edits. No full suite, provider/browser call, commit/push or shared-doc edit. Supervisor independently read actual focused-test and audit evidence; worker gate results remain bounded source/build evidence, not live qualification.
