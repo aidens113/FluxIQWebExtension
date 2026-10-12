@@ -274,6 +274,32 @@ isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day
 
 ## Work Ledger
 
+### 2026-10-12 - t462-t467 merged; correction on B trial 2; t468-t470 dispatched
+
+- Agent: Claude senior supervisor; t462 lead; t463-t467 workers.
+- Changed: t462 the build undoes its own lasting acts before every trial (Core `flow-bootstrap/site-reset/`, domain
+  `start-state`); t463 row-bound identity for controls repeated per row; t464 quoted script values, non-retryable
+  `web.validation.option_not_offered`, unchanged resubmits refused (after a failed trial and after a refutation);
+  t465 a press that started a request is never pressed again (page-world request starts); t466 zero-pass loops are
+  valid runs, read accounts in trial feedback, per-record-set row counts, the Lab counts candidate build calls; t467
+  the judge sees what a filter-only column read and each pass's own page.
+- Correction (supervisor, to the user): B round 8 trial 2 did not start on leftovers. The Lab's fixture reset put the
+  cart back to its seed (dish soap x1) before every trial; the soap's quantity 2 was the trial's own "set the paper
+  towels quantity to 2" step resolving the ambiguous "Qty" to the first row (soap): a silent wrong-row act, fixed by
+  t463. The user's reset rule still stands for real sites, where no fixture reset exists (t462), and the Lab's
+  between-trial reset is being turned off for live builds so the model's reset is what runs are measured on (t470).
+- Validation: supervisor, each on its branch after merging the other repo's dev: t463 extension 238/238, headed 38
+  passed; t465 extension 189/189, headed 25 passed; t464 Core "54 files, 463 tests", domain 47/47, extension
+  263/263; t466 Core "163 files, 1462 tests", runner 43/43; t467 Core "82 files, 711 tests", extension 222/222; t462
+  Core "227 passed, 2730 passed" with 11 failures identical on Core dev without t462 (extraction-vocabulary 1,
+  durable-session 10), domain 291/291; every typecheck exit 0; Core merges gated by `pnpm check`. Pushed: Core
+  `2aedbc1b`, downstream `7cf74ef7`.
+- Outcome: Accepted.
+- Follow-up: t468 the tests failing on dev since the Codex merges (Core extraction-vocabulary, durable-session;
+  downstream authoring-mode-env); t469 a control is never accepted on a look-alike in another dialog; t470 the
+  trial feedback names an interruption's way-out handle, and live builds keep the seed but drop the Lab's
+  between-trial reset. Then round 9: B, C, D two builds each on a new frozen pair.
+
 ### 2026-10-12 - Claude resumed; round 8 build 1 for B/C/D; reset rule; t462-t466 dispatched
 
 - Agent: Claude senior supervisor (resumed after Codex); debug workers; t462 lead; t463-t466 workers.
