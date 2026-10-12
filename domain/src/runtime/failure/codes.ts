@@ -70,6 +70,20 @@ export const WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   TARGET_AMBIGUOUS: "web.target.ambiguous",
   /** The action ran and its post-condition did not hold (decision D4). */
   OUTPUT_NOT_OBSERVED: "web.validation.output_not_observed",
+  /**
+   * A select was asked for an option it does not offer, and still did not
+   * offer it after the verb's own bounded wait for options a page fills in
+   * late (`apps/extension/src/content/actions/select.ts`). Nothing was
+   * changed. Its own code rather than OUTPUT_NOT_OBSERVED because the answer
+   * to Core's one question differs: asking the same select for the same value
+   * again is answered the same way, so it is not retryable. Lane B round 8
+   * (`run-mv5jnc62-01c3609a`, t464) sent `"2"` with its quote marks to a
+   * quantity select offering 1 to 12; the failure was marked retryable, the
+   * runtime retried it three times and the build spent a whole trial testing
+   * the same revision again. The record names the value sent and the options
+   * closest to it, so the Flow's step can be corrected.
+   */
+  OPTION_NOT_OFFERED: "web.validation.option_not_offered",
   /** An authored `web.dom.assert` condition did not hold. */
   STATE_MISMATCH: "web.validation.state_mismatch",
   /** The browser landed somewhere other than the requested URL, or never left where it was. */
@@ -271,6 +285,9 @@ export const WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS: Readonly<Record<WebAutomat
   "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution" },
   "web.target.ambiguous": { category: "target_ambiguous", retryable: false, stage: "target_resolution" },
   "web.validation.output_not_observed": { category: "output_not_observed", retryable: true, stage: "verification" },
+  // The verb ran, the option asked for is not one the control offers, and
+  // asking again offers the same list (the code's own comment above).
+  "web.validation.option_not_offered": { category: "output_not_observed", retryable: false, stage: "verification" },
   "web.validation.state_mismatch": { category: "unexpected_state", retryable: false, stage: "verification" },
   "web.navigation.unexpected": { category: "navigation_unexpected", retryable: false, stage: "confirmation" },
   "web.page.changed": { category: "page_changed", retryable: true, stage: "execution" },
