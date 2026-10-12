@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: A qualified; C/B finishing fixes, D terminal-path accounting and candidate default integrated and pushed; B/C/D live qualification underway on the frozen pair.
+Status detail: A qualified; fixes and candidate default pushed; B/C/D round four failed semantic/oracle gates; generic feedback fixes underway, future testing budget $0.25.
 Created: 2026-10-05
 Last updated: 2026-10-11
 Owner: Senior supervisor agent
@@ -35,8 +35,9 @@ These proofs do not replace the multi-site adaptation acceptance gate.
 paging guidance changes, plus B's confirmed final-turn tool withdrawal fix. Supervisor Core owning tests 80/80,
 domain instructions 14/14, current Core typecheck and domain freshness/typecheck gate, both structure audits.
 Candidate submission/testing stays available during look withdrawal and the final counted decision; accepted
-receipts name the exact trial next. Mandatory trial acceptance and the $0.10 whole-Flow purse are unchanged.
-Integrated downstream first and then Core after narrow checks; no new paid proof of these changes yet.
+receipts name the exact trial next. Mandatory trial acceptance is unchanged. Round-four B/C/D all exercised
+submission and trial execution; their semantic/oracle failures are tracked in the execution document. Future
+testing budget is $0.25 (new user authorization), historical round-four ceiling was $0.10.
 
 **Not qualified:** B round 3 `run-mv4jqkko-bc9a05c6` ($0.09192) accepted three candidates but never tested one;
 completion was forced after trial tools were withdrawn, then the purse refused another request. C's round-2
@@ -47,12 +48,14 @@ graph-level ending. Paired t449 repairs exact optional-path accounting and safe 
 
 **Next order:**
 1. t449 and t450 are independently verified, integrated and pushed in both repositories. Configured product default
-   is candidate; explicit legacy opt-out and raw omitted-mode API compatibility are preserved. Freeze Core b27c0d64
-   for the B/C/D qualification streaks.
+   is candidate; explicit legacy opt-out and raw omitted-mode API compatibility are preserved. Round-four source
+   freeze ended: B/C rejected semantic results, D false acceptance caught by independent oracle. t452 fixes
+   generic feedback/category guidance/UI; inspect D judge evidence coverage before relaunch.
 2. Sync/rebuild live lane trees to the new identified pair, run narrow free preflights and relevant recovery matrix
    cases, then qualify B/C/D: two creation passes on one pair with exact oracles and separate zero-model replays.
    Debug every failure fully, fix its cause and requalify on changed source; no relaunch loops.
-3. Review/integrate t380's remaining test fixture fixes; finish t381 connection ownership against t435 and reproduce
+3. t380 fixture fixes independently verified (45 tests including 16 actual-built process probes), integrated and pushed.
+   Finish t381 connection ownership against t435 and reproduce
    B's separate recording.persistence problem provider-free. An old instruction for a whole suite before merging
    t381 is superseded by the newer narrow-gate user rule. Do not blame machine load or conflate recording with chat builds.
 4. Prove adaptation on three sites twice each, then the ten-site/67-task breadth plan, recording plus mandatory
