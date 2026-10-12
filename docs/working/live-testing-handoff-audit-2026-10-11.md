@@ -1,12 +1,12 @@
 # Live Testing Handoff Audit — 2026-10-11
 
-Status: Complete
-Status detail: Handoff audit delivered; round-3 evidence recovered, unfinished lane changes identified, and continuation ordered below; no implementation or live launch performed.
+Status: Active
+Status detail: Execution authorized; A evidence review, B failure diagnosis and C fix verification assigned in existing isolated lane trees; supervisor owns integration and D diagnosis.
 Created: 2026-10-11
 Last updated: 2026-10-11
 Owner: Codex senior supervisor
 Scope: Reconcile Claude's live testing, saved run verdicts, lane worktrees and working notes, and provide an executable continuation plan.
-Paired document: none (Core inspected read-only)
+Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/mvp-final-month-plan.md
 Related: [MVP plan](./mvp-final-month-plan.md), [recovery plan](./state-aware-recovery-plan.md), [working index](./README.md)
 
 ## Current State
@@ -14,6 +14,16 @@ Related: [MVP plan](./mvp-final-month-plan.md), [recovery plan](./state-aware-re
 **Resume from this audit before the older MVP Current State.** Most notes exist, but the latest lane work is
 uncommitted in worktrees and several status summaries predate completed runs. All dates here use Los Angeles;
 the latest runs' October 12 UTC timestamps are October 11 locally.
+
+**Execution now authorized (user: "ok go").** A-review, B-debug and C-validation assigned below on existing lane
+branches/worktrees. Supervisor handles D diagnosis, independently verifies results and integrates coherent units.
+Prior audit limits below describe audit-only work; subsequent execution validation is recorded in the ledger.
+
+**New evidence during execution:** A has two valid creation outcomes but separate zero-call replay receipts are
+still owed; do not switch the default yet. B never tested an accepted revision and ran out of cost budget;
+the last-decision wrap-up offered no tools. D trials 2-4 ran all displayed steps successfully but Core ended
+failed because its terminal node left unvisited graph nodes; trial feedback omitted this graph-level reason.
+C verification is in flight. New paired task t449 owns the D graph/feedback regression investigation.
 
 **Repository snapshot.** Downstream dev `6e07993f`, Core dev `01621c94`; both equal their locally stored
 `origin/dev` refs (no remote fetch performed). Core main checkout clean; downstream has a pre-existing edit to
@@ -141,7 +151,62 @@ Historical test counts remain previous-session results, not tests independently 
 - Do not erase historical passes merely because reports are stale, and do not infer complete qualification
   from compilation, worker claims, branch names or a saved top-level passed verdict alone.
 
+## Worker Briefs
+
+### Brief: a-review
+- Repository: downstream lane tree `C:/Users/osrs_/FluxStuff/fxwork/t342/!FluxIQWebExtension` (existing task branch).
+- Task: fully debug A round-3 run 2 and assess both runs' qualification, including identity/oracles/replay accounting and UI evidence.
+- Required reads: this Current State; lane tree `docs/working/mvp-final-month-plan/reports/lane-a-round3.md`; both A bundles under `C:/Users/osrs_/FluxStuff/lab-runs/2026-10-11/`; run-1 debug and run-2 pending debug.
+- Owns (may edit): lane tree `docs/working/mvp-final-month-plan/reports/lane-a-round3.md`, `docs/working/language-driven-flow-loop-plan/debugs/run-mv4jvo7k-612f0bbb.md`, `docs/working/live-testing-handoff-audit-2026-10-11/reports/a-review.md`.
+- Must not touch: source, Core, shared working documents, pending debug, other reports; no commits/pushes/merges/builds/launches.
+- Definition of done: every step inspected; exact evidence for gate or gaps; saved run identities/provider accounting checked; report and run-2 debug saved without secrets or captured page contents.
+- Report to: lane tree `docs/working/live-testing-handoff-audit-2026-10-11/reports/a-review.md`.
+
+### Brief: b-debug
+- Repository: downstream lane tree `C:/Users/osrs_/FluxStuff/fxwork/t262/!FluxIQWebExtension` (existing task branch); paired Core read-only.
+- Task: trace `run-mv4jqkko-bc9a05c6` build failure to root cause, inspecting every step and relevant source; distinguish recording-practice failure.
+- Required reads: this Current State; lane-b-round3.md; run bundle under `C:/Users/osrs_/FluxStuff/lab-runs/2026-10-11/`; paired Core Repository Boundary.
+- Owns (may edit): lane tree `docs/working/mvp-final-month-plan/reports/lane-b-round3.md`, `docs/working/language-driven-flow-loop-plan/debugs/run-mv4jqkko-bc9a05c6.md`, `docs/working/live-testing-handoff-audit-2026-10-11/reports/b-debug.md`.
+- Must not touch: any code or other docs; no commits/pushes/merges/builds/tests/launches.
+- Definition of done: concrete cause with file/line and failed sequence, smallest regression/fix proposal, full debug saved; clearly mark hypotheses; no secrets/page captures in report.
+- Report to: lane tree `docs/working/live-testing-handoff-audit-2026-10-11/reports/b-debug.md`.
+
+### Brief: c-validation
+- Repository: paired trees `C:/Users/osrs_/FluxStuff/fxwork/t274/!FluxIQWebExtension` and sibling `!FluxIQ` (existing task branches).
+- Task: inspect surviving C diffs and three lane-c-r3-fix reports; rebuild affected Core libraries and verify narrow owning tests/typechecks/audits; additionally fix B's confirmed completion-only last-decision defect and accepted-submission test-next guidance without weakening trial/purse gates.
+- Required reads: this Current State; three reports in lane tree `docs/working/mvp-final-month-plan/reports/lane-c-r3-fix-{a,b,c}.md`; Core Repository Boundary and code structure; dirty source/test diffs.
+- Owns (may edit): the existing dirty Core authoring-loop.ts/tests, progress.ts/candidate-endings.test.ts, loop-budget.ts and tests/loop-budget.test.ts, look-withdrawal.ts and its new finishing-tools test; downstream system-instructions/instructions.ts and tests/instructions.test.ts; own report.
+- Must not touch: shared docs, other sources/reports; no commits/pushes/merges/provider/browser launches; no full suites. Generated output only through owning builds.
+- Definition of done: fail-first candidate last-decision regression, exact accepted revision test-next guidance; focused candidate/endings/withdrawal/budget/state-digest/instructions tests pass, actual affected typechecks against rebuilt Core pass, both structure audits inspected; report cache concern with evidence, not assumption.
+- Report to: downstream lane tree `docs/working/live-testing-handoff-audit-2026-10-11/reports/c-validation.md`.
+
+### Brief: d-trial-feedback
+- Repository: new paired task `C:/Users/osrs_/FluxStuff/fxwork/t449/!FluxIQWebExtension` and sibling `!FluxIQ`.
+- Task: diagnose D's false-looking terminal failure and fix the underlying graph/compiler bug if confirmed, plus actionable safe graph-level trial feedback.
+- Required reads: this Current State; D run bundle and lane `fxwork/t275` evidence; Core Repository Boundary/code structure; `runtime/flow-bootstrap/verification/detached-execution.ts`, `executor/graph-navigation.ts`, `executor/graph-run.ts`, `service/candidate-trial/feedback.ts` and their tests.
+- Owns (may edit): Core executor graph-navigation.ts, choose-edge.ts (new), step-skip/optional-step.ts and owning barrel/imports, step-skip/tests/guarded-group-run.test.ts and graph-navigation tests; candidate-trial feedback source/tests and safe terminal-code producer; matching architecture docs; downstream D debug and own report in t449. Compiler changes require another ownership review.
+- Must not touch: C's authoring-loop/progress/loop-budget/look-withdrawal/instructions files, other task trees, shared docs; no commits/pushes/merges, full suites, paid calls or browser launches.
+- Definition of done: fail-first regression from D's optional/only-after/repeat shape, no weakening of missing/disconnected-node protection; graph-level failure reported safely without page/selector details; focused tests, affected Core typecheck and audits pass. Report exact source ownership before expanding beyond named modules.
+- Report to: t449 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/d-trial-feedback.md` and `docs/working/language-driven-flow-loop-plan/debugs/run-mv4jjsvj-25b4dc2a.md`.
+
+### Brief: a-zero-call-replays
+- Repository: existing `C:/Users/osrs_/FluxStuff/fxwork/t342/!FluxIQWebExtension` and paired Core, both source frozen at original round-3 pair.
+- Task: run the two missing separate provider-free replays of A's accepted saved Flows using exact templates/IDs/hashes in a-review.md; verify full replay gate.
+- Required reads: this Current State; a-review.md; testing-facility.md separate replay contract; lane-a-round3.md.
+- Owns (may edit): lane tree `docs/working/live-testing-handoff-audit-2026-10-11/reports/a-zero-call-replays.md`, lane-a-round3.md; runtime evidence via owning Lab only.
+- Must not touch: source/Core/shared docs/other reports, original profiles or stored Flows; no commits/pushes/merges, provider calls, full suites or user panel management. Do not sync/rebuild from newer source and silently claim the same pair.
+- Definition of done: both exact stored hashes unchanged, provider/intervention/harness counts all zero, independent task oracle holds; IDs/build identity recorded; supervised headed replay through isolated Lab topology. If source or artifact unavailable, report blocker without recreating the Flow.
+- Report to: lane tree `docs/working/live-testing-handoff-audit-2026-10-11/reports/a-zero-call-replays.md`.
+
 ## Work Ledger
+
+### 2026-10-11 — Continuation started and failures traced
+- Agent: Codex senior supervisor; workers a-review, b-debug, c-validation.
+- Changed: execution briefs and Current State; t449 paired worktree provisioned; owned lane reports/debugs recovered.
+- Why: user authorized execution; qualification requires missing replays and fixes for actual failed build paths.
+- Validation: supervisor read both A running identity receipt sets (`verified: true`) and 4/4 held task facts; inspected D trial results/run-summary metadata: trials 2-4 failed at a terminal node with unvisited nodes and all displayed steps successful. `pnpm.cmd task start trial-completion-feedback --worktree --core` -> t449 created successfully.
+- Outcome: Partial; A replays and narrow C/B/D fixes in flight.
+- Follow-up: independently verify workers' source/test results, integrate downstream before Core, then requalify failed lanes.
 
 ### 2026-10-11 — Saved evidence and unfinished lane work reconciled
 - Agent: Codex senior supervisor.
