@@ -94,6 +94,29 @@ Subsequent authorized source checks/builds/live results are recorded above and i
 
 ## Audit Findings
 
+### Round-six live briefs: frozen candidate pair, recording repair isolated
+
+- Supervisor freezes the integrated t455/t456/t457 product pair; t454 stays isolated and cannot advance dev
+  until all active lane streaks end. Source-equivalent documentation merges do not change qualification.
+- A-review owns lane B in existing paired t262 trees, slot3/instance t262-slot-3/workspace t262-b; same original
+  bigbox-retail task/oracle, own new live-b-round6.md, lane-b-round6.md and per-run debug files only.
+- B-debug owns lane D in existing paired t275 trees, slot4/instance t275-slot-4/workspace t275-d; same original
+  social-network-feed task/oracle, own new live-d-round6.md, lane-d-round6.md and per-run debug files only.
+- Supervisor owns C in paired t451 trees, slot1/instance t451-slot-1/workspace t451-c; unchanged everything-store
+  task, structured loop and independent13record/52field oracle; own live-c-round6.md and per-run debugs.
+- Each lane merges current dev in both idle repositories, rebuilds owning Core libraries, sets launch-process
+  FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25, and runs zero-call ready preflight. Send actual ceiling/candidate/reset/
+  task digest/source pair and expected-identity validation evidence for supervisor review BEFORE paid launch.
+- Root explicitly clears one original headed extension-chat creation after ready review. Existing automatic
+  four running-identity gates precede model dispatch; immediately send all four actual receipts to root.
+- Full every-step/call/result/UI/oracle/accounting debug follows each attempt; no truncated-result success.
+  Separate disabled-provider replay must preserve exact project/Flow/hash and all5counters0 before second.
+- Second creation requires root independent first creation/replay verification. Same frozen source required.
+  Stop on failure until full debug and changed relevant source; balance error stops all paid lanes immediately.
+- No new scenario teaching/oracle edits, direct API shortcuts, source changes, profile reset, guard override,
+  user panel management, commits or pushes by workers. Record cost and limits honestly; D outcome success
+  alone does not prove persisted interruption adaptation. Retain all original profiles and run evidence.
+
 **t454 independent review gate (October 11, pending reproduction):** Source review identified late append after
 typed finalization, delayed counter publication overwriting a newer header, cached-prefix resurrection after
 external removal, and same-service removal retry after a late metadata failure. These are source-supported
