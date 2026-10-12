@@ -337,9 +337,26 @@ test("the reason is the first the refusal names, and nothing but a code can beco
  * nothing, which is what lets a caller start passing the sharpened reason
  * itself without this becoming a second, disagreeing copy.
  */
+// Lane C round 10 (`run-mv5uu9g1-9d80deea`, 0034-0044, t477): a handle from the page before a trial was refused
+// `page_moved_since_packet` four times with no `next`, though the documented move for it is to look again.
+test("a stale handle is told to use the newest view or look again, and to use the handle in instead when one is named", () => {
+  for (const reason of ["page_moved_since_packet", "handle_no_longer_on_page"] as const) {
+    const bare = rejectionDetail({ reason, target: "t230", instead: undefined, missing: undefined, requestId: undefined });
+    assert.match(bare.next ?? "", /names nothing now/u, reason);
+    assert.match(bare.next ?? "", /look at the page again/u, reason);
+    const named = rejectionDetail({ reason, target: "t230", instead: ["t912"], missing: undefined, requestId: undefined });
+    assert.match(named.next ?? "", /handle in instead/u, reason);
+    // Passed back through, as a repeated refusal does (`../repeated-refusal.ts`), it says the same.
+    assert.equal(rejectionDetail({ reason, target: named.target, instead: named.instead, missing: undefined, requestId: undefined }).next, named.next, reason);
+  }
+  assert.equal(rejectionDetail({ reason: "handle_not_in_packet", target: "t9", instead: undefined, missing: undefined, requestId: undefined }).next, undefined);
+});
+
 test("a detail carrying the resolver's codes is sharpened once, and sharpening it again does not move it", () => {
   const first = rejectionDetail({ reason: "parameters_not_resolved", target: "t3", instead: ["web.handle.stale", "web.handle.stale:target"], missing: undefined, requestId: undefined, startLocation: undefined });
-  assert.deepEqual(first, { reason: "page_moved_since_packet", target: "t3", instead: ["web.handle.stale", "web.handle.stale:target"] });
+  // A stale handle says to look again (t477); the resolver's codes in instead are no handle, so it names none.
+  assert.match(first.next ?? "", /names nothing now/u);
+  assert.deepEqual(first, { reason: "page_moved_since_packet", target: "t3", instead: ["web.handle.stale", "web.handle.stale:target"], next: first.next });
   assert.deepEqual(rejectionDetail({ ...first, instead: first.instead, missing: undefined, requestId: undefined, startLocation: undefined }), first);
 
   // A reason that was never the resolver's is left exactly as the caller said,

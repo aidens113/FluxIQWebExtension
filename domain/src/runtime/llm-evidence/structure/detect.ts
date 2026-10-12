@@ -55,6 +55,16 @@
 // a label/value receipt, or a lone record where nothing repeats -- needs
 // nothing of its own here: it is the run, with one item (`./packet.ts`).
 //
+// **A stale handle is refused with the page as it is now (t477).** Lane C
+// round 10 (`run-mv5uu9g1-9d80deea`, 0034-0044) named a handle from the page
+// before a trial had moved the browser, and was refused
+// `page_moved_since_packet` four times with nothing more. A handle from a view
+// of another page, or whose element has left the page, is now refused with
+// the page this call captured -- shown like a look, so its handles are the
+// ones the next call binds -- and, where exactly one element there has the old
+// element's selector in its frame, that element's current handle in `instead`
+// (`staleTarget`).
+//
 // **Each column says where it is in the page view**: the handle of its element
 // in the first item, in the last packet the model was shown (`returned`), found
 // in the detection's own capture (`./first-item/`). Without a shown packet --
@@ -95,6 +105,12 @@ export type WebLlmStructureDetectionContext = {
   returned: WebLlmSnapshotBinding | undefined;
   handles: WebLlmExtractionHandles;
   /**
+   * Gives a capture the handles the model is shown it with (the runtime's
+   * stable handles), so a stale handle's refusal can name the element's
+   * current one (`staleTarget`). Absent, no handle is named.
+   */
+  restamp?: (page: WebLlmSnapshotBinding) => WebLlmSnapshotBinding;
+  /**
    * Told the one whole-page capture this detection read the page's state in,
    * as soon as it has it, so the caller can report that state on the result
    * or on a refusal thrown after it (`../capture.ts`, `withCallStates`). That
@@ -120,7 +136,7 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
 
   const current = target === undefined ? undefined : await captureEvidence(gateway, sessionId, request, request.signal);
   if (current !== undefined) context.observed?.(current);
-  const element = current === undefined || target === undefined ? undefined : boundTarget(context.returned, current, target);
+  const element = current === undefined || target === undefined ? undefined : boundTarget(context.returned, current, target, context.restamp);
   let { detection, page } = await capturedDetection(context, element?.selector, element, current, target);
   // With no target the detection is page-wide and is itself the page's state.
   if (current === undefined) context.observed?.(page);
@@ -224,15 +240,37 @@ async function capturedDetection(
  * the page itself refuses it as `ambiguous_target` when its matches are not
  * all in the one run.
  */
-function boundTarget(returned: WebLlmSnapshotBinding | undefined, current: WebLlmSnapshotBinding, target: string): BoundTarget {
+function boundTarget(returned: WebLlmSnapshotBinding | undefined, current: WebLlmSnapshotBinding, target: string, restamp: WebLlmStructureDetectionContext["restamp"]): BoundTarget {
   const observed = returned ?? current;
-  if (observed.evidence.location !== current.evidence.location) recoverable("target_unobserved", handleRefusal("page_moved_since_packet", target));
+  if (observed.evidence.location !== current.evidence.location) staleTarget("page_moved_since_packet", observed, current, target, restamp);
   const element = observedElement(observed.evidence, target);
   const selector = observed.selectors.get(target);
   if (!selector) recoverable("target_unobserved", handleRefusal("handle_not_in_packet", target));
   const stillThere = current.evidence.elements.some((candidate) => candidate.frameId === element.frameId && current.selectors.get(candidate.target) === selector);
-  if (!stillThere) recoverable("target_unobserved", handleRefusal("handle_no_longer_on_page", target));
+  if (!stillThere) staleTarget("handle_no_longer_on_page", observed, current, target, restamp);
   return { selector, frameId: element.frameId, frameDocument: frameDocumentOf(element) };
+}
+
+/**
+ * Refuses a handle from a view of another page, or whose element has left the
+ * page, with the page as this call captured it (shown like a look by the
+ * runtime, so its handles bind next), and with the handle the element at the
+ * same place has now -- the one element in the same frame with the old
+ * element's selector -- when there is exactly one (see the header).
+ */
+function staleTarget(
+  reason: "page_moved_since_packet" | "handle_no_longer_on_page",
+  observed: WebLlmSnapshotBinding,
+  current: WebLlmSnapshotBinding,
+  target: string,
+  restamp: WebLlmStructureDetectionContext["restamp"]
+): never {
+  const selector = observed.selectors.get(target);
+  const was = observed.evidence.elements.find((candidate) => candidate.target === target);
+  const now = selector === undefined || was === undefined || restamp === undefined ? undefined : restamp(current);
+  const same = now === undefined ? [] : now.evidence.elements.filter((candidate) => candidate.frameId === was!.frameId && now.selectors.get(candidate.target) === selector);
+  const instead = same.length === 1 ? [same[0]!.target] : undefined;
+  throw new RecoverableToolRejection("target_unobserved", rejectionDetail({ reason, target, instead, missing: undefined, requestId: undefined }), current);
 }
 
 /** A target as it was bound: its selector, its frame, and that frame's document when the element was shown in a child frame. */

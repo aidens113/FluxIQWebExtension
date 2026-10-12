@@ -148,7 +148,16 @@ test("refuses a target no recovery packet issued, or whose page has moved on, wi
   // Another Flow's exploration issued nothing this one can name.
   assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "t1" }, "flow.two"), rejection("target_unobserved", { reason: "nothing_observed_yet" }));
   setPage({ url: `${CATALOG.url}page/2`, elements: [LINK], structure: CATALOG.structure });
-  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "t1" }), rejection("target_unobserved", { reason: "page_moved_since_packet", target: "t1" }));
+  // A stale handle's refusal carries the page as it is now and says to use its handles or look again (t477).
+  const moved = await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "t1" });
+  const movedEvidence = moved.evidence as JsonObject;
+  assert.equal(moved.resultCode, "web.action.rejected.target_unobserved");
+  const movedDetail = movedEvidence.detail as JsonObject;
+  assert.deepEqual(Object.keys(movedDetail).sort(), ["next", "reason", "target"]);
+  assert.equal(movedDetail.reason, "page_moved_since_packet");
+  assert.equal(movedDetail.target, "t1");
+  assert.match(String(movedDetail.next), /look at the page again/u);
+  assert.equal((movedEvidence.page as JsonObject).location, `${CATALOG.url}page/2`);
   assert.equal(commands.some((command) => command.parameters.detectStructure !== undefined), false);
 
   assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "a" }), rejection("invalid_input", { reason: "malformed_handle", target: "a" }));
