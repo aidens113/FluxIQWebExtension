@@ -274,6 +274,34 @@ isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day
 
 ## Work Ledger
 
+### 2026-10-12 - Round 10: C and D passed build 1 and its replay, then failed build 2; B failed; t475-t477
+
+- Agent: Claude senior supervisor; debug workers; t475-t477 workers.
+- Round 10 (pair downstream 4ed544f2 / Core 93949d68; matrix all 14 passed; dry runs ready, $0.25,
+  `fixtureResetBetweenTrials:true`):
+  - D build 1 `run-mv5tusge-1400ddf7` passed $0.0518 (4/4 records, 8/8 fields; no Confirm pressed twice; playback
+    refused a look-alike in another dialog); replay `replay-mv5u87p9-9b71bec5` passed (hash equal, all five zero).
+    D build 2 `run-mv5upw4g-2482be12` failed $0.0309: the reset gate (before the Lab's fixture reset) demanded undoing
+    two confirms that cannot be reversed; the model pressed other requests' Delete under `undoes`; the gate refused;
+    three repeat refusals ended the build.
+  - C build 1 `run-mv5tusi6-0813f12a` passed $0.1077 (13/13 rows in order, 367 s of 540 s); replay
+    `replay-mv5ua5x5-7b50c94d` passed (13 records, all five zero). C build 2 `run-mv5uu9g1-9d80deea` failed $0.0369:
+    Core's look counter ended the build at 114 s while a correct revision had 2 retests and 7 minutes left (only the
+    "no" of a split judgement reached the model, a stale handle's refusal named no fresh one).
+  - B build 1 `run-mv5tusj4-b7ee0630` failed $0.1634: the site's first Add to cart only wakes the page and a timed
+    support card covering the button was taken as the press's answer (click.ts:183-185). Safety: the build's reset
+    removed the pre-existing dish soap twice without asking (ledger.ts:119, :195-201, :213-221); the Lab's fixture
+    reset hid it.
+- Validation: supervisor-read step indexes and core logs for each; replay receipts quoted above; full debugs in the
+  lane trees (run-mv5tusge, run-mv5upw4g, run-mv5tusi6, run-mv5uu9g1, run-mv5tusj4).
+- Outcome: Revised. No lane qualified on this pair; qualification restarts on the pair carrying t475-t477.
+- Follow-up: t475 (safety first) undo only on the act's own item and only for an act whose effect appeared,
+  irreversible acts kept as startedWith at the first refusal, focus/live noise ignored, Lab start hook before the
+  start check, each step's own rows for the judge; t476 a woken press under a timed cover is pressed again, a step
+  whose declared effect never appeared is not done; t477 a stall retests instead of ending, fresh handle and view after
+  a trial, both readings of a split judgement. Later: C's cache misses from evidence rewrites (context-window.ts),
+  chat wording ("Testing, which relaxes", "wasn't seen on the page"), the bare nextPage handle refusal.
+
 ### 2026-10-12 - t471-t474 merged; correction on B round 9; round 10 prepared
 
 - Agent: Claude senior supervisor; t471-t474 workers.
