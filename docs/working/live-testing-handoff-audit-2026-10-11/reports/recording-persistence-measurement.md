@@ -88,4 +88,3 @@ Ignored private evidence in this downstream tree: test-runs/recording-persistenc
 4. This probe does not exercise gateway batching/capture arrival, real DOM snapshots/images, browser rendering, network transport, service restart between queued messages, other processes/poll contention, or the saved B90second waiter. Simple synthetic state blobs do not reproduce actual nested browser state/metadata complexity. Unit stop/drain times do not establish B's browser backlog cause or fix; perform the allowed provider-free bigbox-retail recording run only after correctness/source fixes and current identity checks.
 
 No source fix/build/merge, live/browser/provider call, user-panel action or timeout increase performed. Historical B failure remains unresolved. The task supplied measurements and an independently repeatable correctness failure; it did not fix persistence.
-
