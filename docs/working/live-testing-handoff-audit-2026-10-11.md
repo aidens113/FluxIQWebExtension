@@ -3,7 +3,7 @@
 Status: Active
 Status detail: A historically qualified; round-seven B/D creations passed but replay accounting settlement failed; C stopped at contradictory final-slot tool guard. Scoped repairs precede further qualification.
 Created: 2026-10-11
-Last updated: 2026-10-11
+Last updated: 2026-10-12
 Owner: Codex senior supervisor
 Scope: Reconcile Claude's live testing, saved run verdicts, lane worktrees and working notes, and provide an executable continuation plan.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/mvp-final-month-plan.md
@@ -39,6 +39,14 @@ one-slot guard before purse admission. Four trials match13ordered records/52valu
 order differs and judges withheld approval. No promoted Flow or replay; no second creations or balance errors.
 Full worker debugs are complete. Freeze released for bounded replay-settlement and generic final-slot repairs;
 changed-source qualification begins a new pair. Do not count these first passes as completed qualification.
+
+C audit identifies two additional product defects, not author error: all seven scripts requested column
+order correctly, but domain reconciliation substituted field-map order. Helper rejection witnesses omit each
+rejected row's decisive observed value. Supervisor independently matched later four actual SQL answers against
+the compiled original oracle13ordered records/52fields/0extras, and confirmed the schema mismatch. t461 owns
+column fidelity plus optional generic passive rejection observations, with legacy/privacy/continuation gates;
+no fixture-derived guidance, promoted oracle answers, changed filtering or forced judge pass. Core summary
+projection is paired; exact negative eligibility cannot be recovered retrospectively from the old packets.
 
 **Latest budget authorization (user, October 11): $0.25 per test instead of $0.10.** Subsequent live tests set
 `FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25` in the launch process environment and verify the whole-Flow purse in
@@ -399,6 +407,55 @@ the results and any required repairs pass current owner tests and fresh-process 
   from compilation, worker claims, branch names or a saved top-level passed verdict alone.
 
 ## Worker Briefs
+
+### Brief: b-debug — t461 column fidelity
+
+- Nested paired t461 under C:/Users/osrs_/FluxStuff/fxwork/t461. Read Current State and retained t451
+  reports/exclusion-provenance-audit.md; source-supported author order differs from normalization.
+- Own domain/output-nodes/extract-list/reconciled-record-output.ts and nearest tests, declared-columns.ts/
+  record-output.ts only if needed, and nearest dispatch test. No other producer/wire/Core/shared-doc edits.
+- Fail-first neutral field insertion alpha/beta/gamma versus authored gamma/alpha/beta. Actual dispatch
+  schema retains authored order, valid types/labels/exclusions/subsets/helpers/processing unchanged.
+- No-authored-schema fallback retains derived field order. Preserve duplicate/unknown/excluded refusal;
+  no task-aware sorting, oracle changes, model guidance or output-data mutation.
+- Own report reports/column-fidelity-repair.md only; report exact files/checks/architecture wording.
+- Coordinate with A producer: do not run whole domain/extension types/build until its source is stable.
+  Narrow nearest unit tests may run only over stable imports. No full suites/browser/provider/panel/commits.
+
+### Brief: a-review — t461 rejection observation producer and contract
+
+- Nested paired t461, read Current State/own exclusion audit, Core boundary if consulting paired generic types.
+- Own extension content/extraction/{item-filter,list-reader,rejected-samples}.ts, content/actions/extract-list.ts,
+  content/extraction/continued-read/read-checkpoint.ts/nearest test, shared/extraction-continuation.ts and nearest
+  tests. Own domain/actions/extraction/{summary,rejected-samples,
+  seen-values}.ts/barrel/types as required and domain/runtime/llm-evidence/node-run/replay-answer.ts/tests.
+- No extract-list output schema/reconciliation files (B), Core consumer files (C) or shared docs.
+- First propose optional generic positional companion shape in own report and message root/C BEFORE edits
+  depend on it. Approved state union present/absent/unavailable/withheld; value only present, including empty.
+  Closed known reader-kind tokens, positive page/item passive ordinals; never arbitrary descriptor text.
+  Capture rejecting read once during evaluation with truthful original observed value,
+  original observed text including empty string, condition ordinal and bounded passive provenance. No selectors,
+  handles, raw DOM/attribute maps or executable binding; generic Core must not import web contracts.
+- Preserve legacy absence as unknown, grouping/counts/continuations/alignment; do not coalesce identical rows
+  with contradictory observations. Sensitive/refused/thrown reads cannot be labelled absent. No filter change.
+- Fail-first neutral absent/empty/present numeric/multi-rejection/duplicate-observation/continuation cases;
+  wire parser refuses malformed alignment and undeclared sensitive/addressing metadata. Existing privacy wins.
+- Own report reports/rejection-observation-producer.md only. Coordinate source stability before package checks;
+  report exact contract/consumer seams/owner tests. No full suites/browser/provider/panel/commits/lifecycle.
+
+### Brief: c-validation — t461 generic rejection observation consumer
+
+- Start only after t460 replay repair handoff; nested paired t461 Core, read Current State/exclusion audit and
+  A proposed optional contract. Own Core runtime/service/summaries/extraction-summary.ts and nearest tests;
+  result-verification/contracts.ts/read-account/{accounts,alone-rows}.ts/tests, build-test/read-rows.ts if needed.
+- No downstream source files (A/B) or Core evidence-loop files. Generic optional condition observation only,
+  no DOM/selectors/browser APIs/domain imports or reimplementation of domain predicates.
+- Fail-first actual stored-summary and trial/saved-result consumer propagation of neutral companion evidence.
+  Original observed text/predicate context retained, absent/empty/withheld/legacy-unknown truthful and distinct.
+- Sanitize before text flattening using existing denied-key/credential screen; no addresses/executable bindings,
+  no invented numeric truth or eligibility verdict. Keep witness counts, ordering, truncation and old shape valid.
+- Own downstream reports/rejection-observation-consumer.md only. No shared-doc/source-overlap/full suites/
+  browser/provider/panel/commits. Coordinate stable contract/source before exact tests/types/owner build.
 
 ### Brief: a-review — C exclusion provenance audit
 
