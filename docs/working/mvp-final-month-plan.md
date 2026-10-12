@@ -65,7 +65,8 @@ or profile reset is needed to resume. Preserve the existing user edit to `.cline
 **Standing user rules (binding on any agent; several lived only in Claude's private memory until today).**
 - No time-of-day rule for live runs (2026-10-09); launch when ready. Peak pricing matters only when debugging a
   ceiling stop. A rule an agent derived is never presented as the user's.
-- A Flow may spend at most $0.10 (`FLUXIQ_LLM_RUN_COST_CEILING_USD`), counted in billed dollars; never cap model
+- Testing now permits $0.25 per Flow (user, 2026-10-11, superseding $0.10): launch environment
+  `FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25`, counted in billed dollars; never cap model
   output. Paid runs only with a live supervisor; stop at the first balance error; no relaunch loops.
 - Live runs: only the ten realistic scenarios; headed, visible browsers; started by typing into the real extension
   chat; one attempt per launch; every run debugged fully (every step logged as files) before a rerun; lane trees

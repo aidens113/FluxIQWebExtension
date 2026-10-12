@@ -1,7 +1,7 @@
 # Live Testing Handoff Audit — 2026-10-11
 
 Status: Active
-Status detail: A qualified; t274 finishing fixes, t449 optional-path completion and t450 candidate default integrated; preparing fixed-pair B/C/D live qualification; storage WIP retained and t380 verification ready.
+Status detail: A qualified; integrated fixes pushed; round-four B/C failed without promotion and are being debugged, D active on frozen source; t380 independently verified, storage WIP retained.
 Created: 2026-10-11
 Last updated: 2026-10-11
 Owner: Codex senior supervisor
@@ -19,6 +19,12 @@ the latest runs' October 12 UTC timestamps are October 11 locally.
 branches/worktrees. Supervisor handles D diagnosis, independently verifies results and integrates coherent units.
 Prior audit limits below describe audit-only work; subsequent execution validation is recorded in the ledger.
 
+**Latest budget authorization (user, October 11): $0.25 per test instead of $0.10.** Subsequent live tests set
+`FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25` in the launch process environment and verify the whole-Flow purse in
+the ready preflight. CLI cost flags alone cannot raise the configured Core ceiling. Historical runs and earlier
+briefs below retain their actual $0.10 amounts; the new authorization supersedes their future-launch ceiling.
+No provider output cap, guard override or ordinary user-product default change is implied.
+
 **New evidence during execution:** A's gate is now supervisor-verified: both creation passes and separate
 replays `replay-mv4kt6g0-4e4900a8` / `replay-mv4kv3z1-2cfab70c` passed, exact stored Flow hashes unchanged,
 all model/provider/intervention/harness counters zero, model wiring disabled and independent goal held.
@@ -27,12 +33,14 @@ the last-decision wrap-up offered no tools. D trials 2-4 ran all displayed steps
 failed because its terminal node left unvisited graph nodes; trial feedback omitted this graph-level reason.
 C/B finishing changes are integrated as t274. D fix t449 and candidate-default t450 are independently
 verified and integrated downstream first/Core second. Current Core code pair is b27c0d64; no Core dev
-advancement during the next qualification streaks. Live lane sources must contain that dev before launch.
+advancement during a qualification streak. Round-four streaks ended failed; source freeze is now released.
+Live lane sources must contain integrated dev before their next launch.
 
 **Storage follow-up:** t381 introduces a competing connection owner and does not directly fix recording
 append; its WIP remains unmerged in Core. The source review is committed downstream. t380's narrow fixture
-checks pass by worker report, including actual built process probes; supervisor verification/baseline refresh
-and integration wait until the live pair is no longer frozen.
+checks are supervisor-verified: 45/45 including actual-built process probes, current typecheck/build/audit and
+baseline refresh lowering only two counts. Integrated downstream first/Core second after all active runs ended;
+current dev heads downstream 19388f8b/Core 1dbb1081, push pending updated notes.
 
 **Audit intake snapshot (historical).** Downstream dev `6e07993f`, Core dev `01621c94`; both equalled their locally stored
 `origin/dev` refs (no remote fetch performed). Core main checkout clean; downstream has a pre-existing edit to
@@ -166,6 +174,24 @@ Historical test counts remain previous-session results, not tests independently 
 
 ## Worker Briefs
 
+### Brief: candidate-recovery-feedback-b
+- Repository: paired t452 trees under `C:/Users/osrs_/FluxStuff/fxwork/t452/`, synced to integrated dev by supervisor.
+- Task: fix B's proven generic cached-response/stall guidance mismatch in candidate mode and unsafe wrong-control correction advice; preserve guards and exact trial requirement.
+- Required reads: this Current State; t262 live-b-round4.md and full run debug; named Core source and owning tests; Core instructions/code structure.
+- Owns (may edit): Core runtime/llm/evidence-loop.ts and focused request-cache feedback extraction if needed, runtime/llm/evidence-progress/stall-redirect.ts and owning tests, runtime/flow-bootstrap/candidate/submission-refusal.ts and owning tests; own report only. Report exact new module paths before adding them.
+- Must not touch: C-owned domain instructions/Core UI files, D owners, shared docs/other reports, .env or user data; no commits/pushes/merges/provider/browser calls/full suites.
+- Definition of done: fail-first generic regressions: discovery-only cached accepted submission directs exact trial path without nonexistent draft/amendments; legacy notes unchanged; wrong-control diagnostics distinguish control validity from intended purpose and offer valid alternatives without assuming keep-handle. No test-shaped examples, forced semantic acceptance, trial bypass or spend guard relaxation. Owning tests, actual Core typecheck/audit pass.
+- Report to: t452 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/candidate-recovery-feedback-b.md`.
+
+### Brief: candidate-recovery-feedback-c
+- Repository: same paired t452 trees; files partitioned from B worker.
+- Task: generic semantic category filtering guidance and truthful failed-check UI finding text from C's trace.
+- Required reads: this Current State; t451 live-c-round4.md/full debug; named source/tests; Core instructions/code structure.
+- Owns (may edit): downstream domain/src/runtime/llm-evidence/system-instructions/instructions.ts and tests/instructions.test.ts; Core packages/fluxiq/src/ui/activity-action/check-why.ts and tests/action-of.test.ts; own report only.
+- Must not touch: B-owned runtime modules/tests, condition semantics/compiler/catalog contracts, shared docs/other reports/.env/user data; no commits/pushes/merges/provider/browser calls/full suites.
+- Definition of done: fail-first generic count-only finding rejected or replaced without false opposing counts; domain guidance distinguishes actual type/category from incidental text mentions using no scenario-shaped example and remains <=3200 characters. Existing filters unchanged. Owning UI/domain tests, affected actual typechecks and audits pass against current library build where needed.
+- Report to: t452 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/candidate-recovery-feedback-c.md`.
+
 ### Brief: a-review
 - Repository: downstream lane tree `C:/Users/osrs_/FluxStuff/fxwork/t342/!FluxIQWebExtension` (existing task branch).
 - Task: fully debug A round-3 run 2 and assess both runs' qualification, including identity/oracles/replay accounting and UI evidence.
@@ -266,6 +292,38 @@ Historical test counts remain previous-session results, not tests independently 
 - Report to: t275 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/live-d-round4.md`.
 
 ## Work Ledger
+
+### 2026-10-11 — User raises future testing purse; round four ends
+- Agent: Codex senior supervisor.
+- Changed: future per-test ceiling authorized at $0.25 via launch environment; historical $0.10 run evidence unchanged. t380 verified fixture task integrated downstream/Core after all active runs ended.
+- Why: user saw near-passes and authorized more room for correction/judging. Semantic and playback failures still require diagnosis and fixes.
+- Validation: B sealed entry/summary/evaluation independently failed, $0.096883188, 27 calls, no Flow; D independently failed $0.088619448/29 calls, flowCreated true but oracle failed. A remains fully qualified; no round-four B/C/D end-to-end pass. Budget owner code accepts configured test environment 0.25 and threads test scope to isolated Core; dry-run confirmation required at next launch. t380 finish downstream audit passed; Core finish used --skip-checks only after actual supervisor 45 tests/typecheck/build/audit under newer narrow-gate rule.
+- Outcome: No active paid streak; no unchanged relaunch. New paired t452 prepared for bounded generic feedback fixes.
+- Follow-up: finish B/C/D full debugs; t452 feedback work, sync/rebuild and verify $0.25 preflight before changed-source qualification.
+
+### 2026-10-11 — B/C first attempts failed; no unchanged relaunch
+- Agent: Codex senior supervisor; live-b/live-c workers.
+- Changed: lane-owned failure debugs in progress; source pair remains frozen for D.
+- Why: qualify actual build behavior, not compilation or accepted submission alone.
+- Validation: C sealed bundle entry/summary/evaluation independently agree failed, cost $0.088334076, flowCreated false, no oracle verdict. Worker observed 17 calls and accepted revision 2 trial. B worker reports failed $0.096883188/27 calls: revision 3 reset trial executed successfully but not_judged and no promotion after purse stop; supervisor full receipt review owed. No balance error reported.
+- Outcome: B/C do not qualify; no separate replay or second paid creation is authorized on unchanged failed source. D remains active.
+- Follow-up: complete every-step/UI debugs, isolate generic feedback/unchanged-resubmission/purse cause; prepare bounded fail-first fixes and requalify on changed source after active D streak ends. Do not cap provider reply length or alter tasks/oracles/purse.
+
+### 2026-10-11 — Fixture task independently verified; all live identities confirmed
+- Agent: Codex senior supervisor.
+- Changed: t380 supervisor report and baseline regenerated through owning command, lowering only two counts; live source unchanged.
+- Why: independently validate recovered test-fixture work without invalidating active paid streaks.
+- Validation: t380 merged current Core dev; actual fresh owner library build (181.800 s), cache-free typecheck exit 0, structure audit exit 0; 45/45 tests in five owner/consumer files (115.26 s), including 16 rebuilt child-process race/crash probes. B/D four running identity receipts independently read: all verified true and observed payloads equal expected, as already confirmed for C.
+- Outcome: Fixture unit ready for local commit/integration after streaks. Live run outcomes still pending; no balance stop observed.
+- Follow-up: preserve frozen live pair; inspect each completed run and separate replay before signing a gate.
+
+### 2026-10-11 — Round-four attempts admitted
+- Agent: Codex senior supervisor; live-b/live-c/live-d workers.
+- Changed: lane-owned expectations, preflight reports and new run debugs; runtime evidence through owning Lab.
+- Why: verify integrated fixes in real headed extension chat against unchanged tasks/oracles.
+- Validation: all three owning build/dry-run preflights exited ready with zero calls. Single launches: C run-mv4mhz5r-7ad281b1, B run-mv4mj8ef-1d0b141f, D run-mv4mjpig-fa4a3f4f. Supervisor independently inspected C's four running identity receipts: actual Core/host/server and extension background/content match expected, all verified true.
+- Outcome: Partial; live outcomes and separate replay gates pending. No source changes, overrides or user-panel management.
+- Follow-up: debug before another launch; failure requires changed source, balance error stops all paid work. t380 supervisor fresh build/typecheck/audit pass; 45 owning fixture/process tests running in isolated tree, integration held.
 
 ### 2026-10-11 — D completion/default integrated; live pair frozen
 - Agent: Codex senior supervisor; b-debug/a-review/c-validation workers.
