@@ -20,12 +20,23 @@ chat applies the proposal onto a new or blank Flow and says the automation is
 ready, or asks before applying an improvement. Core's single setting
 `FLUXIQ_AUTHORING_MODE` (Core `model/authoring-mode/`, described in Core's
 `docs/architecture/automation-studio/llm-flow-bootstrap.md`) can instead select
-`candidate`, in which a creation or improvement submits an unverified candidate
-draft and nothing is applied; no web-domain behaviour differs between the modes
-apart from what the build is asked to return. The Lab starts each Core in the
-mode a run names (`--authoring-mode`, `legacy` by default) and builds a Flow to
-qualify only in `legacy` (`testing-facility.md`, the instruction-created Flow
-lane).
+`candidate`, in which exploration is separate from submission of the whole
+Flow. Submission assigns a revision and digest; when a trial runner is available,
+Core tests that exact candidate from the declared start, judges its outcome and
+promotes only a passing candidate through the normal proposal path. Without a
+trial runner, completion stores an unverified draft. The Lab starts each Core in
+the mode a run names (`--authoring-mode`, `legacy` by default); the current
+creation-qualification lanes explicitly select `candidate` and provide a trial
+runner and start reset.
+
+**Lists during candidate exploration.** One list read and one Next page provide
+evidence for the paging loop. The submitted Flow reads subsequent pages at runtime;
+exploration does not need to visit every page. Written candidates express repetition
+with script repeat lines, while legacy drafts retain their `amend_draft` repeat form.
+Core keeps submission and trial tools available when repeated looks are withdrawn
+and through the final counted budget decision. A budget estimate never grants
+acceptance or bypasses the whole-Flow spend ceiling: completion with a trial runner
+still requires the exact latest revision's positive trial.
 
 ## Live Run Or Write
 
