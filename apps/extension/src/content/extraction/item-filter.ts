@@ -49,10 +49,16 @@
 // `attribute aria-label is present` is all the judge of `run-munw7ffn-fe1cecd2`
 // was told of the store's Brightaisle Plus badge, and it advised adding a Plus
 // condition the Flow already had. So the filter writes, into the caller's `seen`,
-// the first value each such condition read on an item it held of, whole
+// the first value each condition read on an item it held of, whole
 // (`domain/src/actions/extraction/seen-values.ts` copies it at the wire,
-// uncut). A condition over a column leaves `null`: its
-// values are the records.
+// uncut). **A condition over a column writes it too.** Whether the column's
+// values reach a stored row is not known here -- the stored schema and the
+// answer's `columns` are applied after the read -- and a column read only to
+// filter by reaches none: run `run-mv5jnc51-9eac63f2`'s judges were shown
+// `plus is present` beside eight `attribute absent` witnesses and nothing the
+// read found on a row it kept, and three times refuted an exact answer as a
+// broken read. Core says the value only where the column is not stored
+// (`result-verification/read-account/condition.ts`).
 
 import { webAutomationExtractConditionHolds, type WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
 import type { WebAutomationExtractItemCondition, WebAutomationExtractListRequest } from "../types";
@@ -89,8 +95,8 @@ export type ExtractItemRejections = readonly number[];
 /**
  * Which conditions reject an item, or `undefined` when the request names none
  * and every item is a record. `seen`, when given, holds one entry per condition,
- * and each `null` entry takes the first value that condition's own read produced
- * on an item it held of.
+ * and each `null` entry takes the first non-empty value that condition tested
+ * on an item it held of, whether it read the value itself or named a column.
  */
 export type ExtractItemFilter = ((item: Element, record: ReadRecord, seen?: (string | null)[], capture?: { observations: WebAutomationExtractionRejectionObservation[]; page: number; item: number }) => ExtractItemRejections) | undefined;
 
@@ -113,7 +119,7 @@ export function itemFilterFor(request: WebAutomationExtractListRequest): Extract
     for (const [index, entry] of conditions.entries()) {
       const value = valueOf(entry, item, record);
       if (webAutomationExtractConditionHolds(entry.says, value)) {
-        if (seen?.[index] === null && entry.value.kind === "read" && value) seen[index] = value;
+        if (seen?.[index] === null && value) seen[index] = value;
         continue;
       }
       rejectedBy ??= [];

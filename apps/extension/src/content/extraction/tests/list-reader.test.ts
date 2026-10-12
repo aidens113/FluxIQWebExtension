@@ -347,7 +347,7 @@ test("a continued read reports what its conditions did across the whole read, no
   try {
     const outcome = await extractList(TWO_CONDITIONS, { resume: FILTERED_SO_FAR });
     // A predecessor that did not count alone rows hands over none; this document's two rows each failed one condition.
-    assert.deepEqual(outcome.conditions, { applied: 59, kept: 29, rejected: [21, 9], unfiltered: false, seen: [null, null], alone: [1, 1] });
+    assert.deepEqual(outcome.conditions, { applied: 59, kept: 29, rejected: [21, 9], unfiltered: false, seen: [null, "Earbuds"], alone: [1, 1] });
     assert.equal(outcome.filtered, 30);
     assert.equal(outcome.records.length, 29);
   } finally {
@@ -382,8 +382,8 @@ test("the checkpoint a filtering read hands on carries its condition counts, its
       }
     );
     assert.equal(taken.length, 1);
-    assert.deepEqual(taken[0]?.conditions, { applied: 4, kept: 2, rejected: [2], seen: [null], alone: [2] }, "two handed over plus E kept and F rejected");
-    assert.deepEqual(outcome.conditions, { applied: 5, kept: 3, rejected: [2], unfiltered: false, seen: [null], alone: [2] });
+    assert.deepEqual(taken[0]?.conditions, { applied: 4, kept: 2, rejected: [2], seen: ["E"], alone: [2] }, "two handed over plus E kept and F rejected");
+    assert.deepEqual(outcome.conditions, { applied: 5, kept: 3, rejected: [2], unfiltered: false, seen: ["E"], alone: [2] });
   } finally {
     page.restore();
   }
@@ -393,9 +393,9 @@ test("counts that do not fit the request's conditions are not added to, and a re
   const page = fakeRows([{ title: "Earbuds", posted: "", url: "/e" }]);
   try {
     const misfit = await extractList(TWO_CONDITIONS, { resume: { ...START, conditions: { applied: 9, kept: 9, rejected: [0] } } });
-    assert.deepEqual(misfit.conditions, { applied: 1, kept: 1, rejected: [0, 0], unfiltered: false, seen: [null, null], alone: [0, 0] });
+    assert.deepEqual(misfit.conditions, { applied: 1, kept: 1, rejected: [0, 0], unfiltered: false, seen: [null, "Earbuds"], alone: [0, 0] });
     const fresh = await extractList(TWO_CONDITIONS, { resume: START });
-    assert.deepEqual(fresh.conditions, { applied: 1, kept: 1, rejected: [0, 0], unfiltered: false, seen: [null, null], alone: [0, 0] });
+    assert.deepEqual(fresh.conditions, { applied: 1, kept: 1, rejected: [0, 0], unfiltered: false, seen: [null, "Earbuds"], alone: [0, 0] });
   } finally {
     page.restore();
   }
