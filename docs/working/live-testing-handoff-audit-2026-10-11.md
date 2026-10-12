@@ -1,7 +1,7 @@
 # Live Testing Handoff Audit — 2026-10-11
 
 Status: Active
-Status detail: A qualified; round-four B/C/D fully debugged; t452/t453 integrated, next qualification $0.25 on frozen Core3291fb25; recording owner defect supervisor-reproduced, t454 repair underway.
+Status detail: A qualified; $0.25 round5 B first creation/replay pass then second build fails, C startup and D cohort fail; all runs ended, scoped repairs underway.
 Created: 2026-10-11
 Last updated: 2026-10-11
 Owner: Codex senior supervisor
@@ -34,8 +34,8 @@ failed because its terminal node left unvisited graph nodes; trial feedback omit
 C/B finishing changes are integrated as t274. D fix t449 and candidate-default t450 are independently
 verified and integrated downstream first/Core second. t452 feedback/category/UI and t453 generic judge
 guidance are now independently verified and integrated: Core 3291fb25/downstream 2fa74682 before notes.
-Freeze that product pair for the next $0.25 qualification streaks; lane sources must contain it and rebuilt
-running identities before launch. Recording repair t454 stays isolated until those streaks end.
+Round-five used that frozen product pair with rebuilt running identities. All attempts now ended;
+the outcomes below supersede launch preparation. Scoped source repairs stay isolated until supervisor gates.
 
 **Storage follow-up:** t381 introduces a competing connection owner and does not directly fix recording
 append; its WIP remains unmerged in Core. A dist-backed probe now finds a distinct recording defect: model
@@ -78,18 +78,18 @@ The UI review and production-integrity tasks t334/t335/t337 remain parked, not p
 The preceding dirty-file inventory is the audit intake: C is now integrated, A/B notes preserved and merged,
 while their lane workspaces remain intact for further live work. No profiles or run evidence were reclaimed.
 
-**Next:** t452/t453 integrated (Core 3291fb25/downstream 2fa74682 before notes); qualify B/C/D with the
-verified $0.25 test ceiling. t454 recording-owner repair is independent;
-do not advance dev during a live qualification streak. Round-four source was Core
+**Next:** gate/integrate t455 browser observation recovery, t456 numeric tool accuracy and t457 handler feedback;
+finish measured t454 durable recording index and independently verify it. Then qualify B/C/D on a newly frozen
+pair with the verified $0.25 test ceiling. Do not advance dev during a live streak. Round-four source was Core
 b27c0d64/downstream d1e516e6 (lane documentation commits differed); all three attempts failed their end-to-end
 gates. Each creation requires full debug and separate zero-model replay before another launch; failure requires
 changed source. t380 is now integrated; recording-persistence measurement, three-site adaptation, breadth/UX
 and release work remain after qualification.
 
-Round-five launch update: all ready preflights independently inspected (calls0, unchanged tasks, candidate/reset true, both ceilings0.25). B run-mv4p5ly4-d02b5ca9 and D run-mv4p5hjj-1ef25535 have supervisor-verified four actual running identities and are in flight. C run-mv4p3qri-4c59c2ff failed extension.worker before chat/calls (cost0); full available debug and screenshot reviewed. CDP saw a live extension worker while Playwright readiness saw0; no observed crash. Startup-observation defect needs provider-free reproduction and changed source before C relaunch; no profile reset or timeout expansion. Core dev remains frozen; recording t454 stays isolated.
+Round-five outcome: all ready preflights independently inspected (calls0, unchanged tasks, candidate/reset true, both ceilings0.25). B first run-mv4p5ly4-d02b5ca9 passed exact oracle at$0.120890772 and separate replay-mv4pl732-186afe0a passed unchanged hash/all5counters0; supervisor verified both. Second B run-mv4pp84i-66db9b20 failed build at$0.110844924, full worker debug underway, so no B qualification. D run-mv4p5hjj-1ef25535 failed exact cohort3of4 at$0.080175204 despite runtime/three judges yes; all57steps debugged, numeric parser itself correct but author chose regex. C run-mv4p3qri-4c59c2ff failed extension.worker before chat/calls (cost0); full available debug/screenshot reviewed. CDP saw a live worker while Playwright readiness saw0; no crash. All attempts ended; the Core3291fb25/downstream e836e611 streak is over. No unchanged paid relaunch. Startup t455 and recording t454 remain isolated; recording-index refinement measures and removes per-append history rereads without pool WIP.
 
-**Limits:** no product code edited, tests/builds/live runs launched, provider calls made, or panel managed.
-Historical test counts remain previous-session results, not tests independently rerun during this audit.
+**Audit-only limits (historical):** initial intake made no source edits/provider calls or panel changes.
+Subsequent authorized source checks/builds/live results are recorded above and in the execution ledger.
 
 ## Audit Findings
 
@@ -185,11 +185,38 @@ Historical test counts remain previous-session results, not tests independently 
 
 ## Worker Briefs
 
+### Brief: worker-start-recovery
+- Repository: t455-worker-start-observation downstream task; Core shared3291fb25 read-only.
+- Task: finish supervisor's isolated browser observation-gap recovery; keep actual worker readiness and network containment strict.
+- Required reads: this Current State, worker-start-observation brief/probe results; t455 existing root-authored chrome-worker-target.ts/tests and launch-extension-session.ts prototype; original run-scenario browser setup, readiness/control/guard owners and four source-order identity/containment tests.
+- Owns: t455 new helper/probe helpers and owning tests, browser-session/index.ts, run-scenario.ts narrow wiring, directly affected source-order tests only; own worker-start-observation.md report. Supervisor transferred unfinished prototype, no concurrent source edits.
+- Must not touch: Core/source defaults/model/scenarios/oracles/existing profiles/.env/shared docs, commits/merges/full suites; no CDP-target-only acceptance or timeout/guard relaxation. Probe only actual extension/allowed everything-store in isolated/copied profiles, model disabled.
+- Definition of done: on first proved Chrome-present/Playwright-absent worker timeout, normal-close owned context and relaunch same profile once within attempt; second failure/missing/ambiguous target refuses. Fresh strict worker readiness and awaited canary proofs before returning control session; all actual identity/pairing gates still precede dispatch. Preserve screenshot/trace/console/perturbation ownership, single capture watcher, and terminal-failure cleanup. Unit fail-first plus injected actual-browser recovery with current stamps; owning test-runner build/type and affected tests/audit. Report natural16start probes allpassed (race not naturally reproduced), injected reproduction honestly; no live semantic qualification.
+- Report to: t455 docs/working/live-testing-handoff-audit-2026-10-11/reports/worker-start-observation.md.
+
+### Brief: handler-scope-feedback
+- Repository: new paired task, supervisor provisioned current dev; unit stays isolated until reviewed.
+- Task: preserve actionable trusted handler-scope static refusal explanation lost before candidate trial in B second run.
+- Required reads: this Current State, B round5 report/full second debug/actual dist probe; Core bootstrap-completion.ts issue-feedback path, flow-bootstrap issue-feedback owner, authored script handler assembler and owning tests.
+- Owns: initially named issue-feedback + bootstrap-completion owner/tests and own report; identify exact additional extraction path before editing if needed for structure budgets. No broad parser/graph changes.
+- Supervisor provisioned paired t457 and approved exact Core flow-bootstrap/plan/issue-feedback.ts + plan/tests/issue-feedback.test.ts + llm/harness-options/tests/bootstrap-completion.test.ts + llm/repeat-guard/tests/candidate-feedback.test.ts (test-only latter). Existing routing carries messages when owner emits them; single trusted handler_invalid allowlist change, no parser relaxation or bootstrap-completion.ts edit.
+- Approved new neutral harness regression in llm/harness-options/tests/handler-scope-feedback.test.ts after existing file would exceed800lines; preserve all existing tests and no baseline expansion.
+- Must not touch: numeric domain/source peers, scenarios/oracles/user instruction, .env/user data/shared docs, model output cap or generic raw DOM/provider-message copying; no worker commits/merges/full suites/browser/paid calls.
+- Definition of done: fail-first valid compiler refusal with missing explicit handler target label; actual next model feedback retains safe actionable explanation from trusted authored-statement/static issues. Preserve exact candidate receipt/revision/digest flow and existing privacy/code/path contracts; no realistic task-shaped examples or relaxing invalid handler acceptance. Narrow owner tests/type/fresh built-owner validation/audits; report limits and implementation paths. Supervisor owns architecture/integration.
+- Report to: new task downstream docs/working/live-testing-handoff-audit-2026-10-11/reports/handler-scope-feedback.md.
+
+### Supervisor unit: numeric-tool-contract
+- Repository: t456-numeric-tool-contract, shared Core3291fb25 read-only.
+- Task: correct registered tool prose that promises first-number parsing although deterministic numeric bounds already recognize complete composite counts; guide quantities toward numeric bounds, keep text matches lexical. Existing D raw-text regex failure is not a parser bug and changed prose is not live proof.
+- Owns: domain/src/runtime/llm-evidence/tools.ts, build-loop architecture and own report. Preserve parser/action/wire/oracle semantics and description cap; remove existing realistic-task-shaped accessory example in the same tool prose, use generic status exclusion instead. No source consumer/schema invented, no model-answer injection. Run existing owning tool/condition tests and current domain typecheck/build/audit.
+
 ### Brief: worker-start-observation
 - Repository: new isolated downstream task worktree; current Core3291fb25 read-only, no live-lane source edits.
 - Task: reproduce C run-mv4p3qri-4c59c2ff startup mismatch before choosing a fix. Supervisor owns initial investigation; delegate if additional discovery exceeds bounded owners.
 - Required reads: C round-five full debug and screened startup trace, run-lifecycle/extension-readiness.ts, extension-control-page.ts, launch-browser.ts and extension-start-trace.ts plus their owning tests.
 - Owns: ignored isolated probe/evidence and own report initially; any source fix requires supervisor narrowed file assignment after reproduction.
+- Supervisor narrowed recovery scope after16actual provider-free starts (all pass; intermittent original fault not naturally reproduced): extension-control-page.ts, focused browser-session Chrome worker target lookup plus barrel/owning tests, existing extension-control-page tests and testing-facility architecture. Inject the saved observation split (Chrome target present, Playwright observer absent) to fail first; recover only from a bounded extension.worker readiness failure using an unambiguous Chrome service-worker target. Control-page/pairing and all actual identity guards still follow before model dispatch. Missing/ambiguous/failed Chrome discovery preserves refusal; no timeout expansion or claims that target existence proves execution.
+- Containment review revised that recovery before integration: a Chrome descriptor cannot replace Playwright's attached worker, because the network canary proof depends on that attachment. Keep original worker readiness strict. Supervisor owns browser-session/launch-extension-session.ts and its owning tests, Chrome target lookup/tests/barrel, run-scenario.ts narrow wiring and architecture. Only a proven Chrome-present/Playwright-absent readiness timeout restarts the isolated browser once inside the same attempt; close previous owner normally, preserve profile data and perform fresh strict readiness, awaited worker containment proofs and unchanged identity/pairing gates. No outer relaunch, target-only acceptance, timeout increase or containment relaxation.
 - Must not touch: existing profiles/user data, Core, scenario/oracle/instruction, live-lane branches, model/provider, source-freeze heads, generic timeout or guard overrides. No worker commits/merges/full suites.
 - Definition of done: provider-free actual current extension on allowed everything-store fixture; copied or new isolated profile, Chrome target versus Playwright worker exposure and diagnostic attachment timing compared. Trace actual fault with no load/memory attribution or synthetic browser fixture. Prove correction against actual browser and owning tests before changed-source C relaunch. Report limits honestly; never count CDP existence alone as extension identity or successful chat.
 - Report to: isolated task downstream docs/working/live-testing-handoff-audit-2026-10-11/reports/worker-start-observation.md.
@@ -227,6 +254,7 @@ Round-five launch preparation: coherent fixes and notes pushed to downstream e83
 - Owns (may edit): Core runtime/service/recordings/store.ts, recordings/load-timeline.ts and tests/storage-restart.test.ts/process-probe.mjs; storage/project/runtime-stream-store.ts, recording-stream/{store.ts,index.ts,tests/store.test.ts} and project/index.ts; runtime/service.ts pool injection/recording-only writes/removal wire and service/summaries/store.ts recording-only strict helper; owning recording/removal tests; own report. Supervisor approved exact helpers and narrow wiring after source trace; generic fallback unchanged.
 - Must not touch: public model sequence semantics, global connection pools/t435, t452/t453 source or live lanes, oracle/scenarios, shared docs/.env/user data; no commits/pushes/merges/full suites/browser/providers. Runtime data only through owning APIs in isolated test roots.
 - Retry refinement authorized: exact durable retries are idempotent; preserve original omitted timestamp/offset proof and return landed originals for mirror publication within recording-only owners. Cover post-typed metadata failure, conflicting contents and removed IDs; never guess packet identity or expand the gateway/model contract.
+- Performance refinement authorized after measurements: recording-owned durable identity/projection metadata with exact cursor/generation catch-up, not connection caches. Additional Core owners: project/schema/recording-stream.ts, schema/index.ts and table-names.ts, existing migration registration, schema owning tests; focused helpers/tests inside approved recording-stream directory. Foreign keys and explicit delete/recreate/reopen/raw-chunk append/removal catch-up must invalidate derived state; no overwrite of historical chunks/public sequence. Append/read counters and conflict proof remain exact under partial write failure. Measure old/new chunk/SQL counts and 32/40-entry close/restart phases; unchanged15s child bounds and no baseline/schema-guard bypass.
 - Definition of done: fail-first real-owner zero-sequence append/batch and mixed fallback+SQL restart; positive storage cursor separate from unchanged public timeline identity/order. Exact endedAt/count/order survive rebuilt-process reopen and >32 chunks; mirror changes only after durable success. Explicit removal may append validated private control records under existing lock, never rewrite old content; controls stay out of public entries, fold after legacy merge and cannot resurrect removed IDs. Cover finalized/stale/conflicting/spoofed/duplicate removal, SQL/file modes and legacy ambiguous sequences without guessing/overwriting. No silent recording error, generic fallback change, authority bypass, timeout/baseline expansion or destructive history rewrite. Own narrow tests/current package types/audit pass after fresh build.
 - Report to: t454 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/recording-stream-owner.md`.
 
