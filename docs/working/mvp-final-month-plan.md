@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: A qualified with two separate zero-model replays; recovered C and B finishing fixes integrated; D terminal-path accounting and candidate-default tasks in verification; B/C/D live qualification next.
+Status detail: A qualified; C/B finishing fixes, D terminal-path accounting and candidate default integrated and pushed; B/C/D live qualification underway on the frozen pair.
 Created: 2026-10-05
 Last updated: 2026-10-11
 Owner: Senior supervisor agent
@@ -46,8 +46,9 @@ unvisited required work. Its last three trials had all displayed steps succeed, 
 graph-level ending. Paired t449 repairs exact optional-path accounting and safe terminal feedback.
 
 **Next order:**
-1. Finish and independently verify t449; finish t450 candidate-default now A's gate is signed. Preserve explicit
-   legacy opt-out and raw omitted-mode API compatibility. Until t450 integrates, configured product default is legacy.
+1. t449 and t450 are independently verified, integrated and pushed in both repositories. Configured product default
+   is candidate; explicit legacy opt-out and raw omitted-mode API compatibility are preserved. Freeze Core b27c0d64
+   for the B/C/D qualification streaks.
 2. Sync/rebuild live lane trees to the new identified pair, run narrow free preflights and relevant recovery matrix
    cases, then qualify B/C/D: two creation passes on one pair with exact oracles and separate zero-model replays.
    Debug every failure fully, fix its cause and requalify on changed source; no relaunch loops.

@@ -1,7 +1,7 @@
 # State-Aware Recovery Plan
 
 Status: Active
-Status detail: Implemented through t448; recovery matrix and paid R4a/R4b proofs passed; lane A now qualified with separate zero-model replays; B/C/D continuation and optional-path completion fix underway.
+Status detail: Recovery matrix and paid R4a/R4b passed; A qualified; t449 optional-path completion and t450 candidate default integrated and pushed; B/C/D live qualification underway.
 Created: 2026-10-09
 Last updated: 2026-10-11
 Owner: Senior supervisor agent
