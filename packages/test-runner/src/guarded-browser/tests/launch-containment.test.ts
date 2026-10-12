@@ -17,7 +17,7 @@ const LAUNCH = /\b(?:chromium|firefox|webkit)\s*\.\s*(?:launch|launchPersistentC
 /** Every file allowed to start a browser directly, and why that is safe. */
 const SANCTIONED: Record<string, string> = {
   "guarded-browser/launch-guarded-context.ts": "installs the guard before it returns the context",
-  "run-scenario/browser-session/launch-browser.ts": "run-scenario.ts installs installRunNetworkGuard before opening any page",
+  "run-scenario/browser-session/launch-browser.ts": "launch-extension-session.ts installs and proves the guard before returning control",
   "interactive-session.ts": "installs the guard before opening any page",
   "saved-flow-replay/replay-browser.ts": "installs the guard before opening any page",
   "bench/compatibility.ts": "launches headless only to read the browser version; it opens no page",
@@ -69,8 +69,10 @@ test("each sanctioned launch installs the guard before any page is opened", asyn
 
   assert.ok((await source("run-scenario/browser-session/launch-browser.ts")).includes("networkContainmentArgs("), "run lane: the containment switches are on its command line");
   const run = await source("run-scenario.ts");
-  assertOrder(run, "run lane", "await launchBrowser(", "installRunNetworkGuard(context", "newPage(");
-  assertOrder(run, "run lane", "await launchBrowser(", "installRunNetworkGuard(context", "extensionControlPage(context)");
+  const session = await source("run-scenario/browser-session/launch-extension-session.ts");
+  assertOrder(session, "run session", "await launch(topology", "await installGuard(context", "await openControl(context)");
+  assertOrder(session, "run session", "await openControl(context)", "await guard.serviceWorkersProven()", "return { ...session");
+  assert.ok(run.indexOf("await launchExtensionSession(") < run.indexOf("context.newPage("), "run lane: the guarded and worker-proven session precedes fixture pages");
 
   assertOrder(await source("interactive-session.ts"), "interactive session", "chromium.launchPersistentContext(", "installDeterministicNetworkGuard(context", "newPage(");
   assertOrder(await source("saved-flow-replay/replay-browser.ts"), "saved-Flow replay", "chromium.launchPersistentContext(", "installDeterministicNetworkGuard(context", "newPage(");

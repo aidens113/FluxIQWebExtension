@@ -49,5 +49,5 @@ test("complete intended inventory and canonical/staged executable freshness refu
 test("server gate precedes project/browser/chat while host identity keeps its independent field", async () => {
   const source = await readFile(fileURLToPath(new URL("../../../../../src/run-scenario.ts", import.meta.url)), "utf8");
   const gate = source.indexOf("await verifyRunningServerAdapterIdentity("); assert.ok(gate > source.indexOf("await verifyRunningHostIdentity("));
-  for (const token of ["await prepareIndependentCreationProject(", "await launchBrowser(", "const chat = buildEntry"]) assert.ok(gate < source.indexOf(token));
+  for (const token of ["await prepareIndependentCreationProject(", "await launchExtensionSession(", "const chat = buildEntry"]) assert.ok(gate < source.indexOf(token));
 });
