@@ -99,6 +99,22 @@ test("a location change comes first, then what is gone, then what is new; repeat
   assert.match(now.differs[1]!, /Add to cart/u);
 });
 
+test("each answer says where it was read, so Core can come back to that page (t471)", async () => {
+  const { start, now } = await compare(cart(3), cart(4, [], "https://shop.test/cart?step=2"));
+  assert.equal(start.location, "https://shop.test/cart");
+  assert.equal(now.location, "https://shop.test/cart?step=2");
+  assert.equal(start.location, start.state.location, "the same address the state keeps");
+});
+
+test("each answer gives the same differences as the lines themselves, gone and added, for Core to tell acts apart (t471)", async () => {
+  const { start, now } = await compare(cart(3), cart(4));
+  assert.deepEqual(start.lines, { gone: [], added: [] });
+  assert.ok(now.lines);
+  assert.equal(now.lines.gone.length, 2);
+  assert.equal(now.lines.added.length, 2);
+  assert.deepEqual(now.differs, [...now.lines.gone.map((line) => `gone: ${line}`), ...now.lines.added.map((line) => `new: ${line}`)]);
+});
+
 test("handles that differ between captures do not count", () => {
   const evidence = sanitizeWebLlmSnapshot(walled(3));
   const renumbered = JSON.parse(JSON.stringify(evidence).replace(/"t([1-9][0-9]*)"/gu, (_, n: string) => `"t${Number(n) + 40}"`));
