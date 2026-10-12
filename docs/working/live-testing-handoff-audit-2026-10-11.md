@@ -1,7 +1,7 @@
 # Live Testing Handoff Audit — 2026-10-11
 
 Status: Active
-Status detail: A qualified; $0.25 round5 B first creation/replay pass then second fails, C/D fail; t455/t456/t457 integrated, t454 recording consistency gates underway.
+Status detail: A historically qualified; B round5 first creation/replay passed; round6 B/C/D failed, t458 processing help preparing, t454 recording compatibility gates underway.
 Created: 2026-10-11
 Last updated: 2026-10-11
 Owner: Codex senior supervisor
@@ -78,9 +78,17 @@ The UI review and production-integrity tasks t334/t335/t337 remain parked, not p
 The preceding dirty-file inventory is the audit intake: C is now integrated, A/B notes preserved and merged,
 while their lane workspaces remain intact for further live work. No profiles or run evidence were reclaimed.
 
-**Next:** t456 numeric tool accuracy, t455 guarded browser recovery and t457 handler feedback are integrated;
-live proof pending. Resolve the four t454 independent-review consistency gates before accepting its measured
-durable recording index. Then qualify B/C/D on a newly frozen
+**Next:** t456 numeric tool accuracy, t455 guarded browser recovery and t457 handler feedback are integrated.
+Round-six ran all three lanes on Core190d7bda/downstream921f0296; all attempts ended and the freeze is released.
+Startup completed with all four running identities verified for each. B failed its saved quantity/cart oracle
+($0.044999439); two trial adds had confirmations, but saved first add had no effect and final judge invented
+its confirmation. C/D stopped at48build calls plus initialchat1 ($0.09098706/$0.068919444), not the cash ceiling;
+six C/five D trials remained negative or unconfirmed. Total round-six cost$0.204905943, no balance failure.
+No second creations/replays or unchanged relaunches. C full86step and D full88step audits are complete;
+B full62step audit and provider-free first-click/no-effect fixture probe are complete. Fresh terminal captures
+are not stale caches: current hidden cart facts are omitted by default rendered-only observation.
+Gate t458 supported record-processing help; assess optional passive result-observation seam from B report.
+Resolve t454 no-packet undo compatibility before accepting its measured durable recording index. Then qualify B/C/D on a newly frozen
 pair with the verified $0.25 test ceiling. Do not advance dev during a live streak. Round-four source was Core
 b27c0d64/downstream d1e516e6 (lane documentation commits differed); all three attempts failed their end-to-end
 gates. Each creation requires full debug and separate zero-model replay before another launch; failure requires
@@ -93,6 +101,68 @@ Round-five outcome: all ready preflights independently inspected (calls0, unchan
 Subsequent authorized source checks/builds/live results are recorded above and in the execution ledger.
 
 ## Audit Findings
+
+### Worker brief: supported record-output processing help
+
+- B-debug, paired task t458 (`fxwork/t458/!FluxIQWebExtension` and `!FluxIQ`), after completed C audit.
+- Read own C round-six analysis and Core plan/record-output-contract.ts plus contracts/record-sets/parse-output.ts
+  and process/parse-processing.ts and direct helper types. Core authoring help omits supported process entirely.
+- Own Core record-output-contract.ts, its plan/tests/record-output-contract.test.ts (new if absent) and one
+  focused early-refusal delivery test in the owning llm/harness-options/tests folder if required. Own only
+  downstream reports/record-output-help.md; supervisor owns architecture/shared docs.
+- Fail first on full+condensed published format and actual early rejection feedback omitting supported process.
+  Synchronize help with actual parser-supported dedupe/where/sort/limit/columns/minRows, including dedupe.by.
+  Invalid unique/unknown processing keys still refuse; no parser, accepted schema or runtime change.
+- Use neutral fields/domain examples unrelated to any realistic fixture task or answer. Do not expose page
+  bodies, copy scenario predicates/counts, enlarge provider output, or add prompt-only claims of passing semantics.
+- If current delivered system-prompt pins change, expand only to their owning generation script/affected fixtures
+  and adjacent pin test; report exact changes and verify unrelated fixtures unchanged. Never hand-edit generated pins.
+- Validate owner tests, initial/static refusal delivery, cache-free Core types, fresh owner build and audits/
+  whitespace. No whole suite, baseline increase, paid/browser launches, user panel, commits/merges/pushes.
+- Report exact source paths and neutral fail-first/current results; existing source failures stay rejected.
+
+### Worker brief: judge evidence freshness
+
+- A-review, after B full debug/probe; bounded read-only t262 Core/downstream source investigation.
+- Own new reports/judge-evidence-freshness.md only. Read B round-six debug/probe and actual three judge
+  request artifacts; identify where trial/final verification evidence is collected, refreshed and bounded.
+- Trace generic Core result-verification through the downstream runtime/evidence adapter; partition source
+  responsibility accurately. Do not teach scenario names/counts or copy page bodies into the report.
+- Prove why accepted judge requests held stale totals; distinguish stale recorded pre-action state, stale tool
+  cache, intentionally selected evidence, model inference error and unavailable browser state.
+- Assess whether fresh terminal state already exists but is omitted, versus an absent registered fresh-read
+  seam. Propose the narrow owner repair and neutral fail-first probe, if evidence supports one.
+- Do not blindly repeat lasting acts, alter fixture/oracle, assume click hit-test proves effect, invent independent
+  deterministic goal understanding, change product/source/shared docs, launch paid/browser/Core/panel tasks,
+  commit or push. Return exact owners, compatibility effects and what remains unproven.
+
+### Worker brief: C round-six build debug
+
+- B-debug after completing D round-six report; read-only current t451 paired lane and external run
+  run-mv4rny8v-dde7ddf8. Root owns C live report/per-run debug; worker owns only reports/c-round6-debug-analysis.md.
+- Read every86saved step/call/result/decision/judge and UI metadata; use screenshot viewing where needed.
+- Trace six trials and their exact revisions/digests, full goal evidence and raw matcher/processor choices;
+  distinguish omitted/misread records from unsupported keys/static feedback, truncation and stale evidence.
+- Reconcile49observedcalls (initialchat plus48build), $0.09098706 actual cost, original task/oracle and all4identities.
+  Root already inspected actual receipts and ending failure-panel image; no promotion/runtime/replay exists.
+- Establish terminal evidence_iteration_limit from actual sealed records and whether final corrected candidate
+  still failed judgement. No causal claim that merely increasing cash or call count would have passed.
+- Identify generic owner root causes supported by actual artifacts, with precise source paths/neutral probes;
+  no scenario teaching/examples, page-body exposure, source/shared-doc edits, provider/browser launches,
+  user-panel management, commits or pushes. Record limitations honestly and return when finished.
+
+### Worker brief: B click effect observation
+
+- A-review, existing t262 paired lane, after full round-six failed-run debug.
+- Read own full round-six debug and built bigbox shell/product/add-to-lines owners only.
+- Own new reports/click-effect-observation.md and ignored probe/evidence; no product/shared-document edits.
+- Reproduce compiled realistic fixture first-two-click quantity/count effects with an isolated owned browser;
+  report whether first click is ineffective. Prefer actual extension control if available without changing guards.
+- Provider0, no Core/user-panel management, no source/dev change, no repeated paid launch. Preserve originals.
+- Distinguish fixture mechanism proof from extension action cause, hit-test success from observed lasting effect,
+  and stale judge evidence from model misjudgement of correctly supplied quantity evidence.
+- Record browser/build/page provenance, exact safe deltas, limits, failure and original run links; no page bodies,
+  secrets, scenario teaching, weaker assertions, fixture/oracle edits, commits or pushes.
 
 ### Round-six live briefs: frozen candidate pair, recording repair isolated
 
@@ -451,6 +521,21 @@ Round-five launch preparation: coherent fixes and notes pushed to downstream e83
 - Report to: t275 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/live-d-round4.md`.
 
 ## Work Ledger
+
+- October 11: Round-six Core190d7bda/downstream921f0296 ended allthreefailed. Supervisor independently inspected
+  zero-call ready ceilings0.25/original tasks and all12actual identity receipts. C startup passed; sealed C
+  build48calls/36decisions/12judges ends evidence_iteration_limit, six trialsno, latestrev16; total49calls0.09098706.
+  D build48calls/38decisions/10judges same limit, five no/unconfirmed trials, total49calls0.068919444. B savedoracle
+ 4of10factsunheld despite runtimesucceeded/finaljudgeyes,25calls0.044999439. Trial yes correctness not disproved:
+  two trial add confirmations differ from saved first no-effect. Budget ceiling remains0.25; future ready plans
+  may use existing64call upper bound after relevant source repair, without raising financial/output limits.
+- October 11: Root t454 synced both idletrees to integrated dev190/921; actual fresh owning build64.854s/7250outputs,
+  cache-free currenttypes and independent48tests/6owner files passed. New compatibility comparison proves supported
+  fresh no-packet-ID append after captured undo still regresses; acceptance withheld pending private capture proof.
+  Existing six fresh-process cases/32state measurement remain worker claims until final source independent rerun.
+- October 11: t458 paired provision started for exact Core record-output-contract help omission; no parser changes.
+  A read-only freshness report identifies domain result observation coverage, not Core cache/timing; optional opaque
+  passive result-view proposal needs neutral fail-first validation and preserves legacy fallback/hidden-control rules.
 
 - October 11: Supervisor accepted t455 after current owner build, cache-free types, independent36test lifecycle/
   containment/wiring pass, actual injected browser proof (fresh strict worker/guard identity, forbidden traffic0,
