@@ -1,7 +1,7 @@
 # Live Testing Handoff Audit — 2026-10-11
 
 Status: Active
-Status detail: A qualified; $0.25 round5 B first creation/replay pass then second build fails, C startup and D cohort fail; all runs ended, scoped repairs underway.
+Status detail: A qualified; $0.25 round5 B first creation/replay pass then second fails, C/D fail; t456 numeric tool accuracy integrated, t454/t455/t457 isolated repairs underway.
 Created: 2026-10-11
 Last updated: 2026-10-11
 Owner: Codex senior supervisor
@@ -78,7 +78,7 @@ The UI review and production-integrity tasks t334/t335/t337 remain parked, not p
 The preceding dirty-file inventory is the audit intake: C is now integrated, A/B notes preserved and merged,
 while their lane workspaces remain intact for further live work. No profiles or run evidence were reclaimed.
 
-**Next:** gate/integrate t455 browser observation recovery, t456 numeric tool accuracy and t457 handler feedback;
+**Next:** t456 numeric tool accuracy integrated (downstream fd3adc21), live proof pending. Gate/integrate t455 browser observation recovery and t457 handler feedback;
 finish measured t454 durable recording index and independently verify it. Then qualify B/C/D on a newly frozen
 pair with the verified $0.25 test ceiling. Do not advance dev during a live streak. Round-four source was Core
 b27c0d64/downstream d1e516e6 (lane documentation commits differed); all three attempts failed their end-to-end
@@ -191,6 +191,7 @@ Subsequent authorized source checks/builds/live results are recorded above and i
 - Required reads: this Current State, worker-start-observation brief/probe results; t455 existing root-authored chrome-worker-target.ts/tests and launch-extension-session.ts prototype; original run-scenario browser setup, readiness/control/guard owners and four source-order identity/containment tests.
 - Owns: t455 new helper/probe helpers and owning tests, browser-session/index.ts, run-scenario.ts narrow wiring, directly affected source-order tests only; own worker-start-observation.md report. Supervisor transferred unfinished prototype, no concurrent source edits.
 - Must not touch: Core/source defaults/model/scenarios/oracles/existing profiles/.env/shared docs, commits/merges/full suites; no CDP-target-only acceptance or timeout/guard relaxation. Probe only actual extension/allowed everything-store in isolated/copied profiles, model disabled.
+- Further approved ownership: browser-session/session-observers.ts + tests/session-observers.test.ts keep capture/watch registration single and dispose/rebind console watcher when context replaces, preserving spine budget and context/guard evidence ownership. Directly affected guarded-browser launch-containment, run-evaluation runner-wiring and Core/host/server identity source-order tests may follow extraction, without weakening dispatch/containment order.
 - Definition of done: on first proved Chrome-present/Playwright-absent worker timeout, normal-close owned context and relaunch same profile once within attempt; second failure/missing/ambiguous target refuses. Fresh strict worker readiness and awaited canary proofs before returning control session; all actual identity/pairing gates still precede dispatch. Preserve screenshot/trace/console/perturbation ownership, single capture watcher, and terminal-failure cleanup. Unit fail-first plus injected actual-browser recovery with current stamps; owning test-runner build/type and affected tests/audit. Report natural16start probes allpassed (race not naturally reproduced), injected reproduction honestly; no live semantic qualification.
 - Report to: t455 docs/working/live-testing-handoff-audit-2026-10-11/reports/worker-start-observation.md.
 
