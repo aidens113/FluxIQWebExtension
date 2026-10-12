@@ -4,6 +4,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readCheckpoint, type ReadSoFar } from "../read-checkpoint";
+import { readExtractionCheckpoint } from "../../../../shared/extraction-continuation";
+
+test("checkpoint round trip retains the optional aligned passive observation companion", () => {
+  const observations = [[{ conditionIndex: 0, state: "present" as const, value: "", source: "read" as const, readKind: "attribute" as const, page: 2, item: 3 }]];
+  const checkpoint = readCheckpoint({ ...SO_FAR, conditions: { applied: 1, kept: 0, rejected: [1] }, samples: { rows: () => [[{ title: "Record A" }]], alone: () => [1], observations: () => observations } });
+  assert.deepEqual(checkpoint.rejectedObservations, observations);
+  assert.notEqual(checkpoint.rejectedObservations, observations);
+  assert.deepEqual(readExtractionCheckpoint(JSON.parse(JSON.stringify(checkpoint)))?.rejectedObservations, observations);
+  assert.equal(readExtractionCheckpoint({ ...checkpoint, rejectedObservations: [[]] }), undefined);
+});
 
 const SO_FAR: ReadSoFar = {
   records: [{ name: "A", price: null }],

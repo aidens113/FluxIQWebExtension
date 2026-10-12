@@ -31,38 +31,32 @@
 // them through the same screen as the kept rows
 // (`domain/src/runtime/llm-evidence/node-run/rejected-rows.ts`).
 
+import type { WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
 import type { ExtractedListRecord } from "./list-reader";
 
 /** The rows a read is keeping: `note` each rejection, `rows` and `alone` for the checkpoint and the outcome. */
 export type RejectedSamples = {
-  /** One rejected item: every condition that rejected it, by position in `where`. */
-  note(rejectedBy: readonly number[], record: ExtractedListRecord): void;
-  /** One list per condition: the rows it removed alone, then the rows another condition also rejected. */
+  note(rejectedBy: readonly number[], record: ExtractedListRecord, observations?: readonly WebAutomationExtractionRejectionObservation[]): void;
   rows(): ExtractedListRecord[][];
-  /** Per condition, how many of the leading rows of its list it removed alone. */
   alone(): number[];
+  observations(): Array<Array<WebAutomationExtractionRejectionObservation | null>> | undefined;
 };
 
-/** One condition's rows, in its two groups, with where each said row is. */
-type ConditionRows = { alone: ExtractedListRecord[]; withOthers: ExtractedListRecord[]; placed: Map<string, "alone" | "withOthers"> };
+type Witness = { record: ExtractedListRecord; observation: WebAutomationExtractionRejectionObservation | null };
+type ConditionRows = { alone: Witness[]; withOthers: Witness[]; placed: Map<string, "alone" | "withOthers"> };
 
-/**
- * A collector for `conditions` conditions, starting from what a continued read
- * carried when it has one list per condition, or `undefined` for a read that
- * was not asked for its rejected rows or names no conditions. `carriedAlone` is
- * how many leading rows of each carried list were removed alone; a checkpoint
- * from a page build that did not say counts none of them alone.
- */
+/** Positional witnesses retain contradictory evaluated values without rereading the page. */
 export function rejectedSamplesFor(
   asked: boolean,
   conditions: number,
   carried: readonly ExtractedListRecord[][] | undefined,
-  carriedAlone?: readonly number[] | undefined
+  carriedAlone?: readonly number[] | undefined,
+  carriedObservations?: readonly (readonly (WebAutomationExtractionRejectionObservation | null)[])[] | undefined
 ): RejectedSamples | undefined {
   if (!asked || conditions === 0) return undefined;
   const fits = carried?.length === conditions;
   const lists: ConditionRows[] = Array.from({ length: conditions }, (_unused, index) => {
-    const rows = fits ? (carried[index] ?? []).map(copy) : [];
+    const rows = fits ? (carried[index] ?? []).map((record, ordinal): Witness => ({ record: { ...record }, observation: carriedObservations?.[index]?.[ordinal] ? { ...carriedObservations[index]![ordinal]! } : null })) : [];
     const lead = carriedAlone?.length === conditions ? Math.min(carriedAlone[index] ?? 0, rows.length) : 0;
     const list: ConditionRows = { alone: rows.slice(0, lead), withOthers: rows.slice(lead), placed: new Map() };
     for (const row of list.alone) list.placed.set(keyOf(row), "alone");
@@ -70,12 +64,13 @@ export function rejectedSamplesFor(
     return list;
   });
   return {
-    note(rejectedBy, record) {
+    note(rejectedBy, record, observations) {
       const alone = rejectedBy.length === 1;
       for (const index of rejectedBy) {
         const list = lists[index];
         if (list === undefined) continue;
-        const row = copy(record);
+        const observation = observations?.find((entry) => entry.conditionIndex === index);
+        const row: Witness = { record: { ...record }, observation: observation ? { ...observation } : null };
         const key = keyOf(row);
         const placed = list.placed.get(key);
         if (placed === "alone" || (placed === "withOthers" && !alone)) continue;
@@ -84,15 +79,14 @@ export function rejectedSamplesFor(
         (alone ? list.alone : list.withOthers).push(row);
       }
     },
-    rows: () => lists.map((list) => [...list.alone, ...list.withOthers].map(copy)),
-    alone: () => lists.map((list) => list.alone.length)
+    rows: () => lists.map((list) => [...list.alone, ...list.withOthers].map((row) => ({ ...row.record }))),
+    alone: () => lists.map((list) => list.alone.length),
+    observations: () => lists.some((list) => [...list.alone, ...list.withOthers].some((row) => row.observation !== null))
+      ? lists.map((list) => [...list.alone, ...list.withOthers].map((row) => row.observation ? { ...row.observation } : null)) : undefined
   };
 }
 
-function keyOf(record: ExtractedListRecord): string {
-  return JSON.stringify(record);
-}
-
-function copy(record: ExtractedListRecord): ExtractedListRecord {
-  return { ...record };
+function keyOf(row: Witness): string {
+  const observation = row.observation;
+  return JSON.stringify([row.record, observation ? [observation.state, observation.value, observation.source, observation.readKind] : null]);
 }

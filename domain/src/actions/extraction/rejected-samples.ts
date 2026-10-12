@@ -62,6 +62,43 @@ export const WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_ALONE_KEY = "rejectedSample
 /** One rejected row: a declared field's value, or `null` where an optional field was unreadable. */
 export type WebAutomationExtractionRejectedRow = Record<string, string | null>;
 
+/** Passive provenance of the value evaluated by one rejecting condition. */
+export type WebAutomationExtractionRejectionObservation = {
+  conditionIndex: number;
+  state: "present" | "absent" | "unavailable" | "withheld";
+  value?: string;
+  source: "field" | "read";
+  readKind?: "text" | "attribute" | "value" | "link" | "column";
+  page: number;
+  item: number;
+};
+
+/** A closed, aligned companion; absent legacy observations are never invented. */
+export function webAutomationExtractionRejectedObservationsValue(value: unknown, samples: readonly (readonly unknown[])[]): Array<Array<WebAutomationExtractionRejectionObservation | null>> | undefined {
+  if (!Array.isArray(value) || value.length !== samples.length) return undefined;
+  const out: Array<Array<WebAutomationExtractionRejectionObservation | null>> = [];
+  const keys = new Set(["conditionIndex", "state", "value", "source", "readKind", "page", "item"]);
+  for (const [index, entries] of value.entries()) {
+    if (!Array.isArray(entries) || entries.length !== samples[index]?.length) return undefined;
+    const copied: Array<WebAutomationExtractionRejectionObservation | null> = [];
+    for (const entry of entries) {
+      if (entry === null) {
+        copied.push(null);
+        continue;
+      }
+      if (!entry || typeof entry !== "object" || Array.isArray(entry) || Object.keys(entry).some((key) => !keys.has(key))) return undefined;
+      if (entry.conditionIndex !== index || !["present", "absent", "unavailable", "withheld"].includes(entry.state)) return undefined;
+      if (entry.source !== "field" && entry.source !== "read") return undefined;
+      if (![entry.page, entry.item].every((ordinal) => Number.isSafeInteger(ordinal) && ordinal > 0)) return undefined;
+      if (entry.readKind !== undefined && !["text", "attribute", "value", "link", "column"].includes(entry.readKind)) return undefined;
+      if (entry.state === "present" ? typeof entry.value !== "string" : Object.hasOwn(entry, "value")) return undefined;
+      copied.push({ conditionIndex: index, state: entry.state, source: entry.source, page: entry.page, item: entry.item, ...(entry.readKind === undefined ? {} : { readKind: entry.readKind }), ...(entry.state === "present" ? { value: entry.value } : {}) });
+    }
+    out.push(copied);
+  }
+  return out;
+}
+
 /**
  * The rows copied whole, or `undefined` when they are not
  * well formed: not one list per condition, a row that is not a record of

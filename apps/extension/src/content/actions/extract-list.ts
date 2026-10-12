@@ -186,14 +186,15 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[], aloneOnly: b
  * lead, which is then the whole list. A playback read whose page did not say
  * the leads sends no rows, since it cannot tell which were alone.
  */
-function sampledRows(outcome: Outcome, aloneOnly: boolean): Pick<ExtractionSummary, "rejectedSamples" | "rejectedSamplesAlone"> {
+function sampledRows(outcome: Outcome, aloneOnly: boolean): Pick<ExtractionSummary, "rejectedSamples" | "rejectedSamplesAlone" | "rejectedObservations"> {
   const samples = outcome.rejectedSamples;
   const leads = outcome.rejectedSamplesAlone;
+  const observations = outcome.rejectedObservations;
   if (!samples) return {};
-  if (!aloneOnly) return { rejectedSamples: samples.map((rows) => rows.map((row) => ({ ...row }))), ...(leads ? { rejectedSamplesAlone: [...leads] } : {}) };
+  if (!aloneOnly) return { rejectedSamples: samples.map((rows) => rows.map((row) => ({ ...row }))), ...(leads ? { rejectedSamplesAlone: [...leads] } : {}), ...(observations ? { rejectedObservations: observations.map((entries) => entries.map((entry) => entry ? { ...entry } : null)) } : {}) };
   if (!leads) return {};
   const alone = samples.map((rows, index) => rows.slice(0, leads[index] ?? 0).map((row) => ({ ...row })));
-  return { rejectedSamples: alone, rejectedSamplesAlone: alone.map((rows) => rows.length) };
+  return { rejectedSamples: alone, rejectedSamplesAlone: alone.map((rows) => rows.length), ...(observations ? { rejectedObservations: observations.map((entries, index) => entries.slice(0, leads[index] ?? 0).map((entry) => entry ? { ...entry } : null)) } : {}) };
 }
 
 /** The condition report copied, each list its own array. */

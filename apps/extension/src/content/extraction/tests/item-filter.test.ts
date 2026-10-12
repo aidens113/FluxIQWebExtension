@@ -17,11 +17,25 @@ import { itemFilterFor } from "../item-filter";
 import { extractList } from "../list-reader";
 import type { ExtractionCheckpoint } from "../../../shared/extraction-continuation";
 import type { WebAutomationExtractListRequest } from "../../types";
+import type { WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
 
 /** Never touched: every condition here names a field of the record. */
 const ITEM = {} as Element;
 
 const FIELDS = { name: ".name", price: ".price", badge: ".badge" };
+
+test("rejecting predicates preserve the evaluated absent and present-empty values without changing membership", () => {
+  const rejects = itemFilterFor({ item: ".card", fields: FIELDS, where: [{ field: "badge", contains: "allowed" }, { field: "price", lessThan: 12 }] });
+  const observations: WebAutomationExtractionRejectionObservation[] = [];
+  assert.deepEqual(rejects!(ITEM, { name: "Record A", badge: "", price: "$17" }, undefined, { observations, page: 2, item: 3 }), [0, 1]);
+  assert.deepEqual(observations.map(({ conditionIndex, state, value }) => ({ conditionIndex, state, ...(value === undefined ? {} : { value }) })), [
+    { conditionIndex: 0, state: "present", value: "" }, { conditionIndex: 1, state: "present", value: "$17" }
+  ]);
+  observations.length = 0;
+  rejects!(ITEM, { name: "Record B", badge: null, price: "$4" }, undefined, { observations, page: 2, item: 4 });
+  assert.equal(observations[0]?.state, "absent");
+  assert.equal(Object.hasOwn(observations[0] ?? {}, "value"), false);
+});
 
 function rejections(where: Parameters<typeof itemFilterFor>[0]["where"], record: Record<string, string | null>): readonly number[] {
   const rejects = itemFilterFor({ item: ".card", fields: FIELDS, where });

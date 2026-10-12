@@ -9,7 +9,7 @@
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { validateAutomationStudioRecords, type AutomationStudioRecordSchema } from "fluxiq/automation-studio/nodes";
-import { isWebAutomationExtractFieldKey, webAutomationExtractionSummaryValue } from "../../../actions/extraction";
+import { isWebAutomationExtractFieldKey, webAutomationExtractionSummaryValue, type WebAutomationExtractionRejectionObservation } from "../../../actions/extraction";
 import { webAutomationNextPageAnswerValue } from "../../../actions/next-page";
 import { webAutomationExtractListDispatch } from "../../../output-nodes";
 import { captureEvidence, toolExecution, withCallStates, type WebLlmEvidenceToolExecution } from "../capture";
@@ -249,7 +249,7 @@ export function webNodeReplayReadSaid(payload: JsonValue | undefined, where: unk
 type WebNodeReplayReadRows = { rows?: JsonObject[] | undefined; leftOutOnlyByThis?: JsonObject[] | undefined; note?: string | undefined };
 
 /** The rows one condition removed by itself. */
-type WebNodeReplayLeftOut = { condition: string; rows: JsonObject[] };
+type WebNodeReplayLeftOut = { condition: string; conditionIndex?: number; rows: JsonObject[]; observations?: Array<WebAutomationExtractionRejectionObservation | null> };
 
 /** A value that is an address rather than text: a URL, or a path from an origin. Core's label rule's own. */
 const ADDRESS = /^(?:[a-z][a-z\d+.-]*:\/\/|\/)/iu;
@@ -324,8 +324,10 @@ export function webNodeReplayReadRows(payload: JsonValue | undefined, where: unk
   const named = conditionNames(where, samples?.length ?? 0);
   const tested = testedColumns(ranWhere, samples?.length ?? 0, fields);
   const leftOut = (samples ?? []).flatMap((sampled, index): JsonObject[] => {
-    const alone = labelled(sampled.slice(0, leads?.[index] ?? 0), fields, tested[index]);
-    return alone.length ? [present<WebNodeReplayLeftOut>({ condition: named[index]!, rows: alone }) as unknown as JsonObject] : [];
+    const witnesses = sampled.slice(0, leads?.[index] ?? 0).map((row, ordinal) => ({ rows: labelled([row], fields, tested[index]), observation: summary.rejectedObservations?.[index]?.[ordinal] ?? null })).filter((entry) => entry.rows.length > 0);
+    const alone = witnesses.flatMap((entry) => entry.rows);
+    const observations = summary.rejectedObservations === undefined ? undefined : witnesses.map((entry) => screenedObservation(entry.observation, Array.isArray(ranWhere) ? ranWhere[index] : undefined));
+    return alone.length ? [present<WebNodeReplayLeftOut>({ condition: named[index]!, conditionIndex: summary.rejectedObservations === undefined ? undefined : index, rows: alone, observations }) as unknown as JsonObject] : [];
   });
   if (!rows.length && !leftOut.length) return undefined;
   const notes = [
@@ -337,6 +339,20 @@ export function webNodeReplayReadRows(payload: JsonValue | undefined, where: unk
     leftOutOnlyByThis: leftOut.length ? leftOut : undefined,
     note: notes.length ? notes.join(" ") : undefined
   }) as unknown as JsonObject;
+}
+
+/** A privacy refusal is explicit, never the placeholder presented as an observed value. */
+function screenedObservation(observation: WebAutomationExtractionRejectionObservation | null, condition: unknown): WebAutomationExtractionRejectionObservation | null {
+  if (!observation) return null;
+  const field = isJsonRecord(condition) ? condition.field : undefined;
+  const read = isJsonRecord(condition) && isJsonRecord(condition.read) ? condition.read : undefined;
+  const attribute = read?.attribute;
+  const denied = (typeof field === "string" && webLlmEvidenceKeyIsDenied(field)) || (typeof attribute === "string" && webLlmEvidenceKeyIsDenied(attribute));
+  if (observation.state === "present" && (denied || screenedText(observation.value!) !== observation.value)) {
+    const { value: _value, ...passive } = observation;
+    return { ...passive, state: "withheld" };
+  }
+  return { ...observation };
 }
 
 /**

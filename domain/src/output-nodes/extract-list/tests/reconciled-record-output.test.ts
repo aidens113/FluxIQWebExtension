@@ -118,3 +118,41 @@ test("a recording's own record output is unchanged but for the records path the 
 test("a value that is not an object is handed on for the dispatch's parse to refuse", () => {
   assert.equal(webAutomationReconciledRecordOutput("not an object", request), "not an object");
 });
+
+
+const orderedRequest: WebAutomationExtractListRequest = {
+  item: "li.entry",
+  fields: {
+    alpha: { kind: "text", selector: ".alpha", required: false },
+    beta: { kind: "text", selector: ".beta" },
+    gamma: { kind: "link", selector: "a.gamma" }
+  }
+};
+const orderedAuthored = {
+  datasetId: "entries", label: "Entries", writeMode: "replace",
+  process: { dedupe: { by: ["gamma"] }, columns: ["gamma", "alpha", "beta"], minRows: 0 },
+  schema: { schemaVersion: "0.1", fields: [
+    { id: "gamma", label: "Destination", valueType: "string", required: false },
+    { id: "alpha", label: "Optional text", valueType: "number", required: true },
+    { id: "beta", label: "Other text", valueType: "number", required: true }
+  ] }
+};
+
+test("reconciliation preserves authored column order and extraction-derived cell contracts", () => {
+  const output = webAutomationReconciledRecordOutput(orderedAuthored, orderedRequest) as typeof orderedAuthored;
+  assert.deepEqual(output.schema.fields.map((field) => field.id), ["gamma", "alpha", "beta"]);
+  assert.deepEqual(output.schema.fields.map((field) => field.label), ["Destination", "Optional text", "Other text"]);
+  assert.deepEqual(output.schema.fields.map((field) => field.valueType), ["url", "string", "string"]);
+  assert.deepEqual(output.schema.fields.map((field) => field.required), [true, false, true]);
+  assert.deepEqual(output.process, orderedAuthored.process);
+  assert.equal(output.writeMode, "replace");
+});
+
+test("missing or unusable authored ordering retains the derived field order", () => {
+  for (const schema of [undefined, { fields: [] }, { fields: [{ id: "unknown", label: "Unknown" }] },
+    { fields: [{ id: "gamma", label: "First" }, { id: "gamma", label: "Second" }] }]) {
+    const authoredValue = { datasetId: "entries", label: "Entries", ...(schema === undefined ? {} : { schema }) };
+    const output = webAutomationReconciledRecordOutput(authoredValue, orderedRequest) as { schema: { fields: { id: string }[] } };
+    assert.deepEqual(output.schema.fields.map((field) => field.id), ["alpha", "beta", "gamma"]);
+  }
+});

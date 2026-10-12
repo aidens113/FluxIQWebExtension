@@ -16,7 +16,7 @@
 import { webAutomationExtractionConditionSeenValue, type WebAutomationExtractionConditionSeen } from "./seen-values";
 import { isWebAutomationExtractFieldKey } from "./field-key";
 import { webAutomationExtractionOrderReportValue, type WebAutomationExtractionOrderReport } from "./order-report";
-import { webAutomationExtractionRejectedSamplesAloneValue, webAutomationExtractionRejectedSamplesValue, type WebAutomationExtractionRejectedRow } from "./rejected-samples";
+import { webAutomationExtractionRejectedSamplesAloneValue, webAutomationExtractionRejectedSamplesValue, webAutomationExtractionRejectedObservationsValue, type WebAutomationExtractionRejectedRow, type WebAutomationExtractionRejectionObservation } from "./rejected-samples";
 
 export type WebAutomationExtractionSummary = {
   /** Records returned, across every page read. */
@@ -75,6 +75,7 @@ export type WebAutomationExtractionSummary = {
   rejectedSamples?: WebAutomationExtractionRejectedRow[][] | undefined;
   /** Per condition, how many leading rows of its `rejectedSamples` list it removed alone (`./rejected-samples.ts`); beside `rejectedSamples` only. */
   rejectedSamplesAlone?: number[] | undefined;
+  rejectedObservations?: Array<Array<WebAutomationExtractionRejectionObservation | null>> | undefined;
   /** Why a read that pages stopped paging, in one closed word, or absent for a read that did not page. */
   paginationStop?: WebAutomationExtractionPaginationStop | undefined;
   /** What `dedupe` and `sort` did, or absent for a read whose request named neither. */
@@ -325,6 +326,8 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
     ? undefined
     : webAutomationExtractionRejectedSamplesAloneValue(summary.rejectedSamplesAlone, rejectedSamples);
   if (summary.rejectedSamplesAlone !== undefined && rejectedSamplesAlone === undefined) return undefined;
+  const rejectedObservations = summary.rejectedObservations === undefined || rejectedSamples === undefined ? undefined : webAutomationExtractionRejectedObservationsValue(summary.rejectedObservations, rejectedSamples);
+  if (summary.rejectedObservations !== undefined && rejectedObservations === undefined) return undefined;
   // Optional, so an extension build that predates it still sends a summary that
   // arrives whole; a word this side does not know drops the summary rather than
   // arriving as a half-understood fact.
@@ -375,6 +378,7 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
     ...(conditions !== undefined ? { conditions } : {}),
     ...(rejectedSamples !== undefined ? { rejectedSamples } : {}),
     ...(rejectedSamplesAlone !== undefined ? { rejectedSamplesAlone } : {}),
+    ...(rejectedObservations !== undefined ? { rejectedObservations } : {}),
     ...(paginationStop !== undefined ? { paginationStop } : {}),
     ...(order !== undefined ? { order } : {}),
     ...(earlierPageRepeats !== undefined ? { earlierPageRepeats } : {})

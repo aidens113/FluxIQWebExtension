@@ -161,3 +161,31 @@ test("an excluded column is not a helper: it stays in the read and the schema, a
     ["name", null], ["price", null], ["rating", null], ["url", null], ["secret", "exclude"]
   ]);
 });
+
+
+test("actual dispatch keeps authored schema order before required ordering helpers and exclusions", () => {
+  const extractList = {
+    item: "li.entry",
+    fields: {
+      alpha: { kind: "text", selector: ".alpha", required: false },
+      beta: { kind: "text", selector: ".beta" },
+      gamma: { kind: "link", selector: "a.gamma" },
+      delta: { kind: "text", selector: ".delta", required: false },
+      epsilon: { kind: "text", selector: ".epsilon", handling: "exclude" }
+    },
+    where: [{ field: "delta", is: "present" }],
+    sort: [{ field: "beta", order: "asc" }]
+  };
+  const recordOutput = { datasetId: "entries", label: "Entries", writeMode: "append", schema: { schemaVersion: "0.1", fields: [
+    { id: "gamma", label: "Destination", valueType: "url", required: true },
+    { id: "alpha", label: "Optional text", valueType: "string", required: false }
+  ] } };
+  const sent = dispatched({ extractList, recordOutput });
+  assert.deepEqual((sent.recordOutput.schema as { fields: { id: string }[] }).fields.map((field) => field.id), ["gamma", "alpha", "beta", "epsilon"]);
+  assert.deepEqual(Object.keys(sent.extractList.fields), ["alpha", "beta", "gamma", "epsilon"]);
+  assert.deepEqual(sent.extractList.where, [{ read: { kind: "text", selector: ".delta" }, is: "present" }]);
+  assert.deepEqual((sent.recordOutput.process as JsonObject).sort, [{ field: "beta", order: "asc" }]);
+  const excluded = (sent.recordOutput.schema as { fields: { id: string; handling?: string }[] }).fields.find((field) => field.id === "epsilon");
+  assert.equal(excluded?.handling, "exclude");
+  assert.deepEqual(storedColumns(sent.recordOutput, { alpha: "a", beta: "b", gamma: "https://example.invalid/gamma", epsilon: "not retained" }), ["gamma", "alpha", "beta"]);
+});

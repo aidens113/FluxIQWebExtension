@@ -273,6 +273,21 @@ remain bounded prose on the action result rather than new summary fields.
 
 ### Partial and wide list answers
 
+A valid authored record schema determines column presentation order while
+extraction determines field types, required flags and exclusion handling.
+Reconciliation preserves that order and the authored labels; retained helpers
+and excluded fields follow in their existing derived order. Missing or unusable
+authored order retains the existing field-map fallback.
+
+Requested rejection samples may carry aligned passive observations of the
+value each rejecting condition actually read. Capture happens once at evaluation,
+including present empty text, absent successful reads and unavailable legacy
+evidence. Privacy screening marks withheld values explicitly. Original condition
+indices and read-pass/item ordinals survive alone-row slicing, sparse groups and
+continuation without adding selectors or executable bindings. Equal row labels
+with conflicting observations remain distinct. These observations do not change
+filtering or establish eligibility; the result judge still assesses the task.
+
 List extraction preserves useful work instead of converting every local fault
 into an empty answer. A field is optional unless its structured specification
 explicitly sets `required: true`; an unread optional field is `null`. An item

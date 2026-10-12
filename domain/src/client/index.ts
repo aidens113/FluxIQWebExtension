@@ -1,4 +1,5 @@
 export * from "../constants";
+export { webAutomationExtractionRejectedObservationsValue, type WebAutomationExtractionRejectionObservation } from "../actions/extraction";
 export * from "../actions/types";
 export * from "../actions/schemas";
 export * from "../actions/capabilities";

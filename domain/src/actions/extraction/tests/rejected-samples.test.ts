@@ -15,6 +15,22 @@ const SUMMARY = {
   conditions: { applied: 56, kept: 8, rejected: [13, 20], unfiltered: false }
 };
 
+test("rejection observations retain absent, empty and unavailable states in positional alignment", () => {
+  const rejectedSamples = [[{ name: "Record A" }, { name: "Record B" }], [{ name: "Record C" }]];
+  const rejectedObservations = [[
+    { conditionIndex: 0, state: "absent", source: "read", readKind: "attribute", page: 1, item: 1 },
+    { conditionIndex: 0, state: "present", value: "", source: "read", readKind: "attribute", page: 1, item: 2 }
+  ], [null]];
+  assert.deepEqual(webAutomationExtractionSummaryValue({ ...SUMMARY, rejectedSamples, rejectedObservations })?.rejectedObservations, rejectedObservations);
+  for (const invalid of [[], [[null], [null]], [[{ ...rejectedObservations[0]![0], value: "invented" }, null], [null]], [[{ ...rejectedObservations[0]![0], selector: ".private" }, null], [null]], [[{ ...rejectedObservations[0]![0], readKind: "arbitrary" }, null], [null]], [[{ ...rejectedObservations[0]![0], page: 0 }, null], [null]], [[{ ...rejectedObservations[0]![0], conditionIndex: 1 }, null], [null]], [[{ ...rejectedObservations[0]![0], state: "withheld", value: "secret" }, null], [null]]]) {
+    assert.equal(webAutomationExtractionSummaryValue({ ...SUMMARY, rejectedSamples, rejectedObservations: invalid }), undefined);
+  }
+  for (const state of ["unavailable", "withheld"]) {
+    const companion = [[{ ...rejectedObservations[0]![0], state }, null], [null]];
+    assert.deepEqual(webAutomationExtractionSummaryValue({ ...SUMMARY, rejectedSamples, rejectedObservations: companion })?.rejectedObservations, companion);
+  }
+});
+
 test("samples beside the counts they illustrate arrive, one list per condition", () => {
   const rejectedSamples = [[{ name: "Sponsored earbuds", price: "$20" }], [{ name: "Pro Earbuds Wireless Charging Case", price: null }]];
   assert.deepEqual(webAutomationExtractionSummaryValue({ ...SUMMARY, rejectedSamples })?.rejectedSamples, rejectedSamples);

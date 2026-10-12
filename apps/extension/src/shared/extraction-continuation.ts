@@ -1,3 +1,4 @@
+import { webAutomationExtractionRejectedObservationsValue, type WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
 // How a paginated `web.dom.extract_list` read outlives the document it began
 // in: the checkpoint the page hands the background worker before it follows a
 // pagination control, and the continuation the worker hands the next document.
@@ -100,6 +101,7 @@ export type ExtractionCheckpoint = {
    * them, whose rows then go on as rows another condition also rejected.
    */
   rejectedSamplesAlone?: number[] | undefined;
+  rejectedObservations?: Array<Array<WebAutomationExtractionRejectionObservation | null>> | undefined;
   /**
    * What the read has spent on pages the server refused: the reloads it made,
    * and the refusals as too fast (429) it met, an unexplained empty page
@@ -178,7 +180,7 @@ export type ExtractionCheckpointMessage = {
  */
 export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint | undefined {
   if (typeof value !== "object" || value === null) return undefined;
-  const { records, pagesRead, scrolls, missingFields, filtered, itemsSeen, conditions, rejectedSamples, rejectedSamplesAlone, refusals, earlierPageRepeats } = value as Record<string, unknown>;
+  const { records, pagesRead, scrolls, missingFields, filtered, itemsSeen, conditions, rejectedSamples, rejectedSamplesAlone, rejectedObservations, refusals, earlierPageRepeats } = value as Record<string, unknown>;
   if (!Array.isArray(records) || !records.every(isRecord)) return undefined;
   if (!isCount(pagesRead) || !isCount(scrolls)) return undefined;
   if (!Array.isArray(missingFields) || !missingFields.every((name) => typeof name === "string")) return undefined;
@@ -201,6 +203,9 @@ export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint |
   if (rejectedSamples !== undefined && !(Array.isArray(rejectedSamples) && rejectedSamples.every((rows) => Array.isArray(rows) && rows.every(isRecord)))) return undefined;
   // How many of each list lead as rows its condition removed alone: only beside the lists, one count per list, never more than the list holds.
   if (rejectedSamplesAlone !== undefined && !aloneLeadsValid(rejectedSamplesAlone, rejectedSamples)) return undefined;
+  const observations = rejectedObservations === undefined || !Array.isArray(rejectedSamples) ? undefined : webAutomationExtractionRejectedObservationsValue(rejectedObservations, rejectedSamples);
+  if (rejectedObservations !== undefined && observations === undefined) return undefined;
+  if (observations !== undefined && (conditionCounts === undefined || observations.length !== conditionCounts.rejected.length)) return undefined;
   return {
     records: records.map((record) => ({ ...record })),
     pagesRead,
@@ -211,6 +216,7 @@ export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint |
     ...(conditionCounts === undefined ? {} : { conditions: conditionCounts }),
     ...(rejectedSamples === undefined ? {} : { rejectedSamples: (rejectedSamples as ExtractionCheckpointRecord[][]).map((rows) => rows.map((row) => ({ ...row }))) }),
     ...(rejectedSamplesAlone === undefined ? {} : { rejectedSamplesAlone: [...rejectedSamplesAlone as number[]] }),
+    ...(observations === undefined ? {} : { rejectedObservations: observations }),
     ...(refusalCounts === undefined ? {} : { refusals: refusalCounts }),
     ...(earlierPageRepeats === undefined ? {} : { earlierPageRepeats })
   };
