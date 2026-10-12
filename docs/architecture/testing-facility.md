@@ -1364,7 +1364,12 @@ creation only when both hold, and refuses at stage `before_provider` otherwise
   with `capabilities.candidateTrial` (`lab.candidate_verification_unavailable`);
 - that Core was started with the candidate start hook (decision D1), so every
   trial starts from the seeded fixture rather than from exploration's or an
-  earlier trial's cart (`capabilities.candidateTrial.startReset`;
+  earlier trial's cart. Since t462 the model must first put the site back
+  itself: Core refuses a trial until the build's own lasting acts are undone
+  through the site's controls. The hook then resets the fixture after that,
+  so a Lab trial starts from the seed either way. Exploration after a trial
+  still continues on what the trial left
+  (`capabilities.candidateTrial.startReset`;
   `lab.candidate_start_hook_unset`).
 
 The Lab command asks before anything starts, from the linked Core's readiness

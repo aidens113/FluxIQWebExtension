@@ -80,6 +80,7 @@ import { runWebDescribeElement, runWebFindOnPage } from "./page-find";
 import { publishedWebLlmPage, webLlmPageRetentionKey, webLlmResultRetentionKey, type WebLlmPublishedPage } from "./page-view";
 import { present } from "./present";
 import { observeWebLlmResult } from "./result-observation";
+import { observeWebStartState } from "./start-state";
 import { webFailureRepairParameters } from "./repairable-parameters";
 import { webLlmTargetsUnchanged } from "./target";
 import { canonicalWebLlmTargetHandle } from "./handle-spelling";
@@ -152,6 +153,11 @@ export type WebAutomationLlmEvidenceRuntime = {
   observeResult?(input: Pick<WebLlmEvidenceToolRequest, "projectId" | "flowId" | "callId" | "signal"> & {
     permission: AutomationStudioActionPermissionCheck;
   }): Promise<JsonObject | undefined>;
+  /** Where the page stands against where a build began (t462, `./start-state/`): passive, the same capture as `observeResult`. */
+  startState?(input: Pick<WebLlmEvidenceToolRequest, "projectId" | "flowId" | "callId" | "signal"> & {
+    start?: JsonObject;
+    permission: AutomationStudioActionPermissionCheck;
+  }): Promise<{ state: JsonObject; differs: string[] } | undefined>;
   /** The keys Core refuses in evidence from this domain. Core carries no browser vocabulary of its own, so the domain that knows what these words mean declares them and Core enforces the declaration. Required here, because the producer always knows: an evidence runtime that declared nothing would silently deny nothing. */
   deniedEvidenceKeys: readonly string[];
   observedStateKeys: readonly string[];
@@ -356,6 +362,11 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
     observeResult: (input) => observeWebLlmResult(
       (request) => captureEvidence(gateway, selectSession(gateway.eligibleSessionIds()),
         { ...request, toolId: "web.result_observation", value: {} }, request.signal, undefined, { includeHidden: true }), input),
+    // The page a build began on and what differs from it now (t462): the same
+    // passive capture, so nothing is restamped, retained or shown.
+    startState: (input) => observeWebStartState(
+      (request) => captureEvidence(gateway, selectSession(gateway.eligibleSessionIds()),
+        { ...request, toolId: "web.start_state", value: {} }, request.signal, undefined, { includeHidden: true }), input),
     // Declared once, in `./denied-keys.ts`, because what a reading node read
     // is held to the same list before it is ever returned.
     deniedEvidenceKeys: WEB_LLM_DENIED_EVIDENCE_KEYS,
