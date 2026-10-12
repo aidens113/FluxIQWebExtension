@@ -426,7 +426,7 @@ export async function executeRecordedFlowRun(
   if (!runId) throw new RunnerFailure("runtime.behavior", "Core did not return a run id for the approved Flow");
   input.onRunIdentified?.(runId);
   let sessionStatus = "unknown";
-  const settlement = liveRunSettlement(input.llmExecution);
+  const settlement = { ...liveRunSettlement(input.llmExecution), ...terminalWait };
   try {
     const session = input.llmExecution
       ? await runLiveFlow(control, { projectId: input.projectId, flowId: input.flowId, inputs, llmExecution: input.llmExecution, newRunId: runId }, { ...bounds, timeoutMs: bounds.timeoutMs ?? LIVE_RUN_REQUEST_MS })
@@ -466,10 +466,10 @@ export async function executeRecordedFlowRun(
   // come back without its recovery record, it is read until the record is in,
   // rather than taken as finished while Core is still repairing it -- and so is
   // one whose wrong answer Core is still re-authoring or re-running.
-  const owed = input.llmExecution ? pendingWork(detail, settlement) : undefined;
-  if (owed === "recovery" || owed === "repair") {
-    const early = new RunnerFailure("runtime.behavior", "Core answered the live run before its detail was terminal");
-    const settled = await awaitTerminalRunDetail((timeoutMs) => readRunDetail(control, input.projectId, runId, { timeoutMs }, input.actionTypes ?? new Map()), early, { timeoutMs: LIVE_LLM_RUN_WAIT_MS, intervalMs: READ_BACK_POLL_MS, ...settlement, ...terminalWait });
+  const owed = pendingWork(detail, settlement);
+  if (owed === "recovery" || owed === "repair" || (terminalWait.awaitVerdict && owed === "verdict")) {
+    const early = new RunnerFailure("runtime.behavior", "Core answered the run before its detail was terminal");
+    const settled = await awaitTerminalRunDetail((timeoutMs) => readRunDetail(control, input.projectId, runId, { timeoutMs }, input.actionTypes ?? new Map()), early, { timeoutMs: input.llmExecution ? LIVE_LLM_RUN_WAIT_MS : terminalDetailWaitMs(input.actionTypes?.size), intervalMs: READ_BACK_POLL_MS, ...settlement, ...terminalWait });
     detail = settled.detail;
     unsettled = settled.unsettled;
   }
