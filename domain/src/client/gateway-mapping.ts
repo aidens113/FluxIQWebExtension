@@ -303,7 +303,9 @@ function elementFingerprintSources(target: JsonObject, parameters: JsonObject): 
  *
  * `clearedLayers` is copied the same way (`actions/cleared-layers.ts`): each
  * layer the interference clearing closed as two closed words, its kind and the
- * dismissal pressed, and nothing a producer put beside them.
+ * dismissal pressed, with the way out pressed when the client described it
+ * (t470, kept on the domain's server half and never handed to Core), and
+ * nothing else a producer put beside them.
  *
  * `textPresence` and `visibleNear` are copied the same way
  * (`actions/text-sighting.ts`): a known presence and up to three bounded

@@ -107,7 +107,7 @@ test.describe("modal-flows", () => {
     const reply = await harness.runAction({ commandId: "click-under-banner", actionType: "web.dom.click", selector: PUBLISH });
 
     expect(reply.status, `${reply.message}`).toBe("succeeded");
-    expect(reply.clearedLayers).toEqual([{ kind: "consent", control: "Necessary only" }]);
+    expect(reply.clearedLayers).toEqual([{ kind: "consent", control: "Necessary only", wayOut: { url: expect.any(String), element: expect.objectContaining({ selector: expect.any(String) }) } }]);
     expect((await harness.finalState()).state).toMatchObject({ consent: "essential-only", publishCount: 1, invites: [], inviteCancellations: 0 });
   });
 

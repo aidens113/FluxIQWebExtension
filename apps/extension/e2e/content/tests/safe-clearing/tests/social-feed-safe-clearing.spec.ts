@@ -73,8 +73,12 @@ test("a rate-limit notice offering OK and Try again is closed by its OK; the nod
   expect(actualOf(retried)).toMatch(/closing 1 dialog the page had put in the way/u);
   expect(after.requests["rq_7a95b3"]).toBe("confirmed");
   expect(after.rateLimited).toBe(1);
-  // What the clearing pressed is said on the result, in closed words only.
-  expect(retried.clearedLayers).toEqual([{ kind: "rate_limit", control: "OK" }]);
+  // What the clearing pressed is said on the result in closed words, and the OK it pressed is described as a capture
+  // describes an element, for the domain to name by a handle in the trial's feedback (t470).
+  expect(retried.clearedLayers).toEqual([{ kind: "rate_limit", control: "OK", wayOut: {
+    url: expect.stringContaining("/friends/requests/"),
+    element: expect.objectContaining({ selector: expect.any(String), role: "button", visibleText: "OK" })
+  } }]);
 });
 
 /** The prompt's footer's first button, as the matrix Flow addresses it, without the attribute the page never keeps. */

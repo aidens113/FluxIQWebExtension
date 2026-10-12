@@ -159,3 +159,15 @@ test("a candidate-mode Core gets the start hook on this run's own Scenario Lab r
     assert.equal("FLUXIQ_CANDIDATE_START_TOKEN" in legacy, false);
   }
 });
+
+// t470: a live (paid) candidate build's trials start from the model's own reset, so its Core gets no start hook, inherited
+// or not; any other candidate-mode Core keeps the hook.
+test("a live candidate build's Core gets no start hook, inherited or not, and every other candidate Core keeps it", () => {
+  const inherited = { FLUXIQ_CANDIDATE_START_URL: "http://127.0.0.1:1/elsewhere", FLUXIQ_CANDIDATE_START_TOKEN: "someone-elses-token" };
+  const live = buildFluxIQEnvironment(allocation, { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core", candidateTrialFixtureReset: false }, inherited, ["--authoring-mode", "candidate"]);
+  assert.equal(live.FLUXIQ_AUTHORING_MODE, "candidate");
+  assert.equal("FLUXIQ_CANDIDATE_START_URL" in live, false);
+  assert.equal("FLUXIQ_CANDIDATE_START_TOKEN" in live, false);
+  const kept = buildFluxIQEnvironment(allocation, { repositoryRoot: "C:/extension", fluxiqRepositoryRoot: "C:/core", candidateTrialFixtureReset: true }, inherited, ["--authoring-mode", "candidate"]);
+  assert.equal(kept.FLUXIQ_CANDIDATE_START_URL, `http://127.0.0.1:${allocation.scenarioPort}/__control/reset`);
+});

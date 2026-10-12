@@ -81,6 +81,8 @@ import { publishedWebLlmPage, webLlmPageRetentionKey, webLlmResultRetentionKey, 
 import { present } from "./present";
 import { observeWebLlmResult } from "./result-observation";
 import { observeWebStartState } from "./start-state";
+import { webLlmClearedControlHandles, type WebLlmClearedControlHandlesInput } from "./way-out-handles";
+import { createWebAutomationClearedWayOuts, webAutomationClearedWayOutsOf, type WebAutomationClearedWayOuts } from "../../cleared-way-outs";
 import { webFailureRepairParameters } from "./repairable-parameters";
 import { webLlmTargetsUnchanged } from "./target";
 import { canonicalWebLlmTargetHandle } from "./handle-spelling";
@@ -153,6 +155,8 @@ export type WebAutomationLlmEvidenceRuntime = {
   observeResult?(input: Pick<WebLlmEvidenceToolRequest, "projectId" | "flowId" | "callId" | "signal"> & {
     permission: AutomationStudioActionPermissionCheck;
   }): Promise<JsonObject | undefined>;
+  /** The handle each way out a trial's run pressed is named by in this Flow (t470, `./way-out-handles/`). */
+  clearedControlHandles?(input: WebLlmClearedControlHandlesInput): Promise<Record<string, string>>;
   /** Where the page stands against where a build began (t462, `./start-state/`): passive, the same capture as `observeResult`. */
   startState?(input: Pick<WebLlmEvidenceToolRequest, "projectId" | "flowId" | "callId" | "signal"> & {
     start?: JsonObject;
@@ -288,7 +292,7 @@ export type WebAutomationLlmEvidenceRuntime = {
  */
 const RETAINED_SHOWN_PACKETS = 24;
 
-export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGateway): WebAutomationLlmEvidenceRuntime {
+export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGateway, clearedWayOuts: WebAutomationClearedWayOuts = createWebAutomationClearedWayOuts()): WebAutomationLlmEvidenceRuntime {
   // Every command a build sends goes out through this gateway, so a click or a
   // navigation the model runs carries the same room to wait out a robot check
   // that clears by itself as the Flow's own (`actions/check-wait.ts`).
@@ -362,6 +366,7 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
     observeResult: (input) => observeWebLlmResult(
       (request) => captureEvidence(gateway, selectSession(gateway.eligibleSessionIds()),
         { ...request, toolId: "web.result_observation", value: {} }, request.signal, undefined, { includeHidden: true }), input),
+    clearedControlHandles: webLlmClearedControlHandles({ wayOuts: clearedWayOuts, stable: (scope, binding) => stableHandles.restamp(scope, binding), remember: (scope, binding) => targetPackets.rememberLook(scope, binding) }),
     // The page a build began on and what differs from it now (t462): the same
     // passive capture, so nothing is restamped, retained or shown.
     startState: (input) => observeWebStartState(
@@ -700,7 +705,7 @@ export function bindWebAutomationLlmEvidenceRuntime(fluxiq: FluxIQ): void {
     eligibleSessionIds: () => eligibleWebSessionIds(fluxiq),
     structureDetectionSessionIds: () => eligibleWebSessionIds(fluxiq, WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID),
     executeAction: (sessionId, command) => fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command),
-  }));
+  }, webAutomationClearedWayOutsOf(fluxiq)));
 }
 
 

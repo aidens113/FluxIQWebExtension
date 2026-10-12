@@ -30,3 +30,12 @@ test("at most the bound travels", () => {
   const many = Array.from({ length: WEB_AUTOMATION_CLEARED_LAYERS_MAX + 5 }, () => ({ kind: "dialog", control: "Close" }));
   assert.equal(webAutomationClearedLayersValue(many)?.length, WEB_AUTOMATION_CLEARED_LAYERS_MAX);
 });
+
+// t470: the way out the clearing pressed rides beside the two words as far as this domain's server half.
+test("a way out travels as a web page's address and one bounded descriptor, and is dropped otherwise", () => {
+  const wayOut = { url: "https://social.test/requests", element: { tagName: "button", selector: "#ok", visibleText: "OK" } };
+  assert.deepEqual(webAutomationClearedLayersValue([{ kind: "rate_limit", control: "OK", wayOut }]), [{ kind: "rate_limit", control: "OK", wayOut }]);
+  for (const bad of [{ url: "file:///c:/x", element: { tagName: "button" } }, { url: "https://social.test/", element: "button" }, { url: "https://social.test/", element: { text: "x".repeat(20_000) } }, { url: 4, element: {} }, null]) {
+    assert.deepEqual(webAutomationClearedLayersValue([{ kind: "rate_limit", control: "OK", wayOut: bad }]), [{ kind: "rate_limit", control: "OK" }], JSON.stringify(bad)?.slice(0, 60));
+  }
+});

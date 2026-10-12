@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../../../failure.js";
-import { assertCreatedFlowVerificationReady, createdFlowVerificationReady, labCandidateTrialReadiness, readCreatedFlowCandidateTrialReadiness, type CreatedFlowCandidateTrialReadiness } from "../readiness.js";
+import { assertCreatedFlowVerificationReady, createdFlowVerificationReady, labCandidateTrialFixtureReset, labCandidateTrialReadiness, readCreatedFlowCandidateTrialReadiness, type CreatedFlowCandidateTrialReadiness } from "../readiness.js";
 
 const refusedBeforeProvider = (mode: unknown, code = "lab.candidate_verification_unavailable") => (error: unknown) => error instanceof RunnerFailure && error.category === "facility.contract"
   && error.details?.code === code
@@ -10,12 +10,12 @@ const refusedBeforeProvider = (mode: unknown, code = "lab.candidate_verification
   && error.details?.providerInvocation === "not_attempted_by_this_entry"
   && error.details?.authoringMode === (typeof mode === "string" ? mode : "unrecognized");
 
-const HOOKED: CreatedFlowCandidateTrialReadiness = { trialRunner: true, startReset: true, source: "core" };
+const HOOKED: CreatedFlowCandidateTrialReadiness = { trialRunner: true, startReset: true, fixtureResetBetweenTrials: true, source: "core" };
 
 test("a legacy-mode Core admits created-Flow qualification, whatever is said about candidate trials", () => {
   assert.doesNotThrow(() => assertCreatedFlowVerificationReady("legacy"));
   assert.equal(createdFlowVerificationReady("legacy"), true);
-  assert.equal(createdFlowVerificationReady("legacy", { trialRunner: false, startReset: false, source: "core" }), true);
+  assert.equal(createdFlowVerificationReady("legacy", { trialRunner: false, startReset: false, fixtureResetBetweenTrials: true, source: "core" }), true);
 });
 
 test("candidate mode admits only a Core with the trial runner and the start hook (t348)", () => {
@@ -26,29 +26,48 @@ test("candidate mode admits only a Core with the trial runner and the start hook
 
 test("candidate mode without the trial runner is refused before any provider call", () => {
   assert.throws(() => assertCreatedFlowVerificationReady("candidate"), refusedBeforeProvider("candidate"));
-  assert.throws(() => assertCreatedFlowVerificationReady("candidate", { trialRunner: false, startReset: true, source: "core" }), refusedBeforeProvider("candidate"));
+  assert.throws(() => assertCreatedFlowVerificationReady("candidate", { trialRunner: false, startReset: true, fixtureResetBetweenTrials: true, source: "core" }), refusedBeforeProvider("candidate"));
   assert.equal(createdFlowVerificationReady("candidate"), false);
 });
 
 test("candidate mode without the start hook is refused before any provider call, naming the hook (t348)", () => {
-  assert.throws(() => assertCreatedFlowVerificationReady("candidate", { trialRunner: true, startReset: false, source: "core" }), (error: unknown) => refusedBeforeProvider("candidate", "lab.candidate_start_hook_unset")(error)
+  assert.throws(() => assertCreatedFlowVerificationReady("candidate", { trialRunner: true, startReset: false, fixtureResetBetweenTrials: true, source: "core" }), (error: unknown) => refusedBeforeProvider("candidate", "lab.candidate_start_hook_unset")(error)
     && (error as RunnerFailure).details?.candidateTrial !== undefined && /start hook/u.test((error as Error).message));
-  assert.equal(createdFlowVerificationReady("candidate", { trialRunner: true, startReset: false, source: "lab-plan" }), false);
+  assert.equal(createdFlowVerificationReady("candidate", { trialRunner: true, startReset: false, fixtureResetBetweenTrials: true, source: "lab-plan" }), false);
 });
 
 test("readiness cannot be changed by a caller or model verdict: only Core's exact modes, with Core's trial answer, admit", () => {
   for (const ignored of [undefined, true, "Legacy", " legacy", "Candidate", { ready: true, verified: true }, { consumed: true }]) {
     assert.throws(() => Reflect.apply(assertCreatedFlowVerificationReady, null, [ignored, HOOKED]), refusedBeforeProvider(ignored));
   }
-  for (const verdict of [{ trialRunner: "yes", startReset: true }, { trialRunner: true, startReset: "true" }, { ready: true }, null]) {
+  for (const verdict of [{ trialRunner: "yes", startReset: true }, { trialRunner: true, startReset: "true" }, { trialRunner: true }, { trialRunner: true, startReset: false, fixtureResetBetweenTrials: "false" }, { ready: true }, null]) {
     assert.equal(Reflect.apply(createdFlowVerificationReady, null, ["candidate", verdict]), false);
   }
 });
 
 test("before Core starts, the Lab says the linked Core has the trial runner and only a Core it starts gets the hook", () => {
-  assert.deepEqual(labCandidateTrialReadiness({ startsCore: true }), { trialRunner: true, startReset: true, source: "lab-plan" });
-  assert.deepEqual(labCandidateTrialReadiness({ startsCore: false }), { trialRunner: true, startReset: false, source: "lab-plan" });
-  assert.throws(() => assertCreatedFlowVerificationReady("candidate", labCandidateTrialReadiness({ startsCore: false })), refusedBeforeProvider("candidate", "lab.candidate_start_hook_unset"));
+  assert.deepEqual(labCandidateTrialReadiness({ startsCore: true, fixtureResetBetweenTrials: true }), { trialRunner: true, startReset: true, fixtureResetBetweenTrials: true, source: "lab-plan" });
+  assert.deepEqual(labCandidateTrialReadiness({ startsCore: false, fixtureResetBetweenTrials: true }), { trialRunner: true, startReset: false, fixtureResetBetweenTrials: true, source: "lab-plan" });
+  assert.throws(() => assertCreatedFlowVerificationReady("candidate", labCandidateTrialReadiness({ startsCore: false, fixtureResetBetweenTrials: true })), refusedBeforeProvider("candidate", "lab.candidate_start_hook_unset"));
+});
+
+// t470: since t462 the model resets the site before every trial, and a fixture reset between trials hid whether it
+// worked. A live (paid) build runs with no start hook, is admitted only by a Core with none, and its receipt says so.
+test("a live build's trials start from the model's own reset: no hook, admitted only by a Core with none, and the receipt says so", () => {
+  assert.equal(labCandidateTrialFixtureReset({ live: true }), false);
+  assert.equal(labCandidateTrialFixtureReset({ live: false }), true);
+  for (const startsCore of [true, false]) {
+    const planned = labCandidateTrialReadiness({ startsCore, fixtureResetBetweenTrials: false });
+    assert.deepEqual(planned, { trialRunner: true, startReset: false, fixtureResetBetweenTrials: false, source: "lab-plan" });
+    assert.doesNotThrow(() => assertCreatedFlowVerificationReady("candidate", planned));
+  }
+  const unhooked: CreatedFlowCandidateTrialReadiness = { trialRunner: true, startReset: false, fixtureResetBetweenTrials: false, source: "core" };
+  assert.equal(createdFlowVerificationReady("candidate", unhooked), true);
+  // A Core that would still reset between trials makes the receipt untrue, and is refused naming the hook.
+  assert.throws(() => assertCreatedFlowVerificationReady("candidate", { ...unhooked, startReset: true }), (error: unknown) => refusedBeforeProvider("candidate", "lab.candidate_start_hook_set")(error)
+    && ((error as RunnerFailure).details?.candidateTrial as { fixtureResetBetweenTrials?: unknown } | undefined)?.fixtureResetBetweenTrials === false);
+  // Without the trial runner it is refused as before.
+  assert.throws(() => assertCreatedFlowVerificationReady("candidate", { ...unhooked, trialRunner: false }), refusedBeforeProvider("candidate"));
 });
 
 test("once Core runs, its own generation readiness says whether it has the trial runner and the hook", async () => {
@@ -58,11 +77,12 @@ test("once Core runs, its own generation readiness says whether it has the trial
   };
   const reads: Array<{ endpoint: string; payload: Record<string, unknown>; domainId: string | undefined }> = [];
   const control = (answer: unknown) => ({ automationStudioCall: async (endpoint: string, payload: Record<string, unknown>, _bounds?: unknown, domainId?: string) => { reads.push({ endpoint, payload, domainId }); return answer; } });
-  assert.deepEqual(await readCreatedFlowCandidateTrialReadiness(control({ readiness: readiness(true) }), "web-automation"), { trialRunner: true, startReset: true, source: "core" });
-  assert.deepEqual(await readCreatedFlowCandidateTrialReadiness(control({ readiness: readiness(false) }), "web-automation"), { trialRunner: true, startReset: false, source: "core" });
+  assert.deepEqual(await readCreatedFlowCandidateTrialReadiness(control({ readiness: readiness(true) }), "web-automation"), { trialRunner: true, startReset: true, fixtureResetBetweenTrials: true, source: "core" });
+  assert.deepEqual(await readCreatedFlowCandidateTrialReadiness(control({ readiness: readiness(false) }), "web-automation"), { trialRunner: true, startReset: false, fixtureResetBetweenTrials: true, source: "core" });
+  assert.deepEqual(await readCreatedFlowCandidateTrialReadiness(control({ readiness: readiness(false) }), "web-automation", {}, false), { trialRunner: true, startReset: false, fixtureResetBetweenTrials: false, source: "core" });
   // A Core older than the trial runner, or any answer Core's own reader refuses, has no trial runner.
   for (const answer of [{ readiness: readiness(undefined) }, { readiness: { ...readiness(true), extra: true } }, { readiness: null }, null, "ready"]) {
-    assert.deepEqual(await readCreatedFlowCandidateTrialReadiness(control(answer), "web-automation"), { trialRunner: false, startReset: false, source: "core" });
+    assert.deepEqual(await readCreatedFlowCandidateTrialReadiness(control(answer), "web-automation"), { trialRunner: false, startReset: false, fixtureResetBetweenTrials: true, source: "core" });
   }
   assert.deepEqual(reads[0], { endpoint: "get-flow-bootstrap-generation-readiness", payload: {}, domainId: "web-automation" });
 });

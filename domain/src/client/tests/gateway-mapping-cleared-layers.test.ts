@@ -32,3 +32,9 @@ test("the payload copies the two closed words alone", () => {
   const extra = [{ kind: "dialog", control: "No thanks", label: "No thanks, I would rather pay full price" }] as unknown as WebAutomationActionResult["clearedLayers"];
   assert.deepEqual(webAutomationActionResultPayload(clicked({ clearedLayers: extra })).clearedLayers, [{ kind: "dialog", control: "No thanks" }]);
 });
+
+// t470: the way out the clearing pressed crosses the gateway to the domain's server half.
+test("a cleared layer's way out crosses the gateway with it", () => {
+  const wayOut = { url: "https://social.test/requests", element: { tagName: "div", selector: "#ok", role: "button", visibleText: "OK" } };
+  assert.deepEqual(webAutomationActionResultPayload(clicked({ clearedLayers: [{ kind: "rate_limit", control: "OK", wayOut }] })).clearedLayers, [{ kind: "rate_limit", control: "OK", wayOut }]);
+});
