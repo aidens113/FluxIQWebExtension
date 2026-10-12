@@ -129,7 +129,7 @@ const PLUS: WebAutomationExtractListRequest = {
 
 const START: ExtractionCheckpoint = { records: [], pagesRead: 0, scrolls: 0, missingFields: [], itemsSeen: 0 };
 
-test("a condition with its own read keeps the first value it read on an item it held of, cut to sixty characters; a column's condition keeps none", async () => {
+test("each condition keeps the first value it tested on an item it held of, whole, whether it reads for itself or names a column", async () => {
   const page = fakePage([
     { name: "No badge", price: "$10" },
     { name: "Dear", price: "$99", label: "Brightaisle Plus" },
@@ -140,14 +140,15 @@ test("a condition with its own read keeps the first value it read on an item it 
     assert.deepEqual(outcome.records.map((record) => record.name), ["Cheap"]);
     // Held on "Dear" (which the price then rejected), so that is the first; the
     // value on the row the read rejected for want of it is never a candidate.
-    assert.deepEqual(outcome.conditions?.seen, ["Brightaisle Plus", null]);
+    // The price condition names a column, and held first on "No badge".
+    assert.deepEqual(outcome.conditions?.seen, ["Brightaisle Plus", "$10"]);
   } finally {
     page.restore();
   }
   const long = fakePage([{ name: "A", price: "$1", label: "x".repeat(100) }]);
   try {
     // Whole: no character cut.
-    assert.deepEqual((await extractList(PLUS, { resume: START })).conditions?.seen, ["x".repeat(100), null]);
+    assert.deepEqual((await extractList(PLUS, { resume: START })).conditions?.seen, ["x".repeat(100), "$1"]);
   } finally {
     long.restore();
   }
@@ -158,17 +159,29 @@ test("the value is the whole read's first: the checkpoint carries it, and the ne
   const page = fakePage([{ name: "A", price: "$10", label: "Brightaisle Plus" }], [{ name: "B", price: "$10", label: "Later label" }]);
   try {
     await extractList({ ...PLUS, paginate: { mode: "loadMore", control: ".more", maxPages: 2 } }, { resume: START, checkpoint: async (progress) => { taken.push(progress); } });
-    assert.deepEqual(taken[0]?.conditions?.seen, ["Brightaisle Plus", null]);
+    assert.deepEqual(taken[0]?.conditions?.seen, ["Brightaisle Plus", "$10"]);
   } finally {
     page.restore();
   }
   const next = fakePage([{ name: "C", price: "$10", label: "Later label" }]);
   try {
     const carried: ExtractionCheckpoint = { ...START, pagesRead: 1, conditions: taken[0]!.conditions! };
-    assert.deepEqual((await extractList(PLUS, { resume: carried })).conditions?.seen, ["Brightaisle Plus", null]);
+    assert.deepEqual((await extractList(PLUS, { resume: carried })).conditions?.seen, ["Brightaisle Plus", "$10"]);
     // A document that carried nothing reports its own.
-    assert.deepEqual((await extractList(PLUS, { resume: START })).conditions?.seen, ["Later label", null]);
+    assert.deepEqual((await extractList(PLUS, { resume: START })).conditions?.seen, ["Later label", "$10"]);
   } finally {
     next.restore();
   }
+});
+
+test("a condition over a column keeps the value it tested on an item it held of, and nothing from an item it rejected", () => {
+  // A column read only to filter by reaches no stored row, so this value is the
+  // one thing that can show a judge what the filter saw on the rows it kept.
+  const rejects = itemFilterFor({ item: ".card", fields: { name: ".name", badge: { kind: "attribute", attribute: "aria-label" } }, where: [{ field: "badge", is: "present" }] });
+  const seen: (string | null)[] = [null];
+  assert.deepEqual([...rejects!(ITEM, { name: "Article A", badge: null }, seen)], [0]);
+  assert.deepEqual(seen, [null]);
+  assert.deepEqual([...rejects!(ITEM, { name: "Article B", badge: "Verified" }, seen)], []);
+  assert.deepEqual([...rejects!(ITEM, { name: "Article C", badge: "Verified later" }, seen)], []);
+  assert.deepEqual(seen, ["Verified"]);
 });

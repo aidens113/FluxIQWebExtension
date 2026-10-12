@@ -35,6 +35,11 @@
 // paths refuse a candidate in another one. It is a gate, not a weight: no score
 // makes a different record the right one.
 //
+// `control-row.ts` finds the row a page drew as plain markup -- a cart line's
+// `<div>` -- by the control's own kind: the largest ancestor holding it and no
+// other control alike to it. `record.ts` names such a row by its title and
+// checks a replay's candidate against it (t463).
+//
 // `corroboration.ts` is the one test both acting paths put to Core's score
 // before acting on it: something that says which control this is -- the text,
 // the name, the label, the id or the test id -- must agree exactly, because a

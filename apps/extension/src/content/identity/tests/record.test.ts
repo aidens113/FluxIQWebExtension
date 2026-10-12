@@ -383,3 +383,104 @@ test("a control alone of its kind marks out no row, so a pass over it still fail
   // tell; the region around a lone control may hold any page's words.
   assert.equal(agreesWithRecordedRecord({ values: [SOAP] }, soap.save), false);
 });
+
+// t463: a control repeated on every line of a list the page drew as plain
+// `<div>`s is recorded by its line's title and resolved by it. Lane B round 8
+// (`run-mv5jnc62-01c3609a`) saved the dinner napkins' "Qty" select as nothing
+// but "Qty", and the trial refused it as ambiguous -- the cart holds one per
+// line. The select here is named by `aria-label` rather than its wrapping
+// `<label>` only because the label rule reads `Node` and `instanceof Element`,
+// which this stub DOM does not provide; the real page's `<label>` is exercised
+// by `e2e/content/tests/created-identity/tests/row-bound-control.spec.ts`.
+
+const NAPKINS = "ValueRidge Everyday Dinner Napkins, 250 Count";
+
+/** One cart line with a "Qty" select, as `cart-page.ts` `lineMarkup` draws it. */
+function qtyLine(title: string, total: string): { line: Element; qty: Element; remove: Element } {
+  const options = [el("option", { attributes: { value: "1" }, children: ["1"] }), el("option", { attributes: { value: "2" }, children: ["2"] })];
+  const qty = el("select", { attributes: { class: "qtySelect", "aria-label": "Qty" }, children: options });
+  const remove = el("button", { attributes: { type: "button", class: "btnLink" }, children: ["Remove"] });
+  const actions = el("div", { attributes: { class: "cartLineActions" }, children: [el("label", { children: ["Qty ", qty] }), remove] });
+  const main = el("div", {
+    attributes: { class: "cartLineMain" },
+    children: [el("a", { attributes: { href: `https://bigbox.test/ip/${title.length}` }, children: [title] }), el("span", { children: ["Sold and shipped by ValueRidge"] }), actions]
+  });
+  return { line: el("div", { attributes: { class: "cartLine" }, children: [main, el("strong", { children: [total] })] }), qty, remove };
+}
+
+test("a select repeated on every plain-div cart line is recorded by its own line's title", () => {
+  const soap = qtyLine(SOAP, "$3.47");
+  const towels = qtyLine(TOWELS, "$8.97");
+  bigboxCart([soap, towels]);
+  assert.deepStrictEqual(recordIdentity(towels.qty), { text: TOWELS });
+  assert.deepStrictEqual(recordIdentity(soap.qty), { text: SOAP });
+  assert.deepStrictEqual(recordIdentity(towels.remove), { text: TOWELS }, "each repeated control on the line names the same line");
+});
+
+test("the recorded line's select is accepted and the other line's refused, in either order", () => {
+  const recorded = { text: TOWELS };
+  const first = { soap: qtyLine(SOAP, "$3.47"), towels: qtyLine(TOWELS, "$8.97") };
+  bigboxCart([first.soap, first.towels]);
+  assert.equal(agreesWithRecordedRecord(recorded, first.towels.qty), true);
+  assert.equal(agreesWithRecordedRecord(recorded, first.soap.qty), false);
+  // The lines reordered: the towels' line is now first, where the soap's was.
+  const reordered = { soap: qtyLine(SOAP, "$3.47"), towels: qtyLine(TOWELS, "$17.94") };
+  bigboxCart([reordered.towels, reordered.soap]);
+  assert.equal(agreesWithRecordedRecord(recorded, reordered.towels.qty), true, "the line's total changed with its quantity; its title did not");
+  assert.equal(agreesWithRecordedRecord(recorded, reordered.soap.qty), false);
+});
+
+test("a line whose words no longer exist is refused on every line, and on a line left alone in the cart", () => {
+  const recorded = { text: TOWELS };
+  const soap = qtyLine(SOAP, "$3.47");
+  const napkins = qtyLine(NAPKINS, "$6.48");
+  bigboxCart([soap, napkins]);
+  assert.equal(agreesWithRecordedRecord(recorded, soap.qty), false);
+  assert.equal(agreesWithRecordedRecord(recorded, napkins.qty), false);
+  const alone = qtyLine(SOAP, "$3.47");
+  bigboxCart([alone]);
+  assert.equal(agreesWithRecordedRecord(recorded, alone.qty), false, "the only Qty left is not the towels' line");
+});
+
+test("the recorded line left alone in the cart is still accepted: it is the named line, with no twin to mark its edge", () => {
+  const towels = qtyLine(TOWELS, "$8.97");
+  bigboxCart([towels]);
+  assert.equal(agreesWithRecordedRecord({ text: TOWELS }, towels.qty), true);
+});
+
+test("a control alone of its kind, or twinned only by an unrelated part of the page, records no row", () => {
+  const sort = el("select", { attributes: { "aria-label": "Sort by" }, children: [el("option", { children: ["Best match"] })] });
+  el("main", { children: [el("h1", { children: ["Results"] }), el("div", { attributes: { class: "toolbar" }, children: [el("span", { children: ["12 results"] }), sort] })] });
+  assert.equal(recordIdentity(sort), undefined);
+  // A header and a footer each hold a "Sign in": two places, not two rows of one list.
+  const top = el("button", { children: ["Sign in"] });
+  const bottom = el("button", { children: ["Sign in"] });
+  el("body", { children: [el("header", { children: [el("a", { attributes: { href: "/" }, children: ["ValueRidge"] }), top] }), el("footer", { children: [el("span", { children: ["Help"] }), bottom] })] });
+  assert.equal(recordIdentity(top), undefined);
+  assert.equal(recordIdentity(bottom), undefined);
+});
+
+test("lines that share a title are told by their whole words, and lines identical in every word record nothing", () => {
+  const pickup = qtyLine(TOWELS, "$8.97");
+  const delivery = qtyLine(TOWELS, "$17.94");
+  bigboxCart([pickup, delivery]);
+  const recorded = recordIdentity(delivery.qty);
+  assert.ok(recorded?.text?.includes("$17.94"), JSON.stringify(recorded));
+  assert.equal(agreesWithRecordedRecord(recorded, delivery.qty), true);
+  assert.equal(agreesWithRecordedRecord(recorded, pickup.qty), false);
+  const twinA = qtyLine(TOWELS, "$8.97");
+  const twinB = qtyLine(TOWELS, "$8.97");
+  bigboxCart([twinA, twinB]);
+  assert.equal(recordIdentity(twinA.qty), undefined);
+});
+
+test("the only Qty left, on the line beside the named one, is refused: the group they share is titled by the named line, not this one", () => {
+  // The towels' line is still in the cart but no longer offers a quantity (out
+  // of stock); the soap's line holds the only "Qty" on the page.
+  const soap = qtyLine(SOAP, "$3.47");
+  const towelsMain = el("div", { attributes: { class: "cartLineMain" }, children: [el("a", { attributes: { href: "https://bigbox.test/ip/towels" }, children: [TOWELS] }), el("span", { children: ["Out of stock"] })] });
+  const towels = el("div", { attributes: { class: "cartLine" }, children: [towelsMain, el("strong", { children: ["$8.97"] })] });
+  bigboxCart([{ line: towels }, soap]);
+  assert.equal(agreesWithRecordedRecord({ text: TOWELS }, soap.qty), false);
+  assert.equal(agreesWithRecordedRecord({ text: SOAP }, soap.qty), true);
+});

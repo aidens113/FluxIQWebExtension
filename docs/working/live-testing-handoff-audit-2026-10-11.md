@@ -274,6 +274,31 @@ isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day
 
 ## Work Ledger
 
+### 2026-10-12 - Claude resumed; round 8 build 1 for B/C/D; reset rule; t462-t466 dispatched
+
+- Agent: Claude senior supervisor (resumed after Codex); debug workers; t462 lead; t463-t466 workers.
+- Changed: `AGENTS.md` (user rule 2026-10-12: a build resets the site before it re-runs its Flow); debugs
+  `run-mv5jnc5m-a47c3e59` (D), `run-mv5jnc62-01c3609a` (B) in their lane trees; no product change yet.
+- Why: user, watching B: "the model itself needs to reset the cart before trying to run the flow again", and "why it
+  failed the first time". B trial 1 failed only on its last step: two cart "Qty" selects, the saved step named its
+  control "Qty" alone (`web.target.ambiguous`); later trials ran on the previous trials' cart; revisions 4, 5, 8
+  failed because Core `authoring/values.ts` keeps `value: "2"` with its quote marks (supervisor-verified line);
+  unchanged resubmits counted as revisions until the 64-call budget ended the build. D passed but pressed Confirm
+  twice on one request in playback, its "slow-down notice" step targets the chat close, and a zero-row filter was
+  reported as a wiring failure.
+- Validation: three provider-free dry runs on the frozen pair (downstream 0fc8d0ae, Core aca9f088) -> each
+  `"status":"ready","providerCallCount":0`, `"maxEstimatedCostUsd":0.25`, candidate trial with start reset; paid
+  builds: D `run-mv5jnc5m-a47c3e59` passed $0.0501 (ceiling 0.25 in the ledger); C `run-mv5jnc51-9eac63f2` failed
+  $0.0912; B `run-mv5jnc62-01c3609a` failed $0.1268 (no Flow). D separate disabled replay
+  `replay-mv5k0lge-6ec27e17` passed: hash before = after `ea92a22a…`, coreProviderCallCount/accountedCalls/calls/
+  interventions/harnessActivations all 0, modelProvidersEnabled false, gate not invoked.
+- Outcome: Revised. D's second build is held: live runs wait for every agreed fix (t465 double press), so D
+  re-qualifies with two builds on the fixed pair.
+- Follow-up: t462 build resets site before rerun (lead, Core-paired); t463 row-bound control identity; t464 quoted
+  values, non-retryable no-option match, unchanged resubmits refused (Core-paired); t465 a committing press lands
+  once and interruption steps target the interruption; t466 zero-row filter feedback, chat row counts, Lab call
+  count (Core-paired); C's debug in progress.
+
 ### 2026-10-12 - t461 independently accepted on combined dev
 
 - Agent: Codex senior supervisor; A/B/C workers.

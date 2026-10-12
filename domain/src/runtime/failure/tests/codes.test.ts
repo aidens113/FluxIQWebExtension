@@ -37,6 +37,9 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
   ["TARGET_NOT_FOUND", "web.target.not_found", "target_not_found", true, "target_resolution"],
   ["TARGET_AMBIGUOUS", "web.target.ambiguous", "target_ambiguous", false, "target_resolution"],
   ["OUTPUT_NOT_OBSERVED", "web.validation.output_not_observed", "output_not_observed", true, "verification"],
+  // t464: a select asked for an option it does not offer. The same request is
+  // answered the same way, so a trial no longer advises testing it again.
+  ["OPTION_NOT_OFFERED", "web.validation.option_not_offered", "output_not_observed", false, "verification"],
   ["STATE_MISMATCH", "web.validation.state_mismatch", "unexpected_state", false, "verification"],
   ["NAVIGATION_UNEXPECTED", "web.navigation.unexpected", "navigation_unexpected", false, "confirmation"],
   ["PAGE_CHANGED", "web.page.changed", "page_changed", true, "execution"],

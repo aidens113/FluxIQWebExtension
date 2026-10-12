@@ -39,7 +39,11 @@
 // (`action-runtime/ignored-press/`) -- and only when none came is the control,
 // if it can still be pressed, pressed again at the same point, once, and the
 // result says so. Any sign, above all a request, means it is never pressed
-// again: a second press on one that did something is a second order. The press
+// again: a second press on one that did something is a second order. A request
+// counts from the moment the page begins it, not when its response ends: until
+// 2026-10-12 a Confirm whose page awaited a slow server before changing the
+// card read as ignored and confirmed one friend request twice in playback
+// (`run-mv5jnc5m-a47c3e59`, t465). The press
 // made once more is watched the same way, and on a command control -- a
 // button, a submit, button or image input, anything that says it is a button,
 // and not the one already current or selected -- one the page ignored too is
