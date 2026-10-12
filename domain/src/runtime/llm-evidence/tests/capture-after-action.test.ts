@@ -108,7 +108,12 @@ test("the default wait is ended by cancellation without running out its interval
   const controller = new AbortController();
   const reason = new Error("build cancelled");
   setTimeout(() => controller.abort(reason), 20);
-  const startedAt = Date.now();
+  // Ordered, not timed: a timer due when the 250 ms wait would end fires after
+  // the cancellation at 20 ms however late a busy machine runs both, so the
+  // capture must have rejected before it.
+  let waitRanOut = false;
+  const marker = setTimeout(() => { waitRanOut = true; }, 250);
   await assert.rejects(captureAfterAction(lab.gateway, "session.one", REQUEST, controller.signal), (error) => error === reason);
-  assert.ok(Date.now() - startedAt < 240, "the 250 ms wait was cut short");
+  clearTimeout(marker);
+  assert.equal(waitRanOut, false, "the 250 ms wait was cut short");
 });

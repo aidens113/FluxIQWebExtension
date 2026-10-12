@@ -1,6 +1,6 @@
 import { escapeHtml } from "../../../html.js";
 import { formatMoney } from "../locale/index.js";
-import type { MarketState } from "../state/index.js";
+import { interruptionDue, type MarketState } from "../state/index.js";
 import type { MarketClasses } from "../styles/index.js";
 
 /** The listing the flash-sale popup advertises: a sponsored hub, not the one on the page. */
@@ -25,6 +25,7 @@ export function overlayMarkup(state: MarketState, c: MarketClasses, kind: string
   if (state.notifications === "pending" && (kind === "search" || kind === "item")) parts.push(`<template id="fb-tpl-notify">${notifyCard(c)}</template>`);
   if (kind === "item" && storeName !== null) parts.push(`<template id="fb-tpl-chat">${chatWidget(c, storeName)}</template>`);
   if (kind === "item" && state.mode === "flash-deal" && state.flashDeal === "pending") parts.push(`<template id="fb-tpl-flash">${flashDeal(c)}</template>`);
+  if (interruptionDue(state.interruption, kind)) parts.push(`<template id="fb-tpl-interrupt">${flashDeal(c)}</template>`);
   return parts.join("\n");
 }
 

@@ -17,6 +17,14 @@ test("runAutomation: summary, created adaptations and durable change", () => {
   assert.equal(readRunReplies.run(undefined), undefined);
 });
 
+// t384: a listed run says whether it changed later runs; the reply's own word wins.
+test("runAutomation: the run summary's durable change when the reply does not say", () => {
+  assert.equal(readRunReplies.run({ ok: true, payload: { runSummary: { ...summary, durableBehaviorChanged: true } } })?.durableBehaviorChanged, true);
+  assert.equal(readRunReplies.run({ ok: true, payload: { runSummary: { ...summary, durableBehaviorChanged: true }, durableBehaviorChanged: false } })?.durableBehaviorChanged, false);
+  assert.equal(readRunReplies.run({ ok: true, payload: { runSummary: { ...summary, durableBehaviorChanged: "yes" } } })?.durableBehaviorChanged, undefined);
+  assert.equal(readRunReplies.run({ ok: true, payload: { runSummary: summary } })?.run.durableBehaviorChanged, undefined);
+});
+
 test("runDetail: datasets, adaptation ids and statuses", () => {
   const detail = readRunReplies.detail({ ok: true, payload: {
     runDetail: { summary, adaptationIds: ["a1"], datasets: [{ datasetId: "d1", label: "Orders", recordCount: 12 }, { label: "no id" }, { datasetId: "d2" }] },

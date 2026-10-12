@@ -62,8 +62,19 @@
 // What this still cannot see is a control *replaced* inside a closed
 // container: with the store already chosen, the chosen store's card holds
 // "Your store" and no button, closed flyout or not, so the target reads as not
-// there. Nothing the step recorded says what its effect looked like, so the
-// page's place for it is not checked.
+// there. Where the step recorded no effect, the page's place for it is not
+// checked.
+//
+// **A step that recorded its effect is asked about that first (t447).** A step
+// a build created keeps what its act made true (`routeSignatures.effect`, from
+// `../plan-resolution/act-effect.ts`, or the build's own routing), and Core
+// sends it with the check (`effect`). When the page now shows it -- by the very
+// test a run's state routing asks, `routeEffectHolds`
+// (`../../route-state/effect/holds.ts`) -- the answer is `present` whatever the
+// control now reads: R4b's coupon read "Collected", its wordless identity still
+// matched it, and the check answered `verified` for an act already done
+// (`r4b-coupon-step-identity.md`). An effect the page does not show says
+// nothing, and the check goes on as below. Nothing is run either way.
 //
 // The same page by location is not proof either: two states can share a path.
 // It is the evidence this domain has without acting, it separates run 18's
@@ -84,13 +95,16 @@ import { present } from "../present";
 import { resolveWebPlanNode } from "../plan-resolution";
 import { webLlmHandleRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
+import { webAutomationRouteEffectHolds } from "../../route-state/effect";
 import { webRunnableNode } from "./catalog";
 import { webNodeHiddenTarget } from "./hidden-target";
 import { webNodeReplayMissingTarget } from "./missing-target";
 import {
   WEB_NODE_REPLAY_RESULT_CODES,
   webNodeReplayAnswer,
+  webNodeReplayAnswerOnPage,
   webNodeReplayAnswerWithPage,
+  webNodeReplayPage,
   webNodeReplayPermissionReason,
   type WebNodeReplayFacts
 } from "./replay-answer";
@@ -145,6 +159,9 @@ export async function verifyWebOutputNode(run: WebNodeRun): Promise<WebLlmEviden
   // A step that names no element -- a navigation, a key, a tab -- has nothing
   // on the page to check. That its parameters resolve is all a check can say.
   if (!target) return passed(WEB_NODE_REPLAY_RESULT_CODES.verified, "the step names no element; its parameters resolve, and it was not run", facts(undefined), ranWith);
+  // Its recorded effect already on the page: done, whatever its control now reads (header, t447).
+  const done = await effectShown(run, value.effect, facts(undefined));
+  if (done) return acceptedPresent(done, ranWith);
   for (const check of CHECKS) {
     const result = await run.gateway.executeAction(run.sessionId, {
       actionType: CHECK_ACTION,
@@ -192,6 +209,25 @@ export async function verifyWebOutputNode(run: WebNodeRun): Promise<WebLlmEviden
 function passed(code: string, said: string, about: WebNodeReplayFacts, ranWith?: JsonObject): WebLlmEvidenceToolExecution {
   const answered = webNodeReplayAnswer(code, said, true, about, false);
   return ranWith ? { ...answered, draft: { ranWith } } : answered;
+}
+
+/**
+ * `present`, on the page taken now, when Core sent the step's recorded effect
+ * and that page shows it (header, t447); nothing otherwise. The page is shown
+ * to the model only when it answers.
+ */
+async function effectShown(run: WebNodeRun, effect: JsonValue | undefined, about: WebNodeReplayFacts): Promise<WebLlmEvidenceToolExecution | undefined> {
+  if (!isJsonRecord(effect)) return undefined;
+  const page = await webNodeReplayPage(run, false);
+  if (page?.routeState === undefined || !webAutomationRouteEffectHolds(effect as JsonObject, page.routeState)) return undefined;
+  run.shown(page);
+  return webNodeReplayAnswerOnPage(run, page, {
+    code: WEB_NODE_REPLAY_RESULT_CODES.present,
+    said: "the page already shows what the step does, which is its effect already in place; it was not run",
+    acted: false,
+    ok: true,
+    about
+  });
 }
 
 /** An accepted missing target still needs the current resolved declaration; an unreproducible check supplies none. */

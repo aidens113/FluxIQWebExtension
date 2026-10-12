@@ -20,6 +20,8 @@ const CLICK = "web.output.dom-click";
 const SNAPSHOT = "web.output.dom-capture_snapshot";
 /** A node that only reads. */
 const WAIT_FOR_TEXT = "web.output.dom-wait_for_text";
+const TYPE = "web.output.dom-type";
+const NAVIGATE = "web.output.browser-navigate";
 const PERMITTED = async () => ({ permitted: true as const });
 
 test("a read that declared nothing is written back with no consequences key at all", async () => {
@@ -166,6 +168,35 @@ test("a declaration beside the parameters wins over one inside them", async () =
   assert.deepEqual((pressed.draft?.input as JsonObject).consequences, []);
 });
 
+// One rule for which steps declare (t439, `run-mv4912r9-53b05a51`): the
+// domain's `webPlanStepMustDeclare`, which Core's script format states. A
+// navigate, a check or a plain type never declares there, and a live call was
+// refused for leaving it out, so every rerun of such a saved step failed.
+
+test("a typing step and a navigate that declared nothing run: only a step whose act the page decides must declare", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  const box = shownPageLines(looked.evidence).find((line) => line.line.includes("Search"))!.target;
+  const typed = await runtime.executeTool({ ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: { node: TYPE, parameters: { target: { handle: box }, text: "kettle" } } });
+  assert.equal(typed.resultCode, "web.action.succeeded", JSON.stringify(typed.evidence));
+  assert.equal(Object.hasOwn(typed.draft?.input ?? {}, "consequences"), false);
+  const opened = await runtime.executeTool({ ...PROJECT, callId: "call.three", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: { node: NAVIGATE, parameters: { url: "https://example.test/start" }, consequences: null } });
+  assert.equal(opened.resultCode, "web.action.succeeded", JSON.stringify(opened.evidence));
+});
+
+test("a typing step that submits its form declares, as a press does", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  const box = shownPageLines(looked.evidence).find((line) => line.line.includes("Search"))!.target;
+  const refused = await runtime.executeTool({ ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value: { node: TYPE, parameters: { target: { handle: box }, text: "kettle", submit: true } } });
+  const evidence = refused.evidence as JsonObject & { code: string; detail: { reason: string; missing?: string[] } };
+  assert.equal(evidence.code, "invalid_input");
+  assert.deepEqual(evidence.detail.missing, ["consequences"]);
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.type"), false);
+});
+
 async function firstHandle(runtime: ReturnType<typeof createWebAutomationLlmEvidenceRuntime>): Promise<string> {
   const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
   return shownPageLines(looked.evidence)[0]!.target;
@@ -189,6 +220,6 @@ function page(): JsonObject {
     url: "https://example.test/start",
     title: "Fixture",
     viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
-    interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }]
+    interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }, { tagName: "input", selector: "#query", inputType: "text", accessibleName: "Search", attributes: { name: "q" } }]
   };
 }

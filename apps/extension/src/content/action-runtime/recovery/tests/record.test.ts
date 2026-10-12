@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
-import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationClearedLayer } from "@fluxiq-web-extension/domain/client";
 import { recoveryAccountSentence, CLEAN_RECOVERY_ACCOUNT } from "../account";
 import { recordRecovery } from "../record";
 import type { RecoveryAccount } from "../account";
@@ -84,4 +84,18 @@ test("a record whose code is outside the closed set is left exactly as it was", 
   const left = recordRecovery(result({ status: "failed", validation: { status: "none", reason: "not-yet-validated" }, failure } as Partial<BrowserActionResult>), RECOVERED);
   assert.equal(left.failure?.actual, undefined);
   assert.equal(left.failure?.code, "web.action.made_up");
+});
+
+test("what the defence pressed is recorded on the result as closed words, and nothing is recorded when it pressed nothing (t401)", () => {
+  const dismissed: RecoveryAccount = { attempts: 2, absorbed: ["blocking_dialog"], waitedMs: 150, dismissed: 1, outcome: "recovered" };
+  const reported = recordRecovery(result(), dismissed, [{ kind: "rate_limit", control: "OK" }]);
+  assert.deepEqual(reported.clearedLayers, [{ kind: "rate_limit", control: "OK" }]);
+  assert.match(reported.validation.status === "passed" ? reported.validation.actual : "", /closing 1 dialog the page had put in the way/u);
+
+  const unpressed = recordRecovery(result(), RECOVERED, []);
+  assert.equal(unpressed.clearedLayers, undefined);
+
+  // A word outside the closed set never travels, whatever put it there.
+  const smuggled = recordRecovery(result(), dismissed, [{ kind: "dialog", control: "Try again" } as unknown as WebAutomationClearedLayer, { kind: "dialog", control: "Close" }]);
+  assert.deepEqual(smuggled.clearedLayers, [{ kind: "dialog", control: "Close" }]);
 });

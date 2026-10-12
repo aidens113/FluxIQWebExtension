@@ -5,6 +5,7 @@ export { webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSE
 export { runWebOutputNode } from "./run";
 export type { WebNodeRun } from "./context";
 export { createWebNodeArrivals, type WebNodeArrivals } from "./arrival";
+export { createWebNodeHeldLiterals, type WebNodeHeldLiterals } from "./held-literals";
 export { WEB_NAVIGATION_ACTION } from "./start-location";
 export { createWebNodeShownAddresses, type WebNodeShownAddresses } from "./shown-addresses";
 export { createWebNodeOwnLayers, type WebNodeOwnLayers } from "./own-layers";

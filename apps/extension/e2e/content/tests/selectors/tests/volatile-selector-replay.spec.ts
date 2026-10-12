@@ -30,9 +30,10 @@
 //  3. a Flow that already carries the old address is still resolved, and is
 //     scored on what still means something: a regenerated token is set aside
 //     rather than read as the page naming a different control. Measured against
-//     the same recording with an authored-looking token in its place, which
-//     Core does weigh -- and which scores materially lower on the same page,
-//     against the same candidates, for no other reason.
+//     the same recording with an authored-looking token in its place that
+//     another element on the page really carries, which Core does weigh -- and
+//     which scores materially lower on the same page, against the same
+//     candidates, for no other reason.
 //
 // What it does not prove: anything about a page whose structure changed as well
 // as its ids. A structural path is what is left once a generated anchor is
@@ -76,6 +77,30 @@ async function matched(harness: ContentHarness, selector: string): Promise<{ cou
     try { matches = [...document.querySelectorAll(value)]; } catch { matches = []; }
     return { count: matches.length, text: matches.length === 1 ? (matches[0]?.textContent ?? "") : null };
   }, selector);
+}
+
+/** The attributes `identity/score.ts` reads a selector's anchor from (`selector/quoted-anchors.ts`). */
+const ANCHOR_ATTRIBUTES = ["id", "data-testid", "data-test", "data-cy", "name"] as const;
+
+/**
+ * An anchor some element in the page's body other than a button really
+ * carries, as a selector writes it: words and hyphens only, so no shape rule
+ * reads it as generated, and one through which `addressThrough(anchor)`
+ * matches nothing, so a replay by it is decided by scoring rather than by a
+ * direct hit.
+ * Answers "" when the page has none.
+ */
+async function anchorOnAnotherElement(harness: ContentHarness, addressThrough: (anchor: string) => string): Promise<string> {
+  const anchors = await harness.page.evaluate((attributes) => [...document.querySelectorAll("body *")]
+    .filter((element) => element.tagName.toLowerCase() !== "button")
+    .flatMap((element) => attributes
+      .map((attribute) => ({ attribute, value: element.getAttribute(attribute) ?? "" }))
+      .filter(({ value }) => /^[a-z]+(?:-[a-z]+)*$/u.test(value)))
+    .map(({ attribute, value }) => attribute === "id" ? `#${value}` : `[${attribute}="${value}"]`), [...ANCHOR_ATTRIBUTES]);
+  for (const anchor of anchors) {
+    if ((await matched(harness, addressThrough(anchor))).count === 0) return anchor;
+  }
+  return "";
 }
 
 test("the button under a generated id is authored without it, and the address still names that button", async ({ openHarness }) => {
@@ -185,14 +210,30 @@ test("a Flow that already carries the generated address is resolved, and scored 
   // The descriptor as a Flow built before this rule holds it: the address it
   // was written with, and the xpath anchored on the same token.
   const asBuilt: Descriptor = { ...recorded, selector: oldAddress, xpath: `//*[@id="${recordedScrim}"]/div[1]/div[2]/button[1]` };
-  // The same recording with one field changed: a token of the same length that
-  // reads like something an author wrote. Everything else -- the page, the
-  // candidates, the words, the classes -- is identical, so the difference
-  // between the two measurements is the rule and nothing else.
-  const asAuthoredToken: Descriptor = { ...asBuilt, selector: oldAddress.replace(recordedScrim, "consent-modal"), id: "consent-modal" };
 
   const replay = await openHarness("everything-store", { seed: REPLAYED_SEED });
   await openNotifications(replay);
+
+  // The same recording with one field changed: the address's anchor. Everything
+  // else -- the page, the candidates, the words, the classes -- is identical,
+  // so the difference between the two measurements is the rule and nothing
+  // else.
+  //
+  // The anchor is taken from the replay page, not made up. `identity/score.ts`
+  // sets aside any recorded id, and any selector anchor, that no element on
+  // the current page carries (`page-tokens.ts`, "absent"), whatever its shape:
+  // a token nothing holds is evidence of nothing. The `consent-modal` this row
+  // used to invent was therefore set aside exactly like the regenerated token
+  // once t419 landed, and the two replays scored the same. What the rule
+  // distinguishes is a token the page still uses for a *different* element:
+  // that one keeps its meaning and is charged against the button. The store
+  // generates every id it draws, so the anchor is whichever author-named
+  // attribute another element on the replay page really carries -- a test id
+  // or a name, words only -- and the address through it must match nothing.
+  const structuralSteps = oldAddress.slice(oldAddress.indexOf(" > "));
+  const contradictingAnchor = await anchorOnAnotherElement(replay, (anchor) => `${anchor}${structuralSteps}`);
+  expect(contradictingAnchor, "the replay page carries an author-named anchor on another element").not.toBe("");
+  const asAuthoredToken: Descriptor = { ...asBuilt, selector: `${contradictingAnchor}${structuralSteps}` };
 
   const generated = await replay.runAction({
     commandId: "replay-as-built-generated",
@@ -214,7 +255,7 @@ test("a Flow that already carries the generated address is resolved, and scored 
     type: "measurement",
     description: `pre-built address, generated token: ${generated.status} ` +
       `(strategy ${generated.resolution?.strategy ?? "?"}, best ${generated.resolution?.bestScore ?? "-"}, candidates ${generated.resolution?.candidateCount ?? "-"}); ` +
-      `same recording with an authored-looking token: ${authoredToken.status} ` +
+      `same recording through ${contradictingAnchor}: ${authoredToken.status} ` +
       `(strategy ${authoredToken.resolution?.strategy ?? "?"}, best ${authoredToken.resolution?.bestScore ?? "-"})`
   });
 

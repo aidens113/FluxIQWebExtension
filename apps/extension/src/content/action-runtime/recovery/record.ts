@@ -29,15 +29,24 @@
 // and be dropped whole -- which would lose the failure rather than annotate it.
 // The code is carried over unchanged: absorbing faults does not change what
 // finally went wrong.
+//
+// **What the defence pressed has its own field (t401).** The sentence says how
+// many layers were closed; `clearedLayers` says which kind each was and which
+// dismissal was pressed, two closed words per layer
+// (`domain/src/actions/cleared-layers.ts`), so Core's trace and the chat can
+// say "Closed a notice the page put in the way" without reading prose. It is
+// a declared field of the result, copied at the gateway by its own sanitiser,
+// so it reaches Core on every result that carries one.
 
-import { isWebAutomationFailureCode, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
+import { isWebAutomationFailureCode, webAutomationClearedLayersValue, webAutomationFailureRecord, type WebAutomationClearedLayer } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionResult } from "../../types";
 import { truncateValidationText } from "../validation-outcome";
 import { recoveryAccountSentence, type RecoveryAccount } from "./account";
 
 /**
  * The result as it should be reported, given what reaching it absorbed:
- * unchanged for a clean execution, and annotated on both texts otherwise.
+ * unchanged for a clean execution, and annotated on both texts otherwise;
+ * with `clearedLayers` whenever the defence pressed a way out.
  *
  * The result is written in place rather than copied, for the reason
  * `actions/page-identity.ts` gives for doing the same: it was built one call
@@ -45,7 +54,9 @@ import { recoveryAccountSentence, type RecoveryAccount } from "./account";
  * -- which drops a renamed wire field silently -- or a second copy of the result
  * contract to keep in step with the first.
  */
-export function recordRecovery(result: BrowserActionResult, account: RecoveryAccount): BrowserActionResult {
+export function recordRecovery(result: BrowserActionResult, account: RecoveryAccount, cleared: readonly WebAutomationClearedLayer[] = []): BrowserActionResult {
+  const clearedLayers = webAutomationClearedLayersValue(cleared);
+  if (clearedLayers) result.clearedLayers = clearedLayers;
   const sentence = recoveryAccountSentence(account);
   if (sentence === undefined) return result;
   const validation = result.validation;

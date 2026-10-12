@@ -10,9 +10,13 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { withoutWebLlmDeniedKeys } from "../denied-keys";
 import { present } from "../present";
+import { isJsonRecord } from "../untrusted-json";
 
 /** The parameter a list read names its list in, kept as a handle (`webNodeFlowParameters`). */
 const EXTRACTION_SLOT = "extractList";
+/** The slots a handle is written in (`./run.ts`), and every slot a step names its element in. */
+const HANDLE_SLOTS = ["target", "selector", "element"];
+const ELEMENT_SLOTS: readonly string[] = [...HANDLE_SLOTS, "visualTarget"];
 
 /**
  * The parameters the Flow's step keeps: resolved, except for the list an
@@ -36,9 +40,31 @@ export function webNodeFlowParameters(written: JsonObject, ran: JsonObject): Jso
 /**
  * The call as the model may be shown it again: its own words, with every key
  * the domain denies removed (`../denied-keys.ts`).
+ *
+ * **A call that named its element by handle is kept naming it by that handle
+ * alone (t439).** Its `selector`, `element` and `visualTarget` -- the saved
+ * step's address and fingerprint a rerun merged under the handle -- are left
+ * out rather than screened. Screened, the saved element came back without its
+ * selector, and a rerun of the step from this copy was read as an element the
+ * model had written and refused (`run-mv4912r9-53b05a51`, t942 and t870). The
+ * address and the fingerprint stay in what the Flow keeps (`ranWith`), and a
+ * rerun from this copy names the control by its handle, as every call of the
+ * model does.
  */
 export function webNodeShownCall(value: JsonObject, parameters: JsonObject): JsonObject {
-  return withoutWebLlmDeniedKeys(webNodeCall(value, parameters));
+  return withoutWebLlmDeniedKeys(webNodeCall(value, byHandleOnly(parameters)));
+}
+
+/** The parameters, with the element slots beside a handle left out; unchanged for a call naming no handle. */
+function byHandleOnly(parameters: JsonObject): JsonObject {
+  const slot = HANDLE_SLOTS.find((each) => {
+    const named = parameters[each];
+    return isJsonRecord(named) && Object.hasOwn(named, "handle");
+  });
+  if (slot === undefined) return parameters;
+  const out: JsonObject = {};
+  for (const [key, item] of Object.entries(parameters)) if (key === slot || !ELEMENT_SLOTS.includes(key)) out[key] = item;
+  return out;
 }
 
 /**

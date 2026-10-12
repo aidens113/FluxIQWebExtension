@@ -609,6 +609,21 @@ exact control hashes, and any recorded path shape is the observed one; it never
 tests `removed`, because a layer the run itself opened, such as a store picker,
 may still show controls the recorded step removed.
 
+A step a build created carries the same effect even where Core's build routing
+signs none, as on the candidate path (t447). When exploration acts on a
+handle's control, the target store keeps, beside the control as the act found
+it (t442, `plan-resolution/target-packets.ts` `acted`), the effect of that same
+act: `signRouteEffect` over the route states of the capture the act was made
+from and the one it left (`plan-resolution/act-effect.ts`), kept only when the
+act added a control name the page can show. A candidate's resolution of that
+handle answers it as `effect`, and Core writes it onto the node's
+`routeSignatures.effect`; exploration's own resolutions and a legacy one answer
+none. It is hashes only and never the control's identity: "Collected" is what
+the press made true, never who the control is. A build test's check
+(`node-run/verify.ts`) asked with a recorded `effect` answers `present` when
+the page taken now shows it, whatever the control reads, and otherwise checks
+the control as before; nothing is run either way.
+
 Core carries every evidence entry in call order beside the complete draft and
 history; the domain declares `page` (and the packet's `elements`, `dialogs` and
 `blockedBy`) as its observed-state keys, so each earlier page is replaced by

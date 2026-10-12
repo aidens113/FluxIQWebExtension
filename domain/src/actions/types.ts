@@ -17,6 +17,7 @@ import type { WebAutomationExtractionSummary, WebAutomationExtractListRequest, W
 // it carries. Type-only, as the imports above are, so no cycle exists.
 import type { WebAutomationStructureDetection, WebAutomationStructureDetectionRequest } from "../extraction";
 import type { WebAutomationClearedCheckWait } from "./cleared-check-wait";
+import type { WebAutomationClearedLayer } from "./cleared-layers";
 import type { WebAutomationNextPageAnswer, WebAutomationNextPageRequest } from "./next-page";
 import type { WebAutomationTextPresence } from "./text-sighting";
 
@@ -522,6 +523,12 @@ export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObj
    * a check that needed a person fails the action instead.
    */
   checkWait?: WebAutomationClearedCheckWait | undefined;
+  /**
+   * The layers the extension's interference clearing closed while the action
+   * ran, each as two closed words: its kind and the dismissal pressed
+   * (`./cleared-layers.ts`). Absent when nothing was pressed.
+   */
+  clearedLayers?: WebAutomationClearedLayer[] | undefined;
   /**
    * A failed wait for text, or a failed text assertion: whether the document
    * holds the text without showing it (`hidden`) or not at all (`absent`).

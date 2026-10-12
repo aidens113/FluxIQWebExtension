@@ -35,6 +35,7 @@ import type { ContentAttachment } from "./content-attachment";
 import { captureMergedTabSnapshot, type DomSnapshotPayload } from "./dom-snapshot";
 import type { EventSequence } from "./event-sequence";
 import type { GatewayMessageSender, GatewaySession } from "./gateway-session";
+import { CommandReconciliation, frameDocumentId, inFlightRecordArea, InFlightRecordStore, SeenCommandStore } from "./in-flight/index";
 import type { RecordingEvidenceReporter } from "./recording-evidence";
 import { classifyRecordingStartRefusal } from "./recording-start/index";
 import {
@@ -72,10 +73,19 @@ export type ServerCommandChannelDeps = {
   readonly recordEvent: (payload: RecordingEventPayload, tabId?: number, frameId?: number) => Promise<void>;
   readonly stopRecording: (notifyServer: boolean) => Promise<void>;
   readonly disconnect: () => void;
+  /**
+   * The in-flight record and the answer to a repeated command id (plan B3).
+   * Absent, the channel keeps its own in the browser's session storage.
+   */
+  readonly reconciliation?: CommandReconciliation;
 };
 
 export class ServerCommandChannel {
-  constructor(private readonly deps: ServerCommandChannelDeps) {}
+  private readonly reconciliation: CommandReconciliation;
+
+  constructor(private readonly deps: ServerCommandChannelDeps) {
+    this.reconciliation = deps.reconciliation ?? ownReconciliation(deps);
+  }
 
   async handleMessage(message: ClientGatewayServerMessage): Promise<void> {
     this.deps.gateway.noteMessageReceived();
@@ -107,6 +117,13 @@ export class ServerCommandChannel {
       return;
     }
 
+    // Core asking what became of a command whose answer never reached it (Core
+    // C8): answered from what this browser kept, never by running anything.
+    if (message.type === "server.reconcile_command") {
+      await this.answerReconcile(message.payload.commandId);
+      return;
+    }
+
     if (message.type === "server.set_active_tab") {
       await this.handleCommand({ ...message.payload, command: "set_active_tab" }, message.id);
       return;
@@ -132,6 +149,9 @@ export class ServerCommandChannel {
     this.deps.onActivity("connection", "Connected to FluxIQ", "Client session ready", "success");
     await this.deps.page.sendBrowserState();
     await this.deps.gateway.flushQueue();
+    // A command an earlier worker lost while it was in flight is reported now,
+    // as interrupted with its effect unknown, never left to read as a timeout (plan B3).
+    await this.reconciliation.reportLeftovers().catch((error: unknown) => this.inFlightRecordFailed(error));
   }
 
   async handleCommand(payload: ServerCommandPayload, messageId: string): Promise<void> {
@@ -179,15 +199,50 @@ export class ServerCommandChannel {
       });
       return;
     }
-    if (payload.command === "execute_action") {
-      this.applyStart(this.deps.runtimeStatus.startAction(payload.action));
-      await this.deps.captureActionBoundary("before", payload.action);
-      // The evidence observer brings the target page forward. Re-read Chrome's
-      // authoritative active tab after that asynchronous boundary so a delayed
-      // tabs.onActivated callback cannot leave runtime dispatch on a stale tab.
-      await this.deps.page.refresh();
-      await this.runtimeRouter().executeAction(payload.action);
+    if (payload.command === "evaluate_facts") {
+      // A fact check is a read of the page as it stands, not a step: no
+      // runtime status opens, no evidence boundary is captured, nothing is
+      // recorded, and its answer goes straight back as the gateway result.
+      await this.runtimeRouter().evaluateFacts(payload.check);
+      return;
     }
+    if (payload.command === "execute_action") {
+      const commandId = payload.action.commandId;
+      // A command id this worker already has an answer for -- still running,
+      // just answered, queued, or lost by an earlier worker -- is answered with
+      // it and never acted on twice (`in-flight/command-reconciliation.ts`).
+      if (await this.reconciliation.answerRepeat(commandId) !== undefined) return;
+      await this.reconciliation.begin(payload.action, this.deps.page.tabId()).catch((error: unknown) => this.inFlightRecordFailed(error));
+      try {
+        this.applyStart(this.deps.runtimeStatus.startAction(payload.action));
+        await this.deps.captureActionBoundary("before", payload.action);
+        // The evidence observer brings the target page forward. Re-read Chrome's
+        // authoritative active tab after that asynchronous boundary so a delayed
+        // tabs.onActivated callback cannot leave runtime dispatch on a stale tab.
+        await this.deps.page.refresh();
+        await this.runtimeRouter().executeAction(payload.action);
+      } finally {
+        this.reconciliation.release(commandId);
+      }
+    }
+  }
+
+  private async answerReconcile(commandId: string): Promise<void> {
+    const answer = await this.reconciliation.reconcile(commandId).catch((error: unknown) => {
+      this.inFlightRecordFailed(error);
+      // A browser that cannot read what it kept cannot say; `unknown` never lets Core act again.
+      return { commandId, state: "unknown" as const };
+    });
+    await this.deps.send("client.reconcile_result", answer);
+  }
+
+  /**
+   * The in-flight record could not be written or read. The command still runs
+   * -- refusing it over its own bookkeeping would fail a step that can work --
+   * but a person reading the activity log can see the reconciliation is off.
+   */
+  private inFlightRecordFailed(error: unknown): void {
+    this.deps.onActivity("runtime", "Could not keep the record of an action in flight", error instanceof Error ? error.message : String(error), "warning");
   }
 
   private runtimeRouter(): ExtensionRuntimeCommandRouter {
@@ -200,6 +255,10 @@ export class ServerCommandChannel {
       attachTabForRecording: (tabId) => this.deps.attachment.attachTabForRecording(tabId),
       captureActiveSnapshot: (label) => this.deps.evidence.captureActiveSnapshot(label),
       sendActionResult: (result, tabId, frameId) => this.sendActionResult(result, tabId, frameId),
+      sendGatewayResult: (result) => this.deps.send("client.action_result", result),
+      noteDispatch: async (commandId, tabId, frameId) => {
+        await this.reconciliation.dispatched(commandId, tabId, frameId).catch((error: unknown) => this.inFlightRecordFailed(error));
+      },
       // The look takes in every frame (t200), merged exactly as a recorded
       // event's snapshot is, around the top frame's own capture.
       // A search's look asks every child frame for its hidden elements too.
@@ -224,7 +283,10 @@ export class ServerCommandChannel {
     const visualTarget = result.visualTarget ?? (result.element
       ? webAutomationActionVisualTargetFromElement(result.element as never)
       : undefined);
-    await this.deps.send("client.action_result", gatewayActionResultFromBrowserResult(result));
+    const gatewayResult = gatewayActionResultFromBrowserResult(result);
+    await this.deps.send("client.action_result", gatewayResult);
+    // Sent or queued: the record is cleared, and a repeat of this id is answered with this result.
+    await this.reconciliation.settled(gatewayResult).catch((error: unknown) => this.inFlightRecordFailed(error));
     await this.sendRuntimeConfirmation(result, tabId, frameId);
     await this.deps.recordEvent(compactObject({
       kind: "action.result",
@@ -298,4 +360,16 @@ export class ServerCommandChannel {
     );
     this.deps.emitStatus();
   }
+}
+
+/** The channel's own reconciliation, over the browser's session storage: records, received ids, and the offline queue. */
+function ownReconciliation(deps: ServerCommandChannelDeps): CommandReconciliation {
+  const area = inFlightRecordArea();
+  return new CommandReconciliation({
+    store: new InFlightRecordStore(area),
+    seen: new SeenCommandStore(area),
+    queuedResult: async (commandId) => await deps.gateway.queuedActionResult(commandId),
+    send: async (result) => await deps.send("client.action_result", result),
+    documentOf: frameDocumentId
+  });
 }

@@ -40,6 +40,10 @@
 // the name, the label, the id or the test id -- must agree exactly, because a
 // partial agreement is what a different action with a similar label looks like.
 //
+// `page-tokens.ts` is the one place scoring asks the page a question: whether
+// any element still carries an id or selector token the recording named. One
+// that nothing carries is evidence of nothing and is left out of the score.
+//
 // `stable-name.ts` is the one exception that rule leaves room for, and it is
 // narrow: a control whose name *is* its state -- a chip naming the chosen store
 // -- is read by the part of its name that does not change, a whole text run
@@ -63,6 +67,6 @@ export { TARGET_VETO_FLOOR, vetoCandidate, vetoExactMatch } from "./veto";
 
 export type { CandidateFamily, TargetCandidate, TargetCandidatePool } from "./candidates";
 export type { RecordIdentity } from "./record";
-export type { CandidateSelection, RecordedIdentity, ScoredCandidate } from "./score";
+export type { CandidateSelection, DroppedToken, RecordedIdentity, ScoredCandidate } from "./score";
 export type { StableNameReading } from "./stable-name";
 export type { ExactMatchVerdict, TargetMeasurement, TargetVerdict, TargetVetoReason } from "./veto";
