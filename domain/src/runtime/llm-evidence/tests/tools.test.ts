@@ -152,6 +152,10 @@ test("binds from the production host seam and selects the sole trusted web clien
   assert.match(detectDescription, /where is optional/u);
   assert.match(detectDescription, /leave it out and every item is a row/u);
   assert.equal(detectDescription.indexOf("where is optional") < detectDescription.indexOf("atLeast"), true, "optional comes before the vocabulary that narrows");
+  // t378, lane D (`run-mv0fuual-f9e6f089`): "narrow excess later" read as leave to
+  // filter at the run's end, which never changes the rows a repeat presses.
+  assert.match(detectDescription, /But rows a later step acts on, a press repeated over the read, are narrowed here by where/u);
+  assert.match(detectDescription, /never changes which rows a repeat visits/u);
   // A condition may test a column the plan does not keep, and the text says so:
   // live run `run-muq4oaof-464f5bce` kept `plus` and `ad` only to filter on them,
   // stored six columns where four were asked, and the judge paired no row.
@@ -430,7 +434,9 @@ test("presses any observed control, refuses only a handle it never showed, and n
   // The resolved parameters carry who the element is beside its address: Core
   // derives the adapted target from it, as it does for a recorded node.
   assert.deepEqual(actionParameters.map((entry) => (entry as { selector?: string }).selector), ["#details"]);
-  assert.deepEqual((actionParameters[0] as { element?: unknown }).element, { tagName: "button", visibleText: "Show details", selector: "#details" });
+  // A button's `type` says what it does and is one of the identifying attributes (t425,
+  // `element-fingerprint/build.ts`); `aria-expanded` is its state and `aria-controls` names another element.
+  assert.deepEqual((actionParameters[0] as { element?: unknown }).element, { tagName: "button", visibleText: "Show details", selector: "#details", attributes: { type: "button" } });
   const submit = await runtime.executeTool({ ...base, callId: "call.submit", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t2" } }, consequences: [] } });
   const genericAction = await runtime.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t3" } }, consequences: [] } });
   const missing = await runtime.executeTool({ ...base, callId: "call.missing", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t40" } }, consequences: [] } });

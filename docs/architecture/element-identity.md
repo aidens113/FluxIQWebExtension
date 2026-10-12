@@ -35,20 +35,34 @@ Tried in this order, each only when the ones before it found nothing:
 | 1 | `selector` | `document.querySelectorAll(action.selector)` |
 | 2 | `coordinates` | `document.elementFromPoint` at the command's point |
 | 3 | `visual-target` | the same, at the visual target's centre |
-| 4 | `fingerprint` | `findClosestFingerprint`, then an exact-text scan |
+| 4 | `fingerprint` | `stableFingerprintMatches`, then the name and exact-text scans |
 
 A visual target's **document** bounds are preferred over its viewport bounds
 and corrected for the current scroll: document bounds still say where the
 element is after the page has moved, while viewport bounds point at whatever
 has since scrolled into that spot.
 
-`findClosestFingerprint`
+`stableFingerprintMatches`
 ([`content/element-finder.ts`](../../apps/extension/src/content/element-finder.ts))
 tries, in order: the recorded selector, the xpath, the id, `data-testid`,
-`aria-label`/`name`, the class set, and finally exact visible text. It
-answers with at most one element. The resolver repeats the text half itself,
-because that is the half that ties — "the button that says Continue" is one
-target on most pages and two on this one, and only a count tells those apart.
+`aria-label`/`name`, and the class set. Each of those names one control except
+the class set, which every like control carries, so it answers with all of its
+matches and marks them shared. The resolver then runs the name and exact-text
+scans as well and adds them to the same pool, and scoring chooses; a fingerprint
+whose matches include no element scoring as the recorded control is a miss that
+falls through to Level 2, not a tie. Before t436 the class set answered with its
+first match alone and the text scan never ran, so a saved option chip ("7-in-1",
+"Spain") resolved to the first chip of its group and was vetoed on every later
+visit (run-mv4912r9-53b05a51). The words are scanned here, counted, because they
+tie: "the button that says Continue" is one target on most pages and two on this
+one, and only a count tells those apart.
+
+Level 2's candidates are what a person can act on plus what the page dressed as
+interactive, and also elements of the recorded tag the page listens on for
+presses or that set their own pointer cursor, so a script-bound `<div>` chip is
+scored rather than invisible. What a step saves leaves out the class that sets a
+chosen option apart from its like siblings (`evidence/set-apart.ts`), from both
+`classNames` and `attributes.class`: it is the control's state, not its identity.
 
 When the command named no target at all, so that no strategy ran, the focused
 element resolves as `active-element`. That fallback is reached only when

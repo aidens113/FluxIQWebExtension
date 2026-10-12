@@ -4,7 +4,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
 // Every `src/**/tests/*.test.ts` is bundled as its own entry and executed, so
-// a new test file runs without being registered in another test file.
+// a new test file runs without being registered in another test file. Path
+// fragments given on the command line narrow the run to the matching entries.
 //
 // DOMAIN_TEST_BUILD_LABEL sends the bundles to an ignored per-label directory
 // so concurrent runs (parallel workers) never overwrite each other's output.
@@ -96,13 +97,32 @@ async function findTestEntries(directory) {
   return found;
 }
 
+/**
+ * The entries a run executes. With no filters, every entry; otherwise only the
+ * entries whose package-relative path (forward slashes) contains one of the
+ * filters, so a change is validated with the tests beside it
+ * (`node scripts/test-domain.mjs extraction/tests/conditions`). A filter that
+ * matches nothing throws rather than reporting an empty pass.
+ * @param {string[]} entryPoints absolute test entry paths
+ * @param {string[]} filters path fragments from the command line
+ */
+export function selectTestEntries(entryPoints, filters, root = packageRoot) {
+  if (filters.length === 0) return entryPoints;
+  const relative = (entry) => path.relative(root, entry).split(path.sep).join("/");
+  const wanted = filters.map((filter) => filter.split(path.sep).join("/"));
+  const selected = entryPoints.filter((entry) => wanted.some((filter) => relative(entry).includes(filter)));
+  if (selected.length === 0) throw new Error(`No domain test entry matches ${filters.map((filter) => JSON.stringify(filter)).join(", ")}`);
+  return selected;
+}
+
 async function runDomainTests() {
   const outdir = resolveTestBuildOutdir(process.env.DOMAIN_TEST_BUILD_LABEL);
 
-  const entryPoints = (await findTestEntries(sourceRoot)).sort();
+  const allEntryPoints = (await findTestEntries(sourceRoot)).sort();
   // Discovery runs before anything is deleted: finding nothing is a defect,
   // and must not take the previous run's output with it on the way out.
-  if (entryPoints.length === 0) throw new Error("No domain tests found under src/**/tests/");
+  if (allEntryPoints.length === 0) throw new Error("No domain tests found under src/**/tests/");
+  const entryPoints = selectTestEntries(allEntryPoints, process.argv.slice(2));
 
   await cleanTestBuildOutdir(outdir);
   await build({

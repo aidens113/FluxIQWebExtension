@@ -3,10 +3,14 @@
 // It is built once, when a status first has to be shown, and then updated in
 // place: one host, one shadow root, one pill and the same few nodes inside
 // it, whose text and attributes change and nothing else. Each shape has a
-// fixed size, so a new sentence never moves or resizes the pill; a long one
-// is cut where a word ends and ends in an ellipsis (`fit-line.ts`: the
-// browser's own ellipsis cut "Search Bri…", U-4 of the run-muw60j7c-bb7c9a62
-// UI review), measured again whenever the pill changes width. A detail that
+// fixed size, so a new sentence never moves or resizes the pill. The detail
+// wraps onto a second line rather than being cut mid-sentence ("A step didn't
+// work in the test: the…", lane D run-mv0fuual-f9e6f089 finding 9), and only a
+// sentence too long for both is shortened, to its whole sentences or else
+// where a word ends (`fit-lines.ts`); the headline is one line, cut where a
+// word ends (`fit-line.ts`: the browser's own ellipsis cut "Search Bri…", U-4
+// of the run-muw60j7c-bb7c9a62 UI review). Both are measured again whenever
+// the pill changes width. A detail that
 // changes fades in softly, which is the only motion besides the pulsing mark. The pill itself has no entry
 // animation: a page that loads while FluxIQ works (a navigation, U7 of the
 // t174 live lane's UI review) gets the overlay back at full strength the
@@ -54,6 +58,7 @@
 import { ACTIVITY_DONE_VISIBLE_MS } from "../../shared/activity";
 import { ACTIVITY_OVERLAY_HOST_ATTRIBUTE } from "../picker-host";
 import { fitLine } from "./fit-line";
+import { fitLines } from "./fit-lines";
 import { inertElement } from "./inert-element";
 import type { ActivityOverlayView } from "./overlay-view";
 import { PhaseMark } from "./phase-mark";
@@ -84,19 +89,22 @@ const SURFACE_SHADOW = "0 0 0 1px rgba(0, 0, 0, 0.32), 0 10px 28px rgba(0, 0, 0,
 const TEXT = "#ffffff";
 const SECONDARY = "#d8dde6";
 
+/** The lines the expanded card's detail may wrap onto. */
+const DETAIL_LINES = 2;
 const MARK_SIZE = 14;
 const MARK_GAP = 10;
 const EDGE_MARGIN = 16;
 
 /**
  * Each mode's fixed box, full and narrow, so nothing the text does can move or
- * resize the pill. The narrow box is for a page with no clear corner: the
- * expanded card's still holds "Building your Flow" beside "Step 2 of 5" and
- * about thirty characters of the detail line; the collapsed pill's, the
- * headline.
+ * resize the pill. The expanded card holds the headline and two lines of
+ * detail (padding 22, headline 20, gap 3, detail 2 x 18). The narrow box is
+ * for a page with no clear corner: the expanded card's still holds "Building
+ * your Flow" beside "Step 2 of 5" and about sixty characters of detail; the
+ * collapsed pill's, the headline.
  */
 const SHAPE_SIZE: Readonly<Record<Mode, Readonly<Record<Width, { readonly width: number; readonly height: number }>>>> = Object.freeze({
-  expanded: { pill: { width: 384, height: 66 }, narrow: { width: 288, height: 66 } },
+  expanded: { pill: { width: 384, height: 84 }, narrow: { width: 288, height: 84 } },
   collapsed: { pill: { width: 300, height: 36 }, narrow: { width: 224, height: 36 } }
 });
 
@@ -192,8 +200,9 @@ export class StatusPill {
   }
 
   /**
-   * The headline and the detail as the card can show them: each cut where a
-   * word ends when it is wider than its line (`fitLine`). The headline's line
+   * The headline and the detail as the card can show them: the headline cut
+   * where a word ends when it is wider than its line (`fitLine`), the detail
+   * wrapped onto its lines and shortened only when it fills them (`fitLines`). The headline's line
    * is the top row less the mark and the step beside it; the detail's, its own
    * box less the indent under the mark. Neither box depends on the text in it.
    */
@@ -203,7 +212,7 @@ export class StatusPill {
     const headlineRoom = measure.widthOf(nodes.top) - MARK_SIZE - MARK_GAP - stepRoom;
     const headline = fitLine(view.headline, headlineRoom, (text) => withSpacing(measure.measure(text, HEADLINE_FONT), text));
     if (view.mode !== "expanded" || !view.detail) return { headline, detail: view.detail };
-    const detail = fitLine(view.detail, measure.widthOf(nodes.detail) - MARK_SIZE - MARK_GAP, (text) => measure.measure(text, DETAIL_FONT));
+    const detail = fitLines(view.detail, measure.widthOf(nodes.detail) - MARK_SIZE - MARK_GAP, (text) => measure.measure(text, DETAIL_FONT), DETAIL_LINES);
     return { headline, detail };
   }
 
@@ -229,7 +238,8 @@ export class StatusPill {
     const view = this.shown;
     setDisplay(nodes.headline, true);
     setDisplay(nodes.step, view?.mode === "expanded" && Boolean(view.step));
-    setDisplay(nodes.detail, view?.mode === "expanded" && Boolean(view.detail));
+    // A box that clamps its lines, so a sentence wraps to two and never spills past them.
+    setDisplay(nodes.detail, view?.mode === "expanded" && Boolean(view.detail), "-webkit-box");
   }
 
   private fadeOut(): void {
@@ -329,7 +339,11 @@ function buildNodes(): Nodes {
     "padding-left": `${MARK_SIZE + MARK_GAP}px`,
     font: `400 13px/18px ${FONT_STACK}`,
     color: SECONDARY,
-    "white-space": "nowrap",
+    "white-space": "normal",
+    "overflow-wrap": "normal",
+    "-webkit-box-orient": "vertical",
+    "-webkit-line-clamp": String(DETAIL_LINES),
+    "max-height": `${DETAIL_LINES * 18}px`,
     overflow: "hidden",
     "text-overflow": "ellipsis"
   });
@@ -342,8 +356,8 @@ function withSpacing(width: number | undefined, text: string): number | undefine
   return width === undefined ? undefined : width + text.length * HEADLINE_SPACING_PX;
 }
 
-function setDisplay(node: HTMLElement, shown: boolean): void {
-  node.style.setProperty("display", shown ? "block" : "none", "important");
+function setDisplay(node: HTMLElement, shown: boolean, display = "block"): void {
+  node.style.setProperty("display", shown ? display : "none", "important");
 }
 
 /** Sets the text when it differs; answers whether it changed. */

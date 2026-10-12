@@ -304,7 +304,7 @@ test("a run retrying a step the page was too busy for stays 'Running your Flow' 
   h.pacer.accept(event({ phase: "repairing", label: "Trying the step again", detail: { kind: "thought", title: "Trying the step again", text: "The step didn't work, and a step like this often works on a second try, so FluxIQ is trying it once more.", status: "succeeded", ref: "n10" } }, "run"));
   h.clock.advance(ACTIVITY_DETAIL_INTERVAL_MS);
   const retrying = h.pacer.display()!;
-  assert.deepEqual([retrying.headline, retrying.detail, retrying.step], ["Running your Flow", "The page was busy, trying again", { index: 10, count: 12 }]);
+  assert.deepEqual([retrying.headline, retrying.detail, retrying.step], ["Running your Flow", "The site asked FluxIQ to slow down, trying again", { index: 10, count: 12 }]);
   assert.ok(h.shown.every((entry) => entry.display.headline === "Running your Flow"), h.shown.map((entry) => entry.display.headline).join(", "));
   // A failure no code explains still reads as a retry, not a repair.
   const h2 = harness();

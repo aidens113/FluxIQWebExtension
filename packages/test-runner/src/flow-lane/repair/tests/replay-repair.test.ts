@@ -105,3 +105,75 @@ test("a replay Core could not run at all is unreachable by category, and the res
   assert.deepEqual(broken.prepared, [1, 2], "one broken replay stopped the loop");
   assert.equal(JSON.stringify(replays).includes("Core would not start the run"), false, "the record carries the failure's message");
 });
+
+/**
+ * Whether the replay's Flow succeeded is a question about each step, not each
+ * attempt. run-mv4i1cls-463e4b5c (R4b): the replay reached the goal with no
+ * model, and was failed because one press had been refused by the page as busy
+ * and then pressed again and succeeded -- the failed attempt stays in Core's
+ * list beside the success that followed it.
+ */
+const step = (nodeId: string, order: number, overrides: Record<string, unknown> = {}) => attempt({ attemptId: `${nodeId}.attempt.${order + 1}`, nodeId, order, route: "success", startedAt: 1_000 + order * 100, finishedAt: 1_050 + order * 100, ...overrides });
+const BUSY = { category: "action_failed", code: "web.action.rate_limited", retryable: true, stage: "execution", expected: "the page accepts the press", actual: "the page said it was busy", effect: "unacted" };
+
+async function replayOf(attempts: Record<string, unknown>[], status = "succeeded") {
+  const fake = core({ status, attempts });
+  const [replay] = await replayRepairedFlow(fake.control, { ...fake.input, replays: 1 });
+  return replay!;
+}
+
+test("a step the page refused as busy and that then succeeded on its retry counts as succeeded (R4b's replay)", async () => {
+  const replay = await replayOf([
+    step("node.open", 0),
+    step("node.add", 1, { status: "failed", route: "failed", failure: BUSY }),
+    step("node.add", 2, { metadata: { retry: { attemptNumber: 2, maxAttempts: 4, backoffMs: 250, rung: "retry_node" } } }),
+    step("node.checkout", 3),
+  ]);
+  assert.equal(replay.flowSucceeded, true);
+  assert.equal("flowShortfall" in replay, false);
+});
+
+test("steps skipped because they were not needed count as succeeded: an absent popup, an effect that already held, an act already done", async () => {
+  const replay = await replayOf([
+    step("node.popup", 0, { route: "skipped", skipped: { reason: "target_absent", code: "web.target.not_found" } }),
+    step("node.coupon", 1, { route: "state_routed", skipped: { reason: "state_routed", code: "web.target.not_found", toNodeId: "node.size", direction: "forward" }, stateRouting: { outcome: "effect_holds" } }),
+    step("node.size", 2, { skipped: { reason: "already_done", code: "executor.step.already_done", attemptId: "node.size.attempt.0" } }),
+    step("node.add", 3),
+  ]);
+  assert.equal(replay.flowSucceeded, true);
+  assert.equal("flowShortfall" in replay, false);
+});
+
+test("a step a person cleared fails the replay: a replay proves the repair holds unattended", async () => {
+  const replay = await replayOf([
+    step("node.check", 0, { status: "failed", route: "success", metadata: { ask: { personNeeded: true, status: "answered", route: "success" } } }),
+    step("node.add", 1),
+  ]);
+  assert.equal(replay.flowSucceeded, false);
+  assert.equal(replay.flowShortfall, "person_cleared");
+});
+
+test("a skipped step whose lasting act was not done fails the replay, though Core's run succeeded", async () => {
+  const replay = await replayOf([
+    step("node.open", 0),
+    step("node.claim", 1, { route: "skipped", skipped: { reason: "target_absent", code: "web.target.not_found", notDone: true } }),
+  ]);
+  assert.equal(replay.status, "succeeded");
+  assert.equal(replay.goalPassed, true, "the goal is the fixture's, and is kept as it was");
+  assert.equal(replay.flowSucceeded, false);
+  assert.equal(replay.flowShortfall, "act_not_done");
+});
+
+test("a step whose last attempt did not end well fails the replay, whether it failed, timed out or every retry failed", async () => {
+  for (const last of [{ status: "failed", route: "failed", failure: BUSY }, { status: "timed_out" }, { status: "cancelled" }]) {
+    const replay = await replayOf([step("node.add", 0, { status: "failed", route: "failed", failure: BUSY }), step("node.add", 1, last)]);
+    assert.equal(replay.flowSucceeded, false, `a last attempt that ${last.status}`);
+    assert.equal(replay.flowShortfall, "step_not_succeeded");
+  }
+});
+
+test("a run Core did not finish as succeeded fails the replay first, whatever its steps say", async () => {
+  const replay = await replayOf([step("node.add", 0)], "failed");
+  assert.equal(replay.flowSucceeded, false);
+  assert.equal(replay.flowShortfall, "run_not_succeeded");
+});

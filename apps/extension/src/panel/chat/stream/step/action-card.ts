@@ -19,6 +19,7 @@
 
 import { activityActionOf, type ActivityAction } from "fluxiq/ui";
 import type { ClientGatewayActivity } from "../../../../shared/activity/index";
+import { isAlreadyDoneStep } from "./already-done";
 import { stepWords } from "./words";
 
 /** An action's card. */
@@ -35,6 +36,18 @@ export type ActionCard = ActivityAction & {
   times?: number;
   /** The steps done again this card stands for, itself first, when it is one line for them (`done-again.ts`); absent otherwise. */
   again?: readonly ActionCard[];
+  /**
+   * On a step that worked when tried again: which try it was (2 for the
+   * second), and why the first did not work; the failed card is taken into it
+   * (`retried.ts`). Absent otherwise.
+   */
+  retried?: { tries: number; why: string | null };
+  /**
+   * A run step Core skipped because its act was already done in this run
+   * (`already-done.ts`): its card reads "Already done" ("Confirm · Lin Zhao:
+   * Already done", the row named as on any row's step card). Absent otherwise.
+   */
+  already?: true;
 };
 
 /**
@@ -54,8 +67,11 @@ export function actionCard(event: ClientGatewayActivity, key: string): ActionCar
   const words = stepWords(detail, event.step).text;
   const sentence = words !== undefined && !DOTTED_ID.test(words) ? words : undefined;
   const asked = detail.kind === "ask";
+  const already = isAlreadyDoneStep(event);
   return {
     kind: action.kind,
+    // The act a person would name where it is narrower than the kind ("Choose", "Tick", "Next page"; Core's `activityActionOf`).
+    ...(action.name === undefined ? {} : { name: action.name }),
     target: action.target,
     outcome: action.outcome,
     why: action.why,
@@ -67,6 +83,7 @@ export function actionCard(event: ClientGatewayActivity, key: string): ActionCar
     ...(action.unconfirmed ? { unconfirmed: true as const } : {}),
     // What Core declined of a decision, and why (Core's `activityActionOf`, t193 1003 C13).
     ...(action.refused === undefined ? {} : { refused: action.refused }),
+    ...(already ? { already: true as const } : {}),
     key,
     said: asked ? undefined : sentence,
     answer: asked && detail.resolution !== undefined ? sentence : undefined,

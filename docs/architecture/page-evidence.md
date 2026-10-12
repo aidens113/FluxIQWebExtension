@@ -318,6 +318,35 @@ Every page leaves the domain as `web-llm-page.v3`
   24 per window (Core's default recovery budget), and
   `validateTargetOverrideEvidence` checks a repair's handle against that
   packet. One that was let go, or edited, is `evidence_unrecognized`.
+- **A candidate names only what it was shown** (since t378;
+  `llm-evidence/plan-resolution/target-packets.ts`,
+  `resolve-plan-node.ts`). When a candidate submission's steps are resolved
+  against the Flow's view history (`view_history`), a handle resolves only if
+  some evidence the model read printed it: a line of any capture's page view
+  (a look's too), a failure packet's repair candidates, or a handle that
+  begins a line of any tool answer -- a search's matches, a description, a
+  detection's column `at` (which may name a wordless element the view left
+  out), a node run's answer (`tools.ts` feeds each answer as it leaves the
+  runtime). A refused call's own input echoed back does not count, and
+  neither does a handle mid-line. A handle the store holds that nothing
+  printed -- a number in a gap the view left between wordless wrappers -- is
+  refused `web.handle.unknown`, as a handle no packet carried.
+- **A candidate press needs a control.** A candidate's
+  `web.output.dom-click` (also inside a Run Output node) on an element that is
+  not pressable is refused `web.handle.not_a_control`, with
+  `web.handle.not_a_control:<position>`. An element is pressable when it is a
+  control by its own tag, role, listener or cursor, is actionable by implicit
+  role, a layer or a `<label>`, or sits inside an ancestor the view prints as a
+  control (not a delegate holder such as a chat panel listening on its whole
+  body) (`pressable-targets.ts`, `page-view/line/control-holders.ts`). The
+  exception: words exploration pressed and saw change the page
+  (`node-run/run.ts` marks the handle `pressed` when the capture after the
+  press differs) are not refused; a press that changed nothing proves
+  nothing. A Next page control is not held to this rule.
+- **Exploration itself is unrestricted.** The model's own node runs while it
+  explores are held to neither rule: it may press anything a person could, and
+  a listener a framework adds at the document is invisible to the capture, so
+  text and a control can look the same.
 - **The model is told how to read it.** The domain binds
   `systemInstructions` (`llm-evidence/system-instructions/`, version
   `web-1`, about 2,000 characters) on its evidence runtime, and Core places the
@@ -579,6 +608,21 @@ when the step added something, every added hash is among the observed page's
 exact control hashes, and any recorded path shape is the observed one; it never
 tests `removed`, because a layer the run itself opened, such as a store picker,
 may still show controls the recorded step removed.
+
+A step a build created carries the same effect even where Core's build routing
+signs none, as on the candidate path (t447). When exploration acts on a
+handle's control, the target store keeps, beside the control as the act found
+it (t442, `plan-resolution/target-packets.ts` `acted`), the effect of that same
+act: `signRouteEffect` over the route states of the capture the act was made
+from and the one it left (`plan-resolution/act-effect.ts`), kept only when the
+act added a control name the page can show. A candidate's resolution of that
+handle answers it as `effect`, and Core writes it onto the node's
+`routeSignatures.effect`; exploration's own resolutions and a legacy one answer
+none. It is hashes only and never the control's identity: "Collected" is what
+the press made true, never who the control is. A build test's check
+(`node-run/verify.ts`) asked with a recorded `effect` answers `present` when
+the page taken now shows it, whatever the control reads, and otherwise checks
+the control as before; nothing is run either way.
 
 Core carries every evidence entry in call order beside the complete draft and
 history; the domain declares `page` (and the packet's `elements`, `dialogs` and

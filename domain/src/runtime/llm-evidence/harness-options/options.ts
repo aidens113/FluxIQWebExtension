@@ -130,7 +130,7 @@ export function webAutomationRecoveryHarnessOptions(): AutomationStudioHarnessOp
     },
     {
       toolId: WEB_RECOVERY_DETECT_OPTION_ID,
-      description: "Detect the repeating list or table the failing workflow reads: around an element observed during this exploration when given its opaque target handle, else the page's largest list. Returns an opaque extraction handle naming it, each field's key, label, kind and coverage, the item count, and how the list continues. Returns no values or selectors. Observes only.",
+      description: "Detect the repeating list or table the failing workflow reads: around an element observed during this exploration when given its opaque target handle, else the page's largest list. Returns an opaque extraction handle naming it, each field's key, label, kind and coverage, the item count, and how the list continues. Returns no values. Observes only.",
       // The authoring detection's input, bound for bound.
       inputSchema: { type: "object", properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
       // No repeat policy, as authoring has none: Core refuses an identical

@@ -185,3 +185,44 @@ test("a look the capture cut short merges its re-viewed handles the same way, an
   assert.equal(coupon.ok ? coupon.element.visibleText : "refused", undefined);
   assert.equal(targets.resolve(scope, "t2", ITEM).ok, true, "a cut-short look forgets nothing");
 });
+
+// R4a and R4b (t442, F1): the same coupon, saved by a candidate as `{div, class b}` -- the agreement above kept no
+// words -- and a wordless identity matches the collected coupon as well as the uncollected one. A handle exploration
+// acted on is now saved, for a candidate submission (`view_history`), as the view the act was made from showed it;
+// what the act changed is its effect. Exploration keeps the agreed identity, so t356's reason still holds there.
+
+const STORE_COUPON = (label: string, classes: string): JsonObject => ({ tagName: "div", selector: "#coupons > div:nth-of-type(2)", visibleText: label, hasClickHandler: true, classNames: classes.split(" "), attributes: { class: classes } });
+
+test("a handle exploration acted on is saved as the act found it, and exploration keeps the identity its views agree on", () => {
+  const targets = createWebLlmTargetPackets();
+  const scope = { projectId: "project.one", flowId: "flow.acted" };
+  const before = view(undefined, [STORE_COUPON("Get coupons", "b")]);
+  targets.remember(scope, before);
+  targets.acted(scope, "t1", before);
+  const after = view(undefined, [STORE_COUPON("Collected", "b x")]);
+  targets.remember(scope, after);
+  // A later act on the done control does not replace the first act's view: the Flow meets the control as exploration first did.
+  targets.acted(scope, "t1", after);
+  const saved = targets.resolve(scope, "t1", undefined, "view_history");
+  assert.equal(saved.ok, true, JSON.stringify(saved));
+  if (!saved.ok) return;
+  assert.equal(saved.element.visibleText, "Get coupons");
+  assert.deepEqual(saved.element.classNames, ["b"]);
+  assert.ok(!JSON.stringify(saved).includes("Collected"), "the words the act put there are its effect, never the identity");
+  const exploring = targets.resolve(scope, "t1", undefined);
+  assert.equal(exploring.ok && exploring.element.visibleText, undefined, "exploration on the page as it now is asks for no words the act took away");
+  assert.deepEqual(exploring.ok && exploring.element.classNames, ["b"]);
+});
+
+test("an acted-on identity is not lent to another element under the handle, and a handle nothing acted on keeps the agreed identity", () => {
+  const targets = createWebLlmTargetPackets();
+  const scope = { projectId: "project.one", flowId: "flow.acted-moved" };
+  const before = view(undefined, [STORE_COUPON("Get coupons", "b"), SPEC("Space Grey", "#grey")]);
+  targets.remember(scope, before);
+  targets.acted(scope, "t1", before);
+  targets.remember(scope, view(undefined, [{ tagName: "a", selector: "#coupon-centre", visibleText: "Coupon centre" }, SPEC("Space Blue", "#grey")]));
+  const moved = targets.resolve(scope, "t1", ITEM, "view_history");
+  assert.equal(moved.ok && moved.element.visibleText, "Coupon centre", "another address is another control");
+  const untouched = targets.resolve(scope, "t2", ITEM, "view_history");
+  assert.equal(untouched.ok && untouched.element.visibleText, undefined, "a label two views disagree on stays dropped where nothing acted");
+});

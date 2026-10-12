@@ -226,3 +226,20 @@ test("a refused decision never reads as work done or under way, and a repeated r
   assert.deepEqual([thrice.outcome, thrice.label], [`Not done (3 times): ${because}`, `Change the Flow, run the step again: Not done (3 times): ${because}`]);
   assert.equal(cardWords(card({ kind: "draft", target: null, outcome: "failed", refused, times: 1 }), false).outcome, `Not done: ${because}`, "once is said as once");
 });
+
+// Lane A U1: an option chosen and a box ticked read "Click"; lane C: "Action · Dom next page".
+test("a card names the act where Core names one narrower than the kind, and keeps its target", () => {
+  assert.equal(cardWords(card({ name: "Choose", target: "Size" }), false).label, "Choose, Size: Done");
+  assert.equal(cardWords(card({ name: "Tick", target: "Gift wrap", testing: true }), false).name, "Testing: Tick");
+  assert.equal(cardWords(card({ kind: "navigate", name: "Next page", target: null }), false).label, "Next page: Done");
+  assert.equal(cardWords(card({ kind: "draft", name: "Send the Flow again", target: null, outcome: "failed", refused: { all: true, because: "the same Flow was already sent exactly like this and was not accepted" } }), false).label,
+    "Send the Flow again: Not done: the same Flow was already sent exactly like this and was not accepted");
+});
+
+// Lane D finding 2: a retried press read as a red card followed by a green one.
+test("a step that worked when tried again says on which try, and why the tries before did not", () => {
+  const words = cardWords(card({ target: "Confirm · Jonas Weber", retried: { tries: 2, why: "the site asked FluxIQ to slow down" } }), false);
+  assert.equal(words.state, "done");
+  assert.equal(words.outcome, "Done on the 2nd try. The first try didn't work: the site asked FluxIQ to slow down");
+  assert.equal(cardWords(card({ retried: { tries: 3, why: null }, result: "8 rows" }), false).outcome, "Done on the 3rd try: 8 rows. The first 2 tries didn't work");
+});

@@ -2,6 +2,8 @@ import type { FluxIQ, OutputDispatchRequest, OutputDispatchResult } from "fluxiq
 import type { JsonObject } from "fluxiq/core";
 import { ClientGatewayRequiredCommandContext } from "fluxiq/client-gateway";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
+import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
+import { webAutomationInterruptedDispatchReading, webAutomationUnansweredOutcome } from "../client/interrupted-action";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { outputTargetFromPayload } from "../output-nodes";
 
@@ -24,13 +26,27 @@ export async function dispatchWebAutomationOutput(
     };
     if (target) command.target = target;
     if (request.timeoutMs !== undefined) command.timeoutMs = request.timeoutMs;
-    const result = required ? await (async () => {
-      const outcome = await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command, { context: request.commandContext!, ...(request.signal ? { signal: request.signal } : {}) });
-      if (outcome.status !== "completed") { await ClientGatewayRequiredCommandContext.stop(request.commandContext!, outcome.status); throw new Error(`web.required_${outcome.status}`); }
-      return outcome.result;
-    })() : await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command);
-    const succeeded = result.status === "succeeded";
-    const message = stringValue(result.message);
+    const durable = required ? await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command, { context: request.commandContext!, ...(request.signal ? { signal: request.signal } : {}) }) : undefined;
+    if (durable && durable.status !== "completed") {
+      await ClientGatewayRequiredCommandContext.stop(request.commandContext!, durable.status);
+      // A required command whose outcome Core's ledger holds unknown -- its
+      // answer never came and the browser could not say what became of it --
+      // is reported with that record rather than thrown, so Core's run stops on
+      // it as Outcome uncertain after checking the page (t427). A receipt whose
+      // result is gone is not this dispatch's to read, and still throws.
+      if (durable.status !== "outcome_unknown") throw new Error(`web.required_${durable.status}`);
+      return unansweredResult(request.outputId);
+    }
+    const result = durable ? durable.result : await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command);
+    // A command the browser lost in flight answers `interrupted` in its payload
+    // (plan B3). Its status and record are decided again here from the command
+    // this dispatch sent: a committing act is `unknown` and uncertain, any
+    // other act a failure that did nothing (`client/interrupted-action/`).
+    const interrupted = webAutomationInterruptedDispatchReading(request.outputId, request.payload, result.payload);
+    const status = interrupted?.status ?? result.status;
+    const failure = interrupted?.failure ?? result.failure;
+    const succeeded = status === "succeeded";
+    const message = interrupted?.message ?? stringValue(result.message);
     // A robot check that stood on the landed page and cleared by itself rides
     // the client's payload as `checkWait` (`actions/cleared-check-wait.ts`).
     // Core reads it as the result's own `clearedWait`, never off the payload, so
@@ -43,25 +59,43 @@ export async function dispatchWebAutomationOutput(
     // only that literal, and nothing otherwise. `runtime/adapter.ts` returns
     // this payload to Core as it is, so the runtime path carries it too.
     const route = isRecord(result.payload) && result.payload.route === "ended" ? "ended" : undefined;
+    // What the extension's interference clearing pressed while this action ran
+    // (`actions/cleared-layers.ts`). Core reads it from the top of the dispatch
+    // payload, as it reads `route`, so it is lifted there: copied through its
+    // closed vocabulary, never passed through.
+    const clearedLayers = webAutomationClearedLayersValue(isRecord(result.payload) ? result.payload.clearedLayers : undefined);
     return {
       // `ok` stays the success flag; `status` is the command's own outcome, so
       // Core sees `timed_out` or `cancelled` rather than a bare failure.
       ok: succeeded,
       outputId: request.outputId,
-      status: result.status,
-      payload: compact({ status: result.status, message: result.message, result: result.payload, route }),
+      status,
+      payload: compact({ status, message, result: result.payload, route, clearedLayers }),
       // Core's IO path builds the node message from `error` alone
       // (`failedDispatchResult`), so a command that failed with only a message
       // — the usual shape of a client-side timeout or cancellation — would
       // otherwise arrive with no reason. A success never gains an error.
       ...(result.error ? { error: result.error } : !succeeded && message ? { error: message } : {}),
-      ...(result.failure ? { failure: result.failure } : {}),
+      ...(failure ? { failure } : {}),
       ...(clearedWait ? { clearedWait } : {})
     };
   } catch (error) {
     if (required) { await ClientGatewayRequiredCommandContext.stop(request.commandContext!, "web.required_dispatch_failed"); throw error; }
     return { ok: false, outputId: request.outputId, error: error instanceof Error ? error.message : "Web automation output dispatch failed." };
   }
+}
+
+/** The dispatch result of a required command whose outcome stayed unknown (`../client/interrupted-action/unanswered-outcome.ts`). */
+function unansweredResult(outputId: string): OutputDispatchResult<JsonObject> {
+  const unanswered = webAutomationUnansweredOutcome();
+  return {
+    ok: false,
+    outputId,
+    status: unanswered.status,
+    payload: { status: unanswered.status, message: unanswered.message },
+    error: unanswered.message,
+    failure: unanswered.failure
+  };
 }
 
 function targetSessionId(fluxiq: FluxIQ, metadata: JsonObject | undefined): string | undefined {

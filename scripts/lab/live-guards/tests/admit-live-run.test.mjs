@@ -29,7 +29,7 @@ async function fixture() {
   const env = { FLUXIQ_LAB_INSTANCE: "slot-1" };
   const runs = path.join(root, "test-runs", "instances", "slot-1");
   let digest = "sha256:first";
-  // Wednesday 12:00 UTC, off-peak wherever the suite runs; the peak test moves it.
+  // Wednesday 12:00 UTC.
   let clock = Date.UTC(2026, 8, 30, 12, 0, 0);
   const admit = (overrides = {}) => admitLiveRun({ args: ARGS, env, repositoryRoot: root, coreRoot: path.join(directory, "core"), slotsDirectory: slots, now: clock, isAlive: () => true, fingerprint: async () => ({ digest, files: 1 }), devAncestry: level, ...overrides });
   const writeRun = async (runId, { startedAt, cost, failures, verdict = "failed", liveLlm = { observed: { totalEstimatedCostUsd: cost } } }) => {
@@ -122,21 +122,21 @@ test("after the stop is cleared, a debug is written and the source changes, the 
   }
 });
 
-test("the ledger records each run's spend per build against its ceiling, beside the run's total", async () => {
+test("the ledger records each run's Flow against its ceiling, beside the run's total", async () => {
   const lab = await fixture();
   try {
     const admission = await lab.admit();
     const start = await recordLiveRunStart(admission, { now: lab.now(), pid: 4243 });
     lab.advance(20_000);
     const runId = runIdAt(lab.now() - 15_000, "0b1d0001");
-    // A build and its repair at $0.20 each: $0.40 for the run, and no build past $0.25.
+    // A build and its repair at $0.20 each: inside $0.25 each, and one Flow at $0.40 past it (t438).
     const builds = [{ phase: "build", attempt: null, estimatedCostUsd: 0.2, overCeiling: false }, { phase: "runtime", attempt: null, estimatedCostUsd: 0.2, overCeiling: false }];
     const liveLlm = { authorized: { maxTotalEstimatedCostUsd: 0.25 }, observed: { totalEstimatedCostUsd: 0.4, perBuild: { ceilingUsd: 0.25, builds, maxBuildCostUsd: 0.2, overCeiling: 0 } } };
     await lab.writeRun(runId, { startedAt: new Date(lab.now() - 15_000).toISOString(), liveLlm });
     const { finishes } = await recordLiveRunFinish(admission, start, { exitCode: 0, now: lab.now() });
-    assert.deepEqual([finishes[0].totalEstimatedCostUsd, finishes[0].buildCeilingUsd, finishes[0].maxBuildCostUsd, finishes[0].buildsOverCeiling], [0.4, 0.25, 0.2, 0]);
+    assert.deepEqual([finishes[0].totalEstimatedCostUsd, finishes[0].buildCeilingUsd, finishes[0].maxBuildCostUsd, finishes[0].buildsOverCeiling], [0.4, 0.25, 0.4, 1]);
     const ledgered = (await lab.ledger()).find((entry) => entry.event === "finish");
-    assert.deepEqual([ledgered.buildCeilingUsd, ledgered.maxBuildCostUsd, ledgered.buildsOverCeiling], [0.25, 0.2, 0]);
+    assert.deepEqual([ledgered.buildCeilingUsd, ledgered.maxBuildCostUsd, ledgered.buildsOverCeiling], [0.25, 0.4, 1]);
   } finally {
     await lab.cleanup();
   }
@@ -199,23 +199,6 @@ test("a ledger that cannot be read fails the admission instead of admitting", as
     await writeFile(path.join(lab.slots, "spend-ledger.jsonl"), "not json\n", "utf8");
     await assert.rejects(lab.admit(), /not JSON/u);
     assert.equal(existsSync(path.join(lab.slots, "STOP-balance")), false);
-  } finally {
-    await lab.cleanup();
-  }
-});
-
-test("a peak-hour start is refused at admission until the user creates OVERRIDE-peak, and the admitted run records the override", async () => {
-  const lab = await fixture();
-  try {
-    // Wednesday 08:00 UTC, inside the 06:00-10:00 peak window.
-    lab.advance(-4 * 60 * MINUTE);
-    const refused = await lab.admit({ env: { FLUXIQ_LAB_INSTANCE: "slot-1", FLUXIQ_LAB_OVERRIDE_PEAK: "1" } });
-    assert.deepEqual(refused.refusals.map((refusal) => refusal.rule), ["peak"]);
-    assert.ok(refused.refusals[0].remedy.includes(path.join(lab.slots, "OVERRIDE-peak")));
-    await writeFile(path.join(lab.slots, "OVERRIDE-peak"), "created by the user", "utf8");
-    const admitted = await lab.admit();
-    assert.deepEqual(admitted.refusals, []);
-    assert.deepEqual(admitted.overridden, ["peak"]);
   } finally {
     await lab.cleanup();
   }

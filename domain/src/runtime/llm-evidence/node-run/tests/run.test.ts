@@ -5,14 +5,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AutomationStudioActionPermissionGate } from "fluxiq/automation-studio";
-import type { JsonObject } from "fluxiq/core";
+import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   createWebAutomationLlmEvidenceRuntime,
   webRunnableNode,
   webRunnableNodeIds,
+  WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_RUN_NODE_TOOL_ID,
-  type WebLlmEvidenceGateway
+  type WebLlmEvidenceGateway,
+  type WebLlmRepeatingStructure
 } from "../..";
+import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 import { webObservationNodeId } from "../catalog";
 import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 
@@ -372,19 +375,23 @@ function page(title: string): JsonObject {
 const EXTRACT = "web.output.dom-extract_list";
 const READ_PERMITTED = async () => ({ permitted: true as const });
 const RESULTS_ONE = "https://shop.test/search?q=earbuds&page=1";
-const listRead = (item: string, extra: JsonObject = {}): JsonObject => ({ extractList: { item, fields: { name: { selector: ".name" } }, minItems: 0, ...extra } });
+// Since t432 the model reads a list only by the handle its detection issued; a
+// read it wrote out by hand is refused before it goes out (the last test here).
+// So each read below is of a detected list, and two lists are two captures.
+const CARDS = CAPTURED_DETECTIONS["product-catalog-largest"].structure as JsonValue;
+const ROWS = CAPTURED_DETECTIONS["data-table-largest"].structure as JsonValue;
 
 test("the same list on page 1 and page 5 of one search is one code, whatever the read keeps or how it pages", async () => {
-  const first = await readsOf(RESULTS_ONE, listRead(".card"));
-  const fifth = await readsOf("https://shop.test/search?q=earbuds&page=5#results", listRead(".card", { where: [{ field: "name", contains: ["pro"] }], paginate: false }));
+  const first = await readsOf(RESULTS_ONE, CARDS, {});
+  const fifth = await readsOf("https://shop.test/search?q=earbuds&page=5#results", CARDS, { minItems: 0 });
   assert.match(String(first), /^list:[0-9a-f]+$/u);
   assert.equal(first, fifth);
 });
 
 test("another list on the same page, or the same list on another path, is another code", async () => {
-  const cards = await readsOf(RESULTS_ONE, listRead(".card"));
-  const rows = await readsOf(RESULTS_ONE, listRead(".row"));
-  const deals = await readsOf("https://shop.test/deals?page=1", listRead(".card"));
+  const cards = await readsOf(RESULTS_ONE, CARDS, {});
+  const rows = await readsOf(RESULTS_ONE, ROWS, {});
+  const deals = await readsOf("https://shop.test/deals?page=1", CARDS, {});
   assert.notEqual(rows, undefined);
   assert.notEqual(deals, undefined);
   assert.notEqual(cards, rows);
@@ -401,20 +408,39 @@ test("a press and a look carry no list code", async () => {
   assert.equal(pressed.draft !== undefined && "reads" in pressed.draft, false);
 });
 
-/** Run one list read on a page at `location`; the code its draft statement sent. */
-async function readsOf(location: string, parameters: JsonObject): Promise<unknown> {
-  const gateway: WebLlmEvidenceGateway = {
+/** A page at `location` showing the detected list `structure`. */
+function listPage(location: string, structure: JsonValue): WebLlmEvidenceGateway & { reads: number } {
+  const gateway = {
+    reads: 0,
     eligibleSessionIds: () => ["session.one"],
-    executeAction: async (_sessionId, command) => {
-      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: Object.assign(page("Results"), { url: location }) } };
-      return { status: "succeeded", payload: { extracted: [{ name: "Row 1" }], extraction: { recordCount: 1, pagesRead: 1, itemsSeen: 1, truncated: false, fieldNames: ["name"], missingFields: [] } } };
+    structureDetectionSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId: string, command: { actionType: string }) => {
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded" as const, payload: { snapshot: Object.assign(page("Results"), { url: location }), structure: structuredClone(structure) } };
+      gateway.reads += 1;
+      return { status: "succeeded" as const, payload: { extracted: [{ name: "Row 1" }], extraction: { recordCount: 1, pagesRead: 1, itemsSeen: 1, truncated: false, fieldNames: ["name"], missingFields: [] } } };
     }
   };
-  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const result = await runtime.executeTool({ ...PROJECT, callId: "call.read", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: READ_PERMITTED, value: { node: EXTRACT, parameters, consequences: [] } });
-  assert.equal(result.effectApplied, true);
+  return gateway;
+}
+
+/** Detect the list on a page at `location` and read it by its handle; the code its draft statement sent. */
+async function readsOf(location: string, structure: JsonValue, extra: JsonObject): Promise<unknown> {
+  const runtime = createWebAutomationLlmEvidenceRuntime(listPage(location, structure));
+  const detected = await runtime.executeTool({ ...PROJECT, callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
+  const handle = (detected.evidence as WebLlmRepeatingStructure).extraction;
+  const result = await runtime.executeTool({ ...PROJECT, callId: "call.read", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: READ_PERMITTED, value: { node: EXTRACT, parameters: { extractList: { handle, ...extra } }, consequences: [] } });
+  assert.equal(result.effectApplied, true, JSON.stringify(result.evidence).slice(0, 400));
   return (result.draft as { reads?: string } | undefined)?.reads;
 }
+
+test("a list read the model wrote out by hand is refused before it goes out, as a guess at what it was never shown (t432)", async () => {
+  const gateway = listPage(RESULTS_ONE, CARDS);
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const result = await runtime.executeTool({ ...PROJECT, callId: "call.read", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: READ_PERMITTED, value: { node: EXTRACT, parameters: { extractList: { item: ".card", fields: { name: ".name" } } }, consequences: [] } });
+  assert.equal(result.effectApplied, false);
+  assert.equal(gateway.reads, 0, "nothing was read");
+  assert.match(JSON.stringify(result.evidence), /extraction_required/u);
+});
 
 // t285 (week report W1): an in-place press states what it changed on its draft
 // statement (`changed`, `../press-effect/change/statement.ts`) -- the same walk as

@@ -64,6 +64,7 @@ export function doneAgainWords(cards: readonly ActionCard[]): string {
 
 /** What a card that did its work did, for telling the same step done again; undefined for any card that cannot be one. */
 function identityOf(card: ActionCard): string | undefined {
-  if (card.outcome !== "done" || card.refused !== undefined || card.check || card.again !== undefined || !card.target) return undefined;
+  // A step already done was skipped, not done again (`already-done.ts`).
+  if (card.outcome !== "done" || card.already !== undefined || card.refused !== undefined || card.check || card.again !== undefined || !card.target) return undefined;
   return JSON.stringify([card.kind, card.target, card.testing === true]);
 }

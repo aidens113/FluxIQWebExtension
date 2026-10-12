@@ -117,7 +117,7 @@ test("a card is the same element, icon included, from started to done or failed;
     view.render(buildChatStream([], events), null, controls, "build-1");
     assert.equal(cards(root)[0], card);
     assert.deepEqual([card, ...card.descendants()], nodes, "updated in place, nothing remounted");
-    assert.deepEqual([card.getAttribute("data-state"), text(card, "chat-card-outcome")], ["failed", "Didn't work: it wasn't on the page"]);
+    assert.deepEqual([card.getAttribute("data-state"), text(card, "chat-card-outcome")], ["failed", "Didn't work: FluxIQ couldn't find it where it was saved"]);
 
     events.push(event(4, "exploring", { kind: "tool", title: "Clicking “Accept cookies”", ref: "core.run_node", status: "started" }));
     view.render(buildChatStream([], events), null, controls, "build-1");
@@ -209,7 +209,7 @@ test("a navigate card names its page, and a refusal says its own reason", async 
     ];
     view.render(buildChatStream([], events), null, controls, "run-1");
     const labels = cards(fake(view.element)).map((card) => card.getAttribute("aria-label"));
-    assert.deepEqual(labels, ["Open page, /ip/valueridge-napkins: Done", "Repair, Add to cart: Didn't work: FluxIQ didn't send it, as the step didn't say which control on the page to use"]);
+    assert.deepEqual(labels, ["Open page, /ip/valueridge-napkins: Done", "Repair, Add to cart: Didn't work: FluxIQ didn't send it, as the step didn't name its control the way FluxIQ needs"]);
   });
 });
 

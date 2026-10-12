@@ -11,8 +11,14 @@
 //   check     a `check`: the result check, its card saying the verdict
 //   step      a run's step ("Step 2 of 5: Open results"), its card saying
 //             how it went, and a build's failure marker
+//   recovery  a recovery Core reported on a run step (a step done around it,
+//             a start further along, a route, another way): what happened
+//             and why, and its card (`recovery-message.ts`); a step row with
+//             no recovery on it and no step of its own (an older Core's
+//             route) stays a step message with no card
 //   ask       what Core asked the person: a card waiting on them
-//   note      what Core noted, in words
+//   note      what Core noted, in words, and Core's own deciding row with
+//             its sentence ("Asking the AI model again"), which is status
 //   action    an action with no decision before it (a Core that does not
 //             explain its steps yet): its card
 //
@@ -55,7 +61,9 @@
 // (`apps/web/.../conversation/activity/steps/messages.ts` in FluxIQ Core).
 //
 // A card that did nothing and repeats one shown since anything new happened
-// is no new card: the card it repeats counts it (`card-repeats.ts`). Steps
+// is no new card: the card it repeats counts it (`card-repeats.ts`). A step
+// that didn't work and then did when the run tried it again is one card that
+// says on which try (`retried.ts`). Steps
 // done again before a retry, already shown as done, are one card that holds
 // them (`done-again.ts`).
 //
@@ -65,16 +73,18 @@
 // or Core's shared reading of the action, never a raw id.
 
 import { activityActionKey } from "fluxiq/ui";
-import { isInternalStep, type ClientGatewayActivity } from "../../../../shared/activity/index";
+import { isInternalStep, isModelThought, stepRecovery, type ClientGatewayActivity } from "../../../../shared/activity/index";
 import { actionCard, type ActionCard } from "./action-card";
 import { foldRepeatedCards } from "./card-repeats";
+import { foldRetriedCards } from "./retried";
 import { foldDoneAgain } from "./done-again";
+import { recoveryMessage } from "./recovery-message";
 import { stepWords } from "./words";
 
 type ActivityDetail = NonNullable<ClientGatewayActivity["detail"]>;
 
 /** What a message is. */
-export type StepMessageKind = "decision" | "repair" | "check" | "step" | "ask" | "note" | "action";
+export type StepMessageKind = "decision" | "repair" | "check" | "step" | "recovery" | "ask" | "note" | "action";
 
 /** One of FluxIQ's step messages. */
 export type StepMessage = {
@@ -113,7 +123,22 @@ type Unit = {
   asks: Map<string, Place>;
   /** A robot-check card still waiting for its other half: the ask, or the tool that met the check. */
   check: { place: Place; from: "ask" | "tool" } | undefined;
+  /** Each run step's label by its node, so a recovery for that node can name the step it was for. */
+  labels: Map<string, string>;
 };
+
+/**
+ * `next` with what `before` named and `next` does not: a kind of its own, the
+ * act's name that goes with it, and a target. A call's end is said after the
+ * page moved, and a name the start gave it is not lost ("Click · No thanks"
+ * became "Click · the page", t193).
+ */
+function withEarlierNames(before: ActionCard, next: ActionCard): ActionCard {
+  const card: ActionCard = { ...next, kind: next.kind === "other" ? before.kind : next.kind, target: next.target ?? before.target };
+  const named = next.kind === "other" ? before.name : next.name;
+  delete card.name;
+  return named === undefined ? card : { ...card, name: named };
+}
 
 /** A robot check still waiting on the person: the only card the other half of a check joins. */
 function waitsOnPerson(card: Pick<ActionCard, "kind" | "outcome">): boolean {
@@ -140,7 +165,8 @@ function stepFailedBy(event: ClientGatewayActivity, node: string | undefined): b
  */
 function settlesStep(event: ClientGatewayActivity): boolean {
   const detail = event.detail;
-  return event.phase === "repairing" && event.step === undefined && detail?.kind === "step" && detail.status === "failed" && detail.ref !== undefined;
+  // A recovery that failed or was held back has the same shape, and is a message of its own.
+  return event.phase === "repairing" && event.step === undefined && detail?.kind === "step" && detail.status === "failed" && detail.ref !== undefined && stepRecovery(event) === undefined;
 }
 
 /** The messages for `events` (oldest first), at most `limit` of them, the newest. */
@@ -170,7 +196,7 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
   const mark = (place: Place, next: ActionCard, sequence: number): void => {
     const draft = drafts[place.message]!;
     const before = cardAt(place);
-    draft.actions[place.card] = { ...next, key: before.key, kind: next.kind === "other" ? before.kind : next.kind, target: next.target ?? before.target };
+    draft.actions[place.card] = { ...withEarlierNames(before, next), key: before.key };
     draft.sequence = Math.max(draft.sequence, sequence);
   };
   /** The unit's robot-check card waiting for the other half named by `from`, while it still waits. */
@@ -185,10 +211,13 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
     lastAt = at;
     let unit = units.get(event.activityId);
     if (unit === undefined) {
-      unit = { decision: undefined, open: new Map(), step: undefined, stepNode: undefined, asks: new Map(), check: undefined };
+      unit = { decision: undefined, open: new Map(), step: undefined, stepNode: undefined, asks: new Map(), check: undefined, labels: new Map() };
       units.set(event.activityId, unit);
     }
-    if (unit.step !== undefined) {
+    const recovery = stepRecovery(event);
+    // A recovery is done around a step, not its end: a step it ran before or
+    // during is ended by the row after it, as it would be without it.
+    if (unit.step !== undefined && recovery === undefined) {
       const over = drafts[unit.step]!;
       // Core never ends a run step, so the next row of its unit does -- and
       // says how. A recovery for that same node, or the run itself failing, is
@@ -207,11 +236,25 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
     }
     const detail = event.detail;
     if (detail === undefined || isInternalStep(detail) || settlesStep(event)) continue;
+    if (recovery !== undefined) {
+      unit.decision = undefined;
+      const keys = { message: `step:${event.activityId}#${event.sequence}`, card: cardKey(event) };
+      drafts.push(recoveryMessage(event, keys, at, recovery, detail.ref === undefined ? undefined : unit.labels.get(detail.ref)));
+      continue;
+    }
     const status = detail.status;
     const words = stepWords(detail, event.step);
 
     if (detail.kind === "thought") {
       if (words.text === undefined) continue;
+      // Core's own deciding row with its sentence ("Asking the AI model again")
+      // is status, not the model's reason: a note, and no decision the next
+      // actions belong to (`isModelThought`, t378 W4).
+      if (!isModelThought(event)) {
+        unit.decision = undefined;
+        add(event, detail, "note", at, null);
+        continue;
+      }
       unit.decision = add(event, detail, event.phase === "repairing" ? "repair" : "decision", at, null);
       continue;
     }
@@ -239,7 +282,7 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
         // The end keeps what the start named: a call's end is said after the
         // page moved, and a name the start gave it is not lost
         // ("Click · No thanks" became "Click · the page", t193).
-        if (card !== null && before !== undefined) draft.actions[owner.card] = { ...card, kind: card.kind === "other" ? before.kind : card.kind, target: card.target ?? before.target };
+        if (card !== null && before !== undefined) draft.actions[owner.card] = withEarlierNames(before, card);
         draft.sequence = event.sequence;
         if (draft.kind !== "decision" && draft.kind !== "repair") {
           draft.title = words.title;
@@ -321,6 +364,8 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
       // announces it (t174-w88); one that still does is not shown either.
       if (card?.kind === "join") continue;
       const placed = add(event, detail, "step", at, card);
+      const label = event.step?.label?.trim();
+      if (!marker && detail.ref !== undefined && label) unit.labels.set(detail.ref, label);
       if (!marker && status === "started") {
         unit.step = placed;
         unit.stepNode = detail.ref;
@@ -332,8 +377,9 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
   }
 
   // Repeated refusals and failures are one card each that counts them (U-8, R2-U-7, `card-repeats.ts`),
-  // and steps done again before a retry are one line that holds them (D7, `done-again.ts`).
-  const folded = foldDoneAgain(foldRepeatedCards(drafts));
+  // a step that worked when tried again is one card that says on which try (lane D finding 2,
+  // `retried.ts`), and steps done again before a retry are one line that holds them (D7, `done-again.ts`).
+  const folded = foldDoneAgain(foldRetriedCards(foldRepeatedCards(drafts)));
   const kept = limit > 0 ? folded.slice(-limit) : [];
   const newest = new Map<string, StepMessage>();
   for (const draft of kept) newest.set(draft.activityId, draft);

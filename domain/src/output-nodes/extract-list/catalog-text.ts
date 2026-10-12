@@ -23,8 +23,15 @@
 // description says to detect the list, and the grammar leads with the handle
 // form the resolver takes (`runtime/llm-evidence/plan-resolution/`): which
 // detected columns to keep and under which key, a link's href as written, and
-// reading only the page shown. The literal request follows for a list nothing
-// detected.
+// reading only the page shown.
+//
+// **Only the handle form (t432).** The grammar used to close with the literal
+// request, `{item: css, fields: {key: css}}`, "for a list nothing detected",
+// and the example was a literal request. Both asked the model for selectors it
+// is never shown (user, 2026-10-10: the model names elements by the handles the
+// page view printed). A literal request stays valid for a hand-authored Flow
+// (`actions/extraction/`); a model that writes one is refused
+// (`runtime/llm-evidence/plan-resolution/written-literals.ts`).
 //
 // **The node saves its own rows.** With the list resolved, the next live build
 // read all 8 cards with every field, then failed on a `write-records` node the
@@ -228,17 +235,28 @@ export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
  * now work over: every row the read collects in the run, which the domain
  * declares on the record output rather than sending to the page
  * (`./one-page-read.ts`).
+ *
+ * **Rows a later step acts on are narrowed here (t378).** "Omit it, narrow
+ * later" stays right for a read whose rows are only the answer, but the rows a
+ * `repeat over` presses are the rows this read keeps: Core's end-of-run
+ * processing shapes only the saved answer. Lane D's build, told to narrow
+ * later, confirmed all eight friend requests where four were asked
+ * (`run-mv0fuual-f9e6f089`). Paging's returned room paid for the clause.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
   `{handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}]};`,
-  "where is optional: omit it, keep every item, narrow later. atMost/greaterThan/equals, contains/startsWith/endsWith/matches (text); list = any; not: true inverts; badge: is: \"present\".",
+  "where is optional: omit it, keep every item, narrow later; but rows a later step acts on (a repeat over) are narrowed here, by where. atMost/greaterThan/equals, contains/startsWith/endsWith/matches (text); list = any; not: true inverts; badge: is: \"present\".",
   "link=absolute URL, @href=raw href.",
-  "Or {item: css, fields: {key: css|css@attribute|column:<header>}}.",
   `Reads this page only. Over every row it collects in the run: dedupe?: true|key, sort?: "key desc", minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`
 ].join(" ");
 
 /**
- * One request the page would run: a product list, read one page.
+ * One request as a model writes it: a detected list named by its handle, two
+ * of its columns kept under the plan's own keys, read one page. Since t432 it
+ * is the handle form, which plan resolution makes the request the page runs;
+ * until then it was a literal request whose item and columns were selectors,
+ * which a model is never shown. Its list is a recipe site's, a kind of site no
+ * realistic scenario is (model guidance never teaches to the test).
  *
  * It names `minItems` as well, although 1 is the default and the value is
  * therefore the same request. Core reads a parameter's example as the
@@ -252,8 +270,8 @@ export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
  * `where` is here for the same reason and it is the sharper case: a key the
  * example omits is a key the model is refused for writing beside `extractList`,
  * so an example with no `where` is an example that cannot be narrowed to the
- * rows a person asked for. It shows the literal form, since the example is a
- * literal request; the detected form names a detected column by `field`.
+ * rows a person asked for. It names a detected column by `field`, as the handle
+ * form does.
  *
  * **It is the least a read needs, plus the one exclusion that is nearly always
  * right**, and for a day it was the most instead. It briefly showed four
@@ -297,9 +315,9 @@ export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
  * show where they go and change nothing; the grammar shows what they say.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE: JsonObject = {
-  item: "li.product",
-  fields: { name: ".name", price: ".price", url: "a@href" },
-  where: [{ read: ".sponsored-label", is: "absent" }],
+  handle: "extraction.1",
+  fields: { title: "title", link: "title@href" },
+  where: [{ field: "promoted", is: "absent" }],
   dedupe: false,
   sort: [],
   minItems: 1

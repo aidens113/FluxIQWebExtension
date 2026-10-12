@@ -1,6 +1,7 @@
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, assertLlmExecutionProfile, llmActionConsequences, type LlmActionConsequence, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
 import { requireSafePersistentWorkspaceName, type FluxIQTargetMode } from "./target-config.js";
 import { LAB_AUTHORING_MODE_FLAG, labAuthoringModeValue } from "./live-llm/index.js";
+import { parseRecoveryMatrixCommand, type RecoveryMatrixCommand } from "./recovery-matrix/command.js";
 
 export type EvidenceMode = "none" | "failure" | "checkpoints" | "events";
 export type TargetMode = FluxIQTargetMode;
@@ -24,7 +25,9 @@ export type LabCommand =
   | { command: "compare"; halvesReport: string }
   | { command: "interactive"; scenarioId: string; seed?: number; target?: TargetMode; workspace?: string; freshLogin?: true; livePanel?: false }
   // A saved Flow, replayed on the persistent workspace it was built in, with no model: `lab replay`.
-  | { command: "replay"; scenarioId: string; workspace: string; flowId: string; projectId?: string; instructionTaskId?: string; seed?: number };
+  | { command: "replay"; scenarioId: string; workspace: string; flowId: string; projectId?: string; instructionTaskId?: string; seed?: number }
+  // The state-aware recovery plan's provider-free acceptance matrix: `lab recovery-matrix` (`recovery-matrix/command.ts`).
+  | RecoveryMatrixCommand;
 
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const COMPARE_USAGE = "Usage: lab compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves (a report is a bench id or a path to its report.json)";
@@ -124,6 +127,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     return { command, scenarioId, workspace: requireSafePersistentWorkspaceName(workspaceValue, "--workspace"), flowId, ...(projectId === undefined ? {} : { projectId }), ...(taskId === undefined ? {} : { instructionTaskId: taskId }), ...optionalSeed(args) };
   }
   if (command === "inspect") return { command, runId: positional(args, 0, "run ID") };
+  if (command === "recovery-matrix") return parseRecoveryMatrixCommand(args);
   if (command === "compare") {
     rejectUnknownOptions(args, ["--halves", "--sequential"]);
     if (args.filter(value => value === "--halves").length > 1) throw new Error("--halves may only be specified once");
@@ -137,7 +141,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (reports.length !== 2 || first === undefined || second === undefined) throw new Error(COMPARE_USAGE);
     return { command, baselineReport: first, candidateReport: second, sharedLoad: !args.includes("--sequential") };
   }
-  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] [--no-live-panel] | run <scenario> [--no-live-panel] [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task repair|adapt --flow, or --llm-task create-flow)] [--direct-api-build (test-only, with --llm-task create-flow; never a pass)] | matrix (--all|--scenarios-json JSON) [--no-live-panel] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--project ID] [--instruction-task ID] [--seed N] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves");
+  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] [--no-live-panel] | run <scenario> [--no-live-panel] [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task repair|adapt --flow, or --llm-task create-flow)] [--direct-api-build (test-only, with --llm-task create-flow; never a pass)] | matrix (--all|--scenarios-json JSON) [--no-live-panel] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--project ID] [--instruction-task ID] [--seed N] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves | recovery-matrix --list|--ready|--case ID|--row N");
 }
 
 export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>, allScenarioIds: string[]): Array<{ scenarioId: string; repeatIndex: number }> {

@@ -1,6 +1,8 @@
 // An action card in words, for its view and for anyone who cannot see it:
 //
-//   name     Core's short name for the kind ("Click", "Robot check"); for a
+//   name     Core's short name for the act ("Choose", "Tick", "Next page")
+//            where it is narrower than the kind, else for the kind ("Click",
+//            "Robot check"): an option chosen read "Click" (lane A U1); for a
 //            step of a test run, "Testing: Click", since the step is named by
 //            its action and the test is what it was part of: every test step
 //            read "Test run · ×" (t174-w85 D4, `run-murwd8le-79e735a8`)
@@ -30,7 +32,9 @@
 //   outcome  "Working on it" and "Waiting for you" only while it is the
 //            action of the moment (the newest of work still under way);
 //            "Done", or "Done: 13 rows from 5 pages" when Core said what a
-//            finished action came to (its `result`), "Passed", "Didn't work:
+//            finished action came to (its `result`), "Already done" for a
+//            run step Core skipped because this run had already done its act
+//            (`already-done.ts`), "Passed", "Didn't work:
 //            it wasn't on the page",
 //            "Didn't pass: no price was shown"; "Not confirmed: ..." for a
 //            result check Core could not confirm, which is no failure: an
@@ -87,7 +91,7 @@ const MIN_TARGET_ROOM = 16;
 
 /** `card` in words; `current` is true while it is the action of the moment. */
 export function cardWords(card: ActionCard, current: boolean): CardWords {
-  const kind = ACTIVITY_ACTION_NAMES[card.kind] ?? ACTIVITY_ACTION_NAMES.other;
+  const kind = card.name ?? ACTIVITY_ACTION_NAMES[card.kind] ?? ACTIVITY_ACTION_NAMES.other;
   const name = card.testing ? `Testing: ${kind}` : kind;
   const target = card.target;
   const [state, outcome] = outcomeOf(card, current);
@@ -120,13 +124,34 @@ function outcomeOf(card: ActionCard, current: boolean): [CardWords["state"], str
     case "done":
       // Identical successful cards in a row are one that counts them (`card-repeats.ts`): "Done (5 times)".
       if (card.answer !== undefined) return ["done", `${counted("Done", card.times)}. ${card.answer}`];
+      // A step whose act this run had already done: skipped, and no failure (`already-done.ts`).
+      if (card.already) return ["done", counted("Already done", card.times)];
       if (card.tested !== undefined) return ["done", resultOf(card) === undefined ? counted(card.tested, card.times) : `${counted(card.tested, card.times)} — ${resultOf(card)}`];
+      if (card.retried !== undefined) return ["done", retriedWords(card.retried, resultOf(card))];
       return ["done", card.check ? joined(counted("Passed", card.times), card.said) : joined(counted("Done", card.times), resultOf(card))];
     case "failed":
       if (card.unconfirmed) return ["unconfirmed", joined("Not confirmed", card.said)];
       if (card.why === null && card.answer !== undefined) return ["failed", `${counted("Didn't work", card.times)}. ${card.answer}`];
       return ["failed", joined(counted(card.check ? "Didn't pass" : "Didn't work", card.times), card.why ?? card.said)];
   }
+}
+
+/**
+ * A step that worked when tried again, as one card (`retried.ts`): "Done
+ * on the 2nd try. The first try didn't work: the site asked FluxIQ to slow
+ * down", with what it came to after "Done on the 2nd try" when Core said.
+ */
+function retriedWords(retried: NonNullable<ActionCard["retried"]>, result: string | undefined): string {
+  const done = joined(`Done on the ${ordinal(retried.tries)} try`, result);
+  const before = retried.tries === 2 ? "The first try didn't work" : `The first ${retried.tries - 1} tries didn't work`;
+  return `${done}. ${joined(before, retried.why)}`;
+}
+
+/** 2 is "2nd", 3 "3rd", 11 "11th", 22 "22nd". */
+function ordinal(count: number): string {
+  const tens = count % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "th" : count % 10 === 1 ? "st" : count % 10 === 2 ? "nd" : count % 10 === 3 ? "rd" : "th";
+  return `${count}${suffix}`;
 }
 
 /** What a finished action came to, as Core said it; undefined when it said nothing. */

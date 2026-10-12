@@ -309,3 +309,80 @@ test("a click on a list row still resolves flat, with the row's position as meta
     control: { name: "Widget", kind: "link" },
   });
 });
+
+// -- The full fingerprint, and the save-time guard (t425) ---------------------
+// A repair is saved onto the Flow (`edit_action_target`), so it carries every
+// signal the packet published for its control -- not four of them -- and a
+// control it could find by one attribute alone is refused.
+
+test("a repair carries every signal the packet published for its control, and never its contents", () => {
+  const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings({
+    url: "https://example.test/item",
+    interactiveElements: [
+      {
+        tagName: "input",
+        selector: "#fb8y7yz1",
+        inputType: "text",
+        label: "Quantity",
+        value: "1",
+        attributes: { id: "fb8y7yz1", class: "qty-input form-control", type: "text", inputmode: "numeric", name: "qty", "data-testid": "quantity", value: "1", style: "width: 3em" },
+      },
+    ],
+  });
+  const typeAction = { nodeId: "quantity", definitionId: "web.output.dom-type", recordedTarget: { element: { tagName: "input", label: "Quantity", selector: "#fb1l6ufkg" } } };
+  const resolved = validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t1" }), typeAction, selectors);
+  assert.equal(resolved.status, "resolved", JSON.stringify(resolved));
+  const repaired = resolved.status === "resolved" ? resolved.target as Record<string, unknown> : {};
+  assert.equal(repaired.label, "Quantity");
+  assert.equal(repaired.id, "fb8y7yz1");
+  assert.equal(repaired.name, "qty");
+  assert.equal(repaired.testId, "quantity");
+  assert.deepEqual(repaired.classNames, ["qty-input", "form-control"]);
+  assert.equal(repaired.inputType, undefined, "a text field's default type is no signal; the packet leaves it out");
+  assert.equal(repaired.selector, "#fb8y7yz1");
+  // The identifying attributes only, in the builder's one list: never the box's value, its input mode or a style.
+  assert.deepEqual(repaired.attributes, { name: "qty", "data-testid": "quantity" });
+  assert.equal(JSON.stringify(repaired).includes("\"1\""), false, "what the box holds is not its identity");
+});
+
+test("a repair to a control found by one attribute alone is refused as one that cannot be told apart", () => {
+  // A wordless button known only by the id its selector is addressed through.
+  // It is the one button of the form the recording's was in, so the repair is
+  // anchored (`./equivalence.ts`) -- and would still be found by that id alone.
+  const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings({
+    url: "https://example.test/promo",
+    interactiveElements: [{ tagName: "button", selector: "#x9k2", attributes: { id: "x9k2" }, context: { formId: "promo" }, hasClickHandler: true }],
+  });
+  const clickAction = { nodeId: "dismiss", definitionId: "web.output.dom-click", recordedTarget: { element: { tagName: "button", id: "x9k2", selector: "#x9k2", context: { formId: "promo" } } } };
+  const verdict = validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t1" }), clickAction, selectors);
+  assert.deepEqual(verdict, { status: "ambiguous", reason: "target_indistinguishable" });
+
+  // The same button with its words is the same repair, and is saved.
+  const named = sanitizeWebLlmSnapshotWithBindings({
+    url: "https://example.test/promo",
+    interactiveElements: [{ tagName: "button", selector: "#x9k2", visibleText: "No thanks", attributes: { id: "x9k2" }, context: { formId: "promo" }, hasClickHandler: true }],
+  });
+  assert.equal(validateWebRuntimeTargetOverrideEvidence(named.evidence, target({ element: "t1" }), clickAction, named.selectors).status, "resolved");
+});
+
+// Set Checked is the chat's "Choose". Its repair was refused
+// `action_not_repairable` because a hand-kept list left it out, so the run
+// could not carry on from the failing step (r4a-4, F1).
+test("a Set Checked override with a shown handle resolves, whether its node or a recorded action failed", () => {
+  const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings({
+    url: "https://example.test/options",
+    interactiveElements: [
+      { tagName: "input", inputType: "checkbox", selector: "#gift", name: "Gift wrap" },
+      { tagName: "button", selector: "#go", name: "Continue" },
+    ],
+  });
+  const recordedTarget = { element: { tagName: "input", inputType: "checkbox", accessibleName: "Gift wrap" } };
+  for (const failedAction of [
+    { nodeId: "gift", definitionId: "web.output.dom-check", recordedTarget },
+    { nodeId: "gift", definitionId: "builtin.policy.action", outputId: "web.dom.check", recordedTarget },
+  ]) {
+    const resolved = validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t1" }), failedAction, selectors);
+    assert.equal(resolved.status, "resolved", JSON.stringify(resolved));
+    assert.equal(resolved.status === "resolved" ? (resolved.target as { selector?: string }).selector : undefined, "#gift");
+  }
+});

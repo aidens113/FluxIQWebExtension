@@ -58,7 +58,7 @@ import { publishedWebLlmPage } from "../page-view";
 import { present } from "../present";
 import { webBuildRefusalDiagnostic } from "../refusal-diagnostic";
 import { webActionPermission } from "../permission";
-import { resolveWebPlanNode } from "../plan-resolution";
+import { resolveWebPlanNode, webPlanFirstTargetHandle, webPlanStepMustDeclare, type WebPlanNodeResolutionInput } from "../plan-resolution";
 import { WEB_DECLINED_PRESS_INSTEAD } from "../press";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
@@ -82,7 +82,7 @@ import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type We
 import { webNodeCall as nodeCall, webNodeFlowParameters as flowParameters, webNodeShownCall as safeCall } from "./node-call";
 import { webNodeWriteAsked, webWrittenStep, webWrittenStepIssue } from "./written-step";
 import { webListReadCode } from "./list-read";
-import { webNodeDispatchWithRetries, webNodeFailureRefusal } from "./retries";
+import { webNodeDispatchWithRetries, webNodeEffectCheck, webNodeFailureRefusal } from "./retries";
 
 const EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 /**
@@ -191,6 +191,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   if (!continuing && run.request.startLocation !== undefined) run.arrivals.opening(buildOf(run), run.request.callId);
   if (!continuing) run.addresses.opening(buildOf(run), run.request.callId);
   if (!continuing) run.layers.opening(buildOf(run), run.request.callId);
+  if (!continuing) run.held.opening(buildOf(run), run.request.callId);
+  else run.held.hold(buildOf(run), continuing.calls);
   for (const address of continuing?.addresses ?? []) {
     run.addresses.held(buildOf(run), address, run.request.startLocation);
     if (run.request.startLocation !== undefined) run.arrivals.arrive(buildOf(run));
@@ -222,7 +224,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       run.shown(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, choice: undefined, changed: undefined, control: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
+        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, choice: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
@@ -254,7 +256,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // shape the resolver reads before anything else happens, and the *written*
     // form is what the draft keeps, so the step the Flow gains resolves the
     // same way this run did.
-    const written = withHandleShape(parameters);
+    const shaped = withHandleShape(parameters);
     // `gatedByCaller`, because this call's permission is decided a few lines
     // below against the page the model is looking at, with a refusal that
     // carries that page back to it. Resolution gates a *step of a Flow*, which
@@ -262,11 +264,12 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // `resolveWebPlanNode` rather than the narrow answer Core asks for, because
     // this is a record of a call: a column name the resolution had to guess at
     // is the difference between a wrong answer nobody can explain and one whose
-    // cause is written down (`../name-assumption.ts`).
-    const { resolution: resolved, assumed } = await resolveWebPlanNode(
-      { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters: written, gatedByCaller: true },
-      run.stores
-    );
+    // cause is written down (`../name-assumption.ts`). What the model wrote of the call names an element only
+    // by handle (t432); a rerun keeps what the held Flow saved, which it did not write (`./held-literals/`).
+    const resolving: WebPlanNodeResolutionInput = { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters: shaped, gatedByCaller: true };
+    run.held.author(resolving, buildOf(run));
+    const written = resolving.parameters; // A held step's shown copy put back to what its Flow saved (`./held-literals/`, t439).
+    const { resolution: resolved, assumed } = await resolveWebPlanNode(resolving, run.stores);
     record.assumed = assumed;
     if (resolved.status === "refused") {
       // The handle codes say which way the handle stopped naming one control,
@@ -281,19 +284,20 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // A node that acts on an element, whose parameters named no handle, is
     // acting on a locator the model invented: it has never been shown one.
     // Refused here, where the packet and the reason can be handed back, rather
-    // than on the page as a bare `target_not_found`.
-    if (resolved.status === "unchanged" && node.definition.metadata?.elementTarget === true) {
+    // than on the page as a bare `target_not_found`. Never the element a held
+    // step saved: it reruns as saved, as playback runs it (t439, `./held-literals/`).
+    if (resolved.status === "unchanged" && node.definition.metadata?.elementTarget === true && !run.held.heldElement(resolving)) {
       return refusal(undefined, "target_unobserved", rejectionDetail({
         reason: "target_not_a_handle", target: undefined, instead: HANDLE_SHAPE, missing: undefined, requestId: undefined
       }), record);
     }
     // A control named only by the label beside it is named by that label in the node it keeps (`./observed-control.ts`).
-    const ran = webLabelledIdentity(resolved.status === "resolved" ? resolved.parameters : written, current?.evidence, firstHandle(written));
+    const ran = webLabelledIdentity(resolved.status === "resolved" ? resolved.parameters : written, current?.evidence, webPlanFirstTargetHandle(written));
     // A press on a control the look just taken shows covered is not sent: it
     // would land on the cover (`./covered-target.ts`, C4). The refusal names
     // the cover and carries the page it is on, so the layer can be dealt with
     // first -- a popup that opened on a timer is named this way (C9).
-    const covered = current && node.effect === "mutate" && !writing ? webCoveredTarget(current.evidence, firstHandle(written)) : undefined;
+    const covered = current && node.effect === "mutate" && !writing ? webCoveredTarget(current.evidence, webPlanFirstTargetHandle(written)) : undefined;
     if (current && covered) {
       run.shown(current);
       return refusal(current, covered.code, rejectionDetail({
@@ -303,25 +307,29 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // No page, no control to have observed: the move that goes to the start
     // location acts on the browser rather than on anything in front of it.
     // The words the packet store keeps for the handle, for a control the look before acting does not describe (`./observed-control.ts`).
-    const control = current ? webObservedControl(current.evidence, firstHandle(written), ran, shownWords(run, written)) : { name: undefined, kind: "step" };
-    // A node that acts must say what acting would lastingly do, `[]` included.
+    const control = current ? webObservedControl(current.evidence, webPlanFirstTargetHandle(written), ran, shownWords(run, written)) : { name: undefined, kind: "step" };
+    // A node whose act the page decides must say what acting would lastingly do, `[]` included.
     // Saying nothing is not the same as saying it causes nothing: a step that
     // declared nothing would be waved past the gate every time the Flow ran,
     // and the one fact nobody but the model holds is what its own step means on
     // this site. An explicit `null` is the same as saying nothing: it is what a
     // stored call carried forward before `nodeCall` stopped writing it, and
     // "missing" is the refusal that tells the model what to write instead.
-    if (node.effect === "mutate" && (value.consequences === undefined || value.consequences === null)) {
+    // Which nodes must is the domain's one rule, the plan's and Core's script format's too (`webPlanStepMustDeclare`, t439:
+    // a saved navigate, check or type was refused on every rerun, `run-mv4912r9-53b05a51`). A press must, saved or not:
+    // undeclared, the permission gate would never be asked about it.
+    const declared = value.consequences === null ? undefined : value.consequences;
+    if (declared === undefined && webPlanStepMustDeclare(node.definitionId, written)) {
       return refusal(undefined, "invalid_input", rejectionDetail({
         reason: "missing_input_keys", target: undefined, instead: CALL_KEYS, missing: ["consequences"], requestId: undefined
       }), record);
     }
     // A written step does nothing, so nobody is asked; it is held to its declaration and the node's parameters instead.
-    const writeIssue = writing ? webWrittenStepIssue(node, ran, value.consequences) : undefined;
+    const writeIssue = writing ? webWrittenStepIssue(node, ran, declared) : undefined;
     if (writeIssue) return refusal(undefined, "invalid_input", writeIssue, record);
     const permission = writing ? { kind: "no_consequence" as const } : await webActionPermission({
       check: run.request.permission,
-      declared: value.consequences,
+      declared,
       control,
       verb: node.definition.label.toLowerCase(),
       // Not the model's word, and the reason a read is never refused: a node
@@ -365,9 +373,12 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     record.acted = true;
     // A list read also asks for a few of the rows its conditions turned down,
     // on this command only: the Flow keeps `ran` (`./rejected-rows.ts`).
-    const { result, attempts, lastingAct } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared: value.consequences }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, record);
+    // A lasting act whose answer was lost is checked against the step's own
+    // expected state before Core would make it again (`./retries/effect-check.ts`, plan B3).
+    const { result, attempts, lastingAct } = await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, record, webNodeEffectCheck(run, ran));
     assertActive(run.request.signal);
-    if (result.status !== "succeeded") {
+    // One the check showed landed counts as done, whatever its lost answer said.
+    if (result.status !== "succeeded" && lastingAct !== "landed") {
       // The node's own failure, under the node's own name. The page comes with
       // it -- whatever stood in the way is on it, with a handle to act on --
       // captured to fit inside what this call was allowed, which is what
@@ -419,12 +430,18 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // Arriving from nowhere changed the page by definition: there was none. A
     // page that could not be read was not compared, so it is not said.
     const changed = after === undefined ? undefined : current === undefined || JSON.stringify(after.evidence) !== JSON.stringify(current.evidence);
+    // The control this call acted on, named on its result by handle (`./outcome.ts` `controlHandle`, t442). A press that changed the page acts on what it
+    // pressed, whatever that prints as (`../plan-resolution/target-packets.ts` `pressed`, t378 W13); and a step later written for any control acted on
+    // saves it as this act found it, never as the act left it, with what the act made true as its effect (`acted`, t442 F1, t447 F2).
+    const named = webMovesThePage(node) ? undefined : webPlanFirstTargetHandle(written);
+    if (changed === true && node.definitionId === PRESS_NODE_ID && named !== undefined) run.stores.targets.pressed(buildOf(run), named);
+    if (current && node.effect === "mutate" && named !== undefined) run.stores.targets.acted(buildOf(run), named, current, after);
     // Whether the press answered a layer that stood in front of the page, one
     // this build did not open itself (`./press-effect/answered-layer.ts`,
     // `./own-layers/memory.ts`); then, whichever layers this press opened are the
     // build's own from here on. Never a look, a navigation or a read.
     const pressedOnPage = node.effect === "mutate" && !webMovesThePage(node);
-    const interruption = pressedOnPage && webAnsweredLayer(current?.evidence, after?.evidence, firstHandle(written), (layer) => run.layers.owns(buildOf(run), layer));
+    const interruption = pressedOnPage && webAnsweredLayer(current?.evidence, after?.evidence, webPlanFirstTargetHandle(written), (layer) => run.layers.owns(buildOf(run), layer));
     if (pressedOnPage) run.layers.pressed(buildOf(run), current?.evidence, after?.evidence);
     // The page, with what the node did to it written on the same result rather
     // than around it. One shape, the one every other page has: the compact
@@ -439,10 +456,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       unchangedPress: changed === false && node.definitionId === PRESS_NODE_ID ? PRESS_AGAIN : undefined,
       pageUnreadable: after === undefined ? true : undefined,
       // A press that un-chose (or chose) the control it pressed says so first (`./press-effect/choice.ts`).
-      choice: webPressChoice(node, current, after, firstHandle(written)),
+      choice: webPressChoice(node, current, after, webPlanFirstTargetHandle(written)),
       // Which lines it changed, on the same page only (`./press-effect/page-changes.ts`, t174/F37).
       changed: webNodePageChanges(node, current, after),
-      control: control.name,
+      control: control.name, controlHandle: named,
       read,
       addable: node.proposes,
       inFlow: undefined, attempts: attempts > 1 ? attempts : undefined
@@ -509,7 +526,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         written: undefined,
         // The press flipped whether its control is chosen, under the control's handle: Core
         // takes it out with a later press that flips it back (`./press-effect/toggle.ts`).
-        toggle: webPressToggle(node, current, after, firstHandle(written)),
+        toggle: webPressToggle(node, current, after, webPlanFirstTargetHandle(written)),
         // Which list on which page a list read read, as an opaque code: Core
         // refuses a second kept read of one list (`AS/runtime/flow-draft/
         // second-copy.ts`, `run-muq4oaof-464f5bce`). Made from the page the read
@@ -663,7 +680,7 @@ function unknownNode(named: unknown) {
 function handleRefusal(parameters: JsonObject, issueCodes: readonly string[]) {
   return rejectionDetail({
     reason: "parameters_not_resolved",
-    target: firstHandle(parameters),
+    target: webPlanFirstTargetHandle(parameters),
     // The codes, and then the shapes a handle is accepted in. A live build was
     // refused `web.handle.extraction_required` fifteen times and never once
     // corrected the shape, because a code is a name for a mistake and not a
@@ -674,35 +691,16 @@ function handleRefusal(parameters: JsonObject, issueCodes: readonly string[]) {
   });
 }
 
-/** The first target handle a call's parameters name, wherever it wrote it. */
 /**
  * The words the packet store keeps beside the identity of the control
  * `written`'s handle names, resolved bare as the call's words are
  * (`../tools.ts`, `describeCall`); nothing for a call that names no handle.
  */
 function shownWords(run: WebNodeRun, written: JsonObject): string | undefined {
-  const handle = firstHandle(written);
+  const handle = webPlanFirstTargetHandle(written);
   if (handle === undefined) return undefined;
   const resolution = run.stores.targets.resolve({ projectId: run.request.projectId, flowId: run.request.flowId }, handle, undefined);
   return resolution.ok ? resolution.words : undefined;
-}
-
-function firstHandle(value: JsonValue | undefined, depth = 0): string | undefined {
-  if (depth > 6 || value === undefined || value === null) return undefined;
-  if (typeof value === "string") return canonicalWebLlmTargetHandle(value);
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const found = firstHandle(entry, depth + 1);
-      if (found) return found;
-    }
-    return undefined;
-  }
-  if (typeof value !== "object") return undefined;
-  for (const entry of Object.values(value)) {
-    const found = firstHandle(entry as JsonValue, depth + 1);
-    if (found) return found;
-  }
-  return undefined;
 }
 
 /**

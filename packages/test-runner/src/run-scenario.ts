@@ -33,8 +33,8 @@ import { randomBytes } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { BrowserContext, Page } from "@playwright/test";
-import { assertClonePackage, assertRunManifest, canonicalClonePackageJson, flowLaneExclusion, resolveScenarioWorkflow, scenarioPageFactSchedule, type FacilityFailureStage, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type RunEvaluation, type WebScenario, type ExpectedFact } from "@fluxiq-web-extension/test-contracts";
-import { EvidenceBundle, EvidenceCaptureController, sha256 } from "@fluxiq-web-extension/test-evidence";
+import { assertRunManifest, flowLaneExclusion, resolveScenarioWorkflow, scenarioPageFactSchedule, type FacilityFailureStage, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type RunEvaluation, type WebScenario, type ExpectedFact } from "@fluxiq-web-extension/test-contracts";
+import { EvidenceBundle, EvidenceBundlePublicationError, EvidenceCaptureController } from "@fluxiq-web-extension/test-evidence";
 import type { EvidenceMode } from "./commands.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "./coordinator.js";
 import { classifyRunnerFailure, RunnerFailure, type RunnerFailureCategory } from "./failure.js";
@@ -48,8 +48,6 @@ import { assertExpectedFacts, playwrightScenarioFactProbe } from "./scenario-ass
 import { loadScenarioManifest } from "./scenarios.js";
 import type { FluxIQTargetConfiguration } from "./target-config.js";
 import { exportCloneSource } from "./clone-source-exporter.js";
-import { createDeterministicCloneIdMap } from "./clone-policy.js";
-import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePackageIntoIsolatedDestination } from "./isolated-flow-importer.js";
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant } from "./lab-control/index.js";
@@ -65,11 +63,12 @@ import { automationFailureFromActionResult, createRunManifest, flowActionTimings
 import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, flowStartPage, scenarioStartUrl, type FlowLanePermissionStop, type FlowLaneStoppedForPermission } from "./lane-rules/index.js";
 import { proveCoreActionRoundTrip } from "./core-action-probe/index.js";
 import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
-import { cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
+import { cleanupFailureOutcome, describeRecordingStartDiagnostic, pairingStatusWaitFailureDetails, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
-import { createdFlowChatEntry, verifyRunningBuildIdentity, ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, keepsRunState, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter } from "./run-scenario/index.js";
+import { createdFlowChatEntry, verifyRunningBuildIdentity, ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, keepsRunState, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter, importCloneDestination, pairRunExtension, startPerturbationLifecycle, type PerturbationLifecycle } from "./run-scenario/index.js";
 import { prepareIndependentCreationProject, writeCreationContext, type CreationContext } from "./run-scenario/chat-build/index.js";
+import type { RunPerturbation } from "./perturbations/index.js";
 
 /**
  * The blank tab a browser opens on, and where a Flow that must reach its own
@@ -80,10 +79,11 @@ import { prepareIndependentCreationProject, writeCreationContext, type CreationC
  */
 const BLANK_TAB_URL = "about:blank";
 
-/** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves, and a `creation` run passes its request's own. `livePanel: false` (`--no-live-panel`) keeps the extension panel from being shown beside a headed run's page. */
+/** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves, and a `creation` run passes its request's own. `livePanel: false` (`--no-live-panel`) keeps the extension panel from being shown beside a headed run's page. `perturbation` is a fault the run suffers on purpose (`perturbations/`), armed where the extension is connected and opened; `snapshots/perturbation.json` records when it fired and what the extension and Core reported after. Absent, the run is unchanged. */
 export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; creation?: CreatedFlowRequest; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun; replays?: number; livePanel?: boolean;
   /** How a `creation` run starts its build: `chat`, the default and the only way it can pass, types the task's instruction into the extension's chat window; `direct-api` (`--direct-api-build`, test-only) has the Lab call Core's build endpoint itself, and is never counted as a pass. */
-  buildEntry?: "chat" | "direct-api" };
+  buildEntry?: "chat" | "direct-api";
+  perturbation?: RunPerturbation };
 /**
  * `observation` carries the `RunEvaluation` fields only the lane that ran can
  * know, and `evaluation` is the run's own `RunEvaluation` built from it â€” the
@@ -165,6 +165,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   // When the created Flow's playback was dispatched and judged (epoch ms): its command attempts are written into the run's `steps/` after Core stops (`lab-runs/write-playback-steps.ts`).
   let playbackWindow: { since: number; until?: number } | undefined;
   let networkGuard: DeterministicNetworkGuard | undefined;
+  let perturbation: PerturbationLifecycle | undefined;
   let recordingStarted = false;
   let browserVersion = "unavailable";
   let verdict: "passed" | "failed" = "failed";
@@ -250,32 +251,21 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     topology.control?.recordProviderFailuresTo(providerFailures);
     if (requiresCoreRuntimeIdentity(Boolean(live), flowLane, topology.control)) { await verifyRunningCoreIdentity(topology.control, options.fluxiqRepositoryRoot, extensionPath, identity => bundle.writeStructured("snapshots/running-core-identity.json", identity)); await verifyRunningHostIdentity(topology.control, options.repositoryRoot, labPaths.hostModulePath, identity => bundle.writeStructured("snapshots/running-host-identity.json", identity)); await verifyRunningServerAdapterIdentity(topology.control, options.fluxiqRepositoryRoot, identity => bundle.writeStructured("snapshots/running-server-adapter-identity.json", identity)); }
     if (target.mode === "clone") {
-      if (!topology.control || !topology.authorizationPin || !cloneState.clonePackage) throw new RunnerFailure("environment.missing", "Isolated clone destination did not provide authenticated Core control");
-      const destinationControl = topology.control;
-      const destinationDefinitions = await destinationControl.listNativeNodeDefinitions(topology.projectId ?? "");
-      const destinationAssessment = cloneDestinationAssessment(cloneState.clonePackage, destinationDefinitions);
-      if (destinationAssessment.compatibility.verdict !== "compatible") {
-        throw new RunnerFailure("environment.missing", "Isolated Core does not provide every safe node definition required by the cloned Flow");
-      }
-      const destinationProject = await createRunOwnedCloneProject(destinationControl, { runId, sourceContentHash: cloneState.clonePackage.source.contentHash, authorizationPin: topology.authorizationPin });
-      const destinationFlowId = createRunOwnedCloneFlowId({ runId, sourceProjectId: cloneState.clonePackage.source.projectId, sourceFlowId: cloneState.clonePackage.source.flowId, sourceContentHash: cloneState.clonePackage.source.contentHash });
-      cloneState.clonePackage = {
-        ...cloneState.clonePackage,
-        idMap: createDeterministicCloneIdMap(cloneState.clonePackage.flowDocument, { projectId: destinationProject.projectId, flowId: destinationFlowId }),
-      };
-      assertClonePackage(cloneState.clonePackage);
-      cloneState.clonePackageHash = sha256(canonicalClonePackageJson(cloneState.clonePackage));
-      cloneState.destination = await importClonePackageIntoIsolatedDestination(destinationControl, { clonePackage: cloneState.clonePackage, destinationProjectId: destinationProject.projectId, authorizationPin: topology.authorizationPin });
-      topology = { ...topology, projectId: cloneState.destination.projectId };
-      await destinationControl.selectExistingContext(cloneState.destination.projectId);
-      await bundle.writeStructured("snapshots/clone-package.json", cloneState.clonePackage);
-      await bundle.writeStructured("snapshots/clone-import.json", { projectId: cloneState.destination.projectId, flowId: cloneState.destination.flowId, contentHash: cloneState.destination.contentHash, clonePackageHash: cloneState.clonePackageHash, attested: cloneState.destination.attested });
+      const { control, authorizationPin, projectId } = topology;
+      const { clonePackage } = cloneState;
+      if (!control || !authorizationPin || !clonePackage) throw new RunnerFailure("environment.missing", "Isolated clone destination did not provide authenticated Core control");
+      await importCloneDestination({
+        control, projectId, authorizationPin, runId, cloneState, clonePackage, bundle,
+        useDestinationProject: destinationProjectId => { topology = { ...topology!, projectId: destinationProjectId }; },
+      });
     }
     topology = await prepareIndependentCreationProject(topology, {
       independent: creation !== undefined && buildEntry === "chat", runId,
       workspace: target.mode === "persistent-isolated" ? target.workspace : null, domainId: LAB_PROJECT_DOMAIN_ID,
       writeIdentity: async identity => { creationIdentity = await writeCreationContext(bundle, identity); },
     });
+    perturbation = await startPerturbationLifecycle(options.perturbation, topology);
+    topology = perturbation.topology;
     const launched = await launchBrowser(topology, extensionPath);
     ({ context, browserVersion } = launched); await startTrace.attach(context); // The extension start, timestamped, for extension-start.local.json.
     periodicCapture.start(); labRun?.watchSteps(() => screenshotAdapter.capture(evidenceEvent(runId, scenario.id, undefined, "checkpoint", "The page after a step"))); // A picture into each page step's folder, by the same capture.
@@ -284,6 +274,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     networkGuard = await installRunNetworkGuard(context, topology, [...scenarioOrigins]);
     const consoleWatch = consoleErrors = new ConsoleErrorWatch(context, isScenarioUrl);
     const extensionControl = extensionPage = await extensionControlPage(context); startTrace.observePage(extensionControl, "control");
+    await perturbation.arm({ context, controlPage: extensionControl, scenarioOrigins: [...scenarioOrigins] });
     browserVersion = await browserVersionFromCdp(context, extensionPage);
     // The existing and clone lanes replay a pre-existing Flow, so their variant
     // is armed before the page opens. The two Flow lanes must not arm here: each
@@ -366,7 +357,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       checkGoal: () => findScenarioPageWithExpectedState(context!, page, activeTopology.scenarioOrigin, scenario, workflow).then(found => { scenarioPage = found; return true; }, () => false),
       bundle, publish: details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The live repair was applied and replayed"), details }),
     });
-    const paired = topology.control ? await pairExtension(extensionPage, topology, startTrace) : undefined;
+    const paired = topology.control ? await pairRunExtension(extensionPage, topology, startTrace) : undefined;
     if (paired) await activateScenarioTab(extensionPage, topology.scenarioOrigin); uiReview.phase("start");
     const stepCapture = new EvidenceCaptureController(bundle, evidence.capture, screenshotAdapter);
     if (target.mode === "existing") {
@@ -609,6 +600,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "error", completion.event.summary), details: completion.event.details }).catch(() => undefined);
       }
     }
+    // Before the browser closes, while the perturbation's after-fault readers still have the control page.
+    await perturbation?.writeRecord(bundle);
     // Before the browser closes: a hand-off in progress needs its tab, and the record is written into the bundle still being staged.
     await labPerson?.finish();
     await uiReview.close(); try { await context?.close(); }
@@ -669,8 +662,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     // Core has stopped, so its step log is closed: the created Flow's playback commands join the build's steps. Best-effort, and said when it fails.
     if (topology && labRun?.stepsDirectory && playbackWindow) {
       await writePlaybackSteps({ attemptsDirectory: path.join(topology.allocation.storageDir, "artifacts", "runtime", "command-attempts"), stepsDirectory: labRun.stepsDirectory, since: playbackWindow.since, until: playbackWindow.until ?? Date.now(), redactionLiterals: redactionLiterals ?? [], skippedSteps: playbackSkips, stateRoutingSteps: playbackRoutings })
-        .then(written => process.stderr.write(`[lab] the Flow's playback is in steps/ as ${written.steps.length} step(s)
-`), (error: unknown) => process.stderr.write(`[lab] the Flow's playback could not be written into steps/: ${error instanceof Error ? error.message : String(error)}
+        .then(written => process.stderr.write(`[lab] the Flow's playback is in ${labRun.stepsDirectory} as ${written.steps.length} step(s)
+`), (error: unknown) => process.stderr.write(`[lab] the Flow's playback could not be written into ${labRun.stepsDirectory}: ${error instanceof Error ? error.message : String(error)}
 `));
     }
     // Core has stopped and its logs are in the bundle; the clone cleanup below
@@ -751,8 +744,20 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     if (evaluation) await bundle.writeStructured("evaluation.json", evaluation);
     if (benchReceipt) await bundle.writeStructured("bench-receipt.json", benchReceipt);
     bundle.registerEvidencePolicy(evidence.capture);
-    const finalized = await bundle.finalize({ verdict, metrics });
-    await writeProviderFailureSidecar({ runDirectory: finalized.path, runId, log: providerFailures }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined); await writeExtensionStartSidecar({ runDirectory: finalized.path, runId, trace: startTrace, secrets }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined); // After `finalize`, never before: the artifact index is a walk of the staging directory, so a file written there would be published. A clean run writes none.
+    // After `finalize`, never before: the artifact index is a walk of the staging directory, so a file written there would be published. A clean run writes none.
+    const writeSidecars = async (runDirectory: string) => {
+      await writeProviderFailureSidecar({ runDirectory, runId, log: providerFailures }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined);
+      await writeExtensionStartSidecar({ runDirectory, runId, trace: startTrace, secrets }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined);
+    };
+    let finalized: Awaited<ReturnType<EvidenceBundle["finalize"]>>;
+    try {
+      finalized = await bundle.finalize({ verdict, metrics });
+    } catch (error) {
+      // Sealed but not published (a reader held the staging folder past the back-off and the copy fallback): the run is filed from the staging folder it stays in, so its sidecars, steps link and cost are kept, and the error names stage, errno and folder.
+      if (error instanceof EvidenceBundlePublicationError) await writeSidecars(error.stagingPath).then(() => labRun?.close({ verdict, bundlePath: error.stagingPath }));
+      throw error;
+    }
+    await writeSidecars(finalized.path);
     await labRun?.close({ verdict, bundlePath: finalized.path }); // Best-effort, after `finalize` like the sidecars: links the bundle's `steps` to the run's, copies its key files, rebuilds `lab-runs/index.md`.
     return { runId, verdict, path: finalized.path, ...(observation ? { observation } : {}), ...(evaluation ? { evaluation } : {}), ...(failureCategory ? { failureCategory } : {}), ...(permissionStop ? { permissionStop: { verdict: "stopped_for_permission" as const, ...permissionStop } } : {}) };
   } finally {
@@ -761,14 +766,6 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   }
 }
 
-type PairedExtensionStatus = Record<string, unknown> & { connectionState: "connected"; sessionId: string };
-async function pairExtension(page: Page, topology: RunningTopology, trace: ExtensionStartTrace): Promise<PairedExtensionStatus> {
-  return pairExtensionWithColdEpochRecovery({
-    connect: () => trace.timed("connect", async () => (await runtimeMessage(page, { type: "fluxiq.connect", settings: { gatewayUrl: topology.gatewayUrl, coreApiUrl: topology.fluxiqOrigin, autoReconnect: true, captureMutations: true, captureInputValues: true, captureSnapshots: true } })).status, status => ({ connectionState: typeof status?.connectionState === "string" ? status.connectionState : "unreported", lastError: typeof status?.lastError === "string" ? status.lastError : null })),
-    readStatus: () => extensionStatus(page),
-    approvePairing: referenceCode => trace.timed("approve", () => topology.control!.approvePairing(referenceCode)),
-  });
-}
 /** The facts `finalStateFacts` chooses: the final state, then a positive primary run's playback-goal facts. */
 async function assertFinalState(page: Page, scenario: WebScenario, workflow: ResolvedScenarioWorkflow) { await assertExpectedFacts(finalStateFacts(scenario, workflow), playwrightScenarioFactProbe(page)); }
 /** The final-state facts that did not hold, on the fixture page that came nearest the goal, newest first among equals. */
