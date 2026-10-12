@@ -1,7 +1,7 @@
 # Live Testing Handoff Audit — 2026-10-11
 
 Status: Active
-Status detail: A historically qualified; B round5 first creation/replay passed; round6 B/C/D failed; t458/t459 integrated; t454 final combined-source supervisor gates underway.
+Status detail: A historically qualified; B round5 first creation/replay passed; t458/t459/t454 integrated; changed-source B/C/D round-seven preparation underway at $0.25/64build calls.
 Created: 2026-10-11
 Last updated: 2026-10-11
 Owner: Codex senior supervisor
@@ -96,11 +96,18 @@ content-harness proof passes:48hidden rows preserve updated hidden and stale vis
 saved/trial projections,45selector withholding and hashes independently checked. Runtime stub excludes
 actual background/gateway delivery and improved model verdicts; nonempty sensitive fields0 leaves secret
 withholding covered by owner units. Two failed probe-driver setups are retained and diagnosed, not product passes.
-t454 no-packet undo, hydrated public-writer and orphan claim repairs pass worker107tests, including14actual
-process cases. Supervisor synced the final combined dev pair, rebuilt Core51.174s/7250outputs, ran cache-free
-Core types/domain freshness-types and93owner tests/12files; actual process/32state/final audit gates remain.
+t454 is integrated/pushed at downstream3b40d762/Core4fcb0940. Supervisor final combined-source Core build
+51.174s/7250outputs, cache-free Core types, domain freshness-types,93owner tests/12files and14actual process
+tests/2files all passed, as did native audits/staged whitespace. Original32state FIFO probe passed exact stop,
+count/order/end/immutable-repeat/late-append/reopen/close assertions: typed32/file0/chunkreads32, drain3.173s.
+Private claims recover only exact proven dead owners in one host/PID namespace; live/unknown/reused-live
+owners refuse. Identical complete uncorrelated removed packets remain ambiguous/refused. Historical bytes
+and public sequences/IDs/hydrated responses preserved. Evidence copied into ignored test-runs/task-evidence/t454
+before owning cleanup. This does not prove browser/gateway backlog resolution; t381 pool WIP stays unmerged.
 Then qualify B/C/D on a newly frozen
-pair with the verified $0.25 test ceiling. Do not advance dev during a live streak. Round-four source was Core
+pair with the verified $0.25 test ceiling and existing64build-call bound. Explicit whole-run token check48million
+retains the previous exposure, per-request992000/8000/1000000 unchanged. This Lab run-token check is post-run;
+initial chat versus build calls and whole-test cost must be reconciled separately. Do not advance dev during a live streak. Round-four source was Core
 b27c0d64/downstream d1e516e6 (lane documentation commits differed); all three attempts failed their end-to-end
 gates. Each creation requires full debug and separate zero-model replay before another launch; failure requires
 changed source. t380 is now integrated; recording-persistence measurement, three-site adaptation, breadth/UX
@@ -372,6 +379,33 @@ the results and any required repairs pass current owner tests and fresh-process 
 
 ## Worker Briefs
 
+### Brief: a-review — B round seven
+- Repository: retained paired t262, slot3/instance t262-slot-3/workspace t262-b; supervisor syncs the selected dev pair before dispatch.
+- Task: prepare then qualify original bigbox-retail-pickup-cart-store-remembered-after-creation, candidate chat/headed, two same-pair creations with separate no-model replays; one attempt at a time.
+- Required reads: Current State; next-round-launch-plan.md; original B task/round-six full debug and exact oracle; testing-facility launch/replay/waste guards.
+- Owns (may edit): own live-b-round7.md report, lane-b-round7.md report, new run-id debugs and ignored owning Lab evidence; no source/shared docs/old reports.
+- Must not touch: original instruction/oracle/variant/permits, env files, user panel, profiles/data or source/branches/commits; no full suites, guard overrides or paid auto-relaunch.
+- Definition of done: owning current builds and actual zero-call ready64calls/48millionrun tokens/$0.25both purses/per-requestunchanged; send receipts before paid launch. Supervisor clears one attempt after inspection; send actual four identities immediately. Full every-step/call/UI/debug/exact oracle/cost accounting; passing creation requires separate disabled-provider unchanged-hash replay/all5counters0 before supervisor permits second. Failure stops pending changed relevant source; balance failure stops all paid lanes.
+- Report to: docs/working/live-testing-handoff-audit-2026-10-11/reports/live-b-round7.md in t262.
+
+### Brief: b-debug — C round seven
+- Repository: retained paired t451, slot1/instance t451-slot-1/workspace t451-c; supervisor syncs the selected dev pair.
+- Task: same B round-seven qualification/preflight/debug/replay/stop gates, original everything-store-plus-earbuds-under-50, original five-page dataset/structured-loop oracle and415char digest unchanged.
+- Required reads: Current State; next-round-launch-plan.md; C round-six report/full86step debug; original C task/oracle and testing-facility guards.
+- Owns (may edit): live-c-round7.md, lane-c-round7.md, new run-id debugs and ignored owning Lab evidence in t451 only.
+- Must not touch: source/shared docs/old reports/tasks/oracles/permits/env files, user panel/data/profiles/branches/commits/full suites/guard overrides; no paid auto-relaunch.
+- Definition of done: same64build calls/explicit48millionrun tokens/$0.25whole-test/preserved per-request gates as B; actual ready reviewed before one attempt; complete debug and exact oracle plus separate same-hash disabled-provider/all5zero replay before second clearance. No semantic success from accepted submission or extra budget; balance stops all.
+- Report to: docs/working/live-testing-handoff-audit-2026-10-11/reports/live-c-round7.md in t451.
+
+### Brief: c-validation — D round seven
+- Repository: retained paired t275, slot4/instance t275-slot-4/workspace t275-d; supervisor syncs the selected dev pair.
+- Task: same B round-seven qualification/preflight/debug/replay/stop gates, original social-network-feed-confirm-requests and339char digest unchanged; inspect included/excluded complete quantities, duplicate lasting acts and persisted interruption honestly.
+- Required reads: Current State; next-round-launch-plan.md; D round-six full88step debug, original D task/oracle and testing-facility guards.
+- Owns (may edit): live-d-round7.md, lane-d-round7.md, new run-id debugs and ignored owning Lab evidence in t275 only.
+- Must not touch: source/shared docs/old reports/tasks/oracles/permits/env files, user panel/data/profiles/branches/commits/full suites/guard overrides; no paid auto-relaunch/accept-unchanged shortcut.
+- Definition of done: same64build calls/explicit48millionrun tokens/$0.25whole-test/preserved per-request gates as B; actual ready reviewed before one attempt; full debug/exact oracle/accounting and separate same-hash disabled-provider/all5zero replay before second clearance. Pacing retries are not durable adaptation proof; balance stops all.
+- Report to: docs/working/live-testing-handoff-audit-2026-10-11/reports/live-d-round7.md in t275.
+
 ### Brief: b-debug — recording claim death recovery review
 - Repository: paired t454; C froze these owners before dispatch.
 - Task: independently review private claim PID/exact-proof takeover and descriptor fencing; no execution or source edits.
@@ -402,6 +436,14 @@ the results and any required repairs pass current owner tests and fresh-process 
 Historical worker briefs moved to [the settled-brief archive](./live-testing-handoff-audit-2026-10-11/archive/2026-10-11-settled-worker-briefs.md); current briefs above and active repair briefs under Audit Findings remain authoritative.
 
 ## Work Ledger
+
+### 2026-10-11 — Passive result view and recording persistence independently accepted
+- Agent: Codex senior supervisor; A/B/C workers.
+- Changed: t459 passive result seam/architecture and t454 durable recording identity/read/removal/claim/normalization owners integrated downstream first/Core second and pushed both dev branches.
+- Why: final result checks omitted hidden current state; recording zero cursor split history and later identity/cache/crash defects lost or conflicted with durable entries.
+- Validation: t459 supervisor24Core/17domain tests, fresh types/built adapter/audits; corrected actual headed content-harness proof independently parsed/hashes checked. t454 supervisor107tests/14files including14actual process, fresh Core51.174s/domain types and native audits; original32state exact FIFO/restart probe typed32/file0/chunkreads32. Staging caught three new-test trailing blank lines; removed without behavioral change, staged whitespace passed. No full suites or model calls in these fix gates.
+- Outcome: accepted source heads downstream3b40d762/Core4fcb0940. Core legacy full-check finish bypassed only after observed narrow gates; evidence/profiles retained outside owning cleanup.
+- Follow-up: new frozen-pair B/C/D qualification at$0.25/64build calls/explicit48millionrun tokens, all per-request limits unchanged; browser/gateway recording backlog still unverified.
 
 ### 2026-10-11 ? Settled worker briefs archived
 - Agent: Codex senior supervisor.
