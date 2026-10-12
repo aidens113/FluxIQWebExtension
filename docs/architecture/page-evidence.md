@@ -30,6 +30,29 @@ Failed, missing or cancelled result captures are not replaced with an ordinary
 view. This domain requires the matching optional Core binding contract; domains
 that omit it retain their existing initial-observation path.
 
+## Start state for a build's site reset
+
+Before each candidate trial, a build puts the site back the way it found it
+(t462; Core's `flow-bootstrap/site-reset/`). The web domain answers Core's
+optional `startState` binding from `domain/src/runtime/llm-evidence/start-state/`
+with the same passive capture `observeResult` takes. Hidden elements are
+included; nothing is restamped or retained; no handle, selector or binding is
+kept. The state is the address, the title, and the page's lines without their
+handles. Those lines are read by `page-view/handle-free-lines.ts`, the same
+reading a state diff makes. Then come the non-rendered state rows a result
+check prints.
+
+Left out of the state is whatever stands in front of the page: a dialog, a
+recognised cover or the front layer, everything described beneath one, and
+everything inside an open modal. An interruption is not the site's state. A
+`covered-by` that names a layer left out is dropped from its line.
+
+Given the `start` it answered as the build began, it says what `differs`, as a
+multiset of lines: `location: <start> -> <now>`, then `gone: <line>`, then
+`new: <line>`. Nothing is capped. A `start` it did not make answers
+`undefined`. Core takes the target back to the build's start before it asks,
+and shows the model `differs`.
+
 ## One Contract, In The Domain
 
 The wire shape is declared **once**, in
