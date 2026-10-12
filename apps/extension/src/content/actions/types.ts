@@ -28,6 +28,7 @@ import type {
   WaitConditionOutcome,
   WaitConditionRequest
 } from "../action-runtime";
+import type { WebAutomationFailureCode } from "@fluxiq-web-extension/domain/client";
 import type { ListExtractionOptions, ListExtractionOutcome } from "../extraction";
 import type { PageMove } from "../extraction/page-advance";
 import type { SnapshotCaptureOptions } from "../../shared/snapshot-capture-options";
@@ -129,13 +130,18 @@ export type ContentActionDependencies = {
    */
   watchIgnoredPress(pressed: Element): IgnoredPressWatch;
 
-  /** Succeeds, or fails with `output_not_observed` when the validation did not hold. */
+  /**
+   * Succeeds, or fails with `output_not_observed` when the validation did not
+   * hold -- or with `failureCode`, when the verb knows the failure more
+   * exactly (a select's option not offered, t464).
+   */
   success(
     action: BrowserActionCommand,
     startedAt: number,
     message: string,
     validation: BrowserActionValidation,
-    evidence?: ActionResultEvidence
+    evidence?: ActionResultEvidence,
+    failureCode?: WebAutomationFailureCode
   ): BrowserActionResult;
   failure(action: BrowserActionCommand, error: unknown, startedAt?: number): BrowserActionResult;
   /** The target was disabled, hidden, or covered: ACTION_REJECTED with a code. */

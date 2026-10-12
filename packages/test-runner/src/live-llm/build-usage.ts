@@ -6,6 +6,7 @@
 
 import type { CreatedFlowBuild, CreatedFlowBuildStep } from "../flow-lane/index.js";
 import type { LiveLlmObservedCall, LiveLlmObservedUsage } from "./observed-usage.js";
+import type { LiveLlmStepLogSpend } from "./step-log-spend.js";
 
 /**
  * `calls` is Core's count: `totalProviderCallCount`, which is one per loop
@@ -18,11 +19,16 @@ import type { LiveLlmObservedCall, LiveLlmObservedUsage } from "./observed-usage
  * (`run-mudw1ktb-0557816b`). Nothing changed in this function for that; the
  * number arriving in `providerCalls` is simply the right one now.
  *
- * Where Core gave none, a build it says it sent a
- * request for counts as one call and a build it says it never sent counts as
- * none, so an unknown count can neither pass as spend-free nor hide a refusal
- * behind a guess. A build that reached no provider carries a gate naming Core's
- * stage and code, so the refusal says why.
+ * Where Core gave none, the run's step log counts it: every call it names as
+ * the creation build's (`byPart.creation`, every phase, the trial judges and
+ * the reading of the instructions included, as Core's accounting holds their
+ * spend). A candidate-mode build carries no evidence-loop audit, so Core gives
+ * no count, and lane D round 8 (`run-mv5jnc5m-a47c3e59`, t466) reported its 32
+ * calls as 1 and 25 more as unattributed. Where neither gave one, a build Core
+ * says it sent a request for counts as one call and a build it says it never
+ * sent counts as none, so an unknown count can neither pass as spend-free nor
+ * hide a refusal behind a guess. A build that reached no provider carries a
+ * gate naming Core's stage and code, so the refusal says why.
  *
  * **The per-call ledger is read, not declared absent.** `observedCalls` was the
  * empty list and `perCallRecords` the constant `not recorded` for every build
@@ -33,8 +39,8 @@ import type { LiveLlmObservedCall, LiveLlmObservedUsage } from "./observed-usage
  * Core, or a reader, that publishes none still reports `not recorded`, which
  * stays the honest answer rather than a hard-coded one.
  */
-export function liveLlmBuildUsage(build: CreatedFlowBuild): LiveLlmObservedUsage {
-  const calls = build.providerCalls ?? (build.providerInvocation === "not_attempted" ? 0 : 1);
+export function liveLlmBuildUsage(build: CreatedFlowBuild, stepLog?: LiveLlmStepLogSpend | null): LiveLlmObservedUsage {
+  const calls = build.providerCalls ?? stepLogBuildCalls(stepLog) ?? (build.providerInvocation === "not_attempted" ? 0 : 1);
   const totals = build.accounting;
   const failure = build.failure;
   const observedCalls = buildProviderCalls(build);
@@ -67,6 +73,13 @@ export function liveLlmBuildUsage(build: CreatedFlowBuild): LiveLlmObservedUsage
           ...(failure ? { code: failure.code } : {}),
         },
   };
+}
+
+/** Every call the step log names as the creation build's, in any phase; `null` where it names none. */
+function stepLogBuildCalls(stepLog: LiveLlmStepLogSpend | null | undefined): number | null {
+  const phases = Object.values(stepLog?.byPart?.creation ?? {});
+  const calls = phases.reduce((total, phase) => total + phase.calls, 0);
+  return calls > 0 ? calls : null;
 }
 
 /**

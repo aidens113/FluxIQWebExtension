@@ -26,6 +26,7 @@ expected failure names.
 | `TARGET_NOT_FOUND` | `web.target.not_found` | `target_not_found` | yes | `target_resolution` |
 | `TARGET_AMBIGUOUS` | `web.target.ambiguous` | `target_ambiguous` | no | `target_resolution` |
 | `OUTPUT_NOT_OBSERVED` | `web.validation.output_not_observed` | `output_not_observed` | yes | `verification` |
+| `OPTION_NOT_OFFERED` | `web.validation.option_not_offered` | `output_not_observed` | no | `verification` |
 | `STATE_MISMATCH` | `web.validation.state_mismatch` | `unexpected_state` | no | `verification` |
 | `NAVIGATION_UNEXPECTED` | `web.navigation.unexpected` | `navigation_unexpected` | no | `confirmation` |
 | `PAGE_CHANGED` | `web.page.changed` | `page_changed` | yes | `execution` |

@@ -68,7 +68,22 @@
 // **values** -- what the list extraction read from that row -- and those win
 // over both (`holdsRowValues` below, t195). A control in no record is then
 // checked against the row its own kind marks out: the part of the page that
-// holds it and no other control alike to it (`rowOfOneControl`).
+// holds it and no other control alike to it (`control-row.ts`).
+//
+// ## A row the page drew as plain markup (t463)
+//
+// A `<div>` is not a record, and that rule stands. But a control in no record
+// whose kind repeats -- bigbox's cart line, each a `<div>` with a select named
+// "Qty" -- is recorded by the row its kind marks out, when that row is one of a
+// repeated structure (its twin's row a sibling of the same tag and class). It
+// carries the row's **title** -- the first heading in it, else the first
+// link's words, the item's name on a cart line or a card -- or, where the
+// neighbouring row's title is the same, the row's whole words. A replay accepts
+// a candidate only where an ancestor holding it and no other alike control is
+// titled, or reads whole, as recorded; one in another row, or in a row whose
+// words are gone, is refused (`inNamedRow`). Lane B round 8 refused step 27 as
+// ambiguous, and its step 26 acted on whichever line a positional selector
+// reached (`run-mv5jnc62-01c3609a`).
 //
 // The text leaves out two kinds of words. A sensitive control's contents, by
 // the one rule `sensitive-text.ts` owns (decision D2). And the words inside
@@ -100,9 +115,8 @@
 import { isSensitiveFormControl } from "../element-traits";
 import { isWithinSensitiveControl } from "../sensitive-text";
 import type { DomElementContext } from "../types";
-import { accessibleNameFor } from "./accessible-name";
 import { boundedText } from "./bounded-text";
-import { implicitRole } from "./implicit-role";
+import { controlRow, soleAncestors } from "./control-row";
 import { normalizedText } from "./normalized-text";
 import { parsedUrl } from "../../shared/parsed-url";
 
@@ -152,12 +166,161 @@ const STATEFUL_SUBTREE = 'button,select,textarea,[role="button"],[role="switch"]
  */
 export function recordIdentity(element: Element): RecordIdentity | undefined {
   const record = enclosingRecord(element);
-  if (!record) return undefined;
-  const key = recordKey(record);
-  if (key) return key;
-  if (!repeatedAtCapture(record)) return undefined;
-  const text = recordText(record);
+  if (record) {
+    const key = recordKey(record);
+    if (key) return key;
+    const text = repeatedAtCapture(record) ? recordText(record) : undefined;
+    if (text) return { text };
+  }
+  return controlRowIdentity(element);
+}
+
+/** The tags a person acts on, whose copy in every row is the wrong-row risk (t463). */
+const ROW_CONTROL_TAGS: ReadonlySet<string> = new Set(["button", "select", "textarea", "input", "summary"]);
+/** The ARIA roles that say the same thing about an element of any tag. */
+const ROW_CONTROL_ROLES: ReadonlySet<string> = new Set([
+  "button", "link", "checkbox", "switch", "combobox", "radio", "menuitem", "tab", "spinbutton", "textbox", "searchbox", "slider"
+]);
+
+/**
+ * A control in no record the page drew, named by the words of the row its own
+ * kind marks out (`control-row.ts`) -- bigbox's cart line, a `<div>` with a
+ * "Qty" select in it like every other line's (t463, `run-mv5jnc62-01c3609a`).
+ *
+ * Only for a control, because only a control is acted on, and because the walk
+ * that finds the row runs for every control a snapshot describes and is not
+ * worth running for its wrappers and words. Only for a row that is one of a
+ * repeated structure: its twin's row is a sibling of the same tag and class,
+ * so two unrelated places that happen to hold a "Sign in" each -- a header and
+ * a footer -- are not taken for two rows of one list.
+ *
+ * The words are what a person names the row by (`rowWords`). `undefined` --
+ * no gate -- when there is no row, or when the two rows read the same, since
+ * then nothing written here could tell them apart.
+ */
+function controlRowIdentity(element: Element): RecordIdentity | undefined {
+  if (!isRowControl(element)) return undefined;
+  const found = controlRow(element);
+  if (!found || !sameShape(found.row, found.twinRow)) return undefined;
+  const text = rowWords(found.row, found.twinRow);
   return text ? { text } : undefined;
+}
+
+/** Whether the element is something a person acts on: a form control, a button, a link, or an element whose role says it is one. */
+function isRowControl(element: Element): boolean {
+  const role = element.getAttribute("role")?.trim().toLowerCase().split(/\s+/u)[0];
+  if (role) return ROW_CONTROL_ROLES.has(role);
+  const tag = tagOf(element);
+  if (tag === "a") return element.hasAttribute("href");
+  if (tag === "input") return (element.getAttribute("type") ?? "").toLowerCase() !== "hidden";
+  return ROW_CONTROL_TAGS.has(tag);
+}
+
+/** Whether two rows are two of one repeated thing: the same tag and the same class attribute. */
+function sameShape(row: Element, other: Element): boolean {
+  return tagOf(row) === tagOf(other) && (row.getAttribute("class") ?? "") === (other.getAttribute("class") ?? "");
+}
+
+/**
+ * The words that name a row: its title -- the first heading in it, or failing
+ * one, the first link with words, which on a cart line, a result or a card is
+ * the item's own name -- when the neighbouring row's title differs; otherwise
+ * the row's whole words, when those differ. The title first, because it is the
+ * part of a row that does not change while a Flow works in it: a cart line's
+ * total moves with its quantity, its product's name does not.
+ */
+function rowWords(row: Element, twinRow: Element): string | undefined {
+  const title = rowTitle(row);
+  if (title && title !== rowTitle(twinRow)) return title;
+  const whole = recordText(row);
+  return whole && whole !== recordText(twinRow) ? whole : undefined;
+}
+
+/** Heading tags, whose words title the part of the page they head. */
+const HEADING_TAGS: ReadonlySet<string> = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
+
+/**
+ * The row's first heading's words, or its first link's, read as `recordText`
+ * reads a record: a sensitive control's contents and a control's state left
+ * out. One bounded walk in document order; a heading anywhere wins over a link
+ * before it, since a card often leads with a picture link.
+ */
+function rowTitle(row: Element): string | undefined {
+  return rowTitleElement(row)?.words;
+}
+
+/** The element `rowTitle` reads, with its words. */
+function rowTitleElement(row: Element): { element: Element; words: string } | undefined {
+  if (isWithinSensitiveControl(row)) return undefined;
+  let budget = MAX_RECORD_NODES;
+  let link: { element: Element; words: string } | undefined;
+  const pending: Node[] = childrenInReverse(row);
+  for (let node = pending.pop(); node && budget > 0; node = pending.pop()) {
+    budget -= 1;
+    if (node.nodeType !== ELEMENT_NODE) continue;
+    const child = node as Element;
+    if (isSensitiveFormControl(child) || matchesSelector(child, STATEFUL_SUBTREE)) continue;
+    const role = child.getAttribute("role")?.trim().toLowerCase();
+    if (HEADING_TAGS.has(tagOf(child)) || role === "heading") {
+      const words = recordText(child);
+      if (words) return { element: child, words };
+    }
+    if (link === undefined && tagOf(child) === "a" && child.hasAttribute("href")) {
+      const words = recordText(child);
+      if (words) link = { element: child, words };
+    }
+    for (const grandchild of childrenInReverse(child)) pending.push(grandchild);
+  }
+  return link;
+}
+
+/**
+ * Whether the control sits in the row `words` name: some ancestor that holds it
+ * and no other control alike to it reads whole as those words, or is titled by
+ * them through a title in the control's own row.
+ *
+ * The climb is `control-row.ts`'s, so it stops below the first ancestor that
+ * holds a second alike control: the soap line's "Qty" is never weighed by the
+ * words of the group that also holds the towels' line. A control with no alike
+ * left on the page is weighed by every ancestor in the depth bound, and the
+ * title must then be its own row's, not a neighbouring row's (`titleInAnotherRow`):
+ * the soap's line, alone in the cart under a towels' line that lost its select,
+ * is not the towels' line because the group they share is titled by the towels.
+ */
+function inNamedRow(control: Element, words: string): boolean {
+  for (const ancestor of soleAncestors(control).ancestors) {
+    if (recordText(ancestor) === words) return true;
+    const title = rowTitleElement(ancestor);
+    if (title?.words === words && !titleInAnotherRow(control, title.element)) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether the title sits in a row beside the control's rather than in it: where
+ * their paths meet, the two children they come through are of one shape -- the
+ * same tag and class -- and the control's side has a title of its own that is
+ * not this one. Both, because a row is often laid out in columns of one shape,
+ * and a column that holds only the control and its label titles nothing.
+ */
+function titleInAnotherRow(control: Element, title: Element): boolean {
+  const controlSide = new Map<Element, Element>();
+  let child: Element = control;
+  for (let ancestor = control.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    controlSide.set(ancestor, child);
+    child = ancestor;
+  }
+  let titleChild: Element = title;
+  for (let ancestor = title.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    const ownChild = controlSide.get(ancestor);
+    if (ownChild) {
+      if (ownChild === titleChild || !sameShape(ownChild, titleChild)) return false;
+      const own = rowTitle(ownChild);
+      return own !== undefined && own !== rowTitle(titleChild);
+    }
+    titleChild = ancestor;
+  }
+  return false;
 }
 
 /**
@@ -173,17 +336,20 @@ export function recordIdentity(element: Element): RecordIdentity | undefined {
  */
 export function agreesWithRecordedRecord(recorded: RecordIdentity | undefined, element: Element): boolean {
   const values = rowValues(recorded?.values);
-  if (values.length) return holdsRowValues(enclosingRecord(element) ?? rowOfOneControl(element), values);
+  if (values.length) return holdsRowValues(enclosingRecord(element) ?? controlRow(element)?.row, values);
   if (!recorded || (!recorded.key && !recorded.text)) return true;
   const record = enclosingRecord(element);
-  if (!record) return false;
   if (recorded.key) {
+    if (!record) return false;
     const found = recorded.keyAttribute
       ? normalizedText(record.getAttribute(recorded.keyAttribute))
       : recordKey(record)?.key;
     return sameAsRecorded(found, recorded.key, LEGACY_RECORD_KEY_CUT);
   }
-  return sameAsRecorded(recordText(record), recorded.text, LEGACY_RECORD_TEXT_CUT);
+  if (record && sameAsRecorded(recordText(record), recorded.text, LEGACY_RECORD_TEXT_CUT)) return true;
+  // A row the page drew as plain markup was recorded by its words (t463); a
+  // record's text that disagreed above may still be that row's.
+  return recorded.text !== undefined && inNamedRow(element, recorded.text);
 }
 
 /**
@@ -297,88 +463,6 @@ function rowContents(record: Element): { text: string; exact: Set<string> } {
 
 /** A node waiting in `rowContents`'s walk, and whether it sits in a shadow tree. */
 type RowNode = { node: Node; shadow: boolean };
-
-/**
- * The row a control sits in when no ancestor is a record by this module's
- * rule, so that a For Each pass over rows the page draws as plain `<div>`s --
- * bigbox's cart lines -- is checked rather than refused on every row
- * (`t195-w19b-audit-pickup-order.md` #9).
- *
- * The row is the largest ancestor that holds this control and no other control
- * alike to it -- same role, same accessible name -- found as the child, on the
- * control's path, of the nearest ancestor that holds two. The cart's soap line
- * holds one "Save for later"; the group around it holds the towels' too, so
- * the soap's line is the soap's row. Not the *smallest* ancestor holding one:
- * that is the button's own wrapper, which holds the actions and none of the
- * values. And not a widened record rule (`div` siblings sharing a class):
- * `isRecordElement` also decides what a recording identifies and what the
- * snapshot calls one-per-row, and this question is asked only here, only with
- * a pass's values in hand, where the answer it replaces was always "no".
- *
- * `undefined`, so the gate fails closed, when the control has no name to tell
- * its kind by, when no ancestor within `MAX_RECORD_DEPTH` holds a second one
- * (a lone control marks out no row, and the region around it may hold any
- * page's words), when the row would be the control and nothing more, or when
- * the bounded scan ran out before it could tell.
- */
-function rowOfOneControl(control: Element): Element | undefined {
-  const alike = alikeTo(control);
-  if (!alike) return undefined;
-  const scan = { budget: MAX_ROW_NODES };
-  let row = control;
-  for (let depth = 0; depth < MAX_RECORD_DEPTH; depth += 1) {
-    const parent = row.parentElement;
-    if (!parent) return undefined;
-    const another = holdsAnother(parent, row, alike, scan);
-    if (another === undefined) return undefined;
-    if (another) return row !== control && holdsMoreThan(row, control) ? row : undefined;
-    row = parent;
-  }
-  return undefined;
-}
-
-/** A test for a control alike to this one -- same role, same accessible name -- or `undefined` for one with no name to tell it by. */
-function alikeTo(control: Element): ((element: Element) => boolean) | undefined {
-  const name = accessibleNameFor(control);
-  if (!name) return undefined;
-  const kind = controlKind(control);
-  return (element) => controlKind(element) === kind && accessibleNameFor(element) === name;
-}
-
-/** The element's role, written or implied, or its tag where it has neither. */
-function controlKind(element: Element): string {
-  const written = element.getAttribute("role")?.trim().toLowerCase().split(/\s+/u)[0];
-  return written || implicitRole(element) || tagOf(element);
-}
-
-/**
- * Whether `parent` holds an alike control outside `path`, the child the walk
- * came up through; `undefined` when the shared node budget ran out first.
- */
-function holdsAnother(parent: Element, path: Element, alike: (element: Element) => boolean, scan: { budget: number }): boolean | undefined {
-  const pending: Element[] = [...parent.children].filter((child) => child !== path);
-  for (let element = pending.pop(); element; element = pending.pop()) {
-    if (scan.budget <= 0) return undefined;
-    scan.budget -= 1;
-    if (alike(element)) return true;
-    for (const child of element.children) pending.push(child);
-  }
-  return false;
-}
-
-/** Whether the row holds anything besides the control and the wrappers around it: an element or words off the control's path. */
-function holdsMoreThan(row: Element, control: Element): boolean {
-  for (let current = control; current !== row; ) {
-    const parent = current.parentElement;
-    if (!parent) return false;
-    for (const sibling of parent.childNodes) {
-      if (sibling === current) continue;
-      if (sibling.nodeType === ELEMENT_NODE || /\S/u.test(sibling.nodeValue ?? "")) return true;
-    }
-    current = parent;
-  }
-  return false;
-}
 
 /** An element's attribute values, its resolved link and its current control value: the non-text places a field reads. */
 function elementValues(element: Element): string[] {

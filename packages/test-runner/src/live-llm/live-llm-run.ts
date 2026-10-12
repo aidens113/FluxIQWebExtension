@@ -467,7 +467,9 @@ export class LiveLlmRun {
     // Deliberately no declaration: a build that reached no provider proposed
     // no Flow, so "the runtime absorbed it" can never be what happened here.
     try {
-      await this.settleObserved(liveLlmBuildUsage(build), bundle, publish, { build }, null, false);
+      // The step log counts a build Core gave no call count for (a candidate-mode build, t466).
+      const stepLog = this.stepLogDirectory ? await readLiveLlmStepLogSpend(this.stepLogDirectory) : null;
+      await this.settleObserved(liveLlmBuildUsage(build, stepLog), bundle, publish, { build }, null, false);
     } catch (error) {
       // The breach is thrown before the lane sees the build, so a build that
       // ended without a Flow is carried on it, or the run reads as the facility's.
