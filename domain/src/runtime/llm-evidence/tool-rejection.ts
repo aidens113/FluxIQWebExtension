@@ -205,6 +205,11 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   different page than the one now loaded. Look again where you are now.
  * - `handle_no_longer_on_page`: the control that handle named is not on the
  *   page any more -- it was removed, or the page re-rendered. Look again.
+ *   For either, `next` says so, and where the caller found the same place on
+ *   the page now (a detection, `structure/detect.ts`), `instead` is that
+ *   element's current handle and the refusal carries the page it is on (t477,
+ *   `run-mv5uu9g1-9d80deea`: a stale handle sent four times, refused with
+ *   nothing that said where to look).
  * - `handle_names_several_now`: the control that handle named has become more
  *   than one element, so acting on it would be a guess. Look again and choose.
  * - `handle_in_wrong_parameter`: the handle is written in a parameter that
@@ -696,6 +701,8 @@ export function rejectionDetail(fields: {
       // Read off the codes, so a repeat that passes them back says it again.
       : reason === "handle_not_in_packet" && fields.instead?.includes(WEB_LLM_HANDLE_RENUMBERED_BY_RELOAD) === true ? RENUMBERED_NEXT
       : reason === "outcome_uncertain" ? UNCERTAIN_NEXT
+      // Read off `instead`, so a repeat that passes it back says it again; a resolver's codes there are no handle.
+      : reason === "page_moved_since_packet" || reason === "handle_no_longer_on_page" ? (staleHandleNamed(fields.instead) ? STALE_NEXT_INSTEAD : STALE_NEXT)
       : undefined,
     missing: fields.missing === undefined ? undefined : [...fields.missing],
     requestId: fields.requestId,
@@ -735,6 +742,19 @@ const RENUMBERED_NEXT = "Nothing was done. The page was reloaded (put back) sinc
  * was sent, nothing showed whether it took effect, and it was not made again.
  */
 const UNCERTAIN_NEXT = "Outcome uncertain: this step was sent to the page, but its answer does not show whether it took effect, so it was not made again automatically -- making it twice could do it twice. Look at the page to see whether it took effect before making the same call again.";
+
+/**
+ * What to do about a handle from a view of another page, or of a control that
+ * has left the page (t477): the handle names nothing now.
+ */
+const STALE_NEXT = "Nothing was done. The handle in target came from a view of a page that is no longer the one loaded, or named a control that has since left it, so it names nothing now. Use a handle from the newest view of the page you are on -- the page with this answer, when it carries one -- or look at the page again; where the tool's target is optional, it can be called without one.";
+/** The same, when the caller found the element at the same place on the page now: `instead` is its handle. */
+const STALE_NEXT_INSTEAD = "Nothing was done. The handle in target came from a view of a page that is no longer the one loaded, or named a control that has since left it. The element at the same place on the page now has the handle in instead, shown in the page with this answer: if it is what you meant, make the call again with that handle.";
+
+/** Whether `instead` is one target handle (`t12`), as a stale-handle refusal names the element's current one, and not a resolver's codes. */
+function staleHandleNamed(instead: readonly string[] | undefined): boolean {
+  return instead?.length === 1 && /^t[1-9][0-9]*$/u.test(instead[0]!);
+}
 
 /** A count fit to put on the wire, or nothing. */
 function wholeCount(value: number | undefined): number | undefined {
