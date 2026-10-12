@@ -54,7 +54,7 @@
 // uncut). A condition over a column leaves `null`: its
 // values are the records.
 
-import { webAutomationExtractConditionHolds } from "@fluxiq-web-extension/domain/client";
+import { webAutomationExtractConditionHolds, type WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
 import type { WebAutomationExtractItemCondition, WebAutomationExtractListRequest } from "../types";
 import { readField } from "./field-reader";
 import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";
@@ -92,7 +92,7 @@ export type ExtractItemRejections = readonly number[];
  * and each `null` entry takes the first value that condition's own read produced
  * on an item it held of.
  */
-export type ExtractItemFilter = ((item: Element, record: ReadRecord, seen?: (string | null)[]) => ExtractItemRejections) | undefined;
+export type ExtractItemFilter = ((item: Element, record: ReadRecord, seen?: (string | null)[], capture?: { observations: WebAutomationExtractionRejectionObservation[]; page: number; item: number }) => ExtractItemRejections) | undefined;
 
 /** No condition rejected the item, shared because it is the answer for every row a read keeps. */
 const KEPT: ExtractItemRejections = [];
@@ -108,7 +108,7 @@ export function itemFilterFor(request: WebAutomationExtractListRequest): Extract
   const written = request.where;
   if (written === undefined || written.length === 0) return undefined;
   const conditions = written.map((condition, index) => normalize(condition, index, request));
-  return (item, record, seen) => {
+  return (item, record, seen, capture) => {
     let rejectedBy: number[] | undefined;
     for (const [index, entry] of conditions.entries()) {
       const value = valueOf(entry, item, record);
@@ -118,6 +118,10 @@ export function itemFilterFor(request: WebAutomationExtractListRequest): Extract
       }
       rejectedBy ??= [];
       rejectedBy.push(index);
+      if (capture) {
+        const declared = entry.value.kind === "read" ? entry.value.reader : normalizeExtractField(entry.value.key, request.fields[entry.value.key]!);
+        capture.observations.push({ conditionIndex: index, state: value === undefined ? "absent" : "present", ...(value === undefined ? {} : { value }), source: entry.value.kind, ...(declared === undefined ? {} : { readKind: declared.kind }), page: capture.page, item: capture.item });
+      }
     }
     return rejectedBy ?? KEPT;
   };

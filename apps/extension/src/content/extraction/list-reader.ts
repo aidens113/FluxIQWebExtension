@@ -122,7 +122,7 @@
 // cut, and `truncated` says it was. `order` reports both counts, including the
 // rows a sort key could not read, which go last.
 
-import { WEB_AUTOMATION_EXTRACT_MAX_ITEMS } from "@fluxiq-web-extension/domain/client";
+import { type WebAutomationExtractionRejectionObservation, WEB_AUTOMATION_EXTRACT_MAX_ITEMS } from "@fluxiq-web-extension/domain/client";
 import type { ExtractionCheckpoint } from "../../shared/extraction-continuation";
 import type { WebAutomationExtractListPagination, WebAutomationExtractListRequest } from "../types";
 import { readField } from "./field-reader";
@@ -235,6 +235,7 @@ export type ListExtractionOutcome = {
   rejectedSamples?: ExtractedListRecord[][] | undefined;
   /** Per condition, how many leading rows of its `rejectedSamples` list it removed alone; beside `rejectedSamples` only. */
   rejectedSamplesAlone?: number[] | undefined;
+  rejectedObservations?: Array<Array<WebAutomationExtractionRejectionObservation | null>> | undefined;
   /**
    * Why a read that pages stopped paging, or absent for a read that did not page.
    *
@@ -380,7 +381,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   // Per condition, the items only it rejected, which say whether it is right (`rejected-samples.ts`); carried like the counts.
   const aloneEach = [...carried.alone];
   // Every row each condition rejected, its alone rows first, carried across documents like the counts.
-  const samples = rejectedSamplesFor(options.sampleRejected === true, rejects === undefined ? 0 : rejectedEach.length, resume?.rejectedSamples, resume?.rejectedSamplesAlone);
+  const samples = rejectedSamplesFor(options.sampleRejected === true, rejects === undefined ? 0 : rejectedEach.length, resume?.rejectedSamples, resume?.rejectedSamplesAlone, resume?.rejectedObservations);
 
   // Items the selector named, counted once each, whichever page or scroll named
   // them: a set rather than a running sum, because a `loadMore` or `scroll` read
@@ -425,7 +426,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       ...(listPresence === undefined ? {} : { listPresence }),
       ...(listWait === undefined ? {} : { listWait }),
       ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered, seen: [...seenEach], alone: [...aloneEach] } }),
-      ...(samples === undefined ? {} : { rejectedSamples: samples.rows(), rejectedSamplesAlone: samples.alone() }),
+      ...(samples === undefined ? {} : { rejectedSamples: samples.rows(), rejectedSamplesAlone: samples.alone(), ...(samples.observations() === undefined ? {} : { rejectedObservations: samples.observations() }) }),
       ...(paginate === undefined || paginationStop === undefined ? {} : { paginationStop }),
       ...(spent.retries === 0 ? {} : { pageRetries: spent.retries }),
       ...(refusedStatus === undefined ? {} : { refusedStatus }),
@@ -531,7 +532,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     const thisPage: string[] = [];
     // Every item this page showed that was read, by content, for the repeat check below.
     const shownThisPage: string[] = [];
-    for (const element of shown) {
+    for (const [itemOrdinal, element] of shown.entries()) {
       // Reading one item is where the page can fail under the read: a
       // virtualized list recycles the row a field reader is holding, and a
       // re-render detaches it. The item is skipped and counted; the rows already
@@ -556,7 +557,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
         // only so a read the conditions emptied has something to answer with,
         // and a read that kept anything never returns it.
         if (rejects) {
-          const rejectedBy = rejects(element, itemRead.record, seenEach);
+          const observations: WebAutomationExtractionRejectionObservation[] = [];
+          const rejectedBy = rejects(element, itemRead.record, seenEach, samples ? { observations, page: progress.pagesRead, item: itemOrdinal + 1 } : undefined);
           if (seen === undefined) applied += 1;
           if (rejectedBy.length > 0) {
             if (seen === undefined) {
@@ -567,7 +569,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
               for (const index of rejectedBy) rejectedEach[index] = (rejectedEach[index] ?? 0) + 1;
               const only = rejectedBy.length === 1 ? rejectedBy[0] : undefined;
               if (only !== undefined) aloneEach[only] = (aloneEach[only] ?? 0) + 1;
-              samples?.note(rejectedBy, itemRead.record);
+              samples?.note(rejectedBy, itemRead.record, observations);
               rememberRejected(rejectedRows, itemRead, fields, earlierPages !== undefined, order ? WEB_AUTOMATION_EXTRACT_MAX_ITEMS : maxItems);
             }
             read.set(element, key);

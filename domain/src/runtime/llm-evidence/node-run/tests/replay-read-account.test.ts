@@ -413,3 +413,25 @@ async function replayNeverAppeared(at: string, from: JsonObject | undefined) {
   if (from) value.from = from;
   return await runtime.executeTool({ ...PROJECT, callId: "dryrun.1.3", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED, value });
 }
+
+test("replay evidence retains empty observations and withholds sensitive values before row projection", () => {
+  const extraction = { recordCount: 0, pagesRead: 1, truncated: false, missingFields: [], fieldNames: ["title"], conditions: { applied: 2, kept: 0, rejected: [2], unfiltered: false }, rejectedSamples: [[{ title: "Record A" }, { title: "Record B" }]], rejectedSamplesAlone: [2], rejectedObservations: [[
+    { conditionIndex: 0, state: "present", value: "", source: "read", readKind: "attribute", page: 1, item: 1 },
+    { conditionIndex: 0, state: "present", value: "sk-live-4f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c", source: "read", readKind: "attribute", page: 1, item: 2 }
+  ]] };
+  const read = webNodeReplayReadRows({ extraction, extracted: [] }, [{ read: { kind: "attribute", attribute: "data-state" }, is: "present" }]);
+  const entries = read?.leftOutOnlyByThis as Array<{ observations?: Array<{ state: string; value?: string }> }> | undefined;
+  assert.equal(entries?.[0]?.observations?.[0]?.value, "");
+  assert.equal(entries?.[0]?.observations?.[1]?.state, "withheld");
+  assert.equal(Object.hasOwn(entries?.[0]?.observations?.[1] ?? {}, "value"), false);
+  assert.equal(JSON.stringify(read).includes("sk-live-"), false);
+});
+
+test("sparse rejection groups preserve the original predicate index", () => {
+  const extraction = { recordCount: 0, pagesRead: 1, truncated: false, missingFields: [], fieldNames: ["title"], conditions: { applied: 1, kept: 0, rejected: [0, 1], unfiltered: false }, rejectedSamples: [[], [{ title: "Record A" }]], rejectedSamplesAlone: [0, 1], rejectedObservations: [[], [{ conditionIndex: 1, state: "absent", source: "read", readKind: "attribute", page: 1, item: 1 }]] };
+  const read = webNodeReplayReadRows({ extraction, extracted: [] }, [{ field: "title", is: "present" }, { read: { kind: "attribute", attribute: "data-state" }, is: "present" }]);
+  const entries = read?.leftOutOnlyByThis as Array<{ conditionIndex?: number; observations?: Array<{ conditionIndex: number }> }> | undefined;
+  assert.equal(entries?.length, 1);
+  assert.equal(entries?.[0]?.conditionIndex, 1);
+  assert.equal(entries?.[0]?.observations?.[0]?.conditionIndex, 1);
+});

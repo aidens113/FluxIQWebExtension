@@ -44,8 +44,7 @@
 // out of the read and the schema alike (`./declared-columns.ts`, live run 11's
 // `plus` and `ad`).
 //
-// A field's **label** is the one part of the schema an author does decide, and
-// it is kept: a recording's own record output carries the names the user gave
+// Field labels and valid authored column order are kept: a recording's own record output carries the names the user gave
 // their columns (`domain/src/web-panel-host.ts`), and reconciling must leave a
 // recorded Flow exactly as it was.
 
@@ -77,16 +76,32 @@ const SCHEMA_ONLY = "schema-only";
  */
 export function webAutomationReconciledRecordOutput(authored: JsonValue, request: WebAutomationExtractListRequest, columns?: ReadonlySet<string>): JsonValue {
   if (!isJsonObject(authored)) return authored;
-  const schema = webAutomationRecordOutput({
+  const authoredSchema = isJsonObject(authored.schema) ? authored.schema : undefined;
+  const derived = webAutomationRecordOutput({
     datasetId: SCHEMA_ONLY,
     label: SCHEMA_ONLY,
     request,
-    fieldLabels: authoredFieldLabels(isJsonObject(authored.schema) ? authored.schema : undefined)
+    fieldLabels: authoredFieldLabels(authoredSchema)
   }).schema;
-  const stored = columns === undefined
-    ? schema
-    : { ...schema, fields: schema.fields.filter((field) => columns.has(field.id) || field.handling === "exclude") };
+  const kept = columns === undefined ? derived.fields : derived.fields.filter((field) => columns.has(field.id) || field.handling === "exclude");
+  const stored = { ...derived, fields: authoredFieldOrder(authoredSchema, kept) };
   return { ...authored, schema: stored as unknown as JsonValue, recordsPath: WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH };
+}
+
+/** Valid authored ids decide column order; remaining helpers/exclusions keep derived order. */
+function authoredFieldOrder(schema: JsonObject | undefined, fields: ReturnType<typeof webAutomationRecordOutput>["schema"]["fields"]): typeof fields {
+  const authored = Array.isArray(schema?.fields) ? schema.fields : [];
+  if (authored.length === 0) return fields;
+  const available = new Map(fields.map((field) => [field.id, field]));
+  const seen = new Set<string>();
+  const ordered: typeof fields = [];
+  for (const field of authored) {
+    const id = isJsonObject(field) ? nonEmptyString(field.id) : undefined;
+    if (id === undefined || !available.has(id) || seen.has(id)) return fields;
+    seen.add(id);
+    ordered.push(available.get(id)!);
+  }
+  return [...ordered, ...fields.filter((field) => !seen.has(field.id))];
 }
 
 /**

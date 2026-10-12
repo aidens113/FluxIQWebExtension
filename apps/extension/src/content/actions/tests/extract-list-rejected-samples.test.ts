@@ -35,14 +35,14 @@ function outcome(sampled: boolean): ListExtractionOutcome {
 }
 
 /** Runs the verb, recording the options the read was given and the evidence the result was built from. */
-async function run(command: BrowserActionCommand): Promise<{ options: ListExtractionOptions | undefined; evidence: ActionResultEvidence | undefined }> {
+async function run(command: BrowserActionCommand, supplied?: ListExtractionOutcome): Promise<{ options: ListExtractionOptions | undefined; evidence: ActionResultEvidence | undefined }> {
   let options: ListExtractionOptions | undefined;
   let evidence: ActionResultEvidence | undefined;
   const result = (): BrowserActionResult => ({ commandId: command.commandId, actionType: command.actionType, status: "succeeded", validation: { status: "none", reason: "evidence-only" }, startedAt: 1, finishedAt: 2 });
   const deps = {
     extractList: async (_request: unknown, given?: ListExtractionOptions) => {
       options = given;
-      return outcome(given?.sampleRejected === true);
+      return supplied ?? outcome(given?.sampleRejected === true);
     },
     captureSnapshot: () => ({ url: "https://example.test/", title: "Example", viewport: { width: 1, height: 1, scrollX: 0, scrollY: 0 }, interactiveElements: [] }),
     success: (_action: unknown, _startedAt: unknown, _message: unknown, _validation: unknown, built?: ActionResultEvidence) => {
@@ -54,6 +54,18 @@ async function run(command: BrowserActionCommand): Promise<{ options: ListExtrac
   await extractListAction(command, deps, 1);
   return { options, evidence };
 }
+
+test("alone-only verb and public action-result mapping slice passive observations with their rows", async () => {
+  const supplied: ListExtractionOutcome = { ...outcome(false), records: [], conditions: { applied: 2, kept: 0, rejected: [2, 1], alone: [1, 0], unfiltered: false }, rejectedSamples: [[{ name: "Record A" }, { name: "Record B" }], [{ name: "Record B" }]], rejectedSamplesAlone: [1, 0], rejectedObservations: [[
+    { conditionIndex: 0, state: "absent", source: "read", readKind: "attribute", page: 1, item: 1 },
+    { conditionIndex: 0, state: "present", value: "", source: "read", readKind: "attribute", page: 1, item: 2 }
+  ], [{ conditionIndex: 1, state: "present", value: "17", source: "read", readKind: "attribute", page: 1, item: 2 }]] };
+  const { evidence } = await run({ ...COMMAND, options: { extractList: {}, rejectedSamples: "alone" } }, supplied);
+  assert.deepEqual(evidence?.extraction?.rejectedObservations?.map((entries) => entries.length), [1, 0]);
+  const payload = webAutomationActionResultPayload({ commandId: COMMAND.commandId, actionType: COMMAND.actionType, status: "succeeded", validation: { status: "none", reason: "evidence-only" }, ...(evidence?.extraction ? { extraction: evidence.extraction } : {}), startedAt: 1, finishedAt: 2 });
+  const extraction = payload.extraction as { rejectedObservations?: ListExtractionOutcome["rejectedObservations"] } | undefined;
+  assert.deepEqual(extraction?.rejectedObservations, [[supplied.rejectedObservations![0]![0]], []]);
+});
 
 test("a command that asks for samples gets them on the summary, and they survive the wire copy whole", async () => {
   const { options, evidence } = await run({ ...COMMAND, options: { extractList: {}, rejectedSamples: true } });
