@@ -1,9 +1,9 @@
 # State-Aware Recovery Plan
 
 Status: Active
-Status detail: Implemented and merged (t385-t435); matrix round 2 14/14; paid R4a failed twice and its causes are fixed; attempt 3 approved with R4b, stopped at wrap-up, to relaunch supervised.
+Status detail: Implemented through t448; recovery matrix and paid R4a/R4b proofs passed; lane A now qualified with separate zero-model replays; B/C/D continuation and optional-path completion fix underway.
 Created: 2026-10-09
-Last updated: 2026-10-10
+Last updated: 2026-10-11
 Owner: Senior supervisor agent
 Scope: State-aware subflows (Call Subflow, entries, checkpoints), scoped lifecycle handlers (On Start, On Before, On Retry, On Fail, On Before Next), the integrated recovery ladder with safe state routing, smallest-unit repair, and the browser side that serves them (fact checks, interruption facts, in-flight command reconciliation, chat cards, Lab perturbations), with the schedule, acceptance matrix and briefs. The domain-neutral contracts are owned by the Core paired document; this document does not restate them.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/state-aware-recovery-plan.md
@@ -73,8 +73,14 @@ every step ended well, unattended (t448).
   spend after t438), fixed forward; then Core 10,052 tests and the extension's `pnpm check`, `pnpm test`, `pnpm build`
   pass. Provider-free recovery matrix, all 14 cases, passed before each paid launch.
 
-**Next.** Lanes A-D round 3 on the new dev: lane trees synced to dev and rebuilt first, one lane per lab slot, each
-lane debugs every run before its next (`live-lanes-iterate-on-own-branch-merge-in-rounds`).
+**October 11 continuation.** The [handoff execution](./live-testing-handoff-audit-2026-10-11.md) owns current briefs.
+A's two round-3 creation passes plus two separate zero-model replays are supervisor-verified; no R4a/R4b relaunch
+is owed. Recovered t274 C guidance/finishing changes and B's last-decision trial withdrawal fix are integrated.
+D's later trials ran every displayed step successfully but ended failed for an unused optional-only wait;
+paired t449 repairs terminal coverage for the exact validated optional bypass and reports graph-level endings.
+
+**Next.** Verify/integrate t449 and t450 candidate-default; then B/C/D qualification on the new identified pair:
+lane trees synced/rebuilt first, one lane per lab slot, every failure debugged before another launch.
 
 **Blockers.** None.
 
