@@ -19,15 +19,19 @@
 //   (`capabilities.candidateTrial.startReset`; `lab.candidate_start_hook_unset`
 //   otherwise).
 //
-// **A live build's trials start from the model's own reset (t470).** Since t462
-// the model returns the site to the build's start before every trial, through
-// the site's own controls. While the Lab also reset the fixture between trials
-// a live run could not show that reset working, so a live (paid) candidate build
-// now runs with no start hook (`labCandidateTrialFixtureReset`), and is admitted
-// only when its Core has none: `fixtureResetBetweenTrials` false, `startReset`
-// false. A Core that would still reset between trials is refused
-// (`lab.candidate_start_hook_set`), so the receipt never says what the run did
-// not do. Provider-free paths keep the reset and the rule above. The fixture is
+// **The fixture reset between trials is on unless a run asks to prove the
+// model's own reset (t470, t472).** Since t462 the model returns the site to the
+// build's start before every trial, through the site's own controls, and its
+// reset gate runs and logs its evidence either way. t470 turned the Lab's reset
+// off for every live build so a run would show that reset working; lane D round
+// 9 (run-mv5q4j2n-25784472) showed it is not yet sound (the model judged a dirty
+// site clean), so every trial measured leftovers. Qualification runs therefore
+// keep the fixture reset again, and only a run started with
+// `--model-reset-only` (`labCandidateTrialFixtureReset`) gets no start hook. That
+// run is admitted only when its Core has none: `fixtureResetBetweenTrials`
+// false, `startReset` false. A Core that would still reset between trials is
+// refused (`lab.candidate_start_hook_set`), so the receipt never says what the
+// run did not do. The fixture is
 // still seeded when the run starts, and the lane resets it before playback.
 //
 // Both are refused before any provider call. Before Core starts, the Lab asks
@@ -52,12 +56,13 @@ import { retriedRead } from "./retried-read.js";
 export type CreatedFlowCandidateTrialReadiness = Readonly<{ trialRunner: boolean; startReset: boolean; fixtureResetBetweenTrials: boolean; source: "core" | "lab-plan" }>;
 
 /**
- * Whether the Lab resets the fixture between a candidate build's trials: never
- * for a live (paid) build, whose model resets the site itself before each trial
- * (t462), so a live run shows whether that reset works; always for any other.
+ * Whether the Lab resets the fixture between a candidate build's trials:
+ * always, live or not, so each trial starts from the seeded fixture, unless the
+ * run was started with `--model-reset-only` to prove the model's own reset
+ * (t462) -- then never, so the trials start from what that reset left (t472).
  */
-export function labCandidateTrialFixtureReset(run: { live: boolean }): boolean {
-  return !run.live;
+export function labCandidateTrialFixtureReset(run: { modelResetOnly: boolean }): boolean {
+  return !run.modelResetOnly;
 }
 
 /** Whether a run whose Core authors in `authoringMode`, with `candidateTrial` in candidate mode, may build a Flow to qualify. */
@@ -72,7 +77,7 @@ export function assertCreatedFlowVerificationReady(authoringMode: AutomationStud
   const mode = typeof authoringMode === "string" ? authoringMode : "unrecognized";
   const common = { stage: "before_provider", authoringMode: mode, providerInvocation: "not_attempted_by_this_entry", priorProviderCost: "unknown", ...(candidateTrial ? { candidateTrial: { trialRunner: candidateTrial.trialRunner, startReset: candidateTrial.startReset, fixtureResetBetweenTrials: candidateTrial.fixtureResetBetweenTrials, source: candidateTrial.source } } : {}) };
   if (authoringMode === "candidate" && candidateTrial?.trialRunner === true && !candidateTrial.fixtureResetBetweenTrials) {
-    throw new RunnerFailure("facility.contract", "A live candidate build runs each trial from what the model's own reset left, but the Core under test resets the fixture before each trial; it must be started without the candidate start hook.", { details: { code: "lab.candidate_start_hook_set", ...common } });
+    throw new RunnerFailure("facility.contract", "A --model-reset-only candidate build runs each trial from what the model's own reset left, but the Core under test resets the fixture before each trial; it must be started without the candidate start hook.", { details: { code: "lab.candidate_start_hook_set", ...common } });
   }
   if (authoringMode === "candidate" && candidateTrial?.trialRunner === true) {
     throw new RunnerFailure("facility.contract", "Created-Flow qualification in candidate authoring mode needs the Core under test started with the candidate start hook pointed at the Lab's fixture reset, so every trial starts from the seeded fixture; it was not.", { details: { code: "lab.candidate_start_hook_unset", ...common } });
