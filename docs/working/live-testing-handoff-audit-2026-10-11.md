@@ -102,6 +102,30 @@ Subsequent authorized source checks/builds/live results are recorded above and i
 
 ## Audit Findings
 
+### Worker brief: passive domain result observation
+
+- A-review, paired task t459 under fxwork/t459, after read-only B freshness report. Read that report and current
+  Core binding/end-view owners; downstream capture/published-page/sanitizer and runtime-binding owners.
+- Own Core llm/harness-options/binding.ts and service/end-view/run-reader.ts plus look.ts only if required,
+  with owning end-view tests/new focused binding-contract test. Do not edit t458 record-output-help files.
+- Own downstream focused result-observation module beside llm-evidence capture, its barrel/runtime-binding
+  wiring and owning tests; inspect exact wiring paths then report them before expanding. No browser protocol,
+  fixture/oracle, ordinary public snapshot schema/default, executable action or recording change.
+- Add optional opaque domain-declared passive result-reader capability, selected for both candidate and saved
+  checks. Core must contain no browser concepts; preserve omitted capability fallback, existing cancellation/
+  timeout/deadline/denied-lasting-permission and view-key/privacy screening. Domain owns includeHidden capture.
+- Fail first with neutral unchanged visible status and updated hidden ledger. Existing actual browser capability
+  may be reused, but passive view must not register hidden handles or manufacture executable action bindings.
+  Preserve hidden flags, screen secret fields, and keep unreadable/withheld results honest.
+- Validate current hidden facts reach trial and saved end-view summaries through actual adapter assembly,
+  legacy fallback unchanged, cancellation/denial, sensitive-field removal and no lasting act dispatch. No scenario
+  examples/names/counts in product guidance or tests; no copied page bodies/logged secrets.
+- Fresh Core/domain owning builds, cache-free affected types, owner tests and audits; one provider-free actual
+  browser proof on an allowed realistic fixture only after root clearance if needed. No paid/browser/panel launch
+  otherwise, commits/merges/pushes, full suites, baseline/output/token increases or deterministic-goal pass claim.
+- Own only reports/passive-result-view.md downstream; supervisor owns architecture/shared documents. Return
+  exact interface compatibility/paths, fail-first and observed gates, privacy/passive-evidence limits honestly.
+
 ### Worker brief: supported record-output processing help
 
 - B-debug, paired task t458 (`fxwork/t458/!FluxIQWebExtension` and `!FluxIQ`), after completed C audit.
