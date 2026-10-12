@@ -1,6 +1,7 @@
 // The authoring mode every Core the Lab starts runs in: the run's
-// --authoring-mode, legacy when absent, always given to Core explicitly and
-// recorded in the run's plan, so a created-Flow run builds only in legacy and
+// --authoring-mode, legacy when absent (the Lab's default, not Core's product
+// default, which t450 made candidate), always given to Core explicitly and
+// recorded in the run's plan, so a created-Flow run
 // says which mode its Core was in (t338).
 
 import assert from "node:assert/strict";
@@ -28,7 +29,7 @@ const profile: LlmExecutionProfile = {
 
 const core = (args: readonly string[], base: NodeJS.ProcessEnv = {}) => buildFluxIQEnvironment(allocation, { repositoryRoot: path.resolve("."), fluxiqRepositoryRoot: "C:/core", hostModulePath: "C:/host.js" }, base, args);
 
-test("Core's own variable and default, read through Core", () => {
+test("Core's own variable, read through Core, and the Lab's own default, whatever Core's is", () => {
   assert.equal(LAB_AUTHORING_MODE_ENV, "FLUXIQ_AUTHORING_MODE");
   assert.equal(LAB_AUTHORING_MODE_FLAG, "--authoring-mode");
   assert.equal(labAuthoringModeValue(["node", "cli", "run"]), "legacy");
