@@ -1,7 +1,7 @@
 # Live Testing Handoff Audit — 2026-10-11
 
 Status: Active
-Status detail: A historically qualified; B round5 first creation/replay passed; round6 B/C/D failed; t458 help integrated; t459 passive result-view verification and t454 persistence repairs underway.
+Status detail: A historically qualified; B round5 first creation/replay passed; round6 B/C/D failed; t458/t459 integrated; t454 final combined-source supervisor gates underway.
 Created: 2026-10-11
 Last updated: 2026-10-11
 Owner: Codex senior supervisor
@@ -90,11 +90,15 @@ are not stale caches: current hidden cart facts are omitted by default rendered-
 Supported record-processing help t458 is integrated (downstream f191802a/Core 0cfb4f45): supervisor observed
 52 focused tests, a fresh Core typecheck, actual compiled help/parser parity, downstream freshness/typecheck
 and both native structure audits. No parser or runtime semantics changed. t459 adds optional passive result
-observation; supervisor independently observed24Core/17domain tests, fresh Core/domain types and the
-compiled adapter proof. Real headed content-harness capture proof and final integration remain; its runtime
-stub does not prove actual background/gateway delivery or improved model verdicts.
-t454 no-packet undo compatibility now passes, but final review reproduced three hydrated public-writer
-conflicts and a killed-child orphan reconciliation claim; bounded repairs and independent gates remain.
+observation and is integrated/pushed at downstreamb102c0b3/Cored13bce9b. Supervisor independently observed
+24Core/17domain tests, fresh Core/domain types, compiled adapter proof and both native audits. Actual headed
+content-harness proof passes:48hidden rows preserve updated hidden and stale visible-price evidence;
+saved/trial projections,45selector withholding and hashes independently checked. Runtime stub excludes
+actual background/gateway delivery and improved model verdicts; nonempty sensitive fields0 leaves secret
+withholding covered by owner units. Two failed probe-driver setups are retained and diagnosed, not product passes.
+t454 no-packet undo, hydrated public-writer and orphan claim repairs pass worker107tests, including14actual
+process cases. Supervisor synced the final combined dev pair, rebuilt Core51.174s/7250outputs, ran cache-free
+Core types/domain freshness-types and93owner tests/12files; actual process/32state/final audit gates remain.
 Then qualify B/C/D on a newly frozen
 pair with the verified $0.25 test ceiling. Do not advance dev during a live streak. Round-four source was Core
 b27c0d64/downstream d1e516e6 (lane documentation commits differed); all three attempts failed their end-to-end
