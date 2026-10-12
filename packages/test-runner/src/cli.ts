@@ -119,8 +119,9 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       if (live?.createsFlow && !command.directApiBuild) live.assertChatBuildable();
       // A candidate-mode created-Flow run needs a Core that test-runs candidates and the start hook the Lab gives only a Core it starts;
       // refused here, before anything starts, and asked of the running Core again by the lane (`flow-lane/creation/readiness.ts`).
-      // A live build's trials start from the model's own reset, so its Core gets no fixture reset between trials (t470); the receipt says so.
-      const candidateTrial = live?.coreAuthoringMode === "candidate" ? labCandidateTrialReadiness({ startsCore: target.mode !== "existing", fixtureResetBetweenTrials: labCandidateTrialFixtureReset({ live: true }) }) : undefined;
+      // The Lab resets the fixture between trials unless `--model-reset-only` asks to prove the model's own reset (t470, t472); the receipt says which.
+      if (command.modelResetOnly && live?.coreAuthoringMode !== "candidate") throw new Error("--model-reset-only applies to a candidate build's trials: pass --authoring-mode candidate");
+      const candidateTrial = live?.coreAuthoringMode === "candidate" ? labCandidateTrialReadiness({ startsCore: target.mode !== "existing", fixtureResetBetweenTrials: labCandidateTrialFixtureReset({ modelResetOnly: command.modelResetOnly === true }) }) : undefined;
       if (live?.createsFlow) assertCreatedFlowVerificationReady(live.coreAuthoringMode, candidateTrial);
       const creation = live?.createsFlow ? await loadCreatedFlowRequest({ repositoryRoot, scenarioLabDist: labPaths.scenarioLabDist, scenarioId: command.scenarioId, ...(command.instructionTaskId ? { taskId: command.instructionTaskId } : {}), ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) }) : undefined;
       if (command.dryRun) {
@@ -132,7 +133,7 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
         return 0;
       }
       const selection = creation ? { ...(creation.workflowId ? { workflowId: creation.workflowId } : {}), ...(creation.variantId ? { variantId: creation.variantId } : {}), creation } : { ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) };
-      const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...selection, ...(command.flowLane ? { flow: true } : {}), ...(command.evidence ? { evidence: command.evidence } : {}), ...(live ? { live } : {}), ...(command.replays === undefined ? {} : { replays: command.replays }), ...(command.livePanel === false ? { livePanel: false } : {}), ...(command.directApiBuild ? { buildEntry: "direct-api" as const } : {}), environment: resolvedEnvironment, target });
+      const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...selection, ...(command.flowLane ? { flow: true } : {}), ...(command.evidence ? { evidence: command.evidence } : {}), ...(live ? { live } : {}), ...(command.replays === undefined ? {} : { replays: command.replays }), ...(command.livePanel === false ? { livePanel: false } : {}), ...(command.directApiBuild ? { buildEntry: "direct-api" as const } : {}), ...(command.modelResetOnly ? { modelResetOnly: true } : {}), environment: resolvedEnvironment, target });
       process.stdout.write(`${JSON.stringify(result)}\n`); return result.verdict === "passed" ? 0 : 1;
     }
     const target = resolveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.flowId ? { cliFlowId: command.flowId } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });

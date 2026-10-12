@@ -281,6 +281,18 @@ test("create-flow starts its build from the extension's chat unless the test-onl
   assert.throws(() => parseLabCommand(["run", "everything-store", "--flow", ...adapt, "--direct-api-build"]), /require --live-llm --llm-task create-flow/u);
 });
 
+test("--model-reset-only belongs to create-flow, is given once, and is absent unless asked for (t472)", () => {
+  const live = ["--live-llm", "--llm-profile", "lab-create-flow", "--llm-provider", "deepseek", "--llm-model", DEFAULT_LLM_MODEL, "--llm-task", "create-flow"];
+  const plain = parseLabCommand(["run", "social-network-feed", ...live]);
+  assert.equal(plain.command === "run" && "modelResetOnly" in plain, false, "the Lab's fixture reset is the default, and nothing has to be said to keep it");
+  const only = parseLabCommand(["run", "social-network-feed", "--model-reset-only", ...live, "--dry-run"]);
+  assert.equal(only.command === "run" && only.modelResetOnly === true && only.dryRun === true, true);
+  assert.throws(() => parseLabCommand(["run", "social-network-feed", "--model-reset-only", "--model-reset-only", ...live]), /--model-reset-only may only be specified once/u);
+  const adapt = live.map((value) => (value === "create-flow" ? "adapt" : value));
+  assert.throws(() => parseLabCommand(["run", "social-network-feed", "--flow", ...adapt, "--model-reset-only"]), /require --live-llm --llm-task create-flow/u);
+  assert.throws(() => parseLabCommand(["run", "social-network-feed", "--model-reset-only"]), /require --live-llm --llm-task create-flow/u);
+});
+
 test("compare takes two bench reports, or one report with --halves", () => {
   assert.deepEqual(parseLabCommand(["compare", "bench-a", "bench-b"]), { command: "compare", baselineReport: "bench-a", candidateReport: "bench-b", sharedLoad: true });
   assert.deepEqual(parseLabCommand(["compare", "bench-a", "bench-b", "--sequential"]), { command: "compare", baselineReport: "bench-a", candidateReport: "bench-b", sharedLoad: false });
