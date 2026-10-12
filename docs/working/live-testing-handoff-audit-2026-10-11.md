@@ -1,7 +1,7 @@
 # Live Testing Handoff Audit — 2026-10-11
 
 Status: Active
-Status detail: A qualified; $0.25 round5 B first creation/replay pass then second fails, C/D fail; t456 numeric tool accuracy integrated, t454/t455/t457 isolated repairs underway.
+Status detail: A qualified; $0.25 round5 B first creation/replay pass then second fails, C/D fail; t455/t456/t457 integrated, t454 recording consistency gates underway.
 Created: 2026-10-11
 Last updated: 2026-10-11
 Owner: Codex senior supervisor
@@ -78,8 +78,9 @@ The UI review and production-integrity tasks t334/t335/t337 remain parked, not p
 The preceding dirty-file inventory is the audit intake: C is now integrated, A/B notes preserved and merged,
 while their lane workspaces remain intact for further live work. No profiles or run evidence were reclaimed.
 
-**Next:** t456 numeric tool accuracy integrated (downstream fd3adc21), live proof pending. Gate/integrate t455 browser observation recovery and t457 handler feedback;
-finish measured t454 durable recording index and independently verify it. Then qualify B/C/D on a newly frozen
+**Next:** t456 numeric tool accuracy, t455 guarded browser recovery and t457 handler feedback are integrated;
+live proof pending. Resolve the four t454 independent-review consistency gates before accepting its measured
+durable recording index. Then qualify B/C/D on a newly frozen
 pair with the verified $0.25 test ceiling. Do not advance dev during a live streak. Round-four source was Core
 b27c0d64/downstream d1e516e6 (lane documentation commits differed); all three attempts failed their end-to-end
 gates. Each creation requires full debug and separate zero-model replay before another launch; failure requires
@@ -92,6 +93,30 @@ Round-five outcome: all ready preflights independently inspected (calls0, unchan
 Subsequent authorized source checks/builds/live results are recorded above and in the execution ledger.
 
 ## Audit Findings
+
+**t454 independent review gate (October 11, pending reproduction):** Source review identified late append after
+typed finalization, delayed counter publication overwriting a newer header, cached-prefix resurrection after
+external removal, and same-service removal retry after a late metadata failure. These are source-supported
+risks, not observed failures yet. Do not integrate the recording repair until bounded fail-first probes establish
+the results and any required repairs pass current owner tests and fresh-process restart checks.
+
+### Worker brief: recording concurrency and removal recovery
+
+- Owner: C-validation; task t454, paired worktrees under `fxwork/t454/`.
+- Begin only after A-review returns its read-only report; owner files then belong exclusively to this worker.
+- Read `reports/recording-index-review.md`, current recording repair report and this Current State.
+- Own the existing t454 recording-stream store/projection/schema and runtime recording store/service paths,
+  their owner tests, and only `reports/recording-stream-owner.md` downstream. No shared working-document edits.
+- Reproduce the four reported interleavings using actual typed storage/service boundaries and controlled gates;
+  preserve failing assertions before changing code. Include competing append cursor ownership if the same
+  asynchronous write boundary permits overlapping cursor claims.
+- Fix proven failures at the owning durable boundary. Finalization must exclude late writes, counters cannot
+  regress, removed cached entries cannot republish, and late removal publication failure must recover/retry.
+- No global connection pool/cache, scenario-specific logic, timeout increase, weaker assertions, public sequence
+  change, copied page bodies, or baseline increase. Keep indexed append cost and normal service behavior.
+- Validate affected owner tests, fresh Core build and cache-free types, actual separate-process restart cases,
+  original 32-entry measurement, structure audit and whitespace. Report exact limitations and changes.
+- Never commit, merge, push, modify live lane trees, launch paid calls or manage the user's panel.
 
 1. **Main handoff stale.** `mvp-final-month-plan.md` Current State is dated October 9 and still prioritizes
    round-2 fixes. Its t383 is already merged. The recovery plan's Current State is newer (through t448), but
@@ -185,6 +210,14 @@ Subsequent authorized source checks/builds/live results are recorded above and i
 
 ## Worker Briefs
 
+### Brief: recording-index-review
+- Repository: paired t454, supervisor synced dev1a7e47c6/b16ad470; implementation worker finished, source frozen.
+- Task: independent read-only review of recording repair/index and focused test adequacy before supervisor integration. Report concrete defects with owner paths/reproductions, not a completion claim.
+- Required reads: this Current State + recording-stream-owner.md; git changed/untracked Core paths for this unit only, named below. Do not read other MVP planning/history.
+- Owns: new downstream reports/recording-index-review.md only. Read Core recording-stream/{entry,projection,store}.ts; schema/recording-stream.ts + administration/table-names wiring; runtime-stream recording methods; recordings/store/load-timeline and service recording-only wiring; changed owning adapter/schema/retry/restart/storage tests. No source edits, builds/merges/commits/providers/browser/full suites.
+- Definition of done: evaluate generation/cursor invalidation, concurrent append/control catch-up, transactional rollback, exact ID/public sequence/body-digest proof and generated-time retry scope, explicit recording-delete reference unlink versus unrelated refs/content retention, legacy file+SQL/conflict and late durable finalization recovery. Check index linearity versus full-history scans, schema migration compatibility, owner close/disposal. Identify unsupported ack-loss or general authority claims separately; preserve established API identity/public sequence semantics. Recommend narrow meaningful supervisor cases; do not treat worker test counts alone as correctness.
+- Report to: t454 docs/working/live-testing-handoff-audit-2026-10-11/reports/recording-index-review.md.
+
 ### Brief: worker-start-recovery
 - Repository: t455-worker-start-observation downstream task; Core shared3291fb25 read-only.
 - Task: finish supervisor's isolated browser observation-gap recovery; keep actual worker readiness and network containment strict.
@@ -256,6 +289,7 @@ Round-five launch preparation: coherent fixes and notes pushed to downstream e83
 - Must not touch: public model sequence semantics, global connection pools/t435, t452/t453 source or live lanes, oracle/scenarios, shared docs/.env/user data; no commits/pushes/merges/full suites/browser/providers. Runtime data only through owning APIs in isolated test roots.
 - Retry refinement authorized: exact durable retries are idempotent; preserve original omitted timestamp/offset proof and return landed originals for mirror publication within recording-only owners. Cover post-typed metadata failure, conflicting contents and removed IDs; never guess packet identity or expand the gateway/model contract.
 - Performance refinement authorized after measurements: recording-owned durable identity/projection metadata with exact cursor/generation catch-up, not connection caches. Additional Core owners: project/schema/recording-stream.ts, schema/index.ts and table-names.ts, existing migration registration, schema owning tests; focused helpers/tests inside approved recording-stream directory. Foreign keys and explicit delete/recreate/reopen/raw-chunk append/removal catch-up must invalidate derived state; no overwrite of historical chunks/public sequence. Append/read counters and conflict proof remain exact under partial write failure. Measure old/new chunk/SQL counts and 32/40-entry close/restart phases; unchanged15s child bounds and no baseline/schema-guard bypass.
+- Finalization refinement authorized within existing owners: after typed endedAt commits but later metadata fails, retry/reopen adopts the proven durable end time and complete verified timeline. Direct typed conflicting put refuses; preserve public service repeat-finish returning its original end time even when repeated with a different value. Append/removal cannot reopen completed state. Add fail-first late metadata/finalize/reopen proof; no cross-filesystem atomic rollback claim. Supersede earlier gates after source change, rerun affected owners/fresh processes.
 - Definition of done: fail-first real-owner zero-sequence append/batch and mixed fallback+SQL restart; positive storage cursor separate from unchanged public timeline identity/order. Exact endedAt/count/order survive rebuilt-process reopen and >32 chunks; mirror changes only after durable success. Explicit removal may append validated private control records under existing lock, never rewrite old content; controls stay out of public entries, fold after legacy merge and cannot resurrect removed IDs. Cover finalized/stale/conflicting/spoofed/duplicate removal, SQL/file modes and legacy ambiguous sequences without guessing/overwriting. No silent recording error, generic fallback change, authority bypass, timeout/baseline expansion or destructive history rewrite. Own narrow tests/current package types/audit pass after fresh build.
 - Report to: t454 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/recording-stream-owner.md`.
 
@@ -394,6 +428,20 @@ Round-five launch preparation: coherent fixes and notes pushed to downstream e83
 - Report to: t275 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/live-d-round4.md`.
 
 ## Work Ledger
+
+- October 11: Supervisor accepted t455 after current owner build, cache-free types, independent36test lifecycle/
+  containment/wiring pass, actual injected browser proof (fresh strict worker/guard identity, forbidden traffic0,
+  provider0), final audit and baseline31to28 only. Normal task integration audit passed; merge9c62a57a. Original
+  natural race remains unreproduced. Owning task cleanup reclaimed disposable probe worktree; stdout proof and
+  gate logs remain outside it under fxwork/t455-supervisor-*.log; original C live profile/run evidence untouched.
+- October 11: t457 supervisor22tests plus actual compiled refusal/privacy/repeat proof, fresh Core build/cache-free
+  types and current domain19.896s check passed. Both audits passed. Downstream normal finish then Core own
+  finish used --skip-checks only to avoid its legacy full-suite wrapper after observed narrow gates; see retained
+  reports and finish logs. Exact trusted handler_invalid messages admitted, invalid scripts still refused; no
+  arbitrary page/provider feedback admitted. New source pair needs fresh live qualification, not yet claimed.
+- October 11: Independent t454 source review completed all21owner paths. Four concrete cached-removal,
+  removal-retry, finalize/append and delayed-counter interleavings remain unverified; worker now owns bounded
+  fail-first reproduction/fixes. Repair remains isolated/unmerged despite earlier sequential restart passes.
 
 ### 2026-10-11 — Combined feedback/judge pair integrated; recording failure supervisor-verified
 - Agent: Codex senior supervisor; feedback/judgement/recording workers.
