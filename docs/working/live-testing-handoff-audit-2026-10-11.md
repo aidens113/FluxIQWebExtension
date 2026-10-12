@@ -1,7 +1,7 @@
 # Live Testing Handoff Audit — 2026-10-11
 
 Status: Active
-Status detail: A historically qualified; B round5 first creation/replay passed; t458/t459/t454 integrated; changed-source B/C/D round-seven preparation underway at $0.25/64build calls.
+Status detail: A historically qualified; round-seven B/D creations passed but replay accounting settlement failed; C stopped at contradictory final-slot tool guard. Scoped repairs precede further qualification.
 Created: 2026-10-11
 Last updated: 2026-10-11
 Owner: Codex senior supervisor
@@ -18,6 +18,27 @@ the latest runs' October 12 UTC timestamps are October 11 locally.
 **Execution now authorized (user: "ok go").** A-review, B-debug and C-validation assigned below on existing lane
 branches/worktrees. Supervisor handles D diagnosis, independently verifies results and integrates coherent units.
 Prior audit limits below describe audit-only work; subsequent execution validation is recorded in the ledger.
+
+**Round-seven freeze:** Core5036fb8c/downstreamd19a8d50, all six clean retained lane trees supervisor-synced.
+A-review owns B/t262/slot3; B-debug owns C/t451/slot1; C-validation owns D/t275/slot4. Supervisor independently
+invoked each lane's compiled Core/host/server source/inventory validators and compared ready/current extension
+stamps: all110reached inputs, zero calls, original task digests, chat/candidate/reset,64calls/48millionrun tokens,
+per-request bounds and both0.25purses match. One paid attempt per lane is cleared; actual running four-identity
+receipts/full debugs/oracles/replays remain. Do not advance either dev head during these streaks.
+
+Round-seven admitted runs: B run-mv4v2eci-8b21c15d, C run-mv4v1v25-c7d57567, D run-mv4v1zth-095100f7.
+Supervisor independently read all12actual running identity receipts: every verified flag true and complete
+Core/host/server actual equals expected; extension background/content each match. Startup passed allthree.
+All attempts and replays ended. B creation passed ten facts at49wholecalls/$0.177387264; D creation passed
+four records/eight fields and final state at38wholecalls/$0.113476884. Separate replays achieved goals and
+preserved Flow hashes but failed qualification because three provider counters were null. D immutable
+reconstruction later found explicit settled zero accounting380ms after first succeeded publication; exact
+initial capture time is unavailable. Preserve failed receipts; missing counters never imply zero.
+C failed build at43wholecalls/$0.212390292: its final offered test tool was rejected by a duration-estimated
+one-slot guard before purse admission. Four trials match13ordered records/52values, but requested column
+order differs and judges withheld approval. No promoted Flow or replay; no second creations or balance errors.
+Full worker debugs are complete. Freeze released for bounded replay-settlement and generic final-slot repairs;
+changed-source qualification begins a new pair. Do not count these first passes as completed qualification.
 
 **Latest budget authorization (user, October 11): $0.25 per test instead of $0.10.** Subsequent live tests set
 `FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25` in the launch process environment and verify the whole-Flow purse in
@@ -379,6 +400,69 @@ the results and any required repairs pass current owner tests and fresh-process 
 
 ## Worker Briefs
 
+### Brief: a-review — C exclusion provenance audit
+
+- After B report correction, read-only t451 frozen pair and own C round-seven report; no t460 source reads.
+- Own new t451 reports/exclusion-provenance-audit.md only. Inspect actual trial3-6 request evidence privately;
+  never print labels/rows/page bodies. Report only counts/types/shape/code/hash comparisons.
+- Trace extension content/extraction/{list-reader,rejected-samples,item-filter}.ts, domain extract-list/dispatch.ts
+  and direct consumer of rejected evidence in Core judge input (locate by symbol; ask if brief insufficient).
+- Establish what each rejection witness preserves: original read/predicate, actual absent/present/numeric value,
+  provenance, truncation and field order. Do not infer missing eligibility means eligible or grant a model pass.
+- If evidence omits the decisive observation, propose narrow cross-layer owner change with neutral fail-first
+  tests and privacy requirements; no source edits/scenario-shaped guidance/oracle-to-product knowledge.
+- Also trace whether columns ordering was author choice, output normalization or collector presentation;
+  exact requested order caveat remains until proven. No builds/tests/provider/browser/panel/commits/lifecycle.
+- Return source-supported defect or honest uncertainty, exact files and bounded next brief. Stop reads afterward.
+
+### Brief: a-review — correct B replay diagnosis
+
+- Own only retained t262 reports/live-b-round7.md and its debug/lane report, no source/shared docs.
+- Supervisor independently reconstructed both B/D immutable runtime chunks with read-only SQLite, exact
+  plaintext paths/descriptor-object hashes/bytes/schema/ranges/contiguous sequences/header-last checks.
+- B run6fb38e94-9701-470d-8606-0768bf46ea1d:6chunks/29events; latest summary succeeded, gate invokedfalse,
+  calls/tokens/cost/pending/breaches0, providerRows0/omitted0, settled unverified/no_model_available.
+- Earlier successful-annotation omission hypothesis is superseded: durable publication exists. Preserve raw
+  failed/null replay receipt and identify earlier read as unsettled. Exact initial read timing remains unlogged.
+- Correct own reports honestly; no retroactive qualification, tests/browser/provider/branch/commit actions.
+
+### Brief: c-validation — t460 replay settlement repair
+
+- Paired t460 trees under C:/Users/osrs_/FluxStuff/fxwork/t460. Read Current State here and own D round-seven report.
+- Own downstream saved-flow-replay/replay-saved-flow.ts, flow-lane/persisted-flow-run.ts and terminal-run-wait owner
+  only if needed, their owning tests and a focused helper/barrel if structure requires. No Core edits.
+- Reproduce delayed accounting on BOTH normal execution return and timeout/readback: terminal succeeded first,
+  settled unverified/no_model_available plus explicit zero accounting later. Use existing bounded waiter.
+- Replay requests settlement explicitly even without llmExecution; no timeout increase, null-to-zero coercion,
+  model dispatch, relaxed counters, fixture/oracle changes or generated receipt rewrite. Permanent missing,
+  unsettled, pending/nonzero/contradictory accounting must refuse qualification. Existing caller behavior preserved.
+- Own report docs/working/live-testing-handoff-audit-2026-10-11/reports/replay-settlement-repair.md only.
+- Named owner tests/typecheck/native structure audit; no full suites/browser/provider/panel/lifecycle/commits.
+- Stop edits before supervisor review; report commands, actual results, limitations and architecture text owed.
+
+### Brief: b-debug — t460 final-slot offer/execution repair
+
+- Paired t460 Core tree under C:/Users/osrs_/FluxStuff/fxwork/t460/!FluxIQ. Read Current State here, Core boundary/
+  structure guidance and own C round-seven report. Downstream source owned by c-validation; no overlap.
+- Own Core evidence-loop.ts, loop-budget.ts only if needed, final-decision helper if necessary and their owning
+  tests. Reproduce duration-estimated last slot advertising candidate test then rejecting it before purse admission.
+- Make offered/executable contract consistent while retaining actual duration/cash/call admission and safe final
+  candidate submission. Do not raise timeout/budget, weaken promotion, teach scenarios or assume another trial fits.
+- Neutral fail-first regression for offered test executed/admitted or explicitly withheld with truthful feedback;
+  cost-limited and call/duration-limited final decisions preserve existing supported completion behavior.
+- Own downstream report docs/working/live-testing-handoff-audit-2026-10-11/reports/final-slot-repair.md only.
+- Named owner tests/fresh typecheck/native structure audit, no full suites/provider/browser/panel/commits/lifecycle.
+- Stop edits before supervisor review; report root cause, precise behavior, checks and architecture text owed.
+
+### Brief: c-validation — D replay accounting reconstruction
+- Repository: retained paired t275, read-only after creation/replay processes ended.
+- Task: distinguish pending/omitted Core zero-provider publication from typed detail projection for replay-mv4vpbu9-a39a6705; do not infer zeros from disabled wiring.
+- Required reads: Current State; own round-seven report; Core zero-provider-run.ts/run-record.ts/existing framework disabled-run regression named in that report; exact runtime chunk/content owner only.
+- Owns (may edit): existing live-d-round7.md report only; ignored safe metadata/hash receipt.
+- Must not touch: source/shared docs/other reports, .fluxiq/runtime state, setup/migrations, host/browser/replay/provider calls, profile/keys, branch/commit operations; never publish page-body/cookie/credential values.
+- Definition of done: read-only SQLite and existing owner/hash checks reconstruct only metadata/gate/verification/pending shapes; identify actual producer/read omission with precise evidence or explicit uncertainty; report before implementation scope.
+- Report to: docs/working/live-testing-handoff-audit-2026-10-11/reports/live-d-round7.md in t275.
+
 ### Brief: a-review — B round seven
 - Repository: retained paired t262, slot3/instance t262-slot-3/workspace t262-b; supervisor syncs the selected dev pair before dispatch.
 - Task: prepare then qualify original bigbox-retail-pickup-cart-store-remembered-after-creation, candidate chat/headed, two same-pair creations with separate no-model replays; one attempt at a time.
@@ -436,6 +520,33 @@ the results and any required repairs pass current owner tests and fresh-process 
 Historical worker briefs moved to [the settled-brief archive](./live-testing-handoff-audit-2026-10-11/archive/2026-10-11-settled-worker-briefs.md); current briefs above and active repair briefs under Audit Findings remain authoritative.
 
 ## Work Ledger
+
+### 2026-10-11 — Round-seven results independently checked; t460 repairs assigned
+
+- Supervisor read B/D evaluation and runtime oracles: B ten facts held; D4records/8fields/no extras/nonstring,
+  records+finalstate held. Both confirmed; C no promoted Flow. Whole costs B0.177387264/C0.212390292/D0.113476884.
+- Both separate replay receipts failed solely missing accounting; hashes equal, disabled wiring/credentials[],
+  stored keys preserved, interventions/harness0. No second creation, balance error or automatic retry.
+- Independent read-only immutable reconstruction: B6chunks/29events, D6chunks/36events; exact paths/hashes/
+  bytes/schema/ranges/contiguous sequences/header-last checked. Latest both succeeded/fullzero gate with
+  provider rows0/omitted0/pending0 and settled unverified/no_model_available. Original failed receipts preserved.
+- D annotation lands380ms after first success; original capture time unlogged. No permanent Core publication
+  loss: earlier B omission hypothesis superseded. t460 fixes downstream bounded settlement and Core final-slot
+  offer/execute contract in disjoint files; no budget/time increase. Existing owning lifecycle bootstrap0 reused
+  most builds and regenerated extension; do not run another full build sweep. A audits C provenance read-only.
+- Round-seven frozen-pair streak released; changed-source qualification needs a new pair. Retained lane reports
+  and profiles remain; main .clinerules edit untouched. No user-panel management or generated state edits.
+- Validation: supervisor Node read-only descriptor reconstruction exited0 for B6chunks29events/D6chunks36events;
+  all hash/range/header assertions passed, latest both zero ledger. Actual evaluation projection exited0:
+  B10heldfacts/D4matchedrecords8presentfields0extras0nonstring; both raw replay verdicts failed missing accounting.
+
+### 2026-10-11 — Round-seven preparation frozen; D dry-run omission contained
+- Agent: Codex senior supervisor; A/B/C workers.
+- Changed: all six clean retained lane trees fast-forwarded to Core5036fb8c/downstreamd19a8d50; B/C/D rebuild and actual zero-call ready preparation assigned, no paid clearance yet.
+- Why: qualify integrated processing help/passive result view/recording persistence on unchanged original tasks with the authorized$0.25 and existing64build-call ceiling.
+- Validation: supervisor inspected D omitted-dry-run prelude log: stopped at domain cleanup/build before Lab run entry/host/browser/chat/provider dispatch; no staging directory. Worker owned stop reported no open live run. Corrected explicit dry-run regenerates interrupted owner artifacts; ready/artifact review still pending.
+- Outcome: command error contained before admitted attempt or model spend; preserved logs/profile/data, no source/override change. No product pass/failure inferred from that preparation.
+- Follow-up: inspect actual ready64/48million/bothpurses0.25, current artifact validators and original task hashes before one paid attempt per lane; actual four identities before chat, then full debug/oracle/replay gates.
 
 ### 2026-10-11 — Passive result view and recording persistence independently accepted
 - Agent: Codex senior supervisor; A/B/C workers.
