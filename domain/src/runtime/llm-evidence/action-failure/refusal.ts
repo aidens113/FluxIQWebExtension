@@ -70,6 +70,9 @@ const BY_FAILURE_CODE: Readonly<Record<string, WebLlmToolRejectionCode>> = Objec
   // shape and its arguments are not -- and the reason below tells them apart.
   [WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED]: "output_not_observed",
   [WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH]: "output_not_observed",
+  // A select asked for an option it does not offer (t464): the step is the
+  // right shape and the value it sent is not one of the control's options.
+  [WEB_AUTOMATION_FAILURE_CODES.OPTION_NOT_OFFERED]: "output_not_observed",
   // The browser refused before the verb was reached. Its own code, because it
   // is the one failure nothing the model writes can clear.
   [WEB_AUTOMATION_FAILURE_CODES.BROWSER_PERMISSION_DENIED]: "not_permitted_here",

@@ -186,6 +186,11 @@ function property(value: unknown, name: string): unknown {
  * or skipped validation succeeds, a failed one reports `failed` with the two
  * values that disagreed.
  *
+ * `failureCode` names a failed validation's code when the verb knows more than
+ * "the post-condition did not hold": a select asked for an option it does not
+ * offer is OPTION_NOT_OFFERED, which is not retryable (t464). Without one the
+ * code is the verb's own unobserved output, as below.
+ *
  * A failed `web.dom.assert` is STATE_MISMATCH, not OUTPUT_NOT_OBSERVED. The
  * distinction is the whole point of the pair: the assert verb's post-condition
  * is the Flow's claim about the page, so a failure means the page is in a state
@@ -197,7 +202,8 @@ export function success(
   startedAt: number,
   message: string,
   validation: BrowserActionValidation,
-  evidence: ActionResultEvidence = {}
+  evidence: ActionResultEvidence = {},
+  failureCode?: WebAutomationFailureCode
 ): BrowserActionResult {
   const bounded = boundValidation(validation);
   return buildResult(action, startedAt, {
@@ -205,7 +211,7 @@ export function success(
     validation: bounded,
     message,
     failure: bounded.status === "failed"
-      ? webAutomationFailureRecord(unobservedOutputCode(action), { expected: bounded.expected, actual: bounded.actual })
+      ? webAutomationFailureRecord(failureCode ?? unobservedOutputCode(action), { expected: bounded.expected, actual: bounded.actual })
       : undefined
   }, evidence);
 }

@@ -85,7 +85,9 @@ test("the page observes the selection: untrusted input and change, and the form 
   expect((await harness.finalState()).state).toMatchObject({ submitted: true, values: { name: "Ada", plan: "enterprise" } });
 });
 
-test("a value with no option changes nothing and reports output_not_observed", async ({ openHarness, page }) => {
+// t464: a missing option is its own code, not retryable, and the failure names
+// the value sent (as JSON) and the options closest to it before the full list.
+test("a value with no option changes nothing and reports option_not_offered", async ({ openHarness, page }) => {
   const harness = await openHarness("basic-form");
   const reply = await harness.runAction({ commandId: "select-missing-value", actionType: "web.dom.select", selector: PLAN, value: "platinum" });
   expect(reply).toMatchObject({
@@ -94,9 +96,9 @@ test("a value with no option changes nothing and reports output_not_observed", a
     validation: {
       status: "failed",
       expected: 'an option matching value "platinum" is selected',
-      actual: 'no option matched; the select still holds "starter" and offers "starter" (Starter), "team" (Team), "enterprise" (Enterprise)'
+      actual: 'no option matched: the value sent was "platinum" (8 characters); the closest options offered are "team" (Team), "starter" (Starter), "enterprise" (Enterprise); the select still holds "starter" and offers "starter" (Starter), "team" (Team), "enterprise" (Enterprise)'
     },
-    failure: { category: "output_not_observed", code: "web.validation.output_not_observed", retryable: true, stage: "verification" }
+    failure: { category: "output_not_observed", code: "web.validation.option_not_offered", retryable: false, stage: "verification" }
   });
   await expect(page.locator(PLAN)).toHaveValue(INITIAL_PLAN);
 });

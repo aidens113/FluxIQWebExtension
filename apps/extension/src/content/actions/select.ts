@@ -47,16 +47,39 @@
 // rejection below carries none, and cannot: `actionRejected` builds its own
 // validation from two strings and takes no such parameter. That is a live gap
 // rather than a decision made here -- see reports/v-redaction-producer.md.
+//
+// An option the select does not offer is its own failure, OPTION_NOT_OFFERED,
+// which is not retryable (t464): asking the same select for the same value
+// again is answered the same way. Lane B round 8 (`run-mv5jnc62-01c3609a`)
+// sent a quantity select `"2"` with its quote marks; the failure was marked
+// retryable, so it was tried four times in each of four trials and the build
+// spent a trial testing the same revision again. Two things keep that honest.
+// A page that fills a select in late (a second select whose options load once
+// the first is chosen) is waited for here, up to `OPTION_WAIT_MS`, before the
+// option is called missing, so what a retry would have bought is bought once,
+// inside the verb. And the failure names the value sent -- in JSON quotes, so
+// its own quote marks show -- and the options closest to it, saying when the
+// closest differs only by quote marks, spaces or letter case
+// (`./closest-options.ts`), from the select's own options and only for a
+// select that is not sensitive.
 
+import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
 import { isSensitiveFormControl } from "../element-traits";
 import type { BrowserActionCommand, BrowserActionResult, WebAutomationOptionSelector } from "../types";
 import type { ContentActionDependencies } from "./types";
+import { closestOfferedOptions } from "./closest-options";
 import { describeFieldValue } from "./value-redaction";
 
 /** How many options a failed validation lists, so a select with thousands cannot build a huge string. */
 const OPTIONS_LISTED_ON_FAILURE = 20;
+/** How many of the closest options a failed match names before the full list. */
+const CLOSEST_LISTED_ON_FAILURE = 5;
+/** How long a select is watched for an option it does not offer yet, for a page that fills its options in late (header). */
+const OPTION_WAIT_MS = 2_000;
+/** How often the watched select is read again within that wait. */
+const OPTION_POLL_MS = 100;
 
-export function selectAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
+export async function selectAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const { element, resolution } = deps.resolveTarget(action);
   const withheld = isSensitiveFormControl(element);
   const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution });
@@ -84,14 +107,14 @@ export function selectAction(action: BrowserActionCommand, deps: ContentActionDe
     }, evidence());
   }
 
-  const option = findOption(element, request);
+  const option = findOption(element, request) ?? await optionFilledInLate(element, request);
   if (!option) {
     return deps.success(action, startedAt, `No option matched ${describeRequest(request, withheld)}.`, {
       status: "failed",
       expected: `an option matching ${describeRequest(request, withheld)} is selected`,
-      actual: `no option matched; the select still holds ${describeFieldValue(element.value, withheld)} and offers ${listOptions(element, withheld)}`,
+      actual: `no option matched${sentAndClosest(element, request, withheld)}; the select still holds ${describeFieldValue(element.value, withheld)} and offers ${listOptions(element, withheld)}`,
       redacted: withheld
-    }, evidence());
+    }, evidence(), WEB_AUTOMATION_FAILURE_CODES.OPTION_NOT_OFFERED);
   }
 
   if (option.matches(":disabled")) {
@@ -117,6 +140,40 @@ export function selectAction(action: BrowserActionCommand, deps: ContentActionDe
     actual: selectedValueText(selected, option.value, withheld),
     redacted: withheld
   }, evidence());
+}
+
+/**
+ * The option asked for, once the select has been read again every
+ * `OPTION_POLL_MS` for up to `OPTION_WAIT_MS`; nothing if it never appeared or
+ * the select left the page. An index request waits too: a list filled in late
+ * is short until it is filled.
+ */
+async function optionFilledInLate(element: HTMLSelectElement, request: WebAutomationOptionSelector): Promise<HTMLOptionElement | undefined> {
+  const deadline = Date.now() + OPTION_WAIT_MS;
+  while (Date.now() < deadline && element.isConnected) {
+    await new Promise((resolve) => setTimeout(resolve, OPTION_POLL_MS));
+    const found = findOption(element, request);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
+ * The value sent and the options closest to it, after "no option matched"
+ * (header). The value is written as JSON, so quote marks it carries show as
+ * themselves. Nothing for a sensitive select, whose options and request are
+ * its secret, nor for an index, which names a position the list states.
+ */
+function sentAndClosest(element: HTMLSelectElement, request: WebAutomationOptionSelector, withheld: boolean): string {
+  if (withheld || request.by === "index") return "";
+  const sent = request.by === "value" ? request.value : request.label;
+  const options = [...element.options].map((option) => ({ value: option.value, label: normalizeLabel(optionLabel(option)) }));
+  const { closest, sameButQuoting } = closestOfferedOptions(sent, options, CLOSEST_LISTED_ON_FAILURE);
+  const named = `the ${request.by} sent was ${JSON.stringify(sent)} (${sent.length} character${sent.length === 1 ? "" : "s"})`;
+  if (!closest.length) return `: ${named}`;
+  const listed = closest.map((option) => `"${option.value}" (${option.label})`).join(", ");
+  const same = sameButQuoting ? `; "${sameButQuoting.value}" differs from it only by quote marks, spaces or letter case, so send exactly ${JSON.stringify(request.by === "value" ? sameButQuoting.value : sameButQuoting.label)}` : "";
+  return `: ${named}; the closest options offered are ${listed}${same}`;
 }
 
 /**

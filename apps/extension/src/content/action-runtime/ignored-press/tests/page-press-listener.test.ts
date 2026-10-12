@@ -63,7 +63,7 @@ type ResourceEntry = { startTime: number; initiatorType: string };
  * that holds a nested widget with a root of its own, as a store chip's picker
  * does.
  */
-function fakePage(options: { performanceObserver?: boolean; shadow?: boolean; shadowWidget?: boolean } = {}) {
+function fakePage(options: { performanceObserver?: boolean; shadow?: boolean; shadowWidget?: boolean; pageWorld?: boolean; begunBefore?: number } = {}) {
   const view = eventTarget();
   const navigation = eventTarget();
   const document = { ...eventTarget(), location: { href: "http://127.0.0.1:4000/ip/1" }, defaultView: undefined as unknown };
@@ -123,6 +123,7 @@ function fakePage(options: { performanceObserver?: boolean; shadow?: boolean; sh
   }
 
   let now = 1_000;
+  const starts = { begun: options.begunBefore ?? 0, marked: [] as Element[] };
   const timeline: ResourceEntry[] = [];
   const resources = { pending: [] as ResourceEntry[], deliver: undefined as ((entries: ResourceEntry[]) => void) | undefined, disconnected: 0 };
   class FakePerformanceObserver {
@@ -143,7 +144,15 @@ function fakePage(options: { performanceObserver?: boolean; shadow?: boolean; sh
   const environment: PressPage = {
     MutationObserver: FakeMutationObserver as unknown as typeof MutationObserver,
     PerformanceObserver: options.performanceObserver === false ? undefined : (FakePerformanceObserver as unknown as typeof PerformanceObserver),
-    performance: { now: () => now, getEntriesByType: () => [...timeline] } as unknown as Performance
+    performance: { now: () => now, getEntriesByType: () => [...timeline] } as unknown as Performance,
+    // The page world's count (`request-start-mark.ts`): marked on the pressed element, asked on every flush.
+    markRequestStarts: options.pageWorld
+      ? (pressed) => {
+          starts.marked.push(pressed);
+          const mark = starts.begun;
+          return { begunSince: () => starts.begun > mark };
+        }
+      : undefined
   };
 
   const seen: PressSignal[] = [];
@@ -164,7 +173,9 @@ function fakePage(options: { performanceObserver?: boolean; shadow?: boolean; sh
       resources.pending.push(entry);
       timeline.push(entry);
     },
-    resources
+    resources,
+    /** The page world's count of requests the page has begun, and the elements it was asked to mark. */
+    starts
   };
 }
 
@@ -227,6 +238,25 @@ test("a fetch, an XMLHttpRequest or a beacon begun after the press is a request"
     page.listener.flush();
     assert.deepEqual(page.seen, ["request"], initiator);
   }
+});
+
+test("a request the page began after the press is an answer before its response ends, through the page world's count", () => {
+  // social-network-feed's Confirm awaits its request before it changes the
+  // card; with only the resource timeline, a slow server left the press
+  // looking ignored and it was pressed again (run-mv5jnc5m-a47c3e59, t465).
+  const page = fakePage({ pageWorld: true });
+  assert.deepEqual(page.starts.marked, [page.elements.label], "the pressed element is marked as the listener starts, before the press");
+  page.listener.flush();
+  assert.deepEqual(page.seen, [], "nothing begun since the mark, nothing reported");
+  page.starts.begun += 1;
+  page.listener.flush();
+  assert.deepEqual(page.seen, ["request"], "no resource entry yet, and the request already counts");
+});
+
+test("a request begun before the mark is no answer, through the page world's count either", () => {
+  const page = fakePage({ pageWorld: true, begunBefore: 3 });
+  page.listener.flush();
+  assert.deepEqual(page.seen, [], "three requests the page had begun before the press are not its answer");
 });
 
 test("an image loading, or a request begun before the press, is no answer to it", () => {
