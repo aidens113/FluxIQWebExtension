@@ -117,6 +117,12 @@ export type CreatedFlowLaneInput = {
    * and is refused before anything is built or spent otherwise (`./readiness.ts`).
    */
   authoringMode: AutomationStudioAuthoringMode;
+  /**
+   * Whether the run's Core resets the fixture between candidate trials
+   * (`./readiness.ts` `labCandidateTrialFixtureReset`, t470): false for a live
+   * build, whose trials start from the model's own reset. Absent, true.
+   */
+  candidateTrialFixtureReset?: boolean;
   request: CreatedFlowRequest;
   /** The workflow `request` resolved to, with its variant applied: its expectations judge the run. */
   workflow: ResolvedScenarioWorkflow;
@@ -352,7 +358,7 @@ type CreatedFlowLaneProgress = {
  */
 export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<CreatedFlowLaneEvidence | CreatedFlowLanePermissionStop> {
   // In candidate mode the running Core is asked first -- a read, no provider -- whether it test-runs candidates and starts each trial from the Lab's reset.
-  const candidateTrial = input.authoringMode === "candidate" ? await readCreatedFlowCandidateTrialReadiness(input.control, input.projectDomainId ?? LAB_PROJECT_DOMAIN_ID, input.bounds ?? {}) : undefined;
+  const candidateTrial = input.authoringMode === "candidate" ? await readCreatedFlowCandidateTrialReadiness(input.control, input.projectDomainId ?? LAB_PROJECT_DOMAIN_ID, input.bounds ?? {}, input.candidateTrialFixtureReset ?? true) : undefined;
   assertCreatedFlowVerificationReady(input.authoringMode, candidateTrial);
   const progress: CreatedFlowLaneProgress = { stage: "blank-flow", published: false };
   try {

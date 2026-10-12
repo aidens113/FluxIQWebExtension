@@ -40,6 +40,13 @@ export type TopologyPaths = {
    * run gives none, and Core logs no steps.
    */
   stepLogDirectory?: string;
+  /**
+   * Whether a candidate-mode Core resets the fixture before each candidate
+   * trial (t470): true, or absent, gives it the start hook as before; false
+   * gives it none, so each trial starts from what the model's own reset left
+   * (`flow-lane/creation/readiness.ts` `labCandidateTrialFixtureReset`).
+   */
+  candidateTrialFixtureReset?: boolean;
 };
 
 export function buildScenarioEnvironment(allocation: RunAllocation, seed: number, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
@@ -99,6 +106,12 @@ export function webPanelHostModulePath(repositoryRoot: string): string {
  * that reset requires. Core then resets the fixture before each candidate
  * trial. Legacy mode gets neither, and an inherited value of either is always
  * dropped, so only a Core the Lab starts in candidate mode ever has the hook.
+ *
+ * A live (paid) candidate build gets no hook either (t470, `paths.
+ * candidateTrialFixtureReset` false): since t462 the model resets the site to
+ * the build's start before every trial through the site's own controls, and a
+ * fixture reset between trials would hide whether that reset works. The
+ * fixture still starts seeded, and the lane still resets it before playback.
  */
 export function buildFluxIQEnvironment(allocation: RunAllocation, paths: TopologyPaths, base: NodeJS.ProcessEnv = process.env, args: readonly string[] = process.argv): NodeJS.ProcessEnv {
   const hostModulePath = paths.hostModulePath ?? webPanelHostModulePath(paths.repositoryRoot);
@@ -120,7 +133,7 @@ export function buildFluxIQEnvironment(allocation: RunAllocation, paths: Topolog
     ...(paths.modelProvidersEnabled === undefined ? {} : { FLUXIQ_MODEL_PROVIDERS_ENABLED: String(paths.modelProvidersEnabled) }),
     ...(defaultModel === undefined ? {} : { [LAB_DEFAULT_MODEL_ENV]: defaultModel }),
     [LAB_AUTHORING_MODE_ENV]: authoringMode,
-    ...labCandidateStartHookEnvironment(allocation, authoringMode),
+    ...labCandidateStartHookEnvironment(allocation, authoringMode, paths.candidateTrialFixtureReset ?? true),
     ...(paths.stepLogDirectory ? { FLUXIQ_LLM_STEP_LOG_DIR: paths.stepLogDirectory } : {}),
     PORT: String(allocation.webPort),
     FLUXIQ_ROOT: allocation.fluxiqRoot,
@@ -140,10 +153,11 @@ export function buildFluxIQEnvironment(allocation: RunAllocation, paths: Topolog
 /**
  * The candidate start hook (decision D1) a Lab-started Core gets in candidate
  * mode: this run's Scenario Lab reset and the controller token it requires.
- * Nothing in any other mode.
+ * Nothing in any other mode, and nothing when the run keeps the fixture as the
+ * model's reset leaves it between trials (`fixtureReset` false, t470).
  */
-export function labCandidateStartHookEnvironment(allocation: Pick<RunAllocation, "scenarioPort" | "controllerToken">, authoringMode: string): Record<string, string> {
-  if (authoringMode !== "candidate") return {};
+export function labCandidateStartHookEnvironment(allocation: Pick<RunAllocation, "scenarioPort" | "controllerToken">, authoringMode: string, fixtureReset = true): Record<string, string> {
+  if (authoringMode !== "candidate" || !fixtureReset) return {};
   return {
     [AUTOMATION_STUDIO_CANDIDATE_START_HOOK_ENV.endpoint]: `http://127.0.0.1:${allocation.scenarioPort}/__control/reset`,
     [AUTOMATION_STUDIO_CANDIDATE_START_HOOK_ENV.token]: allocation.controllerToken,

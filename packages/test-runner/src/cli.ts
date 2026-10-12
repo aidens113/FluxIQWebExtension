@@ -8,7 +8,7 @@ import { ClonePackageCache } from "./clone-cache.js";
 import { parseLabCommand, expandMatrix } from "./commands.js";
 import { inspectCoreWebBuild } from "./core-web-build/index.js";
 import { classifyRunnerFailure } from "./failure.js";
-import { assertCreatedFlowVerificationReady, describeCreatedFlowRequest, labCandidateTrialReadiness, loadCreatedFlowRequest } from "./flow-lane/index.js";
+import { assertCreatedFlowVerificationReady, describeCreatedFlowRequest, labCandidateTrialFixtureReset, labCandidateTrialReadiness, loadCreatedFlowRequest } from "./flow-lane/index.js";
 import { inspectRun } from "./inspect.js";
 import { beginLiveLlmRun } from "./live-llm/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
@@ -119,7 +119,8 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       if (live?.createsFlow && !command.directApiBuild) live.assertChatBuildable();
       // A candidate-mode created-Flow run needs a Core that test-runs candidates and the start hook the Lab gives only a Core it starts;
       // refused here, before anything starts, and asked of the running Core again by the lane (`flow-lane/creation/readiness.ts`).
-      const candidateTrial = live?.coreAuthoringMode === "candidate" ? labCandidateTrialReadiness({ startsCore: target.mode !== "existing" }) : undefined;
+      // A live build's trials start from the model's own reset, so its Core gets no fixture reset between trials (t470); the receipt says so.
+      const candidateTrial = live?.coreAuthoringMode === "candidate" ? labCandidateTrialReadiness({ startsCore: target.mode !== "existing", fixtureResetBetweenTrials: labCandidateTrialFixtureReset({ live: true }) }) : undefined;
       if (live?.createsFlow) assertCreatedFlowVerificationReady(live.coreAuthoringMode, candidateTrial);
       const creation = live?.createsFlow ? await loadCreatedFlowRequest({ repositoryRoot, scenarioLabDist: labPaths.scenarioLabDist, scenarioId: command.scenarioId, ...(command.instructionTaskId ? { taskId: command.instructionTaskId } : {}), ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) }) : undefined;
       if (command.dryRun) {

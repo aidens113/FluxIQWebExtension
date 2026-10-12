@@ -45,7 +45,7 @@ type FakeChatOptions = {
 
 const CANDIDATE_ID = "candidate.chat";
 const DRAFT_TEMPLATE: AutomationStudioCandidateAuthoringResult = { status: "draft", projectId: PROJECT, flowId: FLOW, candidateId: CANDIDATE_ID, revision: 2, digest: "d".repeat(64), sourceInstructionIds: ["instruction.one"], baseDependencyDigest: "base", baseSettingsRevision: 0, verification: "not_performed", promotionAllowed: false, accounting: { requestId: "request.one", estimatedInputTokens: 10 } };
-const CANDIDATE_SCOPE = { ...SCOPE, authoringMode: "candidate" as const, candidateTrial: { trialRunner: true, startReset: true, source: "core" as const } };
+const CANDIDATE_SCOPE = { ...SCOPE, authoringMode: "candidate" as const, candidateTrial: { trialRunner: true, startReset: true, fixtureResetBetweenTrials: true, source: "core" as const } };
 const trialSession = (runId: string, queuedAt: number, trial: Record<string, unknown>, flowId = FLOW) => ({ runId, flowId, queuedAt, status: "succeeded", flow: { nodes: [{ text: "page words never kept" }] }, metadata: { candidateTrial: { candidateId: CANDIDATE_ID, digest: "d".repeat(64), start: "reset", ...trial } } });
 
 function fakeChat(options: FakeChatOptions) {
@@ -296,7 +296,7 @@ test("a candidate the chat promoted and applied carries the candidate and trial 
 });
 
 test("candidate mode refuses a Core without the trial runner, or without the start hook, before anything is typed (t348)", async () => {
-  for (const [candidateTrial, code] of [[{ trialRunner: false, startReset: false, source: "core" as const }, "lab.candidate_verification_unavailable"], [{ trialRunner: true, startReset: false, source: "core" as const }, "lab.candidate_start_hook_unset"]] as const) {
+  for (const [candidateTrial, code] of [[{ trialRunner: false, startReset: false, fixtureResetBetweenTrials: true, source: "core" as const }, "lab.candidate_verification_unavailable"], [{ trialRunner: true, startReset: false, fixtureResetBetweenTrials: true, source: "core" as const }, "lab.candidate_start_hook_unset"]] as const) {
     const { control, chat, wait } = fakeChat({ answer: "build", ending: "created" });
     let typed = 0;
     await assert.rejects(buildCreatedFlowFromChat(control, { ...chat, type: async (text) => { typed += 1; await chat.type(text); } }, { ...SCOPE, authoringMode: "candidate", candidateTrial }, wait), (error: unknown) => error instanceof RunnerFailure && error.category === "facility.contract" && error.details?.code === code && error.details?.stage === "before_provider");
