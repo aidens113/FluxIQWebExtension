@@ -1,7 +1,7 @@
 # Live Testing Handoff Audit — 2026-10-11
 
 Status: Active
-Status detail: Execution authorized; A evidence review, B failure diagnosis and C fix verification assigned in existing isolated lane trees; supervisor owns integration and D diagnosis.
+Status detail: A qualified and evidence preserved; t274 C/B finishing fixes integrated after supervisor checks; D fix t449 and candidate-default t450 in verification before B/C/D live qualification.
 Created: 2026-10-11
 Last updated: 2026-10-11
 Owner: Codex senior supervisor
@@ -11,21 +11,24 @@ Related: [MVP plan](./mvp-final-month-plan.md), [recovery plan](./state-aware-re
 
 ## Current State
 
-**Resume from this audit before the older MVP Current State.** Most notes exist, but the latest lane work is
-uncommitted in worktrees and several status summaries predate completed runs. All dates here use Los Angeles;
+**Resume from this execution document.** The MVP and recovery summaries have now been reconciled; recovered
+lane evidence and C/B source changes are committed. All dates here use Los Angeles;
 the latest runs' October 12 UTC timestamps are October 11 locally.
 
 **Execution now authorized (user: "ok go").** A-review, B-debug and C-validation assigned below on existing lane
 branches/worktrees. Supervisor handles D diagnosis, independently verifies results and integrates coherent units.
 Prior audit limits below describe audit-only work; subsequent execution validation is recorded in the ledger.
 
-**New evidence during execution:** A has two valid creation outcomes but separate zero-call replay receipts are
-still owed; do not switch the default yet. B never tested an accepted revision and ran out of cost budget;
+**New evidence during execution:** A's gate is now supervisor-verified: both creation passes and separate
+replays `replay-mv4kt6g0-4e4900a8` / `replay-mv4kv3z1-2cfab70c` passed, exact stored Flow hashes unchanged,
+all model/provider/intervention/harness counters zero, model wiring disabled and independent goal held.
+Candidate-default task t450 may proceed. B never tested an accepted revision and ran out of cost budget;
 the last-decision wrap-up offered no tools. D trials 2-4 ran all displayed steps successfully but Core ended
 failed because its terminal node left unvisited graph nodes; trial feedback omitted this graph-level reason.
-C verification is in flight. New paired task t449 owns the D graph/feedback regression investigation.
+C/B finishing changes are integrated as t274. Paired task t449's D fix is under supervisor verification;
+paired t450 changes the configured product default now A's gate is signed.
 
-**Repository snapshot.** Downstream dev `6e07993f`, Core dev `01621c94`; both equal their locally stored
+**Audit intake snapshot (historical).** Downstream dev `6e07993f`, Core dev `01621c94`; both equalled their locally stored
 `origin/dev` refs (no remote fetch performed). Core main checkout clean; downstream has a pre-existing edit to
 `.clinerules/fluxiq.md`, preserved. No matching FluxIQ/fxwork/fxlab node process found in the process query.
 Slot ownership files exist; ownership files alone do not mean a run is alive. No processes were stopped.
@@ -51,6 +54,9 @@ finish run #2's full debug and inspect running identities/provider accounting be
 B, D and A have untracked reports/debugs. t380 and t381 remain unmerged. Many other retained task branches
 have zero commits ahead of dev and are not unfinished implementation merely because their worktrees exist.
 The UI review and production-integrity tasks t334/t335/t337 remain parked, not part of immediate lane recovery.
+
+The preceding dirty-file inventory is the audit intake: C is now integrated, A/B notes preserved and merged,
+while their lane workspaces remain intact for further live work. No profiles or run evidence were reclaimed.
 
 **Next:** preserve and reconcile the lane evidence; close A's qualification review; debug B/D; independently
 verify and integrate C's existing fixes; rerun only after an evidenced fix. Then qualify B/C/D, prove adaptation
@@ -184,7 +190,7 @@ Historical test counts remain previous-session results, not tests independently 
 - Repository: new paired task `C:/Users/osrs_/FluxStuff/fxwork/t449/!FluxIQWebExtension` and sibling `!FluxIQ`.
 - Task: diagnose D's false-looking terminal failure and fix the underlying graph/compiler bug if confirmed, plus actionable safe graph-level trial feedback.
 - Required reads: this Current State; D run bundle and lane `fxwork/t275` evidence; Core Repository Boundary/code structure; `runtime/flow-bootstrap/verification/detached-execution.ts`, `executor/graph-navigation.ts`, `executor/graph-run.ts`, `service/candidate-trial/feedback.ts` and their tests.
-- Owns (may edit): Core executor graph-navigation.ts, choose-edge.ts (new), step-skip/optional-step.ts and owning barrel/imports, step-skip/tests/guarded-group-run.test.ts and graph-navigation tests; candidate-trial feedback source/tests and safe terminal-code producer; matching architecture docs; downstream D debug and own report in t449. Compiler changes require another ownership review.
+- Owns (may edit): Core executor graph-navigation.ts, graph-navigation/edge.ts and barrel (new), step-skip/optional-step.ts and owning imports, step-skip/tests/guarded-group-run.test.ts and graph-navigation tests; candidate-trial feedback source/tests and safe terminal-code producer; matching architecture docs; downstream D debug and own report in t449. Compiler changes require another ownership review.
 - Must not touch: C's authoring-loop/progress/loop-budget/look-withdrawal/instructions files, other task trees, shared docs; no commits/pushes/merges, full suites, paid calls or browser launches.
 - Definition of done: fail-first regression from D's optional/only-after/repeat shape, no weakening of missing/disconnected-node protection; graph-level failure reported safely without page/selector details; focused tests, affected Core typecheck and audits pass. Report exact source ownership before expanding beyond named modules.
 - Report to: t449 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/d-trial-feedback.md` and `docs/working/language-driven-flow-loop-plan/debugs/run-mv4jjsvj-25b4dc2a.md`.
@@ -198,7 +204,24 @@ Historical test counts remain previous-session results, not tests independently 
 - Definition of done: both exact stored hashes unchanged, provider/intervention/harness counts all zero, independent task oracle holds; IDs/build identity recorded; supervised headed replay through isolated Lab topology. If source or artifact unavailable, report blocker without recreating the Flow.
 - Report to: lane tree `docs/working/live-testing-handoff-audit-2026-10-11/reports/a-zero-call-replays.md`.
 
+### Brief: candidate-default
+- Repository: paired new task `C:/Users/osrs_/FluxStuff/fxwork/t450/!FluxIQWebExtension` and sibling `!FluxIQ`.
+- Task: after A's proven gate, change the Core product authoring default to candidate; retain explicit legacy opt-out and raw omitted-mode API compatibility.
+- Required reads: this Current State; Core Repository Boundary; `model/authoring-mode/authoring-mode.ts` and tests, affected API handlers/configured-mode tests and conversation command mode resolver; architecture section is reference only.
+- Owns (may edit): Core `model/authoring-mode/authoring-mode.ts`, its tests and affected configured-mode API/conversation tests if required; source comments describing the default; own report.
+- Must not touch: runtime candidate/LLM/executor modules owned by C/D, architecture/working shared docs (supervisor owns), .env files, user data, Lab defaults; no commits/pushes/merges/full suites/launches.
+- Definition of done: unset/blank configured product mode uses candidate, explicit legacy/candidate preserved, invalid values refuse; raw API omitted-mode compatibility retained; fail-first owning/configured API tests and affected package typecheck/audit pass; no build/push claims without observed checks.
+- Report to: t450 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/candidate-default.md`.
+
 ## Work Ledger
+
+### 2026-10-11 — A qualified; recovered C/B source integrated
+- Agent: Codex senior supervisor; a-review/c-validation/b-debug workers.
+- Changed: recovered A/B lane evidence merged with task boundaries and retained workspaces; t274 source integrated in both repositories; stale main/recovery Current State reconciled, 64 prior MVP ledger entries archived.
+- Why: A lacked two separate replays and C's existing fixes were still dirty; B's final counted turn wrongly withdrew trial tools.
+- Validation: supervisor Core six owning files 80/80, nonincremental Core typecheck exit 0, domain instructions 14/14, domain freshness/check matching successful stamp; final Core audit exit 0 and downstream task-finish audit passed. Both A replay receipts independently passed exact unchanged hashes, disabled model wiring, five zero counters and independent goal. Core finish's whole-suite invocation bypassed only after actual narrow checks under the current user rule.
+- Outcome: Accepted bounded source/evidence unit; fixed-source B/C/D live behavior still owed.
+- Follow-up: finish t449/t450 verification/integration, then live qualification; t380/t381 remain tracked follow-ups.
 
 ### 2026-10-11 — Continuation started and failures traced
 - Agent: Codex senior supervisor; workers a-review, b-debug, c-validation.
