@@ -35,6 +35,10 @@
 // paths refuse a candidate in another one. It is a gate, not a weight: no score
 // makes a different record the right one.
 //
+// `dialog.ts` is the same gate for a dialog (t469): two dialogs' close buttons
+// are identical controls, so the recording carries the name of the dialog the
+// control sat in, and both acting paths refuse a candidate in another one.
+//
 // `control-row.ts` finds the row a page drew as plain markup -- a cart line's
 // `<div>` -- by the control's own kind: the largest ancestor holding it and no
 // other control alike to it. `record.ts` names such a row by its title and
@@ -64,6 +68,7 @@ export { corroboratesExactly } from "./corroboration";
 export { elementContext, landmarkRole } from "./context";
 export { implicitRole } from "./implicit-role";
 export { associatedLabel, labelText } from "./label";
+export { agreesWithRecordedDialog, dialogName } from "./dialog";
 export { agreesWithRecordedRecord, isRecordElement, recordIdentity } from "./record";
 export { reportableText } from "./reportable-text";
 export { stableNameReading } from "./stable-name";

@@ -144,6 +144,16 @@ export type DomElementContext = {
    * alone cannot tell two `region`s on one page apart; their names can.
    */
   landmarkName?: string | undefined;
+  /**
+   * The name of the dialog the element sat in -- a `<dialog>`, `role="dialog"`
+   * or `"alertdialog"`, or `aria-modal="true"` -- by its accessible name, else
+   * its first heading's words (t469). Two dialogs' close buttons agree on every
+   * signal a fingerprint holds, so a replay of the chat panel's "Close chat"
+   * pressed the notifications prompt's close button; a replay now refuses a candidate in a
+   * dialog of another name, or in none (`content/identity/dialog.ts`). Absent
+   * for an element in no dialog, or in one that names nothing.
+   */
+  dialog?: string | undefined;
   /** The nearest preceding heading's text. */
   heading?: string | undefined;
   listPosition?: { index: number; total: number } | undefined;

@@ -115,6 +115,15 @@ export type WebLlmSnapshotBinding = {
    */
   shadowHosts?: Map<string, readonly string[]>;
   /**
+   * The name of the dialog an element sits in, for the elements that sit in a
+   * named one (`elements.ts`, t469). Like the host chain it never leaves the
+   * domain: a handle's identity carries it as `context.dialog`
+   * (`plan-resolution/element-identity.ts`), so a created Flow's step is
+   * refused on a look-alike control in another dialog. Optional for the same
+   * reason as `shadowHosts`.
+   */
+  dialogNames?: Map<string, string>;
+  /**
    * The page's state digest, taken from the capture this binding was sanitized
    * from (`state-digest/snapshot-states.ts`). It is how a call reports the
    * state it found and left without another capture. Like the maps it never
@@ -176,6 +185,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   const selectors = new Map<string, string>();
   const records = new Map<string, string>();
   const shadowHosts = new Map<string, readonly string[]>();
+  const dialogNames = new Map<string, string>();
   // What tells a look-alike apart, kept beside the packet and published only
   // on an element that needs it.
   const cues = new Map<string, WebLlmLookAlikeCues>();
@@ -203,6 +213,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     selectors.set(described.element.target, described.selector);
     if (described.record !== undefined) records.set(described.element.target, described.record);
     if (described.shadowHosts !== undefined) shadowHosts.set(described.element.target, described.shadowHosts);
+    if (described.dialog !== undefined) dialogNames.set(described.element.target, described.dialog);
     layerSubjects.push({ element: described.element, selector: described.selector, raw });
     cues.set(described.element.target, present<WebLlmLookAlikeCues>({ within: described.within, dialog: dialogOf(raw), position: described.position }));
   }
@@ -245,7 +256,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   tellWebLlmLookAlikesApart(evidence.elements.filter((element) => element.hidden !== true), cues);
   // Every pair: a page whose query was cut would not match its own address (`node-run/shown-addresses.ts`).
   const pageQuery = [...url.searchParams];
-  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, dialogNames, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
 }
 
 /**

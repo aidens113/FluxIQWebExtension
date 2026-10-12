@@ -426,6 +426,7 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
   const selectors = new Map<string, string>();
   const records = new Map<string, string>();
   const shadowHosts = new Map<string, readonly string[]>();
+  const dialogNames = new Map<string, string>();
   const renamed = new Map<string, string>();
   const elements = binding.evidence.elements.map((element, index) => {
     const target = assigned[index] ?? element.target;
@@ -436,6 +437,8 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
     if (record !== undefined) records.set(target, record);
     const hosts = binding.shadowHosts?.get(element.target);
     if (hosts !== undefined) shadowHosts.set(target, hosts);
+    const dialog = binding.dialogNames?.get(element.target);
+    if (dialog !== undefined) dialogNames.set(target, dialog);
     return { ...element, target };
   });
   const rename = (handle: string): string => renamed.get(handle) ?? handle;
@@ -460,5 +463,5 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
   // The digest and the route state are of the page, and renumbering does not
   // touch the page (`state-digest/state-digest.ts` leaves `target` out, and the route state
   // reads no handle), so both travel as they were taken, and so does the query.
-  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, stateDigest: binding.stateDigest, routeState: binding.routeState, pageQuery: binding.pageQuery });
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, dialogNames, stateDigest: binding.stateDigest, routeState: binding.routeState, pageQuery: binding.pageQuery });
 }

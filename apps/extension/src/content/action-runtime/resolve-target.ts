@@ -323,8 +323,8 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
       let measurement = verdict?.measurement;
       if (target && verdict?.refusedBecause) {
         // Refused by its score, it may still be the recorded control with its
-        // state changed; refused by its record, it is not, at any reading.
-        const steady = verdict.refusedBecause === "other-record" ? undefined : stableNameMatch(target, only, scope);
+        // state changed; refused by its record or dialog, it is not, at any reading.
+        const steady = verdict.refusedBecause === "other-record" || verdict.refusedBecause === "other-dialog" ? undefined : stableNameMatch(target, only, scope);
         if (!steady) {
           misses.push(`${attempt.description} (${verdict.summary})`);
           continue;

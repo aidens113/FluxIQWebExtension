@@ -9,7 +9,7 @@ export function outputTargetFromPayload(payload: JsonObject): WebAutomationOutpu
   const selectedCandidate = selectedTargetCandidate(adaptedTarget);
   const explicitVisualTarget = objectValue(adaptedTarget?.visualTarget) ?? objectValue(payload.visualTarget);
   const chosen = firstElementFingerprint(elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate));
-  const element = withRecordedRecord(chosen, payload);
+  const element = withRecordedPlace(chosen, payload);
   // The selector keeps the order it always had, adapted first. What changed is
   // that the identity now follows it whenever the adaptation names another
   // element, so the page judges the selector's match by the same description.
@@ -29,7 +29,8 @@ export function outputTargetFromPayload(payload: JsonObject): WebAutomationOutpu
 
 /**
  * The dispatched element, carrying the record the *recording* named whatever
- * else superseded it.
+ * else superseded it -- and the dialog it named, by the same rule
+ * (`withRecordedDialog`, t469).
  *
  * **Why this is not just another signal in the chain above.** That chain picks
  * one source for the whole identity, and on an applied repair the adapted
@@ -56,6 +57,10 @@ export function outputTargetFromPayload(payload: JsonObject): WebAutomationOutpu
  * the recording. An adapted source that somehow names a record of its own keeps
  * it, because then it is describing a record and not merely inheriting one.
  */
+function withRecordedPlace(element: WebAutomationElementFingerprint | undefined, payload: JsonObject): WebAutomationElementFingerprint | undefined {
+  return withRecordedDialog(withRecordedRecord(element, payload), payload);
+}
+
 function withRecordedRecord(element: WebAutomationElementFingerprint | undefined, payload: JsonObject): WebAutomationElementFingerprint | undefined {
   if (!element) return element;
   const record = elementRecord(objectValue(objectValue(payload.element)?.context)?.record);
@@ -65,6 +70,19 @@ function withRecordedRecord(element: WebAutomationElementFingerprint | undefined
   // named as well: that one was written about the row the Flow was built on.
   if (element.context?.record && !record.values) return element;
   return { ...element, context: { ...element.context, record } };
+}
+
+/**
+ * The dialog the recording named, carried the same way and for the same reason
+ * as its record (t469): a repair says what the control is now called and has
+ * no standing to say which dialog it is in -- Core's normalizer, which a
+ * repair's target passes through, has no `context` to say it with. An adapted
+ * source that names a dialog of its own keeps it.
+ */
+function withRecordedDialog(element: WebAutomationElementFingerprint | undefined, payload: JsonObject): WebAutomationElementFingerprint | undefined {
+  if (!element || element.context?.dialog) return element;
+  const dialog = stringValue(objectValue(objectValue(payload.element)?.context)?.dialog);
+  return dialog ? { ...element, context: { ...element.context, dialog } } : element;
 }
 
 /**
@@ -326,6 +344,7 @@ function elementContext(value: unknown): WebAutomationElementContext | undefined
     fieldsetLegend: stringValue(context.fieldsetLegend),
     landmark: stringValue(context.landmark),
     landmarkName: stringValue(context.landmarkName),
+    dialog: stringValue(context.dialog),
     heading: stringValue(context.heading),
     listPosition: listPosition(context.listPosition),
     tablePosition: tablePosition(context.tablePosition),

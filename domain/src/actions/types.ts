@@ -65,6 +65,16 @@ export type WebAutomationElementContext = {
   landmark?: string | undefined;
   /** That landmark's accessible name, where the page gave it one: what separates two `region`s a role cannot. */
   landmarkName?: string | undefined;
+  /**
+   * The name of the dialog the element sat in -- its accessible name, else its
+   * first heading's words -- where it sat in one (t469). The extension derives
+   * it in `content/identity/dialog.ts` and refuses a replay's candidate in a
+   * dialog of another name, or in none: two dialogs' close buttons agree on
+   * every signal a fingerprint holds, so a step saved on a chat panel's "Close
+   * chat" pressed the notifications prompt's close button. Like `record`, a
+   * gate the page applies, not a weight Core scores.
+   */
+  dialog?: string | undefined;
   /** The nearest preceding heading's text. */
   heading?: string | undefined;
   listPosition?: { index: number; total: number } | undefined;

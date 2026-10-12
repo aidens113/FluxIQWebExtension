@@ -434,7 +434,7 @@ function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
   for (const element of binding.evidence.elements) {
     const selector = binding.selectors.get(element.target);
     if (selector === undefined) continue;
-    const identity = webPlanElementIdentity(element, selector, binding.shadowHosts?.get(element.target));
+    const identity = webPlanElementIdentity(element, selector, binding.shadowHosts?.get(element.target), binding.dialogNames?.get(element.target));
     const target: PageTarget = {
       selector,
       frameId: element.frameId,

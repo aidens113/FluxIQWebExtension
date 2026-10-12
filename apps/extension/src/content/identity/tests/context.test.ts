@@ -134,6 +134,14 @@ test("an element with nothing around it has no context at all", () => withContex
   assert.equal(elementContext(stub()), undefined);
 }));
 
+test("a control in a dialog reports the dialog's name, which a replay checks its answer against (t469)", () => withContext((elementContext) => {
+  // The chat panel of social-network-feed: a dialog, not a landmark, so before
+  // t469 nothing in the context said the close button belonged to it.
+  const chat = stub({ attributes: { role: "dialog", "aria-label": "Chat with Elena Sokolova" } });
+  const head = stub({ parentElement: chat });
+  assert.deepStrictEqual(elementContext(stub({ parentElement: head, attributes: { role: "button", "aria-label": "Close chat" } })), { dialog: "Chat with Elena Sokolova" });
+}));
+
 // --- The landmark around it, and its name (B5) ------------------------------
 //
 // A role says what kind of landmark an element sits in, and two `region`s on

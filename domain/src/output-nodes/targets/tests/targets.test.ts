@@ -575,3 +575,37 @@ test("a recorded record without values still yields to one an adapted target nam
   });
   assert.deepEqual((target?.element as JsonObject).context, { record: { key: "p2", keyAttribute: "data-id" } });
 });
+
+// --- Which dialog the element sat in (t469) -----------------------------------
+//
+// Two dialogs' close buttons agree on every signal a fingerprint holds, so a
+// step saved on a chat panel's "Close chat" pressed the notifications prompt's
+// close button (`run-mv5jnc5m-a47c3e59`, step 0062). The extension refuses a
+// candidate in another dialog now (`content/identity/dialog.ts`), and only if
+// the dialog reaches it: through this normalizer, and past a repair, which
+// Core's normalizer strips of `context`, as the record does.
+
+const closeChat = { selector: "body > div:nth-of-type(3) > div > div:nth-of-type(3)", tagName: "div", role: "button", accessibleName: "Close chat", visibleText: "\u2715", context: { dialog: "Chat with Elena Sokolova" } };
+
+test("the dialog an element sat in survives into the fingerprint and the dispatched target", () => {
+  assert.deepEqual(elementFingerprint(closeChat)?.context, { dialog: "Chat with Elena Sokolova" });
+  const target = outputTargetFromPayload({ selector: closeChat.selector, element: closeChat });
+  assert.deepEqual((target?.element as { context?: unknown }).context, { dialog: "Chat with Elena Sokolova" });
+  assert.equal("context" in (elementFingerprint({ selector: "#x", context: { dialog: 7 } }) ?? {}), false, "a dialog name that is not text is no context at all");
+});
+
+test("an applied repair, after Core's rewrite, still carries the dialog the recording named", () => {
+  const repaired = { handles: { element: "t9" }, handleResolution: "named", tagName: "div", accessibleName: "Close conversation", selector: "body > div:nth-of-type(4) > div > div:nth-of-type(3)" };
+  const node = dispatched({ ...webAutomationOutputPayload("web.dom.click", { element: closeChat }), target: repaired });
+  assert.equal(adaptedTargetSupersedesRecording(node), true);
+  const element = outputTargetFromPayload(node)?.element as { accessibleName?: string; context?: unknown };
+  assert.equal(element.accessibleName, "Close conversation", "the repair names the control");
+  assert.deepEqual(element.context, { dialog: "Chat with Elena Sokolova" }, "the recording names the dialog");
+});
+
+test("a recording with no dialog adds none to a repair", () => {
+  const { context: _context, ...withoutDialog } = closeChat;
+  const repaired = { handles: { element: "t9" }, handleResolution: "named", tagName: "div", accessibleName: "Close conversation", selector: "#c" };
+  const node = dispatched({ ...webAutomationOutputPayload("web.dom.click", { element: withoutDialog }), target: repaired });
+  assert.equal("context" in ((outputTargetFromPayload(node)?.element as object | undefined) ?? {}), false);
+});
