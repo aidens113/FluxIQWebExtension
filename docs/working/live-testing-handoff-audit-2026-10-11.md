@@ -408,6 +408,20 @@ the results and any required repairs pass current owner tests and fresh-process 
 
 ## Worker Briefs
 
+### Brief: b-debug — t460 provider-disabled B/D live repair validation
+
+- After supervisor t460 integration/push and explicit source-sync signal, own retained t262 B replay and t275 D
+  replay operation, sequentially; no provider-enabled creation, second attempt, source/shared-doc edits.
+- Own only t262/t275 reports/replay-settlement-live-proof.md. Preserve old profiles/projects/keys/hash/evidence.
+- Read original round-seven replay helper/options; use exact original project/Flow/task/workspace/instance,
+  FLUXIQ_TEST_ENV_FILES=none and actual withoutProviderSecrets, constructor modelProvidersEnabledfalse.
+- Rebuild through normal owners/current source validators. Send run ID/receipt promptly; preserve failed receipt.
+- Verify runtime/original goal/hash equality, five explicit counters0, settled accounting, no pending/omitted/
+  contradictory rows, credential env[], stored keys preserved, no harness. No inference from disabled wiring.
+- On failure stop/full debug, no relaunch or retry; balance error stops paid work globally. No user panel or reset.
+- This is repair validation on changed source, not a same-pair qualification creation/replay streak.
+- No full suites/lifecycle/commits. Root independently reviews actual receipts before claiming browser success.
+
 ### Brief: b-debug — t461 column fidelity
 
 - Nested paired t461 under C:/Users/osrs_/FluxStuff/fxwork/t461. Read Current State and retained t451
@@ -429,6 +443,7 @@ the results and any required repairs pass current owner tests and fresh-process 
   content/extraction/continued-read/read-checkpoint.ts/nearest test, shared/extraction-continuation.ts and nearest
   tests. Own domain/actions/extraction/{summary,rejected-samples,
   seen-values}.ts/barrel/types as required and domain/runtime/llm-evidence/node-run/replay-answer.ts/tests.
+- domain/client/index.ts may export only the new observation parser/type for shared checkpoint use.
 - No extract-list output schema/reconciliation files (B), Core consumer files (C) or shared docs.
 - First propose optional generic positional companion shape in own report and message root/C BEFORE edits
   depend on it. Approved state union present/absent/unavailable/withheld; value only present, including empty.
@@ -448,6 +463,8 @@ the results and any required repairs pass current owner tests and fresh-process 
 - Start only after t460 replay repair handoff; nested paired t461 Core, read Current State/exclusion audit and
   A proposed optional contract. Own Core runtime/service/summaries/extraction-summary.ts and nearest tests;
   result-verification/contracts.ts/read-account/{accounts,alone-rows}.ts/tests, build-test/read-rows.ts if needed.
+- Focused generic result-verification/condition-observation/{parse,screen,index}.ts and nearest tests approved
+  for shared closed-shape validation/privacy; parser types-only imports, no new cycle or web dependency.
 - No downstream source files (A/B) or Core evidence-loop files. Generic optional condition observation only,
   no DOM/selectors/browser APIs/domain imports or reimplementation of domain predicates.
 - Fail-first actual stored-summary and trial/saved-result consumer propagation of neutral companion evidence.
