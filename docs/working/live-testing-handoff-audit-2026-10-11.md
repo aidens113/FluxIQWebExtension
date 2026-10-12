@@ -1,7 +1,7 @@
 # Live Testing Handoff Audit — 2026-10-11
 
 Status: Active
-Status detail: A qualified and evidence preserved; t274 C/B finishing fixes integrated after supervisor checks; D fix t449 and candidate-default t450 in verification before B/C/D live qualification.
+Status detail: A qualified; t274 finishing fixes, t449 optional-path completion and t450 candidate default integrated; preparing fixed-pair B/C/D live qualification; storage WIP retained and t380 verification ready.
 Created: 2026-10-11
 Last updated: 2026-10-11
 Owner: Codex senior supervisor
@@ -22,11 +22,17 @@ Prior audit limits below describe audit-only work; subsequent execution validati
 **New evidence during execution:** A's gate is now supervisor-verified: both creation passes and separate
 replays `replay-mv4kt6g0-4e4900a8` / `replay-mv4kv3z1-2cfab70c` passed, exact stored Flow hashes unchanged,
 all model/provider/intervention/harness counters zero, model wiring disabled and independent goal held.
-Candidate-default task t450 may proceed. B never tested an accepted revision and ran out of cost budget;
+Candidate-default task t450 is integrated. B never tested an accepted revision and ran out of cost budget;
 the last-decision wrap-up offered no tools. D trials 2-4 ran all displayed steps successfully but Core ended
 failed because its terminal node left unvisited graph nodes; trial feedback omitted this graph-level reason.
-C/B finishing changes are integrated as t274. Paired task t449's D fix is under supervisor verification;
-paired t450 changes the configured product default now A's gate is signed.
+C/B finishing changes are integrated as t274. D fix t449 and candidate-default t450 are independently
+verified and integrated downstream first/Core second. Current Core code pair is b27c0d64; no Core dev
+advancement during the next qualification streaks. Live lane sources must contain that dev before launch.
+
+**Storage follow-up:** t381 introduces a competing connection owner and does not directly fix recording
+append; its WIP remains unmerged in Core. The source review is committed downstream. t380's narrow fixture
+checks pass by worker report, including actual built process probes; supervisor verification/baseline refresh
+and integration wait until the live pair is no longer frozen.
 
 **Audit intake snapshot (historical).** Downstream dev `6e07993f`, Core dev `01621c94`; both equalled their locally stored
 `origin/dev` refs (no remote fetch performed). Core main checkout clean; downstream has a pre-existing edit to
@@ -58,9 +64,10 @@ The UI review and production-integrity tasks t334/t335/t337 remain parked, not p
 The preceding dirty-file inventory is the audit intake: C is now integrated, A/B notes preserved and merged,
 while their lane workspaces remain intact for further live work. No profiles or run evidence were reclaimed.
 
-**Next:** preserve and reconcile the lane evidence; close A's qualification review; debug B/D; independently
-verify and integrate C's existing fixes; rerun only after an evidenced fix. Then qualify B/C/D, prove adaptation
-on three sites, and proceed to breadth/UX and release work. Do not repeat passing R4a/R4b as routine intake.
+**Next:** qualify B/C/D against frozen Core b27c0d64 and downstream d1e516e6 (lane documentation commits
+may differ). Source fixes and A qualification are complete. Each creation requires full debug and a separate
+zero-model replay before another launch; failure requires changed source. Then integrate verified fixture work,
+measure recording persistence, prove three-site adaptation and proceed to breadth/UX and release work.
 
 **Limits:** no product code edited, tests/builds/live runs launched, provider calls made, or panel managed.
 Historical test counts remain previous-session results, not tests independently rerun during this audit.
@@ -213,7 +220,60 @@ Historical test counts remain previous-session results, not tests independently 
 - Definition of done: unset/blank configured product mode uses candidate, explicit legacy/candidate preserved, invalid values refuse; raw API omitted-mode compatibility retained; fail-first owning/configured API tests and affected package typecheck/audit pass; no build/push claims without observed checks.
 - Report to: t450 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/candidate-default.md`.
 
+### Brief: storage-reuse-review
+- Repository: existing paired t381 trees under `C:/Users/osrs_/FluxStuff/fxwork/t381/`; current Core dev read-only for comparison.
+- Task: assess t381 WIP connection reuse against current t435 implementation and B's separate recording persistence failure; identify exact remaining lifecycle/process validation and any merge/ownership defects.
+- Required reads: this Current State; t381 report; six files from Core commit 08eafd1a; current database-manager storage owners and t435 runtime-session connection lifetime; saved B provider-free recording failure summary.
+- Owns (may edit): only t381 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/storage-reuse-review.md`.
+- Must not touch: source/tests/shared docs, other reports, generated or runtime data; no commits/pushes/merges/builds/tests/browser/provider launches.
+- Definition of done: precise distinction between global database pool, project pool and recording path; compatibility/lifecycle/durability risks; actionable narrow validation/fix plan, including actual dist-backed process probes; hypotheses clearly identified.
+- Report to: t381 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/storage-reuse-review.md`.
+
+### Brief: test-fixture-verification
+- Repository: existing paired t380 trees under `C:/Users/osrs_/FluxStuff/fxwork/t380/`, just integrated current dev by supervisor.
+- Task: verify t380's four committed test-fixture changes on current source; correct narrow fixture defects only if reproduced. Keep ready for integration without advancing dev during live qualification streaks.
+- Required reads: this Current State; t380 report; Core diff for ebc3a1b3 and current four changed files.
+- Owns (may edit): Core `runtime/service/flows/tests/creation.test.ts`, `runtime/tests/service-adaptation/tests/recovery-trace.test.ts`, `storage/canonical-authority/tests/whole-fixture.ts`, `storage/canonical-authority/tests/whole-sql.test.ts`; own report.
+- Must not touch: product source/shared docs/other tests/reports, no commits/pushes/merges/full suites/provider/browser calls. No timeout increases; generated output only via owning library build.
+- Definition of done: fresh owning Core library build when needed; changed tests plus existing whole-operation/whole-process consumers pass with actual built current code; owning package typecheck and audits pass; lifecycle/copy/WAL isolation inspected; precise results in report, no whole-suite requirement.
+- Report to: t380 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/test-fixture-verification.md`.
+
+### Brief: live-b-round4
+- Repository: existing paired t262 lane trees; source synced by supervisor to current dev with t274/t449/t450.
+- Task: qualify `bigbox-retail-pickup-cart-store-remembered-after-creation`, two consecutive candidate creations on one frozen source pair, each followed by separate zero-model replay.
+- Required reads: this Current State; lane-b-round3.md and b-debug.md; current testing-facility live/replay/waste-guard rules; original lane-b-candidate task/oracles.
+- Owns (may edit): lane `docs/working/mvp-final-month-plan/reports/lane-b-round4.md`, new run-id debugs, own `docs/working/live-testing-handoff-audit-2026-10-11/reports/live-b-round4.md`; runtime evidence through owning Lab scripts only.
+- Must not touch: source/shared docs/old reports, .env, user panel/data/profiles; no commits/pushes/merges, full suites, guard overrides or paid automatic relaunches. Core/extension own builds required; no model output cap.
+- Definition of done: slot 3, instance t262-slot-3, workspace t262-b; build current Core libraries through owning package scripts, zero-call dry-run ready and four running identities proven before first provider call; headed real extension chat, $0.10 whole-Flow ceiling, one attempt per launch; every run fully debugged/UI reviewed before next. On failure report cause and await changed-source task; on balance error stop all further paid work and alert supervisor. Second paid creation allowed only after first passed and complete debug. Measure independent oracles/unchanged saved hash/zero counters for separate replays.
+- Report to: t262 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/live-b-round4.md`.
+
+### Brief: live-c-round4
+- Repository: new paired t451 lane trees; source synced by supervisor to current dev with t274/t449/t450.
+- Task: qualify `everything-store-plus-earbuds-under-50` with two consecutive candidate creations and separate zero-model replays on the frozen pair.
+- Required reads: this Current State; original lane-c-candidate reports/task/oracles and C verification report; testing-facility live/replay/waste-guard rules.
+- Owns (may edit): lane `docs/working/mvp-final-month-plan/reports/lane-c-round4.md`, new run-id debugs, own `docs/working/live-testing-handoff-audit-2026-10-11/reports/live-c-round4.md`; runtime evidence through owning Lab scripts only.
+- Must not touch: source/shared docs/old reports, .env, user panel/data/profiles; no commits/pushes/merges/full suites/guard overrides/automatic paid relaunches. Rebuild only through owners; no model output cap.
+- Definition of done: slot 1, instance t451-slot-1, workspace t451-c; same preflight/identities/headed chat/$0.10/single launch/full-debug/zero-model gates as B. Preserve original task, five-page dataset oracle and structured loop requirement. On failure report cause and await changed source; balance error stops all paid work. Only a passing debugged first creation permits second on unchanged pair.
+- Report to: t451 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/live-c-round4.md`.
+
+### Brief: live-d-round4
+- Repository: existing paired t275 lane trees; source synced by supervisor to current dev with t274/t449/t450.
+- Task: qualify `social-network-feed-confirm-requests` with two consecutive candidate creations and separate zero-model replays; check saved interruption behavior honestly.
+- Required reads: this Current State; original lane-d-candidate task/oracles, latest D run debug and t449 report; current testing-facility live/replay/waste-guard rules; unimplemented D adaptation design is reference only.
+- Owns (may edit): lane `docs/working/mvp-final-month-plan/reports/lane-d-round4.md`, new run-id debugs, own `docs/working/live-testing-handoff-audit-2026-10-11/reports/live-d-round4.md`; runtime evidence through owning Lab scripts only.
+- Must not touch: source/shared docs/old reports, .env, user panel/data/profiles; no commits/pushes/merges/full suites/guard overrides/automatic paid relaunches. No model output cap; never adopt accept-unchanged-after-one-hold design.
+- Definition of done: slot 4, instance t275-slot-4, workspace t275-d; same preflight/identities/headed chat/$0.10/single launch/full-debug/zero-model gates as B. Inspect row completeness/no duplicate acts, rate-limit retries/pacing and persisted recovery structure; distinguish passing outcome from adaptation proof. Failure awaits changed-source task; balance error stops all paid work. Only a passed/debugged first creation permits second on unchanged pair.
+- Report to: t275 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/live-d-round4.md`.
+
 ## Work Ledger
+
+### 2026-10-11 — D completion/default integrated; live pair frozen
+- Agent: Codex senior supervisor; b-debug/a-review/c-validation workers.
+- Changed: t449 optional-path accounting and safe terminal feedback; t450 configured candidate default; preserved explicit legacy and omitted-mode raw API compatibility. Both dev branches pushed: downstream d1e516e6, Core b27c0d64. Slot 1 transferred from inactive t274 to t451/C after confirming no old process.
+- Why: D's legitimate conditional bypass falsely failed completion; A's signed qualification enabled the planned default change.
+- Validation: supervisor D owning tests 110/110, then 47/47 after integration; default tests 96/96, then combined owner checks 26/26; actual fresh Core typechecks/library builds, downstream freshness/typecheck and both structure audits passed. No full-suite merge gate run.
+- Outcome: Accepted source pair; B/C/D isolated headed runs preparing with current library builds and zero-call preflights. Core dev remains frozen during their streaks.
+- Follow-up: independently inspect live identity/oracle/accounting/replay receipts. t380 worker checks pass but supervisor verification/integration waits; t381 conflicting storage WIP remains unmerged.
 
 ### 2026-10-11 — A qualified; recovered C/B source integrated
 - Agent: Codex senior supervisor; a-review/c-validation/b-debug workers.
@@ -241,8 +301,7 @@ Historical test counts remain previous-session results, not tests independently 
 
 ## Open Questions
 
-- Supervisor: does A's complete run-2 evidence satisfy every existing gate? Saved verdicts are favorable;
-  full step/identity/accounting review remains required.
-- Supervisor: what caused B/D round-3 build endings? Inspect their actual traces; do not reuse old diagnoses by assumption.
+- Supervisor: do B/C/D qualify on the integrated source pair? Fresh live identity/oracle/accounting/replay review remains required.
+- Supervisor: what causes B's independent recording-persistence backlog? Measure the actual append/finalization path before adopting storage WIP.
 - Supervisor: does D's proposed adaptation hold preserve mandatory saved interruption behavior? Review before implementation.
 - User, later release phase: identify the unfamiliar user for final acceptance; no answer needed for immediate recovery.
