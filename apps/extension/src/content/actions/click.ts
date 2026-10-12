@@ -54,6 +54,22 @@
 // A press on anything else that changes nothing is what it always was: a text
 // box pressed to focus it, a line of text, the tab already selected are pressed
 // for no change, and are not failed for it.
+// A press the page ignored whose control a layer then covered during the wait
+// is not answered by that layer. Until 2026-10-12 it was: bigbox's support card
+// opens on a timer three seconds after a product page loads, and an Add to cart
+// pressed just before it only woke the page, the card covered the button, and
+// the press was reported done with nothing in the cart, in a trial and in
+// playback (`run-mv5tusj4-b7ee0630`, t476). Such a press now fails as covered,
+// naming the layer, which the in-page recovery closes through its own way out
+// before it runs the click again (`action-runtime/recovery/`); that run's press
+// is the press made once more, counted against the command
+// (`action-runtime/ignored-press/command-presses.ts`), so it is never followed
+// by a third, and one the page ignores too fails as above. Only a press with no
+// sign at all is read so: one that began a request, or changed its control or
+// section, moved focus or navigated, is never pressed again, covered or not.
+// A control now disabled or gone, rather than covered, still reads as
+// answered, and so does a second cover after the press made once more: a layer
+// a press opens itself, with no other sign, is then left open.
 // A link is held to more than that, because a link states where it
 // goes: the click must visibly do what following it would. A navigation that
 // begins does, and so does the page's own script taking the click over and
@@ -75,7 +91,7 @@
 // which needs the same press and cannot import a verb.
 
 import { WEB_AUTOMATION_CHECK_WAIT_MS, webAutomationBaseTimeoutMs } from "@fluxiq-web-extension/domain/client";
-import { dispatchClickGesture, pressAgain } from "../action-runtime";
+import { dispatchClickGesture, extraPressesMade, noteExtraPress, pressAgain } from "../action-runtime";
 import type {
   ActionResultEvidence,
   ClickPoint,
@@ -141,6 +157,15 @@ const PRESSED_ONCE_MORE = "the page ignored the first press, so it was pressed o
 /** What a press the page ignored twice says. A closed phrase, as above. */
 const IGNORED_TWICE = "the page ignored the first press, so it was pressed once more, and it ignored that press too";
 
+/** What a cover refused after a press the page ignored says, after the layer the gate named. A closed phrase, as above. */
+const COVERED_AFTER_IGNORED = "the page ignored the press, and this layer covered the control during the wait, so the press is made once more once the layer is closed";
+
+/** What the press made once more after that layer was closed says. A closed phrase, as above. */
+const PRESSED_AFTER_COVER = "the page ignored the first press and a layer then covered the control, so the layer was closed and it was pressed once more";
+
+/** What that press says when the page ignored it too. A closed phrase, as above. */
+const IGNORED_AFTER_COVER = `${PRESSED_AFTER_COVER}, and it ignored that press too`;
+
 /** What one press on a control that is not a link was seen to bring. */
 type PressOutcome = {
   /** Whether the click's default action was allowed to run. */
@@ -168,19 +193,40 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
 
   const link = navigatingLink(element);
   if (!link) {
+    // An earlier attempt of this command was a press the page ignored and a
+    // layer then covered: this press, made after the layer was closed, is the
+    // press made once more (`action-runtime/ignored-press/command-presses.ts`).
+    const extra = extraPressesMade(action);
+    const again = extra > 0 ? PRESSED_AFTER_COVER : undefined;
     const first = await press(element, report.point, action, deps, startedAt);
     // Before the ignored-press rule: a page that wrote its refusal outside the
     // control's section is a press the watch saw no sign of, and is never pressed again.
     if (first.refused) return refusal(action, deps, startedAt, first.refused, evidence());
     if (first.sighting && first.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, first.sighting, evidence());
     // A robot check that came and went was an answer; so is any sign the watch saw.
-    if (first.sighting || !first.answer || !pressAgain(first.answer.seen, 0)) {
-      return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting), evidence());
+    if (first.sighting || !first.answer || first.answer.seen.length > 0) {
+      return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting, again), evidence());
+    }
+    if (!pressAgain(first.answer.seen, extra)) {
+      // The press made once more, after the layer was closed, was ignored too.
+      // A control now covered, disabled or gone reads as answered, as below.
+      if (expectsAnswer(element) && deps.checkActionability(element).actionable) {
+        return deps.success(action, startedAt, "Element clicked.", ignoredTwiceValidation(report.detail, first.accepted, IGNORED_AFTER_COVER), evidence());
+      }
+      return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting, again), evidence());
     }
     // The page did nothing at all. The control is pressed once more at the same
-    // point, but only while it can still be pressed: one now covered, disabled
-    // or gone was answered after all, by whatever covered or removed it.
-    if (!deps.checkActionability(element).actionable) {
+    // point, but only while it can still be pressed. One now disabled or gone
+    // was answered after all, by whatever removed it. One now covered was not:
+    // a layer that came during the wait is the page's own motion, so the cover
+    // is refused, naming the layer, and the in-page recovery closes it and runs
+    // the click again, whose press is the press made once more.
+    const now = deps.checkActionability(element);
+    if (!now.actionable) {
+      if (now.code === "covered") {
+        noteExtraPress(action);
+        return deps.rejected(action, startedAt, now.code, "the page answers the press", `${now.detail}; ${COVERED_AFTER_IGNORED}`, { ...evidence(), blockedAt: now.point, target: element });
+      }
       return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting), evidence());
     }
     const second = await press(element, report.point, action, deps, startedAt);
@@ -189,7 +235,7 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
     if (!second.sighting && second.answer && second.answer.seen.length === 0 && expectsAnswer(element)) {
       return deps.success(action, startedAt, "Element clicked.", ignoredTwiceValidation(report.detail, second.accepted), evidence());
     }
-    return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, second.accepted, second.sighting, true), evidence());
+    return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, second.accepted, second.sighting, PRESSED_ONCE_MORE), evidence());
   }
 
   const document = element.ownerDocument;
@@ -336,8 +382,8 @@ function windowWithin(action: BrowserActionCommand, windowMs: number): number {
  * but is not a failure -- handling a click in script and preventing the default
  * is ordinary, and what the click then did is the next action's business.
  */
-function hitTestValidation(detail: string, accepted: boolean, cleared?: RobotCheckSighting, pressedOnceMore = false): BrowserActionValidation {
-  const again = pressedOnceMore ? `; ${PRESSED_ONCE_MORE}` : "";
+function hitTestValidation(detail: string, accepted: boolean, cleared?: RobotCheckSighting, pressedOnceMore?: string): BrowserActionValidation {
+  const again = pressedOnceMore ? `; ${pressedOnceMore}` : "";
   const prevented = accepted ? "" : "; the page prevented the click's default action";
   const waited = cleared
     ? `; ${cleared.afterMs} ms after the press the page put up a robot check that cleared by itself ${cleared.waitedMs} ms later, untouched`
@@ -372,12 +418,12 @@ function expectsAnswer(element: Element): boolean {
  * observed. Only on a command control (`expectsAnswer`). Failed, which the result builder reports as `output_not_observed`
  * (retryable), not as a success the next step would build on.
  */
-function ignoredTwiceValidation(detail: string, accepted: boolean): BrowserActionValidation {
+function ignoredTwiceValidation(detail: string, accepted: boolean, ignored = IGNORED_TWICE): BrowserActionValidation {
   const prevented = accepted ? "" : "; the page prevented the click's default action";
   return {
     status: "failed",
     expected: "the page answers the press",
-    actual: `${detail}; ${IGNORED_TWICE}: no request, no change inside the control or its section, no navigation and no focus move${prevented}`
+    actual: `${detail}; ${ignored}: no request, no change inside the control or its section, no navigation and no focus move${prevented}`
   };
 }
 
