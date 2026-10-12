@@ -33,6 +33,7 @@
 
 import type { FluxIQ } from "fluxiq";
 import type {
+  AutomationStudioActionPermissionCheck,
   AutomationStudioExplorationStopReason,
   AutomationStudioHarnessOptionBundle,
   AutomationStudioLlmDomainSystemInstructions,
@@ -78,6 +79,7 @@ import {
 import { runWebDescribeElement, runWebFindOnPage } from "./page-find";
 import { publishedWebLlmPage, webLlmPageRetentionKey, webLlmResultRetentionKey, type WebLlmPublishedPage } from "./page-view";
 import { present } from "./present";
+import { observeWebLlmResult } from "./result-observation";
 import { webFailureRepairParameters } from "./repairable-parameters";
 import { webLlmTargetsUnchanged } from "./target";
 import { canonicalWebLlmTargetHandle } from "./handle-spelling";
@@ -146,6 +148,10 @@ export type WebLlmStateDigestRequest = {
 export type WebAutomationLlmEvidenceRuntime = {
   /** Whose options these are. Core scopes the harness-option registry by it, so the slot cannot be bound anonymously. */
   domainId: string;
+  /** Passive result evidence; never adds hidden elements to actionable bindings. */
+  observeResult?(input: Pick<WebLlmEvidenceToolRequest, "projectId" | "flowId" | "callId" | "signal"> & {
+    permission: AutomationStudioActionPermissionCheck;
+  }): Promise<JsonObject | undefined>;
   /** The keys Core refuses in evidence from this domain. Core carries no browser vocabulary of its own, so the domain that knows what these words mean declares them and Core enforces the declaration. Required here, because the producer always knows: an evidence runtime that declared nothing would silently deny nothing. */
   deniedEvidenceKeys: readonly string[];
   observedStateKeys: readonly string[];
@@ -347,6 +353,9 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
   };
   return {
     domainId: WEB_AUTOMATION_DOMAIN_ID,
+    observeResult: (input) => observeWebLlmResult(
+      (request) => captureEvidence(gateway, selectSession(gateway.eligibleSessionIds()),
+        { ...request, toolId: "web.result_observation", value: {} }, request.signal, undefined, { includeHidden: true }), input),
     // Declared once, in `./denied-keys.ts`, because what a reading node read
     // is held to the same list before it is ever returned.
     deniedEvidenceKeys: WEB_LLM_DENIED_EVIDENCE_KEYS,

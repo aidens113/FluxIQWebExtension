@@ -12,6 +12,24 @@ Element descriptors and the recording path around them are in
 [extension client architecture](extension-client.md#recording-evidence); what
 is withheld from a capture is in [sensitive values](sensitive-values.md).
 
+## Passive result checks
+
+Candidate-trial and saved-run checks use the web domain's optional Core
+`observeResult` binding. It requests a fresh `capture_snapshot` with
+`includeHidden: true`, runs the existing snapshot sanitizer and publishes the
+ordinary rendered page followed by sanitized non-rendered state. Those rows keep
+their hidden marker and descriptive values, without selectors, attributes,
+targets or reusable bindings. Sensitive controls and strings retain the existing
+withholding rules. The temporary selector maps are discarded; observing hidden
+state does not make it executable.
+
+Ordinary page publication and snapshot defaults keep their current behavior.
+The result view preserves visibility provenance, so a hidden value is evidence
+of page state rather than proof that a user-visible confirmation occurred.
+Failed, missing or cancelled result captures are not replaced with an ordinary
+view. This domain requires the matching optional Core binding contract; domains
+that omit it retain their existing initial-observation path.
+
 ## One Contract, In The Domain
 
 The wire shape is declared **once**, in
