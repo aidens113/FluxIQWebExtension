@@ -1,7 +1,7 @@
 # Live Testing Handoff Audit — 2026-10-11
 
 Status: Active
-Status detail: A historically qualified; B round5 first creation/replay passed; round6 B/C/D failed, t458 processing help preparing, t454 recording compatibility gates underway.
+Status detail: A historically qualified; B round5 first creation/replay passed; round6 B/C/D failed; t458 help integrated; t459 passive result-view verification and t454 persistence repairs underway.
 Created: 2026-10-11
 Last updated: 2026-10-11
 Owner: Codex senior supervisor
@@ -87,8 +87,13 @@ six C/five D trials remained negative or unconfirmed. Total round-six cost$0.204
 No second creations/replays or unchanged relaunches. C full86step and D full88step audits are complete;
 B full62step audit and provider-free first-click/no-effect fixture probe are complete. Fresh terminal captures
 are not stale caches: current hidden cart facts are omitted by default rendered-only observation.
-Gate t458 supported record-processing help; assess optional passive result-observation seam from B report.
-Resolve t454 no-packet undo compatibility before accepting its measured durable recording index. Then qualify B/C/D on a newly frozen
+Supported record-processing help t458 is integrated (downstream f191802a/Core 0cfb4f45): supervisor observed
+52 focused tests, a fresh Core typecheck, actual compiled help/parser parity, downstream freshness/typecheck
+and both native structure audits. No parser or runtime semantics changed. t459 adds optional passive result
+observation; worker unit/built-adapter checks pass, supervisor review and actual-browser seam proof remain.
+t454 no-packet undo compatibility now passes, but final review reproduced three hydrated public-writer
+conflicts and a killed-child orphan reconciliation claim; bounded repairs and independent gates remain.
+Then qualify B/C/D on a newly frozen
 pair with the verified $0.25 test ceiling. Do not advance dev during a live streak. Round-four source was Core
 b27c0d64/downstream d1e516e6 (lane documentation commits differed); all three attempts failed their end-to-end
 gates. Each creation requires full debug and separate zero-model replay before another launch; failure requires
@@ -101,6 +106,40 @@ Round-five outcome: all ready preflights independently inspected (calls0, unchan
 Subsequent authorized source checks/builds/live results are recorded above and in the execution ledger.
 
 ## Audit Findings
+
+### Worker brief: recording public-writer and claim restart gates
+
+- C-validation, frozen t454 paired trees after B final-review return; read recording-final-review.md first.
+- Own existing approved recording/service/summary/schema/reconciliation owners and their tests, own
+  recording-stream-owner.md report only. B source reads stopped; root checks are idle for these files.
+- Fail first using actual configured object storage: append snapshot observation then public rename/note/
+  domain-event writers. Compare public return/cache/durable body, preserved state refs and subsequent removal.
+  Trace hydration boundary; correct persistence/mirror ordering at owner without changing public responses.
+- Fail first with an isolated child process stopped after exact finalized-legacy SQL claim insert but before
+  chunk descriptor; restart identical reconciliation must recover safely without reopening or losing data.
+- Reclaim/reuse only exact body/end/generation/cursor/count/chunk proof; conflicting claims still refuse.
+  Preserve live competing-owner fencing, single-use and normal throw cleanup; no global mutex/timeout reset.
+- No public model/gateway contract, snapshot renumbering, body duplication, pool/cache, baseline increase,
+  scenario teaching, paid/browser/user-panel tasks, commits/merges/pushes or shared-document edits.
+- After adaptive edits finish: affected owner tests, cache-free types, fresh Core build, relevant actual
+  separate-process/metadata/undo cases, original32state assertions, audits/whitespace. Report precise limits.
+
+### Worker brief: final recording consistency review
+
+- B-debug after t458 handoff, read-only frozen t454 paired source and final recording-stream-owner report.
+- Own only new reports/recording-final-review.md; no source/shared-doc edits, tests/builds, provider/browser,
+  commits/merges/pushes. Supervisor independently executes final gates.
+- Review recording-stream entry/projection/store/reconciliation/summary, schema/recording-stream and runtime
+  service/recordings/store.ts; consult direct tests/callers only where needed for a concrete claim.
+- Check original four reproduced races now fenced, chronological v1/v2 controls and reused incarnation identity,
+  capture digest preserving supplied metadata while excluding only assigned fields, and active/tombstone SQL
+  invariants. Distinguish ambiguous uncorrelated retry limits from supported service undo compatibility.
+- Check private finalized legacy claims exact body/generation/cursor/end proof, single-use and cleanup; no
+  ordinary append/removal can use claim to reopen completion. Check durable counts cannot regress.
+- Inspect passive state hydration/dehydration versus archived body proofs for cached removal recovery;
+  do not infer a regression without reading exact caller representation and outlining a neutral reproduction.
+- Return source-supported concerns and exact bounded reproduction instructions, or explain why each gate is
+  satisfied; existing worker test results are claims, not your independent execution. Stop reads before root edits.
 
 ### Worker brief: passive domain result observation
 
