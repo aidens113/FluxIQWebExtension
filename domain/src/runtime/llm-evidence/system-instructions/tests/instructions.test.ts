@@ -14,12 +14,12 @@ const { text, version } = WEB_LLM_SYSTEM_INSTRUCTIONS;
 
 test("the version is one Core's seam accepts, and names the text with loops and written steps", () => {
   assert.match(version, /^[a-z0-9][a-z0-9._-]{0,63}$/u);
-  assert.equal(version, "web-5");
+  assert.equal(version, "web-6");
 });
 
-test("the text holds no control character but a newline, and stays under 3,000 characters", () => {
+test("the text holds no control character but a newline, and stays under 3,200 characters", () => {
   assert.doesNotMatch(text, /[\u0000-\u0009\u000b-\u001f\u007f]/u);
-  assert.ok(text.length > 0 && text.length <= 3000, `text is ${text.length} characters`);
+  assert.ok(text.length > 0 && text.length <= 3200, `text is ${text.length} characters`);
 });
 
 test("it says the model operates a website on the person's behalf", () => {
@@ -77,10 +77,23 @@ test("repetitive work is a loop over the rows a listing kept: act on one kept ro
 test("every page of a list is a loop: read, Next page on the same list, and repeat through Next page while it succeeds", () => {
   const lists = text.split("\n").find((line) => line.startsWith("Lists."));
   assert.ok(lists, "the Lists line is there");
-  assert.ok(lists.includes("Every page of a list is a loop: read the list, then Next page on the same list, then amend_draft repeat on the read through Next page while it succeeds (most N for 'the first N pages'); the Flow keeps each row once."));
+  assert.ok(lists.includes("Every page of a list is a loop the Flow states: read the list, then Next page on the same list, then repeat the read through Next page while it succeeds (most N for 'the first N pages'), each row kept once"));
   // The loop rule for acting on rows stays beside it.
   assert.match(lists, /^Lists\. Repetitive work is a loop/u);
   assert.doesNotMatch(text, /paginate/u);
+});
+
+// web-6 (lane C, `run-mv0pa79q-ef91811b`): a candidate-mode model read all five
+// result pages before writing its Flow and ran out of budget. The paging loop
+// holds in both authoring modes -- amend_draft repeat in a draft, the written
+// Flow's repeat lines otherwise -- and one page read plus one Next page is
+// enough evidence while exploring.
+test("the paging loop holds for drafts and written Flows, and exploring reads one page and one Next page", () => {
+  const lists = text.split("\n").find((line) => line.startsWith("Lists."));
+  assert.ok(lists, "the Lists line is there");
+  assert.ok(lists.includes("in a draft by amend_draft repeat, in a written Flow by its repeat lines"));
+  assert.ok(lists.includes("Exploring needs one page read and one Next page to know the loop works"));
+  assert.ok(lists.includes("the loop reads the other pages when the Flow runs, so do not read every page while exploring"));
 });
 
 test("money, delete and send or publish are asked of the person; no secrets; no robot checks", () => {
