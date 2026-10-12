@@ -56,32 +56,37 @@ fast").** Each unit was verified by the supervisor (tests beside each change, ty
 - Chat and trial wording: not found where saved, the box set back, what follows a failed step (t420, t421, t424,
   t428). Lab honest paths budget in page time (t433). Direct fixes 1ea9b038, b12f0391 (downstream), 19bf1773 (Core).
 
-**Checks today.** Sweep-1010 and sweep-1010b (the day's two full sweeps) ran; every failure they found is fixed and
-merged (see the ledger). On final dev: recovery-matrix cases 1, 2 and 9 passed (rmx-2026-10-10T23-54-47-485Z-5ac142).
+**2026-10-11/12 (this session): the paid proofs pass.** R4a attempt 3 (run-mv4912r9) and R4b (run-mv4dgmki,
+run-mv4i1cls) failed on our defects (the user: "the model isn't the issue"); t436-t448 fixed them and are merged and
+pushed in both repos: saved controls found on a later visit by scoring every signal (t436); Lab bundles publish while a
+file is read (t437); one $0.10 purse per Flow in Lab scope (t438); saved steps rerun as saved, presses always declare
+(t439); every element action repairable in-run (t440); a pressed control keeps its handle and pre-act identity (t442);
+a repair rerun redoes earlier steps before a lasting act and the judge sees the real landing (t443, D1 unchanged);
+requested acts never silently skipped (t444); unambiguous tool-call decisions accepted (t445); a renamed control
+accepted by the in-run rung (t446); a created step carries its act's effect (t447); a repair replay succeeds when
+every step ended well, unattended (t448).
+- **R4a passed:** run-mv4dcf2j-cb68009a, $0.0365: built, trial passed, Lab replay on a fresh page passed with no repair.
+- **R4b passed:** run-mv4itxkr-163e04a8, $0.0288: after the basket redesign the saved press failed its first attempt
+  and 3 retries, the model was called once to diagnose and once to patch onto the renamed control, the run carried on
+  and met the judgement, and the Lab's replay with the repair applied succeeded with no model call.
+- **Checks:** sweep-1011 (both repos' full suites on dev) found two stale tests (prompt pin after t443, sealed-staging
+  spend after t438), fixed forward; then Core 10,052 tests and the extension's `pnpm check`, `pnpm test`, `pnpm build`
+  pass. Provider-free recovery matrix, all 14 cases, passed before each paid launch.
 
-**Paid proofs.** R4a attempt 1 (run-mv2nlh9l, $0.0525) and attempt 2 (run-mv2pgqkj, $0.0779) failed; their causes
-are fixed above. The user approved attempt 3 then R4b; attempt 3 (run-mv35459z-b5aa50cc) was stopped mid-build by the
-supervisor when the user wrapped up the session (a paid run never runs unsupervised): no verdict, a few cents. Debug
-notes for all three are in `language-driven-flow-loop-plan/debugs/`.
+**Next.** Lanes A-D round 3 on the new dev: lane trees synced to dev and rebuilt first, one lane per lab slot, each
+lane debugs every run before its next (`live-lanes-iterate-on-own-branch-merge-in-rounds`).
 
-**Next.**
-1. Sync `fxwork/t418` (both repos) to dev and rebuild, then relaunch R4a attempt 3, supervised to its end:
-   `FLUXIQ_LAB_INSTANCE=t418-proofs FLUXIQ_TEST_TARGET=persistent-isolated pnpm lab run crossborder-marketplace
-   --variant flash-deal --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash
-   --authoring-mode candidate --llm-task create-flow --instruction-task
-   crossborder-marketplace-hub-to-cart-flash-deal-during-build --llm-max-input-tokens 992000 --llm-max-output-tokens
-   8000 --llm-max-total-tokens 1000000 --llm-max-calls 48 --target persistent-isolated --workspace t418-r4a-4
-   --replays 1` (R4b's command is in `reports/t414-paid-proof-prep.md`). If the unchanged-source guard refuses, the
-   stop was deliberate (see its debug note); ask the user.
-2. If R4a passes, R4b (in-run repair after the basket redesign), same supervision.
-3. Then lanes A-D round 3 on the new dev (lane trees synced and rebuilt first).
-
-**Blockers.** None in code. The paid runs wait on the user's next session.
+**Blockers.** None.
 
 **Follow-ups (not started).** Consolidate the way-out label lists (extension interference vocabulary and t430's domain
-`act-landing/way-out-label.ts`); bigbox "naive paths" stalls at 8 parallel copies (t433 open question); only
-`runRuntimeSession` keeps storage connections (t435); a new matrix case for a timed-out dismiss press through
-`actLanded` (row 9 now strikes a Confirm, t430); reconciled flag in run detail; Core web chat "Already done" wording.
+`act-landing/way-out-label.ts`) and guard optional steps to way-out presses (an optional step re-pointed to another
+control that holds in the test is still saved, t439); steps an in-run repair writes carry no effect (t447); why R4a's
+f2/f4/f6 lost scheduled candidates between repair rounds (t439); Upload's repair role is `clickable` (t440); chat turns
+that neither build nor run are not charged to a Flow in Core (t438); chat wording: "Closed 2 notices ... It was"
+(plural/singular), trial cards repeat the verb ("Choose · choose ..."), a search box named by its promotional
+placeholder; bigbox "naive paths" stalls at 8 parallel copies (t433); only `runRuntimeSession` keeps storage
+connections (t435); a matrix case for a timed-out dismiss press through `actLanded` (t430); reconciled flag in run
+detail; Core web chat "Already done" wording.
 
 **Binding rules every unit keeps** (the user's, from `mvp-final-month-plan.md` Current State, and Core's
 architecture): state routing stays a global runtime behaviour that precedes any model call; every node keeps first
@@ -522,6 +527,30 @@ Their briefs are written here before dispatch, against the code as it then stand
   rerun redoes earlier steps and the judge sees the real landing (Core); t444 requested acts never silently skipped,
   done words count as done (Core); t445 unambiguous tool-call decisions accepted (Core); t446 renamed control accepted
   by the in-run rung (domain). Then matrix, sync, relaunch R4b
+
+### 2026-10-12 - t442-t448 merged; sweep-1011 fixed forward; R4b passed
+- Agent: senior supervisor agent (Claude); workers (reports `reports/t442..t448-*.md`)
+- Changed: t442-t447 as in Current State (Core-paired where named); t448 the Lab's repair-replay success rule, plus the
+  supervisor's unattended condition (a person-cleared step fails a replay); sweep fixes on dev: Core
+  `system-prompt-pins.json` (t443's sentence), downstream `killed-run.test.mjs` (t438's per-Flow figure), Core
+  `candidate-unusable-reply.test.ts` (t445's accepted shape)
+- Why: R4b run-mv4dgmki-2b13db91 failed on our defects; R4b run-mv4i1cls-463e4b5c's product behaviour passed but the
+  Lab's replay rule failed it on a retried busy press (the user's rule: one too-early attempt never fails a step)
+- Validation: supervisor, on each task branch after merging the other repo's dev: t446 domain target + callers
+  "# pass 58 # fail 0"; t445 Core llm "Test Files 57 passed, Tests 697 passed"; t444 Core "86 passed, 1132 passed";
+  t442 domain "# pass 656 # fail 0", Core candidate "80 passed"; t443 Core "Test Files 173 passed, Tests 1895
+  passed"; t447 Core "127 passed, 1221 passed", domain "# pass 745 # fail 0"; t448 test-runner flow-lane "# pass 308
+  # fail 0", existing-fluxiq-control "# pass 24"; every tsc exit 0; Core merges gated by `pnpm check`. Sweep-1011:
+  Core `pnpm test` "2 failed | 10052 passed" (both the stale pin, fixed: 31/31), downstream `pnpm check` 1 failure
+  (stale figure, fixed; rerun exit 0), `pnpm test` exit 0, `pnpm build` exit 0. Recovery matrix all 14 cases passed
+  before each launch. R4b run-mv4itxkr-163e04a8 launcher `{"verdict":"passed","totalEstimatedCostUsd":0.028847028,
+  ... "buildsOverCeiling":0}`, replay `{"status":"succeeded","modelCalled":false,"goalPassed":true,
+  "flowSucceeded":true}`
+- Outcome: Accepted
+- Decisions (supervisor): F5 save floor kept; first act's view wins for identity; t443's optional-step exception
+  approved (a sometimes-present step may be absent without blocking a lasting act); a renamed same-place control with
+  only its last word changed is accepted (the residual "Add to wishlist" case is bounded by the step's `done when:`)
+- Follow-up: lanes A-D round 3; the follow-ups in Current State
 
 ## Open Questions
 
