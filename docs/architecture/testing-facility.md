@@ -647,6 +647,11 @@ A replay disables model wiring before starting its owned Core host:
 - it requests deterministic execution with no `runIntent`. This controls
   adaptive execution separately from constructor admission.
 
+Replay explicitly waits for Core's settled verification publication on both
+ordinary return and timeout readback, within the existing deterministic Flow
+bound. A settled no-model result may carry an explicit zero ledger; completed
+graph execution alone cannot establish that the accounting has settled.
+
 Missing provider accounting remains unknown. Core verification deadline
 fallback preserves completed check receipts and cannot certify zero from an
 unsettled check or qualify that run as provider-free replay. An explicit public zero count or
