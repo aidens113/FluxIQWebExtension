@@ -24,7 +24,7 @@ A-review owns B/t262/slot3; B-debug owns C/t451/slot1; C-validation owns D/t275/
 invoked each lane's compiled Core/host/server source/inventory validators and compared ready/current extension
 stamps: all110reached inputs, zero calls, original task digests, chat/candidate/reset,64calls/48millionrun tokens,
 per-request bounds and both0.25purses match. One paid attempt per lane is cleared; actual running four-identity
-receipts/full debugs/oracles/replays remain. Do not advance either dev head during these streaks.
+receipts/full debugs/oracles/replays were subsequently reviewed; this frozen-pair streak has ended.
 
 Round-seven admitted runs: B run-mv4v2eci-8b21c15d, C run-mv4v1v25-c7d57567, D run-mv4v1zth-095100f7.
 Supervisor independently read all12actual running identity receipts: every verified flag true and complete
@@ -47,6 +47,12 @@ the compiled original oracle13ordered records/52fields/0extras, and confirmed th
 column fidelity plus optional generic passive rejection observations, with legacy/privacy/continuation gates;
 no fixture-derived guidance, promoted oracle answers, changed filtering or forced judge pass. Core summary
 projection is paired; exact negative eligibility cannot be recovered retrospectively from the old packets.
+
+t460 is integrated/pushed downstreamcc3b3893/Core563c37bd: supervisor74Core/55runner tests, fresh types,
+current build checks/native audits, post-dev-merge14Core/7runner tests all0. Downstream owning finish0 first;
+Core legacy full gate skipped only after those actual narrow checks. Source repair does not prove live replay.
+B-debug next validates B/D saved Flows provider-disabled, on changed source, without paid creations. t461 remains
+isolated/unpushed; no broader qualification claimed. Original profiles/keys/failed receipts preserved.
 
 **Latest budget authorization (user, October 11): $0.25 per test instead of $0.10.** Subsequent live tests set
 `FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25` in the launch process environment and verify the whole-Flow purse in
