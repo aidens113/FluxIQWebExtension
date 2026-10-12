@@ -21,9 +21,12 @@ reads. Gate before launch: provider-free recovery matrix, all 14 cases passed. V
 
 ## Defect
 
-Under investigation (t448, report `state-aware-recovery-plan/reports/t448-repair-replay-success-rule.md`): which replay
-action was not `succeeded`, and whether it was a step correctly not acted on (skipped as already done, option already
-chosen, optional interruption absent) or a real failure.
+The Lab's rule, not the product (t448, report `state-aware-recovery-plan/reports/t448-repair-replay-success-rule.md`).
+In replay `8e6a87e3-…` attempt #8 (node s8, a press) was refused by the page as busy (`web.action.rate_limited`,
+nothing landed) and its automatic retry (#9) succeeded: the user's rule that one too-early attempt never fails a step.
+The old rule failed the replay on that recovered attempt. t448 (merged `6669025f`): a replay's Flow succeeded when the
+run succeeded, every step's last attempt ended well, no step was cleared by a person, and no skipped step is marked
+not done (t444). The product behaviour of this run passed.
 
 ## UI review
 
@@ -32,4 +35,4 @@ reads "0 Cart" on the item page (site behaviour, not a Flow step).
 
 ## Next
 
-Close t448; if the rule was wrong, R4b's product behaviour passed and the proof is rerun once for a clean verdict.
+Rerun R4b once on the synced tree for a clean verdict under the corrected rule.
