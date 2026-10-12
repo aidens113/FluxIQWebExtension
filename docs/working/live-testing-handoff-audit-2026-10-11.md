@@ -86,6 +86,8 @@ gates. Each creation requires full debug and separate zero-model replay before a
 changed source. t380 is now integrated; recording-persistence measurement, three-site adaptation, breadth/UX
 and release work remain after qualification.
 
+Round-five launch update: all ready preflights independently inspected (calls0, unchanged tasks, candidate/reset true, both ceilings0.25). B run-mv4p5ly4-d02b5ca9 and D run-mv4p5hjj-1ef25535 have supervisor-verified four actual running identities and are in flight. C run-mv4p3qri-4c59c2ff failed extension.worker before chat/calls (cost0); full available debug and screenshot reviewed. CDP saw a live extension worker while Playwright readiness saw0; no observed crash. Startup-observation defect needs provider-free reproduction and changed source before C relaunch; no profile reset or timeout expansion. Core dev remains frozen; recording t454 stays isolated.
+
 **Limits:** no product code edited, tests/builds/live runs launched, provider calls made, or panel managed.
 Historical test counts remain previous-session results, not tests independently rerun during this audit.
 
@@ -182,6 +184,17 @@ Historical test counts remain previous-session results, not tests independently 
   from compilation, worker claims, branch names or a saved top-level passed verdict alone.
 
 ## Worker Briefs
+
+### Brief: worker-start-observation
+- Repository: new isolated downstream task worktree; current Core3291fb25 read-only, no live-lane source edits.
+- Task: reproduce C run-mv4p3qri-4c59c2ff startup mismatch before choosing a fix. Supervisor owns initial investigation; delegate if additional discovery exceeds bounded owners.
+- Required reads: C round-five full debug and screened startup trace, run-lifecycle/extension-readiness.ts, extension-control-page.ts, launch-browser.ts and extension-start-trace.ts plus their owning tests.
+- Owns: ignored isolated probe/evidence and own report initially; any source fix requires supervisor narrowed file assignment after reproduction.
+- Must not touch: existing profiles/user data, Core, scenario/oracle/instruction, live-lane branches, model/provider, source-freeze heads, generic timeout or guard overrides. No worker commits/merges/full suites.
+- Definition of done: provider-free actual current extension on allowed everything-store fixture; copied or new isolated profile, Chrome target versus Playwright worker exposure and diagnostic attachment timing compared. Trace actual fault with no load/memory attribution or synthetic browser fixture. Prove correction against actual browser and owning tests before changed-source C relaunch. Report limits honestly; never count CDP existence alone as extension identity or successful chat.
+- Report to: isolated task downstream docs/working/live-testing-handoff-audit-2026-10-11/reports/worker-start-observation.md.
+
+Round-five launch preparation: coherent fixes and notes pushed to downstream e836e611/Core3291fb25; all three paired lane trees synced clean before workers started. B and D workers own their lane preflights, supervisor owns C. Ready dry-runs do not start topology, so a human pause before running-identity receipts is unavailable. Supervisor inspected the real awaited identity guards in run-scenario.ts (Core/host/server adapter before browser setup, extension before chat). Those guards refuse mismatch before provider dispatch. Supervisor reviews ready plan/intended artifacts before launch and independently reads all four actual receipts as soon as the topology writes them; no new gate or extra paid launch.
 
 ### Brief: live-b-round5
 - Repository: existing paired t262 lane trees, supervisor synced to integrated t452/t453 pair.
