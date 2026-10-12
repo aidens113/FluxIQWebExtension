@@ -19,6 +19,17 @@
 //   (`capabilities.candidateTrial.startReset`; `lab.candidate_start_hook_unset`
 //   otherwise).
 //
+// **A live build's trials start from the model's own reset (t470).** Since t462
+// the model returns the site to the build's start before every trial, through
+// the site's own controls. While the Lab also reset the fixture between trials
+// a live run could not show that reset working, so a live (paid) candidate build
+// now runs with no start hook (`labCandidateTrialFixtureReset`), and is admitted
+// only when its Core has none: `fixtureResetBetweenTrials` false, `startReset`
+// false. A Core that would still reset between trials is refused
+// (`lab.candidate_start_hook_set`), so the receipt never says what the run did
+// not do. Provider-free paths keep the reset and the rule above. The fixture is
+// still seeded when the run starts, and the lane resets it before playback.
+//
 // Both are refused before any provider call. Before Core starts, the Lab asks
 // what it will start (`labCandidateTrialReadiness`); once Core runs, the lane
 // asks Core itself (`readCreatedFlowCandidateTrialReadiness`). A caller's
@@ -33,22 +44,36 @@ import { retriedRead } from "./retried-read.js";
 /**
  * What the Core under test can do with a candidate. `trialRunner`: Core tests a
  * candidate before proposing it. `startReset`: each trial starts from the
- * Lab's fixture reset. `source`: `core` when Core's own readiness said so,
+ * Lab's fixture reset. `fixtureResetBetweenTrials`: whether this run means the
+ * fixture to be reset between trials (`labCandidateTrialFixtureReset`), which
+ * `startReset` must match. `source`: `core` when Core's own readiness said so,
  * `lab-plan` when it is what the Lab will start, asked before Core runs.
  */
-export type CreatedFlowCandidateTrialReadiness = Readonly<{ trialRunner: boolean; startReset: boolean; source: "core" | "lab-plan" }>;
+export type CreatedFlowCandidateTrialReadiness = Readonly<{ trialRunner: boolean; startReset: boolean; fixtureResetBetweenTrials: boolean; source: "core" | "lab-plan" }>;
+
+/**
+ * Whether the Lab resets the fixture between a candidate build's trials: never
+ * for a live (paid) build, whose model resets the site itself before each trial
+ * (t462), so a live run shows whether that reset works; always for any other.
+ */
+export function labCandidateTrialFixtureReset(run: { live: boolean }): boolean {
+  return !run.live;
+}
 
 /** Whether a run whose Core authors in `authoringMode`, with `candidateTrial` in candidate mode, may build a Flow to qualify. */
 export function createdFlowVerificationReady(authoringMode: AutomationStudioAuthoringMode, candidateTrial?: CreatedFlowCandidateTrialReadiness): boolean {
   if (authoringMode === "legacy") return true;
-  return authoringMode === "candidate" && candidateTrial?.trialRunner === true && candidateTrial.startReset === true;
+  return authoringMode === "candidate" && candidateTrial?.trialRunner === true && typeof candidateTrial.fixtureResetBetweenTrials === "boolean" && candidateTrial.startReset === candidateTrial.fixtureResetBetweenTrials;
 }
 
 /** Refuses, before any provider call, a run whose Core cannot produce a Flow the lane may run. */
 export function assertCreatedFlowVerificationReady(authoringMode: AutomationStudioAuthoringMode, candidateTrial?: CreatedFlowCandidateTrialReadiness): void {
   if (createdFlowVerificationReady(authoringMode, candidateTrial)) return;
   const mode = typeof authoringMode === "string" ? authoringMode : "unrecognized";
-  const common = { stage: "before_provider", authoringMode: mode, providerInvocation: "not_attempted_by_this_entry", priorProviderCost: "unknown", ...(candidateTrial ? { candidateTrial: { trialRunner: candidateTrial.trialRunner, startReset: candidateTrial.startReset, source: candidateTrial.source } } : {}) };
+  const common = { stage: "before_provider", authoringMode: mode, providerInvocation: "not_attempted_by_this_entry", priorProviderCost: "unknown", ...(candidateTrial ? { candidateTrial: { trialRunner: candidateTrial.trialRunner, startReset: candidateTrial.startReset, fixtureResetBetweenTrials: candidateTrial.fixtureResetBetweenTrials, source: candidateTrial.source } } : {}) };
+  if (authoringMode === "candidate" && candidateTrial?.trialRunner === true && !candidateTrial.fixtureResetBetweenTrials) {
+    throw new RunnerFailure("facility.contract", "A live candidate build runs each trial from what the model's own reset left, but the Core under test resets the fixture before each trial; it must be started without the candidate start hook.", { details: { code: "lab.candidate_start_hook_set", ...common } });
+  }
   if (authoringMode === "candidate" && candidateTrial?.trialRunner === true) {
     throw new RunnerFailure("facility.contract", "Created-Flow qualification in candidate authoring mode needs the Core under test started with the candidate start hook pointed at the Lab's fixture reset, so every trial starts from the seeded fixture; it was not.", { details: { code: "lab.candidate_start_hook_unset", ...common } });
   }
@@ -60,12 +85,13 @@ export function assertCreatedFlowVerificationReady(authoringMode: AutomationStud
 /**
  * What the Lab will start, asked before anything starts: whether the linked
  * Core's readiness contract carries the trial runner, and whether the Lab
- * starts that Core itself -- only a Core the Lab starts gets the start hook
- * (`../../environment.ts`), so an existing deployment never does.
+ * starts that Core itself with the start hook -- only a Core the Lab starts
+ * gets it (`../../environment.ts`), so an existing deployment never does, and
+ * only when the run resets the fixture between trials.
  */
-export function labCandidateTrialReadiness(target: { startsCore: boolean }): CreatedFlowCandidateTrialReadiness {
+export function labCandidateTrialReadiness(target: { startsCore: boolean; fixtureResetBetweenTrials: boolean }): CreatedFlowCandidateTrialReadiness {
   const contract: { capabilities: Partial<typeof AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS.capabilities> } = AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS;
-  return Object.freeze({ trialRunner: contract.capabilities.candidateTrial !== undefined, startReset: target.startsCore, source: "lab-plan" });
+  return Object.freeze({ trialRunner: contract.capabilities.candidateTrial !== undefined, startReset: target.startsCore && target.fixtureResetBetweenTrials, fixtureResetBetweenTrials: target.fixtureResetBetweenTrials, source: "lab-plan" });
 }
 
 /**
@@ -81,10 +107,12 @@ export async function readCreatedFlowCandidateTrialReadiness(
   },
   domainId: string,
   bounds: FluxIQHttpOptions = {},
+  /** Whether the run means the fixture to be reset between trials (`labCandidateTrialFixtureReset`); the reset, as before, when absent. */
+  fixtureResetBetweenTrials = true,
 ): Promise<CreatedFlowCandidateTrialReadiness> {
   // A safe read, so it is retried like every other one (`./retried-read.ts`).
   const endpoint = AUTOMATION_STUDIO_ENDPOINTS.getFlowBootstrapGenerationReadiness;
   const answer = await retriedRead(endpoint, () => control.automationStudioCall(endpoint, {}, bounds, domainId), control.readClock);
   const readiness = parseAutomationStudioFlowBootstrapGenerationReadiness(answer !== null && typeof answer === "object" ? (answer as { readiness?: unknown }).readiness : undefined);
-  return Object.freeze({ trialRunner: readiness !== null, startReset: readiness?.capabilities.candidateTrial.startReset === true, source: "core" });
+  return Object.freeze({ trialRunner: readiness !== null, startReset: readiness?.capabilities.candidateTrial.startReset === true, fixtureResetBetweenTrials, source: "core" });
 }

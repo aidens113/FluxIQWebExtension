@@ -22,6 +22,21 @@
 // `webAutomationClearedLayersValue`, which keeps known words only and at most
 // `WEB_AUTOMATION_CLEARED_LAYERS_MAX` entries; an entry with an unknown word is
 // dropped rather than guessed at.
+//
+// **The control pressed rides beside the words, as far as this domain (t470).**
+// Lane D round 8 (`run-mv5jnc5m-a47c3e59`): the clearing closed the site's
+// slow-down notice by its OK, Core's trial feedback could say only that a
+// notice was closed, and the model, told to add a step closing it, pressed the
+// one close-like handle it had seen -- the chat's "Close chat". So the client
+// also reports the way out it pressed (`wayOut`): the page's address and the
+// control's descriptor, exactly as a capture describes an element
+// (`describeElement`, sensitivity screened at the source). It travels from the
+// browser to this domain's server half and stops there: the dispatcher keeps it
+// and hands Core only an opaque reference (`../io/gateway-output-dispatcher.ts`,
+// `../cleared-way-outs/`), which Core gives back for a trial so this domain can
+// name the control by a handle the model may write
+// (`../runtime/llm-evidence/way-out-handles/`). A way out from a child frame is
+// not reported: its descriptor carries no frame address.
 
 import type { WebAutomationLayerKind } from "../page-evidence";
 
@@ -59,14 +74,29 @@ export const WEB_AUTOMATION_CLEARED_CONTROL_WORDS = [
 
 export type WebAutomationClearedControlWord = (typeof WEB_AUTOMATION_CLEARED_CONTROL_WORDS)[number];
 
-/** One layer the clearing closed: its kind and the dismissal pressed, both closed words. */
+/**
+ * The way out the clearing pressed (t470): the address of the page it was on
+ * and the control's descriptor, as a capture's `interactiveElements` carries
+ * one. Never past this domain's server half (header).
+ */
+export type WebAutomationClearedWayOut = {
+  url: string;
+  element: Record<string, unknown>;
+};
+
+/** One layer the clearing closed: its kind and the dismissal pressed, both closed words, and the way out pressed when the client could describe it. */
 export type WebAutomationClearedLayer = {
   kind: WebAutomationClearedLayerKind;
   control: WebAutomationClearedControlWord;
+  wayOut?: WebAutomationClearedWayOut | undefined;
 };
 
 /** At most this many cleared layers travel on one result: three per intervention, across a bounded loop. */
 export const WEB_AUTOMATION_CLEARED_LAYERS_MAX = 12;
+
+/** The longest page address and descriptor a way out may carry; a larger one is dropped and the layer kept without it. */
+const WAY_OUT_URL_MAX = 2_048;
+const WAY_OUT_ELEMENT_MAX_BYTES = 16_384;
 
 const KINDS: ReadonlySet<string> = new Set<WebAutomationClearedLayerKind>(["consent", "rate_limit", "promotion", "assistant", "dialog"]);
 const WORDS: ReadonlySet<string> = new Set<string>(WEB_AUTOMATION_CLEARED_CONTROL_WORDS);
@@ -82,10 +112,22 @@ export function webAutomationClearedLayersValue(value: unknown): WebAutomationCl
   for (const entry of value) {
     if (layers.length >= WEB_AUTOMATION_CLEARED_LAYERS_MAX) break;
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) continue;
-    const { kind, control } = entry as { kind?: unknown; control?: unknown };
+    const { kind, control, wayOut } = entry as { kind?: unknown; control?: unknown; wayOut?: unknown };
     if (typeof kind !== "string" || !KINDS.has(kind)) continue;
     if (typeof control !== "string" || !WORDS.has(control)) continue;
-    layers.push({ kind: kind as WebAutomationClearedLayerKind, control: control as WebAutomationClearedControlWord });
+    const pressed = wayOutValue(wayOut);
+    layers.push({ kind: kind as WebAutomationClearedLayerKind, control: control as WebAutomationClearedControlWord, ...(pressed ? { wayOut: pressed } : {}) });
   }
   return layers.length > 0 ? layers : undefined;
+}
+
+/** A way out as it may travel: a web page's address and one descriptor object, both bounded; anything else is none. */
+function wayOutValue(value: unknown): WebAutomationClearedWayOut | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const { url, element } = value as { url?: unknown; element?: unknown };
+  if (typeof url !== "string" || url.length > WAY_OUT_URL_MAX || !/^https?:\/\//iu.test(url)) return undefined;
+  if (typeof element !== "object" || element === null || Array.isArray(element)) return undefined;
+  // A descriptor arrives as JSON (the wire, or the content script's structured message), so it always serializes.
+  const bytes = new TextEncoder().encode(JSON.stringify(element)).length;
+  return bytes <= WAY_OUT_ELEMENT_MAX_BYTES ? { url, element: element as Record<string, unknown> } : undefined;
 }

@@ -3,6 +3,7 @@ import type { JsonObject } from "fluxiq/core";
 import { ClientGatewayRequiredCommandContext } from "fluxiq/client-gateway";
 import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
 import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
+import { webAutomationClearedWayOutsOf } from "../cleared-way-outs";
 import { webAutomationInterruptedDispatchReading, webAutomationUnansweredOutcome } from "../client/interrupted-action";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { outputTargetFromPayload } from "../output-nodes";
@@ -62,15 +63,17 @@ export async function dispatchWebAutomationOutput(
     // What the extension's interference clearing pressed while this action ran
     // (`actions/cleared-layers.ts`). Core reads it from the top of the dispatch
     // payload, as it reads `route`, so it is lifted there: copied through its
-    // closed vocabulary, never passed through.
-    const clearedLayers = webAutomationClearedLayersValue(isRecord(result.payload) ? result.payload.clearedLayers : undefined);
+    // closed vocabulary, never passed through. The way out each layer was
+    // closed by stays here, kept under a reference Core carries instead
+    // (`../cleared-way-outs/`, t470), and leaves the client's own result too.
+    const clearedLayers = coreClearedLayers(fluxiq, isRecord(result.payload) ? result.payload.clearedLayers : undefined);
     return {
       // `ok` stays the success flag; `status` is the command's own outcome, so
       // Core sees `timed_out` or `cancelled` rather than a bare failure.
       ok: succeeded,
       outputId: request.outputId,
       status,
-      payload: compact({ status, message, result: result.payload, route, clearedLayers }),
+      payload: compact({ status, message, result: clearedLayers && isRecord(result.payload) ? { ...result.payload, clearedLayers } : result.payload, route, clearedLayers }),
       // Core's IO path builds the node message from `error` alone
       // (`failedDispatchResult`), so a command that failed with only a message
       // — the usual shape of a client-side timeout or cancellation — would
@@ -83,6 +86,16 @@ export async function dispatchWebAutomationOutput(
     if (required) { await ClientGatewayRequiredCommandContext.stop(request.commandContext!, "web.required_dispatch_failed"); throw error; }
     return { ok: false, outputId: request.outputId, error: error instanceof Error ? error.message : "Web automation output dispatch failed." };
   }
+}
+
+/**
+ * The layers the client closed, as Core may hold them: each layer's two closed
+ * words, and in place of the way out it pressed, the reference this domain kept
+ * it under (t470). Undefined when the client reported none.
+ */
+function coreClearedLayers(fluxiq: FluxIQ, reported: unknown): JsonObject[] | undefined {
+  const wayOuts = webAutomationClearedWayOutsOf(fluxiq);
+  return webAutomationClearedLayersValue(reported)?.map(({ kind, control, wayOut }) => (wayOut === undefined ? { kind, control } : { kind, control, wayOut: wayOuts.keep(wayOut) }));
 }
 
 /** The dispatch result of a required command whose outcome stayed unknown (`../client/interrupted-action/unanswered-outcome.ts`). */
