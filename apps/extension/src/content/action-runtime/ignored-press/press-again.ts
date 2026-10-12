@@ -16,7 +16,7 @@
 
 /** A sign that a press was answered. Any one of them forbids a second press. */
 export type PressSignal =
-  /** A fetch, XMLHttpRequest or beacon the page began after the press. */
+  /** A fetch, XMLHttpRequest, beacon or WebSocket message the page began after the press -- counted from its start, not its response (t465). */
   | "request"
   /** Something changed inside the pressed control or the section around it. */
   | "change"
