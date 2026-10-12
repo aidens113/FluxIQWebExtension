@@ -471,6 +471,8 @@ the results and any required repairs pass current owner tests and fresh-process 
   result-verification/contracts.ts/read-account/{accounts,alone-rows}.ts/tests, build-test/read-rows.ts if needed.
 - Focused generic result-verification/condition-observation/{parse,screen,index}.ts and nearest tests approved
   for shared closed-shape validation/privacy; parser types-only imports, no new cycle or web dependency.
+- read-account/looped-account.ts and nearest tests approved to concatenate aligned observations across passes;
+  legacy labels get null only when a known companion exists elsewhere, never invented absence or provenance.
 - No downstream source files (A/B) or Core evidence-loop files. Generic optional condition observation only,
   no DOM/selectors/browser APIs/domain imports or reimplementation of domain predicates.
 - Fail-first actual stored-summary and trial/saved-result consumer propagation of neutral companion evidence.
