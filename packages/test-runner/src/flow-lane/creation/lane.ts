@@ -119,8 +119,9 @@ export type CreatedFlowLaneInput = {
   authoringMode: AutomationStudioAuthoringMode;
   /**
    * Whether the run's Core resets the fixture between candidate trials
-   * (`./readiness.ts` `labCandidateTrialFixtureReset`, t470): false for a live
-   * build, whose trials start from the model's own reset. Absent, true.
+   * (`./readiness.ts` `labCandidateTrialFixtureReset`, t470, t472): false for a
+   * `--model-reset-only` build, whose trials start from the model's own reset.
+   * Absent, true.
    */
   candidateTrialFixtureReset?: boolean;
   request: CreatedFlowRequest;

@@ -79,11 +79,11 @@ import type { RunPerturbation } from "./perturbations/index.js";
  */
 const BLANK_TAB_URL = "about:blank";
 
-/** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves, and a `creation` run passes its request's own. `livePanel: false` (`--no-live-panel`) keeps the extension panel from being shown beside a headed run's page. `perturbation` is a fault the run suffers on purpose (`perturbations/`), armed where the extension is connected and opened; `snapshots/perturbation.json` records when it fired and what the extension and Core reported after. Absent, the run is unchanged. */
+/** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves, and a `creation` run passes its request's own. `livePanel: false` (`--no-live-panel`) keeps the extension panel from being shown beside a headed run's page. `perturbation` is a fault the run suffers on purpose (`perturbations/`), armed where the extension is connected and opened; `snapshots/perturbation.json` records when it fired and what the extension and Core reported after. Absent, the run is unchanged. `modelResetOnly` (`--model-reset-only`, t472): a live candidate build's Core gets no fixture reset between trials, so they start from the model's own reset; absent, the Lab resets the fixture between them. */
 export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; creation?: CreatedFlowRequest; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun; replays?: number; livePanel?: boolean;
   /** How a `creation` run starts its build: `chat`, the default and the only way it can pass, types the task's instruction into the extension's chat window; `direct-api` (`--direct-api-build`, test-only) has the Lab call Core's build endpoint itself, and is never counted as a pass. */
   buildEntry?: "chat" | "direct-api";
-  perturbation?: RunPerturbation };
+  modelResetOnly?: boolean; perturbation?: RunPerturbation };
 /**
  * `observation` carries the `RunEvaluation` fields only the lane that ran can
  * know, and `evaluation` is the run's own `RunEvaluation` built from it â€” the
@@ -241,7 +241,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       ? options.runsDirectory
       : path.join(options.runsDirectory, ".work");
     const ownsIsolatedCore = topologyTarget.mode === "isolated" || topologyTarget.mode === "persistent-isolated";
-    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, ...(live ? { buildCallLimit: live.authorizedBuildCallLimit, candidateTrialFixtureReset: labCandidateTrialFixtureReset({ live: true }) } : {}), scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath, copyStartupFailureLogs: logsDirectory => copyProcessLogs(bundle, logsDirectory), ...(labRun?.stepsDirectory ? { stepLogDirectory: labRun.stepsDirectory } : {}), ...(ownsIsolatedCore && labPaths.hostPrebuilt ? { prepareHost: false } : {}), ...(ownsIsolatedCore ? { bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
+    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, ...(live ? { buildCallLimit: live.authorizedBuildCallLimit, candidateTrialFixtureReset: labCandidateTrialFixtureReset({ modelResetOnly: options.modelResetOnly === true }) } : {}), scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath, copyStartupFailureLogs: logsDirectory => copyProcessLogs(bundle, logsDirectory), ...(labRun?.stepsDirectory ? { stepLogDirectory: labRun.stepsDirectory } : {}), ...(ownsIsolatedCore && labPaths.hostPrebuilt ? { prepareHost: false } : {}), ...(ownsIsolatedCore ? { bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
     let existingControl: ExistingFluxIQControlClient | undefined;
     if (target.mode === "existing") {
       existingControl = await openExistingFluxIQControl(target, options.runsDirectory);
@@ -412,7 +412,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       const lane = await runCreatedFlowLane({
         control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, request: creation, workflow: flowWorkflow, facilityRunId: runId,
         // The mode the Lab started this Core in (`--authoring-mode`, `legacy` by default); the lane builds only in legacy.
-        authoringMode: live.coreAuthoringMode, candidateTrialFixtureReset: labCandidateTrialFixtureReset({ live: true }), // A live build's trials start from the model's own reset, never the Lab's (t470).
+        authoringMode: live.coreAuthoringMode, candidateTrialFixtureReset: labCandidateTrialFixtureReset({ modelResetOnly: options.modelResetOnly === true }), // The Lab's fixture reset between trials unless --model-reset-only (t470, t472).
         scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
         // Where the built Flow starts: the page the harness would have opened, told to Core instead of loaded, so the build has to reach it itself (`lane-rules/flow-start-page.ts`).
         startLocation: scenarioStartUrl(topology.scenarioOrigin, scenario), entry: chat ? chat.entry : { kind: "direct-api" },
