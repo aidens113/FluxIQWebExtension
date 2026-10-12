@@ -1,13 +1,16 @@
 // Core's `startState` for the web domain (t462): where the page stands against
 // where a build began. It only reads, through the same passive capture a
 // result check takes (`../result-observation/observe.ts`): hidden elements
-// included, no restamp, no retained packet, no handle or selector kept.
+// included, no restamp, no retained packet, no handle or selector kept. It
+// answers where it read (`location`), so Core can come back to an act's own
+// page and look for what the act changed there (t471).
 
 import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import type { WebLlmEvidenceToolRequest } from "../capture";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { boundedIdentifier } from "../untrusted-json";
+import { webStartStateChangedLines } from "./changed-lines";
 import { webStartStateDifferences } from "./differences";
 import { webStartStateFromEvidence } from "./page-state";
 import { webStartStateOf } from "./read-state";
@@ -22,7 +25,7 @@ type StartStateRequest = Pick<WebLlmEvidenceToolRequest, "projectId" | "flowId" 
 export async function observeWebStartState(
   capture: (request: StartStateRequest) => Promise<WebLlmSnapshotBinding>,
   input: StartStateRequest & { start?: JsonObject }
-): Promise<{ state: JsonObject; differs: string[] } | undefined> {
+): Promise<{ state: JsonObject; differs: string[]; location: string; lines: { gone: string[]; added: string[] } } | undefined> {
   input.signal?.throwIfAborted();
   boundedIdentifier(input.projectId, "projectId");
   boundedIdentifier(input.flowId, "flowId");
@@ -34,5 +37,12 @@ export async function observeWebStartState(
   const captured = await capture(request);
   input.signal?.throwIfAborted();
   const now = webStartStateFromEvidence(captured.evidence);
-  return { state: now as unknown as JsonObject, differs: start === undefined ? [] : webStartStateDifferences(start, now) };
+  // Where it was read, so Core can bring the target back to this page through the arrival's `url` (t471: an act is looked for on its own page).
+  // `lines` are the same differences as the lines themselves, so Core can tell which act changed which line without reading words.
+  return {
+    state: now as unknown as JsonObject,
+    differs: start === undefined ? [] : webStartStateDifferences(start, now),
+    location: now.location,
+    lines: start === undefined ? { gone: [], added: [] } : webStartStateChangedLines(start, now)
+  };
 }

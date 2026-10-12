@@ -53,6 +53,14 @@ multiset of lines: `location: <start> -> <now>`, then `gone: <line>`, then
 `undefined`. Core takes the target back to the build's start before it asks,
 and shows the model `differs`.
 
+Every answer also gives the address it read (`location`) and the same
+differences as the lines themselves (`lines: { gone, added }`,
+`start-state/changed-lines.ts`; t471). Core reads the page in place just before
+and just after each lasting act a build makes while exploring, then before a
+trial comes back to that act's page by navigating to `location` and looks for
+what the act changed there. It compares the lines only for equality, so it can
+tell which act changed which line without reading the domain's words.
+
 ## One Contract, In The Domain
 
 The wire shape is declared **once**, in
