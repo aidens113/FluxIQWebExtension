@@ -2,15 +2,19 @@
 // answered (`press-again.ts` says what each sign is and why any one of them
 // forbids a second press). Four listeners, each reporting its own sign:
 //
-// - **request**: a resource entry of initiator type fetch, xmlhttprequest or
-//   beacon that started after the press. Read through a `PerformanceObserver`
-//   (which still sees entries once the timeline buffer is full), flushed with
-//   `takeRecords`, and through `getEntriesByType` where there is no observer.
-//   A resource entry is only written once its response ends, so a request
-//   still in flight when the window closes, on a press that changed nothing
-//   else, is not seen: the one way this can let a second press follow a first
-//   that reached the server. A page that sends a request on a press nearly
-//   always marks it too -- the control disabled, a spinner -- and that is seen.
+// - **request**: a request the page began after the press, seen the moment
+//   the page made it, through the page world's count (`request-start-mark.ts`,
+//   t465): a `fetch`, an `XMLHttpRequest` sent, a beacon or a `WebSocket`
+//   message. Beside it, and alone where no page-world script runs, a resource
+//   entry of initiator type fetch, xmlhttprequest or beacon that started after
+//   the press, read through a `PerformanceObserver` (which still sees entries
+//   once the timeline buffer is full), flushed with `takeRecords`, and through
+//   `getEntriesByType` where there is no observer. A resource entry is only
+//   written once its response ends, so until 2026-10-12 a press whose page
+//   awaited the server before it changed anything read as ignored whenever
+//   the server took longer than the window, and was pressed again:
+//   social-network-feed's Confirm was pressed twice on one friend request in
+//   playback (`run-mv5jnc5m-a47c3e59`), a second order on a real site.
 // - **change**: any mutation -- a child added or removed, an attribute, text --
 //   inside the pressed control's scope (`press-scope.ts`), the control's own
 //   `disabled` and `aria-*` included, and inside every shadow root in that
@@ -37,6 +41,7 @@
 import { composedContains } from "../../shadow-dom";
 import { scopeRoots } from "./scope-roots";
 import { pressScope } from "./press-scope";
+import { markRequestStarts, type RequestStartMark } from "./request-start-mark";
 import type { PressSignal } from "./press-again";
 
 /** A running listener: `flush` delivers what the page has queued but not yet reported; `stop` ends it. */
@@ -61,13 +66,16 @@ export type PressPage = {
   MutationObserver?: typeof MutationObserver | undefined;
   PerformanceObserver?: typeof PerformanceObserver | undefined;
   performance?: Performance | undefined;
+  /** Marks the pressed element in the page world, which then says whether a request began since (`request-start-mark.ts`). */
+  markRequestStarts?: ((pressed: Element) => RequestStartMark | undefined) | undefined;
 };
 
 function contentScriptPage(): PressPage {
   return {
     MutationObserver: globalThis.MutationObserver,
     PerformanceObserver: globalThis.PerformanceObserver,
-    performance: globalThis.performance
+    performance: globalThis.performance,
+    markRequestStarts
   };
 }
 
@@ -77,6 +85,7 @@ export function listenForPressAnswer(pressed: Element, note: (signal: PressSigna
   const view = (document?.defaultView ?? undefined) as PressWindow | undefined;
   const listeners = [
     listenForChange(pressed, page, note),
+    listenForRequestStarts(pressed, page, note),
     listenForRequests(page, note),
     listenForLeaving(document, view, note),
     listenForFocus(pressed, document, note)
@@ -112,6 +121,18 @@ function listenForChange(pressed: Element, page: PressPage, note: (signal: Press
       if (observer.takeRecords().length > 0) note("change");
     },
     stop: () => observer.disconnect()
+  };
+}
+
+/** A request the page began after the mark, read from the page world on every flush. */
+function listenForRequestStarts(pressed: Element, page: PressPage, note: (signal: PressSignal) => void): PressListener {
+  const mark = page.markRequestStarts?.(pressed);
+  if (!mark) return NOTHING;
+  return {
+    flush() {
+      if (mark.begunSince()) note("request");
+    },
+    stop: () => undefined
   };
 }
 
