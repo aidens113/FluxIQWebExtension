@@ -14,7 +14,7 @@ const { text, version } = WEB_LLM_SYSTEM_INSTRUCTIONS;
 
 test("the version is one Core's seam accepts, and names the text with loops and written steps", () => {
   assert.match(version, /^[a-z0-9][a-z0-9._-]{0,63}$/u);
-  assert.equal(version, "web-6");
+  assert.equal(version, "web-7");
 });
 
 test("the text holds no control character but a newline, and stays under 3,200 characters", () => {
@@ -100,6 +100,12 @@ test("money, delete and send or publish are asked of the person; no secrets; no 
   assert.match(text, /spend money, delete something, or send or publish something are asked of the person first/u);
   assert.match(text, /Never type a password or other secret/u);
   assert.match(text, /Never solve a robot check \(CAPTCHA\)/u);
+});
+
+test("category filtering uses evidence of type rather than an incidental mention", () => {
+  const lists = text.split("\n").find((line) => line.startsWith("Lists."));
+  assert.ok(lists, "the Lists line is there");
+  assert.ok(lists.includes("Use evidence of an item's type; a title mentioning another type does not mean the item is that type."));
 });
 
 test("it asks for few decisions under a cost ceiling", () => {

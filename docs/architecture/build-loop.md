@@ -37,6 +37,11 @@ and through the final counted budget decision. A budget estimate never grants
 acceptance or bypasses the whole-Flow spend ceiling: completion with a trial runner
 still requires the exact latest revision's positive trial.
 
+The web Lists guidance uses evidence of an item's type for categorical exclusions;
+mentioning another type in a title does not establish membership in that type.
+This guidance leaves deterministic filter operators unchanged. Its delivery is
+tested; correct semantic filtering still requires live trial and oracle evidence.
+
 ## Live Run Or Write
 
 `core.run_node` reaches `runtime/llm-evidence/node-run/run.ts`. Without `write`
