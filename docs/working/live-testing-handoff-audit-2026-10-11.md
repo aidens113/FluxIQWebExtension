@@ -1,7 +1,7 @@
 # Live Testing Handoff Audit — 2026-10-11
 
 Status: Active
-Status detail: t460 pushed; B/D repair replays passed; t461 observations/order independently checked; headed proof passed; combined-source gates passed; owning paired integration pending. B/C/D qualification open.
+Status detail: t460 pushed; B/D repair replays passed; t461 observations/order independently checked; headed proof passed; t461 integrated; B/D repair replays passed; new .25 ready preflights next. B/C/D qualification open.
 Created: 2026-10-11
 Last updated: 2026-10-12
 Owner: Codex senior supervisor
@@ -53,7 +53,9 @@ column order/3absent+4present DOM witnesses/Core alignment/sparse indices1,2. No
 model verdict, live continuation or withholding claim. Both earlier driver failures retained unchanged.
 Source committed/current dev merged; combined146Core/78domain/83extension/7replay tests passed, all affected
 cache-free types/native audits0; current Core inventory/reached110 rootverified, digest9a6b1e41.
-Fresh owning Core/domain/extension/runner builds passed; t461 owning integration/push stillpending.
+Fresh owning Core/domain/extension/runner builds passed. Owning downstream finish/audit0 merge493b1749
+then Core finish merge1f6580bb0; Core legacy full wrapper skipped only after actual narrow gates and final
+native audit0. Source complete, bothdev push next; ignored t461 logs copied before downstream cleanup.
 
 Future live launches use process FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25 AND CLI maxcost0.25; verify both ready
 purses. Existing64build questions/48millionpost-run Lab token check/per-request992000/8000/1000000 unchanged.
@@ -72,8 +74,7 @@ samehost/PIDnamespace only; live/unknown/reusedlive refuse, identical complete u
 ambiguous. Does not prove old91s browser/gateway drain; t381 poolWIP08eafd1a unmerged. Parked UI/integrity
 t334/t335/t337 not resumed. Historical details retained in archive/reports.
 
-Next finish combined-source narrow gates/current builds, then owning downstreamfirst/Coresecond integration
-and pushbothdev. Freeze new pair for B/C/D:2creations each,
+Next push both accepted devs and prepare frozen-pair zero-call readiness. Freeze new pair for B/C/D:2creations each,
 each full debug/exact oracle+separate disabled replay unchanged hash/all5zero; firstreplay before second.
 Failure stopslane until debug/changedsource; no shortcut from modelyes/rowcount/compilation. Then recording
 live persistence/three-site adaptation/breadth/UX/release remain planned. User panel not started bydefault;
@@ -281,7 +282,7 @@ isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day
   T2 retained packets/hash/DOM/20rows/order/3absent+4present/Core/sparse indices verified. Combined146Core/
   78domain/83extension/7replay tests/types/native audits0; current owner inventories/reached110 rootverified.
 - Limits: no full background transport, model verdict, live continuation/withholding or paid semantic pass.
-- Outcome: ready for owning downstreamfirst/Coresecond integration/push; original driver failures preserved.
+- Outcome: owning downstreamfirst/Coresecond integration completed493b1749/1f6580bb; bothdev push next; original driver failures preserved.
 - Follow-up: freeze new pair, zero-call .25 readiness and one paid creation per open lane before replay gates.
 
 
