@@ -417,6 +417,14 @@ browser. The Lab refuses other scenarios at its launch entries.
 playback), waiting for the target first; only a lasting act whose effect is
 uncertain is held back, and a build never gives up on a recoverable failure.
 
+**A build resets the site before it re-runs its Flow** (user, 2026-10-12): before
+every trial and the judged whole run, the model returns the site to the state the
+build started from through the site's own controls, undoing exactly the lasting
+acts this build made (cart lines added, quantities changed) and never touching
+what existed before the build began. Reversing the build's own acts is not a new
+permission question and does not repeat a lasting act; a trial run on leftovers
+from exploration or an earlier trial measures nothing.
+
 **Model guidance never teaches to the test** (supervisor, 2026-10-09): the
 instructions, examples and feedback text the product gives a model (Core's
 script format, tool descriptions, catalog text, trial feedback) never mirror a
