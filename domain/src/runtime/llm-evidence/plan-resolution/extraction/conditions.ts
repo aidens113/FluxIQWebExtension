@@ -75,6 +75,17 @@
 // only mean `is: "present"`, which is the opposite of what a person writing it
 // about sponsored placements means, and a filter that silently keeps the
 // complement of what was asked for is worse than one that refuses.
+//
+// **A name neither vocabulary knows is refused at the key that names it**
+// (t383): `where.0.field`, where it used to be `where.0`. Lane D
+// (`run-mv0pcfaf-cd251bdc`) wrote a condition on a key that another step kept
+// and this one did not, and its refusal could not say which part of the
+// condition was wrong; Core then advised it as a handle no view printed. The
+// refusal now points at the written name, and Core's advice for
+// `web.handle.unknown_field` says what is true of it: the list is right, and a
+// condition names only its own step's fields or the list's detected columns.
+// The name itself is not spelled back: a refusal quotes structure only
+// (`../issue-position.ts`), and the model reads its own name at that place.
 
 import type { WebAutomationExtractField, WebAutomationExtractItemCondition } from "../../../../actions/extraction";
 import { webAutomationExtractConditionSayingValue } from "../../../../actions/extraction";
@@ -153,7 +164,8 @@ function readCondition(entry: unknown, columns: WebExtractionConditionColumns, p
   // is still answered for before the grammar is.
   const says = webAutomationExtractConditionSayingValue(entry, NAMING_KEYS);
   const column = conditionColumn(named, columns, webExtractionComparedShape(says.ok ? says.says : undefined), path);
-  if (!column.ok) return column;
+  // A name neither vocabulary knows is refused at the key that wrote it (header, t383).
+  if (!column.ok) return column.issue === "web.handle.unknown_field" ? { ok: false, issue: column.issue, path: [...path, namingKey(entry)] } : column;
   // A key the grammar cannot place or act on is refused where it was written;
   // a condition contradicting itself is refused as a whole, since no one key
   // explains it.
@@ -252,6 +264,11 @@ function sortedKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortedKeys);
   if (!isJsonRecord(value)) return value;
   return Object.fromEntries(Object.keys(value).sort().filter((key) => value[key] !== undefined).map((key) => [key, sortedKeys(value[key])]));
+}
+
+/** The key the condition's column is named under: the first naming key written, or `header` (`columnName` has already refused two that disagree). */
+function namingKey(entry: Record<string, unknown>): string {
+  return COLUMN_KEYS.find((key) => entry[key] !== undefined) ?? "header";
 }
 
 /** The column the condition names: one of the naming keys, or a table header. Two that disagree name no one column. */

@@ -127,3 +127,23 @@ test("U5: a person's turn that could not be sent says so under its bubble", asyn
     assert.equal(fake(view.element).children[0]!.byClass("chat-send-error").length, 0, "gone once it is on its way again");
   });
 });
+
+// B5 of the state-aware recovery plan: a recovery Core reports on a run step is
+// its own message with its reasoning and its card, both shown.
+test("a recovery on a run step shows what happened and why, then its card", async () => {
+  await withFakeDocument(() => {
+    const view = createThreadView();
+    const recovery = { kind: "handler", subject: "Close the sign-up box", outcome: "succeeded", event: "before" };
+    const row = activityEvent(1, { phase: "running", label: "Recovered: Close the sign-up box", detail: { kind: "step", title: "Close the sign-up box", status: "succeeded", ref: "n2.add", recovery } as NonNullable<ClientGatewayActivity["detail"]> });
+    view.render(buildChatStream([], [row]), null, controls);
+    const step = fake(view.element).children[0]!;
+    assert.equal(step.getAttribute("data-kind"), "recovery");
+    assert.equal(step.byClass("chat-step-line")[0]!.hidden, false, "the words are shown beside the card");
+    assert.equal(step.byClass("chat-step-title")[0]!.textContent, "Cleared the way first");
+    assert.equal(step.byClass("chat-step-text")[0]!.textContent, " — Did this first, then carried on.");
+    const card = step.byClass("chat-card")[0]!;
+    assert.equal(card.byClass("chat-card-name")[0]!.textContent, "Extra step");
+    assert.equal(card.byClass("chat-card-target")[0]!.textContent, "Close the sign-up box");
+    assert.equal(card.byClass("chat-card-outcome")[0]!.textContent, "Done");
+  });
+});

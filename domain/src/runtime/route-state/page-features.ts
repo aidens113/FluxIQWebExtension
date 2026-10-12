@@ -14,7 +14,7 @@
 //   - `controlCount`: how many distinct control names there were.
 
 import type { JsonObject } from "fluxiq/core";
-import { fnv1a } from "../llm-evidence/state-digest";
+import { fnv1a } from "../hash";
 
 const LIST_SEPARATOR = " | ";
 const LONG_SEGMENT = 24;

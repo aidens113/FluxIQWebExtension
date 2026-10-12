@@ -41,7 +41,7 @@ export { pageEvidence, type SnapshotElementCounts } from "./page";
 export { ownPressCursor } from "./press-cursor";
 export { regionEvidence } from "./regions";
 export { repeatingEvidence } from "./repeating";
-export { setApartFromLikeSiblings } from "./set-apart";
+export { setApartClasses, setApartFromLikeSiblings } from "./set-apart";
 
 export type {
   DialogEvidence,

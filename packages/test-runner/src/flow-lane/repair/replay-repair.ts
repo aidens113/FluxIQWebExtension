@@ -14,7 +14,8 @@
 import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { classifyRunnerFailure, type RunnerFailureCategory } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
-import { executeRecordedFlowRun, type PersistedFlowRunControl } from "../persisted-flow-run.js";
+import { everyNodeEndedSucceeded } from "../node-recovery.js";
+import { executeRecordedFlowRun, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 import type { FlowRunDataset } from "../run-datasets.js";
 
 /** One replay of the applied Flow. */
@@ -34,8 +35,20 @@ export type RepairReplay = Readonly<{
   modelCalled: boolean;
   /** Whether the fixture's declared final state held after the replay. */
   goalPassed: boolean;
-  /** Whether Core's own run and every action attempt succeeded. */
+  /**
+   * Whether the Flow did everything it was written to do: Core's run
+   * succeeded, every step ended well, and no act was left not done
+   * (`flowShortfallOf`). It is not "every attempt read succeeded": a step the
+   * ladder retried keeps its failed attempt beside the success that followed.
+   */
   flowSucceeded: boolean;
+  /**
+   * Why `flowSucceeded` is false, as a closed word, on a replay that ran:
+   * `run_not_succeeded` (Core's run status), `step_not_succeeded` (a step whose
+   * last attempt did not end well), `act_not_done` (a step that does a lasting
+   * act was skipped and its act was not done, Core t444). Absent otherwise.
+   */
+  flowShortfall?: "run_not_succeeded" | "step_not_succeeded" | "person_cleared" | "act_not_done";
   /**
    * Whether the replay stored exactly the datasets the judged run stored, row
    * for row. `null` when the lane gave no datasets to reproduce: a page-state
@@ -119,6 +132,7 @@ async function replayOnce(control: RepairReplayControl, input: RepairReplayInput
     // Read from Core's own accounting, not from the absence of a `runIntent`.
     const providerCalls = countedProviderCalls(await control.getRunDetail(input.projectId, run.runId, bounds));
     const goalPassed = await input.checkGoal();
+    const flowShortfall = flowShortfallOf(run);
     return {
       index,
       outcome: "ran",
@@ -128,7 +142,8 @@ async function replayOnce(control: RepairReplayControl, input: RepairReplayInput
       harnessActivations: run.harnessActivations,
       modelCalled: providerCalls > 0 || run.harnessActivations > 0,
       goalPassed,
-      flowSucceeded: run.status === "succeeded" && run.actions.every((action) => action.status === "succeeded"),
+      flowSucceeded: flowShortfall === null,
+      ...(flowShortfall === null ? {} : { flowShortfall }),
       datasetsReproduced: input.expectedDatasets ? sameDatasets(input.expectedDatasets, run.extracted) : null,
     };
   } catch (error) {
@@ -137,6 +152,35 @@ async function replayOnce(control: RepairReplayControl, input: RepairReplayInput
     const status: RunnerFailureCategory = classifyRunnerFailure(error);
     return { index, outcome: "unreachable", runId, status, providerCalls: 0, harnessActivations: 0, modelCalled: false, goalPassed: false, flowSucceeded: false, datasetsReproduced: input.expectedDatasets ? false : null };
   }
+}
+
+/**
+ * What kept a replay's Flow from succeeding, or `null` when nothing did.
+ *
+ * A step counts as succeeded when its node's last attempt ended well, by the
+ * lane's one rule (`node-recovery.ts`, `everyNodeEndedSucceeded`): it
+ * succeeded, possibly after the ladder retried it (run-mv4i1cls-463e4b5c's
+ * replay: a press the page refused as busy, `web.action.rate_limited` with
+ * effect `unacted`, then pressed again and succeeded); it was skipped as a
+ * sometimes-present step that was not there, or passed over because its
+ * effect already held or the run had already done it; or a person cleared it.
+ * "Every attempt read succeeded" failed that replay on the retry it recovered
+ * from, and would fail every skipped popup too.
+ *
+ * A skip is not enough when the step does a lasting act: Core marks it
+ * `notDone` (t444), the run still reads `succeeded`, and the act the Flow
+ * exists to do did not happen. Any such attempt fails the replay, even if the
+ * same node ran again for another row.
+ *
+ * A replay proves the repair holds unattended, so a step a person had to clear
+ * fails it although the lane's shared rule counts it as ended well.
+ */
+function flowShortfallOf(run: PersistedFlowRunOutcome): NonNullable<RepairReplay["flowShortfall"]> | null {
+  if (run.status !== "succeeded") return "run_not_succeeded";
+  if (!everyNodeEndedSucceeded(run.actions)) return "step_not_succeeded";
+  if (run.actions.some((action) => action.clearedByPerson === true)) return "person_cleared";
+  if (run.actions.some((action) => action.skipped?.reason === "target_absent" && action.skipped.notDone === true)) return "act_not_done";
+  return null;
 }
 
 /** The same datasets by id, each with the same rows in the same order. */

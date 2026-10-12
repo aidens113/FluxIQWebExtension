@@ -62,12 +62,12 @@ function page(): JsonObject {
   };
 }
 
-async function pressCoupon(gateway: WebLlmEvidenceGateway) {
+async function pressCoupon(gateway: WebLlmEvidenceGateway, consequences: string[] = []) {
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const looked = await runtime.executeTool({ ...PROJECT, callId: "look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
   const coupon = shownHandle(looked.evidence, "Get coupons");
   return await runtime.executeTool({ ...PROJECT, callId: "collect.coupon", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission: PERMITTED,
-    value: { node: CLICK, parameters: { target: { handle: coupon } }, consequences: [] } });
+    value: { node: CLICK, parameters: { target: { handle: coupon } }, consequences } });
 }
 
 test("the default is Core's: the first attempt and three retries", () => {
@@ -102,12 +102,20 @@ test("an exploring press whose target never appears fails after exactly four att
   assert.equal((pressed.evidence as Packet).attempts, 4);
 });
 
-test("an exploring press whose confirmation was lost after it acted is not pressed again", async () => {
-  const site = itemPage([failed(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED), failed(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED)]);
-  const pressed = await pressCoupon(site.gateway);
-  assert.equal(pressed.effectApplied, false);
-  assert.deepEqual(site.presses, [1]);
-  assert.equal((pressed.evidence as Packet).attempts, undefined);
+// A press whose confirmation was lost after it acted is a committing act whose
+// outcome is uncertain, and the domain says so on its record: it is not pressed
+// again whatever its call declared. A call's `consequences: none` never unlocks
+// a second press (t430) -- a model under-declares, as paid R4a's offer button
+// showed -- and a call that declared nothing carries no declaration at all
+// (1ea9b038). Only the page, through the effect check, may say it did not land.
+test("an exploring press whose confirmation was lost after it acted is not pressed again, whether it declared a lasting act or none", async () => {
+  for (const consequences of [["modify_existing"], []]) {
+    const site = itemPage([failed(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED), failed(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED)]);
+    const pressed = await pressCoupon(site.gateway, consequences);
+    assert.equal(pressed.effectApplied, false, JSON.stringify(consequences));
+    assert.deepEqual(site.presses, [1], JSON.stringify(consequences));
+    assert.equal((pressed.evidence as Packet).attempts, undefined, JSON.stringify(consequences));
+  }
 });
 
 test("a press answered once as a first attempt says no attempts at all", async () => {

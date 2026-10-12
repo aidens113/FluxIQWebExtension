@@ -25,6 +25,10 @@
 //   which is a worse outcome than the dialog it was clearing. A fragment, a
 //   `javascript:` href and a link back to the same address stay in place, so
 //   those are allowed.
+// - **A control whose press acts** (`press-guard/`, t401): one that
+//   submits a form or toggles a state of its own, or whose own name, or the
+//   name of the button around it, retries, confirms, accepts or goes on. The
+//   label that admitted it is a way out; the control it is part of may not be.
 //
 // The scan is bounded (`DISMISS_SCAN_LIMIT`) because an overlay can hold a
 // whole page's worth of markup, and a defence that walks ten thousand elements
@@ -33,6 +37,7 @@
 // every word in it -- can never be mistaken for a control.
 
 import { composedDescendants } from "../../shadow-dom";
+import { actsOnPress } from "./press-guard";
 import { boundedLayerText } from "./layer-text";
 import { isConsentDeclineLabel, isConsentLayerText, isDismissalLabel, isRateLimitAcknowledgeLabel, isRateLimitLayerText } from "./vocabulary";
 
@@ -122,10 +127,11 @@ function saysDismissal(element: Element): boolean {
   return text.length > 0 && isDismissalLabel(text);
 }
 
-/** Whether pressing this element can do what it says: enabled, and not a link away from here. */
+/** Whether pressing this element can do what it says, and only that: enabled, not a link away from here, and not a control whose press acts. */
 function mayBePressed(element: Element): boolean {
   if (isDisabled(element)) return false;
-  return !leavesTheDocument(element);
+  if (leavesTheDocument(element)) return false;
+  return !actsOnPress(element);
 }
 
 function isDisabled(element: Element): boolean {

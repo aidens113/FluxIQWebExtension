@@ -261,7 +261,7 @@ test("a condition that names no one detected column, or contradicts itself, is r
     // at all, so this is the honest failure the rule allows: nothing plausible
     // was written, rather than something written slightly wrong
     // (`./column-match.test.ts` holds the names that resolve).
-    [[{ field: "sponsored" }], "web.handle.unknown_field", "extractList.where.0"],
+    [[{ field: "sponsored" }], "web.handle.unknown_field", "extractList.where.0.field"],
     // A bare string could only mean "present", which is the opposite of what a
     // person writing it about sponsored placements means.
     [["stock-badge"], "web.handle.malformed", "extractList.where.0"],
@@ -269,7 +269,7 @@ test("a condition that names no one detected column, or contradicts itself, is r
     // guessed. Its brackets, quotes and `=` survive the name fold, so it scores
     // below Core's floor and stays a refusal -- unlike a bare `.class`, which
     // folds to the column's own name and resolves.
-    [[{ field: '[data-testid="stock-badge"]' }], "web.handle.unknown_field", "extractList.where.0"],
+    [[{ field: '[data-testid="stock-badge"]' }], "web.handle.unknown_field", "extractList.where.0.field"],
     // "Not there" and "under fifty" cannot both have been meant.
     [[{ field: "product-price", is: "absent", lessThan: 50 }], "web.handle.malformed", "extractList.where.0"],
     [[{ field: "product-price", is: "sometimes" }], "web.handle.malformed", "extractList.where.0.is"],
@@ -277,7 +277,7 @@ test("a condition that names no one detected column, or contradicts itself, is r
     [[{ field: "product-price", selector: ".price" }], "web.handle.malformed", "extractList.where.0.selector"],
     [[{ is: "absent" }], "web.handle.malformed", "extractList.where.0"],
     // The second condition is the bad one, and the position says so.
-    [[{ field: "product-price", lessThan: 50 }, { field: "nothing" }], "web.handle.unknown_field", "extractList.where.1"]
+    [[{ field: "product-price", lessThan: 50 }, { field: "nothing" }], "web.handle.unknown_field", "extractList.where.1.field"]
   ];
   for (const [where, reason, position] of rows) {
     const refused = await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where });
@@ -285,6 +285,28 @@ test("a condition that names no one detected column, or contradicts itself, is r
     // refusal carries the shape it accepts beside the position it refused at.
     assert.deepEqual(refused, { status: "refused", issueCodes: [reason, HINT, `${reason}:${position}`] }, JSON.stringify(where));
   }
+});
+
+test("a condition on a key its own step does not keep is refused at the key that names it (t383)", async () => {
+  // Lane D (`run-mv0pcfaf-cd251bdc`): a second read of the same list kept
+  // `name` and another column, and its condition named a key only the first
+  // read kept. A step's condition sees its own fields and the detected columns
+  // and nothing else, so the refusal points at the name it wrote, under
+  // whichever key named it, and never at the list's handle.
+  const instance = runtime();
+  const { extraction } = await detect(instance);
+  const fields = { name: "product-name", cost: "product-price" };
+  for (const [condition, position] of [
+    [{ field: "sponsored", is: "absent" }, "extractList.where.0.field"],
+    [{ column: "sponsored", is: "absent" }, "extractList.where.0.column"],
+    [{ key: "sponsored", is: "absent" }, "extractList.where.0.key"]
+  ] as const) {
+    const refused = await resolve(instance, { handle: extraction, fields, where: [condition] });
+    assert.deepEqual(refused, { status: "refused", issueCodes: ["web.handle.unknown_field", HINT, `web.handle.unknown_field:${position}`] }, JSON.stringify(condition));
+  }
+  // The same condition over a key this step does keep resolves, by that key.
+  const kept = await resolve(instance, { handle: extraction, fields, where: [{ field: "cost", lessThan: 50 }] });
+  assert.equal(kept.status, "resolved");
 });
 
 test("two nodes that read the same columns and keep different items save into different datasets", async () => {

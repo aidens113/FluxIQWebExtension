@@ -46,6 +46,14 @@
 // prove their own post-conditions and put it in a validation string
 // (`actions/type.ts`, `clear.ts`, `select.ts`). That path is still open and is
 // recorded in the Week 1 plan's Phase 1.4 notes.
+//
+// `classNames`, and the `class` in `attributes`, leave out the classes that set
+// the element apart as the one chosen option of a run of like options
+// (`evidence/set-apart.ts`, t436): the domain's fingerprint builder leaves a
+// control's state out, and every save path reads its classes from here -- a
+// recorded step from `classNames`, a step built from a handle from the
+// packet's `attributes` (`domain/.../packet-fingerprint/from-packet.ts`). The
+// page view still says which option is chosen, as `marked`.
 
 import { xpathFor } from "./element-finder";
 import { visualDocumentBounds, visualViewportBounds } from "./visual-bounds";
@@ -59,6 +67,8 @@ import {
 } from "./element-traits";
 import { accessibleNameFor, authoredNameAttribute, elementContext, implicitRole, labelText } from "./identity";
 import { pageListensForPress } from "./page-press";
+// Past the barrel on purpose: `./evidence` leads back here (`evidence/controls.ts`).
+import { setApartClasses } from "./evidence/set-apart";
 import { selectorFor } from "./selector";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "./sensitive-text";
 import type { DomElementDescriptor } from "./types";
@@ -84,7 +94,11 @@ export function describeElement(element: Element): DomElementDescriptor {
     descriptor.visibleText = text;
   }
   if (element.id) descriptor.id = element.id;
-  const classNames = [...element.classList];
+  // A class that only draws the chosen option apart from its like siblings is
+  // its state, not its identity (t436): saved, it named whichever option the
+  // page had chosen on a later visit.
+  const state = setApartClasses(element);
+  const classNames = [...element.classList].filter((name) => !state.includes(name));
   if (classNames.length) descriptor.classNames = classNames;
   descriptor.xpath = xpathFor(element);
   const value = readElementValue(element);
@@ -116,6 +130,7 @@ export function describeElement(element: Element): DomElementDescriptor {
     if (select.selectedValue !== undefined) descriptor.selectedValue = select.selectedValue;
   }
   const attributes = elementAttributes(element);
+  if (attributes && state.length && attributes.class !== undefined) attributes.class = classNames.join(" ");
   if (attributes) descriptor.attributes = attributes;
   return descriptor;
 }

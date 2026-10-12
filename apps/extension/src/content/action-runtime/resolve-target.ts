@@ -138,7 +138,7 @@ import {
   type WebAutomationFailureCarrier,
   type WebAutomationFailureRecord
 } from "@fluxiq-web-extension/domain/client";
-import { findClosestFingerprint, type ElementFingerprint } from "../element-finder";
+import { stableFingerprintMatches, type ElementFingerprint } from "../element-finder";
 import { deepElementFromPoint, resolveShadowScope, type LookupRoot, type ShadowScope } from "../selector";
 import { composedRoots } from "../shadow-dom";
 import {
@@ -346,6 +346,12 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
     // tied" and "these two tied, and one of them is the recorded control".
     const decided = target ? scoreTargetCandidates(target, describePool(pool)) : undefined;
     if (decided?.outcome === "resolved") return { outcome: "resolved", target: scoredTarget(decided, pool.length) };
+    // A fingerprint's matches none of which is the recorded control -- a shared
+    // class set, say -- are a miss, as the veto makes a lone one: not a tie.
+    if (decided?.outcome === "unmatched" && attempt.strategy === "fingerprint") {
+      misses.push(`${attempt.description} (${pool.length} matched, none the recorded control)`);
+      continue;
+    }
     return { outcome: "ambiguous", error: ambiguous(attempt, pool, decided) };
   }
 
@@ -467,42 +473,35 @@ function* exactAttempts(action: BrowserActionCommand, target: RecordedTarget | u
 /**
  * What a fingerprint matches, stable signals first.
  *
- * `findClosestFingerprint` answers the stable half -- selector, xpath, id, test
- * id, authored name, class names -- and answers with one element, so there is
- * nothing there to be ambiguous about. Its text fallback is repeated here
- * rather than delegated because that is the half that ties: "the button that
- * says Continue" is one target on most pages and two on this one, and only a
- * count can tell those apart.
+ * `stableFingerprintMatches` answers the stable half -- selector, xpath, id,
+ * test id, authored name, class names -- each root on its own, so a stable
+ * signal that answers in two shadow roots answers twice and is weighed. Each
+ * names one control except a class set, which every like control carries: it
+ * answers with all of them, and then the words below are asked as well and
+ * added, so the multi-match path scores the recorded chip among its like
+ * siblings rather than acting on, or vetoing, the first (t436, the crossborder
+ * option chips of `reports/r4a-4-saved-chip-not-found.md`).
  *
- * Each root in scope is asked on its own, so a stable signal that answers in
- * two shadow roots answers twice, and the resolver weighs the two rather than
- * taking the first.
- *
- * A role-less target's recorded accessible name is scanned for before the text,
- * counted the same way. `findClosestFingerprint` reads a name only off
- * `aria-label` or `name`, the recording computed it by `accessibleNameFor`
- * (`title`, `alt` too), and enumeration never lists a role-less div
- * (`../identity/candidates.ts`), so a text-less swatch named only by `title` had
- * no path once its selector drifted (`run-mux6n7m4-8273e7a0`). A target with a
- * role is left to enumeration, which weighs its name with its other signals.
- * Two controls with one name are two matches, which the veto, the record gate
- * and scoring then treat as any other strategy's.
+ * The words are matched here, counted, because they tie: "the button that says
+ * Continue" is one target on most pages and two on this one. A role-less
+ * target's recorded accessible name is scanned for before its text:
+ * `stableFingerprintMatches` reads a name only off `aria-label` or `name`, the
+ * recording computed it by `accessibleNameFor` (`title`, `alt` too), so a
+ * text-less swatch named only by `title` had no path once its selector drifted
+ * (`run-mux6n7m4-8273e7a0`). A target with a role is left to enumeration, which
+ * weighs its name with its other signals.
  */
 function fingerprintMatches(target: RecordedTarget, roots: readonly LookupRoot[]): Element[] {
   const { visibleText, ...stable } = target;
-  const exact = roots.flatMap((root) => {
-    const found = findClosestFingerprint(stable, root);
-    return found ? [found] : [];
-  });
-  if (exact.length) return exact;
+  const lookups = roots.map((root) => stableFingerprintMatches(stable, root));
+  const exact = lookups.flatMap((lookup) => lookup.matches);
+  if (exact.length && !lookups.some((lookup) => lookup.shared)) return exact;
   const name = target.role?.trim() || target.implicitRole?.trim() ? undefined : normalizedText(target.accessibleName);
-  if (name) {
-    const named = scanMatches(target, roots, (element) => accessibleNameFor(element) === name);
-    if (named.length) return named;
-  }
-  if (!visibleText) return [];
-  const wanted = normalizeText(visibleText);
-  return scanMatches(target, roots, (element) => normalizeText(element.textContent ?? "") === wanted);
+  const named = name ? scanMatches(target, roots, (element) => accessibleNameFor(element) === name) : [];
+  if (!exact.length && named.length) return named;
+  const wanted = visibleText ? normalizeText(visibleText) : undefined;
+  const worded = wanted ? scanMatches(target, roots, (element) => normalizeText(element.textContent ?? "") === wanted) : [];
+  return [...new Set([...exact, ...named, ...worded])];
 }
 
 /** The recorded tag's elements in scope that `matches` accepts, walking at most `MAX_TEXT_SCAN` of them. */

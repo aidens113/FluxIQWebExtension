@@ -5,7 +5,8 @@
  *
  * Timings are the live site's, not a test's: the welcome coupons two seconds
  * after load, the chat a second after a product page loads, the notification
- * prompt three and a half seconds in, the flash deal at one and a half. A
+ * prompt three and a half seconds in, the flash deal at one and a half (the
+ * interruption switch at whatever delay its arm set, at load by default). A
  * visitor who has answered one never sees it again, because the answer is
  * posted to the server and the next page is rendered from it.
  *
@@ -120,15 +121,31 @@ if (document.getElementById('fb-tpl-chat')) setTimeout(() => {
   bubble.addEventListener('click', () => go('panel'));
 }, 1000);
 
-if (document.getElementById('fb-tpl-flash')) setTimeout(() => {
-  const modal = stamp('fb-tpl-flash');
+// The flash-sale promotion: a ticking countdown, a close glyph, and a big button to a different, sponsored hub.
+// onClose is what the glyph does; it answers false when the close did nothing.
+function openFlashDeal(templateId, onClose) {
+  const modal = stamp(templateId);
   if (!modal) return;
   const countdown = qs('b', byClass('modalBody', modal));
   let left = 600;
   const timer = setInterval(() => { left -= 1; countdown.textContent = String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0'); }, 1000);
-  byClass('modalClose', modal).addEventListener('click', async () => { clearInterval(timer); modal.remove(); await mutate('flash-deal', { action: 'close' }); });
+  byClass('modalClose', modal).addEventListener('click', async () => {
+    if (!onClose()) return;
+    clearInterval(timer);
+    modal.remove();
+  });
   byClass('btn', modal).addEventListener('click', () => { location.href = boot.root + 'item/1005008403519?src=flashdeal'; });
-}, 1500);
+}
+
+if (document.getElementById('fb-tpl-flash')) setTimeout(() => openFlashDeal('fb-tpl-flash', () => { mutate('flash-deal', { action: 'close' }); return true; }), 1500);
+
+// The interruption switch (state/interruption.ts): the same promotion on the page and load the arm chose. Armed
+// inert, its close handler shipped broken: the glyph takes the click and nothing happens.
+if (boot.interruption && document.getElementById('fb-tpl-interrupt')) {
+  const closes = boot.interruption.dismiss === 'closes';
+  const show = () => openFlashDeal('fb-tpl-interrupt', () => { if (closes) mutate('interruption', { action: 'close' }); return closes; });
+  if (boot.interruption.delayMs > 0) setTimeout(show, boot.interruption.delayMs); else show();
+}
 
 // The region picker is a web component from the storefront's shared header library, with its own shadow root.
 const REGION_NAMES = { DE: ['🇩🇪', 'Germany', 'EUR'], ES: ['🇪🇸', 'Spain', 'EUR'], GB: ['🇬🇧', 'United Kingdom', 'GBP'], US: ['🇺🇸', 'United States', 'USD'] };

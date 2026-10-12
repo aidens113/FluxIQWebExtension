@@ -7,7 +7,7 @@ import type { LiveLlmReauthorRecord } from "../reauthor-record.js";
 import { liveLlmRunSpend } from "../run-spend.js";
 import { LAB_CEILING_USD } from "./lab-ceiling.js";
 
-/** Core's per-build ceiling as the Lab resolves it (`FLUXIQ_LLM_RUN_COST_CEILING_USD`, default $0.10). */
+/** Core's per-Flow ceiling as the Lab resolves it (`FLUXIQ_LLM_RUN_COST_CEILING_USD`, default $0.10). */
 const CEILING = LAB_CEILING_USD;
 
 /** An amount rounded to the nano-dollar, as the spend report rounds it. */
@@ -44,7 +44,7 @@ test("a run read from its interventions counts a check it already itemized once,
 });
 
 test("a run with nothing settled spends nothing, and a build alone is its own total", () => {
-  assert.deepEqual(liveLlmRunSpend({ ceilingUsd: CEILING }), { calls: 0, totalEstimatedCostUsd: 0, phases: { build: null, runtime: null, judge: null, reauthor: null, chat: null, read: null }, uncountedPhases: [], stepLog: null, perBuild: { ceilingUsd: CEILING, builds: [], maxBuildCostUsd: 0, overCeiling: 0 } });
+  assert.deepEqual(liveLlmRunSpend({ ceilingUsd: CEILING }), { calls: 0, totalEstimatedCostUsd: 0, phases: { build: null, runtime: null, judge: null, reauthor: null, chat: null, read: null }, uncountedPhases: [], stepLog: null, perBuild: { ceilingUsd: CEILING, builds: [], parts: [], maxBuildCostUsd: 0, overCeiling: 0 } });
   const build = liveLlmRunSpend({ build: usage({ calls: 22, totalEstimatedCostUsd: 0.04178802 }), ceilingUsd: CEILING });
   assert.equal(build.calls, 22);
   assert.equal(build.totalEstimatedCostUsd, 0.04178802);
@@ -60,10 +60,12 @@ function reauthor(costs: number[]): LiveLlmReauthorRecord {
   };
 }
 
-test("spend is reported per build against Core's per-build ceiling, each build on its own", () => {
-  // A build, its playback's recovery and two re-author builds at 0.8 of Core's
-  // ceiling each: 3.2 times the ceiling for the run, and every build inside its own.
-  const each = nano(CEILING * 0.8);
+// t438: one purse per Flow. The user's words (2026-10-01): "bring the ceiling
+// down to $0.1 per flow max" -- the build, its re-authors, its repairs and the
+// judge all count against it. A Lab run is one Flow, judged once.
+test("spend is reported as one Flow against the ceiling: build, recovery, re-authors and check together, each part listed", () => {
+  // Each part at a fifth of the ceiling: every part inside it, the Flow not.
+  const each = nano(CEILING * 0.2);
   const spend = liveLlmRunSpend({
     build: usage({ calls: 30, totalEstimatedCostUsd: each }),
     runtime: usage({ calls: 5, totalEstimatedCostUsd: each }),
@@ -71,21 +73,31 @@ test("spend is reported per build against Core's per-build ceiling, each build o
     reauthor: reauthor([each, each]),
     ceilingUsd: CEILING,
   });
+  const flow = nano(each * 4 + 0.002);
+  assert.equal(spend.totalEstimatedCostUsd, flow);
   assert.equal(spend.perBuild.ceilingUsd, CEILING);
-  assert.deepEqual(spend.perBuild.builds.map((item) => [item.phase, item.attempt, item.estimatedCostUsd, item.overCeiling]), [
-    ["build", null, each, false], ["runtime", null, each, false], ["reauthor", 1, each, false], ["reauthor", 2, each, false],
+  assert.deepEqual(spend.perBuild.builds, [{ phase: "flow", attempt: null, estimatedCostUsd: flow, overCeiling: flow > CEILING }]);
+  assert.deepEqual(spend.perBuild.parts.map((item) => [item.phase, item.attempt, item.estimatedCostUsd]), [
+    ["build", null, each], ["judge", null, 0.002], ["runtime", null, each], ["reauthor", 1, each], ["reauthor", 2, each],
   ]);
-  assert.equal(spend.perBuild.maxBuildCostUsd, each);
-  assert.equal(spend.perBuild.overCeiling, 0);
-  // The result check is not a build: it stays in the phases and the run total only.
-  assert.equal(spend.totalEstimatedCostUsd, Number((each * 4 + 0.002).toFixed(9)));
+  assert.equal(spend.perBuild.maxBuildCostUsd, flow);
+  assert.equal(spend.perBuild.overCeiling, flow > CEILING ? 1 : 0);
 });
 
-test("a build over the per-build ceiling is reported as over it, never folded into a run total that hides it", () => {
-  const spend = liveLlmRunSpend({ build: usage({ calls: 48, totalEstimatedCostUsd: CEILING * 1.04 }), reauthor: reauthor([nano(CEILING * 0.4), nano(CEILING * 1.2)]), ceilingUsd: CEILING });
-  assert.deepEqual(spend.perBuild.builds.filter((item) => item.overCeiling).map((item) => [item.phase, item.attempt]), [["build", null], ["reauthor", 2]]);
-  assert.equal(spend.perBuild.overCeiling, 2);
-  assert.equal(spend.perBuild.maxBuildCostUsd, nano(CEILING * 1.2));
+// `run-mv4912r9-53b05a51`: the build $0.04248 (its chat call included), the
+// in-run repair $0.00424 and the re-author's two rounds $0.07345 -- $0.12033
+// against $0.10, which the per-part figures read as inside the ceiling.
+test("a Flow whose build and repairs together pass the ceiling is over it, though no part is", () => {
+  const spend = liveLlmRunSpend({
+    build: usage({ calls: 55, totalEstimatedCostUsd: nano(CEILING * 0.4248) }),
+    runtime: usage({ calls: 2, totalEstimatedCostUsd: nano(CEILING * 0.0424) }),
+    reauthor: reauthor([nano(CEILING * 0.4), nano(CEILING * 0.3345)]),
+    ceilingUsd: CEILING,
+  });
+  assert.ok(spend.perBuild.parts.every((item) => item.estimatedCostUsd <= CEILING));
+  assert.equal(spend.perBuild.maxBuildCostUsd, nano(CEILING * 1.2017));
+  assert.deepEqual(spend.perBuild.builds.map((item) => [item.phase, item.overCeiling]), [["flow", true]]);
+  assert.equal(spend.perBuild.overCeiling, 1);
 });
 
 // `run-muqk713g-d08ad3dc`: 35 provider calls for $0.121157 in its step log,
@@ -119,8 +131,10 @@ test("the run's step log fills the calls Core did not count, and adds the chat c
   assert.deepEqual(spend.phases.reauthor, { calls: 17, estimatedCostUsd: 0.061567476 });
   assert.deepEqual(spend.uncountedPhases, []);
   assert.deepEqual(spend.stepLog, { calls: 35, estimatedCostUsd: 0.121156656, filledReauthorCalls: 17, unattributed: { calls: 0, estimatedCostUsd: 0 }, fromBuild: NOTHING_FROM_BUILD });
-  // The chat call is not a build: the per-build figures are unchanged.
-  assert.deepEqual(spend.perBuild, withoutLog.perBuild);
+  // The chat call and the calls only the log saw are the Flow's too: its figure is the run's whole spend.
+  assert.equal(spend.perBuild.maxBuildCostUsd, 0.121156656);
+  assert.equal(withoutLog.perBuild.maxBuildCostUsd, withoutLog.totalEstimatedCostUsd);
+  assert.deepEqual(spend.perBuild.parts.filter((item) => item.phase === "chat"), [{ phase: "chat", attempt: null, estimatedCostUsd: 0.000305376 }]);
 });
 
 test("a step log that saw calls no phase claims adds them as unattributed, and one that saw fewer takes nothing away", () => {
@@ -168,8 +182,9 @@ test("the creation build's judge and its reading of the instructions are phases 
   assert.equal(spend.totalEstimatedCostUsd, 0.088887084, "the run's total is unchanged: nothing is counted twice");
   assert.deepEqual(spend.stepLog?.unattributed, { calls: 0, estimatedCostUsd: 0 });
   assert.deepEqual(spend.stepLog?.fromBuild, { judge: { calls: 2, estimatedCostUsd: 0.001935936 }, read: { calls: 1, estimatedCostUsd: 0.000379548 }, calls: 0, estimatedCostUsd: 0.002315484 });
-  // Core's purse held the build to its ceiling with the judge and the read in it.
-  assert.deepEqual(spend.perBuild.builds, [{ phase: "build", attempt: null, estimatedCostUsd: 0.088570608, overCeiling: false }]);
+  // The Flow is the whole run: the build, its judge, its reading and the chat call.
+  assert.deepEqual(spend.perBuild.builds, [{ phase: "flow", attempt: null, estimatedCostUsd: 0.088887084, overCeiling: 0.088887084 > CEILING }]);
+  assert.deepEqual(spend.perBuild.parts.map((item) => item.phase), ["build", "read", "judge", "chat"]);
 });
 
 test("a build figure that never held the judge or the read loses nothing, and one that counted their calls loses those too", () => {

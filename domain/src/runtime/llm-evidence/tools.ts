@@ -66,10 +66,11 @@ import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "./denied-keys";
 import { WEB_LLM_VIEW_KEYS } from "./observed-state";
 import { WEB_LLM_SYSTEM_INSTRUCTIONS } from "./system-instructions";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
-import { createWebNodeArrivals, createWebNodeOwnLayers, createWebNodeShownAddresses, runWebOutputNode, webLlmCallWords, webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_NAVIGATION_ACTION, type WebLlmCallWords } from "./node-run";
+import { createWebNodeArrivals, createWebNodeHeldLiterals, createWebNodeOwnLayers, createWebNodeShownAddresses, runWebOutputNode, webLlmCallWords, webObservationNodeId, webRunnableNode, webRunnableNodeIds, WEB_NAVIGATION_ACTION, type WebLlmCallWords } from "./node-run";
 import {
   createWebLlmTargetPackets,
   resolveWebPlanNodeParameters,
+  webLlmPacketTargets,
   WEB_LLM_ROW_CONTEXT_KEYS,
   type WebPlanNodeResolution,
   type WebPlanNodeResolutionInput
@@ -247,8 +248,13 @@ export type WebAutomationLlmEvidenceRuntime = {
    * (`plan-resolution/step-permission.ts`): a step that would lastingly do
    * something the run is not permitted answers `needs_permission`, and a step
    * that presses without saying what pressing would do is refused.
+   *
+   * A step a repair wrote comes with `handleEvidence`, the one packet its
+   * handles were issued in, and resolves from that packet alone
+   * (`plan-resolution/packet-targets.ts`, t429); a packet this runtime did not
+   * keep resolves nothing.
    */
-  resolvePlanNodeParameters(input: WebPlanNodeResolutionInput): Promise<WebPlanNodeResolution>;
+  resolvePlanNodeParameters(input: WebPlanNodeResolutionInput & { handleEvidence?: JsonObject | undefined }): Promise<WebPlanNodeResolution>;
 };
 
 /**
@@ -301,6 +307,8 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
   // Which layers a press of each build opened, so closing one is a step of the
   // Flow and not an interruption (`./node-run/own-layers/memory.ts`).
   const layers = createWebNodeOwnLayers();
+  // What the Flow each continuing round holds, which a rerun keeps without the model writing it (`./node-run/held-literals/`).
+  const held = createWebNodeHeldLiterals();
   const stable = (request: WebLlmEvidenceToolRequest, binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding =>
     stableHandles.restamp({ projectId: request.projectId, flowId: request.flowId }, binding);
   // Every packet an authoring tool shows the model: kept for the next repair
@@ -332,6 +340,11 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
   };
   const retain = retainIn(toolPackets);
   const retainFailure = retainIn(failurePackets);
+  // The structured packet behind a page, search or description as the model read it. Equal keys describe equal pages, so a packet from either window fits.
+  const retainedFor = (evidence: JsonObject): WebLlmSnapshotBinding | undefined => {
+    const key = webLlmResultRetentionKey(evidence);
+    return key === undefined ? undefined : failurePackets.get(key) ?? toolPackets.get(key);
+  };
   return {
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     // Declared once, in `./denied-keys.ts`, because what a reading node read
@@ -479,7 +492,8 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
             looked: (binding) => looked(input, sessionId, binding),
             arrivals,
             addresses,
-            layers
+            layers,
+            held
           }));
         }
         if (input.toolId === WEB_LLM_DETECT_STRUCTURE_TOOL_ID) {
@@ -631,10 +645,8 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
       }
       // A page, search or description as the model read it. Judged before the
       // target: one this runtime did not retain is not one it can check,
-      // whatever handles its text prints. Equal keys describe equal pages, so
-      // a packet from either window fits.
-      const key = webLlmResultRetentionKey(evidence);
-      const retained = key === undefined ? undefined : failurePackets.get(key) ?? toolPackets.get(key);
+      // whatever handles its text prints.
+      const retained = retainedFor(evidence);
       if (retained === undefined) return { status: "absent", reason: "evidence_unrecognized" };
       return validateWebRuntimeTargetOverrideEvidence(retained.evidence, target, failedAction, retained.selectors);
     },
@@ -642,7 +654,13 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
       return extractionHandles.resolve({ projectId: input.projectId, flowId: input.flowId }, input.handle);
     },
     resolvePlanNodeParameters(input) {
-      return resolveWebPlanNodeParameters(input, { targets: targetPackets, extractions: extractionHandles });
+      if (input.handleEvidence === undefined) return resolveWebPlanNodeParameters(input, { targets: targetPackets, extractions: extractionHandles });
+      // A repair's step, from the one packet its model was shown (t429). A
+      // packet this runtime did not keep -- let go, edited, or never issued --
+      // gives its handles no meaning, and the step is refused, never saved raw.
+      const retained = retainedFor(input.handleEvidence);
+      if (retained === undefined) return Promise.resolve({ status: "refused", issueCodes: ["web.handle.unknown"] });
+      return resolveWebPlanNodeParameters(input, { targets: webLlmPacketTargets({ projectId: input.projectId, flowId: input.flowId }, retained), extractions: extractionHandles });
     },
   };
 }

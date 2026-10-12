@@ -13,18 +13,25 @@
 // t243, `executor/state-routing/routed-attempt.ts`): its mark is
 // `state_routed`, with the node the run went to and whether that is ahead of or
 // behind the step. It is how a debug sees the runtime consulted the page.
+//
+// A `target_absent` skip of a step whose own words name a lasting act carries
+// `notDone: true` (Core t444, `executor/step-skip/act-not-done.ts`): the step
+// was not shown and its effect was not on the page, so the act was not done.
+// The run still reads `succeeded`; this mark is how a reader that has to know
+// whether every act happened (a repair replay, `repair/replay-repair.ts`) tells
+// a not-done act from a popup that simply was not there.
 
 import { attemptNodeId } from "./persisted-attempt.js";
 
 /** A skipped attempt: why, what observed it, and its span in epoch ms on Core's clock. A state-routed one also says where the run went, and which way. */
 export type PersistedFlowActionSkip =
-  | { reason: "target_absent"; code: string; startedAt: number; finishedAt: number }
+  | { reason: "target_absent"; code: string; notDone?: true; startedAt: number; finishedAt: number }
   | { reason: "state_routed"; code: string; toNodeId: string; direction: "forward" | "backward"; startedAt: number; finishedAt: number };
 
 /** The shape of a Core code (`web.target.not_found`, `executor.ready_state.not_shown`): dotted lowercase words. */
 const CORE_CODE = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/u;
 
-/** Each reason's keys, exactly: a mark with any other key is not Core's shape. */
+/** Each reason's keys, exactly: a mark with any other key is not Core's shape. A `target_absent` mark may also carry `notDone`, and then only as `true`. */
 const MARK_KEYS = { target_absent: ["code", "reason"], state_routed: ["code", "direction", "reason", "toNodeId"] } as const;
 
 /**
@@ -40,10 +47,13 @@ export function skippedAttemptOf(attempt: Record<string, unknown>, startedAt: nu
   const fields = mark as Record<string, unknown>;
   const { reason, code } = fields;
   if (reason !== "target_absent" && reason !== "state_routed") return undefined;
-  if (Object.keys(fields).sort().join() !== MARK_KEYS[reason].join()) return undefined;
+  const notDone = reason === "target_absent" && Object.hasOwn(fields, "notDone");
+  if (notDone && fields.notDone !== true) return undefined;
+  const keys = Object.keys(fields).filter((key) => !(notDone && key === "notDone")).sort().join();
+  if (keys !== MARK_KEYS[reason].join()) return undefined;
   if (typeof code !== "string" || code.length > 120 || !CORE_CODE.test(code)) return undefined;
   const span = { startedAt, finishedAt: finishedAt ?? startedAt };
-  if (reason === "target_absent") return { reason, code, ...span };
+  if (reason === "target_absent") return { reason, code, ...(notDone ? { notDone: true as const } : {}), ...span };
   const { toNodeId, direction } = fields;
   if (typeof toNodeId !== "string" || attemptNodeId(toNodeId) === null) return undefined;
   if (direction !== "forward" && direction !== "backward") return undefined;

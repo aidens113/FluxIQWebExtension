@@ -28,8 +28,9 @@
 // Rows, by fixture:
 //   - everything-store: the robot check the store serves in place of every
 //     page, which must stay the person's and be left untouched.
-//   - modal-flows: the consent banner, which is not a dialog and stays an
-//     ordinary refusal; and challenge dialogs added to a page -- a robot check,
+//   - modal-flows: the consent banner, which is declined when it can be and
+//     otherwise is not a dialog and stays an ordinary refusal; and challenge
+//     dialogs added to a page -- a robot check,
 //     a password or code prompt, and a card form or payment confirmation inside
 //     an aria-modal dialog are the person's even when the dialog also offers a
 //     way out, while the same dialog with none of them is not.
@@ -93,14 +94,30 @@ test.describe("modal-flows", () => {
   const ADD_SECTION = "[data-testid=\"add-section\"]";
   const PUBLISH = "[data-testid=\"publish-draft\"]";
 
-  test("an overlay that is not a dialog stays a rejection, and a dialog the page is not painting does not count", async ({ openHarness }) => {
+  // The consent banner is fixed over the action bar and declares no dialog. It
+  // offers "Essential only", and a banner that can be declined is a layer the
+  // defence clears, by declining, because declining gives nothing away
+  // (`blocking-dialog.ts`, since 2026-09-29, f8135495). Until t403 this row
+  // still expected the refusal from before that change: it failed on dev from
+  // that day, and its code was renamed on 2026-10-01 without it passing.
+  test("a cookie banner that can be declined is declined, never accepted, and a dialog the page is not painting is not touched", async ({ openHarness }) => {
     const harness = await openHarness("modal-flows");
 
-    // The consent banner is fixed over the action bar and owns the primary
-    // action, but it declares no dialog, makes nothing inert, and offers no way
-    // out but a choice about cookies. Meanwhile the invite dialog is in the
-    // markup with `aria-modal="true"` and `hidden`.
+    // The invite dialog is in the markup with `aria-modal="true"` and `hidden`.
     const reply = await harness.runAction({ commandId: "click-under-banner", actionType: "web.dom.click", selector: PUBLISH });
+
+    expect(reply.status, `${reply.message}`).toBe("succeeded");
+    expect(reply.clearedLayers).toEqual([{ kind: "consent", control: "Necessary only" }]);
+    expect((await harness.finalState()).state).toMatchObject({ consent: "essential-only", publishCount: 1, invites: [], inviteCancellations: 0 });
+  });
+
+  test("an overlay that is not a dialog and offers no way out stays a rejection", async ({ openHarness, page }) => {
+    const harness = await openHarness("modal-flows");
+    // The same banner with no way to decline: only "Accept all cookies" is
+    // left, which gives something away, so nothing here may press it.
+    await page.getByTestId("consent-reject").evaluate((button) => button.remove());
+
+    const reply = await harness.runAction({ commandId: "click-under-banner", actionType: "web.dom.click", selector: PUBLISH, timeoutMs: 3_000 });
 
     expect(reply).toMatchObject({
       status: "failed",
@@ -108,7 +125,7 @@ test.describe("modal-flows", () => {
     });
     expect(reply.failure?.actual).toMatch(/^covered: /u);
     expect(reply.message).toMatch(/^Action rejected: /u);
-    expect((await harness.finalState()).state).toMatchObject({ publishCount: 0 });
+    expect((await harness.finalState()).state).toMatchObject({ consent: "pending", publishCount: 0 });
   });
 
   const CHALLENGES: Array<[string, string, string]> = [

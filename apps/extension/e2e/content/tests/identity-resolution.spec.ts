@@ -242,8 +242,8 @@ test.describe("scored selection: Core's matcher decides what an exact strategy c
     const clicks = await trackClicks(page);
 
     // Measured with Core's matcher as it now stands, and the same on both
-    // paths: the renamed Save ranks first at -0.104, Discard second at -0.360,
-    // confidence 0 -- 0.454 under the 0.35 floor. The ranking is right and the
+    // paths: the renamed Save ranks first at -0.085, Discard second at -0.256,
+    // confidence 0 -- 0.435 under the 0.35 floor. The ranking is right and the
     // floor refuses it anyway, which is what sends this variant's live run to
     // the provider. The Flow path's point lands on the renamed Save and is
     // refused at the same score.
@@ -260,9 +260,12 @@ test.describe("scored selection: Core's matcher decides what an exact strategy c
         failure: TARGET_NOT_FOUND,
         resolution: { strategy: "fingerprint", candidateCount: 2, confidence: 0 }
       });
-      expect(reply.resolution?.bestScore).toBeCloseTo(-0.104, 3);
-      expect(reply.resolution?.runnerUpScore).toBeCloseTo(-0.36, 3);
-      if (shape === "flow") expect(reply.message).toContain('refused button "Apply changes" scoring -0.10');
+      // -0.104 before t419: the recorded id and selector are on no element of the drifted page, so they no longer count against it.
+      expect(reply.resolution?.bestScore).toBeCloseTo(-0.085, 3);
+      // -0.360 before t419, for the same reason: Discard is no longer charged for lacking the absent id.
+      expect(reply.resolution?.runnerUpScore).toBeCloseTo(-0.256, 3);
+      // The veto's sentence reads -0.09 rather than -0.10 since t419, on the same score.
+      if (shape === "flow") expect(reply.message).toContain('refused button "Apply changes" scoring -0.09');
     }
 
     expect(await clicks()).toEqual([]);
@@ -360,8 +363,9 @@ test.describe("scored selection: Core's matcher decides what an exact strategy c
     // 1.000/1.000 of the tie-break above, which both succeeded. Pinned rather
     // than bounded, so the Core constant this file's header names cannot move
     // without a row saying so.
-    expect(reply.resolution?.bestScore).toBeCloseTo(0.389, 3);
-    expect(reply.resolution?.confidence).toBeCloseTo(0.366, 3);
+    // 0.389 and 0.366 before t419: the recorded id and selector are on no element of the redesigned page, so they no longer count against it.
+    expect(reply.resolution?.bestScore).toBeCloseTo(0.602, 3);
+    expect(reply.resolution?.confidence).toBeCloseTo(0.566, 3);
     expect(reply.element).toMatchObject({ tagName: "button", accessibleName: "Save changes", visibleText: "Save" });
     await expect
       .poll(async () => (await harness.finalState()).state)

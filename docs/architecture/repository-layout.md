@@ -610,6 +610,15 @@ EXTENSION_TEST_BUILD_LABEL=my-task pnpm --filter @fluxiq-web-extension/extension
 DOMAIN_TEST_BUILD_LABEL=my-task pnpm --filter @fluxiq-web-extension/domain test
 ```
 
+To run only the tests beside a change, pass path fragments to the domain or
+extension runner; it builds and runs the entries whose path contains one of them, and
+refuses a fragment that matches nothing:
+
+```bash
+cd domain && DOMAIN_TEST_BUILD_LABEL=my-task node scripts/test-domain.mjs extraction/tests/conditions page-evidence/tests
+cd apps/extension && EXTENSION_TEST_BUILD_LABEL=my-task node scripts/test-extension.mjs panel/automations/tests
+```
+
 | Variable | With a label, bundles go to | Without one |
 | --- | --- | --- |
 | `EXTENSION_TEST_BUILD_LABEL` | `apps/extension/.test-build-scratch/<label>/` | `apps/extension/.test-build-scratch/default/` |

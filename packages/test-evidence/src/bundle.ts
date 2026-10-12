@@ -1,9 +1,10 @@
-import { rename, mkdir, open, readFile, readdir, rm, stat, type FileHandle } from "node:fs/promises";
+import { mkdir, open, readFile, readdir, rm, stat, type FileHandle } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
 import { assertEvidenceEvent, assertEvidencePolicy, type EvidencePolicy } from "@fluxiq-web-extension/test-contracts";
 import { DEFAULT_EVIDENCE_POLICY, toContractEvidenceEvent, toContractEvidencePolicy } from "./contracts.js";
 import { sha256 } from "./hash.js";
+import { publishBundleDirectory, type PublishedBundleDirectory } from "./publication/index.js";
 import { assertNoSensitiveText, redactStructured, redactText, type RedactionOptions } from "./redaction.js";
 import { createTimeline, renderContactSheet, renderReport } from "./report.js";
 import type { ArtifactEntry, ArtifactIndex, CapturedEvidenceEvent, CaptureEvidenceEventInput, CapturePolicy, CaptureScreenshot, EvidenceSummary, FinalizeInput, VerifiedArtifact, VerifiedVisual } from "./types.js";
@@ -11,8 +12,6 @@ import type { ArtifactEntry, ArtifactIndex, CapturedEvidenceEvent, CaptureEviden
 const MEDIA_TYPES: Record<string, string> = { ".json": "application/json", ".ndjson": "application/x-ndjson", ".html": "text/html", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".zip": "application/zip", ".webm": "video/webm", ".log": "text/plain" };
 const TRANSIENT_JOURNAL_OPEN_CODES = new Set(["EBUSY", "EPERM", "EACCES"]);
 const JOURNAL_OPEN_DELAYS_MS = [10, 25, 50] as const;
-const TRANSIENT_PUBLICATION_RENAME_CODES = new Set(["EBUSY", "EPERM", "EACCES"]);
-const PUBLICATION_RENAME_DELAYS_MS = [10, 25, 50] as const;
 
 type EvidenceBundleFinalizationBoundary =
   | "journal.closed"
@@ -29,6 +28,8 @@ type EvidenceBundleTestHooks = {
   openJournalFile?: (target: string, flags: string) => Promise<FileHandle>;
   openArtifactFile?: (target: string, flags: "w" | "wx") => Promise<Pick<FileHandle, "writeFile" | "sync" | "close">>;
   renameDirectory?: (source: string, destination: string) => Promise<void>;
+  copyDirectory?: (source: string, destination: string) => Promise<void>;
+  removeDirectory?: (target: string) => Promise<void>;
   wait?: (milliseconds: number) => Promise<unknown>;
   syncDirectory?: (directory: string) => Promise<void>;
 };
@@ -45,35 +46,6 @@ export async function openEvidenceJournalWithRetry(
       const code = (error as NodeJS.ErrnoException)?.code;
       if (!code || !TRANSIENT_JOURNAL_OPEN_CODES.has(code) || attempt >= JOURNAL_OPEN_DELAYS_MS.length) throw error;
       await wait(JOURNAL_OPEN_DELAYS_MS[attempt]!);
-    }
-  }
-}
-
-async function pathExists(target: string): Promise<boolean> {
-  try {
-    await stat(target);
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
-    throw error;
-  }
-}
-
-async function renameEvidenceBundleWithRetry(
-  source: string,
-  destination: string,
-  renameDirectory: (source: string, destination: string) => Promise<void> = rename,
-  wait: (milliseconds: number) => Promise<unknown> = delay,
-): Promise<void> {
-  for (let attempt = 0; ; attempt += 1) {
-    if (await pathExists(destination)) throw new Error(`Evidence bundle already exists: ${destination}`);
-    try {
-      await renameDirectory(source, destination);
-      return;
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException)?.code;
-      if (!code || !TRANSIENT_PUBLICATION_RENAME_CODES.has(code) || attempt >= PUBLICATION_RENAME_DELAYS_MS.length) throw error;
-      await wait(PUBLICATION_RENAME_DELAYS_MS[attempt]!);
     }
   }
 }
@@ -237,7 +209,7 @@ export class EvidenceBundle {
 
   getEvents(): readonly CapturedEvidenceEvent[] { return this.events; }
 
-  async finalize(input: FinalizeInput): Promise<{ path: string; summary: EvidenceSummary; index: ArtifactIndex }> {
+  async finalize(input: FinalizeInput): Promise<{ path: string; summary: EvidenceSummary; index: ArtifactIndex; publication: PublishedBundleDirectory }> {
     this.assertWritable();
     this.finalizing = true;
     await this.appendTail;
@@ -277,17 +249,18 @@ export class EvidenceBundle {
     await this.reachBoundary("marker.synced");
     await bestEffortSyncDirectory(this.stagingPath, this.options.testHooks?.syncDirectory);
     await this.reachBoundary("staging-directory.synced");
-    await renameEvidenceBundleWithRetry(
-      this.stagingPath,
-      this.finalPath,
-      this.options.testHooks?.renameDirectory,
-      this.options.testHooks?.wait,
-    );
+    // A reader holding a file open blocks the rename on Windows; past the back-off the bundle is published by copy, and only then does this throw `EvidenceBundlePublicationError`, leaving the sealed bundle in staging.
+    const publication = await publishBundleDirectory(this.stagingPath, this.finalPath, {
+      renameDirectory: this.options.testHooks?.renameDirectory,
+      copyDirectory: this.options.testHooks?.copyDirectory,
+      removeDirectory: this.options.testHooks?.removeDirectory,
+      wait: this.options.testHooks?.wait,
+    });
     await this.reachBoundary("directory.renamed");
     await bestEffortSyncDirectory(this.options.rootDirectory, this.options.testHooks?.syncDirectory);
     await this.reachBoundary("root-directory.synced");
     this.finalized = true;
-    return { path: this.finalPath, summary, index };
+    return { path: this.finalPath, summary, index, publication };
   }
 
   async abort(): Promise<void> {

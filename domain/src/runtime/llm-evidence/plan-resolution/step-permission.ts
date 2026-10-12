@@ -45,6 +45,7 @@
 
 import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
+import { webAutomationActionDeclarationRequired } from "../../../actions/consequence-declaration";
 import { webAutomationActionEffect } from "../../../actions/effect";
 import { WEB_AUTOMATION_ACTION_SAFETY } from "../../../actions/safety";
 import type { WebAutomationActionType } from "../../../actions/types";
@@ -72,13 +73,13 @@ export type WebPlanStepPermission =
   | { kind: "refused"; missing: readonly AutomationStudioActionConsequence[]; requestId: string | null };
 
 /**
- * The web actions that commit: the ones whose effect is the page's to decide
- * rather than the action's. Everything else changes only what is shown, or what
- * a field holds before anything submits it, and Core does not gate either.
+ * The action each node id runs, so a step is held to the domain's one rule for
+ * which actions commit (`../../../actions/consequence-declaration.ts`, t439):
+ * the ones whose effect is the page's to decide rather than the action's.
  */
-const COMMITTING_ACTIONS: readonly WebAutomationActionType[] = ["web.dom.click", "web.dom.keypress", "web.dom.dialog"];
-
-const COMMITTING_NODE_IDS: ReadonlySet<string> = new Set(COMMITTING_ACTIONS.map((action) => webAutomationOutputNodeId(action)));
+const ACTION_BY_NODE_ID: ReadonlyMap<string, WebAutomationActionType> = new Map(
+  (Object.keys(WEB_AUTOMATION_ACTION_SAFETY) as WebAutomationActionType[]).map((action) => [webAutomationOutputNodeId(action), action] as const)
+);
 
 /**
  * What each node's own action does to the page, by the node id a step names.
@@ -107,8 +108,8 @@ const VERBS: Partial<Record<WebAutomationActionType, string>> = {
 
 /** Whether a step running this node must say what it would lastingly do. */
 export function webPlanStepMustDeclare(nodeDefinitionId: string, parameters?: JsonObject): boolean {
-  return COMMITTING_NODE_IDS.has(nodeDefinitionId)
-    || (nodeDefinitionId === webAutomationOutputNodeId("web.dom.type") && parameters?.submit === true);
+  const action = ACTION_BY_NODE_ID.get(nodeDefinitionId);
+  return action !== undefined && webAutomationActionDeclarationRequired(action, parameters);
 }
 
 /**

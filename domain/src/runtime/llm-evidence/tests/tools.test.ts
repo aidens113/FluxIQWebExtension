@@ -434,7 +434,9 @@ test("presses any observed control, refuses only a handle it never showed, and n
   // The resolved parameters carry who the element is beside its address: Core
   // derives the adapted target from it, as it does for a recorded node.
   assert.deepEqual(actionParameters.map((entry) => (entry as { selector?: string }).selector), ["#details"]);
-  assert.deepEqual((actionParameters[0] as { element?: unknown }).element, { tagName: "button", visibleText: "Show details", selector: "#details" });
+  // A button's `type` says what it does and is one of the identifying attributes (t425,
+  // `element-fingerprint/build.ts`); `aria-expanded` is its state and `aria-controls` names another element.
+  assert.deepEqual((actionParameters[0] as { element?: unknown }).element, { tagName: "button", visibleText: "Show details", selector: "#details", attributes: { type: "button" } });
   const submit = await runtime.executeTool({ ...base, callId: "call.submit", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t2" } }, consequences: [] } });
   const genericAction = await runtime.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t3" } }, consequences: [] } });
   const missing = await runtime.executeTool({ ...base, callId: "call.missing", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t40" } }, consequences: [] } });

@@ -11,6 +11,11 @@
 //   check     a `check`: the result check, its card saying the verdict
 //   step      a run's step ("Step 2 of 5: Open results"), its card saying
 //             how it went, and a build's failure marker
+//   recovery  a recovery Core reported on a run step (a step done around it,
+//             a start further along, a route, another way): what happened
+//             and why, and its card (`recovery-message.ts`); a step row with
+//             no recovery on it and no step of its own (an older Core's
+//             route) stays a step message with no card
 //   ask       what Core asked the person: a card waiting on them
 //   note      what Core noted, in words, and Core's own deciding row with
 //             its sentence ("Asking the AI model again"), which is status
@@ -68,17 +73,18 @@
 // or Core's shared reading of the action, never a raw id.
 
 import { activityActionKey } from "fluxiq/ui";
-import { isInternalStep, isModelThought, type ClientGatewayActivity } from "../../../../shared/activity/index";
+import { isInternalStep, isModelThought, stepRecovery, type ClientGatewayActivity } from "../../../../shared/activity/index";
 import { actionCard, type ActionCard } from "./action-card";
 import { foldRepeatedCards } from "./card-repeats";
 import { foldRetriedCards } from "./retried";
 import { foldDoneAgain } from "./done-again";
+import { recoveryMessage } from "./recovery-message";
 import { stepWords } from "./words";
 
 type ActivityDetail = NonNullable<ClientGatewayActivity["detail"]>;
 
 /** What a message is. */
-export type StepMessageKind = "decision" | "repair" | "check" | "step" | "ask" | "note" | "action";
+export type StepMessageKind = "decision" | "repair" | "check" | "step" | "recovery" | "ask" | "note" | "action";
 
 /** One of FluxIQ's step messages. */
 export type StepMessage = {
@@ -117,6 +123,8 @@ type Unit = {
   asks: Map<string, Place>;
   /** A robot-check card still waiting for its other half: the ask, or the tool that met the check. */
   check: { place: Place; from: "ask" | "tool" } | undefined;
+  /** Each run step's label by its node, so a recovery for that node can name the step it was for. */
+  labels: Map<string, string>;
 };
 
 /**
@@ -157,7 +165,8 @@ function stepFailedBy(event: ClientGatewayActivity, node: string | undefined): b
  */
 function settlesStep(event: ClientGatewayActivity): boolean {
   const detail = event.detail;
-  return event.phase === "repairing" && event.step === undefined && detail?.kind === "step" && detail.status === "failed" && detail.ref !== undefined;
+  // A recovery that failed or was held back has the same shape, and is a message of its own.
+  return event.phase === "repairing" && event.step === undefined && detail?.kind === "step" && detail.status === "failed" && detail.ref !== undefined && stepRecovery(event) === undefined;
 }
 
 /** The messages for `events` (oldest first), at most `limit` of them, the newest. */
@@ -202,10 +211,13 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
     lastAt = at;
     let unit = units.get(event.activityId);
     if (unit === undefined) {
-      unit = { decision: undefined, open: new Map(), step: undefined, stepNode: undefined, asks: new Map(), check: undefined };
+      unit = { decision: undefined, open: new Map(), step: undefined, stepNode: undefined, asks: new Map(), check: undefined, labels: new Map() };
       units.set(event.activityId, unit);
     }
-    if (unit.step !== undefined) {
+    const recovery = stepRecovery(event);
+    // A recovery is done around a step, not its end: a step it ran before or
+    // during is ended by the row after it, as it would be without it.
+    if (unit.step !== undefined && recovery === undefined) {
       const over = drafts[unit.step]!;
       // Core never ends a run step, so the next row of its unit does -- and
       // says how. A recovery for that same node, or the run itself failing, is
@@ -224,6 +236,12 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
     }
     const detail = event.detail;
     if (detail === undefined || isInternalStep(detail) || settlesStep(event)) continue;
+    if (recovery !== undefined) {
+      unit.decision = undefined;
+      const keys = { message: `step:${event.activityId}#${event.sequence}`, card: cardKey(event) };
+      drafts.push(recoveryMessage(event, keys, at, recovery, detail.ref === undefined ? undefined : unit.labels.get(detail.ref)));
+      continue;
+    }
     const status = detail.status;
     const words = stepWords(detail, event.step);
 
@@ -346,6 +364,8 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
       // announces it (t174-w88); one that still does is not shown either.
       if (card?.kind === "join") continue;
       const placed = add(event, detail, "step", at, card);
+      const label = event.step?.label?.trim();
+      if (!marker && detail.ref !== undefined && label) unit.labels.set(detail.ref, label);
       if (!marker && status === "started") {
         unit.step = placed;
         unit.stepNode = detail.ref;
