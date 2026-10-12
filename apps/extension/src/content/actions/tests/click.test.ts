@@ -17,7 +17,8 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
-import type { InPlaceEffect, InPlaceEffectWatch, PressSignal, RateLimitNotice, RobotCheckSighting } from "../../action-runtime";
+import type { ActionabilityRejectionCode, ActionabilityReport, InPlaceEffect, InPlaceEffectWatch, PressSignal, RateLimitNotice, RobotCheckSighting } from "../../action-runtime";
+import { runWithRecovery, type RecoveryFault } from "../../action-runtime/recovery";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../../types";
 import { clickAction } from "../click";
 import type { ContentActionDependencies } from "../types";
@@ -188,17 +189,29 @@ function dependencies(
   notices: { make: ContentActionDependencies["watchRateLimitNotice"]; record: NoticeRecord },
   checks: { make: ContentActionDependencies["watchRobotCheck"]; record: CheckRecord },
   ignored: { make: ContentActionDependencies["watchIgnoredPress"]; record: IgnoredRecord },
-  pressableAgain: boolean
+  pressableAgain: boolean,
+  againAs: ActionabilityRejectionCode = "covered",
+  judgedAs?: () => ActionabilityReport
 ): ContentActionDependencies {
   let judged = 0;
   const provided: Partial<ContentActionDependencies> = {
     resolveTarget: () => ({ element, resolution: {} as ReturnType<ContentActionDependencies["resolveTarget"]>["resolution"] }),
     checkActionability: () => {
       judged += 1;
-      return judged === 1 || pressableAgain
-        ? { actionable: true, point: { x: 10, y: 20 }, detail: "the point 10,20 landed on the target" }
-        : { actionable: false, code: "covered", detail: "the point 10,20 landed on a scrim" };
+      if (judgedAs) return judgedAs();
+      return judged === 1 || pressableAgain ? PRESSABLE : notPressable(againAs);
     },
+    // The record the real builder writes for a gate's refusal (`results.ts`): its reason word leads `actual`.
+    rejected: (action: BrowserActionCommand, startedAt: number, code: string, expected: string, actual: string): BrowserActionResult => ({
+      commandId: action.commandId,
+      actionType: action.actionType,
+      status: "failed",
+      message: `Action rejected: ${actual}`,
+      validation: { status: "failed", expected, actual },
+      failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE, { expected, actual: `${code}: ${actual}` }),
+      startedAt,
+      finishedAt: startedAt
+    }),
     describeElement: () => ({}) as ReturnType<ContentActionDependencies["describeElement"]>,
     captureSnapshot: () => ({}) as ReturnType<ContentActionDependencies["captureSnapshot"]>,
     watchInPlaceEffect,
@@ -260,6 +273,18 @@ function dependencies(
   });
 }
 
+/** The gate's answer for a control that can be pressed. */
+const PRESSABLE: ActionabilityReport = { actionable: true, point: { x: 10, y: 20 }, detail: "the point 10,20 landed on the target" };
+
+/** What the gate says of a layer over the control: what the point landed on, and the layer it belongs to (`covering-layer.ts`). */
+const COVER_DETAIL = `the point 10,20 landed on a card, which covers the target; it is under the layer "Hi, I'm Val"`;
+
+/** The gate's answer for a control that can no longer be pressed, for each of its reasons. */
+function notPressable(code: ActionabilityRejectionCode): ActionabilityReport {
+  if (code === "covered") return { actionable: false, code, detail: COVER_DETAIL, point: { x: 10, y: 20 } };
+  return { actionable: false, code, detail: code === "disabled" ? "the element is disabled" : "the element is not in the document" };
+}
+
 async function click(
   t: TestContext,
   behaviour: PageBehaviour,
@@ -278,7 +303,7 @@ async function click(
   // A page that answers the press unless a row says it ignored it, so every
   // row written before the extra press existed keeps its meaning.
   const ignored = fakeIgnoredWatch(pressing.seen ?? ["change"], page.events, pressing.secondSeen);
-  const deps = dependencies(page.element, watch.make, notices, checks, ignored, pressing.pressableAgain ?? true);
+  const deps = dependencies(page.element, watch.make, notices, checks, ignored, pressing.pressableAgain ?? true, pressing.againAs);
   const result = await clickAction(action, deps, startedAt);
   return { result, events: page.events, watch: watch.record, notices: notices.record, checks: checks.record, ignored: ignored.record };
 }
@@ -289,6 +314,8 @@ type PressOptions = {
   seen?: PressSignal[];
   /** Whether the control can still be pressed when it is judged again; true unless a row says otherwise. */
   pressableAgain?: boolean;
+  /** Why it cannot, when it cannot: covered unless a row says otherwise. */
+  againAs?: ActionabilityRejectionCode;
   /** The rate-limit notice the press made once more is answered with. */
   secondNotice?: RateLimitNotice;
   /** The signs the press made once more was answered with; the page answers it unless a row says otherwise. */
@@ -523,8 +550,32 @@ test("a press answered by any sign at all -- a change, a navigation, a focus mov
   }
 });
 
-test("an ignored press whose control can no longer be pressed -- now covered, disabled or gone -- is not pressed again", async (t) => {
-  const { result, events } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: [], pressableAgain: false });
+test("an ignored press whose control can no longer be pressed -- now disabled or gone -- is not pressed again", async (t) => {
+  for (const againAs of ["disabled", "hidden"] as ActionabilityRejectionCode[]) {
+    const { result, events } = await click(t, { link: false, prevent: false }, undefined, { ...CLICK }, undefined, undefined, 1_000, { seen: [], pressableAgain: false, againAs });
+    assert.equal(result.status, "succeeded", againAs);
+    assert.deepEqual(events, FIRST_PRESS, againAs);
+  }
+});
+
+// bigbox-retail's support card opens on a timer three seconds after a product
+// page loads, over the pinned Add to cart; a first press made just before it
+// only woke the page, and the card that covered the button during the wait was
+// taken for the press's answer: reported done with nothing in the cart, in a
+// trial and in playback (`run-mv5tusj4-b7ee0630`, t476). Make the covered
+// branch succeed again and this row goes red.
+test("an ignored press whose control a layer then covered is refused as covered, naming the layer, and is not pressed again in this attempt", async (t) => {
+  const action = { ...CLICK };
+  const { result, events } = await click(t, { link: false, prevent: false }, undefined, action, undefined, undefined, 1_000, { seen: [], pressableAgain: false });
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE);
+  assert.equal(result.failure?.actual, `covered: ${COVER_DETAIL}; the page ignored the press, and this layer covered the control during the wait, so the press is made once more once the layer is closed`);
+  assert.equal(result.failure?.effect, undefined, "a press was made, so the refusal never says it was not");
+  assert.deepEqual(events, FIRST_PRESS, "pressed once: the press made once more waits for the layer to be closed");
+});
+
+test("a press that began a request is never pressed again, even when a layer then covers its control", async (t) => {
+  const { result, events } = await click(t, { link: false, prevent: false }, undefined, { ...CLICK }, undefined, undefined, 1_000, { seen: ["request"], pressableAgain: false });
   assert.equal(result.status, "succeeded");
   assert.deepEqual(events, FIRST_PRESS);
 });
@@ -588,4 +639,86 @@ test("the press made once more is refused by the page when the page answers it s
   assert.equal(result.failure?.code, "web.action.refused_by_page");
   assert.deepEqual(notices.refusedByPageWith, [{ afterMs: 2, needs: true }]);
   assert.deepEqual(events, [...FIRST_PRESS, ...SECOND_PRESS]);
+});
+
+// The same press as `actions/execute.ts` runs it: inside the in-page recovery
+// (`action-runtime/recovery/`), which closes a layer over the target through
+// its own way out and runs the click again. These rows are the whole of t476's
+// fix: the press the page only woke on is made once more after the layer that
+// covered it is closed -- once, never a third time -- and a press that began a
+// request is never made again, covered or not.
+
+/** What one recovering click did: the result, the faults the recovery cleared for, the page's events, and how many presses were made. */
+type RecoveringClick = { result: BrowserActionResult; cleared: RecoveryFault[]; events: string[]; presses: number; looks: number };
+
+/**
+ * A click run inside the recovery loop. `answers` is what the page answers
+ * each press with, in order (`[]` ignored it); `gate` is what the gate says at
+ * each look, in order, and the control is pressable at any look past it.
+ */
+async function recoveringClick(t: TestContext, answers: PressSignal[][], gate: ActionabilityReport[]): Promise<RecoveringClick> {
+  installMouseEvent(t);
+  const page = fakePage({ link: false, prevent: false });
+  let presses = 0;
+  const ignored: { make: ContentActionDependencies["watchIgnoredPress"]; record: IgnoredRecord } = {
+    record: { made: 0, settledWith: [], stopped: 0 },
+    make: () => {
+      page.events.push("ignored-watch");
+      const seen = answers[presses] ?? ["change"];
+      presses += 1;
+      return { settle: async (windowMs) => ({ seen: [...seen], afterMs: seen.length > 0 ? 4 : windowMs }), stop: () => undefined };
+    }
+  };
+  let looks = 0;
+  const judged = (): ActionabilityReport => gate[looks++] ?? PRESSABLE;
+  const deps = dependencies(page.element, fakeWatch(undefined, page.events).make, fakeNoticeWatch(undefined, page.events), fakeCheckWatch(undefined, page.events), ignored, true, "covered", judged);
+  // One command object for every attempt, as `executeContentAction` hands it.
+  const action: BrowserActionCommand = { ...CLICK };
+  const cleared: RecoveryFault[] = [];
+  const close = (fault: RecoveryFault): number => {
+    cleared.push(fault);
+    page.events.push("layer-closed");
+    return 1;
+  };
+  const { result } = await runWithRecovery(action, 1_000, () => clickAction(action, deps, 1_000), async () => undefined, () => 1_000, close, () => false);
+  return { result, cleared, events: page.events, presses, looks };
+}
+
+const COVERED = notPressable("covered");
+
+test("a timed layer over a press the page only woke on: the layer is closed and the control pressed once more, and that press is answered", async (t) => {
+  const { result, cleared, events, presses } = await recoveringClick(t, [[], ["request"]], [PRESSABLE, COVERED, PRESSABLE]);
+  assert.equal(result.status, "succeeded");
+  assert.equal(presses, 2, "pressed again, once");
+  assert.deepEqual(events, [...FIRST_PRESS, "layer-closed", ...FIRST_PRESS]);
+  assert.deepEqual(cleared, ["obstructed_target"], "the recovery closed the layer the refusal named before it ran the click again");
+  assert.deepEqual(result.validation, {
+    status: "passed",
+    expected: "the click lands on the target or something inside it",
+    actual: "the point 10,20 landed on the target; the page ignored the first press and a layer then covered the control, so the layer was closed and it was pressed once more"
+  });
+});
+
+test("the press made once more after the layer is closed is never followed by a third: ignored too, it fails as not observed", async (t) => {
+  const { result, events, presses } = await recoveringClick(t, [[], []], [PRESSABLE, COVERED, PRESSABLE, PRESSABLE]);
+  assert.equal(result.status, "failed");
+  assert.equal(presses, 2);
+  assert.deepEqual(events, [...FIRST_PRESS, "layer-closed", ...FIRST_PRESS]);
+  assert.match(result.validation.status === "failed" ? result.validation.actual : "", /so the layer was closed and it was pressed once more, and it ignored that press too: no request/u);
+});
+
+test("a press that began a request is pressed once, and no layer that then covers its control is closed for it", async (t) => {
+  const { result, cleared, events, presses, looks } = await recoveringClick(t, [["request"]], [PRESSABLE, COVERED]);
+  assert.equal(result.status, "succeeded");
+  assert.equal(presses, 1, "never pressed again");
+  assert.deepEqual(events, FIRST_PRESS);
+  assert.deepEqual(cleared, []);
+  assert.equal(looks, 1, "an answered press is never looked at again for a cover");
+});
+
+test("a second cover after the press made once more reads as answered: a layer the press opens itself is left open", async (t) => {
+  const { result, cleared, presses } = await recoveringClick(t, [[], []], [PRESSABLE, COVERED, PRESSABLE, COVERED]);
+  assert.equal(result.status, "succeeded");
+  assert.equal(presses, 2);
+  assert.deepEqual(cleared, ["obstructed_target"]);
 });

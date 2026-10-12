@@ -61,6 +61,7 @@ import {
   WEB_AUTOMATION_ROUTE_STATE_PATHS,
   webAutomationRouteEffect,
   webAutomationRouteEffectHolds,
+  webAutomationRouteEffectSeen,
   webAutomationRouteSignature,
   webAutomationRouteState
 } from "./route-state";
@@ -190,6 +191,10 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
     // synchronous; the rule is in `./route-state/effect/holds.ts`.
     signRouteEffect: (before, after) => webAutomationRouteEffect(before, after),
     routeEffectHolds: (effect, observed) => webAutomationRouteEffectHolds(effect, observed),
+    // Whether a lasting step's effect appeared once it answered success, so a
+    // step whose act never took effect is not counted as done (t476). Pure and
+    // synchronous; the rule is in `./route-state/effect/seen.ts`.
+    routeEffectSeen: (effect, observed) => webAutomationRouteEffectSeen(effect, observed),
     inspectStateDiff(input) {
       if (input.before?.summary === undefined || input.after?.summary === undefined) {
         throw new Error("A web state diff needs a snapshot on both sides, so none was computed.");
