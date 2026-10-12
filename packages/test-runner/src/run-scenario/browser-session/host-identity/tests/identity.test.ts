@@ -48,7 +48,7 @@ test("host gate precedes project/browser/chat and copies the companion stamp to 
   const source = await readFile(path.join(root, "packages/test-runner/src/run-scenario.ts"), "utf8");
   const gate = source.indexOf("await verifyRunningHostIdentity(");
   assert.ok(gate > source.indexOf("await verifyRunningCoreIdentity("));
-  for (const token of ["await prepareIndependentCreationProject(", "await launchBrowser(", "const chat = buildEntry"]) assert.ok(gate < source.indexOf(token));
+  for (const token of ["await prepareIndependentCreationProject(", "await launchExtensionSession(", "const chat = buildEntry"]) assert.ok(gate < source.indexOf(token));
   const launcher = await readFile(path.join(root, "scripts/lab/run-lab.mjs"), "utf8");
   assert.ok(launcher.includes('await copyFile(`${paths.sharedHostModule}.identity.json`, `${paths.hostModule}.identity.json`)'));
 });

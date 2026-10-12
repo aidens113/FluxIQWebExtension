@@ -2734,6 +2734,15 @@ already-running workers, subscribes and immediately rechecks to close the
 observation race, accepts only `chrome-extension:` workers, and waits at most
 30 seconds before producing bounded counts and connection state. It removes
 its listener and timer on every outcome and never records worker URLs.
+The Lab runner permits one normal browser close and relaunch on the same owned
+profile when this full timeout observes zero workers but Chrome independently
+reports exactly one extension service-worker target. Missing, ambiguous or failed
+target discovery refuses recovery. The first browser's containment proofs must
+finish and its guard must remain clean before relaunch; the replacement must pass
+ordinary Playwright worker readiness and fresh containment proofs. A CDP target
+alone never substitutes for those proofs. Capture and step watching register once;
+console observation rebinds to the replacement context. This bounded recovery
+does not retry a Flow or bypass subsequent pairing and running-identity checks.
 Locale, timezone, viewport, and color scheme are fixed. Before launching, the
 fixture refuses an artifact whose build stamp (`build-info.json`) no longer
 matches the source, or that has no stamp, as `environment.stale`; see

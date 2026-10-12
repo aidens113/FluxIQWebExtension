@@ -66,7 +66,7 @@ import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioS
 import { cleanupFailureOutcome, describeRecordingStartDiagnostic, pairingStatusWaitFailureDetails, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
-import { createdFlowChatEntry, verifyRunningBuildIdentity, ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, keepsRunState, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter, importCloneDestination, pairRunExtension, startPerturbationLifecycle, type PerturbationLifecycle } from "./run-scenario/index.js";
+import { createdFlowChatEntry, verifyRunningBuildIdentity, ExtensionStartTrace, writeExtensionStartSidecar, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, configuredCredentials, evidenceEvent, exportRunClonePackage, keepsRunState, launchExtensionSession, sessionObservers, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter, importCloneDestination, pairRunExtension, startPerturbationLifecycle, type PerturbationLifecycle } from "./run-scenario/index.js";
 import { prepareIndependentCreationProject, writeCreationContext, type CreationContext } from "./run-scenario/chat-build/index.js";
 import type { RunPerturbation } from "./perturbations/index.js";
 
@@ -266,14 +266,18 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     });
     perturbation = await startPerturbationLifecycle(options.perturbation, topology);
     topology = perturbation.topology;
-    const launched = await launchBrowser(topology, extensionPath);
-    ({ context, browserVersion } = launched); await startTrace.attach(context); // The extension start, timestamped, for extension-start.local.json.
-    periodicCapture.start(); labRun?.watchSteps(() => screenshotAdapter.capture(evidenceEvent(runId, scenario.id, undefined, "checkpoint", "The page after a step"))); // A picture into each page step's folder, by the same capture.
     const scenarioOrigins = new Set(scenarioNetworkOrigins(topology.scenarioOrigin));
-    const isScenarioUrl = (url: string) => { try { return scenarioOrigins.has(new URL(url).origin); } catch { return false; } };
-    networkGuard = await installRunNetworkGuard(context, topology, [...scenarioOrigins]);
-    const consoleWatch = consoleErrors = new ConsoleErrorWatch(context, isScenarioUrl);
-    const extensionControl = extensionPage = await extensionControlPage(context); startTrace.observePage(extensionControl, "control");
+    const launched = await launchExtensionSession(topology, extensionPath, sessionObservers({
+      scenarioOrigins: [...scenarioOrigins], trace: startTrace,
+      adoptSession: session => ({ context, browserVersion } = session),
+      adoptGuard: guard => (networkGuard = guard),
+      watchConsole: (session, isScenarioUrl) => (consoleErrors = new ConsoleErrorWatch(session.context, isScenarioUrl)),
+      startCapture: () => periodicCapture.start(),
+      watchSteps: () => labRun?.watchSteps(() => screenshotAdapter.capture(evidenceEvent(runId, scenario.id, undefined, "checkpoint", "The page after a step"))),
+    }));
+    ({ context, browserVersion, guard: networkGuard } = launched);
+    const { isScenarioUrl } = launched;
+    const extensionControl = extensionPage = launched.controlPage;
     await perturbation.arm({ context, controlPage: extensionControl, scenarioOrigins: [...scenarioOrigins] });
     browserVersion = await browserVersionFromCdp(context, extensionPage);
     // The existing and clone lanes replay a pre-existing Flow, so their variant
@@ -544,7 +548,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     }
     // A Flow-lane run that never reached the lane built no Flow, and does not pass on the recording's checks alone.
     assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, permissionStop });
-    consoleWatch.assertOnlyAllowed(workflow.expected.allowedConsoleErrors);
+    consoleErrors!.assertOnlyAllowed(workflow.expected.allowedConsoleErrors);
     networkGuard.assertNoViolations();
     // Whatever the Flow did: a Flow the Lab built by calling Core itself was never asked for in the chat, which is what the product is measured on.
     if (creation && buildEntry === "direct-api") throw new RunnerFailure("fixture.invalid", "This run built its Flow by calling Core's build endpoint directly (--direct-api-build, test-only), not from the extension's chat window, so it is never counted as a pass");

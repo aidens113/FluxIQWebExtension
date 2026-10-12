@@ -83,7 +83,7 @@ test("the runner publishes only the closed topology-readiness projection in its 
 
 test("the focused extension-readiness lifecycle validates the worker before opening any page", async () => {
   // t174-w6 moved the start out of the spine into `run-scenario/extension-control-page.ts`, which also times it.
-  assert.ok((await runnerSource()).includes("await extensionControlPage(context)"), "the spine starts the extension through the module");
+  assert.ok((await runnerSource()).includes("await launchExtensionSession(topology, extensionPath,"), "the spine starts the extension through the module");
   const source = await runnerModuleSource("run-scenario", "extension-control-page.ts");
   assert.match(source, /import \{[^}]*\bawaitExtensionWorker\b[^}]*\} from "\.\.\/run-lifecycle\/index\.js";/u);
   const start = source.indexOf("export async function extensionControlPage(");

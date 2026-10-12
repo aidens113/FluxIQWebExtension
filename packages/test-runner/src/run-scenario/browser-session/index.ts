@@ -5,8 +5,11 @@
 // session is confined to, and the extension panel shown beside the fixture.
 export { activateScenarioTab } from "./activate-scenario-tab.js";
 export { browserVersionFromCdp } from "./browser-version.js";
+export { chromeWorkerTarget } from "./chrome-worker-target.js";
 export { installRunNetworkGuard } from "./install-run-network-guard.js";
 export { launchBrowser } from "./launch-browser.js";
+export { launchExtensionSession } from "./launch-extension-session.js";
+export { sessionObservers } from "./session-observers.js";
 export { presentFlowTab, type FlowTabMoment, type PresentFlowTabInput } from "./present-flow-tab.js";
 export * from "./live-panel/index.js";
 export { requireExtension } from "./require-extension.js";
