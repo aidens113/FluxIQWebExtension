@@ -1,7 +1,7 @@
 # Live Testing Handoff Audit — 2026-10-11
 
 Status: Active
-Status detail: A qualified; integrated fixes pushed; round-four B/C failed without promotion and are being debugged, D active on frozen source; t380 independently verified, storage WIP retained.
+Status detail: A qualified; round-four B/C/D fully debugged; t452/t453 integrated, next qualification $0.25 on frozen Core3291fb25; recording owner defect supervisor-reproduced, t454 repair underway.
 Created: 2026-10-11
 Last updated: 2026-10-11
 Owner: Codex senior supervisor
@@ -32,15 +32,21 @@ Candidate-default task t450 is integrated. B never tested an accepted revision a
 the last-decision wrap-up offered no tools. D trials 2-4 ran all displayed steps successfully but Core ended
 failed because its terminal node left unvisited graph nodes; trial feedback omitted this graph-level reason.
 C/B finishing changes are integrated as t274. D fix t449 and candidate-default t450 are independently
-verified and integrated downstream first/Core second. Current Core code pair is b27c0d64; no Core dev
-advancement during a qualification streak. Round-four streaks ended failed; source freeze is now released.
-Live lane sources must contain integrated dev before their next launch.
+verified and integrated downstream first/Core second. t452 feedback/category/UI and t453 generic judge
+guidance are now independently verified and integrated: Core 3291fb25/downstream 2fa74682 before notes.
+Freeze that product pair for the next $0.25 qualification streaks; lane sources must contain it and rebuilt
+running identities before launch. Recording repair t454 stays isolated until those streaks end.
 
 **Storage follow-up:** t381 introduces a competing connection owner and does not directly fix recording
-append; its WIP remains unmerged in Core. The source review is committed downstream. t380's narrow fixture
+append; its WIP remains unmerged in Core. A dist-backed probe now finds a distinct recording defect: model
+timeline sequence starts at zero, typed event storage requires positive sequence, first append falls back to
+file while later appends go to SQL, finalize does not backfill a nonempty SQL stream, restart reads only the
+stale fallback. Supervisor independently reproduced the 31 SQL / 1 file / 1 reopened entry loss. t454 owns
+the focused sequence/read-owner repair and legacy split-state tests, without adopting the pool WIP.
+t380's narrow fixture
 checks are supervisor-verified: 45/45 including actual-built process probes, current typecheck/build/audit and
 baseline refresh lowering only two counts. Integrated downstream first/Core second after all active runs ended;
-current dev heads downstream 19388f8b/Core 1dbb1081, push pending updated notes.
+t380's integration and earlier notes are pushed; later t452/t453 heads are listed above.
 
 **Audit intake snapshot (historical).** Downstream dev `6e07993f`, Core dev `01621c94`; both equalled their locally stored
 `origin/dev` refs (no remote fetch performed). Core main checkout clean; downstream has a pre-existing edit to
@@ -72,10 +78,13 @@ The UI review and production-integrity tasks t334/t335/t337 remain parked, not p
 The preceding dirty-file inventory is the audit intake: C is now integrated, A/B notes preserved and merged,
 while their lane workspaces remain intact for further live work. No profiles or run evidence were reclaimed.
 
-**Next:** qualify B/C/D against frozen Core b27c0d64 and downstream d1e516e6 (lane documentation commits
-may differ). Source fixes and A qualification are complete. Each creation requires full debug and a separate
-zero-model replay before another launch; failure requires changed source. Then integrate verified fixture work,
-measure recording persistence, prove three-site adaptation and proceed to breadth/UX and release work.
+**Next:** t452/t453 integrated (Core 3291fb25/downstream 2fa74682 before notes); qualify B/C/D with the
+verified $0.25 test ceiling. t454 recording-owner repair is independent;
+do not advance dev during a live qualification streak. Round-four source was Core
+b27c0d64/downstream d1e516e6 (lane documentation commits differed); all three attempts failed their end-to-end
+gates. Each creation requires full debug and separate zero-model replay before another launch; failure requires
+changed source. t380 is now integrated; recording-persistence measurement, three-site adaptation, breadth/UX
+and release work remain after qualification.
 
 **Limits:** no product code edited, tests/builds/live runs launched, provider calls made, or panel managed.
 Historical test counts remain previous-session results, not tests independently rerun during this audit.
@@ -174,11 +183,62 @@ Historical test counts remain previous-session results, not tests independently 
 
 ## Worker Briefs
 
+### Brief: live-b-round5
+- Repository: existing paired t262 lane trees, supervisor synced to integrated t452/t453 pair.
+- Task: original bigbox-retail-pickup-cart-store-remembered-after-creation, two consecutive candidate creations with separate disabled-model replays on frozen Core3291fb25.
+- Required reads: this Current State; live-b-round4.md/full debug, t452 feedback report; current original task/oracles and live/replay guard rules.
+- Owns (may edit): new lane-b-round5.md, live-b-round5.md and new run-id debugs; runtime evidence through owning Lab scripts only.
+- Must not touch: source/shared docs/old reports/.env/user data/profiles; no commits/merges/pushes/full suites/guard overrides or user panel management. No reply-output cap or automatic relaunch.
+- Definition of done: slot3/instance t262-slot-3/workspace t262-b; current owning library/build outputs and ready preflight proving zero calls, candidate/reset trial and whole-Flow $0.25 via process environment. Four actual identities match before provider, headed real chat, one attempt. First success fully debugged/independent exact oracles/separate unchanged-hash zero-provider/intervention/harness replay before second creation. Failure fully debugged then stops pending changed source; first balance failure stops all paid work. Report UI/costs honestly.
+- Report to: t262 downstream docs/working/live-testing-handoff-audit-2026-10-11/reports/live-b-round5.md.
+
+### Brief: live-d-round5
+- Repository: existing paired t275 lane trees, supervisor synced to integrated t452/t453 pair.
+- Task: original social-network-feed-confirm-requests, same two-creation/zero-model replay qualification, frozen Core3291fb25.
+- Required reads: this Current State; live-d-round4.md/full false-acceptance debug, t453 report; original task/oracles and current live/replay/guard rules.
+- Owns (may edit): new lane-d-round5.md, live-d-round5.md and new run-id debugs; runtime evidence through owning Lab only.
+- Must not touch: same source/docs/profile/permission boundaries as B; no test-shaped guidance or expected-count injection.
+- Definition of done: slot4/instance t275-slot-4/workspace t275-d; same current builds/$0.25 zero-call preflight/four identity/headed chat/single launch/full-debug/replay gates as B. Inspect all rows, duplicate acts, excluded witnesses, independent oracle and any encountered rate-limit recovery; a judge yes alone or automatic retry does not prove saved adaptation. Failure/balance stops as B; no unchanged relaunch.
+- Report to: t275 downstream docs/working/live-testing-handoff-audit-2026-10-11/reports/live-d-round5.md.
+
+### Supervisor lane: live-c-round5
+- Repository: existing paired t451; slot1/instance t451-slot-1/workspace t451-c.
+- Task: unchanged everything-store-plus-earbuds-under-50, same frozen Core3291fb25 and $0.25 environment/preflight/identity/debug/replay gates as B/D.
+- Supervisor owns new lane-c-round5.md/live-c-round5.md/new run debugs. Recording worker stays in isolated t454.
+- Preserve five-page exact dataset oracle and structured paging loop; no oracle/task alteration, output cap, source edit or unchanged failure relaunch. Only successful/debugged first creation and separate zero-model replay permit second.
+
+### Brief: recording-stream-owner
+- Repository: paired t454 trees under `C:/Users/osrs_/FluxStuff/fxwork/t454/`, separate from live lane/source tasks.
+- Task: repair the actual recording sequence/write/read ownership chain established by the provider-free dist probe; preserve existing projects and recordings, never merge t381 pool WIP wholesale.
+- Required reads: this Current State; t381 recording-persistence-measurement.md and sanitized reproduction/private probe; model recording-framework sequence assignment; actual recording store, runtime-stream/event-chunk recording helpers, summaries/store fallback and owning tests; Core instructions/code structure.
+- Owns (may edit): Core runtime/service/recordings/store.ts, recordings/load-timeline.ts and tests/storage-restart.test.ts/process-probe.mjs; storage/project/runtime-stream-store.ts, recording-stream/{store.ts,index.ts,tests/store.test.ts} and project/index.ts; runtime/service.ts pool injection/recording-only writes/removal wire and service/summaries/store.ts recording-only strict helper; owning recording/removal tests; own report. Supervisor approved exact helpers and narrow wiring after source trace; generic fallback unchanged.
+- Must not touch: public model sequence semantics, global connection pools/t435, t452/t453 source or live lanes, oracle/scenarios, shared docs/.env/user data; no commits/pushes/merges/full suites/browser/providers. Runtime data only through owning APIs in isolated test roots.
+- Retry refinement authorized: exact durable retries are idempotent; preserve original omitted timestamp/offset proof and return landed originals for mirror publication within recording-only owners. Cover post-typed metadata failure, conflicting contents and removed IDs; never guess packet identity or expand the gateway/model contract.
+- Definition of done: fail-first real-owner zero-sequence append/batch and mixed fallback+SQL restart; positive storage cursor separate from unchanged public timeline identity/order. Exact endedAt/count/order survive rebuilt-process reopen and >32 chunks; mirror changes only after durable success. Explicit removal may append validated private control records under existing lock, never rewrite old content; controls stay out of public entries, fold after legacy merge and cannot resurrect removed IDs. Cover finalized/stale/conflicting/spoofed/duplicate removal, SQL/file modes and legacy ambiguous sequences without guessing/overwriting. No silent recording error, generic fallback change, authority bypass, timeout/baseline expansion or destructive history rewrite. Own narrow tests/current package types/audit pass after fresh build.
+- Report to: t454 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/recording-stream-owner.md`.
+
+### Brief: recording-persistence-measurement
+- Repository: t381 downstream report/probe workspace; subject read-only built Core `C:/Users/osrs_/FluxStuff/fxwork/t380/!FluxIQ` (77604650, actual rebuilt library verified by supervisor). Never load t381's conflicting Core WIP.
+- Task: provider-free phase/queue measurements of actual recording append and finalization, before choosing a storage optimization.
+- Required reads: this Current State; committed storage-reuse-review.md; named Core service.ts append/finalize/storage helpers, service/object-documents.ts, service/locks.ts, service-recordings/tests/storage.test.ts, _shared/performance-metrics.ts and current actual-built process-probe import order. Supervisor approved bounded read-only extension to actual service/recordings/store.ts, storage/project/runtime-stream-store.ts and referenced recording/event-chunk helper to classify restart mismatch.
+- Owns (may edit): t381 downstream own report and ignored `test-runs/recording-persistence-measurement/` private probe/evidence only. Subject Core source/dist read-only; no source edits/builds/merges/commits/shared docs, full suites, browser/provider/user-panel operations.
+- Definition of done: actual dist-backed service/canonical SQLite owners on isolated mkdtemp data, framework-first imports; measure lock queue/wait/drain, normalization/dehydration, global get/put, typed project append/index/summary and finalization spans. Preserve real call ordering and method behavior; no external models. Compare small and moderate synthetic state payloads/batch sizes using unit-only data, not recorded page content. Assert exact persisted count/order and endedAt after queued appends, no later mutation, normal close. Report medians/tails/counts and source/artifact identity; do not extrapolate a probe pass to browser backlog resolution. Explain any missing representative payload/process boundary.
+- Report to: t381 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/recording-persistence-measurement.md`.
+
+### Brief: result-cohort-judgement
+- Repository: paired t453 trees under `C:/Users/osrs_/FluxStuff/fxwork/t453/`; supervisor will sync integrated t452 before final validation.
+- Task: strengthen generic result-verification instruction for complete quantity interpretation and included/excluded cohort checking, based on D's false acceptance with full evidence already present.
+- Required reads: this Current State; t275 live-d-round4.md and full run debug; Core runtime/llm/diagnosis-instructions.ts and owning instruction/request/verdict tests; Core instructions/code structure.
+- Owns (may edit): Core packages/fluxiq/src/programs/automation-studio/runtime/llm/diagnosis-instructions.ts; llm/tests/diagnosis-channel.test.ts and deepseek/tests/system-prompt.test.ts; generated deepseek/tests/system-prompt-pins.json (regenerate only two verification entries through actual builder, never hand-edit); own report only.
+- Must not touch: t452 files, judge schemas/coverage protocols, numeric condition semantics, oracle/scenario/fixture, shared docs, .env or user data; no commits/pushes/merges/provider/browser calls/full suites. No expected-count injection or scenario-shaped examples.
+- Definition of done: generic verification requires interpreting all quantitative components and comparing relevant left-out witnesses against original requirements independently of the authored predicate, with uncertainty refusing acceptance. Distinguish before/after aggregate counts from distinct cohort size. Owning tests prove instruction delivery and preserve judgement/gate contracts; actual affected typecheck/audit pass. Do not claim wording/naming coverage proves deterministic arithmetic or completeness.
+- Report to: t453 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/result-cohort-judgement.md`.
+
 ### Brief: candidate-recovery-feedback-b
 - Repository: paired t452 trees under `C:/Users/osrs_/FluxStuff/fxwork/t452/`, synced to integrated dev by supervisor.
 - Task: fix B's proven generic cached-response/stall guidance mismatch in candidate mode and unsafe wrong-control correction advice; preserve guards and exact trial requirement.
 - Required reads: this Current State; t262 live-b-round4.md and full run debug; named Core source and owning tests; Core instructions/code structure.
-- Owns (may edit): Core runtime/llm/evidence-loop.ts, evidence-loop/candidate-receipt.ts and own test/barrel, evidence-loop/answered-request.ts and decision-handlers/answered-request.ts with own tests; runtime/llm/evidence-progress/stall-redirect.ts and owning tests; runtime/flow-bootstrap/candidate/submission-refusal.ts and owning tests; own report only. Supervisor approved bounded receipt/answered-request expansion after worker identified owners.
+- Owns (may edit): Core runtime/llm/evidence-loop.ts; runtime/llm/candidate-receipt/{receipt.ts,index.ts,tests/receipt.test.ts}; evidence-loop/answered-request.ts and decision-handlers/answered-request.ts with own tests/barrels; runtime/llm/evidence-progress/{stall-redirect.ts,redirect-facts.ts,index.ts} and owning tests; runtime/flow-bootstrap/candidate/submission-refusal.ts and owning tests; own report only. Supervisor approved bounded receipt/answered-request/facts extraction and receipt relocation up one level to preserve directory, depth and coordinator budgets.
 - Must not touch: C-owned domain instructions/Core UI files, D owners, shared docs/other reports, .env or user data; no commits/pushes/merges/provider/browser calls/full suites.
 - Definition of done: fail-first generic regressions: discovery-only cached accepted submission directs exact trial path without nonexistent draft/amendments; legacy notes unchanged; wrong-control diagnostics distinguish control validity from intended purpose and offer valid alternatives without assuming keep-handle. No test-shaped examples, forced semantic acceptance, trial bypass or spend guard relaxation. Owning tests, actual Core typecheck/audit pass.
 - Report to: t452 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/candidate-recovery-feedback-b.md`.
@@ -292,6 +352,38 @@ Historical test counts remain previous-session results, not tests independently 
 - Report to: t275 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/live-d-round4.md`.
 
 ## Work Ledger
+
+### 2026-10-11 — Combined feedback/judge pair integrated; recording failure supervisor-verified
+- Agent: Codex senior supervisor; feedback/judgement/recording workers.
+- Changed: t452 integrated Core135da138/downstreambec8639b; t453 integrated Core3291fb25/downstream2fa74682; all unit reports/architecture preserved. Recording repair brief expanded to exact adapter/load/strict-write/removal owners without touching pool WIP.
+- Why: restore consistent candidate guidance and reject semantic counterexamples before new paid tests; preserve actual recording histories across restart.
+- Validation: root t453 delivery/pins52/52, cache-free Core typecheck exit0, actual domain freshness/typecheck22.221s and both audits pass; worker four subjects111/111/fresh47.392s build. Core finish whole-suite bypass only after real narrow gates. Root reran configured32-entry probe: exit1 at reopen, typed31/file1/reopen1. User$0.25 accepted by actual zero-call budget resolver; next actual ready preflight still required.
+- Outcome: Accepted combined product pair, live proof pending. Recording loss independently confirmed; t454 has fail-first reproduction and begins scoped repair.
+- Follow-up: sync/rebuild headed B/C/D, freeze Core3291fb25 during qualification, full debug plus separate zero-model replays; t454 integration after streaks. No unchanged relaunch or model output cap.
+
+### 2026-10-11 — Feedback unit passes; recording restart defect reproduced
+- Agent: Codex senior supervisor; B/C feedback and recording-measurement workers.
+- Changed: t452 source and architecture committed in both task branches, integration underway. t453 generic judge prose and delivery/pin tests ready for t452 sync. Recording source remains untouched.
+- Why: complete current-output gates and investigate provider-free recording backlog without adopting conflicting storage WIP.
+- Validation: root actual final Core build passed 45.249 s/7218 outputs; cache-free Core typecheck exit 0, actual downstream freshness/source/test check 9.577 s, both audits pass. Root runtime 50 + final wiring/receipt 17, UI 114, domain 15; final worker source tests 107/8 pass. t381 probe worker reproduced unique-identity 32-entry timeline: in-process 32, typed SQL 31, fallback file 1, restart loader returns 1; only first append fell back to file, later appends used SQL. Root reproduction review still owed.
+- Outcome: Feedback unit accepted for integration. Recording has a persistence/read-owner split hypothesis supported by source and counts, not merely slow connections; no browser backlog resolution claimed.
+- Follow-up: finish t452, sync t453 and independently gate; preserve measured restart evidence, write bounded recording-owner fix brief. Next paid tests retain $0.25 preflight and unchanged task/oracle gates.
+
+### 2026-10-11 — Supervisor confirms D's visible false success
+- Agent: Codex senior supervisor.
+- Changed: t453 generic verification brief and t452 modularity ownership; no new paid run.
+- Why: D's real ending panel says Passed although its independent oracle failed; shared feedback source must obey existing depth/directory/file budgets.
+- Validation: root visually inspected D ending and mid-build actual side-panel images. Ending states six rows passed (aggregate before/after) and Run finished; saved flow-lane independently says candidate revision 4 yes/two judge calls, runtime succeeded/reported passed/oracle failed. Mid-build repeats a Read list card and exposes a camelCase field key in its prose; tracked UX follow-up. Root t452 runtime four owning files 50/50 passed in addition to UI 114/114/domain 15/15; fresh combined build/domain check passed before final receipt-path relocation, so final relocated build/check/audit still owed.
+- Outcome: False-positive UI is confirmed from pixels, not just metadata. D prompt-only fix tests delivery and does not establish deterministic quantity interpretation.
+- Follow-up: final current-source package gates; t453 inclusion/exclusion/quantity prompt, regenerated owning pins; changed-source $0.25 live proof. Defer unrelated UI labels/cards to planned UX phase.
+
+### 2026-10-11 — Generic fixes underway; D false acceptance evidenced
+- Agent: Codex senior supervisor; t452 B/C workers and D-debug worker.
+- Changed: C's domain web-7 category/type evidence sentence and Core bare-count failure-card fallback; B fail-first candidate cache/stall/wrong-control regressions. Full B/C reports/debugs committed and merged with retained workspaces; both source/evidence devs pushed.
+- Why: repeated accepted submissions received conflicting legacy advice; wrong-control advice assumed semantic intent; C failure card displayed identical counts as a contradiction.
+- Validation: supervisor independently reviewed C diffs and ran UI 114/114 plus domain instructions 15/15; full combined source checks pending stable B edits. D worker inspected actual three judge requests: original instruction, omitted row and exclusion accounts present; both candidate judges and runtime judge still answered yes. No evidence omission/confirmation leakage established; supervisor request-level review owed.
+- Outcome: Partial feedback unit; generic semantic judge follow-up must not embed task/oracle answers. No new paid launch.
+- Follow-up: actual combined typechecks/build/audits and root owning tests; D generic acceptance proposal; ready preflight must show configured $0.25 before changed-source runs.
 
 ### 2026-10-11 — User raises future testing purse; round four ends
 - Agent: Codex senior supervisor.
