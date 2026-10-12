@@ -42,6 +42,14 @@ mentioning another type in a title does not establish membership in that type.
 This guidance leaves deterministic filter operators unchanged. Its delivery is
 tested; correct semantic filtering still requires live trial and oracle evidence.
 
+The registered list-detection tool describes numeric bounds against recognized
+combined counts using their whole total; otherwise the parser uses the first
+numeric token. Quantity constraints use those numeric comparisons. Text regex
+conditions match characters, so their cohorts still require semantic verification
+against the instruction. Generic status exclusions illustrate text conditions.
+These descriptions match existing extraction behavior; they do not establish that
+a model chooses the correct condition or that result judges prove completeness.
+
 ## Live Run Or Write
 
 `core.run_node` reaches `runtime/llm-evidence/node-run/run.ts`. Without `write`
