@@ -90,7 +90,9 @@ are not stale caches: current hidden cart facts are omitted by default rendered-
 Supported record-processing help t458 is integrated (downstream f191802a/Core 0cfb4f45): supervisor observed
 52 focused tests, a fresh Core typecheck, actual compiled help/parser parity, downstream freshness/typecheck
 and both native structure audits. No parser or runtime semantics changed. t459 adds optional passive result
-observation; worker unit/built-adapter checks pass, supervisor review and actual-browser seam proof remain.
+observation; supervisor independently observed24Core/17domain tests, fresh Core/domain types and the
+compiled adapter proof. Real headed content-harness capture proof and final integration remain; its runtime
+stub does not prove actual background/gateway delivery or improved model verdicts.
 t454 no-packet undo compatibility now passes, but final review reproduced three hydrated public-writer
 conflicts and a killed-child orphan reconciliation claim; bounded repairs and independent gates remain.
 Then qualify B/C/D on a newly frozen
@@ -366,6 +368,24 @@ the results and any required repairs pass current owner tests and fresh-process 
 
 ## Worker Briefs
 
+### Brief: a-review — passive result browser seam
+- Repository: paired t459; existing passive result-view source brief still applies.
+- Task: verify fresh hidden-state result observation in one provider-free headed browser using the established content harness and realistic bigbox fixture.
+- Required reads: Current State; own passive-result-view report; apps/extension/e2e/content/harness.ts and owning realistic fixture launcher.
+- Owns (may edit): own passive-result-view report; ignored isolated probe/profile/evidence outside disposable downstream worktree.
+- Must not touch: product source, shared docs, fixtures/oracles, original lane profiles, model/provider calls, user panel/Core host; no executable hidden bindings.
+- Definition of done: current stamped content/domain/Core builds; real content capture through sanitizer/domain callback/Core reader preserves visible stale and hidden current evidence, markers and secret/selector withholding; record precise runtime-stub and absent-background/gateway limitations.
+- Report to: docs/working/live-testing-handoff-audit-2026-10-11/reports/passive-result-view.md in t459.
+
+### Brief: b-debug — next-round launch plan
+- Repository: downstream; retained B/C/D lanes, read-only.
+- Task: reconstruct exact owning launch/preflight commands for the next changed-source round, using $0.25, existing64call maximum and explicit48million whole-run token ceiling while preserving per-request limits.
+- Required reads: Current State; existing lane round-six reports; test-runner live-llm-plan.ts and owning launcher arguments only.
+- Owns (may edit): docs/working/live-testing-handoff-audit-2026-10-11/reports/next-round-launch-plan.md in retained t262 downstream tree.
+- Must not touch: source, shared docs, profiles, fixture/oracles, environment files, task branches; no provider calls, browser launches, ready builds or panel management.
+- Definition of done: exact commands/flags and identity/zero-call preflight gates documented for supervisor use; confirm explicit run-token bound survives resolver and identify owning instance/workspace/original instruction digest per lane.
+- Report to: docs/working/live-testing-handoff-audit-2026-10-11/reports/next-round-launch-plan.md.
+
 ### Brief: recording-index-review
 - Repository: paired t454, supervisor synced dev1a7e47c6/b16ad470; implementation worker finished, source frozen.
 - Task: independent read-only review of recording repair/index and focused test adequacy before supervisor integration. Report concrete defects with owner paths/reproductions, not a completion claim.
@@ -584,6 +604,14 @@ Round-five launch preparation: coherent fixes and notes pushed to downstream e83
 - Report to: t275 downstream `docs/working/live-testing-handoff-audit-2026-10-11/reports/live-d-round4.md`.
 
 ## Work Ledger
+
+### 2026-10-11 — Processing help integrated; final recording review reproduces two new failures
+- Agent: Codex senior supervisor; A/B/C workers.
+- Changed: t458 help/tests/architecture integrated downstream first/Core second; both dev branches pushed. t459 optional passive result view remains isolated; t454 follow-up brief adds actual public-writer and killed-child claim gates.
+- Why: supported processing was missing from model help; strict recording identity proofs exposed hydrated mirror publication and a durable orphan claim.
+- Validation: supervisor t45852focused tests, cache-free Core types, actual compiled help/parser parity, domain freshness/types and native audits passed; owning finishes exited0. Worker fail-first reproduced three public-writer conflicts and one killed-child claim conflict; repairs not yet accepted.
+- Outcome: t458 accepted at downstreamf191802a/Core0cfb4f45; no new paid test or claim of live semantic success.
+- Follow-up: independent t459 content-browser/type/test gates; t454 strict public/body/restart fencing review and checks; prepare $0.25/64call changed-source round with preserved token bounds.
 
 - October 11: Round-six Core190d7bda/downstream921f0296 ended allthreefailed. Supervisor independently inspected
   zero-call ready ceilings0.25/original tasks and all12actual identity receipts. C startup passed; sealed C
