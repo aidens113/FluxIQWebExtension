@@ -13,21 +13,20 @@ are under `domain/src/`.
 
 ## Which Build Runs
 
-Everything below describes the build Core runs in its default `legacy`
-authoring mode, which is how the product creates and improves Flows: the
-evidence loop explores, writes and tests the steps, the build is judged, and the
-chat applies the proposal onto a new or blank Flow and says the automation is
-ready, or asks before applying an improvement. Core's single setting
-`FLUXIQ_AUTHORING_MODE` (Core `model/authoring-mode/`, described in Core's
-`docs/architecture/automation-studio/llm-flow-bootstrap.md`) can instead select
-`candidate`, in which exploration is separate from submission of the whole
-Flow. Submission assigns a revision and digest; when a trial runner is available,
+Core's configured product default is `candidate`: exploration is separate from
+submission of the whole Flow. Core's single setting `FLUXIQ_AUTHORING_MODE`
+(Core `model/authoring-mode/`, described in Core's
+`docs/architecture/automation-studio/llm-flow-bootstrap.md`) can explicitly select
+`legacy` to retain the evidence-guided draft path. No environment file is rewritten.
+Submission assigns a revision and digest; when a trial runner is available,
 Core tests that exact candidate from the declared start, judges its outcome and
 promotes only a passing candidate through the normal proposal path. Without a
 trial runner, completion stores an unverified draft. The Lab starts each Core in
 the mode a run names (`--authoring-mode`, `legacy` by default); the current
 creation-qualification lanes explicitly select `candidate` and provide a trial
-runner and start reset.
+runner and start reset. Raw Core API requests that omit authoring mode retain
+legacy compatibility. The domain capabilities below serve both paths; draft
+retention details apply to legacy builds.
 
 **Lists during candidate exploration.** One list read and one Next page provide
 evidence for the paging loop. The submitted Flow reads subsequent pages at runtime;
