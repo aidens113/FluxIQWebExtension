@@ -109,10 +109,23 @@ export function assertLiveRepairProof(proof: LiveRepairProof): void {
       details: { unreproducedReplays: reproduced.map((replay) => ({ index: replay.index, runId: replay.runId, status: replay.status })) },
     });
   }
+  // Two separate questions, each named in the message: whether the fixture's
+  // final state held, and whether the Flow itself did all it was written to do
+  // (`replay-repair.ts`, `flowShortfallOf`). R4b's replay reached the state and
+  // was failed on a retry it had recovered from, under a message that said the
+  // state was not reached.
   const failed = proof.replays.filter((replay) => !replay.goalPassed || !replay.flowSucceeded);
   if (failed.length) {
-    throw new RunnerFailure("runtime.behavior", `The applied repair did not hold: ${failed.length} of ${proof.replays.length} replay(s) did not reach the fixture's expected final state`, {
-      details: { failedReplays: failed.map((replay) => ({ index: replay.index, status: replay.status, goalPassed: replay.goalPassed, flowSucceeded: replay.flowSucceeded })) },
+    const missedGoal = failed.filter((replay) => !replay.goalPassed).length;
+    const unsucceeded = failed.filter((replay) => !replay.flowSucceeded);
+    const shortfalls = [...new Set(unsucceeded.map((replay) => replay.flowShortfall ?? "unreported"))];
+    const total = proof.replays.length;
+    const reasons = [
+      ...(missedGoal ? [`${missedGoal} of ${total} replay(s) did not reach the fixture's expected final state`] : []),
+      ...(unsucceeded.length ? [`${unsucceeded.length} of ${total} replay(s) ran a Flow that did not succeed (${shortfalls.join(", ")})`] : []),
+    ];
+    throw new RunnerFailure("runtime.behavior", `The applied repair did not hold: ${reasons.join("; ")}`, {
+      details: { failedReplays: failed.map((replay) => ({ index: replay.index, status: replay.status, goalPassed: replay.goalPassed, flowSucceeded: replay.flowSucceeded, ...(replay.flowShortfall ? { flowShortfall: replay.flowShortfall } : {}) })) },
     });
   }
 }

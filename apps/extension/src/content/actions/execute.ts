@@ -69,13 +69,14 @@
 import {
   WEB_AUTOMATION_FAILURE_CODES,
   webAutomationFailureRecord,
+  type WebAutomationClearedLayer,
   type WebAutomationFailureCarrier,
   type WebAutomationFailureRecord
 } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
 import { TargetResolutionError } from "../action-runtime";
-import { clearableLayerOverPage, clearInterference } from "../action-runtime/interference";
+import { clearableLayerOverPage, pressWaysOut, type ClearingTarget } from "../action-runtime/interference";
 import { faultMayHideBehindLayer, recordRecovery, runWithRecovery } from "../action-runtime/recovery";
 import { observePageIdentity, reportPageChange } from "./page-identity";
 import { captureSnapshotAction } from "./capture-snapshot";
@@ -133,6 +134,8 @@ class UnsupportedActionTypeError extends Error implements WebAutomationFailureCa
  */
 export async function executeContentAction(action: BrowserActionCommand, deps: ContentActionDependencies): Promise<BrowserActionResult> {
   const startedAt = Date.now();
+  // What the defence pressed between attempts, for the result's own record of it.
+  const cleared: WebAutomationClearedLayer[] = [];
   const { result, account } = await runWithRecovery(
     action,
     startedAt,
@@ -142,13 +145,45 @@ export async function executeContentAction(action: BrowserActionCommand, deps: C
     },
     undefined,
     undefined,
-    // A target the page has not drawn (`target_absent`) has no layer to spare,
-    // and the wall that hides it is what the loop clears (`presence.ts`); the
-    // layer probe is asked for that fault alone, so it spares nothing either.
-    (fault) => clearInterference(faultMayHideBehindLayer(fault) ? undefined : ownTarget(action, deps)),
-    () => clearableLayerOverPage()
+    // Every intervention, and the probe that decides whether a missing target
+    // is worth one, is told what the step says of its target, so the layer the
+    // step works in is never cleared (`interference/clearing-target.ts`). A
+    // target the page has not drawn (`target_absent`) was not resolved by the
+    // attempt that just failed, so it is not resolved again here -- the layer
+    // probe is asked for that fault alone -- and it is spared by its selector
+    // and its recorded names instead. The wall that hides it holds neither, so
+    // that wall is still cleared (`presence.ts`); the prompt a "Not now" step
+    // is aimed at is not.
+    (fault) => {
+      const pressed = pressWaysOut(clearingTarget(action, deps, !faultMayHideBehindLayer(fault)));
+      cleared.push(...pressed);
+      return pressed.length;
+    },
+    () => clearableLayerOverPage(clearingTarget(action, deps, false))
   );
-  return recordRecovery(result, account);
+  return recordRecovery(result, account, cleared);
+}
+
+/**
+ * What the step says of its target, for the defence to spare the layer that
+ * holds it: the element it resolves to now (when `resolve` asks for it), its
+ * selector, and the names its recorded fingerprint carries (accessible name,
+ * label, text). Read afresh at each intervention, as each attempt resolves its
+ * target afresh.
+ */
+function clearingTarget(action: BrowserActionCommand, deps: ContentActionDependencies, resolve: boolean): ClearingTarget {
+  const fingerprints = [action.element, action.options?.element].filter(isRecord);
+  const selector = action.selector ?? fingerprints.map((print) => print.selector).find(isText);
+  const names = fingerprints.flatMap((print) => [print.accessibleName, print.label, print.visibleText, print.text, print.ariaLabel]).filter(isText);
+  return { element: resolve ? ownTarget(action, deps) : undefined, selector, names };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 /**

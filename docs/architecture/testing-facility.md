@@ -1063,7 +1063,7 @@ Three reproduce larger application pages and carry no Week 1 corpus row:
 | `admin-console` | CRM console with a virtualised customer list that scrolls inside its own pane, client-side routing, inline editing of a record, and a settings switch inside a web component's shadow root. | Primary, variant `read-only`; `extract-customer-list`, variant `short-book`; `browse-to-customer`; `switch-settings-tab`, variant `light-dom-toggle`. |
 | `member-directory` | Members dashboard whose table carries generated class names, row action menus, an edit dialog, filters, and a bulk remove behind a confirmation. | Primary, variants `restyled` and `member-left`; `filter-members`, variant `sorted-by-activity`; `remove-invitations`, variant `support-drawer`. |
 | `everything-store` | An everything store (fictional Brightaisle) with class names and ids generated per seed, a consent banner, a delayed app banner and notifications modal, a shadow-DOM chat that opens over the buy box, placeholder results, a results tail that loads on scroll, sponsored cards and a sponsored carousel among results, results repeated across pages, a broken Next, prices written twice, `div` pickers, a buy box dead until hydrated, a Save for later that fails once, and a checkout preset to the store's preferences with a payment iframe. Its defences are a search-form honeypot, a 429 rate limit with `Retry-After`, a soft browser check, and a canvas robot check only a person can pass. | Primary (buy a kettle, the playback goal); `add-to-cart`, variant `redesigned-header` (repair); `first-page-earbuds`, variants `deal-wheel` (new popup) and `robot-check` (a hand-off to the person the Lab plays, required, then the workflow's own table; see [the Lab plays the person at a check](#the-lab-plays-the-person-at-a-check)); `plus-under-fifty`, judged only in the created-Flow lane because no recording can pass it. |
-| `crossborder-marketplace` | Cross-border marketplace (a signed-in buyer in Germany; 50 listings, 19 sellers, four warehouses): consent banner, delayed welcome coupons, notification prompt and flash-deal popup, a chat pill over Add to cart, results drawn as skeletons with lazy cards, paid placements mixed in and results repeated across pages, a broken Next, a "verify you are human" check on every third results page, items opening in a new tab, div-built option pickers, a shadow-root store coupon whose first claim fails, framed description and payment picker, a checkout honeypot, a rate-limited feed, per-seed class hashes, per-load ids, and locale-formatted prices and dates. | Primary (three hubs and a coupon in the cart, judged by playback goal), variants `basket-redesign` (the recorded repair task, and the created-Flow target-override proof `crossborder-marketplace-hub-to-cart-basket-redesign-after-creation`, armed only for playback) and `flash-deal`; `spain-hubs` (13-record extraction), variant `list-layout`; `place-order` (consequential purchase that must end in a permission request unless the run is permitted to move money). |
+| `crossborder-marketplace` | Cross-border marketplace (a signed-in buyer in Germany; 50 listings, 19 sellers, four warehouses): consent banner, delayed welcome coupons, notification prompt and flash-deal popup, a chat pill over Add to cart, results drawn as skeletons with lazy cards, paid placements mixed in and results repeated across pages, a broken Next, a "verify you are human" check on every third results page, items opening in a new tab, div-built option pickers, a shadow-root store coupon whose first claim fails, framed description and payment picker, a checkout honeypot, a rate-limited feed, per-seed class hashes, per-load ids, and locale-formatted prices and dates. | Primary (three hubs and a coupon in the cart, judged by playback goal), variants `basket-redesign` (the recorded repair task, and the created-Flow target-override proof `crossborder-marketplace-hub-to-cart-basket-redesign-after-creation`, armed only for playback) and `flash-deal`, and three variants of the interruption switch (`state/interruption.ts`), which adds the same flash deal to any mode on a chosen page (home, search, item, cart or checkout) from a chosen load of it onwards, opened at load unless the arm sets a delay, until it is closed: `flash-deal-on-arrival` (the home page's first load, before the first action), `flash-deal-second-item` (the second product page loaded, a chosen loop pass; the recorded path never meets it) and `flash-deal-stuck` (every product page, with a close glyph that does nothing and a server that refuses the close; expected failure `unexpected_state` / `web.action.blocked_by_dialog`, the honest code a run reports when the deal stays in the way); `spain-hubs` (13-record extraction), variant `list-layout`; `place-order` (consequential purchase that must end in a permission request unless the run is permitted to move money). |
 | `bigbox-retail` | ValueRidge, a fictional big-box retailer: consent dialog, delayed email offer with a honeypot field, support widget and store picker in shadow roots lying over the buttons that matter, per-seed generated classes and ids, ads that repeat listings and ignore filters, prices drawn in pieces, a bot check on the third results page cleared by press-and-hold or waiting, a Next arrow that drops the filters, an Add to cart whose first press only wakes the page, a stale cart badge, a sign-in wall, rate-limited pickup times whose spinner clears only on retry, a cross-origin card frame, and new-tab links. | Primary (pickup cart for another store, playback goal), variant `redesigned-buy-box` (repair); variant `store-remembered` (step already done: the site remembers Millbrook, so `choose-millbrook` has no target and the page already shows its result); `pickup-towels` (nine listings over two filtered pages), variant `list-layout` (existing-Flow edge case); `pickup-order` (consequential guest order). |
 | `job-board` | Job board (Rolefinch) whose Apply hands off to an applicant-tracking site (Talentloom): a shadow-DOM consent wall, a delayed job-alert offer, a chat panel that opens over the job pane, a sign-in wall from the fourth job opened, sponsored cards that ignore filters and repeat real results, a fresh posting that shifts pagination between pages, a broken Next, a rate limiter with retry-after, a first save that fails, a pane that stalls until Retry, a stale badge, salaries in several formats and currencies, seed-rotated classes and ids, and a cross-origin application form in a new tab with a US-first location lookup, a pre-ticked talent pool, a honeypot and a person check. Only four oracle read-outs carry test ids. | Primary (save a week of one employer's jobs), variant `overflow-save`; `remote-rust-roles`, variant `no-exact-matches`; `apply-remote-rust-role`, variant `posting-closed` (expected failure `target_not_found`). |
 | `local-classifieds` | Kerbfind Marketplace, a fictional local-classifieds site in the style of the big social-network marketplaces: a cookie dialog that owns the page, a timed notification prompt, a chat window over Make offer, infinite scroll whose one failing batch loads only on Try again, adverts built from the listing card, a listing sent twice across batches, results outside the search straight after the real ones, a shadow-DOM radius picker whose Apply needs a second press, stale counts, a "checking your browser" pause, a contact rate limit, an offer-form honeypot, a cross-origin map frame, and per-seed atomic class names and ids. | Primary (a consequential offer), `bike-search`, variants `list-layout` and `location-check`; `save-dining-tables`, variant `moved-save`. |
@@ -1513,7 +1513,7 @@ What the chat cannot carry is refused before anything starts
 
 - `--llm-permit`. The chat sends no permit; the person answers at the point
   instead.
-- `--llm-max-cost-usd` below Core's per-build ceiling (below).
+- `--llm-max-cost-usd` below Core's per-Flow ceiling (below).
 - A model other than the default the run's Core was started with. That
   default is the run's `--llm-model`, which the Lab passes to Core (see "The
   default model" below), so `--llm-model deepseek-v4-pro` builds on it from
@@ -1522,7 +1522,7 @@ What the chat cannot carry is refused before anything starts
 
 Two limits come with the chat path:
 
-- Every build is held to one per-build ceiling however it is started:
+- Every Flow is held to one ceiling however it is started:
   Core's run cost ceiling, `FLUXIQ_LLM_RUN_COST_CEILING_USD` (default $0.10,
   passed by the Lab to the run's Core), lowered by the Flow's own
   `maxEstimatedCostUsdPerRun`. Core computes it for every
@@ -1531,11 +1531,15 @@ Two limits come with the chat path:
   `live-llm-plan.ts`), lowered by `--llm-max-cost-usd`, and a direct build
   writes it onto its Flow. A chat build's Flow is made inside Core's command,
   so a lowered ceiling has no Flow to go onto: `--llm-max-cost-usd` below the
-  run's ceiling is refused for a chat build (`assertChatBuildable`). A run's
-  total is the sum of its builds, which is why a chat build plus the Flow's
-  repair can pass the ceiling with every build under it
+  run's ceiling is refused for a chat build (`assertChatBuildable`). The
+  ceiling is one purse per Flow (t438; the user, 2026-10-01: "bring the
+  ceiling down to $0.1 per flow max"): the build, its judge, the chat's
+  reading, the run's repairs and re-authors and its result check all draw on
+  it in the Lab's Core. Before it was, each part had the whole ceiling, and a
+  chat build plus the Flow's repair passed it with every part under it
   (`run-muq66ff9-cb3767a1`, under the earlier $0.25 ceiling: build $0.098,
-  reauthors $0.160, $0.043 and $0.011, result check $0.012).
+  reauthors $0.160, $0.043 and $0.011, result check $0.012;
+  `run-mv4912r9-53b05a51`, $0.1203 against $0.10).
 - A chat build that fails leaves no readable record of what it spent. Core's
   diagnostic reaches the thread's sentence only, so such a build's accounting
   is `null`.
@@ -2179,6 +2183,158 @@ loads the start page again and checks its at-load facts, so recording starts
 from the page as it was first presented, whatever the round trip cost. The
 probe records one `web.dom.extract` action timing, which is the recording
 lane's reported verdict unless the run fails at the facility.
+
+### Run perturbations
+
+`packages/test-runner/src/perturbations/` makes a run suffer one declared fault,
+for the state-aware recovery plan's acceptance-matrix rows 9 and 11. Neither can
+be a scenario variant: the Scenario Lab server has no handle on the browser or
+the gateway. A run takes it as `RunScenarioOptions.perturbation` (read from
+untrusted input with `parseRunPerturbation`); without one nothing is started,
+armed or recorded, and the run is unchanged.
+
+- `{ kind: "drop-action-result", onTargetSelector: "<selector>" }` (row 9).
+  Before the browser launches, a loopback relay starts on an ephemeral port
+  between the extension and Core's gateway, and the run's `gatewayUrl` becomes
+  the relay's, so the browser's containment, the network guard and the
+  extension's `fluxiq.connect` all name it. The relay passes the upgrade on with
+  `Host` set to the gateway and no `Sec-WebSocket-Extensions` (so no frame is
+  compressed), then forwards every message as the bytes it arrived as. It drops
+  the first `client.action_result` of the first `server.execute_action` whose
+  target is exactly that selector (the step's own `selector`, as Core sends it),
+  whatever was pressed before it; a retry of that step is a new command and
+  passes. The connection stays open. It never records a frame body. (A count of
+  committing acts was tried first and struck a dismissal instead of the confirm.)
+- `{ kind: "stop-service-worker", onSiteRequest: "<path pattern>" }` (row 11).
+  Once the extension's control page is open, the first page request to a
+  scenario origin whose path matches the pattern (`*` is any run of
+  characters), such as `/api/social-network-feed/confirm-request`, closes the
+  extension's `service_worker` CDP target (`Target.closeTarget`) while the
+  request is in flight. The target list is then polled for the stopped worker
+  leaving it (`worker.gone`) and an extension worker returning
+  (`worker.started`); Chromium 134 lists the successor under the same target
+  id, and neither Playwright's worker events nor CDP target discovery events
+  arrived for either.
+
+The bundle's `snapshots/perturbation.json` holds the perturbation, whether and
+when it fired (`fault.fired` with the dropped command id, or `worker.stopped`),
+every event around it in order, and two readings taken 2 and 10 seconds after
+the fault: the extension's status (connection, whether a session is held, queue
+size, the runtime command's state and id; no settings, client id, URLs or
+names) and Core's gateway snapshot (session statuses and times, and audit
+entries from 5 seconds before the fault: time, session, type and command id
+only). Reading the extension's status sends it a runtime message, which itself
+starts a stopped worker again, so a row-11 record's successor appears about 2
+seconds after the stop.
+
+`node packages/test-runner/dist/perturbations/check/cli.js --kind
+drop-action-result|stop-service-worker` is the headed, provider-free proof
+that each fault fires at the right moment. It reuses the extension chat
+check's browser session (isolated Core, Scenario Lab, headed Chromium with the
+e2e build and the network guard), pairs the extension, answers
+social-network-feed's own prompts as the person, and has Core press Confirm on
+Amara Osei's request through `execute-client-action`. It passes when the fault
+fired, the site shows the request accepted, Core never received a successful
+result, the dropped result is the armed act's (row 9) or the worker stopped
+after the site received the confirm request (row 11), and both sides were read
+afterwards. Evidence goes to `test-runs/perturbation-check/<stamp>-<kind>/`. It
+proves the fault, not FluxIQ's reconciliation after it.
+
+### The recovery acceptance matrix
+
+`lab recovery-matrix` runs the state-aware recovery plan's acceptance matrix
+(`docs/working/state-aware-recovery-plan.md`, "Acceptance matrix") provider-free
+and headed, on the realistic scenarios only. Row 12 is the paid proof and is not
+in it. The code is `packages/test-runner/src/recovery-matrix/`.
+
+```bash
+FLUXIQ_TEST_ENV_FILES=none pnpm lab recovery-matrix --list          # every row, its cases, and what it still waits for
+FLUXIQ_TEST_ENV_FILES=none pnpm lab recovery-matrix --ready         # every case a current Core can prove
+FLUXIQ_TEST_ENV_FILES=none pnpm lab recovery-matrix --row 4         # one row's cases
+FLUXIQ_TEST_ENV_FILES=none pnpm lab recovery-matrix --case 13b      # one case; repeatable
+```
+
+**Rows and cases.** `matrix-rows.ts` is the table: each row is one or more
+cases, and a case is one Flow, one switch (a scenario variant, a run
+perturbation from "Run perturbations" above, or neither), one check, and what
+the site's state must show afterwards. A row declares the executor capabilities
+its proof needs (`handlers`, `entries`, `checkpoints`, `call-subflow`,
+`reconciliation`); `--list` reports it `ready` when it needs none, `pending`
+with the capabilities otherwise, and `blocked` when it cannot be hand-authored
+as written (below).
+
+**Flows are candidate scripts saved through Core's own path.** Each case's Flow
+is a hand-authored candidate script under `recovery-matrix/flows/`, written
+against the scenario's own markup the way its recording script is. A case first
+opens a fresh persistent workspace once, so its Core sets up storage, the Lab
+identity and the project and records the fixture's port, and closes it. With
+that Core stopped, the script is assembled by
+`acceptAutomationStudioFlowBootstrapResult`, validated by
+`validateAutomationStudioFlowBootstrapPlan` against the web node library, and
+saved by `createFlowBootstrapAdaptation` with an approve and an apply, in this
+process against the workspace's FluxIQ root (`recovery-matrix/compile/`). No
+graph, node or edge is written by hand. Steps name elements by literal
+selectors, which the domain keeps as written; a typing step also carries an
+`element` identity, because without one Core reads the typed text as the
+field's identity and the browser refuses the right field. A Core whose library
+has no Call Subflow refuses a script that calls a part
+(`flow_script.call_unavailable`), and the case is reported `not-proven` for
+`call-subflow`.
+
+**Element facts without evidence.** A fact (`when:`, `done when:`, `start at:`)
+names an element by an evidence handle in the model's grammar, and a
+hand-authored Flow has no exploration to issue one. Such Flows name it with a
+host locator instead, `exists at "<css selector>"` (t402), which Core keeps
+opaque as `target: { locator }` and the web host reads as its selector
+(`domain/src/runtime/facts/query.ts`). A dialog fact (`dialog <kind> "<name>"`)
+needs neither. The compile step still refuses any plan that names an evidence
+handle anywhere (`compile/evidence-handles.ts`), node parameters or metadata,
+before Core saves it, since a saved handle would never resolve; a case is
+reported `blocked` only for that.
+
+**The run.** The workspace is opened again. The fixture is reset, the case's
+variant armed and its perturbation started, the extension paired in a visible
+browser (`openReplayBrowser`, as `lab replay` does), and the saved Flow run
+deterministically. The owned Core is built with `modelProvidersEnabled: false`,
+the run carries no `llmExecution`, and a case refuses to start when its
+environment holds a provider credential. The case then reads:
+
+- Core's run detail: every attempt in closed words, including the C11 trace
+  records when Core writes them (`lifecycle`, `entry`, `stateRouting` with the
+  guards that refused a way on, `framePath`) (`records/attempt-records.ts`);
+- Core's model gate record for the call count (`records/model-calls.ts`). Core
+  writes a zero accounting in the same save as the result verdict, after the run
+  answers, so the case waits up to 30 seconds for it. A failed deterministic
+  run's gate declines with `invoked: false` and a code, which also reads as zero.
+  A run with no gate record has no count, and the case fails as unknown;
+- the site's state from `/__control/final-state`, judged against the case:
+  cart pieces and adds, coupons, confirmed requests and refused presses, with
+  any act beyond the expected one counted as a duplicated act
+  (`records/site-state.ts`);
+- the scenario's goal facts on the page, where the case judges by them.
+
+**The verdict.** Every check (`checks/matrix-checks.ts`) first requires zero
+model calls, zero interventions and zero harness activations, and the site's
+acts as expected. It then asks for the record that shows its behaviour, for
+example a `before` or `retry` handler that resumed with its completion check
+true for row 4. A case whose run wrote no record of the mechanism the row is
+about is `not-proven`, naming the missing capability, never `passed`. Every
+case also reports the plan's measures (`measures.ts`): incidents and how many
+closed without a model, retries, planned fails and true failures, model calls
+per true failure, state routes, duplicated acts and false successes. In-run
+fixes, avoidable escalations and learning cost are 0 by construction in a
+provider-free run, and handler-check overhead is `null` until the trace carries
+per-boundary timings.
+
+**The bundle** is `<runs>/recovery-matrix/<matrix-run-id>/`: `case-<id>.json`
+per case (verdict, reasons, missing records, the compiled Flow's steps and
+requirements, each attempt in closed words, the accounting and its source, the
+measures, the perturbation's report) and `summary.json` (every case's verdict
+and the matrix's status table). Cases run one at a time, each once per launch. A
+case that passed, or never ran, has its workspace removed. One that did not pass
+keeps it under `<runs>/persistent-isolated/rmx-<case>-<hex>/`, with Core's store
+holding the run's trace and the session's process logs, and names it as
+`retainedWorkspace`, so every failure is debugged from its run's files.
 
 ### Recording checks
 
@@ -3012,7 +3168,7 @@ Live-provider testing is an explicit opt-in lane and is not part of ordinary det
 
 The default Lab allowance is the model's whole context window: 992,000 input tokens, 8,000 output tokens and 1,000,000 total tokens per request (`DEFAULT_LLM_LAB_BUDGET`), with a 30-second timeout and Core's per-build estimated-cost ceiling (`FLUXIQ_LLM_RUN_COST_CEILING_USD`, default $0.10; see "Live-run waste guards"), which a run's options may only lower (each call inherits that ceiling). Validation rejects any request total above 1,000,000 tokens (`LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST`, mirroring Core's DeepSeek model limits). That number is what the model can read, not a budget: on 2026-09-30 the user ordered that no limit hide page information from the model, and a request over the window fails loudly rather than being trimmed. The allowance used to be 8,000/2,000/10,000 under a 50,000-token ceiling, then 48,000/8,000/56,000 under Core's 64,000-token ceiling, and each made a real page impossible to describe. A live run permits no retries.
 
-Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core run intent `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The live campaign (`scripts/lab/live-campaign`) passes no `--llm-max-run-tokens`: with whole-page requests a build may use more than a million tokens across its calls, and a run budget it outgrew would fail the run as `performance.budget` only after the money was spent, so what bounds a campaign run is its per-build spend ceiling, its call count and Core's stall guard. The spend ceiling is per build, whatever the build's call count, and it has one definition: Core's scoped ceiling resolver, activated by `FLUXIQ_LLM_RUN_COST_CEILING_SCOPE=test` and resolved from the Lab's `FLUXIQ_LLM_RUN_COST_CEILING_USD` (Lab default $0.10; ordinary user UI remains $0.25 and ignores the test variable), which the Lab resolves for each run with `liveLlmBuildCostCeilingUsd` (`packages/test-runner/src/live-llm/build-cost-ceiling.ts`): the same sources it passes Core, through Core's own resolver, so the plan and Core hold a build to one number. `--llm-max-cost-usd` is the whole build's ceiling, not a per-call figure: it may only lower Core's ceiling, is never multiplied by the call count, and the live campaign passes none. The ceiling is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings, so Core's loop budget holds the build, the run's recovery and each re-author build to it, each on its own. The Lab's post-run check holds each settled phase to it again, and every live run reports its spend per build against it: `snapshots/live-llm.json` `observed.perBuild`, the campaign row's `perBuildSpend` with the summary's `buildsOverCeiling`, and the spend ledger's `buildCeilingUsd`, `maxBuildCostUsd` and `buildsOverCeiling`. There is no spend budget across runs. The model is the Flow's `llmModel` setting.
+Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core run intent `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The live campaign (`scripts/lab/live-campaign`) passes no `--llm-max-run-tokens`: with whole-page requests a build may use more than a million tokens across its calls, and a run budget it outgrew would fail the run as `performance.budget` only after the money was spent, so what bounds a campaign run is its Flow's spend ceiling, its call count and Core's stall guard. The spend ceiling is one purse per Flow, whatever the call count -- the user's words (2026-10-01): "bring the ceiling down to $0.1 per flow max" -- and it has one definition: Core's scoped ceiling resolver, activated by `FLUXIQ_LLM_RUN_COST_CEILING_SCOPE=test` and resolved from the Lab's `FLUXIQ_LLM_RUN_COST_CEILING_USD` (Lab default $0.10; ordinary user UI remains $0.25 and ignores the test variable), which the Lab resolves for each run with `liveLlmBuildCostCeilingUsd` (`packages/test-runner/src/live-llm/build-cost-ceiling.ts`): the same sources it passes Core, through Core's own resolver, so the plan and Core hold a Flow to one number. `--llm-max-cost-usd` is the whole build's ceiling, not a per-call figure: it may only lower Core's ceiling, is never multiplied by the call count, and the live campaign passes none. The ceiling is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings. Because the Lab's Core runs with the ceiling Lab-scoped, Core holds the whole Flow to it as one purse (t438): the build and its judge, the chat's reading of the message that asked for the build or the run, the run's in-run repairs, its recovery after the run, its result check, its re-authors and their re-runs all draw on the Flow's one record (`creation-spend.json`), each call held against what the Flow has left and added to the record as it settles, whether the run succeeds or fails (Core `docs/architecture/automation-studio/llm-flow-bootstrap.md`, "One purse per Flow creation"). The record outlives the creation, so a later build of the same Flow in the Lab -- an extend after it was proposed -- carries everything the Flow has spent and may be refused on cost at once. The Lab's post-run check holds each settled phase to the ceiling again, and every live run reports its Flow's whole spend against it, every phase and every call its step log saw: `snapshots/live-llm.json` `observed.perBuild` (one `flow` entry, with its `parts` beside it), the campaign row's `perBuildSpend` with the summary's `buildsOverCeiling` (Flows over the ceiling), and the spend ledger's `buildCeilingUsd`, `maxBuildCostUsd` (the Flow's spend) and `buildsOverCeiling` (1 when the Flow passed the ceiling). The field names are kept for the ledger's readers. There is no spend budget across runs. The model is the Flow's `llmModel` setting.
 
 **Model calls need no grant.** Core resolves the provider from the caller's own unlocked Secret Keys session. The Lab installs the key, saves the Flow's LLM settings and spend ceiling, and then sends its build (`generate-flow-bootstrap-adaptation`) or run (`run-runtime-session` with a `runIntent`). The one thing the operator still allows is a consequence: `--llm-permit` names the classes (`move_money`, `delete`, `send_or_publish`, `modify_existing`, `create_new`) the run's actions may cause, and the Lab sends them as `permittedConsequences` on the build and the run only when it names any. Absent, a consequential act stops and asks a person (`permission_required`). A created-Flow build started from the extension's chat carries no permit at all, so `--llm-permit` is refused for it, and the Lab's person answers the question in the chat instead ("The build is started from the extension's chat window" above). `snapshots/live-llm.json` records the plan's `authorized` bounds and its `permittedConsequences`.
 
@@ -3070,6 +3226,18 @@ had failed. Such a run's ledger `finish` carries `facilityFailureBeforeProvider`
 recorded no cost, and its step log holds no provider call. Anything less certain
 leaves the field out and the run counts as a failure. A killed run is skipped
 the same way. Either still asks for its debug.
+
+A killed run is a `.staging-run-*` folder with no seal. A staging folder whose
+`bundle.complete.json` matches its `artifact-index.json` finished and only
+failed to publish, so it is read like a published bundle (its real verdict, cost
+and per-build spend) and marked `unpublished` in the ledger; it counts under
+`unchanged` like any other run. Publication itself retries the staging rename
+for about 15 s and then publishes through a copy, because on Windows a folder
+cannot be renamed while any process holds a file in it open:
+run-mv4912r9-53b05a51 (2026-10-11) lost its bundle to a reader tailing
+`events.ndjson` and was recorded as killed. When it still fails, the error names
+the stage, the errno and the folder the sealed bundle stays in, and the run
+record is closed from that folder so its `steps/` link survives.
 
 `behind-dev` is the user's rule of 2026-10-01: live testing runs on code synced
 to the integrated `dev` line. A lane worktree that missed a merge round tests
@@ -3133,7 +3301,7 @@ Never stop a Lab run by matching processes by command line. On 2026-10-01 a
 other lanes' runs (`docs/working/language-driven-flow-loop-plan/debugs/run-muq0in9r-0793b448.md`,
 Cause 1).
 
-#### The per-build cost ceiling
+#### The per-Flow cost ceiling
 
 The Lab's build/recovery ceiling is `FLUXIQ_LLM_RUN_COST_CEILING_USD`, in US
 dollars: $0.10 when unset. The user clarified on 2026-10-03 that this is only
@@ -3158,7 +3326,7 @@ bounds it by Core's largest configurable ceiling, $10
 ceiling itself.
 
 The Lab's plan, its post-run check (each call's cost and each build's total)
-and its spend reports use the same value Core gets:
+and its spend reports (each Flow's whole spend) use the same value Core gets:
 `liveLlmBuildCostCeilingUsd(repositoryRoot)` reads the same configuration and
 lowering flag and resolves the value through Core's own
 `resolveAutomationStudioLlmRunCostCeilingUsd` with explicit test scope, so a value Core would refuse at

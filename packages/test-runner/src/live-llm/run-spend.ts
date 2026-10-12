@@ -34,8 +34,16 @@
 // step log names each call's build and phase (`byPart`), so the creation
 // build's `judge` calls join the judge phase and its `read` calls are `read`;
 // their cost comes out of the build's only when Core's figure is the one that
-// held it (`creationBuildSplit`). Core's purse holds the build to its ceiling
-// with them in, so the per-build figures keep Core's whole build cost.
+// held it (`creationBuildSplit`).
+//
+// **One purse per Flow (t438).** The user's words (2026-10-01): "bring the
+// ceiling down to $0.1 per flow max" -- the build, its re-authors, its repairs
+// and the judge all count against one ceiling, in billed dollars. A Lab run is
+// one Flow, so `perBuild` judges the run's whole spend, every phase and every
+// call the step log saw, as that one Flow against the ceiling, and lists each
+// part beside it. It used to judge the build, the run's recovery and each
+// re-author as builds of their own, each allowed the whole ceiling, which read
+// `run-mv4912r9-53b05a51` ($0.1203 against $0.10) as inside it.
 
 import type { LiveLlmObservedUsage } from "./observed-usage.js";
 import type { LiveLlmReauthorRecord } from "./reauthor-record.js";
@@ -65,11 +73,9 @@ export type LiveLlmRunSpend = {
   /** What the run's step log held and what it added to the phases; `null` when there was no step log to read. */
   stepLog: LiveLlmStepLogReconciliation | null;
   /**
-   * The spend judged per build against the per-build ceiling, as Core judges
-   * it: the build, the run's own recovery and each re-author attempt is a
-   * build of its own, each allowed the whole ceiling and none summed with
-   * another. The result check is not a build: Core holds it to its own,
-   * smaller limit outside the run's budget, so it is reported in `phases` only.
+   * The spend judged against the ceiling as one Flow: the run's whole spend,
+   * build, recovery, re-authors, judge, chat and anything the step log alone
+   * saw, with each part listed beside it.
    */
   perBuild: LiveLlmPerBuildSpend;
 };
@@ -93,16 +99,22 @@ export type LiveLlmStepLogReconciliation = {
 type LiveLlmStepLogShare = LiveLlmSpendPhase & { calls: number };
 type LiveLlmCreationBuildSplit = { judge: LiveLlmStepLogShare; read: LiveLlmStepLogShare; calls: number; estimatedCostUsd: number };
 
-/** One build's spend against the per-build ceiling. */
-export type LiveLlmBuildSpend = { phase: "build" | "runtime" | "reauthor"; attempt: number | null; estimatedCostUsd: number; overCeiling: boolean };
+/** The Flow's spend against the ceiling: everything the run spent on it. */
+export type LiveLlmBuildSpend = { phase: "flow"; attempt: null; estimatedCostUsd: number; overCeiling: boolean };
+
+/** One part of the Flow's spend, as it drew on the Flow's one purse; a re-author's attempts are each a part. */
+export type LiveLlmFlowSpendPart = { phase: "build" | "read" | "judge" | "chat" | "runtime" | "reauthor" | "unattributed"; attempt: number | null; estimatedCostUsd: number };
 
 export type LiveLlmPerBuildSpend = {
-  /** The ceiling each build was held to: the plan's, which is Core's per-build ceiling or lower. */
+  /** The ceiling the Flow was held to: the plan's, which is Core's run cost ceiling or lower. */
   ceilingUsd: number;
+  /** The Flow, one entry; none for a run that spent nothing anywhere. */
   builds: LiveLlmBuildSpend[];
-  /** The most any one build spent, so a reader sees at once how near the ceiling the run came. */
+  /** What each part of the Flow spent, which together make its figure. */
+  parts: LiveLlmFlowSpendPart[];
+  /** What the Flow spent, so a reader sees at once how near the ceiling the run came. */
   maxBuildCostUsd: number;
-  /** How many builds spent more than the ceiling: 0 on every run Core held to it. */
+  /** 1 when the Flow spent more than the ceiling, else 0. */
   overCeiling: number;
 };
 
@@ -155,13 +167,14 @@ export function liveLlmRunSpend(input: {
     };
   }
   const phases = [build, runtime, judge, reauthor, chat, read];
+  const totalEstimatedCostUsd = sum([...phases.map((phase) => phase?.estimatedCostUsd ?? 0), stepLog?.unattributed.estimatedCostUsd ?? 0]);
   return {
     calls: counted(phases) + (stepLog?.unattributed.calls ?? 0),
-    totalEstimatedCostUsd: sum([...phases.map((phase) => phase?.estimatedCostUsd ?? 0), stepLog?.unattributed.estimatedCostUsd ?? 0]),
+    totalEstimatedCostUsd,
     phases: { build, runtime, judge, reauthor, chat, read },
     uncountedPhases: reauthorUncounted ? ["reauthor"] : [],
     stepLog,
-    perBuild: perBuildSpend(input.ceilingUsd, coreBuild, runtime, input.reauthor),
+    perBuild: flowSpend(input.ceilingUsd, totalEstimatedCostUsd, { build, read, judge, chat, runtime }, input.reauthor, stepLog?.unattributed ?? null),
   };
 }
 
@@ -198,22 +211,30 @@ function creationBuildSplit(build: { calls: number; estimatedCostUsd: number } |
 }
 
 /**
- * Each build's spend against the ceiling. A re-author's attempts are each a
- * build, so each is judged on its own figure; one whose cost Core did not
- * record is listed at what was recorded, which is nothing.
+ * The Flow's spend against the ceiling: the run's whole total, judged once,
+ * with its parts listed. A re-author's attempts are each a part; one whose
+ * cost Core did not record is listed at what was recorded, which is nothing.
  */
-function perBuildSpend(ceilingUsd: number, build: LiveLlmSpendPhase | null, runtime: LiveLlmSpendPhase | null, reauthor: LiveLlmReauthorRecord | null | undefined): LiveLlmPerBuildSpend {
-  const of = (phase: LiveLlmBuildSpend["phase"], attempt: number | null, estimatedCostUsd: number): LiveLlmBuildSpend => ({ phase, attempt, estimatedCostUsd, overCeiling: estimatedCostUsd > ceilingUsd });
-  const builds = [
-    ...(build ? [of("build", null, build.estimatedCostUsd)] : []),
-    ...(runtime ? [of("runtime", null, runtime.estimatedCostUsd)] : []),
-    ...(reauthor?.attempts ?? []).map((attempt, index) => of("reauthor", attempt.attempt ?? index + 1, sum([attempt.estimatedCostUsd ?? 0]))),
+function flowSpend(
+  ceilingUsd: number,
+  totalEstimatedCostUsd: number,
+  phases: Record<"build" | "read" | "judge" | "chat" | "runtime", LiveLlmSpendPhase | null>,
+  reauthor: LiveLlmReauthorRecord | null | undefined,
+  unattributed: LiveLlmSpendPhase | null,
+): LiveLlmPerBuildSpend {
+  const part = (phase: LiveLlmFlowSpendPart["phase"], attempt: number | null, estimatedCostUsd: number): LiveLlmFlowSpendPart => ({ phase, attempt, estimatedCostUsd });
+  const parts = [
+    ...(["build", "read", "judge", "chat", "runtime"] as const).flatMap((phase) => (phases[phase] ? [part(phase, null, phases[phase].estimatedCostUsd)] : [])),
+    ...(reauthor?.attempts ?? []).map((attempt, index) => part("reauthor", attempt.attempt ?? index + 1, sum([attempt.estimatedCostUsd ?? 0]))),
+    ...(unattributed && (unattributed.calls ?? 0) + unattributed.estimatedCostUsd > 0 ? [part("unattributed", null, unattributed.estimatedCostUsd)] : []),
   ];
+  const overCeiling = totalEstimatedCostUsd > ceilingUsd;
   return {
     ceilingUsd,
-    builds,
-    maxBuildCostUsd: builds.reduce((most, item) => Math.max(most, item.estimatedCostUsd), 0),
-    overCeiling: builds.filter((item) => item.overCeiling).length,
+    builds: parts.length > 0 ? [{ phase: "flow", attempt: null, estimatedCostUsd: totalEstimatedCostUsd, overCeiling }] : [],
+    parts,
+    maxBuildCostUsd: parts.length > 0 ? totalEstimatedCostUsd : 0,
+    overCeiling: parts.length > 0 && overCeiling ? 1 : 0,
   };
 }
 

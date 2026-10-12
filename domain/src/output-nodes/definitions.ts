@@ -1,6 +1,7 @@
 import type { AutomationNodeParameter, AutomationNodePort } from "fluxiq/automation-studio/nodes";
 import type { AutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
+import { WEB_AUTOMATION_ACTION_CONSEQUENCE_DECLARATION } from "../actions/consequence-declaration";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import type { WebAutomationActionDefinition } from "../actions/schemas";
 import type { WebAutomationActionType } from "../actions/types";
@@ -169,13 +170,30 @@ const stateVerifyingOutputs: ReadonlySet<WebAutomationActionType> = new Set<WebA
   "web.dom.wait_for_selector"
 ]);
 
+// What a model reads about `expectedState` (t432): what the step leaves the
+// page showing, written as the script's `done when:` line, which names its
+// element by handle and becomes `{ facts }` here (Core's
+// `script-statements/step-done-when.ts`). The `conditions` form the evaluator
+// also reads names its element by a locator, which a hand-authored Flow may
+// write and a model never does, so it is not described to one.
 const expectedStateParameter: AutomationNodeParameter = {
   id: "expectedState",
   label: "Expected State",
-  description: "Post-conditions checked after this action, as web.dom.assert conditions: { conditions: [{ kind, selector, expected }], mode, timeoutMs }.",
+  description: "What the page shows once this step worked, checked after it runs. Write it as the step's `done when:` line, naming any element only by the handle the page view printed for it: `done when: text t9 contains \"Saved\"`.",
   valueType: "object",
   ui: { control: "value" }
 };
+
+/**
+ * What a model reads about `target`: the one parameter it names an element
+ * in, by handle (t432; user, 2026-10-10: the model names elements by the
+ * handles the page view printed, and the rest "is all handled by extension").
+ * Plan resolution turns the handle into the `selector` and `element` beside it
+ * (`runtime/llm-evidence/plan-resolution/`), which a model never sees or writes
+ * (`shownToModel: false`); Core writes `target` back as the adapted target when
+ * the step runs.
+ */
+const TARGET_DESCRIPTION = "The element this step acts on, named only by the handle the page view printed for it, copied exactly: {\"handle\": \"t5\"}; in a Flow script, `target: t5`. A step that acts on an element needs one.";
 
 export function webAutomationOutputNodeId(outputId: WebAutomationActionType): string {
   return `web.output.${outputId.replace(/^web\./, "").replace(/\./g, "-")}`;
@@ -251,6 +269,9 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
       // Read or change: the question Core's defensive policy asks before it
       // repeats an action. See WEB_AUTOMATION_ACTION_EFFECT above.
       effect: WEB_AUTOMATION_ACTION_EFFECT[definition.actionType],
+      // Which steps must declare their consequences, the domain's one rule (`../actions/consequence-declaration.ts`): Core
+      // schedules a saved step to run as saved in a repair's test only where its declaration is not required or present (t439).
+      consequenceDeclaration: WEB_AUTOMATION_ACTION_CONSEQUENCE_DECLARATION[definition.actionType],
       // Core's element-target preparation (`runtime/io-policy.ts`) resolves the
       // recorded fingerprint against the runtime candidates, and applies its
       // confidence floor, only for an output that declares this. The flag is
@@ -269,10 +290,11 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
 
 function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeParameter[] {
   const selectorParameters: AutomationNodeParameter[] = [
-    { id: "target", label: "Adapted Target", valueType: "object", ui: { control: "value" } },
-    { id: "selector", label: "Selector", valueType: "string", ui: { control: "text", placeholder: "CSS selector" } },
-    { id: "element", label: "Element", valueType: "object", ui: { control: "value" } },
-    { id: "visualTarget", label: "Visual Target", valueType: "object", ui: { control: "value" } },
+    { id: "target", label: "Adapted Target", description: TARGET_DESCRIPTION, valueType: "object", example: { handle: "t5" }, ui: { control: "value" } },
+    // Filled from the handle in `target`, never by a model (`TARGET_DESCRIPTION`).
+    { id: "selector", label: "Selector", valueType: "string", shownToModel: false, ui: { control: "text", placeholder: "CSS selector" } },
+    { id: "element", label: "Element", valueType: "object", shownToModel: false, ui: { control: "value" } },
+    { id: "visualTarget", label: "Visual Target", valueType: "object", shownToModel: false, ui: { control: "value" } },
     { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 10_000 }
   ];
   // A structured parameter is an `object` whose shape is the matching field of

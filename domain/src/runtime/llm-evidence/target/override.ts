@@ -46,6 +46,8 @@
 // a control nobody can name. The gate withholds a name the model was never
 // shown, so this adds nothing to what leaves the domain.
 
+import type { WebAutomationElementFingerprint } from "../../../actions/types";
+import { webElementIdentityShortfall } from "../../../element-fingerprint";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { type WebLlmEvidenceElement } from "../elements";
 import { present } from "../present";
@@ -58,6 +60,7 @@ import {
 } from "../repairable-parameters";
 import type { WebLlmPageEvidence } from "../sanitize";
 import { webRepairEquivalenceRefusal } from "./equivalence";
+import { webPacketElementFingerprint } from "../packet-fingerprint";
 import type {
   AutomationStudioRuntimeTargetOverrideEvidenceValidation,
   AutomationStudioRuntimeTargetOverrideFailedAction,
@@ -126,9 +129,15 @@ export function validateWebRuntimeTargetOverrideEvidence(
   // ever declared before something reads it -- and such an action has nothing
   // this contract can re-point, which is what the refusal says.
   if (resolved.size !== 1 || !element) return { status: "absent", reason: "action_not_repairable" };
+  const fingerprint = webPacketElementFingerprint(element, { selector: selectors?.get(element.target) });
+  // The save-time guard (t425): a repair is saved onto the Flow by
+  // `edit_action_target`, so a control it could find by one attribute alone is
+  // refused here, as one that cannot be told apart. Core's closed vocabulary has
+  // no closer word, and the model is told nothing about which signals it lacked.
+  if (webElementIdentityShortfall(fingerprint)) return { status: "ambiguous", reason: "target_indistinguishable" };
   return present<Extract<AutomationStudioRuntimeTargetOverrideEvidenceValidation, { status: "resolved" }>>({
     status: "resolved",
-    target: resolvedTarget(element, selectors),
+    target: resolvedTarget(element, fingerprint),
     control: repairedControl(element)
   });
 }
@@ -174,6 +183,14 @@ function proposedHandles(target: AutomationStudioRuntimeTargetOverrideTarget): R
  * element target in this system already has: Core's element-target normalizer
  * and the DOM outputs read it with no new branch. There is no keyed form. One
  * existed for a list extraction and nothing read it.
+ *
+ * Its signals are the full fingerprint the builder makes of the packet element
+ * (`../packet-fingerprint/`): the tag, role and input type, the words, the
+ * label, the authored id, `name`, class tokens and test id, and the attributes
+ * that describe the control. Not where it sat: the record the recording named
+ * stays the node's (`output-nodes/targets/targets.ts` `withRecordedRecord`), so
+ * no `context` is written, and the list position rides in `metadata` as it
+ * always has.
  */
 type WebResolvedRepairTarget = {
   /** The handle used, which is always the one the model named. */
@@ -189,23 +206,16 @@ type WebResolvedRepairTarget = {
   handleResolution: "named";
   tagName: string;
   role?: string;
+  implicitRole?: string;
   accessibleName?: string;
+  label?: string;
   visibleText?: string;
-  selector?: string;
-  metadata?: WebRepairElementMetadata;
-};
-
-/**
- * One packet element as an element-target fingerprint. Identity first: the
- * accessible name, the visible text, the role and the tag are what survives a
- * page rewriting its markup, and Core's own matcher weights them accordingly.
- * The selector is one more signal rather than the identity.
- */
-type WebRepairElementFingerprint = {
-  tagName: string;
-  role?: string;
-  accessibleName?: string;
-  visibleText?: string;
+  id?: string;
+  name?: string;
+  classNames?: string[];
+  testId?: string;
+  inputType?: string;
+  attributes?: Record<string, string>;
   /** A hint, not the identity, and absent where the binding is gone. Only valid inside `metadata.browserFrameId`'s frame. */
   selector?: string;
   metadata?: WebRepairElementMetadata;
@@ -221,42 +231,47 @@ type WebRepairElementMetadata = {
   listTotal?: number;
 };
 
-function resolvedTarget(
-  resolved: WebLlmEvidenceElement,
-  selectors: ReadonlyMap<string, string> | undefined
-): AutomationStudioRuntimeTargetOverrideTarget {
-  const fingerprint = elementFingerprint(resolved, selectors);
-  return present<WebResolvedRepairTarget>({
+/**
+ * Core refuses a resolved target whose serialization is longer than this
+ * (`AUTOMATION_STUDIO_RUNTIME_TARGET_MAX_SERIALIZED_LENGTH`, 4,000), less room
+ * for the handle map. A control with long words then keeps its words and drops
+ * its describing attributes and class list first, which every other signal
+ * outweighs (Core weighs class names at 5 against 24 for its words).
+ */
+const MAX_TARGET_LENGTH = 3_800;
+
+function resolvedTarget(resolved: WebLlmEvidenceElement, fingerprint: WebAutomationElementFingerprint): AutomationStudioRuntimeTargetOverrideTarget {
+  const metadata = present<WebRepairElementMetadata>({
+    browserFrameId: resolved.frameId,
+    inputType: resolved.inputType,
+    controlType: resolved.controlType,
+    formId: resolved.form,
+    listIndex: resolved.item?.index,
+    listTotal: resolved.item?.total
+  });
+  const target = present<WebResolvedRepairTarget>({
     handles: { [WEB_REPAIRABLE_ELEMENT_PARAMETER]: resolved.target },
     handleResolution: "named",
-    tagName: fingerprint.tagName,
+    tagName: resolved.tag,
     role: fingerprint.role,
+    implicitRole: fingerprint.implicitRole,
     accessibleName: fingerprint.accessibleName,
+    label: fingerprint.label,
     visibleText: fingerprint.visibleText,
-    selector: fingerprint.selector,
-    metadata: fingerprint.metadata
-  });
-}
-
-function elementFingerprint(element: WebLlmEvidenceElement, selectors: ReadonlyMap<string, string> | undefined): WebRepairElementFingerprint {
-  const metadata = present<WebRepairElementMetadata>({
-    browserFrameId: element.frameId,
-    inputType: element.inputType,
-    controlType: element.controlType,
-    formId: element.form,
-    listIndex: element.item?.index,
-    listTotal: element.item?.total
-  });
-  return present<WebRepairElementFingerprint>({
-    tagName: element.tag,
-    role: element.role,
-    accessibleName: element.name,
-    visibleText: element.text,
+    id: fingerprint.id,
+    name: fingerprint.name,
+    classNames: fingerprint.classNames,
+    testId: fingerprint.testId,
+    inputType: fingerprint.inputType,
+    attributes: fingerprint.attributes,
     // The hint, and only where the caller still holds the binding that issued
     // the handle. The packet has not carried a selector since `.v2`, so a repair
     // resolved from a packet alone is fingerprint-only -- which is weaker, not
     // wrong: the name, the role and the tag are what Core scores highest.
-    selector: selectors?.get(element.target),
+    selector: fingerprint.selector,
     metadata: Object.keys(metadata).length ? metadata : undefined
   });
+  if (JSON.stringify(target).length <= MAX_TARGET_LENGTH) return target;
+  const { attributes: _attributes, classNames: _classNames, ...bounded } = target;
+  return bounded;
 }

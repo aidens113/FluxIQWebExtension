@@ -42,6 +42,19 @@ test("an attempt that ran, or a mark that is not Core's closed shape, carries no
   for (const action of outcome.actions) assert.equal("skipped" in action, false, `${action.attemptIndex} carries no skip`);
 });
 
+// Core t444: a skipped step whose words name a lasting act keeps that the act was not done.
+test("a not-done skip keeps Core's notDone mark, and only as true", async () => {
+  const outcome = await run([
+    attempt({ skipped: { reason: "target_absent", code: "web.target.not_found", notDone: true } }),
+    attempt({ attemptId: "b", skipped: { reason: "target_absent", code: "web.target.not_found", notDone: "yes" } }),
+    attempt({ attemptId: "c", skipped: { reason: "state_routed", code: "executor.state_routed", toNodeId: "node.search", direction: "forward", notDone: true } }),
+  ]);
+  assert.deepEqual(outcome.actions[0]!.skipped, { reason: "target_absent", code: "web.target.not_found", notDone: true, startedAt: 1_000, finishedAt: 1_030 });
+  assert.equal("skipped" in outcome.actions[1]!, false, "a notDone that is not true is not Core's shape");
+  assert.equal("skipped" in outcome.actions[2]!, false, "only a target_absent skip can say its act was not done");
+  assert.deepEqual(outcome.actions.map((action) => action.status), ["skipped", "skipped", "skipped"], "the skip route still reads skipped");
+});
+
 test("a skip that dispatched nothing finished when it started", async () => {
   const outcome = await run([attempt({ finishedAt: undefined, skipped: { reason: "target_absent", code: "executor.ready_state.not_shown" } })]);
   assert.deepEqual(outcome.actions[0]!.skipped, { reason: "target_absent", code: "executor.ready_state.not_shown", startedAt: 1_000, finishedAt: 1_000 });

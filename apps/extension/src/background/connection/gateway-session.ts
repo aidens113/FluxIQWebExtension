@@ -17,6 +17,7 @@ import { HEARTBEAT_INTERVAL_MS, RECONNECT_BASE_DELAY_MS, RECONNECT_MAX_DELAY_MS 
 import { browserDescriptor } from "../../shared/browser";
 import {
   browserExtensionCapabilities,
+  type ClientGatewayActionResult,
   type ClientGatewayClientHello,
   type ClientGatewayClientMessage,
   type ClientGatewayServerMessage,
@@ -26,6 +27,7 @@ import {
   type JsonObject,
   type ServerCommandPayload
 } from "../../shared/protocol";
+import { webAutomationFactCheckFromGatewayCommand } from "@fluxiq-web-extension/domain/client";
 import { browserActionFromGatewayCommand, gatewayActionResultFromRejection, isWebAutomationActionRejection } from "../../runtime";
 import { compactObject } from "./value-readers";
 
@@ -230,6 +232,26 @@ export class GatewaySession {
     this.deps.emitStatus();
   };
 
+  /**
+   * The result the offline queue holds for a command id, when it holds one: a
+   * command whose result was queued while the socket was down is answered with
+   * it, never run again (`in-flight/command-reconciliation.ts`, plan B3).
+   *
+   * The wire lets a client report `interrupted` (Core's contract, C8); this
+   * extension still reports a leftover as `unknown` or `failed` with the
+   * payload marker, so a queued `interrupted` is read as `unknown`: never as
+   * "did not act".
+   */
+  async queuedActionResult(commandId: string): Promise<ClientGatewayActionResult | undefined> {
+    const queued = await this.deps.queue.readQueuedEvents();
+    for (const message of queued) {
+      if (message.type !== "client.action_result" || message.payload.commandId !== commandId) continue;
+      const { status, ...rest } = message.payload;
+      return { ...rest, status: status === "interrupted" ? "unknown" : status };
+    }
+    return undefined;
+  }
+
   async flushQueue(): Promise<void> {
     if (!this.client?.connected) return;
     const queued = await this.deps.queue.readQueuedEvents();
@@ -311,6 +333,19 @@ export class GatewaySession {
     client.on("stop_recording", ({ message }) => handlers.onCommand({ ...message.payload, command: "stop_recording" }, message.id));
     client.on("capture_snapshot", ({ message }) => handlers.onCommand({ ...message.payload, command: "capture_snapshot" }, message.id));
     client.on("execute_action", ({ message }) => {
+      // A fact check is not a web action: it is answered by its own route
+      // (`runtime/fact-check-runner.ts`), or refused here when unreadable.
+      const facts = webAutomationFactCheckFromGatewayCommand(message.payload);
+      if (facts !== undefined) {
+        if (isWebAutomationActionRejection(facts)) {
+          void this.send("client.action_result", gatewayActionResultFromRejection(facts)).catch((error: unknown) => {
+            this.deps.reportError(error instanceof Error ? error.message : "Could not report a rejected fact check.");
+          });
+          return;
+        }
+        handlers.onCommand({ command: "evaluate_facts", check: facts }, message.id);
+        return;
+      }
       const action = browserActionFromGatewayCommand(message.payload);
       // An unknown action type is answered here; nothing is dispatched to the page.
       if (isWebAutomationActionRejection(action)) {

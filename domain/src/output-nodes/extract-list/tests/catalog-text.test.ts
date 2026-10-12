@@ -37,7 +37,8 @@ test("the grammar leads with the handle form, and says how to keep, rename and r
   for (const term of ['handle: "extraction.N"', 'fields?: {yourKey: "colKey"|"colKey@href"}', "absolute URL", "raw href"]) {
     assert.equal(grammar.includes(term), true, `the grammar does not say ${term}`);
   }
-  assert.equal(grammar.indexOf("handle") < grammar.indexOf("item: css"), true, "the handle form comes before the literal request");
+  // Only the handle form (t432): the literal request named its item and columns by selectors, which a model is never shown.
+  assert.equal(/css|selector|item:/iu.test(grammar), false, "the grammar offers no literal request");
   assert.match(grammar, /minItems \(default 1, 0 = none\), maxItems/u);
 });
 
@@ -67,7 +68,6 @@ test("the shape a model copies shows a mark and a bound over a column under the 
   const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
   assert.equal(grammar.includes('{field: "colKey", is: "absent"}'), true, "the mark condition is still shown");
   assert.equal(grammar.includes('{field: "yourKey", atLeast: 4, lessThan: 50}'), true, "a bound is shown, over a column under the plan's own key");
-  assert.equal(grammar.indexOf("where?:") < grammar.indexOf("item: css"), true, "the conditions belong to the handle form, before the literal request");
   // The comparisons no shape shows are still named, or they are not writable.
   // `contains` and `not` lost their shape here on 2026-09-24 to pay for the
   // optionality clause, and keep it in the detect tool's description, which has
@@ -83,7 +83,10 @@ test("the shape a model copies shows a mark and a bound over a column under the 
   // well as what. `where` stays present because a key the example omits is a key
   // the model is refused for writing beside `extractList`.
   const where = WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE.where as ReadonlyArray<Record<string, unknown>>;
-  assert.deepEqual(where, [{ read: ".sponsored-label", is: "absent" }]);
+  assert.deepEqual(where, [{ field: "promoted", is: "absent" }]);
+  // The example is the handle form a model writes (t432), never a literal request.
+  assert.equal(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE.handle, "extraction.1");
+  assert.equal(Object.hasOwn(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, "item"), false);
   assert.equal(Object.hasOwn(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, "where"), true, "the example declares where, or a model cannot write it beside extractList");
 });
 

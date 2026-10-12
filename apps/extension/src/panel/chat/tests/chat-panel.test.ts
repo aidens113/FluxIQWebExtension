@@ -6,7 +6,7 @@
 // person's message and the answer.
 
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { mock } from "node:test";
 import { ACTIVITY_MESSAGES } from "../../../shared/activity/index";
 import { RUNTIME_MESSAGES } from "../../../shared/constants";
 import type { ExtensionStatus } from "../../../shared/protocol";
@@ -336,6 +336,47 @@ test("the empty latest chat asks for the model keys once, says when none is enab
       assert.equal(asked, 1, "a status redraw does not ask again");
     });
   }
+});
+
+test("a key added after the chat read it missing lifts the line on the next poll", async () => {
+  await withFakeDocument(async () => {
+    const core = targetCore([]);
+    let enabled = false;
+    let asked = 0;
+    const request = async <T>(message: PanelMessage): Promise<PanelResult<T>> => {
+      if (message.type !== RUNTIME_MESSAGES.panelModelReadiness) return core.request<T>(message);
+      asked += 1;
+      return { ok: true, value: { ok: true, payload: { keys: [{ kind: "llm", provider: "DeepSeek", enabled }] } } } as unknown as PanelResult<T>;
+    };
+    const globals = globalThis as { chrome?: unknown };
+    const before = globals.chrome;
+    globals.chrome = { runtime: { onMessage: { addListener: () => undefined, removeListener: () => undefined } } };
+    mock.timers.enable({ apis: ["setInterval"] });
+    const chat = createChatPanel(request, () => ({ element: document.createElement("a") as HTMLElement, observe: () => undefined }));
+    try {
+      chat.render(CONNECTED);
+      chat.setActive(true);
+      await settle();
+      await settle();
+      const key = fake(chat.element).byClass("chat-key-line")[0]!;
+      assert.equal(key.hidden, false, "no key yet: the line shows");
+      const first = asked;
+      // The key is installed while the panel is open (R4a, moment 1).
+      enabled = true;
+      mock.timers.tick(4_000);
+      await settle();
+      await settle();
+      assert.equal(asked, first + 1, "asked again on the poll while it read missing");
+      assert.equal(key.hidden, true, "the key is there now: the line is gone");
+      mock.timers.tick(4_000);
+      await settle();
+      assert.equal(asked, first + 1, "never asked again once a key is enabled");
+    } finally {
+      chat.setActive(false);
+      mock.timers.reset();
+      globals.chrome = before;
+    }
+  });
 });
 
 test("an automation's empty chat neither offers the starts nor reads the model keys", async () => {

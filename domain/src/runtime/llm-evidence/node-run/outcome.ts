@@ -48,6 +48,16 @@ export type WebNodeOutcome = {
   changed?: string[];
   /** The control it acted on, in the words the model was shown. */
   control?: string;
+  /**
+   * The handle of that control, beside its words (t442). The view that printed
+   * it is replaced by the next one (Core's context window), and a press often
+   * removes what it pressed, so a Flow step written afterwards had only the
+   * words to go on and copied the handle of a line of text the press removed:
+   * R4a and R4b were refused `evidence_completion_parameters_unresolved` for
+   * exactly that. The model's own token, never a locator; absent where the call
+   * acted on no control (a look, a navigation, a step only written).
+   */
+  controlHandle?: string;
   /** What a reading node read, whole but for its secrets (`./read-result.ts`). */
   read?: JsonValue;
   /**

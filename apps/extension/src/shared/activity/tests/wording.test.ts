@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { activityWording, type ActivityWording, type ClientGatewayActivity } from "../index";
+import { activityWording, isHeadlineEcho, type ActivityWording, type ClientGatewayActivity } from "../index";
 
 const RAW_ID = /\b[a-z]+\.[a-z_]+/u;
 
@@ -89,7 +89,9 @@ test("result codes become a short outcome, never the code", () => {
     ["web.action.rejected.not_at_start_location", "succeeded", "not tried"],
     ["web.action.rejected.target_unobserved", "succeeded", "not tried: the step named something it hadn't seen on the page"],
     ["web.action.rejected.target_covered", "succeeded", "not tried: a popup or banner on the page was covering it"],
-    ["web.action.target_not_found", "succeeded", "couldn't find it on the page"],
+    // Looked up by what FluxIQ saved of it, and not found that way: never "not on the page" (R4a, moment 06).
+    ["web.action.target_not_found", "succeeded", "FluxIQ couldn't find it where it was saved"],
+    ["web.target.not_found", "succeeded", "FluxIQ couldn't find it where it was saved"],
     ["web.structure.not_detected", "succeeded", "couldn't find it on the page"],
     ["web.action.timeout", "succeeded", "that didn't work: the page took too long"],
     ["web.action.failed", "succeeded", "that didn't work"],
@@ -263,9 +265,9 @@ test("a call Core rejected before sending it says it was not tried, and why when
   const read = "Trying again: reading the list of “name, price, rating and 3 more”";
   const rejected = (title: string, label: string, text: string) => activityWording(named({ phase: "repairing", title, label: `${label} — didn't work`, status: "succeeded", text }));
   const list = rejected("Reading the list of “name, price, rating and 3 more”", read, "Result: web.action.rejected.target_unobserved · Reason: malformed_handle · Node: web.output.dom-extract_list");
-  assert.equal(list.sentence, `${read} — not tried: the step didn't say which list to read`);
+  assert.equal(list.sentence, `${read} — not tried: the step didn't name its list the way FluxIQ needs`);
   const click = rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.rejected.target_unobserved · Reason: target_not_a_handle · Node: web.output.dom-click");
-  assert.equal(click.sentence, "Clicking “Add to cart” — not tried: the step didn't say which control on the page to use");
+  assert.equal(click.sentence, "Clicking “Add to cart” — not tried: the step didn't name its control the way FluxIQ needs");
   const older = rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.rejected.target_unobserved · Reason: handle_from_older_view · Node: web.output.dom-click");
   assert.equal(older.sentence, "Clicking “Add to cart” — not tried: FluxIQ was looking at an older view of the page");
   const bare = rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.rejected.target_unobserved · Node: web.output.dom-click");
@@ -277,8 +279,8 @@ test("a call Core rejected before sending it says it was not tried, and why when
     assert.doesNotMatch(wording.sentence, /couldn't find|wasn't on the page|trying another way/u);
     assertHuman(wording, wording.sentence);
   }
-  // A call that ran and missed its target still says so.
-  assert.equal(rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.target_not_found · Node: web.output.dom-click").outcome, "couldn't find it on the page");
+  // A call that ran and missed its target still says so, by where FluxIQ saved it.
+  assert.equal(rejected("Clicking “Add to cart”", "Clicking “Add to cart”", "Result: web.action.target_not_found · Node: web.output.dom-click").outcome, "FluxIQ couldn't find it where it was saved");
 });
 
 // Lane C (run-mv0fuotv-805294d7, defect 3): "Not done: saving the Flow's steps — that didn't work,
@@ -297,4 +299,43 @@ test("a failed or refused call never says what FluxIQ does next", () => {
   for (const wording of [slowed, activityWording(tool("core.flow_draft", "failed")), activityWording(tool("core.run_node", "failed", "web.action.failed"))]) {
     assert.doesNotMatch(wording.sentence, /trying another way/u);
   }
+});
+
+// t423: a Flow sent back because a step answering a popup pressed its offer, not its way out.
+test("a Flow sent back for pressing a popup's offer says so plainly, never with its code", () => {
+  const sentBack = activityWording(event({
+    phase: "building",
+    label: "Not done: saving the Flow's steps",
+    detail: { kind: "tool", title: "Saving the Flow's steps", status: "failed", ref: "core.submit_candidate", text: "Result: candidate.way_out_refused:1a2b3c4d · Reason: failed" }
+  }));
+  assert.equal(sentBack.outcome, "a step would accept the offer instead of closing it, so it was sent back");
+  assert.doesNotMatch(sentBack.sentence, /way_out|candidate\./u);
+  assertHuman(sentBack, sentBack.sentence);
+});
+
+// R4a (`run-mv2nlh9l-52e476da`, moment 10): the overlay read a bare "Build failed" while the
+// chat's ending said why. Core's ending row now says the reason, and the overlay's detail
+// line keeps it under the "Build failed" headline.
+test("a failed build's ending says its reason under the headline, never only the headline again", () => {
+  const label = "Build failed: it kept trying without getting any further, so it was stopped";
+  const ending = activityWording(event({ phase: "failed", label, final: true, detail: { kind: "step", title: label, status: "failed", text: "It kept trying without getting any further, so it was stopped." } }));
+  assert.equal(ending.sentence, label);
+  assert.equal(isHeadlineEcho("Build failed", ending.sentence), false);
+});
+
+// R4a attempt 2 (run-mv2pgqkj-f3552c70, trial 3, moment 12): the Flow's clear
+// step (`web.output.dom-clear`) failed with `web.validation.output_not_observed`,
+// the site putting "1" back in the quantity box. That code matched none of the
+// outcome words and read "done"; and R4a's exploration clear
+// (`web.action.rejected.output_not_observed`, run-mv2nlh9l-52e476da) read "not
+// tried: it ran, ..." though it ran. Both now say what the card says, worded
+// for the box.
+test("a clear or typing step the site set back says so, never done or not tried", () => {
+  const clear = (code: string) => activityWording(named({ phase: "exploring", title: "Clearing “Quantity”", label: "Clearing “Quantity”", status: "succeeded", text: `Result: ${code} · Node: web.output.dom-clear` }));
+  assert.equal(clear("web.validation.output_not_observed").sentence, "Clearing “Quantity” — that didn't work: it ran, but the site set the box back");
+  assert.equal(clear("web.action.rejected.output_not_observed").sentence, "Clearing “Quantity” — that didn't work: it ran, but the site set the box back");
+  const typed = activityWording(named({ phase: "exploring", title: "Typing \"3\" into “Quantity”", label: "Typing \"3\" into “Quantity”", status: "succeeded", text: "Result: web.validation.output_not_observed · Node: web.output.dom-type" }));
+  assert.equal(typed.outcome, "that didn't work: it ran, but the site set the box back");
+  const press = activityWording(named({ phase: "exploring", title: "Clicking “collect the store coupon”", label: "Clicking “collect the store coupon”", status: "succeeded", text: "Result: web.validation.output_not_observed · Node: web.output.dom-click" }));
+  assert.equal(press.outcome, "that didn't work: it ran, but the page didn't change the way it should have");
 });

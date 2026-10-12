@@ -231,7 +231,12 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
   {
     actionType: "web.dom.type",
     label: "Type Text",
-    description: "Enter text into an editable DOM element. With submit set to true it then sends the field's form, as pressing Enter does: a search typed and sent in one step.",
+    // Typing has always replaced the field's content (`apps/extension/src/content/action-runtime/keyboard/type-text.ts`),
+    // but nothing the model read said so. R4a's second paid run (t423,
+    // `run-mv2pgqkj-f3552c70`) set a box's value with a clear step and then a
+    // typing step; the page put its default back once the box was emptied, so
+    // the clear step failed `output_not_observed` and the build looped on it.
+    description: "Enter text into an editable DOM element, replacing whatever it holds, as selecting it all and typing over it does: to set a field to a value, type the new value and never clear it first. With submit set to true it then sends the field's form, as pressing Enter does: a search typed and sent in one step.",
     // `text` is required. It was not, and that is why a recorded password step
     // replayed as a field typed empty: `payloads.ts` filled `text` with `""`
     // when the recorder had withheld the value, `hasExecutableParameters`
@@ -273,8 +278,11 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
   },
   {
     actionType: "web.dom.wait_for_selector",
-    label: "Wait For Selector",
-    description: "Wait until an element is present, visible, enabled, or absent.",
+    // What a model reads (t432): the element is named by its handle, like every
+    // element step's, so neither the label nor the description speaks of how
+    // the page finds it. The action id is kept: saved Flows name it.
+    label: "Wait For Element",
+    description: "Wait until the element its target handle names is present, visible, enabled, or absent.",
     parameterSchema: waitForSelectorSchema
   },
   {

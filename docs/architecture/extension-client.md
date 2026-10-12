@@ -219,6 +219,40 @@ since they last pressed Connect (remembered in `chrome.storage.session`).
 `e2e/reconnect.spec.ts` covers a restarted worker reconnecting, a dropped socket
 reconnecting, and the alarm being set and firing.
 
+**A command in flight** (state-aware recovery plan, B3). An action's promise
+dies with the worker that ran it, so before the background sends a Flow action
+toward a page it writes a record to `chrome.storage.session` --
+`{ commandId, actionType, committing, tabId, documentId, startedAt }`, one key
+per command, never a value the action carries -- and clears it once the result
+is sent or queued (`background/connection/in-flight/`). `committing` is the
+domain's rule (`webAutomationActionCommits`): a press, a key press, a dialog
+answer, or typing that submits. The record names its tab when the command is
+accepted and is refined with the tab and Chrome's `documentId` just before
+`executeAction` reaches the page (`noteDispatch`, `runtime/action-runner.ts`).
+
+- **Worker start.** After the next `session_ready`, once the offline queue has
+  been flushed, every record no running command of this worker owns is a
+  command an earlier worker lost. It is sent as `client.action_result` built by
+  `webAutomationInterruptedActionResult`: its payload says
+  `status: "interrupted", effect: "unknown"`, and its wire status is `unknown`
+  with an `ambiguous` record for a committing act, or `failed` with an
+  `unacted`, retryable record for any other act. A missing acknowledgement is
+  never "did not happen". The record is then cleared.
+- **A repeated command id.** An `execute_action` whose id this worker already
+  has an answer for is answered with it and never reaches the page: nothing
+  while the command is still running (its own result answers), the result
+  just sent (the last 16 are remembered), the interrupted result for a record
+  an earlier worker left, or the result still waiting in the offline queue
+  (`GatewaySession.queuedActionResult`).
+- **A dropped socket without a restart** leaves the running command's record
+  alone: the command is still running in this worker, its result is queued
+  offline, and the queue is flushed on the next `session_ready`.
+
+A browser without `chrome.storage.session` (Firefox before 115) keeps the
+records in worker memory: a repeated id is still answered, but a worker that
+stops takes its records with it. The client declares the behaviour as
+`web.actions.reconcile` version 1 (`domain/src/runtime/capabilities.ts`).
+
 **Saved state of the wrong shape** is repaired, not thrown. Settings, the
 session, the client id and the offline queue are read through
 `background/saved-state.ts`: each well-formed field is kept, each malformed one
@@ -492,8 +526,8 @@ pacer keeps what Core says and changes how often it is said:
   FluxIQ declined to send (`web.action.rejected.*`) is "not tried", never a
   page miss, with why when the row carries the caller's reason (`Reason:` in
   its record): Core's words for it less their "FluxIQ didn't send it, as", a
-  list read naming a list ("not tried: the step didn't say which list to
-  read"), or the code's own last words when they are not a page miss ("not
+  list read naming a list ("not tried: the step didn't name its list the way
+  FluxIQ needs"), or the code's own last words when they are not a page miss ("not
   tried: a popup or banner on the page was covering it")
   (`shared/activity/not-tried.ts`; R2-U-6 of `run-muwansvz-a2b4a987`, where
   "couldn't find it on the page" was said of a list in plain sight);
@@ -937,6 +971,13 @@ derives from:
 
 `web.browser.navigate`, `web.browser.tab`, and `web.browser.download` run in
 the background worker; every other action runs in the tab's content script.
+
+One gateway command type travels the same `execute_action` channel without
+being an action: `web.page.facts`, the batched, zero-wait fact check (plan B1).
+`gateway-session.ts` splits it off before the action path, the command router
+answers it through `runtime/fact-check-runner.ts` and the content script's
+`content/facts/`, and it opens no runtime status, chat card or recorded event
+([Fact checks](web-capabilities.md#fact-checks-webpagefacts)).
 
 Server action commands use the current gateway shape:
 

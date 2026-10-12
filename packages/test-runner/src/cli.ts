@@ -14,6 +14,7 @@ import { beginLiveLlmRun } from "./live-llm/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { runInteractiveSession } from "./interactive-session.js";
 import { assertRealisticScenarios, isRealisticScenario } from "./realistic-scenarios/index.js";
+import { recoveryMatrixStatus, runRecoveryMatrix } from "./recovery-matrix/index.js";
 import { runScenario } from "./run-scenario.js";
 import { replaySavedFlow } from "./saved-flow-replay/index.js";
 import { loadScenarioManifests } from "./scenarios.js";
@@ -54,6 +55,16 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       if (target.mode !== "persistent-isolated") throw new Error("replay runs on the persistent workspace the Flow was saved in");
       const result = await replaySavedFlow({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, flowId: command.flowId, ...(command.projectId === undefined ? {} : { projectId: command.projectId }), ...(command.instructionTaskId ? { taskId: command.instructionTaskId } : {}), ...(command.seed === undefined ? {} : { seed: command.seed }), target, environment: resolvedEnvironment, credentialSources: [env, resolvedEnvironment] });
       process.stdout.write(`${JSON.stringify(result)}\n`); return result.verdict === "passed" ? 0 : 1;
+    }
+    if (command.command === "recovery-matrix") {
+      // Provider-free and headed; every case's scenario is one of the ten realistic ones (`recovery-matrix/matrix-rows.ts`).
+      if (command.list) {
+        process.stdout.write(`${JSON.stringify({ status: recoveryMatrixStatus() })}\n`);
+        return 0;
+      }
+      const outcome = await runRecoveryMatrix({ caseIds: command.caseIds, rows: command.rows, ready: command.ready }, { repositoryRoot, fluxiqRepositoryRoot, runsDirectory, environment: resolvedEnvironment, credentialSources: [env, resolvedEnvironment] });
+      process.stdout.write(`${JSON.stringify({ matrixRunId: outcome.matrixRunId, directory: outcome.directory, cases: outcome.results.map(result => ({ caseId: result.caseId, verdict: result.verdict, reasons: result.reasons })) })}\n`);
+      return outcome.results.every(result => result.verdict === "passed") ? 0 : 1;
     }
     if (command.command === "inspect") { process.stdout.write(`${JSON.stringify(await inspectRun(runsDirectory, command.runId))}\n`); return 0; }
     if (command.command === "compare") {
