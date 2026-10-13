@@ -11,12 +11,17 @@
 // nothing is reported as no effect (`./no-effect.ts`). Some pages take the
 // first press after a change only as a wake-up and act on the second.
 //
-// A press whose call declared a lasting consequence is never made again here:
-// whether it may be is the caller's decision (`pressAgain` absent), and it is
-// then reported after the wait alone.
+// Whether the press may be made twice at all is the caller's decision
+// (`pressAgain` absent where it may not), and such a press is then reported
+// after the wait alone. A press whose call declared a lasting consequence
+// (`lasting`) is made again only when it certainly did not happen: the page
+// unchanged through the wait and the control still there, shown and enabled,
+// in a form or dialog still open (`./certain-no-effect.ts`, t513). Anything
+// short of that leaves its effect uncertain, and it is held back as before.
 
 import type { WebLlmSnapshotBinding } from "../../sanitize";
 import type { WebRunnableNode } from "../catalog";
+import { webPressCertainlyIgnored } from "./certain-no-effect";
 import { webPressNoEffect } from "./no-effect";
 import { webPressedControlWords } from "./press-words";
 
@@ -30,6 +35,8 @@ export type WebPressSettleSteps = {
   pressAgain: (() => Promise<boolean>) | undefined;
   sleep: (ms: number) => Promise<void>;
   now: () => number;
+  /** True where the press's call declared a lasting consequence: it is made again only when it certainly did not happen. */
+  lasting?: boolean;
 };
 
 /**
@@ -51,13 +58,14 @@ export async function webPressSettled(
   if (!unchanged(after)) return { after, presses: 1 };
   let page = await waitForEffect(after, unchanged, steps);
   if (!unchanged(page)) return { after: page, presses: 1 };
-  const pressedAgain = steps.pressAgain !== undefined && await steps.pressAgain();
+  const again = steps.pressAgain;
+  const pressedAgain = again !== undefined && (steps.lasting !== true || webPressCertainlyIgnored(page, handle)) && await again();
   if (pressedAgain) {
     page = await steps.look();
     if (unchanged(page)) page = await waitForEffect(page, unchanged, steps);
   }
   const presses = pressedAgain ? 2 : 1;
-  if (!unchanged(page)) return { after: page, presses, pressedAgain: `The first press of ${webPressedControlWords(before, handle)} changed nothing, so it was pressed once more; what is said here is what that second press did.` };
+  if (!unchanged(page)) return { after: page, presses, pressedAgain: `Pressed again: the first press of ${webPressedControlWords(before, handle)} changed nothing, so it was pressed once more; what is said here is what that second press did.` };
   return { after: page, presses, noEffect: webPressNoEffect(node, before, page, handle, presses)! };
 }
 
