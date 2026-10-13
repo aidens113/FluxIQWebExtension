@@ -2217,7 +2217,19 @@ binding. Cancellation erases draft values immediately while retaining the ID
 for an explicit failed-cancellation retry. Receipt Close cleans local UI.
 Older optional low-level callers retain omitted-ID compatibility and its risk.
 IDs provide correlation, not authorization or ordering of content commands.
-Receiver lifecycle and confirmation idempotence require separate validation.
+The content receiver retains its accepted pick lease after the physical press
+and overlay drain, so a successful choice can still be confirmed. Start,
+cancel and record compare local ownership before releasing listeners or emitting
+an extraction. Known retired IDs remain fenced for the content-document lifetime;
+unseen opaque starts may replace ownership and do not establish chronology.
+Listener closures and drain timers check their exact operation, including
+same-ID rearming. Matching cancellation is idempotent; an unknown cancellation
+fences its later matching delivery. Explicit administrative stopPick resets this
+local memory. Idle never-retired DefineExtraction remains supported through the
+existing recording/definition gates. Each accepted Confirm invokes that gate;
+no cross-command confirmation idempotence is promised. Receiver tests and a
+headed Chromium company-website two-pick/cancel/confirm native proof cover this
+boundary; full paired scraping/export/restart and Firefox live remain separate.
 
 Chat question inputs submit on plain, unhandled Enter. Composing events,
 legacy IME key code229 and modified Enter leave the native event untouched;

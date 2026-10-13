@@ -178,18 +178,18 @@ export type ExtractionContentMessage =
  * request: `unreadable_request`, the request names no readable field, or the
  * page refused to read it; `not_recording`, nothing is being recorded, so no
  * event could be added; `invalid_definition`, what arrived is not a recorded
- * extraction.
+ * extraction; `stale_session`, this locally retired or mismatching pick cannot
+ * affect the accepted picker or recording. IDs do not establish arrival order.
  *
- * `not_picking` was here and is gone. No frame could produce it -- `pickStart`
- * and `pickCancel` both answer `{ ok: true }` unconditionally -- so it was a
- * word the vocabulary offered and nothing could ever say, which reads to the
- * next person as a refusal the worker should handle.
+ * `not_picking` is not an outcome: a completed successful pick remains
+ * confirmable after its overlay drains. `stale_session` reports local
+ * correlation refusal, while matching cancellation remains idempotent.
  *
  * A fixed vocabulary, like `ExtractionProposeRefusal`'s: a refusal crosses the
  * same channel a proposal does, so it says why in words chosen here rather than
  * quoting anything the page holds (D3).
  */
-export type ExtractionContentRefusal = "unreadable_request" | "not_recording" | "invalid_definition";
+export type ExtractionContentRefusal = "unreadable_request" | "not_recording" | "invalid_definition" | "stale_session";
 
 /** What a frame answers an `ExtractionContentMessage` with. `rows` belongs to a preview alone. */
 export type ExtractionContentResponse =

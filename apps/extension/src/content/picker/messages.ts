@@ -20,7 +20,7 @@ import {
 } from "../../shared/extraction-messages";
 import { PICKER_PREVIEW_MAX_ROWS, readPreviewRows } from "./preview";
 import { recordExtraction } from "./recorded-event";
-import { startPick, stopPick } from "./session";
+import { startPick, cancelPick, preparePickRecord } from "./session";
 
 /**
  * What the router does with the message channel afterwards: `answered`, the
@@ -63,18 +63,21 @@ export function handleExtractionMessage(
   sendResponse: (response: ExtractionContentResponse) => void
 ): ExtractionHandling {
   if (message.type === EXTRACTION_CONTENT_MESSAGES.pickStart) {
-    startPick(message.sessionId, message.form ?? "list");
-    sendResponse({ ok: true });
+    const accepted = startPick(message.sessionId, message.form ?? "list");
+    sendResponse(accepted ? { ok: true } : { ok: false, refused: "stale_session" });
     return "answered";
   }
   if (message.type === EXTRACTION_CONTENT_MESSAGES.pickCancel) {
-    stopPick();
+    cancelPick(message.sessionId);
     sendResponse({ ok: true });
     return "answered";
   }
   if (message.type === EXTRACTION_CONTENT_MESSAGES.record) {
-    // A confirmed extraction ends the pick, if a stray one is somehow still up.
-    stopPick();
+    // Correlation is checked before any release or recording effect.
+    if (!preparePickRecord(message.sessionId)) {
+      sendResponse({ ok: false, refused: "stale_session" });
+      return "answered";
+    }
     const outcome = recordExtraction(message.definition);
     sendResponse(outcome === "recorded" ? { ok: true } : { ok: false, refused: outcome });
     return "answered";

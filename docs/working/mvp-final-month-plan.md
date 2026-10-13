@@ -1,7 +1,7 @@
 # MVP Final Month Plan
 
 Status: Active
-Status detail: A qualified; fixes and candidate default pushed; B/C/D round four failed semantic/oracle gates; generic feedback fixes underway, future testing budget $0.25.
+Status detail: Historical A-D creation qualified; instruction-led adaptation/breadth and release acceptance continue, with storage/learning fixes integrated and picker/matrix prerequisites being verified.
 Created: 2026-10-05
 Last updated: 2026-10-13
 Owner: Senior supervisor agent
@@ -60,7 +60,7 @@ graph-level ending. Paired t449 repairs exact optional-path accounting and safe 
    Finish t381 connection ownership against t435 and reproduce
    B's separate recording.persistence problem provider-free. An old instruction for a whole suite before merging
    t381 is superseded by the newer narrow-gate user rule. Do not blame machine load or conflate recording with chat builds.
-4. Prove adaptation on three sites twice each, then the ten-site/67-task breadth plan, recording plus mandatory
+4. Prove adaptation on three sites twice each, then the ten-site/68-task breadth plan, recording plus mandatory
    instructions, exposed catalog/extraction/UX gaps, freeze/hardening and installed-browser release proof.
 
 **Other retained units:** parked t334/t335/t337 production-integrity chain and paused UI review remain separate.
@@ -123,7 +123,7 @@ The following are targets subject to gates, not claimed completion dates.
 | P5, Oct 10-16 | Rebuild and qualify A-D | Two creation passes per build pair, exact oracles and zero-call replays; then C S7 |
 | Phase 1b, after A-D | Other realistic tasks; recording plus instruction | Correct reusable outcome despite recording detours |
 | Adaptation, Oct 12-23 | Create, drift, diagnose, repair, verify, persist, resume, reuse | Three sites twice each; later run zero-call |
-| Breadth/UX, Oct 17-28 | Ten sites, explicit 67-task denominator; onboarding, scraping, controls | Creation + repair coverage; understandable outcomes/learning |
+| Breadth/UX, Oct 17-28 | Ten sites, explicit 68-task denominator; onboarding, scraping, controls | Creation + repair coverage; understandable outcomes/learning |
 | Freeze Oct 29; harden to Nov 4 | Restart/uncertain-write matrix, privacy, performance, packages | Installed Chrome/Edge and Firefox proof, screened diagnostics |
 | RC Nov 5-10 | Clean-profile 13-step script and 26 acceptance items | Unfamiliar-user proof; approval for main/tag/store submission |
 
@@ -322,3 +322,26 @@ Earlier state and all 64 prior entries are preserved in
 - Changed: integrated t520 on both dev branches (downstream2583ccfc/Core6f11c3bc); t521 fixes read-back and post-run learning statements from authoritative durable summary, preserving unknown and actual review controls. t522 bounded extraction receiver ownership is released separately; the remainder of paused UX scope stays paused.
 - Validation: t520 repository/pool13/13, Core source/test types, public-library build and both owning integration audits passed. For t521 root initial29pass/1obsolete-copy failure, corrected15/15 and final web types passed; no grant/review controls weakened. Final structure audit precedes merge. No full suite, provider call or user panel management.
 - Outcome: current slots/lane identities mapped; slot3 reassigned after no-live-process check with old marker and prior debug preserved. Live preparation waits integrated source notice; paid qualification waits frozen t522 delta too.
+
+### Brief: recovery-matrix-task-authority-discovery
+- Worker: codex-t517, read-only main downstream/source and t418 current helper.
+- Read Current State and instruction-led authority contract; inspect recovery-matrix compile-flow-script.ts and immediate callers/task cases (at most five source files initially).
+- Matrix currently saves instruction.body=input.flowName. Determine whether explicit authored task descriptions already exist for each case and can be passed without title/trace/goal inference. Count affected callers, exact owning source/tests and smallest synchronized change.
+- Unit-test/internal graph primitives can remain instructionless; actual browser automations cannot. Never inject a fixture oracle/goal into an existing saved Flow. Distinguish hand-authored deterministic matrix tasks from user-driven model creation.
+- Own report docs/working/mvp-final-month-plan/reports/codex-matrix-authority-discovery.md. No source/shared-doc edits/tests/builds/browser/paid calls/commits or process management. Send bounded fix recommendation early.
+
+### Brief: t523-explicit-recovery-matrix-tasks
+- Worker: codex-t517 after discovery report frozen. Unit: downstream fxwork/t523/!FluxIQWebExtension, task/t523-explicit-recovery-matrix-tasks; detached sibling Core read-only.
+- Read Current State, own matrix authority discovery and relevant manually authored scripts for each of14 cases (10 scripts). More reads are authorized only for those script semantics/types/tests.
+- Own recovery-matrix compile-flow-script.ts, run-matrix-case.ts, case contract and authored case definitions (actual paths discovered in report), adjacent compiler/case tests/barrels only. No model guidance/Core/fixture oracle/task inventory changes.
+- Require explicit taskInstructions string for every fresh browser matrix Flow; authored case text states actual intended script behavior, independently of Flow title, oracle, goalFacts or inferred script trace. Validate missing/blank/nonstring before createFlow or writes; no fallback/coercion.
+- Pass explicit case text into fresh compile and persist through existing instruction API before run. It is authored deterministic test work, not model generation or fixture goal injection into saved user Flows.
+- Tests prove early refusal without writes, exact authored text persisted, all case definitions nonempty and title-independent, existing compiler graph/control behavior retained. Do not weaken instruction admission or bypass production runtime.
+- Own report main docs/working/mvp-final-month-plan/reports/codex-t523-matrix-tasks.md. Narrow owning tests only then freeze; root types/audit/free matrix provider-free execution.
+- No source beyond four discovered owners without report/approval, shared docs/commits/full suites/browser/paid calls/process management/private data. No t518 imports or recording-only controls.
+
+### 2026-10-13 - t522 picker receiver independently verified
+- Agent: Codex senior supervisor; implementation worker replay_investigation.
+- Changed: accepted picker lease survives a successful physical press, known old commands cannot disturb a newer pick, exact callback/timer operations cannot retire replacement/rearmed sessions, and truthful stale_session refusal precedes recording effects. Local administrative reset and idle DefineExtraction compatibility remain explicit.
+- Validation: supervisor reviewed source/test changes and observed final owning30/30 plus adjacent background57/57 pass. Source/test/bundle types and Chrome/Edge/Firefox builds passed after mechanical type corrections; native audit exit0 with no baseline growth. Headed Chromium/company-website native production-helper proof passed13 assertions, actual4-item inference and one structure-only recorded action, externalRequests0/modelCalls0. No paired gateway/user panel/provider was used.
+- Outcome: accepted for dev integration. Full instruction-led scraping/export/restart remains release proof. Crossborder current source free preflight is ready, publication built and fixture variant1/1passed; new matrix task-authority defect is assigned t523 before final counted source freeze.
