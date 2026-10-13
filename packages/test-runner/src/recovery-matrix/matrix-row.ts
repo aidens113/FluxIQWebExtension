@@ -57,6 +57,8 @@ export type RecoveryMatrixCase = Readonly<{
   caseId: string;
   /** What this case shows, in one sentence. */
   title: string;
+  /** Explicit tester-authored browser task, independent of the case title and site oracle. */
+  taskInstructions: string;
   scenarioId: RealisticScenarioId;
   /** The scenario workflow the Flow does; the primary workflow when absent. */
   workflowId?: string;

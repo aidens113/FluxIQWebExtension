@@ -112,7 +112,7 @@ export async function runMatrixCase(row: RecoveryMatrixRow, matrixCase: Recovery
     await removeRunOwnedTopologyState(setup).catch(/* best-effort: only the setup session's own directory */ () => undefined);
     if (!projectId) throw new RunnerFailure("environment.missing", "The matrix workspace's Core created no project");
     try {
-      compiled = await compileMatrixFlow({ fluxiqRoot: setup.allocation.fluxiqRoot, projectId, flowId: `flow.recovery-matrix.${matrixCase.caseId}`, flowName: `Recovery matrix ${matrixCase.caseId}: ${matrixCase.title}`.slice(0, 120), script });
+      compiled = await compileMatrixFlow({ fluxiqRoot: setup.allocation.fluxiqRoot, projectId, flowId: `flow.recovery-matrix.${matrixCase.caseId}`, flowName: `Recovery matrix ${matrixCase.caseId}: ${matrixCase.title}`.slice(0, 120), taskInstructions: matrixCase.taskInstructions, script });
     } catch (error) {
       if (error instanceof MatrixAuthoringGap) return (outcome = finish({ ...base, verdict: "blocked", reasons: [error.message], missingRecords: [], observed: { handles: error.handles.map(item => item.path) }, compiled: null, run: null, attempts: [], accounting: null, measures: null, perturbationReport: null }));
       // A library with no Call Subflow node cannot save a Flow that calls a part: the capability, not the script, is missing.

@@ -37,3 +37,15 @@ test("--ready selects only rows that need nothing and have no authoring gap; unk
   assert.throws(() => selectRecoveryMatrixCases({ rows: [12] }), /no row 12/);
   assert.throws(() => selectRecoveryMatrixCases({}), /selected no case/);
 });
+
+test("all fourteen deterministic browser cases carry explicit task text independent of titles", () => {
+  assert.equal(cases.length, 14);
+  for (const matrixCase of cases) {
+    assert.equal(typeof matrixCase.taskInstructions, "string");
+    assert.ok(matrixCase.taskInstructions.trim().length > 0);
+    assert.ok(matrixCase.taskInstructions.trim().length <= 4000);
+    assert.notEqual(matrixCase.taskInstructions, matrixCase.title);
+    assert.notEqual(matrixCase.taskInstructions, matrixCase.flow);
+    assert.notEqual(matrixCase.taskInstructions, `Recovery matrix ${matrixCase.caseId}: ${matrixCase.title}`.slice(0, 120));
+  }
+});

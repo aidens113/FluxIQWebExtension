@@ -30,15 +30,16 @@ const used = [...new Set(RECOVERY_MATRIX_ROWS.flatMap(row => row.cases.map(matri
 for (const { flow, gap, calls } of used) {
   test(gap ? `${flow} is refused for the evidence handle its fact needs, before Core saves it` : `${flow} assembles, validates and is applied as a saved Flow through Core's own path`, { timeout: 120_000 }, async () => {
     const script = scripts[flow];
+    const taskInstructions = RECOVERY_MATRIX_ROWS.flatMap(row => row.cases).find(matrixCase => matrixCase.flow === flow)!.taskInstructions;
     assert.equal(typeof script, "string", `the matrix names a Flow ${flow} that flows/ does not export`);
     const { root, projectId } = await workspace();
     try {
       const flowId = `flow.matrix.${flow.toLowerCase().replaceAll("_", "-")}`;
       if (gap) {
-        await assert.rejects(compileMatrixFlow({ fluxiqRoot: root, projectId, flowId, flowName: flow, script: script! }), (error: unknown) => error instanceof MatrixAuthoringGap && error.handles.length > 0);
+        await assert.rejects(compileMatrixFlow({ fluxiqRoot: root, projectId, flowId, flowName: flow, taskInstructions, script: script! }), (error: unknown) => error instanceof MatrixAuthoringGap && error.handles.length > 0);
         return;
       }
-      const compiling = compileMatrixFlow({ fluxiqRoot: root, projectId, flowId, flowName: flow, script: script! });
+      const compiling = compileMatrixFlow({ fluxiqRoot: root, projectId, flowId, flowName: flow, taskInstructions, script: script! });
       // A Flow that calls a part saves only on a Core whose library has Call Subflow (t392); before that, Core refuses it by that name and nothing else.
       const compiled = calls ? await compiling.catch((error: unknown) => {
         assert.ok(error instanceof RunnerFailure && Array.isArray(error.details?.codes) && error.details.codes.includes("flow_script.call_unavailable"), String(error));
@@ -52,6 +53,10 @@ for (const { flow, gap, calls } of used) {
       try {
         const subflows = await reader.programs.automationStudio.listFlowSubflowSummaries({ projectId, flowId, limit: 10, offset: 0 });
         assert.equal(subflows.total, compiled.subflows.length);
+        const instructions = await reader.programs.automationStudio.getFlowInstructionSet({ projectId, flowId });
+        const authored = instructions.find(instruction => instruction.scope.kind === "flow" && instruction.scope.flowId === flowId);
+        assert.equal(authored?.body, taskInstructions);
+        assert.notEqual(authored?.body, flow);
       } finally {
         await reader.close();
       }
@@ -65,8 +70,17 @@ test("a handle anywhere in the plan refuses the script, naming the handle", { ti
   const { root, projectId } = await workspace();
   try {
     const script = `${CONFIRM_QUALIFYING}\non before everywhere: a notice can cover the requests\n  when: exists requests-notice\n  step: close it\n    node: web.dom.click\n    selector: [aria-label="Close"]\n    consequences: none\n  then: carry on\nend`;
-    await assert.rejects(compileMatrixFlow({ fluxiqRoot: root, projectId, flowId: "flow.matrix.gap", flowName: "gap", script }), (error: unknown) => error instanceof MatrixAuthoringGap && error.handles.some(item => item.handle === "requests-notice"));
+    await assert.rejects(compileMatrixFlow({ fluxiqRoot: root, projectId, flowId: "flow.matrix.gap", flowName: "gap", taskInstructions: "Confirm the qualifying requests while dismissing a requests notice when needed.", script }), (error: unknown) => error instanceof MatrixAuthoringGap && error.handles.some(item => item.handle === "requests-notice"));
   } finally {
     await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
+
+for (const taskInstructions of [undefined, null, 42, {}, "", "   ", "x".repeat(4001)]) {
+  test(`invalid task text is refused before any Core instance or durable write: ${typeof taskInstructions}`, async (t) => {
+    const create = t.mock.method(FluxIQ, "create", () => { throw new Error("Core must not open for invalid task text"); });
+    const input = { fluxiqRoot: "unused-root", projectId: "p", flowId: "f", flowName: "A display name is not task authority", script: "flow: unused", taskInstructions };
+    await assert.rejects(compileMatrixFlow(input as unknown as Parameters<typeof compileMatrixFlow>[0]), (error: unknown) => error instanceof RunnerFailure && error.category === "fixture.invalid" && error.message.includes("explicit task instructions"));
+    assert.equal(create.mock.callCount(), 0);
+  });
+}

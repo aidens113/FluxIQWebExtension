@@ -15,6 +15,14 @@ Generation and deterministic reuse are measured separately. Oracle outputs,
 scripted selectors and expected fixture values remain scoring data and never
 become product model guidance or inferred task instructions.
 
+The provider-free recovery matrix compiles manually authored browser scripts
+with each case's independent `taskInstructions` literal. Its compiler rejects
+missing, blank, nonstring or oversized task text before opening Core, saves it
+through the normal task API, and binds bootstrap adaptation to the returned
+instruction ID. Case titles, script summaries, site oracles and goal facts are
+not task-authority fallbacks. This measures authored deterministic recovery,
+not model generation, and does not inject tasks into old saved user Flows.
+
 ## Interactive development sessions
 
 Use `pnpm lab:interactive <scenario> --target persistent-isolated --workspace <name>` when developing or debugging a small UI change. The command builds prerequisites once, starts one headed browser and one isolated topology, reuses the named FluxIQ state/browser profile, loads both the scenario and authenticated panel surfaces, and then accepts newline-delimited JSON commands on standard input until `{"action":"stop"}`. After the first build, the faster relaunch is `node packages/test-runner/dist/cli.js interactive <scenario> --target persistent-isolated --workspace <name>`.
