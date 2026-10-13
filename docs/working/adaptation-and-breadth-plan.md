@@ -1,7 +1,7 @@
 # Adaptation Gate And Breadth Sample Plan
 
 Status: Active
-Status detail: No counted gate pass; t517 merged locally; t516 independently verified and ready for integration; t518 implements recorded recovery/state linking.
+Status detail: No counted gate pass; t516/t517 independently verified and merged locally; t518 implements recorded recovery/state linking before fresh preflights.
 Created: 2026-10-13
 Last updated: 2026-10-13
 Owner: Senior supervisor agent (planned by a lane lead)
@@ -11,18 +11,18 @@ Related: Core work, if any, is briefed through Core's mvp-final-month-plan.md; [
 
 ## Current State
 
-**Codex continuation active, 2026-10-13.** t517 is merged locally on both dev branches. t516 is independently verified after current dev integration, including headed wheel/rate-limit clearing receipts; serial integration is next. t518 fixes historical recording evidence and producer-clock linking before further recorded-Flow preflights. The unrelated `.clinerules/fluxiq.md` edit on main dev is preserved.
+**Codex continuation active, 2026-10-13.** t516 and t517 are independently verified and merged locally on both dev branches. t518 fixes historical recording evidence and producer-clock linking before fresh recorded-Flow preflights. Publishing waits for the coherent handoff fixes. The unrelated `.clinerules/fluxiq.md` edit on main dev is preserved.
 
 **Verified work.**
 
 - **t517:** one certain-no-effect re-press; exhausted lasting actions fail default continuation. Explicit failed/optional routes remain. Supervisor observed 140 Core executor, 10 contract, 302 domain and 501 extension tests, package source/test typechecks, both audits and headed Chromium Post harness. Core/downstream merged locally; publishing waits for the coherent handoff fixes. Reports: `adaptation-and-breadth-plan/reports/codex-t517.md` and original t517 report.
 - **t516:** guarded interruption learning stays on for model-free runs when adaptations are kept; successful judged completion gates apply. Fixed per-layer/identical-time repair, intervention, adaptation and proposal collisions. Real-domain handle issuance/resolution works without a prior model look. The alleged false robot check is an actual first-search soft check; results/wheel negative classifier cases pass.
   - Supervisor observed 108 combined Core tests, 16 domain and 32 extension tests, source/test typechecks and Core audit. Headed Chromium wheel test exposed a missing name for text-only dismissals; fixed via existing sensitivity-filtered visible text, with fail-first/final 11 dismissal tests and passing wheel/rate-limit harness cases. Full gateway/Core handler execution and durable reuse remain unverified.
-  - `validation.ok` reports resolution/preflight, not execution of the new handler. Reports: `adaptation-and-breadth-plan/reports/codex-t516.md` and original t516 report. Task is committed and ready for downstream-then-Core integration.
+  - `validation.ok` reports resolution/preflight, not execution of the new handler. Reports: `adaptation-and-breadth-plan/reports/codex-t516.md` and original t516 report. Both structure gates passed; downstream 88300455 and Core 93867c7e merged locally.
 
 **Recorded replay cause and t518.** Crossborder playback retries the first coupon claim successfully before reaching its recorded manual retry. Store playback waits through the self-clearing check before reaching an inferred wait and recorded Continue click. Reset is present; missing controls here are already-obsolete recovery actions. Social's recorded double-Post has the same risk after t517.
 
-The historical-state bridge is absent, and crossborder's linker attaches later snapshots to earlier actions by mixing producer/ingestion clocks. t518 supplies optional host-owned historical projection and hashes-only route/effect evidence, with strict provenance and incomplete/ambiguous declines. Existing positive-evidence state routing remains the decision maker; there is no generic failed-action skip. Crossborder durable captures are available; store's isolated raw captures are gone. Report: `adaptation-and-breadth-plan/reports/codex-replay-investigation.md`.
+The historical-state bridge is absent, and crossborder's linker attaches later snapshots to earlier actions by mixing producer/ingestion clocks. t518 supplies optional host-owned historical projection and hashes-only route/effect evidence, with strict provenance and incomplete/ambiguous declines. Recorded-state matches require a full control-set digest, preserving legacy fuzzy matching for other Flows. Existing positive-evidence state routing remains the decision maker; there is no generic failed-action skip. Crossborder durable captures are available; store's isolated raw captures are gone. Report: `adaptation-and-breadth-plan/reports/codex-replay-investigation.md`.
 
 **Adaptation gate (Milestone 1).** It runs on three sites, each with a different kind of drift:
 
@@ -68,7 +68,7 @@ Replays, dry runs, the recovery matrix and the G5 probe make no model calls.
 
 **Next steps.**
 
-1. Verify and merge t516 and t517 (above). Investigate the crossborder control failure.
+1. Finish and independently verify t518, then fresh unarmed recorded-Flow controls and armed drift preflights. t516/t517 are merged locally.
 2. Sync the five lane trees (t262, t275, t342, t451, t418) to both `dev` branches and rebuild Core in each
    (`pnpm --filter fluxiq --filter @fluxiq/contracts build`); run the recovery matrix and every dry run.
 3. Gate round 2: crossborder `basket-redesign` (slot 3), everything-store `deal-wheel` (needs t516), social
@@ -126,7 +126,7 @@ Codex supervisor has dispatched these independent briefs. Worker claims remain u
 - Task: connect recorded actions to existing positive-evidence state routing, fixing recorded manual recovery steps that playback already completed; correct state-linker producer/ingestion clock mixing.
 - Required reads: this Current State; `reports/codex-replay-investigation.md`; Core boundary/code structure; existing recording proposal generation/candidates, host runtime route-state callbacks and state-linker; downstream host route-state projection and inferred waits.
 - Owns (may edit), Core: `runtime/state-linker.ts`, `runtime/host-runtime.ts`, `runtime/recording-flow-proposal.ts`, `nodes/importer-sdk.ts` recording candidate types if needed; `runtime/service/recordings/`, `runtime/service/recording-state-index/`, adjacent owning tests; minimal service wiring in `runtime/service.ts` only if needed and within its existing budget. All paths under `packages/fluxiq/src/programs/automation-studio/`.
-- Owns (may edit), downstream: `domain/src/runtime/host-runtime.ts`, new cohesive historical-state projection under `domain/src/runtime/route-state/` and adjacent tests/barrels; `domain/src/recording/proposals/late-target-wait.ts` and tests; `domain/src/tests/domain.test.ts` and `web-panel-host.test.ts` mapper assertions; route-state signature/compare modules and tests for strict recorded-state matching; present-wait failure classification and adjacent tests only if needed. Use new `docs/architecture/recorded-replay-state.md` in each repository for authored documentation.
+- Owns (may edit), downstream: `domain/src/runtime/host-runtime.ts`, new cohesive historical-state projection under `domain/src/runtime/route-state/` and adjacent tests/barrels; `domain/src/recording/proposals/late-target-wait.ts` and tests; `domain/src/tests/domain.test.ts` and `web-panel-host.test.ts` mapper assertions; route-state signature/compare/effect-sign modules and tests for strict recorded-state matching and complete bounded effect evidence; present-wait failure classification and adjacent tests only if needed. Use new `docs/architecture/recorded-replay-state.md` in each repository for authored documentation.
 - Must not touch: t516/t517 trees or owned executor/learning files; shared working documents; fixtures, model prompts/guidance, oracles, runtime data. No commits, merges, pushes, paid/browser Lab runs or full suites.
 - Design: optional host-owned historical snapshot projection; Core loads indexed durable snapshots, chooses strict producer-time at-action/pre-state and next-action-boundary after-state with explicit provenance; rejects ambiguous/missing/truncated captures; signs with existing host callbacks and persists hashes-only routeSignatures onto candidates/nodes.
 - Safety: no generic missing-control skip, timeout bypass, or invented terminal state. Existing effect_holds/forward routing owns skip decisions. Only inferred present-target waits may receive narrowly classified missing-target readiness; all ordinary waits retain their semantics. Missing evidence retains existing failure behavior.
@@ -301,8 +301,8 @@ G1 brief (for the supervisor to dispatch, `worker-high`, test-runner only):
    - Before relying on it, confirm from the first command's `run.json` that it made 0 provider calls.
 3. On the frozen pair, run:
    - `pnpm lab recovery-matrix` (expect `{"passed":14}`);
-   - the scripted workflow runs for each gate site and its variant (`pnpm lab run bigbox-retail --variant
-     redesigned-buy-box --flow`, and the same for everything-store `--workflow first-page-earbuds --variant
+   - the scripted workflow runs for each gate site and its variant (`pnpm lab run crossborder-marketplace --variant
+     basket-redesign --flow`, and the same for everything-store `--workflow first-page-earbuds --variant
      deal-wheel` and social `--variant regrouped`), to check that each fixture's drift and oracle hold;
    - each gate command below with `--dry-run` (expect `ready`, 0 provider calls).
 4. Sync and rebuild the lane trees of slots 1-3 (B, C and D's trees serve bigbox, everything-store and social).
@@ -335,7 +335,7 @@ env -u DEEPSEEK_API_KEY FLUXIQ_TEST_ENV_FILES=none FLUXIQ_LAB_INSTANCE=<slot> FL
   pnpm lab replay <scenario> --workspace adapt-<site>-<n> --project <projectId> --flow <flowId> --instruction-task <task>
 ```
 
-Step C, observed only and not gating: the same replay with the base task (bigbox `bigbox-retail-pickup-cart`,
+Step C, observed only and not gating: the same replay with the base task (crossborder `crossborder-marketplace-hub-to-cart`,
 everything-store `everything-store-first-page-plus-earbuds`, social `social-network-feed-group-post`). It records
 whether the repaired Flow still works on the unchanged site.
 
@@ -343,12 +343,12 @@ Per site:
 
 | Site | Slot (tree) | Task | Drift and what the run must learn | Oracle |
 | --- | --- | --- | --- | --- |
-| bigbox-retail | 1 (B) | `bigbox-retail-pickup-cart-redesigned-after-creation` | Classes renamed. Add to cart loses its automation id and moves; Buy now (a lasting lookalike) takes its place. The run must re-target Add to cart, never press Buy now. | PG `build-pickup-cart` (store switched; towels and napkins in the cart for pickup) |
-| everything-store | 2 (C) | `everything-store-first-page-plus-earbuds-deal-wheel` | A delayed spin-to-win popup makes the results page inert. The run must dismiss it and keep a guarded handler or branch in the Flow (user rule: interruptions become branches). | DS `extract-first-page` (`workflows/first-page.ts:78`) |
-| social-network-feed | 3 (D) | `social-network-feed-group-post-regrouped-after-creation` | The "Write something..." prompt is gone; Create post, poll and event replace it. The run must re-author the opening of the post. The instruction asks to post, so Core permits `send_or_publish` without `--llm-permit` (confirm in the dry run's request). | PG `post-in-group` (post pending approval) |
+| crossborder-marketplace | 3 (t262) | `crossborder-marketplace-hub-to-cart-basket-redesign-after-creation` | Add to cart loses its automation id and is renamed Add to basket; Buy now occupies the old place. Learn a target override, never press Buy now. | PG hub-to-cart task oracle |
+| everything-store | 1 (t451) | `everything-store-first-page-plus-earbuds-deal-wheel` | A delayed spin-to-win popup makes the results page inert. Dismiss it and keep a guarded handler or branch (interruptions become branches). | DS `extract-first-page` (`workflows/first-page.ts:78`) |
+| social-network-feed | 4 (t275) | `social-network-feed-group-post-regrouped-after-creation` | The recorded composer prompt is gone; Create post, poll and event replace it. Re-author the opening. The instruction permits `send_or_publish`; confirm in the dry-run request. | PG `post-in-group` (post pending approval) |
 
-Run 1 for each site goes in one round on slots 1-3. Run 2 goes in the next round, on the same pair if run 1 passed.
-A failure is debugged fully, its cause is fixed, and the site's count restarts on the changed pair. Slot 4 carries
+Run 1 for each site goes in one round on slots 3, 1 and 4. Run 2 goes in the next round, on the same pair if run 1 passed.
+A failure is debugged fully, its cause is fixed, and the site's count restarts on the changed pair. Slot 2 carries
 breadth work during gate rounds.
 
 ### Phase 3 — Breadth wave 2 and records
