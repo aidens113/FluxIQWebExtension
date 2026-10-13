@@ -3,5 +3,7 @@
 // it appeared after the step answered success (t476).
 export { WEB_ROUTE_EFFECT_FORMAT } from "./format";
 export { webAutomationRouteEffect } from "./sign";
+// What a page changed by itself between two of its states, which a signed effect leaves out (t496).
+export { webAutomationRouteSelfChanges } from "./self-changes";
 export { webAutomationRouteEffectHolds } from "./holds";
 export { MIN_ADDED_FOR_ABSENCE, webAutomationRouteEffectSeen } from "./seen";

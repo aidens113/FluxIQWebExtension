@@ -149,10 +149,10 @@
     },
     "import-cycles": {
       "domain/src/runtime/llm-evidence/index.ts": 7,
-      "domain/src/runtime/llm-evidence/node-run/run.ts": 6,
       "domain/src/runtime/llm-evidence/tools.ts": 6,
       "domain/src/runtime/llm-evidence/harness-options/execute.ts": 5,
       "domain/src/runtime/llm-evidence/node-run/replay.ts": 5,
+      "domain/src/runtime/llm-evidence/node-run/run.ts": 5,
       "apps/extension/src/runtime/index.ts": 4,
       "domain/src/runtime/llm-evidence/node-run/verify.ts": 4,
       "packages/test-runner/src/demo-workspace/provisioning.ts": 4,
