@@ -163,6 +163,16 @@ Codex supervisor has dispatched these independent briefs. Worker claims remain u
 - Definition of done: explain why positive state routing failed, prove proposed fix with bounded generic regression design, distinguish missing producer evidence from routing defect. Crossborder oracle passed, zero calls/harness activations, an obsolete click was skipped; store extraction never ran.
 - Report to: own report above and supervisor.
 
+### Brief: codex-t518-live-capture-coverage
+- Repository: paired t518 source; read-only fresh store/crossborder retained recordings named in store-debug brief.
+- Task: measure real historical capture projection/provenance coverage, especially store transient-check actions and next extraction; identify exact declining evidence fields or phase/timestamp gaps.
+- Required reads: Current State, capture report, domain historical projector and extension capture producers; retained private recording/state indexes and snapshots only as needed.
+- Owns (may edit): own report only, docs/working/adaptation-and-breadth-plan/reports/codex-t518-live-capture-coverage.md in t518 downstream.
+- Must not touch: source/shared docs/fixtures/oracles/original state; no commits/pushes/provider/browser/full-suite runs.
+- Safety: report counts, boolean completeness, known schema/phase field names and source locations only; no raw page values, selectors, hashes, state bodies, credentials or tokens.
+- Definition of done: actual projector acceptance counts; capture timing agreement; specific missing evidence and safe owning producer change if required. Other debug worker owns executor routing/failure lifecycle; relay findings to it to avoid duplicate investigation.
+- Report to: own report and supervisor/replay_investigation.
+
 ## Inventory (2026-10-13)
 
 ### Drift variants
