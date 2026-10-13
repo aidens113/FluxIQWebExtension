@@ -138,6 +138,13 @@ Rules are AGENTS.md's testing rules and the audit's launch settings:
 - No shared docs, commits, live runs or full suites. Report own codex-t518-passive-domain.md. Freeze source before supervisor validation.
 - Acceptance: live/durable parity, positive read-only facts with zero added controls, missing/unknown completeness, editable/secret/live/volatile exclusions, duplicates, loss of facts, oversized proof and legacy regressions.
 
+### Brief: codex-t518-terminal-act-role
+- Worker: codex-t516, paired t518 domain only, after passive implementation frozen.
+- Own: importer IO output definitions/metadata and recording mapper role emission, adjacent tests. Coordinate exact trusted output metadata and Core fallback mapping with replay worker before edits.
+- Extend explicit generic recoveryRole with terminal_act only for known act-producing output contracts; readiness remains passive-only. Core must not infer final-act permission from positive page changes or browser output names. Read/extraction outputs never qualify, even without recordOutput.
+- Preserve ordinary output behavior and unknown old contracts; missing role declines terminal completion. No model guidance or scenario words.
+- Report own codex-t518-terminal-act-role.md. No shared docs/commits/live/full suites; freeze before root validation.
+
 Completed dispatch briefs are preserved in [the handoff brief archive](./adaptation-and-breadth-plan/archive/2026-10-13-codex-handoff-briefs.md). Current implementation briefs are added here.
 
 ### Brief: codex-t518-complete-control-match
