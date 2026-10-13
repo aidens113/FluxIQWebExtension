@@ -147,6 +147,16 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 ## Worker Briefs
 
+### Brief: whole-topology held re-author investigation
+- Worker: codex-t516; read-only follow-up after t530 source/report freeze. Use frozen t530 pair; no new branch, source/shared-doc edits, commits, model/browser calls or panel management. Own report `mvp-final-month-plan/reports/codex-held-topology-execution-design.md`.
+- Read structural audit unit 4, Current State and t529 report/shared candidate graph-source contract once available; do not modify active t529/t531 execution or evidence owners.
+- Inspect Core `service/runtime-adaptation/{held-candidate,repair-rerun,judged-reauthor}.ts` and direct Router selection/runtime graph-option/session/reauthor consumers needed to execute the held topology. Summarize exact additional reads.
+- Design how a held immutable topology reselects its entry from fresh state, executes only candidate-owned sibling graphs and preserves normal inputs/results, permissions, cancellation and no-model trials. Reuse t529 loader rather than another accepted-store fallback.
+- Bind traces/versions/selected entry and authoritative judgement to the exact held adaptation/topology/base; no early apply, stale mutation, judgement from the previous pass or rollback-as-safety. Preserve exactly-once settlement and truthful UI/record projection.
+- Identify reset ownership for re-run lasting acts and prerequisite applicable entry receipts from unit 3. Unsupported/unprepared cases must remain refused; do not claim multi-entry qualification from one successful path.
+- Propose smallest file-partitioned executable units plus fail-first coverage: Router change, new/changed helper, foreign source, failed alternative, cancellation/stale ownership, zero apply before judge, exact-once application and subsequent saved provider-free reuse.
+- Return exact owners, contract changes, unresolved product decisions and implementation order. No implementation until supervisor writes a separate bounded brief.
+
 ### Brief: applicable entry-case acceptance investigation
 - Worker: codex-t517; read-only follow-up in frozen t531 pair, not another task branch. Own report `mvp-final-month-plan/reports/codex-entry-case-acceptance-design.md`; no shared-document edits, commits or model/browser calls.
 - Read structural-authoring audit unit 3 and Current State; t529 loader/evidence is still isolated and may change trace projection. No executor/route-validator/UI/judge implementation edits.
