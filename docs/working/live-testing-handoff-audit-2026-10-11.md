@@ -258,6 +258,20 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
 
 ## Work Ledger
 
+### 2026-10-13 - Round 16: C passed build 1 and replay; D passed; B failed after an accepted trial
+
+- Agent: Claude senior supervisor; debug workers.
+- Preflight on pair Core 3ace826c / downstream 87f85e72 (t495-t498 added): matrix `{"passed":14}`; B, C and D dry runs
+  `ready` with 0 provider calls.
+- C qualification build 1 `run-mv6i27oi-a87fb247` passed $0.0974 (13/13 in order, 52/52 fields, 0 unexpected);
+  replay `replay-mv6ih7r5-7f5958bb` passed (13/13, goal true, hash equal, all five zero).
+- D confirming build `run-mv6i2akr-516b2f03` passed $0.0707; replay `replay-mv6ih7r5-188a0197` passed (4/4, goal true,
+  hash equal, all five zero).
+- B confirming build `run-mv6i28zl-a53d36db` failed $0.1936: trial 3 judged yes and the Flow was saved, but the oracle
+  failed; the run went on to step 0225 (105 calls, 780 s) and ended on an unusable answer.
+- Validation: spend-ledger finish lines; each run's `evaluation.json` read by the supervisor; replay receipts above.
+- Outcome: In progress. C's build 2 waits for the C and B debugs, in case B shows a regression on this pair.
+
 ### 2026-10-13 - t496 and t498 merged; round 16 prepared
 
 - Agent: Claude senior supervisor; t496 and t498 workers.
