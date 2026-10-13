@@ -28,7 +28,9 @@ import { attributeValue, webLlmElementKind, webLlmPageTree } from "../page-view"
 /** What an element a type step cannot type into is, in the words a refusal names it by (header). */
 export const WEB_LLM_NOT_A_FIELD_KINDS = [
   "text", "heading", "link", "button", "select", "checkbox", "radio", "switch", "toggle", "tab",
-  "menuitem", "option", "slider", "treeitem", "img", "clickable", "dialog", "layer", "file_input"
+  "menuitem", "option", "slider", "treeitem", "img", "clickable", "dialog", "layer", "file_input",
+  // A scripted list (`role="listbox"` on anything but a `<select>`), its own kind since t509.
+  "listbox"
 ] as const;
 
 export type WebLlmNotAFieldKind = (typeof WEB_LLM_NOT_A_FIELD_KINDS)[number];
