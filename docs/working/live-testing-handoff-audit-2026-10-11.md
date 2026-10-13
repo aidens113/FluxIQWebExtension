@@ -274,6 +274,28 @@ isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day
 
 ## Work Ledger
 
+### 2026-10-12 - t475-t477 merged; round 11 prepared
+
+- Agent: Claude senior supervisor; t475-t477 workers.
+- Changed: t475 an undo acts only on its act's own row/dialog (hashed tokens) or an item the act provably created,
+  anything else refused unpressed (`candidate.undo_wrong_target`); acts recorded only when their effect appeared;
+  refused undos keep the act as `startedWith.cannotUndo` at once; the Lab start hook runs before the start check;
+  focus and self-changing lines ignored; row-bound steps list the rows they acted on. t476 a woken press under a
+  timed cover is pressed again once; a lasting step whose recorded effect never appeared fails
+  `core.step.effect_not_seen` (not retried). t477 a candidate-build stall retests the latest revision instead of
+  ending; refused looks go to the repeat guard; a stale-handle refusal carries the fresh page and handle; a fresh view
+  after each trial; both readings of a split judgement reach the model.
+- Validation: supervisor, each after merging dev: t476 Core "113 files, 993 tests", domain 129/129, extension
+  275/275, headed press-answers 6 passed; t477 Core "504 files, 5328 tests", domain 376/376; t475 Core "418 files,
+  4653 tests", domain 535/535; every typecheck exit 0; Core merges gated by `pnpm check`. Pushed: Core `0371884c`,
+  downstream `bbffa860`.
+- Outcome: Accepted.
+- Open (product, not Lab): on a real site without a start hook, an add whose new item appears on another page (a cart
+  line after a product-page Add to cart) cannot yet be proven to be the build's, so t475 keeps it as startedWith
+  instead of removing it; the user's reset rule needs the build to record every page an act's effect lands on at the
+  start, then remove only the line absent at start. Also: the stall retest checks only the call budget, not time or
+  cost left; false `effect_not_seen` on looped steps or transient toasts unmeasured.
+
 ### 2026-10-12 - Round 10: C and D passed build 1 and its replay, then failed build 2; B failed; t475-t477
 
 - Agent: Claude senior supervisor; debug workers; t475-t477 workers.
