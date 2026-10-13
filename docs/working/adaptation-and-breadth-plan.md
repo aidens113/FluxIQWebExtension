@@ -6,7 +6,7 @@ Created: 2026-10-13
 Last updated: 2026-10-13
 Owner: Senior supervisor agent (planned by a lane lead)
 Scope: Execution plan for the MVP's next two milestones after lanes A-D qualified: the adaptation gate (create, drift, diagnose, repair, verify, persist, resume, reuse on three realistic sites, twice each, later run zero-call) and a first breadth sample of the 68 realistic tasks on sites not yet proven.
-Paired document: none
+Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/adaptation-and-breadth-plan.md
 Related: Core work, if any, is briefed through Core's mvp-final-month-plan.md; [live-testing audit](./live-testing-handoff-audit-2026-10-11.md), [MVP final month](./mvp-final-month-plan.md), [state-aware recovery](./state-aware-recovery-plan.md), [testing facility](../architecture/testing-facility.md), [working index](./README.md)
 
 ## Current State
@@ -162,7 +162,7 @@ Codex supervisor has dispatched these independent briefs. Worker claims remain u
 - Repository: paired t518 trees at `C:/Users/osrs_/FluxStuff/fxwork/t518/` (task/t518-recorded-recovery-state-routing).
 - Task: connect recorded actions to existing positive-evidence state routing, fixing recorded manual recovery steps that playback already completed; correct state-linker producer/ingestion clock mixing.
 - Required reads: this Current State; `reports/codex-replay-investigation.md`; Core boundary/code structure; existing recording proposal generation/candidates, host runtime route-state callbacks and state-linker; downstream host route-state projection and inferred waits.
-- Owns (may edit), Core: `runtime/state-linker.ts`, `runtime/host-runtime.ts`, `runtime/recording-flow-proposal.ts`, `nodes/importer-sdk/` recording candidate types if needed; `runtime/service/recordings/`, `runtime/service/recording-state-index/`, adjacent owning tests; minimal service wiring in `runtime/service.ts` only if needed and within its existing budget. All paths under `packages/fluxiq/src/programs/automation-studio/`.
+- Owns (may edit), Core: `runtime/state-linker.ts`, `runtime/host-runtime.ts`, `runtime/recording-flow-proposal.ts`, `nodes/importer-sdk.ts` recording candidate types if needed; `runtime/service/recordings/`, `runtime/service/recording-state-index/`, adjacent owning tests; minimal service wiring in `runtime/service.ts` only if needed and within its existing budget. All paths under `packages/fluxiq/src/programs/automation-studio/`.
 - Owns (may edit), downstream: `domain/src/runtime/host-runtime.ts`, new cohesive historical-state projection under `domain/src/runtime/route-state/` and adjacent tests/barrels; `domain/src/recording/proposals/late-target-wait.ts` and tests; present-wait failure classification and adjacent tests only if needed. Use new `docs/architecture/recorded-replay-state.md` in each repository for authored documentation.
 - Must not touch: t516/t517 trees or owned executor/learning files; shared working documents; fixtures, model prompts/guidance, oracles, runtime data. No commits, merges, pushes, paid/browser Lab runs or full suites.
 - Design: optional host-owned historical snapshot projection; Core loads indexed durable snapshots, chooses strict producer-time at-action/pre-state and next-action-boundary after-state with explicit provenance; rejects ambiguous/missing/truncated captures; signs with existing host callbacks and persists hashes-only routeSignatures onto candidates/nodes.
