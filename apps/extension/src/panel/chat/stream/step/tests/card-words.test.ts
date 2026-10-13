@@ -137,30 +137,37 @@ test("a decision Core declined says not done and why, never didn't work, and an 
 
 // t193 1003 D8 (`run-musp4h2f-72e8ed99`, 12/16-mid-build-panel): two test cards read "Testing: Click ·
 // ValueRidge Everyday Di…", cut before the words that told the 3-Pack from the single pack.
-test("a long target is cut from the middle, so the words that tell two cards apart stay visible", () => {
+// Round 12, lane D (`run-mv62icw0-070f88ad`, 00010): cut to the head, equal labels read "wait …
+// be accepted · Jonas Weber" and "wait … to be accepted · Lin Zhao", and the view's own cut read
+// "friend requests pa…". A target of several words is shown whole and wrapped, never cut there.
+test("a long target of several words is shown whole and wrapped, so the words that tell two cards apart stay visible", () => {
   const pack = cardWords(card({ target: "ValueRidge Everyday Dinner Napkins 250 Count (3-Pack)", testing: true }), false);
   const single = cardWords(card({ target: "ValueRidge Everyday Dinner Napkins 250 Count", testing: true }), false);
   assert.notEqual(pack.target, single.target);
-  for (const [words, end] of [[pack, "(3-Pack)"], [single, "250 Count"]] as const) {
-    assert.ok(words.target!.endsWith(end), words.target!);
-    assert.ok(words.target!.startsWith("ValueRidge"), words.target!);
-    assert.ok(words.target!.includes("…"), words.target!);
-    assert.ok(words.name.length + words.target!.length <= 36, words.target!);
+  for (const [words, whole] of [[pack, "ValueRidge Everyday Dinner Napkins 250 Count (3-Pack)"], [single, "ValueRidge Everyday Dinner Napkins 250 Count"]] as const) {
+    assert.deepEqual([words.target, words.whole], [whole, true]);
   }
+  // Equal labels read the same on every row, whatever the row's name.
+  const waits = ["Jonas Weber", "Lin Zhao"].map((row) => cardWords(card({ kind: "wait", target: `wait for the request to be accepted · ${row}` }), false).target);
+  assert.deepEqual(waits, ["wait for the request to be accepted · Jonas Weber", "wait for the request to be accepted · Lin Zhao"]);
   // The accessible name keeps every word.
   assert.equal(pack.label, "Testing: Click, ValueRidge Everyday Dinner Napkins 250 Count (3-Pack): Done");
-  // A target that fits is left whole, and a long path is cut where one of its parts ends, keeping its end.
-  assert.equal(cardWords(card({ target: "Add to cart", testing: true }), false).target, "Add to cart");
+  // A target that fits is left whole on one line, and a long path is cut where one of its parts ends, keeping its end.
+  assert.deepEqual([cardWords(card({ target: "Add to cart", testing: true }), false).target, cardWords(card({ target: "Add to cart", testing: true }), false).whole], ["Add to cart", false]);
   const path = cardWords(card({ kind: "navigate", target: "/scenarios/bigbox/store/product/valueridge-dinner-napkins-250", testing: true }), false).target!;
   assert.ok(path.endsWith("napkins-250"), path);
   // Cut where one of its parts ends (U-13 of the run-muw60j7c-bb7c9a62 review: "Hybr…"), never inside one.
   assert.ok(path.startsWith("…") && /^[/-]/u.test("/scenarios/bigbox/store/product/valueridge-dinner-napkins-250".slice(-(path.length - 1) - 1)), path);
   assert.ok("Testing: Open page".length + path.length <= 36, path);
-  // A typing step keeps the words it typed, cut from the middle, ahead of the field it typed into.
-  const typed = cardWords(card({ kind: "type", target: '"ValueRidge Everyday Dinner Napkins 250 Count" into Search', testing: true }), false).target!;
-  assert.ok(typed.startsWith('"ValueRidge') && typed.endsWith('Count"') && typed.includes("…"), typed);
-  assert.ok("Testing: Type".length + typed.length <= 36, typed);
+  // A typing step keeps every word it typed, wrapped, and leaves out the field when both do not fit the head.
+  const typed = cardWords(card({ kind: "type", target: '"ValueRidge Everyday Dinner Napkins 250 Count" into Search', testing: true }), false);
+  assert.deepEqual([typed.target, typed.whole], ['"ValueRidge Everyday Dinner Napkins 250 Count"', true]);
   assert.equal(cardWords(card({ kind: "type", target: '"Napkins 250 Count" into Search' }), false).target, '"Napkins 250 Count" into Search', "a typed target that fits keeps its field");
+  // Past what a few wrapped lines hold, it is cut from the middle where words end, keeping both ends.
+  const long = Array.from({ length: 30 }, (_, index) => `word${index}`).join(" ");
+  const cut = cardWords(card({ target: long }), false).target!;
+  assert.ok(cut.length <= 120 && cut.startsWith("word0 ") && cut.endsWith(" word29") && cut.includes(" … "), cut);
+  for (const word of cut.replace(/…/gu, " ").split(/\s+/u).filter(Boolean)) assert.ok(long.split(" ").includes(word), `"${word}" is not a whole word`);
 });
 
 // U-13 of the run-muw60j7c-bb7c9a62 UI review: "Read list · name, ... rating and 3 more" elided
@@ -184,9 +191,8 @@ test("a long target keeps whole words: a list keeps Core's name, whole, and no w
     assert.deepEqual([tested.target, tested.whole], [name, true], name);
   }
   const words = "Sponsored Pulsebud Earbuds Hybridnoisecancellingwirelessbuds";
-  const look = cardWords(card({ kind: "look", target: words }), false).target!;
-  assert.equal(look, "Sponsored Pulsebud Earbuds…");
-  for (const word of look.replace(/…/gu, " ").split(/\s+/u).filter(Boolean)) assert.ok(words.split(" ").includes(word), `${look}: "${word}" is not a whole word`);
+  const look = cardWords(card({ kind: "look", target: words }), false);
+  assert.deepEqual([look.target, look.whole], [words, true], "several words are shown whole, wrapped, and no word is cut");
   const one = "Hybridnoisecancellingwirelessbudswithcase";
   assert.equal(cardWords(card({ kind: "look", target: one }), false).target, one, "one word with nowhere to cut is left for the view");
 });

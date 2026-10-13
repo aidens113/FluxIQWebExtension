@@ -329,13 +329,14 @@ test("a failed build's ending says its reason under the headline, never only the
 // outcome words and read "done"; and R4a's exploration clear
 // (`web.action.rejected.output_not_observed`, run-mv2nlh9l-52e476da) read "not
 // tried: it ran, ..." though it ran. Both now say what the card says, worded
-// for the box.
-test("a clear or typing step the site set back says so, never done or not tried", () => {
+// for the text (round 12: a typing step into a span read "the site set the box
+// back", where no box existed).
+test("a clear or typing step whose text did not change says so, never done or not tried", () => {
   const clear = (code: string) => activityWording(named({ phase: "exploring", title: "Clearing “Quantity”", label: "Clearing “Quantity”", status: "succeeded", text: `Result: ${code} · Node: web.output.dom-clear` }));
-  assert.equal(clear("web.validation.output_not_observed").sentence, "Clearing “Quantity” — that didn't work: it ran, but the site set the box back");
-  assert.equal(clear("web.action.rejected.output_not_observed").sentence, "Clearing “Quantity” — that didn't work: it ran, but the site set the box back");
+  assert.equal(clear("web.validation.output_not_observed").sentence, "Clearing “Quantity” — that didn't work: it ran, but the text there didn't change the way it should have");
+  assert.equal(clear("web.action.rejected.output_not_observed").sentence, "Clearing “Quantity” — that didn't work: it ran, but the text there didn't change the way it should have");
   const typed = activityWording(named({ phase: "exploring", title: "Typing \"3\" into “Quantity”", label: "Typing \"3\" into “Quantity”", status: "succeeded", text: "Result: web.validation.output_not_observed · Node: web.output.dom-type" }));
-  assert.equal(typed.outcome, "that didn't work: it ran, but the site set the box back");
+  assert.equal(typed.outcome, "that didn't work: it ran, but the text there didn't change the way it should have");
   const press = activityWording(named({ phase: "exploring", title: "Clicking “collect the store coupon”", label: "Clicking “collect the store coupon”", status: "succeeded", text: "Result: web.validation.output_not_observed · Node: web.output.dom-click" }));
   assert.equal(press.outcome, "that didn't work: it ran, but the page didn't change the way it should have");
 });

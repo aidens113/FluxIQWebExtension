@@ -72,8 +72,8 @@
 // long as it is on screen and never moves. Every word comes from `stepWords`
 // or Core's shared reading of the action, never a raw id.
 
-import { activityActionKey } from "fluxiq/ui";
-import { isInternalStep, isModelThought, stepRecovery, type ClientGatewayActivity } from "../../../../shared/activity/index";
+import { activityActionKey, activityActionSkipped } from "fluxiq/ui";
+import { isInternalStep, isModelThought, stepRecovery, stepSkip, type ClientGatewayActivity } from "../../../../shared/activity/index";
 import { actionCard, type ActionCard } from "./action-card";
 import { foldRepeatedCards } from "./card-repeats";
 import { foldRetriedCards } from "./retried";
@@ -169,6 +169,21 @@ function settlesStep(event: ClientGatewayActivity): boolean {
   return event.phase === "repairing" && event.step === undefined && detail?.kind === "step" && detail.status === "failed" && detail.ref !== undefined && stepRecovery(event) === undefined;
 }
 
+/** Skips Core decides after it announced the step, which settle that step's card. */
+const SKIPPED_AFTER_ANNOUNCING: ReadonlySet<string> = new Set(["optional_absent", "state_routed"]);
+
+/**
+ * Core's words for `event` when it is the row that says the run step it
+ * announced for `node` was skipped (`stepSkip`; Core's `activityActionSkipped`),
+ * or null. A skip for already done comes in place of a step, not after one
+ * (`already-done.ts`), and keeps its own card.
+ */
+function skippedStep(event: ClientGatewayActivity, node: string | undefined): string | null {
+  const skip = stepSkip(event);
+  if (skip === undefined || node === undefined || event.detail?.ref !== node || !SKIPPED_AFTER_ANNOUNCING.has(skip.reason)) return null;
+  return activityActionSkipped(skip);
+}
+
 /** The messages for `events` (oldest first), at most `limit` of them, the newest. */
 export function stepMessages(events: readonly ClientGatewayActivity[], limit: number): StepMessage[] {
   const drafts: StepMessage[] = [];
@@ -229,10 +244,17 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
       // "Click · Get coupons" read "Didn't work" with no reason when the page
       // had said it was busy (D8, `run-murwd8le-79e735a8`).
       const why = outcome === "failed" && settlesStep(event) ? actionCard(event, "")?.why ?? null : null;
-      over.actions = over.actions.map((card) => (card.outcome === "working" ? { ...card, outcome, ...(why === null ? {} : { why }) } : card));
+      // A step Core passed over once it was announced -- what it acts on was
+      // not shown, or the page was already at another step -- is skipped, not
+      // done: its card read "Done" while the status line said "Skipped ...: it
+      // was not shown" (round 12, lane D, `run-mv62icw0-070f88ad`). Core's
+      // words for the skip go on the step's card, and its row is no second card.
+      const skipped = outcome === "done" ? skippedStep(event, unit.stepNode) : null;
+      over.actions = over.actions.map((card) => (card.outcome === "working" ? { ...card, outcome, ...(why === null ? {} : { why }), ...(skipped === null ? {} : { tested: skipped }) } : card));
       over.sequence = Math.max(over.sequence, event.sequence);
       unit.step = undefined;
       unit.stepNode = undefined;
+      if (skipped !== null) continue;
     }
     const detail = event.detail;
     if (detail === undefined || isInternalStep(detail) || settlesStep(event)) continue;

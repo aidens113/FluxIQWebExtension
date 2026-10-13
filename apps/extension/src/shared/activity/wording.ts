@@ -284,8 +284,8 @@ function wayOutOutcome(code: string | undefined): string | undefined {
 function toolOutcome(event: ClientGatewayActivity, status: "started" | "succeeded" | "failed" | undefined, code: string | undefined): string {
   if (code) {
     // A step that ran and whose effect did not show: Core's card words, worded
-    // for the step's kind ("it ran, but the site set the box back" for a clear
-    // or a typing step). `web.validation.output_not_observed` matched nothing
+    // for the step's kind ("it ran, but the text there didn't change the way
+    // it should have" for a clear or a typing step). `web.validation.output_not_observed` matched nothing
     // here and read "done" (R4a attempt 2, `run-mv2pgqkj-f3552c70`, moment 12).
     if (RAN_UNSEEN.test(code)) {
       const why = activityActionOf(event)?.why ?? activityActionFailureReason(code);
