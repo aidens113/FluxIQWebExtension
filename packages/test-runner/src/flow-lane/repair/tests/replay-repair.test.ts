@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ExistingRunDetail } from "../../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../../failure.js";
-import { replayRepairedFlow, type RepairReplayControl } from "../replay-repair.js";
+import { assertReplaysAccounted, replayRepairedFlow, type RepairReplay, type RepairReplayControl } from "../replay-repair.js";
 
 /**
  * A repair that only works while a provider is being paid is an expensive
@@ -17,6 +17,8 @@ function runDetail(overrides: Partial<ExistingRunDetail> = {}): ExistingRunDetai
   return {
     summary: { runId: "run.replay", projectId: "project-1", flowId: "flow-1", status: "succeeded", routeDecisionCount: 0, subflowEntryCount: 0, actionAttemptCount: 1, updatedAt: 1 },
     routeDecisions: [], subflows: [], actionAttempts: [], interventions: [],
+    // Core states a zero accounting for a run that asked no model (Core `result-verification/zero-provider-run.ts`).
+    providerCallCount: 0,
     ...overrides,
   };
 }
@@ -102,6 +104,8 @@ test("a replay Core could not run at all is unreachable by category, and the res
   assert.deepEqual(replays.map((replay) => replay.outcome), ["unreachable", "unreachable"]);
   assert.equal(replays[0]?.status, "runtime.behavior");
   assert.equal(replays[0]?.goalPassed, false);
+  assert.equal(replays[0]?.providerCalls, null, "a replay that never ran has no count, and 0 would be a measurement");
+  assert.doesNotThrow(() => assertReplaysAccounted(replays), "an unreachable replay is judged as unreachable, not as unaccounted");
   assert.deepEqual(broken.prepared, [1, 2], "one broken replay stopped the loop");
   assert.equal(JSON.stringify(replays).includes("Core would not start the run"), false, "the record carries the failure's message");
 });
@@ -176,4 +180,40 @@ test("a run Core did not finish as succeeded fails the replay first, whatever it
   const replay = await replayOf([step("node.add", 0)], "failed");
   assert.equal(replay.flowSucceeded, false);
   assert.equal(replay.flowShortfall, "run_not_succeeded");
+});
+
+/** A run detail on which Core published no provider count at all. */
+function unaccounted(): ExistingRunDetail {
+  const { providerCallCount: _omitted, ...detail } = runDetail();
+  return detail;
+}
+
+/**
+ * `lab replay` refuses a replay Core published no accounting for: "no call"
+ * and "nobody counted" are different facts (`provider/free-accounting.ts`).
+ * The in-run replay counted the second as the first (adaptation plan G1).
+ */
+test("a replay Core published no provider accounting for is unknown, not zero, and fails the proof", async () => {
+  const silent = core({ detail: unaccounted });
+  const replays = await replayRepairedFlow(silent.control, { ...silent.input, replays: 2 });
+  assert.deepEqual(replays.map((replay) => replay.providerCalls), [null, null]);
+  assert.equal(replays[0]?.modelCalled, false, "nothing says a model was called; nothing says it was not");
+  assert.throws(
+    () => assertReplaysAccounted(replays),
+    (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior"
+      && error.message === "Core published no provider call accounting for 2 of 2 replay(s) of the applied Flow, so whether they called a model is unknown"
+      && JSON.stringify(error.details?.unaccountedReplays) === "[1,2]",
+  );
+});
+
+test("itemized provider calls with no count are a model call, and still an unknown count", async () => {
+  const itemized = core({ detail: () => ({ ...unaccounted(), providerCalls: [], providerCallsOmitted: 1 }) });
+  const [replay] = await replayRepairedFlow(itemized.control, { ...itemized.input, replays: 1 });
+  assert.equal(replay?.providerCalls, null);
+  assert.equal(replay?.modelCalled, true);
+});
+
+test("a known zero passes the accounting check", () => {
+  const known: RepairReplay = { index: 1, outcome: "ran", runId: "run.replay", status: "succeeded", providerCalls: 0, harnessActivations: 0, modelCalled: false, goalPassed: true, flowSucceeded: true, datasetsReproduced: null };
+  assert.doesNotThrow(() => assertReplaysAccounted([known]));
 });

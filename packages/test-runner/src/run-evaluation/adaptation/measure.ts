@@ -46,20 +46,84 @@ export function adaptationIdsToRead(runDetail: JsonRecord, graphs: readonly Json
  * - Cost: Core's accounting; `null` when Core stated none of it.
  */
 export function measureRunAdaptations(facts: RunAdaptationFacts): RunAdaptationMeasurements {
-  const { runDetail, graphs, adaptations } = facts;
-  const created = createdIds(runDetail);
-  const resume = resumeOf(runDetail);
-  const exercised = stampedIds(runDetail, graphs).filter((id) => !created.includes(id) && statusOf(adaptations.get(id)) === "applied");
-  const graded = unique([...created, ...exercised, ...(resume?.adaptationIds ?? [])]);
-  const accounting = costAccounting(runDetail);
-  const reuse: RunAdaptationReuse = { exercisedAdaptationIds: exercised, providerCalls: accounting.calls, interventions: arrayOf(runDetail.interventions).length, resume };
+  const exercised = exercisedIds(facts, (id) => facts.adaptations.get(id));
+  return {
+    adaptationReuse: reuseOf(facts, exercised),
+    ...storedMeasurements(gradedIds(facts, exercised), facts.adaptations),
+    adaptationCost: costOf(facts.runDetail),
+  };
+}
+
+/**
+ * A repair lane's run, measured as one (adaptation plan G1): `lane` is the run
+ * that made the repair, read after the lane applied it, and `replay` the first
+ * model-free replay of the repaired Flow that ran, or `null` when none did.
+ * `repairAdaptationIds` are the adaptations the lane applied or found applied,
+ * which `lane.adaptations` must hold.
+ *
+ * - Persistence, validation and cost are the lane run's, as
+ *   `measureRunAdaptations` measures them, with every repair adaptation graded
+ *   too: a re-author Core applied in the run is not always on the run's own
+ *   created list.
+ * - Reuse is the replay's: Core's stamp rule, plus each repair adaptation Core
+ *   holds `applied` whose recorded `appliedTo` names a node the replay
+ *   attempted. Core's legacy apply (`service/adaptations/graph-flow-patch.ts`)
+ *   re-points a node without stamping its `metadata.adaptationIds`, so the
+ *   stamp rule alone cannot see that repair being reused; `appliedTo` is
+ *   Core's own record of where it applied it.
+ */
+export type RepairedRunAdaptationFacts = { lane: RunAdaptationFacts; replay: RunAdaptationFacts | null; repairAdaptationIds: readonly string[] };
+
+/** The four measurements of a repair lane's run, by the rules `RepairedRunAdaptationFacts` states. */
+export function measureRepairedRunAdaptations(facts: RepairedRunAdaptationFacts): RunAdaptationMeasurements {
+  const { lane, replay } = facts;
+  const exercisedInLane = exercisedIds(lane, (id) => lane.adaptations.get(id));
+  return {
+    adaptationReuse: replay ? reuseOf(replay, repairReuseIds(lane, replay, facts.repairAdaptationIds)) : null,
+    ...storedMeasurements(unique([...gradedIds(lane, exercisedInLane), ...facts.repairAdaptationIds]), lane.adaptations),
+    adaptationCost: costOf(lane.runDetail),
+  };
+}
+
+/** The adaptations the replay reused: stamped and applied, or a repair applied to a node it attempted. Never one the replay created. */
+function repairReuseIds(lane: RunAdaptationFacts, replay: RunAdaptationFacts, repairIds: readonly string[]): string[] {
+  const created = createdIds(replay.runDetail);
+  const attempted = new Set(arrayOf(replay.runDetail.actionAttempts).filter(isRecord).map((attempt) => attempt.nodeId).filter(isText));
+  const appliedTo = repairIds.filter((id) => {
+    const stored = lane.adaptations.get(id);
+    return !created.includes(id) && statusOf(stored) === "applied" && arrayOf(stored?.appliedTo).filter(isRecord).some((target) => isText(target.id) && attempted.has(target.id));
+  });
+  return unique([...exercisedIds(replay, (id) => replay.adaptations.get(id) ?? lane.adaptations.get(id)), ...appliedTo]);
+}
+
+/** The stamped adaptations the run executed that it did not create and that Core holds `applied`: Core's replay rule. */
+function exercisedIds(facts: RunAdaptationFacts, stored: (id: string) => JsonRecord | undefined): string[] {
+  const created = createdIds(facts.runDetail);
+  return stampedIds(facts.runDetail, facts.graphs).filter((id) => !created.includes(id) && statusOf(stored(id)) === "applied");
+}
+
+/** Created, exercised and trialled, each once: the adaptations graded and persisted. */
+function gradedIds(facts: RunAdaptationFacts, exercised: readonly string[]): string[] {
+  return unique([...createdIds(facts.runDetail), ...exercised, ...(resumeOf(facts.runDetail)?.adaptationIds ?? [])]);
+}
+
+function reuseOf(facts: RunAdaptationFacts, exercised: string[]): RunAdaptationReuse | null {
+  const reuse: RunAdaptationReuse = { exercisedAdaptationIds: exercised, providerCalls: costAccounting(facts.runDetail).calls, interventions: arrayOf(facts.runDetail.interventions).length, resume: resumeOf(facts.runDetail) };
+  return fitting(reuse, validateRunAdaptationReuse);
+}
+
+/** Validation and persistence over the graded ids; each is unmeasured when any one adaptation was not read or does not state what it needs. */
+function storedMeasurements(graded: readonly string[], adaptations: ReadonlyMap<string, JsonRecord>): Pick<RunAdaptationMeasurements, "adaptationValidation" | "adaptationPersistence"> {
   const records = graded.map((id) => storedRecord(id, adaptations.get(id)));
   return {
-    adaptationReuse: fitting(reuse, validateRunAdaptationReuse),
     adaptationValidation: graded.every((id) => adaptations.has(id)) ? fitting({ adaptations: graded.map((id) => confidence(id, adaptations.get(id)!)) }, validateRunAdaptationValidation) : null,
     adaptationPersistence: records.every((entry): entry is RunAdaptationRecord => entry !== undefined) ? fitting({ adaptations: records }, validateRunAdaptationPersistence) : null,
-    adaptationCost: accounting.cost ? fitting(accounting.cost, validateRunAdaptationCost) : null,
   };
+}
+
+function costOf(runDetail: JsonRecord): RunAdaptationCost | null {
+  const { cost } = costAccounting(runDetail);
+  return cost ? fitting(cost, validateRunAdaptationCost) : null;
 }
 
 /** The adaptations the run itself created (`runDetail.adaptationIds`). */
