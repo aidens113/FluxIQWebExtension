@@ -97,10 +97,38 @@ function coverName(cover: WebLlmEvidenceElement, elements: readonly WebLlmEviden
   return spaced.length > MAX_COVER_WORDS ? `${spaced.slice(0, MAX_COVER_WORDS - 1)}…` : spaced;
 }
 
-/** The first control inside a cover whose words read as closing it (header). */
+/**
+ * The first control inside a cover whose words read as closing it (header),
+ * as `../node-run/covered-target.ts` names a layer's closers: a mark that is
+ * only a closing word inside a pressable element of the cover counts, and a
+ * closing element that holds another gives way to it -- a help card whose words
+ * start with its "×" opens the widget when pressed; only the "×" closes it
+ * (t507, `run-mv6qrcln-2e194a12` step 0008 named the card).
+ */
 function closerOf(cover: WebLlmEvidenceElement, elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageTree): WebLlmEvidenceElement | undefined {
-  return elements.find((element) => tree.isUnder(element, cover) && pressable(element)
-    && [wordsOf(element), element.label].some((words) => words !== undefined && CLOSE_WORDS.test(words)));
+  const byHandle = new Map(elements.map((element) => [element.target, element] as const));
+  const reads = (element: WebLlmEvidenceElement, words: RegExp): boolean => [wordsOf(element), element.label].some((said) => said !== undefined && words.test(said));
+  const closers = elements.filter((element) => tree.isUnder(element, cover) && reads(element, CLOSE_WORDS)
+    && (pressable(element) || (reads(element, CLOSE_MARK) && insidePressable(byHandle, element, cover.target))));
+  return closers.find((closer) => !closers.some((other) => other !== closer && tree.isUnder(other, closer)));
+}
+
+/** A mark that is nothing but a closing word: a "×", a "Close" (`../node-run/covered-target.ts`). */
+const CLOSE_MARK = /^\s*(?:×|✕|✖|x|close|dismiss)\s*$/iu;
+
+/** How far up the `parent` chain an ancestor is looked for. */
+const MOST_DEPTH = 40;
+
+/** Whether a described ancestor of `element` below `cover` is pressable, so a press on it lands on that ancestor's listener. */
+function insidePressable(byHandle: ReadonlyMap<string, WebLlmEvidenceElement>, element: WebLlmEvidenceElement, cover: string): boolean {
+  let at = element.parent;
+  for (let depth = 0; at !== undefined && at !== cover && depth < MOST_DEPTH; depth += 1) {
+    const ancestor = byHandle.get(at);
+    if (ancestor === undefined) return false;
+    if (pressable(ancestor)) return true;
+    at = ancestor.parent;
+  }
+  return false;
 }
 
 /** Whether a person would press it: a button or link, or something the page listens to or points at. */

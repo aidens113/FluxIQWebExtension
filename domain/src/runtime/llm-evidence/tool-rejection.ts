@@ -62,6 +62,7 @@
 
 import { publishedWebLlmPage, type WebLlmPublishedPage } from "./page-view";
 import { present } from "./present";
+import { webLlmRejectionNext } from "./rejection-next";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "./sanitize";
 
 export const WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1" as const;
@@ -218,10 +219,9 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   one the handle's element is in, so moving it there would be a guess.
  * - `handle_wrong_kind_of_control`: the handle names a real control, and not
  *   one this node can act on -- a choice step given a button, an entry step
- *   given a link. The handle is not the mistake; the node is. When the
- *   control's own kind says which node does act on it, `useNode` names that
- *   node: call it with the same handle (`target`). Without `useNode`, choose
- *   a handle whose control this node fits.
+ *   given a link. The handle is not the mistake; the node is. `useNode`, where
+ *   the control's own kind says, names the node to call with the same handle;
+ *   `next` says how to choose in a custom listbox or combobox (t509).
  * - `handle_not_a_field`: a type or clear step names an element that holds no
  *   typed text -- plain text, a heading, a checkbox -- which `next` names
  *   (t486, `run-mv62icw0-2be384b4`: a quantity `<span>` typed into). Name
@@ -294,6 +294,9 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   Reach a page with more of them, paginate, or lower the minimum.
  * - `no_records_read`: the read came back with nothing and none of the above
  *   says why. The page held nothing here.
+ * - `option_not_offered`: a select was asked for an option it does not offer,
+ *   by value and by visible words alike, and nothing was chosen. `next` says
+ *   where its options are shown and how to name one (t509).
  *
  * What the client would not run at all:
  * - `state_not_as_asserted`: an authored claim about the page did not hold.
@@ -388,6 +391,7 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "required_fields_missing",
   "fewer_records_than_required",
   "no_records_read",
+  "option_not_offered",
   "state_not_as_asserted",
   "page_not_scriptable",
   "channel_to_page_failed",
@@ -707,15 +711,8 @@ export function rejectionDetail(fields: {
     // back through here, names the node again without knowing it exists.
     useNode: (reason === "handle_wrong_kind_of_control" || reason === "handle_not_a_field") && fields.instead !== undefined ? webLlmHandleFittingNode(fields.instead) : undefined,
     closeWith: fields.closeWith === undefined || fields.closeWith.length === 0 ? undefined : [...fields.closeWith],
-    next: reason === "covered_by_layer" ? (fields.closeWith?.length ? COVERED_NEXT_CLOSE : COVERED_NEXT)
-      // Read off the codes, so a repeat that passes them back says it again.
-      : reason === "handle_not_in_packet" && fields.instead?.includes(WEB_LLM_HANDLE_RENUMBERED_BY_RELOAD) === true ? RENUMBERED_NEXT
-      : reason === "outcome_uncertain" ? UNCERTAIN_NEXT
-      // Read off the kind code in `instead`, so a repeat that passes it back says it again.
-      : reason === "handle_not_a_field" ? notAFieldNext(fields.instead)
-      // Read off `instead`, so a repeat that passes it back says it again; a resolver's codes there are no handle.
-      : reason === "page_moved_since_packet" || reason === "handle_no_longer_on_page" ? (staleHandleNamed(fields.instead) ? STALE_NEXT_INSTEAD : STALE_NEXT)
-      : undefined,
+    // Read off the reason and the codes, so a repeat that passes them back says it again (`./rejection-next/`).
+    next: webLlmRejectionNext(reason, fields.instead, fields.closeWith),
     missing: fields.missing === undefined ? undefined : [...fields.missing],
     requestId: fields.requestId,
     startLocation: fields.startLocation,
@@ -735,51 +732,6 @@ export function rejectionDetail(fields: {
     paginationStop: fields.paginationStop,
     repeatedAnswer: wholeCount(fields.repeatedAnswer)
   });
-}
-
-/** The resolver's code naming what a type or clear step's element is (`plan-resolution/resolve-plan-node.ts`), and the words for each kind. */
-const TARGET_KIND_PREFIX = "web.handle.target_kind.";
-const TARGET_KIND_WORDS: Readonly<Record<string, string>> = Object.freeze({
-  text: "plain text", heading: "a heading", img: "an image", option: "an option", file_input: "a file input", menuitem: "a menu item", treeitem: "a tree item"
-});
-
-/** What to do about a type or clear on an element that holds no typed text, naming what it is when the codes say. */
-function notAFieldNext(instead: readonly string[] | undefined): string {
-  const kind = instead?.find((code) => code.startsWith(TARGET_KIND_PREFIX))?.slice(TARGET_KIND_PREFIX.length);
-  const named = kind === undefined || !/^[a-z_]{1,20}$/u.test(kind) ? "an element" : TARGET_KIND_WORDS[kind] ?? `a ${kind}`;
-  return `Nothing was done. The handle in target names ${named}, which holds no typed text, so nothing can be typed into or cleared there. `
-    + "Name the field itself -- a text box, a text area or an editable area -- by the handle the page view prints for it; where useNode is given, that node is the one that acts on this element.";
-}
-
-/** What to do about a control a layer covers, when the layer's own close control is known (`closeWith`). */
-const COVERED_NEXT_CLOSE = "Nothing was done. The layer in instead covers the target: press one of closeWith to close it, then make this same call again, unchanged.";
-/** The same, when no control of the layer reads as closing it. */
-const COVERED_NEXT = "Nothing was done. The layer in instead covers the target: close or answer it with one of its own controls on the page, then make this same call again, unchanged.";
-
-/**
- * What to do about a handle the page renumbered by reloading. A rerun reloads
- * its page before it runs, so the model's correction -- the handle from the page
- * it was just shown -- missed again (`run-musq0b1m-0472cfa0`, steps 0063, 0067).
- */
-const RENUMBERED_NEXT = "Nothing was done. The page was reloaded (put back) since the view this handle came from, and the reload renumbered its controls, so the handle names nothing now. Look at the page again and use the control's current handle from that view.";
-
-/**
- * What to do about a lasting act whose outcome is uncertain (t359, t361): it
- * was sent, nothing showed whether it took effect, and it was not made again.
- */
-const UNCERTAIN_NEXT = "Outcome uncertain: this step was sent to the page, but its answer does not show whether it took effect, so it was not made again automatically -- making it twice could do it twice. Look at the page to see whether it took effect before making the same call again.";
-
-/**
- * What to do about a handle from a view of another page, or of a control that
- * has left the page (t477): the handle names nothing now.
- */
-const STALE_NEXT = "Nothing was done. The handle in target came from a view of a page that is no longer the one loaded, or named a control that has since left it, so it names nothing now. Use a handle from the newest view of the page you are on -- the page with this answer, when it carries one -- or look at the page again; where the tool's target is optional, it can be called without one.";
-/** The same, when the caller found the element at the same place on the page now: `instead` is its handle. */
-const STALE_NEXT_INSTEAD = "Nothing was done. The handle in target came from a view of a page that is no longer the one loaded, or named a control that has since left it. The element at the same place on the page now has the handle in instead, shown in the page with this answer: if it is what you meant, make the call again with that handle.";
-
-/** Whether `instead` is one target handle (`t12`), as a stale-handle refusal names the element's current one, and not a resolver's codes. */
-function staleHandleNamed(instead: readonly string[] | undefined): boolean {
-  return instead?.length === 1 && /^t[1-9][0-9]*$/u.test(instead[0]!);
 }
 
 /** A count fit to put on the wire, or nothing. */

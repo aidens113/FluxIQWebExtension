@@ -210,3 +210,57 @@ test("a wall appearing changes the state digest, though no element's words chang
   delete clear.evidence;
   assert.notEqual(webLlmStateDigest(sanitizeWebLlmSnapshot(walled)), webLlmStateDigest(sanitizeWebLlmSnapshot(clear)));
 });
+
+// t507, breadth wave 1 on company-website (`run-mv6qrcln-2e194a12`, step
+// 0008): a help widget's greeting card painted over a consent sheet's answers.
+// Geometry alone put the widget's launcher, card and "×" inside the sheet, and
+// the model took them for the sheet's own. The widget's host is an empty box
+// in the corner, as a widget that positions its own children often is.
+// `parent` is the capture's index of the nearest listed ancestor; the page is
+// at the top, so each document box is its viewport box.
+const sheetUnderWidget = (): Record<string, unknown> => {
+  const interactiveElements: Array<Record<string, unknown>> = [
+    { tagName: "a", selector: "#home", visibleText: "Home", bounds: box(0, 0, 50, 20) },
+    { tagName: "button", selector: "#find", visibleText: "Find", bounds: box(100, 100, 80, 30) },
+    { tagName: "div", selector: "#backdrop", bounds: box(0, 0, 1280, 720), frontLayer: true },
+    { tagName: "div", selector: "#sheet", role: "dialog", accessibleName: "Cookie choices", bounds: box(0, 520, 1280, 200), frontLayer: true, parent: 2 },
+    { tagName: "p", selector: "#sheet-body", visibleText: "We use cookies to run this site.", bounds: box(32, 540, 800, 60), frontLayer: true, parent: 3 },
+    { tagName: "button", selector: "#settings", visibleText: "Settings", bounds: box(840, 650, 100, 44), frontLayer: true, parent: 3 },
+    { tagName: "button", selector: "#decline", visibleText: "Decline optional", bounds: box(960, 650, 170, 44), frontLayer: true, parent: 3 },
+    { tagName: "button", selector: "#allow", visibleText: "Allow all", bounds: box(1140, 650, 110, 44), frontLayer: true, parent: 3 },
+    { tagName: "div", selector: "#helper", bounds: box(1280, 720, 0, 0), frontLayer: true },
+    { tagName: "div", selector: "#launcher", accessibleName: "Help", visibleText: "Help", cursor: "pointer", hasClickHandler: true, bounds: box(1204, 644, 60, 60), frontLayer: true, parent: 8 },
+    { tagName: "div", selector: "#card", visibleText: "×Need a hand? Ask our assistant anything.", cursor: "pointer", hasClickHandler: true, bounds: box(868, 552, 396, 152), frontLayer: true, parent: 8 },
+    { tagName: "div", selector: "#card-close", accessibleName: "Close", visibleText: "×", bounds: box(1238, 560, 14, 28), frontLayer: true, parent: 10 }
+  ];
+  for (const element of interactiveElements) element.documentBounds = element.bounds;
+  return {
+    url: "https://shop.test/about",
+    title: "About us",
+    interactiveElements,
+    evidence: {
+      dialogs: { modal: true, open: [{ selector: "#sheet", role: "dialog", modal: true, native: false, label: "Cookie choices", bounds: box(0, 520, 1280, 200), kind: "consent" }] },
+      overlays: {
+        tested: 7,
+        blockedCount: 5,
+        blockers: [
+          { selector: "#backdrop", blocks: 2, blocked: ["#home", "#find"], bounds: box(0, 0, 1280, 720), kind: "consent" },
+          { selector: "#helper", blocks: 3, blocked: ["#settings", "#decline", "#allow"] }
+        ]
+      }
+    }
+  };
+};
+
+test("a widget painted over a modal dialog is not inside it: its host, launcher, card and × hold no `inDialog`", () => {
+  const { elements } = sanitizeWebLlmSnapshot(sheetUnderWidget());
+  const sheet = named(elements, "Cookie choices");
+  assert.equal(named(elements, "We use cookies to run this site.").inDialog, sheet.target, "the dialog's own words are still inside it");
+  const decline = named(elements, "Decline optional");
+  const helper = elements.find((element) => element.covers?.includes(decline.target));
+  assert.ok(helper, "the widget's host is the cover over the dialog's answers");
+  assert.deepEqual(decline.coveredBy, [helper.target], "the cover is real and stays reported");
+  for (const element of [helper, named(elements, "Help"), named(elements, "×Need a hand? Ask our assistant anything."), named(elements, "Close")]) {
+    assert.equal(element.inDialog, undefined, `${element.target} (${element.name ?? element.text ?? element.tag}) belongs to the widget, not the dialog`);
+  }
+});

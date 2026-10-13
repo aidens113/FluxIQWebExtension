@@ -29,7 +29,7 @@ const BASE = { projectId: "project.one", flowId: "flow.one" } as const;
 /** The page's own words, none of which may ever appear in a refusal. */
 const PAGE_WORDS = ["Schedule post", "Draft to the Northwind account", "queue-rows", "#schedule"] as const;
 
-type Page = { url: string; elements: Array<{ tagName: string; selector: string; accessibleName?: string; attributes?: Record<string, string> }> };
+type Page = { url: string; elements: Array<{ tagName: string; selector: string; accessibleName?: string; role?: string; attributes?: Record<string, string> }> };
 
 const QUEUE: Page = {
   url: "https://scheduler.example.test/queue",
@@ -462,5 +462,54 @@ test("a type into a non-field is told what the element is, and the node that act
   assert.equal(checkbox.useNode, "web.output.dom-click");
   // Passed back through, as a repeated refusal does, it says the same.
   assert.deepEqual(rejectionDetail({ reason: checkbox.reason, target: checkbox.target, instead: checkbox.instead }), checkbox);
+});
+
+/**
+ * A choice step on a scripted list, as the model receives it.
+ *
+ * Live (`run-mv6qrcdu-a31b44b8`, step 0060), the open list of a scripted sort
+ * control -- a `div role="listbox"`, printed `select` -- was handed to
+ * `web.output.dom-select` and refused `handle_wrong_kind_of_control` with no
+ * node and no words, and the repeat guard ended the build. The refusal now
+ * says what the element is and the press that chooses in it.
+ */
+test("a choice step on a scripted listbox is told it is one and to press the option, and on a scripted combobox to press it open", async () => {
+  const COLOURS: Page = {
+    url: "https://example.test/paint",
+    elements: [
+      { tagName: "div", role: "combobox", selector: "#colour", accessibleName: "Colour" },
+      { tagName: "div", role: "listbox", selector: "#colour-list" },
+      { tagName: "div", role: "option", selector: "#colour-list div", accessibleName: "Blue" }
+    ]
+  };
+  const { gateway, clicks } = labWith(standingPage(COLOURS));
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+
+  const listed = await runtime.executeTool({ ...BASE, callId: "call.list", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-select", parameters: { target: { handle: "t2" }, value: "blue" }, consequences: [] } });
+  assert.equal(codeOf(listed), "target_unobserved");
+  const listDetail = detailOf(listed);
+  assert.equal(listDetail?.reason, "handle_wrong_kind_of_control");
+  assert.equal(listDetail?.useNode, undefined);
+  assert.match(String(listDetail?.next), /custom listbox, not a native select/u);
+  assert.match(String(listDetail?.next), /web\.output\.dom-click/u);
+  assert.match(String(listDetail?.next), /option's own handle/u);
+  // Nothing of the page rides on it.
+  assert.equal(JSON.stringify(listDetail).includes("Blue"), false);
+
+  const opened = await runtime.executeTool({ ...BASE, callId: "call.combo", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-select", parameters: { target: { handle: "t1" }, value: "blue" }, consequences: [] } });
+  const comboDetail = detailOf(opened);
+  assert.equal(comboDetail?.reason, "handle_wrong_kind_of_control");
+  assert.equal(comboDetail?.useNode, "web.output.dom-click");
+  assert.match(String(comboDetail?.next), /custom combobox, not a native select/u);
+  assert.match(String(comboDetail?.next), /then press the option/u);
+  // A repeat passes the codes back through, and says the same.
+  const repeated = rejectionDetail({ reason: "parameters_not_resolved", target: "t2", instead: listDetail?.instead as string[] });
+  assert.equal(repeated.next, listDetail?.next);
+
+  // The press the refusal names, on the option's own handle, acts.
+  const pressed = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t3" } }, consequences: [] } });
+  assert.equal(codeOf(pressed) === "target_unobserved", false, JSON.stringify(pressed));
+  assert.deepEqual(clicks, ["#colour-list div"]);
 });
 

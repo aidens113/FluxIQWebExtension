@@ -1,13 +1,17 @@
 // The one word the page view prints for what an element is (t223, "Kinds"):
 // `link`, `button`, `field` (`field:<type>` for an input that is not text or
-// search, `field[search]` for a search box), `select`, `checkbox`, `radio`, `switch`, `toggle`, `tab`,
+// search, `field[search]` for a search box), `select`, `listbox`, `checkbox`, `radio`, `switch`, `toggle`, `tab`,
 // `menuitem`, `option`, `slider`, `treeitem`, `h1`-`h6`, `img`, `clickable`,
 // `dialog` and `layer`. Plain text has no kind.
 //
 // The role the page wrote decides first, so a link styled as a button and
-// marked `role="button"` is a button. Three roles the format does not name are
+// marked `role="button"` is a button. Two roles the format does not name are
 // given the nearest kind it does: `combobox` and `spinbutton` are fields a
-// person types into, and a `listbox` is chosen from, as a select is.
+// person types into. A native `<select>` is a `select` whatever role it
+// carries, and only it: the choice node chooses only in a native select, so a
+// scripted list (`role="listbox"` on anything else) is a `listbox`, chosen from
+// by pressing its option. Printed `select`, it was chosen in as one and
+// refused until the build ended (t509, `run-mv6qrcdu-a31b44b8`, step 0060).
 //
 // A search box is said to be one (t229): the crossborder marketplace's read
 // `field "Autumn Mega Sale: up to 70% off"`, and the model searched the home
@@ -30,7 +34,7 @@ const ROLE_KINDS: Readonly<Record<string, string>> = {
   searchbox: "field",
   combobox: "field",
   spinbutton: "field",
-  listbox: "select",
+  listbox: "listbox",
   tab: "tab",
   menuitem: "menuitem",
   menuitemcheckbox: "menuitem",
@@ -50,6 +54,7 @@ export function webLlmElementKind(element: WebLlmEvidenceElement): string | unde
 }
 
 function ownKind(element: WebLlmEvidenceElement): string | undefined {
+  if (element.tag === "select") return "select";
   const role = element.role?.trim().split(/\s+/u)[0]?.toLowerCase();
   const byRole = role === undefined ? undefined : ROLE_KINDS[role];
   if (byRole !== undefined) return byRole;
@@ -67,7 +72,6 @@ function tagKind(element: WebLlmEvidenceElement): string | undefined {
   if (tag === "input") return inputKind(element.inputType ?? "text");
   if (tag === "a" && (element.href !== undefined || attributeValue(element, "href") !== undefined)) return "link";
   if (tag === "button") return "button";
-  if (tag === "select") return "select";
   if (tag === "textarea") return "field";
   if (tag === "summary") return "toggle";
   if (HEADING_TAG.test(tag)) return tag;

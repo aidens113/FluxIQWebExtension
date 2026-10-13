@@ -62,6 +62,10 @@
 // closest differs only by quote marks, spaces or letter case
 // (`./closest-options.ts`), from the select's own options and only for a
 // select that is not sensitive.
+//
+// A request by value that names no option's value is matched against the
+// options' visible words, when exactly one option carries them (t509,
+// `findOption`): the words are what the page view shows of a select.
 
 import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
 import { isSensitiveFormControl } from "../element-traits";
@@ -201,15 +205,31 @@ function requestedOption(action: BrowserActionCommand): WebAutomationOptionSelec
   return undefined;
 }
 
-/** The one option matching the request, or nothing: an index outside the list matches no option. */
+/**
+ * The one option matching the request, or nothing: an index outside the list
+ * matches no option. A value that is no option's value is matched against the
+ * options' visible words, spacing and letter case aside, when exactly one
+ * option carries them (t509): the page view shows a select's options by their
+ * words alone, so a model sends those, and a distance select's "10 miles"
+ * (value "10") failed three times in `run-mv6qrcdu-a31b44b8`. Two options with
+ * the same words match neither, so the choice is never a guess.
+ */
 function findOption(element: HTMLSelectElement, request: WebAutomationOptionSelector): HTMLOptionElement | undefined {
   const options = [...element.options];
-  if (request.by === "value") return options.find((option) => option.value === request.value);
+  if (request.by === "value") return options.find((option) => option.value === request.value) ?? onlyOptionReading(options, request.value);
   if (request.by === "label") {
     const wanted = normalizeLabel(request.label);
     return options.find((option) => normalizeLabel(optionLabel(option)) === wanted);
   }
   return Number.isInteger(request.index) ? options[request.index] : undefined;
+}
+
+/** The one option whose visible words are `words`, spacing and letter case aside; nothing when none or several are. */
+function onlyOptionReading(options: readonly HTMLOptionElement[], words: string): HTMLOptionElement | undefined {
+  const wanted = normalizeLabel(words).toLowerCase();
+  if (!wanted) return undefined;
+  const reading = options.filter((option) => normalizeLabel(optionLabel(option)).toLowerCase() === wanted);
+  return reading.length === 1 ? reading[0] : undefined;
 }
 
 /**
