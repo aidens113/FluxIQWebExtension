@@ -429,12 +429,15 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
     "web.handle.extraction_required",
     "web.handle.not_a_control",
     "web.handle.wrong_control",
+    "web.handle.not_a_field",
     EXTRACTION_HINT,
     "web.handle.expected.extract_list.next_page",
     "web.handle.expected.next_page.list_control",
     TARGET_HINT,
     USE_CLICK,
     USE_SELECT,
+    ...["text", "heading", "link", "button", "select", "checkbox", "radio", "switch", "toggle", "tab",
+      "menuitem", "option", "slider", "treeitem", "img", "clickable", "dialog", "layer", "file_input"].map((kind) => `web.handle.target_kind.${kind}`),
     "web.handle.unidentifiable"
   ]);
 });

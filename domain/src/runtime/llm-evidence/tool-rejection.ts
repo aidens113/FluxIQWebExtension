@@ -222,6 +222,11 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   control's own kind says which node does act on it, `useNode` names that
  *   node: call it with the same handle (`target`). Without `useNode`, choose
  *   a handle whose control this node fits.
+ * - `handle_not_a_field`: a type or clear step names an element that holds no
+ *   typed text -- plain text, a heading, a checkbox -- which `next` names
+ *   (t486, `run-mv62icw0-2be384b4`: a quantity `<span>` typed into). Name
+ *   the field instead; `useNode` names the node that does act on the element
+ *   where its kind says.
  * - `extraction_handle_required`: a repeating list was already detected here,
  *   so an extraction written from selectors is a guess at what was never
  *   shown. Name the detected list's own handle.
@@ -361,6 +366,7 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "handle_in_wrong_parameter",
   "handle_in_another_frame",
   "handle_wrong_kind_of_control",
+  "handle_not_a_field",
   "covered_by_layer",
   "extraction_handle_required",
   "column_not_in_detected_list",
@@ -598,6 +604,10 @@ const HANDLE_ISSUE_REASONS: ReadonlyMap<string, WebLlmToolRejectionReason> = new
   // control a press acts on.
   ["web.handle.not_a_control", "handle_wrong_kind_of_control"],
   ["web.handle.wrong_control", "handle_wrong_kind_of_control"],
+  // A candidate's type or clear step on an element that holds no typed text
+  // (`plan-resolution/typing-targets.ts`, t486). Its kind rides beside it as
+  // `web.handle.target_kind.<kind>`, which `next` names.
+  ["web.handle.not_a_field", "handle_not_a_field"],
   // A Flow step's control found by one attribute alone (t425,
   // `element-fingerprint/shortfall.ts`): one that cannot be told apart from
   // the rest of the page once that attribute changes. Only a step a Flow saves
@@ -695,12 +705,14 @@ export function rejectionDetail(fields: {
     // Read off the same codes the reason was, and in the same one place, so a
     // repeat of this refusal (`repeated-refusal.ts`), which passes `instead`
     // back through here, names the node again without knowing it exists.
-    useNode: reason === "handle_wrong_kind_of_control" && fields.instead !== undefined ? webLlmHandleFittingNode(fields.instead) : undefined,
+    useNode: (reason === "handle_wrong_kind_of_control" || reason === "handle_not_a_field") && fields.instead !== undefined ? webLlmHandleFittingNode(fields.instead) : undefined,
     closeWith: fields.closeWith === undefined || fields.closeWith.length === 0 ? undefined : [...fields.closeWith],
     next: reason === "covered_by_layer" ? (fields.closeWith?.length ? COVERED_NEXT_CLOSE : COVERED_NEXT)
       // Read off the codes, so a repeat that passes them back says it again.
       : reason === "handle_not_in_packet" && fields.instead?.includes(WEB_LLM_HANDLE_RENUMBERED_BY_RELOAD) === true ? RENUMBERED_NEXT
       : reason === "outcome_uncertain" ? UNCERTAIN_NEXT
+      // Read off the kind code in `instead`, so a repeat that passes it back says it again.
+      : reason === "handle_not_a_field" ? notAFieldNext(fields.instead)
       // Read off `instead`, so a repeat that passes it back says it again; a resolver's codes there are no handle.
       : reason === "page_moved_since_packet" || reason === "handle_no_longer_on_page" ? (staleHandleNamed(fields.instead) ? STALE_NEXT_INSTEAD : STALE_NEXT)
       : undefined,
@@ -723,6 +735,20 @@ export function rejectionDetail(fields: {
     paginationStop: fields.paginationStop,
     repeatedAnswer: wholeCount(fields.repeatedAnswer)
   });
+}
+
+/** The resolver's code naming what a type or clear step's element is (`plan-resolution/resolve-plan-node.ts`), and the words for each kind. */
+const TARGET_KIND_PREFIX = "web.handle.target_kind.";
+const TARGET_KIND_WORDS: Readonly<Record<string, string>> = Object.freeze({
+  text: "plain text", heading: "a heading", img: "an image", option: "an option", file_input: "a file input", menuitem: "a menu item", treeitem: "a tree item"
+});
+
+/** What to do about a type or clear on an element that holds no typed text, naming what it is when the codes say. */
+function notAFieldNext(instead: readonly string[] | undefined): string {
+  const kind = instead?.find((code) => code.startsWith(TARGET_KIND_PREFIX))?.slice(TARGET_KIND_PREFIX.length);
+  const named = kind === undefined || !/^[a-z_]{1,20}$/u.test(kind) ? "an element" : TARGET_KIND_WORDS[kind] ?? `a ${kind}`;
+  return `Nothing was done. The handle in target names ${named}, which holds no typed text, so nothing can be typed into or cleared there. `
+    + "Name the field itself -- a text box, a text area or an editable area -- by the handle the page view prints for it; where useNode is given, that node is the one that acts on this element.";
 }
 
 /** What to do about a control a layer covers, when the layer's own close control is known (`closeWith`). */

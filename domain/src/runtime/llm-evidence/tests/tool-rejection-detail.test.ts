@@ -306,8 +306,8 @@ test("every code the plan resolver can refuse with names a reason, and each reas
   const unmapped: string[] = [];
   for (const code of WEB_PLAN_HANDLE_ISSUE_CODES) {
     const reason = webLlmHandleRejectionReason([code]);
-    if (code.startsWith("web.handle.expected.")) {
-      assert.equal(reason, "parameters_not_resolved", `${code} is a shape hint and must not be read as a reason`);
+    if (code.startsWith("web.handle.expected.") || code.startsWith("web.handle.target_kind.")) {
+      assert.equal(reason, "parameters_not_resolved", `${code} is a shape hint or a kind, and must not be read as a reason`);
       continue;
     }
     if (reason === "parameters_not_resolved") unmapped.push(code);
@@ -450,3 +450,17 @@ test("a handle the page renumbered by reloading is told the page was reloaded an
   const never = rejectionDetail({ reason: "parameters_not_resolved", target: "t40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}'] });
   assert.deepEqual(never, { reason: "handle_not_in_packet", target: "t40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}'] });
 });
+
+// A type or clear on an element that holds no typed text (t486, `run-mv62icw0-2be384b4`: a quantity `<span>`).
+test("a type into a non-field is told what the element is, and the node that acts on it where one does", () => {
+  const text = rejectionDetail({ reason: "parameters_not_resolved", target: "t932", instead: ["web.handle.not_a_field", "web.handle.target_kind.text", "web.handle.not_a_field:target"] });
+  assert.equal(text.reason, "handle_not_a_field");
+  assert.match(text.next ?? "", /names plain text, which holds no typed text/u);
+  assert.equal(text.useNode, undefined);
+  const checkbox = rejectionDetail({ reason: "parameters_not_resolved", target: "t7", instead: ["web.handle.not_a_field", "web.handle.expected.node.web.output.dom-click", "web.handle.target_kind.checkbox"] });
+  assert.match(checkbox.next ?? "", /names a checkbox,/u);
+  assert.equal(checkbox.useNode, "web.output.dom-click");
+  // Passed back through, as a repeated refusal does, it says the same.
+  assert.deepEqual(rejectionDetail({ reason: checkbox.reason, target: checkbox.target, instead: checkbox.instead }), checkbox);
+});
+

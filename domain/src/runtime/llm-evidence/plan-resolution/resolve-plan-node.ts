@@ -101,6 +101,13 @@
 // adds at the document) makes words a control the view cannot tell from text.
 // For the same reason a candidate may press words exploration pressed and saw
 // change the page (`target-packets.ts` `pressed`, W13).
+//
+// **t486.** A candidate's type or clear step names a field (`typing-targets.ts`):
+// one on anything else is refused `web.handle.not_a_field`, beside
+// `web.handle.target_kind.<kind>` saying what it names; an act on one page
+// (`onPage`) names that page's control, else `web.handle.stale`
+// (`target-packets.ts` `resolveOn`); a slot's key written dotted beside it is
+// read as its own (`dotted-keys.ts`, W2).
 
 import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
@@ -120,6 +127,9 @@ import { webPlanPositionCode } from "./issue-position";
 import { webPlanOwnExtractionList } from "./own-extraction-list";
 import { resolveWebNextPageSlot } from "./next-page-slot";
 import { webPlanStepPermission, type WebPlanStepIssueCode } from "./step-permission";
+import { webPlanControlMisfit } from "./control-fit";
+import { WEB_LLM_NOT_A_FIELD_KINDS, type WebLlmNotAFieldKind } from "./typing-targets";
+import { webPlanReadDottedKeys } from "./dotted-keys";
 import { webPlanModelWrote, webPlanModelWroteAny, webPlanWrittenLiterals, type WebPlanAuthorship } from "./written-literals";
 import type { WebLlmTargetPackets, WebLlmTargetReach, WebLlmTargetResolution } from "./target-packets";
 
@@ -158,6 +168,9 @@ export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   // choose value 5 in, actual the target is a <button>"). Only a contradiction
   // the registered output itself would refuse is counted.
   "web.handle.wrong_control",
+  // A candidate's type or clear step on an element that holds no typed text
+  // (`./typing-targets.ts`, t486; `run-mv62icw0-2be384b4`: a quantity `<span>`).
+  "web.handle.not_a_field",
   // The extraction node's `extractList` as `{ handle, fields? }`, as its
   // description spells out. Until S4 it was `handle_fields_paginate`, which
   // named a key the read no longer takes beside the refusal of that key.
@@ -185,6 +198,8 @@ export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   // (`fittingNodeCode`), and never otherwise.
   "web.handle.expected.node.web.output.dom-click",
   "web.handle.expected.node.web.output.dom-select",
+  // Beside `web.handle.not_a_field`: what the element is, as the page view prints it. Not a reason.
+  ...WEB_LLM_NOT_A_FIELD_KINDS.map((kind) => `web.handle.target_kind.${kind}` as const),
   // A Flow step's control found by one attribute alone (t425, `./identity-guard.ts`).
   "web.handle.unidentifiable"
 ] as const;
@@ -241,6 +256,8 @@ export type WebPlanNodeResolutionInput = {
    * `handleViews`.
    */
   handleReach?: WebLlmTargetReach | undefined;
+  /** The page the caller is about to act on: a handle written without `location` resolves there alone (header, t486). Ignored under `handleReach`. */
+  onPage?: string | undefined;
   /** Every parameter, or only those named, is the model's own writing (Core's `writtenByModel`, `modelWrittenParameters`; t432). */
   writtenByModel?: true | undefined;
   modelWrittenParameters?: readonly string[] | undefined;
@@ -360,69 +377,11 @@ const NEXT_PAGE_NODE_ID = webAutomationOutputNodeId("web.dom.next_page");
 /** Where every handle on a Next page node goes, said beside a refusal about where or how one was written there. */
 const NEXT_PAGE_SHAPE: WebPlanHandleIssueCode = "web.handle.expected.next_page.list_control";
 
-/** Choosing an option is `HTMLSelectElement` behaviour, and the output refuses anything else outright. */
-const SELECT_NODE_ID = webAutomationOutputNodeId("web.dom.select");
-/** Entering and clearing text need an editable control. */
-const TEXT_ENTRY_NODE_IDS: ReadonlySet<string> = new Set([webAutomationOutputNodeId("web.dom.type"), webAutomationOutputNodeId("web.dom.clear")]);
-/** Tags that are positively not editable. Anything unrecognised is left alone: this refuses what is known wrong, never what is merely unfamiliar. */
-const NEVER_EDITABLE_TAGS: ReadonlySet<string> = new Set(["select", "button", "a", "option", "img"]);
-
-/**
- * Whether the element the handle names is one this step's output would refuse.
- *
- * The evidence packet names each element's tag, so a step that chooses an
- * option and names a button is a mistake the model made with the answer in
- * front of it -- and one that used to reach a built Flow and fail on the page,
- * long after the packet that would have corrected it was gone. Only a
- * contradiction the registered output itself enforces counts, so this can
- * refuse nothing the run would have accepted.
- */
-function actsOnTheWrongControl(nodeDefinitionId: string, identity: JsonObject | undefined): boolean {
-  const tagName = typeof identity?.tagName === "string" ? identity.tagName.toLowerCase() : undefined;
-  if (tagName === undefined) return false;
-  if (nodeDefinitionId === SELECT_NODE_ID) return tagName !== "select";
-  return TEXT_ENTRY_NODE_IDS.has(nodeDefinitionId) && NEVER_EDITABLE_TAGS.has(tagName);
-}
-
-/** Controls a press acts on by what they are. */
-const PRESSABLE_TAGS: ReadonlySet<string> = new Set(["button", "a", "summary"]);
-/** Roles a page gives a control that is pressed, whatever element carries them. */
-const PRESSABLE_ROLES: ReadonlySet<string> = new Set(["button", "option", "menuitem", "tab", "radio", "checkbox", "link"]);
-/** Input types that are pressed rather than typed into. */
-const PRESSABLE_INPUT_TYPES: ReadonlySet<string> = new Set(["button", "submit", "reset", "image", "checkbox", "radio"]);
-
-/**
- * The node that acts on the element a refused handle names, as the code a
- * refusal carries it in, or nothing when the identity does not say.
- *
- * Read only from the identity the handle already resolved to -- its tag, its
- * role and its input type, each a closed word for a kind of control rather
- * than anything the page wrote in it -- so what goes back is a node id and
- * never page text. A native `<option>` is chosen through its `<select>`, whose
- * handle is a different one, so it names nothing rather than a press; an
- * element nothing here recognises names nothing either, because naming a node
- * the model would then be refused by again is worse than naming none.
- */
-function fittingNodeCode(identity: JsonObject | undefined): WebPlanHandleIssueCode | undefined {
-  const tagName = lowerCase(identity?.tagName);
-  if (tagName === undefined || tagName === "option") return undefined;
-  if (tagName === "select") return "web.handle.expected.node.web.output.dom-select";
-  const role = lowerCase(identity?.role);
-  const inputType = lowerCase(identity?.inputType);
-  const pressable = PRESSABLE_TAGS.has(tagName)
-    || (role !== undefined && PRESSABLE_ROLES.has(role))
-    || (tagName === "input" && inputType !== undefined && PRESSABLE_INPUT_TYPES.has(inputType));
-  return pressable ? "web.handle.expected.node.web.output.dom-click" : undefined;
-}
-
-function lowerCase(value: JsonValue | undefined): string | undefined {
-  return typeof value === "string" ? value.toLowerCase() : undefined;
-}
-
 type Scope = { projectId: string; flowId: string };
 /** `step`: the resolution is of a step a Flow will save, not of a call the caller gated itself (`gatedByCaller`) or a fact's target. */
-type Scoped = Scope & WebPlanAuthorship & { reach: WebLlmTargetReach | undefined; step: boolean };
-type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string; views?: WebPlanHandleView[]; effect?: JsonObject | undefined };
+type Scoped = Scope & WebPlanAuthorship & { reach: WebLlmTargetReach | undefined; step: boolean; onPage: string | undefined };
+/** `notAField`: what the element is, where it holds no typed text (`target-packets.ts`, t486). */
+type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string; views?: WebPlanHandleView[]; effect?: JsonObject | undefined; notAField?: WebLlmNotAFieldKind | undefined };
 /** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control -- or the shape that fits the key -- instead when one does. */
 type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath; fits?: WebPlanHandleIssueCode | undefined };
 type NodeOutcome =
@@ -441,6 +400,15 @@ const TARGET_ISSUES = {
 
 /** The node that presses its target, the only one a candidate's step is held to naming a control with (header). */
 const PRESS_NODE_ID = webAutomationOutputNodeId("web.dom.click");
+/** The nodes that type into or clear their target, the only ones a candidate's step is held to naming a field with (header). */
+const TEXT_ENTRY_NODE_IDS: ReadonlySet<string> = new Set([webAutomationOutputNodeId("web.dom.type"), webAutomationOutputNodeId("web.dom.clear")]);
+
+/** Every parameter each web node's schema names, which a dotted key's head may name before the node holds it (`dotted-keys.ts`). */
+const NAMED_PARAMETERS: ReadonlyMap<string, ReadonlySet<string>> = new Map(webAutomationActionDefinitions.map((definition) => [
+  webAutomationOutputNodeId(definition.actionType),
+  new Set(isJsonRecord(definition.parameterSchema.properties) ? Object.keys(definition.parameterSchema.properties) : [])
+]));
+const NONE_NAMED: ReadonlySet<string> = new Set();
 
 /**
  * The answer alone, which is what Core's binding asks for and all it accepts
@@ -457,7 +425,7 @@ export async function resolveWebPlanNodeParameters(input: WebPlanNodeResolutionI
 /** The answer, and every name it assumed to reach it (`WebPlanNodeOutcome`). */
 export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stores: WebPlanHandleStores): Promise<WebPlanNodeOutcome> {
   const step = input.gatedByCaller !== true && input.nodeDefinitionId !== FACT_TARGET_NODE_ID;
-  const scope: Scoped = { projectId: input.projectId, flowId: input.flowId, reach: input.handleReach, step, model: input.writtenByModel === true, modelKeys: input.modelWrittenParameters };
+  const scope: Scoped = { projectId: input.projectId, flowId: input.flowId, reach: input.handleReach, step, model: input.writtenByModel === true, modelKeys: input.modelWrittenParameters, onPage: input.onPage };
   const outcome = input.nodeDefinitionId === RUN_OUTPUT_NODE_ID
     ? resolveRunOutput(input.parameters, scope, stores)
     : resolveNode(input.nodeDefinitionId, input.parameters, scope, stores);
@@ -541,7 +509,13 @@ function actingStep(nodeDefinitionId: string, parameters: JsonObject): { nodeDef
   return { nodeDefinitionId: webAutomationOutputNodeId(parameters.outputId), parameters: isJsonRecord(payload) ? payload as JsonObject : {} };
 }
 
-function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Scoped, stores: WebPlanHandleStores): NodeOutcome {
+function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Scoped, stores: WebPlanHandleStores): NodeOutcome {
+  // A slot's key written dotted beside it, read as the slot's own (header, W2); a head the model wrote any dotted key of is the model's.
+  const dotted = webPlanReadDottedKeys(written, NAMED_PARAMETERS.get(nodeDefinitionId) ?? NONE_NAMED, (value) => webPlanHandleKind(value) !== undefined);
+  if (!dotted.ok) return { status: "refused", refusals: [{ code: dotted.issue, kind: slotKind(dotted.head), path: dotted.path, fits: dotted.head === "nextPage" ? NEXT_PAGE_SHAPE : undefined }] };
+  const parameters = dotted.parameters;
+  const modelHeads = [...dotted.heads].filter(([key]) => webPlanModelWrote(authored, key)).map(([, head]) => head);
+  const scope: Scoped = modelHeads.length === 0 ? authored : { ...authored, modelKeys: [...(authored.modelKeys ?? []), ...modelHeads] };
   const refusals: Refusal[] = [];
   const assumed: WebLlmNameAssumptionSaid[] = [];
   const replaced = new Map<string, Resolved>();
@@ -549,6 +523,8 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
   const nextPageNode = nodeDefinitionId === NEXT_PAGE_NODE_ID;
   // Only a candidate's press (header).
   const press = nodeDefinitionId === PRESS_NODE_ID && scope.reach === "view_history";
+  // Only a candidate's typing (header).
+  const typing = TEXT_ENTRY_NODE_IDS.has(nodeDefinitionId) && scope.reach === "view_history";
   // An element the model named other than by handle, or did not name (header).
   if (webPlanModelWroteAny(scope)) for (const literal of webPlanWrittenLiterals(nodeDefinitionId, parameters, SELECTOR_NODE_IDS.has(nodeDefinitionId), scope)) refusals.push({ code: literal.code, kind: "target", path: literal.path });
   for (const [key, value] of Object.entries(parameters)) {
@@ -603,7 +579,7 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
       }
       const outcome = resolveTarget(state.fallback, scope, stores.targets, press);
       if (typeof outcome !== "string") replaced.set(key, {
-        value: outcome.value, frameId: outcome.frameId, frameUrlPath: outcome.frameUrlPath, element: outcome.element, statePath: state.path, effect: outcome.effect
+        value: outcome.value, frameId: outcome.frameId, frameUrlPath: outcome.frameUrlPath, element: outcome.element, statePath: state.path, effect: outcome.effect, notAField: outcome.notAField
       });
       else refusals.push({ code: outcome, kind: outcome === "web.handle.misplaced" ? "extraction" : "target", path: [key, "$state", "fallback"] });
       continue;
@@ -645,8 +621,13 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
     }
   }
   const firstNamed = named[0];
-  if (firstNamed && actsOnTheWrongControl(nodeDefinitionId, element?.element)) {
-    return { status: "refused", refusals: [{ code: "web.handle.wrong_control", kind: "target", path: [firstNamed.slot], fits: fittingNodeCode(element?.element) }] };
+  const misfit = webPlanControlMisfit(nodeDefinitionId, element?.element);
+  if (firstNamed && misfit.wrong) return { status: "refused", refusals: [{ code: "web.handle.wrong_control", kind: "target", path: [firstNamed.slot], fits: misfit.fits }] };
+  if (firstNamed && typing && element?.notAField !== undefined) {
+    return { status: "refused", refusals: [
+      { code: "web.handle.not_a_field", kind: "target", path: [firstNamed.slot], fits: `web.handle.target_kind.${element.notAField}` },
+      { code: "web.handle.not_a_field", kind: "target", path: [firstNamed.slot], fits: misfit.fits }
+    ] };
   }
   if (firstNamed && scope.step && ELEMENT_NODE_IDS.has(nodeDefinitionId) && webPlanStepFoundByTooLittle(element?.element)) {
     return { status: "refused", refusals: [{ code: "web.handle.unidentifiable", kind: "target", path: [firstNamed.slot] }] };
@@ -759,13 +740,24 @@ function resolveTarget(value: Record<string, unknown>, scope: Scoped, targets: W
   if (kind !== "target" || typeof value.handle !== "string") return "web.handle.malformed";
   if (value.location !== undefined && (typeof value.location !== "string" || value.location === "")) return "web.handle.malformed";
   const handle = canonicalWebLlmTargetHandle(value.handle) ?? value.handle;
-  const resolution = targets.resolve({ projectId: scope.projectId, flowId: scope.flowId }, handle, value.location as string | undefined, scope.reach);
+  const at = { projectId: scope.projectId, flowId: scope.flowId };
+  // An act on one page names that page's control (header); a written location, or a candidate's view history, decides otherwise.
+  const resolution = value.location === undefined && scope.reach === undefined && scope.onPage !== undefined
+    ? targets.resolveOn(at, handle, scope.onPage)
+    : targets.resolve(at, handle, value.location as string | undefined, scope.reach);
   if (!resolution.ok) return resolution.renumberedByReload === true ? "web.handle.renumbered_by_reload" : TARGET_ISSUES[resolution.code];
   if (press && resolution.notAControl === true) return "web.handle.not_a_control";
   const resolved: Resolved = { value: resolution.selector, frameId: resolution.frameId, frameUrlPath: resolution.frameUrlPath, element: resolution.element as unknown as JsonObject };
   if (resolution.shownIn !== undefined) resolved.views = [{ handle, view: resolution.shownIn.view, location: resolution.shownIn.location }];
   if (resolution.effect !== undefined) resolved.effect = resolution.effect;
+  if (resolution.notAField !== undefined) resolved.notAField = resolution.notAField;
   return resolved;
+}
+
+/** The kind of handle a slot holds, for the shape a refusal at it names. */
+function slotKind(key: string): WebPlanHandleKind | undefined {
+  if (key === "extractList") return "extraction";
+  return (TARGET_SLOTS as readonly string[]).includes(key) ? "target" : undefined;
 }
 
 /** A handle slot's value written as a handle: any object with a `handle` key. Its shape is judged by the slot. */

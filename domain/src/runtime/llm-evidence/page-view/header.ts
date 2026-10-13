@@ -4,7 +4,7 @@
 //   PAGE "<title>"
 //   URL <location written with ~>   (~ = <base>)
 //   VIEW <w>x<h> at the top · <n> elements with visible words or a control, in page order · find_on_page searches the rest
-//   COVERING <handle> "<name>" <kind> covers <n> · ...
+//   COVERING <handle> "<name>" <kind> covers <n> close <handle> "<words>" · ...
 //   DIALOG <handle> "<name>" modal <kind> · ...
 //   LOADING <readyState> busy <kind> "<label>" ... pending-navigation
 //   FRAMES <ids> did not answer
@@ -14,9 +14,23 @@
 //
 // These say what the dropped packet keys said: the title, the frame, loading,
 // navigation, dialogs, blockers, selection and a short capture.
+//
+// **A cover is named from its own element (t486, N5).** Lane D's round 12
+// build 2 (`run-mv636xyp-2e4fe54d`) said `COVERING t692` and nothing more: the
+// blocker record carried only its handle, and t692 printed no line of its own.
+// Where the capture describes the blocker's element, what the record leaves out
+// is read from it: its name, else the first heading inside it, else its own
+// words (cut to `MAX_COVER_WORDS`); its layer kind, else its role (the record's
+// own role first: until t486 it was said only for a blocker with no handle,
+// so N5's `role: "banner"` never reached the line); how many
+// controls it covers; and the first control inside it whose words read as
+// closing it (`CLOSE_WORDS`, the words `../node-run/covered-target.ts` closes a
+// layer by), as `close <handle> "<words>"`.
 
+import type { WebLlmEvidenceElement } from "../elements";
 import type { WebLlmPageEvidence } from "../sanitize";
-import { quotedWords } from "./element";
+import { quotedWords, webLlmReadableWords } from "./element";
+import { webLlmPageTree, type WebLlmPageTree } from "./page-tree";
 import type { WebLlmLinkWriter } from "./link-writer";
 
 /** The header lines for a page whose view has `lineCount` element lines. */
@@ -46,14 +60,59 @@ function viewLine(evidence: WebLlmPageEvidence, lineCount: number): string {
   return `VIEW ${viewport.width}x${viewport.height} ${scrolled} · ${scope}`;
 }
 
+/** The most of a cover's own words said, so a banner's whole text does not fill the header. */
+const MAX_COVER_WORDS = 60;
+/** The words a control that closes a layer is named with, at the start of its name (`../node-run/covered-target.ts`). */
+const CLOSE_WORDS = /^\s*(?:×|✕|✖|x|close|dismiss|no,? thanks|not now|maybe later|skip|cancel|continue shopping|got it)(?![a-z])/iu;
+const HEADING_TAG = /^h[1-6]$/u;
+
 function coveringLine(evidence: WebLlmPageEvidence): string | undefined {
-  const entries = (evidence.blockedBy ?? []).map((blocker) => joined([
-    blocker.target,
-    blocker.name === undefined ? undefined : quotedWords(blocker.name),
-    blocker.kind,
-    blocker.blocks === undefined ? undefined : `covers ${blocker.blocks}`
-  ]) ?? blocker.role ?? "layer");
-  return entries.length > 0 ? `COVERING ${entries.join(" · ")}` : undefined;
+  const blockers = evidence.blockedBy ?? [];
+  if (blockers.length === 0) return undefined;
+  const byHandle = new Map(evidence.elements.map((element) => [element.target, element] as const));
+  const tree = webLlmPageTree(evidence.elements);
+  const entries = blockers.map((blocker) => {
+    const cover = blocker.target === undefined ? undefined : byHandle.get(blocker.target);
+    const name = blocker.name ?? (cover === undefined ? undefined : coverName(cover, evidence.elements, tree));
+    const blocks = blocker.blocks ?? cover?.coversCount;
+    const closer = cover === undefined ? undefined : closerOf(cover, evidence.elements, tree);
+    return joined([
+      blocker.target,
+      name === undefined ? undefined : quotedWords(name),
+      blocker.kind ?? cover?.kind ?? cover?.isDialog?.kind ?? blocker.role ?? cover?.role ?? cover?.implicitRole,
+      blocks === undefined ? undefined : `covers ${blocks}`,
+      closer === undefined ? undefined : `close ${closer.target} ${quotedWords(wordsOf(closer)!)}`
+    ]) ?? blocker.role ?? "layer";
+  });
+  return `COVERING ${entries.join(" · ")}`;
+}
+
+/** What a cover is called: its name, the first heading inside it, or its own words, cut (header). */
+function coverName(cover: WebLlmEvidenceElement, elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageTree): string | undefined {
+  const heading = elements.find((element) => (HEADING_TAG.test(element.tag) || element.role === "heading") && tree.isUnder(element, cover));
+  const words = cover.name ?? (heading === undefined ? undefined : wordsOf(heading)) ?? wordsOf(cover);
+  if (words === undefined) return undefined;
+  const spaced = words.replace(/\s+/gu, " ").trim();
+  if (spaced === "") return undefined;
+  return spaced.length > MAX_COVER_WORDS ? `${spaced.slice(0, MAX_COVER_WORDS - 1)}…` : spaced;
+}
+
+/** The first control inside a cover whose words read as closing it (header). */
+function closerOf(cover: WebLlmEvidenceElement, elements: readonly WebLlmEvidenceElement[], tree: WebLlmPageTree): WebLlmEvidenceElement | undefined {
+  return elements.find((element) => tree.isUnder(element, cover) && pressable(element)
+    && [wordsOf(element), element.label].some((words) => words !== undefined && CLOSE_WORDS.test(words)));
+}
+
+/** Whether a person would press it: a button or link, or something the page listens to or points at. */
+function pressable(element: WebLlmEvidenceElement): boolean {
+  const role = element.role ?? element.implicitRole;
+  return element.tag === "button" || element.tag === "a" || role === "button" || role === "link" || element.hasClickHandler === true || element.cursor === "pointer";
+}
+
+/** An element's words as a reader sees them: its name, else its text. */
+function wordsOf(element: WebLlmEvidenceElement): string | undefined {
+  const words = element.name ?? element.text;
+  return words === undefined || words.trim() === "" ? undefined : webLlmReadableWords(element, words);
 }
 
 function dialogLine(evidence: WebLlmPageEvidence): string | undefined {

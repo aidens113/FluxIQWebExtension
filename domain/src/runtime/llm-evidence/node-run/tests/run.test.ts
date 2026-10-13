@@ -17,7 +17,7 @@ import {
 } from "../..";
 import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 import { webObservationNodeId } from "../catalog";
-import { shownPageLines } from "../../page-view/tests/shown-page-lines";
+import { shownHandle, shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const CLICK = "web.output.dom-click";
@@ -475,4 +475,43 @@ test("an in-place press's draft statement says which lines it changed, as its ou
   assert.deepEqual((pressed.draft as { changed?: unknown } | undefined)?.changed, [{ words: "Cart (3)", how: "rose" }, { words: "Added to cart", how: "appeared" }]);
   // The outcome says the line that appeared, from the same walk.
   assert.deepEqual(((pressed.evidence as JsonObject).changed as string[]).map((entry) => entry.replace(/^t\d+ /u, "")), ["\"Added to cart\" appeared"]);
+});
+
+// Round 12 build 1 (`run-mv62icw0-2be384b4`, 0035/0036, t486): `t667` was shown on
+// the towels page and pressed from the napkins page. Resolved against every page
+// the Flow had seen, it found the towels control, and the extension hunted for it
+// on the napkins page through four attempts (25.5 s). A node run now resolves a
+// handle against the page it just looked at: one only another page showed is
+// refused `page_moved_since_packet` (`web.handle.stale`), carrying the page as it
+// is now, and nothing is sent.
+test("a handle from another page is refused as stale with the page as it is now, before any send", async () => {
+  const commands: string[] = [];
+  let at: "towels" | "napkins" = "towels";
+  const pageOf = (name: "towels" | "napkins"): JsonObject => ({
+    url: `https://valueridge.test/p/${name}`,
+    title: name,
+    interactiveElements: [{ tagName: "button", selector: `#${name}-add`, accessibleName: `Add to cart: ${name}`, id: `${name}-add` }]
+  });
+  const gateway: WebLlmEvidenceGateway = {
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      commands.push(command.actionType);
+      return command.actionType === "web.dom.capture_snapshot" ? { status: "succeeded", payload: { snapshot: pageOf(at) } } : { status: "succeeded" };
+    }
+  };
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const look = async (callId: string) => await runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  const towelsAdd = shownHandle((await look("look-towels")).evidence, "Add to cart: towels");
+  at = "napkins";
+  await look("look-napkins");
+  commands.length = 0;
+
+  const pressed = await runtime.executeTool({ ...PROJECT, callId: "press-stale", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: towelsAdd } }, consequences: [] } });
+  assert.equal(pressed.effectApplied, false, JSON.stringify(pressed.evidence));
+  assert.deepEqual(commands.filter((command) => command !== "web.dom.capture_snapshot"), [], "nothing but the look before acting was sent");
+  const evidence = pressed.evidence as JsonObject & { detail?: JsonObject };
+  assert.equal(evidence.code, "target_unobserved");
+  assert.equal(evidence.detail?.reason, "page_moved_since_packet");
+  assert.match(String(evidence.detail?.next), /names nothing now/u);
+  assert.equal(shownHandle(evidence, "Add to cart: napkins").startsWith("t"), true, "the refusal carries the napkins page as it is now");
 });

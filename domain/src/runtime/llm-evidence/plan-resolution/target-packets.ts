@@ -142,6 +142,28 @@
 // looks. A press that changed nothing proves nothing, and lane D's message
 // pressed so stays refused.
 //
+// **A step types into a field (t486).** A plain text line holds no typed
+// text, and round 12 build 1 typed into one (`run-mv62icw0-2be384b4`, `t932
+// "1"`). So each target also says, where it is not a field, what it is
+// (`typing-targets.ts`), and a resolution of one is marked `notAField` with
+// that word; the resolver refuses a candidate's type step on it. Pages that
+// disagree make it a field.
+//
+// **An act names a control on the page it acts on (t486).** Round 12 build 1
+// (0035/0036) pressed `t667`, shown on the towels page, from the napkins page:
+// resolved bare against every page, it found the towels control and the
+// extension hunted for it on the napkins page through four attempts. A caller
+// that acts on one page asks `resolveOn` with that page's location: a handle
+// that page holds resolves there, one only another remembered page holds is
+// `stale` (the node run answers it with the page it captured, t477), and one no
+// page holds is what a bare handle would be. A page the store does not hold, or
+// whose newest view was a look the browser cut short (`partial`), cannot say
+// what it lacks, and the handle resolves bare, as before. So does a handle a
+// page at the same path holds under another query or fragment: that is the
+// same document in another state -- a variant chosen, a filter applied -- and
+// a rerun that put the product page back without `?variant=` still pressed the
+// size chip the variant page showed (U-B3-3, `run-mux6pndp-16feb842`).
+//
 // Bounded twice: a Flow keeps its newest `RETAINED_PAGES_PER_FLOW` pages, and
 // the store keeps its newest `RETAINED_FLOWS` Flows. A page let go makes its
 // handles `stale` for that Flow; another Flow's handles are `unknown`, as they
@@ -158,6 +180,7 @@ import { webPlanActEffect } from "./act-effect";
 import { webLlmFrameUrlPath } from "./frame-url-path";
 import { webLlmPressableTargets } from "./pressable-targets";
 import { webLlmPrintedTargetHandles } from "./printed-handles";
+import { webLlmNotAFieldTargets, type WebLlmNotAFieldKind } from "./typing-targets";
 import { createWebLlmViewHistory, type WebLlmTargetView, type WebLlmViewHistory } from "./view-history";
 
 const RETAINED_PAGES_PER_FLOW = 8;
@@ -195,6 +218,8 @@ export type WebLlmTargetResolution =
       notAControl?: true;
       /** Under `view_history`, beside the acted identity only: what exploration's act on it made true (header, t447). */
       effect?: JsonObject;
+      /** The element holds no typed text, and is this (header, t486). */
+      notAField?: WebLlmNotAFieldKind;
     }
   /** `not_shown`: under `view_history`, a handle the store holds that no evidence printed (header). */
   | { ok: false; code: "unknown" | "stale" | "ambiguous" | "not_unique" | "not_shown"; renumberedByReload?: true };
@@ -217,20 +242,27 @@ export type WebLlmTargetPackets = {
   /** Exploration acted on `handle` from the page `before` showed, leaving the page `after` shows: a candidate's step saves its control as it was there, and what the act made true (header). */
   acted(scope: WebLlmTargetScope, handle: string, before: WebLlmSnapshotBinding, after?: WebLlmSnapshotBinding): void;
   resolve(scope: WebLlmTargetScope, handle: string, location: string | undefined, reach?: WebLlmTargetReach): WebLlmTargetResolution;
+  /** A bare handle for an act on the page at `page`: that page's, `stale` when only another page holds it (header, t486). */
+  resolveOn(scope: WebLlmTargetScope, handle: string, page: string): WebLlmTargetResolution;
 };
 
-type PageTarget = { selector: string; frameId: number | undefined; frameUrlPath: string | undefined; element: WebPlanElementIdentity; words: string | undefined; shared: boolean; pressable: boolean };
+type PageTarget = {
+  selector: string; frameId: number | undefined; frameUrlPath: string | undefined; element: WebPlanElementIdentity; words: string | undefined; shared: boolean; pressable: boolean;
+  /** What the element is, where a type step has nowhere to type into it (header). */
+  notAField: WebLlmNotAFieldKind | undefined;
+};
 type PageTargets = Map<string, PageTarget>;
 /**
  * `renumbered`: per page, the handles a reload dropped while showing their
  * control under another (see the header). `history`: every handle any capture
  * carried (header). `printed`: every handle evidence printed (header). `pressed`: every handle
  * a press of exploration's changed the page for (header). `acted`: each handle exploration acted
- * on, as the view the first act was made from showed it, with what that act made true (header).
+ * on, as the view the first act was made from showed it, with what that act made true (header). `partial`: the pages
+ * whose newest view was a look the browser cut short (header).
  */
 type FlowPages = {
   pages: Map<string, PageTargets>; letGo: Set<string>; renumbered: Map<string, Set<string>>; history: WebLlmViewHistory<PageTarget>;
-  printed: Set<string>; pressed: Set<string>; acted: Map<string, ActedTarget>;
+  printed: Set<string>; pressed: Set<string>; acted: Map<string, ActedTarget>; partial: Set<string>;
 };
 /** A control as the first act on it found it, and what that act made true when it added anything (`act-effect.ts`). */
 type ActedTarget = PageTarget & { effect: JsonObject | undefined };
@@ -247,7 +279,8 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       history: createWebLlmViewHistory(acrossView),
       printed: new Set<string>(),
       pressed: new Set<string>(),
-      acted: new Map<string, ActedTarget>()
+      acted: new Map<string, ActedTarget>(),
+      partial: new Set<string>()
     };
     flows.delete(key);
     flows.set(key, flow);
@@ -265,6 +298,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       printedBy(flow, binding);
       markRenumbered(flow, binding, targets);
       keep(flow, binding.evidence.location, acrossViews(flow.pages.get(binding.evidence.location), targets));
+      flow.partial.delete(binding.evidence.location);
     },
     rememberLook(scope, binding) {
       const flow = flowOf(scope);
@@ -279,11 +313,13 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       if (!binding.evidence.truncated) {
         markRenumbered(flow, binding, seen);
         keep(flow, location, acrossViews(before, seen));
+        flow.partial.delete(location);
         return;
       }
       const targets = new Map(before ?? []);
       for (const [handle, target] of acrossViews(before, seen)) targets.set(handle, target);
       keep(flow, location, targets);
+      flow.partial.add(location);
     },
     printed(scope, result, echoed) {
       // Only a Flow with captures holds a handle to have printed.
@@ -322,6 +358,12 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       // A candidate names only what evidence printed, and saves a control acted on as the act found it (header).
       return reached.ok && !flow.printed.has(handle) ? { ok: false, code: "not_shown" } : actedAs(flow, handle, pressedBefore(flow, handle, reached));
     },
+    resolveOn(scope, written, page) {
+      const handle = canonicalWebLlmTargetHandle(written) ?? written;
+      const flow = flows.get(scopeKey(scope));
+      if (!flow) return { ok: false, code: "unknown" };
+      return pressedBefore(flow, handle, resolveOnPage(flow, handle, page));
+    }
   };
 }
 
@@ -416,7 +458,9 @@ function resolveCurrent(flow: FlowPages, handle: string, location: string | unde
       element,
       words: known.words === target.words ? spacedName(element, known.words) : undefined,
       shared: known.shared || target.shared,
-      pressable: known.pressable || target.pressable
+      pressable: known.pressable || target.pressable,
+      // A field on any page is a field (header).
+      notAField: known.notAField === undefined || target.notAField === undefined ? undefined : known.notAField
     });
   }
   if (seen.size > 1) return { ok: false, code: "ambiguous" };
@@ -426,11 +470,38 @@ function resolveCurrent(flow: FlowPages, handle: string, location: string | unde
   return missing(flow.letGo.size > 0 ? "stale" : "unknown", [...flow.renumbered.values()].some((marked) => marked.has(handle)));
 }
 
+/** A bare handle for an act on the page at `page` (header). */
+function resolveOnPage(flow: FlowPages, handle: string, page: string): WebLlmTargetResolution {
+  const here = flow.pages.get(page);
+  if (here?.has(handle) === true) return resolveCurrent(flow, handle, page);
+  // A page not held, or newest seen through a look cut short, cannot say what it lacks.
+  if (here === undefined || flow.partial.has(page)) return resolveCurrent(flow, handle, undefined);
+  // Missing here: renumbered by this page's reload, which says so, or else named by another page or by none.
+  const missingHere = resolveCurrent(flow, handle, page);
+  if (missingHere.ok || missingHere.renumberedByReload === true) return missingHere;
+  const elsewhere = resolveCurrent(flow, handle, undefined);
+  // The same document in another state (header).
+  const path = documentPath(page);
+  if ([...flow.pages].some(([location, targets]) => location !== page && documentPath(location) === path && targets.has(handle))) return elsewhere;
+  return elsewhere.ok || elsewhere.code === "ambiguous" || elsewhere.code === "not_unique" ? { ok: false, code: "stale" } : elsewhere;
+}
+
+/** A location without its query and fragment: the document it names, whatever state it is in. */
+function documentPath(location: string): string {
+  try {
+    const url = new URL(location);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return location.replace(/[?#].*$/su, "");
+  }
+}
+
 /** Each described element's target in one capture, marked shared where the capture gave its address to several. */
 function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
   const targets: PageTargets = new Map();
   const uses = new Map<string, number>();
   const pressable = webLlmPressableTargets(binding.evidence.elements);
+  const notFields = webLlmNotAFieldTargets(binding.evidence.elements);
   for (const element of binding.evidence.elements) {
     const selector = binding.selectors.get(element.target);
     if (selector === undefined) continue;
@@ -442,7 +513,8 @@ function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
       element: identity,
       words: spacedName(identity, webPlanElementWords(element, identity)),
       shared: false,
-      pressable: pressable.has(element.target)
+      pressable: pressable.has(element.target),
+      notAField: notFields.get(element.target)
     };
     const address = addressOf(target);
     uses.set(address, (uses.get(address) ?? 0) + 1);
@@ -532,6 +604,7 @@ function keep(flow: FlowPages, location: string, targets: PageTargets): void {
     if (flow.pages.size <= RETAINED_PAGES_PER_FLOW) break;
     flow.pages.delete(oldest);
     flow.renumbered.delete(oldest);
+    flow.partial.delete(oldest);
     flow.letGo.add(oldest);
   }
   for (const oldest of flow.letGo) {
@@ -557,6 +630,7 @@ function resolved(target: PageTarget): Extract<WebLlmTargetResolution, { ok: tru
   if (target.frameUrlPath !== undefined) resolution.frameUrlPath = target.frameUrlPath;
   if (target.words !== undefined) resolution.words = target.words;
   if (!target.pressable) resolution.notAControl = true;
+  if (target.notAField !== undefined) resolution.notAField = target.notAField;
   return resolution;
 }
 

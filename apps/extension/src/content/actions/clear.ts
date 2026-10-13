@@ -22,7 +22,14 @@
 // control -- so "the field holds a withheld value of 12 characters" becomes
 // nothing at all, on the exact failure an operator most needs to read: a field
 // the page refilled after the clear emptied it.
+//
+// A target that has no value at all -- a `<span>`, a heading -- is not a field
+// the clear failed to empty: clearing it fails the same way every time. So it
+// fails with TARGET_NOT_ACTIONABLE, which is not retryable and which a repair
+// may answer, as the type verb does (t486), rather than the read-back's
+// retryable OUTPUT_NOT_OBSERVED.
 
+import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
 import { isSensitiveFormControl } from "../element-traits";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
@@ -44,7 +51,7 @@ export function clearAction(action: BrowserActionCommand, deps: ContentActionDep
       expected: "a field whose value can be emptied",
       actual: `the target is a <${element.tagName.toLowerCase()}>, which has no value`,
       redacted: withheld
-    }, evidence());
+    }, evidence(), WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE);
   }
 
   element.focus();
