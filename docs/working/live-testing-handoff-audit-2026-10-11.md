@@ -270,7 +270,23 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
 - B confirming build `run-mv6i28zl-a53d36db` failed $0.1936: trial 3 judged yes and the Flow was saved, but the oracle
   failed; the run went on to step 0225 (105 calls, 780 s) and ended on an unusable answer.
 - Validation: spend-ledger finish lines; each run's `evaluation.json` read by the supervisor; replay receipts above.
-- Outcome: In progress. C's build 2 waits for the C and B debugs, in case B shows a regression on this pair.
+- Debugs: C build 1 sound (no site band; every left-out row accounted for; no false yes); t498 worked live (one current
+  script; the refused one superseded); t495 raised first-judge cache to about 9-10.6k tokens. Defects: on a double no Core
+  forwards only the first judge's reading (`agreement.ts:63-79`); the receipt stops at a refused submit (`receipt.ts`);
+  superseding rewrites early context (cache). D sound (9/9 facts; exploration pressed no Confirm), but its trial 1
+  confirmed all 8 requests (hidden by the Lab reset); a `fields` refusal drops its issues. B: the saved Flow's store step
+  recorded a chat card ("chat with us ×") as part of its effect, so playback on a site that already remembered the store
+  never saw it hold; recovery knew the store was set but could only propose a refused retarget; the repair pressed a
+  different store twice and stopped at its 64-call allowance. Not a false acceptance; t498 not involved.
+- C qualification build 2 `run-mv6itasw-cca0dcc9` passed $0.0387 (13/13 in order, 52/52 fields, 0 unexpected); replay
+  `replay-mv6j6kre-348e80f7` passed (13/13, goal true, hash equal, all five zero). C has two consecutive passing builds on
+  pair 3ace826c / 87f85e72, each followed by a passing replay; its build 2 debug is in progress.
+- Outcome: In progress. Decision (supervisor): C's build 2 launched on the C debug's verdict (no blocker) before B's debug
+  returned; B's cause proved lane-specific (a recorded effect), not a regression on the pair.
+- Follow-up: t499 page-raised layer names never count as a step's effect; t500 recovery takes the success edge when the
+  result already holds, a repair never reverses a lasting state it did not set, a stalled repair round ends; t501 both
+  readings on a double no, the receipt reports the latest accepted revision, supersession appended not rewritten;
+  t502 a `fields` refusal names the read's columns and points to a fresh detection when the columns are stale.
 
 ### 2026-10-13 - t496 and t498 merged; round 16 prepared
 
