@@ -1,6 +1,6 @@
 # Crossborder Continuation Preparation
 
-Status: Current-pair preparation complete; t522 delta and paid authorization pending
+Status: Final-pair preparation and selected free matrix complete; paid authorization pending
 Owner: codex-t516 worker
 Updated: 2026-10-13
 
@@ -32,6 +32,22 @@ Before paid launch, incorporate the supervisor's pending t522 picker delta, re-e
 
 Expected gate evidence remains P1–P7 from the adaptation plan: successful judged creation, detected armed drift, actual repair with diagnosis, judged durable application, in-run and later zero-call replay, retained Flow behavior and conduct/accounting evidence. Absorbed drift, no proposal or compilation alone cannot qualify.
 
+## Final frozen pair and selected free matrix
+
+After the supervisor's final integration notice, the existing t418 downstream branch fast-forwarded to `6a46e66b`; Core remains `73550acb`. The picker receiver and explicit matrix-task changes are present. The final crossborder dry-run passed exit 0, ready/zero provider calls/chat/candidate/persistent-isolated, and `coreWeb.cached: true`. Only extension and runner needed rebuilding; five unaffected owning steps reused verified stamps. The extension's owning freshness comparison again returns `current`. Exact final artifact identities are retained externally in `artifact-identities-final.json`.
+
+The normal CLI command `node scripts/lab/run-lab.mjs recovery-matrix --case 9 --case 10 --case 11` ran once, with the driver's environment passed through owning `withoutProviderSecrets`, env files disabled, and model providers disabled in both compilation and runtime topology. The browser follows `openReplayBrowser` through the normal session launcher to `launch-browser.ts`, which sets `headless = false`; headed Chromium does not depend on an unsupported headless flag. No bare recorded Flow conversion or instruction synthesis was used: t523's separately authored `taskInstructions` are passed into compilation.
+
+Matrix `rmx-2026-10-13T22-34-12-050Z-da2c11` finished exit 0. Exact case receipts and summary live under `C:/Users/osrs_/FluxStuff/fxwork/t418/!FluxIQWebExtension/test-runs/instances/t418-slot-3/recovery-matrix/rmx-2026-10-13T22-34-12-050Z-da2c11/`. External `matrix-counts.json` and `matrix-9-10-11.log` retain sanitized counts and launcher evidence beneath this report's reservation evidence directory.
+
+| Case | Actual result | Mechanism evidence | Accounting |
+| --- | --- | --- | --- |
+| 9, lost action result | Passed; succeeded; 13 distinct attempted steps, four declared lasting steps, no repeated step, zero duplicate acts | Perturbation fired. Receipt has no explicit reconciliation outcome or lifecycle record; checker accepts correct site outcome plus succeeded/uncertain-stop after a fired fault. This is an outcome proof with a mechanism limitation. | Core cost accounting calls/interventions/itemized calls all 0 |
+| 10, checkpoint return | Passed; succeeded; 22 attempts, zero duplicate acts | One handler route, three lasting acts completed before route and three `already_done` skips afterward; one incident closed without model, no unhandled lifecycle | Core cost accounting calls/interventions/itemized calls all 0 |
+| 11, worker stopped mid-act | Passed; succeeded; 16 attempts, one retry, zero duplicate acts | Worker perturbation fired; one incident closed without model. Receipt checker confirms fired fault, honest end and independent site goal, without naming a reconciliation outcome. | Core cost accounting calls/interventions/itemized calls all 0 |
+
+All three receipts have zero reasons and no missing-record keys. No failure occurred, so no failure debug or unchanged rerun was needed. The case9 evidence limitation was sent to the supervisor and independent audit worker; its pass is not promoted into a stronger mechanism claim. The matrix itself closes its browser/topology sessions and disposes successful run-owned workspaces. The CLI finished normally; final matching-process inspection found no retained lane/matrix process. The authorized prior debug is still the only untracked lane file, and slot 3 remains reserved.
+
 ## Validation limits
 
-Current-pair build and zero-call task readiness are verified; paid generation, actual repair classification, durable reuse and P1–P7 are unverified. No provider call, live spend entry, product server or user panel was started. The processes actually started were owning prerequisite build/preflight children, the owned Core web/gateway build children, and the narrow fixture-test Chromium/server children. All sessions finished normally; a final lane-matching Windows process check found no retained process. No process outside this task was stopped. Exact external receipts contain build identities and count/readiness evidence, with no private recorded runtime values or credentials printed.
+Final-pair build, zero-call task readiness and the selected deterministic matrix outcomes are verified; paid generation, actual learned repair classification, durable reuse and P1–P7 are unverified. No provider call, paid live spend entry or user panel was started. The processes actually started were owning prerequisite build/preflight children, the owned Core web/gateway build children, narrow fixture-test Chromium/server children, and matrix-owned isolated Core/scenario/browser sessions. All sessions finished normally; no process outside this task was stopped. Exact external receipts contain build identities and count/readiness evidence, with no private recorded runtime values or credentials printed. No paid launch occurs before a separate supervisor notice.

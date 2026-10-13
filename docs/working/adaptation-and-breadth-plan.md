@@ -1,7 +1,7 @@
 # Adaptation Gate And Breadth Sample Plan
 
 Status: Active
-Status detail: t516/t517 merged locally; t518 crossborder passes, store matching and social terminal evidence remain in progress.
+Status detail: Instruction-led work and prerequisites pushed; crossborder repair/reuse passes with P4 hash proof under review, store candidate acceptance failure being debugged.
 Created: 2026-10-13
 Last updated: 2026-10-13
 Owner: Senior supervisor agent (planned by a lane lead)
@@ -10,6 +10,14 @@ Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/adaptation-and-br
 Related: Core work, if any, is briefed through Core's mvp-final-month-plan.md; [live-testing audit](./live-testing-handoff-audit-2026-10-11.md), [MVP final month](./mvp-final-month-plan.md), [state-aware recovery](./state-aware-recovery-plan.md), [testing facility](../architecture/testing-facility.md), [working index](./README.md)
 
 ## Current State
+
+**Crossborder P4 resolved; first counted pass on `6a46e66b` / `73550acb`.** Supervisor independently inspected/reran complete immutable graph-history reconstruction, bound to the actual project-owned repair and its succeeded judged source run. All 25 operations are present; both repair pre-states match preceding history; the full reconstructed final graph matches durable state and recorded rollback matches the base. Same-domain before/after hashes differ. Supervisor separately excluded metadata/layout/stamps and confirmed exactly one node's executable parameters changed in the same graph. This satisfies P4 as reconstructed durable-history evidence, not an originally captured hash pair. P7 UI reviewed directly; all four independent goal facts held, including zero orders. Previously verified creation/repair/resumption and in-run/later zero-call reuse complete P1–P7 for `run-mv79nr9o-89a70c81` plus `replay-mv79t4ms-c8a3b890`. Earlier P4-held statements below are historical. Store fix diagnosis continues; no second paid crossborder launch is authorized yet because a source change resets the qualification streak.
+
+**Latest instruction-led qualification, October 13.** Frozen source: downstream `6a46e66b`, Core `73550acb`. Crossborder `run-mv79nr9o-89a70c81` passes judged creation, four-attempt target failure, validated repair, same-node resumption and independent goal; one applied adaptation advances revision 1 to 2. In-run reuse and later `replay-mv79t4ms-c8a3b890` pass. Supervisor independently verified the later receipt's unchanged Flow hash, disabled providers and all five zero counters. Cost: 20 calls / $0.018806934 accounted estimate. **Not yet supervisor-counted:** the repair lane's two aggregate reads both follow Core's in-run apply, so their hashes are equal; the helper's `counted: true` does not by itself satisfy P4's explicit before/after hash requirement. Same-domain earlier evidence is being sought without relaxing the gate. Full debug is retained; no second paid launch authorized.
+
+Store `run-mv79nrcx-112c5ed7` failed before Flow creation: both reset candidate trials stored 16 rows and received affirmative model checks, but Core refused those checks for absent required request quotations supporting exclusions. Repeated unchanged submissions were refused; no candidate was promoted or adaptation exercised. Cost: 26 observed calls / $0.039868932 accounted estimate. Full semantic/evidence diagnosis is in progress; no unchanged rerun. Social adaptation and the first breadth sample remain pending. The provider-free operational matrix cases 9–11 passed with zero calls, zero duplicate lasting acts and zero false successes; lost acknowledgement used gateway reconciliation rather than a node repair incident.
+
+The paragraphs below retain historical evidence. Current authority is this latest entry and the dispatch briefs in `mvp-final-month-plan.md`; older locally-merged/publishing-waits and standalone recorded-build next steps are superseded.
 
 **October 13 continuation:** instruction-led t519 and t516/t517 are pushed to both dev branches (downstream 7b416b99 / Core 63692096). Existing automations need actual written task instructions before their next run. Standalone recorded-Flow construction is retired; historical commands below using bare --flow are obsolete and must not be relaunched. t518 remains preserved separately, unmerged/unpushed. Next: instruction-created adaptation and breadth qualification on the delivered pair; extract any generic t518 fix only if independently needed. User directs continuing through MVP completion. Current dispatch briefs are in mvp-final-month-plan.
 
