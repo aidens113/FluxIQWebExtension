@@ -8,6 +8,8 @@
 // things "no repeating structure" means happened. `list-name.ts` reads what the
 // page calls the list, for the packet's `list`. Neither of those two is
 // re-exported: nothing outside this directory refuses a detection or names one.
+// `item-row.ts` says which item of a list a handle sits in, with its words: a
+// control column's `atItem`, and a press's `actedOn` in `../node-run/` (t504).
 
 export { detectRepeatingStructure, type WebLlmStructureDetectionContext } from "./detect";
 export {
@@ -19,6 +21,7 @@ export {
   type WebLlmExtractionHandles,
   type WebLlmExtractionHandleScope
 } from "./handles";
+export { webLlmItemRow } from "./item-row";
 export {
   WEB_LLM_STRUCTURE_PAGINATION_MODES,
   WEB_LLM_STRUCTURE_SCHEMA_VERSION,

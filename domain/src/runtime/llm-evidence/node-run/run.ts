@@ -71,7 +71,7 @@ import { webCoveredTarget } from "./covered-target";
 import type { WebNodeRun } from "./context";
 import type { WebNodeOutcome } from "./outcome";
 import { webLabelledIdentity, webObservedControl } from "./observed-control";
-import { webAnsweredLayer, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPressChoice, webPressToggle } from "./press-effect";
+import { webAnsweredLayer, webNodeActedOn, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPressChoice, webPressToggle } from "./press-effect";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
 import { webNodeHeldFlow } from "./arrival";
 import { webUnshownAddressRefusal } from "./shown-addresses";
@@ -213,7 +213,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       run.shown(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, choice: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
+        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, actedOn: undefined, choice: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
@@ -447,6 +447,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       pageChanged: changed,
       unchangedPress: changed === false && node.definitionId === PRESS_NODE_ID ? PRESS_AGAIN : undefined,
       pageUnreadable: after === undefined ? true : undefined,
+      // An act on a control inside an item of a repeating list says which item, from the look before it (`./press-effect/acted-on.ts`, t504).
+      actedOn: webNodeActedOn(node, current, named),
       // A press that un-chose (or chose) the control it pressed says so first (`./press-effect/choice.ts`).
       choice: webPressChoice(node, current, after, webPlanFirstTargetHandle(written)),
       // Which lines it changed, on the same page only (`./press-effect/page-changes.ts`, t174/F37).

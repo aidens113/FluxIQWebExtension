@@ -33,6 +33,15 @@ export type WebNodeOutcome = {
    */
   pageUnreadable?: true;
   /**
+   * One sentence, first of what the act did, when it acted on an element
+   * inside an item of a repeating list or a table row: which item, as the page
+   * view marks it, with that item's words -- `This acted on item 1/3 (Ana Ruiz,
+   * Invoice for March) only, through its "Archive"; no other item was acted on.`
+   * (`./press-effect/acted-on.ts`, t504). Information, never a refusal. Absent
+   * for an act on nothing in such an item, a look, and a step only written.
+   */
+  actedOn?: string;
+  /**
    * One sentence, ahead of `changed`, when the press un-chose the very control
    * it pressed -- or chose it: `This press un-chose "Space Grey": it was chosen
    * before.` (`./press-effect/choice.ts`). Information, never a refusal: the
