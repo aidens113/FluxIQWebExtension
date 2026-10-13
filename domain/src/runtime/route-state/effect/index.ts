@@ -5,5 +5,7 @@ export { WEB_ROUTE_EFFECT_FORMAT } from "./format";
 export { webAutomationRouteEffect } from "./sign";
 // What a page changed by itself between two of its states, which a signed effect leaves out (t496).
 export { webAutomationRouteSelfChanges } from "./self-changes";
+// The control names a page shows only inside some of its layers, which a signed effect leaves out when the page raised them (t499).
+export { webAutomationRouteLayerOnlyHashes } from "./layer-only";
 export { webAutomationRouteEffectHolds } from "./holds";
 export { MIN_ADDED_FOR_ABSENCE, webAutomationRouteEffectSeen } from "./seen";
