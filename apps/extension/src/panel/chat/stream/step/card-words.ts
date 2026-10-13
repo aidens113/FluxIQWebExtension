@@ -11,14 +11,18 @@
 //            never says "the page": "Click · the page" and "Action · the
 //            page" said nothing a person could tell apart (t193,
 //            `run-muqiojz4-04a7a8fc`), and the message above the card says
-//            what the step did. A long one is cut from the middle, keeping
-//            its first word and as many of its last as fit, so the words
-//            that tell two cards apart stay on screen: two test cards read
+//            what the step did. A target of several words that is longer
+//            than the head holds is shown whole and the view wraps it at its
+//            spaces (`whole`): cut to the head, the same label read "wait …
+//            be accepted · Jonas Weber" on one row and "wait … to be accepted
+//            · Lin Zhao" on the next, and the view's own cut at the end read
+//            "friend requests pa…" (round 12, lane D, `run-mv62icw0-070f88ad`).
+//            Only one past `WRAP_ROOM` is cut, from the middle, keeping its
+//            first word and as many of its last as fit, so the words that
+//            tell two cards apart stay on screen: two test cards read
 //            "Testing: Click · ValueRidge Everyday Di…", the 3-Pack and the
-//            single pack alike (t193 1003, D8). The view cuts at the end
-//            when it must, so this keeps the head of the card within what a
-//            narrow panel shows. Every cut falls where a word ends, never
-//            inside one ("Hybr…"). A list Core names as "name, price, rating
+//            single pack alike (t193 1003, D8). Every cut falls where a word
+//            ends, never inside one ("Hybr…"). A list Core names as "name, price, rating
 //            and 3 more" is never cut or renamed: renamed to fit, one list
 //            read "name, price and 4 more" on its card, "name and 5 more" on
 //            its test card and "name, price, rating and 3 more" on the
@@ -88,6 +92,12 @@ export type CardWords = {
 const HEAD_ROOM = 36;
 /** The least room a target is given, whatever its name's length. */
 const MIN_TARGET_ROOM = 16;
+/**
+ * The most characters a target of several words is shown with, wrapped by the
+ * view: a few lines of the side panel. Longer than that it is cut from the
+ * middle where words end.
+ */
+const WRAP_ROOM = 120;
 
 /** `card` in words; `current` is true while it is the action of the moment. */
 export function cardWords(card: ActionCard, current: boolean): CardWords {
@@ -101,7 +111,12 @@ export function cardWords(card: ActionCard, current: boolean): CardWords {
   // named by both ("name and mutualFriends"), and cut, its test card read "Testing: Read list ·
   // name and…" (U-R3-1 of run-mux6nxst-c9bca37c).
   const list = target !== null && (card.kind === "read" || LIST.test(target));
-  return { state, name, target: target === null ? null : list ? target : shortened(target, room), whole: list && target.length > room, outcome, label };
+  if (target === null) return { state, name, target: null, whole: false, outcome, label };
+  // A target of several words wraps at its spaces rather than being cut to the head; one word
+  // with no spaces (a path) cannot wrap there, so it is cut where one of its parts ends.
+  const wraps = list || /\s/u.test(target.trim());
+  const shown = list ? target : wraps ? wrapped(target, room) : shortened(target, room);
+  return { state, name, target: shown, whole: wraps && shown.length > room, outcome, label };
 }
 
 function outcomeOf(card: ActionCard, current: boolean): [CardWords["state"], string | null] {
@@ -186,6 +201,18 @@ function shortened(text: string, room: number): string {
   const into = ` into ${typed[2]!}`;
   const withField = room - 2 - into.length;
   return withField >= MIN_TYPED_ROOM ? `"${cutMiddle(typed[1]!, withField)}"${into}` : `"${cutMiddle(typed[1]!, room - 2)}"`;
+}
+
+/**
+ * A target of several words, for the view to wrap: whole when it fits the
+ * head; else the words typed alone for a typing step, the field left out as
+ * `shortened` leaves it (the card's label keeps it); and either cut from the
+ * middle where words end only past `WRAP_ROOM`.
+ */
+function wrapped(text: string, room: number): string {
+  if (text.length <= room) return text;
+  const typed = TYPED.exec(text);
+  return typed ? `"${cutMiddle(typed[1]!, WRAP_ROOM - 2)}"` : cutMiddle(text, WRAP_ROOM);
 }
 
 /** Where a word with no spaces may be cut: before each of its separators ("/", "-", "_", "."). */

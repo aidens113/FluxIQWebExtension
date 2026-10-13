@@ -18,7 +18,7 @@ import path from "node:path";
 import { resolveScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import type { PersistentRunAllocation } from "../allocation.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "../coordinator.js";
-import { classifyRunnerFailure, RunnerFailure } from "../failure.js";
+import { RunnerFailure } from "../failure.js";
 import { createdFlowActionTypes, createdFlowDatasetHolds, createdFlowSecretInputs, judgeCreatedFlowDataset, loadCreatedFlowRequest, readFlowNodes, resetScenarioLab, resolveCreatedFlowSecrets, type FlowRunRoute, type PersistedFlowRunOutcome } from "../flow-lane/index.js";
 import { runProviderFreeReplayFlow } from "./run-flow.js";
 import { armScenarioVariant } from "../lab-control/index.js";
@@ -26,11 +26,13 @@ import { resolveLabPaths } from "../lab-instance/index.js";
 import { finalStateFacts } from "../lane-rules/index.js";
 import { liveLlmObservedUsage } from "../live-llm/index.js";
 import { assertExpectedFacts, playwrightScenarioFactProbe } from "../scenario-assertions.js";
+import { ExtensionStartTrace, writeExtensionStartSidecar } from "../run-scenario/index.js";
 import { loadScenarioManifest } from "../scenarios.js";
 import type { FluxIQTargetConfiguration } from "../target-config.js";
 import { providerFreeReplayFailures, replayKeyIdentities, replayKeyPreservation } from "./provider/index.js";
 import { providerCredentialVariables } from "./provider-credential-variables.js";
 import { openReplayBrowser, type ReplayBrowser } from "./replay-browser.js";
+import { replayErrorOf } from "./receipt-error.js";
 import { savedNavigationOrigins } from "./saved-navigation-origins.js";
 import { selectReplayProject } from "./project-selection.js";
 
@@ -96,7 +98,8 @@ export type SavedFlowReplayResult = Readonly<{
    */
   datasets: readonly Readonly<{ records: number; sha256: string }>[] | null;
   playbackGoalHeld: boolean | null;
-  error: Readonly<{ category: string; message: string }> | null;
+  /** Why the replay could not complete; for a failed extension start, `details` is its closed projection (stage, timings, worker count). */
+  error: ReturnType<typeof replayErrorOf> | null;
   resultPath: string;
 }>;
 
@@ -127,6 +130,7 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
   let topology: RunningTopology | undefined;
   let browser: ReplayBrowser | undefined;
   let keysBefore: readonly string[] | undefined;
+  let startTrace: { trace: ExtensionStartTrace; secrets: string[] } | undefined;
   try {
     const labPaths = resolveLabPaths(options.repositoryRoot, options.environment);
     const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);
@@ -167,7 +171,10 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
     if (!state.servedAtSavedAddress) reasons.push("the saved Flow navigates to an address this invocation does not serve the fixture at");
     const secretInputs = createdFlowSecretInputs({ scenarioId: request.task.scenarioId, secrets: resolveCreatedFlowSecrets(scenario, workflow, options.environment), workflow, nodes });
 
-    browser = await openReplayBrowser(topology, { extensionPath: labPaths.extensionPath, startPath: scenario.startPath });
+    // The extension start's local diagnostic, screened for everything secret this replay holds; written beside the receipt whatever happens.
+    const traceSecrets = [topology.allocation.controllerToken, authorizationPassword, credentials?.password, credentials?.authorizationPin, credentials?.totp, ...Object.values(secretInputs)].filter((value): value is string => typeof value === "string" && value.length > 0);
+    startTrace = { trace: new ExtensionStartTrace({ secrets: traceSecrets }), secrets: traceSecrets };
+    browser = await openReplayBrowser(topology, { extensionPath: labPaths.extensionPath, startPath: scenario.startPath, trace: startTrace.trace });
     await resetScenarioLab(scenarioOrigin, topology.allocation.controllerToken);
     if (workflow.variant) await armScenarioVariant(scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
     await browser.openStart();
@@ -194,7 +201,7 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
     if (state.hashAfter !== state.hashBefore) reasons.push("the saved Flow's content changed during the replay");
     browser.guard.assertNoViolations();
   } catch (error) {
-    state.error = { category: classifyRunnerFailure(error), message: error instanceof Error ? error.message : String(error) };
+    state.error = replayErrorOf(error);
     reasons.push("the replay did not complete");
   } finally {
     if (topology?.control && keysBefore) {
@@ -205,6 +212,13 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
     }
     // Cleanup never replaces the replay's result: that is what the caller needs, and a failed close leaves only this invocation's session behind.
     await browser?.close().catch(/* best-effort: the result is already decided */ () => undefined);
+    // After the close, so the trace holds the browser's last events; `<runs>/replays/<replay-id>/extension-start.local.json`, never part of the receipt.
+    if (startTrace) {
+      const { trace, secrets } = startTrace;
+      await mkdir(path.join(options.runsDirectory, "replays", replayId), { recursive: true })
+        .then(() => writeExtensionStartSidecar({ runDirectory: path.join(options.runsDirectory, "replays", replayId), runId: replayId, trace, secrets }))
+        .catch(/* best-effort: a local diagnostic may not replace the replay's result */ () => undefined);
+    }
     await topology?.close().catch(/* best-effort: the result is already decided */ () => undefined);
     if (topology) await removeRunOwnedTopologyState(topology).catch(/* best-effort: only this invocation's session directory */ () => undefined);
   }
