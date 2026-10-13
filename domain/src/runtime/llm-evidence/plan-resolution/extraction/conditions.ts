@@ -20,7 +20,7 @@
 //
 // The column is named exactly as a kept column is -- a detected key, a key in
 // another case, `column:Header` or a bare header, or the nearest column to a
-// name written slightly wrong (`./column-match.ts`) -- and refused exactly as
+// name written slightly wrong (`output-nodes/extract-list/column-match.ts`) -- and refused exactly as
 // one is, so there is one vocabulary for "which column" and not two.
 //
 // What the condition then *says* about that column is not this file's
@@ -91,8 +91,8 @@ import type { WebAutomationExtractField, WebAutomationExtractItemCondition } fro
 import { webAutomationExtractConditionSayingValue } from "../../../../actions/extraction";
 import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
-import { webExtractionComparedShape, type WebExtractionColumnAssumption } from "./column-match";
-import { webExtractionNamedColumn, type WebExtractionColumn, type WebExtractionColumnIssue, type WebExtractionColumnLook } from "./columns";
+import { webExtractionComparedShape } from "../../../../output-nodes";
+import { webExtractionNamedColumn, type WebExtractionColumn, type WebExtractionColumnAssumption, type WebExtractionColumnIssue, type WebExtractionColumnLook } from "./columns";
 import type { WebPlanValuePath } from "../handle-tokens";
 
 export type WebExtractionConditions =
@@ -160,7 +160,7 @@ function readCondition(entry: unknown, columns: WebExtractionConditionColumns, p
   if (named === undefined) return { ok: false, issue: "web.handle.malformed", path };
   // What the condition *says* is read before the column it says it about,
   // because a comparison on the number in a value is a signal for which column
-  // was meant (`./column-match.ts`). Which refusal wins is unchanged: the column
+  // was meant (`output-nodes/extract-list/column-match.ts`). Which refusal wins is unchanged: the column
   // is still answered for before the grammar is.
   const says = webAutomationExtractConditionSayingValue(entry, NAMING_KEYS);
   const column = conditionColumn(named, columns, webExtractionComparedShape(says.ok ? says.says : undefined), path);

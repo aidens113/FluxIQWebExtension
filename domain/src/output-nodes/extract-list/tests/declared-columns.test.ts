@@ -141,9 +141,15 @@ test("no declared schema, a schema naming a column the read does not take, or on
   // And the dispatch then sends the read as written, less what left the page
   // (read-list redesign C3), and asking for the rows it kept.
   const { paginate: _paginate, dedupe: _dedupe, ...onePage } = extractList;
-  for (const authored of [null, renamed]) {
-    assert.deepEqual(dispatched({ extractList, recordOutput: authored as never }).extractList, { ...onePage, answer: "kept" });
-  }
+  assert.deepEqual(dispatched({ extractList, recordOutput: null }).extractList, { ...onePage, answer: "kept" });
+  // Since t489 a name the read does not take is matched to the column it means
+  // before anything is narrowed (`../stored-columns.ts`): `link` is the url
+  // column, under the author's name, so the schema is the read's own four and
+  // the helpers leave the read as for any declared schema.
+  const sent = dispatched({ extractList, recordOutput: renamed });
+  assert.deepEqual(Object.keys(sent.extractList.fields), ["name", "price", "rating", "link"]);
+  assert.deepEqual(sent.extractList.fields.link, extractList.fields.url);
+  assert.deepEqual((sent.recordOutput.schema as { fields: { id: string }[] }).fields.map((field) => field.id), ["name", "price", "rating", "link"]);
 });
 
 test("a recording's own record output, which declares every field, narrows nothing", () => {

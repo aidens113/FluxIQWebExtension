@@ -1,5 +1,11 @@
-// Which detected column a name written slightly wrong means, and what the
-// resolution assumed to get there.
+// Which column of a list read a name written slightly wrong means.
+//
+// It lives beside the extraction node because two places ask it and must get
+// one answer: the plan resolver, reading a column a plan names in `fields` or
+// `where` (`runtime/llm-evidence/plan-resolution/extraction/columns.ts`), and
+// the record output's stored columns (`./stored-columns.ts`), which the resolver
+// at submit and this node's dispatch at run time both read through it (t489).
+// Until t489 it was the resolver's own, so the dispatch could not ask it.
 //
 // ## Why a near miss must not refuse here of all places
 //
@@ -11,7 +17,7 @@
 // fourteen times and never corrected itself.
 //
 // `actions/extraction/field-match.ts` put that rule on the **literal** request
-// path on 2026-09-26 and could not put it here, so `./columns.ts` still refused
+// path on 2026-09-26 and could not put it here, so the resolver's `columns.ts` still refused
 // `web.handle.unknown_field` on the *detected* path -- which is the path the
 // extraction node's own authoring text steers a model towards, and therefore
 // the one where the rule pays most. This module is that half.
@@ -25,7 +31,7 @@
 // corrected by the same judgement.
 //
 // A detected key is matched, and so is a table column's **header**, because the
-// model is shown both and may write either (`./columns.ts` reads `column:Header`
+// model is shown both and may write either (the resolver's `columns.ts` reads `column:Header`
 // and a bare header). Both are aliases of the one column, and a guess that lands
 // on either resolves to it.
 //
@@ -81,34 +87,7 @@ import {
   WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS,
   type WebAutomationExtractConditionSaying,
   type WebAutomationExtractField
-} from "../../../../actions/extraction";
-import type { WebPlanValuePath } from "../handle-tokens";
-
-/**
- * A name that found its column by something other than the key verbatim: what
- * was written, what it was read as, how, and with what score.
- *
- * It is the resolver's half of
- * `WebAutomationExtractListFieldAssumption` (`actions/extraction/read-request.ts`),
- * in the same form, so the two paths' assumptions read as one thing. `index` is
- * a `where` position there; here a name can be written in several places, so the
- * position is the resolver's own value path.
- *
- * `normalized` is the same name in another casing or with other separators,
- * which is a spelling variant; `nearest` is a scored guess and is the one worth
- * a person's attention. `score` is name similarity in 0..1 before any shape
- * tie-break, exactly as Core's matcher reports it. `among` says which
- * vocabulary answered: the columns the detection showed, or the ones this plan
- * keeps under its own keys.
- */
-export type WebExtractionColumnAssumption = {
-  path: WebPlanValuePath;
-  written: string;
-  field: string;
-  how: "normalized" | "nearest";
-  score: number;
-  among: "detected" | "kept";
-};
+} from "../../actions/extraction";
 
 /** The column a written name resolved to, and how much of that was a guess. */
 export type WebExtractionColumnMatch = {
@@ -182,8 +161,8 @@ function columnAliases(detected: Record<string, WebAutomationExtractField>, head
  *
  * Two columns can answer to one name -- the same table header twice -- and Core
  * keeps the first candidate on a tie, so the first is the answer here too. That
- * is a guess recorded as one, which is what the rule asks for; `./columns.ts`
- * still refuses `web.handle.ambiguous` where a name matches two columns
+ * is a guess recorded as one, which is what the rule asks for; the resolver's
+ * `columns.ts` still refuses `web.handle.ambiguous` where a name matches two columns
  * *exactly*, because that is two answers rather than a spelling.
  */
 function matchedAlias(named: AutomationStudioNameMatch, aliases: readonly ColumnAlias[]): WebExtractionColumnMatch {

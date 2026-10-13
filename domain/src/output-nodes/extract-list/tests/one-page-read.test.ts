@@ -153,7 +153,7 @@ test("an authored process Core refuses fails the node before the page is read, w
       assert.equal(dispatch.result.failure?.code, "record_output.invalid");
       assert.equal(dispatch.result.failure?.stage, "dispatch");
       assert.deepEqual(dispatch.result.effects, []);
-      assert.ok(((dispatch.result.outputs?.error as JsonObject).issues as string[]).includes(issue), JSON.stringify(dispatch.result.outputs));
+      assert.ok(((dispatch.result.outputs?.error as JsonObject).issues as JsonObject[]).some((entry) => entry.code === issue), JSON.stringify(dispatch.result.outputs));
     }
   }
 });

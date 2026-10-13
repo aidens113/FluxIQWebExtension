@@ -24,7 +24,7 @@ function listRead(count: number, extra: JsonObject = {}): JsonObject {
 
 test("a list read keeps its account ahead of its rows: the origin once, the first rows, and where the rest are", () => {
   const read = webNodeReadWithRejectedRows(listRead(70)).read as JsonObject;
-  assert.deepEqual(Object.keys(read), ["actionType", "url", "title", "origin", "firstRows", "restOfRows", "extracted", "extraction"]);
+  assert.deepEqual(Object.keys(read), ["actionType", "url", "title", "page", "origin", "firstRows", "restOfRows", "extracted", "extraction"]);
   assert.equal(read.origin, ORIGIN);
   assert.equal((read.extracted as unknown[]).length, 70);
   assert.deepEqual(read.firstRows, (read.extracted as unknown[]).slice(0, WEB_NODE_READ_FIRST_ROWS));
@@ -32,6 +32,23 @@ test("a list read keeps its account ahead of its rows: the origin once, the firs
   assert.match(read.restOfRows as string, /core\.recall_result/u);
   // The page's own address stays whole: it is where the origin is read from.
   assert.equal(read.url, PAGE);
+});
+
+// Lane C round 13 (`run-mv66s8yl-fbbfa221`) read page 2 five times calling it
+// page 1: the read said "21 records from 1 page" and nothing said which page.
+test("a list read says which page of the list it read, by its address, apart from how many pages it went through", () => {
+  const read = webNodeReadWithRejectedRows(listRead(4, { extraction: { recordCount: 4, pagesRead: 1 } })).read as JsonObject;
+  assert.equal(read.page, `This read read page 5 of the list by its address, ${PAGE}; pagesRead (1) counts the pages this one read went through, not which page it was.`);
+  const second = `${ORIGIN}/scenarios/everything-store/s/page/2/`;
+  assert.match((webNodeReadWithRejectedRows(listRead(4, { url: second })).read as JsonObject).page as string, /^This read read page 2 of the list by its address/u);
+  // An address that numbers no page is said so, never guessed to be page 1; `p` is not read as a page.
+  for (const url of [`${ORIGIN}/scenarios/everything-store/s?k=earbuds`, `${ORIGIN}/item?p=7`]) {
+    assert.match((webNodeReadWithRejectedRows(listRead(4, { url })).read as JsonObject).page as string, /whose address states no page number/u, url);
+  }
+  // A read with no page of its own says nothing about one.
+  const nowhere = listRead(4);
+  delete nowhere.url;
+  assert.equal(Object.hasOwn(webNodeReadWithRejectedRows(nowhere).read as JsonObject, "page"), false);
 });
 
 // Core refuses an execution result whose evidence meets one object twice

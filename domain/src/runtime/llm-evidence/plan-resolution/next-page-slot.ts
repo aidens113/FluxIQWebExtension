@@ -26,6 +26,16 @@
 // `pagination`) is left exactly as written. Neither is refused as a guess, as a
 // literal read is: the contract accepts it.
 //
+// **The list written alone (t489).** `nextPage: extraction.N` -- the bare
+// handle, or `{"handle": "extraction.N", "location"?: ...}`, the shape the script
+// format turns a bare handle into -- can only mean the list: an extraction
+// handle names a list and nothing else on this step, and a Next page step with
+// no control uses the list's own pager. So it is read as `{list: ...}`. Lane C
+// round 13 (`run-mv66s8yl-fbbfa221`, revision 2) wrote exactly that and was
+// refused `web.handle.misplaced`, which named no fix it could see. A target
+// handle written alone is not read so -- which list it moves is not said -- and
+// is refused `malformed` beside the shape it goes in.
+//
 // A handle the stores do not know, let go, or written in the wrong place is
 // refused exactly as the read's is (`web.handle.unknown`, `.stale`,
 // `.misplaced`), at the position it was written in; the shape this value takes
@@ -90,6 +100,7 @@ export function resolveWebNextPageSlot(
   /** Which views the control's handle may resolve from (`target-packets.ts`); the current pages when absent. */
   reach?: WebLlmTargetReach
 ): WebNextPageSlotResolution {
+  if (listAlone(value)) return resolveWebNextPageSlot({ list: value }, scope, targets, extractions, reach);
   if (!isJsonRecord(value)) return typeof value === "string" && webPlanHandleKind(value) !== undefined ? refused("web.handle.malformed", []) : { status: "literal" };
   if (!Object.hasOwn(value, "list") && !Object.hasOwn(value, "control")) return literalRequest(value);
 
@@ -128,6 +139,12 @@ export function resolveWebNextPageSlot(
   const resolution: Extract<WebNextPageSlotResolution, { status: "resolved" }> = { status: "resolved", request: checked as unknown as JsonObject, frameId: binding.frameId, frameUrlPath: binding.frameUrlPath };
   if (controlView !== undefined) resolution.controlView = controlView;
   return resolution;
+}
+
+/** Whether `value` is an extraction handle written alone, bare or as `{handle, location?}`: the list, and nothing else (header). */
+function listAlone(value: unknown): value is JsonValue {
+  if (typeof value === "string") return webPlanHandleKind(value) === "extraction";
+  return isJsonRecord(value) && Object.keys(value).every((key) => REFERENCE_KEYS.includes(key)) && webPlanHandleKind(value.handle) === "extraction";
 }
 
 /**

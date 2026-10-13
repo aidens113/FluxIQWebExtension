@@ -51,15 +51,14 @@
 // says why and the position it was refused at. **The list itself is never
 // guessed** -- a handle addresses one detection or none. A *column* name is,
 // because a column is a name the model has to retype and a detection often
-// names them after the page's own markup (`./column-match.ts`); every such
+// names them after the page's own markup (`output-nodes/extract-list/column-match.ts`); every such
 // guess is reported in the resolution's `assumed` rather than made silently.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationExtractListRequestRead, webAutomationExtractListRequestValue } from "../../../../actions/extraction";
 import type { WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../../structure";
 import { isJsonRecord } from "../../untrusted-json";
-import type { WebExtractionColumnAssumption } from "./column-match";
-import { keptWebExtractionColumns, type WebExtractionColumnIssue } from "./columns";
+import { keptWebExtractionColumns, type WebExtractionColumnAssumption, type WebExtractionColumnIssue } from "./columns";
 import { keptWebExtractionConditions } from "./conditions";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanValuePath } from "../handle-tokens";
 
@@ -72,7 +71,7 @@ export type WebExtractionSlotResolution =
   /**
    * `assumed` is every column name that found its column by something other
    * than the detected key verbatim: what was written, what it was read as, how,
-   * and with what score (`./column-match.ts`).
+   * and with what score (`./columns.ts`).
    *
    * It is what makes a wrong answer traceable to an assumed column rather than
    * guessed at, and it is the resolver's counterpart to the dispatch reader's
