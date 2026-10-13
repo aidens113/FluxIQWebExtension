@@ -110,10 +110,10 @@ test("round 6: a promoted candidate the chat applied, with its trial audit and n
   assert.deepEqual(outcome.build.candidateOutcome, {
     authoringMode: "candidate", outcome: "promoted", draft: null, candidateId: "candidate.round6", revision: 4, digest: DIGEST, verdict: "yes", trialRunId: "trial.4", codes: [], judgeCalls: 2, trialCount: 4,
     trials: [
-      { runId: "trial.1", revision: 2, digest: DIGEST, start: "reset", execution: "failed", code: "web.action.timeout", verdict: null },
-      { runId: "trial.2", revision: 2, digest: DIGEST, start: "reset", execution: "failed", code: "web.action.timeout", verdict: null },
-      { runId: "trial.3", revision: 3, digest: DIGEST, start: "reset", execution: "failed", code: "web.action.timeout", verdict: null },
-      { runId: "trial.4", revision: 4, digest: DIGEST, start: "reset", execution: "succeeded", code: null, verdict: "yes" },
+      { runId: "trial.1", revision: 2, digest: DIGEST, start: "reset", execution: "failed", code: "web.action.timeout", verdict: "execution_failed", reason: "web.action.timeout" },
+      { runId: "trial.2", revision: 2, digest: DIGEST, start: "reset", execution: "failed", code: "web.action.timeout", verdict: "execution_failed", reason: "web.action.timeout" },
+      { runId: "trial.3", revision: 3, digest: DIGEST, start: "reset", execution: "failed", code: "web.action.timeout", verdict: "execution_failed", reason: "web.action.timeout" },
+      { runId: "trial.4", revision: 4, digest: DIGEST, start: "reset", execution: "succeeded", code: null, verdict: "yes", reason: null },
     ],
     promotedAdaptationId: ADAPTATION_ID,
   });
@@ -128,7 +128,28 @@ test("a promoted candidate the Lab built directly, with its trial audit and no e
   const outcome = await run;
   for (const step of ["approve", "apply", "reset:/__control/reset", "run", "oracle", "publish"]) assert.ok(core.calls.includes(step), `${step} happens`);
   assert.equal(outcome.build.candidateOutcome?.outcome, "promoted");
-  assert.deepEqual(outcome.build.candidateOutcome?.trials?.map((trial) => trial.verdict), [null, "yes"]);
+  assert.deepEqual(outcome.build.candidateOutcome?.trials?.map((trial) => [trial.verdict, trial.reason]), [["execution_failed", "web.action.timeout"], ["yes", null]]);
+});
+
+// B build 2's debug: a rejected trial was recorded `verdict: null`, as if Core had not decided it.
+// Every trial of a promoted candidate other than the one that promoted it was rejected, and says so.
+test("a promoted candidate records every trial it did not promote with a definite verdict and its reason", async () => {
+  const sessions = [
+    { runId: "trial.ran", flowId: FLOW_ID, queuedAt: 10, status: "succeeded", metadata: { candidateTrial: { candidateId: "candidate.round6", revision: 2, digest: DIGEST, start: "reset", execution: "succeeded" } } },
+    { runId: "trial.cancelled", flowId: FLOW_ID, queuedAt: 20, status: "cancelled", metadata: { candidateTrial: { candidateId: "candidate.round6", revision: 3, digest: DIGEST, start: "reset", execution: "cancelled" } } },
+    { runId: "trial.unwritten", flowId: FLOW_ID, queuedAt: 30, status: "running", metadata: { candidateTrial: { candidateId: "candidate.round6", revision: 3, digest: DIGEST, start: "reset" } } },
+    ROUND_6_SESSIONS[3]!,
+  ];
+  const { core, entry } = round6Core({ runtimeSessions: sessions });
+  const { run } = await runLane(core, { authoringMode: "candidate", entry });
+  const outcome = await run;
+  assert.deepEqual(outcome.build.candidateOutcome?.trials?.map((trial) => [trial.runId, trial.verdict, trial.reason]), [
+    ["trial.ran", "rejected", "not_promoted"],
+    ["trial.cancelled", "execution_failed", "candidate.trial_cancelled"],
+    ["trial.unwritten", "rejected", "not_promoted"],
+    ["trial.4", "yes", null],
+  ]);
+  assert.equal(outcome.build.candidateOutcome?.trials?.some((trial) => trial.verdict === null), false);
 });
 
 test("without the evidence-loop audit, a proposal is refused unless candidate mode reads a whole promotion on it (t367)", async () => {

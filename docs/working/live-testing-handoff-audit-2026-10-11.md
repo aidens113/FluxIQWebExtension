@@ -11,75 +11,59 @@ Related: [MVP plan](./mvp-final-month-plan.md), [recovery plan](./state-aware-re
 
 ## Current State
 
-Execution is authorized by original audit plus user "ok go". Latest instruction sets future tests to$0.25.
-Supervisor owns memory/verification/commits/pushes; workers own written bounded source/report briefs.
+Qualification means two consecutive passing paid builds on one frozen source pair. Each build is followed by a
+separate model-free replay with an unchanged Flow hash and all five counters at zero, and every run is fully
+debugged.
 
-Published t460 pair downstreamd18a3268/Core563c37bd: offered candidate finishing tools now reach ordinary
-gates; expired deadlines keep paid duration-limit trace. Replay explicitly awaits settled verification on
-normal/timeout paths within existing deterministic bounds; strict zero-provider gate unchanged. Supervisor
-observed74Core/55runner tests, fresh types/current owner checks/native audits, post-dev-merge14Core/7runner
-tests0. Owning downstream finish0 first; legacy Core full finish skipped only after actual narrow gates.
-Bothdev pushed, evidence copied ignored test-runs/task-evidence/t460 before cleanup; detached Core retained.
+- A qualified in round 3, on an earlier pair.
+- B and D qualified in round 12 on downstream f2d100a6 / Core f2e6b076:
+  - B: run-mv62icw0-2be384b4 and run-mv636xvb-e1426db1.
+  - D: run-mv62icw0-070f88ad and run-mv636xyp-2e4fe54d.
+  - All four replays passed. All four debugs are in the lane trees (t262, t275).
+  - B's Flow borrows a cross-page "+" handle that works only positionally.
+- C is not qualified. Round 12 build 1 (run-mv62icw3-9118516f) failed. For "under $50" the Flow applied a
+  "$25 to $50" site filter, which dropped two rows, and every judge said yes. C waits for t482.
 
-B-debug owns sequential provider-disabled B/t262 and D/t275 repair probes on thatpair. B replay-mv4xdvny-
-7b74bbcc passed: supervisor independently checked original goal/runtime/hash/all5zero, disabled wiring/env[]/
-keys preserved; readonly6chunks29events exact paths/hashes/bytes/schema/ranges/header-last, fullzero ledger/
-pending0/providerRows0/omitted0/settledno_model_available. D replay-mv4xm81z-82c5feb8 also passed: root4orderedrecords/8fields/hash/all5zero and fullzero6chunks36events verified.
-Replay has no creation-style four-running-identity receipts; normal owner/current expected validators and
-actual replay/control metadata are available. These changed-source diagnostic probes are not same-pair
-creation qualification. Both probes ended; no paid creation/retry. Source integration may now proceed.
+In flight: t482-t487, in task worktrees under fxwork/, none merged. Each worker owns its report in that task's
+docs/working/state-aware-recovery-plan/reports/.
 
-Round7 ended on Core5036fb8c/downstreamd19a8d50, all12actual creation running identities rootverified.
-B run-mv4v2eci-8b21c15d passed10facts49calls/$0.177387264; D run-mv4v1zth-095100f7 passed4records/8fields/
-finalstate38calls/$0.113476884. Original separate replays goals/hash held but failed3null counters. Later
-immutable both fullzero ledgers rootverified (B6chunks29events/D6chunks36events), D annotation380ms after
-first succeeded; capturetime unlogged. Preserve failed receipts, no permanent-publication-loss claim.
-C run-mv4v1v25-c7d57567 failed43calls/$0.212390292: offered final test refused before purse admission at
-duration-estimated lastslot. Later4trials rootmatch13ordered SQLanswers/52values/0extra/noinvalid/truncation.
-All7scripts authored correct column order, domain normalized it wrongly; helper rejected-row values missing.
-Judges unconfirmed, no promoted Flow/runtime/replay; negative eligibility cannot be reconstructed from old
-packets. Full all-step debugs/reports pushed; no second creation/balance error/unchanged relaunch.
+- t482: judges refuse over-narrowing; rowsActedOn rows keep their content; read-condition and record-set
+  wording.
+- t483: lab replay goes through launchExtensionSession and keeps failure details; a rejected trial gets a
+  verdict.
+- t484: a byte-stable request prefix; route state is appended, not inserted.
+- t485: pace from the stated limit; an interruption branch before "Complete now"; label-only resubmits.
+- t486: cross-page handles refused in exploration and at submit; a type into a non-editable element refused at
+  submit; dotted read fields; the covering line names its cover; a satisfied step routed by state and not counted
+  as an act.
+- t487: chat wording.
 
-Active t461 nested fxwork/t461 paired branch: A owns extension/domain rejection producer/wire/replay; B
-owns3domain column-order files (stable); C owns generic Core summary/result account/helper/loop projection.
-Optional aligned fourstate observations present/absent/unavailable/withheld; value onlypresent incl empty,
-closed readerkind tokens/original condition index/passive page/item ordinals, no addressing/binding. Legacy
-null=unknown, capture once, conflicting duplicate reads survive, privacy before flattening. Never infer
-eligibility or force judge approval. Workerclaims column38/domain23/extension78+8/Core72tests pass; Core
-current65.447s7262output build/cache-free types pass, parser annotation corrected/retested. A corrected
-file-count/packed-statement findings, refroze source and passed types/current domain-extension builds. Supervisor independently observed72Core/78domain/83extension tests0, cache-free types0 and both native audits0.
-Headed Chrome134 T2 proof passed; root checked retained actual packets/artifact hashes/20kept rows in exact
-column order/3absent+4present DOM witnesses/Core alignment/sparse indices1,2. No background transport,
-model verdict, live continuation or withholding claim. Both earlier driver failures retained unchanged.
-Source committed/current dev merged; combined146Core/78domain/83extension/7replay tests passed, all affected
-cache-free types/native audits0; current Core inventory/reached110 rootverified, digest9a6b1e41.
-Fresh owning Core/domain/extension/runner builds passed. Owning downstream finish/audit0 merge493b1749
-then Core finish merge1f6580bb0; Core legacy full wrapper skipped only after actual narrow gates and final
-native audit0. Source complete; bothdev pushed at downstream0fc8d0ae/Coreaca9f088. Ignored t461 logs copied before cleanup.
-Bothsourceheads frozen; A/B/C own B/D/C zero-call readiness only, no paid launch cleared yet.
+Next steps:
 
-Future live launches use process FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25 AND CLI maxcost0.25; verify both ready
-purses. Existing64build questions/48millionpost-run Lab token check/per-request992000/8000/1000000 unchanged.
-Initialchat/runtimejudge versus build-only accounting must reconcile; aggregate token check is not proved
-pre-dispatch reservation. No reply cap/envfile/product-default/time increase or guard override. Balanceerror
-stops paid globally; failedcreation requires full debug+changedsource. Only10realistic browser scenarios;
-no scenario-shaped model guidance. Preserve profiles/projects/keys/recordings/.clinerules user edit.
+1. Verify and merge t482-t487 on narrow gates. Core merges run under Core's pnpm check.
+2. Sync the lane trees, then run the recovery matrix and the dry runs.
+3. Run C's round-13 qualification: two builds, their replays and their debugs.
 
-A historicallyqualified2creations/separate replays rootverified on earlierpair (down67661406/Core01621c94
-equivalent6e07993f); replays mv4kt6g0/mv4kv3z1 hashes/all5zero/disabled/goalheld. No routine thirdA. R4a/R4b
-adaptation proofs passed; B round5 firstpass/replay then secondhandler_scopefailed, B stillunqualified.
-t455/456/457/458/459/454 integrated/pushed. Passive hidden-result content harness proof excludes full gateway/
-model verdict. t454 root107tests/14files incl14actual process, fresh build/types/audits and32FIFO proof
-exactstop/order/end/repeat/lateappend/reopen/close typed32/file0/chunkreads32/drain3.173s. Deadclaim recovery
-samehost/PIDnamespace only; live/unknown/reusedlive refuse, identical complete uncorrelated removed packets
-ambiguous. Does not prove old91s browser/gateway drain; t381 poolWIP08eafd1a unmerged. Parked UI/integrity
-t334/t335/t337 not resumed. Historical details retained in archive/reports.
+B and D need no further routine builds. Rerun them only to confirm a change that touches their path.
 
-Next independently verify new frozen-pair zero-call readiness, then clear exactly one paid creation perlane. Freeze new pair for B/C/D:2creations each,
-each full debug/exact oracle+separate disabled replay unchanged hash/all5zero; firstreplay before second.
-Failure stopslane until debug/changedsource; no shortcut from modelyes/rowcount/compilation. Then recording
-live persistence/three-site adaptation/breadth/UX/release remain planned. User panel not started bydefault;
-isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day; owning lifecycle cleanup.
+Launch settings for a paid build:
+
+- Process environment: FLUXIQ_TEST_TARGET=persistent-isolated and FLUXIQ_LLM_RUN_COST_CEILING_USD=0.25 (each
+  lane's .env.local says isolated and 0.10), FLUXIQ_LAB_INSTANCE=<lane slot>, FLUXIQ_LAB_CORE_BRANCH=<lane Core
+  branch>, FLUXIQ_DEMO_HEADLESS=false.
+- CLI: --llm-max-cost-usd 0.25, --llm-max-calls 64, --llm-max-run-tokens 48000000.
+- Replays: env -u DEEPSEEK_API_KEY FLUXIQ_TEST_ENV_FILES=none, with the same instance and branch.
+
+Rules:
+
+- Only the ten realistic scenarios, in a visible browser, started from the extension chat.
+- A balance error stops all paid work.
+- Every failed run gets a full debug and changed source before a rerun.
+- No model guidance shaped like a scenario.
+- Full suites at most twice a day.
+- Preserve profiles, projects, keys, recordings and the user's .clinerules edit.
+
+Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
 
 ## Audit Findings
 
@@ -274,7 +258,7 @@ isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day
 
 ## Work Ledger
 
-### 2026-10-13 - t478-t481 merged; round 12 build 1: B and D passed, C failed; D's replay never started
+### 2026-10-13 - Round 12: B and D passed both builds and every replay; C failed build 1; t482-t487
 
 - Agent: Claude senior supervisor; t478-t481 workers; debug workers.
 - Changed: t478-t480 as the round 11 follow-up says; t481 pinned the in-run repair test's clock to off-peak (the
@@ -285,12 +269,41 @@ isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day
     equal, all five zero).
   - D build 1 `run-mv62icw0-070f88ad` passed $0.0783; replay `replay-mv62rwy7-fcb23be8` never ran the Flow: the
     extension's service worker did not appear within 30 s (`extension.worker`), and the receipt dropped the failure's
-    details. A Lab defect is being traced (`reports/replay-worker-timeout.md`); a rerun with the lane's instance is
-    running. A first rerun was a supervisor launch error (no `FLUXIQ_LAB_INSTANCE`, refused before any browser).
-  - C build 1 `run-mv62icw3-9118516f` failed $0.1696; full debug dispatched.
+    details. A Lab defect is being traced (`reports/replay-worker-timeout.md`). The rerun with the lane's instance,
+    `replay-mv62zkqz-aa2333d2`, passed (expected dataset 4/4 matched, hash equal, all five zero). A first rerun was
+    a supervisor launch error (no `FLUXIQ_LAB_INSTANCE`, refused before any browser).
+  - C build 1 `run-mv62icw3-9118516f` failed $0.1696 (debug in t451): for "under $50" the script added a
+    "$25 to $50" site filter, so the two qualifying $22.99 rows never reached the read (11 of 13 stored), and both
+    trial judges and the final check said yes while naming that filter. Same shape as round 10 build 2. A Core
+    result-verification defect: a narrowing step that moved the page leaves no step-change record, and the judge
+    instruction never rules on narrowing beyond the request. Fix t482.
+  - B and D build 1 debugs: both passes clean (no pre-existing item touched, no undo, trials from the reset start).
+    Waste and defects: a cross-page handle retried 25.5 s; typing into a span passed submit; a satisfied step
+    retried 13.2 s; a 28.8k-character output schema placed after the evidence window (~50% of D's cost); a
+    route-state entry inserted mid-window; a pace learned from one hinted wait; no wait/dismiss branch saved after a
+    rate-limit refusal (the user's interruption rule); empty rowsActedOn rows; chat wording faults.
+  - B build 2 `run-mv636xvb-e1426db1` passed $0.1446; replay `replay-mv63ibwy-54a01533` passed (goal held, hash
+    equal, all five zero). D build 2 `run-mv636xyp-2e4fe54d` passed $0.0853; replay `replay-mv63ibwz-b6e01917`
+    passed (4/4, hash equal, all five zero). Both lanes have two consecutive passing builds on one frozen pair, each
+    followed by a passing model-free replay.
+  - Build 2 debugs (lane trees, run-mv636xvb and run-mv636xyp) confirm both passes. B: all 5 oracle facts, the
+    soap untouched in both trials, playback and the oracle, no undo, both trials from the reset start; caveat: the
+    saved quantity step presses the napkins page's "+" handle on the towels page and works only because the "+"
+    identity is positional (submit accepted a cross-page handle; t486). D: 4/4 records and 8/8 fields in order,
+    `atLeast 5`, each Confirm effective once, no undo. New: label-only resubmits trialled as revisions (N1, t485);
+    a "text is absent" condition wording the judges called fragile (N3, t482); an unnamed covering element (N5,
+    t486); a false "it was refused" narration of an unchanged resubmission (t487); a rejected trial recorded with
+    `verdict: null` by the Lab (t483).
+  - **B and D qualified** on pair f2d100a6 / f2e6b076 (lane A qualified in round 3). C remains.
 - Validation: `git rev-parse --short origin/dev` gives f2d100a6 here and f2e6b076 in Core; matrix receipt
-  `{"passed":14}`; spend-ledger finish lines quoted above; B replay receipt from its log.
-- Outcome: In progress. B needs its debug before build 2; D needs a completed replay and its debug.
+  `{"passed":14}`; spend-ledger finish lines; replay receipts from the supervisor's logs.
+- Outcome: B and D accepted as qualified; C in progress. Decision (supervisor): the fixes the round found were dispatched only after B's and D's
+  second builds launched, and none merges until those builds' debugs close, so the pair stayed frozen.
+- Follow-up: t482 judges refuse over-narrowing and get rowsActedOn content; t483 `lab replay` through
+  `launchExtensionSession` with failure details kept; t484 byte-stable request prefix and appended route state;
+  t485 pace from the stated limit and an interruption branch before "Complete now"; t486 cross-page handle refused,
+  non-editable type refused at submit, dotted read fields, a satisfied step routed by state; t487 chat wording.
+  Still open: C's bare `nextPage` handle and re-reading page 2 as "page 1" (10 decisions, $0.058).
 
 ### 2026-10-13 - Round 11: B and C passed build 1 and its replay; D's filter missed a row; t478-t480
 
