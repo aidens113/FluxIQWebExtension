@@ -258,6 +258,28 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
 
 ## Work Ledger
 
+### 2026-10-13 - Round 13: C passed build 1; B and D failed on t486 and t485 changes; t488 reverts t486's submit check
+
+- Agent: Claude senior supervisor; debug workers.
+- Round 13 (pair Core 32e8aa24 / downstream 3ed9a639; matrix `{"passed":14}`; B, C and D dry runs `ready` with
+  0 provider calls, after the Lab refused stale Core builds in all four trees and each was rebuilt):
+  - C build 1 `run-mv66s8yl-fbbfa221` passed $0.0501 (first C pass since t482; debug dispatched).
+  - B confirming build `run-mv66samo-b5e6d5e8` failed $0.0187: submit refused step 12 "open the napkins product"
+    as `bootstrap.handle.other_page`, a false positive of t486's submit check. Step 11 types a search with
+    submit:true, which moves the browser to the results page that printed t1247, but the check took the page from
+    both neighbours' handles (printed on the towels product page, the same location without its query) and
+    assumed the step runs there. The repeat guard then refused the unchanged resubmits; no Flow.
+  - D confirming build `run-mv66sc3c-c47e74b8` failed $0.0243: twice a trial ran incomplete and a reworded
+    resubmit was answered `candidate.unchanged_submission` (t485's label-only rule); the repeat guard refused the
+    retries; record-output refusals (`process_unknown_field`, `process_where_column_dropped`) in between. Debug
+    dispatched to find whether the rule blocks a legitimate retest.
+- Changed: t488 reverts the submit-time check (plan-parameter-resolution.ts, submission-refusal.ts and their tests
+  restored to 1cf31ed3); the run-time refusal of a handle from another page stays.
+- Validation: t488 Core harness-options/candidate/harness/step-loop "61 passed (61)" files, "478 passed", tsc exit
+  0, Core merge gated by `pnpm check` passed; pushed Core `8ecf5ae6` (downstream unchanged at `4ecccbcb`).
+- Outcome: In progress. Decision (supervisor): C's round-13 pass does not count toward qualification, because the
+  pair changes with t488 and D's fix; round 14 restarts C's count on the next pair.
+
 ### 2026-10-13 - t482-t487 merged; round 13 prepared
 
 - Agent: Claude senior supervisor; t482-t487 workers.
