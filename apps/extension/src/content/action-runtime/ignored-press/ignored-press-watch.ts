@@ -6,9 +6,16 @@
 // any one is seen -- a press the page answered costs no wait -- or when the
 // window closes with none. Only a press that settles with nothing seen is a
 // candidate for pressing once more, which `press-again.ts` decides.
+//
+// Beside it, from the same instant, a settled look (`settled-look.ts`, t517)
+// keeps watching after that first sign: a press answered only by a change in
+// its section that came and went -- a spinner that turns back into the button
+// -- is asked, through `settleUnchanged`, whether the page settled exactly as it
+// was. The watch only carries it; the click decides what to do with it.
 
 import { listenForPressAnswer, type PressListener } from "./page-press-listener";
 import type { PressSignal } from "./press-again";
+import { lookUntilSettled, type SettledLook } from "./settled-look";
 
 /** What the page was seen to do after the press, and how long the watch ran. */
 export type IgnoredPressAnswer = {
@@ -25,7 +32,13 @@ export type IgnoredPressWatch = {
    * handler did synchronously answers without waiting. Stops the watch.
    */
   settle(windowMs: number): Promise<IgnoredPressAnswer>;
-  /** Stops without waiting; safe to call more than once. */
+  /**
+   * After `settle`: resolves `true` only when, within `windowMs`, the page
+   * settled exactly as it was before the press and nothing else answered it
+   * (`settled-look.ts`). Stops the look.
+   */
+  settleUnchanged(windowMs: number): Promise<boolean>;
+  /** Stops without waiting, the settled look included; safe to call more than once. */
   stop(): void;
 };
 
@@ -36,8 +49,13 @@ export type IgnoredPressProbe = (pressed: Element, note: (signal: PressSignal) =
 const CHECK_INTERVAL_MS = 50;
 
 /** Starts watching, from just before the press on `pressed`, for any answer to it. */
-export function watchIgnoredPress(pressed: Element, probe: IgnoredPressProbe = listenForPressAnswer): IgnoredPressWatch {
+export function watchIgnoredPress(
+  pressed: Element,
+  probe: IgnoredPressProbe = listenForPressAnswer,
+  look: (pressed: Element) => SettledLook = (element) => lookUntilSettled(element, probe)
+): IgnoredPressWatch {
   const startedAt = Date.now();
+  const settledLook = look(pressed);
   const seen: PressSignal[] = [];
   let wake: (() => void) | undefined;
   const listener = probe(pressed, (signal) => {
@@ -55,7 +73,11 @@ export function watchIgnoredPress(pressed: Element, probe: IgnoredPressProbe = l
   const answer = (): IgnoredPressAnswer => ({ seen: [...seen], afterMs: Date.now() - startedAt });
 
   return {
-    stop,
+    stop() {
+      stop();
+      settledLook.stop();
+    },
+    settleUnchanged: (windowMs) => settledLook.settle(windowMs),
     settle(windowMs) {
       if (!stopped) listener.flush();
       if (seen.length > 0 || windowMs <= 0 || stopped) {

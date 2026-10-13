@@ -53,6 +53,7 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
   // t174 F40: a press the page answered with "Please select a Color." beside it
   // and nothing done. The page's state, not retryable, and unacted.
   ["REFUSED_BY_PAGE", "web.action.refused_by_page", "unexpected_state", false, "execution"],
+  ["NO_EFFECT", "web.action.no_effect", "action_failed", true, "execution"],
   // t163's finding 2. A manifest-permission refusal reported as the retryable
   // `web.action.failed` cost run-muht9lpw-a39aa056 three attempts and then the
   // run, so the refusal has its own non-retryable row and the dead channel it
@@ -67,11 +68,15 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
 ];
 
 /** The rows whose producer can prove the act did not happen, which carry `effect: "unacted"`. Every other row states nothing. */
-const UNACTED: ReadonlySet<string> = new Set(["RATE_LIMITED", "REFUSED_BY_PAGE"]);
+const UNACTED: ReadonlySet<string> = new Set(["RATE_LIMITED", "REFUSED_BY_PAGE", "NO_EFFECT"]);
+
+/** The rows whose producer saw the act certainly change nothing (t517), which also carry `certainNoEffect`. */
+const CERTAIN_NO_EFFECT: ReadonlySet<string> = new Set(["NO_EFFECT"]);
 
 /** A row's effect, spread onto the record the row builds. */
-function effectOf(name: string): { effect?: "unacted" } {
-  return UNACTED.has(name) ? { effect: "unacted" } : {};
+function effectOf(name: string): { effect?: "unacted"; certainNoEffect?: true } {
+  if (!UNACTED.has(name)) return {};
+  return CERTAIN_NO_EFFECT.has(name) ? { effect: "unacted", certainNoEffect: true } : { effect: "unacted" };
 }
 
 const CODES = Object.values(WEB_AUTOMATION_FAILURE_CODES) as WebAutomationFailureCode[];

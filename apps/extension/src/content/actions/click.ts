@@ -70,6 +70,22 @@
 // A control now disabled or gone, rather than covered, still reads as
 // answered, and so does a second cover after the press made once more: a layer
 // a press opens itself, with no other sign, is then left open.
+// And a press whose only answer was a change in its section that came and went
+// is no answer. social-network-feed's Post spins for 450 ms on its first
+// press, turns back into Post and posts nothing; only the second press posts.
+// The spinner is a sign, so the watch above never pressed again, and trials and
+// playback passed the press with nothing posted (`run-mv6v2jh4-69244ffb`). So a
+// first press answered only by a change in its section is looked at once more
+// (`action-runtime/ignored-press/settled-look.ts`): when, within
+// `NO_EFFECT_SETTLE_MS`, the page settled exactly as it was before the press --
+// no request, navigation or focus move at any point, nothing outside the
+// section, the section's markup and fields the same -- and the command control
+// can still be pressed, the press certainly did nothing. It fails as
+// `web.action.no_effect`, which states the act did not happen and is marked
+// `certainNoEffect`: Core makes it once more, and only once, even a lasting
+// act the person granted (t517). The click never presses a third time itself:
+// a press it already made once more, or the press made after a layer was
+// closed, is not looked at again.
 // A link is held to more than that, because a link states where it
 // goes: the click must visibly do what following it would. A navigation that
 // begins does, and so does the page's own script taking the click over and
@@ -90,7 +106,7 @@
 // that presses a blocking dialog's own way out (`action-runtime/interference/`),
 // which needs the same press and cannot import a verb.
 
-import { WEB_AUTOMATION_CHECK_WAIT_MS, webAutomationBaseTimeoutMs } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_CHECK_WAIT_MS, WEB_AUTOMATION_FAILURE_CODES, webAutomationBaseTimeoutMs } from "@fluxiq-web-extension/domain/client";
 import { dispatchClickGesture, extraPressesMade, noteExtraPress, pressAgain } from "../action-runtime";
 import type {
   ActionResultEvidence,
@@ -151,6 +167,18 @@ const ROBOT_CHECK_REPLY_MARGIN_MS = 1_000;
  */
 const IGNORED_PRESS_WINDOW_MS = 800;
 
+/**
+ * How long a first press answered only by a change in its section is given to
+ * settle back to exactly how the page was before it (`settled-look.ts`). Paid
+ * in full only by a press whose section is still moving, or changed and stayed
+ * changed without another sign; a section that comes back is read as soon as
+ * it is quiet. Shortened, never lengthened, by the command's own timeout.
+ */
+const NO_EFFECT_SETTLE_MS = 1_500;
+
+/** What a press that certainly did nothing says, after the hit test. A closed phrase: nothing the page wrote is in it. */
+const SETTLED_UNCHANGED = "the page changed only for a moment, and once it settled nothing on it had changed: no request, no navigation, no focus move, nothing outside the control's section, and the section exactly as before the press; the control can still be pressed";
+
 /** What a press made twice says, in the result's `actual`. A closed phrase: nothing the page wrote is in it. */
 const PRESSED_ONCE_MORE = "the page ignored the first press, so it was pressed once more";
 
@@ -176,6 +204,8 @@ type PressOutcome = {
   sighting: RobotCheckSighting | undefined;
   /** What the page did at all: on a first press, whether to press once more; on that second press, whether either was answered. */
   answer: IgnoredPressAnswer | undefined;
+  /** A first press answered only by a change in its section, after which the page settled exactly as it was (t517). */
+  settledUnchanged: boolean;
 };
 
 export async function clickAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
@@ -198,11 +228,15 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
     // press made once more (`action-runtime/ignored-press/command-presses.ts`).
     const extra = extraPressesMade(action);
     const again = extra > 0 ? PRESSED_AFTER_COVER : undefined;
-    const first = await press(element, report.point, action, deps, startedAt);
+    const first = await press(element, report.point, action, deps, startedAt, extra === 0);
     // Before the ignored-press rule: a page that wrote its refusal outside the
     // control's section is a press the watch saw no sign of, and is never pressed again.
     if (first.refused) return refusal(action, deps, startedAt, first.refused, evidence());
     if (first.sighting && first.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, first.sighting, evidence());
+    // A change that came and went, and a page settled exactly as it was: certainly nothing, for Core to press once more.
+    if (first.settledUnchanged && deps.checkActionability(element).actionable) {
+      return deps.success(action, startedAt, "Element clicked, and the page settled unchanged.", settledUnchangedValidation(report.detail, first.accepted), evidence(), WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT);
+    }
     // A robot check that came and went was an answer; so is any sign the watch saw.
     if (first.sighting || !first.answer || first.answer.seen.length > 0) {
       return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting, again), evidence());
@@ -229,7 +263,7 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
       }
       return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting), evidence());
     }
-    const second = await press(element, report.point, action, deps, startedAt);
+    const second = await press(element, report.point, action, deps, startedAt, false);
     if (second.refused) return refusal(action, deps, startedAt, second.refused, evidence());
     if (second.sighting && second.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, second.sighting, evidence());
     if (!second.sighting && second.answer && second.answer.seen.length === 0 && expectsAnswer(element)) {
@@ -283,14 +317,17 @@ function navigatingLink(element: Element): NavigatingLink | undefined {
  * answer. They read the same window and end on their own signals, so an
  * ordinary press waits no longer than its answer takes; only a robot check the
  * press puts up is followed past it. Both presses are watched for any answer;
- * the second is never followed by a third.
+ * the second is never followed by a third. `lookAgain` is set on a command's
+ * first press only: one answered by nothing but a change in its section, on a
+ * command control, is then given `NO_EFFECT_SETTLE_MS` to settle back.
  */
 async function press(
   element: Element,
   point: ClickPoint,
   action: BrowserActionCommand,
   deps: ContentActionDependencies,
-  startedAt: number
+  startedAt: number,
+  lookAgain: boolean
 ): Promise<PressOutcome> {
   // Assigned inside the gesture's callback, which control flow cannot see.
   let notice = undefined as RateLimitWatch | undefined;
@@ -308,7 +345,11 @@ async function press(
       check ? check.settle(windowMs, robotCheckWaitMs(action, startedAt)) : undefined,
       ignored ? ignored.settle(windowWithin(action, IGNORED_PRESS_WINDOW_MS)) : undefined
     ]);
-    return { accepted, refused, sighting, answer };
+    const changedOnly = answer !== undefined && answer.seen.length === 1 && answer.seen[0] === "change";
+    const settledUnchanged = lookAgain && changedOnly && !refused && !sighting && ignored !== undefined && expectsAnswer(element)
+      ? await ignored.settleUnchanged(windowWithin(action, NO_EFFECT_SETTLE_MS))
+      : false;
+    return { accepted, refused, sighting, answer, settledUnchanged };
   } finally {
     notice?.stop();
     check?.stop();
@@ -410,6 +451,16 @@ function expectsAnswer(element: Element): boolean {
   const current = control.getAttribute?.("aria-current");
   if (current !== null && current !== undefined && current !== "false") return false;
   return control.getAttribute?.("aria-selected") !== "true";
+}
+
+/**
+ * A press that certainly did nothing (`SETTLED_UNCHANGED`). Failed, which with
+ * its code is `web.action.no_effect`: the act did not happen and is marked
+ * `certainNoEffect`, so Core makes it once more, and only once.
+ */
+function settledUnchangedValidation(detail: string, accepted: boolean): BrowserActionValidation {
+  const prevented = accepted ? "" : "; the page prevented the click's default action";
+  return { status: "failed", expected: "the page answers the press", actual: `${detail}; ${SETTLED_UNCHANGED}${prevented}` };
 }
 
 /**

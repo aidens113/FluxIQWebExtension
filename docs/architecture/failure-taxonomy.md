@@ -13,7 +13,7 @@ stage it always carries.
 
 ## The Closed Set
 
-`WEB_AUTOMATION_FAILURE_CODES` names twenty-two codes. Read a code from that
+`WEB_AUTOMATION_FAILURE_CODES` names the closed code set. Read a code from that
 object rather than writing its string: the key is the name source code and
 this page use, and the value is the code Core stores and a scenario manifest's
 expected failure names.
@@ -35,6 +35,7 @@ expected failure names.
 | `USER_INTERVENTION_REQUIRED` | `web.intervention.required` | `user_intervention_required` | no | `execution` |
 | `BLOCKED_BY_DIALOG` | `web.action.blocked_by_dialog` | `unexpected_state` | no | `execution` |
 | `RATE_LIMITED` | `web.action.rate_limited` | `action_failed` | yes | `execution` |
+| `NO_EFFECT` | `web.action.no_effect` | `action_failed` | yes | `execution` |
 | `REFUSED_BY_PAGE` | `web.action.refused_by_page` | `unexpected_state` | no | `execution` |
 | `BROWSER_PERMISSION_DENIED` | `web.browser.permission_denied` | `blocked_by_capability_or_policy` | no | `dispatch` |
 | `TRANSPORT_TRANSIENT` | `web.transport.transient` | `action_failed` | yes | `execution` |
@@ -49,6 +50,8 @@ which element to act on; `dispatch` before anything ran, for a verb the client
 will not run at all; `execution` while the action ran; `confirmation` while
 confirming the action itself landed; `verification` while checking a
 post-condition or an authored assertion.
+
+`NO_EFFECT` carries `effect: "unacted"` and `certainNoEffect: true`. The click watch compares the settled press region with its pre-press state, including field values, and excludes a request, navigation, focus move or observed change elsewhere. A transient spinner that reverts is not a completed effect. The comparison stays local and never enters the failure record. Core permits exactly one re-press of a lasting step, stamps that attempt `retry.repress: true`, and stops after the second no-effect answer unless an authored failure route, handler or explicit continuation takes over. Non-lasting steps retain the first attempt plus three retries. Model feedback uses `press_had_no_effect` with a next step to inspect prerequisites or another control after automatic retries finish.
 
 `retryable` answers only Core's question — whether retrying the same action
 unchanged can succeed without a person or a Flow edit. Core's parser forbids
