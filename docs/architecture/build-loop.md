@@ -41,6 +41,15 @@ runner and start reset. Raw Core API requests that omit authoring mode retain
 legacy compatibility. The domain capabilities below serve both paths; draft
 retention details apply to legacy builds.
 
+Candidate checks distinguish a wrong result from an affirmative judge whose
+exclusion explanation lacks required evidence. Core can re-ask that judge for
+precise row-local name/quotation proof under the existing ask and spend bounds,
+using the same screened task and result. Persistent missing proof remains
+unconfirmed and cannot promote the candidate; a later test can rejudge the
+same exact revision's retained evidence without executing the Flow again.
+Actual wrong rows, counts and contradictions still require the existing repair
+and validation path. The domain's task and independent Lab oracle are unchanged.
+
 **Lists during candidate exploration.** One list read and one Next page provide
 evidence for the paging loop. The submitted Flow reads subsequent pages at runtime;
 exploration does not need to visit every page. Written candidates express repetition
