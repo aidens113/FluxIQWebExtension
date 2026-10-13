@@ -258,6 +258,24 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
 
 ## Work Ledger
 
+### 2026-10-13 - t496 and t498 merged; round 16 prepared
+
+- Agent: Claude senior supervisor; t496 and t498 workers.
+- Changed: t496 a step's recorded effect leaves out names the page changed by itself (two captures of the same
+  document, nothing sent between them, something appeared by itself); an effect that would become empty is kept;
+  `run.ts` handle shaping moved to `node-run/handle-shape/` (800 to 756 lines). t498 an accepted submit carries its
+  script, named current by revision and digest; a later refusal carries the current revision and is labelled
+  refused and superseded; older submissions become `supersededBy` entries that change only when a new revision is
+  accepted; `writeMode: replace` inside a repeat refused at completion and submit; the only-after refusal names its
+  line and both fixes; trial reads say how paging ended. Supervisor choice: a refused script stays readable,
+  labelled, until a newer revision is accepted, because its issues point at its lines.
+- Validation: t496 domain llm-evidence, route-state and output-nodes "# pass 1286 / # fail 0", domain and extension
+  tsc exit 0, audit exit 0 (the downstream finish first refused a Core worktree 2 commits behind Core dev; the
+  supervisor moved it to dev; no Core change). t498 after the dev merge: Core flow-bootstrap, llm and candidate-trial
+  "341 passed | 1 skipped" files, "3993 passed"; Core tsc and build exit 0; domain, extension and runner tsc exit 0;
+  Core merge gated by `pnpm check`. Pushed Core `3ace826c`, downstream `87f85e72`.
+- Outcome: Accepted.
+
 ### 2026-10-13 - t495 and t497 merged; t496 and t498 in progress
 
 - Agent: Claude senior supervisor; t495-t498 workers.
