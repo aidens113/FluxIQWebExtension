@@ -258,6 +258,21 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
 
 ## Work Ledger
 
+### 2026-10-13 - t493 merged; round 15 prepared
+
+- Agent: Claude senior supervisor; t493 worker.
+- Changed: processing lists, per `where` condition of a saved answer, the rows it alone left out by label
+  (`processing.conditions[].leftOutOnlyByThis`); the result summary, trial feedback, left-out guard and verdict
+  treat them as a read's left-out rows, so a yes must name each one and why the request excludes it; the judge
+  instruction says so (pins updated, no scenario words); a refuted Flow resubmitted with only its datasetId changed
+  is answered `unchanged_after_no` (supervisor policy refining t485); `startView` serialises right after
+  `schemaVersion`. Candidate builds do not reach the legacy build-test `stores.removed` path (left counts-only).
+- Validation: supervisor after the dev merge: Core result-verification/service/flow-bootstrap/llm "506 passed |
+  1 skipped" files, "5383 passed"; contracts record-sets "121 passed"; Core, domain, extension and runner
+  typechecks exit 0; structure audit exit 0; Core merge gated by `pnpm check`. Pushed Core `b73717a8`, downstream
+  `5ea7fc7a`.
+- Outcome: Accepted.
+
 ### 2026-10-13 - t491 and t492 merged; t493 in progress
 
 - Agent: Claude senior supervisor; t491-t493 workers.
