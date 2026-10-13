@@ -21,14 +21,22 @@
 // What the page changes by itself is left out (t496, `./self-changing/`):
 // `selfChanging` is what the build saw this page change with nothing done to it.
 // An act that added only such names keeps its effect as it was signed.
+//
+// So is what a layer the page raised by itself shows (t499): a chat or help
+// bubble that came up with the page a press reloaded, a promotion. Read off the
+// two captures' own layer marks (`./self-changing/page-raised.ts`), which say
+// which layers the act cannot have opened.
 
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationRouteEffect } from "../../route-state/effect";
 import type { WebLlmSnapshotBinding } from "../sanitize";
+import { webLlmPageRaisedNames } from "./self-changing";
+
+type Capture = Pick<WebLlmSnapshotBinding, "routeState" | "evidence">;
 
 /** The effect of an act made from the page `before` showed and leaving the page `after` shows, or nothing when it changed nothing the page can show. */
-export function webPlanActEffect(before: Pick<WebLlmSnapshotBinding, "routeState">, after: Pick<WebLlmSnapshotBinding, "routeState"> | undefined, selfChanging?: ReadonlySet<string>): JsonObject | undefined {
+export function webPlanActEffect(before: Capture, after: Capture | undefined, selfChanging?: ReadonlySet<string>): JsonObject | undefined {
   if (before.routeState === undefined || after?.routeState === undefined) return undefined;
-  const effect = webAutomationRouteEffect(before.routeState, after.routeState, selfChanging);
+  const effect = webAutomationRouteEffect(before.routeState, after.routeState, selfChanging, webLlmPageRaisedNames(before.evidence, after.evidence));
   return Array.isArray(effect.added) && effect.added.length > 0 ? effect : undefined;
 }
