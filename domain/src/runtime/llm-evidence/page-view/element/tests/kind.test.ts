@@ -61,6 +61,17 @@ test("the role the page wrote decides before the tag", () => {
   assert.equal(webLlmElementKind(el({ tag: "button", hasClickHandler: true })), "button", "clickable only when nothing else names it");
 });
 
+test("a scripted list is a listbox, and only a native select is a select (t509)", () => {
+  // Live, a `div role="listbox"` printed as `select`, the model chose in it as
+  // in a native select, and the choice node -- which chooses only in a native
+  // one -- was refused until the build ended (`run-mv6qrcdu-a31b44b8`, 0060).
+  assert.equal(webLlmElementKind(el({ tag: "div", role: "listbox" })), "listbox");
+  assert.equal(webLlmElementKind(el({ tag: "ul", role: "listbox" })), "listbox");
+  // A native select stays one whatever role it carries, since the choice node acts on it.
+  assert.equal(webLlmElementKind(el({ tag: "select", role: "listbox" })), "select");
+  assert.equal(webLlmElementKind(el({ tag: "select", role: "combobox" })), "select");
+});
+
 test("a search box is field[search]: by type, role, a search landmark or form, or a q/search name or id (t229)", () => {
   const rows: Array<[Partial<WebLlmEvidenceElement> & { tag: string }, string | undefined]> = [
     [{ tag: "input", landmark: "search" }, "field[search]"],
