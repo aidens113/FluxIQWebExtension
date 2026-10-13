@@ -61,6 +61,20 @@
 // prints that handle's words, so no value and no selector is added. A field
 // whose element cannot be told has no `at`.
 //
+// **A control column's `at` names the one item it sits in (t504).** Lane D
+// round 17 (`run-mv6lgt3s-c3aa6fac`) and round 15 both meant "the requests that
+// qualify" and pressed the Confirm column's `at` -- the first row's Confirm,
+// whose row did not qualify. The handle was printed apart from any row, so it
+// read as the column's. A column whose element is a control (a button, a field,
+// a link: anything the page view prints as one) now carries `atItem` beside
+// `at`: the item as the page view marks it and that item's words
+// (`item 1/8 (Ana Ruiz, Invoice for March)`, `./item-row.ts`). The handle is
+// kept, rather than dropped for every row's handle: the page view already gives
+// each row's control under its own marker, and without `at` a column of an
+// atomic-class site is told by nothing (run 38 above). A text column carries
+// no item: acting on it is not what it is for, and the packet then quotes no
+// item's words but the samples it always had.
+//
 // **A list that continues is told as Next page on the same handle.** The read
 // reads the page shown (S4, `read-list-collect-design.md` 6.1), so the
 // packet no longer says how far a read would page: `paginationBound`, the
@@ -81,9 +95,11 @@ import type { WebAutomationExtractionProposal, WebAutomationStructureDetection }
 import { present } from "../present";
 import { screenedPageText } from "../withheld";
 import type { WebLlmEvidenceElement } from "../elements";
+import { webLlmViewTraits } from "../page-view";
 import { webLlmShownColumn } from "./field-sample";
 import { webLlmFirstItemElements, webLlmFirstItemHandles, type WebLlmFirstItemPages } from "./first-item";
 import type { WebLlmExtractionBinding } from "./handles";
+import { webLlmItemRow } from "./item-row";
 
 export const WEB_LLM_STRUCTURE_SCHEMA_VERSION = "web-llm-structure.v1" as const;
 
@@ -102,7 +118,7 @@ export type WebLlmStructurePaginationMode = (typeof WEB_LLM_STRUCTURE_PAGINATION
 const RECORD_NOTE = "record is the one item you aimed at, read as a one-row table; name its handle in extractList when the instruction is about that item";
 
 /** What the packet says of `at`, once, when a field carries one: domain text. */
-const AT_NOTE = "a field's at is the handle of that column's element in the first item that has it; its line in the page view shows what the column holds. at is that item's own element, so acting on it acts on that item only; to act on the rows a listing keeps, use the control inside one of the rows it keeps";
+const AT_NOTE = "a field's at is the handle of that column's element in the first item that has it, never of the whole column; its line in the page view shows what the column holds. at is that item's own element, so acting on it acts on that item only -- for a control, the item its atItem names by place and words; to act on the rows a listing keeps, use the control inside one of the rows it keeps";
 
 /**
  * What the packet says of a list that continues: domain text around the
@@ -139,6 +155,13 @@ export type WebLlmStructureField = {
    * cannot be told or was not shown.
    */
   at?: string;
+  /**
+   * Only beside the `at` of a control (a button, a field, a link): the one item
+   * that control sits in, as the page view marks it, with that item's words --
+   * `item 1/8 (Ana Ruiz, Invoice for March)` (`./item-row.ts`, t504). Absent for
+   * a text column, a control in no item of a list of several, or no `at`.
+   */
+  atItem?: string;
   /**
    * The field's value in the first item that has it, screened, one line and
    * short (`./field-sample.ts`). Absent for a form control's value, a withheld
@@ -292,8 +315,22 @@ function readableFields(proposal: WebAutomationExtractionProposal, firstItem: We
     .filter((field) => field.spec.handling !== "exclude")
     .map((field) => {
       const column = webLlmShownColumn(screenedPageText(field.label) ?? field.key, elements.get(field.key), field.spec);
-      return { key: field.key, spec: field.spec, shown: shownField(field.key, column.label, field.spec.kind, field.coverage, at.get(field.key), column.sample) };
+      const handle = at.get(field.key);
+      return { key: field.key, spec: field.spec, shown: shownField(field.key, column.label, field.spec.kind, field.coverage, handle, controlItem(firstItem, handle), column.sample) };
     });
+}
+
+/**
+ * The item a control column's `at` sits in, as the page the model was shown
+ * marks it, with its words (`./item-row.ts`, header); `undefined` for a column
+ * the page view prints as text, or an `at` in no item of a list of several.
+ */
+function controlItem(firstItem: WebLlmFirstItemPages | undefined, handle: string | undefined): string | undefined {
+  const shown = firstItem?.shown;
+  if (shown === undefined || handle === undefined) return undefined;
+  const element = shown.evidence.elements.find((candidate) => candidate.target === handle);
+  if (element === undefined || webLlmViewTraits(element).lineRole !== "control") return undefined;
+  return webLlmItemRow(shown.evidence, handle);
 }
 
 /** The binding one handle keeps: the proposal's item, the readable fields under the keys shown, and its pagination. */
@@ -330,7 +367,7 @@ function boundList(
   });
 }
 
-function shownField(key: string, label: string, kind: WebAutomationExtractFieldKind, coverage: number, at: string | undefined, sample: string | undefined): WebLlmStructureField {
+function shownField(key: string, label: string, kind: WebAutomationExtractFieldKind, coverage: number, at: string | undefined, atItem: string | undefined, sample: string | undefined): WebLlmStructureField {
   return present<WebLlmStructureField>({
     key,
     // A label is page structure, but it is still page text: one line,
@@ -339,6 +376,7 @@ function shownField(key: string, label: string, kind: WebAutomationExtractFieldK
     kind,
     coverage: Math.round(coverage * 100) / 100,
     at,
+    atItem,
     sample
   });
 }
