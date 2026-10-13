@@ -133,7 +133,7 @@ Rules are AGENTS.md's testing rules and the audit's launch settings:
 - Repository: paired t517 trees at `C:/Users/osrs_/FluxStuff/fxwork/t517/`.
 - Task: review uncommitted t517, fix dead lasting actions reporting graph success, add meaningful failure feedback and document the new failure field.
 - Required reads: this Current State; original t517 report; Core AGENTS.md boundary and code-structure; t517 diffs and tests.
-- Owns (may edit): t517's existing changed source/tests; Core executor graph/step-loop failure finalization and adjacent tests; downstream `domain/src/runtime/llm-evidence/tool-rejection.ts` and its tests; both repositories' relevant architecture docs.
+- Owns (may edit): t517's existing changed source/tests; Core executor graph/step-loop/defensive failure finalization and adjacent tests; downstream `domain/src/runtime/llm-evidence/tool-rejection.ts`, `action-failure/refusal.ts`, `rejection-next/next-sentence.ts` and adjacent tests; both repositories' relevant architecture docs.
 - Must not touch: shared working documents, any other task tree, lifecycle scripts, generated/runtime data. No commits, merges, pushes or full suites.
 - Definition of done: exhausted dead lasting action is a failed run; exactly one certain-no-effect re-press; focused tests, touched-package typechecks and audits pass. Preserve explicit failure handlers/branches.
 - Report to: t517 downstream `docs/working/adaptation-and-breadth-plan/reports/codex-t517.md`.
