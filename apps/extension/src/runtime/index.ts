@@ -1,4 +1,5 @@
 export * from "./page-delivery";
+export * from "./next-page-continuation";
 export * from "./action-runner";
 export * from "./automation-tab";
 export * from "./browser-download";

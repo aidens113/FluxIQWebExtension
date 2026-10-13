@@ -1,5 +1,5 @@
 // T1 coverage of how the worker carries `web.dom.next_page` into the document
-// its press loads (`../extract-list-continuation.ts`, `sendNextPageAcrossDocuments`).
+// its press loads (`../next-page-continuation.ts`, `sendNextPageAcrossDocuments`).
 //
 // A press on a link takes the content script that pressed it away with the
 // command unanswered. The page marks the press under the command's token just
@@ -14,6 +14,7 @@ import { test } from "node:test";
 import type { BrowserActionCommand, BrowserActionResult } from "../../shared/protocol";
 import { PAGE_MOVE_MARK_MESSAGE, type PageMoveMark } from "../../shared/extraction-continuation";
 import { runBrowserActionCommand } from "../action-runner";
+import { sendNextPageAcrossDocuments } from "../next-page-continuation";
 
 const TAB_ID = 7;
 const CONTENT_SCRIPT_VERSION = 2;
@@ -22,7 +23,7 @@ const CHANNEL_CLOSED = "A listener indicated an asynchronous response by returni
 type Listener = (message: unknown, sender: { tab?: { id?: number }; frameId?: number }, sendResponse: (response?: unknown) => void) => unknown;
 
 /** What one delivered action does: mark under the token it was sent, then either lose its reply or answer. */
-type Delivery = { marks?: Array<{ mark: unknown; token?: string }>; outcome: { lost: string } | { reply: BrowserActionResult } };
+type Delivery = { marks?: Array<{ mark: unknown; token?: string; tabId?: number; frameId?: number }>; outcome: { lost: string } | { reply: BrowserActionResult } };
 
 const ACTION: BrowserActionCommand = {
   commandId: "c-next",
@@ -45,7 +46,7 @@ const MOVED: BrowserActionResult = {
 };
 
 /** Installs a chrome stub that plays `deliveries` in order, one per action send, and records every action message sent. */
-function installChromeStub(deliveries: Delivery[]): { sent: Array<Record<string, unknown>>; listeners: Set<Listener>; readied: () => number } {
+function installChromeStub(deliveries: Delivery[], options: { tabClosed?: boolean } = {}): { sent: Array<Record<string, unknown>>; listeners: Set<Listener>; readied: () => number } {
   const listeners = new Set<Listener>();
   const sent: Array<Record<string, unknown>> = [];
   let pings = 0;
@@ -59,7 +60,7 @@ function installChromeStub(deliveries: Delivery[]): { sent: Array<Record<string,
   (globalThis as { chrome?: unknown }).chrome = {
     runtime,
     tabs: {
-      get: (tabId: number) => Promise.resolve({ id: tabId, status: "complete", url: "https://shop.test/results?page=2" }),
+      get: (tabId: number) => options.tabClosed ? Promise.reject(new Error("No tab with id")) : Promise.resolve({ id: tabId, status: "complete", url: "https://shop.test/results?page=2" }),
       onUpdated: { addListener: () => undefined, removeListener: () => undefined },
       sendMessage: (_tabId: number, message: Record<string, unknown>, _options: { frameId?: number }, callback: (response: unknown) => void) => {
         if (message["type"] === "fluxiq.ping") {
@@ -74,9 +75,9 @@ function installChromeStub(deliveries: Delivery[]): { sent: Array<Record<string,
         sent.push(structuredClone(message));
         const delivery = pending.shift() ?? { outcome: { reply: MOVED } };
         const token = (message["extraction"] as { token?: string } | undefined)?.token;
-        for (const { mark, token: own } of delivery.marks ?? []) {
+        for (const { mark, token: own, tabId, frameId } of delivery.marks ?? []) {
           const body = { type: PAGE_MOVE_MARK_MESSAGE, token: own ?? token, mark };
-          for (const listener of [...listeners]) listener(structuredClone(body), { tab: { id: TAB_ID }, frameId: 0 }, () => undefined);
+          for (const listener of [...listeners]) listener(structuredClone(body), { tab: { id: tabId ?? TAB_ID }, frameId: frameId ?? 0 }, () => undefined);
         }
         if ("lost" in delivery.outcome) {
           runtime.lastError = { message: delivery.outcome.lost };
@@ -152,4 +153,83 @@ test("a mark that is not one, or under another token, is not taken", async () =>
     { outcome: { reply: MOVED } }
   ]);
   assert.equal(continuation(sent[1])?.resume, undefined);
+});
+
+test("movement marks from another tab or frame cannot authorize a resumed landing", async () => {
+  const { sent, listeners } = await run([
+    { marks: [{ mark: { by: "next" }, tabId: TAB_ID + 1 }, { mark: { by: "next" }, frameId: 3 }], outcome: { lost: CHANNEL_CLOSED } },
+    { outcome: { reply: MOVED } }
+  ]);
+  assert.equal(continuation(sent[1])?.resume, undefined);
+  assert.equal(listeners, 0);
+});
+
+async function directSend(deliveries: Delivery[], options: { tabClosed?: boolean; frameId?: number; makeReadyError?: Error } = {}): Promise<{ result: BrowserActionResult; sent: Record<string, unknown>[]; listeners: number }> {
+  const stub = installChromeStub(deliveries, options);
+  type ChromeStub = { runtime: { lastError?: { message: string } }; tabs: { sendMessage(tabId: number, message: unknown, options: { frameId: number }, callback: (response: unknown) => void): void } };
+  const installed = (globalThis as unknown as { chrome: ChromeStub }).chrome;
+  try {
+    const result = await sendNextPageAcrossDocuments(ACTION, TAB_ID, { type: "executeAction", action: ACTION }, options.frameId ?? 0, {
+      send: <TResponse>(tabId: number, message: unknown, frameId: number) => new Promise<TResponse>((resolve, reject) => {
+        installed.tabs.sendMessage(tabId, message, { frameId }, (response) => {
+          const error = installed.runtime.lastError;
+          if (error) reject(new Error(error.message));
+          else resolve(response as TResponse);
+        });
+      }),
+      makeReady: async () => {
+        if (options.makeReadyError) throw options.makeReadyError;
+      }
+    });
+    return { result, sent: stub.sent, listeners: stub.listeners.size };
+  } catch (error) {
+    assert.equal(stub.listeners.size, 0, "failed movement leaked its listener");
+    throw error;
+  } finally {
+    uninstall();
+  }
+}
+
+test("closed tab and reassigned child frame propagate the original delivery failure and remove the listener", async () => {
+  const lost: Delivery[] = [{ outcome: { lost: CHANNEL_CLOSED } }];
+  await assert.rejects(directSend(lost, { tabClosed: true }), /message channel closed/u);
+  await assert.rejects(directSend(lost, { frameId: 4 }), /message channel closed/u);
+});
+
+test("a readiness cancellation ends continuation and releases its movement listener", async () => {
+  const cancelled = new Error("Movement cancelled during document readiness");
+  cancelled.name = "AbortError";
+  await assert.rejects(directSend([{ marks: [{ mark: { by: "next" } }], outcome: { lost: CHANNEL_CLOSED } }], { makeReadyError: cancelled }), (error) => error === cancelled);
+});
+
+test("four unmarked lost documents exhaust the movement fence and clean up", async () => {
+  const lost: Delivery = { outcome: { lost: CHANNEL_CLOSED } };
+  await assert.rejects(directSend([lost, lost, lost, lost]), /message channel closed/u);
+});
+
+test("the resumed landing carries the remaining deadline and a one millisecond final budget", async (t) => {
+  let now = 1_000_000;
+  t.mock.method(Date, "now", () => now);
+  const stub = installChromeStub([
+    { marks: [{ mark: { by: "next" } }], outcome: { lost: CHANNEL_CLOSED } },
+    { marks: [{ mark: { by: "next", refusals: { retries: 1 } } }], outcome: { lost: CHANNEL_CLOSED } },
+    { outcome: { reply: MOVED } }
+  ]);
+  type Send = (tabId: number, body: Record<string, unknown>, options: unknown, callback: unknown) => void;
+  const tabs = (globalThis as unknown as { chrome: { tabs: { sendMessage: Send; get(tabId: number): Promise<{ id: number; status: string }> } } }).chrome.tabs;
+  // Readiness is independent of this clock: an already-complete unnamed tab
+  // needs no URL-stability interval in the transport's budget regression.
+  tabs.get = async (tabId) => ({ id: tabId, status: "complete" });
+  const original = tabs.sendMessage;
+  tabs.sendMessage = (tabId, body, options, callback) => {
+    if (body["type"] === "executeAction") now += 20_000;
+    original(tabId, body, options, callback);
+  };
+  try {
+    await runBrowserActionCommand({ action: ACTION, attachTabForRecording: () => Promise.resolve() });
+    assert.deepEqual(stub.sent.map((message) => (message["action"] as BrowserActionCommand).timeoutMs), [30_000, 10_000, 1]);
+    assert.equal(stub.listeners.size, 0);
+  } finally {
+    uninstall();
+  }
 });
