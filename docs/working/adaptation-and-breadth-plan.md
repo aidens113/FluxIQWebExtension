@@ -98,6 +98,12 @@ Rules are AGENTS.md's testing rules and the audit's launch settings:
 
 ## Worker Briefs
 
+### Brief: codex-t516-handler-validation-path
+- Worker: codex-t516; read-only investigation in paired t518, no source/live runs.
+- Own report: reports/codex-t516-handler-validation-path.md. Read Current State and original t516/guarded-learning reports; exact Lab provider-free flow/replay and Core judged promotion entry points only as needed.
+- Find the narrowest realistic provider-free full gateway/Core validation that reaches a cleared popup, judges success, applies learned handler and proves durable reuse. Explain whether existing recorded --flow controls actually enter that promotion path.
+- Return exact commands/entry points, expected evidence keys/counts, prerequisites and honest capability gaps. No synthetic browser fixtures, task-shaped model guidance, paid calls, server management, shared docs or edits.
+
 ### Brief: codex-t518-terminal-core
 - Unit/worktree: paired t518 Core only. Worker: replay_investigation, after store diagnosis.
 - Read: paired Current State; downstream terminal-recovery-design report; Core AGENTS already read, follow it.
