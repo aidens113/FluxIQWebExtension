@@ -38,8 +38,14 @@ export type CreatedFlowCandidateTrialRun = Readonly<{
   /** How the run of the candidate ended: `succeeded`, `failed`, `cancelled`, or `null` while Core had not written it. */
   execution: string | null;
   code: string | null;
-  /** The verdict Core gave this trial, where Core said it (a failed build's diagnostic); `null` where it did not. */
-  verdict: AutomationStudioCandidateTrialOutcomeVerdict | null;
+  /**
+   * The verdict Core gave this trial, where Core said it (a failed build's diagnostic, the trial that promoted).
+   * A promoted candidate's other trials were rejected, and say so: `execution_failed` when their run did not
+   * succeed (Core's own verdict for such a run), otherwise `rejected`. `null` only where nothing decides it.
+   */
+  verdict: AutomationStudioCandidateTrialOutcomeVerdict | "rejected" | null;
+  /** Why a trial was rejected, as a closed code: the run's failure code, or `not_promoted`; `null` where none applies. */
+  reason: string | null;
 }>;
 
 /**
@@ -92,9 +98,9 @@ export async function readCreatedFlowCandidatePromotion(control: CandidateContro
   const candidateId = identifier(field(detail, "candidateId"));
   if (candidateId === null) return null;
   const verdict = field(trial, "verdict") === "yes" ? "yes" : "unknown", trialRunId = identifier(field(trial, "runId"));
-  // Core names the verdict of the trial that promoted it, and only that one; the others' stay unsaid (`null`).
+  // Core names the verdict of the trial that promoted it; every other trial of the candidate was rejected (B build 2 recorded them `null`).
   const sessions = await readCandidateTrials(control, subject, candidateId);
-  const trials = sessions === null || verdict !== "yes" || trialRunId === null ? sessions : Object.freeze(sessions.map((run) => run.runId === trialRunId ? Object.freeze({ ...run, verdict }) : run));
+  const trials = sessions === null || verdict !== "yes" || trialRunId === null ? sessions : Object.freeze(sessions.map((run) => Object.freeze(run.runId === trialRunId ? { ...run, verdict } : notPromoted(run))));
   return Object.freeze({
     authoringMode: "candidate", outcome: "promoted", draft: null, candidateId,
     revision: whole(field(detail, "revision")), digest: identifier(field(detail, "digest")),
@@ -152,7 +158,7 @@ export async function createdFlowFailedCandidateOutcome(control: CandidateContro
   const seen = new Set((sessions ?? []).map((trial) => trial.runId));
   const trials = sessions === null && named.length === 0 ? null : Object.freeze([
     ...(sessions ?? []).map((trial) => Object.freeze({ ...trial, verdict: verdictOf.get(trial.runId) ?? trial.verdict })),
-    ...named.filter((trial) => !seen.has(trial.runId)).map((trial) => Object.freeze({ runId: trial.runId, revision: trial.revision, digest: null, start: null, execution: null, code: code(trial.code), verdict: trial.verdict })),
+    ...named.filter((trial) => !seen.has(trial.runId)).map((trial) => Object.freeze({ runId: trial.runId, revision: trial.revision, digest: null, start: null, execution: null, code: code(trial.code), verdict: trial.verdict, reason: code(trial.code) })),
   ]);
   const last = candidate.trials.at(-1);
   return Object.freeze({
@@ -199,9 +205,15 @@ async function readCandidateTrials(control: CandidateControl, subject: { project
     const trial = field(field(session, "metadata"), "candidateTrial"), runId = identifier(field(session, "runId"));
     if (runId === null || field(session, "flowId") !== subject.flowId || field(trial, "candidateId") !== candidateId) return [];
     const queuedAt = field(session, "queuedAt");
-    return [{ queuedAt: typeof queuedAt === "number" ? queuedAt : 0, trial: Object.freeze({ runId, revision: whole(field(trial, "revision")), digest: identifier(field(trial, "digest")), start: code(field(trial, "start")), execution: code(field(trial, "execution")), code: code(field(trial, "code")), verdict: null }) }];
+    return [{ queuedAt: typeof queuedAt === "number" ? queuedAt : 0, trial: Object.freeze({ runId, revision: whole(field(trial, "revision")), digest: identifier(field(trial, "digest")), start: code(field(trial, "start")), execution: code(field(trial, "execution")), code: code(field(trial, "code")), verdict: null, reason: null }) }];
   });
   return Object.freeze(trials.sort((a, b) => a.queuedAt - b.queuedAt).map((entry) => entry.trial));
+}
+
+/** A trial of a promoted candidate that did not promote it: Core answers `execution_failed` for any run that did not succeed, and the rest were judged short of a standing yes. */
+function notPromoted(run: CreatedFlowCandidateTrialRun): CreatedFlowCandidateTrialRun {
+  if (run.execution !== null && run.execution !== "succeeded") return { ...run, verdict: "execution_failed", reason: run.code ?? code(`candidate.trial_${run.execution}`) };
+  return { ...run, verdict: "rejected", reason: "not_promoted" };
 }
 
 function field(value: unknown, key: string): unknown {

@@ -673,6 +673,28 @@ the run's action types and statuses, the extraction measurements
 count and SHA-256, so two replays can be shown to have stored the same rows in
 the same order. It holds counts, ids, origins and digests, never page content.
 
+The replay's browser starts through the same guarded session as `lab run`
+(`launchExtensionSession`; `saved-flow-replay/replay-browser.ts` launches
+nothing itself, which `guarded-browser/tests/launch-containment.test.ts` pins):
+the containment switches and forgotten cached workers, the network guard
+before any page, the worker proofs awaited before pairing, and the one normal
+close and relaunch when Playwright observes no worker that Chrome reports (see
+the extension readiness recovery below). Whatever browser the session launched
+last is closed if the start or pairing fails. Pairing and every provider-free
+guarantee above are unchanged. When the replay cannot complete, the receipt's
+`error` keeps its category and message and, for a failed extension start,
+`details`: the closed projection `extensionStartFailureDetails` (stage,
+`workerMs`, `timeoutMs`, `observedWorkerCount`, `browserConnected`), codes and
+integers only. Replay `replay-mv62rwy7-fcb23be8` failed on the worker wait with
+none of this, before the replay used the session. The start's trace is written
+whatever the outcome to `<runs>/replays/<replay-id>/extension-start.local.json`,
+screened like a run's and never part of the receipt. Its first entry,
+`browser.profile-handover`, is a record-only probe taken before launch: whether
+the profile's Chrome `lockfile` exists and the milliseconds since anything at
+the top of the profile or in `Default/` was last written (`unavailable` with an
+error code when the profile cannot be read). It gates nothing; it is there to
+decide whether a Chrome still releasing the profile ever precedes a worker gap.
+
 The actual project and Flow IDs come from the build's screened `snapshots/creation-context.json`; independent chat creation uses a new run-owned project inside the preserved workspace. Pass `--project` for that project. Replay selects and checks that exact scope before lookup or browser launch, with no name search or default fallback on an explicit mismatch. Omitting the option retains legacy workspace-default behavior. The identity snapshot is written before selection/Send and on ending; a failed draft ID alone does not establish a reusable Flow.
 
 The flow id is also named by the build's `snapshots/flow-lane.json`. A build
