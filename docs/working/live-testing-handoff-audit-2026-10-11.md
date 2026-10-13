@@ -15,36 +15,40 @@ Qualification means two consecutive passing paid builds on one frozen source pai
 separate model-free replay with an unchanged Flow hash and all five counters at zero, and every run is fully
 debugged.
 
-- A qualified in round 3, on an earlier pair.
-- B and D qualified in round 12 on downstream f2d100a6 / Core f2e6b076:
-  - B: run-mv62icw0-2be384b4 and run-mv636xvb-e1426db1.
-  - D: run-mv62icw0-070f88ad and run-mv636xyp-2e4fe54d.
-  - All four replays passed. All four debugs are in the lane trees (t262, t275).
-  - B's Flow borrows a cross-page "+" handle that works only positionally.
-- C is not qualified. Round 12 build 1 (run-mv62icw3-9118516f) failed. For "under $50" the Flow applied a
-  "$25 to $50" site filter, which dropped two rows, and every judge said yes. C waits for t482.
+**All four lanes are qualified.**
 
-In flight: t482-t487, in task worktrees under fxwork/, none merged. Each worker owns its report in that task's
-docs/working/state-aware-recovery-plan/reports/.
+| Lane | Round | Source pair | Builds |
+| --- | --- | --- | --- |
+| A | 3 | an earlier pair | see the archive |
+| B | 12 | downstream f2d100a6 / Core f2e6b076 | run-mv62icw0-2be384b4, run-mv636xvb-e1426db1 |
+| C | 16 | downstream 87f85e72 / Core 3ace826c | run-mv6i27oi-a87fb247, run-mv6itasw-cca0dcc9 |
+| D | 12 | downstream f2d100a6 / Core f2e6b076 | run-mv62icw0-070f88ad, run-mv636xyp-2e4fe54d |
 
-- t482: judges refuse over-narrowing; rowsActedOn rows keep their content; read-condition and record-set
-  wording.
-- t483: lab replay goes through launchExtensionSession and keeps failure details; a rejected trial gets a
-  verdict.
-- t484: a byte-stable request prefix; route state is appended, not inserted.
-- t485: pace from the stated limit; an interruption branch before "Complete now"; label-only resubmits.
-- t486: cross-page handles refused in exploration and at submit; a type into a non-editable element refused at
-  submit; dotted read fields; the covering line names its cover; a satisfied step routed by state and not counted
-  as an act.
-- t487: chat wording.
+- Every qualifying build's replay passed, and every debug is in its lane tree (t262, t275, t451).
+- C's replays: replay-mv6ih7r5-7f5958bb and replay-mv6j6kre-348e80f7.
+- B and D confirmed later pairs too: D passed rounds 14, 15 and 16, under the stricter t492/t494 oracle from
+  round 15 on. B passed round 15. B failed round 16: the saved store step recorded a chat card as part of its
+  effect, which t499 fixes.
+
+In flight (task worktrees under fxwork/; reports in each task's docs/working/state-aware-recovery-plan/reports/):
+
+- t499: names in a page-raised layer never count as a step's recorded effect.
+- t500: recovery takes the success edge when the result already holds; a repair never reverses a lasting state it
+  did not set; a stalled repair round ends.
+- t501: both judges' readings on a double no; the receipt reports the latest accepted revision; supersession is
+  appended, not rewritten.
+- t502: a refusal inside `fields` names the read's columns and points to a fresh detection when the columns are
+  stale.
+
+Open for the user: builds take lasting acts on items outside the request while exploring (D round 15, step 0027)
+and in trials (D round 16, trial 1 confirmed all 8 requests). The Lab reset hides both, but a real account keeps
+them.
 
 Next steps:
 
-1. Verify and merge t482-t487 on narrow gates. Core merges run under Core's pnpm check.
-2. Sync the lane trees, then run the recovery matrix and the dry runs.
-3. Run C's round-13 qualification: two builds, their replays and their debugs.
-
-B and D need no further routine builds. Rerun them only to confirm a change that touches their path.
+1. Merge t499-t502 on narrow gates, then confirm B and D on the new pair.
+2. Then move to the MVP plan's next milestones: the adaptation gate (three sites, twice each), recording, and a
+   breadth sample across new sites and tasks.
 
 Launch settings for a paid build:
 
@@ -63,7 +67,7 @@ Rules:
 - Full suites at most twice a day.
 - Preserve profiles, projects, keys, recordings and the user's .clinerules edit.
 
-Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
+Earlier history (rounds 4-10, t460, t461) is in the Work Ledger archive.
 
 ## Audit Findings
 
@@ -257,6 +261,19 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
   artifacts/profiles/recordings; don't copy task answers into guidance. Two passing pairs required, not assumed.
 
 ## Work Ledger
+
+### 2026-10-13 - C qualified; all four lanes qualified
+
+- Agent: Claude senior supervisor; debug worker.
+- C build 2 debug (lane tree, run-mv6itasw-cca0dcc9): the same 13 rows as build 1 in the same order; no step narrowed the
+  list; every left-out row fails a stated term; the 2 removed rows are page-boundary repeats; a false yes in trial 2 was
+  blocked by the two-judge agreement rule; $0.039 is about two-thirds off-peak pricing and the rest 14 decisions against
+  23. Recurring: W4 (a condition put back that trial 1 had shown wrong), W5 (supersede cache), R1.
+- Validation: build 2 `evaluation.json` verdict and oracle passed (13/13 in order, 52/52 fields, 0 unexpected); replay
+  `replay-mv6j6kre-348e80f7` passed (13/13, goal true, hash equal, all five zero); the debug's cost recomputation
+  $0.038730 matches the ledger.
+- Outcome: Accepted. **C qualified** on downstream 87f85e72 / Core 3ace826c (runs run-mv6i27oi-a87fb247 and
+  run-mv6itasw-cca0dcc9). A (round 3), B and D (round 12) and C (round 16) are all qualified.
 
 ### 2026-10-13 - Round 16: C passed build 1 and replay; D passed; B failed after an accepted trial
 

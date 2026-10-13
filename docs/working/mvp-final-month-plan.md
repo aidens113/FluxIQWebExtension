@@ -18,7 +18,7 @@ Related: [30-day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 The older October 9 handoff and ledger are retained in the archive linked below. Deadline November 10;
 feature freeze October 29. No user panel has been started or managed by this continuation.
 
-**Qualified: lane A.** Same identified product pair for two consecutive candidate creations,
+**Qualified: lanes A, B, C and D** (2026-10-13; B and D in round 12, C in round 16; details and run ids in the live-testing audit's Current State). Lane A: Same identified product pair for two consecutive candidate creations,
 `run-mv4jihmm-af72a1e1` ($0.03038) and `run-mv4jvo7k-612f0bbb` ($0.04783), both exact oracles 4/4.
 Separate replays `replay-mv4kt6g0-4e4900a8` and `replay-mv4kv3z1-2cfab70c` passed with unchanged saved
 Flow hashes, independent goal held, model wiring disabled and every provider/intervention/harness count zero.
