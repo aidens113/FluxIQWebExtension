@@ -452,6 +452,13 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
 
 ## Work Ledger
 
+### 2026-10-13 - Complete store state matches; generated control edge corrected
+
+- Agent: Codex senior supervisor; exact durable routing diagnosis by replay worker.
+- Changed: fresh run-mv72qmg0-b3cfb3f9 proves complete historical99/live101 control matching. The refusal is unbound_value from skipped entry44.success through generated legacy ready data input, not a missing target/signature. Core generated sequential edges now enter control input in; real data/binding guards remain.
+- Validation: supervisor observed37 owning proposal/skipped-value/output-read tests and Core source typecheck pass. Required data-edge negative remains refused. Source committed434c0d86/d35dab42; no browser rerun while terminal producers/contract are being edited.
+- Outcome: terminal producer/passive-domain/Core guarded End work dispatched via file-owned briefs. No model calls or pushes; full handler durable execution and adaptation gate remain unverified.
+
 ### 2026-10-13 - Completed briefs archived; replay truth consolidated
 
 - Agent: Codex supervisor.
