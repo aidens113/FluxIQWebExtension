@@ -258,6 +258,41 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
 
 ## Work Ledger
 
+### 2026-10-13 - t482-t487 merged; round 13 prepared
+
+- Agent: Claude senior supervisor; t482-t487 workers.
+- Changed:
+  - t482 each read's result summary lists `narrowedBefore` (the steps that acted on the page before it), and the
+    judge refuses a step whose words keep less than the request asks; the supervisor narrowed its category clause to
+    "a category, option or value the request does not name that can leave out items the request asks for". Acted-on
+    rows keep their content; plain read-condition and record-set wording.
+  - t483 `lab replay` starts through `launchExtensionSession` (one-time relaunch, worker proofs, start trace), keeps
+    start-failure details, probes the profile lock; a rejected trial records a verdict.
+  - t484 the output schema leads the request and route state is only appended. A replaced page view's swap for a
+    reference is deliberate (it removes ~3.9M characters for ~1.17M re-billed in 1,161 decision pairs) and stays.
+  - t485 pace learned from refusals at each refusal's own time (no structured stated-limit source reaches Core);
+    `candidate.trial_slow_down_unhandled` until a learned pace and a wait or way-out branch are saved; label-only
+    resubmits answered unchanged (supervisor policy: `recordOutput.datasetId` is not a label).
+  - t486 a node run refuses a handle from another page as `web.handle.stale`; submit refuses
+    `bootstrap.handle.other_page` (candidate sentence quotes only handles; the plan-path code stays out of
+    `AUTHORED_CODES`, because its message quotes locations); `handle_not_a_field` for type/clear into a non-field;
+    dotted read fields read or refused; covers named; a step with its own recorded effect checks the page before a
+    retry handler; a skipped step reaches the result check as `acted: false` with `satisfiedByState`.
+  - t487 skipped-step cards, unchanged-resubmit narration, a step counter that never runs back, word-boundary wrap.
+- Validation: supervisor after each dev merge into the task branch: t482 Core llm/result-verification/candidate-trial
+  "254 passed (254)" files, "2490 passed"; t483 runner "# pass 43 / # fail 0" and creation "# pass 167"; live
+  `replay-mv648lac-beafbfd2` through the new path passed (4/4, hash equal, all five zero, start trace written);
+  matrix on t483 `{"passed":14}`; t484 "214 passed (214)", "2023 passed"; t485 "262 passed | 1 skipped",
+  "3093 passed"; t487 Core "164 passed (164)", "1534 passed", extension "# pass 383 / # fail 0"; t486 Core
+  "332 passed | 1 skipped", "3656 passed", domain "# pass 1010", extension "# pass 542"; every typecheck exit 0;
+  each Core merge gated by `pnpm check` passed. Pushed Core `32e8aa24`, downstream `3ed9a639`.
+- Outcome: Accepted.
+- Open: the effect check answered "not on the page" twice on an unchanged page in B's playback (suspected rotating
+  banner; playback keeps no routing reason or effect hashes); `overlays.ts:68-75` registers a pinned bar as a
+  blocker covering 0 controls; Core has no submission advice for `web.handle.not_a_field`; the slow-down gate checks
+  a wait branch's shape, not its duration; C's bare `nextPage` handle and page 2 re-read as "page 1";
+  `decision-context/supersede.ts` re-bills ~200k characters; a label-derived datasetId still costs a trial.
+
 ### 2026-10-13 - Round 12: B and D passed both builds and every replay; C failed build 1; t482-t487
 
 - Agent: Claude senior supervisor; t478-t481 workers; debug workers.
