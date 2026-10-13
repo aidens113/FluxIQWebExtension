@@ -15,7 +15,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { resolveScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
+import { resolveScenarioWorkflow, type ExpectedFact } from "@fluxiq-web-extension/test-contracts";
 import type { PersistentRunAllocation } from "../allocation.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "../coordinator.js";
 import { RunnerFailure } from "../failure.js";
@@ -23,9 +23,9 @@ import { createdFlowActionTypes, createdFlowDatasetHolds, createdFlowSecretInput
 import { runProviderFreeReplayFlow } from "./run-flow.js";
 import { armScenarioVariant } from "../lab-control/index.js";
 import { resolveLabPaths } from "../lab-instance/index.js";
-import { finalStateFacts } from "../lane-rules/index.js";
 import { liveLlmObservedUsage } from "../live-llm/index.js";
 import { assertExpectedFacts, playwrightScenarioFactProbe } from "../scenario-assertions.js";
+import { replayFinalStateFacts } from "./final-state-check.js";
 import { ExtensionStartTrace, writeExtensionStartSidecar } from "../run-scenario/index.js";
 import { loadScenarioManifest } from "../scenarios.js";
 import type { FluxIQTargetConfiguration } from "../target-config.js";
@@ -189,9 +189,11 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
       const extraction = judgeCreatedFlowDataset({ workflow, stepId: judgement.stepId, run, actionTypes, scenarioOrigin });
       state.extraction = extraction.measurements.map(measurement => ({ ...measurement }));
       if (!createdFlowDatasetHolds(extraction)) reasons.push("the records the Flow stored do not match the task's expected dataset");
-    } else {
-      state.playbackGoalHeld = await playbackGoalHeld(browser, scenarioOrigin, finalStateFacts(scenario, workflow));
-      if (!state.playbackGoalHeld) reasons.push("the scenario's playback goal did not hold after the Flow ran");
+    }
+    const facts = replayFinalStateFacts(judgement.judgeBy, scenario, workflow);
+    if (facts) {
+      state.playbackGoalHeld = await playbackGoalHeld(browser, scenarioOrigin, facts);
+      if (!state.playbackGoalHeld) reasons.push(judgement.judgeBy === "expected-dataset" ? "the scenario's final state did not hold after the Flow ran" : "the scenario's playback goal did not hold after the Flow ran");
     }
     if (run.status !== "succeeded") reasons.push(`Core reported the run ${run.status}`);
     if (state.usage.calls !== 0) reasons.push(`Core accounted ${state.usage.calls} model provider call(s) to the run`);
@@ -262,7 +264,7 @@ function rowsDigest(records: readonly Record<string, unknown>[]): string {
 }
 
 /** Whether the playback goal holds on any tab showing the fixture, newest first, as the created-Flow lane judges it. */
-async function playbackGoalHeld(browser: ReplayBrowser, scenarioOrigin: string, facts: ReturnType<typeof finalStateFacts>): Promise<boolean> {
+async function playbackGoalHeld(browser: ReplayBrowser, scenarioOrigin: string, facts: readonly ExpectedFact[]): Promise<boolean> {
   for (const page of browser.context.pages().filter(candidate => !candidate.isClosed() && candidate.url().startsWith(`${scenarioOrigin}/`)).reverse()) {
     try { await assertExpectedFacts(facts, playwrightScenarioFactProbe(page)); return true; }
     catch { /* best-effort: the Flow may have finished on another tab */ }

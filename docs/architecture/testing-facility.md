@@ -623,7 +623,11 @@ it, and on the `isolated` target the FluxIQ install it was saved in is deleted
 when that run ends. `lab replay` is the proof that what was saved is reusable:
 a later, separate invocation on the persistent workspace the Flow was saved in
 runs it exactly as saved, with no model anywhere, and judges it the way the task
-that built it is judged.
+that built it is judged. A task judged by its expected dataset is also checked
+against its final state when its workflow declares one, as the created-Flow lane
+checks it (`saved-flow-replay/final-state-check.ts`): a Flow can store the right
+rows and still act on more items than the instruction asked, and a replay that
+compared only the rows would pass it.
 
 ```bash
 # Build: a live create-flow run on the persistent target (the only target that keeps the Flow).
