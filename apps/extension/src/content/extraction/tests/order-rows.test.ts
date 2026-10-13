@@ -6,7 +6,9 @@
 // `null` for one the page had nothing for -- so nothing here needs a page.
 
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { listRowOrderFor } from "../order-rows";
 
 type Row = Record<string, string | null>;
@@ -161,4 +163,49 @@ test("dedupe, then sort, then the bound: the answer is the first rows of the sor
   assert.deepEqual(titles(ordered.rows), ["b", "c"]);
   assert.equal(ordered.duplicates, 1);
   assert.equal(ordered.cut, true);
+});
+
+// A number sort key reads a value as Core's processing does (P7, t510): the
+// page's order and Core's agree on every number case of Core's shared table
+// (`@fluxiq/contracts`, `record-sets/process/value-reading-cases.ts`), read from
+// the linked Core's source when it is there, else from its built export. "£72k"
+// sorts as 72000, not 72, and "3m ago" as 3. The table's date cases are Core's
+// own reader's.
+type ReadingCase = { kind: string; text?: string; expected: unknown };
+
+async function coreValueReadingCases(): Promise<readonly ReadingCase[]> {
+  // `.../packages/fluxiq/dist/programs/automation-studio/index.js`, four levels under `packages/`.
+  const packages = new URL("../../../../", import.meta.resolve("fluxiq/automation-studio"));
+  const source = new URL("contracts/src/record-sets/process/value-reading-cases.ts", packages);
+  const built = new URL("contracts/dist/automation-studio.js", packages);
+  const loaded = (await import(existsSync(fileURLToPath(source)) ? source.href : built.href)) as { AUTOMATION_STUDIO_RECORD_VALUE_READING_CASES?: readonly ReadingCase[] };
+  const cases = loaded.AUTOMATION_STUDIO_RECORD_VALUE_READING_CASES;
+  assert.ok(Array.isArray(cases), "Core's value-reading table is exported");
+  return cases;
+}
+
+/** The supervisor's rule for a letter m (t510), pinned beside the table until Core's table carries it. */
+const LETTER_M_CASES: readonly ReadingCase[] = [
+  { kind: "number", text: "3m ago", expected: 3 },
+  { kind: "number", text: "10 m", expected: 10 },
+  { kind: "number", text: "$1.2m", expected: 1_200_000 },
+  { kind: "number", text: "£3m", expected: 3_000_000 }
+];
+
+test("a number sort reads every number case of Core's value-reading table as Core does", async () => {
+  const numbers = [...await coreValueReadingCases(), ...LETTER_M_CASES].filter((entry): entry is ReadingCase & { text: string } => entry.kind === "number" && typeof entry.text === "string");
+  assert.ok(numbers.some((entry) => entry.text === "£72k – £80k per annum"), "the magnitude case is in the table");
+  const order = listRowOrderFor({ sort: [{ field: "salary", order: "asc", as: "number" }] }, FIELDS)!;
+  for (const entry of numbers) {
+    const row: Row = { title: "case", salary: entry.text };
+    if (entry.expected === null) {
+      // A value that states no number cannot be sorted, and is counted.
+      assert.equal(order.apply([row], 10, NOW).unsortable, 1, entry.text);
+      continue;
+    }
+    // Read as the expected number, it sorts between plain numbers just under and just over it.
+    const expected = entry.expected as number;
+    const rows: Row[] = [{ title: "over", salary: String(expected + 0.0001) }, row, { title: "under", salary: String(expected - 0.0001) }];
+    assert.deepEqual(titles(order.apply(rows, 10, NOW).rows), ["under", "case", "over"], entry.text);
+  }
 });

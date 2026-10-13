@@ -31,7 +31,11 @@
 // (`webAutomationExtractConditionNumber`): the first run of digits, thousands
 // separators dropped, so `$1,299.00` is 1299 and `£65,000 to £80,000` is 65000;
 // a run whose separators can only be continental is read as written, so
-// `EUR 169,00` is 169 and `1.165,00 €` is 1165 (t194-w32).
+// `EUR 169,00` is 169 and `1.165,00 €` is 1165 (t194-w32); a k on the digits,
+// or the word after them, is a magnitude, so `£72k` is 72000, and an m is a
+// million only with a currency sign attached or a decimal point, so `$1.2m` is
+// 1200000 and `3m ago` is 3 (t510).
+// Core's shared value-reading table pins this reading (`tests/order-rows.test.ts`).
 //
 // `auto` reads a column as dates when most of its values state one, as numbers
 // when most state one, and as text otherwise, deciding once per key over the

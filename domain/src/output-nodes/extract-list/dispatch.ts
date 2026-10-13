@@ -38,7 +38,9 @@
 // and clears the author's, so Core's default whole-row identity applies. The
 // whole output, `process` included, then goes through Core's record-output
 // parser, so a `process` Core refuses fails the node before the page is read,
-// with Core's own `record_output.process_*` issues, like any other refusal.
+// with Core's own `record_output.process_*` issues, like any other refusal --
+// each naming the field or sort key it refused and what it can use instead
+// (`./process-issues.ts`, t510).
 //
 // **The timeout (D14).** The page reads a list within
 // `WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS`, and the command's `timeoutMs`
@@ -107,6 +109,7 @@ import { webAutomationDeclaredColumnsRead } from "./declared-columns";
 import { webAutomationDerivedRecordOutput } from "./derived-record-output";
 import { webAutomationExtractListOnePageRead } from "./one-page-read";
 import { webAutomationReconciledRecordOutput } from "./reconciled-record-output";
+import { webAutomationRecordOutputIssues } from "./process-issues";
 import { WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH } from "./records-path";
 import { webAutomationStoredColumnIssues, webAutomationStoredColumns, type WebAutomationStoredColumnName } from "./stored-columns";
 
@@ -136,11 +139,12 @@ export function webAutomationExtractListDispatch(nodeParameters: JsonObject): We
   const parameters = withFlowAsks(timed, request);
   const declared = authored === undefined || authored === null
     ? request === undefined ? undefined : webAutomationDerivedRecordOutput(request)
-    : request === undefined ? withRecordsPath(authored) : webAutomationReconciledRecordOutput(authored, request, narrowed?.columns);
+    : request === undefined ? withRecordsPath(authored) : webAutomationReconciledRecordOutput(authored, request, narrowed?.columns, narrowed?.shown);
   const timeout = commandTimeout(parameters.timeoutMs);
   if (declared === undefined) return { ok: true, payload: { parameters, ...timeout } };
-  const parsed = parseAutomationStudioRecordOutput(withReadProcess(declared, onePage));
-  if (!parsed.ok) return { ok: false, result: recordOutputRefusal(parsed.issues) };
+  const processed = withReadProcess(declared, onePage);
+  const parsed = parseAutomationStudioRecordOutput(processed);
+  if (!parsed.ok) return { ok: false, result: recordOutputRefusal(parsed.issues, processed) };
   // The parsed output is plain JSON; its type only spells the optional keys.
   const recordOutput = parsed.output as unknown as JsonObject;
   return { ok: true, payload: { parameters, ...timeout, recordOutput } };
@@ -259,7 +263,12 @@ function bounded(sentence: string): string {
   return sentence.length <= FAILURE_SENTENCE_MAX ? sentence : `${sentence.slice(0, FAILURE_SENTENCE_MAX - 3)}...`;
 }
 
-function recordOutputRefusal(issues: readonly string[]): AutomationNodeExecutionResult {
+/**
+ * The node's refusal of a record output Core's parser refuses: Core's codes,
+ * each as `{code, field?, valid?}` read from the output it refused
+ * (`./process-issues.ts`, t510), the one shape `./stored-columns.ts` gives.
+ */
+function recordOutputRefusal(issues: readonly string[], output: JsonValue): AutomationNodeExecutionResult {
   const encryptUnavailable = issues.includes(ENCRYPT_UNAVAILABLE_ISSUE);
   const code = encryptUnavailable ? "record_output.encrypt_unavailable" : "record_output.invalid";
   const failure: AutomationStudioFailureRecord = {
@@ -272,8 +281,7 @@ function recordOutputRefusal(issues: readonly string[]): AutomationNodeExecution
     status: "failed",
     route: "failed",
     effects: [],
-    // Core's codes as issues of the one shape (`./stored-columns.ts`): a code, with no field Core's parser names.
-    outputs: { error: { code, issues: issues.map((issue) => ({ code: issue })) } },
+    outputs: { error: { code, issues: webAutomationRecordOutputIssues(issues, output) as unknown as JsonObject[] } },
     message: encryptUnavailable
       ? "Save extracted records asks to encrypt a field, which is not available yet, so the list was not read."
       : "Save extracted records is not a valid record output, so the list was not read.",

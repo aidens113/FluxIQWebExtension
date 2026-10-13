@@ -98,6 +98,45 @@ test("a named one and N others counts N + 1, and only when no digit comes first"
   for (const [value, number] of rows) assert.equal(webAutomationExtractConditionNumber(value), number, value);
 });
 
+// Breadth wave 1's job board (`run-mv6qr7fk-77f30b49`): a salary written "£72k"
+// read as 72, so `atLeast 70000` dropped it in every trial (t510). Generic values.
+test("a thousand or million written on the number scales it", () => {
+  const rows: Array<[string, number | undefined]> = [
+    ["£72k", 72_000],
+    ["72K", 72_000],
+    ["$1.2m", 1_200_000],
+    ["1.15k", 1_150],
+    ["2.5M downloads", 2_500_000],
+    ["€1,5k", 1_500],
+    ["40 thousand", 40_000],
+    ["1.5 million views", 1_500_000],
+    ["$90k+", 90_000],
+    // A letter m is a million only with a currency sign attached or a decimal point.
+    ["£3m", 3_000_000],
+    ["1.5m", 1_500_000],
+    ["1,5m", 1_500_000],
+    ["€2M", 2_000_000],
+    ["3m ago", 3],
+    ["10m", 10],
+    ["10M followers", 10],
+    ["10 m", 10],
+    // A range reads its first end, with that end's own magnitude only.
+    ["£60k–£72k", 60_000],
+    ["£72k - £80k per annum", 72_000],
+    ["£60-72k", 60],
+    // A letter after a space, or a longer unit, is not a magnitude.
+    ["€85 k", 85],
+    ["5 m", 5],
+    ["5 km away", 5],
+    ["10kg", 10],
+    ["12 months", 12],
+    ["3 million-ish", 3_000_000]
+  ];
+  for (const [value, number] of rows) assert.equal(webAutomationExtractConditionNumber(value), number, value);
+  assert.equal(holds({ atLeast: 70_000 }, "£72k – £80k per annum"), true);
+  assert.equal(holds({ atLeast: 70_000 }, "£65k"), false);
+});
+
 test("every numeric comparison reads that number, and a value with none fails", () => {
   assert.equal(holds({ atLeast: 4 }, "4.0"), true);
   assert.equal(holds({ atLeast: 4 }, "3.7 out of 5 stars"), false);

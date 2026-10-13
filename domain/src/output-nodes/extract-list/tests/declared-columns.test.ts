@@ -195,3 +195,129 @@ test("actual dispatch keeps authored schema order before required ordering helpe
   assert.equal(excluded?.handling, "exclude");
   assert.deepEqual(storedColumns(sent.recordOutput, { alpha: "a", beta: "b", gamma: "https://example.invalid/gamma", epsilon: "not retained" }), ["gamma", "alpha", "beta"]);
 });
+
+// t510 (F1): stored is not shown. A column an ordering or a `process` needs is
+// stored, whatever the schema said of it, and `process.columns` -- the author's,
+// or the declared columns written for them -- keeps it out of the answer.
+
+/** A task list sorted by a due date the answer does not show: generic, not a Lab site. */
+const tasks = {
+  item: "li.task",
+  fields: {
+    title: { kind: "text", selector: ".title" },
+    owner: { kind: "text", selector: ".owner" },
+    status: { kind: "text", selector: ".status" },
+    due: { kind: "text", selector: ".due", required: false },
+    archived: { kind: "text", selector: ".archived-flag", required: false }
+  },
+  where: [{ field: "archived", is: "absent" }]
+};
+const taskSchema = (...ids: string[]) => ({ schemaVersion: "0.1", fields: ids.map((id) => ({ id, label: id, valueType: "string" })) });
+const excludedTaskField = (id: string) => ({ id, label: id, valueType: "string", handling: "exclude" });
+
+function schemaIds(recordOutputValue: JsonObject): Array<[string, string | null]> {
+  return (recordOutputValue.schema as { fields: { id: string; handling?: string }[] }).fields.map((field) => [field.id, field.handling ?? null]);
+}
+
+test("t510: a schema of the declared columns and a process.sort on a helper stores the helper and shows only the declared columns", () => {
+  const sent = dispatched({ extractList: tasks, recordOutput: { datasetId: "tasks", writeMode: "append", schema: taskSchema("title", "owner", "status"), process: { sort: [{ field: "due", order: "asc" }] } } });
+  assert.deepEqual(Object.keys(sent.extractList.fields), ["title", "owner", "status", "due"]);
+  assert.deepEqual(schemaIds(sent.recordOutput), [["title", null], ["owner", null], ["status", null], ["due", null]]);
+  assert.deepEqual(sent.recordOutput.process, { sort: [{ field: "due", order: "asc" }], columns: ["title", "owner", "status"] });
+  // `archived` was read only to filter by: it leaves the read and is read by its condition.
+  assert.deepEqual(sent.extractList.where, [{ read: { kind: "text", selector: ".archived-flag" }, is: "absent" }]);
+});
+
+test("t510: a helper the schema marks exclude and process.sort names is stored as a helper, and the author's columns hide it", () => {
+  const recordOutput = {
+    datasetId: "tasks",
+    writeMode: "append",
+    schema: { schemaVersion: "0.1", fields: [...taskSchema("title", "owner", "status").fields, excludedTaskField("due"), excludedTaskField("archived")] },
+    process: { sort: [{ field: "due", order: "desc" }], columns: ["title", "owner", "status"] }
+  };
+  const sent = dispatched({ extractList: tasks, recordOutput });
+  assert.deepEqual(schemaIds(sent.recordOutput), [["title", null], ["owner", null], ["status", null], ["due", null]]);
+  assert.deepEqual(sent.recordOutput.process, recordOutput.process);
+  // `archived` was marked exclude and only a condition reads it: never stored.
+  assert.deepEqual(Object.keys(sent.extractList.fields), ["title", "owner", "status", "due"]);
+  assert.deepEqual(storedColumns(sent.recordOutput, { title: "t", owner: "o", status: "s", due: "d" }), ["title", "owner", "status", "due"]);
+});
+
+test("t510: a helper a process.dedupe or process.where names is stored; a where keeps it among the columns written", () => {
+  const deduped = dispatched({ extractList: tasks, recordOutput: { datasetId: "tasks", writeMode: "append", schema: taskSchema("title", "owner"), process: { dedupe: { by: ["due"] } } } });
+  assert.deepEqual(schemaIds(deduped.recordOutput).map(([id]) => id), ["title", "owner", "due"]);
+  assert.deepEqual((deduped.recordOutput.process as JsonObject).columns, ["title", "owner"]);
+  const filtered = dispatched({ extractList: tasks, recordOutput: { datasetId: "tasks", writeMode: "append", schema: taskSchema("title", "owner"), process: { where: [{ field: "status", contains: "open" }], sort: [{ field: "due", order: "asc" }] } } });
+  assert.deepEqual(schemaIds(filtered.recordOutput).map(([id]) => id), ["title", "owner", "status", "due"]);
+  // Core refuses a where over a column `columns` drops, so the where's column is shown.
+  assert.deepEqual((filtered.recordOutput.process as JsonObject).columns, ["title", "owner", "status"]);
+});
+
+test("t510: a helper the read's own sort names is stored and not shown", () => {
+  const sent = dispatched({ extractList: { ...tasks, sort: [{ field: "due", order: "asc" }] }, recordOutput: { datasetId: "tasks", writeMode: "append", schema: taskSchema("title", "owner", "status") } });
+  assert.deepEqual(schemaIds(sent.recordOutput).map(([id]) => id), ["title", "owner", "status", "due"]);
+  assert.deepEqual(sent.recordOutput.process, { sort: [{ field: "due", order: "asc" }], columns: ["title", "owner", "status"] });
+});
+
+/**
+ * The auction run's read (`run-mv6qrbgx-06151cdb`, w1 auction debug), with
+ * stand-in selectors: the ten columns the model named, and two of its conditions.
+ */
+const auctionRead = {
+  item: "li.listing",
+  fields: {
+    title: { kind: "text", selector: ".title" },
+    price: { kind: "text", selector: ".price" },
+    bids: { kind: "text", selector: ".bids" },
+    postage: { kind: "text", selector: ".postage" },
+    condition: { kind: "text", selector: ".condition", required: false },
+    ends: { kind: "text", selector: ".ends" },
+    endsAt: { kind: "text", selector: ".ends-at", required: false },
+    pounds: { kind: "text", selector: ".pounds", required: false },
+    bin: { kind: "text", selector: ".bin", required: false },
+    ad: { kind: "attribute", attribute: "data-adid", required: false }
+  },
+  where: [{ field: "ad", is: "absent" }, { field: "pounds", lessThan: 150 }],
+  minItems: 0
+};
+
+/** Steps 0022 and 0024 of that run: every helper marked exclude, the sort on one of them, the answer's columns in process. */
+function auctionRecordOutput(sortField: string): JsonObject {
+  const kept = ["title", "price", "bids", "postage"].map((id) => ({ id, label: id, valueType: "string" }));
+  const helpers = ["condition", "ends", "endsAt", "pounds", "bin", "ad"].map((id) => ({ id, label: id, valueType: "string", handling: "exclude" }));
+  return {
+    datasetId: "kestrel35auctions",
+    writeMode: "replace",
+    schema: { schemaVersion: "0.1", fields: [...kept, ...helpers] },
+    process: { sort: [{ field: sortField, order: "asc" }], columns: ["title", "price", "bids", "postage"] }
+  };
+}
+
+test("t510: the auction run's 0022 and 0024 record outputs are accepted, the sort key stored and hidden, the other helpers not stored", () => {
+  for (const sortField of ["endsAt", "ends"]) {
+    const sent = dispatched({ extractList: auctionRead, recordOutput: auctionRecordOutput(sortField) });
+    assert.deepEqual(schemaIds(sent.recordOutput), [["title", null], ["price", null], ["bids", null], ["postage", null], [sortField, null]], sortField);
+    assert.deepEqual(sent.recordOutput.process, { sort: [{ field: sortField, order: "asc" }], columns: ["title", "price", "bids", "postage"], minRows: 0 }, sortField);
+    assert.deepEqual(Object.keys(sent.extractList.fields), ["title", "price", "bids", "postage", sortField], sortField);
+    // The conditions over `ad` and `pounds` still run, each through its column's own spec.
+    assert.deepEqual(sent.extractList.where, [
+      { read: { kind: "attribute", attribute: "data-adid" }, is: "absent" },
+      { read: { kind: "text", selector: ".pounds" }, lessThan: 150 }
+    ], sortField);
+    // What is stored is a record output Core's parser accepts as it is.
+    assert.equal(parseAutomationStudioRecordOutput(sent.recordOutput).ok, true, sortField);
+  }
+});
+
+test("t510: the record output the dispatch runs, dispatched again, runs unchanged", () => {
+  const cases: Array<[JsonObject, JsonObject]> = [
+    [auctionRead, auctionRecordOutput("endsAt")],
+    [tasks, { datasetId: "tasks", writeMode: "append", schema: taskSchema("title", "owner"), process: { sort: [{ field: "due", order: "asc" }] } }]
+  ];
+  for (const [read, recordOutput] of cases) {
+    const first = dispatched({ extractList: read, recordOutput });
+    const again = dispatched({ extractList: read, recordOutput: first.recordOutput });
+    assert.deepEqual(again.recordOutput, first.recordOutput);
+    assert.deepEqual(again.extractList, first.extractList);
+  }
+});

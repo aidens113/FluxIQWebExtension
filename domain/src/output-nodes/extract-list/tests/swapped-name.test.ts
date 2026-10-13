@@ -81,7 +81,7 @@ test("submit and dispatch agree: a record output naming a sibling column is refu
   if (dispatch.ok) return;
   assert.deepEqual((dispatch.result.outputs?.error as JsonObject).issues, [
     { code: "record_output.column_not_read", field: ELSEWHERE, valid: [TITLE, ACTION, COUNT] },
-    { code: "record_output.process_unknown_field", field: ELSEWHERE }
+    { code: "record_output.process_unknown_field", field: ELSEWHERE, valid: [TITLE, ACTION, COUNT] }
   ]);
 
   // A name written short still becomes its column on both sides.

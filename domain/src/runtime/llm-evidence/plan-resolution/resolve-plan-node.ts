@@ -120,7 +120,7 @@ import { webAutomationOutputNodeId, webAutomationUrlPath } from "../../../output
 import { webLlmNameAssumptions, type WebLlmNameAssumption, type WebLlmNameAssumptionSaid } from "../name-assumption";
 import type { WebLlmExtractionHandles } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
-import { resolveWebExtractionSlot, webPlanSlotRefusal, webPlanStoredColumns, webPlanUndispatchable, type WebPlanRefusalIssue } from "./extraction";
+import { resolveWebExtractionSlot, webPlanRunRecordOutput, webPlanSlotRefusal, webPlanStoredColumns, webPlanUndispatchable, type WebPlanRefusalIssue } from "./extraction";
 import { webPlanStepFoundByTooLittle } from "./identity-guard";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
@@ -672,7 +672,7 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
   }
   const views = [...replaced.values()].flatMap((entry) => entry.views ?? []);
   // A step's effect is its element's (t447); a fact's target is read, never acted on, so it has none.
-  return { status: "resolved", parameters: resolved, assumed, views, effect: scope.step ? element?.effect : undefined };
+  return { status: "resolved", parameters: extractionNode && scope.step ? webPlanRunRecordOutput(resolved) : resolved, assumed, views, effect: scope.step ? element?.effect : undefined };
 }
 
 /** Exact supported state grammar; the public Core guard also accepts extras. */
