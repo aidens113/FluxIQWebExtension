@@ -41,7 +41,7 @@ import type {
   AutomationStudioRuntimeTargetOverrideFailedAction,
   AutomationStudioRuntimeTargetOverrideTarget
 } from "fluxiq/automation-studio";
-import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, AUTOMATION_STUDIO_FLOW_CONDITION_RULES } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationCheckWaitParameters } from "../../actions/check-wait";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
@@ -407,11 +407,8 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
     // read-list redesign (S4) took the `paginate` sentences out: a read reads one
     // page and a `paginate` is refused `paginate_retired`, so `pagination` only
     // says how the list continues, and every page is Next page on the same
-    // handle with a repeat. The paired bound is Core's
-    // 700 characters for a node parameter description, which `extract-list/
-    // catalog-text.ts` sits at; between them these two bounds are what a model
-    // ever learns about `where`, so the next clause that earns its place has to
-    // displace one already there.
+    // handle with a repeat. The paired bound is Core's 700 characters for a node
+    // parameter description, which `extract-list/catalog-text.ts` sits at.
     //
     // **A condition may name a column the plan does not keep, and the text says
     // so** (t194 w36). Live run `run-muq4oaof-464f5bce` kept `plus` and `ad` in
@@ -419,21 +416,23 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
     // had six columns where four were asked, and the judge paired no row though
     // every asked value was right. The resolver had always taken a detected key
     // the plan does not keep (`plan-resolution/extraction/conditions.ts`); the
-    // model was never told. Room came from wording, not rules: "Returns no
-    // values or selectors" (the next sentence says to run the node to see rows),
-    // "naming it", "when"/"opaque" before the target handle, "the comparison"
-    // after "no number fails", "really", and the closing "Name a column the
-    // detection showed", now said inside the condition clause itself.
+    // model was never told.
     //
     // **Rows a repeat presses are narrowed by the read's where (t378).** Lane
     // D's build (`run-mv0fuual-f9e6f089`) took "narrow excess later" as leave
     // to filter at the end of the run, which never changes the rows a repeat
     // visits, and confirmed all eight requests where four were asked. The
     // clause fitted inside the 2,000 the paging sentences returned.
+    //
+    // **What a condition may say is Core's one text (t478).** Lane D round 11
+    // (`run-mv5yaapw-6d20d23d`) wrote a listing's `where` while its looks were
+    // withdrawn, and wrote a digit pattern for "five or more". The rules now ride
+    // on `core.submit_candidate`'s format, which no withdrawal touches, and this
+    // says that same text (`AUTOMATION_STUDIO_FLOW_CONDITION_RULES`), never a copy.
     tools: [
       {
         toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
-        description: "Detect a repeating list or table around target handle, else the page's largest list. Returns extraction handle, field keys/labels/kinds/coverage, item count, pagination and paginationBound. Observes only, never a step of the Flow. Run the extraction node with extractList: {handle, fields?: {yourKey: \"fieldKey\" | \"fieldKey@attr\"}, where?: [{field: \"fieldKey\", is: \"absent\"}], minItems?: 0}. The read reads the page shown. pagination says how the list continues: every page is Next page on the same handle (nextPage: {list: handle}) after the read, with repeat on the read through it. Narrow the page first for a partial list; minItems: 0 allows no rows. where is optional: leave it out and every item is a row, the right first attempt when unsure; narrow excess later. But rows a later step acts on, a press repeated over the read, are narrowed here by where: a condition saved with the answer never changes which rows a repeat visits. Every condition must hold and names a detected column, never guessed item text. It may name a column fields does not keep: keep only the columns asked for, never a mark used only to filter. Presence: {field, is: \"present\"} or {field, is: \"absent\"} for a column only some items have. Number: atLeast, atMost, lessThan, greaterThan or equals. Use numeric bounds for quantities, not text regex. Recognized combined counts use their total; otherwise the first number ($49 is 49, 3.7 out of 5 is 3.7); no number fails. Text: contains, startsWith, endsWith, equals, or matches for a regex, ignoring case; one value or a list meaning any. not: true keeps what the condition rejects: {field: \"status\", equals: [\"paused\", \"retired\"], not: true} excludes those states. If conditions reject every item, the node returns what it read and says so in its report. Lists mix ads with results: coverage below 1 often marks ads, excluded with is: \"absent\".",
+        description: "Detect a repeating list or table around target handle, else the page's largest list. Returns extraction handle, field keys/labels/kinds/coverage, item count, pagination and paginationBound. Observes only, never a step of the Flow. Run the extraction node with extractList: {handle, fields?: {yourKey: \"fieldKey\" | \"fieldKey@attr\"}, where?: [{field: \"fieldKey\", is: \"absent\"}], minItems?: 0}. The read reads the page shown. pagination says how the list continues: every page is Next page on the same handle (nextPage: {list: handle}) after the read, with repeat on the read through it. Narrow the page first for a partial list; minItems: 0 allows no rows. where is optional: leave it out and every item is a row, the right first attempt when unsure; narrow excess later. But rows a later step acts on, a press repeated over the read, are narrowed here by where: a condition saved with the answer never changes which rows a repeat visits. Every condition must hold and names a detected column, never guessed item text. It may name a column fields does not keep: keep only the columns asked for, never a mark used only to filter. " + AUTOMATION_STUDIO_FLOW_CONDITION_RULES + " If conditions reject every item, the node returns what it read and says so in its report. Lists mix ads with results: coverage below 1 often marks ads, excluded with is: \"absent\".",
         inputSchema: { type: "object", properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
         effect: "observe",
       },
