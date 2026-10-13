@@ -9,3 +9,5 @@ export * from "./replay-browser.js";
 export * from "./replay-saved-flow.js";
 export * from "./run-flow.js";
 export * from "./saved-navigation-origins.js";
+export * from "./profile-handover-probe.js";
+export * from "./receipt-error.js";
