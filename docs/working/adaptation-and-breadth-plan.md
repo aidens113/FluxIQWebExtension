@@ -385,6 +385,28 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
 
 ## Work Ledger
 
+### 2026-10-13 - Breadth wave 1: all four failed on new failure types; t506 merged; t507-t510 dispatched
+
+- Agent: Claude senior supervisor; debug and task workers.
+- Pair Core fbd06c77 / downstream 58144440 (t505 merged); all four dry runs `ready`.
+- Wave 1, first runs ever on these sites; all failed, $0.108 together:
+  - company-website gas-engineers `run-mv6qrcln-2e194a12` $0.0032: the privacy dialog's own "Reject non-essential"
+    control was refused `web.action.rejected.target_covered`; three repeats ended the build (t507).
+  - auction-marketplace kestrel-auctions `run-mv6qrbgx-06151cdb` $0.0100: a real stacked modal (actionable), then
+    `record_output.process_excluded_field` three times. Submit and dispatch read one record output two ways again; a
+    sort key marked exclude was refused, though the dispatch would have run it, and the remedy text was wrong (t510).
+  - local-classifieds bike-search `run-mv6qrcdu-a31b44b8` $0.0268: a select on the sort control was refused
+    `web.action.rejected.target_unobserved`; repeats ended the build (t509).
+  - job-board remote-rust-roles `run-mv6qr7fk-77f30b49` $0.0682: 65 calls, no Flow; debug in progress.
+- Changed: t506 (G1) merged: the repair lane records the saved Flow's steps hash before and after apply, fails an
+  applied repair that changed nothing, and treats missing in-run accounting as unknown. The override is durable;
+  Core gaps found (an unstamped adaptation id, an applied revision equal to the base, a silently ignored failed
+  write at `service.ts:4036`) are being fixed in t508.
+- Validation: t506 runner tsc exit 0; repair and adaptation tests "# pass 88 / # fail 0"; audit exit 0; pushed
+  downstream `a3307585`. Wave-1 receipts from the spend ledger and each run's `evaluation.json`.
+- Outcome: Revised. Wave 1 shows element handling (covered, unobserved) and record-output refusals are the breadth
+  blockers. Gate round 1 waits for t508; wave 1 reruns after t507, t509 and t510.
+
 ### 2026-10-13 - Phase 0 free checks run (G1 and t505 in progress)
 
 - Agent: Claude senior supervisor.
