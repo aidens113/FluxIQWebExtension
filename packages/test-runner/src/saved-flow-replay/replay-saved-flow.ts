@@ -33,6 +33,7 @@ import { providerFreeReplayFailures, replayKeyIdentities, replayKeyPreservation 
 import { providerCredentialVariables } from "./provider-credential-variables.js";
 import { openReplayBrowser, type ReplayBrowser } from "./replay-browser.js";
 import { replayErrorOf } from "./receipt-error.js";
+import { replayWorkflowSelection } from "./workflow-selection.js";
 import { savedNavigationOrigins } from "./saved-navigation-origins.js";
 import { selectReplayProject } from "./project-selection.js";
 
@@ -47,6 +48,8 @@ export type SavedFlowReplayOptions = {
   projectId?: string;
   /** The instruction task the Flow was built for, which says how its result is judged; the scenario's first task when absent. */
   taskId?: string;
+  /** `--variant`: the variant to arm in place of the task's own, for a model-free pre-flight against a drift. */
+  variantId?: string;
   seed?: number;
   target: Extract<FluxIQTargetConfiguration, { mode: "persistent-isolated" }>;
   /** The resolved Lab environment: declared secrets are read from it. */
@@ -135,9 +138,11 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
     const labPaths = resolveLabPaths(options.repositoryRoot, options.environment);
     const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);
     const request = await loadCreatedFlowRequest({ repositoryRoot: options.repositoryRoot, scenarioLabDist: labPaths.scenarioLabDist, scenarioId: options.scenarioId, ...(options.taskId ? { taskId: options.taskId } : {}) });
-    const workflow = resolveScenarioWorkflow(scenario, { ...(request.workflowId ? { workflowId: request.workflowId } : {}), ...(request.variantId ? { variantId: request.variantId } : {}) });
+    // `--variant` arms the named variant in place of the task's own (`workflow-selection.ts`); the receipt names the one armed.
+    const selection = replayWorkflowSelection(request, options.variantId);
+    const workflow = resolveScenarioWorkflow(scenario, selection);
     const { judgement } = request;
-    state.task = { taskId: request.task.id, scenarioId: request.task.scenarioId, workflowId: request.workflowId ?? null, variantId: request.variantId ?? null, judgeBy: judgement.judgeBy, stepId: judgement.judgeBy === "expected-dataset" ? judgement.stepId : null };
+    state.task = { taskId: request.task.id, scenarioId: request.task.scenarioId, workflowId: request.workflowId ?? null, variantId: selection.variantId ?? null, judgeBy: judgement.judgeBy, stepId: judgement.judgeBy === "expected-dataset" ? judgement.stepId : null };
 
     const credentials = options.target.credentials;
     topology = await startTopology({

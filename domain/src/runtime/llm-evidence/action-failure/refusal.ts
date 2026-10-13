@@ -122,6 +122,7 @@ const BY_FAILURE_REASON: Readonly<Record<string, WebLlmToolRejectionReason>> = O
   [WEB_AUTOMATION_FAILURE_CODES.OPTION_NOT_OFFERED]: "option_not_offered",
   [WEB_AUTOMATION_FAILURE_CODES.BROWSER_PERMISSION_DENIED]: "page_not_scriptable",
   [WEB_AUTOMATION_FAILURE_CODES.TRANSPORT_TRANSIENT]: "channel_to_page_failed",
+  [WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT]: "press_had_no_effect",
   [WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE]: "node_not_runnable_here",
   [WEB_AUTOMATION_FAILURE_CODES.NOT_IMPLEMENTED]: "node_not_runnable_here",
   [WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER]: "parameter_not_readable",

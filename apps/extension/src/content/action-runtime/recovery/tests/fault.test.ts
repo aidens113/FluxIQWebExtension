@@ -104,7 +104,7 @@ test("a verb that only reads absorbs every transient fault the closed set names,
       Object.values(WEB_AUTOMATION_FAILURE_CODES)
         .filter(isWebAutomationFailureCode)
         .filter((code) => RECOVERY_FAULT_BY_CODE[code] !== undefined)
-        .filter((code) => code !== WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED)
+        .filter((code) => code !== WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED && code !== WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT)
         .map((code) => recoverableFault(failed(actionType, code), command(actionType))),
       // `obstructed_target` is TARGET_NOT_SHOWN's, absorbed as the obstruction it always was.
       ["obstructed_target", "target_absent", "output_not_observed", "page_changed", "timeout", "transport", "action_failed"]
@@ -116,6 +116,13 @@ test("a press the page refused as too fast is never retried by this loop, on any
   assert.equal(RECOVERY_FAULT_BY_CODE[WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED], "rate_limited");
   for (const actionType of RECOVERY_KNOWN_ACTION_TYPES) {
     assert.equal(recoverableFault(failed(actionType, WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED), command(actionType)), undefined, actionType);
+  }
+});
+
+test("a press that certainly did nothing is never pressed again by this loop: Core makes it once more, and only once (t517)", () => {
+  assert.equal(RECOVERY_FAULT_BY_CODE[WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT], "no_effect");
+  for (const actionType of RECOVERY_KNOWN_ACTION_TYPES) {
+    assert.equal(recoverableFault(failed(actionType, WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT), command(actionType)), undefined, actionType);
   }
 });
 

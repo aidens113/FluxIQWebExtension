@@ -435,7 +435,8 @@ test("the runner leaves a Flow that must reach its own page on a blank tab, and 
  */
 test("the runner tells the created-Flow lane where the Flow starts, using the address it would have opened", async () => {
   const source = await runnerSource();
-  assert.match(source, /startLocation: scenarioStartUrl\(topology\.scenarioOrigin, scenario\),/u, "the created lane is told where its Flow starts");
+  // `activeTopology` is the same running topology, held in a const so a closure keeps its narrowing (t512).
+  assert.match(source, /startLocation: scenarioStartUrl\((?:active)?[tT]opology\.scenarioOrigin, scenario\),/u, "the created lane is told where its Flow starts");
   // The harness's own load goes through the same expression, so the page it
   // opens and the page Core names can never be two different pages. The load
   // itself is `run-scenario/open-scenario-start.ts` since t150 split the runner;

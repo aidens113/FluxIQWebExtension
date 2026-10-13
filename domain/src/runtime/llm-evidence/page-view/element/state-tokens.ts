@@ -13,6 +13,15 @@
 // `disabled` for a control whose own cursor refuses a press. A field's
 // placeholder is printed apart from its name, and not when it is the name.
 //
+// A content-editable region is a field whose value is its text (t513): the
+// capture reads that text as the element's words (`text`, screened as every
+// page string is, and dropped whole for a sensitive control), and a value is
+// read only from an input or a textarea, so a filled composer printed as
+// `field "Write something..."` and the model re-typed it five times
+// (`run-mv6v2jh4-69244ffb`). Its text is printed as `="…"`, spaced as a reader
+// sees it; `=""` only where it has no words at all, since text the capture
+// folded into its name is not guessed at.
+//
 // The link target is written by the caller (`../link-writer.ts`,
 // `../link-repeats.ts`), because how it is written depends on the lines
 // before it. A column header with a space in it is quoted, so where it ends is
@@ -21,6 +30,7 @@
 import type { WebLlmEvidenceElement } from "../../elements";
 import { attributeValue } from "./attribute-value";
 import { quotedWords } from "./quoted";
+import { webLlmReadableWords } from "./readable-words";
 
 /** The element's state tokens for a line of the given kind, with the link target already written. */
 export function webLlmStateTokens(element: WebLlmEvidenceElement, kind: string | undefined, linkTarget: string | undefined, words?: string): string[] {
@@ -29,7 +39,8 @@ export function webLlmStateTokens(element: WebLlmEvidenceElement, kind: string |
   const placeholder = field ? attributeValue(element, "placeholder")?.trim() : undefined;
   if (placeholder !== undefined && placeholder !== "" && placeholder !== words) tokens.push(`placeholder ${quotedWords(placeholder)}`);
   if (field) {
-    if (element.value !== undefined) tokens.push(`=${quotedWords(element.value)}`);
+    const value = element.value ?? editableText(element);
+    if (value !== undefined) tokens.push(`=${quotedWords(value)}`);
     else if (element.hasValue === false) tokens.push("=\"\"");
   }
   if (kind === "select") tokens.push(...selectTokens(element));
@@ -53,6 +64,14 @@ export function webLlmStateTokens(element: WebLlmEvidenceElement, kind: string |
   const covers = element.coversCount ?? element.covers?.length;
   if (covers !== undefined && covers > 0) tokens.push(`covers ${covers}`);
   return tokens;
+}
+
+/** What a content-editable region holds: its text as a reader sees it, `""` where it has no words at all, nothing for any other element. */
+function editableText(element: WebLlmEvidenceElement): string | undefined {
+  const editable = attributeValue(element, "contenteditable");
+  if (editable === undefined || editable.trim().toLowerCase() === "false") return undefined;
+  if (element.text !== undefined && element.text.trim() !== "") return webLlmReadableWords(element, element.text);
+  return element.name === undefined ? "" : undefined;
 }
 
 function selectTokens(element: WebLlmEvidenceElement): string[] {

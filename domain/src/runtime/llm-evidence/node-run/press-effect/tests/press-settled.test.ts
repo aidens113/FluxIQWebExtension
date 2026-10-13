@@ -112,3 +112,61 @@ test("a look that comes back unreadable during the wait ends it: the page went s
   assert.equal(settled.noEffect, undefined);
   assert.equal(h.log.includes("press"), false);
 });
+
+// A press whose call declared a lasting consequence (t513, the supervisor's
+// reading of the user's rule of 2026-10-07): the effect of a press is not
+// uncertain when the wait showed nothing changed at all and the control is
+// still there, shown and enabled, in a form or dialog still open -- it did not
+// happen, so it is made once more. Anything short of that keeps it held back.
+
+/** The harness, with the press marked as one whose call declared a lasting consequence. */
+function lastingHarness(looks: Array<WebLlmSnapshotBinding | undefined>) {
+  const h = harness(looks);
+  return { ...h, steps: { ...h.steps, lasting: true } };
+}
+
+test("a lasting press that certainly changed nothing is pressed once more, and says so", async () => {
+  const h = lastingHarness([...Array.from({ length: 6 }, () => bound(OPEN)), bound(CLOSED)]);
+  const settled = await webPressSettled(CLICK, bound(OPEN), bound(OPEN), "t3", h.steps);
+  assert.equal(h.log.filter((entry) => entry === "press").length, 1);
+  assert.equal(settled.presses, 2);
+  assert.match(String(settled.pressedAgain), /^Pressed again: the first press of "Save" \(t3\) changed nothing/u);
+  assert.deepEqual(settled.after?.evidence.elements.map((element) => element.target), ["t4"]);
+});
+
+test("a lasting press whose control is disabled, hidden or gone is never pressed again", async () => {
+  const disabled: FixtureElement[] = [OPEN[0]!, OPEN[1]!, { ...OPEN[2]!, attributes: [["disabled", ""]] }];
+  const ariaDisabled: FixtureElement[] = [OPEN[0]!, OPEN[1]!, { ...OPEN[2]!, attributes: [["aria-disabled", "true"]] }];
+  const hidden: FixtureElement[] = [OPEN[0]!, OPEN[1]!, { ...OPEN[2]!, hidden: true }];
+  const gone: FixtureElement[] = [OPEN[0]!, OPEN[1]!];
+  for (const page of [disabled, ariaDisabled, hidden, gone]) {
+    const h = lastingHarness(Array.from({ length: 40 }, () => bound(page)));
+    const settled = await webPressSettled(CLICK, bound(page), bound(page), "t3", h.steps);
+    assert.equal(h.log.includes("press"), false, JSON.stringify(page));
+    assert.equal(settled.presses, 1);
+    assert.equal(settled.pressedAgain, undefined);
+  }
+});
+
+test("a lasting press whose dialog is hidden, or whose handle is unknown, is never pressed again", async () => {
+  const closedDialog: FixtureElement[] = [{ ...OPEN[0]!, hidden: true }, OPEN[1]!, OPEN[2]!];
+  const h = lastingHarness(Array.from({ length: 40 }, () => bound(closedDialog)));
+  await webPressSettled(CLICK, bound(closedDialog), bound(closedDialog), "t3", h.steps);
+  assert.equal(h.log.includes("press"), false);
+  const unnamed = lastingHarness(Array.from({ length: 40 }, () => bound(OPEN)));
+  await webPressSettled(CLICK, bound(OPEN), bound(OPEN), undefined, unnamed.steps);
+  assert.equal(unnamed.log.includes("press"), false);
+});
+
+test("a lasting press that changed anything, or whose page could not be read, is never pressed again", async () => {
+  const moved = lastingHarness([bound(CLOSED)]);
+  const changed = await webPressSettled(CLICK, bound(OPEN), bound(OPEN), "t3", moved.steps);
+  assert.equal(moved.log.includes("press"), false);
+  assert.equal(changed.noEffect, undefined);
+  const lost = lastingHarness([undefined]);
+  await webPressSettled(CLICK, bound(OPEN), bound(OPEN), "t3", lost.steps);
+  assert.equal(lost.log.includes("press"), false);
+  const truncated = lastingHarness(Array.from({ length: 40 }, () => bound(OPEN, { truncated: true })));
+  await webPressSettled(CLICK, bound(OPEN, { truncated: true }), bound(OPEN, { truncated: true }), "t3", truncated.steps);
+  assert.equal(truncated.log.includes("press"), false);
+});

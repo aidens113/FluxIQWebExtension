@@ -1,24 +1,71 @@
 # Adaptation Gate And Breadth Sample Plan
 
 Status: Active
-Status detail: Planned 2026-10-13; nothing run yet. Gap G1 (repair persistence evidence) blocks the gate's counted runs; breadth wave 1 needs no new facility.
+Status detail: No counted gate pass; t517 independently verified and ready for integration; t516 review complete pending supervisor verification; t518 addresses recorded recovery/state linking.
 Created: 2026-10-13
 Last updated: 2026-10-13
 Owner: Senior supervisor agent (planned by a lane lead)
 Scope: Execution plan for the MVP's next two milestones after lanes A-D qualified: the adaptation gate (create, drift, diagnose, repair, verify, persist, resume, reuse on three realistic sites, twice each, later run zero-call) and a first breadth sample of the 68 realistic tasks on sites not yet proven.
-Paired document: none
+Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/adaptation-and-breadth-plan.md
 Related: Core work, if any, is briefed through Core's mvp-final-month-plan.md; [live-testing audit](./live-testing-handoff-audit-2026-10-11.md), [MVP final month](./mvp-final-month-plan.md), [state-aware recovery](./state-aware-recovery-plan.md), [testing facility](../architecture/testing-facility.md), [working index](./README.md)
 
 ## Current State
 
-**Nothing has run under this plan yet.** The plan was written on 2026-10-13 from the round-18 pair
-(Core fbd06c77 / downstream 15458401), on which B, C and D passed with zero-call replays.
+**Codex continuation active, 2026-10-13.** t517 is committed and independently verified after dev integration (140 Core executor, 10 contracts, 302 domain, 501 extension tests; package typechecks; headed Chromium Post harness). t516 review fixed identity collisions and added real-domain/judged-promotion checks; supervisor verification is next. The shared recorded-recovery cause and clock mismatch are identified; t518 implements positive-state routing. The supervisor owns serial integration. The unrelated `.clinerules/fluxiq.md` edit on main dev is preserved.
+
+**Original handoff, 2026-10-13 (Claude to Codex; findings below superseded by the Codex ledger where stated).** Gate round 1 and breadth wave 1 ran; nothing counted yet (ledger has
+every run and debug). Fixes t506-t515 are merged and pushed. Two tasks are still open:
+
+- **t516** (a popup closed by the extension's defence becomes a guarded `add_handler` proposal, plus the false robot
+  check on results pages): worktrees `fxwork/t516/!FluxIQWebExtension` and `fxwork/t516/!FluxIQ`, branch
+  `task/t516-defence-closed-popup-handler`. Worker reported Partial, uncommitted, not verified by the supervisor.
+  Report: `reports/t516-defence-closed-popup-handler.md` in that tree.
+  - What it built: a step succeeds after the defence closed a named layer. Core then proposes, with no model call, an
+    `add_handler` before that step: `when` dialog visible, one press of the way-out handle, `completionCheck` dialog
+    absent, `resume`, no leading wait. The proposal goes through the existing in-run repair path, and the run detail
+    carries the `diagnosis` and `runtime_patch` interventions P2-P4 read.
+    - Domain `io/gateway-output-dispatcher.ts` gives each closed layer a `wayOutDefinitionId`.
+    - New Core files: `service/runtime-session/interruption-handler.ts`, `interruption-learning.ts` and
+      `in-run-repair-fix-record.ts`.
+  - Its claims: Core vitest on executor, runtime-session, runtime-adaptation and in-run-repair gave `132 passed` and
+    `1176 passed`. `pnpm run check` exited 0 in Core, domain and extension. Both audits pass.
+  - Not shown live: the model-free `everything-store --workflow first-page-earbuds --variant deal-wheel --flow` run
+    `run-mv6y2t42-222ea4f9` never met the wheel. The recorded workflow's wait for the soft-check button is stale and
+    timed out 4 times. That needs its own brief, and the gate's paid run is the real proof.
+  - The false robot check on results pages (half of the brief) is not mentioned in the report; check whether it was
+    done.
+  - Supervisor decision (2026-10-13): learning stays on for any run that keeps adaptations, including model-free runs.
+    The handler needs no model call, and the judged end still gates the apply.
+- **t517** (playback re-presses a lasting control that certainly changed nothing, through the extension's click watch;
+  a transient spinner is not an effect): `fxwork/t517/...`, branch `task/t517-playback-certain-no-effect-repress`.
+  Worker reported Done, uncommitted, not verified by the supervisor. Report:
+  `reports/t517-playback-certain-no-effect-repress.md` in that tree.
+  - Scope: 11 source files. A new failure code `web.action.no_effect` (retryable, unacted, `certainNoEffect`) in
+    domain `failure/codes.ts` and Core's failure record and parser. Core `retry.repress` with a once-only rule in
+    `defensive/assess.ts`. The extension click watch is in `ignored-press/settled-look.ts`.
+  - Its claims: tests beside each change pass (Core executor 138, contracts 10, domain 225 and 358, extension 498).
+    The headed spec `press-answers/tests/wake-press-post.spec.ts` gave `1 passed`. Both audits pass.
+  - Before merging, fix or decide: (1) a dead lasting Post still let a graph run end `succeeded`, through the rule that
+    carries a Flow past a failed step, a false success; (2) the model sees a bare `action_failed` for the new code
+    until `tool-rejection.ts` gains a reason; (3) a non-lasting press that does nothing is now pressed up to 4 times
+    in exploration (matches the every-node-retries rule); (4) the new record field is undocumented.
+- Verify each against its brief (run the tests beside the change, tsc, audit), then `pnpm task finish` downstream
+  first, detach the Core worktree, and finish in Core.
+
+**Not yet investigated (start here after t516/t517).** The model-free crossborder control failed on the unchanged
+site: `lab run crossborder-marketplace --flow` (run `run-mv6xaosc-1c145c22`, t262 slot 3) built a Flow from its own
+recording and playback ended `web.target.not_found` after four ~4.2 s retries of one click. Find the node and why the
+element was not found on the second pass (the user's "elements not detected the second time" report); suspects are
+a one-time step (store coupon claim, `claim-again`) whose control is gone once used, or the recording's target
+identity. t516's everything-store control failed the same way: a recorded step timed out 4 times on unchanged
+ground. Check for one shared cause in how the `--flow` lane builds and replays a recorded workflow before treating
+them as two defects.
 
 **Adaptation gate (Milestone 1).** It runs on three sites, each with a different kind of drift:
 
 | Site | Task (`--instruction-task`) | Drift (variant) | Repair class |
 | --- | --- | --- | --- |
-| bigbox-retail | `bigbox-retail-pickup-cart-redesigned-after-creation` | `redesigned-buy-box` | target override |
+| crossborder-marketplace | `crossborder-marketplace-hub-to-cart-basket-redesign-after-creation` | `basket-redesign` | target override |
 | everything-store | `everything-store-first-page-plus-earbuds-deal-wheel` | `deal-wheel` | interruption handler |
 | social-network-feed | `social-network-feed-group-post-regrouped-after-creation` | `regrouped` | re-author |
 
@@ -28,14 +75,12 @@ Related: Core work, if any, is briefed through Core's mvp-final-month-plan.md; [
 - A separate model-free `lab replay` then proves the repair was kept and is reused with zero calls in a new session.
 - Commands are in Phase 2, and pass criteria P1-P7 in "Gate oracle".
 
-**Gaps.**
+bigbox `redesigned-buy-box` stays as a non-gating check that Buy now is never pressed (its button keeps the text
+"Add to cart", so the extension re-finds it without a repair).
 
-- G1 blocks counting a gate run. Today nothing records that the applied repair changed the saved Flow:
-  - R4b's evaluation left `adaptationPersistence` and `adaptationReuse` null.
-  - The in-run replay counts missing accounting as 0 (`replay-repair.ts:203`).
-- G5 must pass before social's runs. It is a free probe: does a saved post Flow replay without a model and without
-  stalling at its permission point?
-- G3, G4 and G6 are follow-ups and do not block the gate.
+**Gaps.** G1 merged as t506 (the repair lane hashes the saved Flow before and after apply); t512 adds the
+`adaptationGate` classification, so an absorbed drift or `no_proposal` is never counted. G5 is closed (a saved
+post Flow replayed model-free with no permission stall). G3, G4 and G6 are follow-ups and do not block the gate.
 
 **Breadth sample (Milestone 2).** The task list has **68** tasks, not 67: 57 original tasks plus 11 additions,
 asserted in `apps/scenario-lab/src/scenarios/tests/realistic-site-live-tasks.test.ts:87`. Every task has an
@@ -60,12 +105,19 @@ Replays, dry runs, the recovery matrix and the G5 probe make no model calls.
 
 **Next steps.**
 
-1. Phase 0: brief G1 (one worker, test-runner only). Run the G5 probe, the recovery matrix and every dry run on the
-   pair the gate will use.
-2. Launch gate round 1 on slots 1-3 (bigbox, everything-store, social) together with breadth task 1 on slot 4.
-   Debug every run fully.
-3. After two counted passes per site on one frozen pair, record the gate in the MVP plan. If it is not green by
+1. Verify and merge t516 and t517 (above). Investigate the crossborder control failure.
+2. Sync the five lane trees (t262, t275, t342, t451, t418) to both `dev` branches and rebuild Core in each
+   (`pnpm --filter fluxiq --filter @fluxiq/contracts build`); run the recovery matrix and every dry run.
+3. Gate round 2: crossborder `basket-redesign` (slot 3), everything-store `deal-wheel` (needs t516), social
+   `regrouped` (needs t513, t514 and t517). Each lane tree must hold a debug note for its slot's previous run at
+   `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` or the Lab refuses the launch.
+4. With them, the three wave-1 breadth reruns not yet rerun (local-classifieds, auction, company-website), one per
+   free slot, each after its slot's debug.
+5. After two counted passes per site on one frozen pair, record the gate in the MVP plan. If it is not green by
    2026-10-23, bring a scope proposal rather than relaxing P1-P7.
+
+Open user decision: should a lasting press on rows the build's read did not select be refused? (Lane D's over-acts
+were hidden by the Lab reset; t504 fixed their cause.)
 
 Rules are AGENTS.md's testing rules and the audit's launch settings:
 
@@ -74,6 +126,49 @@ Rules are AGENTS.md's testing rules and the audit's launch settings:
 - Every failure is debugged, and the source is changed before any rerun.
 - No model guidance shaped like a scenario.
 - Lane trees are synced to dev and rebuilt before every round.
+
+## Worker Briefs — Codex continuation (2026-10-13)
+
+### Brief: codex-t517
+- Repository: paired t517 trees at `C:/Users/osrs_/FluxStuff/fxwork/t517/`.
+- Task: review uncommitted t517, fix dead lasting actions reporting graph success, add meaningful failure feedback and document the new failure field.
+- Required reads: this Current State; original t517 report; Core AGENTS.md boundary and code-structure; t517 diffs and tests.
+- Owns (may edit): t517's existing changed source/tests; Core executor graph/step-loop/defensive failure finalization and adjacent tests; downstream `domain/src/runtime/llm-evidence/tool-rejection.ts`, `action-failure/refusal.ts`, `rejection-next/next-sentence.ts` and adjacent tests; both repositories' relevant architecture docs.
+- Must not touch: shared working documents, any other task tree, lifecycle scripts, generated/runtime data. No commits, merges, pushes or full suites.
+- Definition of done: exhausted dead lasting action is a failed run; exactly one certain-no-effect re-press; focused tests, touched-package typechecks and audits pass. Preserve explicit failure handlers/branches.
+- Report to: t517 downstream `docs/working/adaptation-and-breadth-plan/reports/codex-t517.md`.
+
+### Brief: codex-t516
+- Repository: paired t516 trees at `C:/Users/osrs_/FluxStuff/fxwork/t516/`.
+- Task: review uncommitted t516 against report; verify handler learning, judged-only application and actual robot-check diagnosis; fix defects found within owned paths.
+- Required reads: this Current State; original t516 report; Core AGENTS.md boundary and code-structure; t516 diffs and tests; store soft-check source.
+- Owns (may edit): t516's existing changed source/tests; Core `runtime/service/runtime-session/` interruption learning and adjacent tests; downstream architecture docs for cleared-layer/handler contract; Core architecture doc already changed.
+- Must not touch: shared working documents, any other task tree, lifecycle scripts, generated/runtime data. No commits, merges, pushes, paid/browser Lab runs or full suites.
+- Definition of done: focused tests, touched-package typechecks and audits pass; model-free learning stays on when adaptations are kept; detail remaining integration/live risks honestly.
+- Report to: t516 downstream `docs/working/adaptation-and-breadth-plan/reports/codex-t516.md`.
+
+### Brief: codex-replay-investigation
+- Repository: read-only main checkout plus t262/t516 run evidence.
+- Task: identify whether unchanged-site replay failures share a recording-to-Flow cause; pinpoint failed nodes and their lifecycle, and propose the smallest fix with regression cases.
+- Required reads: this Current State; runner recorded-Flow lane; recording proposals; store and crossborder workflow sources; sanitized diagnostics for run-mv6xaosc-1c145c22 and run-mv6y2t42-222ea4f9.
+- Owns (may edit): only `docs/working/adaptation-and-breadth-plan/reports/codex-replay-investigation.md` in t262 downstream tree (existing task branch).
+- Must not touch: source, shared docs, generated/runtime data. No commits, merges, pushes or test/browser/provider runs. Never print recorded page content or secrets.
+- Definition of done: evidence-backed shared-cause conclusion or explicit separation, exact code pointers and actionable implementation/test brief.
+- Report to: the owned report path in t262.
+
+Codex supervisor has dispatched these independent briefs. Worker claims remain unverified until reviewed and rechecked here. Integration is serial, downstream before Core, with narrow gates only.
+
+### Brief: codex-t518
+- Repository: paired t518 trees at `C:/Users/osrs_/FluxStuff/fxwork/t518/` (task/t518-recorded-recovery-state-routing).
+- Task: connect recorded actions to existing positive-evidence state routing, fixing recorded manual recovery steps that playback already completed; correct state-linker producer/ingestion clock mixing.
+- Required reads: this Current State; `reports/codex-replay-investigation.md`; Core boundary/code structure; existing recording proposal generation/candidates, host runtime route-state callbacks and state-linker; downstream host route-state projection and inferred waits.
+- Owns (may edit), Core: `runtime/state-linker.ts`, `runtime/host-runtime.ts`, `runtime/recording-flow-proposal.ts`, `nodes/importer-sdk.ts` recording candidate types if needed; `runtime/service/recordings/`, `runtime/service/recording-state-index/`, adjacent owning tests; minimal service wiring in `runtime/service.ts` only if needed and within its existing budget. All paths under `packages/fluxiq/src/programs/automation-studio/`.
+- Owns (may edit), downstream: `domain/src/runtime/host-runtime.ts`, new cohesive historical-state projection under `domain/src/runtime/route-state/` and adjacent tests/barrels; `domain/src/recording/proposals/late-target-wait.ts` and tests; present-wait failure classification and adjacent tests only if needed. Use new `docs/architecture/recorded-replay-state.md` in each repository for authored documentation.
+- Must not touch: t516/t517 trees or owned executor/learning files; shared working documents; fixtures, model prompts/guidance, oracles, runtime data. No commits, merges, pushes, paid/browser Lab runs or full suites.
+- Design: optional host-owned historical snapshot projection; Core loads indexed durable snapshots, chooses strict producer-time at-action/pre-state and next-action-boundary after-state with explicit provenance; rejects ambiguous/missing/truncated captures; signs with existing host callbacks and persists hashes-only routeSignatures onto candidates/nodes.
+- Safety: no generic missing-control skip, timeout bypass, or invented terminal state. Existing effect_holds/forward routing owns skip decisions. Only inferred present-target waits may receive narrowly classified missing-target readiness; all ordinary waits retain their semantics. Missing evidence retains existing failure behavior.
+- Definition of done: generic regression for automatic recovery followed by recorded manual retry, transient check cleared before its recorded control, delayed ingestion, ambiguous/missing/truncated snapshots and dead lasting controls; focused tests, touched-package typechecks and audits pass. Report actual sample projection coverage without page data.
+- Report to: t518 downstream `docs/working/adaptation-and-breadth-plan/reports/codex-t518.md`.
 
 ## Inventory (2026-10-13)
 
@@ -384,6 +479,90 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
   line. A worker's claim is not validation.
 
 ## Work Ledger
+
+### 2026-10-13 - t517 independently verified after current dev integration
+
+- Agent: Codex supervisor; codex-t517 worker.
+- Changed: certain-no-effect failure and one re-press retained; dead lasting actions now fail default continuation while explicit failed/optional routes remain. Fixed unseen open-shadow-root answers and stopped-watch certainty; added useful model failure feedback and contract documentation. Reports are `reports/codex-t517.md` and the original t517 report.
+- Validation: supervisor ran `pnpm.cmd exec vitest run` on Core executor step-loop/defensive/outside-graph dirs (140 passed) and contracts `src/failure` (10 passed); `node scripts/test-domain.mjs` on runtime/failure/action-feedback/retry/press-effect/client dirs (302 passed); `node scripts/test-extension.mjs content/actions/tests content/action-runtime` (501 passed). Core contracts/fluxiq, domain source/test and extension source/test tsc all exit 0. Core contracts and fluxiq public outputs rebuilt.
+- Browser: headed Chromium content harness on social-network-feed composer, `wake-press-post`, one pass in 20.5 s. First press reports certainly unacted and sends zero post requests; second sends one and page shows the pending post. Harness uses real content/page-world bundles with stubbed background; no full gateway/Core browser playback or Firefox claim.
+- Outcome: Verified; structure gates and serial integration next. No paid run or full suite.
+
+### 2026-10-13 - Codex resumed the handoff
+
+- Agent: Codex senior supervisor; codex-t517, codex-t516 and codex-replay-investigation workers.
+- Assigned: t517 false-success/failure-feedback review; t516 handler/promotion and robot-check review; shared recorded-Flow replay investigation. Briefs are above; each worker writes its own report.
+- Decision: keep model-free handler learning enabled when adaptations are kept; use owning tests, package typechecks and audits, with no full-suite runs. Alerted the user to Core runtime recovery changes and synchronized failure contracts.
+- Validation: intake only; no worker claims accepted yet. Main downstream dev is aed9fcfc, Core dev is 234851b3; t516/t517 code is still uncommitted.
+- Outcome: In progress.
+
+### 2026-10-13 - Recorded recovery lifecycle and clock mismatch identified
+
+- Agent: Codex supervisor and codex-replay-investigation worker.
+- Findings: crossborder's first runtime claim retries successfully, making its recorded manual retry obsolete. Store's search waits through the real self-clearing check, making both its inferred wait and manual continue obsolete. Reset-before-replay is present. Social's recorded double-Post has the same risk after t517.
+- Evidence: read-only report `adaptation-and-breadth-plan/reports/codex-replay-investigation.md`; crossborder has 16 durable state snapshots but its earlier actions link to a future snapshot because the state linker mixes producer and ingestion times. Store's isolated raw snapshots no longer exist.
+- Decision: t518 connects safe historical state evidence to existing state routing and fixes clock selection. Preserve challenge behavior, oracles, and default failure when evidence is insufficient. No arbitrary failed-action skip.
+- Validation: supervisor reviewed source seams and sanitized worker findings; projected terminal-effect coverage/live replay remain to be checked. Paired t518 provisioned with the worktree helper plus narrow package builds, avoiding the task-start wrapper's full-workspace build under the user's daily full-suite restriction.
+- Outcome: In progress.
+
+### 2026-10-13 - t515 merged; crossborder pre-flight read; handoff to Codex
+
+- Agent: Claude senior supervisor; t515 workers A and B.
+- Changed: t515 merged (Core `234851b3`, its `pnpm check` gate passed; downstream `df891974`). A split's no whose advice adds an exclusion the request never states
+  is marked with the quoted words and re-asked once; judges read the request's wording; process columns carry
+  their evidence; instruction columns are answered from the request. The supervisor changed one fixture in
+  `result-verification/build-test/tests/judge.test.ts`: the murwcmx2 no's advice tripped the new check under a
+  request that names no accessories, and that test's subject is yes-then-no, not exclusion.
+- Crossborder pre-flight (t262 slot 3, $0): the model-free control `run-mv6xaosc-1c145c22` failed on the unchanged
+  site (`web.target.not_found`), so its replay `replay-mv6xdxax-2dc0cad9` under `basket-redesign` (also
+  `target_not_found`) proves nothing by itself. The variant is still accepted for the gate: under it, Add to cart
+  loses its test id, is renamed Add to basket, and gets re-seeded classes, while Buy now takes its place.
+  `crossborder-marketplace/tests/browser-paths.test.ts:200` asserts that the recorded path fails under it. The
+  control's own failure is open (Current State).
+- Earlier the same day: matrix `{"passed":14}`; the dry runs for social, bigbox, store and job were all `ready` with
+  zero provider calls. Model-free replays of B (13/13), C and D (4/4) passed on t510 with hashes equal and all five
+  counters zero.
+- Validation: in `fxwork/t515/!FluxIQ/packages/fluxiq` after merging Core dev, `npx tsc --noEmit -p .` exited 0 and
+  `npx vitest run` over the runtime's `result-verification`, `flow-bootstrap`, `llm` and `service/candidate-trial`
+  folders gave "Tests 4635 passed | 2 skipped". Contracts `vitest run src/record-sets/process`: "107 passed". Core
+  `node scripts/structure-audit.mjs` passed. Downstream `pnpm task finish t515` reported structure audit
+  `"passed":true`.
+- Outcome: Revised. Handed off to Codex with t516 and t517 in flight (Current State).
+
+### 2026-10-13 - Gate round 1 debugged; gate site changed; t512-t516 dispatched
+
+- Agent: Claude senior supervisor; debug and task workers.
+- Findings (debugs in the lane trees):
+  - bigbox `run-mv6v2g3l`: the drift was armed and met, but the redesigned button still reads "Add to cart", so the
+    extension's scorer found it on the first attempt (0.535 against 0.058); Buy now was never pressed. A good product
+    outcome; not an adaptation proof. The repair lane wrote `no_proposal` only in the instance bundle.
+  - everything-store `run-mv6v2hx5`: the deal-wheel appeared and the extension's popup defence closed it ("absorbing
+    blocking_dialog"), so Core saw no failure and learned no handler; the 15/16 came from a judge-driven
+    `name not contains "Ear Tips"` exclusion the request never stated, which both judges then accepted. Side finding: every
+    results-page landing is read as a robot check that cleared after about 9 s.
+  - social `run-mv6v2jh4`: the site's Post button posts on its second press (by design); t511 withholds a second press of a
+    lasting act and the repeat guard refused the model's own; the build ended on `state: absent` turned into a fake handle
+    and a bare `handle_unresolved` naming no key.
+  - job-board rerun `run-mv6v2kzn`: rows, values and order right, but an unrequested `posted` column; Core read "newest
+    posting first" as a column and hid the sort reading when `process.columns` dropped the key, so judges rejected the
+    exact answer (revision 5); the result check looped to 8192 tokens and counted as refuted.
+- Decisions (supervisor):
+  - The target-override gate slot moves from bigbox `redesigned-buy-box` to crossborder
+    `crossborder-marketplace-hub-to-cart-basket-redesign-after-creation` (the button is renamed, as in R4b). bigbox stays
+    as a non-gating "Buy now is never pressed" check.
+  - Before paying for a gate run, a model-free replay of a Flow built on the unchanged site, run against the armed
+    variant, must fail at the drift step (t512 adds `--variant` to `lab replay`).
+  - A press of a lasting control that certainly changed nothing (no change after the settle wait, control present and
+    enabled, form still open) gets one more press. This applies the user's rule that only an uncertain lasting act is
+    held back.
+  - A sort over a column `process.columns` hides stays allowed.
+- Follow-up: t512 gate classification (`no_proposal` or absorbed means not counted; repair lane written even when the
+  oracle fails; central copies; replay `--variant`). t513 certain-no-effect re-press and content-editable text in the
+  page view. t514 words are not handles; unresolved refusals name the key. t515 a yes over a condition-alone left-out row
+  quotes the request; the column list ends at its clause; `sortRead` survives hiding; a cut-off check is asked again.
+  t516 a defence-closed popup becomes a guarded handler; the false robot check.
+- Validation: not validated (findings and dispatch only); evidence quoted from each run's debug note.
+- Outcome: Revised.
 
 ### 2026-10-13 - Gate round 1: no counted pass; job-board rerun got further
 
