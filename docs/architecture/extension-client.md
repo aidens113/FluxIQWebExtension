@@ -1077,6 +1077,30 @@ failed URL claim on a page with no gate. Every producer is listed in
 
 ### Robot Checks
 
+A layer that the interference defence closes can become a guarded handler of
+the saved Flow. The action result's `clearedLayers` keeps the layer kind and
+allow-listed dismissal, plus the accessible layer `name` and `controlName`
+when present (whitespace collapsed, at most 120 characters each). The browser
+also reports the pressed control's descriptor as `wayOut`; that descriptor
+stays in the domain, which passes Core an opaque reference and
+`wayOutDefinitionId: "web.output.dom-click"`.
+
+After a successful step, Core learns a `before` handler scoped to that step:
+dialog visible by name, press the resolved dismissal, check the dialog is
+absent, resume. It adds no leading wait. The domain reconstructs a partial
+view from the recorded dismissal and resolves its handle through view history,
+including during saved-Flow playback with no prior model look. The saved
+handler contains resolved target parameters, never an ephemeral handle.
+Learning is enabled when the run keeps adaptations, including model-free
+runs; diagnose-only, proposal-only and dry-run lanes do not learn.
+
+The deterministic diagnosis and runtime-patch intervention report successful
+resolution and structural preflight, not an observed execution of the new
+handler. The adaptation remains held until the run succeeds and its result is
+judged to answer. A failed, refuted or unjudged run leaves it unapplied and
+reviewable. Each layer cleared by the same attempt has distinct repair,
+adaptation and proposal identities.
+
 FluxIQ never presses, types into, solves or reloads a robot check. What it
 does next depends on who clears the check, which
 [`content/action-runtime/challenge-evidence.ts`](../../apps/extension/src/content/action-runtime/challenge-evidence.ts)
