@@ -19,7 +19,6 @@ const SANCTIONED: Record<string, string> = {
   "guarded-browser/launch-guarded-context.ts": "installs the guard before it returns the context",
   "run-scenario/browser-session/launch-browser.ts": "launch-extension-session.ts installs and proves the guard before returning control",
   "interactive-session.ts": "installs the guard before opening any page",
-  "saved-flow-replay/replay-browser.ts": "installs the guard before opening any page",
   "bench/compatibility.ts": "launches headless only to read the browser version; it opens no page",
   "extension-chat-check/firefox/launch-firefox.ts": "installs the guard before it installs the add-on or returns the context; Firefox has no containment switches",
 };
@@ -75,7 +74,12 @@ test("each sanctioned launch installs the guard before any page is opened", asyn
   assert.ok(run.indexOf("await launchExtensionSession(") < run.indexOf("context.newPage("), "run lane: the guarded and worker-proven session precedes fixture pages");
 
   assertOrder(await source("interactive-session.ts"), "interactive session", "chromium.launchPersistentContext(", "installDeterministicNetworkGuard(context", "newPage(");
-  assertOrder(await source("saved-flow-replay/replay-browser.ts"), "saved-Flow replay", "chromium.launchPersistentContext(", "installDeterministicNetworkGuard(context", "newPage(");
+  // The saved-Flow replay launches nothing itself: it starts through the run lane's session, so it gets the same containment, worker proofs and one-time relaunch.
+  const replay = await source("saved-flow-replay/replay-browser.ts");
+  assert.equal(LAUNCH.test(replay), false, "saved-Flow replay: starts no browser directly");
+  assert.ok(replay.includes("await launchExtensionSession("), "saved-Flow replay: starts through launchExtensionSession");
+  assert.ok(replay.indexOf("await launchExtensionSession(") < replay.indexOf("newPage("), "saved-Flow replay: the guarded and worker-proven session precedes fixture pages");
+  assert.equal(/installDeterministicNetworkGuard\(|awaitExtensionWorker\(/u.test(replay), false, "saved-Flow replay: no guard or readiness wait of its own beside the session's");
 
   const firefoxChat = await source("extension-chat-check/firefox/launch-firefox.ts");
   assertOrder(firefoxChat, "Firefox chat check", "firefox.launchPersistentContext(", "installDeterministicNetworkGuard(context", "installTemporaryAddon(");

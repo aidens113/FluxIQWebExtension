@@ -44,8 +44,8 @@ test("every persistent Chromium launch forgets the profile's stored service work
     const forget = text.indexOf(FORGET);
     if (forget < 0 || forget > launch) unguarded.push(relative);
   }
-  // The four launchers there are today; a fifth is checked the same way without being listed.
-  for (const known of ["guarded-browser/launch-guarded-context.ts", "run-scenario/browser-session/launch-browser.ts", "interactive-session.ts", "saved-flow-replay/replay-browser.ts"]) {
+  // The three launchers there are today (a saved-Flow replay launches through the run session); a fourth is checked the same way without being listed.
+  for (const known of ["guarded-browser/launch-guarded-context.ts", "run-scenario/browser-session/launch-browser.ts", "interactive-session.ts"]) {
     assert.ok(launching.includes(known), `${known} is found as a persistent Chromium launch`);
   }
   assert.deepEqual(unguarded, [], `These launch a persistent Chromium without forgetting its stored service workers first: ${unguarded.join(", ")}`);
