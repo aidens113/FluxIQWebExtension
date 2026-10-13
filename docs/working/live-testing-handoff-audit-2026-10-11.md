@@ -258,6 +258,28 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
 
 ## Work Ledger
 
+### 2026-10-13 - t495 and t497 merged; t496 and t498 in progress
+
+- Agent: Claude senior supervisor; t495-t498 workers.
+- Changed: t495 the judge and result-check packet put the result summary (start view first) right after the policy
+  gates and every per-trial id after it; "Testing revision N, which keeps" reads "Testing this version, which keeps".
+  t497 a nearest column match whose names share a token while each keeps one the other does not answer is refused in
+  conditions, record columns and fields (D round 15 rev 5, score 0.702), the refusal carrying `{code, field, valid}`
+  through a new `extraction/slot-refusal.ts` built with `present()` (the supervisor moved it there: the audit refuses a
+  conditional spread in the model's packet, and `resolve-plan-node.ts` is at its 800-line limit). Deferred: telling the
+  model about a harmless accepted guess (Core change).
+- Cause proved (t496): lane B's store step recorded a rotating hero-carousel button name as part of its effect; the
+  click reloads the page to slide 0, so the effect check holds about one time in three on an unchanged page. Fix in
+  progress: names that change between two captures with no act between them are left out of a recorded effect.
+- Cause proved (t498): an accepted submit returns no script, and the only script left in context was the refused one,
+  called "the script you just sent"; fix in progress (the accepted revision stays in context, a refused one is marked
+  superseded; `writeMode: replace` in a repeat refused; the only-after refusal names the line; trials state how paging
+  ended).
+- Validation: t497 domain output-nodes and llm-evidence "# pass 1251 / # fail 0", domain tsc exit 0, audit exit 0;
+  t495 Core llm and activity "226 passed (226)" files, "2214 passed", tsc exit 0, Core merge gated by `pnpm check`.
+  Pushed Core `850f213e`, downstream `597540d3`.
+- Outcome: Accepted (t495, t497).
+
 ### 2026-10-13 - Round 15: C, B and D all passed and replayed
 
 - Agent: Claude senior supervisor; debug workers.
