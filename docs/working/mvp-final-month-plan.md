@@ -151,6 +151,14 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 ## Worker Briefs
 
+### Brief: model/site-control reset readiness investigation
+- Worker: codex-replay; read-only follow-up in frozen t529 pair after source/report completion. Root is running final gates; no source/shared-doc edits or new branch. Own report `mvp-final-month-plan/reports/codex-site-control-reset-readiness.md`.
+- Read entry-case and held-topology designs plus Current State. Inspect Core `flow-bootstrap/site-reset/{ledger,start-check,trial-policy,undoes-tool,contracts}.ts` and direct build-tool/reset consumers needed to trace baseline capture, own-act reversal and trial/final-run gates.
+- Trace what the model actually receives/calls to undo only exploration/prior-trial acts through domain controls, preserve pre-existing state and verify opaque resulting state. Determine whether unset fixture start-hook exercises that production loop or reveals a missing contract. No fixture wholesale reset can substitute for this proof.
+- Inspect downstream hook wiring/creation readiness and owning realistic site controls only where required. Separate build-owned undo, supported case preparation and fresh independent observation; identify lasting uncertainty/repeat guards and final whole-run reset ownership.
+- Report exact implemented seams, actual gaps, smallest file-partitioned fixes, and a provider-free/live qualification design for allowed realistic scenarios using existing controls. Coordinate t532 declaration contracts; no case-parser/executor/held edits.
+- No implementation, tests, builds, model/browser/provider calls, overrides, user panel, commits or runtime-state changes. Summarize additional reads and concrete evidence; do not call hook readiness model-controlled reset qualification.
+
 ### Brief: t532 applicable-case declaration foundation
 - Worker: codex-t517; create paired isolated `task/t532-applicable-entry-cases` under `fxwork/t532` using owning nextTaskId/createWorktree helpers and offline installs. Next id checked t532; stop/report if taken. Start current dev, no whole-workspace build wrapper.
 - Read your entry-case design, Current State and Core boundary/code-structure guidance. Own report `mvp-final-month-plan/reports/t532-applicable-entry-cases.md`. This task remains isolated until declaration, execution receipts and promotion form a coherent unit; this first brief is declaration ownership only.
