@@ -294,3 +294,31 @@ Earlier state and all 64 prior entries are preserved in
 - Changed: resumed instruction-led adaptation/breadth and remaining release acceptance on user direction; retained t518 except independently necessary native SQLite path fix. Written t520/t521 briefs precede worker execution; main unrelated .clinerules edit is preserved.
 - Validation: independently reviewed t520 source/test diff, repository/pool13/13 passed on Windows, Core source/test typecheck passed and structure audit passed. Fresh narrow framework build passed. Native long-path failure was reproduced before worker fix; no recording-only endpoint or graph contract restored.
 - Outcome: t520 accepted pending paired integration; lane readiness and bounded truthful-learning UI correction continue before live source freeze.
+
+### Brief: continuation-crossborder-lane-preparation
+- Worker: codex-t516 after readiness report frozen. Unit: existing clean paired fxwork/t418, slot3; no source edits.
+- Read Current State, own readiness report, adaptation Phase2/Gate oracle and exact prior slot3 debug; preserve lane branch/history/data.
+- Wait for root's t520/t521 integrated-source notice before syncing/building. Merge each local dev into its existing lane branch normally; never rebase/reset/discard divergent work. Stop and report conflicts or dirty source.
+- Recheck lane/slot liveness with existing process helpers, preserve current slot3 owner marker under external run-scoped evidence, then assign the idle slot reservation to this lane. This coordination marker is agent-owned, not product runtime storage. Never touch other slots or guards.
+- Preserve and copy exact prior slot3 debug into this lane so existing debug guard is satisfied; never fabricate a debug or write override files.
+- Build only required Core public libraries/native gateway, web-domain host, scenario lab, runner prerequisite packages and instanced extension using owning launcher/cache. No full workspace suite/build; no user panel management.
+- Preflight current instruction-led crossborder basket-redesign gate with dry-run readiness, zero providers; run only relevant free recovery matrix cases and scripted realistic base/variant workflow as needed. Bare --flow remains forbidden.
+- Own report: docs/working/mvp-final-month-plan/reports/codex-continuation-crossborder-preparation.md in main downstream; logs/count-only receipts outside git. Return exact running source/artifact identity, ready flags, expected actual repair classification and failures.
+- No paid launches until root sends frozen-pair authorization; no source/private data/commits/pushes. Keep slot3 reserved for this lane; report all processes actually started and cleanly close only your completed preflight children.
+
+### Brief: t522-extraction-picker-ownership
+- Worker: replay_investigation. Unit: downstream fxwork/t522/!FluxIQWebExtension, task/t522-extraction-picker-ownership; sibling detached Core is read-only.
+- Read Current State, codex-continuation-acceptance-audit extraction section and prior extraction-receiver-release-readiness/confirmation-fixture-plan reports. User's complete-MVP direction releases this focused held receiver work; no broader paused UI review resumed.
+- Own extension content/picker/session.ts and messages.ts, shared/extraction-messages.ts only for truthful stale_session union/comment; adjacent new receiver/confirmation tests and local test support/barrel. No Core/background/auth/recorded-event source edits.
+- Implement accepted receiver lease separate from overlay/drain lifetime. Current exact successful pick remains confirmable after ordinary click/timer/draining Escape; invalid-definition/not-recording can retry. Known-retired start/cancel/record never touches newer picker; unknown matching cancel tombstones later delivery. Never-seen opaque start may replace; do not claim chronological ordering that IDs cannot prove.
+- Duplicate current start must preserve successful pick and avoid duplicate listeners; refused pick can rearm same ID. Stale callback closures/timers, including restarted same-session timer, must check exact lease/operation before swallowing or releasing.
+- Preserve idle never-retired no-pick DefineExtraction compatibility and existing emit/definition/recording gates; active other-picker record refuses before effect. Retain known retired IDs for content-document lifetime, reset only through explicit administrative stopPick hard-reset; ordinary production drain/replacement/cancel use owned release operations.
+- Tests first reproduce stale A against B and successful public inference/confirmation. Use real inference/recordExtraction and structural synthetic fixture; no injected production test hook, value trace, fabricated success or weakened existing assertions. Preserve each accepted explicit Confirm invocation; no definition caching/idempotence invention.
+- Own report main docs/working/mvp-final-month-plan/reports/codex-t522-picker.md. Narrow owning tests only then freeze; root types/audit/native realistic DOM proof. Stop and report any needed source beyond ownership before editing.
+- No shared docs/commits/full suites/paid calls/process or user-panel management/private data. Read-only sibling Core; no t518 imports. Return exact limits, checks and changed paths.
+
+### 2026-10-13 - t520 integration and t521 learning summary verification
+- Agent: Codex senior supervisor.
+- Changed: integrated t520 on both dev branches (downstream2583ccfc/Core6f11c3bc); t521 fixes read-back and post-run learning statements from authoritative durable summary, preserving unknown and actual review controls. t522 bounded extraction receiver ownership is released separately; the remainder of paused UX scope stays paused.
+- Validation: t520 repository/pool13/13, Core source/test types, public-library build and both owning integration audits passed. For t521 root initial29pass/1obsolete-copy failure, corrected15/15 and final web types passed; no grant/review controls weakened. Final structure audit precedes merge. No full suite, provider call or user panel management.
+- Outcome: current slots/lane identities mapped; slot3 reassigned after no-live-process check with old marker and prior debug preserved. Live preparation waits integrated source notice; paid qualification waits frozen t522 delta too.
