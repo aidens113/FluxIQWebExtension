@@ -13,10 +13,13 @@ export function webStartStateOf(start: JsonObject | undefined): WebStartState | 
   if (start.title !== undefined && typeof start.title !== "string") return undefined;
   const lines = start.lines;
   if (!Array.isArray(lines) || !lines.every((line): line is string => typeof line === "string")) return undefined;
+  const items = start.items;
+  if (items !== undefined && !(Array.isArray(items) && items.every((item): item is string => typeof item === "string"))) return undefined;
   return present<WebStartState>({
     schemaVersion: WEB_START_STATE_SCHEMA_VERSION,
     location: start.location,
     title: start.title,
-    lines: [...lines]
+    lines: [...lines],
+    items: items === undefined ? undefined : [...items]
   });
 }

@@ -58,6 +58,7 @@ import { publishedWebLlmPage } from "../page-view";
 import { present } from "../present";
 import { webBuildRefusalDiagnostic } from "../refusal-diagnostic";
 import { webActionPermission } from "../permission";
+import { webTargetSpot } from "../control-spot";
 import { resolveWebPlanNode, webPlanFirstTargetHandle, webPlanStepMustDeclare, type WebPlanNodeResolutionInput } from "../plan-resolution";
 import { WEB_DECLINED_PRESS_INSTEAD } from "../press";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
@@ -308,6 +309,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // location acts on the browser rather than on anything in front of it.
     // The words the packet store keeps for the handle, for a control the look before acting does not describe (`./observed-control.ts`).
     const control = current ? webObservedControl(current.evidence, webPlanFirstTargetHandle(written), ran, shownWords(run, written)) : { name: undefined, kind: "step" };
+    const spot = current ? webTargetSpot(current, webPlanFirstTargetHandle(written)) : {}; // Its record and dialog as opaque tokens: Core ties an undo to its act's own item (Core t475).
     // A node whose act the page decides must say what acting would lastingly do, `[]` included.
     // Saying nothing is not the same as saying it causes nothing: a step that
     // declared nothing would be waved past the gate every time the Flow ran,
@@ -330,7 +332,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     const permission = writing ? { kind: "no_consequence" as const } : await webActionPermission({
       check: run.request.permission,
       declared,
-      control,
+      control: { ...control, ...spot },
       verb: node.definition.label.toLowerCase(),
       // Not the model's word, and the reason a read is never refused: a node
       // that only looks at the page cannot have left anything behind, so what

@@ -12,22 +12,34 @@
 // used: a layer's box may span the page, and the page behind it is state. A
 // `covered-by` naming a layer left out is dropped from the line it is on,
 // since the line would otherwise differ only by the interruption.
+//
+// **Focus is not state (FluxIQ Core t475).** Which element holds focus moves
+// with every press and every look; lane B round 10 (`run-mv5tusj4-b7ee0630`)
+// was asked to undo "marked focused" as an act's effect. The focus mark is
+// left off every line.
+//
+// **Items (t475).** Given the read's records, the state lists the opaque
+// tokens of the records its kept elements sit in, as the permission
+// declaration names a control's record, so Core can tell which items an act
+// created.
 
 import type { WebLlmEvidenceElement } from "../elements";
 import { webIsLayer } from "../node-run/layer";
 import { webLlmHandleFreeViewLines, webLlmPageText, webLlmPageTree } from "../page-view";
 import { present } from "../present";
 import type { WebLlmPageEvidence } from "../sanitize";
+import { webControlSpotToken } from "../control-spot";
 import { WEB_START_STATE_SCHEMA_VERSION } from "./schema-version";
 import type { WebStartState } from "./state";
 
-/** The state of the page `evidence` captured, interruptions left out. */
-export function webStartStateFromEvidence(evidence: WebLlmPageEvidence): WebStartState {
+/** The state of the page `evidence` captured, interruptions and focus left out; with `records`, the items its kept elements sit in. */
+export function webStartStateFromEvidence(evidence: WebLlmPageEvidence, records?: ReadonlyMap<string, string>): WebStartState {
   const tree = webLlmPageTree(evidence.elements);
   const interruption = (element: WebLlmEvidenceElement): boolean =>
     webIsLayer(element) || element.inDialog !== undefined || tree.ancestors(element).some(webIsLayer);
   const dropped = new Set(evidence.elements.filter(interruption).map((element) => element.target));
-  const kept = evidence.elements.filter((element) => !dropped.has(element.target)).map((element) => {
+  const kept = evidence.elements.filter((element) => !dropped.has(element.target)).map((focusable) => {
+    const { focused: _focused, ...element } = focusable;
     const coveredBy = element.coveredBy;
     if (coveredBy === undefined || !coveredBy.some((handle) => dropped.has(handle))) return element;
     const { coveredBy: _covered, ...rest } = element;
@@ -49,6 +61,10 @@ export function webStartStateFromEvidence(evidence: WebLlmPageEvidence): WebStar
     schemaVersion: WEB_START_STATE_SCHEMA_VERSION,
     location: evidence.location,
     title: summary.title,
-    lines: [...summary.lines, ...hidden]
+    lines: [...summary.lines, ...hidden],
+    items: records ? [...new Set(kept.flatMap((element) => {
+      const record = records.get(element.target);
+      return record ? [webControlSpotToken("item", record)] : [];
+    }))] : undefined
   });
 }

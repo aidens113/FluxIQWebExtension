@@ -46,7 +46,7 @@
 // given (`./press.ts`, `./tool-rejection.ts`), so neither the model nor a trace
 // has to guess which of them happened.
 
-import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
+import type { AutomationStudioActionConsequence, AutomationStudioActionDeclaration, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import { automationStudioDestructiveConsequences, isAutomationStudioActionConsequence } from "fluxiq/automation-studio";
 import { present } from "./present";
 
@@ -83,7 +83,8 @@ export type WebActionPermission =
 export async function webActionPermission(input: {
   check: AutomationStudioActionPermissionCheck | undefined;
   declared: unknown;
-  control: { name: string | undefined; kind: string };
+  /** `item` and `dialog`: the opaque tokens of where the control sits (`./control-spot.ts`), passed through as they are. */
+  control: { name: string | undefined; kind: string; item?: string | undefined; dialog?: string | undefined };
   verb: string;
   effect: "observe" | "mutate";
 }): Promise<WebActionPermission> {
@@ -118,7 +119,8 @@ export async function webActionPermission(input: {
     return declared.length ? { kind: "permitted" } : { kind: "no_consequence" };
   }
   const name = boundedName(input.control.name) || `an unlabelled ${input.control.kind}`;
-  const verdict = await input.check({ consequences: declared, control: { name, kind: input.control.kind }, verb: boundedVerb(input.verb), effect: input.effect });
+  const control = present<AutomationStudioActionDeclaration["control"]>({ name, kind: input.control.kind, item: input.control.item || undefined, dialog: input.control.dialog || undefined });
+  const verdict = await input.check({ consequences: declared, control, verb: boundedVerb(input.verb), effect: input.effect });
   if (verdict.permitted) return { kind: "permitted" };
   return present<Extract<WebActionPermission, { kind: "refused" }>>({ kind: "refused", missing: verdict.missing, requestId: verdict.requestId, declined: verdict.declined });
 }
