@@ -258,6 +258,23 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
 
 ## Work Ledger
 
+### 2026-10-13 - Round 14: D passed and replayed; B stuck finding a product; C falsely accepted 10 of 13 rows
+
+- Agent: Claude senior supervisor; debug workers.
+- Preflight on pair Core b06a1d4b / downstream 3ddf7684: pre-t489 saved Flows still replay (B
+  `replay-mv6atmam-424abbe6` passed, goal held; D `replay-mv6atlmu-c75e3ed9` passed 4/4; both hash equal, all five
+  zero); B, C and D dry runs `ready` with 0 provider calls; matrix `{"passed":14}`.
+- D confirming build `run-mv6bg8sv-99895ba1` passed $0.0388; replay `replay-mv6bn9k0-5b76077f` passed (4/4, hash
+  equal, all five zero). Debug dispatched.
+- B confirming build `run-mv6bg7ac-d24d91ce` failed $0.0523: the accepted revision's trial added the 3-Pack napkins
+  for shipping; the model then repeated the same search from the same results page and the repeat guard refused it
+  three times (`same_result`). Debug dispatched to test whether the page view showed the right product.
+- C build 1 `run-mv6bg8d8-1a461436` failed $0.0716 as a false acceptance: Flow saved and the result check said
+  passed, but the oracle got 10 of 13 rows (17 collected, 7 in order); the build used 537.9 s of 540 s. Debug
+  dispatched.
+- Validation: spend-ledger finish lines; replay receipts and C's `evaluation.json` extraction quoted above.
+- Outcome: In progress.
+
 ### 2026-10-13 - t489 and t490 merged; the second sweep; round 14 prepared
 
 - Agent: Claude senior supervisor; t489 and t490 workers.
