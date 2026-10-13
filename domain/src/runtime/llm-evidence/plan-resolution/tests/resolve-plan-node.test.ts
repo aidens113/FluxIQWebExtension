@@ -441,6 +441,8 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
     USE_SELECT,
     ...["text", "heading", "link", "button", "select", "checkbox", "radio", "switch", "toggle", "tab",
       "menuitem", "option", "slider", "treeitem", "img", "clickable", "dialog", "layer", "file_input"].map((kind) => `web.handle.target_kind.${kind}`),
+    "web.handle.target_kind.listbox",
+    "web.handle.target_kind.combobox",
     "web.handle.unidentifiable"
   ]);
 });
@@ -502,6 +504,35 @@ test("a refusal for the wrong control names the node that acts on it, and only w
     await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.select", parameters: { target: { handle: "t1" }, value: "x" } }),
     refusedWith("web.handle.wrong_control", USE_CLICK, "web.handle.wrong_control:parameters.target")
   );
+});
+
+test("a choice step on a scripted listbox or combobox is refused with what it is, never as a bare wrong control", async () => {
+  // Live, an open scripted list -- a `div role="listbox"` the page view prints
+  // as `select` -- was handed to the choice node, refused with only
+  // `wrong_control`, and the repeat guard ended the build
+  // (`run-mv6qrcdu-a31b44b8`, step 0060). A choice node chooses only in a
+  // native `<select>`; a scripted list is chosen from by pressing its option,
+  // and a scripted combobox is pressed open first. The refusal says which kind
+  // the element is, so the next call is a press, not the same choice again.
+  const opener: JsonObject = { tagName: "div", role: "combobox", selector: "#colour", accessibleName: "Colour" };
+  const list: JsonObject = { tagName: "div", role: "listbox", selector: "#colour-list" };
+  const choice: JsonObject = { tagName: "div", role: "option", selector: "#colour-list div", accessibleName: "Blue" };
+  const typedCombo: JsonObject = { tagName: "input", role: "combobox", inputType: "text", selector: "#town", accessibleName: "Town", attributes: { type: "text" } };
+  const nativeList: JsonObject = { tagName: "select", role: "listbox", selector: "#sizes", accessibleName: "Sizes" };
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [opener, list, choice, typedCombo, nativeList] }));
+  await inspect(runtime);
+
+  // The list itself: its kind, and no node to repeat on the same handle -- the press belongs on an option's own handle.
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { target: { handle: "t2" }, value: "blue" }),
+    refusedWith("web.handle.wrong_control", "web.handle.target_kind.listbox", "web.handle.wrong_control:target"));
+  // The closed opener: pressed with the same handle, and its kind.
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { target: { handle: "t1" }, value: "blue" }),
+    refusedWith("web.handle.wrong_control", USE_CLICK, "web.handle.target_kind.combobox", "web.handle.wrong_control:target"));
+  // The option the refusal points to is pressed on its own handle.
+  assert.equal((await resolve(runtime, CLICK_NODE, { target: { handle: "t3" } })).status, "resolved");
+  // A combobox the person types into is not called a scripted one; a native select with a list role is still chosen in.
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { target: { handle: "t4" }, value: "x" }), refusedAt("web.handle.wrong_control", "target"));
+  assert.equal((await resolve(runtime, SELECT_NODE, { target: { handle: "t5" }, value: "s" })).status, "resolved");
 });
 
 test("a selector the page gave to several controls is refused rather than acted on at the first of them", async () => {

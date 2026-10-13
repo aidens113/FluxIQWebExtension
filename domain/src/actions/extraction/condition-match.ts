@@ -43,6 +43,20 @@
 // keeps that reading (1165 and 1.165) because nothing in the text says
 // otherwise.
 //
+// A magnitude written on that number is part of it (t510): `k` or `K` directly
+// on the digits, followed by anything but a letter or digit, is a thousand
+// ("£72k", "72K"), and so is "4 thousand". A bare `m` is minutes, metres or a
+// million, so `m` or `M` on the digits is a million only when a currency sign
+// is attached to the number or the number has a decimal point ("$1.2m", "£3m",
+// "1.5m", "€2M"); "3m ago" and "10m" stay 3 and 10. "1.5 million" is always a
+// million. A letter after a space ("5 m", "10 M") or a longer unit ("72kg",
+// "5 km") is not a magnitude. Until t510 a job board's "£72k – £80k per annum"
+// read as 72, so `atLeast 70000` dropped it in every trial
+// (`run-mv6qr7fk-77f30b49`). A range reads its first end only, with that end's
+// own magnitude: "£72k – £80k" is 72000, and "£60-72k" is 60. Core's
+// `read-number.ts` reads every value the same way; both run Core's shared case
+// table (`tests/value-reading-parity.test.ts`).
+//
 // One count is written differently: a named one and "N others". "Aisha Khan
 // and 4 other mutual friends" is five mutual friends, and "Liked by Sam and 12
 // others" is thirteen likes, so a value that names someone before any digit
@@ -221,6 +235,18 @@ export function webAutomationExtractConditionPattern(written: string): RegExp | 
   }
 }
 
+/**
+ * A magnitude written right after a number (see "What a value is"): `k`, `K`,
+ * `m` or `M` on its digits with no letter or digit after it, or the word after
+ * any space. A letter `m` counts only for a number with a currency sign
+ * attached or a decimal point (`scaled`). Core's `read-number.ts` reads the
+ * same, through the shared table.
+ */
+const MAGNITUDE = /^(?:([km])(?![\p{L}\p{N}])|\s*(thousand|million)\b)/iu;
+const MAGNITUDE_EXPONENT: Readonly<Record<string, number>> = { k: 3, thousand: 3, m: 6, million: 6 };
+/** A currency sign attached to the number that follows it: "$1m", "£3m". */
+const CURRENCY_ATTACHED = /\p{Sc}$/u;
+
 /** Someone named, with no digit before them, then "and N other(s)": a count of N + 1. */
 const NAMED_AND_OTHERS = /^[^\d]*\p{L}[^\d]*?\s+and\s+(\d[\d,]*)\s+others?\b/iu;
 
@@ -233,13 +259,27 @@ export function webAutomationExtractConditionNumber(value: string): number | und
   }
   const separated = SEPARATED_NUMBER.exec(value);
   if (separated !== null && CONTINENTAL_NUMBER.test(separated[0])) {
-    const number = Number(separated[0].replaceAll(".", "").replace(",", "."));
+    const number = scaled(separated[0].replaceAll(".", "").replace(",", "."), value.slice(0, separated.index), value.slice(separated.index + separated[0].length));
     if (Number.isFinite(number)) return number;
   }
   const found = NUMBER.exec(value);
   if (found === null) return undefined;
-  const number = Number(found[0].replaceAll(",", ""));
+  const number = scaled(found[0].replaceAll(",", ""), value.slice(0, found.index), value.slice(found.index + found[0].length));
   return Number.isFinite(number) ? number : undefined;
+}
+
+/**
+ * The number `digits` writes, times the magnitude `after` starts with, scaled in
+ * decimal so 1.2m is exactly 1200000. A letter `m` is a million only with a
+ * currency sign attached (`before` ends with one) or a decimal point in
+ * `digits`: "3m ago" is three minutes, not three million.
+ */
+function scaled(digits: string, before: string, after: string): number {
+  const magnitude = MAGNITUDE.exec(after);
+  const letter = magnitude?.[1]?.toLowerCase();
+  const applies = letter !== "m" || CURRENCY_ATTACHED.test(before) || digits.includes(".");
+  const exponent = magnitude === null || !applies ? 0 : MAGNITUDE_EXPONENT[(magnitude[1] ?? magnitude[2]!).toLowerCase()]!;
+  return Number(exponent === 0 ? digits : `${digits}e${exponent}`);
 }
 
 /** Accepted where a pattern is written with flags, and dropped: each carries state across calls, so a row's verdict would depend on the rows before it. */

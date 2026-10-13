@@ -121,7 +121,9 @@ const NAMED: ReadonlyArray<readonly [string, string, string | undefined]> = [
   // "Didn't work: the step wasn't accepted" -- and the colour Add to cart
   // refused had no code of its own at all.
   ["web.action.refused_by_page", "refused_by_page", "page_needs_something_first"],
-  [WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, "refused_by_page", "page_busy_try_later"]
+  [WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, "refused_by_page", "page_busy_try_later"],
+  // t509: a select sent an option it does not offer, and was told only `output_not_observed`.
+  [WEB_AUTOMATION_FAILURE_CODES.OPTION_NOT_OFFERED, "output_not_observed", "option_not_offered"]
 ];
 
 test("every failure code the page can send is named, and only the two that name nothing stay bare", () => {
@@ -163,6 +165,21 @@ test("a page's refusal says which kind it was in words Core's repeat guard reads
     assert.equal(/select a color|network busy/iu.test(said), false, `a refusal repeated the page's notice: ${said}`);
     assert.equal(refusal.personNeeded, undefined);
   }
+});
+
+test("a select asked for an option it does not offer is told where the options are and how to name one, in none of the page's words (t509)", () => {
+  // Live (`run-mv6qrcdu-a31b44b8`, steps 0020, 0030, 0032), a distance select
+  // was sent its option's visible words where it wanted the option's value and
+  // was answered a bare `output_not_observed` three times, the repeat guard
+  // refusing the copies in between. The client's sentence names the options,
+  // which are the page's words, so the refusal says where they are shown.
+  const refusal = webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.OPTION_NOT_OFFERED, actual: "no option matched; the select offers \"10\" (Ten leagues)" } });
+  assert.equal(refusal.code, "output_not_observed");
+  assert.equal(refusal.detail?.reason, "option_not_offered");
+  assert.match(refusal.detail?.next ?? "", /no option of this select/u);
+  assert.match(refusal.detail?.next ?? "", /page view lists its options/u);
+  assert.match(refusal.detail?.next ?? "", /describe_element/u);
+  assert.equal(/leagues/iu.test(JSON.stringify(refusal)), false, "the page's option words do not ride on the refusal");
 });
 
 test("a malformed or absent account leaves the code alone rather than inventing counts", () => {

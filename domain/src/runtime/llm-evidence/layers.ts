@@ -26,7 +26,9 @@
 // page behind a dialog from being counted as inside it: the element comes after
 // the dialog in document order, as a descendant must, and nothing covers it --
 // a control a modal holds answers its own click, and one behind the modal's
-// backdrop does not.
+// backdrop does not. A third keeps another layer's controls out of it: an
+// element under a different cover, by its described ancestors, belongs to that
+// cover even where its box overlaps the dialog's (t507).
 
 import type { PageEvidenceWire, WebAutomationOverlayEvidence, WebAutomationOverlayEvidenceItem, WebAutomationPageEvidence } from "../../page-evidence";
 import { pageEvidenceWire } from "../../page-evidence";
@@ -122,11 +124,44 @@ function markInsideModals(snapshot: Record<string, unknown>, handleOf: (selector
     return handle !== undefined && bounds && at !== undefined ? [{ handle, bounds, at }] : [];
   });
   if (!modals.length) return;
+  const byTarget = new Map(subjects.map(({ element }) => [element.target, element] as const));
   subjects.forEach(({ element, raw }, index) => {
     if (covered.has(element.target)) return;
     const modal = modals.find((dialog) => index > dialog.at && centreInside(raw, dialog.bounds));
-    if (modal) element.inDialog = modal.handle;
+    if (modal && !inAnotherLayer(byTarget, element, modal.handle)) element.inDialog = modal.handle;
   });
+}
+
+/** How far up the `parent` chain a layer is looked for. */
+const MOST_DEPTH = 40;
+
+/**
+ * Whether `element` belongs to a cover other than the modal `dialog`: it is
+ * that cover, or that cover is among its described ancestors before the
+ * dialog is, and the cover itself does not sit inside the dialog (t507).
+ * Geometry alone put a help widget's card, launcher and "×", painted over a
+ * consent sheet's answers, inside the sheet, and the model took them for the
+ * sheet's own (`run-mv6qrcln-2e194a12`, step 0008). An element with no cover
+ * in its ancestry is left to the geometry, as before.
+ */
+function inAnotherLayer(byTarget: ReadonlyMap<string, WebLlmEvidenceElement>, element: WebLlmEvidenceElement, dialog: string): boolean {
+  let at: WebLlmEvidenceElement | undefined = element;
+  for (let depth = 0; at !== undefined && depth < MOST_DEPTH; depth += 1) {
+    if (at.target === dialog) return false;
+    if (at.covers?.length || at.coversCount) return !reaches(byTarget, at, dialog);
+    at = at.parent === undefined ? undefined : byTarget.get(at.parent);
+  }
+  return false;
+}
+
+/** Whether `dialog` is among the described ancestors of `element`. */
+function reaches(byTarget: ReadonlyMap<string, WebLlmEvidenceElement>, element: WebLlmEvidenceElement, dialog: string): boolean {
+  let at = element.parent;
+  for (let depth = 0; at !== undefined && depth < MOST_DEPTH; depth += 1) {
+    if (at === dialog) return true;
+    at = byTarget.get(at)?.parent;
+  }
+  return false;
 }
 
 function overlayBlockers(snapshot: Record<string, unknown>): Array<PageEvidenceWire<WebAutomationOverlayEvidenceItem>> {

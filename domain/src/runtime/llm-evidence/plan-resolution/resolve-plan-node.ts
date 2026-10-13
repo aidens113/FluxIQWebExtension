@@ -120,7 +120,7 @@ import { webAutomationOutputNodeId, webAutomationUrlPath } from "../../../output
 import { webLlmNameAssumptions, type WebLlmNameAssumption, type WebLlmNameAssumptionSaid } from "../name-assumption";
 import type { WebLlmExtractionHandles } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
-import { resolveWebExtractionSlot, webPlanSlotRefusal, webPlanStoredColumns, webPlanUndispatchable, type WebPlanRefusalIssue } from "./extraction";
+import { resolveWebExtractionSlot, webPlanRunRecordOutput, webPlanSlotRefusal, webPlanStoredColumns, webPlanUndispatchable, type WebPlanRefusalIssue } from "./extraction";
 import { webPlanStepFoundByTooLittle } from "./identity-guard";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
@@ -199,8 +199,8 @@ export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   // (`fittingNodeCode`), and never otherwise.
   "web.handle.expected.node.web.output.dom-click",
   "web.handle.expected.node.web.output.dom-select",
-  // Beside `web.handle.not_a_field`: what the element is, as the page view prints it. Not a reason.
-  ...WEB_LLM_NOT_A_FIELD_KINDS.map((kind) => `web.handle.target_kind.${kind}` as const),
+  // What the element is: beside `web.handle.not_a_field` as the page view prints it, beside a choice step's `wrong_control` a scripted listbox or combobox (`./control-fit.ts`, t509). Not a reason.
+  ...WEB_LLM_NOT_A_FIELD_KINDS.map((kind) => `web.handle.target_kind.${kind}` as const), "web.handle.target_kind.combobox",
   // A Flow step's control found by one attribute alone (t425, `./identity-guard.ts`).
   "web.handle.unidentifiable"
 ] as const;
@@ -627,7 +627,7 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
   }
   const firstNamed = named[0];
   const misfit = webPlanControlMisfit(nodeDefinitionId, element?.element);
-  if (firstNamed && misfit.wrong) return { status: "refused", refusals: [{ code: "web.handle.wrong_control", kind: "target", path: [firstNamed.slot], fits: misfit.fits }] };
+  if (firstNamed && misfit.wrong) return { status: "refused", refusals: [misfit.fits, misfit.kind].map((fits): Refusal => ({ code: "web.handle.wrong_control", kind: "target", path: [firstNamed.slot], fits })) };
   if (firstNamed && typing && element?.notAField !== undefined) {
     return { status: "refused", refusals: [
       { code: "web.handle.not_a_field", kind: "target", path: [firstNamed.slot], fits: `web.handle.target_kind.${element.notAField}` },
@@ -672,7 +672,7 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
   }
   const views = [...replaced.values()].flatMap((entry) => entry.views ?? []);
   // A step's effect is its element's (t447); a fact's target is read, never acted on, so it has none.
-  return { status: "resolved", parameters: resolved, assumed, views, effect: scope.step ? element?.effect : undefined };
+  return { status: "resolved", parameters: extractionNode && scope.step ? webPlanRunRecordOutput(resolved) : resolved, assumed, views, effect: scope.step ? element?.effect : undefined };
 }
 
 /** Exact supported state grammar; the public Core guard also accepts extras. */

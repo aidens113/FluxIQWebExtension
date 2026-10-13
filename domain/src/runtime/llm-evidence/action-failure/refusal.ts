@@ -116,6 +116,10 @@ const BY_FAILURE_CODE: Readonly<Record<string, WebLlmToolRejectionCode>> = Objec
 const BY_FAILURE_REASON: Readonly<Record<string, WebLlmToolRejectionReason>> = Object.freeze({
   [WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS]: "target_ambiguous",
   [WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH]: "state_not_as_asserted",
+  // A select sent an option it does not offer (t464). Bare, it was sent again
+  // as it was (t509, `run-mv6qrcdu-a31b44b8` steps 0020-0032): the reason's
+  // `next` says where the options are shown, never which they are.
+  [WEB_AUTOMATION_FAILURE_CODES.OPTION_NOT_OFFERED]: "option_not_offered",
   [WEB_AUTOMATION_FAILURE_CODES.BROWSER_PERMISSION_DENIED]: "page_not_scriptable",
   [WEB_AUTOMATION_FAILURE_CODES.TRANSPORT_TRANSIENT]: "channel_to_page_failed",
   [WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE]: "node_not_runnable_here",

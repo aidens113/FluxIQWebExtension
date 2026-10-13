@@ -101,3 +101,18 @@ test("a blocker's own role is said beside its handle, even when its element says
   assert.match(text, /^COVERING t692 banner$/mu);
 });
 
+// t507 (`run-mv6qrcln-2e194a12`, step 0008): a help widget's greeting card over
+// a consent sheet. The header named the card as the widget's closer -- its
+// words start with its "×" -- though a press on the card opens the widget;
+// the "×" inside it, which carries no cursor or listener of its own, closes it.
+test("a cover's closer is the × inside its pressable card, never the card whose words start with it", () => {
+  const text = webLlmPageText(fixturePacket([
+    { tag: "div", target: "t9", frontLayer: true, coversCount: 3 },
+    { tag: "div", target: "t10", parent: "t9", name: "Help", cursor: "pointer", hasClickHandler: true },
+    { tag: "div", target: "t11", parent: "t9", text: "× Need a hand? Ask our assistant anything.", cursor: "pointer", hasClickHandler: true },
+    { tag: "div", target: "t12", parent: "t11", name: "Close", text: "×" },
+    { tag: "button", target: "t20", name: "Decline optional", coveredBy: ["t9"] }
+  ], { blockedBy: [{ target: "t9" }] }));
+  assert.match(text, /^COVERING t9 .*close t12 "Close"$/mu);
+});
+
