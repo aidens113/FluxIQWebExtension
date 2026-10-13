@@ -262,6 +262,21 @@ Earlier history (rounds 4-10, t460, t461) is in the Work Ledger archive.
 
 ## Work Ledger
 
+### 2026-10-13 - Round 17 confirming builds: B and D passed and replayed; C failed
+
+- Agent: Claude senior supervisor; debug workers.
+- Pair Core ac17274c / downstream 023c526f (t499-t502 added); matrix `{"passed":14}`; B, C and D dry runs `ready`, 0
+  provider calls.
+- B `run-mv6lgrmx-1c4309c5` passed $0.0428; replay `replay-mv6lsq0h-30a7e6e3` passed (goal true, hash equal, all five
+  zero). D `run-mv6lgt3s-c3aa6fac` passed $0.0268; replay `replay-mv6lswnf-91e0193d` passed (4/4, goal true, hash
+  equal, all five zero).
+- C `run-mv6lgqi6-4bfab2e1` failed $0.0631: trials no, no, unconfirmed, unconfirmed, then no; an unchanged resubmit
+  refused; three repeats refused ended the build with no Flow. C is qualified on the previous pair; a debug decides
+  whether t499-t502 regressed its path or this is variance.
+- Validation: spend-ledger finish lines; each run's `evaluation.json` verdict and oracle read by the supervisor;
+  replay receipts above.
+- Outcome: In progress.
+
 ### 2026-10-13 - t499-t502 merged
 
 - Agent: Claude senior supervisor; t499-t502 workers.
