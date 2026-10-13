@@ -505,6 +505,14 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
 
 ## Work Ledger
 
+### 2026-10-13 - Later starting-state and terminal recovery gaps remain
+
+- Agent: Codex supervisor; capture and executor investigation workers.
+- Changed: genuine pre-extraction phase committed and independently checked; fresh headed provider-free controls on new isolated workspaces.
+- Validation: store run-mv71ibus-9c9b922e still fails four inferred-wait attempts, extraction not_run. Extraction now has a pre-signature and routing tests six candidates, zero matches/no guard refusals. The still-required filter click is entry45 (Continue is29); routing must preserve filter work. Adjacent failed-command capture contains all99 controls from the filter pre-state plus two extra controls; exact path comparison is still being checked against artifact redaction, so no comparator change is accepted yet.
+- Browser: social run-mv71jipp-fa66f988 page oracle passes but Flow fails at obsolete inferred wait36 after first Post33 reports no-effect then retries successfully. Last manual Post37 has before-signature only; no later executable boundary exists. No model calls/harness activations; both bundles archived externally. Terminal capture/flush provenance under investigation, no blind terminal success.
+- Outcome: t518 remains unmerged/unpublished while bounded evidence/matching gaps are fixed; t516/t517 remain merged locally. No unchanged rerun or paid/provider/full-suite run.
+
 ### 2026-10-13 - t518 combined verification passed; fresh controls rejected before replay
 
 - Agent: Codex supervisor; codex-t518 and capture workers; live-debug worker assigned.
