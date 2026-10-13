@@ -10,10 +10,16 @@ import { pathExists } from "./path-exists.js";
  * redaction attestation covers these, and the rest of `test-runs/` stays where
  * it is. The model's own steps are not copied at all -- they were written here
  * in the first place, and the bundle links to them.
+ *
+ * The adaptation gate's evidence is kept too: the repair lane's record (with
+ * its `adaptationGate` classification), the run's adaptation measurements, and
+ * the created Flow's project, Flow id and hash, which a later-session replay
+ * needs. A gate reader starts here, and found none of them (t512).
  */
 const KEY_FILES = [
   "summary.json", "run.json", "evaluation.json", "report.html", "review", "screenshots",
-  "snapshots/live-llm.json", "snapshots/flow-lane.json", "logs/core.log", "provider-failures.local.json",
+  "snapshots/live-llm.json", "snapshots/flow-lane.json", "snapshots/repair-lane.json", "snapshots/adaptation.json",
+  "snapshots/creation-context.json", "logs/core.log", "provider-failures.local.json",
 ] as const;
 
 /**
