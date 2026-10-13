@@ -3,7 +3,7 @@
 Status: Active
 Status detail: A qualified; fixes and candidate default pushed; B/C/D round four failed semantic/oracle gates; generic feedback fixes underway, future testing budget $0.25.
 Created: 2026-10-05
-Last updated: 2026-10-11
+Last updated: 2026-10-13
 Owner: Senior supervisor agent
 Scope: The ordered plan from 2026-10-05 to the polished-MVP deadline of 2026-11-10: what is done, what is held on unmerged branches or dirty trees, what must be integrated and pushed, and the week-by-week work to pass the 30-day plan's Final MVP Acceptance Test. It does not redo intake already recorded in the 2026-10-03 handoff, and it does not itself run live provider calls.
 Paired document: C:/Users/osrs_/FluxStuff/!FluxIQ/docs/working/mvp-final-month-plan.md
@@ -12,6 +12,8 @@ Related: [30-day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 ---
 
 ## Current State
+
+**Active continuation (October 13).** User directs continuous execution until the MVP is finished. Instruction-led t519 is delivered on both dev branches (Core 63692096 / downstream 7b416b99): existing automations require explicit written tasks before the next run; recordings are described optional evidence. t516/t517 are delivered too. Separate t518 is preserved, unmerged/unpushed; retired recording-only conversion is not a prerequisite for instruction-led qualification. Resume the adaptation gate and breadth on current source, then unresolved UX/extraction/hardening and release acceptance. Do not infer completion from historical lane qualifications. No user-panel management is authorized.
 
 **Continuation recovered October 11 (Los Angeles).** Follow
 [live-testing handoff and execution](./live-testing-handoff-audit-2026-10-11.md), which owns current briefs and validation.
@@ -245,3 +247,50 @@ Earlier state and all 64 prior entries are preserved in
 - Direct-request origins/session/redirect policy needs a concrete design; do not inherit the old any-origin default as authorization.
 - Who runs the Phase 6 release-candidate script as the "person unfamiliar with FluxIQ"? Owner: user.
 - Historical requested67task list had57existing rows; originalmissingten remain unknown. Ten clearly NEW proposals are integrated (t312 first3; t316 next3; t318 final4), preserving all original57 full ordered objects, with exact oracles; no recovered-history or qualification-pass claim. Optional original-list question remains unanswered.
+
+### Brief: mvp-continuation-live-readiness
+- Worker: codex-t516; discovery only in main downstream and existing lane trees; no source edits, paid launches or panel management.
+- Read this Current State, adaptation-and-breadth-plan Current State and Phase 2/Gate oracle, owning Lab guard/setup scripts and latest lane debug only as needed.
+- Inspect current slot ownership/processes without printing credentials, lane git status/build identities and recorded debug guard prerequisites. Find exact current Windows commands for crossborder/store/social gate and the remaining breadth reruns.
+- Decide whether t519 creates any genuine launch incompatibility in existing instruction-created paths; never restore recorded-only conversion or synthesize task authority from fixture goals for saved Flows.
+- Own report: docs/working/mvp-final-month-plan/reports/codex-continuation-live-readiness.md. Return recommended first slot/tree, narrow preflights/build commands, concrete blockers and owning source seams. Preserve profiles/data and existing lane work.
+- No full suites/paid calls/commits/shared document edits. Do not start or stop any processes.
+
+### Brief: mvp-continuation-recovery-triage
+- Worker: replay_investigation; read-only in paired main and t518, no source edits or tests initially.
+- Read this Current State, adaptation-and-breadth-plan Current State, instruction-led-automation-plan Current State and relevant t518 reports only as needed.
+- Determine which unmerged t518 changes affect instruction-created/repaired Flow reliability independently of retired trace conversion, versus obsolete recording-only work. Assess native SQLite long-path issue for isolated instruction-first Lab builds.
+- Own report: docs/working/mvp-final-month-plan/reports/codex-continuation-recovery-triage.md. Return smallest independently mergeable needed unit, exact files/dependencies, existing evidence and narrow regression commands. Do not merge/cherry-pick or erase t518.
+- No full suites/paid calls/process management/commits/shared document edits; no user/browser/token data in output.
+
+### Brief: mvp-continuation-acceptance-audit
+- Worker: codex-t517; read-only downstream/Core source and authored docs.
+- Read this Current State, 30-day plan Final MVP Acceptance Test and Week3/4 exit criteria, current node/extraction/manual findings documents' Current State as needed.
+- Map remaining release acceptance gaps to actual existing code/evidence, distinguishing proven, implemented-unproven and missing. Focus on instruction-first user journey, adaptation visibility/reuse, extraction, operational controls, onboarding and installable artifacts.
+- Own report: docs/working/mvp-final-month-plan/reports/codex-continuation-acceptance-audit.md. Give ordered concrete work, precise file ownership and narrow/live validation plan. Avoid broad cosmetic refactors or speculative post-MVP features.
+- No source edits/full suites/paid calls/process management/commits/shared document edits or private recorded data output.
+
+### Brief: t520-windows-sqlite-long-paths
+- Worker: replay_investigation, after read-only triage report is frozen. Unit: paired fxwork/t520; branch task/t520-windows-sqlite-long-paths.
+- Read current plan state, your triage report and Core AGENTS; inspect e60bfbe0 only for the two generic SQLite source/test files.
+- Own: Core packages/fluxiq/src/programs/database-manager/storage/sqlite-repository.ts and its tests/sqlite-repository.test.ts only. No recording-related contracts/docs/source from t518.
+- Port the minimal native Windows long-path SQLite opening fix to current dev, preserving POSIX behavior and both constructor paths. Existing-parent regression must demonstrate long path create/write/reopen/read.
+- Record fail-first if feasible without editing main; test only owning SQLite repository/pool tests. No broad suite/type/build while root is independently preparing public libraries.
+- Own report: main downstream docs/working/mvp-final-month-plan/reports/codex-t520-sqlite.md; root owns shared storage architecture/doc integration.
+- No commits/merges/pushes, user runtime state, panel management, paid calls or t518 changes. Freeze source before reporting. Return exact files/check command/result and limitations.
+
+### Brief: t521-durable-learning-run-summary
+- Worker: codex-t517, after read-only acceptance audit report is frozen. Unit: paired fxwork/t521; branch task/t521-durable-learning-run-summary.
+- Read current plan state, your acceptance audit and Core AGENTS; trace existing authoritative durableBehaviorChanged response/summary and current adaptation application semantics.
+- Own Core apps/web/src/features/automation-studio/runtime/FlowRunView.tsx, RuntimePostRunSummary.tsx and focused run-detail/result projection/copy helpers if needed, adjacent tests/barrels only. Coordinate exact helper scope in report before large extraction; keep changes small.
+- Reconnected/read-back run results must consume server summary.durableBehaviorChanged, covering runtime patches, handlers/inRunRepairs and result reauthor. Never infer learning from autoApply intent or created adaptation IDs. Preserve server's deliberate legacy semantics; no generic runtime changes.
+- Post-run explanation distinguishes actual kept change, proposed/waiting/held-back change and no change, instead of saying every created repair needs approval. Do not overclaim actual reuse.
+- Regressions: applied:false and missing application proof cannot claim durable change; authoritative true handles all repair kinds; failed/refuted/cancelled cases retain honest copy; existing readback/run-control behavior preserved.
+- Own report main downstream docs/working/mvp-final-month-plan/reports/codex-t521-learning-summary.md. Run adjacent tests only; source freeze before root types/audit.
+- No Core packages/downstream source/shared docs/commits/live/full suites/panel management/private data. Root owns paired docs and integration.
+
+### 2026-10-13 - Continuous MVP execution and t520 narrow verification
+- Agent: Codex senior supervisor; discovery reports from replay_investigation, codex-t516 and codex-t517.
+- Changed: resumed instruction-led adaptation/breadth and remaining release acceptance on user direction; retained t518 except independently necessary native SQLite path fix. Written t520/t521 briefs precede worker execution; main unrelated .clinerules edit is preserved.
+- Validation: independently reviewed t520 source/test diff, repository/pool13/13 passed on Windows, Core source/test typecheck passed and structure audit passed. Fresh narrow framework build passed. Native long-path failure was reproduced before worker fix; no recording-only endpoint or graph contract restored.
+- Outcome: t520 accepted pending paired integration; lane readiness and bounded truthful-learning UI correction continue before live source freeze.
