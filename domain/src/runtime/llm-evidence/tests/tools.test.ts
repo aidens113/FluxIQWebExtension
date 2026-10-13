@@ -408,6 +408,9 @@ test("presses any observed control, refuses only a handle it never showed, and n
   const actionTypes: string[] = [];
   const actionParameters: unknown[] = [];
   let detailsExpanded = false;
+  // Every press counts on the page's status line, as a real page answers one,
+  // so no press here is taken for one that changed nothing (t511) and pressed once more.
+  let presses = 0;
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
@@ -415,6 +418,7 @@ test("presses any observed control, refuses only a handle it never showed, and n
       if (command.actionType !== "web.dom.capture_snapshot") {
         actionParameters.push(command.parameters);
         if (command.actionType === "web.dom.click") detailsExpanded = true;
+        if (command.actionType === "web.dom.click") presses += 1;
       }
       return command.actionType === "web.dom.capture_snapshot"
         ? { status: "succeeded", payload: { snapshot: {
@@ -424,6 +428,7 @@ test("presses any observed control, refuses only a handle it never showed, and n
             { tagName: "button", selector: "#action", visibleText: "Run action", attributes: { type: "button" } },
             { tagName: "input", selector: "#name", inputType: "text", name: "Name" },
             { tagName: "select", selector: "#plan", name: "Plan" },
+            { tagName: "span", selector: "#status", visibleText: `Pressed ${presses} times` },
           ],
         } } }
         : { status: "succeeded" };
@@ -445,9 +450,8 @@ test("presses any observed control, refuses only a handle it never showed, and n
   const submit = await runtime.executeTool({ ...base, callId: "call.submit", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t2" } }, consequences: [] } });
   const genericAction = await runtime.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t3" } }, consequences: [] } });
   const missing = await runtime.executeTool({ ...base, callId: "call.missing", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t40" } }, consequences: [] } });
-  // A submit and a generic action are pressed like anything else. This fake page
-  // does not change under them, so each reports no progress -- but each was
-  // pressed, which the old rule refused on its own judgement.
+  // A submit and a generic action are pressed like anything else, each once:
+  // each was pressed, which the old rule refused on its own judgement.
   assert.equal(submit.resultCode, "web.action.succeeded");
   assert.equal(genericAction.resultCode, "web.action.succeeded");
   assert.deepEqual(actionParameters.map((entry) => (entry as { selector?: string }).selector), ["#details", "#submit", "#action"]);
@@ -510,11 +514,18 @@ test("reports a successful press with unchanged parsed evidence as no progress",
   });
   const result = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
   // The press ran and the page looks the same, which is a fact about the page
-  // rather than a refusal: the step stands and the Flow keeps it.
+  // rather than a refusal: the step stands and the Flow keeps it. Since t511 the
+  // page is looked at again for a moment and the control pressed once more, and
+  // a press that still changed nothing answers `no_effect`, never `succeeded`.
   assert.equal(result.resultCode, "web.action.succeeded");
+  assert.equal((result.evidence as { status?: string }).status, "no_effect");
   assert.equal((result.evidence as { pageChanged?: boolean }).pageChanged, false);
   assert.equal(result.draft?.proposes, true);
-  assert.deepEqual(actionTypes, ["web.dom.capture_snapshot", "web.dom.click", "web.dom.capture_snapshot"]);
+  assert.deepEqual(actionTypes.slice(0, 3), ["web.dom.capture_snapshot", "web.dom.click", "web.dom.capture_snapshot"]);
+  // Pressed twice, and every other command a look; how many looks the bounded wait took depends on the clock.
+  assert.equal(actionTypes.filter((type) => type === "web.dom.click").length, 2);
+  assert.ok(actionTypes.every((type) => type === "web.dom.click" || type === "web.dom.capture_snapshot"), actionTypes.join(","));
+  assert.equal(actionTypes[actionTypes.length - 1], "web.dom.capture_snapshot");
 });
 
 test("refuses an action the page did not take, and keeps disconnect and malformed snapshot failures fatal", async () => {

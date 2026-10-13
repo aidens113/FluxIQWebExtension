@@ -202,24 +202,29 @@ async function firstHandle(runtime: ReturnType<typeof createWebAutomationLlmEvid
   return shownPageLines(looked.evidence)[0]!.target;
 }
 
+// A press that lands counts on the page's status line, as a real page answers
+// a press, so no press here is taken for one that changed nothing (t511) and
+// pressed once more.
 function stub() {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
+  let presses = 0;
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
       commands.push({ actionType: command.actionType, parameters: command.parameters });
-      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page() } };
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page(presses) } };
+      if (command.actionType === "web.dom.click") presses += 1;
       return { status: "succeeded", payload: { value: "ok" } };
     }
   };
   return { gateway, commands };
 }
 
-function page(): JsonObject {
+function page(presses: number): JsonObject {
   return {
     url: "https://example.test/start",
     title: "Fixture",
     viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
-    interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }, { tagName: "input", selector: "#query", inputType: "text", accessibleName: "Search", attributes: { name: "q" } }]
+    interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }, { tagName: "input", selector: "#query", inputType: "text", accessibleName: "Search", attributes: { name: "q" } }, { tagName: "span", selector: "#status", visibleText: `Pressed ${presses} times` }]
   };
 }

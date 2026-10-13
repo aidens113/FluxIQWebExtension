@@ -65,6 +65,9 @@ test("a press that left the pressed control's choice as it was says nothing abou
   assert.equal("choice" in pressed, false);
   const grey = (await press(runtime, swatch(looked, "Space Grey"))).evidence as JsonObject;
   assert.equal("choice" in grey, false);
+  // Genuinely presses that changed nothing, even pressed twice: never `succeeded` (t511).
+  assert.equal(pressed.status, "no_effect");
+  assert.equal(grey.status, "no_effect");
 });
 
 function swatch(looked: { evidence: unknown }, words: string): string {

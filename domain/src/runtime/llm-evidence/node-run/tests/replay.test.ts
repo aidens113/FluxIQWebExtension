@@ -411,17 +411,22 @@ function answeringStub(failure: { code: string } | undefined, answer: string) {
   return { gateway };
 }
 
+// A press that lands counts on the page's status line, as a real page answers
+// a press, so no press here is taken for one that changed nothing (t511) and
+// pressed once more.
 function stub(options: { clickFailure?: { code?: string }; nextPageFailure?: { code: string }; payload?: JsonObject; elements?: JsonObject[]; truncated?: true } = {}) {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
+  let presses = 0;
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
       commands.push({ actionType: command.actionType, parameters: command.parameters });
-      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page(options.elements, options.truncated) } };
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page(options.elements, options.truncated, presses) } };
       if (command.actionType === "web.dom.click" && options.clickFailure) {
         const code = options.clickFailure.code;
         return code === undefined ? { status: "failed", error: "no" } : { status: "failed", failure: { code }, error: "no" };
       }
+      if (command.actionType === "web.dom.click") presses += 1;
       if (command.actionType === "web.dom.next_page" && options.nextPageFailure) return { status: "failed", failure: { code: options.nextPageFailure.code }, error: "no" };
       return { status: "succeeded", payload: options.payload ?? { value: "ok" } };
     }
@@ -429,12 +434,13 @@ function stub(options: { clickFailure?: { code?: string }; nextPageFailure?: { c
   return { gateway, commands };
 }
 
-function page(elements: JsonObject[] = [{ tagName: "button", selector: "#go", visibleText: "Go" }], truncated?: true): JsonObject {
+function page(elements: JsonObject[] = [{ tagName: "button", selector: "#go", visibleText: "Go" }], truncated?: true, presses = 0): JsonObject {
+  const status: JsonObject = { tagName: "span", selector: "#status", visibleText: `Pressed ${presses} times` };
   const snapshot: JsonObject = {
     url: START,
     title: "Fixture",
     viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
-    interactiveElements: elements
+    interactiveElements: [...elements, status]
   };
   if (truncated) snapshot.truncated = true;
   return snapshot;

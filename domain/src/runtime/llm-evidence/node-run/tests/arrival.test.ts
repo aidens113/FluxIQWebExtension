@@ -296,6 +296,7 @@ async function dryRun(runtime: Runtime): Promise<string[]> {
 function openTab() {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
   let location = START;
+  let presses = 0;
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
@@ -304,18 +305,22 @@ function openTab() {
         location = String(command.parameters.url);
         return { status: "succeeded", payload: { value: "ok" } };
       }
-      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page(location) } };
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page(location, presses) } };
+      if (command.actionType === "web.dom.click") presses += 1;
       return { status: "succeeded", payload: { value: "ok" } };
     }
   };
   return { gateway, commands };
 }
 
-function page(url: string): JsonObject {
+// A press that lands counts on the page's status line, as a real page answers
+// a press, so no press here is taken for one that changed nothing (t511) and
+// pressed once more.
+function page(url: string, presses = 0): JsonObject {
   return {
     url,
     title: "Bigbox",
     viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
-    interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Set as my store" }]
+    interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Set as my store" }, { tagName: "span", selector: "#status", visibleText: presses === 0 ? "No store chosen" : "Store chosen" }]
   };
 }

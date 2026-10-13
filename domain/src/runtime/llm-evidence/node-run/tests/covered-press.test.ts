@@ -16,31 +16,41 @@ const CLICK = "web.output.dom-click";
 /** `banner`: a layer beside the main column that covers nothing, as a cookie banner at the foot of the page. */
 type Layer = "none" | "popup" | "dialog" | "banner" | "overlap";
 
-/** The store page with the main column under `body`, and the layer the test opens beside it. */
+/**
+ * The store page with the main column under `body`, and the layer the test
+ * opens beside it. A press on the page's own controls changes its status line,
+ * as a real page answers a press, so no press here is taken for one that
+ * changed nothing (t511) and pressed once more.
+ */
 function store(): { gateway: WebLlmEvidenceGateway; clicks: string[]; open(layer: Layer): void } {
   let layer: Layer = "none";
+  let status = "Choose pickup or delivery";
   const clicks: string[] = [];
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
       if (command.actionType === "web.dom.click") {
         clicks.push(String(command.parameters.selector));
-        if (command.parameters.selector === "body > div:nth-of-type(1) > button") layer = "none";
+        const selector = String(command.parameters.selector);
+        if (selector === "body > div:nth-of-type(1) > button") layer = "none";
+        if (selector.endsWith("> header > button")) status = "Pickup chosen";
+        if (selector.endsWith("> main > a")) status = "Wireless earbuds opened";
         return { status: "succeeded" };
       }
       if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
-      return { status: "succeeded", payload: { snapshot: snapshot(layer) } };
+      return { status: "succeeded", payload: { snapshot: snapshot(layer, status) } };
     }
   };
   return { gateway, clicks, open: (next) => { layer = next; } };
 }
 
-function snapshot(layer: Layer): JsonObject {
+function snapshot(layer: Layer, status: string): JsonObject {
   const main = layer === "none" ? "body > div" : "body > div:nth-of-type(2)";
   const storeButton = `${main} > header > button`;
   const elements: JsonObject[] = [
     { tagName: "button", selector: storeButton, visibleText: "Pickup or delivery?" },
-    { tagName: "a", selector: `${main} > main > a`, visibleText: "Wireless earbuds", attributes: { href: "/p/1" } }
+    { tagName: "a", selector: `${main} > main > a`, visibleText: "Wireless earbuds", attributes: { href: "/p/1" } },
+    { tagName: "p", selector: `${main} > main > p`, visibleText: status }
   ];
   if (layer === "none") return { url: URL, title: "Store", interactiveElements: elements };
   const cover = "body > div:nth-of-type(1)";

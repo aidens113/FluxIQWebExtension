@@ -342,29 +342,36 @@ test("write must be a boolean, and write: false is an ordinary live run", async 
   assert.equal(stubbed.commands.filter((command) => command.actionType === "web.dom.click").length, 1);
 });
 
+/**
+ * A page with one Go button. A press that lands counts on the page's status
+ * line, as a real page answers a press, so no press here is taken for one that
+ * changed nothing (t511) and pressed once more.
+ */
 function stub(options: { failClick?: boolean } = {}) {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
   let title = "Fixture";
+  let presses = 0;
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
       commands.push({ actionType: command.actionType, parameters: command.parameters });
       if (command.actionType === "web.dom.capture_snapshot") {
-        return { status: "succeeded", payload: { snapshot: page(title) } };
+        return { status: "succeeded", payload: { snapshot: page(title, presses) } };
       }
       if (command.actionType === "web.dom.click" && options.failClick) return { status: "failed", error: "the control is gone" };
+      if (command.actionType === "web.dom.click") presses += 1;
       return { status: "succeeded", payload: { value: "ok" } };
     }
   };
   return { gateway, commands, setTitle: (next: string) => { title = next; } };
 }
 
-function page(title: string): JsonObject {
+function page(title: string, presses: number): JsonObject {
   return {
     url: "https://example.test/start",
     title,
     viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
-    interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }]
+    interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }, { tagName: "span", selector: "#status", visibleText: `Pressed ${presses} times` }]
   };
 }
 
@@ -415,7 +422,7 @@ function listPage(location: string, structure: JsonValue): WebLlmEvidenceGateway
     eligibleSessionIds: () => ["session.one"],
     structureDetectionSessionIds: () => ["session.one"],
     executeAction: async (_sessionId: string, command: { actionType: string }) => {
-      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded" as const, payload: { snapshot: Object.assign(page("Results"), { url: location }), structure: structuredClone(structure) } };
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded" as const, payload: { snapshot: Object.assign(page("Results", 0), { url: location }), structure: structuredClone(structure) } };
       gateway.reads += 1;
       return { status: "succeeded" as const, payload: { extracted: [{ name: "Row 1" }], extraction: { recordCount: 1, pagesRead: 1, itemsSeen: 1, truncated: false, fieldNames: ["name"], missingFields: [] } } };
     }

@@ -160,8 +160,11 @@ test("digests are stable across calls on an unchanged page and move when the pag
   const third = await look(runtime, "call.three");
   assert.notEqual(third.stateDigests?.after, second.stateDigests?.after);
 
-  // An action that changes nothing on the page leaves the state it found.
+  // An action that changes nothing on the page leaves the state it found. It is
+  // genuinely a press that changed nothing: waited on, pressed once more, and
+  // answered `no_effect` (t511).
   const pressed = await click(runtime, "call.four", handleOf(third, "Go"));
+  assert.equal((pressed.evidence as JsonObject).status, "no_effect");
   assert.equal(pressed.stateDigests?.before, third.stateDigests?.after);
   assert.equal(pressed.stateDigests?.after, third.stateDigests?.after);
 });
@@ -264,6 +267,8 @@ async function decide(
 type Decision = {
   name: string;
   page?: () => FakePage;
+  /** The page a press moves to, as a real page answers a press; without one a press changes nothing and is waited on and pressed again (t511). */
+  pressed?: () => FakePage;
   /** Whether the page refuses a click. */
   clickFails?: boolean;
   /** What happens first and is not counted: the look that shows a handle. */
@@ -288,6 +293,7 @@ const DECISIONS: Decision[] = [
     name: "action that runs",
     setUp: lookFirst,
     request: (shown) => ({ ...PROJECT, callId: "call.n", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: handleOf(shown!, "Go") } }, consequences: [] } }),
+    pressed: () => smallPage("Pressed"),
     bracketed: true, captures: { old: 4, now: 2 }, digests: "both"
   },
   {
@@ -329,7 +335,7 @@ const DECISIONS: Decision[] = [
 for (const decision of DECISIONS) {
   test(`page captures for one decision (${decision.name}): ${decision.captures.old} digested around the call, ${decision.captures.now} digested on it`, async () => {
     for (const protocol of ["digests-around-calls", "digests-on-calls"] as const) {
-      const fake = fakeGateway(decision.page?.() ?? smallPage(), { failClick: decision.clickFails === true });
+      const fake = fakeGateway(decision.page?.() ?? smallPage(), decision.pressed === undefined ? { failClick: decision.clickFails === true } : { failClick: decision.clickFails === true, onClick: decision.pressed() });
       const runtime = createWebAutomationLlmEvidenceRuntime(fake.gateway);
       const shown = await decision.setUp?.(runtime);
       const before = fake.captures();

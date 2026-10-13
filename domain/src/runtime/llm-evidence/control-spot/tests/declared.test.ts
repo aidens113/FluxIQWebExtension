@@ -16,18 +16,24 @@ const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const SEP = String.fromCharCode(31);
 
 /** Two request rows, each with its own Confirm button. */
-function requests(): JsonObject {
+/** Two request rows; each confirm that lands counts on a status line, as a real page answers it, so none is taken for a press that changed nothing (t511). */
+function requests(confirmed = 0): JsonObject {
   const row = (name: string, y: number) => [
     { tagName: "a", selector: `#name-${name}`, visibleText: name, bounds: { x: 0, y, width: 100, height: 20 }, context: { record: { text: name } } },
     { tagName: "button", selector: `#confirm-${name}`, visibleText: "Confirm", bounds: { x: 200, y, width: 80, height: 20 }, context: { record: { text: name } } }
   ];
-  return { url: "https://example.test/requests", title: "Requests", viewport: { width: 400, height: 400, scrollX: 0, scrollY: 0 }, interactiveElements: [...row("Tom Becker", 0), ...row("Amara Osei", 40)] };
+  return { url: "https://example.test/requests", title: "Requests", viewport: { width: 400, height: 400, scrollX: 0, scrollY: 0 }, interactiveElements: [...row("Tom Becker", 0), ...row("Amara Osei", 40), { tagName: "span", selector: "#status", visibleText: `${confirmed} confirmed`, bounds: { x: 0, y: 80, width: 100, height: 20 } }] };
 }
 
 test("a press declares the opaque token of the row its control sits in: each row its own, and none of its words", async () => {
+  let confirmed = 0;
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
-    executeAction: async (_session, command) => command.actionType === "web.dom.capture_snapshot" ? { status: "succeeded", payload: { snapshot: requests() } } : { status: "succeeded", payload: { value: "ok" } }
+    executeAction: async (_session, command) => {
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: requests(confirmed) } };
+      if (command.actionType === "web.dom.click") confirmed += 1;
+      return { status: "succeeded", payload: { value: "ok" } };
+    }
   };
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });

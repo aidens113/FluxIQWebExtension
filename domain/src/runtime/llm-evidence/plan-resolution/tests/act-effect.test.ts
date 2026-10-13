@@ -114,6 +114,8 @@ test("no effect is answered where no act's identity is: exploration's own resolu
   // Share's press changed no control on the page: there is nothing its step could be passed over for.
   const share = shownHandle((await run(runtime, LOOK, {})).evidence, "Share");
   const pressed = await run(runtime, CLICK, { target: { handle: share } });
+  // Genuinely a press that changed nothing: waited on, pressed once more, and answered `no_effect` (t511).
+  assert.equal((pressed.evidence as JsonObject).status, "no_effect");
   assert.deepEqual(pressed.routeState, await routeStateOf(runtime), "the page the press left is the page as it was");
   const unchanged = await candidate(runtime, share);
   assert.equal(unchanged.status, "resolved", JSON.stringify(unchanged));

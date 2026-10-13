@@ -67,6 +67,8 @@ test("a press that changed nothing, a look and a navigation say no changes", asy
   const pressed = await press(runtime, shownHandle(looked.evidence, "Add to cart"));
   assert.equal((pressed.evidence as JsonObject).pageChanged, false);
   assert.equal("changed" in (pressed.evidence as JsonObject), false);
+  // Genuinely a press that changed nothing, even pressed twice: never `succeeded` (t511).
+  assert.equal((pressed.evidence as JsonObject).status, "no_effect");
   stubbed.set({ chosen: true });
   const went = await runtime.executeTool({ ...PROJECT, callId: "call.go", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: NAVIGATE, parameters: { url: ITEM }, consequences: [] } });
   assert.equal(went.resultCode, "web.action.succeeded", JSON.stringify(went.evidence).slice(0, 400));

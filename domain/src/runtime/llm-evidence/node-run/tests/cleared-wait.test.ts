@@ -45,11 +45,16 @@ test("a malformed or out-of-bounds wait adds nothing, and an extra field never r
   assert.deepEqual(withClearedWait({ checkWait: { waitedMs: 600_000 } }, toolExecution({}, true, "web.action.succeeded")).clearedWait, { waitedMs: 600_000 });
 });
 
+// A press that lands counts on the page's status line, as a real page answers
+// a press, so no press here is taken for one that changed nothing (t511) and
+// pressed once more.
 async function pressWith(clickPayload: JsonObject) {
+  let presses = 0;
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
-      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page() } };
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page(presses) } };
+      presses += 1;
       return { status: "succeeded", payload: clickPayload };
     }
   };
@@ -60,11 +65,11 @@ async function pressWith(clickPayload: JsonObject) {
   return await runtime.executeTool({ ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle } }, consequences: [] } });
 }
 
-function page(): JsonObject {
+function page(presses: number): JsonObject {
   return {
     url: "https://example.test/start",
     title: "Fixture",
     viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
-    interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }]
+    interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }, { tagName: "span", selector: "#status", visibleText: `Pressed ${presses} times` }]
   };
 }

@@ -5,7 +5,11 @@ import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_FIND_ON_PAGE_TOOL_ID, WE
 
 const PROJECT = { projectId: "project.find", flowId: "flow.find" } as const;
 
-/** A page whose account menu is closed: its items are listed only when a capture asks for hidden elements. */
+/**
+ * A page whose account menu is closed: its items are listed only when a capture
+ * asks for hidden elements. Pressing Account opens it, as a real menu does, so
+ * the press is never taken for one that changed nothing (t511) and pressed once more.
+ */
 function site(): { gateway: WebLlmEvidenceGateway; captures: JsonObject[]; clicks: string[] } {
   const captures: JsonObject[] = [];
   const clicks: string[] = [];
@@ -22,8 +26,10 @@ function site(): { gateway: WebLlmEvidenceGateway; captures: JsonObject[]; click
         { tagName: "button", selector: "#account", accessibleName: "Account" },
         { tagName: "a", selector: "#home", accessibleName: "Home", attributes: { href: "/home" } }
       ];
-      const hidden = [{ tagName: "a", selector: "#orders", accessibleName: "Your orders", attributes: { href: "/orders", "data-testid": "menu-orders" }, hidden: true }];
-      const interactiveElements = command.parameters.includeHidden === true ? [...visible, ...hidden] : visible;
+      const orders = { tagName: "a", selector: "#orders", accessibleName: "Your orders", attributes: { href: "/orders", "data-testid": "menu-orders" } };
+      const open = clicks.includes("#account");
+      const hidden = open ? [] : [{ ...orders, hidden: true }];
+      const interactiveElements = open ? [...visible, orders] : command.parameters.includeHidden === true ? [...visible, ...hidden] : visible;
       return { status: "succeeded", payload: { snapshot: { url: "https://shop.test/home", title: "Shop", interactiveElements } } };
     }
   };
