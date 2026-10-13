@@ -258,6 +258,20 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
 
 ## Work Ledger
 
+### 2026-10-13 - Round 15: C, B and D all passed and replayed
+
+- Agent: Claude senior supervisor; debug workers.
+- Round 15 (pair Core b73717a8 / downstream dfbf6fa4, carrying t482-t494):
+  - C qualification build 1 `run-mv6eq0m8-3fe9dc47` passed $0.0717 (13/13 in order, 52/52 fields, 0 unexpected);
+    replay `replay-mv6f35nl-320c42de` passed (13/13, goal true, hash equal, all five zero).
+  - B confirming build `run-mv6eq215-a986f1f3` passed $0.0756; replay `replay-mv6f0jyq-82829319` passed (goal true,
+    hash equal, all five zero).
+  - D confirming build `run-mv6ep5oy-05d5095c` passed $0.0709 under the stricter t492 oracle; replay
+    `replay-mv6f1713-07253526` passed (4/4, goal true with the pending-request facts, hash equal, all five zero).
+- Validation: spend-ledger finish lines; each run's `evaluation.json` verdict and oracle "passed" read by the
+  supervisor (C extraction 13/13 by position, 52/52 fields); replay receipts quoted above.
+- Outcome: In progress. Full debugs dispatched for all three; C's qualification build 2 waits for C's debug.
+
 ### 2026-10-13 - t494 merged; round 15 launched
 
 - Agent: Claude senior supervisor.
