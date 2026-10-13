@@ -84,8 +84,21 @@
 // refusal now points at the written name, and Core's advice for
 // `web.handle.unknown_field` says what is true of it: the list is right, and a
 // condition names only its own step's fields or the list's detected columns.
-// The name itself is not spelled back: a refusal quotes structure only
-// (`../issue-position.ts`), and the model reads its own name at that place.
+// Since t497 the refusal also carries one issue in the shape t489 gave the
+// record output's columns, `{code: "web.handle.unknown_field", field, valid}`:
+// the name as written and every name the condition could use instead -- the
+// plan's own kept keys, then the detection's keys. Names and keys only, held to
+// Core's bounds (`./refusal-issues.ts`); a header with a space in it is not an
+// identifier and is left out rather than quoted.
+//
+// **A name whose nearest column is a sibling is one neither vocabulary knows**
+// (t497). Lane D round 15 (`run-mv6ep5oy-05d5095c`, D1) wrote a condition on a
+// key from a later detection of the same card; the read had no such column,
+// and the nearest one shared the card's path and was its button. The condition
+// tested the button and kept the rows it was written to leave out, and the
+// submit answer said nothing. The matcher now refuses a guess that swaps a part
+// of the name for another (`output-nodes/extract-list/swapped-name.ts`), so that
+// condition is refused here with the read's columns listed.
 
 import type { WebAutomationExtractField, WebAutomationExtractItemCondition } from "../../../../actions/extraction";
 import { webAutomationExtractConditionSayingValue } from "../../../../actions/extraction";
@@ -93,12 +106,14 @@ import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
 import { webExtractionComparedShape } from "../../../../output-nodes";
 import { webExtractionNamedColumn, type WebExtractionColumn, type WebExtractionColumnAssumption, type WebExtractionColumnIssue, type WebExtractionColumnLook } from "./columns";
+import { webPlanBoundedIssues, type WebPlanRefusalIssue } from "./refusal-issues";
 import type { WebPlanValuePath } from "../handle-tokens";
 
 export type WebExtractionConditions =
   /** `where` is empty when the clause was written and says nothing, which is what writing no clause says. */
   | { ok: true; where: WebAutomationExtractItemCondition[]; assumed: WebExtractionColumnAssumption[] }
-  | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath };
+  /** `issues` only for a column neither vocabulary knows: the name and the names it can use (header, t497). */
+  | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath; issues?: WebPlanRefusalIssue[] };
 
 /**
  * The columns a condition may name: the ones the detection showed the model,
@@ -152,7 +167,7 @@ export function keptWebExtractionConditions(where: unknown, columns: WebExtracti
 
 type OneCondition =
   | { ok: true; condition: WebAutomationExtractItemCondition; assumed: WebExtractionColumnAssumption | undefined }
-  | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath };
+  | Extract<WebExtractionConditions, { ok: false }>;
 
 function readCondition(entry: unknown, columns: WebExtractionConditionColumns, path: WebPlanValuePath): OneCondition {
   if (!isJsonRecord(entry)) return { ok: false, issue: "web.handle.malformed", path };
@@ -165,7 +180,7 @@ function readCondition(entry: unknown, columns: WebExtractionConditionColumns, p
   const says = webAutomationExtractConditionSayingValue(entry, NAMING_KEYS);
   const column = conditionColumn(named, columns, webExtractionComparedShape(says.ok ? says.says : undefined), path);
   // A name neither vocabulary knows is refused at the key that wrote it (header, t383).
-  if (!column.ok) return column.issue === "web.handle.unknown_field" ? { ok: false, issue: column.issue, path: [...path, namingKey(entry)] } : column;
+  if (!column.ok) return column.issue === "web.handle.unknown_field" ? unknownColumn(named, columns, [...path, namingKey(entry)]) : column;
   // A key the grammar cannot place or act on is refused where it was written;
   // a condition contradicting itself is refused as a whole, since no one key
   // explains it.
@@ -264,6 +279,17 @@ function sortedKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortedKeys);
   if (!isJsonRecord(value)) return value;
   return Object.fromEntries(Object.keys(value).sort().filter((key) => value[key] !== undefined).map((key) => [key, sortedKeys(value[key])]));
+}
+
+/**
+ * The refusal of a condition whose column neither vocabulary knows (header):
+ * the name as written, and every name it could use -- the plan's kept keys
+ * first, because those are the ones it chose, then the detection's.
+ */
+function unknownColumn(named: string, columns: WebExtractionConditionColumns, path: WebPlanValuePath): Extract<WebExtractionConditions, { ok: false }> {
+  const written = named.startsWith(HEADER_PREFIX) ? named.slice(HEADER_PREFIX.length) : named;
+  const valid = [...Object.keys(columns.kept), ...Object.keys(columns.detected)];
+  return { ok: false, issue: "web.handle.unknown_field", path, issues: webPlanBoundedIssues([{ code: "web.handle.unknown_field", field: written, valid }]) };
 }
 
 /** The key the condition's column is named under: the first naming key written, or `header` (`columnName` has already refused two that disagree). */
