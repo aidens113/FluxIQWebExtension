@@ -11,7 +11,8 @@ export type WebStartState = {
   /**
    * The page view's element lines, handle-free (`../page-view/handle-free-lines.ts`),
    * then one row per element that is not rendered, as a result check's passive
-   * view prints it. Lines of a dialog or a layer in front of the page are left out.
+   * view prints it. Lines of a dialog or a layer in front of the page are left out,
+   * except the hidden state the page's own pinned banner holds (`./page-state.ts`, t505).
    */
   lines: string[];
   /**

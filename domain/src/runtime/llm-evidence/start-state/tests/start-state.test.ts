@@ -135,6 +135,66 @@ test("a dialog or covering layer over the page is not the site's state", async (
   assert.equal(changed.differs.length, 4, "the page behind the wall is still compared");
 });
 
+/**
+ * A detail page whose pinned header (`position: sticky`, so the capture puts it
+ * in the front layer) holds a hidden summary of the list a press adds to, shown
+ * only on hover, as a site's header menu does. `panel` opens a pinned "Added"
+ * panel beside the page, as a press's confirmation does, with a hidden tip of
+ * its own.
+ */
+const detail = (saved: readonly string[], panel = false): Snapshot => {
+  const banner = { landmark: "banner" };
+  const aside = 6 + saved.length;
+  return {
+    url: "https://site.test/item/7",
+    title: "Item 7",
+    interactiveElements: [
+      { tagName: "header", selector: "#top", bounds: box(0, 0, 1280, 60), frontLayer: true, context: banner },
+      { tagName: "a", selector: "#list-link", visibleText: "Your list", bounds: box(1100, 10, 80, 20), frontLayer: true, parent: 0, context: banner },
+      { tagName: "div", selector: "#summary", hidden: true, parent: 0, context: banner },
+      ...saved.map((name, index) => ({ tagName: "li", selector: `#summary-${index}`, visibleText: `1 x ${name}`, hidden: true, parent: 2, context: banner })),
+      { tagName: "p", selector: "#summary-total", visibleText: `${saved.length} on your list`, hidden: true, parent: 2, context: banner },
+      { tagName: "h1", selector: "#title", visibleText: "Item 7", bounds: box(0, 100, 400, 40), context: { landmark: "main" } },
+      { tagName: "button", selector: "#keep", visibleText: "Keep on list", bounds: box(0, 300, 160, 40), context: { landmark: "main" } },
+      ...(panel ? [
+        { tagName: "aside", selector: "#added", bounds: box(880, 0, 400, 800), frontLayer: true, context: { landmark: "complementary" } },
+        { tagName: "strong", selector: "#added-head", visibleText: "Added", bounds: box(900, 20, 100, 20), frontLayer: true, parent: aside, context: { landmark: "complementary" } },
+        { tagName: "div", selector: "#added-tip", visibleText: "Only one per visit", hidden: true, parent: aside, context: { landmark: "complementary" } }
+      ] : [])
+    ]
+  };
+};
+
+test("an add on a detail page shows in the hidden summary its pinned header holds: the page's own banner is not a layer over it (t505)", async () => {
+  const { start, now } = await compare(detail(["Lamp"]), detail(["Lamp", "Chair"], true));
+  const lines = start.state.lines as string[];
+  assert.ok(lines.some((line) => line.includes("1 x Lamp") && line.includes("\"hidden\":true")), lines.join("\n"));
+  assert.ok(now.lines);
+  assert.equal(now.lines.added.filter((line) => line.includes("1 x Chair")).length, 1, now.differs.join("\n"));
+  assert.ok(now.lines.added.some((line) => line.includes("2 on your list")), now.differs.join("\n"));
+  assert.ok(now.lines.gone.some((line) => line.includes("1 on your list")), now.differs.join("\n"));
+  assert.ok(!now.differs.some((entry) => entry.includes("Lamp")), "what the list held before the add is never new");
+  assert.ok(now.differs.every((entry) => !/Added|Only one per visit|Your list/u.test(entry)), "the panel the press opened, and the pinned header's rendered words, stay out");
+});
+
+test("a pinned panel that opens with nothing else changed is still no difference, hidden content and all (t505 keeps t475)", async () => {
+  const { now } = await compare(detail(["Lamp"]), detail(["Lamp"], true));
+  assert.deepEqual(now.differs, []);
+});
+
+test("hidden content of a dialog stays out, even one in the page's banner: a dialog is an interruption, painted or not (t505)", () => {
+  const withHidden = (note: string): Snapshot => {
+    const snapshot = walled(3);
+    const elements = snapshot.interactiveElements as Array<Record<string, unknown>>;
+    const dialog = elements.findIndex((element) => element.selector === "#consent");
+    return { ...snapshot, interactiveElements: [...elements.map((element, index) => index >= dialog ? { ...element, context: { landmark: "banner" } } : element), { tagName: "p", selector: "#consent-note", visibleText: note, hidden: true, parent: dialog, context: { landmark: "banner" } }] };
+  };
+  const one = webStartStateFromEvidence(sanitizeWebLlmSnapshot(withHidden("Partner list v1")));
+  const two = webStartStateFromEvidence(sanitizeWebLlmSnapshot(withHidden("Partner list v2")));
+  assert.ok(one.lines.every((line) => !line.includes("Partner list")), one.lines.join("\n"));
+  assert.deepEqual(one.lines, two.lines);
+});
+
 test("a start this module did not make answers undefined without reading the page", async () => {
   const { runtime, commands } = runtimeOver(cart(3));
   const made = (await runtime.startState!(request))!.state;
