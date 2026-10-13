@@ -385,6 +385,24 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
 
 ## Work Ledger
 
+### 2026-10-13 - t510 merged (one reader for a record output; value reading)
+
+- Agent: Claude senior supervisor; t510 workers.
+- Changed: submit writes back the record output the dispatch builds (`plan-resolution/extraction/run-record-output.ts`),
+  so submit and run time can no longer disagree; a field a process sorts, dedupes or filters on stays stored but hidden;
+  every record-output refusal carries `{code, field, valid}` and Core's `process_excluded_field` gives the
+  store-and-hide remedy, wired through to feedback; the format says what exclude and `process.columns` each mean. Value
+  reading: a date keeps its time of day, "Nd Nh left" is a remaining time, a year-less date is the occurrence nearest the
+  read; k on the digits is thousand; m is million only with a currency sign or a decimal point (supervisor rule: "3m ago"
+  and "10m" stay as written); the domain's and the extension's readers run Core's shared table. Behaviour change: a schema
+  field marked exclude is stored only when a process needs it. Known: a range reads only its first end ("£60-72k" is 60).
+- Validation: Core contracts record-sets "159 passed"; Core flow-bootstrap and result-verification "195 passed | 1
+  skipped" files, "2532 passed"; Core tsc and build exit 0; after the dev merge (resolve-plan-node.ts auto-merged with
+  t509, 800 lines) domain output-nodes, llm-evidence and actions/extraction "# pass 1388 / # fail 0", extension
+  content/extraction and actions "# pass 433 / # fail 0", typechecks exit 0, audit passed; Core merge gated by
+  `pnpm check`. Pushed Core `ad721caa`, downstream `3e970ce4`.
+- Outcome: Accepted. Compatibility replays of the latest B, C and D Flows running.
+
 ### 2026-10-13 - t507, t508 and t509 merged (wave-1 element handling; durable apply)
 
 - Agent: Claude senior supervisor; t507-t509 workers.
