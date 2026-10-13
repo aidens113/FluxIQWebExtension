@@ -153,6 +153,16 @@ Codex supervisor has dispatched these independent briefs. Worker claims remain u
 - Definition of done: exact rejecting endpoint/code path, caller/callee mismatch, relation to t518 changes, bounded fix paths and regression command. Both final fixture checkpoints succeeded; evaluations say facility.contract/unclassified and zero model calls; flow-lane snapshot absent.
 - Report to: own report above and supervisor.
 
+### Brief: codex-t518-store-replay-debug
+- Repository: paired t518 source, read-only store run-mv70yr2e-cebae56b in test-runs/instances/codex-t518-slot-1; crossborder passing run-mv70yrj2-bc7f032a in slot 3 as comparison.
+- Task: trace store's four web.dom.wait_for_selector timeouts after approval succeeds. Determine exact inferred versus authored wait, capture completeness/provenance/signature coverage, live matching reason and minimal safe fix.
+- Required reads: Current State; own t518 report; flow-lane/runtime/evidence artifacts privately; owning historical projector, recorded-routing signer and existing Core routing only as needed.
+- Owns (may edit): own report only, docs/working/adaptation-and-breadth-plan/reports/codex-t518-store-replay-debug.md in t518 downstream.
+- Must not touch: source, fixtures/oracles/model guidance/shared docs/original runtime data; no commits/pushes/browser/provider/full-suite runs.
+- Safety: no raw page values, selectors, state hashes, credentials/tokens or log/response bodies in report. Return static failure/output codes, evidence completeness counts, source locations and fix paths. No generic timeout/absent-control success.
+- Definition of done: explain why positive state routing failed, prove proposed fix with bounded generic regression design, distinguish missing producer evidence from routing defect. Crossborder oracle passed, zero calls/harness activations, an obsolete click was skipped; store extraction never ran.
+- Report to: own report above and supervisor.
+
 ## Inventory (2026-10-13)
 
 ### Drift variants
