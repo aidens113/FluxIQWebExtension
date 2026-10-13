@@ -318,3 +318,77 @@ test("the boundary's expectation evaluator judges conditions through the same ga
   assert.equal(evaluation.checkedConditionCount, 1);
   assert.equal(evaluation.failure?.code, "web.validation.state_mismatch");
 });
+
+// One page capture between two web steps, not two (t480: 25 s of each 58 s
+// Lab trial was the page read twice). Core offers the page the last step ended
+// on to the next step's `before_action` capture only when no step started since
+// and it arrived moments ago; this host answers it rather than reading the same
+// page again, and reads as before in every other case.
+function capturedPage(): Partial<OutputDispatchResult<JsonObject>> {
+  return { ok: true, status: "succeeded", payload: { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/s?k=earbuds&page=2", ["#next"]) } } };
+}
+
+test("the page the last step ended on, offered back at the next step's start, is answered without a second read", async () => {
+  const { gateway: seam, calls } = gateway([capturedPage()]);
+  const boundary = createWebAutomationHostRuntime(seam);
+  const ended = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID, "after_action"));
+  const next = { ...captureInput(POLICY_ACTION_ID, "before_action", { outputId: "web.dom.extract_list" }), attemptId: "node.2.attempt.1", previousStateRef: ended };
+  const started = await boundary.captureStateSnapshot!(next);
+
+  assert.equal(calls.length, 1);
+  // The same snapshot, every key a later reader uses with it: the view, `from`, the capture time.
+  assert.equal(started, ended);
+  assert.deepEqual(started.from, { location: "https://shop.test/s?k=earbuds&page=2" });
+});
+
+test("an offered page is read again when it is not a step's start or not this host's snapshot, and a non-page node is still declined", async () => {
+  const { gateway: seam, calls } = gateway(Array.from({ length: 4 }, capturedPage));
+  const boundary = createWebAutomationHostRuntime(seam);
+  const ended = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID, "after_action"));
+  assert.equal(calls.length, 1);
+
+  const after = await boundary.captureStateSnapshot!({ ...captureInput(CLICK_NODE_ID, "after_action"), previousStateRef: ended });
+  assert.notEqual(after, ended);
+  const foreign = await boundary.captureStateSnapshot!({ ...captureInput(CLICK_NODE_ID), previousStateRef: { stateSnapshotId: "other.1", stateRef: "other.1@x", capturedAt: 1, summary: {} } });
+  assert.notEqual(foreign.stateSnapshotId, "other.1");
+  const { summary: _view, ...viewlessRef } = ended;
+  const viewless = await boundary.captureStateSnapshot!({ ...captureInput(CLICK_NODE_ID), previousStateRef: viewlessRef });
+  assert.notEqual(viewless, ended);
+  assert.equal(calls.length, 4);
+  await assert.rejects(async () => boundary.captureStateSnapshot!({ ...captureInput("builtin.code.run"), previousStateRef: ended }), /does not act on a page/u);
+  assert.equal(calls.length, 4);
+});
+
+// Before and after, timed: one web step's two state captures, with the page a
+// results page of 400 controls and the browser answering in 40 ms. Before t480
+// the step's start read the page again; now it is the page the last step ended on.
+test("one web step's state captures take one page read where they took two", async (t) => {
+  const LATENCY_MS = 40;
+  const bigPage = pageSnapshot("https://shop.test/s?k=earbuds&page=2", Array.from({ length: 400 }, (_, index) => `#result-${index}`));
+  const reads = { count: 0 };
+  const seam: WebAutomationHostRuntimeGateway = {
+    dispatch: async (request) => {
+      reads.count += 1;
+      await new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
+      return { outputId: request.outputId, ok: true, status: "succeeded", payload: { status: "succeeded", result: { snapshot: bigPage } } } as OutputDispatchResult<JsonObject>;
+    }
+  };
+  const boundary = createWebAutomationHostRuntime(seam);
+  const lastEnded = await boundary.captureStateSnapshot!(captureInput(CLICK_NODE_ID, "after_action"));
+  const step = (offered: boolean) => ({ ...captureInput(CLICK_NODE_ID), attemptId: "node.2.attempt.1", ...(offered ? { previousStateRef: lastEnded } : {}) });
+
+  async function timed(offered: boolean): Promise<{ ms: number; reads: number }> {
+    const readsBefore = reads.count;
+    const startedAt = performance.now();
+    await boundary.captureStateSnapshot!(step(offered));
+    await boundary.captureStateSnapshot!({ ...step(false), point: "after_action" });
+    return { ms: performance.now() - startedAt, reads: reads.count - readsBefore };
+  }
+  const before = await timed(false);
+  const after = await timed(true);
+  t.diagnostic(`one web step's captures: before t480 ${before.reads} reads in ${before.ms.toFixed(1)} ms; after ${after.reads} read in ${after.ms.toFixed(1)} ms`);
+
+  assert.equal(before.reads, 2);
+  assert.equal(after.reads, 1);
+  assert.ok(after.ms < before.ms, `${after.ms} < ${before.ms}`);
+});
