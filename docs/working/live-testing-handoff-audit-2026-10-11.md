@@ -269,16 +269,28 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
     submit:true, which moves the browser to the results page that printed t1247, but the check took the page from
     both neighbours' handles (printed on the towels product page, the same location without its query) and
     assumed the step runs there. The repeat guard then refused the unchanged resubmits; no Flow.
-  - D confirming build `run-mv66sc3c-c47e74b8` failed $0.0243: twice a trial ran incomplete and a reworded
-    resubmit was answered `candidate.unchanged_submission` (t485's label-only rule); the repeat guard refused the
-    retries; record-output refusals (`process_unknown_field`, `process_where_column_dropped`) in between. Debug
-    dispatched to find whether the rule blocks a legitimate retest.
+  - D confirming build `run-mv66sc3c-c47e74b8` failed $0.0243 on a contract defect older than round 12, not
+    t485 (the supervisor's first guess was wrong): submit checks `recordOutput` as written, while
+    `extract-list/dispatch.ts` swaps its schema for the read's raw detector keys, so revisions 4, 7 and 8 passed
+    submit, confirmed all 8 requests and failed the last read `process_unknown_field` (not retryable); trial feedback
+    said only "The step names a node that cannot run"; raw keys were refused at submit; identical resubmits ended on
+    the repeat guard. Round 12 passed only because that model wrote its columns inside `extractList.fields`. Debug
+    in t275. Fix t489.
+  - Debugs: B (t262) confirms the false positive (the pages differed in path, not query); cache hits 84.8% (58.4%
+    in round 12), the per-token rate halved. C (t451) confirms 13/13 by position and 52/52 fields; the Flow pressed
+    no site filter (all narrowing in the read's `where`), so t482's rule is unproven live. Found: page 2 read as
+    "page 1"; Core guidance `flow-script-format.ts:190` invites narrowing with site controls first; a row check
+    matching by name prefix (`request-rows/checked-rows.ts`); one wording for every handle code (`issue-words.ts`).
 - Changed: t488 reverts the submit-time check (plan-parameter-resolution.ts, submission-refusal.ts and their tests
   restored to 1cf31ed3); the run-time refusal of a handle from another page stays.
 - Validation: t488 Core harness-options/candidate/harness/step-loop "61 passed (61)" files, "478 passed", tsc exit
   0, Core merge gated by `pnpm check` passed; pushed Core `8ecf5ae6` (downstream unchanged at `4ecccbcb`).
 - Outcome: In progress. Decision (supervisor): C's round-13 pass does not count toward qualification, because the
-  pair changes with t488 and D's fix; round 14 restarts C's count on the next pair.
+  pair changes with t488 and t489; round 14 restarts C's count on the next pair.
+- Follow-up: t489 one domain function decides a record output's stored columns for both submit and dispatch,
+  unknown names refused at submit with the read's columns listed, a read says which page it read, a bare
+  `extraction.N` for `nextPage`; Core trial feedback carries the node's own issues, validation names the unknown
+  field, guidance stops inviting site-control narrowing, row identity not by name prefix, true words per handle code.
 
 ### 2026-10-13 - t482-t487 merged; round 13 prepared
 
