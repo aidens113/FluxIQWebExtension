@@ -258,6 +258,18 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
 
 ## Work Ledger
 
+### 2026-10-13 - t494 merged; round 15 launched
+
+- Agent: Claude senior supervisor.
+- Changed: t494 `lab replay` also checks a dataset-judged task's declared final state, as the created-Flow lane
+  does (`saved-flow-replay/final-state-check.ts`); before it, D's replay reported goal null and would have passed an
+  over-confirming Flow. The structure baseline was lowered where a violation was removed.
+- Validation: runner tsc exit 0; `node --test` saved-flow-replay and guarded-browser "# pass 46 / # fail 0"; audit
+  exit 0. Live: D's round-14 Flow replayed under the t492 oracle, before t494 `replay-mv6drba2-f7455fd6` (goal null)
+  and after `replay-mv6emycm-5911a977` passed (4/4, goal true, hash equal, all five zero). Round-15 preflight on Core
+  b73717a8: matrix `{"passed":14}`, B, C and D dry runs `ready` with 0 provider calls. Pushed downstream `dfbf6fa4`.
+- Outcome: Accepted. Round 15 launched: C build 1 (qualification), B and D confirming builds.
+
 ### 2026-10-13 - t493 merged; round 15 prepared
 
 - Agent: Claude senior supervisor; t493 worker.
