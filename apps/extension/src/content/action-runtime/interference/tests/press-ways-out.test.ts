@@ -157,3 +157,11 @@ test("at most three layers are pressed in one intervention", () => {
   const { body } = page(...prompts.map((prompt) => prompt.scrim));
   assert.equal(withPage(body, () => pressWaysOut(undefined)).length, 3);
 });
+
+test("a text-only dismissal keeps its visible words when it has no accessible name", () => {
+  const decline = h("p", {}, "No thanks, I will browse first");
+  const promotion = h("div", { role: "dialog", "aria-modal": "true", "aria-label": "Reading reminders" }, [decline]);
+  closesOnPress(decline, promotion);
+  const cleared = withPage(h("body", {}, [promotion]), () => pressWaysOut(undefined));
+  assert.deepEqual(cleared, [{ kind: "dialog", control: "No thanks", name: "Reading reminders", controlName: "No thanks, I will browse first" }]);
+});

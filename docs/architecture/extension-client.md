@@ -1075,12 +1075,14 @@ malformed Flow and still fails as `web.validation.state_mismatch`, as does a
 failed URL claim on a page with no gate. Every producer is listed in
 [the failure taxonomy](failure-taxonomy.md#who-produces-what).
 
-### Robot Checks
+### Learned Interruption Handlers
 
 A layer that the interference defence closes can become a guarded handler of
 the saved Flow. The action result's `clearedLayers` keeps the layer kind and
 allow-listed dismissal, plus the accessible layer `name` and `controlName`
-when present (whitespace collapsed, at most 120 characters each). The browser
+when present (whitespace collapsed, at most 120 characters each). A text-only
+dismissal uses its sensitivity-filtered visible text when it has no accessible
+name. The browser
 also reports the pressed control's descriptor as `wayOut`; that descriptor
 stays in the domain, which passes Core an opaque reference and
 `wayOutDefinitionId: "web.output.dom-click"`.
@@ -1100,6 +1102,8 @@ handler. The adaptation remains held until the run succeeds and its result is
 judged to answer. A failed, refuted or unjudged run leaves it unapplied and
 reviewable. Each layer cleared by the same attempt has distinct repair,
 adaptation and proposal identities.
+
+### Robot Checks
 
 FluxIQ never presses, types into, solves or reloads a robot check. What it
 does next depends on who clears the check, which

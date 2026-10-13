@@ -15,7 +15,8 @@
 // carries the layer's accessible name, computed exactly as the snapshot's
 // dialog evidence labels it (`../../evidence/dialogs.ts`), which is what a
 // `dialog` fact's name is matched against, and the pressed control's accessible
-// name. Both are what a page view of the step already shows; the domain bounds
+// name, falling back to its sensitivity-filtered visible words for a text-only
+// dismissal. Both are what a page view of the step already shows; the domain bounds
 // them (`domain/src/actions/cleared-layers.ts`). Each is read before the press,
 // for the reason the way out is; a layer the page gave no name has none.
 //
@@ -33,7 +34,7 @@
 // it would name a control of the top document.
 
 import type { WebAutomationClearedLayer } from "@fluxiq-web-extension/domain/client";
-import { describeElement } from "../../describe-element";
+import { describeElement, visibleText } from "../../describe-element";
 import { isTopFrame } from "../../frame-geometry";
 import { accessibleNameFor } from "../../identity";
 import { dispatchClickGesture } from "../click-gesture";
@@ -89,10 +90,10 @@ function clearedKind(overlay: Element): WebAutomationClearedLayer["kind"] {
   return kind === undefined || kind === "robot_check" ? "dialog" : kind;
 }
 
-/** The layer's and the control's accessible names, each only when the page gave one. */
+/** The layer's accessible name and the dismissal's accessible name or safely readable text. */
 function namesOf(overlay: Element, control: Element): Pick<WebAutomationClearedLayer, "name" | "controlName"> {
   const name = accessibleNameFor(overlay);
-  const controlName = accessibleNameFor(control);
+  const controlName = accessibleNameFor(control) || visibleText(control);
   return { ...(name ? { name } : {}), ...(controlName ? { controlName } : {}) };
 }
 
