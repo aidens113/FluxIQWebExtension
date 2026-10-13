@@ -281,7 +281,7 @@ export type PanelRelayFailureCode = "forbidden" | "not_paired" | "no_project" | 
 /** Every panel relay's reply, in the `{ ok: true } & T | { ok: false; error }` envelope the panel already reads. */
 export type PanelRelayResponse<TPayload = unknown> =
   | { ok: true; payload: TPayload }
-  | { ok: false; error: string; code: PanelRelayFailureCode; httpStatus?: number | undefined };
+  | { ok: false; error: string; code: PanelRelayFailureCode; httpStatus?: number | undefined; diagnosticCode?: string };
 
 /**
  * Automation panel requests, by their short names; the strings live in

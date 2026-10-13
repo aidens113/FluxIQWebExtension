@@ -22,6 +22,7 @@ import { ADD_TO_CART_WORKFLOW, FIRST_PAGE_WORKFLOW, PLUS_UNDER_FIFTY_WORKFLOW, P
  */
 export const everythingStoreManifest = createScenarioManifest({
   id: "everything-store",
+  recordingDescription: "Demonstrates search, product options, cart review and checkout controls.",
   title: "Everything store",
   tags: ["retail", "marketplace", "search", "pagination", "sponsored", "variants", "checkout", "anti-bot", "captcha", "rate-limit", "honeypot", "consent-banner", "shadow-dom", "iframe", "generated-classes", "extraction"],
   seed: 241,

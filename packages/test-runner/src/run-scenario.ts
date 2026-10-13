@@ -30,6 +30,7 @@
 // the bundle.
 import { presentFlowTab, verifyRunningCoreIdentity, verifyRunningHostIdentity, verifyRunningServerAdapterIdentity, requiresCoreRuntimeIdentity } from "./run-scenario/browser-session/index.js";
 import { randomBytes } from "node:crypto";
+import { refuseRecordingOnlyFlow } from "./flow-lane/recording-only/index.js";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { BrowserContext, Page } from "@playwright/test";
@@ -51,7 +52,7 @@ import { exportCloneSource } from "./clone-source-exporter.js";
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant } from "./lab-control/index.js";
-import { LAB_PROJECT_DOMAIN_ID, judgeEveryFact, withholdObservedFactValues, type JudgedFact, type JudgedFinalState, type CreatedFlowLaneEvidence, type FlowLaneEvidence, createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, recordFailedJudgement, repairLaneSummary, withDeclaredFlowRepair, runCreatedFlowLane, runFlowLane, selectLaneObservation, labCandidateTrialFixtureReset, type CreatedFlowRequest, type LiveRepairLaneInput, type LiveRepairLaneFailure, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
+import { LAB_PROJECT_DOMAIN_ID, judgeEveryFact, withholdObservedFactValues, type JudgedFact, type JudgedFinalState, type CreatedFlowLaneEvidence, type FlowLaneEvidence, createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, recordFailedJudgement, repairLaneSummary, withDeclaredFlowRepair, runCreatedFlowLane, selectLaneObservation, labCandidateTrialFixtureReset, type CreatedFlowRequest, type LiveRepairLaneInput, type LiveRepairLaneFailure, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, chromiumExtensionStorageDirs, runRedactionScopes, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
 import { LabRunRecord, writePlaybackSteps, type PlaybackSkippedStep, type PlaybackStateRoutingStep } from "./lab-runs/index.js";
@@ -63,7 +64,7 @@ import { automationFailureFromActionResult, createRunManifest, flowActionTimings
 import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, flowStartPage, scenarioStartUrl, type FlowLanePermissionStop, type FlowLaneStoppedForPermission } from "./lane-rules/index.js";
 import { proveCoreActionRoundTrip } from "./core-action-probe/index.js";
 import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
-import { cleanupFailureOutcome, describeRecordingStartDiagnostic, pairingStatusWaitFailureDetails, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
+import { recordingStartMessage, cleanupFailureOutcome, describeRecordingStartDiagnostic, pairingStatusWaitFailureDetails, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
 import { createdFlowChatEntry, verifyRunningBuildIdentity, ExtensionStartTrace, writeExtensionStartSidecar, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, configuredCredentials, evidenceEvent, exportRunClonePackage, keepsRunState, launchExtensionSession, sessionObservers, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter, importCloneDestination, pairRunExtension, startPerturbationLifecycle, type PerturbationLifecycle } from "./run-scenario/index.js";
@@ -118,6 +119,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   const labPaths = resolveLabPaths(options.repositoryRoot, options.environment);
   const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);
   const target = options.target ?? { mode: "isolated" as const };
+  if (options.flow === true && options.creation === undefined && target.mode !== "existing" && target.mode !== "clone") refuseRecordingOnlyFlow();
   // A Flow-lane run whose intent only proposes a repair is held to what the scenario declares such a run ends with, and judged on the proposal: a recorded
   // Flow always, and a created one when `--replays` has its repair applied, whose proposal the repair lane then judges (`proveRepair` below).
   const workflow = resolveWorkflow(scenario, options, target);
@@ -127,6 +129,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   // the variant's govern the Flow run alone. Judging the unarmed recording by
   // the armed expectation fails every negative variant before its Flow exists.
   const recordingWorkflow = options.flow && workflow.variant ? unarmedWorkflow(scenario, options) : workflow;
+  // Validate authored demonstration context before any topology/browser starts.
+  const startRecording = options.creation === undefined ? recordingStartMessage(recordingWorkflow.recordingDescription) : undefined;
   // Page facts are phase-specific -- a workflow's describe its unarmed
   // rendering, a variant's the armed one -- and the contract owns that rule so
   // that no lane decides it again. Both checks below read this schedule and
@@ -368,7 +372,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       if (!paired || !existingControl || !existingPreflight) throw new RunnerFailure("gateway.pairing", "Existing FluxIQ extension pairing did not produce an executable session");
       await existingControl.selectExistingContext(target.projectId);
       const recordingBaseline = recordingIds(await existingControl.listRecordings(target.projectId));
-      await runtimeMessage(extensionPage, { type: "fluxiq.startRecording" });
+      await runtimeMessage(extensionPage, startRecording!);
       recordingStarted = true;
       await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Execute configured persisted FluxIQ Flow"), details: { projectId: target.projectId, flowId: target.flowId, flowContentHash: existingPreflight.flow.contentHash } });
       existingExecution = await executeExistingPersistedFlow(existingControl, target, runId, persistedFlowRunContext({ scenario, scenarioOrigin: topology.scenarioOrigin, page, seed, facilityRunId: runId }), workflow.expected.actions ?? []);
@@ -386,7 +390,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     } else if (target.mode === "clone") {
       if (!paired || !topology.control || !topology.authorizationPin || !cloneState.clonePackage || !cloneState.destination || !cloneState.clonePackageHash) throw new RunnerFailure("gateway.pairing", "Cloned Flow destination is not ready for execution");
       const recordingBaseline = recordingIds(await topology.control.listRecordings(cloneState.destination.projectId));
-      await runtimeMessage(extensionPage, { type: "fluxiq.startRecording" });
+      await runtimeMessage(extensionPage, startRecording!);
       recordingStarted = true;
       await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Execute cloned Flow in isolated FluxIQ"), details: { sourceProjectId: cloneState.clonePackage.source.projectId, sourceFlowId: cloneState.clonePackage.source.flowId, sourceContentHash: cloneState.clonePackage.source.contentHash, destinationProjectId: cloneState.destination.projectId, destinationFlowId: cloneState.destination.flowId, clonePackageHash: cloneState.clonePackageHash } });
       cloneState.execution = await executeExistingPersistedFlow(topology.control, { projectId: cloneState.destination.projectId, flowId: cloneState.destination.flowId }, runId, persistedFlowRunContext({ scenario, scenarioOrigin: topology.scenarioOrigin, page, seed, facilityRunId: runId }), workflow.expected.actions ?? []);
@@ -462,7 +466,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         if (topology.projectId) await topology.control.selectProject(topology.projectId);
         // The discard window opens here, after the Core action probe above, whose runtime confirmations Core audits with no recording open.
         discardWindowFrom = Date.now();
-        const startResponse = await runtimeMessage(extensionControl, { type: "fluxiq.startRecording" }); recordingStarted = true;
+        const startResponse = await runtimeMessage(extensionControl, startRecording!);
+        recordingStarted = true;
         // startRecording answers before Core accepts the recording, and input before then is not recorded.
         await pollStatus(extensionControl, value => value.recordingState === "recording").catch(async cause => {
           const observed = await runtimeMessage(extensionControl, { type: "fluxiq.getStatus" }).then((response: any) => response.status).catch(() => undefined);
@@ -518,33 +523,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "Core persisted the completed recording"), details: { recordingCount: outcome.recordingCount, projectId: topology.projectId, recordedEvents, recordingDiscards: discardAudit.discards, recordingDiscardWindow: discardAudit.window, extensionConnectionAfterStop: connectionAfterStop, recordedActions: { extension: completeness.extensionActions, core: completeness.coreActions }, recordings: outcome.finalized.map(item => ({ recordingId: item.recordingId, entryCount: item.entryCount, entriesAppendedAfterFirstPoll: item.entriesAppendedWhileWaiting, finalizationWaitMs: item.waitedMs })) } });
       if (discardAudit.failure) throw discardAudit.failure;
       if (completeness.failure) throw completeness.failure;
-      if (options.flow) {
-        const control = topology.control;
-        const activeTopology = topology;
-        const recordingId = outcome.newRecordingIds[0];
-        const { projectId, authorizationPin } = topology; if (!projectId || !authorizationPin) throw new RunnerFailure("environment.missing", "The Flow lane needs an authenticated isolated Core with an authorization PIN");
-        if (outcome.newRecordingIds.length !== 1 || !recordingId) throw new RunnerFailure("recording.persistence", `The Flow lane builds a Flow from exactly the recording this run produced, and observed ${outcome.newRecordingIds.length} new recordings`);
-        await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the run's own recording and run it"), details: { variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } }); uiReview.phase("build");
-        // Settled however the lane ends: an overspend or an unreached provider fails a finished run, and a failed lane still leaves its provider calls itemized.
-        labPerson = await startLabPerson({ control, projectId, context: context!, scenarioOrigin: activeTopology.scenarioOrigin, runToken: activeTopology.allocation.controllerToken, scenarioId: scenario.id, scenarioLabDist: labPaths.scenarioLabDist, workflowId: flowWorkflow.workflowId, variantId: flowWorkflow.variant?.id, write: snapshot => bundle.writeStructured(PERSON_HAND_OFFS_SNAPSHOT, snapshot), publish: handOff => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The Lab played the person at a check FluxIQ handed off"), details: { handOff } }) });
-        const lane = await runLaneWithLiveLlmSettlement({ live, control, projectId, bundle, publish: details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The live provider run finished"), details }) }, async flowRunIdentified => await runFlowLane({
-          control, projectId, authorizationPin, recordingId,
-          scenario, workflow: flowWorkflow, facilityRunId: runId, flowRunIdentified, ...(repair ? { repairExpectation: repair } : {}),
-          // The unarmed workflow's, which the recording lane asserted above.
-          recordingEvents: recordingWorkflow.expected.recordingEvents ?? [],
-          scenarioOrigin: activeTopology.scenarioOrigin, runToken: activeTopology.allocation.controllerToken, secrets: declaredSecrets,
-          ...(live ? { authorizeLiveLlm: live.authorizer(control, activeTopology) } : {}),
-          // Closes the discard window for the second read: Core audits the Flow's runtime confirmations against the finalized recording.
-          flowDispatchStarting: at => { discardWindowUntil = at; },
-          ...flowRunHooks<FlowLaneEvidence>(activeTopology, async evidence => {
-            await bundle.writeStructured("snapshots/flow-lane.json", flowLaneSnapshot(evidence));
-            await writeFlowExtractionMismatches(bundle, scenario, evidence.extraction);
-          }),
-        }));
-        if (lane.observation.oracleVerdict === "failed") throw new RunnerFailure("runtime.behavior", "The generated Flow ran, but the fixture's expected final state did not hold afterwards");
-        await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The generated Flow ran and met the workflow's expectations"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, harnessActivations: lane.run.harnessActivations } });
-        await proveRepair(control, activeTopology, projectId, lane, "recording");
-      }
+
     }
     // A Flow-lane run that never reached the lane built no Flow, and does not pass on the recording's checks alone.
     assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, permissionStop });

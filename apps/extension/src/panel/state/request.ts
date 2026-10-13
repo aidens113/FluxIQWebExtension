@@ -27,8 +27,14 @@ export async function panelRequest<T>(message: PanelMessage): Promise<PanelResul
   if (reply === null || typeof reply !== "object") {
     return { ok: false, sentence: EXTENSION_RESTARTED, detail: "The extension's background worker gave no answer." };
   }
-  const typed = reply as { ok?: unknown; error?: unknown; code?: unknown };
+  const typed = reply as { ok?: unknown; error?: unknown; code?: unknown; diagnosticCode?: unknown };
   if (typed.ok === true) return { ok: true, value: reply as T };
+  if (typed.diagnosticCode === "automation.instructions_required" || typed.diagnosticCode === "automation.instruction_led_authoring_required") {
+    return { ok: false, code: typed.diagnosticCode, sentence: "Author task instructions in FluxIQ before this automation can run or resume." };
+  }
+  if (typed.diagnosticCode === "recording.description_required" || typed.diagnosticCode === "recording.supporting_evidence_invalid") {
+    return { ok: false, code: typed.diagnosticCode, sentence: "Describe and finalize the supporting recording in FluxIQ before attaching it." };
+  }
   const raw = typeof typed.error === "string" ? typed.error : undefined;
   if (raw === UNKNOWN_MESSAGE_ERROR) {
     return { ok: false, sentence: "This extension doesn't support that yet.", detail: raw, unsupported: true };

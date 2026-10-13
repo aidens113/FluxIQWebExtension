@@ -39,6 +39,7 @@ const KEPT_LISTINGS = `div[data-item-id]${NOT_AN_AD}:has(${RATED_4_5_AND_UP}):no
  */
 export const PICKUP_TOWELS_WORKFLOW: ScenarioWorkflow = {
   id: "pickup-towels",
+  recordingDescription: "Demonstrates product search, pickup selection and cart review.",
   description: "Find every pack of paper towels that ValueRidge sells itself, that the home store can have ready for pickup today and that is rated 4.5 or better, across every page of results, leaving out ads, and read name, price, unit price and rating.",
   recordingScript: [
     ...OPENING_STEPS,

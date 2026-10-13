@@ -1,7 +1,7 @@
 # Instruction-Led Automations And Supporting Recordings
 
 Status: Active
-Status detail: Entry points mapped; paired t519 implementation of instruction gates and described supporting evidence.
+Status detail: Implementation independently verified; paired dev integration and artifact refresh pending.
 Created: 2026-10-13
 Last updated: 2026-10-13
 Owner: Codex senior supervisor
@@ -23,6 +23,12 @@ Related: [adaptation and breadth](./adaptation-and-breadth-plan.md), [MVP](./mvp
 - Discovery found ordinary generation already checks active instruction inventory, but deterministic persisted runs/resume and recording/policy proposal activation bypass it. A recording proposal's instructions metadata does not control its trace-derived graph.
 - Migration: preserve existing legitimate written Flow-owned instructions; absence, blank/inactive/wrong-owner or known model-only suggestions cannot satisfy task authority. Do not require a new origin marker for all old legitimate written instructions. Existing graphs may be retained after actual instruction entry; do not claim this retroactively verifies an instruction-led build.
 - New standalone recording/policy activation is retired with an actionable instruction-led authoring route. Empty drafts and recording diagnostics remain accessible. Lab's recorded-only executable lane is retired in favor of its existing explicit-task created-Flow lane, with no new hidden authoring engine.
+- Implementation is integrated in the paired task trees: Core admission/description/diagnostics and nullable recording-summary migration 0026, shared extension description/recovery, web task editor and optional described-recording attachment, and retired Lab conversion with 42 explicit workflow descriptions.
+- Supervisor observed extension 100 tests plus source/test/bundle check; web 146 tests and types; runner 66 distinct tests after CLI fixture correction; domain 16, contracts 2 and scenario 9 tests plus touched types/build prerequisites. Core 72 narrowed tests (including real no-model migration and durable description summaries), prior registry/control tests and helper tests passed; final collaborator/helper/gateway verification remains.
+- Native description helper was exercised in Chromium on company-website: blank, Cancel, Escape and trimmed valid description passed 8 assertions with no external requests or model calls. This is native DOM validation, not a full paired recording/build/replay or Firefox live test. No user panel was started.
+- Audit corrections removed new UI import cycles, unpacked new statements, removed unreachable retired runner execution, respected source naming/barrels, and repaired authored links. Core's instructionAuthority collaborator owns readiness/assert/resume without growing the legacy facade. Generated indices are refreshed; baselines only shrink: Core 1156 entries (5 lowered, 3 removed), downstream 644 (2 lowered, 2 removed).
+- Final independent checks: 116 distinct Core cases across selections; web 147 distinct cases with 49 repeated after transport extraction and a final 4-case task-editor regression; extension initial 100 and final 291 affected lifecycle cases (overlap), source/test checks and Chrome/Edge/Firefox artifact builds. Runner 66, domain 16, contracts 2 and scenario 9 cases passed, with touched package types. Final malformed API bodies refuse before authority and failed evidence loading preserves unknown attachments. Full suites/paid runs were not used.
+- All sources are frozen and verified; final documentation/index/baseline updates, paired task finish and dev pushes remain. Existing unrelated main .clinerules/fluxiq.md edit remains untouched; t518 stays separately unmerged/unpushed.
 
 ## Worker Briefs
 
@@ -116,3 +122,19 @@ Related: [adaptation and breadth](./adaptation-and-breadth-plan.md), [MVP](./mvp
 - Why: recording/policy activation compiles the trace independently of task metadata, deterministic run/resume lacks mandatory task admission, and recording starts have no owned description.
 - Validation: independently inspected FlowInstruction model, API save defaults, generation-context gate and runRuntimeSession admission. `pnpm.cmd --filter @fluxiq/contracts build`, `--filter fluxiq build`, and `--filter @fluxiq/client-gateway-websocket build` passed for base public contract prerequisites; no full suite or live run.
 - Outcome: Accepted discovery; source implementation in progress. Preserve existing legitimate written Flow instructions and old data; no inferred task migration or standalone recording replay launches.
+
+### 2026-10-13 - Independent checks and implementation review
+
+- Agent: Codex senior supervisor.
+- Changed: reviewed service gates, task editor attachment preservation and owner switching, model-only no-mutation protection, described summary persistence and legacy nullable migration; updated obsolete recording-only architecture/MVP guidance.
+- Validation: root extension 100/100, web 146/146, Lab runner 66 distinct cases, domain 16/16, contracts 2/2, scenario 9/9; touched package compilation/type checks observed. Core narrowed 72/72 includes actual saved no-model runs, closed refusals, task edits, proposal refusal and close/reopen summaries. Native Chromium modal 8 assertions passed on company-website.
+- Failures corrected: browser-safe contract test misplaced Node types, obsolete CLI/conversation fixtures, web transport mocks/provider-error copy, omitted description summary projection, and new source cycles/layout violations. Source mistakes were fixed rather than approval gates bypassed. Final facade collaborator and fresh gates remain.
+- Outcome: Partial until final audit/type/test and paired integration; no full suites, paid calls or pushes.
+
+### 2026-10-13 - Final source verification
+
+- Agent: Codex senior supervisor.
+- Changed: accepted genuine instructionAuthority collaborator, corrected nonstring API instruction coercion, and prevented a failed optional evidence load from clearing existing attachments; existing graph/recording data remain intact.
+- Validation: Core final affected 42/42 and subsequent public-service 14/14 passed; these complete 116 distinct Core cases across checks. Web 146/146, post-extraction 49/49 and final task-editor 4/4 passed (147 distinct); extension 100/100 plus affected lifecycle 291/291 passed with overlap. Core/web/domain/scenario/runner source and test types passed; contracts and Chrome/Edge/Firefox bundles built. Native company-website Chromium helper passed 8 assertions, zero external requests/provider calls.
+- Audit: source cycles, swallowed errors, packing, naming, imports and size violations resolved; only generated working index drift remains, with lower baselines to regenerate. No full suite or paid provider run.
+- Outcome: Accepted source implementation; integration/push and final index audit pending. Full paired recording/build/replay and Firefox live behavior are not claimed.

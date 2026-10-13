@@ -1,4 +1,5 @@
 export { LIVE_INSTRUCTION_TASKS } from "./live-instructions.js";
+export { REALISTIC_SITE_LIVE_TASKS } from "./realistic-site-live-tasks.js";
 export type { LiveInstructionTask } from "./live-instructions.js";
 export { LIVE_REPAIR_TASKS } from "./live-repair-tasks.js";
 export type { LiveRepairTask } from "./live-repair-tasks.js";

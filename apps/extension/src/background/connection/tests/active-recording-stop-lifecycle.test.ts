@@ -71,7 +71,7 @@ test("Stop cancels held UI preflight before it can send a start", async (t) => {
     }
   });
 
-  const starting = h.recording.start();
+  const starting = h.recording.start("Demonstrate the browser interaction sequence.");
   await preflightEntered;
   const stopping = h.recording.stop(true);
   assert.equal(h.recording.stop(false), stopping, "crossing Stops share the preflight cancellation owner");
@@ -102,10 +102,10 @@ test("Start A then Stop then Start B detaches A and runs B only after Stop", asy
     }
   });
 
-  const startA = h.recording.start();
+  const startA = h.recording.start("Demonstrate the browser interaction sequence.");
   await aEntered;
   const stopping = h.recording.stop(true);
-  const startB = h.recording.start();
+  const startB = h.recording.start("Demonstrate the browser interaction sequence.");
   assert.notEqual(startB, startA, "B owns a distinct public UI request");
   await settle();
   assert.equal(preflightCount, 1, "B waits behind Stop rather than entering preflight");
@@ -130,7 +130,7 @@ test("Stop closes a pending client handshake once and a late acceptance cannot r
   stubManifest(t);
   const timers = fakeTimers(t);
   const h = harness();
-  await h.recording.start();
+  await h.recording.start("Demonstrate the browser interaction sequence.");
   const recordingId = String(h.sent[0]?.payload.recordingId);
 
   const stopping = h.recording.stop(true);
@@ -157,7 +157,7 @@ test("Stop drains an in-flight retry send before placing its close", async (t) =
       return lookupCount === 1 ? undefined : retryLookupGate;
     }
   });
-  await h.recording.start();
+  await h.recording.start("Demonstrate the browser interaction sequence.");
   h.recording.noteStartRefusal(STALE!);
   timers.fire(400);
   await settle();
@@ -224,7 +224,7 @@ test("a UI start requested behind a Stop waiting on an accepted start runs only 
   const serverStart = h.recording.beginAccepted("recording-server", "project-1");
   await settle();
   const stopping = h.recording.stop(false);
-  const queuedUiStart = h.recording.start();
+  const queuedUiStart = h.recording.start("Demonstrate the browser interaction sequence.");
   await settle();
   assert.equal(h.sent.filter((message) => message.type === "client.start_recording").length, 0);
 
@@ -267,7 +267,7 @@ test("a rejected pending start cannot strand or reject its crossing Stop", async
     }
   });
 
-  const starting = h.recording.start();
+  const starting = h.recording.start("Demonstrate the browser interaction sequence.");
   await settle();
   const stopping = h.recording.stop(true);
   rejectStart(new Error("start send failed"));
@@ -287,7 +287,7 @@ test("a new Stop can cancel UI work released behind an older Stop without deadlo
   navigation.schedule(7, "https://shop.test/account", () => landingGate);
 
   const oldStop = h.recording.stop(false);
-  const uiStart = h.recording.start();
+  const uiStart = h.recording.start("Demonstrate the browser interaction sequence.");
   let newStop: Promise<void> | undefined;
   const crossing = oldStop.then(async () => {
     newStop = h.recording.stop(true);
@@ -351,8 +351,8 @@ test("simultaneous UI starts wait for an old drain, then create and begin one ne
   });
 
   const stopping = h.recording.stop(false);
-  const firstStart = h.recording.start();
-  const secondStart = h.recording.start();
+  const firstStart = h.recording.start("Demonstrate the browser interaction sequence.");
+  const secondStart = h.recording.start("Demonstrate the browser interaction sequence.");
   assert.equal(firstStart, secondStart, "UI starts crossing the same Stop are single-flight before the handshake exists");
   await settle();
   assert.equal(h.sent.filter((message) => message.type === "client.start_recording").length, 0);
@@ -406,7 +406,7 @@ test("a server start wins while released UI preflight is held, with one new iden
   navigation.schedule(7, "https://shop.test/account", () => drainGate);
 
   const stopping = h.recording.stop(false);
-  const uiStart = h.recording.start();
+  const uiStart = h.recording.start("Demonstrate the browser interaction sequence.");
   const serverStart = h.recording.beginAccepted("recording-server", "project-2");
   releaseDrain();
   await stopping;
@@ -449,7 +449,7 @@ test("a UI start wins before a distinct server start, with one client start and 
   navigation.schedule(7, "https://shop.test/account", () => drainGate);
 
   const stopping = h.recording.stop(false);
-  const uiStart = h.recording.start();
+  const uiStart = h.recording.start("Demonstrate the browser interaction sequence.");
   releaseDrain();
   await stopping;
   await preflightEntered;

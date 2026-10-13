@@ -62,12 +62,6 @@ async function respond(type: string, message: AutomationPanelRequest, deps: Auto
       const flowId = text(message.flowId);
       return flowId ? deps.call("run-runtime-session", { projectId, flowId, runIntent: "explore_and_adapt" }) : missing("flowId");
     }
-    case AUTOMATION_PANEL_MESSAGES.testGeneratedAutomation: {
-      // A test of a Flow just generated from a recording runs as generated:
-      // repairing it would hide what the recording got wrong.
-      const flowId = text(message.flowId);
-      return flowId ? deps.call("run-runtime-session", { projectId, flowId }) : missing("flowId");
-    }
     case AUTOMATION_PANEL_MESSAGES.runDetail: {
       const runId = text(message.runId);
       return runId ? runDetail(projectId, runId, deps) : missing("runId");
@@ -81,15 +75,10 @@ async function respond(type: string, message: AutomationPanelRequest, deps: Auto
       if (!format) return missing("format");
       return deps.call("export-run-dataset", { projectId, runId, datasetId, format });
     }
-    case AUTOMATION_PANEL_MESSAGES.generateFromRecording: {
-      const recordingId = deps.lastStoppedRecordingId();
-      if (!recordingId) return failure("invalid_request", "There is no finished recording to turn into an automation. Record one, then try again.");
-      return deps.call("generate-recording-proposal", { projectId, recordingId, mode: "direct" });
-    }
-    case AUTOMATION_PANEL_MESSAGES.saveGeneratedAutomation: {
-      const proposalId = text(message.proposalId);
-      return proposalId ? deps.call("review-recording-flow-proposal", { projectId, proposalId, decision: "approved" }) : missing("proposalId");
-    }
+    case AUTOMATION_PANEL_MESSAGES.generateFromRecording:
+    case AUTOMATION_PANEL_MESSAGES.testGeneratedAutomation:
+    case AUTOMATION_PANEL_MESSAGES.saveGeneratedAutomation:
+      return failure("invalid_request", "Author task instructions in FluxIQ and optionally attach a described recording. Recording-only automation authoring has been retired.");
     default:
       return failure("invalid_request", "That request is not one FluxIQ knows.");
   }

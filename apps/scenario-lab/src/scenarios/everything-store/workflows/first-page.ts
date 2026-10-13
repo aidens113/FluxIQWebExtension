@@ -65,6 +65,7 @@ const FIRST_PAGE_STEPS: ScenarioStep[] = [
  */
 export const FIRST_PAGE_WORKFLOW: ScenarioWorkflow = {
   id: "first-page-earbuds",
+  recordingDescription: "Demonstrates search filters, lazy result loading and reading one results page.",
   description: "Search for wireless earbuds, narrow the results to Brightaisle Plus, and read every organic result on the first page into a table of name, price, rating and url.",
   recordingScript: FIRST_PAGE_STEPS,
   expected: {

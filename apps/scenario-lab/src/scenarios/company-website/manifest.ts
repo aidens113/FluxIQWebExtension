@@ -173,6 +173,7 @@ const TEAM_EXPECTED = [{ step: "extract-gas-engineers", count: GAS_ENGINEER_RECO
  */
 export const companyWebsiteManifest = createScenarioManifest({
   id: "company-website",
+  recordingDescription: "Demonstrates company navigation and service information reading.",
   title: "Company website",
   tags: ["company-website", "consent-overlay", "shadow-dom", "honeypot", "human-check", "lazy-load", "rate-limit", "iframe", "generated-classes", "extraction", "forms"],
   seed: 4519,
@@ -208,6 +209,7 @@ export const companyWebsiteManifest = createScenarioManifest({
   workflows: [
     {
       id: "gas-engineers",
+      recordingDescription: "Demonstrates directory search and reading matching engineer records.",
       description: "Read the whole team grid, past the stuck \"Show more people\" button, and keep everyone at Eastmoor or Hollins Cross with a Gas Safe ID, once each.",
       recordingScript: TEAM_SCRIPT,
       expected: {
@@ -231,6 +233,7 @@ export const companyWebsiteManifest = createScenarioManifest({
     },
     {
       id: "business-prices",
+      recordingDescription: "Demonstrates pricing navigation and reading displayed business prices.",
       description: "Switch the price list to landlord and business prices, open the collapsed repairs category, and read both categories without the partner adverts.",
       recordingScript: PRICE_SCRIPT,
       expected: {
@@ -244,6 +247,7 @@ export const companyWebsiteManifest = createScenarioManifest({
     },
     {
       id: "book-service",
+      recordingDescription: "Demonstrates selecting service options and using booking controls.",
       description: "Book a combi boiler service at Hollins Cross in the earliest weekday morning slot on or after 1 October, pay the deposit the widget requires, and read the site's confirmation. These expectations are the run the person allowed to pay; without that permission the right outcome is a request for it.",
       recordingScript: BOOKING_SCRIPT,
       expected: {

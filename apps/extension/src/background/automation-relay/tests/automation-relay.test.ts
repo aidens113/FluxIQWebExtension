@@ -61,8 +61,7 @@ test("a run sends only the project, the Flow and the repair intent; a test of a 
   await h.send({ type: AUTOMATION_PANEL_MESSAGES.runAutomation, flowId: "flow-1", flow: { nodes: [] }, runIntent: "build_and_adapt", permittedConsequences: ["move_money"], inputs: { password: "x" } });
   await h.send({ type: AUTOMATION_PANEL_MESSAGES.testGeneratedAutomation, flowId: "flow-2", proposalId: "p" });
   assert.deepEqual(h.calls.map((call) => [call.endpoint, call.payload]), [
-    ["run-runtime-session", { projectId: "project-1", flowId: "flow-1", runIntent: "explore_and_adapt" }],
-    ["run-runtime-session", { projectId: "project-1", flowId: "flow-2" }]
+    ["run-runtime-session", { projectId: "project-1", flowId: "flow-1", runIntent: "explore_and_adapt" }]
   ]);
   assert.deepEqual(await h.send({ type: AUTOMATION_PANEL_MESSAGES.runAutomation }), { ok: false, code: "invalid_request", error: "That request is missing its flowId." });
 });
@@ -96,17 +95,14 @@ test("model readiness asks the secret-keys program and keeps only kind, provider
   assert.deepEqual(h.calls, [{ endpoint: "snapshot", payload: {}, programId: "secret-keys" }]);
 });
 
-test("a proposal is generated directly from the last stopped recording, and saved by approving it", async () => {
+test("recording-only generation, test and approval are retired without a Core call", async () => {
   const h = harness();
-  await h.send({ type: AUTOMATION_PANEL_MESSAGES.generateFromRecording, mode: "llm_assisted" });
-  await h.send({ type: AUTOMATION_PANEL_MESSAGES.saveGeneratedAutomation, proposalId: "proposal-1", decision: "rejected", policyOverride: {} });
-  assert.deepEqual(h.calls.map((call) => [call.endpoint, call.payload]), [
-    ["generate-recording-proposal", { projectId: "project-1", recordingId: "recording-9", mode: "direct" }],
-    ["review-recording-flow-proposal", { projectId: "project-1", proposalId: "proposal-1", decision: "approved" }]
-  ]);
-  const none = harness({}, { lastStoppedRecordingId: () => undefined });
-  assert.equal((await none.send({ type: AUTOMATION_PANEL_MESSAGES.generateFromRecording })).ok, false);
-  assert.equal(none.calls.length, 0);
+  for (const type of [AUTOMATION_PANEL_MESSAGES.generateFromRecording, AUTOMATION_PANEL_MESSAGES.testGeneratedAutomation, AUTOMATION_PANEL_MESSAGES.saveGeneratedAutomation]) {
+    const result = await h.send({ type, flowId: "flow.one", proposalId: "proposal.one" });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.match(result.error, /Author task instructions/);
+  }
+  assert.equal(h.calls.length, 0);
 });
 
 test("a step is removed by the activity id the log showed, and without a project nothing else runs", async () => {

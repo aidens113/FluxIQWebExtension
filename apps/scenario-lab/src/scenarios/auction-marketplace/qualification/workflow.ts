@@ -4,6 +4,7 @@ import { accessoryCleanupExpected } from "./expected.js";
 
 export const accessoryCleanupWorkflow: ScenarioWorkflow = {
   id: "remove-watched-accessories",
+  recordingDescription: "Demonstrates reviewing watched auctions and removing accessory entries.",
   description: "Remove watched accessories while preserving watched cameras and read the resulting watchlist.",
   recordingScript: [
     { id: "cleanup-promotion", operation: "waitForState", target: "role:dialog:Bid on the go", timeoutMs: 15_000 },

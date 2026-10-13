@@ -76,6 +76,7 @@ const ENTRY_ITEMS = ENTRY_COMMENTS.map((comment) => `li:has(> div ${permalink(co
  */
 export const photoSocialManifest = createScenarioManifest({
   id: "photo-social",
+  recordingDescription: "Demonstrates image browsing and adding selected posts to a collection.",
   title: "Photo social",
   tags: ["social", "photo", "feed", "consent-overlay", "shadow-dom", "infinite-scroll", "generated-classes", "anti-bot", "lookalike-accounts", "extraction", "consequential"],
   seed: 238,
@@ -137,6 +138,7 @@ export const photoSocialManifest = createScenarioManifest({
   workflows: [
     {
       id: "giveaway-entries",
+      recordingDescription: "Demonstrates opening a post and reading participation information.",
       description: "Open the studio's giveaway, load every comment and the reply that holds an entry, and read the valid entries: two friends tagged, first qualifying comment per person, nothing after the close.",
       recordingScript: [
         ...OPENING,
@@ -179,6 +181,7 @@ export const photoSocialManifest = createScenarioManifest({
     },
     {
       id: "ask-price",
+      recordingDescription: "Demonstrates opening a profile conversation and using its message composer.",
       description: "Message the shop about the moon jar by name, wait for its instant reply, and read the piece and price off the card it shares.",
       recordingScript: [
         ...OPENING,

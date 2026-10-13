@@ -10,6 +10,7 @@ import { flowActionTypes, readFlowNodes, type FlowNodeRecord } from "./flow-acti
 import { flowLaneObservation, type RunLaneObservation } from "./lane-observation.js";
 import { extractionMismatchReport, extractionStepMismatches, type ExtractionDisclosureRule, type ExtractionMismatchReport } from "../run-expectations/index.js";
 import { approveRecordingFlowProposal, assertProposalCoversRecording, createRecordingFlowProposal, type RecordingFlowProposal } from "./recording-flow-proposal.js";
+import { refuseRecordingOnlyFlow } from "./recording-only/index.js";
 import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "./persisted-flow-run.js";
 import { absorbedEveryFailure, assertRecoveryAsDeclared, recoveryAttribution, recoveryAttributionSnapshot, type RunRecoveryAttribution } from "./recovery-attribution.js";
 import { assertFlowRepair, judgeFlowRepair, type FlowRepairExpectation, type FlowRepairJudgement } from "./repair/index.js";
@@ -134,124 +135,7 @@ export type FlowLaneOutcome = {
  * judged against the recording lane's own leftovers.
  */
 export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome> {
-  const bounds = input.bounds ?? {};
-  // Before anything reads the recording. Core finishes writing it after the
-  // client has stopped, and a proposal requested during that window carries
-  // only the actions Core happened to have appended -- the defect
-  // `L-dropped-action` reproduced 12 times in 24 runs.
-  const recording = await awaitFinalizedRecording(input.control, { projectId: input.projectId, recordingId: input.recordingId }, bounds, input.recordingWait ?? {});
-  const proposal = await createRecordingFlowProposal(input.control, { projectId: input.projectId, recordingId: input.recordingId }, bounds);
-  // Before approval: a proposal short of what the recording pins would become
-  // a Flow that skips a recorded step and can still exit green.
-  assertProposalCoversRecording(proposal, input.recordingEvents);
-  const approved = await approveRecordingFlowProposal(input.control, {
-    projectId: input.projectId,
-    proposalId: proposal.proposalId,
-    authorizationPin: input.authorizationPin,
-    name: `Lab flow ${input.facilityRunId}`,
-  }, bounds);
-  await resetScenarioLab(input.scenarioOrigin, input.runToken);
-  // Every run, not only an armed one: the reset reloads nothing, so an unarmed
-  // Flow started wherever the recording left the tab (W18, on auth-gate's
-  // account page, where no password field exists).
-  await input.prepareFlowPage();
-  // Read before running, and once: the same nodes answer every question below.
-  const nodes = await readFlowNodes(input.control, { projectId: input.projectId, flowId: approved.flowId }, bounds);
-  // The map identifies each attempt, and a Flow whose nodes dispatch no output
-  // could not have run the recording at all.
-  const actionTypes = flowActionTypes(nodes, approved.flowId);
-  // Each action node's place in the recording's order, so the run's start is
-  // judged against the recording rather than against Core's start rule. An
-  // action node linked to no candidate of this proposal fails here, before the
-  // run starts.
-  const candidateOrder = recordedCandidateOrder(nodes, actionTypes, proposal, approved.flowId);
-  // A node on a sensitive control asks for its value under a path rather than
-  // carrying it. Each such request is answered by exactly one declared secret,
-  // keyed by the path Core resolves, or the run fails here, before it starts.
-  const secretInputs = declaredSecretBindingInputs({
-    scenarioId: input.scenario.id,
-    secrets: input.secrets,
-    steps: input.workflow.recordingScript,
-    requests: flowSecretRequests(nodes),
-  });
-  // A node on a file input asks for its files the same way, keyed by its recorded
-  // control. It gets the file the recording lane chose, or the run fails here.
-  const uploadInputs = declaredUploadInputs({ scenarioId: input.scenario.id, steps: input.workflow.recordingScript, requests: flowUploadRequests(nodes) });
-  // After the Flow exists and before it runs: the live run's settings are
-  // saved on this Flow.
-  const llmExecution = input.authorizeLiveLlm ? await input.authorizeLiveLlm(approved.flowId) : undefined;
-  // Just before the first Flow action can reach Core, whose runtime confirmation Core audits against the finalized recording.
-  input.flowDispatchStarting(Date.now());
-  const run = await executeRecordedFlowRun(input.control, {
-    projectId: input.projectId,
-    flowId: approved.flowId,
-    facilityRunId: input.facilityRunId,
-    ...(llmExecution ? { llmExecution } : {}),
-    ...(input.projectDomainId === undefined ? {} : { domainId: input.projectDomainId }),
-    ...(input.flowRunIdentified ? { onRunIdentified: input.flowRunIdentified } : {}),
-    actionTypes,
-    candidateOrder,
-    // Each declared value and each supplied file once, under the path a node reads: Core persists a run's inputs, so any further copy is a copy on disk.
-    inputs: { ...secretInputs, ...uploadInputs, scenarioId: input.scenario.id, facilityRunId: input.facilityRunId },
-  }, bounds);
-  const expected = input.workflow.expected;
-  // Judged before the oracle and the publish, and never throwing: the
-  // measurements are what the bench's extraction numbers are computed from, so
-  // a run whose expectations fail must still publish them.
-  const extraction = judgeFlowExtraction({
-    expected: expected.extracted,
-    script: input.workflow.recordingScript,
-    datasets: run.extracted,
-    actionTypes,
-    candidateOrder,
-    durationsByNode: run.extractionDurationsByNode,
-    readsByNode: extractionReadsByNode(run.actions),
-    scenarioOrigin: input.scenarioOrigin,
-  });
-  // The oracle and the publish both come before the asserts. An assert throws
-  // on any mismatch, and a run that failed one used to leave the runner with no
-  // Flow observation at all, so the category Core reported never reached the
-  // evaluation. Consulting the oracle first costs a failing run the oracle's
-  // wait and buys it a real `oracleVerdict` instead of a null.
-  const oracleHeld = await input.checkFinalState();
-  // Every failure this run met was recovered from, so the failure record Core
-  // kept describes an attempt rather than the run.
-  const absorbed = absorbedEveryFailure(run.actions);
-  const observation = flowLaneObservation({
-    flowCreated: true,
-    oracleVerdict: oracleHeld ? "passed" : "failed",
-    run,
-    automationFailureExpected: expected.failure ?? null,
-    extraction: extraction.measurements,
-  });
-  // Where the run started, in the recording's order: 0 is the recording's first
-  // action. Null when no attempt landed on an action node.
-  const startCandidateIndex = run.startCandidateIndex ?? null;
-  // Judged only for a run whose intent could propose a repair, and published
-  // with the rest before any expectation is asserted.
-  const repair = input.repairExpectation && llmExecution && llmExecution.intent !== "diagnosis_only"
-    ? await judgeFlowRepair(input.control, { projectId: input.projectId, flowId: approved.flowId, run, expectation: input.repairExpectation }, bounds)
-    : undefined;
-  // Joined before the evidence is written, like every other measurement here:
-  // a run whose declaration fails is exactly the run whose rung attribution has
-  // to be readable.
-  const recovery = recoveryAttribution(run.actions);
-  await input.recordEvidence({ recording, proposal, flowId: approved.flowId, run, observation, extraction, startCandidateIndex, ...(repair ? { repair } : {}) });
-  // Before the expectations, which would otherwise blame whichever later action
-  // they name ("did not produce a web.dom.click action", W28 run 2). The start
-  // comes first: a run that began at a later action also stops short of the
-  // actions before it, and the start is the cause.
-  assertFlowStartedAtFirstAction(startCandidateIndex, proposal.candidateIds.length);
-  assertFlowDidNotStopEarly(run);
-  assertFlowFailure(expected.failure, absorbed ? null : run.failure);
-  assertFlowActions(expected.actions, run.actions);
-  assertFlowExtraction(extraction);
-  // After the actions, which name the node an unabsorbed fault stopped at, and
-  // before the repair, which is the model's answer to a fault the runtime did
-  // not absorb.
-  assertRecoveryAsDeclared(expected.recovery, recovery);
-  assertFlowRepair(repair);
-  return { recording, proposal, flowId: approved.flowId, run, observation, extraction, recovery, startCandidateIndex, ...(repair ? { repair } : {}) };
+  return refuseRecordingOnlyFlow();
 }
 
 /**

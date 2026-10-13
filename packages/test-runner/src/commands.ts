@@ -2,6 +2,7 @@ import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, assertLlmExecutionProfile, l
 import { requireSafePersistentWorkspaceName, type FluxIQTargetMode } from "./target-config.js";
 import { LAB_AUTHORING_MODE_FLAG, labAuthoringModeValue } from "./live-llm/index.js";
 import { parseRecoveryMatrixCommand, type RecoveryMatrixCommand } from "./recovery-matrix/command.js";
+import { refuseRecordingOnlyFlow } from "./flow-lane/recording-only/index.js";
 
 export type EvidenceMode = "none" | "failure" | "checkpoints" | "events";
 export type TargetMode = FluxIQTargetMode;
@@ -51,6 +52,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     const { present: directApiBuild, rest: withoutDirectApi } = flagOption(withoutLivePanel, "--direct-api-build");
     const { present: modelResetOnly, rest: withoutDirect } = flagOption(withoutDirectApi, "--model-reset-only");
     const { flowLane, rest: withoutFlow } = flowLaneOption(withoutDirect);
+    if (flowLane) refuseRecordingOnlyFlow();
     const { dryRun, rest } = dryRunOption(withoutFlow);
     const scenarioId = positional(rest, 0, "scenario ID");
     const llm = llmOptions(rest);

@@ -166,6 +166,15 @@ export async function callCoreProgram(
   if (status === 401 || status === 403) {
     return { ok: false, code: "refused", httpStatus: status, error: stringValue(body?.error) ?? "FluxIQ refused this browser's pairing." };
   }
+  const diagnostic = objectValue(objectValue(body?.payload)?.diagnostic);
+  const diagnosticCode = stringValue(body?.errorCode) ?? stringValue(diagnostic?.code);
+  const authorityFailure = diagnosticCode === "automation.instructions_required"
+    || diagnosticCode === "automation.instruction_led_authoring_required"
+    || diagnosticCode === "recording.description_required"
+    || diagnosticCode === "recording.supporting_evidence_invalid";
+  if (authorityFailure && body?.ok !== true) {
+    return { ok: false, code: "failed", diagnosticCode, httpStatus: status, error: stringValue(body?.error) ?? "Open FluxIQ to author task instructions or describe the supporting recording." };
+  }
   if (status < 200 || status >= 300 || body?.ok !== true) {
     return { ok: false, code: "failed", httpStatus: status, error: stringValue(body?.error) ?? `FluxIQ answered ${status}.` };
   }

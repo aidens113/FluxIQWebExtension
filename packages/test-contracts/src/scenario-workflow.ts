@@ -20,6 +20,7 @@ export type ResolvedScenarioWorkflow = {
   workflowId: string | undefined;
   variant: ScenarioVariant | undefined;
   recordingScript: ScenarioStep[];
+  recordingDescription?: string;
   expected: ScenarioExpected;
 };
 
@@ -88,6 +89,7 @@ export function resolveScenarioWorkflow(
     workflowId,
     variant,
     recordingScript: workflow.recordingScript,
+    ...(workflow.recordingDescription === undefined ? {} : { recordingDescription: workflow.recordingDescription }),
     expected: variant ? { ...workflow.expected, ...variant.expected } : workflow.expected,
   };
 }

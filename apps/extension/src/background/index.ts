@@ -219,7 +219,7 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
   }
 
   if (typed.type === RUNTIME_MESSAGES.startRecording) {
-    await manager.startRecording();
+    await manager.startRecording(typeof typed.description === "string" ? typed.description : undefined);
     return { ok: true, status: manager.status() };
   }
 

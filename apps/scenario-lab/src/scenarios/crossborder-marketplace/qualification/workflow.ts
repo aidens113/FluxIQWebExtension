@@ -5,6 +5,7 @@ import { couponOnlyExpected } from "./expected.js";
 
 export const couponOnlyWorkflow: ScenarioWorkflow = {
   id: "collect-official-coupon-only",
+  recordingDescription: "Demonstrates identifying the official coupon control and reviewing coupon state.",
   description: "Collect only the official store coupon, report it, and leave cart, checkout and orders untouched.",
   recordingScript: [
     { id: "coupon-only-welcome", operation: "waitForState", target: 'text="Welcome back, Mara!"', timeoutMs: 8000 },

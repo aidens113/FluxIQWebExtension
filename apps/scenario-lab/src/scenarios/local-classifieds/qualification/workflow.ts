@@ -4,6 +4,7 @@ import { soldSavesExpected } from "./expected.js";
 
 export const soldSavesWorkflow: ScenarioWorkflow = {
   id: "remove-sold-saves",
+  recordingDescription: "Demonstrates reviewing saved listing status and removing sold entries.",
   description: "Unsave the sold listing while keeping the available listing and leaving hidden/contact state unchanged.",
   recordingScript: [
     { id: "sold-saves-consent", operation: "click", target: "role:button:Allow all cookies" },

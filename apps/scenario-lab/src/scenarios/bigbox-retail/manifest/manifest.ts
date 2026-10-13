@@ -26,6 +26,7 @@ import { STORE_REMEMBERED } from "./store-remembered-variant.js";
  */
 export const bigboxRetailManifest = createScenarioManifest({
   id: "bigbox-retail",
+  recordingDescription: "Demonstrates retail product options, cart editing and review.",
   title: "Big-box retail",
   tags: ["retail", "ecommerce", "consent", "modal", "shadow-dom", "iframe", "new-tab", "sponsored", "pagination", "generated-classes", "anti-bot", "rate-limit", "variants", "checkout", "extraction", "filter"],
   seed: 239,

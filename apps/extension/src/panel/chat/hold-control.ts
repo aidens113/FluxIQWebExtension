@@ -35,7 +35,8 @@ export function createHoldControl(request: PanelStore["request"], eligible: () =
   const sentence = createElement("p", { className: "chat-hold-sentence" });
   const button = createElement("button", { className: "chat-hold", attrs: { type: "button" } });
   const status = createElement("span", { className: "chat-hold-status", attrs: { role: "status", "aria-live": "polite" } });
-  const element = createElement("div", { className: "chat-hold-control", hidden: true }, [sentence, button, status]);
+  const recovery = createElement("button", { text: "Open task Instructions in FluxIQ", hidden: true, attrs: { type: "button" } });
+  const element = createElement("div", { className: "chat-hold-control", hidden: true }, [sentence, button, status, recovery]);
 
   const live = () => current !== null && current.subject.kind === "run" && !current.final
     && current.phase !== "done" && current.phase !== "failed";
@@ -54,6 +55,7 @@ export function createHoldControl(request: PanelStore["request"], eligible: () =
     sentence.hidden = now !== "hand";
     sentence.textContent = now === "hand" ? heldSentence(current!) : "";
     status.textContent = notice;
+    recovery.hidden = !notice.startsWith("Author task instructions");
   }
 
   function send(target: ClientGatewayActivity, kind: Press) {
@@ -68,9 +70,26 @@ export function createHoldControl(request: PanelStore["request"], eligible: () =
       projectId: target.subject.projectId,
       runId: target.subject.id
     }).then((reply) => {
-      if (!reply.ok || !reply.value?.ok) failed();
+      if (!reply.ok) {
+        failed();
+        if ((reply.code === "automation.instructions_required" || reply.code === "automation.instruction_led_authoring_required") && generation === lease && current?.activityId === target.activityId) {
+          notice = reply.sentence;
+          render();
+        }
+      } else if (!reply.value?.ok) failed();
     }).catch(/* best-effort: a failed relay leaves the press retryable */ failed);
   }
+
+  recovery.addEventListener("click", () => {
+    const target = current;
+    if (!target || target.subject.kind !== "run") return;
+    void request({ type: RUNTIME_MESSAGES.panelOpenFluxIQ, runId: target.subject.id }).then((result) => {
+      if (!result.ok && current?.activityId === target.activityId) {
+        notice = result.sentence;
+        render();
+      }
+    });
+  });
 
   button.addEventListener("click", () => {
     const now = press();

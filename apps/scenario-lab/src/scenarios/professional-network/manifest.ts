@@ -126,6 +126,7 @@ const rotterdamDataset = { step: "extract-rotterdam-engineers", count: ROTTERDAM
  */
 export const professionalNetworkManifest = createScenarioManifest({
   id: "professional-network",
+  recordingDescription: "Demonstrates outgoing request review and withdrawing selected stale requests.",
   title: "Professional network",
   tags: ["social", "professional-network", "search", "pagination", "extraction", "invitations", "overlays", "anti-bot", "shadow-dom", "generated-classes"],
   seed: 4303,
@@ -155,6 +156,7 @@ export const professionalNetworkManifest = createScenarioManifest({
   }],
   workflows: [{
     id: "people-search",
+    recordingDescription: "Demonstrates people search filters and reading matching profile records.",
     description: "Search people for data engineer, narrow to second-degree connections in Rotterdam, Netherlands, and read every result across every page, each person once and no promoted entry.",
     recordingScript: SEARCH_SCRIPT,
     expected: {

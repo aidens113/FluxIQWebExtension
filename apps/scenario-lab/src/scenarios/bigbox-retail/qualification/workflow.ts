@@ -6,6 +6,7 @@ import { soapQuantityExpected } from "./expected.js";
 const c = bigboxClasses("baseline", 239);
 export const soapQuantityWorkflow: ScenarioWorkflow = {
   id: "ensure-soap-quantity",
+  recordingDescription: "Demonstrates inspecting existing cart lines and adjusting only the selected quantity.",
   description: "Set the existing soap line to three in total, preserving line, store and other account state.",
   recordingScript: [
     { id: "soap-consent", operation: "click", target: "role:button:Accept all" },

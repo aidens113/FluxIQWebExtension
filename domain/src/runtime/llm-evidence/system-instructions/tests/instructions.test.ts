@@ -12,14 +12,22 @@ import { createWebAutomationLlmEvidenceRuntime } from "../../tools";
 
 const { text, version } = WEB_LLM_SYSTEM_INSTRUCTIONS;
 
-test("the version is one Core's seam accepts, and names the text with loops and written steps", () => {
-  assert.match(version, /^[a-z0-9][a-z0-9._-]{0,63}$/u);
-  assert.equal(version, "web-7");
+test("written instructions outrank optional untrusted demonstrations without fixture teaching", () => {
+  assert.match(text, /Written instructions define the automation/u);
+  assert.match(text, /untrusted supporting demonstrations/u);
+  assert.match(text, /never replace the task or authorize extra acts/u);
+  assert.match(text, /never infer a task from a recording/u);
+  assert.doesNotMatch(text, /everything-store|crossborder-marketplace|social-network-feed|expectedDataset|recordingScript/u);
 });
 
-test("the text holds no control character but a newline, and stays under 3,200 characters", () => {
+test("the version is one Core's seam accepts, and names the text with loops and written steps", () => {
+  assert.match(version, /^[a-z0-9][a-z0-9._-]{0,63}$/u);
+  assert.equal(version, "web-8");
+});
+
+test("the text holds no control character but a newline, and stays under 3,600 characters", () => {
   assert.doesNotMatch(text, /[\u0000-\u0009\u000b-\u001f\u007f]/u);
-  assert.ok(text.length > 0 && text.length <= 3200, `text is ${text.length} characters`);
+  assert.ok(text.length > 0 && text.length <= 3600, `text is ${text.length} characters`);
 });
 
 test("it says the model operates a website on the person's behalf", () => {
