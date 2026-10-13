@@ -147,6 +147,15 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 ## Worker Briefs
 
+### Brief: applicable entry-case acceptance investigation
+- Worker: codex-t517; read-only follow-up in frozen t531 pair, not another task branch. Own report `mvp-final-month-plan/reports/codex-entry-case-acceptance-design.md`; no shared-document edits, commits or model/browser calls.
+- Read structural-authoring audit unit 3 and Current State; t529 loader/evidence is still isolated and may change trace projection. No executor/route-validator/UI/judge implementation edits.
+- Inspect Core `flow-bootstrap/candidate/{trial-gate,contracts}.ts`, `service/candidate-trial/{contracts,port,promotion}.ts` and directly needed candidate/reset/receipt owners. Document exact service wiring and identity checks; summarize any extra reads.
+- Design an explicit applicable entry-case contract derived from task/supportable starting states, immutable revision/digest/task identity, fresh Router observations and existing start-reset ownership. Identify where required cases are declared, prepared, executed, judged and accumulated without inventing alternate states or trusting model yes as coverage.
+- Preserve simple single-route creation and mutually exclusive route semantics. Missing/failed/stale required receipts cannot promote; changing candidate/task invalidates receipts. Account for exploration/trial lasting acts and resets through owning controls; no early accepted-store writes.
+- Propose smallest file-partitioned Core implementation units and downstream realistic-site structural/result qualification. Include two actual entry states, nested/repeated helper calls, untested route refusal, final saved zero-model reuse and no arbitrary subflow-count oracle.
+- Flag unresolved product choices with concrete options; prefer executable defaults from current task contract. Return a bounded design and exact owners, not implementation or a claim of qualification.
+
 ### Brief: t531 rooted candidate topology reachability
 - Worker: codex-t517; create paired isolated `task/t531-rooted-topology-reachability` under `fxwork/t531` through owning helpers/offline installs; check availability after t530. No whole-workspace build wrapper.
 - Read structural audit unit 2 and Core boundary/structure. Current route validation counts call targets from every graph, so disconnected helper components can appear reachable. Runtime helpers/loaders and acceptance-case work are separate.
