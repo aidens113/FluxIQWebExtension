@@ -1,5 +1,5 @@
 // The presses themselves, one per layer in the way, each recorded as the layer's
-// kind and the dismissal's allow-list word (t401).
+// kind and the dismissal's allow-list word (t401), and the two names (t516).
 //
 // `clear.ts` says why the defence presses at all and which guards stand in
 // front of a press; this is the loop it describes, and the record of what it
@@ -7,8 +7,18 @@
 // the page put in the way" rather than only that something was closed: the
 // layer's kind comes from the same classifier the snapshot names layers by
 // (`layer-kind.ts`), or `dialog` when none names it, and the control is named
-// by the allow-list phrase that admitted it (`control-word.ts`), never by its
-// label. Nothing else the page said leaves it in the words.
+// by the allow-list phrase that admitted it (`control-word.ts`).
+//
+// **The two names (t516).** An interruption met in a run must become a branch
+// of the Flow -- wait for the layer, dismiss it, return -- and a handler built
+// from "a dialog, closed by No thanks" can name neither. So the record also
+// carries the layer's accessible name, computed exactly as the snapshot's
+// dialog evidence labels it (`../../evidence/dialogs.ts`), which is what a
+// `dialog` fact's name is matched against, and the pressed control's accessible
+// name, falling back to its sensitivity-filtered visible words for a text-only
+// dismissal. Both are what a page view of the step already shows; the domain bounds
+// them (`domain/src/actions/cleared-layers.ts`). Each is read before the press,
+// for the reason the way out is; a layer the page gave no name has none.
 //
 // **The control pressed is described too (t470).** Lane D round 8
 // (`run-mv5jnc5m-a47c3e59`): the defence closed the site's slow-down notice by
@@ -24,8 +34,9 @@
 // it would name a control of the top document.
 
 import type { WebAutomationClearedLayer } from "@fluxiq-web-extension/domain/client";
-import { describeElement } from "../../describe-element";
+import { describeElement, visibleText } from "../../describe-element";
 import { isTopFrame } from "../../frame-geometry";
+import { accessibleNameFor } from "../../identity";
 import { dispatchClickGesture } from "../click-gesture";
 import type { ClearingTarget } from "./clearing-target";
 import { clearedControlWord } from "./control-word";
@@ -59,7 +70,7 @@ export function pressWaysOut(spare: Element | ClearingTarget | undefined): WebAu
       const control = pressableWayOut(overlay);
       if (!control) continue;
       // Named before the press: a layer that closes is gone from the page after it.
-      const record: WebAutomationClearedLayer = { kind: clearedKind(overlay), control: clearedControlWord(control) };
+      const record: WebAutomationClearedLayer = { kind: clearedKind(overlay), control: clearedControlWord(control), ...namesOf(overlay, control) };
       try {
         if (isTopFrame()) record.wayOut = { url: location.href, element: describeElement(control) as unknown as Record<string, unknown> };
       } catch {
@@ -77,6 +88,13 @@ export function pressWaysOut(spare: Element | ClearingTarget | undefined): WebAu
 function clearedKind(overlay: Element): WebAutomationClearedLayer["kind"] {
   const kind = layerKind(overlay);
   return kind === undefined || kind === "robot_check" ? "dialog" : kind;
+}
+
+/** The layer's accessible name and the dismissal's accessible name or safely readable text. */
+function namesOf(overlay: Element, control: Element): Pick<WebAutomationClearedLayer, "name" | "controlName"> {
+  const name = accessibleNameFor(overlay);
+  const controlName = accessibleNameFor(control) || visibleText(control);
+  return { ...(name ? { name } : {}), ...(controlName ? { controlName } : {}) };
 }
 
 /** Presses the control at the centre of its own box, as a person would. False when it has no box to aim at. */

@@ -10,6 +10,8 @@ import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { webAutomationClearedWayOutsOf } from "../../cleared-way-outs";
 import { dispatchWebAutomationOutput } from "../gateway-output-dispatcher";
+import { webAutomationOutputNodeId } from "../../output-nodes";
+import { bindWebAutomationLlmEvidenceRuntime, type WebAutomationLlmEvidenceRuntime } from "../../runtime/llm-evidence";
 
 async function dispatchWith(payload: JsonObject | undefined, fluxiq: FluxIQ = fakeFluxIQ(payload)): Promise<OutputDispatchResult<JsonObject>> {
   return await dispatchWebAutomationOutput(fluxiq, { domainId: WEB_AUTOMATION_DOMAIN_ID, outputId: "web.dom.click", payload: { selector: "#confirm" } });
@@ -73,5 +75,52 @@ test("a way out that is not a web page's address and one descriptor is dropped, 
   for (const wayOut of [{ url: "javascript:alert(1)", element: { tagName: "button" } }, { url: "https://social.test/", element: [] }, { url: "https://social.test/", element: { text: "x".repeat(20_000) } }, "OK"]) {
     const result = await dispatchWith({ status: "succeeded", clearedLayers: [{ kind: "rate_limit", control: "OK", wayOut }] } as unknown as JsonObject);
     assert.deepEqual(result.payload?.clearedLayers, [{ kind: "rate_limit", control: "OK" }], JSON.stringify(wayOut).slice(0, 60));
+  }
+});
+
+// t516: the layer's own name and the pressed control's name are lifted beside the closed words, so Core can turn the
+// close into a handler; the descriptor still stays here.
+test("a layer's name and the name of the control pressed reach Core beside the closed words", async () => {
+  const wayOut = { url: "https://library.test/catalogue", element: { tagName: "button", selector: "#later", visibleText: "Maybe later" } };
+  const payload = { status: "succeeded", clearedLayers: [{ kind: "dialog", control: "Maybe later", name: "Join the reading club for free holds", controlName: "Maybe later, I will browse first", wayOut }] } as unknown as JsonObject;
+  const result = await dispatchWith(payload);
+  const [lifted] = result.payload?.clearedLayers as Array<Record<string, unknown>>;
+  assert.equal(lifted?.name, "Join the reading club for free holds");
+  assert.equal(lifted?.controlName, "Maybe later, I will browse first");
+  assert.match(String(lifted?.wayOut), /^way-out\.[0-9a-f]{32}$/u);
+  assert.doesNotMatch(JSON.stringify(result.payload), /library\.test|#later/u);
+});
+
+// t516: Core learns a closed layer as a handler whose step presses the way out. Core names no domain's steps, so the
+// dispatcher says which of this domain's node definitions presses it, beside the reference; a layer with no way out
+// names none.
+test("a layer closed by a way out names the node definition that presses it; one with no way out names none", async () => {
+  const wayOut = { url: "https://library.test/catalogue", element: { tagName: "button", selector: "#later", visibleText: "Maybe later" } };
+  const payload = { status: "succeeded", clearedLayers: [{ kind: "dialog", control: "Maybe later", name: "Join the reading club", wayOut }, { kind: "dialog", control: "Close" }] } as unknown as JsonObject;
+  const result = await dispatchWith(payload);
+  const [pressed, unpressed] = result.payload?.clearedLayers as Array<Record<string, unknown>>;
+  assert.equal(pressed?.wayOutDefinitionId, webAutomationOutputNodeId("web.dom.click"));
+  assert.equal(Object.hasOwn(unpressed ?? {}, "wayOutDefinitionId"), false);
+});
+
+test("a playback close resolves through the bound domain without exploration or a model look", async () => {
+  const wayOut = { url: "https://library.test/catalogue", element: { tagName: "button", selector: "#later", accessibleName: "Maybe later", visibleText: "Maybe later" } };
+  const payload = { status: "succeeded", clearedLayers: [{ kind: "dialog", control: "Maybe later", name: "Reading club", wayOut }] } as unknown as JsonObject;
+  const fluxiq = fakeFluxIQ(payload);
+  let runtime: WebAutomationLlmEvidenceRuntime | undefined;
+  Object.assign(fluxiq.programs, { automationStudio: { bindLlmEvidenceRuntime: (bound: WebAutomationLlmEvidenceRuntime) => { runtime = bound; } } });
+  bindWebAutomationLlmEvidenceRuntime(fluxiq);
+  const result = await dispatchWith(payload, fluxiq);
+  const [layer] = result.payload?.clearedLayers as Array<{ wayOut: string; wayOutDefinitionId: string }>;
+  assert.ok(runtime);
+  const scope = { projectId: "project.playback", flowId: "flow.saved" };
+  const handles = await runtime.clearedControlHandles!({ ...scope, wayOuts: [layer!.wayOut] });
+  const handle = handles[layer!.wayOut];
+  assert.ok(handle);
+  const resolved = await runtime.resolvePlanNodeParameters({ ...scope, nodeDefinitionId: layer!.wayOutDefinitionId, parameters: { target: { handle } }, declaredConsequences: [], handleReach: "view_history" });
+  assert.equal(resolved.status, "resolved");
+  if (resolved.status === "resolved") {
+    assert.equal(resolved.parameters.selector, "#later");
+    assert.equal(JSON.stringify(resolved.parameters).includes('"handle"'), false);
   }
 });

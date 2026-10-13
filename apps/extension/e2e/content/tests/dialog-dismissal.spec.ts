@@ -133,6 +133,12 @@ test.describe("a dialog the page opened over itself", () => {
     expect(reply.status, reply.message).toBe("succeeded");
     expect(validationActual(reply)).toMatch(CLOSED_ONE);
     await expect(wheel).toBeHidden();
+    expect(reply.clearedLayers).toMatchObject([{
+      kind: "dialog",
+      name: "Spin to win up to 20% off!",
+      controlName: "No thanks, I would rather pay full price",
+      wayOut: { element: { selector: expect.any(String) } }
+    }]);
   });
 
   test("crossborder-marketplace: a popup that declares no role at all is cleared by its own way out", async ({ openHarness, page }) => {

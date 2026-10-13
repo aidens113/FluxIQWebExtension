@@ -6,7 +6,7 @@ import { webAutomationClearedLayersValue } from "../actions/cleared-layers";
 import { webAutomationClearedWayOutsOf } from "../cleared-way-outs";
 import { webAutomationInterruptedDispatchReading, webAutomationUnansweredOutcome } from "../client/interrupted-action";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
-import { outputTargetFromPayload } from "../output-nodes";
+import { outputTargetFromPayload, webAutomationOutputNodeId } from "../output-nodes";
 
 export async function dispatchWebAutomationOutput(
   fluxiq: FluxIQ,
@@ -90,13 +90,27 @@ export async function dispatchWebAutomationOutput(
 
 /**
  * The layers the client closed, as Core may hold them: each layer's two closed
- * words, and in place of the way out it pressed, the reference this domain kept
- * it under (t470). Undefined when the client reported none.
+ * words, its own name and the pressed control's name when the page gave them
+ * (t516: what Core learns the interruption as a handler from), and in place of
+ * the way out it pressed, the reference this domain kept it under (t470),
+ * with the node definition a step pressing that way out runs
+ * (`wayOutDefinitionId`, t516): Core names no domain's steps, and the handler
+ * it learns presses the way out by that definition and the way out's handle.
+ * Undefined when the client reported none.
  */
 function coreClearedLayers(fluxiq: FluxIQ, reported: unknown): JsonObject[] | undefined {
   const wayOuts = webAutomationClearedWayOutsOf(fluxiq);
-  return webAutomationClearedLayersValue(reported)?.map(({ kind, control, wayOut }) => (wayOut === undefined ? { kind, control } : { kind, control, wayOut: wayOuts.keep(wayOut) }));
+  return webAutomationClearedLayersValue(reported)?.map(({ kind, control, name, controlName, wayOut }) => ({
+    kind,
+    control,
+    ...(name === undefined ? {} : { name }),
+    ...(controlName === undefined ? {} : { controlName }),
+    ...(wayOut === undefined ? {} : { wayOut: wayOuts.keep(wayOut), wayOutDefinitionId: WAY_OUT_PRESS_DEFINITION_ID })
+  }));
 }
+
+/** The node definition the clearing's own press is, as a Flow step: the extension pressed the way out as a click does. */
+const WAY_OUT_PRESS_DEFINITION_ID = webAutomationOutputNodeId("web.dom.click");
 
 /** The dispatch result of a required command whose outcome stayed unknown (`../client/interrupted-action/unanswered-outcome.ts`). */
 function unansweredResult(outputId: string): OutputDispatchResult<JsonObject> {

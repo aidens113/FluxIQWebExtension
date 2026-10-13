@@ -256,3 +256,60 @@ test("an ordinary status region is read and is no check", () => {
   const page = el("body", longContent(), withAttributes("div", { role: "status" }, "Added to basket"));
   assert.equal(pageRobotCheck(page), undefined);
 });
+
+// t516: the deal-wheel gate run's debug (`run-mv6v2hx5-f448e662`) read the "Robot check ... cleared on its own" card on
+// every everything-store landing as a false detection. It is not one: the store serves its soft browser check
+// (`pages/challenges/soft-check.ts`, "The soft check a session's first search meets") at the first search of every
+// fresh store session, in every mode, and that page passes by itself at `softCheckAuto` (8 s). The two rows above read
+// it. These rows hold the other half: the results page itself, with every layer the store paints over it, is no check,
+// and the store's real robot check is still the person's.
+
+/** everything-store's first results page as the deal-wheel variant paints it: the header, the rail, the cards, the cookie banner, and the wheel and notifications prompts. */
+function storeResultsPage(): FakeElement {
+  const card = (title: string, price: string) => el("div", el("h2", title), el("span", price), el("span", "4.5 out of 5 stars"), el("button", "Add to cart"));
+  return el("body",
+    el("header", el("p", "brightaisle"), el("label", "Search in"), el("label", "Search Brightaisle"), el("button", "Go")),
+    el("div",
+      el("aside", el("label", "Minimum price"), el("label", "Maximum price"), el("label", "Sort by:")),
+      el("main",
+        el("p", "1-16 of over 2,000 results for \"wireless earbuds\""),
+        card("Tessaro Arc Wireless Earbuds, Bluetooth 5.3 Headphones with 48H Playtime", "$29.99"),
+        card("Replacement Ear Tips for Wireless Earbuds, Memory Foam Eartips, 3 Pairs (S/M/L), Black", "$12.99"),
+        card("Sponsored: Noise Cancelling Wireless Earbuds with Charging Case", "$39.99"),
+        el("p", "Listing details and prices for everything on this page. ".repeat(20)))),
+    withAttributes("div", { role: "region", "aria-label": "Cookie preferences" },
+      el("p", el("strong", "Cookies and advertising choices."), " We use cookies and similar tools to provide our services, understand how customers use them, and show you relevant ads."),
+      el("button", "Accept"), el("button", "Decline"), el("button", "Customize cookies")),
+    withAttributes("div", { role: "dialog", "aria-modal": "true" },
+      el("p", "Spin to win up to 20% off!"), el("div", el("p", "One spin per customer. Today only.")), el("button", "Spin the wheel"), el("button", "No thanks, I would rather pay full price")),
+    withAttributes("div", { role: "dialog", "aria-modal": "true" },
+      el("p", "Never miss a deal"), el("div", "Brightaisle would like to send you notifications about price drops, deliveries and Lightning Deals."),
+      el("button", "Not now"), el("button", "Allow notifications")));
+}
+
+test("everything-store's results page with its wheel, notifications prompt and cookie banner up is no check", () => {
+  assert.equal(pageRobotCheck(storeResultsPage()), undefined);
+  assert.equal(pageChallenge(storeResultsPage()), undefined);
+});
+
+test("the deal wheel and the notifications prompt, read as layers, are neither a check nor a challenge", () => {
+  const wheel = withAttributes("div", { role: "dialog", "aria-modal": "true" },
+    el("p", "Spin to win up to 20% off!"), el("div", el("p", "One spin per customer. Today only.")), el("button", "Spin the wheel"), el("button", "No thanks, I would rather pay full price"));
+  const notifications = withAttributes("div", { role: "dialog", "aria-modal": "true" },
+    el("p", "Never miss a deal"), el("div", "Brightaisle would like to send you notifications about price drops, deliveries and Lightning Deals."), el("button", "Not now"), el("button", "Allow notifications"));
+  for (const layer of [wheel, notifications]) {
+    assert.equal(withFakeHtmlElement(() => robotCheckIn(layer as unknown as Element, "dialog")), undefined);
+    assert.equal(dialogChallenge(layer), undefined);
+  }
+});
+
+test("everything-store's robot check, served once a search is flagged, is still the person's", () => {
+  const page = el("body", el("div", el("div",
+    el("p", "brightaisle"),
+    el("h4", "Enter the characters you see below"),
+    el("p", "Sorry, we just need to make sure you're not a robot. For best results, please make sure your browser is accepting cookies."),
+    el("p", el("span", "Try different image")),
+    el("form", el("label", "Type characters"), el("button", "Continue shopping")))));
+  assert.equal(pageRobotCheck(page), "person_only");
+  assert.equal(pageChallenge(page), "captcha");
+});

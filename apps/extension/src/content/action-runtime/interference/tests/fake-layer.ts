@@ -150,13 +150,27 @@ export function closesOnPress(control: FakeElement, layer: FakeElement): void {
  */
 export function withPage<T>(body: FakeElement, run: () => T): T {
   const globals = globalThis as Record<string, unknown>;
-  const saved = { document: globals.document, MouseEvent: globals.MouseEvent, HTMLElement: globals.HTMLElement };
+  const saved = {
+    document: globals.document,
+    MouseEvent: globals.MouseEvent,
+    HTMLElement: globals.HTMLElement,
+    HTMLInputElement: globals.HTMLInputElement,
+    HTMLSelectElement: globals.HTMLSelectElement,
+    HTMLTextAreaElement: globals.HTMLTextAreaElement
+  };
+  const all = (): Fake[] => [body as unknown as Fake, ...(body as unknown as Fake).descendants()];
   globals.document = {
-    querySelectorAll: (selector: string) => [body, ...(body as unknown as Fake).descendants()].filter((element) => (element as unknown as Fake).matches(selector)),
+    querySelectorAll: (selector: string) => all().filter((element) => element.matches(selector)),
+    // The accessible name reads `aria-labelledby` through it (`identity/accessible-name.ts`).
+    getElementById: (id: string) => all().find((element) => element.attrs.id === id) ?? null,
     location: { href: PAGE_HREF }
   };
   globals.MouseEvent = class extends Event {};
   globals.HTMLElement = class {};
+  // Named by the accessible-name and sensitivity rules; no fake element is one of them.
+  globals.HTMLInputElement = class {};
+  globals.HTMLSelectElement = class {};
+  globals.HTMLTextAreaElement = class {};
   try {
     return run();
   } finally {
