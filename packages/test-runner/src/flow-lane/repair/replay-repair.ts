@@ -10,9 +10,14 @@
 // against. The check is still made from Core's own accounting rather than from
 // that argument: a replay that somehow reached a provider has to be able to say
 // so, and "we did not ask for a model" is an intention, not a measurement.
+//
+// Accounting Core did not publish is unknown, never 0 (adaptation plan G1):
+// "no call" and "nobody counted" are different facts. `lab replay` refuses a
+// replay with no accounting (`saved-flow-replay/provider/free-accounting.ts`),
+// and `assertReplaysAccounted` refuses the in-run replay on the same rule.
 
 import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
-import { classifyRunnerFailure, type RunnerFailureCategory } from "../../failure.js";
+import { classifyRunnerFailure, RunnerFailure, type RunnerFailureCategory } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
 import { everyNodeEndedSucceeded } from "../node-recovery.js";
 import { executeRecordedFlowRun, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "../persisted-flow-run.js";
@@ -27,11 +32,15 @@ export type RepairReplay = Readonly<{
   runId: string | null;
   /** Core's run status, or the failure category for a replay that could not run. */
   status: string;
-  /** Provider calls Core counted for this run. The whole point: it must be 0. */
-  providerCalls: number;
+  /**
+   * Provider calls Core counted for this run. The whole point: it must be a
+   * known 0. `null` when Core published no count -- or the replay never ran --
+   * which is unknown, and fails the proof (`assertReplaysAccounted`).
+   */
+  providerCalls: number | null;
   /** LLM interventions Core recorded for this run. Also 0 on a reused repair. */
   harnessActivations: number;
-  /** Whether Core called a provider at all, by either count. */
+  /** Whether Core called a provider at all, by its count, its itemized calls, or its interventions. */
   modelCalled: boolean;
   /** Whether the fixture's declared final state held after the replay. */
   goalPassed: boolean;
@@ -130,7 +139,9 @@ async function replayOnce(control: RepairReplayControl, input: RepairReplayInput
     }, bounds);
     runId = run.runId;
     // Read from Core's own accounting, not from the absence of a `runIntent`.
-    const providerCalls = countedProviderCalls(await control.getRunDetail(input.projectId, run.runId, bounds));
+    const detail = await control.getRunDetail(input.projectId, run.runId, bounds);
+    const providerCalls = countedProviderCalls(detail);
+    const itemizedCalls = (detail.providerCalls?.length ?? 0) + (detail.providerCallsOmitted ?? 0);
     const goalPassed = await input.checkGoal();
     const flowShortfall = flowShortfallOf(run);
     return {
@@ -140,7 +151,7 @@ async function replayOnce(control: RepairReplayControl, input: RepairReplayInput
       status: run.status,
       providerCalls,
       harnessActivations: run.harnessActivations,
-      modelCalled: providerCalls > 0 || run.harnessActivations > 0,
+      modelCalled: (providerCalls ?? 0) > 0 || itemizedCalls > 0 || run.harnessActivations > 0,
       goalPassed,
       flowSucceeded: flowShortfall === null,
       ...(flowShortfall === null ? {} : { flowShortfall }),
@@ -150,8 +161,23 @@ async function replayOnce(control: RepairReplayControl, input: RepairReplayInput
     // The category, never the message: a replay that broke on a read must not
     // put whatever that read said into the bundle.
     const status: RunnerFailureCategory = classifyRunnerFailure(error);
-    return { index, outcome: "unreachable", runId, status, providerCalls: 0, harnessActivations: 0, modelCalled: false, goalPassed: false, flowSucceeded: false, datasetsReproduced: input.expectedDatasets ? false : null };
+    // No count: a replay that never ran was never counted, and a 0 would read as a measurement.
+    return { index, outcome: "unreachable", runId, status, providerCalls: null, harnessActivations: 0, modelCalled: false, goalPassed: false, flowSucceeded: false, datasetsReproduced: input.expectedDatasets ? false : null };
   }
+}
+
+/**
+ * Fails a proof whose replays ran but whose provider calls Core did not count:
+ * whether they called a model is unknown, and an unknown is not the known 0 a
+ * reused repair must show (gate P5). A replay that never ran is judged as
+ * unreachable by `assertLiveRepairProof`, not here.
+ */
+export function assertReplaysAccounted(replays: readonly RepairReplay[]): void {
+  const unaccounted = replays.filter((replay) => replay.outcome === "ran" && replay.providerCalls === null);
+  if (!unaccounted.length) return;
+  throw new RunnerFailure("runtime.behavior", `Core published no provider call accounting for ${unaccounted.length} of ${replays.length} replay(s) of the applied Flow, so whether they called a model is unknown`, {
+    details: { unaccountedReplays: unaccounted.map((replay) => replay.index) },
+  });
 }
 
 /**
@@ -196,9 +222,10 @@ function sameDatasets(expected: readonly FlowRunDataset[], actual: readonly Flow
  * Deliberately the narrow question. `live-llm` builds a whole usage record for
  * a run that was authorized to spend; a replay was authorized to spend nothing,
  * and all that has to be established is whether Core counted a call anyway. The
- * three readings are Core's own, most authoritative first: its per-run ledger,
- * its gate's count, and the per-call lines it itemized.
+ * two counts are Core's own, most authoritative first: its per-run ledger and
+ * its gate's count. Neither published is `null`, as `lab replay` reads it; the
+ * per-call lines are not a count (`modelCalled` still reads them as calls).
  */
-function countedProviderCalls(detail: ExistingRunDetail): number {
-  return detail.llmAccounting?.calls ?? detail.providerCallCount ?? (detail.providerCalls?.length ?? 0) + (detail.providerCallsOmitted ?? 0);
+function countedProviderCalls(detail: ExistingRunDetail): number | null {
+  return detail.llmAccounting?.calls ?? detail.providerCallCount ?? null;
 }

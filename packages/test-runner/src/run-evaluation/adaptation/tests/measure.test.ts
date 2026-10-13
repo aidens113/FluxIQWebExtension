@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { measureRunAdaptations, adaptationIdsToRead, type RunAdaptationFacts } from "../measure.js";
+import { measureRepairedRunAdaptations, measureRunAdaptations, adaptationIdsToRead, type RunAdaptationFacts } from "../measure.js";
 
 const stamped = (id: string, adaptationIds: string[]) => ({ id, definitionId: "web.click", metadata: { adaptationIds } });
 const stored = (status: string, fields: Record<string, unknown> = {}) => ({ status, riskLevel: "low", validationResults: [], metadata: { phase9: { baseRevision: 3, appliedRevision: status === "applied" ? 4 : undefined } }, ...fields });
@@ -73,4 +73,56 @@ test("persistence is unmeasured, not guessed, when a stored record states no bas
 test("the ids to read are the created, the stamped on attempted nodes, and the trialled, each once", () => {
   const facts = replayFacts({}, { adaptationIds: ["adaptation.new"], actionAttempts: [{ nodeId: "save" }, { nodeId: "save" }] });
   assert.deepEqual(adaptationIdsToRead(facts.runDetail, facts.graphs), ["adaptation.new", "adaptation.repair-1"]);
+});
+
+/**
+ * A repair lane's run (adaptation plan G1): the lane's own run made the repair,
+ * and a model-free replay of the repaired Flow is the reuse. Persistence,
+ * validation and cost are the lane run's, read after the apply; reuse is the
+ * replay's. Core's legacy apply re-points a node without stamping it, so a
+ * repair the lane applied is also matched by the node Core says it applied to.
+ */
+const laneFacts = (adaptation: Record<string, unknown> = stored("applied", { appliedTo: [{ kind: "action_target", id: "save" }], validationResults: [succeeded("trial", 1)] }), detail: Record<string, unknown> = {}): RunAdaptationFacts => ({
+  runDetail: { summary: { runId: "run-1", projectId: "p" }, actionAttempts: [{ nodeId: "open" }, { nodeId: "save" }], interventions: [{ kind: "runtime_patch" }], adaptationIds: ["adaptation.repair-1"], metadata: { llmGate: { costAccounting: { calls: 2, inputTokens: 20, outputTokens: 4, totalTokens: 24, estimatedCostUsd: 0.001 } } }, ...detail },
+  graphs: [{ nodes: [{ id: "open", definitionId: "web.navigate" }, { id: "save", definitionId: "web.click" }] }],
+  adaptations: new Map([["adaptation.repair-1", adaptation]]),
+});
+const unstampedReplay = (detail: Record<string, unknown> = {}): RunAdaptationFacts => replayFacts({ graphs: [{ nodes: [{ id: "open" }, { id: "save" }] }], adaptations: new Map() }, detail);
+
+test("a repaired run's persistence is the lane run's applied repair, and its reuse is the model-free replay of it", () => {
+  const measured = measureRepairedRunAdaptations({ lane: laneFacts(), replay: unstampedReplay(), repairAdaptationIds: ["adaptation.repair-1"] });
+  assert.deepEqual(measured.adaptationPersistence, { adaptations: [{ adaptationId: "adaptation.repair-1", status: "applied", baseRevision: 3, appliedRevision: 4 }] });
+  assert.deepEqual(measured.adaptationReuse, { exercisedAdaptationIds: ["adaptation.repair-1"], providerCalls: 0, interventions: 0, resume: null });
+  assert.equal(measured.adaptationCost?.providerCalls, 2, "the cost is the run that spent on the repair");
+  assert.equal(measured.adaptationValidation?.adaptations[0]?.adaptationId, "adaptation.repair-1");
+});
+
+test("a node-stamped repair is reused by Core's own stamp rule, with the store read from the lane when the replay did not read it", () => {
+  const stampedReplay = replayFacts({ adaptations: new Map() });
+  const measured = measureRepairedRunAdaptations({ lane: laneFacts(stored("applied")), replay: stampedReplay, repairAdaptationIds: ["adaptation.repair-1"] });
+  assert.deepEqual(measured.adaptationReuse?.exercisedAdaptationIds, ["adaptation.repair-1"]);
+});
+
+test("a repair is not reused by a replay that never attempted the node it was applied to, or when Core does not hold it applied", () => {
+  const elsewhere = laneFacts(stored("applied", { appliedTo: [{ kind: "action_target", id: "checkout" }] }));
+  assert.deepEqual(measureRepairedRunAdaptations({ lane: elsewhere, replay: unstampedReplay(), repairAdaptationIds: ["adaptation.repair-1"] }).adaptationReuse?.exercisedAdaptationIds, []);
+  const reverted = laneFacts(stored("reverted", { appliedTo: [{ kind: "action_target", id: "save" }] }));
+  assert.deepEqual(measureRepairedRunAdaptations({ lane: reverted, replay: unstampedReplay(), repairAdaptationIds: ["adaptation.repair-1"] }).adaptationReuse?.exercisedAdaptationIds, []);
+});
+
+test("a repair the lane run did not list as created -- a re-author Core applied in the run -- is still graded and persisted", () => {
+  const measured = measureRepairedRunAdaptations({ lane: laneFacts(undefined, { adaptationIds: [] }), replay: unstampedReplay(), repairAdaptationIds: ["adaptation.repair-1"] });
+  assert.deepEqual(measured.adaptationPersistence?.adaptations.map((record) => record.adaptationId), ["adaptation.repair-1"]);
+});
+
+test("with no replay that ran there is no reuse to measure, and a replay Core kept no accounting for certifies nothing", () => {
+  assert.equal(measureRepairedRunAdaptations({ lane: laneFacts(), replay: null, repairAdaptationIds: ["adaptation.repair-1"] }).adaptationReuse, null);
+  const silent = measureRepairedRunAdaptations({ lane: laneFacts(), replay: unstampedReplay({ metadata: {} }), repairAdaptationIds: ["adaptation.repair-1"] });
+  assert.equal(silent.adaptationReuse?.providerCalls, null);
+});
+
+test("a repair id the lane did not read is unmeasured persistence, never a guessed record", () => {
+  const measured = measureRepairedRunAdaptations({ lane: laneFacts(), replay: unstampedReplay(), repairAdaptationIds: ["adaptation.repair-1", "adaptation.unread"] });
+  assert.equal(measured.adaptationPersistence, null);
+  assert.equal(measured.adaptationValidation, null);
 });

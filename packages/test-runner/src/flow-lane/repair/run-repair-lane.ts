@@ -32,10 +32,20 @@
 // the run's judged whole run and then applies it or rejects it with a closed
 // reason; one it rejected, or left held and unsettled, changed nothing. The
 // lane writes and publishes that, replays nothing, and fails the run.
+//
+// What the proof must show beyond Core's word (adaptation plan G1, gate P4 and
+// P5): the saved Flow's hashes before and after the apply, failing an applied
+// repair whose steps did not move (`assertRepairPersisted`); and a known 0
+// provider calls on every replay that ran, an unpublished count failing as
+// unknown (`assertReplaysAccounted`). From the same reads it writes the run's
+// adaptation measurements (`snapshots/adaptation.json`): persistence from the
+// run that made the repair, reuse from its first replay.
 
-import type { RunHarnessResultReauthor, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
+import type { RunAdaptationMeasurements, RunHarnessResultReauthor, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
+import { measureRepairedRunAdaptations, readRunAdaptationFacts, RUN_ADAPTATION_SNAPSHOT } from "../../run-evaluation/adaptation/index.js";
+import { writeFlowLaneAdaptationSnapshot } from "../adaptation-snapshot.js";
 import { declaredSecretBindingInputs, flowSecretRequests, type DeclaredSecret } from "../declared-secrets.js";
 import { declaredUploadInputs, flowUploadRequests } from "../declared-uploads.js";
 import { readFlowNodes, type FlowNodeRecord } from "../flow-action-types.js";
@@ -43,7 +53,9 @@ import type { PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 import { resetScenarioLab } from "../reset-scenario-lab.js";
 import type { FlowRepairExpectation } from "./declared-repair.js";
 import { assertFlowRepair, judgeFlowRepair } from "./judge-repair.js";
+import { assertRepairPersisted } from "./apply-repair.js";
 import { assertLiveRepairProof, proveLiveRepair, type LiveRepairProof, type ProveLiveRepairControl } from "./prove-repair.js";
+import { assertReplaysAccounted } from "./replay-repair.js";
 
 /** What the lane needs of the live run: whether it repairs a Flow, and the task and run intent that produced the repair. */
 export type LiveRepairRun = { repairsFlow: boolean; describeRepair(): { task: string; purpose: string } };
@@ -61,8 +73,10 @@ export type LiveRepairLaneInput = {
    * The Flow the lane built and the run it made, which names what the recovery
    * saved. `extracted` is what that run stored, which a re-author's replays
    * must reproduce when it holds at least one dataset (`resultRepairOf`).
+   * `runId` is Core's id for that run, from which the adaptation
+   * measurements are read; absent, none are written.
    */
-  lane: { flowId: string; run: Pick<PersistedFlowRunOutcome, "harnessRecovery"> & Partial<Pick<PersistedFlowRunOutcome, "extracted">> };
+  lane: { flowId: string; run: Pick<PersistedFlowRunOutcome, "harnessRecovery"> & Partial<Pick<PersistedFlowRunOutcome, "extracted" | "runId">> };
   /**
    * The rule of the lane that built the Flow, for rebuilding the run's inputs
    * from its nodes: a created Flow's (`createdFlowSecretInputs`), whose nodes
@@ -163,16 +177,50 @@ export async function runLiveRepairLane(
     checkGoal: input.checkGoal,
   }, bounds);
   await input.bundle.writeStructured("snapshots/repair-lane.json", declaredRepair ? { ...proof, declaredRepair } : proof);
+  const laneRunId = input.lane.run.runId;
+  if (laneRunId) {
+    // Best effort, like every lane's snapshot: a failed read writes nothing, which reads as unmeasured.
+    await writeFlowLaneAdaptationSnapshot({ bundle: input.bundle, path: RUN_ADAPTATION_SNAPSHOT, measure: () => measureRepairLane(control, { projectId: input.projectId, flowId: input.lane.flowId, laneRunId, proof }) });
+  }
   await input.publish({
     ...(declaredRepair ? { declaredRepair: declaredRepair.verdict } : {}),
     application: proof.application.outcome,
     adaptations: proof.adaptationIds.length,
+    ...(proof.application.flow ? { flowChange: proof.application.flow.change } : {}),
     replaysRequested: proof.replaysRequested,
     ...(resultRepair ? { repair: "result_reauthor" } : {}),
     replays: proof.replays.map((replay) => ({ index: replay.index, outcome: replay.outcome, providerCalls: replay.providerCalls, goalPassed: replay.goalPassed, datasetsReproduced: replay.datasetsReproduced })),
   });
+  // Persistence first: a repair that was not kept explains whatever its replays did.
+  assertRepairPersisted(proof.application);
   assertLiveRepairProof(proof);
+  assertReplaysAccounted(proof.replays);
   return proof;
+}
+
+/**
+ * The run's adaptation measurements, from the run that made the repair, read
+ * now that the repair is applied, and the first replay that ran. Every repair
+ * adaptation is read, including one the run did not list as created. Any read
+ * that fails throws, and nothing is written.
+ */
+async function measureRepairLane(
+  control: ProveLiveRepairControl,
+  input: { projectId: string; flowId: string; laneRunId: string; proof: LiveRepairProof },
+  bounds: FluxIQHttpOptions = {},
+): Promise<RunAdaptationMeasurements> {
+  const lane = await readRunAdaptationFacts(control, { projectId: input.projectId, flowId: input.flowId, runId: input.laneRunId });
+  const adaptations = new Map(lane.adaptations);
+  for (const adaptationId of input.proof.adaptationIds) {
+    if (adaptations.has(adaptationId)) continue;
+    const payload = await control.automationStudioCall("get-flow-adaptation", { projectId: input.projectId, flowId: input.flowId, adaptationId }, bounds);
+    const adaptation = (payload as { adaptation?: unknown } | null)?.adaptation;
+    if (adaptation === null || typeof adaptation !== "object" || Array.isArray(adaptation)) throw new RunnerFailure("runtime.behavior", "Core's payload carried no adaptation record", { details: { reasonCode: "adaptation.payload_malformed" } });
+    adaptations.set(adaptationId, adaptation as Record<string, unknown>);
+  }
+  const replayRunId = input.proof.replays.find((replay) => replay.outcome === "ran" && replay.runId)?.runId;
+  const replay = replayRunId ? await readRunAdaptationFacts(control, { projectId: input.projectId, flowId: input.flowId, runId: replayRunId }) : null;
+  return measureRepairedRunAdaptations({ lane: { ...lane, adaptations }, replay, repairAdaptationIds: input.proof.adaptationIds });
 }
 
 /**

@@ -6,6 +6,7 @@ import { createdFlowSecretInputs } from "../../creation/index.js";
 import { runLiveRepairLane, type LiveRepairLaneInput } from "../run-repair-lane.js";
 import type { ProveLiveRepairControl } from "../prove-repair.js";
 import { resetProducerResponse } from "../../tests/reset-producer-response.js";
+import { RUN_ADAPTATION_SNAPSHOT } from "../../../run-evaluation/adaptation/index.js";
 
 /**
  * The lane end to end, against a fake Core: approve, apply, replay, publish,
@@ -44,7 +45,10 @@ const attempt = { attemptId: "attempt.one", nodeId: "node.one", definitionId: "w
 /** What the recovery's proposal pointed at, as Core's adaptation stores it: the page's one submit control. */
 const APPLY_CHANGES = { tagName: "button", accessibleName: "Apply changes", metadata: { controlType: "submit" } };
 
-function lane(options: { recovery?: RunHarnessRecovery; replays?: number; applyRefused?: boolean; providerCalls?: number; goal?: boolean; target?: Record<string, unknown>; nodes?: unknown[]; replayRows?: (replay: number) => Record<string, unknown>[] } = {}) {
+/** The step the repair re-points, as the saved Flow holds it before the repair. */
+const SAVED_STEP = { id: "node.one", definitionId: "web.output.dom-click", parameterValues: { target: { tagName: "button", accessibleName: "Save" } } };
+
+function lane(options: { recovery?: RunHarnessRecovery; replays?: number; applyRefused?: boolean; providerCalls?: number; accounting?: boolean; inert?: boolean; reauthorRevisions?: boolean; goal?: boolean; target?: Record<string, unknown>; nodes?: unknown[]; replayRows?: (replay: number) => Record<string, unknown>[] } = {}) {
   const endpoints: string[] = [];
   const written: Array<{ path: string; value: any }> = [];
   const published: Record<string, unknown>[] = [];
@@ -58,15 +62,17 @@ function lane(options: { recovery?: RunHarnessRecovery; replays?: number; applyR
     getRunDetail: async () => ({
       summary: { runId: "run.replay", projectId: "project-1", flowId: "flow-1", status: "succeeded", routeDecisionCount: 0, subflowEntryCount: 0, actionAttemptCount: 1, updatedAt: 1 },
       routeDecisions: [], subflows: [], actionAttempts: [], interventions: [],
-      ...(options.providerCalls === undefined ? {} : { providerCallCount: options.providerCalls }),
+      // Core states a zero accounting for a run that asked no model; `accounting: false` is a Core that stated none.
+      ...(options.providerCalls === undefined ? (options.accounting === false ? {} : { providerCallCount: 0 }) : { providerCallCount: options.providerCalls }),
     }),
     automationStudioCall: async (endpoint: string, payload: Record<string, unknown>) => {
       endpoints.push(endpoint + (payload.action ? `:${String(payload.action)}` : ""));
-      if (endpoint === "get-flow") return { flow: { nodes: options.nodes ?? [] } };
+      // Applying re-points the saved step onto the repaired control, unless `inert`: Core said applied and changed nothing.
+      if (endpoint === "get-flow") return { flow: { flowId: payload.flowId, nodes: [applied && !options.inert ? { ...SAVED_STEP, parameterValues: { target: options.target ?? APPLY_CHANGES } } : SAVED_STEP, ...(options.nodes ?? [])], edges: [] } };
       if (endpoint === "list-flow-subflows") return { subflows: [] };
-      if (endpoint === "get-flow-adaptation" && payload.adaptationId === REAUTHORED) return { adaptation: { adaptationId: REAUTHORED, status: "applied" } };
+      if (endpoint === "get-flow-adaptation" && payload.adaptationId === REAUTHORED) return { adaptation: { adaptationId: REAUTHORED, status: "applied", ...(options.reauthorRevisions === false ? {} : { metadata: { phase9: { baseRevision: 3, appliedRevision: 4 } } }) } };
       if (endpoint === "get-run-dataset-page") { const rows = options.replayRows?.(replaysRun) ?? []; return { dataset: { schema: { fields: [{ id: "name" }] }, rows, nextCursor: null } }; }
-      if (endpoint === "get-flow-adaptation") return { adaptation: { adaptationId: "adaptation-1", status: applied ? "applied" : "proposed", proposalId: "proposal-1", patch: [{ kind: "edit_action_target", after: options.target ?? APPLY_CHANGES }] } };
+      if (endpoint === "get-flow-adaptation") return { adaptation: { adaptationId: "adaptation-1", status: applied ? "applied" : "proposed", proposalId: "proposal-1", patch: [{ kind: "edit_action_target", targetId: "node.one", after: options.target ?? APPLY_CHANGES }], riskLevel: "low", validationResults: [{ kind: "trial", status: "succeeded", checkedAt: 1 }], ...(applied ? { appliedTo: [{ kind: "action_target", id: "node.one" }] } : {}), metadata: { phase9: { baseRevision: 3, ...(applied ? { appliedRevision: 4 } : {}) } } } };
       if (endpoint === "review-flow-adaptation") {
         if (payload.action === "apply") {
           if (options.applyRefused) throw new RunnerFailure("environment.missing", "Automation Studio call failed: review-flow-adaptation");
@@ -75,7 +81,10 @@ function lane(options: { recovery?: RunHarnessRecovery; replays?: number; applyR
         return { adaptation: { adaptationId: "adaptation-1" } };
       }
       const rows = options.replayRows?.(replaysRun);
-      return { runDetail: { summary: { runId: "run.replay", status: "succeeded" }, actionAttempts: [attempt], interventions: [], ...(rows ? { datasets: [{ datasetId: "products", nodeIds: ["node.one"], recordCount: rows.length, truncated: false, invalidCount: 0 }] } : {}) } };
+      // The lane's own run created the repair and spent on it; a replay created nothing and Core states it spent nothing.
+      const own = payload.runId === "run.lane";
+      const spent = own ? { calls: 3, inputTokens: 30, outputTokens: 6, totalTokens: 36, estimatedCostUsd: 0.002 } : { calls: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCostUsd: 0 };
+      return { runDetail: { summary: { runId: own ? "run.lane" : "run.replay", projectId: "project-1", status: "succeeded" }, actionAttempts: [attempt], interventions: [], adaptationIds: own ? ["adaptation-1"] : [], metadata: { llmGate: { costAccounting: spent } }, ...(rows ? { datasets: [{ datasetId: "products", nodeIds: ["node.one"], recordCount: rows.length, truncated: false, invalidCount: 0 }] } : {}) } };
     },
   } as unknown as ProveLiveRepairControl;
   const input: LiveRepairLaneInput = {
@@ -112,9 +121,10 @@ test("a repair is approved, applied and replayed, and the proof is published bef
   assert.equal(proof.replaysRequested, 2);
   assert.deepEqual(proof.replays.map((replay) => [replay.outcome, replay.providerCalls, replay.goalPassed]), [["ran", 0, true], ["ran", 0, true]]);
   assert.deepEqual(fake.reset, [1, 2], "each replay resets the fixture before arming it");
-  assert.deepEqual(fake.written.map((entry) => entry.path), ["snapshots/repair-lane.json"]);
+  assert.deepEqual(fake.written.map((entry) => entry.path), ["snapshots/repair-lane.json"], "a lane run with no run id is not measured");
   assert.equal(fake.written[0]?.value.application.outcome, "applied");
   assert.deepEqual(fake.published[0]?.application, "applied");
+  assert.equal(fake.published[0]?.flowChange, "changed");
   assert.ok(fake.endpoints.includes("review-flow-adaptation:approve"));
   assert.ok(fake.endpoints.includes("review-flow-adaptation:apply"));
 });
@@ -357,4 +367,61 @@ test("no re-author marker and no proposal is unchanged: recorded as no_proposal,
   assert.equal(proof?.application.outcome, "no_proposal");
   assert.deepEqual(proof?.replays, []);
   assert.equal("resultReauthor" in (fake.written[0]?.value ?? {}), false);
+});
+
+/**
+ * Adaptation plan G1: the proof records the saved Flow before and after the
+ * apply, an applied repair that left the Flow's steps unchanged fails, a replay
+ * Core kept no accounting for is unknown rather than zero, and the run's
+ * persistence and reuse measurements are written from the same facts.
+ */
+test("the proof records the saved Flow's hashes before and after the apply, and the run's persistence and reuse are measured", async (t) => {
+  const fake = lane({ replays: 1 });
+  t.after(fake.restore);
+  const proof = await runLiveRepairLane(fake.control, { ...fake.input, lane: { flowId: "flow-1", run: { harnessRecovery: RECOVERED, runId: "run.lane" } } });
+  assert.equal(proof?.application.flow?.change, "changed");
+  const record = fake.written[0]?.value;
+  assert.equal(fake.written[0]?.path, "snapshots/repair-lane.json");
+  assert.match(record.application.flow.before.contentHash, /^[0-9a-f]{64}$/u);
+  assert.notEqual(record.application.flow.before.stepsHash, record.application.flow.after.stepsHash);
+  assert.deepEqual(record.application.adaptations.map((item: { baseRevision: number; appliedRevision: number }) => [item.baseRevision, item.appliedRevision]), [[3, 4]]);
+  assert.equal(fake.written[1]?.path, RUN_ADAPTATION_SNAPSHOT);
+  const measured = fake.written[1]?.value;
+  assert.deepEqual(measured.adaptationPersistence, { adaptations: [{ adaptationId: "adaptation-1", status: "applied", baseRevision: 3, appliedRevision: 4 }] });
+  // Core's legacy apply re-points the node without stamping it, so the replay is matched to the change by where Core says it applied it.
+  assert.deepEqual(measured.adaptationReuse, { exercisedAdaptationIds: ["adaptation-1"], providerCalls: 0, interventions: 0, resume: null });
+  assert.equal(measured.adaptationCost.providerCalls, 3, "the cost is the run that made the repair, not its replay");
+});
+
+test("a repair Core reports applied that left the saved Flow's steps unchanged fails the run, with the evidence written first", async (t) => {
+  const fake = lane({ replays: 1, inert: true });
+  t.after(fake.restore);
+  await assert.rejects(
+    runLiveRepairLane(fake.control, fake.input),
+    (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && /^Core reported the repair applied, but the saved Flow's steps are unchanged/u.test(error.message),
+  );
+  assert.equal(fake.written[0]?.value.application.outcome, "applied");
+  assert.equal(fake.written[0]?.value.application.flow.change, "unchanged");
+  assert.equal(fake.published[0]?.flowChange, "unchanged");
+});
+
+test("a replay Core kept no provider accounting for fails the run as unknown, as `lab replay` does", async (t) => {
+  const fake = lane({ replays: 1, accounting: false });
+  t.after(fake.restore);
+  await assert.rejects(
+    runLiveRepairLane(fake.control, fake.input),
+    (error: unknown) => error instanceof RunnerFailure && /^Core published no provider call accounting for 1 of 1 replay\(s\) of the applied Flow/u.test(error.message),
+  );
+  assert.equal(fake.written[0]?.value.replays[0]?.providerCalls, null);
+  assert.deepEqual(fake.published[0]?.replays, [{ index: 1, outcome: "ran", providerCalls: null, goalPassed: true, datasetsReproduced: null }]);
+});
+
+test("a re-author Core applied in the run whose record shows no change to the Flow is unproven, and fails", async (t) => {
+  const fake = lane({ replays: 1, recovery: RESULT_REPAIRED, reauthorRevisions: false });
+  t.after(fake.restore);
+  await assert.rejects(
+    runLiveRepairLane(fake.control, { ...fake.input, lane: { flowId: "flow-1", run: { harnessRecovery: RESULT_REPAIRED, extracted: [] } } }),
+    (error: unknown) => error instanceof RunnerFailure && /^Core applied the repair inside the run, and neither the saved Flow nor Core's record/u.test(error.message),
+  );
+  assert.equal(fake.written[0]?.value.application.flow.change, "unseen_in_run");
 });
