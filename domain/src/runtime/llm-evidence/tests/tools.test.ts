@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { AUTOMATION_STUDIO_FLOW_CONDITION_RULES } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import {
   bindWebAutomationLlmEvidenceRuntime,
@@ -163,6 +164,10 @@ test("binds from the production host seam and selects the sole trusted web clien
   // And it says what the node does when conditions reject everything, since a
   // model that read an empty answer as an empty page would repair nothing.
   assert.match(detectDescription, /returns what it read and says so in its report/u);
+  // t478, lane D round 11 (`run-mv5yaapw-6d20d23d`): the where vocabulary is
+  // Core's one text, the same the submission's format carries through any look
+  // withdrawal, never a copy of its own.
+  assert.equal(detectDescription.includes(AUTOMATION_STUDIO_FLOW_CONDITION_RULES), true, "the detection says Core's condition rules whole");
   // S4 of the read-list redesign: the read reads one page and never goes
   // through pages by itself, so the description teaches no `paginate` (a read
   // that carries one is refused `paginate_retired`). `pagination` says how the

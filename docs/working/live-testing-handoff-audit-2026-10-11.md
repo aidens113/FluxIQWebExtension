@@ -274,6 +274,28 @@ isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day
 
 ## Work Ledger
 
+### 2026-10-13 - Round 11: B and C passed build 1 and its replay; D's filter missed a row; t478-t480
+
+- Agent: Claude senior supervisor; debug workers; t478-t480 workers.
+- Round 11 (pair downstream bbffa860 / Core 0371884c; matrix all 14 passed; dry runs ready, fixture reset on):
+  - B build 1 `run-mv5yaapd-ad19eaae` passed $0.0961 (first B pass since round 7); replay
+    `replay-mv5yofwd-b23216e5` passed (goal held, hash equal, all five zero). Safety: the reset gate's undo still
+    removed the pre-existing dish soap once (0066): two missing row tokens compared equal (`site-reset/ledger.ts:170`),
+    and the gate asked although the start hook had reset the site; the fixture reset restored it.
+  - C build 1 `run-mv5yaapy-8c34bf34` passed $0.0803 (13/13 rows in order, 365 s); replay `replay-mv5ypd5y-74061ea8`
+    passed (13 records, all five zero). Waste: two page snapshots per web step (~25 s of each 58 s trial), t477's
+    post-trial view breaks the provider cache once per trial, wording faults.
+  - D build 1 `run-mv5yaapw-6d20d23d` failed $0.0487: the Flow filtered with a digit regex and left out "Aisha Khan and
+    4 other mutual friends" (5); the `where` rules live only in the detect tool's description, withdrawn after repeated
+    detects; three judges said yes with the row in front of them.
+- Validation: replay receipts quoted above; full debugs in the lane trees (run-mv5yaapd, run-mv5yaapy, run-mv5yaapw).
+- Outcome: Revised. Decision (supervisor, the user's rule: never launch with a known fix in flight): B's and C's
+  second builds wait; B, C and D qualify together on the pair carrying t478-t480.
+- Follow-up: t478 condition rules always offered with the script; a yes refused over a left-out row whose number the
+  condition kept; t479 (safety) unasked removal only on a positive identity match, never missing == missing, and no
+  undo request after the start hook reset; t480 one snapshot per web step, the post-trial view keeps the cache, true
+  chat wording, the stray post-run run.
+
 ### 2026-10-12 - t475-t477 merged; round 11 prepared
 
 - Agent: Claude senior supervisor; t475-t477 workers.
