@@ -3,18 +3,10 @@
 // said it created, whether it said future runs changed, and the statuses the
 // run's detail listed. A fact nobody reported stays undefined.
 //
-// `learned` counts only the run's adaptations Core reports `applied`: one that
-// was created but is still proposed, testing or merely validated has not
-// changed what future runs do, so it is never "learned". With the run's
-// adaptation ids and their statuses known it is the number applied; when Core
-// said nothing durable changed it is 0; otherwise it stays undefined. The
-// summary's `adaptationCount` (created, applied or not) does not feed it.
-//
-// One exception raises it: when Core says durable behaviour changed and no
-// applied id accounts for it (the count is 0 or unknown), `learned` is 1. That
-// is a re-author Core kept after a judged re-run: a Flow Bootstrap adaptation,
-// so no adaptation id of the run names it, yet the stored Flow did change. An
-// applied id already counted is not counted again.
+// The run's own durable flag says whether it kept a change. Current adaptation
+// statuses can change after that run and cannot supply historical attribution.
+// The API reports no exact kept count or kinds, so positive counts stay unknown;
+// an explicit false proves zero, and a missing flag remains unknown.
 
 import type { RunFacts, RunOutcome, RunSummary } from "./types";
 
@@ -53,20 +45,15 @@ export function runFacts(input: RunFactsInput): RunFacts {
   const statuses = ids === undefined || input.adaptationStatuses === undefined
     ? []
     : ids.map((id) => input.adaptationStatuses?.get(id));
-  const applied = ids !== undefined && input.adaptationStatuses !== undefined
-    ? statuses.filter((status) => status === "applied").length
-    : input.durableBehaviorChanged === false ? 0 : undefined;
-  // A kept re-author changes the stored Flow without an applied id behind it.
-  const learned = input.durableBehaviorChanged === true && (applied === undefined || applied === 0) ? 1 : applied;
+  const durable = input.durableBehaviorChanged ?? run.durableBehaviorChanged;
+  const learned = durable === false ? 0 : undefined;
   // Every change the run tried, kept or not: what is still being checked, or did not hold.
   const changesTried = ids?.length ?? run.adaptationCount;
   const known = statuses.filter((status): status is string => status !== undefined);
   const validated = known.some((status) => PASSED.has(status)) ? true
     : known.length > 0 && known.length === statuses.length && known.every((status) => DROPPED.has(status)) ? false
       : undefined;
-  const futureRunsUpdated = input.durableBehaviorChanged === true || known.includes("applied")
-    ? true
-    : input.durableBehaviorChanged === false ? false : undefined;
+  const futureRunsUpdated = durable;
 
   return {
     outcome,
