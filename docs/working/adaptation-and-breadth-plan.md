@@ -133,6 +133,16 @@ Codex supervisor has dispatched these independent briefs. Worker claims remain u
 - Definition of done: generic regression for automatic recovery followed by recorded manual retry, transient check cleared before its recorded control, delayed ingestion, ambiguous/missing/truncated snapshots and dead lasting controls; focused tests, touched-package typechecks and audits pass. Report actual sample projection coverage without page data.
 - Report to: t518 downstream `docs/working/adaptation-and-breadth-plan/reports/codex-t518.md`.
 
+### Brief: codex-t518-capture
+- Repository: t518 downstream tree at `C:/Users/osrs_/FluxStuff/fxwork/t518/!FluxIQWebExtension`.
+- Task: preserve explicit evidence that a capture found no dialog/blocker, so missing historical evidence is not mistaken for absence.
+- Required reads: this Current State; extension `content/evidence/dialogs.ts`, `overlays.ts`, snapshot assembly and owning tests; domain `recording/web-state/evidence/project.ts` (read-only) zero-count projection.
+- Owns (may edit): `apps/extension/src/content/evidence/dialogs.ts`, `overlays.ts`, adjacent owning tests; minimal existing snapshot assembler adjustment if necessary, after naming it to supervisor.
+- Must not touch: all domain/Core files, model guidance, fixtures/oracles, shared docs, other task trees. No commits/merges/pushes/provider/browser runs/full suites.
+- Design: existing producers return explicit empty evidence after their real scans, with correct tested/blocked counts. Do not invent absence after errors, partial scans, or missing APIs. Keep existing positive-dialog/blocker semantics and sensitive-data filtering. Domain already persists openCount/blockedCount from explicit producers and may omit empty collection blobs.
+- Definition of done: fail-first real-producer unit checks for known-empty versus failed/unknown evidence, positive evidence unaffected; extension source/test typechecks and owning tests pass. Report any required source path expansion.
+- Report to: t518 downstream `docs/working/adaptation-and-breadth-plan/reports/codex-t518-capture.md`.
+
 ## Inventory (2026-10-13)
 
 ### Drift variants
