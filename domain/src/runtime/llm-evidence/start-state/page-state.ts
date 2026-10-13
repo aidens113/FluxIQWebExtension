@@ -13,6 +13,22 @@
 // `covered-by` naming a layer left out is dropped from the line it is on,
 // since the line would otherwise differ only by the interruption.
 //
+// **The page's own pinned header keeps its hidden state (t505).** The front
+// layer is a paint fact: the capture puts there anything under a `fixed` or
+// `sticky` ancestor, and a site's header pinned while scrolling is one. Lane B
+// round 18 (`run-mv6p76yw-701793d0`) added an item from a detail page; the
+// item showed only in the confirmation panel (a layer, rightly left out) and in
+// the header's hidden summary of the visitor's list -- the lines the result
+// check read to pass the build -- and the header's badge was never redrawn. The
+// whole header was left out as a layer, so the read after the add saw nothing,
+// and Core recorded the add as having no effect. So a hidden element is kept
+// when the outermost front layer above it is the page's banner landmark and no
+// dialog or recognised cover holds it: hidden, it stands in front of nothing,
+// and the banner is on the page before and after any press rather than opening
+// over it. The banner's rendered elements stay out -- what a pinned header
+// covers moves with every scroll -- and so does the hidden content of any other
+// front layer, such as a pinned panel a press opened.
+//
 // **Focus is not state (FluxIQ Core t475).** Which element holds focus moves
 // with every press and every look; lane B round 10 (`run-mv5tusj4-b7ee0630`)
 // was asked to undo "marked focused" as an act's effect. The focus mark is
@@ -32,11 +48,15 @@ import { webControlSpotToken } from "../control-spot";
 import { WEB_START_STATE_SCHEMA_VERSION } from "./schema-version";
 import type { WebStartState } from "./state";
 
-/** The state of the page `evidence` captured, interruptions and focus left out; with `records`, the items its kept elements sit in. */
+/** The state of the page `evidence` captured, interruptions and focus left out, the pinned banner's hidden state kept; with `records`, the items its kept elements sit in. */
 export function webStartStateFromEvidence(evidence: WebLlmPageEvidence, records?: ReadonlyMap<string, string>): WebStartState {
   const tree = webLlmPageTree(evidence.elements);
-  const interruption = (element: WebLlmEvidenceElement): boolean =>
-    webIsLayer(element) || element.inDialog !== undefined || tree.ancestors(element).some(webIsLayer);
+  const interruption = (element: WebLlmEvidenceElement): boolean => {
+    if (webIsLayer(element) || element.inDialog !== undefined) return true;
+    const above = tree.ancestors(element);
+    if (!above.some(webIsLayer)) return false;
+    return !(element.hidden === true && !above.some(interruptsByWhatItIs) && outermostFrontLayer(above)?.landmark === BANNER);
+  };
   const dropped = new Set(evidence.elements.filter(interruption).map((element) => element.target));
   const kept = evidence.elements.filter((element) => !dropped.has(element.target)).map((focusable) => {
     const { focused: _focused, ...element } = focusable;
@@ -67,4 +87,17 @@ export function webStartStateFromEvidence(evidence: WebLlmPageEvidence, records?
       return record ? [webControlSpotToken("item", record)] : [];
     }))] : undefined
   });
+}
+
+/** The landmark role of the page's own header (header). */
+const BANNER = "banner";
+
+/** A dialog, or a cover the capture recognised by kind: an interruption by what it is, painted or not (header). */
+function interruptsByWhatItIs(element: WebLlmEvidenceElement): boolean {
+  return element.isDialog !== undefined || element.kind !== undefined;
+}
+
+/** The farthest of `above` (nearest first) the capture put in the front layer. */
+function outermostFrontLayer(above: readonly WebLlmEvidenceElement[]): WebLlmEvidenceElement | undefined {
+  return [...above].reverse().find((element) => element.frontLayer === true);
 }
