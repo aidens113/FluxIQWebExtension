@@ -7,6 +7,11 @@
 // holds by the host's own test (`routeEffectHolds`) on a page that already holds the coupon and not on a fresh one;
 // it is never answered where no identity was acted on; and the build test's check of the step answers `present`
 // when the page shows it, whatever the control now reads.
+//
+// And it leaves out what the page changes by itself (t496): in `run-mv6eq215-a986f1f3` the look an act was made from
+// caught a rotating banner on its second slide, the press reloaded the page onto its first, and the first slide's link
+// was kept as added, so the effect held only while that slide was up. Held on a generic page of that shape: a banner
+// that moves one slide on every capture and starts again on every reload, and a units switch whose press reloads.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -136,4 +141,71 @@ test("the build test's check answers `present` for a step whose effect the page 
   assert.equal(await check({ collected: true }), "core.replay.verified");
   // An effect the page does not show says nothing: the check goes on and finds the control.
   assert.equal(await check({ collected: false }, resolved.effect), "core.replay.verified");
+});
+
+const BANNER_URL = "https://recipes.test/";
+const SWITCH = "#units > button";
+const SLIDES = ["Read this week's pick", "Browse the archive", "Meet the cooks"];
+
+/**
+ * A recipe page. Its banner shows slide `slide` at the next capture, moves on one
+ * slide each capture after, and starts again at the first on a reload; pressing
+ * the units switch saves metric units and reloads the page.
+ */
+function site(start: { metric: boolean; slide: number } = { metric: false, slide: 0 }): WebAutomationLlmEvidenceRuntime {
+  let metric = start.metric;
+  let slide = start.slide;
+  let document = 1;
+  return createWebAutomationLlmEvidenceRuntime({
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.click") {
+        if (command.parameters.selector === SWITCH && !metric) {
+          metric = true;
+          document += 1;
+          slide = 0;
+        }
+        return { status: "succeeded" };
+      }
+      if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
+      const shown = SLIDES[slide % SLIDES.length]!;
+      slide += 1;
+      const elements: JsonObject[] = [
+        { tagName: "a", selector: "#banner > a", visibleText: shown, attributes: { href: "/featured" } },
+        { tagName: "a", selector: "#nav > a", visibleText: "All recipes", attributes: { href: "/recipes" } },
+        { tagName: "span", selector: "#units > span", visibleText: metric ? "Units: metric" : "Units: imperial", hasClickHandler: true },
+        ...(metric ? [] : [{ tagName: "button", selector: SWITCH, visibleText: "Use metric units" }])
+      ];
+      return { status: "succeeded", payload: { snapshot: { url: BANNER_URL, title: "Recipes", interactiveElements: elements, evidence: { navigation: { type: "navigate", timeOrigin: 1_000 * document } } } } };
+    }
+  });
+}
+
+/** A build that looks (first slide), then presses the switch from its own look (second slide) and the reload starts the banner again. */
+async function builtEffect(): Promise<JsonObject> {
+  const runtime = site();
+  const looked = await run(runtime, LOOK, {});
+  const units = shownHandle(looked.evidence, "Use metric units");
+  const pressed = await run(runtime, CLICK, { target: { handle: units } });
+  assert.equal((pressed.evidence as { pageChanged?: boolean }).pageChanged, true);
+  const resolved = await runtime.resolvePlanNodeParameters({ ...SCOPE, nodeDefinitionId: CLICK, parameters: { target: { handle: units } }, declaredConsequences: ["modify_existing"], permission: PERMITTED, handleReach: "view_history" });
+  assert.equal(resolved.status, "resolved", JSON.stringify(resolved));
+  if (resolved.status !== "resolved" || !resolved.effect) throw new Error(`the step carries no effect: ${JSON.stringify(resolved)}`);
+  return resolved.effect;
+}
+
+test("an act whose look caught a turning banner keeps only what the act did, and holds on every slide", async () => {
+  const effect = await builtEffect();
+  // What the act did: the units chip reads metric. The banner's link is not the act's.
+  assert.equal((effect.added as string[]).length, 1, JSON.stringify(effect));
+  for (const slide of [0, 1, 2]) {
+    assert.equal(webAutomationRouteEffectHolds(effect, await routeStateOf(site({ metric: true, slide }))), true, `metric units already saved, banner on slide ${slide + 1}`);
+  }
+});
+
+test("the same effect never holds where the act's result is not on the page, whatever the banner shows", async () => {
+  const effect = await builtEffect();
+  for (const slide of [0, 1, 2]) {
+    assert.equal(webAutomationRouteEffectHolds(effect, await routeStateOf(site({ metric: false, slide }))), false, `imperial units, banner on slide ${slide + 1}`);
+  }
 });

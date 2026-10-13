@@ -103,6 +103,13 @@
 // page passes the step over as done rather than failing it. An effect only
 // ever skips a step: Core never runs an act again because of one.
 //
+// **What the page changes by itself is no act's effect (t496).** Each Flow also
+// keeps what its pages were seen changing with nothing done to them -- a banner
+// that turns on its own -- from every capture it is handed (`remember`,
+// `rememberLook`) and the node run's word that something is about to be done to
+// the page (`acting`), and `acted` leaves those names out of the effect it
+// keeps (`self-changing/`).
+//
 // **A candidate submission may name a control from any view (t358).** The
 // store also keeps each Flow's view history (`view-history.ts`): every handle
 // any capture carried, as its views agree it is (`acrossView`). Only a caller
@@ -177,6 +184,7 @@ import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webPlanElementIdentity, webPlanElementIdentityAcrossViews, webPlanElementWords, type WebPlanElementIdentity } from "./element-identity";
 import { webLlmPageText } from "../page-view";
 import { webPlanActEffect } from "./act-effect";
+import { createWebLlmSelfChangingNames, type WebLlmSelfChangingNames } from "./self-changing";
 import { webLlmFrameUrlPath } from "./frame-url-path";
 import { webLlmPressableTargets } from "./pressable-targets";
 import { webLlmPrintedTargetHandles } from "./printed-handles";
@@ -241,6 +249,8 @@ export type WebLlmTargetPackets = {
   pressed(scope: WebLlmTargetScope, handle: string): void;
   /** Exploration acted on `handle` from the page `before` showed, leaving the page `after` shows: a candidate's step saves its control as it was there, and what the act made true (header). */
   acted(scope: WebLlmTargetScope, handle: string, before: WebLlmSnapshotBinding, after?: WebLlmSnapshotBinding): void;
+  /** Something is about to be done to the page this Flow's build stands on, or Core is running the draft again: the newest capture no longer says how the page stands (header, t496). */
+  acting(scope: WebLlmTargetScope): void;
   resolve(scope: WebLlmTargetScope, handle: string, location: string | undefined, reach?: WebLlmTargetReach): WebLlmTargetResolution;
   /** A bare handle for an act on the page at `page`: that page's, `stale` when only another page holds it (header, t486). */
   resolveOn(scope: WebLlmTargetScope, handle: string, page: string): WebLlmTargetResolution;
@@ -258,11 +268,12 @@ type PageTargets = Map<string, PageTarget>;
  * carried (header). `printed`: every handle evidence printed (header). `pressed`: every handle
  * a press of exploration's changed the page for (header). `acted`: each handle exploration acted
  * on, as the view the first act was made from showed it, with what that act made true (header). `partial`: the pages
- * whose newest view was a look the browser cut short (header).
+ * whose newest view was a look the browser cut short (header). `selfChanging`: what its pages were seen changing by
+ * themselves (header, t496).
  */
 type FlowPages = {
   pages: Map<string, PageTargets>; letGo: Set<string>; renumbered: Map<string, Set<string>>; history: WebLlmViewHistory<PageTarget>;
-  printed: Set<string>; pressed: Set<string>; acted: Map<string, ActedTarget>; partial: Set<string>;
+  printed: Set<string>; pressed: Set<string>; acted: Map<string, ActedTarget>; partial: Set<string>; selfChanging: WebLlmSelfChangingNames;
 };
 /** A control as the first act on it found it, and what that act made true when it added anything (`act-effect.ts`). */
 type ActedTarget = PageTarget & { effect: JsonObject | undefined };
@@ -280,7 +291,8 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       printed: new Set<string>(),
       pressed: new Set<string>(),
       acted: new Map<string, ActedTarget>(),
-      partial: new Set<string>()
+      partial: new Set<string>(),
+      selfChanging: createWebLlmSelfChangingNames()
     };
     flows.delete(key);
     flows.set(key, flow);
@@ -294,6 +306,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
     remember(scope, binding) {
       const flow = flowOf(scope);
       const targets = targetsOf(binding);
+      flow.selfChanging.captured(binding);
       flow.history.record(binding.evidence.location, targets);
       printedBy(flow, binding);
       markRenumbered(flow, binding, targets);
@@ -304,6 +317,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       const flow = flowOf(scope);
       const location = binding.evidence.location;
       const seen = targetsOf(binding);
+      flow.selfChanging.captured(binding);
       flow.history.record(location, seen);
       printedBy(flow, binding);
       // A look that described every control says which have gone, as a shown
@@ -342,11 +356,14 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       if (flow === undefined || handle === undefined || flow.acted.has(handle)) return;
       const target = targetsOf(before).get(handle);
       if (target === undefined || target.shared) return;
-      flow.acted.set(handle, { ...target, effect: webPlanActEffect(before, after) });
+      flow.acted.set(handle, { ...target, effect: webPlanActEffect(before, after, flow.selfChanging.of(before.evidence.location)) });
       for (const oldest of flow.acted.keys()) {
         if (flow.acted.size <= ACTED_PER_FLOW) break;
         flow.acted.delete(oldest);
       }
+    },
+    acting(scope) {
+      flows.get(scopeKey(scope))?.selfChanging.acting();
     },
     resolve(scope, written, location, reach) {
       const handle = canonicalWebLlmTargetHandle(written) ?? written;

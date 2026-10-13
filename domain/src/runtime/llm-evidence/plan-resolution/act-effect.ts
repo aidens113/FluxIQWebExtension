@@ -17,14 +17,18 @@
 // control's identity. An effect is kept only when the act added something the
 // page can show, because one that added nothing never holds and would only
 // ride along unread.
+//
+// What the page changes by itself is left out (t496, `./self-changing/`):
+// `selfChanging` is what the build saw this page change with nothing done to it.
+// An act that added only such names keeps its effect as it was signed.
 
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationRouteEffect } from "../../route-state/effect";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 
 /** The effect of an act made from the page `before` showed and leaving the page `after` shows, or nothing when it changed nothing the page can show. */
-export function webPlanActEffect(before: Pick<WebLlmSnapshotBinding, "routeState">, after: Pick<WebLlmSnapshotBinding, "routeState"> | undefined): JsonObject | undefined {
+export function webPlanActEffect(before: Pick<WebLlmSnapshotBinding, "routeState">, after: Pick<WebLlmSnapshotBinding, "routeState"> | undefined, selfChanging?: ReadonlySet<string>): JsonObject | undefined {
   if (before.routeState === undefined || after?.routeState === undefined) return undefined;
-  const effect = webAutomationRouteEffect(before.routeState, after.routeState);
+  const effect = webAutomationRouteEffect(before.routeState, after.routeState, selfChanging);
   return Array.isArray(effect.added) && effect.added.length > 0 ? effect : undefined;
 }
