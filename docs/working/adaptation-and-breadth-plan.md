@@ -385,6 +385,23 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
 
 ## Work Ledger
 
+### 2026-10-13 - t511 merged; compatibility replays pass; gate round 1 prepared
+
+- Agent: Claude senior supervisor; t511 workers.
+- Changed: t511 domain: `run.ts` compared the before and after pages whole (scroll and positions included), so a press
+  that changed nothing read as a success; now position, scroll and focus alone are not a change, and a press that
+  changed nothing is waited on, pressed once more unless it declared a lasting consequence, and answered `no_effect`
+  (test stubs now change a status line when pressed). t511 Core: each condition carries `valuesRead` (the number read
+  or the matched text, up to four kept and four left-out rows) and each sorted record set `sortRead`; a judge's
+  out-of-order claim the record refutes is marked contradicted. Open: a saved Flow's playback still presses once.
+- Validation: compatibility replays after t510 on the latest B, C and D Flows passed (B
+  `replay-mv6t1b9r-1b57bdf3` goal true; C `replay-mv6t1alp-6da0cfee` 13/13; D `replay-mv6t1aky-c481b32a` 4/4; hash equal,
+  all five zero). t511 after the dev merges: Core result-verification, candidate-trial and deepseek "86 passed (86)"
+  files, "819 passed"; domain runtime, output-nodes and actions "# pass 1709 / # fail 0"; Core, domain and extension tsc
+  exit 0; check-extension exit 0; audit passed; Core merge gated by `pnpm check`. Pushed Core `a1e249ab`, downstream
+  `5a33299b`.
+- Outcome: Accepted. Next: gate round 1 (bigbox, everything-store, social) with the wave-1 rerun on slot 2.
+
 ### 2026-10-13 - t510 merged (one reader for a record output; value reading)
 
 - Agent: Claude senior supervisor; t510 workers.
