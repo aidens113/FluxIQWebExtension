@@ -13,6 +13,19 @@ are under `domain/src/`.
 
 ## Which Build Runs
 
+Every build starts from explicit task instructions owned by the Flow. Optional
+recordings provide supplementary evidence only, with a separate description of
+what each demonstrates. Recorded retries and extra acts do not expand the task
+or force corresponding nodes into the automation. Core owns instruction and
+recording persistence, evidence assembly and authoring/execution admission;
+the web domain supplies browser evidence and actions.
+
+Saved automations also need current active task instructions before their next
+run or resume, including deterministic execution. Missing instructions lead to
+the owning Flow's instruction editor. Valid written instructions allow reuse
+without a new model call. Old graphs/recordings remain accessible; entering a
+task does not retroactively prove an old recording-derived graph implements it.
+
 Core's configured product default is `candidate`: exploration is separate from
 submission of the whole Flow. Core's single setting `FLUXIQ_AUTHORING_MODE`
 (Core `model/authoring-mode/`, described in Core's

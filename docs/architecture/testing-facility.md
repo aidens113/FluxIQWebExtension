@@ -1,5 +1,20 @@
 # Automated testing facility
 
+## Instruction authority and recording evidence
+
+Automation generation uses the authored explicit-task created-Flow lane through
+the production instruction/chat contract. The standalone recorded `--flow`
+conversion lane is retired: a recording cannot define an executable automation.
+Mapping diagnostics remain evidence, and coverage of every demonstration event
+does not prove the written task was answered.
+
+Fixture recordings supply explicit descriptions independently of automation
+instructions. Saved/clone/replay execution respects Core's current instruction
+gate; the Lab must not silently inject a fixture goal into an old automation.
+Generation and deterministic reuse are measured separately. Oracle outputs,
+scripted selectors and expected fixture values remain scoring data and never
+become product model guidance or inferred task instructions.
+
 ## Interactive development sessions
 
 Use `pnpm lab:interactive <scenario> --target persistent-isolated --workspace <name>` when developing or debugging a small UI change. The command builds prerequisites once, starts one headed browser and one isolated topology, reuses the named FluxIQ state/browser profile, loads both the scenario and authenticated panel surfaces, and then accepts newline-delimited JSON commands on standard input until `{"action":"stop"}`. After the first build, the faster relaunch is `node packages/test-runner/dist/cli.js interactive <scenario> --target persistent-isolated --workspace <name>`.

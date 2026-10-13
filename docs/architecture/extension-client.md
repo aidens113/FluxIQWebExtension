@@ -61,6 +61,18 @@ but the generic websocket package remains domain-neutral.
 
 ## Panel UI
 
+Core requires active, nonempty Flow-owned task instructions before every saved
+automation run or resume, including deterministic runs. The panel preserves a
+closed missing-instruction refusal and opens the owning Flow to enter its task.
+Names, recording descriptions, notes and inferred trace goals do not satisfy
+this requirement. Valid instructions allow ordinary reuse with no new model
+call. Chrome/Edge and Firefox use the same task and description controls.
+
+The recording description is an explicit start input sent through the gateway
+to Core's durable recording service. Existing undescribed recordings remain
+accessible and can be edited without changing their captured timeline. A
+description is required before attaching them as supplemental build evidence.
+
 The popup and the side panel are one UI. Both `popup/index.html` and
 `sidepanel/index.html` are the same stub -- a `<div id="app">`, a link to
 `index.css`, and `index.js` -- and each entry calls `mountPanel(root, surface)`
@@ -85,15 +97,11 @@ the gear and Open FluxIQ) and, under it, exactly one screen
   to a thread that shows the run (`ChatPanel.followRun`, below).
 - **Automations**, the person's saved automations, newest first. Choosing one
   calls `chat.open({ kind: "automation", flowId, name })` and shows the chat.
-  Below the list, "New automation" offers "Record a new automation" and
-  "Extract Data From This Page"; a recording that just ended is reviewed at the
-  top (analyze, preview, test, save), and the panel switches to this tab when
-  a recording stops.
-  Review actions retain their mounted controls across phase changes, including
-  Done while analysis progresses into building. A removed focused action hands
-  focus to an available local control only while the visible review still owns
-  focus in the active document. Passive redraw and dismissal do not claim
-  external focus; reducer, request and review-epoch contracts remain unchanged.
+  New automation starts with explicit written task instructions. Recording and
+  extraction offer supporting evidence with a required description of what it
+  demonstrates. A completed recording remains reviewable and attachable to an
+  instructed draft; it cannot independently generate, test or approve an
+  executable automation. Review preserves the person's focus and existing data.
 - **Settings**, opened by the gear in place of everything else: the two
   addresses and four switches with an explicit Save, Disconnect, the on-page
   status (Full, Small, Off), Report a problem, Forget this pairing, and Open

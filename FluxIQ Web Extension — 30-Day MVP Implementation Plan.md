@@ -10,7 +10,13 @@ The MVP must prove the core FluxIQ product thesis:
 
 The primary product loop is:
 
-**Describe / Demonstrate → Generate → Validate → Execute → Detect Failure → AI Takeover → Explore → Repair → Verify → Persist → Deterministic Reuse**
+**Write Task Instructions → Optionally Add Described Demonstrations → Generate → Validate → Execute → Detect Failure → AI Takeover → Explore → Repair → Verify → Persist → Deterministic Reuse**
+
+Task instructions are mandatory for all automations, including existing ones
+before their next run. Recordings are purely supplementary evidence and require
+a separate description of what they demonstrate. Neither a recording nor its
+description may define the automation. Core enforces this at build and persisted
+execution boundaries; valid deterministic reuse still needs no new model call.
 
 Every task during this development cycle must directly improve this loop, its reliability, or its usability.
 
@@ -759,26 +765,27 @@ Natural-language requests can create runnable browser automations without manual
 
 ### Objective
 
-Turn recording into a polished user-facing teaching mechanism.
+Make described recordings useful optional evidence for instruction-led authoring.
 
 ### Flow
 
-**Start Recording → Perform Task → Stop Recording → Analyze → Generate → Test → Save**
+**Write Task Instructions → Describe Optional Recording → Record Demonstration → Stop Recording → Attach Evidence → Generate From Instructions → Test → Save**
 
 ### Improve
 
 - Clear recording state
-- Recording start/stop
+- Required demonstration description and recording start/stop
 - Event feedback
 - Notes/narration where supported
 - Ability to remove mistaken steps
 - Clear analysis state
-- Automation preview
+- Optional evidence attachment to an instructed draft
 - Test generated automation
 
 ### Exit Criteria
 
-Recording feels like a product feature rather than an internal development/debug interface.
+Recording supports the written task without creating a standalone executable
+automation. Existing recordings remain readable and can receive descriptions.
 
 ---
 
@@ -1025,7 +1032,7 @@ Users can understand that their automation becomes more capable over time.
 
 A nontechnical user can complete:
 
-**Install → Describe/Demonstrate → Generate → Run → Observe → Encounter Change → Watch Adaptation → Re-run Learned Automation**
+**Install → Write Instructions → Optionally Add Described Evidence → Generate → Run → Observe → Encounter Change → Watch Adaptation → Re-run Learned Automation**
 
 without using Advanced Editor.
 
