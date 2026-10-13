@@ -19,6 +19,7 @@ export function webLlmRejectionNext(reason: WebLlmToolRejectionReason, instead: 
     // Read off the codes, so a repeat that passes them back says it again.
     : reason === "handle_not_in_packet" && instead?.includes(RENUMBERED_BY_RELOAD) === true ? RENUMBERED_NEXT
     : reason === "outcome_uncertain" ? UNCERTAIN_NEXT
+    : reason === "press_had_no_effect" ? "The press left the page unchanged after it settled. Automatic retries have finished. Read the current page for a missing prerequisite or choose another control; the requested effect has not been established."
     : reason === "option_not_offered" ? OPTION_NOT_OFFERED_NEXT
     // Read off the kind code in `instead`, so a repeat that passes it back says it again.
     : reason === "handle_not_a_field" ? notAFieldNext(instead) : reason === "handle_wrong_kind_of_control" ? webPlanScriptedChoiceMove(instead)

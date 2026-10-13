@@ -1,7 +1,7 @@
 # Adaptation Gate And Breadth Sample Plan
 
 Status: Active
-Status detail: Gate round 1 and breadth wave 1 ran on 2026-10-13 with no counted pass; fixes t506-t515 merged; t516 (Partial) and t517 (Done, unverified) sit uncommitted in their worktrees for Codex.
+Status detail: No counted gate pass; t517 independently verified and ready for integration; t516 review complete pending supervisor verification; t518 addresses recorded recovery/state linking.
 Created: 2026-10-13
 Last updated: 2026-10-13
 Owner: Senior supervisor agent (planned by a lane lead)
@@ -11,9 +11,9 @@ Related: Core work, if any, is briefed through Core's mvp-final-month-plan.md; [
 
 ## Current State
 
-**Codex continuation active, 2026-10-13.** Independent workers are reviewing/fixing t517 and t516 in their paired task trees and investigating both unchanged-site replay failures read-only. The supervisor owns verification and serial integration. The existing `.clinerules/fluxiq.md` modification on main `dev` is unrelated and will be preserved.
+**Codex continuation active, 2026-10-13.** t517 is committed and independently verified after dev integration (140 Core executor, 10 contracts, 302 domain, 501 extension tests; package typechecks; headed Chromium Post harness). t516 review fixed identity collisions and added real-domain/judged-promotion checks; supervisor verification is next. The shared recorded-recovery cause and clock mismatch are identified; t518 implements positive-state routing. The supervisor owns serial integration. The unrelated `.clinerules/fluxiq.md` edit on main dev is preserved.
 
-**Handoff, 2026-10-13 (Claude to Codex).** Gate round 1 and breadth wave 1 ran; nothing counted yet (ledger has
+**Original handoff, 2026-10-13 (Claude to Codex; findings below superseded by the Codex ledger where stated).** Gate round 1 and breadth wave 1 ran; nothing counted yet (ledger has
 every run and debug). Fixes t506-t515 are merged and pushed. Two tasks are still open:
 
 - **t516** (a popup closed by the extension's defence becomes a guarded `add_handler` proposal, plus the false robot
@@ -479,6 +479,14 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
   line. A worker's claim is not validation.
 
 ## Work Ledger
+
+### 2026-10-13 - t517 independently verified after current dev integration
+
+- Agent: Codex supervisor; codex-t517 worker.
+- Changed: certain-no-effect failure and one re-press retained; dead lasting actions now fail default continuation while explicit failed/optional routes remain. Fixed unseen open-shadow-root answers and stopped-watch certainty; added useful model failure feedback and contract documentation. Reports are `reports/codex-t517.md` and the original t517 report.
+- Validation: supervisor ran `pnpm.cmd exec vitest run` on Core executor step-loop/defensive/outside-graph dirs (140 passed) and contracts `src/failure` (10 passed); `node scripts/test-domain.mjs` on runtime/failure/action-feedback/retry/press-effect/client dirs (302 passed); `node scripts/test-extension.mjs content/actions/tests content/action-runtime` (501 passed). Core contracts/fluxiq, domain source/test and extension source/test tsc all exit 0. Core contracts and fluxiq public outputs rebuilt.
+- Browser: headed Chromium content harness on social-network-feed composer, `wake-press-post`, one pass in 20.5 s. First press reports certainly unacted and sends zero post requests; second sends one and page shows the pending post. Harness uses real content/page-world bundles with stubbed background; no full gateway/Core browser playback or Firefox claim.
+- Outcome: Verified; structure gates and serial integration next. No paid run or full suite.
 
 ### 2026-10-13 - Codex resumed the handoff
 

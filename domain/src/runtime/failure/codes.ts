@@ -167,6 +167,26 @@ export const WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
    */
   REFUSED_BY_PAGE: "web.action.refused_by_page",
   /**
+   * A press that certainly did nothing: once the page settled, nothing on it
+   * had changed -- no request, no navigation, no focus move, no change anywhere
+   * outside the control's section, and the section itself back exactly as it
+   * was before the press, a spinner that came and went included -- and the
+   * command control is still there, shown and enabled. Produced by
+   * `content/actions/click.ts` from what
+   * `content/action-runtime/ignored-press/settled-look.ts` saw, only on a
+   * press the click made once (t517).
+   *
+   * social-network-feed's Post takes its first press only as a wake-up: the
+   * button spins for 450 ms, turns back into Post, and nothing is posted; the
+   * second press posts. A person presses again, so this row states the act did
+   * not happen (`effect: "unacted"`) and is retryable, and it carries
+   * `certainNoEffect`, which Core reads to make a lasting press once more and
+   * only once (`executor/defensive/assess.ts`). Until t517 trials and playback
+   * read the spinner as the page's answer, passed the press, and posted
+   * nothing (`run-mv6v2jh4-69244ffb`).
+   */
+  NO_EFFECT: "web.action.no_effect",
+  /**
    * The browser refused the action because this extension may not touch that
    * page: a host the manifest does not request, a `chrome://` or gallery URL, or
    * an enterprise policy that forbids scripting it.
@@ -248,6 +268,8 @@ export type WebAutomationFailureCodeDefinition = {
   readonly retryable: boolean;
   readonly stage: AutomationStudioFailureStage;
   readonly effect?: NonNullable<AutomationStudioFailureRecord["effect"]>;
+  /** Only beside `effect: "unacted"` on a retryable row: the producer saw the act certainly change nothing. */
+  readonly certainNoEffect?: true;
 };
 
 /**
@@ -301,6 +323,8 @@ export const WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS: Readonly<Record<WebAutomat
   // The page said it needs something first and did nothing: its state, which
   // answers the same press the same way until something else on it changes.
   "web.action.refused_by_page": { category: "unexpected_state", retryable: false, stage: "execution", effect: "unacted" },
+  // The press certainly did nothing, so making it once more is not a second act (the code's own comment above).
+  "web.action.no_effect": { category: "action_failed", retryable: true, stage: "execution", effect: "unacted", certainNoEffect: true },
   // A page this extension may not touch answers the same way however many times
   // it is asked, so the row says so: `dispatch`, because the browser refused
   // before the verb was reached, and not retryable.
@@ -360,6 +384,7 @@ export function webAutomationFailureRecord(code: WebAutomationFailureCode, compa
     ...(actual === undefined ? {} : { actual }),
     ...(evidenceDigest === undefined ? {} : { evidenceDigest }),
     ...(definition.effect === undefined ? {} : { effect: definition.effect }),
+    ...(definition.certainNoEffect === true ? { certainNoEffect: true as const } : {}),
     ...(retryAfterMs === undefined ? {} : { retryAfterMs })
   };
 }

@@ -113,6 +113,7 @@ const NAMED: ReadonlyArray<readonly [string, string, string | undefined]> = [
   [WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH, "output_not_observed", "state_not_as_asserted"],
   [WEB_AUTOMATION_FAILURE_CODES.BROWSER_PERMISSION_DENIED, "not_permitted_here", "page_not_scriptable"],
   [WEB_AUTOMATION_FAILURE_CODES.TRANSPORT_TRANSIENT, "action_failed", "channel_to_page_failed"],
+  [WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT, "action_failed", "press_had_no_effect"],
   [WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE, "invalid_input", "node_not_runnable_here"],
   [WEB_AUTOMATION_FAILURE_CODES.NOT_IMPLEMENTED, "invalid_input", "node_not_runnable_here"],
   [WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, "invalid_input", "parameter_not_readable"],
@@ -125,6 +126,13 @@ const NAMED: ReadonlyArray<readonly [string, string, string | undefined]> = [
   // t509: a select sent an option it does not offer, and was told only `output_not_observed`.
   [WEB_AUTOMATION_FAILURE_CODES.OPTION_NOT_OFFERED, "output_not_observed", "option_not_offered"]
 ];
+
+test("a no-effect refusal explains that automatic retries finished without claiming success", () => {
+  const refusal = webActionFailureRefusal({ status: "failed", failure: { code: WEB_AUTOMATION_FAILURE_CODES.NO_EFFECT } });
+  assert.equal(refusal.detail?.reason, "press_had_no_effect");
+  assert.match(refusal.detail?.next ?? "", /Automatic retries have finished/);
+  assert.match(refusal.detail?.next ?? "", /effect has not been established/);
+});
 
 test("every failure code the page can send is named, and only the two that name nothing stay bare", () => {
   const refusalFor = (code: string) => webActionFailureRefusal({ status: "failed", failure: { code } });

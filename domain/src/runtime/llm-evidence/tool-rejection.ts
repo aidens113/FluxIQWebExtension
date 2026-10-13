@@ -399,6 +399,7 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "outcome_uncertain",
   "page_needs_something_first",
   "page_busy_try_later",
+  "press_had_no_effect",
   "answered_the_same_again",
   "page_unchanged_after_action",
   "already_at_destination",

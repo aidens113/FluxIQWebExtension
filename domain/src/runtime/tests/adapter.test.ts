@@ -156,6 +156,19 @@ test("a press the page turned away before it landed keeps its retry, and the wai
   assert.equal(late.failure?.retryable, true);
 });
 
+test("a press the client saw certainly change nothing reaches Core as an unacted retry marked certainNoEffect (t517)", async () => {
+  // The client's click watch: once the page settled, nothing on it had changed
+  // and the control was still there to press. Core makes a lasting press so
+  // once more, and only once.
+  const ignored = { category: "action_failed", code: "web.action.no_effect", retryable: true, stage: "execution", actual: "the page settled unchanged" } as AutomationStudioFailureRecord;
+  const result = await runCommand({ commandId: "client.command.ignored", status: "failed", message: "Element clicked.", failure: ignored });
+  assert.deepEqual(result.failure, { category: "action_failed", code: "web.action.no_effect", retryable: true, stage: "execution", actual: "the page settled unchanged", effect: "unacted", certainNoEffect: true });
+  assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure, "Core's parser keeps the mark");
+  // The mark is the code's, never the sender's: no other failure can claim it.
+  const claimed = await runCommand({ commandId: "client.command.claimed", status: "failed", message: "The press failed.", failure: { category: "action_failed", code: "web.action.failed", retryable: true, stage: "execution", effect: "unacted", certainNoEffect: true } });
+  assert.equal(claimed.failure?.certainNoEffect, undefined);
+});
+
 test("a committing press states whether it was dispatched, so Core repeats only a press that never happened (t359)", async () => {
   const after = async (code: string, category: AutomationStudioFailureRecord["category"], stage: AutomationStudioFailureRecord["stage"], extra: Partial<AutomationStudioFailureRecord> = {}, command: FluxIQRuntimeCommand = clickCommand) =>
     (await runCommand({ commandId: `client.${code}`, status: "failed", message: "The press failed.", failure: { category, code, retryable: true, ...(stage ? { stage } : {}), ...extra } }, command)).failure;
