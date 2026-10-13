@@ -20,7 +20,17 @@ every run and debug). Fixes t506-t515 are merged and pushed. Two tasks are still
   `docs/working/adaptation-and-breadth-plan/reports/` in that tree. Unverified by the supervisor.
 - **t517** (playback re-presses a lasting control that certainly changed nothing, through the extension's click watch;
   a transient spinner is not an effect): `fxwork/t517/...`, branch `task/t517-playback-certain-no-effect-repress`.
-  Same state as t516.
+  Worker reported Done, uncommitted, not verified by the supervisor. Report:
+  `reports/t517-playback-certain-no-effect-repress.md` in that tree.
+  - Scope: 11 source files. A new failure code `web.action.no_effect` (retryable, unacted, `certainNoEffect`) in
+    domain `failure/codes.ts` and Core's failure record and parser. Core `retry.repress` with a once-only rule in
+    `defensive/assess.ts`. The extension click watch is in `ignored-press/settled-look.ts`.
+  - Its claims: tests beside each change pass (Core executor 138, contracts 10, domain 225 and 358, extension 498).
+    The headed spec `press-answers/tests/wake-press-post.spec.ts` gave `1 passed`. Both audits pass.
+  - Before merging, fix or decide: (1) a dead lasting Post still let a graph run end `succeeded`, through the rule that
+    carries a Flow past a failed step, a false success; (2) the model sees a bare `action_failed` for the new code
+    until `tool-rejection.ts` gains a reason; (3) a non-lasting press that does nothing is now pressed up to 4 times
+    in exploration (matches the every-node-retries rule); (4) the new record field is undocumented.
 - Verify each against its brief (run the tests beside the change, tsc, audit), then `pnpm task finish` downstream
   first, detach the Core worktree, and finish in Core.
 
