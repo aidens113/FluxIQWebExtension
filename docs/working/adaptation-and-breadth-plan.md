@@ -11,6 +11,8 @@ Related: Core work, if any, is briefed through Core's mvp-final-month-plan.md; [
 
 ## Current State
 
+**Codex continuation active, 2026-10-13.** Independent workers are reviewing/fixing t517 and t516 in their paired task trees and investigating both unchanged-site replay failures read-only. The supervisor owns verification and serial integration. The existing `.clinerules/fluxiq.md` modification on main `dev` is unrelated and will be preserved.
+
 **Handoff, 2026-10-13 (Claude to Codex).** Gate round 1 and breadth wave 1 ran; nothing counted yet (ledger has
 every run and debug). Fixes t506-t515 are merged and pushed. Two tasks are still open:
 
@@ -124,6 +126,37 @@ Rules are AGENTS.md's testing rules and the audit's launch settings:
 - Every failure is debugged, and the source is changed before any rerun.
 - No model guidance shaped like a scenario.
 - Lane trees are synced to dev and rebuilt before every round.
+
+## Worker Briefs — Codex continuation (2026-10-13)
+
+### Brief: codex-t517
+- Repository: paired t517 trees at `C:/Users/osrs_/FluxStuff/fxwork/t517/`.
+- Task: review uncommitted t517, fix dead lasting actions reporting graph success, add meaningful failure feedback and document the new failure field.
+- Required reads: this Current State; original t517 report; Core AGENTS.md boundary and code-structure; t517 diffs and tests.
+- Owns (may edit): t517's existing changed source/tests; Core executor graph/step-loop failure finalization and adjacent tests; downstream `domain/src/runtime/llm-evidence/tool-rejection.ts` and its tests; both repositories' relevant architecture docs.
+- Must not touch: shared working documents, any other task tree, lifecycle scripts, generated/runtime data. No commits, merges, pushes or full suites.
+- Definition of done: exhausted dead lasting action is a failed run; exactly one certain-no-effect re-press; focused tests, touched-package typechecks and audits pass. Preserve explicit failure handlers/branches.
+- Report to: t517 downstream `docs/working/adaptation-and-breadth-plan/reports/codex-t517.md`.
+
+### Brief: codex-t516
+- Repository: paired t516 trees at `C:/Users/osrs_/FluxStuff/fxwork/t516/`.
+- Task: review uncommitted t516 against report; verify handler learning, judged-only application and actual robot-check diagnosis; fix defects found within owned paths.
+- Required reads: this Current State; original t516 report; Core AGENTS.md boundary and code-structure; t516 diffs and tests; store soft-check source.
+- Owns (may edit): t516's existing changed source/tests; Core `runtime/service/runtime-session/` interruption learning and adjacent tests; downstream architecture docs for cleared-layer/handler contract; Core architecture doc already changed.
+- Must not touch: shared working documents, any other task tree, lifecycle scripts, generated/runtime data. No commits, merges, pushes, paid/browser Lab runs or full suites.
+- Definition of done: focused tests, touched-package typechecks and audits pass; model-free learning stays on when adaptations are kept; detail remaining integration/live risks honestly.
+- Report to: t516 downstream `docs/working/adaptation-and-breadth-plan/reports/codex-t516.md`.
+
+### Brief: codex-replay-investigation
+- Repository: read-only main checkout plus t262/t516 run evidence.
+- Task: identify whether unchanged-site replay failures share a recording-to-Flow cause; pinpoint failed nodes and their lifecycle, and propose the smallest fix with regression cases.
+- Required reads: this Current State; runner recorded-Flow lane; recording proposals; store and crossborder workflow sources; sanitized diagnostics for run-mv6xaosc-1c145c22 and run-mv6y2t42-222ea4f9.
+- Owns (may edit): only `docs/working/adaptation-and-breadth-plan/reports/codex-replay-investigation.md` in t262 downstream tree (existing task branch).
+- Must not touch: source, shared docs, generated/runtime data. No commits, merges, pushes or test/browser/provider runs. Never print recorded page content or secrets.
+- Definition of done: evidence-backed shared-cause conclusion or explicit separation, exact code pointers and actionable implementation/test brief.
+- Report to: the owned report path in t262.
+
+Codex supervisor has dispatched these independent briefs. Worker claims remain unverified until reviewed and rechecked here. Integration is serial, downstream before Core, with narrow gates only.
 
 ## Inventory (2026-10-13)
 
@@ -434,6 +467,14 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
   line. A worker's claim is not validation.
 
 ## Work Ledger
+
+### 2026-10-13 - Codex resumed the handoff
+
+- Agent: Codex senior supervisor; codex-t517, codex-t516 and codex-replay-investigation workers.
+- Assigned: t517 false-success/failure-feedback review; t516 handler/promotion and robot-check review; shared recorded-Flow replay investigation. Briefs are above; each worker writes its own report.
+- Decision: keep model-free handler learning enabled when adaptations are kept; use owning tests, package typechecks and audits, with no full-suite runs. Alerted the user to Core runtime recovery changes and synchronized failure contracts.
+- Validation: intake only; no worker claims accepted yet. Main downstream dev is aed9fcfc, Core dev is 234851b3; t516/t517 code is still uncommitted.
+- Outcome: In progress.
 
 ### 2026-10-13 - t515 merged; crossborder pre-flight read; handoff to Codex
 
