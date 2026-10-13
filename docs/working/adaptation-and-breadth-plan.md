@@ -195,6 +195,16 @@ Codex supervisor has dispatched these independent briefs. Worker claims remain u
 - Definition of done: explain why site oracle passes but Flow fails; distinguish obsolete wait/click from essential step. Identify a safe producer-boundary fix if existing evidence is insufficient. Never infer action causality or capture phase solely from timestamp or blindly skip terminal waits.
 - Report to: own report and supervisor; capture worker owns store mismatch investigation.
 
+### Brief: codex-t518-terminal-recovery-design
+- Repository: paired t518 source, read-only design/probes following social replay-debug report.
+- Task: specify the smallest safe settled terminal recording capture and generic terminal state-routing seam for obsolete manual recovery after runtime success.
+- Required reads: Current State/social report; recorder/background stop/flush, IO bridge/state index, recorded-routing signer, executor state-routing guards/result/graph integration.
+- Owns (may edit): own report only, docs/working/adaptation-and-breadth-plan/reports/codex-t518-terminal-recovery-design.md. Private synthetic non-browser probes allowed.
+- Must not touch: source/shared docs/fixtures/oracles/original state; no commits/pushes/provider/browser/full suites.
+- Design requirements: producer asserts actual settled end boundary, links exact last executable observation, rejects intervening acts/busy/incomplete capture; preserve through owning generic contracts/index. Core must not infer phase from clock alone. Completion requires positive effect evidence, existing skipped-output/checkpoint/lasting-repeat guards, no remaining required read and no blanket wait skip.
+- Definition of done: exact file partitions for producer/contract/signer/terminal routing, proposed generic regressions/negative rows, compatibility and minimum proof requirements. Show how a future terminal effect can settle an inferred readiness wait safely; no completion from controls disappearing or goal oracle alone.
+- Report to: own report and supervisor; store comparison worker owns historical-control parity investigation.
+
 ## Inventory (2026-10-13)
 
 ### Drift variants
