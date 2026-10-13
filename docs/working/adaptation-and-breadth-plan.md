@@ -24,8 +24,8 @@ Related: Core work, if any, is briefed through Core's mvp-final-month-plan.md; [
 
 - Supervisor observed 196 Core, 138 domain, 14 capture tests, package typechecks and both audits. A native long-path approval defect was independently reproduced at the actual 264-character subflow-summary filename and fixed in generic SQLite opens; fail-first regression then 13 storage/pool tests pass, types/audit/build pass.
 - Crossborder run-mv70yrj2-bc7f032a passes its goal oracle with zero model calls/harness activations. Durable trace proves effect_holds routing past its obsolete manual retry.
-- Store run-mv71ibus-9c9b922e failed four inferred-wait attempts before extraction. The genuinely pre-execution extraction carries phase (10 owning tests/type/bundle/audit pass), but the then-exact control equality rejected two delayed banner additions despite all99 required controls remaining. Complete packed control proofs now permit additions while requiring every saved control and exact path/layers; absent proof retains digest/count equality. Supervisor observed22 owning tests, domain source/test types, extension bundle compatibility and both audits. The next fresh control is pending; withheld command-result paths are not routing evidence.
-- Social run-mv71jipp-fa66f988 posts successfully after first-press no-effect recovery and passes the page oracle, but Flow fails at obsolete readiness wait. No snapshot exists after final manual Post. A settled terminal producer boundary and guarded End target are being designed; positive effect and required-read/result guards are mandatory. Static published state needs positive evidence; disappearing controls or the external oracle alone cannot complete the Flow.
+- Store run-mv71ibus-9c9b922e failed four inferred-wait attempts before extraction. The genuinely pre-execution extraction carries phase (10 owning tests/type/bundle/audit pass), but the then-exact control equality rejected two delayed banner additions despite all99 required controls remaining. Complete packed control proofs now permit additions while requiring every saved control and exact path/layers; absent proof retains digest/count equality. Supervisor observed22 owning tests, domain source/test types, extension bundle compatibility and both audits. Fresh run-mv72qmg0-b3cfb3f9 proves candidate45 now matches, but routing refuses unbound_value from entry44; four attempts at obsolete wait28 still fail. Required-value provenance is under investigation; withheld command-result paths are not routing evidence.
+- Social run-mv71jipp-fa66f988 posts successfully after first-press no-effect recovery and passes the page oracle, but Flow fails at obsolete readiness wait. No snapshot exists after final manual Post. Settled terminal producer and complete passive-fact projection are assigned by separate file-owned briefs; guarded End integration follows. Positive effect and required-read/result guards are mandatory. Static published state needs positive evidence; disappearing controls or the external oracle alone cannot complete the Flow.
 - t518 remains on paired task branches, unmerged/unpublished. Store/social source fixes and fresh controls remain; no unchanged relaunch. t516/t517 are merged locally; neither dev is pushed while this recovery compatibility work remains. Full guarded-handler execution/durable reuse and the counted adaptation gate are still unverified.
 
 Reports: replay-investigation, t518, t518-capture, t518-live-debug, t518-store-replay-debug, t518-live-capture-coverage and t518-social-replay-debug under adaptation-and-breadth-plan/reports/. Archived old crossborder captures lack completeness evidence and remain unsigned; fresh control proof uses new recordings.
@@ -97,6 +97,38 @@ Rules are AGENTS.md's testing rules and the audit's launch settings:
 - Lane trees are synced to dev and rebuilt before every round.
 
 ## Worker Briefs
+
+### Brief: codex-t518-terminal-core
+- Unit/worktree: paired t518 Core only. Worker: replay_investigation, after store diagnosis.
+- Read: paired Current State; downstream terminal-recovery-design report; Core AGENTS already read, follow it.
+- Own: client-gateway bridge and recording boundary helper; automation-studio model recording types/state-index/intake/io-bridge; service recording-state-index and recordings recorded-routing/proposal-generation/proposal-candidates/candidate-definitions; focused terminal signer; runtime recording-flow-proposal; executor state-routing focused terminal guard/decision/contracts/required-results helper; adjacent tests/barrels. No downstream source edits.
+- Preserve and strictly verify typed v1 closed_settled boundary with exact final admitted canonical executable event/source/generation/cursor, unique settled after snapshot and no later executable action. Producer stamps mapped event metadata. Missing proof declines; referenced durable-object errors propagate.
+- Use opaque host project/sign/effect callbacks; positive effect mandatory. Append existing builtin.control.end only with verified terminal evidence, immutable suffix/provenance binding. Never create executable observations or model calls.
+- Only inferred recorded readiness gates plus one linked final act may be bypassed. Refuse manual/branched/stale suffixes, missing effects, required reads/recordOutput/results/subflows and existing checkpoint/value/repeat/scope/progress guards. No unbound-value exemption.
+- Adding End must preserve failed-final-action semantics: final required failed act cannot default-continue into End and succeed. Explicit authored failure/optional routes remain.
+- Boundary shape: version1/kind closed_settled/sourceId/lastExecutableEventId/lastExecutableGeneration/admittedThroughSequence/captureTiming after-action. Agree producer metadata names with t517 directly.
+- No shared docs/commit/live/full suites. Report own downstream codex-t518-terminal-core.md; freeze before root checks. Generic handcrafted examples only.
+- Acceptance: durable boundary survives reopen; wrong/ambiguous/stale identities decline; generic first-send retry then obsolete readiness routes End without duplicate act; dead send fails; omitted required read and stale graph cannot succeed; old recordings preserve behavior.
+
+### Brief: codex-t518-terminal-producer
+- Unit/worktree: paired t518; downstream source only. Worker: codex-t517.
+- Read: Current State; reports/codex-t518-terminal-recovery-design.md in t518.
+- Own: extension content recorder/message-handler and focused recording-boundary module; background active-recording, recording-evidence, recorded-event-intake; shared boundary protocol; adjacent tests. Also own browser passive eligibility descriptor fields, composed-tree classifier and snapshot completeness.
+- Build a real settled stop handshake while recording remains active, flush and await admitted canonical events after dedup, capture after settlement, verify no intervening action/document change, publish after-action terminalBoundary then finalize. Unknown scope declines; capture errors propagate. Do not relabel an ordinary pre-state.
+- Agree typed boundary shape with supervisor/Core worker before wiring. Exact admitted event identity, source, action generation and admitted cursor are mandatory; timestamps alone do not prove it.
+- Passive eligibility: rendered nonactionable heading/paragraph in main content, safe complete ancestry, no editable/live/status/alert/busy/dialog/overlay/banner/aside/footer/extension UI or sensitive content. Unknown false. Preserve explicit completeness. No scenario strings.
+- No Core/domain edits, shared docs, commits, live runs or full suites. Stop source edits before supervisor validation. Report own file codex-t518-terminal-producer.md with changed paths, checks and limitations.
+- Acceptance: owning tests prove ordering, dedup identity, flush-created final input, stop/action/document races, incomplete/busy scope, real errors; passive classification exclusions and completeness.
+
+### Brief: codex-t518-passive-domain
+- Unit/worktree: paired t518. Worker: codex-t516. Domain source only.
+- Read: Current State; t518 terminal-recovery-design report, especially positive stable passive facts.
+- Own: recording/web-state descriptor types/state payload; llm-evidence recognized descriptor preservation; focused route-state/passive-facts module; route-state project/historical reconstruction; effect sign/holds/format and owning tests. Coordinate shared descriptor shape with producer; do not edit extension/Core.
+- Preserve browser explicit passiveFactEligible and passiveFactsComplete through durable/live sanitizer parity. Missing classification never implies eligibility.
+- Project safe normalized nonactionable semantic facts into hashes only, reject withheld/secret material. Complete before and after required for passive additions. Preserve multiplicity where needed; never sample a proof.
+- Add versioned passive-bearing effect; all required control and passive additions must hold, positive addition mandatory; empty/disappearance/draft never holds. Legacy control effects remain compatible. Oversized evidence declines under Core canonical bound.
+- No shared docs, commits, live runs or full suites. Report own codex-t518-passive-domain.md. Freeze source before supervisor validation.
+- Acceptance: live/durable parity, positive read-only facts with zero added controls, missing/unknown completeness, editable/secret/live/volatile exclusions, duplicates, loss of facts, oversized proof and legacy regressions.
 
 Completed dispatch briefs are preserved in [the handoff brief archive](./adaptation-and-breadth-plan/archive/2026-10-13-codex-handoff-briefs.md). Current implementation briefs are added here.
 
