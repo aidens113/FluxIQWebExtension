@@ -145,6 +145,12 @@ Rules are AGENTS.md's testing rules and the audit's launch settings:
 - Preserve ordinary output behavior and unknown old contracts; missing role declines terminal completion. No model guidance or scenario words.
 - Report own codex-t518-terminal-act-role.md. No shared docs/commits/live/full suites; freeze before root validation.
 
+### Brief: codex-t518-strong-terminal-effect
+- Workers: replay_investigation owns Core host boundary/signer forwarding/tests; codex-t516 owns domain focused effect/terminal signer, host callback assembly and owning tests. Separate file ownership by repository.
+- Ordinary control additions can come from an unrelated delayed banner after a dead final press. They cannot alone grant terminal completion. Add optional generic signRecordedTerminalEffect(before, after); absent capability declines terminal evidence. Core remains opaque and uses its existing bounded signature/effect checker.
+- Domain terminal signing requires complete safe before/after passive fact multisets and positive stable additions, retaining all required multiplicities and path; empty/incomplete/oversized proof declines. Control additions alone never authorize this terminal path. Existing ordinary control effect/routing behavior remains.
+- Regressions: dead final act plus unrelated new controls cannot reach End; genuinely new complete read-only result facts qualify; missing facts/completeness and legacy hosts decline. No scenario-shaped data/model guidance, shared docs, commits, live runs or full suites. Update each own terminal report and freeze for root validation.
+
 Completed dispatch briefs are preserved in [the handoff brief archive](./adaptation-and-breadth-plan/archive/2026-10-13-codex-handoff-briefs.md). Current implementation briefs are added here.
 
 ### Brief: codex-t518-complete-control-match
