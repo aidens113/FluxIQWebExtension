@@ -274,7 +274,7 @@ isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day
 
 ## Work Ledger
 
-### 2026-10-13 - t478-t481 merged; round 12 build 1: B and D passed, C failed; D's replay never started
+### 2026-10-13 - Round 12: B and D passed both builds and every replay; C failed build 1; t482-t487
 
 - Agent: Claude senior supervisor; t478-t481 workers; debug workers.
 - Changed: t478-t480 as the round 11 follow-up says; t481 pinned the in-run repair test's clock to off-peak (the
@@ -285,12 +285,32 @@ isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day
     equal, all five zero).
   - D build 1 `run-mv62icw0-070f88ad` passed $0.0783; replay `replay-mv62rwy7-fcb23be8` never ran the Flow: the
     extension's service worker did not appear within 30 s (`extension.worker`), and the receipt dropped the failure's
-    details. A Lab defect is being traced (`reports/replay-worker-timeout.md`); a rerun with the lane's instance is
-    running. A first rerun was a supervisor launch error (no `FLUXIQ_LAB_INSTANCE`, refused before any browser).
-  - C build 1 `run-mv62icw3-9118516f` failed $0.1696; full debug dispatched.
+    details. A Lab defect is being traced (`reports/replay-worker-timeout.md`). The rerun with the lane's instance,
+    `replay-mv62zkqz-aa2333d2`, passed (expected dataset 4/4 matched, hash equal, all five zero). A first rerun was
+    a supervisor launch error (no `FLUXIQ_LAB_INSTANCE`, refused before any browser).
+  - C build 1 `run-mv62icw3-9118516f` failed $0.1696 (debug in t451): for "under $50" the script added a
+    "$25 to $50" site filter, so the two qualifying $22.99 rows never reached the read (11 of 13 stored), and both
+    trial judges and the final check said yes while naming that filter. Same shape as round 10 build 2. A Core
+    result-verification defect: a narrowing step that moved the page leaves no step-change record, and the judge
+    instruction never rules on narrowing beyond the request. Fix t482.
+  - B and D build 1 debugs: both passes clean (no pre-existing item touched, no undo, trials from the reset start).
+    Waste and defects: a cross-page handle retried 25.5 s; typing into a span passed submit; a satisfied step
+    retried 13.2 s; a 28.8k-character output schema placed after the evidence window (~50% of D's cost); a
+    route-state entry inserted mid-window; a pace learned from one hinted wait; no wait/dismiss branch saved after a
+    rate-limit refusal (the user's interruption rule); empty rowsActedOn rows; chat wording faults.
+  - B build 2 `run-mv636xvb-e1426db1` passed $0.1446; replay `replay-mv63ibwy-54a01533` passed (goal held, hash
+    equal, all five zero). D build 2 `run-mv636xyp-2e4fe54d` passed $0.0853; replay `replay-mv63ibwz-b6e01917`
+    passed (4/4, hash equal, all five zero). Both lanes have two consecutive passing builds on one frozen pair, each
+    followed by a passing model-free replay; qualification closes when the build 2 debugs confirm the passes.
 - Validation: `git rev-parse --short origin/dev` gives f2d100a6 here and f2e6b076 in Core; matrix receipt
-  `{"passed":14}`; spend-ledger finish lines quoted above; B replay receipt from its log.
-- Outcome: In progress. B needs its debug before build 2; D needs a completed replay and its debug.
+  `{"passed":14}`; spend-ledger finish lines; replay receipts from the supervisor's logs.
+- Outcome: In progress. Decision (supervisor): the fixes the round found were dispatched only after B's and D's
+  second builds launched, and none merges until those builds' debugs close, so the pair stayed frozen.
+- Follow-up: t482 judges refuse over-narrowing and get rowsActedOn content; t483 `lab replay` through
+  `launchExtensionSession` with failure details kept; t484 byte-stable request prefix and appended route state;
+  t485 pace from the stated limit and an interruption branch before "Complete now"; t486 cross-page handle refused,
+  non-editable type refused at submit, dotted read fields, a satisfied step routed by state; t487 chat wording.
+  Still open: C's bare `nextPage` handle and re-reading page 2 as "page 1" (10 decisions, $0.058).
 
 ### 2026-10-13 - Round 11: B and C passed build 1 and its replay; D's filter missed a row; t478-t480
 
