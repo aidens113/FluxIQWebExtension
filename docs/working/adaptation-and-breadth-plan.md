@@ -385,6 +385,22 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
 
 ## Work Ledger
 
+### 2026-10-13 - Phase 0 free checks run (G1 and t505 in progress)
+
+- Agent: Claude senior supervisor.
+- Trees: B t262 (slot 3) for bigbox, C t451 (slot 1) for everything-store, D t275 (slot 4) for social, A t342 (slot 2)
+  for breadth; all on Core fbd06c77 / downstream 15458401, synced and rebuilt.
+- Drift fixtures (model-free scripted runs on the drifted variant) fail as designed, each with the drift's own failure:
+  bigbox `redesigned-buy-box` run-mv6q6dw2-e0dd284c `web.validation.state_mismatch`; everything-store `deal-wheel`
+  run-mv6q6du1-a55efbee `web.action.timeout`; social `regrouped` run-mv6q8t4z-5c3dc73d `web.target.not_found`.
+- G5: the recorded post Flow (run-mv6q6dwh-26c74694, passed) replayed model-free, `replay-mv6qclwo-16f07546` passed
+  (goal true, hash equal, all five zero, no permission stall). G5 closed.
+- Dry runs `ready` with 0 provider calls: the three gate commands (`--replays 1`) and the four wave-1 tasks
+  (job-board-remote-rust-roles, local-classifieds-bike-search, auction-marketplace-kestrel-auctions,
+  company-website-gas-engineers).
+- Validation: receipts quoted above, from the supervisor's logs.
+- Outcome: Revised. Waiting on t506 (G1) and t505 (every lasting act recorded) before the paid gate round and wave 1.
+
 ### 2026-10-13 — Plan written from a read-only inventory
 
 - Agent: lane lead (planning), with three read-only workers (Lab drift and repair mechanics, earlier proofs and the
