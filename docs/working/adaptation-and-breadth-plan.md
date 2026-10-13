@@ -385,6 +385,23 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
 
 ## Work Ledger
 
+### 2026-10-13 - Gate round 1: no counted pass; job-board rerun got further
+
+- Agent: Claude senior supervisor; debug workers.
+- Pair Core a1e249ab / downstream 5a33299b (t482-t511); matrix `{"passed":14}`; four dry runs `ready`. The first launch
+  was refused by the Lab's debug guard on every slot (the wave-1 debugs were filed as reports, not at each lane tree's
+  debug path; spent $0). The supervisor wrote each lane's debug note from those reports and relaunched.
+- bigbox `run-mv6v2g3l-a865ead7` $0.0317: oracle passed, but harness 0, no recovery attempted, no adaptation recorded,
+  and no repair-lane.json or adaptation.json written. Not counted. The debug establishes whether the drift was met
+  and absorbed by identity, or never armed.
+- everything-store `run-mv6v2hx5-f448e662` $0.0356: Flow created, reported passed, oracle failed (15 of 16 records, 9 in
+  order); no recovery attempted. Not counted; debug.
+- social `run-mv6v2jh4-69244ffb` $0.0285: failed in creation (no Flow, 48 calls), before the drift. Not counted; debug.
+- Breadth: job-board rerun `run-mv6v2kzn-d593231f` $0.0558: Flow created, a trial judged yes, but the oracle matched 0 of
+  7 records and the build reported failed; debug. The other three wave-1 reruns wait for each slot's debug.
+- Validation: spend-ledger finish lines; each run's `evaluation.json`, read by the supervisor.
+- Outcome: Revised.
+
 ### 2026-10-13 - t511 merged; compatibility replays pass; gate round 1 prepared
 
 - Agent: Claude senior supervisor; t511 workers.
