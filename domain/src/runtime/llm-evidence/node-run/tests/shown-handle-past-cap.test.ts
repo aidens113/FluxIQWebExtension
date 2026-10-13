@@ -40,6 +40,9 @@ const PAGE_LENGTH = LIVE_PACKET_LENGTH + 5;
 /**
  * A results page whose forty described controls end at the brand filter, and a
  * notice above the sidebar on the looks `noticeOn` names (the first look is 1).
+ * Once a press lands, a status line says so, as a real filter answers a press,
+ * so no press here is taken for one that changed nothing (t511) and pressed
+ * once more.
  */
 function searchPage(noticeOn: (look: number) => boolean) {
   const clicked: string[] = [];
@@ -61,7 +64,7 @@ function searchPage(noticeOn: (look: number) => boolean) {
       url: PAGE,
       title: "usb c hub 7 in 1 - Farbazaar",
       viewport: { width: 1280, height: 800, scrollX: 0, scrollY: 0 },
-      interactiveElements: [...upper.slice(0, 20), ...(withNotice ? notice : []), ...upper.slice(20), ...filter, ...results]
+      interactiveElements: [...upper.slice(0, 20), ...(withNotice ? notice : []), ...upper.slice(20), ...filter, ...results, ...pressedStatus(clicked.length)]
     };
   };
   const gateway: WebLlmEvidenceGateway = {
@@ -75,6 +78,11 @@ function searchPage(noticeOn: (look: number) => boolean) {
     }
   };
   return { gateway, clicked };
+}
+
+/** The status line a page shows once it has been pressed: none before. */
+function pressedStatus(presses: number): Element[] {
+  return presses === 0 ? [] : [{ tagName: "span", selector: "main .status", visibleText: `${presses} filter applied` }];
 }
 
 async function look(runtime: ReturnType<typeof createWebAutomationLlmEvidenceRuntime>): Promise<Packet> {
@@ -146,7 +154,7 @@ function productPage() {
       looks += 1;
       const snapshot: JsonObject = looks === 1
         ? { url: `${PRODUCT}?variant=5510202`, title: "Towels", interactiveElements: [chip, add] }
-        : { url: PRODUCT, title: "Towels", interactiveElements: [add] };
+        : { url: PRODUCT, title: "Towels", interactiveElements: [add, ...pressedStatus(clicked.length)] };
       return { status: "succeeded", payload: { snapshot } };
     }
   };

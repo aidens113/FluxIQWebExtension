@@ -40,7 +40,10 @@ const UNDELIVERED = failed(WEB_AUTOMATION_FAILURE_CODES.TRANSPORT_TRANSIENT, CON
 /** A send that reached the page, whose answer was lost when the page unloaded. */
 const ANSWER_LOST = failed(WEB_AUTOMATION_FAILURE_CODES.TRANSPORT_TRANSIENT, PORT_CLOSED);
 
-function page(): JsonObject {
+// Every command that reaches the page counts on its cart line, as a real Add to
+// cart answers, so a press that landed is never taken for one that changed
+// nothing (t511) and pressed once more.
+function page(sent = 0): JsonObject {
   return {
     url: ITEM,
     title: "Voltbay USB C Hub",
@@ -48,7 +51,8 @@ function page(): JsonObject {
     interactiveElements: [
       { tagName: "input", selector: "#q", type: "search", accessibleName: "Search", placeholder: "Search" },
       { tagName: "button", selector: "#add", visibleText: "Add to cart" },
-      { tagName: "span", selector: "#price", visibleText: "$12.99" }
+      { tagName: "span", selector: "#price", visibleText: "$12.99" },
+      { tagName: "span", selector: "#cart", visibleText: `Cart: ${sent} sent` }
     ]
   };
 }
@@ -63,7 +67,7 @@ function itemPage(actionType: string, answers: readonly WebNodeDispatchResult[])
         sent.push(sent.length + 1);
         return answers[sent.length - 1] ?? { status: "succeeded", payload: { value: "ok" } };
       }
-      return { status: "succeeded", payload: { snapshot: page() } };
+      return { status: "succeeded", payload: { snapshot: page(sent.length) } };
     }
   };
   return { gateway, sent };

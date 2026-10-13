@@ -27,14 +27,18 @@ function failed(code: WebAutomationFailureCode): WebNodeDispatchResult {
   return { status: "failed", failure: webAutomationFailureRecord(code, { expected: "the press", actual: "not yet" }) as unknown as JsonObject, error: code };
 }
 
-function page(): JsonObject {
+// Every command that reaches the page counts on its cart line, as a real Add to
+// cart answers, so a press that landed is never taken for one that changed
+// nothing (t511) and pressed once more.
+function page(sent = 0): JsonObject {
   return {
     url: ITEM,
     title: "Voltbay USB C Hub",
     viewport: { width: 1280, height: 720, scrollX: 0, scrollY: 0 },
     interactiveElements: [
       { tagName: "button", selector: "#add", visibleText: "Add to cart" },
-      { tagName: "span", selector: "#price", visibleText: "$12.99" }
+      { tagName: "span", selector: "#price", visibleText: "$12.99" },
+      { tagName: "span", selector: "#cart", visibleText: `Cart: ${sent} sent` }
     ]
   };
 }
@@ -49,7 +53,7 @@ function itemPage(actionType: string, answers: readonly WebNodeDispatchResult[])
         sent.push(sent.length + 1);
         return answers[sent.length - 1] ?? { status: "succeeded", payload: { value: "ok" } };
       }
-      return { status: "succeeded", payload: { snapshot: page() } };
+      return { status: "succeeded", payload: { snapshot: page(sent.length) } };
     }
   };
   return { gateway, sent };

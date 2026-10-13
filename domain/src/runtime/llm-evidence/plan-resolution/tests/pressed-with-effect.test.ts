@@ -94,7 +94,9 @@ test("words exploration pressed with no effect stay plain text to a candidate, a
   const pressed = await run(runtime, CLICK, { target: { handle: message } });
   assert.equal(pressed.resultCode, "web.action.succeeded", JSON.stringify(pressed.evidence));
   assert.equal((pressed.evidence as { pageChanged?: boolean }).pageChanged, false, JSON.stringify(pressed.evidence));
-  assert.deepEqual(clicks, [MESSAGE]);
+  // Genuinely a press that changed nothing: pressed once more by its own retry, and answered `no_effect` (t511).
+  assert.equal((pressed.evidence as { status?: string }).status, "no_effect");
+  assert.deepEqual(clicks, [MESSAGE, MESSAGE]);
 
   const answer = await candidatePress(runtime, message);
   assert.equal(answer.status, "refused", JSON.stringify(answer));

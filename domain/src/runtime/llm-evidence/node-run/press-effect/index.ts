@@ -6,8 +6,13 @@
 // (`./chosen-state.ts`), said as a sentence (`./choice.ts`) and stated to the
 // draft as the control and the way it flipped (`./toggle.ts`) -- whether it
 // answered a layer that then went (`./answered-layer.ts`), which item of a
-// repeating list it acted on (`./acted-on.ts`, t504), and, for a press the
-// page refused, the line the page answered with (`./notice.ts`).
+// repeating list it acted on (`./acted-on.ts`, t504), for a press the page
+// refused, the line the page answered with (`./notice.ts`), and, for a press
+// that changed nothing at all, its own wait and second press
+// (`./settled.ts`) and the sentence that says it had no effect
+// (`./no-effect.ts`, t511), naming the control one way (`./press-words.ts`),
+// all read from whether the page stayed the same page apart from where it is
+// drawn (`./unchanged-page.ts`), which `pageChanged` reads too.
 
 export { webNodeActedOn } from "./acted-on";
 export { webAnsweredLayer } from "./answered-layer";
@@ -16,4 +21,8 @@ export { webPressChosenState, type WebPressChosenState } from "./chosen-state";
 export { webNodeNoticedDetail, webNodePageNotice, type WebNodeNoticedDetail } from "./notice";
 export { webNodePageChangeStatement, type WebNodePageChangeLine } from "./change";
 export { webNodePageChanges } from "./page-changes";
+export { webPressNoEffect } from "./no-effect";
+export { webPressSettled, type WebPressSettled, type WebPressSettleSteps } from "./settled";
+export { webPressedControlWords } from "./press-words";
+export { webPageUnchanged } from "./unchanged-page";
 export { webPressToggle } from "./toggle";

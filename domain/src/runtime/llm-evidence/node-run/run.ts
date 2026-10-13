@@ -69,9 +69,9 @@ import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION } 
 import { withClearedWait } from "./cleared-wait";
 import { webCoveredTarget } from "./covered-target";
 import type { WebNodeRun } from "./context";
-import type { WebNodeOutcome } from "./outcome";
+import type { WebNodeOutcome, WebNodeRanOutcome } from "./outcome";
 import { webLabelledIdentity, webObservedControl } from "./observed-control";
-import { webAnsweredLayer, webNodeActedOn, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPressChoice, webPressToggle } from "./press-effect";
+import { webAnsweredLayer, webNodeActedOn, webNodeNoticedDetail, webNodePageChanges, webNodePageChangeStatement, webPageUnchanged, webPressChoice, webPressSettled, webPressToggle } from "./press-effect";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
 import { webNodeHeldFlow } from "./arrival";
 import { webUnshownAddressRefusal } from "./shown-addresses";
@@ -213,7 +213,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       run.shown(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, actedOn: undefined, choice: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
+        nodeEvidence(looked.evidence, present<WebNodeRanOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, noEffect: undefined, pressedAgain: undefined, pageUnreadable: undefined, actedOn: undefined, choice: undefined, changed: undefined, control: undefined, controlHandle: undefined, read: undefined, addable: false, inFlow: undefined, attempts: undefined })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
@@ -403,8 +403,22 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // (`../capture.ts`, `captureAfterAction`); a page still unreadable once
     // that window has passed is reported without a packet, and the node is
     // still reported as having run, because it did.
-    const settled = await captureAfterAction(run.gateway, run.sessionId, run.request, run.request.signal);
-    const after = settled === undefined ? undefined : run.restamp(settled);
+    const look = async () => {
+      const settled = await captureAfterAction(run.gateway, run.sessionId, run.request, run.request.signal);
+      return settled === undefined ? undefined : run.restamp(settled);
+    };
+    // A press that changed nothing is looked at again for a moment and, unless its call declared a
+    // lasting consequence, pressed once more before it is said to have had no effect (`./press-effect/settled.ts`, t511).
+    const lasting = Array.isArray(declared) && declared.some((entry) => typeof entry === "string" && entry !== "");
+    const pressAgain = async () => (await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran))).result.status === "succeeded";
+    const pressed = await webPressSettled(node, current, await look(), webPlanFirstTargetHandle(written), {
+      look, pressAgain: lasting ? undefined : pressAgain, now: () => Date.now(),
+      sleep: async (ms) => {
+        await new Promise((resolve) => setTimeout(resolve, ms));
+        assertActive(run.request.signal);
+      }
+    });
+    const after = pressed.after;
     if (after) run.shown(after);
     // What the node read, whole, for a node that reads. Never the raw page:
     // the look's payload is nothing else, and a press, a type or a navigation
@@ -420,8 +434,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     const read = node.proposes ? shownRead : undefined;
     run.addresses.ran(buildOf(run), { actionType: node.actionType, parameters: ran, read, location: after?.evidence.location ?? current?.evidence.location });
     // Arriving from nowhere changed the page by definition: there was none. A
-    // page that could not be read was not compared, so it is not said.
-    const changed = after === undefined ? undefined : current === undefined || JSON.stringify(after.evidence) !== JSON.stringify(current.evidence);
+    // page that could not be read was not compared, so it is not said. Where the
+    // page is drawn and where focus sits are not a change (`./press-effect/unchanged-page.ts`,
+    // t511): a 19-pixel scroll once answered a press that did nothing `pageChanged: true`.
+    const changed = after === undefined ? undefined : current === undefined || !webPageUnchanged(current.evidence, after.evidence);
     // The control this call acted on, named on its result by handle (`./outcome.ts` `controlHandle`, t442). A press that changed the page acts on what it
     // pressed, whatever that prints as (`../plan-resolution/target-packets.ts` `pressed`, t378 W13); and a step later written for any control acted on
     // saves it as this act found it, never as the act left it, with what the act made true as its effect (`acted`, t442 F1, t447 F2).
@@ -438,14 +454,16 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // The page, with what the node did to it written on the same result rather
     // than around it. One shape, the one every other page has: the compact
     // view's `page` text, where every handle the model may use is printed.
-    const outcome = present<WebNodeOutcome>({
+    const outcome = present<WebNodeRanOutcome>({
       ok: true,
       node: node.definitionId,
-      status: result.status,
+      // A press that changed nothing, even pressed again, is never `succeeded` (`./press-effect/no-effect.ts`, t511).
+      status: pressed.noEffect === undefined ? result.status : "no_effect",
       // Said, never inferred: a press that left the page looking the same may
       // still have been the right step, and a model that is told so can decide.
       pageChanged: changed,
-      unchangedPress: changed === false && node.definitionId === PRESS_NODE_ID ? PRESS_AGAIN : undefined,
+      unchangedPress: changed === false && pressed.noEffect === undefined && node.definitionId === PRESS_NODE_ID ? PRESS_AGAIN : undefined,
+      noEffect: pressed.noEffect, pressedAgain: pressed.pressedAgain,
       pageUnreadable: after === undefined ? true : undefined,
       // An act on a control inside an item of a repeating list says which item, from the look before it (`./press-effect/acted-on.ts`, t504).
       actedOn: webNodeActedOn(node, current, named),

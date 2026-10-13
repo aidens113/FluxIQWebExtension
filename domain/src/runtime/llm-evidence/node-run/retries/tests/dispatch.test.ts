@@ -32,32 +32,38 @@ function failed(code: WebAutomationFailureCode): { status: string; failure: Json
 
 /**
  * The item page, whose coupon press answers `answers` in turn and then
- * succeeds. Counts every command the press sent.
+ * succeeds. Counts every command the press sent. A press that lands changes
+ * the page's status line, as a real coupon press would, so a landed press is
+ * never taken for one that changed nothing (t511) and pressed once more.
  */
 function itemPage(answers: ReadonlyArray<ReturnType<typeof failed>>) {
   const presses: number[] = [];
+  let collected = false;
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
       if (command.actionType === "web.dom.click") {
         presses.push(presses.length + 1);
         const answer = answers[presses.length - 1];
-        return answer ?? { status: "succeeded", payload: { value: "ok" } };
+        if (answer !== undefined) return answer;
+        collected = true;
+        return { status: "succeeded", payload: { value: "ok" } };
       }
-      return { status: "succeeded", payload: { snapshot: page() } };
+      return { status: "succeeded", payload: { snapshot: page(collected) } };
     }
   };
   return { gateway, presses };
 }
 
-function page(): JsonObject {
+function page(collected = false): JsonObject {
   return {
     url: ITEM,
     title: "Voltbay USB C Hub",
     viewport: { width: 1280, height: 720, scrollX: 0, scrollY: 0 },
     interactiveElements: [
       { tagName: "button", selector: "#coupon", visibleText: "Get coupons" },
-      { tagName: "button", selector: "#add", visibleText: "Add to cart" }
+      { tagName: "button", selector: "#add", visibleText: "Add to cart" },
+      { tagName: "span", selector: "#coupon-status", visibleText: collected ? "Coupon collected" : "No coupon yet" }
     ]
   };
 }

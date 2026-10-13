@@ -14,7 +14,11 @@ export type WebNodeOutcome = {
   ok: true;
   /** The node that ran, as the catalog names it. */
   node: string;
-  /** The command's own status, as the page reported it. */
+  /**
+   * The command's own status, as the page reported it -- except a press that
+   * landed and changed nothing even after its own wait and second press, which
+   * is `no_effect`, never `succeeded`, with `noEffect` saying so (t511).
+   */
   status: string;
   /** Whether the page looked different afterwards. Absent where it was not compared. */
   pageChanged?: boolean;
@@ -87,4 +91,29 @@ export type WebNodeOutcome = {
    * with the attempts counted, never the first attempt's failure.
    */
   attempts?: number;
+};
+
+/**
+ * What a node that ran against the page says beyond what every node call says:
+ * what came of a press that changed nothing (t511). A step only written
+ * (`./written-step.ts`) pressed nothing, so its outcome has no such fields.
+ */
+export type WebNodeRanOutcome = WebNodeOutcome & {
+  /**
+   * Said with `status: "no_effect"`, and only on a press: it landed, was waited
+   * on and, where it may be made twice, pressed once more, and nothing on the
+   * page changed -- no line appeared or went, none changed its words, value or
+   * state -- naming the open dialog it sits in, if any, as still open
+   * (`./press-effect/no-effect.ts`, `./press-effect/settled.ts`, t511).
+   * Classifieds step 0038 of `run-mv6qrcdu-a31b44b8` pressed Apply in an open
+   * dialog, nothing changed, and the answer was `succeeded`. Never beside
+   * `unchangedPress`, whose advice to press again this has already taken.
+   */
+  noEffect?: string;
+  /**
+   * Said where the first press changed nothing and only the press's own second
+   * press changed the page: the answer is that second press's
+   * (`./press-effect/settled.ts`, t511).
+   */
+  pressedAgain?: string;
 };

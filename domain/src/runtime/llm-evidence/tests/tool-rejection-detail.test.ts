@@ -48,6 +48,11 @@ const TWINNED: Page = {
   ]
 };
 
+/**
+ * The lab: every command that reaches the page counts on a status line after
+ * its controls, as a real page answers an act, so no press here is taken for
+ * one that changed nothing (t511) and pressed once more.
+ */
 function labWith(pages: { next(): Page }): { gateway: WebLlmEvidenceGateway; clicks: string[] } {
   const clicks: string[] = [];
   return {
@@ -60,7 +65,8 @@ function labWith(pages: { next(): Page }): { gateway: WebLlmEvidenceGateway; cli
           return { status: "succeeded" };
         }
         const page = pages.next();
-        return { status: "succeeded", payload: { snapshot: { url: page.url, title: "Queue", interactiveElements: page.elements } } };
+        const status = { tagName: "span", selector: "#lab-status", visibleText: `Acts done: ${clicks.length}` };
+        return { status: "succeeded", payload: { snapshot: { url: page.url, title: "Queue", interactiveElements: [...page.elements, status] } } };
       }
     }
   };

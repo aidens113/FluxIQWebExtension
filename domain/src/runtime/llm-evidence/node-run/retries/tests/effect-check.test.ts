@@ -42,18 +42,21 @@ function site(pressAnswers: readonly WebNodeDispatchResult[], assertAnswer: () =
         asserts.push(command.parameters);
         return await assertAnswer();
       }
-      return { status: "succeeded", payload: { snapshot: page() } };
+      return { status: "succeeded", payload: { snapshot: page(presses.length) } };
     }
   };
   return { gateway, presses, asserts };
 }
 
-function page(): JsonObject {
+// Every command that reaches the page counts on its cart line, as a real Add to
+// cart answers, so a press that landed is never taken for one that changed
+// nothing (t511) and pressed once more.
+function page(sent = 0): JsonObject {
   return {
     url: ITEM,
     title: "Voltbay USB C Hub",
     viewport: { width: 1280, height: 720, scrollX: 0, scrollY: 0 },
-    interactiveElements: [{ tagName: "button", selector: "#add", visibleText: "Add to cart" }]
+    interactiveElements: [{ tagName: "button", selector: "#add", visibleText: "Add to cart" }, { tagName: "span", selector: "#cart", visibleText: `Cart: ${sent} sent` }]
   };
 }
 

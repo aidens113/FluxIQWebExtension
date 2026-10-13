@@ -23,9 +23,14 @@ const DIALOG_BOX = { x: 400, y: 200, width: 400, height: 300 };
 
 type Click = { status: string; failure?: JsonObject; error?: string };
 
-/** A feed whose app prompt can open over it, appended after forty-four other controls. */
+/**
+ * A feed whose app prompt can open over it, appended after forty-four other
+ * controls. A search press that lands opens a status line at the end, as a
+ * real search answers, so it is never taken for a press that changed nothing
+ * (t511) and pressed once more.
+ */
 function promptPage() {
-  const state = { prompt: false, clicks: [] as string[], captureFails: false };
+  const state = { prompt: false, clicks: [] as string[], captureFails: false, searching: false };
   const feed = Array.from({ length: 44 }, (_, index) => ({
     tagName: "button", selector: `#post-${index + 1}`, visibleText: `Post ${index + 1}`, attributes: { type: "button" },
     bounds: { x: 20, y: 20 + index * 30, width: 100, height: 20 }
@@ -37,7 +42,8 @@ function promptPage() {
       interactiveElements: [
         { tagName: "button", selector: "#open-search", visibleText: "Search people", attributes: { type: "button" }, bounds: { x: 20, y: 5, width: 100, height: 10 } },
         ...feed,
-        ...(state.prompt ? [{ tagName: "button", selector: "#not-now", visibleText: "Not now", attributes: { type: "button" }, bounds: { x: 450, y: 400, width: 80, height: 30 } }] : [])
+        ...(state.prompt ? [{ tagName: "button", selector: "#not-now", visibleText: "Not now", attributes: { type: "button" }, bounds: { x: 450, y: 400, width: 80, height: 30 } }] : []),
+        ...(state.searching ? [{ tagName: "span", selector: "#search-status", visibleText: "Search open", bounds: { x: 20, y: 1400, width: 100, height: 20 } }] : [])
       ]
     };
     if (state.prompt) page.evidence = { dialogs: { open: [{ selector: "#prompt", role: "dialog", modal: true, native: false, bounds: DIALOG_BOX }], modal: true } };
@@ -59,6 +65,7 @@ function promptPage() {
         const blocked: Click = { status: "failed", error: `Action blocked: ${PRIVATE}`, failure: { category: "unexpected_state", code: WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG, retryable: false, stage: "execution", actual: `covered: ${PRIVATE}` } };
         return blocked;
       }
+      if (selector === "#open-search") state.searching = true;
       return { status: "succeeded" };
     }
   };

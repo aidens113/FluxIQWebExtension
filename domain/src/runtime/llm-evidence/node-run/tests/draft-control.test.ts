@@ -169,27 +169,33 @@ test("a control the page already names keeps both its name and its label, and th
   assert.equal(kept.label, "Quantity");
 });
 
+// A press that lands counts on the page's status line, as a real page answers
+// a press, so no press here is taken for one that changed nothing (t511) and
+// pressed once more.
 function stub(options: { failClick?: boolean } = {}) {
   let title = "Fixture";
+  let presses = 0;
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
-      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page(title) } };
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: page(title, presses) } };
       if (command.actionType === "web.dom.click" && options.failClick) return { status: "failed", error: "the control is gone" };
+      if (command.actionType === "web.dom.click") presses += 1;
       return { status: "succeeded", payload: { value: "ok" } };
     }
   };
   return { gateway, setTitle: (next: string) => { title = next; } };
 }
 
-function page(title: string): JsonObject {
+function page(title: string, presses: number): JsonObject {
   return {
     url: START,
     title,
     viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
     interactiveElements: [
       { tagName: "button", selector: "#add", visibleText: "Add to cart" },
-      { tagName: "button", selector: "#dismiss", visibleText: "Not now" }
+      { tagName: "button", selector: "#dismiss", visibleText: "Not now" },
+      { tagName: "span", selector: "#status", visibleText: `Pressed ${presses} times` }
     ]
   };
 }
@@ -211,22 +217,24 @@ function swatchPage(marked: boolean): JsonObject {
   };
 }
 
-/** A page with a promotion popup over it whose "No thanks" closes it. */
+/** A page with a promotion popup over it whose "No thanks" closes it; Add to cart counts on the cart line (t511). */
 function popupStub() {
   let open = true;
+  let cart = 0;
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
-      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: popupPage(open) } };
+      if (command.actionType === "web.dom.capture_snapshot") return { status: "succeeded", payload: { snapshot: popupPage(open, cart) } };
       if (command.actionType === "web.dom.click" && command.parameters.selector === "#promo > button") open = false;
+      if (command.actionType === "web.dom.click" && command.parameters.selector === "#add") cart += 1;
       return { status: "succeeded", payload: { value: "ok" } };
     }
   };
   return { gateway };
 }
 
-function popupPage(open: boolean): JsonObject {
-  const main: JsonObject[] = [{ tagName: "button", selector: "#add", visibleText: "Add to cart" }];
+function popupPage(open: boolean, cart: number): JsonObject {
+  const main: JsonObject[] = [{ tagName: "button", selector: "#add", visibleText: "Add to cart" }, { tagName: "span", selector: "#cart", visibleText: `Cart: ${cart}` }];
   if (!open) return { url: START, title: "Fixture", interactiveElements: main };
   return {
     url: START,
@@ -310,9 +318,13 @@ function press(runtime: ReturnType<typeof createWebAutomationLlmEvidenceRuntime>
   return runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle } }, consequences: [] } });
 }
 
-/** A store page whose store button opens a chooser; "Set as my store" picks Millbrook and reloads the page without it. */
+/**
+ * A store page whose store button opens a chooser; "Set as my store" picks
+ * Millbrook and reloads the page without it. Add to cart counts on the cart
+ * line, so it is never taken for a press that changed nothing (t511).
+ */
 function storeStub(options: { consent?: boolean } = {}) {
-  const state = { chooser: false, store: "Carden Falls Supercenter", chat: false, consent: options.consent === true };
+  const state = { chooser: false, store: "Carden Falls Supercenter", chat: false, consent: options.consent === true, cart: 0 };
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
@@ -323,6 +335,7 @@ function storeStub(options: { consent?: boolean } = {}) {
         if (selector === "#chooser > button") { state.chooser = false; state.store = "Millbrook Crossing Supercenter"; }
         if (selector === "#chat > button") state.chat = false;
         if (selector === "#consent > button") state.consent = false;
+        if (selector === "#add") state.cart += 1;
       }
       return { status: "succeeded", payload: { value: "ok" } };
     }
@@ -334,10 +347,11 @@ function storeStub(options: { consent?: boolean } = {}) {
   };
 }
 
-function storePage(state: { chooser: boolean; store: string; chat: boolean; consent: boolean }): JsonObject {
+function storePage(state: { chooser: boolean; store: string; chat: boolean; consent: boolean; cart: number }): JsonObject {
   const elements: JsonObject[] = [
     { tagName: "button", selector: "#fulfillment", visibleText: `Pickup or delivery? ${state.store}` },
-    { tagName: "button", selector: "#add", visibleText: "Add to cart" }
+    { tagName: "button", selector: "#add", visibleText: "Add to cart" },
+    { tagName: "span", selector: "#cart", visibleText: `Cart: ${state.cart}` }
   ];
   // A layer's controls name it by its place in the list, as the capture writes `parent`.
   const layer = (selector: string, words: string, button: string): void => {

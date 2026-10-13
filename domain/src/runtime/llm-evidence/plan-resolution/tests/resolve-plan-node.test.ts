@@ -225,7 +225,10 @@ test("a click or navigation the build runs goes to the page with the check allow
     executeAction: async (_sessionId, command) => {
       sent.push({ actionType: command.actionType, parameters: command.parameters });
       if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
-      return { status: "succeeded", payload: { snapshot: { url: FORM_URL, title: "Fixture", interactiveElements: [nameField, submit] } } };
+      // Once Submit is pressed a status line says so, as a real form answers, so the press is never taken for one that changed nothing (t511).
+      const submitted = sent.some((entry) => entry.actionType === "web.dom.click");
+      const status = { tagName: "span", selector: "#status", visibleText: submitted ? "Submitted" : "Not submitted" };
+      return { status: "succeeded", payload: { snapshot: { url: FORM_URL, title: "Fixture", interactiveElements: [nameField, submit, status] } } };
     }
   });
   const run = async (callId: string, node: string, parameters: JsonObject) =>

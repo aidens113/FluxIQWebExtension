@@ -65,20 +65,25 @@ type Command = { actionType: string; parameters: JsonObject };
 /**
  * The careers page: a merged look of the top document and frame 7, and frame
  * 7's own document -- at the frame's address, with its elements unprefixed --
- * when a capture is addressed to the frame.
+ * when a capture is addressed to the frame. Once a press lands, a status line
+ * on the top document says so, as a real page answers a press, so no press here
+ * is taken for one that changed nothing (t511) and pressed once more.
  */
 function careersPage(): { runtime: WebAutomationLlmEvidenceRuntime; commands: Command[] } {
   const commands: Command[] = [];
+  let presses = 0;
   const runtime = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
     structureDetectionSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
       commands.push({ actionType: command.actionType, parameters: structuredClone(command.parameters) });
+      if (command.actionType === "web.dom.click") presses += 1;
       if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
       const inFrame = command.parameters.browserFrameId === FRAME_ID;
+      const status: JsonObject[] = presses === 0 ? [] : [{ tagName: "span", selector: "#status", visibleText: `Pressed ${presses} times` }];
       const snapshot: JsonObject = inFrame
         ? { url: FRAME_URL, title: "Apply", interactiveElements: [SUBMIT, REFERENCE].map((element) => ({ tagName: element.tagName as string, selector: (element.selector as string).replace(/^frame\[\d+\] >> /u, ""), accessibleName: element.accessibleName as string, visibleText: element.visibleText as string })) }
-        : { url: TOP_URL, title: "Careers", interactiveElements: [ACCEPT, SUBMIT, REFERENCE] };
+        : { url: TOP_URL, title: "Careers", interactiveElements: [ACCEPT, SUBMIT, REFERENCE, ...status] };
       const payload: JsonObject = command.parameters.detectStructure === undefined ? { snapshot } : { snapshot, structure: STRUCTURE };
       return { status: "succeeded", payload };
     }

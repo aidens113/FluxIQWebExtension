@@ -224,11 +224,13 @@ test("with no permission check to ask, every high-risk declaration is refused", 
 });
 
 // A press that leaves the page looking the same is no longer refused. It was,
-// while a press existed only to reveal something; a node that ran and succeeded
-// is a step of the Flow whatever the sanitized packet then looks like -- a press
-// that applies a filter can leave it identical -- so what changed is reported
-// as a fact (`pageChanged`) and the step stands.
-test("reports a press that changed nothing as a page that did not change, and keeps the step", async () => {
+// while a press existed only to reveal something; a node that ran is a step of
+// the Flow whatever the sanitized packet then looks like, so what changed is
+// reported as a fact (`pageChanged`) and the step stands. Since t511 such a
+// press is first pressed once more (the user's every-node-retries rule; some
+// pages take the first press only as a wake-up), and one that still changed
+// nothing answers `status: "no_effect"` with a sentence, never `succeeded`.
+test("reports a press that changed nothing, pressed twice, as no effect, and keeps the step", async () => {
   const clicked: string[] = [];
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
@@ -248,10 +250,13 @@ test("reports a press that changed nothing as a page that did not change, and ke
   const pressed = await runtime.executeTool({ ...BASE, callId: "call.inert", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("Nothing happens")! } }, consequences: [] } });
 
   assert.equal(pressed.resultCode, "web.action.succeeded");
-  assert.equal((pressed.evidence as { pageChanged?: boolean }).pageChanged, false);
-  // Lane t195, run-munuxns5-833f4313: bigbox's first press after a load only wakes the page.
-  assert.match(String((pressed.evidence as { unchangedPress?: string }).unchangedPress), /press the same control once more/u);
-  assert.deepEqual(clicked, ["#inert"]);
+  const evidence = pressed.evidence as { status?: string; pageChanged?: boolean; noEffect?: string; unchangedPress?: string };
+  assert.equal(evidence.status, "no_effect");
+  assert.equal(evidence.pageChanged, false);
+  assert.match(String(evidence.noEffect), /"Nothing happens" \(t\d+\) was pressed twice/u);
+  // The advice to press again (lane t195, run-munuxns5-833f4313) was already taken: it was pressed twice.
+  assert.equal(evidence.unchangedPress, undefined);
+  assert.deepEqual(clicked, ["#inert", "#inert"]);
 });
 
 // The repair path presses through `pressControl` directly. A press the person

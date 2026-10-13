@@ -35,15 +35,23 @@ const beds: JsonObject = { tagName: "select", selector: "#beds", accessibleName:
 const band: JsonObject = { tagName: "select", selector: "#band", accessibleName: "Price band" };
 const search: JsonObject = { tagName: "button", selector: "#search", visibleText: "Search" };
 
-/** A runtime whose page is whatever the test says it is now. */
+/**
+ * A runtime whose page is whatever the test says it is now. Once a press lands,
+ * a status line after the page's controls says so, as a real page answers a
+ * press, so no press here is taken for one that changed nothing (t511) and
+ * pressed once more.
+ */
 function runtimeOver(page: () => { url: string; elements: JsonObject[] }): WebAutomationLlmEvidenceRuntime {
+  let presses = 0;
   return createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
     structureDetectionSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.click") presses += 1;
       if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
       const current = page();
-      return { status: "succeeded", payload: { snapshot: { url: current.url, title: "Fixture", interactiveElements: current.elements } } };
+      const status: JsonObject[] = presses === 0 ? [] : [{ tagName: "span", selector: "#press-status", visibleText: `Pressed ${presses} times` }];
+      return { status: "succeeded", payload: { snapshot: { url: current.url, title: "Fixture", interactiveElements: [...current.elements, ...status] } } };
     }
   });
 }
@@ -179,9 +187,9 @@ test("an exploration that sees more than ninety-nine controls is handed numbers 
   // The old spelling is still read, over the same numbers (t223).
   assert.ok(pattern.test("target.120") && !pattern.test("target.0") && !pattern.test(`target.${WEB_LLM_TARGET_HANDLE_MAX_NUMBER + 1}`));
 
-  // A press on a three-digit handle is bound and pressed: the fixture page does
-  // not change, so it comes back `no_progress` -- not `invalid_input`, which is
-  // a handle the tool would not read, nor `target_unobserved`, one it could not bind.
+  // A press on a three-digit handle is bound and pressed -- not `invalid_input`,
+  // which is a handle the tool would not read, nor `target_unobserved`, one it
+  // could not bind.
   const pressed = await runtime.executeTool({ projectId: "p", flowId: "f", callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t120" } }, consequences: [] } });
   // The press runs: a node that ran and succeeded is a step of the Flow
   // whatever the packet then looks like.

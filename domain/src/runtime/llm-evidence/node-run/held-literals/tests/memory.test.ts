@@ -25,15 +25,20 @@ const HELD: JsonObject[] = [
   { node: EXTRACT, parameters: { extractList: SAVED_LIST }, consequences: [] }
 ];
 
+// A press that lands counts on the page's status line, as a real page answers
+// a press, so no press here is taken for one that changed nothing (t511) and
+// pressed once more.
 function site() {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
+  let presses = 0;
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
       commands.push({ actionType: command.actionType, parameters: command.parameters });
       if (command.actionType === "web.dom.capture_snapshot") {
-        return { status: "succeeded", payload: { snapshot: { url: "https://example.test/tickets", title: "Tickets", interactiveElements: [{ tagName: "button", selector: "#renew", visibleText: "Renew", attributes: { "data-testid": "renew" } }] } } };
+        return { status: "succeeded", payload: { snapshot: { url: "https://example.test/tickets", title: "Tickets", interactiveElements: [{ tagName: "button", selector: "#renew", visibleText: "Renew", attributes: { "data-testid": "renew" } }, { tagName: "span", selector: "#status", visibleText: `Renewed ${presses} times` }] } } };
       }
+      if (command.actionType === "web.dom.click") presses += 1;
       if (command.actionType === "web.dom.extract_list") {
         return { status: "succeeded", payload: { extracted: [{ title: "Row 1" }], extraction: { recordCount: 1, pagesRead: 1, itemsSeen: 1, truncated: false, fieldNames: ["title"], missingFields: [] } } };
       }

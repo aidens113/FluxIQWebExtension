@@ -255,6 +255,8 @@ test("a call that left no page it read reports no route state", async () => {
 type Decision = {
   name: string;
   page?: () => FakePage;
+  /** The page a press moves to, as a real page answers a press; without one a press changes nothing and is waited on and pressed again (t511). */
+  pressed?: () => FakePage;
   clickFails?: boolean;
   /** What happens first and is not counted: the look that shows a handle. */
   setUp?: (runtime: WebAutomationLlmEvidenceRuntime) => Promise<WebLlmEvidenceToolExecution | undefined>;
@@ -275,6 +277,7 @@ const DECISIONS: Decision[] = [
     name: "action that runs",
     setUp: lookFirst,
     request: (shown) => ({ ...PROJECT, callId: "call.n", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: handleOf(shown!, "Go") } }, consequences: [] } }),
+    pressed: () => smallPage("Pressed"),
     captures: 2, routeState: true
   },
   {
@@ -308,7 +311,7 @@ const DECISIONS: Decision[] = [
 
 for (const decision of DECISIONS) {
   test(`page captures for one decision (${decision.name}): still ${decision.captures}, with the route state it left ${decision.routeState ? "reported" : "absent"}`, async () => {
-    const fake = fakePage(decision.page?.() ?? smallPage(), { failClick: decision.clickFails === true });
+    const fake = fakePage(decision.page?.() ?? smallPage(), decision.pressed === undefined ? { failClick: decision.clickFails === true } : { failClick: decision.clickFails === true, onClick: decision.pressed() });
     const runtime = createWebAutomationLlmEvidenceRuntime(fake.gateway);
     const shown = await decision.setUp?.(runtime);
     const before = fake.captures();
