@@ -54,6 +54,8 @@ import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
 import { webExtractionMatchedColumn } from "../../../../output-nodes";
 import type { WebPlanValuePath } from "../handle-tokens";
+import type { WebPlanRefusalIssue } from "./refusal-issues";
+import { webPlanUnknownColumnIssues } from "./unknown-column-issues";
 
 /**
  * A name that found its column by something other than the key verbatim: what
@@ -86,7 +88,8 @@ export type WebExtractionColumnIssue = "web.handle.malformed" | "web.handle.ambi
 
 export type WebExtractionColumns =
   | { ok: true; fields: Record<string, WebAutomationExtractField>; assumed: WebExtractionColumnAssumption[] }
-  | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath };
+  /** `issues` only for a name no column answers to: the name, the read's columns, and whether the items changed since the detection (`./unknown-column-issues.ts`, t502). */
+  | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath; issues?: WebPlanRefusalIssue[] };
 
 type Detected = Record<string, WebAutomationExtractField>;
 
@@ -150,7 +153,7 @@ export function keptWebExtractionColumns(fields: unknown, measured: Detected, pa
   for (const written of entries) {
     if (written.column?.ok === true) continue;
     const guessed = readColumn(written.entry, written.ownKey, remaining, written.at, GUESSING);
-    if (!guessed.ok) return guessed;
+    if (!guessed.ok) return unknownField(guessed) ? unknownColumn(written, detected) : guessed;
     written.column = guessed;
     taken.add(guessed.key);
     delete remaining[guessed.key];
@@ -213,6 +216,34 @@ function unrequired(detected: Detected): Detected {
 function listedKey(column: Extract<Column, { ok: true }>): string {
   const written = column.assumed?.written;
   return written !== undefined && isWebAutomationExtractFieldKey(written) ? written : column.key;
+}
+
+/**
+ * The refusal of an entry no column answers to, even by a guess: the name it
+ * wrote and every detected column, which are the names `fields` can use (t502).
+ * An entry that wrote no one name is refused at its position alone, as before.
+ */
+function unknownColumn(written: Entry, detected: Detected): Extract<WebExtractionColumns, { ok: false }> {
+  const name = nameWritten(written.entry, written.ownKey);
+  return present<Extract<WebExtractionColumns, { ok: false }>>({
+    ok: false,
+    issue: "web.handle.unknown_field",
+    path: written.at,
+    issues: name === undefined ? undefined : webPlanUnknownColumnIssues(name, Object.keys(detected), detected)
+  });
+}
+
+/** The one name an entry looks its column up by, as `readColumn` reads it, before any `@attribute`: the string, the object's naming key, header or handle key. */
+function nameWritten(entry: unknown, ownKey: string | undefined): string | undefined {
+  const name = typeof entry === "string" ? entry : isJsonRecord(entry) ? objectName(entry, ownKey) : undefined;
+  return name?.split("@")[0];
+}
+
+function objectName(entry: Record<string, unknown>, ownKey: string | undefined): string | undefined {
+  const named = COLUMN_NAME_KEYS.map((key) => entry[key]).find((name) => name !== undefined);
+  if (typeof named === "string") return named;
+  if (typeof entry.header === "string") return `${HEADER_PREFIX}${entry.header}`;
+  return Object.hasOwn(entry, "handle") ? ownKey : undefined;
 }
 
 /** Whether a read failed only because nothing answered to the name, which is the one failure another reading may still answer. */

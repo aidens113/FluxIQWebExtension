@@ -61,6 +61,12 @@ function keptColumns(fields: unknown, detected: Record<string, WebAutomationExtr
   return keptWebExtractionColumns(fields, detected, ["fields"]);
 }
 
+/** A `fields` entry refused at `key` for naming no column: the name, where it is an identifier, and the read's columns (t502). */
+function unknownAt(key: string, written: string, detected: Record<string, WebAutomationExtractField> = CATALOG) {
+  const field = /^[A-Za-z0-9_.:-]{1,200}$/u.test(written) ? { field: written } : {};
+  return { ok: false, issue: "web.handle.unknown_field", path: ["fields", key], issues: [{ code: "web.handle.unknown_field", ...field, valid: Object.keys(detected) }] };
+}
+
 /** A detected column as a read keeps it: the detection's coverage-derived `required` is not carried (`../columns.ts`, `unrequired`). */
 function asKept(spec: WebAutomationExtractField): WebAutomationExtractField {
   return typeof spec === "string" ? spec : { ...spec, required: false };
@@ -112,10 +118,10 @@ test("a column with no plausible candidate is still an honest failure", () => {
   // this row: the matcher can plausibly relate them to product-name and
   // product-price, which is the recovery this module exists to provide.
   for (const written of ["banana", "wombat", "#card > .price:nth-child(2)"]) {
-    assert.deepEqual(keptColumns({ name: written }), { ok: false, issue: "web.handle.unknown_field", path: ["fields", "name"] }, written);
+    assert.deepEqual(keptColumns({ name: written }), unknownAt("name", written), written);
   }
   // A name written as a header, where nothing has a header at all.
-  assert.deepEqual(keptColumns({ name: "column:Name" }), { ok: false, issue: "web.handle.unknown_field", path: ["fields", "name"] });
+  assert.deepEqual(keptColumns({ name: "column:Name" }), unknownAt("name", "Name"));
   // A condition's refusal also names the name and the read's columns (t497).
   assert.deepEqual(conditions([{ field: "banana", is: "absent" }]), {
     ok: false,
@@ -284,9 +290,9 @@ test("a cart read in the instruction's own words resolves each name to the one c
 
 test("a name of a kind two columns have, or none has, is still refused: a kind decides only when it names one column", () => {
   const twoQuantities = { ...CART, "div_span_css-7q_number": { kind: "text", selector: "div > span.css-7q", required: true } } as const;
-  assert.deepEqual(keptColumns({ quantity: "quantity" }, twoQuantities), { ok: false, issue: "web.handle.unknown_field", path: ["fields", "quantity"] });
+  assert.deepEqual(keptColumns({ quantity: "quantity" }, twoQuantities), unknownAt("quantity", "quantity", twoQuantities));
   // A detection with no column of the kind: the catalog labels nothing as a number.
-  assert.deepEqual(keptColumns({ quantity: "qty" }), { ok: false, issue: "web.handle.unknown_field", path: ["fields", "quantity"] });
+  assert.deepEqual(keptColumns({ quantity: "qty" }), unknownAt("quantity", "qty"));
   // A word that means no kind is refused as before.
-  assert.deepEqual(keptColumns({ name: "wombat" }, CART), { ok: false, issue: "web.handle.unknown_field", path: ["fields", "name"] });
+  assert.deepEqual(keptColumns({ name: "wombat" }, CART), unknownAt("name", "wombat", CART));
 });
