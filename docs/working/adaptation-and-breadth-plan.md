@@ -185,6 +185,16 @@ Codex supervisor has dispatched these independent briefs. Worker claims remain u
 - Definition of done: fail-first emitted metadata regression plus confirmation record-before-dispatch check; owning tests and extension source/test check pass. Explain limits: human type/scroll captures remain after/unknown and unsigned; extraction supplies a safe future read boundary, not invented completion.
 - Report to: docs/working/adaptation-and-breadth-plan/reports/codex-t518-live-capture-coverage.md and supervisor.
 
+### Brief: codex-t518-social-replay-debug
+- Repository: paired t518 source; read-only social run-mv71jipp-fa66f988 in test-runs/instances/codex-t518-slot-4.
+- Task: identify the timed-out recorded wait after automatic Post recovery; trace required readiness, route/effect evidence and whether genuine terminal after-state evidence exists.
+- Required reads: Current State, t517/t518 reports, private runtime/recording artifacts; owning signer/state-routing and recorder flush/stop boundary as needed.
+- Owns (may edit): own report only, docs/working/adaptation-and-breadth-plan/reports/codex-t518-social-replay-debug.md in t518 downstream.
+- Must not touch: source/shared docs/fixtures/oracles/original state; no commits/pushes/provider/browser/full suites.
+- Safety: report static codes, phase/field names/counts, source locations only. No raw page values/selectors/hashes/state/log bodies or secrets.
+- Definition of done: explain why site oracle passes but Flow fails; distinguish obsolete wait/click from essential step. Identify a safe producer-boundary fix if existing evidence is insufficient. Never infer action causality or capture phase solely from timestamp or blindly skip terminal waits.
+- Report to: own report and supervisor; capture worker owns store mismatch investigation.
+
 ## Inventory (2026-10-13)
 
 ### Drift variants
