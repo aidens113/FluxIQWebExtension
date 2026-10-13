@@ -13,6 +13,8 @@ Related: Core work, if any, is briefed through Core's mvp-final-month-plan.md; [
 
 **Codex continuation active, 2026-10-13.** t516 and t517 are independently verified and merged locally on both dev branches. t518 fixes historical recording evidence and producer-clock linking before fresh recorded-Flow preflights. Publishing waits for the coherent handoff fixes. The unrelated `.clinerules/fluxiq.md` edit on main dev is preserved.
 
+**New product direction takes precedence:** [instruction-led automations](./instruction-led-automation-plan.md). User requires explicit authoritative instructions for every automation, including existing flows before their next run, and descriptions for purely supplemental recordings. Paired t518 remains committed locally/unpushed; no more standalone recording controls. Fresh store run-mv74jziz-abaeb09e passes, skips obsolete wait28 and executes required filter45/extraction63, zero model calls/harness activations. Social run-mv74jzv2-e55828db posts after automatic re-press and passes its page oracle, but Flow fails obsolete wait35/final click36; terminal completion remains unverified. Both bundles were preserved externally. Further qualification must follow the new instruction-led contract.
+
 **Verified work.**
 
 - **t517:** one certain-no-effect re-press; exhausted lasting actions fail default continuation. Explicit failed/optional routes remain. Supervisor observed 140 Core executor, 10 contract, 302 domain and 501 extension tests, package source/test typechecks, both audits and headed Chromium Post harness. Core/downstream merged locally; publishing waits for the coherent handoff fixes. Reports: `adaptation-and-breadth-plan/reports/codex-t517.md` and original t517 report.
