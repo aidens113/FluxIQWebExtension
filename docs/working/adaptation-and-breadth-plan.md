@@ -1,7 +1,7 @@
 # Adaptation Gate And Breadth Sample Plan
 
 Status: Active
-Status detail: Gate round 1 and breadth wave 1 ran on 2026-10-13 with no counted pass; fixes t506-t515 merged; t516 and t517 in flight at the handoff to Codex.
+Status detail: Gate round 1 and breadth wave 1 ran on 2026-10-13 with no counted pass; fixes t506-t515 merged; t516 (Partial) and t517 (Done, unverified) sit uncommitted in their worktrees for Codex.
 Created: 2026-10-13
 Last updated: 2026-10-13
 Owner: Senior supervisor agent (planned by a lane lead)
@@ -16,8 +16,24 @@ every run and debug). Fixes t506-t515 are merged and pushed. Two tasks are still
 
 - **t516** (a popup closed by the extension's defence becomes a guarded `add_handler` proposal, plus the false robot
   check on results pages): worktrees `fxwork/t516/!FluxIQWebExtension` and `fxwork/t516/!FluxIQ`, branch
-  `task/t516-defence-closed-popup-handler`. Uncommitted worker edits; report under
-  `docs/working/adaptation-and-breadth-plan/reports/` in that tree. Unverified by the supervisor.
+  `task/t516-defence-closed-popup-handler`. Worker reported Partial, uncommitted, not verified by the supervisor.
+  Report: `reports/t516-defence-closed-popup-handler.md` in that tree.
+  - What it built: a step succeeds after the defence closed a named layer. Core then proposes, with no model call, an
+    `add_handler` before that step: `when` dialog visible, one press of the way-out handle, `completionCheck` dialog
+    absent, `resume`, no leading wait. The proposal goes through the existing in-run repair path, and the run detail
+    carries the `diagnosis` and `runtime_patch` interventions P2-P4 read.
+    - Domain `io/gateway-output-dispatcher.ts` gives each closed layer a `wayOutDefinitionId`.
+    - New Core files: `service/runtime-session/interruption-handler.ts`, `interruption-learning.ts` and
+      `in-run-repair-fix-record.ts`.
+  - Its claims: Core vitest on executor, runtime-session, runtime-adaptation and in-run-repair gave `132 passed` and
+    `1176 passed`. `pnpm run check` exited 0 in Core, domain and extension. Both audits pass.
+  - Not shown live: the model-free `everything-store --workflow first-page-earbuds --variant deal-wheel --flow` run
+    `run-mv6y2t42-222ea4f9` never met the wheel. The recorded workflow's wait for the soft-check button is stale and
+    timed out 4 times. That needs its own brief, and the gate's paid run is the real proof.
+  - The false robot check on results pages (half of the brief) is not mentioned in the report; check whether it was
+    done.
+  - Supervisor decision (2026-10-13): learning stays on for any run that keeps adaptations, including model-free runs.
+    The handler needs no model call, and the judged end still gates the apply.
 - **t517** (playback re-presses a lasting control that certainly changed nothing, through the extension's click watch;
   a transient spinner is not an effect): `fxwork/t517/...`, branch `task/t517-playback-certain-no-effect-repress`.
   Worker reported Done, uncommitted, not verified by the supervisor. Report:
@@ -39,7 +55,9 @@ site: `lab run crossborder-marketplace --flow` (run `run-mv6xaosc-1c145c22`, t26
 recording and playback ended `web.target.not_found` after four ~4.2 s retries of one click. Find the node and why the
 element was not found on the second pass (the user's "elements not detected the second time" report); suspects are
 a one-time step (store coupon claim, `claim-again`) whose control is gone once used, or the recording's target
-identity.
+identity. t516's everything-store control failed the same way: a recorded step timed out 4 times on unchanged
+ground. Check for one shared cause in how the `--flow` lane builds and replays a recorded workflow before treating
+them as two defects.
 
 **Adaptation gate (Milestone 1).** It runs on three sites, each with a different kind of drift:
 
