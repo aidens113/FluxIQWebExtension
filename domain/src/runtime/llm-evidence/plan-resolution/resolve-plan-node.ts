@@ -20,7 +20,9 @@
 //   `ambiguous`;
 // - the extraction node's `extractList` naming an `extraction.N` becomes the
 //   `web.dom.extract_list` request the detection tool kept behind it, cut to the
-//   columns the plan asks for, on the page shown (`extraction/slot.ts`);
+//   columns the plan asks for, on the page shown (`extraction/slot.ts`), with
+//   each column its `recordOutput` names under that name, and a step its own
+//   dispatch would refuse is refused (`extraction/stored-columns.ts`, t489);
 // - the Next page node's `nextPage` naming `{list: "extraction.N", control?: "tN"}`
 //   becomes the `web.dom.next_page` request: the list's item and the way to
 //   its next page the detection found, or the named control (`next-page-slot.ts`);
@@ -31,10 +33,9 @@
 //   (`actions/check-wait.ts`), as a recorded one is, which resolves it even
 //   when it names no handle.
 //
-// A handle's element in a child frame also writes `browserFrameId`, and a node that already names a different frame
-// is refused rather than silently moved. Beside it goes `browserFrameUrlPath`, the path of the frame's document when
-// the element was shown, which is what finds the frame again once the page has been reloaded and the id names nothing
-// (`target-packets.ts`); an extraction handle's list carries both the same way (`extraction/slot.ts`).
+// A handle's element in a child frame also writes `browserFrameId`, and a node already naming another frame is refused.
+// Beside it goes `browserFrameUrlPath`, the path of the frame's document when the element was shown, which finds the
+// frame again once a reload renumbered it (`target-packets.ts`); an extraction handle's list carries both the same way.
 //
 // A resolved selector handle also writes `element`: who the element the model was shown is, in the shape a recorded
 // node carries it (`element-identity.ts`). Without it Core reads a type node's `text` as the element's identity and
@@ -119,7 +120,7 @@ import { webAutomationOutputNodeId, webAutomationUrlPath } from "../../../output
 import { webLlmNameAssumptions, type WebLlmNameAssumption, type WebLlmNameAssumptionSaid } from "../name-assumption";
 import type { WebLlmExtractionHandles } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
-import { resolveWebExtractionSlot } from "./extraction";
+import { resolveWebExtractionSlot, webPlanStoredColumns, webPlanUndispatchable, type WebPlanRefusalIssue } from "./extraction";
 import { webPlanStepFoundByTooLittle } from "./identity-guard";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
@@ -285,7 +286,8 @@ export type WebPlanNodeResolution =
   | { status: "unchanged" }
   /** `handleViews` only when Core asked for the view history (`handleReach`), and only for a node whose handles resolved from a view; `effect`, what exploration's act on the step's control made true (header). */
   | { status: "resolved"; parameters: JsonObject; handleViews?: WebPlanHandleView[]; effect?: JsonObject }
-  | { status: "refused"; issueCodes: readonly (WebPlanHandleIssue | WebPlanStepIssueCode)[] }
+  /** `issues`, the field and the names it can use where a refusal names them (`extraction/stored-columns.ts`, t489). */
+  | { status: "refused"; issueCodes: readonly (WebPlanHandleIssue | WebPlanStepIssueCode | `record_output.${string}`)[]; issues?: WebPlanRefusalIssue[] }
   /** A person must answer this one. `requestId` is null where there was nobody to ask. */
   | { status: "needs_permission"; missing: readonly AutomationStudioActionConsequence[]; requestId: string | null };
 
@@ -382,8 +384,8 @@ type Scope = { projectId: string; flowId: string };
 type Scoped = Scope & WebPlanAuthorship & { reach: WebLlmTargetReach | undefined; step: boolean; onPage: string | undefined };
 /** `notAField`: what the element is, where it holds no typed text (`target-packets.ts`, t486). */
 type Resolved = { value: JsonValue; frameId: number | undefined; frameUrlPath: string | undefined; element: JsonObject | undefined; statePath?: string; views?: WebPlanHandleView[]; effect?: JsonObject | undefined; notAField?: WebLlmNotAFieldKind | undefined };
-/** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control -- or the shape that fits the key -- instead when one does. */
-type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath; fits?: WebPlanHandleIssueCode | undefined };
+/** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control -- or the shape that fits the key -- instead when one does; `details`, said after every position (`extraction/stored-columns.ts`). */
+type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath; fits?: WebPlanHandleIssueCode | undefined; details?: readonly string[]; issues?: readonly WebPlanRefusalIssue[] };
 type NodeOutcome =
   | { status: "unchanged" }
   | { status: "resolved"; parameters: JsonObject; assumed: WebLlmNameAssumptionSaid[]; views: WebPlanHandleView[]; effect?: JsonObject | undefined }
@@ -547,10 +549,11 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
     if (extractionNode && key === "extractList") {
       const slot = resolveWebExtractionSlot(value, scope, stores.extractions);
       if (slot.status === "resolved") {
-        replaced.set(key, { value: slot.request, frameId: slot.frameId, frameUrlPath: slot.frameUrlPath, element: undefined });
-        // The Flow keeps this request under the plan's keys, and a draft read
-        // back out of it shows the model those keys (`own-extraction-list.ts`).
-        stores.extractions.wrote(scope, slot.request as unknown as WebAutomationExtractListRequest, slot.frameId);
+        const stored = webPlanStoredColumns(slot.request, parameters.recordOutput);
+        replaced.set(key, { value: stored.request, frameId: slot.frameId, frameUrlPath: slot.frameUrlPath, element: undefined });
+        // The Flow keeps this request under the plan's keys, which a draft read back out of it shows (`own-extraction-list.ts`).
+        stores.extractions.wrote(scope, stored.request as unknown as WebAutomationExtractListRequest, slot.frameId);
+        assumed.push(...stored.assumed);
         // Written member by member rather than spread, because a spread carries
         // no excess-property check and this value is on its way to the wire
         // (`../present.ts`, and the `contract-spread` rule that holds this
@@ -600,6 +603,8 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
     }
   }
   if (refusals.length > 0) return { status: "refused", refusals };
+  const undispatchable = extractionNode && scope.step ? webPlanUndispatchable(Object.fromEntries(Object.entries(parameters).map(([key, value]) => [key, replaced.get(key)?.value ?? value]))) : undefined;
+  if (undispatchable) return { status: "refused", refusals: undispatchable.map((entry) => ({ code: entry.code, kind: entry.code === "web.handle.unknown_field" ? "extraction" : undefined, path: entry.path, details: entry.details, issues: entry.issues })) };
   if (replaced.size === 0) return { status: "unchanged" };
 
   // Slots naming the element must all name the same one; which of two the node acts on is not this resolver's to pick.
@@ -787,5 +792,9 @@ function refusal(parameters: JsonObject, refusals: Refusal[]): Extract<WebPlanNo
   }
   const reasons = WEB_PLAN_HANDLE_ISSUE_CODES.filter((code) => codes.has(code));
   const positions = [...new Set(refusals.map((entry) => webPlanPositionCode(entry.code, parameters, entry.path) as WebPlanHandleIssue))];
-  return { status: "refused", issueCodes: [...reasons, ...positions].slice(0, MAX_ISSUE_CODES) };
+  const details = [...new Set(refusals.flatMap((entry) => entry.details ?? []))] as `record_output.${string}`[];
+  const issues = refusals.flatMap((entry) => entry.issues ?? []).slice(0, MAX_ISSUE_CODES).map((issue) => ({ ...issue }));
+  const answer: Extract<WebPlanNodeResolution, { status: "refused" }> = { status: "refused", issueCodes: [...reasons, ...positions, ...details].slice(0, MAX_ISSUE_CODES) };
+  if (issues.length > 0) answer.issues = issues;
+  return answer;
 }

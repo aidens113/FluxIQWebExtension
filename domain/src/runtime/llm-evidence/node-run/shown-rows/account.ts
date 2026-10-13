@@ -15,6 +15,8 @@
 // rejected and removed alone, how many pages it read and why it stopped, and
 // `validation` says the same in a sentence. This module adds the rest, ahead of
 // the rows, so the account reads in order:
+// - `page`, which page of the list the read read, with its number where its
+//   address states one (`./read-page.ts`, t489);
 // - `origin`, once, when a link in the rows is written from it (`./links.ts`);
 // - `firstRows`, the first few kept rows, so the model can still see what the
 //   read was reading;
@@ -27,6 +29,7 @@
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebNodeReadLinks } from "./links";
+import { webNodeReadPage } from "./read-page";
 
 /** How many kept rows a read shows ahead of the rest. */
 export const WEB_NODE_READ_FIRST_ROWS = 3;
@@ -49,6 +52,9 @@ export function webNodeReadOutcome(read: JsonValue | undefined, links: WebNodeRe
   const extracted = read.extracted;
   const rows = Array.isArray(extracted) ? extracted.map((row) => writtenRow(row, links)) : extracted;
   const account: JsonObject = {};
+  // Only a list read reads a page of a list.
+  const page = Array.isArray(extracted) ? webNodeReadPage(read.url, isJsonObject(read.extraction) ? read.extraction.pagesRead : undefined) : undefined;
+  if (page !== undefined) account.page = page;
   if (links.used() && links.origin !== undefined) account.origin = links.origin;
   // Copies, never the same objects `extracted` holds: Core's evidence check
   // reads a value met twice as a cycle and refuses the whole result as

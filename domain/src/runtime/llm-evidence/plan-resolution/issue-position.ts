@@ -13,6 +13,13 @@
 // model chose, which may have come from the page -- is given as its position
 // among its object's keys, and an array entry as its index. Core bounds a code
 // to 100 characters, so a longer path is cut at the end.
+//
+// **What a refusal may name (supervisor, t489).** Beside the positions, a
+// refusal may name a field the model itself wrote and list a read's column
+// keys: both are structure -- names the model chose and keys the detection
+// already showed it -- and a refusal naming them can be fixed in one step
+// (`extraction/stored-columns.ts`). It never carries a cell value, a sample, a
+// label's page text, or any other text the page holds.
 
 import { WEB_AUTOMATION_EXTRACT_CONDITION_KEYS } from "../../../actions/extraction";
 import { isJsonRecord } from "../untrusted-json";
@@ -39,6 +46,8 @@ const GRAMMAR_KEYS: ReadonlySet<string> = new Set([
   // The Next page step's request (`next-page-slot.ts`): its handle form and its literal.
   "nextPage", "list", "pagination",
   "parameters", "extractList", "target", "element", "recordOutput", "outputId",
+  // A record output's own grammar, where a column it names is refused (`extraction/stored-columns.ts`, t489).
+  "schema", "process", "id",
   // Which duplicates to drop and what order to return (`actions/extraction/order-request.ts`).
   "dedupe", "sort", "by", "order", "as"
 ]);

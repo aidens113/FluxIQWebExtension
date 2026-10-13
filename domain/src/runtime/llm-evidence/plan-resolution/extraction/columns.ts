@@ -20,7 +20,7 @@
 //   reference, and a `kind` only when it is the kind that will be read.
 //
 // **A name nothing answers to is resolved to the nearest column rather than
-// refused** (`./column-match.ts` says why, and with what signals). What is still
+// refused** (`output-nodes/extract-list/column-match.ts` says why, and with what signals). What is still
 // refused is a selector, a kind that reads something else, a column two answer
 // to *exactly*, and a name with no plausible candidate at all -- with the
 // position it was refused at.
@@ -52,8 +52,35 @@ import {
 } from "../../../../actions/extraction";
 import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
-import { webExtractionMatchedColumn, type WebExtractionColumnAssumption } from "./column-match";
+import { webExtractionMatchedColumn } from "../../../../output-nodes";
 import type { WebPlanValuePath } from "../handle-tokens";
+
+/**
+ * A name that found its column by something other than the key verbatim: what
+ * was written, what it was read as, how, and with what score.
+ *
+ * It is the resolver's half of
+ * `WebAutomationExtractListFieldAssumption` (`actions/extraction/read-request.ts`),
+ * in the same form, so the two paths' assumptions read as one thing. `index` is
+ * a `where` position there; here a name can be written in several places, so the
+ * position is the resolver's own value path. The match itself is the extraction
+ * node's (`output-nodes/extract-list/column-match.ts`).
+ *
+ * `normalized` is the same name in another casing or with other separators,
+ * which is a spelling variant; `nearest` is a scored guess and is the one worth
+ * a person's attention. `score` is name similarity in 0..1 before any shape
+ * tie-break, exactly as Core's matcher reports it. `among` says which
+ * vocabulary answered: the columns the detection showed, or the ones this plan
+ * keeps under its own keys.
+ */
+export type WebExtractionColumnAssumption = {
+  path: WebPlanValuePath;
+  written: string;
+  field: string;
+  how: "normalized" | "nearest";
+  score: number;
+  among: "detected" | "kept";
+};
 
 export type WebExtractionColumnIssue = "web.handle.malformed" | "web.handle.ambiguous" | "web.handle.unknown_field";
 

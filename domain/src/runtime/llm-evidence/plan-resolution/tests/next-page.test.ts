@@ -155,14 +155,28 @@ test("a Next page step in any other shape is refused at the key, naming the shap
     [{ list: 7 }, "nextPage.list"],
     [{ control: "t1" }, "nextPage"],
     [{ item: "li.result", next: "a.next", maxPages: 2 }, "nextPage.maxPages"],
-    [{ item: "li.result", next: "a.next", pagination: { next: "a.more" } }, "nextPage.next"],
-    ["extraction.1", "nextPage"]
+    [{ item: "li.result", next: "a.next", pagination: { next: "a.more" } }, "nextPage.next"]
   ];
   for (const [nextPage, position] of malformed) {
     assert.deepEqual(await resolve(runtime, NEXT_PAGE_NODE, { nextPage }), refusedAt("web.handle.malformed", position, NEXT_PAGE_SHAPE), JSON.stringify(nextPage));
   }
   // A handle anywhere else on the step is misplaced, and it belongs in nextPage.
   assert.deepEqual(await resolve(runtime, NEXT_PAGE_NODE, { nextPage: { list: extraction }, selector: { handle: extraction } }), refusedAt("web.handle.misplaced", "selector", NEXT_PAGE_SHAPE));
+});
+
+// Lane C round 13 (`run-mv66s8yl-fbbfa221`, revision 2) wrote `nextPage: extraction.1` and was
+// refused `web.handle.misplaced`. An extraction handle names a list and nothing else on this step.
+test("a list handle written alone is the list: bare, or as {handle, location?} as the script format writes it", async () => {
+  const runtime = runtimeOver("product-catalog-largest");
+  const { extraction } = await detect(runtime);
+  const expected = resolvedTo({ item: CARD, pagination: { next: testId("pagination-next") } });
+  assert.deepEqual(await resolve(runtime, NEXT_PAGE_NODE, { nextPage: extraction }), expected);
+  assert.deepEqual(await resolve(runtime, NEXT_PAGE_NODE, { nextPage: { handle: extraction } }), expected);
+  // Read as `{list}`, so it is refused as a list is when it names none.
+  assert.deepEqual(await resolve(runtime, NEXT_PAGE_NODE, { nextPage: "extraction.999" }), refusedAt("web.handle.unknown", "nextPage.list"));
+  // A control written alone does not say which list it moves: refused beside the shape it goes in.
+  const next = shownHandle(await look(runtime), "Next page");
+  assert.deepEqual(await resolve(runtime, NEXT_PAGE_NODE, { nextPage: next }), refusedAt("web.handle.malformed", "nextPage", NEXT_PAGE_SHAPE));
 });
 
 test("a Run Output node naming Next page resolves its payload as the step itself would", async () => {

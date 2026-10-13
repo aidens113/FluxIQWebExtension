@@ -75,6 +75,15 @@
 // page with no qualifying item is an ordinary pass of a loop, not a failed
 // read, and its rejected rows are not the instruction's.
 //
+// **The stored columns (t489).** Before anything else, the names the record
+// output writes for its columns are read against the read's own columns by the
+// one function the plan resolver reads them with at submit
+// (`./stored-columns.ts`): a name matching a column renames that column in the
+// read, and a name matching none refuses the node, naming it and the read's
+// columns. So a record output accepted at submit is one this dispatch stores,
+// and run `run-mv66sc3c-c47e74b8`'s schema of `name` and `mutualFriends` over a
+// detected read can no longer pass one and fail the other.
+//
 // A request that does not parse derives nothing and moves nothing: it is sent
 // as authored, and the dispatch refuses it with its own reason.
 
@@ -99,6 +108,7 @@ import { webAutomationDerivedRecordOutput } from "./derived-record-output";
 import { webAutomationExtractListOnePageRead } from "./one-page-read";
 import { webAutomationReconciledRecordOutput } from "./reconciled-record-output";
 import { WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH } from "./records-path";
+import { webAutomationStoredColumnIssues, webAutomationStoredColumns, type WebAutomationStoredColumnName } from "./stored-columns";
 
 /** The dispatch payload's fields beside `outputId`, or the node's refusal when its record output cannot be saved. */
 export type WebAutomationExtractListDispatch =
@@ -111,14 +121,18 @@ const ENCRYPT_UNAVAILABLE_ISSUE = "record_schema.encrypt_unavailable";
 export function webAutomationExtractListDispatch(nodeParameters: JsonObject): WebAutomationExtractListDispatch {
   const { recordOutput: authored, ...rest } = nodeParameters;
   if (isJsonObject(rest.extractList) && webAutomationExtractListPagesBeyondOne(rest.extractList.paginate)) return { ok: false, result: pagingRetiredRefusal() };
-  const written = webAutomationExtractListRequestValue(rest.extractList);
+  const read = webAutomationExtractListRequestValue(rest.extractList);
+  const stored = read === undefined ? undefined : webAutomationStoredColumns(authored, read);
+  if (stored?.ok === false) return { ok: false, result: unreadColumnsRefusal(stored.unread, stored.columns) };
+  const written = stored?.request ?? read;
   const narrowed = written === undefined ? undefined : webAutomationDeclaredColumnsRead(authored, written);
   const request = narrowed?.request ?? written;
-  // A request that parsed was an object, as written or as narrowed.
-  const sent = narrowed === undefined ? rest.extractList as JsonObject : narrowed.request as unknown as JsonObject;
+  // A request that parsed was an object, as written, renamed or narrowed.
+  const sent = narrowed !== undefined ? narrowed.request as unknown as JsonObject
+    : stored?.renamed === true ? stored.request as unknown as JsonObject : rest.extractList as JsonObject;
   const onePage = request === undefined ? undefined : webAutomationExtractListOnePageRead(sent, request);
-  const read = onePage === undefined ? rest : { ...rest, extractList: onePage.page };
-  const timed = request !== undefined && leftDefault(read.timeoutMs) ? { ...read, timeoutMs: WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS } : read;
+  const page = onePage === undefined ? rest : { ...rest, extractList: onePage.page };
+  const timed = request !== undefined && leftDefault(page.timeoutMs) ? { ...page, timeoutMs: WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS } : page;
   const parameters = withFlowAsks(timed, request);
   const declared = authored === undefined || authored === null
     ? request === undefined ? undefined : webAutomationDerivedRecordOutput(request)
@@ -209,6 +223,42 @@ function withRecordsPath(authored: JsonValue): JsonValue {
   return { ...authored, recordsPath: WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH };
 }
 
+/** How much of a column list one failure sentence holds (Core bounds `expected` and `actual`). */
+const FAILURE_SENTENCE_MAX = 900;
+
+/**
+ * The node's refusal of a record output naming columns its read does not read
+ * (`./stored-columns.ts`): Core's `record_output.invalid`, with the names and
+ * the read's columns said in `expected` and `actual`, which reach the model's
+ * trial feedback. Submit refuses the same names (`plan-resolution`), so a Flow
+ * built through it never arrives here; a Flow saved before t489 can.
+ */
+function unreadColumnsRefusal(unread: readonly WebAutomationStoredColumnName[], columns: readonly string[]): AutomationNodeExecutionResult {
+  const code = "record_output.invalid";
+  // `{code, field, valid}` each, the one shape Core's trial feedback reads (`./stored-columns.ts`).
+  const issues = webAutomationStoredColumnIssues(unread, columns) as unknown as JsonObject[];
+  const failure: AutomationStudioFailureRecord = {
+    category: "graph_validation_or_unknown_node",
+    code,
+    retryable: false,
+    stage: "dispatch",
+    expected: bounded(`recordOutput names only columns the read reads: ${columns.join(", ")}`),
+    actual: bounded(`recordOutput names columns the read does not read: ${unread.map((name) => name.written).join(", ")}`)
+  };
+  return {
+    status: "failed",
+    route: "failed",
+    effects: [],
+    outputs: { error: { code, issues } },
+    message: "Save extracted records names columns the list does not read, so the list was not read.",
+    failure
+  };
+}
+
+function bounded(sentence: string): string {
+  return sentence.length <= FAILURE_SENTENCE_MAX ? sentence : `${sentence.slice(0, FAILURE_SENTENCE_MAX - 3)}...`;
+}
+
 function recordOutputRefusal(issues: readonly string[]): AutomationNodeExecutionResult {
   const encryptUnavailable = issues.includes(ENCRYPT_UNAVAILABLE_ISSUE);
   const code = encryptUnavailable ? "record_output.encrypt_unavailable" : "record_output.invalid";
@@ -222,7 +272,8 @@ function recordOutputRefusal(issues: readonly string[]): AutomationNodeExecution
     status: "failed",
     route: "failed",
     effects: [],
-    outputs: { error: { code, issues: [...issues] } },
+    // Core's codes as issues of the one shape (`./stored-columns.ts`): a code, with no field Core's parser names.
+    outputs: { error: { code, issues: issues.map((issue) => ({ code: issue })) } },
     message: encryptUnavailable
       ? "Save extracted records asks to encrypt a field, which is not available yet, so the list was not read."
       : "Save extracted records is not a valid record output, so the list was not read.",
