@@ -64,6 +64,16 @@
 // excluding: with nothing else left, the contradicting column is still the
 // answer, because a guess beats a refusal.
 //
+// ## A guess that swaps a part of the name is not a guess (t497)
+//
+// A nearest match is accepted only where the written name is the column's name
+// written short, long or misspelt. Where the two share a family of tokens and
+// each keeps a token the other does not answer -- a key from another detection
+// of the same card, `record_outcome` for `record_action` -- the name means a
+// different column, and the match is refused (`./swapped-name.ts` states the
+// rule and the run behind it). The caller then refuses the name with the read's
+// columns, which is one corrected step rather than trials on the wrong column.
+//
 // ## A name that means a kind of column, where no name answers
 //
 // A detection over a page styled with hashed class names labels its columns by
@@ -88,6 +98,7 @@ import {
   type WebAutomationExtractConditionSaying,
   type WebAutomationExtractField
 } from "../../actions/extraction";
+import { webExtractionNameSwapsPart } from "./swapped-name";
 
 /** The column a written name resolved to, and how much of that was a guess. */
 export type WebExtractionColumnMatch = {
@@ -118,11 +129,22 @@ export function webExtractionMatchedColumn(
   if (named === undefined) return look.headerOnly ? undefined : columnByMeaning(written, detected);
   // Only a guess stands a column aside. An exact or normalized hit is the name,
   // and Core's own `preferShape` already prefers the right shape among several.
-  if (named.how !== "nearest" || wanted === undefined) return matchedAlias(named, aliases);
+  if (named.how !== "nearest" || wanted === undefined) return unswapped(written, named, aliases);
   const apart = aliases.filter((alias) => alias.accepts === undefined || alias.accepts === wanted);
-  if (apart.length === 0 || apart.length === aliases.length) return matchedAlias(named, aliases);
+  if (apart.length === 0 || apart.length === aliases.length) return unswapped(written, named, aliases);
   const best = automationStudioMatchName(written, apart, options);
-  return best === undefined ? matchedAlias(named, aliases) : matchedAlias(best, apart);
+  return best === undefined ? unswapped(written, named, aliases) : unswapped(written, best, apart);
+}
+
+/**
+ * The column a guess landed on, or `undefined` when the guess swapped a part of
+ * the name for another and so names a different column (`./swapped-name.ts`,
+ * t497). A refused guess does not fall back to a column by meaning: the name
+ * did name a family of columns, and the member it named is not in this read.
+ */
+function unswapped(written: string, named: AutomationStudioNameMatch, aliases: readonly ColumnAlias[]): WebExtractionColumnMatch | undefined {
+  if (named.how === "nearest" && webExtractionNameSwapsPart(written, named.id)) return undefined;
+  return matchedAlias(named, aliases);
 }
 
 /**

@@ -49,9 +49,7 @@ import { webAutomationExtractListRequestValue, type WebAutomationExtractListRequ
 import { webAutomationExtractListDispatch, webAutomationStoredColumnIssues, webAutomationStoredColumns, type WebAutomationRecordOutputIssue } from "../../../../output-nodes";
 import type { WebLlmNameAssumptionSaid } from "../../name-assumption";
 import type { WebPlanValuePath } from "../handle-tokens";
-
-/** One issue a refusal carries beside its codes, in the shape Core reads on a refused answer (header). */
-export type WebPlanRefusalIssue = { code: string; field?: string; valid?: string[] };
+import { WEB_PLAN_ISSUE_CODE, webPlanBoundedIssues, type WebPlanRefusalIssue } from "./refusal-issues";
 
 /** One reason the step cannot be dispatched as written: the code, where, the codes to say after it, and its issues. */
 export type WebPlanUndispatchable = {
@@ -61,11 +59,6 @@ export type WebPlanUndispatchable = {
   issues: readonly WebPlanRefusalIssue[];
 };
 
-/** Core's bounds on a refusal's codes and issues (`plan-parameter-resolution.ts`). */
-const ISSUE_CODE = /^[a-z0-9_.:-]{1,100}$/iu;
-const ISSUE_NAME = /^[A-Za-z0-9_.:-]{1,200}$/u;
-const MAX_ISSUES = 16;
-const MAX_ISSUE_NAMES = 64;
 /** The issue a record output naming a column its read does not read carries (`output-nodes/extract-list/stored-columns.ts`). */
 const COLUMN_NOT_READ = "record_output.column_not_read";
 /** Core's issues of a `process` naming a field the stored schema does not hold as a column. */
@@ -99,7 +92,7 @@ export function webPlanUndispatchable(parameters: JsonObject): WebPlanUndispatch
   const stored = read === undefined ? undefined : webAutomationStoredColumns(parameters.recordOutput, read);
   if (stored?.ok === false) {
     // The dispatch's own column issues, under the reason this refusal gives, so Core says each beside it.
-    const issues = bounded(webAutomationStoredColumnIssues(stored.unread, stored.columns)
+    const issues = webPlanBoundedIssues(webAutomationStoredColumnIssues(stored.unread, stored.columns)
       .filter((issue) => issue.code === COLUMN_NOT_READ)
       .map((issue) => ({ ...issue, code: "web.handle.unknown_field" })));
     return stored.unread.map((name, index) => ({ code: "web.handle.unknown_field", path: ["recordOutput", ...name.path], details: [], issues: index === 0 ? issues : [] }));
@@ -109,25 +102,14 @@ export function webPlanUndispatchable(parameters: JsonObject): WebPlanUndispatch
   const error = dispatch.result.outputs?.error;
   const issues = isJsonObject(error) && Array.isArray(error.issues) ? error.issues.flatMap((issue) => issueOf(issue)) : [];
   const code = dispatch.result.failure?.code ?? "";
-  const details = [...new Set([code, ...issues.map((issue) => issue.code)])].filter((issue) => ISSUE_CODE.test(issue));
+  const details = [...new Set([code, ...issues.map((issue) => issue.code)])].filter((issue) => WEB_PLAN_ISSUE_CODE.test(issue));
   const columns = issues.some((issue) => COLUMN_ISSUES.has(issue.code));
   return [{
     code: columns ? "web.handle.unknown_field" : "web.handle.malformed",
     path: code.startsWith("record_output.") ? ["recordOutput"] : ["extractList"],
     details,
-    issues: bounded(issues.filter((issue) => issue.field !== undefined || issue.valid !== undefined))
+    issues: webPlanBoundedIssues(issues.filter((issue) => issue.field !== undefined || issue.valid !== undefined))
   }];
-}
-
-/** The issues as Core keeps them (header): at most sixteen, each code in its alphabet, each name an identifier, at most 64 names. */
-function bounded(issues: readonly WebAutomationRecordOutputIssue[]): WebPlanRefusalIssue[] {
-  return issues.filter((issue) => ISSUE_CODE.test(issue.code)).slice(0, MAX_ISSUES).map((issue) => {
-    const kept: WebPlanRefusalIssue = { code: issue.code };
-    if (issue.field !== undefined && ISSUE_NAME.test(issue.field)) kept.field = issue.field;
-    const valid = (issue.valid ?? []).filter((name) => ISSUE_NAME.test(name)).slice(0, MAX_ISSUE_NAMES);
-    if (valid.length > 0) kept.valid = valid;
-    return kept;
-  });
 }
 
 /** One of the dispatch's issues: an object of the one shape, or a bare code as an older producer writes it. */

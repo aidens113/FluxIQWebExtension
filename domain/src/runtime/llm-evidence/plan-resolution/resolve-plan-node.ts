@@ -120,7 +120,7 @@ import { webAutomationOutputNodeId, webAutomationUrlPath } from "../../../output
 import { webLlmNameAssumptions, type WebLlmNameAssumption, type WebLlmNameAssumptionSaid } from "../name-assumption";
 import type { WebLlmExtractionHandles } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
-import { resolveWebExtractionSlot, webPlanStoredColumns, webPlanUndispatchable, type WebPlanRefusalIssue } from "./extraction";
+import { resolveWebExtractionSlot, webPlanSlotRefusal, webPlanStoredColumns, webPlanUndispatchable, type WebPlanRefusalIssue } from "./extraction";
 import { webPlanStepFoundByTooLittle } from "./identity-guard";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
@@ -563,7 +563,7 @@ function resolveNode(nodeDefinitionId: string, written: JsonObject, authored: Sc
           assumed.push({ path: [key, ...entry.path], written: entry.written, field: entry.field, how: entry.how, score: entry.score });
         }
       } else if (slot.status === "refused") {
-        refusals.push({ code: slot.issue, kind: "extraction", path: [key, ...slot.path], fits: slot.expected });
+        refusals.push(webPlanSlotRefusal(key, slot));
       }
       else {
         const frameId = declaredFrame(parameters.browserFrameId);
