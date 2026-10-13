@@ -49,74 +49,135 @@ const SWALLOWED_EVENTS = ["pointerdown", "mousedown", "pointerup", "mouseup", "c
  */
 const DRAIN_TIMEOUT_MS = 10_000;
 
-type PickSession = {
+type PickLease = {
   readonly sessionId: string;
   readonly form: ExtractionPickForm;
-  /** `picking`, waiting for the press; `draining`, the pick is made and the rest of its press is being absorbed. */
-  phase: "picking" | "draining";
+  outcome: "picking" | "picked" | "refused";
 };
 
+type PickSession = {
+  readonly lease: PickLease;
+  phase: "picking" | "draining";
+  readonly swallow: EventListener;
+  readonly track: EventListener;
+  readonly escape: EventListener;
+  timer?: ReturnType<typeof setTimeout>;
+  timerToken?: object;
+};
+
+let lease: PickLease | undefined;
 let session: PickSession | undefined;
 let hovered: Element | undefined;
-let drainTimer: ReturnType<typeof setTimeout> | undefined;
+// IDs prove only local retirement, never arrival order. Retain until this
+// content document ends or an explicit administrative reset occurs.
+const retired = new Set<string>();
 
-/** Puts the overlay up and takes the page's pointer events until a pick is made or the pick is stopped. */
-export function startPick(sessionId: string, form: ExtractionPickForm): void {
-  stopPick();
-  session = { sessionId, form, phase: "picking" };
+/** Accept an unseen lease or rearm a refused current pick; duplicate starts preserve a successful choice. */
+export function startPick(sessionId: string, form: ExtractionPickForm): boolean {
+  if (retired.has(sessionId)) return false;
+  if (lease?.sessionId === sessionId) {
+    if (lease.outcome !== "refused") return true;
+    releaseSession(session);
+    lease.outcome = "picking";
+  } else {
+    if (lease) retired.add(lease.sessionId);
+    releaseSession(session);
+    lease = { sessionId, form, outcome: "picking" };
+  }
+  const accepted = lease;
+  const current: PickSession = {
+    lease: accepted, phase: "picking",
+    swallow: event => swallowEvent(current, event),
+    track: event => trackPointer(current, event as PointerEvent),
+    escape: event => cancelOnEscape(current, event as KeyboardEvent)
+  };
+  session = current;
   openPickerOverlay();
-  for (const type of SWALLOWED_EVENTS) window.addEventListener(type, swallowEvent, true);
-  window.addEventListener("pointermove", trackPointer, true);
-  window.addEventListener("keydown", cancelOnEscape, true);
+  for (const type of SWALLOWED_EVENTS) window.addEventListener(type, current.swallow, true);
+  window.addEventListener("pointermove", current.track, true);
+  window.addEventListener("keydown", current.escape, true);
+  return true;
 }
 
-/** Gives the page back: the overlay goes, the listeners go, and the session is forgotten. */
+/** Idempotent matching cancellation; an unseen cancellation fences a later delivery of that same ID. */
+export function cancelPick(sessionId: string): void {
+  retired.add(sessionId);
+  if (lease?.sessionId !== sessionId) return;
+  releaseSession(session);
+  lease = undefined;
+}
+
+/** Confirm only the accepted successful choice, or the compatible idle never-retired definition command. */
+export function preparePickRecord(sessionId: string): boolean {
+  if (retired.has(sessionId)) return false;
+  if (!lease) return true;
+  if (lease.sessionId !== sessionId || lease.outcome !== "picked") return false;
+  releaseSession(session);
+  return true;
+}
+
+/** Explicit administrative reset. Ordinary drains, cancellation and replacement never forget retirement. */
 export function stopPick(): void {
-  if (drainTimer) clearTimeout(drainTimer);
-  drainTimer = undefined;
-  if (session) {
-    for (const type of SWALLOWED_EVENTS) window.removeEventListener(type, swallowEvent, true);
-    window.removeEventListener("pointermove", trackPointer, true);
-    window.removeEventListener("keydown", cancelOnEscape, true);
-  }
+  releaseSession(session);
+  lease = undefined;
+  retired.clear();
+}
+
+function currentSession(current: PickSession): boolean {
+  return session === current && lease === current.lease;
+}
+
+/** Gives the page back without discarding a choice awaiting confirmation. */
+function releaseSession(current: PickSession | undefined): void {
+  if (!current || !currentSession(current)) return;
+  if (current.timer !== undefined) clearTimeout(current.timer);
+  delete current.timerToken;
+  for (const type of SWALLOWED_EVENTS) window.removeEventListener(type, current.swallow, true);
+  window.removeEventListener("pointermove", current.track, true);
+  window.removeEventListener("keydown", current.escape, true);
   session = undefined;
   hovered = undefined;
   closePickerOverlay();
 }
 
-function swallowEvent(event: Event): void {
+function swallowEvent(current: PickSession, event: Event): void {
+  if (!currentSession(current)) return;
   event.preventDefault();
   event.stopImmediatePropagation();
-  const current = session;
-  if (!current) return;
   if (current.phase === "picking" && event.type === "pointerdown") {
     takePick(current, event as PointerEvent);
     return;
   }
   if (current.phase === "draining" && (event.type === "click" || event.type === "auxclick")) {
-    stopPick();
+    releaseSession(current);
     return;
   }
-  if (current.phase === "draining") restartDrainTimer();
+  if (current.phase === "draining") restartDrainTimer(current);
 }
 
-/** The press chose an element: the overlay comes down, the worker is told, and the rest of the press is absorbed. */
+/** Structural pick and confirmation ownership outlive the swallowed physical press. */
 function takePick(current: PickSession, event: PointerEvent): void {
   current.phase = "draining";
   const target = pickTarget(event);
+  const message = pickedMessage(current.lease, target);
+  current.lease.outcome = message.proposal || message.element ? "picked" : "refused";
   closePickerOverlay();
   hovered = undefined;
-  restartDrainTimer();
-  void chrome.runtime.sendMessage(pickedMessage(current, target)).catch(() => undefined);
+  restartDrainTimer(current);
+  void chrome.runtime.sendMessage(message).catch(() => undefined);
 }
 
-function restartDrainTimer(): void {
-  if (drainTimer) clearTimeout(drainTimer);
-  drainTimer = setTimeout(() => stopPick(), DRAIN_TIMEOUT_MS);
+function restartDrainTimer(current: PickSession): void {
+  if (current.timer !== undefined) clearTimeout(current.timer);
+  const token = {};
+  current.timerToken = token;
+  current.timer = setTimeout(() => {
+    if (currentSession(current) && current.timerToken === token) releaseSession(current);
+  }, DRAIN_TIMEOUT_MS);
 }
 
 /** What the frame tells the worker. A pick it cannot propose an extraction for says so in the propose vocabulary. */
-function pickedMessage(current: PickSession, target: Element | null): ExtractionPickedMessage {
+function pickedMessage(current: PickLease, target: Element | null): ExtractionPickedMessage {
   if (!target) return { type: EXTRACTION_PICKED_MESSAGE, sessionId: current.sessionId, refused: "target_not_found" };
   if (current.form === "value") {
     return { type: EXTRACTION_PICKED_MESSAGE, sessionId: current.sessionId, element: pickedElement(target) };
@@ -147,12 +208,12 @@ function pickTarget(event: MouseEvent): Element | null {
   return under && !isExtensionUiNode(under) ? under : null;
 }
 
-function trackPointer(event: PointerEvent): void {
-  if (session?.phase !== "picking") return;
+function trackPointer(current: PickSession, event: PointerEvent): void {
+  if (!currentSession(current) || current.phase !== "picking") return;
   const target = pickTarget(event);
   if (target === (hovered ?? null)) return;
   hovered = target ?? undefined;
-  pointPickerOverlay(target, caption(session.form, target));
+  pointPickerOverlay(target, caption(current.lease.form, target));
 }
 
 /**
@@ -180,13 +241,15 @@ function caption(form: ExtractionPickForm, target: Element | null): string {
  * a pick the proposal is already on its way, and the rest of that press is being
  * drained; cancelling then would throw away what the user just chose.
  */
-function cancelOnEscape(event: KeyboardEvent): void {
-  if (event.key !== "Escape") return;
+function cancelOnEscape(current: PickSession, event: KeyboardEvent): void {
+  if (!currentSession(current) || event.key !== "Escape") return;
   event.preventDefault();
   event.stopImmediatePropagation();
-  const current = session;
-  stopPick();
-  if (current?.phase !== "picking") return;
-  const cancelled: ExtractionPickCancelledMessage = { type: EXTRACTION_PICK_CANCELLED_MESSAGE, sessionId: current.sessionId };
+  if (current.phase !== "picking") {
+    releaseSession(current);
+    return;
+  }
+  cancelPick(current.lease.sessionId);
+  const cancelled: ExtractionPickCancelledMessage = { type: EXTRACTION_PICK_CANCELLED_MESSAGE, sessionId: current.lease.sessionId };
   void chrome.runtime.sendMessage(cancelled).catch(() => undefined);
 }
