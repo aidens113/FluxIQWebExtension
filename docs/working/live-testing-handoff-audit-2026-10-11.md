@@ -258,6 +258,23 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
 
 ## Work Ledger
 
+### 2026-10-13 - t491 and t492 merged; t493 in progress
+
+- Agent: Claude senior supervisor; t491-t493 workers.
+- Changed: t491 the stall note says "submit" only when Core's acts record shows every act covered, else names
+  untried routes (unused controls, other page-search words, back to a listing); `find_on_page` lists up to ten close
+  matches after exact ones, each naming the query words it lacks. t492 run, subflow and node ids follow the
+  instructions and policy gates in the judge/result-check packet; the confirm-requests oracle requires every
+  unselected request still pending (server answers in non-rendered script elements, which the extension's page
+  view, identity and extraction skip: `rendered-elements.ts:61`, `identity/record.ts:378`). Survey of oracles blind to
+  an over-act: job-board apply-quillmark (and -check-first), company-website book-service and quote-request,
+  everything-store buy-kettle, bigbox pickup-order (weak); photo-social moon-jar-price unclear.
+- Validation: supervisor after dev merges: t491 Core llm "186 passed (186)" files, "1871 passed"; domain
+  llm-evidence "# pass 1022"; t492 Core llm and recovery "238 passed (238)", "2459 passed"; social-network-feed
+  scenario tests "# pass 28 / # fail 0"; typechecks exit 0; Core merges gated by `pnpm check`. Pushed Core
+  `5d2e0652`, downstream `66ab0ae1`.
+- Outcome: Accepted (t491, t492); t493 in progress.
+
 ### 2026-10-13 - Round 14: D passed and replayed; B stuck finding a product; C falsely accepted 10 of 13 rows
 
 - Agent: Claude senior supervisor; debug workers.
@@ -273,7 +290,18 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
   passed, but the oracle got 10 of 13 rows (17 collected, 7 in order); the build used 537.9 s of 540 s. Debug
   dispatched.
 - Validation: spend-ledger finish lines; replay receipts and C's `evaluation.json` extraction quoted above.
-- Outcome: In progress.
+- Debugs (lane trees):
+  - B: the page view showed the right napkins whole (a "100 Count | Options" tile with a "250 Count" size chip);
+    the model chose a 3-Pack whose title held the exact name; Core's no-progress note said "submit" while the model
+    still needed the right pack (`stall-redirect.ts:193`); `find_on_page` matched only literal substrings. Not
+    element detection.
+  - D: pass confirmed (4/4, 8/8, four Confirms each once, no undo); t485 learned an 8.1 s pace; t489 columns agreed;
+    decisions 86.2% cached. Found: trial 1 confirmed all 8 requests and the oracle could not see it (D6); the judge's
+    per-trial ids sat early in its request (36% of cost).
+  - C: a `recordOutput.process.where` (name not contains "Charging Case") dropped 3 correct rows; judges saw only
+    `filteredOut: 5`; the left-out guard read only the read's own conditions. Time played no part (build 281 s;
+    537.9 s was the whole Lab run). A datasetId-only change gave a refuted Flow a second trial.
+- Outcome: Revised. Fixes t491 (stall note, near matches), t492 (judge prefix, over-act oracle), t493 (processed-out rows).
 
 ### 2026-10-13 - t489 and t490 merged; the second sweep; round 14 prepared
 
