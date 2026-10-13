@@ -270,7 +270,19 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
     `replay-mv6f1713-07253526` passed (4/4, goal true with the pending-request facts, hash equal, all five zero).
 - Validation: spend-ledger finish lines; each run's `evaluation.json` verdict and oracle "passed" read by the
   supervisor (C extraction 13/13 by position, 52/52 fields); replay receipts quoted above.
-- Outcome: In progress. Full debugs dispatched for all three; C's qualification build 2 waits for C's debug.
+- Debugs: C build 1 sound (13 oracle rows, no site band, each left-out row checked; a false yes in trial 2 blocked by
+  the other judge and the naming guard); t489 live (page 2 called page 2, bare nextPage accepted). B pass confirmed (the
+  single napkins product, 250 Count, for pickup; soap untouched); t491's close matches led the model off the 3-Pack
+  decoy. D pass confirmed (9/9 final-state facts); no trial confirmed an unselected request, but exploration step 0027
+  confirmed one (Tom Becker), which the Lab reset hid - a supervisor question for the user (exploration acts on items
+  outside the request; touches the no-restrictions rule).
+- C qualification build 2 `run-mv6ff44s-01def7f6` failed $0.0625: trial 1 unconfirmed, a later revision judged no,
+  then three identical resubmits refused `flow_script.only_after_misplaced` ended on the repeat guard. C's count
+  restarts. Debug dispatched.
+- Outcome: Revised. B and D confirmed on the t482-t494 pair; C not yet qualified.
+- Follow-up: t495 judge prefix (runId after the trial-identical startView) and "Testing, which keeps…" wording;
+  t496 the satisfied-step effect check that flips no_match, no_match, holds on an unchanged page (every B round);
+  t497 a loosely matched column name is refused or stated, never silently mapped (D rev 5).
 
 ### 2026-10-13 - t494 merged; round 15 launched
 
