@@ -17,7 +17,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../../../output-nodes";
-import { webAutomationRouteEffectHolds } from "../../../route-state";
+import { webAutomationRouteEffectHolds, webAutomationRouteEffectSeen } from "../../../route-state";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebAutomationLlmEvidenceRuntime } from "../..";
 import { shownHandle } from "../../page-view/tests/shown-page-lines";
 
@@ -208,4 +208,211 @@ test("the same effect never holds where the act's result is not on the page, wha
   for (const slide of [0, 1, 2]) {
     assert.equal(webAutomationRouteEffectHolds(effect, await routeStateOf(site({ metric: false, slide }))), false, `imperial units, banner on slide ${slide + 1}`);
   }
+});
+
+// t499: nor does it keep what a layer the page raised by itself shows (`../self-changing/page-raised.ts`). In
+// `run-mv6i28zl-a53d36db` (F1) a press that chose a store reloaded the page, the reloaded page put a chat card up by
+// itself, and the card's control was kept beside the store chip, so a later run on a page that remembered the store,
+// with the card closed, never saw the effect hold. Held on a generic page of that shape -- a recipe whose "Save to my
+// box" reloads onto a page with a help bubble -- and on a layer the capture recognised as the page's own (an
+// assistant, a promotion). What must not change is held beside it: a layer the press itself opened on the same
+// document -- a dialog, a panel that answers an add -- is the press's effect, and its controls stay required.
+
+const RECIPE_URL = "https://recipes.test/recipes/lemon-tart";
+const BOX = { x: 0, y: 0, width: 1280, height: 800 };
+
+type Raw = JsonObject & { selector: string };
+
+/** The captured list, with each element's `parent` written as its parent's index, as the capture writes it. */
+function listed(elements: ReadonlyArray<Raw & { under?: string }>): JsonObject[] {
+  return elements.map(({ under, ...element }) => {
+    if (under === undefined) return element;
+    const parent = elements.findIndex((other) => other.selector === under);
+    assert.ok(parent >= 0, `no element ${under}`);
+    return { ...element, parent };
+  });
+}
+
+/** The effect a candidate's step on `handle` carries, after exploration pressed it. */
+async function effectOf(runtime: WebAutomationLlmEvidenceRuntime, handle: string): Promise<JsonObject> {
+  const resolved = await runtime.resolvePlanNodeParameters({ ...SCOPE, nodeDefinitionId: CLICK, parameters: { target: { handle } }, declaredConsequences: ["modify_existing"], permission: PERMITTED, handleReach: "view_history" });
+  assert.equal(resolved.status, "resolved", JSON.stringify(resolved));
+  if (resolved.status !== "resolved" || !resolved.effect) throw new Error(`the step carries no effect: ${JSON.stringify(resolved)}`);
+  return resolved.effect;
+}
+
+const SAVE = "#save";
+const HELP = "#help";
+
+type Box = {
+  /** The recipe is in the reader's box. */
+  saved: boolean;
+  /** The help bubble is up. */
+  help: boolean;
+  /** Saving reloads the page; otherwise the page answers in place. */
+  reloads: boolean;
+  /** What the capture recognised the bubble as, if anything. */
+  kind?: string;
+};
+
+/**
+ * A recipe page. Pressing "Save to my box" saves the recipe, and the page then puts up a help bubble by itself:
+ * after the reload when saving reloads, or in place when it does not. The bubble's own "×" closes it.
+ */
+function recipe(start: Box): WebAutomationLlmEvidenceRuntime {
+  const state = { ...start };
+  let document = 1;
+  return createWebAutomationLlmEvidenceRuntime({
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.click") {
+        if (command.parameters.selector === SAVE && !state.saved) {
+          state.saved = true;
+          state.help = true;
+          if (state.reloads) document += 1;
+        }
+        if (command.parameters.selector === `${HELP} .close`) state.help = false;
+        return { status: "succeeded" };
+      }
+      if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
+      const elements: Array<Raw & { under?: string }> = [
+        { tagName: "a", selector: "#nav > a", visibleText: "All recipes", attributes: { href: "/recipes" } },
+        { tagName: "button", selector: "#box", visibleText: state.saved ? "My box: 1 recipe" : "My box: empty" },
+        ...(state.saved ? [] : [{ tagName: "button", selector: SAVE, visibleText: "Save to my box" }]),
+        { tagName: "a", selector: "#method > a", visibleText: "Jump to method", attributes: { href: "#method" } }
+      ];
+      const evidence: JsonObject = { navigation: { type: "navigate", timeOrigin: 1_000 * document } };
+      if (state.help) {
+        elements.push(
+          { tagName: "div", selector: HELP },
+          { tagName: "div", selector: `${HELP} > div`, visibleText: "Need help? ×", hasClickHandler: true, under: HELP },
+          { tagName: "span", selector: `${HELP} .close`, visibleText: "×", hasClickHandler: true, under: `${HELP} > div` }
+        );
+        const blocker: JsonObject = { selector: HELP, blocks: 1, blocked: ["#method > a"] };
+        if (state.kind !== undefined) blocker.kind = state.kind;
+        evidence.overlays = { tested: 4, blockedCount: 1, blockers: [blocker] };
+      }
+      return { status: "succeeded", payload: { snapshot: { url: RECIPE_URL, title: "Lemon tart", interactiveElements: listed(elements), evidence } } };
+    }
+  });
+}
+
+/** Exploration: look at the page with no bubble up, press "Save to my box", and take the step's effect. */
+async function savedEffect(shape: Pick<Box, "reloads" | "kind">): Promise<JsonObject> {
+  const runtime = recipe({ saved: false, help: false, ...shape });
+  const save = shownHandle((await run(runtime, LOOK, {})).evidence, "Save to my box");
+  const pressed = await run(runtime, CLICK, { target: { handle: save } });
+  assert.equal((pressed.evidence as { pageChanged?: boolean }).pageChanged, true);
+  return await effectOf(runtime, save);
+}
+
+async function holdsOn(effect: JsonObject, page: Box): Promise<boolean> {
+  return webAutomationRouteEffectHolds(effect, await routeStateOf(recipe(page)));
+}
+
+test("a press that reloads onto a page whose help bubble opens by itself keeps only what the press did", async () => {
+  const effect = await savedEffect({ reloads: true });
+  assert.equal((effect.added as string[]).length, 1, `the box chip alone: ${JSON.stringify(effect)}`);
+  // A later run on a page that remembers the recipe, the bubble closed (an earlier step closed it).
+  assert.equal(await holdsOn(effect, { saved: true, help: false, reloads: true }), true, "remembered, bubble closed");
+  assert.equal(await holdsOn(effect, { saved: true, help: true, reloads: true }), true, "remembered, bubble up");
+  assert.equal(await holdsOn(effect, { saved: false, help: false, reloads: true }), false, "not saved");
+  assert.equal(await holdsOn(effect, { saved: false, help: true, reloads: true }), false, "not saved, bubble up");
+});
+
+test("a layer the capture recognised as one the page puts up on its own is left out even on the same document", async () => {
+  for (const kind of ["assistant", "promotion"]) {
+    const effect = await savedEffect({ reloads: false, kind });
+    assert.equal((effect.added as string[]).length, 1, `${kind}: ${JSON.stringify(effect)}`);
+    assert.equal(await holdsOn(effect, { saved: true, help: false, reloads: false }), true, `${kind}: remembered, bubble closed`);
+    assert.equal(await holdsOn(effect, { saved: false, help: true, reloads: false, kind }), false, `${kind}: not saved`);
+  }
+});
+
+test("a layer of no recognised kind that came up on the same document is the press's, and stays required", async () => {
+  const effect = await savedEffect({ reloads: false });
+  assert.equal((effect.added as string[]).length, 3, `the chip and the layer's two controls: ${JSON.stringify(effect)}`);
+  assert.equal(await holdsOn(effect, { saved: true, help: true, reloads: false }), true);
+  assert.equal(await holdsOn(effect, { saved: true, help: false, reloads: false }), false);
+});
+
+const SERVINGS = "#servings";
+const DIALOG = "#servings-dialog";
+const LIST = "#add-to-list";
+const PANEL = "#list-panel";
+
+/**
+ * A recipe page on one document. "Serves 4" opens a modal dialog to change the servings and changes nothing else;
+ * "Add to shopping list" opens a panel that answers the add, and the header's list count goes up.
+ */
+function kitchen(start: { dialog: boolean; listed: boolean; panel: boolean }): WebAutomationLlmEvidenceRuntime {
+  const state = { ...start };
+  return createWebAutomationLlmEvidenceRuntime({
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType === "web.dom.click") {
+        if (command.parameters.selector === SERVINGS) state.dialog = true;
+        if (command.parameters.selector === LIST && !state.listed) {
+          state.listed = true;
+          state.panel = true;
+        }
+        return { status: "succeeded" };
+      }
+      if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
+      const elements: Array<Raw & { under?: string }> = [
+        { tagName: "a", selector: "#nav > a", visibleText: "All recipes", attributes: { href: "/recipes" } },
+        { tagName: "a", selector: "#list", visibleText: state.listed ? "Shopping list (1)" : "Shopping list", attributes: { href: "/list" } },
+        { tagName: "button", selector: SERVINGS, visibleText: "Serves 4" },
+        { tagName: "button", selector: LIST, visibleText: "Add to shopping list" }
+      ];
+      const dialogs: JsonObject[] = [];
+      const blockers: JsonObject[] = [];
+      if (state.dialog) {
+        elements.push(
+          { tagName: "div", selector: DIALOG, role: "dialog", accessibleName: "Change servings" },
+          { tagName: "button", selector: `${DIALOG} > button:nth-of-type(1)`, visibleText: "Serves 2", under: DIALOG },
+          { tagName: "button", selector: `${DIALOG} > button:nth-of-type(2)`, visibleText: "Serves 6", under: DIALOG },
+          { tagName: "button", selector: `${DIALOG} > button:nth-of-type(3)`, visibleText: "Done", under: DIALOG }
+        );
+        dialogs.push({ selector: DIALOG, role: "dialog", label: "Change servings", modal: true, bounds: BOX });
+        blockers.push({ selector: DIALOG, label: "Change servings", blocks: 4, blocked: ["#nav > a", "#list", SERVINGS, LIST] });
+      }
+      if (state.panel) {
+        elements.push(
+          { tagName: "div", selector: PANEL, role: "dialog", accessibleName: "Added to your list" },
+          { tagName: "a", selector: `${PANEL} > a`, visibleText: "View list", attributes: { href: "/list" }, under: PANEL },
+          { tagName: "button", selector: `${PANEL} > button:nth-of-type(1)`, visibleText: "Keep browsing", under: PANEL },
+          { tagName: "button", selector: `${PANEL} > button:nth-of-type(2)`, visibleText: "Close", under: PANEL }
+        );
+        dialogs.push({ selector: PANEL, role: "dialog", label: "Added to your list", modal: true, bounds: BOX });
+        blockers.push({ selector: PANEL, label: "Added to your list", blocks: 4, blocked: ["#nav > a", "#list", SERVINGS, LIST] });
+      }
+      const evidence: JsonObject = { navigation: { type: "navigate", timeOrigin: 1_000 } };
+      if (dialogs.length > 0) evidence.dialogs = { open: dialogs };
+      if (blockers.length > 0) evidence.overlays = { tested: 4, blockedCount: 4, blockers };
+      return { status: "succeeded", payload: { snapshot: { url: RECIPE_URL, title: "Lemon tart", interactiveElements: listed(elements), evidence } } };
+    }
+  });
+}
+
+async function pressedEffect(words: string): Promise<JsonObject> {
+  const runtime = kitchen({ dialog: false, listed: false, panel: false });
+  const handle = shownHandle((await run(runtime, LOOK, {})).evidence, words);
+  const pressed = await run(runtime, CLICK, { target: { handle } });
+  assert.equal((pressed.evidence as { pageChanged?: boolean }).pageChanged, true);
+  return await effectOf(runtime, handle);
+}
+
+test("a press that opens a dialog keeps the dialog's controls as its effect", async () => {
+  const effect = await pressedEffect("Serves 4");
+  assert.equal((effect.added as string[]).length, 3, `the dialog's three controls: ${JSON.stringify(effect)}`);
+  assert.equal(webAutomationRouteEffectHolds(effect, await routeStateOf(kitchen({ dialog: true, listed: false, panel: false }))), true, "the dialog is open");
+  assert.equal(webAutomationRouteEffectHolds(effect, await routeStateOf(kitchen({ dialog: false, listed: false, panel: false }))), false, "the dialog is closed");
+});
+
+test("a press whose panel answers it keeps the panel's controls beside the count it raised, so an add that never happened reads as not seen", async () => {
+  const effect = await pressedEffect("Add to shopping list");
+  assert.equal((effect.added as string[]).length, 4, `the count and the panel's three controls: ${JSON.stringify(effect)}`);
+  assert.equal(webAutomationRouteEffectSeen(effect, await routeStateOf(kitchen({ dialog: false, listed: true, panel: true }))), "seen");
+  assert.equal(webAutomationRouteEffectSeen(effect, await routeStateOf(kitchen({ dialog: false, listed: false, panel: false }))), "not_seen");
 });

@@ -26,6 +26,19 @@
 // has them left out of `added` and `removed` before the sample is taken.
 // Should nothing the act added be left, the effect is signed as before: an
 // effect that added nothing never holds, and the step keeps the effect it had.
+//
+// **Nor is what a layer the page raised by itself shows (t499).** A help or chat
+// bubble a page puts up on every load was up on the page a "Set as my store"
+// press reloaded, and its control was kept beside the store chip; a later run on
+// a page that remembered the store, with the bubble closed by an earlier step,
+// never saw the effect hold (`run-mv6i28zl-a53d36db` F1). A caller that can read
+// the capture's layers names the controls that sit only in such a layer
+// (`pageRaised`: read by `../../llm-evidence/plan-resolution/self-changing/page-raised.ts`,
+// hashed by `./layer-only.ts`), and they are left out of `added` -- not of
+// `removed`, which is signed from what the act's own page lost and is never
+// tested. When the act added nothing else, the layer is what the act opened (a
+// press that answers with a dialog on a new page), and its controls are kept.
+// The host's own `signRouteEffect` has route states only and names no layer.
 
 import type { JsonObject } from "fluxiq/core";
 import { WEB_ROUTE_EFFECT_FORMAT } from "./format";
@@ -33,16 +46,21 @@ import { webRoutePageFeatures } from "../page-features";
 
 const NONE: ReadonlySet<string> = new Set();
 
-export function webAutomationRouteEffect(before: JsonObject, after: JsonObject, selfChanging: ReadonlySet<string> = NONE): JsonObject {
+export function webAutomationRouteEffect(before: JsonObject, after: JsonObject, selfChanging: ReadonlySet<string> = NONE, pageRaised: ReadonlySet<string> = NONE): JsonObject {
   const from = webRoutePageFeatures(before);
   const to = webRoutePageFeatures(after);
-  const steady = signed(from.controlHashes, to.controlHashes, selfChanging);
-  const effect = (steady.added as string[]).length > 0 || selfChanging.size === 0 ? steady : signed(from.controlHashes, to.controlHashes, NONE);
+  // What is left out, most first: the first that leaves the act something it added is signed, else nothing is.
+  const tries = [new Set([...selfChanging, ...pageRaised]), selfChanging];
+  const effect = tries.map((left) => signed(from.controlHashes, to.controlHashes, left)).find((tried) => (tried.added as string[]).length > 0)
+    ?? signed(from.controlHashes, to.controlHashes, NONE);
   if (to.path !== from.path) effect.path = to.path;
   return effect;
 }
 
-/** The effect's hashes, leaving out every hash in `left`. */
+/**
+ * The effect's hashes, leaving out every hash in `left`. A layer's controls are
+ * on the page the act left, so leaving them out never changes `removed`.
+ */
 function signed(from: readonly string[], to: readonly string[], left: ReadonlySet<string>): JsonObject {
   return {
     v: WEB_ROUTE_EFFECT_FORMAT.version,
