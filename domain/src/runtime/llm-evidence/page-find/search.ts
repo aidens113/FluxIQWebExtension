@@ -3,9 +3,12 @@
 // The page view shows what has visible words or is a control. Everything else
 // -- a closed menu's items, a collapsed panel, an icon button's test id, a
 // field's name attribute -- is found here. Every element of the capture is
-// searched, hidden, off-page and text-less ones included, and nothing is
-// ranked: matches come in page order, fifty to a page, and the last line says
-// how to ask for the next fifty.
+// searched, hidden, off-page and text-less ones included, and exact matches
+// are not ranked: they come in page order, fifty to a page, and the last line
+// says how to ask for the next fifty. Once they are all shown, close matches
+// follow (t491, `./near.ts`): elements holding most or part of the query's
+// words but not as written, best first and capped, each marked `near` with
+// the query words it lacks.
 //
 // A match is printed as the view would print the element -- handle, kind, its
 // words in quotes -- so a handle found here is copied the same way as one read
@@ -24,6 +27,7 @@ import { present } from "../present";
 import type { WebLlmEvidenceElement } from "../elements";
 import type { WebLlmPageEvidence } from "../sanitize";
 import { quotedWords, undoubledWords, webLlmElementKind, webLlmElementWhere, webLlmElementWords } from "../page-view";
+import { webLlmNearMatches } from "./near";
 import { WEB_LLM_FIND_SCHEMA_VERSION } from "./schema-version";
 
 /** Matches to one page of the answer. */
@@ -50,21 +54,31 @@ export function webLlmFindOnPage(evidence: WebLlmPageEvidence, query: string, af
     return match === undefined ? [] : [{ element, match }];
   });
   const shown = matches.slice(after, after + WEB_LLM_FIND_PAGE_SIZE);
-  const lines = [`${matches.length} ${matches.length === 1 ? "match" : "matches"} for ${quotedWords(query)}`];
-  if (matches.length === 0 && after === 0) lines.push(nothingHere(evidence));
-  for (const { element, match } of shown) lines.push(matchLine(element, match, evidence));
   const left = matches.length - (after + shown.length);
+  const near = left === 0 && after <= matches.length
+    ? webLlmNearMatches(evidence.elements, query, new Set(matches.map(({ element }) => element)))
+    : { shown: [], more: 0 };
+  const lines = [`${matches.length} ${matches.length === 1 ? "match" : "matches"} for ${quotedWords(query)}`];
+  if (matches.length === 0 && after === 0) lines.push(nothingHere(evidence, near.shown.length > 0));
+  for (const { element, match } of shown) lines.push(matchLine(element, match, evidence));
   if (left > 0) lines.push(`… ${left} more: web.find_on_page ${JSON.stringify({ query, after: after + shown.length })}`);
+  const nearCount = near.shown.length + near.more;
+  if (nearCount > 0) lines.push(`${nearCount} close ${nearCount === 1 ? "match" : "matches"}, holding most or part of those words but not as written:`);
+  for (const { element, lacking } of near.shown) lines.push(nearLine(element, lacking, evidence));
+  if (near.more > 0) lines.push(`${near.more} more close ${near.more === 1 ? "match" : "matches"} not shown; search fewer words to narrow them.`);
   return present<WebLlmFindResult>({ schemaVersion: WEB_LLM_FIND_SCHEMA_VERSION, trust: evidence.trust, location: evidence.location, found: lines.join("\n") });
 }
 
 /** What an empty search says: only this page was read, and how to look across the site. */
-function nothingHere(evidence: WebLlmPageEvidence): string {
+function nothingHere(evidence: WebLlmPageEvidence, nearFollow: boolean): string {
   const fields = evidence.elements.filter((element) => webLlmElementKind(element) === "field[search]").map((element) => element.target);
   const across = fields.length === 0
     ? "To look across the site, follow a link to the page that lists it."
     : `To look across the site, type it into the site's search field ${fields.join(" or ")} and submit it, or follow a link to the page that lists it.`;
-  return `Nothing on this page holds those words, hidden elements included; find_on_page reads only the page you are on, never the rest of the site. ${across}`;
+  const none = nearFollow
+    ? "Nothing on this page holds those words as written, hidden elements included; the close matches below hold most or part of them. find_on_page"
+    : "Nothing on this page holds those words, hidden elements included; find_on_page";
+  return `${none} reads only the page you are on, never the rest of the site. ${across}`;
 }
 
 /** Where an element matched: in its words, or in a named field or attribute's value or name. */
@@ -106,6 +120,16 @@ function matchLine(element: WebLlmEvidenceElement, match: Match, evidence: WebLl
   const words = wordsOf(element);
   if (words !== undefined) parts.push(quotedWords(cut(words)));
   if (!match.inWords) parts.push(`(${match.field}=${quotedWords(windowAround(collapsed(match.value), match.at))})`);
+  parts.push(webLlmElementWhere(element, evidence.viewport));
+  return parts.join(" ");
+}
+
+/** A close match: as an exact one prints, marked `near` with the query words it lacks. */
+function nearLine(element: WebLlmEvidenceElement, lacking: string[], evidence: WebLlmPageEvidence): string {
+  const parts = [element.target, webLlmElementKind(element) ?? element.tag];
+  const words = wordsOf(element);
+  if (words !== undefined) parts.push(quotedWords(cut(words)));
+  parts.push(lacking.length === 0 ? "near, holds every word" : `near, lacks ${quotedWords(lacking.join(" "))}`);
   parts.push(webLlmElementWhere(element, evidence.viewport));
   return parts.join(" ");
 }
