@@ -57,6 +57,7 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationExtractListRequestRead, webAutomationExtractListRequestValue } from "../../../../actions/extraction";
 import type { WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../../structure";
+import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
 import { keptWebExtractionColumns, type WebExtractionColumnAssumption, type WebExtractionColumnIssue } from "./columns";
 import { keptWebExtractionConditions } from "./conditions";
@@ -94,8 +95,8 @@ export type WebExtractionSlotResolution =
   /**
    * `path` is where inside the value it was refused, and `expected` the shape
    * the refused key belongs in when it has one. `issues` names the field and
-   * the names it can use, where the refusal knows them: a condition's column
-   * neither vocabulary knows (`./conditions.ts`, t497).
+   * the names it can use, where the refusal knows them: a column `fields` or a
+   * condition names that none answers to (`./unknown-column-issues.ts`, t497, t502).
    */
   | { status: "refused"; issue: WebExtractionSlotIssue; path: WebPlanValuePath; expected?: WebExtractionSlotHint; issues?: WebPlanRefusalIssue[] };
 
@@ -146,7 +147,7 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
 
   const fieldsKey = value.columns !== undefined ? "columns" : "fields";
   const columns = keptWebExtractionColumns(value[fieldsKey], binding.extractList.fields, [fieldsKey]);
-  if (!columns.ok) return refused(columns.issue, columns.path);
+  if (!columns.ok) return refusedWith(columns);
   // Conditions are read against the columns the *detection* found, because the
   // mark that tells a sponsored card from an organic one is exactly the column
   // a table of products does not want -- and against the columns this plan
@@ -155,7 +156,7 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   const where = value.where === undefined
     ? undefined
     : keptWebExtractionConditions(value.where, { detected: binding.extractList.fields, kept: columns.fields }, ["where"]);
-  if (where !== undefined && !where.ok) return where.issues === undefined ? refused(where.issue, where.path) : { status: "refused", issue: where.issue, path: where.path, issues: where.issues };
+  if (where !== undefined && !where.ok) return refusedWith(where);
 
   const request: JsonObject = { item: binding.extractList.item, fields: columns.fields as unknown as JsonObject };
   // An empty clause resolves to no conditions, and the request carries no
@@ -244,4 +245,9 @@ function samePath(left: WebPlanValuePath, right: WebPlanValuePath): boolean {
 
 function refused(issue: WebExtractionSlotIssue, path: WebPlanValuePath): Refused {
   return { status: "refused", issue, path };
+}
+
+/** A refused `fields` or `where`, with the issues that name what it wrote and what it can use where it has them (t497, t502). */
+function refusedWith(failed: { issue: WebExtractionSlotIssue; path: WebPlanValuePath; issues?: WebPlanRefusalIssue[] | undefined }): Refused {
+  return present<Refused>({ status: "refused", issue: failed.issue, path: failed.path, expected: undefined, issues: failed.issues });
 }

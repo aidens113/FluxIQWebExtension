@@ -88,7 +88,8 @@
 // record output's columns, `{code: "web.handle.unknown_field", field, valid}`:
 // the name as written and every name the condition could use instead -- the
 // plan's own kept keys, then the detection's keys. Names and keys only, held to
-// Core's bounds (`./refusal-issues.ts`); a header with a space in it is not an
+// Core's bounds (`./refusal-issues.ts`, through `./unknown-column-issues.ts`, which since
+// t502 also says when the name is a sibling of a detected column); a header with a space in it is not an
 // identifier and is left out rather than quoted.
 //
 // **A name whose nearest column is a sibling is one neither vocabulary knows**
@@ -106,7 +107,8 @@ import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
 import { webExtractionComparedShape } from "../../../../output-nodes";
 import { webExtractionNamedColumn, type WebExtractionColumn, type WebExtractionColumnAssumption, type WebExtractionColumnIssue, type WebExtractionColumnLook } from "./columns";
-import { webPlanBoundedIssues, type WebPlanRefusalIssue } from "./refusal-issues";
+import type { WebPlanRefusalIssue } from "./refusal-issues";
+import { webPlanUnknownColumnIssues } from "./unknown-column-issues";
 import type { WebPlanValuePath } from "../handle-tokens";
 
 export type WebExtractionConditions =
@@ -287,9 +289,8 @@ function sortedKeys(value: unknown): unknown {
  * first, because those are the ones it chose, then the detection's.
  */
 function unknownColumn(named: string, columns: WebExtractionConditionColumns, path: WebPlanValuePath): Extract<WebExtractionConditions, { ok: false }> {
-  const written = named.startsWith(HEADER_PREFIX) ? named.slice(HEADER_PREFIX.length) : named;
   const valid = [...Object.keys(columns.kept), ...Object.keys(columns.detected)];
-  return { ok: false, issue: "web.handle.unknown_field", path, issues: webPlanBoundedIssues([{ code: "web.handle.unknown_field", field: written, valid }]) };
+  return { ok: false, issue: "web.handle.unknown_field", path, issues: webPlanUnknownColumnIssues(named, valid, columns.detected) };
 }
 
 /** The key the condition's column is named under: the first naming key written, or `header` (`columnName` has already refused two that disagree). */

@@ -18,6 +18,8 @@ const ACTION = "div_xk2p9q7_xm4r8t1_div_xa7s5d3_xf9g1h4";
 const COUNT = "div_xk2p9q7_xm4r8t1_span_xz8c2v6";
 /** A key of a later detection of the same card: a status text this read has no column for. */
 const ELSEWHERE = "div_xk2p9q7_xm4r8t1_div_xq1w2e3_xf9g1h4";
+/** The evidence a swapped name adds: the items changed since the detection, so a fresh detection is the way (t502). */
+const CHANGED = (field: string) => ({ code: "web.handle.columns_changed", field });
 
 const CARD: Record<string, WebAutomationExtractField> = {
   [TITLE]: { kind: "text", selector: "div.xk2p9q7 > a.xw3e6y2" },
@@ -32,7 +34,7 @@ test("a condition on another detection's key is refused at its field, naming it 
     ok: false,
     issue: "web.handle.unknown_field",
     path: ["where", 0, "field"],
-    issues: [{ code: "web.handle.unknown_field", field: ELSEWHERE, valid: ["title", TITLE, ACTION, COUNT] }]
+    issues: [{ code: "web.handle.unknown_field", field: ELSEWHERE, valid: ["title", TITLE, ACTION, COUNT] }, CHANGED(ELSEWHERE)]
   });
 });
 
@@ -43,7 +45,7 @@ test("a condition on a plain word with one part swapped is refused the same way;
   };
   const swapped = keptWebExtractionConditions([{ field: "record_outcome", contains: "done" }], { detected: words, kept: {} }, ["where"]);
   assert.equal(swapped.ok, false);
-  if (!swapped.ok) assert.deepEqual(swapped.issues, [{ code: "web.handle.unknown_field", field: "record_outcome", valid: ["record_label", "record_action"] }]);
+  if (!swapped.ok) assert.deepEqual(swapped.issues, [{ code: "web.handle.unknown_field", field: "record_outcome", valid: ["record_label", "record_action"] }, CHANGED("record_outcome")]);
 
   const short = keptWebExtractionConditions([{ field: "action", is: "present" }], { detected: words, kept: {} }, ["where"]);
   assert.equal(short.ok, true, JSON.stringify(short));
@@ -60,6 +62,6 @@ test("the resolved slot's refusal carries the issue, so the step's refusal can s
     status: "refused",
     issue: "web.handle.unknown_field",
     path: ["where", 0, "field"],
-    issues: [{ code: "web.handle.unknown_field", field: ELSEWHERE, valid: ["title", TITLE, ACTION, COUNT] }]
+    issues: [{ code: "web.handle.unknown_field", field: ELSEWHERE, valid: ["title", TITLE, ACTION, COUNT] }, CHANGED(ELSEWHERE)]
   });
 });

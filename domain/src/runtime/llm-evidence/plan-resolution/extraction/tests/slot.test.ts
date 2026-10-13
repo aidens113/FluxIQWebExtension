@@ -341,13 +341,19 @@ test("what cannot name one detected list or column is refused with where the han
   // `title` is not such a miss: the matcher plausibly relates ordinary title
   // vocabulary to product-name, which is the recovery this module promises.
   // `column-match.test.ts` holds the names that now resolve instead.
-  const unknownField: JsonObject[] = [
-    { handle: extraction, fields: { name: "banana" } },
-    { handle: extraction, fields: { name: "column:Name" } },
-    { item: { handle: extraction }, fields: { name: { handle: extraction, key: "banana" } } }
+  // Each refusal names what was written and the read's columns (t502).
+  const unknownField: Array<[JsonObject, string]> = [
+    [{ handle: extraction, fields: { name: "banana" } }, "banana"],
+    [{ handle: extraction, fields: { name: "column:Name" } }, "Name"],
+    [{ item: { handle: extraction }, fields: { name: { handle: extraction, key: "banana" } } }, "banana"]
   ];
-  for (const extractList of unknownField) {
-    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.unknown_field", "extractList.fields.0", EXTRACTION_HINT), JSON.stringify(extractList));
+  const columns = ["product-image_src", "product-image_alt", "product-name", "product-link", "product-price", "product-rating", "stock-badge"];
+  for (const [extractList, field] of unknownField) {
+    assert.deepEqual(
+      await resolve(runtime, EXTRACT_LIST_NODE, { extractList }),
+      { status: "refused", issueCodes: ["web.handle.unknown_field", EXTRACTION_HINT, "web.handle.unknown_field:extractList.fields.0"], issues: [{ code: "web.handle.unknown_field", field, valid: columns }] },
+      JSON.stringify(extractList)
+    );
   }
   const malformed: Array<[JsonObject, string]> = [
     [{ handle: extraction, fields: {} }, "extractList.fields"],
@@ -403,7 +409,9 @@ test("a refusal quotes where it went wrong by position, never a key or value the
   const runtime = runtimeOver(CATALOG);
   const { extraction } = await detect(runtime);
   const refusal = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { Jane_Doe: "product-name", "Card 4111": "Card 4111" } } });
-  assert.deepEqual(refusal, refusedAt("web.handle.unknown_field", "extractList.fields.1", EXTRACTION_HINT));
+  // The issue lists the read's columns; the written value is no identifier, so it is left out rather than quoted (t502).
+  const columns = ["product-image_src", "product-image_alt", "product-name", "product-link", "product-price", "product-rating", "stock-badge"];
+  assert.deepEqual(refusal, { status: "refused", issueCodes: ["web.handle.unknown_field", EXTRACTION_HINT, "web.handle.unknown_field:extractList.fields.1"], issues: [{ code: "web.handle.unknown_field", valid: columns }] });
   assert.equal(JSON.stringify(refusal).includes("Jane"), false);
   assert.equal(JSON.stringify(refusal).includes("4111"), false);
   // Every code is one Core admits: at most 100 characters of `[a-z0-9_.:-]`.
