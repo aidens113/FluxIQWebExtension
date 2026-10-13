@@ -100,6 +100,16 @@ Rules are AGENTS.md's testing rules and the audit's launch settings:
 
 Completed dispatch briefs are preserved in [the handoff brief archive](./adaptation-and-breadth-plan/archive/2026-10-13-codex-handoff-briefs.md). Current implementation briefs are added here.
 
+### Brief: codex-t518-complete-control-match
+- Repository: t518 downstream branch.
+- Task: allow additional live controls while requiring every saved historical control; fix delayed-banner false negative without fuzzy historical matching.
+- Required reads: Current State/live-capture report; route-state signature, comparator, format and owning tests; Core public signature size constant.
+- Owns (may edit): domain/src/runtime/route-state/signature.ts, compare-signatures.ts, signature-format.ts comments only if needed, tests/signature.test.ts and tests/recorded-recovery.test.ts; own live-capture report. No other domain/Core/extension/shared-doc edits.
+- Design: retain legacy sketch/digest fields. Add optional complete sorted fixed-width hash-set representation only when the whole signature fits Core's exported bound and count proves completeness; historical strict comparison may require set inclusion when both complete sets exist, with exact path/layers. Every expected hash must hold; empty expected set cannot match a nonempty live page. Missing full evidence retains strict digest/count equality. Nonhistorical fuzzy semantics unchanged.
+- Safety: reject malformed/incomplete hash sets, no truncated sample inclusion, no signature budget expansion, no secrets/names/paths in signatures. Missing one required effect/control on an otherwise identical large page remains a failure; extra unrelated controls may match only with full expected evidence.
+- Definition of done: fail-first added-live-controls regression, missing100th/malformed/oversized/missing-evidence/path/layer negatives, generic readiness route executes still-required read/filter; owning tests and domain source/test tsc pass. No browser/full suites/commits.
+- Report to: existing codex-t518-live-capture-coverage.md with checks/limits; root owns architecture docs and browser rerun.
+
 ## Inventory (2026-10-13)
 
 ### Drift variants
