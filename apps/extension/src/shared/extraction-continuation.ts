@@ -1,28 +1,18 @@
 import { webAutomationExtractionRejectedObservationsValue, type WebAutomationExtractionRejectionObservation } from "@fluxiq-web-extension/domain/client";
-// How a paginated `web.dom.extract_list` read outlives the document it began
-// in: the checkpoint the page hands the background worker before it follows a
-// pagination control, and the continuation the worker hands the next document.
+// Legacy content-reader checkpoint contracts, retained until its serial S7
+// cleanup removes the remaining consumers. Production worker transport no
+// longer carries read checkpoints. Next-page movement marks below remain live.
+// Checkpoints describe accumulated records, counts and the content reader's
+// previous progress. The old reader still imports them, but the production
+// worker neither acknowledges nor carries those row checkpoints. They must
+// never become storage, diagnostics or recording payloads.
 //
-// A read runs in the content script, and a Next that loads a new document
-// destroys that script with the command unanswered, so everything it had read
-// would go with it. So before each control is followed the page sends a
-// checkpoint -- the records and pages read so far, and the counts the read's own
-// account is built from -- and waits for it to be taken. When the command's reply is then lost, `runtime/extract-list-continuation.ts`
-// waits for the tab's new document and sends the same command again carrying
-// that checkpoint, and the new document's read goes on from it
-// (`content/extraction/list-reader.ts`).
-//
-// The checkpoint carries page values, exactly as the command's own reply does.
-// It crosses from the content script to the worker and back and is held only in
-// the worker's memory for the length of the command -- never in storage, a log,
-// or the recording -- which is the same place a reply's records already live.
-//
-// **`web.dom.next_page` crosses documents the same way, carrying no rows.**
+// **`web.dom.next_page` crosses documents carrying no rows.**
 // One step presses one control, so all a document it loads needs to know is
 // that the press was made, how the list moved, and what the landing has spent
 // on pages the server refused. The page sends that mark just before it presses,
 // and again before it reloads a refused landing; when the reply is lost, the
-// worker hands the next document the latest mark, and that document answers
+// Next-page transport hands the next document the latest mark, and it answers
 // whether the list arrived (`content/extraction/page-advance/`). A reply lost
 // before any mark pressed nothing, so the step goes out again from the start.
 

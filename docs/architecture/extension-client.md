@@ -19,6 +19,16 @@ authorization, and long-running work. The extension owns browser presence.
 
 ## Responsibilities
 
+Cross-document action transport belongs to Next page. The focused
+`runtime/next-page-continuation.ts` receives a validated movement mark before
+the page presses, then hands it to a replacement document to check the landing
+without another press. Matching tab, frame and token, refusal counts, the
+original deadline, document readiness and listener cleanup remain enforced.
+List reads use ordinary delivery for the current page, without a checkpoint
+token or a row-carrying worker listener. Legacy content-reader checkpoint
+contracts remain temporarily for its later cleanup; production dispatch still
+refuses stored multipage read requests with an explicit migration path.
+
 The extension:
 
 - connects to a local or hosted FluxIQ gateway URL;
