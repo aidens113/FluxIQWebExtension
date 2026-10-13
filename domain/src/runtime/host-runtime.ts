@@ -12,7 +12,7 @@
 // that binds a runtime gets the evaluator with it and there is nothing to
 // forget; see the Core report `core-expectation-evaluator.md`.
 //
-// Four decisions worth knowing:
+// Decisions worth knowing:
 //
 //  - **Only web nodes are snapshotted.** `captureStateSnapshot` runs for every
 //    node attempt in every Flow, including LLM, code and router nodes. A page
@@ -42,6 +42,14 @@
 //    real address, because a reset to a screened one would not reach the page,
 //    and it is written only when that address is exactly what the packet
 //    already publishes -- nothing in it withheld -- so it carries no secret.
+//  - **One capture between two steps, not two.** The page a step ended on is
+//    the page the next one starts on when nothing ran between them, so when
+//    Core offers it back (`previousStateRef` on a `before_action` capture,
+//    only moments after it arrived and with no other step started) it is
+//    returned as that step's starting page instead of being read again. It
+//    keeps every key a later reader uses -- the view, `from`, the document's
+//    identity -- because it is the same snapshot; only the gateway round trip
+//    is gone, about half of every web step's state cost (t480).
 //  - **Snapshots are not stored here.** Core hands both refs back to
 //    `inspectStateDiff`, so the diff reads the summaries it was given. A cache
 //    keyed by `stateRef` would be a second copy of state Core already holds.
@@ -95,6 +103,8 @@ export type WebAutomationHostRuntimeGateway = { dispatch: WebAutomationHostRunti
 
 const SNAPSHOT_OUTPUT_ID = "web.dom.capture_snapshot";
 const HOST_RUNTIME_SOURCE = "web-automation-host-runtime";
+/** What every snapshot this host captured is named with, so it knows its own when Core offers one back. */
+const STATE_SNAPSHOT_ID_PREFIX = "web.state.";
 /** Matches Core's default `builtin.policy.action` command timeout. */
 const HOST_STATE_COMMAND_TIMEOUT_MS = 5_000;
 
@@ -133,6 +143,11 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       if (!actsOnPage(input.node)) {
         throw new Error(`Node ${input.node.definitionId} does not act on a page, so no web state was captured.`);
       }
+      // The page the previous step ended on, which Core offers only when no
+      // step started since and it arrived moments ago: the same page, so it is
+      // answered rather than read a second time (t480).
+      const ended = input.point === "before_action" ? input.previousStateRef : undefined;
+      if (ended?.summary !== undefined && ended.stateSnapshotId.startsWith(STATE_SNAPSHOT_ID_PREFIX)) return ended;
       const result = await gateway.dispatch({
         outputId: SNAPSHOT_OUTPUT_ID,
         payload: {},
@@ -163,7 +178,7 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
         ...(documentTimeOrigin === undefined ? {} : { documentTimeOrigin })
       } as unknown as JsonObject;
       captures += 1;
-      const stateSnapshotId = `web.state.${captures}`;
+      const stateSnapshotId = `${STATE_SNAPSHOT_ID_PREFIX}${captures}`;
       const from = resetToken(snapshot);
       return { stateSnapshotId, stateRef: `${stateSnapshotId}@${input.attemptId}:${input.point}`, capturedAt: Date.now(), summary, ...(from ? { from } : {}) };
     },
