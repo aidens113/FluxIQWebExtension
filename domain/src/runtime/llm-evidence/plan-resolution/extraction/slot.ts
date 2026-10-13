@@ -60,6 +60,7 @@ import type { WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../..
 import { isJsonRecord } from "../../untrusted-json";
 import { keptWebExtractionColumns, type WebExtractionColumnAssumption, type WebExtractionColumnIssue } from "./columns";
 import { keptWebExtractionConditions } from "./conditions";
+import type { WebPlanRefusalIssue } from "./refusal-issues";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanValuePath } from "../handle-tokens";
 
 /** Why an `extractList` names no one detected list. Each is a plan resolver issue code. */
@@ -92,9 +93,11 @@ export type WebExtractionSlotResolution =
   }
   /**
    * `path` is where inside the value it was refused, and `expected` the shape
-   * the refused key belongs in when it has one.
+   * the refused key belongs in when it has one. `issues` names the field and
+   * the names it can use, where the refusal knows them: a condition's column
+   * neither vocabulary knows (`./conditions.ts`, t497).
    */
-  | { status: "refused"; issue: WebExtractionSlotIssue; path: WebPlanValuePath; expected?: WebExtractionSlotHint };
+  | { status: "refused"; issue: WebExtractionSlotIssue; path: WebPlanValuePath; expected?: WebExtractionSlotHint; issues?: WebPlanRefusalIssue[] };
 
 /**
  * Said beside a `paginate`, `maxPages` or `maxScrolls` the read no longer
@@ -152,7 +155,7 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   const where = value.where === undefined
     ? undefined
     : keptWebExtractionConditions(value.where, { detected: binding.extractList.fields, kept: columns.fields }, ["where"]);
-  if (where !== undefined && !where.ok) return refused(where.issue, where.path);
+  if (where !== undefined && !where.ok) return where.issues === undefined ? refused(where.issue, where.path) : { status: "refused", issue: where.issue, path: where.path, issues: where.issues };
 
   const request: JsonObject = { item: binding.extractList.item, fields: columns.fields as unknown as JsonObject };
   // An empty clause resolves to no conditions, and the request carries no

@@ -9,5 +9,8 @@
 
 export { type WebExtractionColumnAssumption } from "./columns";
 export { resolveWebExtractionSlot, type WebExtractionSlotIssue, type WebExtractionSlotResolution } from "./slot";
+export { webPlanSlotRefusal, type WebPlanSlotRefusal } from "./slot-refusal";
 // The step's record output read as its dispatch reads it (t489).
-export { webPlanStoredColumns, webPlanUndispatchable, type WebPlanRefusalIssue, type WebPlanUndispatchable } from "./stored-columns";
+export { webPlanStoredColumns, webPlanUndispatchable, type WebPlanUndispatchable } from "./stored-columns";
+// What a refusal says beside its codes: the field and the names it can use (t489, t497).
+export { type WebPlanRefusalIssue } from "./refusal-issues";

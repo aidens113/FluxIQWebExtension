@@ -283,7 +283,11 @@ test("a condition that names no one detected column, or contradicts itself, is r
     const refused = await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where });
     // Every one of these is a shape the grammar could have taken, so the
     // refusal carries the shape it accepts beside the position it refused at.
-    assert.deepEqual(refused, { status: "refused", issueCodes: [reason, HINT, `${reason}:${position}`] }, JSON.stringify(where));
+    const { issues, ...answer } = refused as { issues?: readonly { code: string; valid?: readonly string[] }[] };
+    assert.deepEqual(answer, { status: "refused", issueCodes: [reason, HINT, `${reason}:${position}`] }, JSON.stringify(where));
+    // An unknown column also names the read's columns (t497), so the model can fix it in one step.
+    if (reason === "web.handle.unknown_field") assert.ok(issues?.some((issue) => issue.code === reason && (issue.valid?.length ?? 0) > 0), JSON.stringify(where));
+    else assert.equal(issues, undefined, JSON.stringify(where));
   }
 });
 
@@ -302,7 +306,9 @@ test("a condition on a key its own step does not keep is refused at the key that
     [{ key: "sponsored", is: "absent" }, "extractList.where.0.key"]
   ] as const) {
     const refused = await resolve(instance, { handle: extraction, fields, where: [condition] });
-    assert.deepEqual(refused, { status: "refused", issueCodes: ["web.handle.unknown_field", HINT, `web.handle.unknown_field:${position}`] }, JSON.stringify(condition));
+    const { issues, ...answer } = refused as { issues?: readonly { code: string; field?: string; valid?: readonly string[] }[] };
+    assert.deepEqual(answer, { status: "refused", issueCodes: ["web.handle.unknown_field", HINT, `web.handle.unknown_field:${position}`] }, JSON.stringify(condition));
+    assert.ok(issues?.some((issue) => issue.field === "sponsored" && (issue.valid ?? []).includes("cost")), JSON.stringify(condition));
   }
   // The same condition over a key this step does keep resolves, by that key.
   const kept = await resolve(instance, { handle: extraction, fields, where: [{ field: "cost", lessThan: 50 }] });
