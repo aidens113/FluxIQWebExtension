@@ -1,12 +1,16 @@
+import { friendRequestAnswer, friendRequestAnswerSubject } from "../oracle/index.js";
 import { requestAuditAccountFacts } from "../qualification/index.js";
 import { escapeHtml as esc, page } from "../../../html.js";
 import type { RenderContext } from "../../../types.js";
 import type { ClientConfig, ClientPage } from "../client/index.js";
-import { COMMUNITIES, MAYA, OPEN_DAY_POST, STALE_REQUEST_BADGE } from "../content/index.js";
+import { COMMUNITIES, FRIEND_REQUESTS, MAYA, OPEN_DAY_POST, STALE_REQUEST_BADGE } from "../content/index.js";
 import type { FeedMode, FeedState } from "../types.js";
 import { feedClasses, type FeedClasses } from "./classes.js";
 import { avatarGraphic, glyph, photoSource, SITE_ROOT } from "./parts.js";
 import { feedStylesheet } from "./stylesheet.js";
+
+/** Every friend request's id, in list order: one server-state element each, which the confirm-requests oracle reads (`oracle/`). */
+const REQUEST_IDS = FRIEND_REQUESTS.map((request) => request.id);
 
 /** Which top-bar destination a page belongs to, so its icon is the current one. */
 export type ShellSection = "home" | "friends" | "groups" | "none";
@@ -46,14 +50,21 @@ export function buildMarkerText(mode: FeedMode): string {
  */
 export function sitePage(context: ShellContext, title: string, main: string, script: string): string {
   const { css, seed, state } = context;
-  const body = `<div class="${css.app}">${topBar(context)}${main}</div>${state.consent === "pending" ? consentDialog(css) : ""}<div class="${css.toastRegion}" role="status" aria-live="polite"></div><style>${feedStylesheet(css, seed)}</style><script type="application/json" data-testid="social-request-audit-account">${requestAuditAccountFacts(state).replaceAll("<", "\\u003c")}</script>`;
+  const body = `<div class="${css.app}">${topBar(context)}${main}</div>${state.consent === "pending" ? consentDialog(css) : ""}<div class="${css.toastRegion}" role="status" aria-live="polite"></div><style>${feedStylesheet(css, seed)}</style><script type="application/json" data-testid="social-request-audit-account">${requestAuditAccountFacts(state).replaceAll("<", "\\u003c")}</script>${REQUEST_IDS.map((id) => `<script type="text/plain" data-testid="${friendRequestAnswerSubject(id)}">${friendRequestAnswer(state.requests, id)}</script>`).join("")}`;
   return page(title, body, `
 const qualificationAccountFacts = ${requestAuditAccountFacts.toString()};
+const oracleRequestAnswer = ${friendRequestAnswer.toString()};
+const oracleRequestSubject = ${friendRequestAnswerSubject.toString()};
+const oracleRequestIds = ${JSON.stringify(REQUEST_IDS)};
 const qualificationMutate = mutate;
 mutate = async (operation, payload = {}) => {
   const result = await qualificationMutate(operation, payload);
   const account = document.querySelector('[data-testid="social-request-audit-account"]');
   if (account) account.textContent = qualificationAccountFacts(result.state);
+  for (const id of oracleRequestIds) {
+    const answer = document.querySelector('[data-testid="' + oracleRequestSubject(id) + '"]');
+    if (answer) answer.textContent = oracleRequestAnswer(result.state.requests, id);
+  }
   return result;
 };
 ${script}`);
