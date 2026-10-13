@@ -262,6 +262,22 @@ Earlier history (rounds 4-10, t460, t461) is in the Work Ledger archive.
 
 ## Work Ledger
 
+### 2026-10-13 - t503 merged; round 18 prepared
+
+- Agent: Claude senior supervisor; t503 worker.
+- Changed: script entries state what was true when written ("Revision N (digest D), as Core accepted it"; refused
+  entries name `latestAcceptedWhenSent`); one trailing `core.current_flow` entry names the current revision, earlier
+  bytes unchanged; t501's `supersedes` mark removed; the submit repeat check keys on the standing revision digest, so
+  restoring a never-refuted revision is not a repeat; on an unsure/yes split an unsure reading that contradicts Core's
+  paging record is asked again once with the record named (`verificationReask: true`), never turned into a yes by Core;
+  the candidate wrap-up keeps its tool list byte-stable (refused tools answered unrun). Accepted open point: the
+  judgement deadline is sized for two checks asked twice; a slow re-ask can leave a trial not judged, and the build
+  retests.
+- Validation: after the dev merge, Core llm, result-verification, flow-bootstrap, service and recovery "564 passed | 1
+  skipped" files, "6036 passed"; Core tsc and build exit 0; domain and runner tsc exit 0; audits exit 0; Core merge
+  gated by `pnpm check`. Pushed Core `fbd06c77`, downstream `15458401`.
+- Outcome: Accepted. Round 18: confirming builds for B, C and D on this pair.
+
 ### 2026-10-13 - t504 merged (D's over-act: column handle and absorbed acts)
 
 - Agent: Claude senior supervisor; t504 worker.
