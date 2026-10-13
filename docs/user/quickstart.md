@@ -64,18 +64,24 @@ You can see which key and model a flow uses in that flow's **Settings**, under
 
 ## 4. Create an automation (about 2 minutes)
 
-Open the page you want to automate in a normal tab. Then pick one of three
-ways to start:
+Open the page you want to automate in a normal tab. Create an automation and
+write what you want it to do in **Instructions**. Every automation needs a
+written task, including a saved automation that has none before its next run.
+Then choose any support you need:
 
 - **Describe an automation.** Tell FluxIQ what you want done, in your own
   words. For example: "Search this store for a USB-C cable and add the
   cheapest one to the cart."
-- **Show FluxIQ how.** Start a recording in the panel, do the task once
-  yourself, then stop. FluxIQ turns what you did into steps.
-- **Extract data from this page.** Pick the rows and columns you want, and
-  FluxIQ builds a scraper that collects them.
+- **Show FluxIQ how.** Start a recording in the panel and describe what the
+  demonstration shows. Do the task once, then stop. Attach the finished
+  recording in **Instructions** as optional evidence for your written task.
+- **Extract data from this page.** Describe which data the automation should
+  collect. Use the extension to pick a list and inspect the rows and columns.
+  A described recording can supplement the instructions for the scraper.
 
-Test the automation while you create it. When it does what you want, save it.
+Select a model in the automation's **Settings**, then build and test it in
+**Steps**. When it does what you want, save it. The written task defines the
+automation; recording titles, descriptions and captured actions do not replace it.
 
 **It worked if** the automation runs from start to finish and ends in the
 result you expected.
