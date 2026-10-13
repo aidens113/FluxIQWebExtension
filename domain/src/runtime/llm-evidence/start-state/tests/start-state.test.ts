@@ -157,3 +157,25 @@ test("an aborted ask dispatches nothing", async () => {
   await assert.rejects(runtime.startState!({ ...request, signal: controller.signal }));
   assert.equal(commands.length, 0);
 });
+
+test("leaves which element has focus out of the state, so a focus move is no difference (Core t475)", async () => {
+  const focused = Object.assign(cart(3), { focusedElement: { tagName: "button", selector: "#add", visibleText: "Add to cart" } });
+  const { now } = await compare(cart(3), focused);
+  assert.deepEqual(now.differs, []);
+  assert.deepEqual(now.lines, { gone: [], added: [] });
+});
+
+test("lists the items on the page by the tokens a declaration names a control's record by, so Core can tell which an act created (Core t475)", async () => {
+  const line = (name: string, y: number) => [
+    { tagName: "p", selector: `#line-${name}`, visibleText: name, bounds: box(0, y, 200, 20), context: { record: { text: name } } },
+    { tagName: "button", selector: `#remove-${name}`, visibleText: "Remove", bounds: box(300, y, 80, 20), context: { record: { text: name } } }
+  ];
+  const { start, now } = await compare(cart(1, line("Soap", 100)), cart(2, [...line("Soap", 100), ...line("Towels", 140)]));
+  const before = (start as { items?: string[] }).items ?? [];
+  const after = (now as { items?: string[] }).items ?? [];
+  assert.equal(before.length, 1);
+  assert.equal(after.length, 2);
+  assert.ok(after.includes(before[0]!), "the item that was there keeps its token");
+  for (const item of after) assert.match(item, /^i:[0-9a-f]{32}$/);
+  assert.ok(!JSON.stringify([start, now]).includes("Towels\u001f"), "the record's address never leaves the domain");
+});

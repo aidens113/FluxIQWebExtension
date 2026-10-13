@@ -14,4 +14,10 @@ export type WebStartState = {
    * view prints it. Lines of a dialog or a layer in front of the page are left out.
    */
   lines: string[];
+  /**
+   * The opaque tokens of the records -- rows, cards, list items -- the kept
+   * elements sit in (`../control-spot.ts`), in the form Core's declaration
+   * takes them (FluxIQ Core t475). Absent when the read was given no records.
+   */
+  items?: string[];
 };
