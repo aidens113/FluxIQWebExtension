@@ -133,3 +133,55 @@ test("a search that matched, or a later page of one, says nothing more", () => {
   assert.deepEqual(lines(webLlmFindOnPage(page(elements), "search", 0).found), ["1 match for \"search\"", "t489 field[search] \"Search\" on screen"]);
   assert.deepEqual(lines(webLlmFindOnPage(page(elements), "nothing", 50).found), ["0 matches for \"nothing\""]);
 });
+
+// t491 (`run-mv6bg7ac-d24d91ce`, Q1/Q3): the model searched an item's full name
+// and was given only a decoy whose title held that exact string. The right
+// item was a tile with a shorter name and an Options link, and a size chip
+// carried the remaining words. Close matches follow the exact ones, each
+// saying which of the query's words it lacks.
+const VARIANT_PAGE: WebLlmEvidenceElement[] = [
+  { target: "t1", tag: "a", name: "Harbor Oak Writing Desk, Walnut Finish (2-Pack)", href: "https://shop.test/p/desk-2-pack", box: BOX, onViewport: true },
+  { target: "t2", tag: "div", text: "Harbor Oak Writing Desk, Oak Finish Options", ownText: "", box: BOX, onViewport: true },
+  { target: "t3", tag: "a", name: "Harbor Oak Writing Desk, Oak Finish", href: "https://shop.test/p/desk", box: BOX, onViewport: true },
+  { target: "t4", tag: "a", name: "Options", href: "https://shop.test/p/desk", box: BOX, onViewport: true },
+  { target: "t5", tag: "button", name: "Walnut Finish", box: BOX, onViewport: true },
+  { target: "t6", tag: "span", text: "Walnut", box: BOX, onViewport: true },
+  { target: "t7", tag: "a", name: "Garden Hose, 50 ft", href: "https://shop.test/p/hose", box: BOX, onViewport: true }
+];
+
+test("close matches follow the exact ones, ranked by the share of the query's words they hold, each saying what it lacks", () => {
+  const found = webLlmFindOnPage(page(VARIANT_PAGE), "Harbor Oak Writing Desk, Walnut Finish", 0).found;
+  assert.deepEqual(lines(found), [
+    "1 match for \"Harbor Oak Writing Desk, Walnut Finish\"",
+    "t1 link \"Harbor Oak Writing Desk, Walnut Finish (2-Pack)\" on screen",
+    "2 close matches, holding most or part of those words but not as written:",
+    "t3 link \"Harbor Oak Writing Desk, Oak Finish\" near, lacks \"Walnut\" on screen",
+    "t5 button \"Walnut Finish\" near, lacks \"Harbor Oak Writing Desk\" on screen"
+  ]);
+});
+
+test("close matching ignores case, punctuation, plural endings and short stop words, and an element of one shared word is not close", () => {
+  const found = webLlmFindOnPage(page(VARIANT_PAGE), "the writing-desks of harbor oak in walnut", 0).found;
+  assert.deepEqual(lines(found), [
+    "0 matches for \"the writing-desks of harbor oak in walnut\"",
+    "Nothing on this page holds those words as written, hidden elements included; the close matches below hold most or part of them. find_on_page reads only the page you are on, never the rest of the site. To look across the site, follow a link to the page that lists it.",
+    "2 close matches, holding most or part of those words but not as written:",
+    "t1 link \"Harbor Oak Writing Desk, Walnut Finish (2-Pack)\" near, holds every word on screen",
+    "t3 link \"Harbor Oak Writing Desk, Oak Finish\" near, lacks \"walnut\" on screen"
+  ]);
+});
+
+test("close matches are capped, deterministic, and shown only once the exact matches are exhausted", () => {
+  const many = Array.from({ length: 30 }, (_, index): WebLlmEvidenceElement => ({ target: `t${index + 1}`, tag: "a", name: `Blue Ceramic Mug ${index + 1}`, href: `https://shop.test/p/${index}`, box: BOX }));
+  const first = webLlmFindOnPage(page(many), "Large Blue Ceramic Mug", 0).found;
+  assert.equal(first, webLlmFindOnPage(page(many), "Large Blue Ceramic Mug", 0).found);
+  const near = lines(first).filter((line) => line.includes(" near, "));
+  assert.equal(near.length, 10);
+  assert.equal(near[0], "t1 link \"Blue Ceramic Mug 1\" near, lacks \"Large\" on screen");
+  assert.match(first, /^20 more close matches not shown; search fewer words to narrow them\.$/mu);
+  const exact = Array.from({ length: 60 }, (_, index): WebLlmEvidenceElement => ({ target: `e${index + 1}`, tag: "button", name: `Mug rack ${index + 1}`, box: BOX }));
+  const mixed = [...exact, { target: "n1", tag: "a", name: "Rack for a mug", href: "https://shop.test/p/rack", box: BOX }];
+  assert.ok(!webLlmFindOnPage(page(mixed), "mug rack", 0).found.includes(" near, "), "the first page of exact matches has no close ones");
+  assert.match(webLlmFindOnPage(page(mixed), "mug rack", 50).found, /^n1 link "Rack for a mug" near, holds every word on screen$/mu);
+  assert.deepEqual(lines(webLlmFindOnPage(page(mixed), "mug", 0).found).filter((line) => line.includes(" near, ")), [], "a one-word query has no close matches");
+});
