@@ -63,7 +63,7 @@ export type RunFacts = {
   aiUsed?: boolean | undefined;
   /** How many times AI stepped in, when known. */
   aiActivations?: number | undefined;
-  /** How many page variations the run learned: its adaptations Core reports applied. */
+  /** Exact historical kept count, when reported; current statuses cannot fill it. */
   learned?: number | undefined;
   /** How many changes the run tried, applied or not (adaptations created). */
   changesTried?: number | undefined;
