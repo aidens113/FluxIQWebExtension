@@ -258,6 +258,27 @@ Earlier history (rounds 7-11, t460, t461) is in the Work Ledger and the archive.
 
 ## Work Ledger
 
+### 2026-10-13 - t489 and t490 merged; the second sweep; round 14 prepared
+
+- Agent: Claude senior supervisor; t489 and t490 workers.
+- Changed: t489 one domain function (`output-nodes/extract-list/stored-columns.ts`) decides a record output's stored
+  columns for submit and dispatch; a name no read column matches is refused at submit as
+  `{code, field, valid}` (Core accepts `issues` on a refused plan-node answer: at most 16, identifier names, 64
+  valid names); dispatch issues use the same shape; trial feedback passes a failed step's own issues; plan
+  validation names the unknown field; the script guidance no longer invites narrowing with a site's controls first
+  (the completion-schema ratchet raised 6,100 to 6,500 for the 328-byte corrected sentence, now cached since
+  t484); checked rows match on full identity; each handle code has its own words. Supervisor sign-off: a refusal may
+  name the model's field and the read's column keys, never cell values or page text. t490 the candidate facade
+  test's second revision changes a step for real (t485 rightly answers a rename-only resubmit as unchanged).
+- Validation: second sweep on Core 8ecf5ae6 / downstream 5ff78194: Core build 0, downstream check 0, build 0,
+  downstream `pnpm test` exit 0 (extension "# pass 2932", runner "# pass 2255", domain "# pass 1884", scenario-lab
+  "# pass 697"); Core `pnpm test` "Tests 4 failed | 10545 passed" (all four in candidate-generation.test.ts, fixed
+  by t490: "Test Files 24 passed (24)", "125 passed"). t489 after dev merges: Core service/flow-bootstrap/
+  result-verification/llm/activity "543 passed | 1 skipped" files, "5696 passed"; domain output-nodes and
+  llm-evidence "# pass 1242 / # fail 0"; domain, extension and Core typechecks exit 0; Core merges gated by
+  `pnpm check`. Pushed Core `b06a1d4b`, downstream `3ddf7684`.
+- Outcome: Accepted.
+
 ### 2026-10-13 - Round 13: C passed build 1; B and D failed on t486 and t485 changes; t488 reverts t486's submit check
 
 - Agent: Claude senior supervisor; debug workers.
