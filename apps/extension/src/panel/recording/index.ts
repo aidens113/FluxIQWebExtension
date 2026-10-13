@@ -25,3 +25,5 @@ export {
   type ReviewView,
   type TestOutcome
 } from "./review";
+
+export { requestRecordingDescription } from "./description";

@@ -15,6 +15,7 @@ export const ORDER_CONTACT = { firstName: "Dana", lastName: "Whitfield", email: 
  */
 export const PICKUP_ORDER_WORKFLOW: ScenarioWorkflow = {
   id: "pickup-order",
+  recordingDescription: "Demonstrates selecting a pickup location and completing pickup checkout.",
   description: "Order one 6-roll pack of the store-brand Select-A-Size paper towels for pickup at the home store, saving the soap already in the cart for later, as a guest paying at pickup in the earliest open slot, and read the confirmation.",
   recordingScript: [
     ...OPENING_STEPS,

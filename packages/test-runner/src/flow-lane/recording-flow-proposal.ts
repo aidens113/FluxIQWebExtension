@@ -1,5 +1,6 @@
 import type { ExpectedEvent } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
+import { refuseRecordingOnlyFlow } from "./recording-only/index.js";
 import type { FluxIQHttpOptions } from "../http-control/index.js";
 
 /** The Core calls the Flow lane makes; `ExistingFluxIQControlClient` satisfies it. */
@@ -109,21 +110,7 @@ export async function approveRecordingFlowProposal(
   input: { projectId: string; proposalId: string; authorizationPin: string; name: string },
   bounds: FluxIQHttpOptions = {},
 ): Promise<ApprovedRecordingFlow> {
-  const payload = asRecord(await control.automationStudioCall("review-recording-flow-proposal", {
-    projectId: input.projectId,
-    proposalId: input.proposalId,
-    decision: "approved",
-    destination: { kind: "flow", name: input.name },
-    authorizationPin: input.authorizationPin,
-  }, bounds), "review-recording-flow-proposal payload");
-  const proposal = asRecord(payload.proposal, "review.proposal");
-  if (proposal.status !== "approved") throw new RunnerFailure("recording.contract", `Core did not approve the recording Flow proposal (status ${String(proposal.status)})`);
-  const flow = asRecord(payload.flow, "review.flow");
-  const review = asRecord(proposal.review, "review.proposal.review");
-  const destination = asRecord(review.destination, "review.proposal.review.destination");
-  const flowId = textOf(flow.flowId, "review.flow.flowId");
-  if (destination.kind !== "flow" || destination.flowId !== flowId) throw new RunnerFailure("recording.contract", "Core's approval destination did not name the Flow it returned");
-  return { flowId, proposalId: input.proposalId, created: destination.created === true };
+  return refuseRecordingOnlyFlow();
 }
 
 function asRecord(value: unknown, at: string): Record<string, unknown> {

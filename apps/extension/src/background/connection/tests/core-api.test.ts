@@ -301,3 +301,14 @@ test("the snapshot lookup carries a timeout, so a Core that never answers cannot
   await fetchProjectIdFromCoreSnapshot(credentials, { sessionId: undefined, clientId: "client-1" }, "panel");
   assert.ok(requests[0]?.init.signal instanceof AbortSignal);
 });
+
+test("closed instruction diagnostics survive relay while arbitrary diagnostics stay private", async (t) => {
+  let body: unknown = { ok: false, error: "Add task instructions", errorCode: "automation.instructions_required" };
+  stubFetch(t, () => json(400, body));
+  const first = await callCoreProgram(credentials, "run-runtime-session", {});
+  assert.deepEqual(first, { ok: false, code: "failed", httpStatus: 400, diagnosticCode: "automation.instructions_required", error: "Add task instructions" });
+  body = { ok: false, error: "Add task instructions", payload: { diagnostic: { code: "automation.instructions_required" } } };
+  assert.deepEqual(await callCoreProgram(credentials, "run-runtime-session", {}), first);
+  body = { ok: false, error: "Failed", payload: { diagnostic: { code: "private.detail", details: "not forwarded" } } };
+  assert.deepEqual(await callCoreProgram(credentials, "run-runtime-session", {}), { ok: false, code: "failed", httpStatus: 400, error: "Failed" });
+});

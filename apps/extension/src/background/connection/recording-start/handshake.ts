@@ -35,6 +35,7 @@ export const RECORDING_START_RETRY_DELAYS_MS: readonly number[] = [400, 1_200, 2
 
 export type RecordingStartAttempt = {
   readonly recordingId: string;
+  readonly description: string;
   readonly startedAt: number;
   readonly initialState: JsonObject;
   // 0 for the first send, then 1, 2, ... for each retry.
@@ -59,6 +60,7 @@ export type RecordingStartHandshakeDeps = {
 
 type PendingStart = {
   readonly recordingId: string;
+  readonly description: string;
   readonly startedAt: number;
   readonly initialState: JsonObject;
   attempt: number;
@@ -86,7 +88,7 @@ export class RecordingStartHandshake {
   }
 
   // Sends the first attempt and opens its acceptance window.
-  async begin(input: { recordingId: string; startedAt: number; initialState: JsonObject }): Promise<void> {
+  async begin(input: { description: string; recordingId: string; startedAt: number; initialState: JsonObject }): Promise<void> {
     this.cancel();
     this.pending = { ...input, attempt: 0, acceptTimer: undefined, retryTimer: undefined, inFlightSend: undefined, localStartDue: false };
     await this.sendPending(this.pending);
@@ -165,6 +167,7 @@ export class RecordingStartHandshake {
     );
     const send = this.deps.send({
       recordingId: pending.recordingId,
+      description: pending.description,
       startedAt: pending.startedAt,
       initialState: pending.initialState,
       attempt: pending.attempt

@@ -10,6 +10,7 @@ const row = (urn: string) => `li[data-entity-urn="${urn}"]`;
 /** A read-only reference path; the answer is independently enumerated in expected.ts. */
 export const staleRequestAuditWorkflow: ScenarioWorkflow = {
   id: "audit-stale-requests",
+  recordingDescription: "Demonstrates outgoing request age review without withdrawing requests.",
   description: "Report the month-old unanswered connection requests without changing any invitation.",
   recordingScript: [
     { id: "audit-app-prompt", operation: "waitForState", target: 'div:text-is("Not now")', timeoutMs: 15_000 },

@@ -148,6 +148,7 @@ const watchExpected = {
  */
 export const auctionMarketplaceManifest = createScenarioManifest({
   id: "auction-marketplace",
+  recordingDescription: "Demonstrates auction inspection, bid entry and confirmation review.",
   title: "Auction marketplace",
   tags: ["marketplace", "auction", "search", "filters", "pagination", "generated-classes", "overlays", "anti-bot", "iframe", "shadow-dom", "consequential", "extraction", "locale"],
   seed: 4040,
@@ -179,6 +180,7 @@ export const auctionMarketplaceManifest = createScenarioManifest({
   workflows: [
     {
       id: "watch-endings",
+      recordingDescription: "Demonstrates ending-time filters and watch controls on selected auctions.",
       description: "Watch the three original Kestrel 35 auctions under £100 that end before Tuesday midnight and are not watched yet, leave the one already watched alone, and read the watchlist back.",
       recordingScript: [
         ...ARRIVE,
@@ -210,6 +212,7 @@ export const auctionMarketplaceManifest = createScenarioManifest({
     },
     {
       id: "kestrel-auctions",
+      recordingDescription: "Demonstrates narrowing auction results and reading listing records.",
       description: "Collect every original Kestrel 35 auction that is not for parts and is under £150 at the site's pound estimate, once each, soonest ending first, by narrowing the results with the site's own filters.",
       recordingScript: [
         ...SEARCH_STEPS,

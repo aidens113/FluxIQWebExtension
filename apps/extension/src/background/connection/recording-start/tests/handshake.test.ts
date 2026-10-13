@@ -94,7 +94,7 @@ function harness(t: TestContext, hold?: () => Promise<void>) {
 }
 
 async function begin(handshake: RecordingStartHandshake) {
-  await handshake.begin({ recordingId: "client.alpha.1", startedAt: 10, initialState: INITIAL_STATE });
+  await handshake.begin({ description: "Demonstrate the browser interaction sequence.", recordingId: "client.alpha.1", startedAt: 10, initialState: INITIAL_STATE });
 }
 
 test("a transient refusal is retried, and the retry re-sends the same recording", async (t) => {
@@ -225,7 +225,7 @@ test("an answer between the elapsed window and the settled send still decides th
   await settle();
   assert.deepEqual(local, [], "FluxIQ accepted, so the settling send begins nothing");
 
-  const refused = handshake.begin({ recordingId: "client.alpha.2", startedAt: 20, initialState: INITIAL_STATE });
+  const refused = handshake.begin({ description: "Demonstrate the browser interaction sequence.", recordingId: "client.alpha.2", startedAt: 20, initialState: INITIAL_STATE });
   timers.fireAll();
   handshake.noteRefusal(STALE);
   held.release(1);
@@ -292,7 +292,7 @@ test("disconnecting cancels the handshake, and a new start replaces the old one"
   handshake.cancel();
   assert.equal(timers.count(), 0);
 
-  await handshake.begin({ recordingId: "client.alpha.2", startedAt: 20, initialState: INITIAL_STATE });
+  await handshake.begin({ description: "Demonstrate the browser interaction sequence.", recordingId: "client.alpha.2", startedAt: 20, initialState: INITIAL_STATE });
   assert.equal(handshake.pendingRecordingId(), "client.alpha.2");
   handshake.noteRefusal(STALE);
   timers.fireAll();

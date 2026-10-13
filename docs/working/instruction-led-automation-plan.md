@@ -1,7 +1,7 @@
 # Instruction-Led Automations And Supporting Recordings
 
 Status: Active
-Status detail: Contract and entry-point investigation before implementation.
+Status detail: Implementation independently verified; paired dev integration and artifact refresh pending.
 Created: 2026-10-13
 Last updated: 2026-10-13
 Owner: Codex senior supervisor
@@ -19,6 +19,16 @@ Related: [adaptation and breadth](./adaptation-and-breadth-plan.md), [MVP](./mvp
 - Existing recorded-only flows need a clear instructions/migration path. Investigate whether instruction attachment alone preserves the stated authority or whether their old recording-derived build must be regenerated; do not silently treat a trace as the task.
 - Previous paired t518 is committed locally and unpushed. Store run-mv74jziz-abaeb09e passes with required filter/extraction execution and zero model calls. Social run-mv74jzv2-e55828db passes its page oracle but its recorded Flow fails; no terminal replay success is claimed. Its standalone recording path is being superseded by this requirement. Preserve all code/evidence; no further recorded-only relaunches.
 - Main downstream unrelated .clinerules/fluxiq.md edit is preserved. Neither dev has been pushed.
+- Paired task t519 lives at C:/Users/osrs_/FluxStuff/fxwork/t519/{!FluxIQWebExtension,!FluxIQ}, branch task/t519-instruction-led-automations. Base public libraries built narrowly; no full suite or panel launch.
+- Discovery found ordinary generation already checks active instruction inventory, but deterministic persisted runs/resume and recording/policy proposal activation bypass it. A recording proposal's instructions metadata does not control its trace-derived graph.
+- Migration: preserve existing legitimate written Flow-owned instructions; absence, blank/inactive/wrong-owner or known model-only suggestions cannot satisfy task authority. Do not require a new origin marker for all old legitimate written instructions. Existing graphs may be retained after actual instruction entry; do not claim this retroactively verifies an instruction-led build.
+- New standalone recording/policy activation is retired with an actionable instruction-led authoring route. Empty drafts and recording diagnostics remain accessible. Lab's recorded-only executable lane is retired in favor of its existing explicit-task created-Flow lane, with no new hidden authoring engine.
+- Implementation is integrated in the paired task trees: Core admission/description/diagnostics and nullable recording-summary migration 0026, shared extension description/recovery, web task editor and optional described-recording attachment, and retired Lab conversion with 42 explicit workflow descriptions.
+- Supervisor observed extension 100 tests plus source/test/bundle check; web 146 tests and types; runner 66 distinct tests after CLI fixture correction; domain 16, contracts 2 and scenario 9 tests plus touched types/build prerequisites. Core 72 narrowed tests (including real no-model migration and durable description summaries), prior registry/control tests and helper tests passed; final collaborator/helper/gateway verification remains.
+- Native description helper was exercised in Chromium on company-website: blank, Cancel, Escape and trimmed valid description passed 8 assertions with no external requests or model calls. This is native DOM validation, not a full paired recording/build/replay or Firefox live test. No user panel was started.
+- Audit corrections removed new UI import cycles, unpacked new statements, removed unreachable retired runner execution, respected source naming/barrels, and repaired authored links. Core's instructionAuthority collaborator owns readiness/assert/resume without growing the legacy facade. Generated indices are refreshed; baselines only shrink: Core 1156 entries (5 lowered, 3 removed), downstream 644 (2 lowered, 2 removed).
+- Final independent checks: 116 distinct Core cases across selections; web 147 distinct cases with 49 repeated after transport extraction and a final 4-case task-editor regression; extension initial 100 and final 291 affected lifecycle cases (overlap), source/test checks and Chrome/Edge/Firefox artifact builds. Runner 66, domain 16, contracts 2 and scenario 9 cases passed, with touched package types. Final malformed API bodies refuse before authority and failed evidence loading preserves unknown attachments. Full suites/paid runs were not used.
+- All sources are frozen and verified; final documentation/index/baseline updates, paired task finish and dev pushes remain. Existing unrelated main .clinerules/fluxiq.md edit remains untouched; t518 stays separately unmerged/unpushed.
 
 ## Worker Briefs
 
@@ -38,6 +48,46 @@ Related: [adaptation and breadth](./adaptation-and-breadth-plan.md), [MVP](./mvp
 - Worker: codex-t516; downstream domain/Lab read-only. Read Current State; inspect existing instruction/recording context assembly and realistic Lab manifests/recorded-flow callers.
 - Own report: instruction-led-automation-plan/reports/lab-domain-discovery.md. No source/shared docs/commits/builds/live/provider runs.
 - Find how instructions and recording descriptions reach the model and how recorded-only fixture paths must change. Do not preserve a hidden test-only bypass or add scenario-shaped product guidance. Distinguish manually authored deterministic execution from model generation.
+
+### Brief: instruction-core-implementation
+- Repository: paired t519 FluxIQ Core.
+- Task: enforce active nonempty Flow-owned explicit task instructions for build and persisted run/resume/repair before effects; retire recording-only executable activation; own described supplementary evidence.
+- Required reads: Current State, own core-contract-discovery report, Core AGENTS and owning modules.
+- Owns (may edit): Core packages/contracts/**, packages/fluxiq/**, packages/client-gateway-websocket/** and their adjacent tests. Core backend/API/gateway only; no apps/web files.
+- Must not touch: Core apps/web/**, downstream source, shared working docs, t518, user data, commits/pushes.
+- Contract: recording.description is optional in persisted legacy shape; new start/create and attach require nonblank description. Update existing description without losing events. Description never substitutes for FlowInstruction.
+- Contract: reuse active instruction inventory; preserve valid existing written Flow-owned tasks; known model/recording inference cannot grant authority. General task-save endpoint supports legacy existing flows, not only blank generation targets.
+- Contract: recording/policy proposals may remain diagnostic; direct executable approval refuses with closed actionable instruction-led-authoring error. No copying every trace act into instruction-led work.
+- Contract: described linked recordings enter generation as untrusted supplementary evidence subordinate to explicit instructions; validate ownership/finalized/description before provider call.
+- Coordinate wire/API signatures and closed errors with UI and Lab workers before changing consumers. Internal graph unit seams are not user automation bypasses; projectless public service execution must require explicit authority.
+- Definition of done: narrow adjacent tests prove missing/blank/inactive/wrong-owner instruction refusal with zero dispatch/provider, legacy migration, valid no-model run, direct recording-only refusal and description integrity. Run narrow tests only; notify root before package-wide type/build gates.
+- Report to: docs/working/instruction-led-automation-plan/reports/core-implementation.md downstream.
+
+### Brief: instruction-ui-implementation
+- Repository: paired t519 downstream extension and Core web UI.
+- Task: instruction-first authoring and actionable legacy next-run recovery; require recording description at start/edit/attach; recordings remain optional evidence.
+- Required reads: Current State, own ui-discovery report, owning Core web/extension UI modules.
+- Owns (may edit): downstream apps/extension/** and adjacent tests; Core apps/web/** and adjacent tests only.
+- Must not touch: Core packages/** backend/contracts, downstream domain/packages/test-runner/packages/test-contracts/apps/scenario-lab, shared working docs, t518, user data, commits/pushes.
+- Remove recording-only generate/test/save/approval shortcut from runnable UI. Redirect to explicit Instructions authoring with described optional recording attachment; no task inferred from title/trace/description.
+- Existing flow missing task instructions must expose actual Instructions editor before next run/resume; deterministic readiness checks must require the same authority. Surface closed backend errors/actionable recovery instead of generic retry.
+- New recording/extraction auto-start and Core web client start must collect an explicit description; existing recordings can edit it independently of name/notes. Chrome/Firefox share the same requirement.
+- Coordinate API/protocol shape and error codes with Core worker; server guards remain authoritative. Blank drafts stay editable; no extension-local durable authority store.
+- Definition of done: adjacent tests cover task-required authoring/run/recovery, missing descriptions, separate fields, preserved legacy recording edits and shared browser panel. Narrow tests only; notify root before type/build gates.
+- Report to: docs/working/instruction-led-automation-plan/reports/ui-implementation.md.
+
+### Brief: instruction-lab-implementation
+- Repository: paired t519 downstream domain/Lab.
+- Task: retire recording-only executable lane, use existing explicit-task generation paths, require explicit fixture recording descriptions and respect persisted instruction refusal.
+- Required reads: Current State, own lab-domain-discovery report, owning runner/task/fixture modules.
+- Owns (may edit): packages/test-runner/**, packages/test-contracts/**, apps/scenario-lab/**, domain/** and their adjacent tests.
+- Must not touch: apps/extension/**, Core source, shared working docs, t518, user data, commits/pushes.
+- Retire direct recorded --flow activation with actionable existing created-Flow command; preserve read/mapping diagnostics. Do not build another authoring engine, silently attach fixture goals to saved/clone flows, or keep a hidden bypass.
+- Provide explicit authored fixture demonstration descriptions at recording starts through public description contract; do not infer from title/trace or copy automation instruction into description. Coordinate wire shape with UI/Core workers.
+- Domain generic model guidance establishes instruction precedence over optional untrusted demonstrations; never mirror realistic tasks, oracle values, selectors, products or names in product guidance.
+- Existing explicit-task chat/build route remains normal generation. Separate generation/reuse metrics, with no manual execution counted as model generation. Missing instruction errors propagate without mutating old flows.
+- Definition of done: narrow runner/request/recording/fixture/model-guidance tests prove early refusal/no hidden conversion and no oracle context leakage; no paid/live runs or full suites. Notify root before package type/build gates.
+- Report to: docs/working/instruction-led-automation-plan/reports/lab-implementation.md.
 
 ## Implementation Phases
 
@@ -64,3 +114,27 @@ Related: [adaptation and breadth](./adaptation-and-breadth-plan.md), [MVP](./mvp
 - Changed: new product direction recorded; user confirmed missing instructions block existing automations before their next run. Previous recording-only live controls sealed and preserved; no further launches.
 - Validation: initial source inspection finds existing FlowInstruction inventory and candidate build authority, plus direct recording proposal generation/approval paths that require review. Prior t518 narrow validation and live limits remain in the paired adaptation document.
 - Outcome: read-only discovery briefs prepared before implementation; no source changes or pushes for this requirement yet.
+
+### 2026-10-13 - Bypasses mapped and paired implementation dispatched
+
+- Agent: Codex senior supervisor; discovery workers replay_investigation, codex-t517 and codex-t516.
+- Changed: accepted three source-backed discovery reports, established disjoint Core-package/UI/Lab implementation briefs and provisioned paired t519 through owning worktree helpers with offline install.
+- Why: recording/policy activation compiles the trace independently of task metadata, deterministic run/resume lacks mandatory task admission, and recording starts have no owned description.
+- Validation: independently inspected FlowInstruction model, API save defaults, generation-context gate and runRuntimeSession admission. `pnpm.cmd --filter @fluxiq/contracts build`, `--filter fluxiq build`, and `--filter @fluxiq/client-gateway-websocket build` passed for base public contract prerequisites; no full suite or live run.
+- Outcome: Accepted discovery; source implementation in progress. Preserve existing legitimate written Flow instructions and old data; no inferred task migration or standalone recording replay launches.
+
+### 2026-10-13 - Independent checks and implementation review
+
+- Agent: Codex senior supervisor.
+- Changed: reviewed service gates, task editor attachment preservation and owner switching, model-only no-mutation protection, described summary persistence and legacy nullable migration; updated obsolete recording-only architecture/MVP guidance.
+- Validation: root extension 100/100, web 146/146, Lab runner 66 distinct cases, domain 16/16, contracts 2/2, scenario 9/9; touched package compilation/type checks observed. Core narrowed 72/72 includes actual saved no-model runs, closed refusals, task edits, proposal refusal and close/reopen summaries. Native Chromium modal 8 assertions passed on company-website.
+- Failures corrected: browser-safe contract test misplaced Node types, obsolete CLI/conversation fixtures, web transport mocks/provider-error copy, omitted description summary projection, and new source cycles/layout violations. Source mistakes were fixed rather than approval gates bypassed. Final facade collaborator and fresh gates remain.
+- Outcome: Partial until final audit/type/test and paired integration; no full suites, paid calls or pushes.
+
+### 2026-10-13 - Final source verification
+
+- Agent: Codex senior supervisor.
+- Changed: accepted genuine instructionAuthority collaborator, corrected nonstring API instruction coercion, and prevented a failed optional evidence load from clearing existing attachments; existing graph/recording data remain intact.
+- Validation: Core final affected 42/42 and subsequent public-service 14/14 passed; these complete 116 distinct Core cases across checks. Web 146/146, post-extraction 49/49 and final task-editor 4/4 passed (147 distinct); extension 100/100 plus affected lifecycle 291/291 passed with overlap. Core/web/domain/scenario/runner source and test types passed; contracts and Chrome/Edge/Firefox bundles built. Native company-website Chromium helper passed 8 assertions, zero external requests/provider calls.
+- Audit: source cycles, swallowed errors, packing, naming, imports and size violations resolved; only generated working index drift remains, with lower baselines to regenerate. No full suite or paid provider run.
+- Outcome: Accepted source implementation; integration/push and final index audit pending. Full paired recording/build/replay and Firefox live behavior are not claimed.

@@ -173,10 +173,12 @@ export class ActiveRecording {
     this.events += 1;
   }
 
-  start(): Promise<void> {
+  start(description?: string): Promise<void> {
+    const normalized = description?.trim();
+    if (!normalized || normalized.length > 4000) return Promise.reject(new Error("recording.description_required: Describe this recording in 1?4000 characters."));
     if (this.uiStart) return this.uiStart.finished;
     const uiStart = { cancelled: false, finished: Promise.resolve() };
-    const finished = this.startAfterStop(uiStart);
+    const finished = this.startAfterStop(uiStart, normalized);
     uiStart.finished = finished;
     this.uiStart = uiStart;
     void finished.then(
@@ -186,7 +188,7 @@ export class ActiveRecording {
     return finished;
   }
 
-  private async startAfterStop(uiStart: UiStartUnderWay): Promise<void> {
+  private async startAfterStop(uiStart: UiStartUnderWay, description: string): Promise<void> {
     await this.settleCapturedStop();
     if (uiStart.cancelled) return;
     if (this.handshake.isPending()) {
@@ -227,7 +229,7 @@ export class ActiveRecording {
     // second Core lookup: the send resolves the project authoritatively, once
     // per attempt.
     this.deps.onActivity("recording", "Starting recording", this.deps.projects.current() ? "Waiting for FluxIQ project acceptance." : "Waiting for FluxIQ project context.", "warning");
-    await this.handshake.begin({ recordingId, startedAt, initialState: initialState as unknown as JsonObject });
+    await this.handshake.begin({ recordingId, startedAt, description, initialState: initialState as unknown as JsonObject });
     this.deps.emitStatus();
   }
 
@@ -457,6 +459,7 @@ export class ActiveRecording {
     const projectId = await this.lookUpProject(attempt.recordingId, attempt.attempt === 0 ? "recording_start" : "recording_start_retry");
     await this.deps.send("client.start_recording", {
       recordingId: attempt.recordingId,
+      description: attempt.description,
       ...(projectId ? { projectId } : {}),
       startedAt: attempt.startedAt,
       domainId: WEB_AUTOMATION_DOMAIN_ID,

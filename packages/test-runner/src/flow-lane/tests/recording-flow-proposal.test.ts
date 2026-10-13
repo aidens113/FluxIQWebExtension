@@ -61,19 +61,20 @@ test("a proposal with no candidate is refused, since an approved Flow would exec
   await assert.rejects(() => createRecordingFlowProposal(client, { projectId: "project.web", recordingId: "recording.one" }), /carried no action candidate/);
 });
 
-test("approval returns the Flow Core created, and the destination must name it", async () => {
+test("recording approval is retired before any public activation call", async () => {
   const approved = { proposal: { ...proposal({ status: "approved" }), review: { decision: "approved", destination: { kind: "flow", flowId: "flow.new", created: true } } }, flow: { flowId: "flow.new" } };
   const client = control({ "review-recording-flow-proposal": approved });
-  const result = await approveRecordingFlowProposal(client, { projectId: "project.web", proposalId: "proposal.one", authorizationPin: "123456", name: "Lab flow" });
-  assert.deepEqual(result, { flowId: "flow.new", proposalId: "proposal.one", created: true });
-  assert.deepEqual(client.calls[0]?.payload, { projectId: "project.web", proposalId: "proposal.one", decision: "approved", destination: { kind: "flow", name: "Lab flow" }, authorizationPin: "123456" });
+  await assert.rejects(() => approveRecordingFlowProposal(client, { projectId: "project.web", proposalId: "proposal.one", authorizationPin: "123456", name: "Lab flow" }), /Recording-only Flow creation is retired/);
+  assert.deepEqual(client.calls, []);
 });
 
 test("an unapproved proposal or a mismatched destination is refused", async () => {
   const rejected = control({ "review-recording-flow-proposal": { proposal: { ...proposal({ status: "rejected" }), review: {} }, flow: { flowId: "flow.new" } } });
-  await assert.rejects(() => approveRecordingFlowProposal(rejected, { projectId: "p", proposalId: "proposal.one", authorizationPin: "1", name: "n" }), /did not approve/);
+  await assert.rejects(() => approveRecordingFlowProposal(rejected, { projectId: "p", proposalId: "proposal.one", authorizationPin: "1", name: "n" }), /Recording-only Flow creation is retired/);
   const mismatched = control({ "review-recording-flow-proposal": { proposal: { ...proposal({ status: "approved" }), review: { destination: { kind: "flow", flowId: "flow.other", created: true } } }, flow: { flowId: "flow.new" } } });
-  await assert.rejects(() => approveRecordingFlowProposal(mismatched, { projectId: "p", proposalId: "proposal.one", authorizationPin: "1", name: "n" }), /did not name the Flow/);
+  await assert.rejects(() => approveRecordingFlowProposal(mismatched, { projectId: "p", proposalId: "proposal.one", authorizationPin: "1", name: "n" }), /Recording-only Flow creation is retired/);
+  assert.deepEqual(rejected.calls, []);
+  assert.deepEqual(mismatched.calls, []);
 });
 
 /**

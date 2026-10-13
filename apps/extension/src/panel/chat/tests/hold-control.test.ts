@@ -129,3 +129,19 @@ test("an obsolete owner cannot press, and a reply for an older run or owner chan
     assert.equal(view.byClass("chat-hold-status")[0]!.textContent, "", "an obsolete owner's failure changes nothing");
   });
 });
+
+test("a missing-task refusal offers recovery for the actual held run", async () => {
+  await withFakeDocument(async () => {
+    const sent: PanelMessage[] = [];
+    const control = createHoldControl(relay(sent, async () => ({ ok: false, code: "automation.instructions_required", sentence: "Author task instructions in FluxIQ before this automation can run or resume." })), () => true);
+    control.update(run({ phase: "paused" }, "held-run"));
+    const view = fake(control.element);
+    view.byClass("chat-hold")[0]!.dispatch("click");
+    await settle();
+    const recovery = view.descendants().find((node) => node.tagName === "BUTTON" && node.textContent === "Open task Instructions in FluxIQ")!;
+    assert.equal(recovery.hidden, false);
+    recovery.dispatch("click");
+    await settle();
+    assert.deepEqual(sent[1], { type: "fluxiq.panel.openFluxIQ", runId: "held-run" });
+  });
+});

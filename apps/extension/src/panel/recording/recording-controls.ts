@@ -24,6 +24,7 @@ import { mountExtractionPanel } from "../extraction";
 import type { PanelContext } from "../shell";
 import { createStickyError } from "../state";
 import { extractControl } from "./extract-control";
+import { requestRecordingDescription } from "./description";
 import { recordControl } from "./record-control";
 import "./recording.css";
 
@@ -52,9 +53,9 @@ export function createRecordingControls(context: PanelContext): RecordingControl
     id: "recordButton",
     className: "icon-button record-button",
     hidden: true,
-    attrs: { type: "button", "aria-label": "Start recording", title: "Record a new automation" }
+    attrs: { type: "button", "aria-label": "Start recording", title: "Record supporting evidence" }
   }, [recordIcon()]);
-  const recordNew = createElement("button", { className: "small-button", text: "Record a new automation", attrs: { type: "button" } });
+  const recordNew = createElement("button", { className: "small-button", text: "Record supporting evidence", attrs: { type: "button" } });
   const recordLine = createElement("p", { className: "card-line" });
   const extractionHost = createElement("div", { className: "extraction-entry" });
   const extraction = mountExtractionPanel(extractionHost, { prepare: startRecordingIfIdle });
@@ -62,7 +63,7 @@ export function createRecordingControls(context: PanelContext): RecordingControl
   const extractSlot = createElement("div", { className: "new-automation-extract" }, [extractionHost]);
   const newAutomation = createElement("section", { className: "new-automation", attrs: { "aria-label": "New automation" } }, [
     createElement("h3", { className: "new-automation-title", text: "New automation" }),
-    createElement("p", { className: "card-line", text: "Describe what you want in the chat, or show FluxIQ how by doing it once while it records." }),
+    createElement("p", { className: "card-line", text: "Describe the task in chat or in FluxIQ. Add a described recording as optional supporting evidence." }),
     createElement("div", { className: "new-automation-row" }, [recordNew, recordLine]),
     createElement("div", { className: "new-automation-row" }, [extractSlot, extractLine])
   ]);
@@ -98,7 +99,13 @@ export function createRecordingControls(context: PanelContext): RecordingControl
     error.clear();
     sending = true;
     rerender();
-    const result = await store.request({ type: RUNTIME_MESSAGES.startRecording });
+    const description = await requestRecordingDescription(newAutomation);
+    if (description === undefined) {
+      sending = false;
+      rerender();
+      return;
+    }
+    const result = await store.request({ type: RUNTIME_MESSAGES.startRecording, description });
     sending = false;
     if (!result.ok) error.show(result.sentence, (status) => status.recordingState === "recording", result.detail);
     rerender();
@@ -107,7 +114,9 @@ export function createRecordingControls(context: PanelContext): RecordingControl
   /** Extraction is recorded into a recording; with none running, one is started first. */
   async function startRecordingIfIdle(): Promise<void> {
     if (latest?.recordingState === "recording") return;
-    const result = await store.request({ type: RUNTIME_MESSAGES.startRecording });
+    const description = await requestRecordingDescription(newAutomation);
+    if (description === undefined) throw new Error("Recording cancelled.");
+    const result = await store.request({ type: RUNTIME_MESSAGES.startRecording, description });
     if (!result.ok) throw new Error(result.sentence);
   }
 
@@ -132,9 +141,9 @@ export function createRecordingControls(context: PanelContext): RecordingControl
     const connected = status.connectionState === "connected";
     recordButton.hidden = record.hidden || !connected;
     recordButton.disabled = record.disabled || sending;
-    recordButton.title = record.reason ?? "Record a new automation";
+    recordButton.title = record.reason ?? "Record supporting evidence";
     recordNew.disabled = record.disabled || record.hidden || sending;
-    recordLine.textContent = record.hidden ? "Recording now. Stop it from the bar at the top." : record.reason ?? "Do the job once while FluxIQ records the steps.";
+    recordLine.textContent = record.hidden ? "Recording now. Stop it from the bar at the top." : record.reason ?? "Record a demonstration to support your task instructions.";
 
     const extract = extractControl(status, working);
     extraction.setAvailable(!extract.disabled, extract.line);

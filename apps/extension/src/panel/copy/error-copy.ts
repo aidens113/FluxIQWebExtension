@@ -34,6 +34,8 @@ export function errorSentence(raw: string | undefined): string {
   if (text === "WebSocket connection failed.") return "Can't reach FluxIQ. Make sure it is running on this computer.";
   if (/^FluxIQ recordings API returned 401\b/.test(text)) return "FluxIQ didn't accept this browser. Connect again to re-approve it.";
   if (/^FluxIQ recordings API returned \d+/.test(text)) return "Couldn't load recordings from FluxIQ.";
+  if (text.startsWith("recording.description_required:")) return "Describe this recording before starting it.";
+  if (text.startsWith("Author task instructions in FluxIQ")) return text;
   if (PLAIN.has(text)) return text;
   return UNMAPPED;
 }

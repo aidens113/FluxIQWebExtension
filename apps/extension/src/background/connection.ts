@@ -408,8 +408,8 @@ export class FluxIQConnection {
     this.emitStatus();
   }
 
-  startRecording(): Promise<void> {
-    return this.recording.start();
+  startRecording(description?: string): Promise<void> {
+    return this.recording.start(description);
   }
 
   stopRecording(notifyServer = true): Promise<void> {

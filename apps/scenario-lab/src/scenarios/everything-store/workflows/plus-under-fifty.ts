@@ -45,6 +45,7 @@ const RECORDS = earbudRecords(ANSWER);
  */
 export const PLUS_UNDER_FIFTY_WORKFLOW: ScenarioWorkflow = {
   id: "plus-under-fifty",
+  recordingDescription: "Demonstrates filtered product reads across multiple result pages.",
   description: "Find every Plus-eligible pair of wireless earbuds rated 4.0 or higher and priced under $50 across every page of results, leaving out sponsored placements and accessories, each once, in the order the results first show them.",
   recordingScript: [
     ...SHARED_STEPS.openStore,

@@ -41,6 +41,20 @@ function client(overrides: Record<string, unknown> = {}) {
   } as any;
 }
 
+test("missing persisted instructions propagate without synthesizing a task or dispatching the saved Flow", async () => {
+  const refusal = new Error("automation.instructions_required");
+  let dispatched = 0;
+  let changed = 0;
+  const control = client({
+    startPersistedFlow: async () => { throw refusal; },
+    runPersistedFlow: async () => { dispatched++; },
+    automationStudioCall: async () => { changed++; }
+  });
+  await assert.rejects(() => executeExistingPersistedFlow(control, target, "run.instruction-gate"), error => error === refusal);
+  assert.equal(dispatched, 0);
+  assert.equal(changed, 0);
+});
+
 test("preflights exact project, Flow, and discoverable gateway", async () => {
   const value = await preflightExistingFluxIQ(client(), target);
   assert.equal(value.flow.contentHash, "a".repeat(64));

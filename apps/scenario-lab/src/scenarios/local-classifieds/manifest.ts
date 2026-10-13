@@ -109,6 +109,7 @@ const saveTable = (key: string, index: number): ScenarioStep[] => [
  */
 export const localClassifiedsManifest = createScenarioManifest({
   id: "local-classifieds",
+  recordingDescription: "Demonstrates listing detail navigation and seller contact controls.",
   title: "Local classifieds",
   tags: ["marketplace", "classifieds", "infinite-scroll", "sponsored", "generated-classes", "shadow-dom", "iframe", "consent", "anti-bot", "extraction", "permission"],
   seed: 44,
@@ -148,6 +149,7 @@ export const localClassifiedsManifest = createScenarioManifest({
   workflows: [
     {
       id: "bike-search",
+      recordingDescription: "Demonstrates location filters and reading matching classified listings.",
       description: "Every bicycle within 10 miles of Kelford from £100 to £400 in good condition or better, each once, cheapest first, with no advert and nothing from outside the search.",
       recordingScript: [
         answerCookies,
@@ -209,6 +211,7 @@ export const localClassifiedsManifest = createScenarioManifest({
     },
     {
       id: "save-dining-tables",
+      recordingDescription: "Demonstrates inspecting furniture listings and saving selected items.",
       description: "Save the three cheapest dining tables within 5 miles of Kelford, then read back everything saved, cheapest first.",
       recordingScript: [
         answerCookies,

@@ -1,5 +1,20 @@
 # Automated testing facility
 
+## Instruction authority and recording evidence
+
+Automation generation uses the authored explicit-task created-Flow lane through
+the production instruction/chat contract. The standalone recorded `--flow`
+conversion lane is retired: a recording cannot define an executable automation.
+Mapping diagnostics remain evidence, and coverage of every demonstration event
+does not prove the written task was answered.
+
+Fixture recordings supply explicit descriptions independently of automation
+instructions. Saved/clone/replay execution respects Core's current instruction
+gate; the Lab must not silently inject a fixture goal into an old automation.
+Generation and deterministic reuse are measured separately. Oracle outputs,
+scripted selectors and expected fixture values remain scoring data and never
+become product model guidance or inferred task instructions.
+
 ## Interactive development sessions
 
 Use `pnpm lab:interactive <scenario> --target persistent-isolated --workspace <name>` when developing or debugging a small UI change. The command builds prerequisites once, starts one headed browser and one isolated topology, reuses the named FluxIQ state/browser profile, loads both the scenario and authenticated panel surfaces, and then accepts newline-delimited JSON commands on standard input until `{"action":"stop"}`. After the first build, the faster relaunch is `node packages/test-runner/dist/cli.js interactive <scenario> --target persistent-isolated --workspace <name>`.
@@ -233,20 +248,19 @@ The browser suite and the four facility target modes must not be conflated:
    invocation; the Scenario Lab port is kept, so a Flow saved in the workspace
    can be [replayed later](#replaying-a-saved-flow).
 
-On the `isolated` and `persistent-isolated` targets a run takes one of two
-lanes. The recording lane, the default, drives the manifest's recording script
-while the extension records, and proves Core's production client-action API
-with a short Core action probe. The Flow lane, `lab run --flow`, goes on to
-build a persisted Flow from that run's own recording through Core's public
-proposal API, and runs it. Both are described in
+On the `isolated` and `persistent-isolated` targets the default recording lane
+drives the manifest's explicitly described demonstration while the extension
+records, and probes Core's production client-action API. It measures capture,
+not automation generation. Standalone `lab run --flow` trace conversion is
+retired; use the explicit-task created-Flow lane for authoring. See
 [Recording lane and Flow lane](#recording-lane-and-flow-lane). Existing mode
 never creates or rewrites the selected Flow: it executes the exact pre-existing
 Flow after checking its project scope and recording a stable content hash.
 
 Live instruction campaigns add a separate created-Flow lane: Core authors a
 Flow from the task instruction, the facility reviews and applies that proposal,
-then runs and judges it. It is not one of the ordinary `lab run` recording/
-recorded-Flow lane choices, and its artifact is described under
+then runs and judges it. Instructions define its work; described recordings may
+support them. Its artifact is described under
 [The instruction-created Flow lane and its authored artifact](#the-instruction-created-flow-lane-and-its-authored-artifact).
 
 ## Ownership boundary
@@ -1166,23 +1180,21 @@ These are fixture tests, not extension-to-Core E2E tests.
 
 ## Recording lane and Flow lane
 
-Every `lab run` on the `isolated` or `persistent-isolated` target runs the
-recording lane, and `--flow` adds the Flow lane after it. The existing and
-clone targets run a pre-existing Flow on neither lane.
+The default `lab run` on isolated targets records a described demonstration.
+It cannot convert that recording directly into an executable automation.
+Instruction-led creation uses the existing explicit-task lane. Existing and
+clone targets execute a saved Flow only when Core validates its task instructions.
 
 ```powershell
-pnpm lab run basic-form
-pnpm lab run basic-form --flow
-pnpm lab run auth-gate --flow --variant expired
-pnpm lab run product-catalog --workflow search --flow
+pnpm lab run company-website
+pnpm lab run company-website --live-llm --llm-profile <profile> --llm-provider <provider> --llm-task create-flow --instruction-task <task>
 ```
 
 `--workflow <id>` selects a `workflows[]` entry; without it the manifest's
-primary workflow runs. `--variant <id>` requires `--flow`, because only the Flow
-lane arms a variant. `--flow` is refused on the existing and clone targets. A
-`--flow` followed by a bare value is read as `--flow <flow-id>`, the existing
-target's Flow override, so give the Flow-lane flag last or before another
-option (`packages/test-runner/src/commands.ts`).
+primary workflow runs. Bare `--flow` now refuses before topology startup with
+instruction-led guidance. `--flow <flow-id>` remains a saved-Flow selector for
+existing/clone reuse; it does not reactivate trace conversion. Creation and
+saved replay use their own supported variant controls.
 
 ### The recording lane
 
@@ -1241,128 +1253,23 @@ recording, and runs the [recording checks](#recording-checks).
 A variant never changes the recording. The recording lane always records the
 workflow unarmed, and judges it against the unarmed workflow's expectations.
 
-### The Flow lane
+### The retired recording-derived Flow lane
 
-After the recording checks pass, the Flow lane
-(`packages/test-runner/src/flow-lane/run-flow-lane.ts`) runs with no provider
-configured; every step is a Core call or a fixture assertion:
+Standalone recorded Flow conversion is retired. `runFlowLane` and the direct
+recording approval helper refuse before controls, provider authorization,
+reset, dispatch or judgement. Core also refuses recording/policy proposal
+activation into executable Flows or reusable nodes. A trace, its description
+or proposal metadata cannot grant task authority.
 
-1. It requires exactly one new recording, and waits until Core has finalized it.
-2. It asks Core's public `create-recording-flow-proposals` for the recording's
-   proposal. A proposal with no candidate, or with fewer candidates than the
-   executable recording events the workflow pins exact counts for, fails as
-   `recording.contract` before anything is approved.
-3. It approves the proposal into a new Flow through
-   `review-recording-flow-proposal`. Core creates and writes the Flow; the lane
-   never authors one.
-4. It resets the fixture state through the Scenario Lab's `/__control/reset`, so
-   the Flow is judged on state it produced itself.
-5. It prepares the page: it arms the variant, if any, loads the scenario's
-   `startPath` in the scenario tab, and checks the armed rendering's page facts.
-   Every Flow run starts on the start page, never wherever the recording left
-   the tab, and never by a reload.
-6. It reads the Flow's nodes once, maps each node to its action type, and pairs
-   the nodes' requests with the [declared replay secrets](#declared-replay-secrets)
-   and [declared uploads](#declared-uploads).
-7. It runs the Flow through Core's persisted-run API, with those values as run
-   inputs and `web-automation` as the authorized domain, and reads Core's run
-   detail whether the Flow succeeded or failed.
-8. It consults the fixture oracle, publishes what it observed, and only then
-   judges the workflow's expectations.
+Finalization and recording-mapping coverage remain capture diagnostics. They
+do not require every demonstrated retry or extra act in an instructed build.
+Existing historical bundles remain evidence of the earlier implementation;
+their recorded-lane success is not instruction-led generation qualification.
 
-The expectations are judged in this order:
-
-- `expected.failure`, against the structured `failure` record Core wrote on the
-  first attempt that has one: its category, and its code when the workflow
-  names one. An expected failure that did not happen, or a failure nobody
-  expected, fails as `runtime.behavior`. Nothing is read from a message.
-- `expected.actions`, by the rule in [Scenario lab and contract](#scenario-lab-and-contract),
-  failing as `action.dispatch`.
-- `expected.extracted`, against **the datasets Core stored for the run**
-  (`flow-lane/run-datasets.ts`). The lane reads `runDetail.datasets` and pages
-  `get-run-dataset-page` until Core advances no cursor, rebuilding each row over
-  the page's schema and restoring `null` for every field the row lacks, because
-  an expectation spells an optional miss as `null` and a `null` matches only a
-  `null`. A dataset whose rows do not add up to its summary's `recordCount` is
-  refused: a short read would turn a record regression into a missing one. A
-  stored attempt never carries its rows — Core replaces them with a `$dataset`
-  marker and keeps the count — so there is no other place to read them from.
-
-  Datasets pair with the script's `extract` steps by the recording's candidate
-  order, and one `RunExtractionMeasurement` per step is published on the
-  observation and in `snapshots/flow-lane.json` **before** any expectation is
-  judged. The assertions then run in this order: fewer extract nodes than
-  recorded extract steps fails as `recording.contract`; any non-string field
-  value fails as `runtime.behavior`; an expectation naming a step the script
-  does not extract from fails as `fixture.invalid`; an expected step for which
-  the Flow stored no dataset fails as `runtime.behavior`; and the records are
-  compared last.
-
-  Two members of the expectation are **stated as unjudged rather than judged or
-  refused**: the pages a read covered, and whether it hit the page's item cap.
-  Core's run detail and its datasets record neither, and a dataset's own
-  `truncated` is Core's per-run row cap, a different event. They are therefore
-  removed from the entry handed to the assertion, named on the step as
-  `unjudged`, and enter no rate — so `paginationAccuracy` on this lane has an
-  empty population and publishes no number. It stays a recording-lane measure,
-  and no recording-lane result pages any more, so it publishes no rate there
-  either until a page loop can be recorded. The records are still compared in
-  full, which is the stronger claim: a step that read only page 1 cannot
-  produce page 3's records.
-- The fixture oracle. A Flow whose expectations held but whose fixture did not
-  reach its expected final state fails as `runtime.behavior`.
-
-What the lane observed is written to `snapshots/flow-lane.json` before any
-expectation is judged, so a run that fails one still shows the Flow run it was.
-The file holds Core's identifiers, statuses, counts and structured records,
-never page content (`flowLaneSnapshot`):
-
-- the recording's id and entry count, and the lane's own wait on it;
-- the proposal's id, mapper, candidate count, and Core's own issues;
-- the Flow and runtime run ids, the run status, the number of LLM interventions
-  Core recorded (`harnessActivations`), and the first failure record;
-- an `extraction` block: whether the workflow's expectation applied, the extract
-  nodes against the recorded extract steps, datasets no step paired with, and
-  per step its position, its status (`judged`, `not_run` or `not_expected`), its
-  record, field and non-string counts, the expectation members this lane could
-  **not** judge, and Core's own dataset flags. No step id, field name or value
-  is in it. The `unjudged` list is the point of the block: a reader who sees a
-  green extraction must be able to see what was not compared without opening
-  the code. Beside each step's comparison sits `reads`: what the reads that
-  wrote that step's dataset said about **themselves**, and `[]` for a step
-  whose reads reported none;
-- per attempt, in order: the Flow node it ran and its position in Core's
-  attempt order; its action type, status, start time and duration; the ladder
-  rung that asked for it, when it is not the node's first attempt; what the run
-  did about the state the node expected before it ran; its failure record;
-  Core's transition comparison status when Core reported one, kept only when it
-  is shaped like one of Core's names; **both** target resolutions, each narrowed
-  to closed words and numbers; the read's own account of itself for an attempt
-  that dispatched one (`extraction`); and the size in bytes and truncation flag
-  of each sanitized evidence packet Core captured before and after it. The
-  packets themselves never travel;
-- a `recovery` block: which recovery answered for each node, which rungs ran,
-  and the busiest node's attempt count (`recoveryAttributionSnapshot`).
-
-The node id is the newest of those and the one the rest depend on. An action
-carried none until the recovery ladder existed, deliberately, so that an
-identifier could never reach a judgement or a bundle. What changed is that a
-node is now attempted more than once: without the id, a node the ladder retried
-twice and a Flow that authored the same action twice produce the same flat list
-of attempts, and no rung can be attributed to anything. It is admitted only when
-it has the shape of a Core node identifier, so a value carrying page text is
-read as absent.
-
-The two target resolutions answer different questions and are named apart.
-`targetResolution` is Core's own, its pre-dispatch choice of candidate.
-`hostTargetResolution` is the browser's `WebAutomationTargetResolution`, which
-names the `strategy` it actually found the element by; it reaches Core inside
-the dispatched result payload, and Core projects it onto the attempt
-(`runtime/service/summaries/host-target-resolution.ts`). That strategy is the
-only evidence of the recovery that has no ladder rung, because the browser
-re-resolves a renamed control before Core is told anything failed -- so a
-`fingerprint` or `scored-candidate` strategy on a **succeeded** attempt is the
-record that a rename was survived.
+Use the instruction-created lane below for authoring and saved Flow replay
+for deterministic reuse. Both obey production instruction gates. Dataset,
+action and page oracles remain external scoring data, never synthesized task
+instructions or supplemental recording descriptions.
 
 ### The instruction-created Flow lane and its authored artifact
 
@@ -2837,9 +2744,9 @@ The implemented specs verify:
 These specs do not use the Scenario Lab registry or the FluxIQ gateway; they
 share only Scenario Lab's network guard. The isolated facility runner's
 recording lane proves pairing, recording persistence, and production
-client-action dispatch, as the verified `basic-form` run showed, and its
-[Flow lane](#the-flow-lane) executes a persisted Flow built from the run's own
-recording. The existing target executes a pre-existing persisted Flow but still
+client-action dispatch. Its earlier recording-derived conversion is
+[retired](#the-retired-recording-derived-flow-lane); current authoring requires
+explicit instructions. The existing target executes a pre-existing instructed Flow but still
 awaits a live validation run. The facility does not yet prove full
 reconnect/replay, Firefox behavior, or installed Chrome/Edge behavior. Neither
 Playwright suite proves a command's delivery to a child frame through the

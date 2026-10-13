@@ -334,7 +334,7 @@ export function createAutomationsController(
         if (reply?.run.flowId !== flowId) reply = undefined;
         if (!result.ok) {
           if (result.unsupported) runUnsupported = true;
-          notices.set(flowId, result.unsupported ? { sentence: "Run it in FluxIQ.", openFluxIQ: true } : { sentence: result.sentence, detail: result.detail, openFluxIQ: false });
+          notices.set(flowId, result.unsupported ? { sentence: "Run it in FluxIQ.", openFluxIQ: true } : { sentence: result.sentence, detail: result.detail, openFluxIQ: result.code === "automation.instructions_required" || result.code === "automation.instruction_led_authoring_required" });
         } else if (!reply) notices.set(flowId, { sentence: "It ran, but FluxIQ didn't say how it went.", openFluxIQ: true });
         else { replies.set(flowId, reply); detailsAsked.delete(reply.run.runId); }
       } catch {

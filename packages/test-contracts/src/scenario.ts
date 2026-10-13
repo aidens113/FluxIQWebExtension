@@ -393,6 +393,8 @@ export type ScenarioVariant = {
 export type ScenarioWorkflow = {
   id: string;
   description: string;
+  /** Authored explanation of the demonstration; never the automation instruction. */
+  recordingDescription?: string;
   recordingScript: ScenarioStep[];
   expected: ScenarioExpected;
   variants?: ScenarioVariant[];
@@ -420,6 +422,8 @@ export type WebScenario = {
   schemaVersion: typeof SCENARIO_SCHEMA_VERSION;
   id: string;
   title: string;
+  /** Explicit fixture-authored description of the primary demonstration. */
+  recordingDescription?: string;
   tags: string[];
   seed: number;
   startPath: string;

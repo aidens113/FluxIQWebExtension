@@ -4,6 +4,7 @@ import { restoreClothsExpected } from "./expected.js";
 
 export const restoreClothsWorkflow: ScenarioWorkflow = {
   id: "restore-saved-cloths",
+  recordingDescription: "Demonstrates restoring eligible saved household items and preserving unrelated saves.",
   description: "Transfer the existing saved cloth line into the active cart, preserving every other line.",
   recordingScript: [
     { id: "cloths-notifications", operation: "waitForState", target: "role:dialog:Never miss a deal", timeoutMs: 15_000 },

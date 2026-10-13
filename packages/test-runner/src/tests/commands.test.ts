@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { RunnerFailure } from "../failure.js";
+
+const instructionLedRefusal = (error: unknown) => error instanceof RunnerFailure
+  && error.details?.code === "automation.instruction_led_authoring_required"
+  && /Recording-only Flow creation is retired/u.test(error.message);
 
 test("saved replay binds explicit project identity without changing legacy replay", () => {
   assert.deepEqual(parseLabCommand(["replay", "basic-form", "--workspace", "saved", "--project", "project.created", "--flow", "flow.saved"]), {
@@ -100,36 +105,19 @@ test("live LLM CLI takes a run token budget only when one is typed", () => {
 test("--llm-task repair is a live task with the same budget options as adapt", () => {
   const repair = ["--live-llm", "--llm-profile", "lab-explore-repair", "--llm-provider", "deepseek", "--llm-model", DEFAULT_LLM_MODEL, "--llm-task", "repair"];
   // The campaign's own repair limits, which an iterating repair needs room for.
-  const command = parseLabCommand(["run", "identity-drift", "--variant", "renamed-redesign", "--flow", ...repair, "--llm-max-input-tokens", "42000", "--llm-max-output-tokens", "8000", "--llm-max-total-tokens", "50000", "--llm-max-calls", "26", "--llm-max-run-tokens", "600000"]);
+  const command = parseLabCommand(["run", "identity-drift", ...repair, "--llm-max-input-tokens", "42000", "--llm-max-output-tokens", "8000", "--llm-max-total-tokens", "50000", "--llm-max-calls", "26", "--llm-max-run-tokens", "600000"]);
   assert.equal(command.command === "run" ? command.llm?.task : undefined, "repair");
   assert.equal(command.command === "run" ? command.llm?.budget.maxCallsPerRun : undefined, 26);
   assert.equal(command.command === "run" ? command.llm?.budget.maxTotalTokensPerRun : undefined, 600_000);
   // Not a small fixed cap: an iterating repair takes the operator's number, up to Core's backstop.
-  assert.equal(parseLabCommand(["run", "identity-drift", "--flow", ...repair, "--llm-max-calls", "64"]).command === "run" ? 64 : 0, 64);
-  assert.throws(() => parseLabCommand(["run", "identity-drift", "--flow", ...repair, "--llm-max-calls", "65"]), /from 1 to 64/u);
+  assert.equal(parseLabCommand(["run", "identity-drift", ...repair, "--llm-max-calls", "64"]).command === "run" ? 64 : 0, 64);
+  assert.throws(() => parseLabCommand(["run", "identity-drift", ...repair, "--llm-max-calls", "65"]), /from 1 to 64/u);
 });
 
-test("--replays applies and replays the repair, and only for the tasks whose Flow the model repairs", () => {
-  const repair = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "repair"];
-  const adapt = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "adapt"];
-  const create = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "create-flow"];
-  for (const [task, count] of [[repair, "2"], [adapt, "3"], [repair, "0"]] as const) {
-    const command = parseLabCommand(["run", "identity-drift", "--flow", ...task, "--replays", count]);
-    assert.equal(command.command === "run" ? command.replays : undefined, Number(count));
-  }
-  // Absent unless typed, so an existing repair run applies and replays nothing.
-  const untyped = parseLabCommand(["run", "identity-drift", "--flow", ...adapt]);
-  assert.equal(untyped.command === "run" ? "replays" in untyped : true, false);
-  // A created Flow's playback runs with the model taking part, so its repair is applied and replayed the same way, with no recorded Flow lane.
-  const created = parseLabCommand(["run", "identity-drift", "--variant", "renamed-redesign", ...create, "--instruction-task", "identity-drift-rename-redesigned-after-creation", "--replays", "1"]);
-  assert.deepEqual(created.command === "run" ? [created.replays, created.instructionTaskId, "flowLane" in created] : undefined, [1, "identity-drift-rename-redesigned-after-creation", false]);
-  assert.throws(() => parseLabCommand(["run", "identity-drift", "--flow", ...create, "--replays", "1"]), /drop --flow/u);
-  const diagnose = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "diagnose"];
-  assert.throws(() => parseLabCommand(["run", "identity-drift", "--flow", ...diagnose, "--replays", "1"]), /--replays requires --live-llm with --llm-task repair, adapt or create-flow/u);
-  assert.throws(() => parseLabCommand(["run", "identity-drift", "--replays", "1"]), /--replays requires --live-llm/u);
-  assert.throws(() => parseLabCommand(["run", "identity-drift", ...repair, "--replays", "1"]), /--replays replays the Flow the lane built/u);
-  assert.throws(() => parseLabCommand(["run", "identity-drift", "--flow", ...repair, "--replays", "11"]), /--replays must be between 0 and 10/u);
-  assert.throws(() => parseLabCommand(["run", "identity-drift", "--flow", ...repair, "--replays", "twice"]), /--replays must be an integer/u);
+test("--replays applies and replays the repair, and only for the tasks whose Flow the model repairs", () => { const create = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "create-flow"];
+ const created = parseLabCommand(["run", "everything-store", ...create, "--instruction-task", "everything-store-first-page-plus-earbuds-deal-wheel", "--replays", "1"]);
+ assert.equal(created.command === "run" ? created.replays : undefined, 1);
+ for (const task of ["repair", "adapt", "diagnose", "create-flow"]) assert.throws(() => parseLabCommand(["run", "everything-store", "--flow", "--llm-task", task, "--replays", "1"]), /Recording-only Flow creation is retired/);
 });
 
 test("live LLM CLI fails closed without opt-in or required non-secret identity", () => {
@@ -216,25 +204,16 @@ test("bench resume accepts exactly one durable campaign ID and no plan overrides
   }
 });
 
-test("--flow with no value selects the Flow lane; with a value it still names a persisted Flow", () => {
-  assert.deepEqual(parseLabCommand(["run", "basic-form", "--flow"]), { command: "run", scenarioId: "basic-form", flowLane: true });
-  assert.deepEqual(parseLabCommand(["run", "basic-form", "--flow", "--target", "isolated"]), { command: "run", scenarioId: "basic-form", target: "isolated", flowLane: true });
-  assert.deepEqual(parseLabCommand(["run", "basic-form", "--target", "existing", "--flow", "flow-1"]), { command: "run", scenarioId: "basic-form", target: "existing", flowId: "flow-1" });
-  assert.equal("flowLane" in parseLabCommand(["run", "basic-form"]), false);
-  assert.throws(() => parseLabCommand(["run", "basic-form", "--flow", "--flow"]), /only be specified once/);
+test("--flow with no value selects the Flow lane; with a value it still names a persisted Flow", () => { assert.throws(() => parseLabCommand(["run", "everything-store", "--flow"]), /Recording-only Flow creation is retired/);
+ assert.deepEqual(parseLabCommand(["run", "everything-store", "--target", "existing", "--flow", "flow-1"]), { command: "run", scenarioId: "everything-store", target: "existing", flowId: "flow-1" });
+ assert.throws(() => parseLabCommand(["run", "everything-store", "--flow", "--flow"]), /only be specified once/);
 });
 
-test("the Flow lane refuses targets that run a pre-existing Flow", () => {
-  assert.throws(() => parseLabCommand(["run", "basic-form", "--flow", "--target", "existing"]), /pre-existing Flow/);
-  assert.throws(() => parseLabCommand(["run", "basic-form", "--flow", "--target", "clone"]), /pre-existing Flow/);
-});
+test("the Flow lane refuses targets that run a pre-existing Flow", () => { for (const target of ["existing", "clone"]) assert.throws(() => parseLabCommand(["run", "everything-store", "--flow", "--target", target]), /Recording-only Flow creation is retired/); });
 
-test("--variant arms one variant and requires the Flow lane", () => {
-  assert.deepEqual(parseLabCommand(["run", "identity-drift", "--flow", "--variant", "selector-only"]), { command: "run", scenarioId: "identity-drift", variantId: "selector-only", flowLane: true });
-  assert.deepEqual(parseLabCommand(["run", "product-catalog", "--flow", "--workflow", "paginated-extraction", "--variant", "short-catalog"]), { command: "run", scenarioId: "product-catalog", workflowId: "paginated-extraction", variantId: "short-catalog", flowLane: true });
-  assert.throws(() => parseLabCommand(["run", "identity-drift", "--variant", "selector-only"]), /--variant requires --flow/);
-  assert.throws(() => parseLabCommand(["run", "identity-drift", "--flow", "--variant", "Selector Only"]), /kebab-case/);
-  assert.throws(() => parseLabCommand(["matrix", "--all", "--variant", "selector-only"]), /Unknown option/);
+test("--variant arms one variant and requires the Flow lane", () => { assert.throws(() => parseLabCommand(["run", "everything-store", "--flow", "--variant", "deal-wheel"]), /Recording-only Flow creation is retired/);
+ assert.throws(() => parseLabCommand(["run", "everything-store", "--variant", "deal-wheel"]), /--variant requires --flow/);
+ assert.throws(() => parseLabCommand(["matrix", "--all", "--variant", "deal-wheel"]), /Unknown option/);
 });
 
 test("create-flow runs one instruction task without the recorded Flow lane, with its variant, and can be dry-run", () => {
@@ -255,12 +234,12 @@ test("create-flow runs one instruction task without the recorded Flow lane, with
   assert.equal(dry.dryRun, true);
   assert.equal(dry.workflowId, "paginated-extraction");
 
-  assert.throws(() => parseLabCommand(["run", "product-catalog", "--flow", ...live]), /create-flow builds its Flow from an instruction task, not from the run's recording: drop --flow/u);
+  assert.throws(() => parseLabCommand(["run", "product-catalog", "--flow", ...live]), instructionLedRefusal);
   assert.throws(() => parseLabCommand(["run", "product-catalog", ...live, "--instruction-task", "Not Kebab"]), /--instruction-task must be a lowercase kebab-case task ID/u);
   assert.throws(() => parseLabCommand(["run", "product-catalog", ...live, "--dry-run", "--dry-run"]), /--dry-run may only be specified once/u);
   // The creation options belong to create-flow alone, and a variant still needs a Flow lane.
   const adapt = live.map((value) => (value === "create-flow" ? "adapt" : value));
-  assert.throws(() => parseLabCommand(["run", "product-catalog", "--flow", ...adapt, "--instruction-task", "product-catalog-first-page"]), /require --live-llm --llm-task create-flow/u);
+  assert.throws(() => parseLabCommand(["run", "product-catalog", "--flow", ...adapt, "--instruction-task", "product-catalog-first-page"]), instructionLedRefusal);
   assert.throws(() => parseLabCommand(["run", "product-catalog", "--dry-run"]), /require --live-llm --llm-task create-flow/u);
   assert.throws(() => parseLabCommand(["run", "product-catalog", "--variant", "short-catalog", ...adapt]), /--variant requires --flow/u);
   assert.throws(() => parseLabCommand(["matrix", "--scenarios-json", '["product-catalog"]', ...live]), /create-flow builds one instruction task per run: use lab run/u);
@@ -278,7 +257,7 @@ test("create-flow starts its build from the extension's chat unless the test-onl
   assert.equal(hidden.command === "run" && hidden.directApiBuild && hidden.livePanel === false, true);
   assert.throws(() => parseLabCommand(["run", "everything-store", "--direct-api-build", "--direct-api-build", ...live]), /--direct-api-build may only be specified once/u);
   const adapt = live.map((value) => (value === "create-flow" ? "adapt" : value));
-  assert.throws(() => parseLabCommand(["run", "everything-store", "--flow", ...adapt, "--direct-api-build"]), /require --live-llm --llm-task create-flow/u);
+  assert.throws(() => parseLabCommand(["run", "everything-store", "--flow", ...adapt, "--direct-api-build"]), instructionLedRefusal);
 });
 
 test("--model-reset-only belongs to create-flow, is given once, and is absent unless asked for (t472)", () => {
@@ -289,7 +268,7 @@ test("--model-reset-only belongs to create-flow, is given once, and is absent un
   assert.equal(only.command === "run" && only.modelResetOnly === true && only.dryRun === true, true);
   assert.throws(() => parseLabCommand(["run", "social-network-feed", "--model-reset-only", "--model-reset-only", ...live]), /--model-reset-only may only be specified once/u);
   const adapt = live.map((value) => (value === "create-flow" ? "adapt" : value));
-  assert.throws(() => parseLabCommand(["run", "social-network-feed", "--flow", ...adapt, "--model-reset-only"]), /require --live-llm --llm-task create-flow/u);
+  assert.throws(() => parseLabCommand(["run", "social-network-feed", "--flow", ...adapt, "--model-reset-only"]), instructionLedRefusal);
   assert.throws(() => parseLabCommand(["run", "social-network-feed", "--model-reset-only"]), /require --live-llm --llm-task create-flow/u);
 });
 
@@ -344,7 +323,7 @@ test("--llm-permit carries the named consequence classes on the live profile", (
 test("--no-live-panel turns the headed run's live panel off for run, matrix and interactive, wherever it sits", () => {
   assert.deepEqual(parseLabCommand(["run", "basic-form"]), { command: "run", scenarioId: "basic-form" }, "absent, the panel is on: the command carries no livePanel at all");
   assert.deepEqual(parseLabCommand(["run", "--no-live-panel", "basic-form", "--seed", "7"]), { command: "run", scenarioId: "basic-form", seed: 7, livePanel: false }, "the flag takes no value, so the scenario id after it is still the positional");
-  assert.deepEqual(parseLabCommand(["run", "basic-form", "--flow", "--no-live-panel"]), { command: "run", scenarioId: "basic-form", flowLane: true, livePanel: false });
+  assert.deepEqual(parseLabCommand(["run", "everything-store", "--target", "existing", "--flow", "flow.saved", "--no-live-panel"]), { command: "run", scenarioId: "everything-store", target: "existing", flowId: "flow.saved", livePanel: false });
   assert.deepEqual(parseLabCommand(["matrix", "--no-live-panel", "--all"]), { command: "matrix", all: true, repeat: 1, livePanel: false });
   assert.deepEqual(parseLabCommand(["interactive", "--no-live-panel", "basic-form"]), { command: "interactive", scenarioId: "basic-form", livePanel: false });
   assert.throws(() => parseLabCommand(["run", "basic-form", "--no-live-panel", "--no-live-panel"]), /--no-live-panel may only be specified once/);

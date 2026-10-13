@@ -35,6 +35,9 @@ const requiredString = (value: JsonObject, key: string, path: string, issues: Va
 const optionalString = (value: JsonObject, key: string, path: string, issues: ValidationIssue[]) => {
   if (value[key] !== undefined && (typeof value[key] !== "string" || value[key].length === 0)) issue(issues, `${path}.${key}`, "must be a non-empty string when provided");
 };
+const validateRecordingDescription = (value: unknown, path: string, issues: ValidationIssue[]) => {
+  if (value !== undefined && (typeof value !== "string" || !value.trim() || value.trim().length > 4000)) issue(issues, path, "must be an explicit nonblank demonstration description up to 4000 characters");
+};
 const kebabId = (value: JsonObject, path: string, issues: ValidationIssue[]) => {
   requiredString(value, "id", path, issues);
   if (typeof value.id === "string" && !KEBAB_ID.test(value.id)) issue(issues, `${path}.id`, "must be a kebab-case identifier");
@@ -315,9 +318,10 @@ const validateWorkflowBody = (workflow: JsonObject, path: string, issues: Valida
 
 const validateWorkflow: Validator = (value, path, issues) => {
   if (!isObject(value)) return issue(issues, path, "must be an object");
-  checkKeys(value, ["id", "description", "recordingScript", "expected", "variants"], path, issues);
+  checkKeys(value, ["id", "description", "recordingDescription", "recordingScript", "expected", "variants"], path, issues);
   kebabId(value, path, issues);
   requiredString(value, "description", path, issues);
+  validateRecordingDescription(value.recordingDescription, `${path}.recordingDescription`, issues);
   if (Array.isArray(value.recordingScript) && value.recordingScript.length === 0) issue(issues, `${path}.recordingScript`, "must contain at least one step");
   validateWorkflowBody(value, path, issues);
 };
@@ -342,7 +346,8 @@ const validateEvidencePolicy: Validator = (value, path, issues) => {
 export function validateWebScenario(input: unknown): ValidationResult<WebScenario> {
   const issues: ValidationIssue[] = [];
   if (!isObject(input)) return { valid: false, issues: [{ path: "$", message: "must be an object" }] };
-  checkKeys(input, ["schemaVersion", "id", "title", "tags", "seed", "startPath", "capabilities", "networkPolicy", "recordingScript", "playbackGoal", "expected", "variants", "workflows", "secrets", "evidencePolicy"], "$", issues);
+  checkKeys(input, ["schemaVersion", "id", "title", "recordingDescription", "tags", "seed", "startPath", "capabilities", "networkPolicy", "recordingScript", "playbackGoal", "expected", "variants", "workflows", "secrets", "evidencePolicy"], "$", issues);
+  validateRecordingDescription(input.recordingDescription, "$.recordingDescription", issues);
   if (input.schemaVersion !== "0.1") issue(issues, "$.schemaVersion", "must equal 0.1");
   kebabId(input, "$", issues);
   requiredString(input, "title", "$", issues);

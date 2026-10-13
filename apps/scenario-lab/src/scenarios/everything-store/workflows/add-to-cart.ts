@@ -52,6 +52,7 @@ const SUBTOTAL: ExpectedFact = {
  */
 export const ADD_TO_CART_WORKFLOW: ScenarioWorkflow = {
   id: "add-to-cart",
+  recordingDescription: "Demonstrates selecting a product, adding it and reading the resulting cart.",
   description: "Add two Sage Green 1.7 L Tidewell kettles sold by Brightaisle to the cart, move the phone case already in it to Saved for later, and read back what the cart holds.",
   recordingScript: [
     ...SHARED_STEPS.openStore,

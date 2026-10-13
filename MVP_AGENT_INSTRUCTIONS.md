@@ -77,7 +77,13 @@ Browser-specific functionality should normally live here.
 
 All MVP work exists to improve this loop:
 
-**Describe / Demonstrate → Generate → Validate → Execute → Detect Failure → AI Takeover → Explore → Repair → Verify → Persist → Deterministic Reuse**
+**Write Task Instructions → Optionally Add Described Demonstrations → Generate → Validate → Execute → Detect Failure → AI Takeover → Explore → Repair → Verify → Persist → Deterministic Reuse**
+
+Every automation requires explicit written task instructions, including existing
+automations before their next run. Recordings are purely supplemental and each
+needs a description of what it demonstrates. A recording description, inferred
+goal or captured trace cannot substitute for the task. Deterministic reuse with
+valid instructions does not require a new model call.
 
 A task is high priority if it materially improves one or more parts of this loop.
 
@@ -222,7 +228,7 @@ Focus:
 Primary areas:
 
 - Natural-language creation
-- Demonstration/recording
+- Described supporting demonstrations/recordings
 - Runtime progress
 - Adaptation UI
 - Advanced Editor entry point

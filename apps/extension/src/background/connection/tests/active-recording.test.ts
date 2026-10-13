@@ -13,13 +13,13 @@ import { fakeTimers, harness, NO_PROJECT, settle, STALE, stubManifest } from "./
 
 test("nothing is sent while disconnected, and an unsupported page refuses with its reason", async () => {
   const offline = harness({ gatewayState: "disconnected" });
-  await offline.recording.start();
+  await offline.recording.start("Demonstrate the browser interaction sequence.");
   assert.equal(offline.sent.length, 0);
   assert.equal(offline.lastError(), "Connect to FluxIQ before recording.");
   assert.equal(offline.recording.state(), "idle");
 
   const blocked = harness({ unsupported: { reason: "Browser pages cannot be recorded." } as UnsupportedPageState });
-  await blocked.recording.start();
+  await blocked.recording.start("Demonstrate the browser interaction sequence.");
   assert.equal(blocked.sent.length, 0);
   assert.equal(blocked.lastError(), "Browser pages cannot be recorded.");
   assert.deepEqual(blocked.activities.at(-1), {
@@ -35,13 +35,14 @@ test("a start sends the recording manifest once, and a second press waits for Fl
   const timers = fakeTimers(t);
   const h = harness({ projectId: "project-1" });
 
-  await h.recording.start();
+  await h.recording.start("Demonstrate the browser interaction sequence.");
   await settle();
   assert.equal(h.sent.length, 1);
   const [start] = h.sent;
   assert.equal(start?.type, "client.start_recording");
   assert.match(String(start?.payload.recordingId), /^client\.client-1\.\d+$/);
   assert.equal(start?.payload.projectId, "project-1");
+  assert.equal(start?.payload.description, "Demonstrate the browser interaction sequence.");
   assert.deepEqual(start?.payload.metadata, {
     domainId: start?.payload.domainId,
     requestedBy: "extension-record-button",
@@ -52,13 +53,13 @@ test("a start sends the recording manifest once, and a second press waits for Fl
   assert.deepEqual(h.resolveReasons, ["recording_start"]);
   assert.equal(timers.count(), 1, "the acceptance window is open");
 
-  await h.recording.start();
+  await h.recording.start("Demonstrate the browser interaction sequence.");
   assert.equal(h.sent.length, 1, "a pending start is never sent twice");
   assert.equal(h.labels().at(-1), "Recording is starting");
 
   h.recording.cancelStart();
   assert.equal(timers.count(), 0, "cancelling closes the acceptance window");
-  await h.recording.start();
+  await h.recording.start("Demonstrate the browser interaction sequence.");
   await settle();
   assert.equal(h.sent.length, 2, "once cancelled, the next press starts again");
 });
@@ -68,7 +69,7 @@ test("silence begins the recording locally, with the tab event taking the facade
   const timers = fakeTimers(t);
   const h = harness();
 
-  await h.recording.start();
+  await h.recording.start("Demonstrate the browser interaction sequence.");
   await settle();
   const recordingId = String(h.sent[0]?.payload.recordingId);
   timers.fireAll();
@@ -92,7 +93,7 @@ test("a transient refusal is re-sent with a fresh project lookup; a persistent o
   const timers = fakeTimers(t);
   const h = harness({ projectId: "project-1" });
 
-  await h.recording.start();
+  await h.recording.start("Demonstrate the browser interaction sequence.");
   await settle();
   h.recording.noteStartRefusal(STALE!);
   assert.equal(h.labels().at(-1), "Recording start delayed");
@@ -180,7 +181,7 @@ test("an acknowledgement inside the window starts the recording once, and the wi
   const timers = fakeTimers(t);
   const h = harness({ projectId: "project-1" });
 
-  await h.recording.start();
+  await h.recording.start("Demonstrate the browser interaction sequence.");
   await settle();
   const recordingId = String(h.sent[0]?.payload.recordingId);
   assert.equal(timers.count(), 1, "the acceptance window is open");
@@ -204,7 +205,7 @@ test("an acknowledgement after a local start changes nothing but the project lin
   const timers = fakeTimers(t);
   const h = harness();
 
-  await h.recording.start();
+  await h.recording.start("Demonstrate the browser interaction sequence.");
   await settle();
   const recordingId = String(h.sent[0]?.payload.recordingId);
   timers.fireAll();
@@ -236,7 +237,7 @@ test("an acknowledgement while the local start is under way starts the recording
   const timers = fakeTimers(t);
   const h = harness();
 
-  await h.recording.start();
+  await h.recording.start("Demonstrate the browser interaction sequence.");
   await settle();
   const recordingId = String(h.sent[0]?.payload.recordingId);
   timers.fireAll();
@@ -269,7 +270,7 @@ test("an acknowledgement naming another recording is ignored while a start is pe
   const timers = fakeTimers(t);
   const h = harness();
 
-  await h.recording.start();
+  await h.recording.start("Demonstrate the browser interaction sequence.");
   await settle();
   const recordingId = String(h.sent[0]?.payload.recordingId);
   await h.recording.beginAccepted("recording-other", "project-2");
@@ -297,7 +298,7 @@ test("an acknowledgement that crosses the client's own Stop does not restart the
   const timers = fakeTimers(t);
   const h = harness();
 
-  await h.recording.start();
+  await h.recording.start("Demonstrate the browser interaction sequence.");
   await settle();
   const recordingId = String(h.sent[0]?.payload.recordingId);
   timers.fireAll();
@@ -323,7 +324,7 @@ test("a stalled project lookup holds a start for its bound, then the local fallb
   let stalled = true;
   const h = harness({ lookup: () => (stalled ? new Promise<undefined>(() => undefined) : Promise.resolve(undefined)) });
 
-  const pressed = h.recording.start();
+  const pressed = h.recording.start("Demonstrate the browser interaction sequence.");
   await settle();
   assert.equal(h.sent.length, 0, "the lookup holds the send");
   assert.deepEqual(timers.delays(), [RECORDING_START_ACCEPT_TIMEOUT_MS, RECORDING_START_PROJECT_LOOKUP_BOUND_MS]);
@@ -347,7 +348,16 @@ test("a stalled project lookup holds a start for its bound, then the local fallb
   // A lookup that gave up once is not skipped for good: the next start looks again.
   stalled = false;
   await h.recording.stop(false);
-  await h.recording.start();
+  await h.recording.start("Demonstrate the browser interaction sequence.");
   await settle();
   assert.deepEqual(h.resolveReasons, ["recording_start", "recording_start"]);
+});
+
+test("an explicit description is required before recording preflight or gateway sends", async () => {
+  const h = harness();
+  await assert.rejects(h.recording.start(), /recording.description_required/);
+  await assert.rejects(h.recording.start("   "), /recording.description_required/);
+  await assert.rejects(h.recording.start("x".repeat(4001)), /recording.description_required/);
+  assert.equal(h.sent.length, 0);
+  assert.equal(h.resolveReasons.length, 0);
 });

@@ -80,7 +80,17 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
   }
   if (message.type === RUNTIME_MESSAGES.panelOpenFluxIQ) {
     let automation: { projectId: string; flowId: string } | undefined;
-    if (message.flowId !== undefined) {
+    if (message.runId !== undefined) {
+      if (typeof message.runId !== "string" || !message.runId.trim() || message.runId.length > 2048) return relayFailure("invalid_request", "A valid runId is required.");
+      const projectId = await deps.relay.projectId();
+      if (!projectId) return relayFailure("no_project");
+      const result = await deps.relay.call("get-flow-run-detail", { projectId, runId: message.runId.trim(), compact: true });
+      if (!result.ok) return result;
+      const payload = result.payload as { runDetail?: { flowId?: string; summary?: { flowId?: string } } };
+      const flowId = payload.runDetail?.flowId ?? payload.runDetail?.summary?.flowId;
+      if (!flowId) return relayFailure("invalid_request", "This run's owning automation could not be identified.");
+      automation = { projectId, flowId };
+    } else if (message.flowId !== undefined) {
       if (typeof message.flowId !== "string" || !message.flowId.trim() || message.flowId.length > 2048) {
         return relayFailure("invalid_request", "That request is missing a valid flowId.");
       }

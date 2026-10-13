@@ -68,6 +68,7 @@ const ALLOWED_CONSOLE_ERRORS = ["status of 429"];
  */
 export const jobBoardManifest = createScenarioManifest({
   id: "job-board",
+  recordingDescription: "Demonstrates job search, result reading and detail navigation.",
   title: "Job board",
   tags: ["jobs", "search", "pagination", "sponsored", "consent", "shadow-dom", "iframe", "multi-tab", "anti-bot", "generated-classes", "extraction", "forms", "consequential"],
   seed: 246,
@@ -104,6 +105,7 @@ export const jobBoardManifest = createScenarioManifest({
   workflows: [
     {
       id: "remote-rust-roles",
+      recordingDescription: "Demonstrates combined job search filters and reading matching role records.",
       description: "Collect every job with Rust in its title that is fully remote in the UK and whose yearly salary starts at £70,000 or more, each once, newest first.",
       recordingScript: [
         ...arrive("rust"),
@@ -135,6 +137,7 @@ export const jobBoardManifest = createScenarioManifest({
     },
     {
       id: "apply-remote-rust-role",
+      recordingDescription: "Demonstrates navigating from a role to its application form and submission controls.",
       description: "Apply for Quillmark's remote Senior Rust Engineer role through its Talentloom careers site with the candidate's details, opting out of the talent community, and read back the confirmation.",
       recordingScript: [
         ...arrive("Senior Rust Engineer Quillmark"),
