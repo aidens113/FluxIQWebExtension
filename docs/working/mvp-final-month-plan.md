@@ -151,6 +151,15 @@ proposal rather than silently relaxing success. Preserve the prior schedule as
 
 ## Worker Briefs
 
+### Brief: S7 reader/domain/browser coherent removal design
+- Worker: codex-t516; read-only in frozen t530 pair after held-topology report. Own report `mvp-final-month-plan/reports/codex-s7-single-page-removal-design.md`; root reviews t530 concurrently. No source/shared-doc edits, new branch, tests/builds/browser/provider calls or commits.
+- Read S7 readiness units 2/3/5 and Current State. t527 transport is integrated: Next-page movement remains; list reads no longer use worker row checkpoints. Do not rediscover t527.
+- Inspect extension `content/extraction/{list-reader,pagination,detect-pagination,infer-list}.ts`, `continued-read/`, `content/action-runtime/extraction-continuation.ts`, `content/actions/extract-list.ts`, recovery fault/results and shared final checkpoint consumers. Trace exact surviving pager/pace/detection ownership.
+- Inspect domain `actions/extraction/{request,read-request,schema,retired-paging,recorded-definition,summary}.ts`, extract-list dispatch/one-page-read, and structure packet/Next-page-slot consumers. Identify strict stored/recording compatibility boundary versus new executable request/detection metadata.
+- Produce exact coherent file partition for removing internal read paging/checkpoints while preserving one-page condition/field/sensitivity/count/deadline facts, raw multipage migration refusal, usable maxPages1 legacy evidence, Next-page detection/binding and movement safeguards.
+- Map ten raw-paginate content browser specs to Read/Next-page/Repeat or justified retired-test deletion; preserve allowed ten scenarios and full-document movement coverage. Do not edit specs until production/API partition is concrete.
+- Explain wire/type synchronization, smallest meaningful fail-first checks, narrow source/test gates and actual Chrome/Firefox proof limits. Flag compatibility ambiguity before implementation. No Core read-account/promotion/executor/entry-case/UI changes; report any needed export consumer explicitly.
+
 ### Brief: model/site-control reset readiness investigation
 - Worker: codex-replay; read-only follow-up in frozen t529 pair after source/report completion. Root is running final gates; no source/shared-doc edits or new branch. Own report `mvp-final-month-plan/reports/codex-site-control-reset-readiness.md`.
 - Read entry-case and held-topology designs plus Current State. Inspect Core `flow-bootstrap/site-reset/{ledger,start-check,trial-policy,undoes-tool,contracts}.ts` and direct build-tool/reset consumers needed to trace baseline capture, own-act reversal and trial/final-run gates.
