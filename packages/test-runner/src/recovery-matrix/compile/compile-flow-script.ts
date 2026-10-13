@@ -49,6 +49,7 @@ export type CompileMatrixFlowInput = {
   projectId: string;
   flowId: string;
   flowName: string;
+  taskInstructions: string;
   script: string;
 };
 
@@ -63,6 +64,10 @@ export class MatrixAuthoringGap extends RunnerFailure {
 
 /** Saves the script as a Flow in `projectId` and answers what was saved. Throws when Core refuses it. */
 export async function compileMatrixFlow(input: CompileMatrixFlowInput): Promise<CompiledMatrixFlow> {
+  if (typeof input.taskInstructions !== "string" || !input.taskInstructions.trim() || input.taskInstructions.trim().length > 4000) {
+    throw new RunnerFailure("fixture.invalid", "Recovery-matrix browser Flows require explicit task instructions of 1-4000 characters.");
+  }
+  const taskInstructions = input.taskInstructions.trim();
   const native = webNodeRuntime();
   const fluxiq = FluxIQ.create({ rootDir: input.fluxiqRoot, loadEnv: false, domainId: WEB_AUTOMATION_DOMAIN_ID, modelProvidersEnabled: false, domains: [webAutomationDomain] });
   try {
@@ -78,18 +83,16 @@ export async function compileMatrixFlow(input: CompileMatrixFlowInput): Promise<
     if (handles.length) throw new MatrixAuthoringGap(handles);
     const validation = validateAutomationStudioFlowBootstrapPlan({ plan: accepted.plan, registry, resolution, size: automationStudioFlowBootstrapSizeLimitsOf(flow) });
     if (!validation.ok || !validation.validated) throw refusal("validate", validation.issues);
-    const now = Date.now();
-    const instructionId = `instruction.${input.flowId}`;
-    await service.saveFlowInstruction(input.projectId, {
-      schemaVersion: "0.1", instructionId, title: input.flowName, body: input.flowName,
-      scope: { kind: "flow", projectId: input.projectId, flowId: input.flowId },
-      priority: 100, status: "active", requirement: "required", createdAt: now, updatedAt: now,
+    const instruction = await service.saveFlowGenerationInstruction({
+      projectId: input.projectId,
+      flowId: input.flowId,
+      instruction: taskInstructions,
     });
     const adaptation = await service.createFlowBootstrapAdaptation({
       projectId: input.projectId,
       flowId: input.flowId,
       baseDependencyDigest: await service.getLlmExecutionDependencyDigest(input.projectId, input.flowId),
-      sourceInstructionIds: [instructionId],
+      sourceInstructionIds: [instruction.instructionId],
       summary: accepted.summary,
       buildPlan: validation.validated,
       actorId: "recovery-matrix",
