@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { WebLlmEvidenceElement } from "../../../elements";
 import { webLlmStateTokens } from "../state-tokens";
+import { bodyLines } from "../../tests/packet-fixture";
 
 const el = (fields: Partial<WebLlmEvidenceElement> & { tag: string }): WebLlmEvidenceElement => ({ target: "t1", ...fields });
 
@@ -51,4 +52,23 @@ test("a field's placeholder is printed apart, first, unless it is the field's wo
   assert.deepEqual(webLlmStateTokens(field, "field[search]", undefined), ["placeholder \"Autumn Mega Sale: up to 70% off\"", "=\"\""]);
   assert.deepEqual(webLlmStateTokens(field, "field[search]", undefined, "Autumn Mega Sale: up to 70% off"), ["=\"\""]);
   assert.deepEqual(webLlmStateTokens(field, "button", undefined), [], "only a field has a placeholder to print");
+});
+
+// t513: a content-editable region is a field whose value is its text. The
+// capture reads that text as the element's words, and nothing else carried it,
+// so a filled composer printed `field "Write something..."` and the model and
+// the judges both took it for empty.
+test("a content-editable field states its text as its value, spaced as a reader sees it", () => {
+  const editable = (fields: Partial<WebLlmEvidenceElement>) => el({ tag: "div", attributes: [["contenteditable", "true"]], ...fields });
+  assert.deepEqual(webLlmStateTokens(editable({ name: "Write something...", text: "Lunch at noon" }), "field", undefined, "Write something..."), ["=\"Lunch at noon\""]);
+  assert.deepEqual(webLlmStateTokens(editable({ name: "Note", text: "Line oneLine two", readable: "Line one Line two" }), "field", undefined, "Note"), ["=\"Line one Line two\""]);
+  assert.deepEqual(webLlmStateTokens(editable({}), "field", undefined), ["=\"\""], "a region with no words at all is empty");
+  assert.deepEqual(webLlmStateTokens(editable({ name: "Note" }), "field", undefined, "Note"), [], "text the capture may have folded into the name is not guessed at");
+  assert.deepEqual(webLlmStateTokens(el({ tag: "div", text: "Read only", attributes: [["contenteditable", "false"]] }), undefined, undefined), []);
+  assert.deepEqual(webLlmStateTokens(editable({ text: "Lunch at noon" }), "button", undefined), [], "only a field holds a value");
+});
+
+test("a filled content-editable field's line shows what it holds", () => {
+  const lines = bodyLines([{ tag: "div", name: "Write something...", text: "Lunch at noon", attributes: [["contenteditable", "true"]] }]);
+  assert.deepEqual(lines, ["t1 field \"Write something...\" =\"Lunch at noon\""]);
 });

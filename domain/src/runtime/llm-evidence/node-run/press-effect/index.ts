@@ -9,13 +9,15 @@
 // repeating list it acted on (`./acted-on.ts`, t504), for a press the page
 // refused, the line the page answered with (`./notice.ts`), and, for a press
 // that changed nothing at all, its own wait and second press
-// (`./settled.ts`) and the sentence that says it had no effect
+// (`./settled.ts`), made for a lasting press only when it certainly did not
+// happen (`./certain-no-effect.ts`, t513), and the sentence that says it had no effect
 // (`./no-effect.ts`, t511), naming the control one way (`./press-words.ts`),
 // all read from whether the page stayed the same page apart from where it is
 // drawn (`./unchanged-page.ts`), which `pageChanged` reads too.
 
 export { webNodeActedOn } from "./acted-on";
 export { webAnsweredLayer } from "./answered-layer";
+export { webPressCertainlyIgnored } from "./certain-no-effect";
 export { webPressChoice } from "./choice";
 export { webPressChosenState, type WebPressChosenState } from "./chosen-state";
 export { webNodeNoticedDetail, webNodePageNotice, type WebNodeNoticedDetail } from "./notice";

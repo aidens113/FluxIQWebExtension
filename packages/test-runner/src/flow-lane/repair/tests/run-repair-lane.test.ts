@@ -235,7 +235,7 @@ test("a created Flow's proposal naming another control, or no proposal, is never
   assert.equal(wrong.endpoints.some((endpoint) => endpoint.startsWith("review-flow-adaptation")), false, "a wrong proposal must not be approved onto the Flow");
   assert.deepEqual(wrong.reset, []);
   assert.deepEqual([wrong.written[0]?.value.declaredRepair.verdict, wrong.written[0]?.value.application, wrong.written[0]?.value.replays], ["wrong_target", null, []], "the judgement is written before the run fails");
-  assert.deepEqual(wrong.published[0], { declaredRepair: "wrong_target", application: null });
+  assert.deepEqual(wrong.published[0], { declaredRepair: "wrong_target", application: null, adaptationGate: { counted: false, reason: "declared_repair_not_made" } });
 
   // A refusal is not the declared repair either: a created Flow that failed and proposed nothing does not pass as repaired.
   const none = createdLane({ replays: 1, recovery: REFUSED });
@@ -340,9 +340,9 @@ for (const [label, fields, reason, message] of [
     assert.deepEqual(fake.written[0]?.value, {
       task: "repair", purpose: "explore_and_adapt", repair: "result_reauthor",
       resultReauthor: { adaptationId: REAUTHORED, kept: false, held: true, notAppliedReason: reason },
-      application: null, replaysRequested: 2, replays: [],
+      application: null, replaysRequested: 2, replays: [], adaptationGate: { counted: false, reason: "reauthor_not_kept" },
     });
-    assert.deepEqual(fake.published, [{ repair: "result_reauthor", kept: false, held: true, notAppliedReason: reason, application: null, replaysRequested: 2, replays: [] }]);
+    assert.deepEqual(fake.published, [{ repair: "result_reauthor", kept: false, held: true, notAppliedReason: reason, application: null, replaysRequested: 2, replays: [], adaptationGate: { counted: false, reason: "reauthor_not_kept" } }]);
     assert.deepEqual(fake.reset, [], "nothing is replayed");
     assert.deepEqual(fake.endpoints, [], "nothing is judged, approved or applied: there is nothing kept to apply");
   });
@@ -424,4 +424,71 @@ test("a re-author Core applied in the run whose record shows no change to the Fl
     (error: unknown) => error instanceof RunnerFailure && /^Core applied the repair inside the run, and neither the saved Flow nor Core's record/u.test(error.message),
   );
   assert.equal(fake.written[0]?.value.application.flow.change, "unseen_in_run");
+});
+
+/**
+ * t512: every record the lane writes says whether the run counts toward the
+ * adaptation gate (plan, "Gate oracle"), and the lane still writes its record
+ * when the created Flow's oracle failed (run-mv6v2hx5-f448e662, where the
+ * failure threw before the lane and left no record at all).
+ */
+const ABSORBED: RunHarnessRecovery = { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [] };
+
+test("a drift absorbed or never met is recorded and published as not counting toward the gate", async (t) => {
+  const fake = lane({ replays: 1, recovery: ABSORBED });
+  t.after(fake.restore);
+  const proof = await runLiveRepairLane(fake.control, fake.input);
+  assert.equal(proof?.application.outcome, "no_proposal");
+  assert.deepEqual(fake.written[0]?.value.adaptationGate, { counted: false, reason: "no_recovery_attempted" });
+  assert.deepEqual(fake.published[0]?.adaptationGate, { counted: false, reason: "no_recovery_attempted" });
+});
+
+test("a recovery that proposed nothing is recorded as not counting toward the gate", async (t) => {
+  const fake = lane({ replays: 1, recovery: REFUSED });
+  t.after(fake.restore);
+  await runLiveRepairLane(fake.control, fake.input);
+  assert.deepEqual(fake.written[0]?.value.adaptationGate, { counted: false, reason: "no_proposal" });
+});
+
+test("an applied repair that moved the steps and replayed with no model counts toward the gate", async (t) => {
+  const fake = lane({ replays: 1 });
+  t.after(fake.restore);
+  await runLiveRepairLane(fake.control, fake.input);
+  assert.deepEqual(fake.written[0]?.value.adaptationGate, { counted: true, reason: "counted" });
+  assert.deepEqual(fake.published[0]?.adaptationGate, { counted: true, reason: "counted" });
+});
+
+test("an applied repair replayed 0 times does not count toward the gate", async (t) => {
+  const fake = lane({ replays: 0 });
+  t.after(fake.restore);
+  await runLiveRepairLane(fake.control, fake.input);
+  assert.deepEqual(fake.written[0]?.value.adaptationGate, { counted: false, reason: "no_replay" });
+});
+
+test("a replay that missed the goal is recorded as not counting before the run fails", async (t) => {
+  const fake = lane({ replays: 1, goal: false });
+  t.after(fake.restore);
+  await assert.rejects(runLiveRepairLane(fake.control, fake.input), RunnerFailure);
+  assert.deepEqual(fake.written[0]?.value.adaptationGate, { counted: false, reason: "replay_failed" });
+});
+
+test("a created Flow whose oracle failed still has its repair lane recorded, beside the failure, with nothing applied or replayed", async (t) => {
+  const fake = lane({ replays: 1 });
+  t.after(fake.restore);
+  const laneFailure = { category: "runtime.behavior", code: "lab.extraction_mismatch" };
+  const proof = await runLiveRepairLane(fake.control, { ...fake.input, lane: { flowId: "flow-1", run: { harnessRecovery: RECOVERED, runId: "run.lane" } }, laneFailure } as LiveRepairLaneInput);
+  assert.equal(proof, undefined);
+  assert.equal(fake.endpoints.filter((endpoint) => endpoint.startsWith("review-flow-adaptation")).length, 0, "a repair from a run judged wrong is never approved onto the Flow");
+  assert.deepEqual(fake.reset, []);
+  const record = fake.written[0]?.value;
+  assert.equal(fake.written[0]?.path, "snapshots/repair-lane.json");
+  assert.deepEqual(record.laneFailure, laneFailure);
+  assert.equal(record.application, null);
+  assert.deepEqual(record.adaptationIds, ["adaptation-1"]);
+  assert.equal(record.recoveryAttempted, true);
+  assert.deepEqual(record.replays, []);
+  assert.deepEqual(record.adaptationGate, { counted: false, reason: "oracle_failed" });
+  assert.deepEqual(fake.published[0]?.adaptationGate, { counted: false, reason: "oracle_failed" });
+  assert.equal(fake.written[1]?.path, RUN_ADAPTATION_SNAPSHOT, "the lane run's own adaptations are still measured");
+  assert.equal(fake.written[1]?.value.adaptationReuse, null, "no replay ran, so reuse is unmeasured");
 });

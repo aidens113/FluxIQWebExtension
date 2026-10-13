@@ -8,6 +8,7 @@ export * from "./project-selection.js";
 export * from "./replay-browser.js";
 export * from "./final-state-check.js";
 export * from "./replay-saved-flow.js";
+export * from "./workflow-selection.js";
 export * from "./run-flow.js";
 export * from "./saved-navigation-origins.js";
 export * from "./profile-handover-probe.js";

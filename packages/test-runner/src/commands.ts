@@ -26,7 +26,8 @@ export type LabCommand =
   | { command: "compare"; halvesReport: string }
   | { command: "interactive"; scenarioId: string; seed?: number; target?: TargetMode; workspace?: string; freshLogin?: true; livePanel?: false }
   // A saved Flow, replayed on the persistent workspace it was built in, with no model: `lab replay`.
-  | { command: "replay"; scenarioId: string; workspace: string; flowId: string; projectId?: string; instructionTaskId?: string; seed?: number }
+  // `variantId` (`--variant`) arms that variant in place of the task's own: the free pre-flight that a drift forces a failure before a paid gate round.
+  | { command: "replay"; scenarioId: string; workspace: string; flowId: string; projectId?: string; instructionTaskId?: string; variantId?: string; seed?: number }
   // The state-aware recovery plan's provider-free acceptance matrix: `lab recovery-matrix` (`recovery-matrix/command.ts`).
   | RecoveryMatrixCommand;
 
@@ -115,7 +116,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
   }
   if (command === "replay") {
     // No `--target`: a Flow outlives the run that built it only in a persistent workspace, so that is the one target a replay has.
-    rejectUnknownOptions(args, ["--workspace", "--flow", "--project", "--instruction-task", "--seed"]);
+    rejectUnknownOptions(args, ["--workspace", "--flow", "--project", "--instruction-task", "--variant", "--seed"]);
     const scenarioId = positional(args, 0, "scenario ID");
     const workspaceValue = option(args, "--workspace");
     if (workspaceValue === undefined) throw new Error("replay requires --workspace: the persistent workspace the Flow was saved in");
@@ -126,7 +127,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (projectValue !== undefined && !projectId) throw new Error("--project requires the saved Flow's actual project ID");
     const taskId = option(args, "--instruction-task");
     if (taskId !== undefined && !KEBAB_ID.test(taskId)) throw new Error("--instruction-task must be a lowercase kebab-case task ID");
-    return { command, scenarioId, workspace: requireSafePersistentWorkspaceName(workspaceValue, "--workspace"), flowId, ...(projectId === undefined ? {} : { projectId }), ...(taskId === undefined ? {} : { instructionTaskId: taskId }), ...optionalSeed(args) };
+    return { command, scenarioId, workspace: requireSafePersistentWorkspaceName(workspaceValue, "--workspace"), flowId, ...(projectId === undefined ? {} : { projectId }), ...(taskId === undefined ? {} : { instructionTaskId: taskId }), ...optionalVariant(args), ...optionalSeed(args) };
   }
   if (command === "inspect") return { command, runId: positional(args, 0, "run ID") };
   if (command === "recovery-matrix") return parseRecoveryMatrixCommand(args);
@@ -143,7 +144,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (reports.length !== 2 || first === undefined || second === undefined) throw new Error(COMPARE_USAGE);
     return { command, baselineReport: first, candidateReport: second, sharedLoad: !args.includes("--sequential") };
   }
-  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] [--no-live-panel] | run <scenario> [--no-live-panel] [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task repair|adapt --flow, or --llm-task create-flow)] [--direct-api-build (test-only, with --llm-task create-flow; never a pass)] [--model-reset-only (with --llm-task create-flow --authoring-mode candidate: no Lab fixture reset between trials)] | matrix (--all|--scenarios-json JSON) [--no-live-panel] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--project ID] [--instruction-task ID] [--seed N] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves | recovery-matrix --list|--ready|--case ID|--row N");
+  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] [--no-live-panel] | run <scenario> [--no-live-panel] [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task repair|adapt --flow, or --llm-task create-flow)] [--direct-api-build (test-only, with --llm-task create-flow; never a pass)] [--model-reset-only (with --llm-task create-flow --authoring-mode candidate: no Lab fixture reset between trials)] | matrix (--all|--scenarios-json JSON) [--no-live-panel] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--project ID] [--instruction-task ID] [--variant ID] [--seed N] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves | recovery-matrix --list|--ready|--case ID|--row N");
 }
 
 export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>, allScenarioIds: string[]): Array<{ scenarioId: string; repeatIndex: number }> {
