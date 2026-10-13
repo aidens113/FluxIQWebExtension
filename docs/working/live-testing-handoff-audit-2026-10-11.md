@@ -262,6 +262,19 @@ Earlier history (rounds 4-10, t460, t461) is in the Work Ledger archive.
 
 ## Work Ledger
 
+### 2026-10-13 - Round 18: B, C and D all passed and replayed on the newest pair
+
+- Agent: Claude senior supervisor.
+- Pair Core fbd06c77 / downstream 15458401 (t495-t504); matrix `{"passed":14}`; B, C and D dry runs `ready`, 0
+  provider calls.
+- B `run-mv6p76yw-701793d0` passed $0.0319; replay `replay-mv6phc1h-c459e5c0` passed (goal true, hash equal, all five
+  zero). C `run-mv6p75tm-3bf4e2c1` passed $0.0381 (13/13 in order, 52/52 fields, 0 unexpected); replay
+  `replay-mv6pkr4b-091cb90b` passed (13/13, goal true). D `run-mv6p78kz-44f8e85d` passed $0.0216; replay
+  `replay-mv6pi9en-f60cf4a0` passed (4/4, goal true).
+- Validation: spend-ledger finish lines; each run's `evaluation.json` verdict and oracle passed, read by the
+  supervisor; replay receipts above.
+- Outcome: Accepted. First round in which all three lanes passed with their replays on one pair. Debugs dispatched.
+
 ### 2026-10-13 - t503 merged; round 18 prepared
 
 - Agent: Claude senior supervisor; t503 worker.
