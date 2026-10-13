@@ -71,10 +71,14 @@ const SCHEMA_ONLY = "schema-only";
  * schema, so Core's capture, which copies each row by the schema, does not
  * store it. An excluded column stays declared, as it always is (D12).
  *
+ * `shown` are the answer's columns when a helper is stored only for
+ * processing and the author wrote no `process.columns` (`./declared-columns.ts`,
+ * t510): they are written there, so the helper is stored and not shown.
+ *
  * A value that is not an object is handed back untouched, so the dispatch's
  * parse refuses it with its own codes as it always did.
  */
-export function webAutomationReconciledRecordOutput(authored: JsonValue, request: WebAutomationExtractListRequest, columns?: ReadonlySet<string>): JsonValue {
+export function webAutomationReconciledRecordOutput(authored: JsonValue, request: WebAutomationExtractListRequest, columns?: ReadonlySet<string>, shown?: readonly string[]): JsonValue {
   if (!isJsonObject(authored)) return authored;
   const authoredSchema = isJsonObject(authored.schema) ? authored.schema : undefined;
   const derived = webAutomationRecordOutput({
@@ -85,7 +89,8 @@ export function webAutomationReconciledRecordOutput(authored: JsonValue, request
   }).schema;
   const kept = columns === undefined ? derived.fields : derived.fields.filter((field) => columns.has(field.id) || field.handling === "exclude");
   const stored = { ...derived, fields: authoredFieldOrder(authoredSchema, kept) };
-  return { ...authored, schema: stored as unknown as JsonValue, recordsPath: WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH };
+  const process = shown === undefined ? {} : { process: { ...(isJsonObject(authored.process) ? authored.process : {}), columns: [...shown] } };
+  return { ...authored, schema: stored as unknown as JsonValue, recordsPath: WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH, ...process };
 }
 
 /** Valid authored ids decide column order; remaining helpers/exclusions keep derived order. */

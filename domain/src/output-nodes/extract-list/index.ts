@@ -8,6 +8,7 @@ export * from "./dispatch";
 export * from "./issues";
 export * from "./parameter-contract";
 export * from "./parameters";
+export * from "./process-issues";
 export * from "./reconciled-record-output";
 export * from "./record-output";
 export * from "./record-output-process";

@@ -109,7 +109,7 @@ test("a name only a process writes is also Core's own process_unknown_field, bes
   if (dispatch.ok) return;
   assert.deepEqual((dispatch.result.outputs?.error as JsonObject).issues, [
     { code: "record_output.column_not_read", field: "status", valid: Object.keys(requests.fields) },
-    { code: "record_output.process_unknown_field", field: "status" }
+    { code: "record_output.process_unknown_field", field: "status", valid: Object.keys(requests.fields) }
   ]);
 });
 

@@ -116,11 +116,12 @@ export function webAutomationStoredColumns(recordOutput: JsonValue | undefined, 
 /**
  * The issues a refusal of `unread` says (header): each name as
  * `record_output.column_not_read` with the read's column keys as `valid`, and a
- * name a `process` wrote also as Core's own `record_output.process_unknown_field`.
+ * name a `process` wrote also as Core's own `record_output.process_unknown_field`,
+ * with the same keys (t510: every record-output refusal carries `valid`).
  */
 export function webAutomationStoredColumnIssues(unread: readonly WebAutomationStoredColumnName[], columns: readonly string[]): WebAutomationRecordOutputIssue[] {
   const issues: WebAutomationRecordOutputIssue[] = unread.map((name) => ({ code: COLUMN_NOT_READ, field: name.written, valid: [...columns] }));
-  for (const name of unread) if (name.path[0] === "process") issues.push({ code: PROCESS_UNKNOWN_FIELD, field: name.written });
+  for (const name of unread) if (name.path[0] === "process") issues.push({ code: PROCESS_UNKNOWN_FIELD, field: name.written, valid: [...columns] });
   return issues;
 }
 
