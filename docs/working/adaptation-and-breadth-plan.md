@@ -175,6 +175,16 @@ Codex supervisor has dispatched these independent briefs. Worker claims remain u
 - Definition of done: actual projector acceptance counts; capture timing agreement; specific missing evidence and safe owning producer change if required. Other debug worker owns executor routing/failure lifecycle; relay findings to it to avoid duplicate investigation.
 - Report to: own report and supervisor/replay_investigation.
 
+### Brief: codex-t518-extraction-provenance
+- Repository: t518 downstream tree, same task branch.
+- Task: preserve explicit before-action provenance on the existing extraction-definition recording capture so recorded recovery can route to the later required read.
+- Required reads: Current State; live-capture report; content/picker/recorded-event.ts and background/extraction/confirm.ts; recorder.basePayload and existing recorder/picker/extraction tests.
+- Owns (may edit): apps/extension/src/content/picker/recorded-event.ts and adjacent owning tests; background/extraction/tests/ confirmation ordering regression if needed (confirm.ts read-only unless a genuine ordering defect is demonstrated). Update own live-capture report with change/checks.
+- Must not touch: human type/scroll producers, after-execution confirmations, Core/domain signer/projector/routing, fixtures/oracles/shared docs; no commits/pushes/browser/provider/full suites.
+- Design: confirmExtraction awaits recordDefinition before dispatching extract_list; recordExtraction emits data.extract and synchronous basePayload captures before returning. Stamp only this genuinely before-execution event with existing captureTiming before-action metadata. Preserve ordering and failure propagation; never relabel human type/scroll or result.finishedAt snapshots.
+- Definition of done: fail-first emitted metadata regression plus confirmation record-before-dispatch check; owning tests and extension source/test check pass. Explain limits: human type/scroll captures remain after/unknown and unsigned; extraction supplies a safe future read boundary, not invented completion.
+- Report to: docs/working/adaptation-and-breadth-plan/reports/codex-t518-live-capture-coverage.md and supervisor.
+
 ## Inventory (2026-10-13)
 
 ### Drift variants
