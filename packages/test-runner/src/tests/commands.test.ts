@@ -320,6 +320,15 @@ test("replay names the persistent workspace, the saved Flow and the task that ju
   assert.throws(() => parseLabCommand(["replay", "social-scheduler", "--workspace", "t019-replay", "--flow", "flow.c1542a11", "--instruction-task", "Not_Kebab"]), /kebab-case/);
 });
 
+test("replay --variant arms a named variant for a model-free pre-flight of a saved Flow against a drift", () => {
+  assert.deepEqual(
+    parseLabCommand(["replay", "bigbox-retail", "--workspace", "t262-b", "--project", "project-1", "--flow", "flow.saved", "--instruction-task", "bigbox-retail-pickup-cart", "--variant", "redesigned-buy-box"]),
+    { command: "replay", scenarioId: "bigbox-retail", workspace: "t262-b", projectId: "project-1", flowId: "flow.saved", instructionTaskId: "bigbox-retail-pickup-cart", variantId: "redesigned-buy-box" },
+  );
+  assert.throws(() => parseLabCommand(["replay", "bigbox-retail", "--workspace", "t262-b", "--flow", "flow.saved", "--variant", "Not_Kebab"]), /--variant must be a lowercase kebab-case variant ID/);
+  assert.throws(() => parseLabCommand(["replay", "bigbox-retail", "--workspace", "t262-b", "--flow", "flow.saved", "--variant", "a", "--variant", "b"]), /only be specified once/);
+});
+
 test("--llm-permit carries the named consequence classes on the live profile", () => {
   const create = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "create-flow"];
   const permitted = parseLabCommand(["run", "social-scheduler", ...create, "--llm-permit", "send_or_publish, create_new"]);

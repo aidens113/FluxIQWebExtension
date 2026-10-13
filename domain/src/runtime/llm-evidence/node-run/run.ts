@@ -407,12 +407,14 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       const settled = await captureAfterAction(run.gateway, run.sessionId, run.request, run.request.signal);
       return settled === undefined ? undefined : run.restamp(settled);
     };
-    // A press that changed nothing is looked at again for a moment and, unless its call declared a
-    // lasting consequence, pressed once more before it is said to have had no effect (`./press-effect/settled.ts`, t511).
+    // A press that changed nothing is looked at again for a moment and pressed once more before it is said to have had
+    // no effect (`./press-effect/settled.ts`, t511). One whose call declared a lasting consequence -- granted, or the gate
+    // above had refused it -- is pressed again only when it certainly did not happen: nothing changed at all and its
+    // control is still there and enabled in a form or dialog still open (`./press-effect/certain-no-effect.ts`, t513).
     const lasting = Array.isArray(declared) && declared.some((entry) => typeof entry === "string" && entry !== "");
     const pressAgain = async () => (await webNodeDispatchWithRetries(run, { definitionId: node.definitionId, effect: node.effect, declared }, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) }, undefined, webNodeEffectCheck(run, ran))).result.status === "succeeded";
     const pressed = await webPressSettled(node, current, await look(), webPlanFirstTargetHandle(written), {
-      look, pressAgain: lasting ? undefined : pressAgain, now: () => Date.now(),
+      look, pressAgain, lasting, now: () => Date.now(),
       sleep: async (ms) => {
         await new Promise((resolve) => setTimeout(resolve, ms));
         assertActive(run.request.signal);

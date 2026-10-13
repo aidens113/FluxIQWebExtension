@@ -21,7 +21,7 @@ const CLICK = "web.output.dom-click";
 const SNAPSHOT = "web.output.dom-capture_snapshot";
 const PAGE = "https://settings.test/preferences";
 
-type State = { scrollY: number; open: boolean; bold: boolean };
+type State = { scrollY: number; open: boolean; bold: boolean; saveDisabled: boolean };
 
 test("Save in an open dialog that changed nothing, pressed twice, is reported as no effect, never as succeeded", async () => {
   const page = stub(() => undefined);
@@ -49,8 +49,31 @@ test("Save that only takes on the second press is answered as the second press's
   assert.deepEqual(page.clicked, ["#save", "#save"]);
 });
 
-test("a press whose call declared a lasting consequence is not pressed again, and still says it had no effect", async () => {
+// t513: a lasting press is not uncertain when nothing changed at all and its control is still there and enabled in a
+// dialog still open -- it did not happen, so it is made once more, under the grant the call already had.
+test("a lasting press whose first press certainly changed nothing is pressed once more, and the second press's success is said", async () => {
+  const page = stub((state, presses) => (presses === 2 ? { ...state, open: false } : undefined));
+  const runtime = createWebAutomationLlmEvidenceRuntime(page.gateway);
+  const save = shownHandle((await look(runtime)).evidence, "Save");
+  const pressed = (await press(runtime, save, ["modify_existing"])).evidence as JsonObject;
+  assert.equal(pressed.status, "succeeded");
+  assert.equal(pressed.pageChanged, true);
+  assert.match(String(pressed.pressedAgain), /^Pressed again: the first press of "Save" \(t\d+\) changed nothing/u);
+  assert.deepEqual(page.clicked, ["#save", "#save"]);
+});
+
+test("a lasting press that changed nothing even pressed twice says so", async () => {
   const page = stub(() => undefined);
+  const runtime = createWebAutomationLlmEvidenceRuntime(page.gateway);
+  const save = shownHandle((await look(runtime)).evidence, "Save");
+  const pressed = (await press(runtime, save, ["modify_existing"])).evidence as JsonObject;
+  assert.equal(pressed.status, "no_effect");
+  assert.match(String(pressed.noEffect), /pressed twice/u);
+  assert.deepEqual(page.clicked, ["#save", "#save"]);
+});
+
+test("a lasting press on a control the page shows disabled is not pressed again, and still says it had no effect", async () => {
+  const page = stub(() => undefined, { saveDisabled: true });
   const runtime = createWebAutomationLlmEvidenceRuntime(page.gateway);
   const save = shownHandle((await look(runtime)).evidence, "Save");
   const pressed = (await press(runtime, save, ["modify_existing"])).evidence as JsonObject;
@@ -83,8 +106,8 @@ async function press(runtime: ReturnType<typeof createWebAutomationLlmEvidenceRu
  * little; `onPress` says what else the press did (`undefined`: nothing), told
  * how many times the page has been pressed.
  */
-function stub(onPress: (state: State, presses: number) => State | undefined) {
-  let state: State = { scrollY: 151, open: true, bold: false };
+function stub(onPress: (state: State, presses: number) => State | undefined, start: Partial<State> = {}) {
+  let state: State = { scrollY: 151, open: true, bold: false, saveDisabled: false, ...start };
   const clicked: string[] = [];
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
@@ -115,7 +138,7 @@ function snapshot(state: State): JsonObject {
       raw("div", "#settings", 320, { role: "dialog", accessibleName: "Display settings" }),
       raw("select", "#size", 360, { accessibleName: "Text size", selectedValue: "large", options: [{ value: "medium", label: "Medium" }, { value: "large", label: "Large" }], parent: 2 }),
       raw("button", "#cancel", 400, { accessibleName: "Cancel", parent: 2 }),
-      raw("button", "#save", 400, { accessibleName: "Save", parent: 2 })
+      raw("button", "#save", 400, state.saveDisabled ? { accessibleName: "Save", parent: 2, attributes: { disabled: "" } } : { accessibleName: "Save", parent: 2 })
     );
   }
   return {
