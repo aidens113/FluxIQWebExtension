@@ -262,6 +262,22 @@ Earlier history (rounds 4-10, t460, t461) is in the Work Ledger archive.
 
 ## Work Ledger
 
+### 2026-10-13 - t504 merged (D's over-act: column handle and absorbed acts)
+
+- Agent: Claude senior supervisor; t504 worker.
+- Cause (report `d-exploration-over-act.md`): element identity was right (t763 printed in Tom Becker's row). The
+  model meant the selected set, but pressed the Confirm column's `at` handle from `web.detect_repeating_structure`,
+  which is always the first row's control. The press was recorded as act-1, then the Lab start hook's reset marked it
+  undone with no record. The site has no control that reverses an accepted request, so it could only be kept as
+  `cannotUndo`.
+- Changed: a control column carries `atItem` naming its row; a press inside a list answers `actedOn` (which item,
+  through which control, and that no other item was acted on); acts a start reset absorbs are listed as
+  `absorbedByStartReset` in the kept trial result. Held for the user: refusing a lasting press on a row no read kept.
+- Validation: t504 after dev merges: Core flow-bootstrap "138 passed | 1 skipped" files, "1986 passed"; domain
+  llm-evidence, route-state and output-nodes "# pass 1310 / # fail 0"; domain and Core tsc exit 0; audits exit 0;
+  Core merge gated by `pnpm check`. Pushed Core `e6ade47a`, downstream `13b31c91`.
+- Outcome: Accepted.
+
 ### 2026-10-13 - Round 17 confirming builds: B and D passed and replayed; C failed
 
 - Agent: Claude senior supervisor; debug workers.
