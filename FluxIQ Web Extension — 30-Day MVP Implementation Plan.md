@@ -1378,7 +1378,7 @@ Test:
 2. Install/start FluxIQ runtime.
 3. Complete onboarding.
 4. Create a natural-language automation.
-5. Create a recorded automation.
+5. Create an instructed automation with an optional described recording.
 6. Create a scraper.
 7. Execute them repeatedly.
 8. Trigger at least one unexpected-state adaptation.
@@ -1403,7 +1403,7 @@ The MVP is ready when a person unfamiliar with FluxIQ can reasonably accomplish 
 1. Install FluxIQ.
 2. Understand the basic purpose of the product.
 3. Describe a browser automation using natural language.
-4. Alternatively demonstrate the automation.
+4. Optionally supplement those instructions with a described demonstration.
 5. Alternatively create a scraping automation.
 6. Have FluxIQ generate a runnable automation.
 7. Test it.
