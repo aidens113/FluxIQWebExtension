@@ -7,7 +7,7 @@ export { captureSnapshotForResponse } from "./capture-snapshot-for-response";
 export { challengeIn, robotCheckIn } from "./challenge-evidence";
 export { dispatchClickGesture } from "./click-gesture";
 export { executeAction } from "./execute-action";
-export { pressAgain } from "./ignored-press";
+export { extraPressesMade, noteExtraPress, pressAgain } from "./ignored-press";
 export { recordedShadowHosts } from "./recorded-shadow-hosts";
 export { resolveTarget, TargetResolutionError } from "./resolve-target";
 // The assertion's own page reads, shared with the fact check (`../facts/`).

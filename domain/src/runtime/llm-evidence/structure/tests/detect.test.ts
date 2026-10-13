@@ -134,6 +134,23 @@ async function detect(runtime: WebAutomationLlmEvidenceRuntime, value: JsonObjec
  * carries a reason for the model and not for the record is a defect, and these
  * expectations name both rather than either.
  */
+/**
+ * A stale handle's refusal (t477): the reason and handle, a `next` that says to
+ * use the newest view or look again -- or the handle in `instead` when one is
+ * named -- and the page as this call captured it, at `location`.
+ */
+function assertStale(result: Awaited<ReturnType<typeof detect>>, reason: string, target: string, location: string, instead: string | undefined) {
+  assert.equal(result.resultCode, "web.action.rejected.target_unobserved");
+  assert.equal(result.resultReason, reason);
+  const evidence = result.evidence as JsonObject;
+  const detail = evidence.detail as JsonObject;
+  assert.equal(detail.reason, reason);
+  assert.equal(detail.target, target);
+  assert.deepEqual(detail.instead, instead === undefined ? undefined : [instead]);
+  assert.match(String(detail.next), instead === undefined ? /look at the page again/u : /handle in instead/u);
+  assert.equal((evidence.page as JsonObject).location, location);
+}
+
 function rejection(code: string, detail?: JsonObject) {
   const evidence: JsonObject = detail === undefined
     ? { schemaVersion: "web-llm-tool-result.v1", ok: false, code }
@@ -276,12 +293,12 @@ test("a target handle an inspect issued is bound through its selector, even one 
 
   // A handle the model was never shown.
   assert.deepEqual(await detect(runtime, { target: "t9" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "t9" }));
-  // The element has left the page.
+  // The element has left the page. The refusal carries the page as it is now, and says to use its handles or look again (t477).
   page = { ...page, elements: [next] };
-  assert.deepEqual(await detect(runtime, { target: "t2" }), rejection("target_unobserved", { reason: "handle_no_longer_on_page", target: "t2" }));
-  // The page itself has moved on.
+  assertStale(await detect(runtime, { target: "t2" }), "handle_no_longer_on_page", "t2", page.url, undefined);
+  // The page itself has moved on. Two elements there have the old one's selector, so no handle is named for it.
   page = { ...page, url: "http://127.0.0.1:4173/scenarios/product-catalog/page/2", elements: [next, link(), link()] };
-  assert.deepEqual(await detect(runtime, { target: "t2" }), rejection("target_unobserved", { reason: "page_moved_since_packet", target: "t2" }));
+  assertStale(await detect(runtime, { target: "t2" }), "page_moved_since_packet", "t2", page.url, undefined);
 
   // An element in a child frame is detected in that frame, and the handle remembers it.
   // The handle is read out of the packet rather than assumed: a page keeps a
@@ -307,6 +324,36 @@ test("a target handle an inspect issued is bound through its selector, even one 
  * a fault, so the receipt could never be read. It is held to the origin of the
  * frame document the element was shown in, which is still a guard.
  */
+// Lane C round 10 (`run-mv5uu9g1-9d80deea`, 0034-0044, t477): a trial moved the browser from the unfiltered results to a
+// filtered page, and the model sent the handle of the first result's label from the page before four times, refused
+// `page_moved_since_packet` with nothing more. The same place on the page now had its own handle, which was never named.
+test("a handle from a page the browser has left is refused with the page now and the handle the same place has there", async () => {
+  const label = (href: string): JsonObject => ({ tagName: "a", selector: '[data-testid="card-label"]', accessibleName: "Featured", attributes: { href, "data-testid": "card-label" } });
+  const next: JsonObject = { tagName: "button", selector: '[data-testid="pagination-next"]', visibleText: "Next" };
+  let page: FakePage = withElements(captured("product-catalog-largest"), [next, label("/p/a")]);
+  const { gateway } = fakeGateway(() => page);
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.before", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+  const old = shownPageLines(inspected.evidence).find((line) => line.kind === "link")!.target;
+
+  // The browser is now on another page whose one element at that selector is another control: another number.
+  const moved = "http://127.0.0.1:4173/scenarios/product-catalog/?filter=rated";
+  const after = withElements(captured("product-catalog-largest"), [next, label("/p/b")]);
+  after.url = moved;
+  page = after;
+  const refused = await detect(runtime, { target: old });
+  const fresh = (((refused.evidence as JsonObject).detail as JsonObject).instead as string[] | undefined)?.[0];
+  assert.ok(fresh !== undefined && fresh !== old, `a fresh handle is named, not ${old}`);
+  assertStale(refused, "page_moved_since_packet", old, moved, fresh);
+  // The handle named is the one the page carried with the refusal shows for that element.
+  assert.equal(shownPageLines(refused.evidence).find((line) => line.target === fresh)?.kind, "link");
+
+  // The refusal's page was shown like a look, so the handle it named binds: the detection runs.
+  const detected = await detect(runtime, { target: fresh! });
+  assert.equal(detected.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
+  assert.equal((detected.evidence as WebLlmRepeatingStructure).target, fresh);
+});
+
 test("a target in a cross-origin child frame is detected in that frame's document, held to the origin it was shown with", async () => {
   const top = "http://127.0.0.1:4173/scenarios/job-board/careers/quillmark/jobs/QM-4471";
   const frameUrl = "http://127.0.0.1:4999/scenarios/job-board/embed/confirmation?app=app-1";
@@ -452,7 +499,9 @@ test("a page refusal about the target says which way the handle stopped naming o
   // reasons this domain already has for a handle that stopped naming one
   // control. Both were a bare `target_unobserved` until now.
   page = refusing("target_not_found", { url: LISTING, elements: page.elements! });
-  assert.deepEqual(await detect(runtime, { target }), rejection("target_unobserved", { reason: "handle_no_longer_on_page", target }));
+  const gone = await detect(runtime, { target });
+  assert.deepEqual(gone, rejection("target_unobserved", { reason: "handle_no_longer_on_page", target, next: ((gone.evidence as JsonObject).detail as JsonObject).next! }));
+  assert.match(String(((gone.evidence as JsonObject).detail as JsonObject).next), /look at the page again/u);
   page = refusing("ambiguous_target", { url: LISTING, elements: page.elements! });
   assert.deepEqual(await detect(runtime, { target }), rejection("target_unobserved", { reason: "handle_names_several_now", target }));
 

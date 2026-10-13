@@ -131,7 +131,13 @@ const ABSORBED_ELSEWHERE: ReadonlySet<RecoveryFault> = new Set<RecoveryFault>(["
  * `disabled`, the third member, is deliberately absent, and it is the row that
  * makes this a list rather than "every ACTION_REJECTED". `covered` and `hidden`
  * are only ever produced by the actionability gate, which runs before any verb
- * touches the page, so a retry cannot repeat an act. `disabled` is produced
+ * touches the page, so a retry cannot repeat an act -- with one exception that
+ * keeps the guarantee: `actions/click.ts` reports `covered` after a press the
+ * page answered with no sign at all, when a layer covered the control during
+ * the wait (t476). That press is one the click would press once more anyway
+ * (`ignored-press/press-again.ts`); the retry closes the layer first, and the
+ * press it makes is counted as the command's one extra press
+ * (`ignored-press/command-presses.ts`). `disabled` is produced
  * there too -- but also by `actions/check.ts` after `setCheckedState` failed, by
  * `actions/upload.ts` after `setInputFiles` failed, and by `actions/select.ts`
  * for an option that will be disabled however often it is asked. Absorbing the

@@ -528,6 +528,7 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
             request: input,
             returned: returnedEvidence.get(evidenceScope(input, sessionId)),
             handles: extractionHandles,
+            restamp: (page) => stable(input, page), // A stale handle's refusal names the element's current handle as shown (`./structure/detect.ts`, t477).
             observed: (page) => { observed = page; },
           });
           // It only observes, so the state it found is the state it left.

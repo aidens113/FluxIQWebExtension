@@ -656,7 +656,13 @@ and the path shape it moved to when that changed. When the step cannot run,
 when the step added something, every added hash is among the observed page's
 exact control hashes, and any recorded path shape is the observed one; it never
 tests `removed`, because a layer the run itself opened, such as a store picker,
-may still show controls the recorded step removed.
+may still show controls the recorded step removed. When a lasting step without
+`done when:` answers success, Core asks `routeEffectSeen(effect, observed)`
+(`route-state/effect/seen.ts`, t476): `seen` when the effect holds, `not_seen`
+only when the step added at least three control names, none of them is on the
+observed page and the page is not on the path shape the step moved to, and
+`unknown` otherwise -- a later add whose panel words its quantity differently
+still shows part of the effect. Core fails a step on `not_seen` alone.
 
 A step a build created carries the same effect even where Core's build routing
 signs none, as on the candidate path (t447). When exploration acts on a
