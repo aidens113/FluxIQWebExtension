@@ -1,3 +1,4 @@
+import { confirmRequestsFacts } from "./oracle/index.js";
 import { requestAuditWorkflow } from "./qualification/index.js";
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
@@ -59,7 +60,9 @@ const OWN_POST = "[role=\"feed\"] > [role=\"article\"]:has(h3 a[href*=\"/people/
 const CONFIRMED_CARD = "[role=\"list\"] > [role=\"listitem\"]:has(a[href*=\"/messages/t/\"])";
 const card = (slug: string) => `[role="listitem"]:has(a[href$="/people/${slug}/"])`;
 
-const QUALIFYING = FRIEND_REQUESTS.filter((request) => request.mutualCount >= 5);
+/** The instruction's threshold: confirm everyone with at least this many mutual friends. */
+const MUTUAL_FRIENDS_TO_CONFIRM = 5;
+const QUALIFYING = FRIEND_REQUESTS.filter((request) => request.mutualCount >= MUTUAL_FRIENDS_TO_CONFIRM);
 
 const path = (value: string): ExpectedFact => ({ id: "document-path", subject: "document", predicate: "path", value });
 const buildIs = (mode: FeedMode): ExpectedFact => ({ id: "build-marker", subject: "build-marker", predicate: "text", value: buildMarkerText(mode) });
@@ -75,7 +78,8 @@ const PENDING: ExpectedFact = { id: "pending-post", subject: "pending-posts", pr
  * - `feed-digest` reads a friends-only digest of the home feed, judged record
  *   by record;
  * - `confirm-requests` confirms the friend requests that qualify, past a rate
- *   limit, and reads back who was confirmed;
+ *   limit, and reads back who was confirmed; it is judged as well by the
+ *   server's answer to every request, so confirming one too many fails;
  * - `move-open-day` changes a boosted post the site will not let anyone edit,
  *   which can only be done by deleting it and posting again.
  *
@@ -194,7 +198,9 @@ export const socialNetworkFeedManifest = createScenarioManifest({
           count: QUALIFYING.length,
           records: QUALIFYING.map((request) => ({ name: personBySlug(request.person).name, mutualFriends: request.mutualLine ?? null })),
         }],
-        finalState: [path(`${ROOT}friends/requests/`)],
+        // The server's answer to each request, beside the records: a run that confirmed more than asked can still store
+        // the expected four by filtering its last read, so only these facts catch the over-act (`oracle/`).
+        finalState: [path(`${ROOT}friends/requests/`), ...confirmRequestsFacts(MUTUAL_FRIENDS_TO_CONFIRM)],
         allowedConsoleErrors: [],
       },
     },
