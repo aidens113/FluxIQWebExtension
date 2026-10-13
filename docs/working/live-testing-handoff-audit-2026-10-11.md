@@ -273,6 +273,13 @@ Earlier history (rounds 4-10, t460, t461) is in the Work Ledger archive.
 - C `run-mv6lgqi6-4bfab2e1` failed $0.0631: trials no, no, unconfirmed, unconfirmed, then no; an unchanged resubmit
   refused; three repeats refused ended the build with no Flow. C is qualified on the previous pair; a debug decides
   whether t499-t502 regressed its path or this is variance.
+- Debugs: C (lane tree) - judge variance at the root (revision 4 stored the 13 oracle rows; one judge doubted paging
+  against `stop: ended`, another called 8 plus-absent rows qualifying, and revision 5 followed it to 0 rows), plus a
+  t501 regression that decided the ending: append-only supersession left 5 scripts in context, 4 labelled "is your
+  current Flow", and the repeat guard keyed a submit on its text, not the standing revision, so restoring revision 4
+  was refused three times. Fix t503. B and D passes confirmed (B: playback's store check held first time; D: no trial
+  over-act, but exploration step 0033 pressed Tom Becker's Confirm while saying it meant the 5+ rows, as in round 15;
+  investigation dispatched: `reports/d-exploration-over-act.md`).
 - Validation: spend-ledger finish lines; each run's `evaluation.json` verdict and oracle read by the supervisor;
   replay receipts above.
 - Outcome: In progress.
