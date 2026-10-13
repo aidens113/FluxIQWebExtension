@@ -14,7 +14,8 @@ import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import { webAutomationOutputNodeId } from "../../../../output-nodes";
 import { createWebLlmExtractionHandles } from "../../structure";
 import { webLlmHandleRejectionReason } from "../../tool-rejection";
-import { createWebLlmTargetPackets, resolveWebPlanNodeParameters } from "..";
+import { createWebLlmStableTargetHandles } from "../../stable-handles";
+import { createWebLlmTargetPackets, resolveWebPlanNodeParameters, type WebPlanNodeResolutionInput } from "..";
 
 test("pages that disagree make a bare handle ambiguous, and each page still answers for itself", () => {
   const targets = createWebLlmTargetPackets();
@@ -225,4 +226,148 @@ test("an acted-on identity is not lent to another element under the handle, and 
   assert.equal(moved.ok && moved.element.visibleText, "Coupon centre", "another address is another control");
   const untouched = targets.resolve(scope, "t2", ITEM, "view_history");
   assert.equal(untouched.ok && untouched.element.visibleText, undefined, "a label two views disagree on stays dropped where nothing acted");
+});
+
+// A handle from another page, named for an act on the page the caller is on (t486).
+//
+// Round 12 build 1 (`run-mv62icw0-2be384b4`, 0035/0036): `t667` was shown on
+// the towels page and named by a call made on the napkins page, where no `t667`
+// exists. Written bare, it resolved against every page the Flow had seen, found
+// the towels page's control, and the extension hunted for it on the napkins
+// page through four attempts (25.5 s) before answering a bare
+// `target_not_found`.
+//
+// Held here: a caller that says which page it acts on (`onPage`) resolves a
+// bare handle against that page alone, and a handle only another page showed
+// is refused `web.handle.stale` before anything is sent -- the code the node
+// run answers with the page it captured (t477). A handle no page showed stays
+// `web.handle.unknown`; a page the store does not hold, or holds only through a
+// look the browser cut short, is resolved as before, since neither can say what
+// the page lacks. Without `onPage` -- a replay, a check, a candidate -- nothing
+// changes.
+
+const SCOPE = { projectId: "project.onpage", flowId: "flow.onpage" };
+const TOWELS = "https://valueridge.test/p/paper-towels";
+const NAPKINS = "https://valueridge.test/p/dinner-napkins";
+const CLICK = webAutomationOutputNodeId("web.dom.click");
+
+const TOWELS_PAGE: JsonObject[] = [
+  { tagName: "button", selector: "#towels-plus", accessibleName: "Increase quantity", id: "towels-plus" },
+  { tagName: "button", selector: "#towels-add", accessibleName: "Add to cart: paper towels", id: "towels-add" }
+];
+const NAPKINS_PAGE: JsonObject[] = [
+  { tagName: "button", selector: "#napkins-add", accessibleName: "Add to cart: dinner napkins", id: "napkins-add" }
+];
+
+function flow() {
+  const handles = createWebLlmStableTargetHandles();
+  const targets = createWebLlmTargetPackets();
+  const capture = (url: string, elements: JsonObject[], cut = false) => handles.restamp(SCOPE, sanitizeWebLlmSnapshotWithBindings({ url, interactiveElements: elements, truncated: cut }));
+  const handleOf = (binding: ReturnType<typeof capture>, selector: string): string => {
+    const found = binding.evidence.elements.find((element) => binding.selectors.get(element.target) === selector);
+    if (found === undefined) throw new Error(`no handle for ${selector}`);
+    return found.target;
+  };
+  return { targets, capture, handleOf, stores: { targets, extractions: createWebLlmExtractionHandles() } };
+}
+
+function press(handle: string, extra: Partial<WebPlanNodeResolutionInput> = {}): WebPlanNodeResolutionInput {
+  return { ...SCOPE, nodeDefinitionId: CLICK, parameters: { target: { handle } }, gatedByCaller: true, ...extra };
+}
+
+test("a handle only another page showed is refused web.handle.stale for an act on this page", async () => {
+  const { targets, capture, handleOf, stores } = flow();
+  const towels = capture(TOWELS, TOWELS_PAGE);
+  targets.remember(SCOPE, towels);
+  // The model moves on; the node run looks at the napkins page before it acts.
+  targets.rememberLook(SCOPE, capture(NAPKINS, NAPKINS_PAGE));
+  const stale = handleOf(towels, "#towels-add");
+
+  const answer = await resolveWebPlanNodeParameters(press(stale, { onPage: NAPKINS }), stores);
+  assert.equal(answer.status, "refused", JSON.stringify(answer));
+  if (answer.status === "refused") {
+    assert.equal(answer.issueCodes[0], "web.handle.stale");
+    assert.ok(answer.issueCodes.includes("web.handle.stale:target"), JSON.stringify(answer.issueCodes));
+  }
+  // The store says the same on its own.
+  assert.deepEqual(targets.resolveOn(SCOPE, stale, NAPKINS), { ok: false, code: "stale" });
+});
+
+test("a handle on the page acted on resolves there; one no page showed stays unknown", async () => {
+  const { targets, capture, handleOf, stores } = flow();
+  targets.remember(SCOPE, capture(TOWELS, TOWELS_PAGE));
+  const napkins = capture(NAPKINS, NAPKINS_PAGE);
+  targets.rememberLook(SCOPE, napkins);
+
+  const here = await resolveWebPlanNodeParameters(press(handleOf(napkins, "#napkins-add"), { onPage: NAPKINS }), stores);
+  assert.equal(here.status, "resolved", JSON.stringify(here));
+  if (here.status === "resolved") assert.equal(here.parameters.selector, "#napkins-add");
+
+  const nowhere = await resolveWebPlanNodeParameters(press("t999", { onPage: NAPKINS }), stores);
+  assert.equal(nowhere.status, "refused", JSON.stringify(nowhere));
+  if (nowhere.status === "refused") assert.equal(nowhere.issueCodes[0], "web.handle.unknown");
+});
+
+test("without onPage a bare handle still resolves from any remembered page (a replay, a check)", async () => {
+  const { targets, capture, handleOf, stores } = flow();
+  const towels = capture(TOWELS, TOWELS_PAGE);
+  targets.remember(SCOPE, towels);
+  targets.rememberLook(SCOPE, capture(NAPKINS, NAPKINS_PAGE));
+  const answer = await resolveWebPlanNodeParameters(press(handleOf(towels, "#towels-add")), stores);
+  assert.equal(answer.status, "resolved", JSON.stringify(answer));
+});
+
+test("a location written beside the handle still decides over onPage", async () => {
+  const { targets, capture, handleOf, stores } = flow();
+  const towels = capture(TOWELS, TOWELS_PAGE);
+  targets.remember(SCOPE, towels);
+  targets.rememberLook(SCOPE, capture(NAPKINS, NAPKINS_PAGE));
+  const input = press(handleOf(towels, "#towels-add"), { onPage: NAPKINS });
+  input.parameters = { target: { handle: handleOf(towels, "#towels-add"), location: TOWELS } };
+  const answer = await resolveWebPlanNodeParameters(input, stores);
+  assert.equal(answer.status, "resolved", JSON.stringify(answer));
+});
+
+test("a page the store does not hold, or holds only through a look cut short, resolves as before", async () => {
+  const { targets, capture, handleOf, stores } = flow();
+  const towels = capture(TOWELS, TOWELS_PAGE);
+  targets.remember(SCOPE, towels);
+  const towelsAdd = handleOf(towels, "#towels-add");
+
+  const unheld = await resolveWebPlanNodeParameters(press(towelsAdd, { onPage: "https://valueridge.test/cart" }), stores);
+  assert.equal(unheld.status, "resolved", JSON.stringify(unheld));
+
+  // The browser cut the napkins look short: the towels button may be past where it stopped.
+  targets.rememberLook(SCOPE, capture(NAPKINS, NAPKINS_PAGE, true));
+  const cut = await resolveWebPlanNodeParameters(press(towelsAdd, { onPage: NAPKINS }), stores);
+  assert.equal(cut.status, "resolved", JSON.stringify(cut));
+
+  // A whole view of the napkins page settles it.
+  targets.rememberLook(SCOPE, capture(NAPKINS, NAPKINS_PAGE));
+  const whole = await resolveWebPlanNodeParameters(press(towelsAdd, { onPage: NAPKINS }), stores);
+  assert.equal(whole.status, "refused", JSON.stringify(whole));
+});
+
+test("a handle a page at the same path showed under another query resolves: the same document in another state", async () => {
+  const { targets, capture, handleOf, stores } = flow();
+  const variant = capture(`${TOWELS}?variant=12`, TOWELS_PAGE);
+  targets.remember(SCOPE, variant);
+  // The rerun put the page back without the variant, and its look did not describe the button.
+  targets.rememberLook(SCOPE, capture(TOWELS, [TOWELS_PAGE[0]!]));
+  const answer = await resolveWebPlanNodeParameters(press(handleOf(variant, "#towels-add"), { onPage: TOWELS }), stores);
+  assert.equal(answer.status, "resolved", JSON.stringify(answer));
+});
+
+test("a candidate submission is not held to it: its steps act on many pages", async () => {
+  const { targets, capture, handleOf, stores } = flow();
+  const towels = capture(TOWELS, TOWELS_PAGE);
+  targets.remember(SCOPE, towels);
+  targets.rememberLook(SCOPE, capture(NAPKINS, NAPKINS_PAGE));
+  const candidate = (extra: Partial<WebPlanNodeResolutionInput>): WebPlanNodeResolutionInput => ({
+    ...SCOPE, nodeDefinitionId: CLICK, parameters: { target: { handle: handleOf(towels, "#towels-add") } }, declaredConsequences: [],
+    permission: async () => ({ permitted: true as const }), handleReach: "view_history", ...extra
+  });
+  const answer = await resolveWebPlanNodeParameters(candidate({ onPage: NAPKINS }), stores);
+  assert.equal(answer.status, "resolved", JSON.stringify(answer));
+  assert.deepEqual(answer, await resolveWebPlanNodeParameters(candidate({}), stores));
 });

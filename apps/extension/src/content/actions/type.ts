@@ -44,7 +44,16 @@
 // Enter does (`../action-runtime/keyboard/implicit-submission.ts`): a search
 // typed and sent is one step. Typing that held and a send that did not is a
 // failed step, because sending was what was asked.
+//
+// A target that holds no typed text at all -- a `<span>`, a heading, a
+// checkbox -- is not a field the text failed to stick in: typing into it fails
+// the same way every time. So it fails with TARGET_NOT_ACTIONABLE, which is
+// not retryable and which a repair may answer, rather than the read-back's
+// OUTPUT_NOT_OBSERVED, which is retryable. Round 12 build 1
+// (`run-mv62icw0-2be384b4`, t486) typed into a quantity `<span>` and the
+// runtime retried it three times, telling the model it might yet pass.
 
+import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
 import { isSensitiveFormControl } from "../element-traits";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
@@ -67,7 +76,7 @@ export async function typeAction(action: BrowserActionCommand, deps: ContentActi
       expected: `a text field or editable element holding ${describeFieldValue(text, withheld)}`,
       actual: `the target is a <${element.tagName.toLowerCase()}>, which holds no typed text`,
       redacted: withheld
-    }, evidence());
+    }, evidence(), WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_ACTIONABLE);
   }
 
   deps.keyboard.typeText(element, text);

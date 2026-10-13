@@ -267,7 +267,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // is the difference between a wrong answer nobody can explain and one whose
     // cause is written down (`../name-assumption.ts`). What the model wrote of the call names an element only
     // by handle (t432); a rerun keeps what the held Flow saved, which it did not write (`./held-literals/`).
-    const resolving: WebPlanNodeResolutionInput = { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters: shaped, gatedByCaller: true };
+    const resolving: WebPlanNodeResolutionInput = { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters: shaped, gatedByCaller: true, onPage: current?.evidence.location }; // A handle only another page showed is refused stale with this page, never sent (t486).
     run.held.author(resolving, buildOf(run));
     const written = resolving.parameters; // A held step's shown copy put back to what its Flow saved (`./held-literals/`, t439).
     const { resolution: resolved, assumed } = await resolveWebPlanNode(resolving, run.stores);
