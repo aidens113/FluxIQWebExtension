@@ -158,6 +158,18 @@ Rules are AGENTS.md's testing rules and the audit's launch settings:
 
 Codex supervisor has dispatched these independent briefs. Worker claims remain unverified until reviewed and rechecked here. Integration is serial, downstream before Core, with narrow gates only.
 
+### Brief: codex-t518
+- Repository: paired t518 trees at `C:/Users/osrs_/FluxStuff/fxwork/t518/` (task/t518-recorded-recovery-state-routing).
+- Task: connect recorded actions to existing positive-evidence state routing, fixing recorded manual recovery steps that playback already completed; correct state-linker producer/ingestion clock mixing.
+- Required reads: this Current State; `reports/codex-replay-investigation.md`; Core boundary/code structure; existing recording proposal generation/candidates, host runtime route-state callbacks and state-linker; downstream host route-state projection and inferred waits.
+- Owns (may edit), Core: `runtime/state-linker.ts`, `runtime/host-runtime.ts`, `runtime/recording-flow-proposal.ts`, `nodes/importer-sdk/` recording candidate types if needed; `runtime/service/recordings/`, `runtime/service/recording-state-index/`, adjacent owning tests; minimal service wiring in `runtime/service.ts` only if needed and within its existing budget. All paths under `packages/fluxiq/src/programs/automation-studio/`.
+- Owns (may edit), downstream: `domain/src/runtime/host-runtime.ts`, new cohesive historical-state projection under `domain/src/runtime/route-state/` and adjacent tests/barrels; `domain/src/recording/proposals/late-target-wait.ts` and tests; present-wait failure classification and adjacent tests only if needed. Use new `docs/architecture/recorded-replay-state.md` in each repository for authored documentation.
+- Must not touch: t516/t517 trees or owned executor/learning files; shared working documents; fixtures, model prompts/guidance, oracles, runtime data. No commits, merges, pushes, paid/browser Lab runs or full suites.
+- Design: optional host-owned historical snapshot projection; Core loads indexed durable snapshots, chooses strict producer-time at-action/pre-state and next-action-boundary after-state with explicit provenance; rejects ambiguous/missing/truncated captures; signs with existing host callbacks and persists hashes-only routeSignatures onto candidates/nodes.
+- Safety: no generic missing-control skip, timeout bypass, or invented terminal state. Existing effect_holds/forward routing owns skip decisions. Only inferred present-target waits may receive narrowly classified missing-target readiness; all ordinary waits retain their semantics. Missing evidence retains existing failure behavior.
+- Definition of done: generic regression for automatic recovery followed by recorded manual retry, transient check cleared before its recorded control, delayed ingestion, ambiguous/missing/truncated snapshots and dead lasting controls; focused tests, touched-package typechecks and audits pass. Report actual sample projection coverage without page data.
+- Report to: t518 downstream `docs/working/adaptation-and-breadth-plan/reports/codex-t518.md`.
+
 ## Inventory (2026-10-13)
 
 ### Drift variants
@@ -474,6 +486,15 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
 - Assigned: t517 false-success/failure-feedback review; t516 handler/promotion and robot-check review; shared recorded-Flow replay investigation. Briefs are above; each worker writes its own report.
 - Decision: keep model-free handler learning enabled when adaptations are kept; use owning tests, package typechecks and audits, with no full-suite runs. Alerted the user to Core runtime recovery changes and synchronized failure contracts.
 - Validation: intake only; no worker claims accepted yet. Main downstream dev is aed9fcfc, Core dev is 234851b3; t516/t517 code is still uncommitted.
+- Outcome: In progress.
+
+### 2026-10-13 - Recorded recovery lifecycle and clock mismatch identified
+
+- Agent: Codex supervisor and codex-replay-investigation worker.
+- Findings: crossborder's first runtime claim retries successfully, making its recorded manual retry obsolete. Store's search waits through the real self-clearing check, making both its inferred wait and manual continue obsolete. Reset-before-replay is present. Social's recorded double-Post has the same risk after t517.
+- Evidence: read-only report `adaptation-and-breadth-plan/reports/codex-replay-investigation.md`; crossborder has 16 durable state snapshots but its earlier actions link to a future snapshot because the state linker mixes producer and ingestion times. Store's isolated raw snapshots no longer exist.
+- Decision: t518 connects safe historical state evidence to existing state routing and fixes clock selection. Preserve challenge behavior, oracles, and default failure when evidence is insufficient. No arbitrary failed-action skip.
+- Validation: supervisor reviewed source seams and sanitized worker findings; projected terminal-effect coverage/live replay remain to be checked. Paired t518 provisioned with the worktree helper plus narrow package builds, avoiding the task-start wrapper's full-workspace build under the user's daily full-suite restriction.
 - Outcome: In progress.
 
 ### 2026-10-13 - t515 merged; crossborder pre-flight read; handoff to Codex
