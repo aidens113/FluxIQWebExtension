@@ -274,6 +274,24 @@ isolated Lab servers authorized. Narrow owner gates; full suites atmosttwice/day
 
 ## Work Ledger
 
+### 2026-10-13 - t478-t481 merged; round 12 build 1: B and D passed, C failed; D's replay never started
+
+- Agent: Claude senior supervisor; t478-t481 workers; debug workers.
+- Changed: t478-t480 as the round 11 follow-up says; t481 pinned the in-run repair test's clock to off-peak (the
+  sweep's two Core failures were DeepSeek peak pricing, not product behaviour).
+- Round 12 (pair downstream f2d100a6 / Core f2e6b076; matrix all 14 passed; B, C and D dry runs `ready` with 0
+  provider calls):
+  - B build 1 `run-mv62icw0-2be384b4` passed $0.1062; replay `replay-mv62t56y-c4714401` passed (goal held, hash
+    equal, all five zero).
+  - D build 1 `run-mv62icw0-070f88ad` passed $0.0783; replay `replay-mv62rwy7-fcb23be8` never ran the Flow: the
+    extension's service worker did not appear within 30 s (`extension.worker`), and the receipt dropped the failure's
+    details. A Lab defect is being traced (`reports/replay-worker-timeout.md`); a rerun with the lane's instance is
+    running. A first rerun was a supervisor launch error (no `FLUXIQ_LAB_INSTANCE`, refused before any browser).
+  - C build 1 `run-mv62icw3-9118516f` failed $0.1696; full debug dispatched.
+- Validation: `git rev-parse --short origin/dev` gives f2d100a6 here and f2e6b076 in Core; matrix receipt
+  `{"passed":14}`; spend-ledger finish lines quoted above; B replay receipt from its log.
+- Outcome: In progress. B needs its debug before build 2; D needs a completed replay and its debug.
+
 ### 2026-10-13 - Round 11: B and C passed build 1 and its replay; D's filter missed a row; t478-t480
 
 - Agent: Claude senior supervisor; debug workers; t478-t480 workers.
