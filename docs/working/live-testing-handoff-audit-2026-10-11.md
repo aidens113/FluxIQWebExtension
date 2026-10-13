@@ -262,6 +262,26 @@ Earlier history (rounds 4-10, t460, t461) is in the Work Ledger archive.
 
 ## Work Ledger
 
+### 2026-10-13 - t499-t502 merged
+
+- Agent: Claude senior supervisor; t499-t502 workers.
+- Changed: t499 a layer whose kind the capture recognises (consent, rate limit, robot check, promotion, assistant), or
+  one left by a navigation, is the page's own and its names are left out of an act's recorded effect (web-effect.v1
+  unchanged; old effects check as before). t500 the repair brief carries the diagnosis verdicts and Core's page check,
+  offers "already done" before "re-find", forbids changing a choice the build did not make; an unmeasured repair round
+  that stalls with acts still to do and no new act ends not finished (supervisor decision, narrowing t194-w70; taking
+  the success edge from recovery was not built, because once t499 lands, state routing takes it before recovery runs).
+  t501 both judges' readings on a double no, one contradicting Core's paging record marked (`verify.ts` passes the
+  reads); the receipt reports the latest accepted revision; supersession is appended, earlier entries never rewritten.
+  t502 a `fields` refusal carries `{code, field, valid}`; a sibling-of-a-column name adds `web.handle.columns_changed`
+  and Core then says to detect the list again.
+- Validation: t500 Core recovery/unfinished-build/tests "193 passed (193)" files, "1492 passed"; t499 domain
+  route-state/llm-evidence/output-nodes "# pass 1300 / # fail 0" (the shared task Core was moved to Core dev to finish);
+  t501 Core result-verification/llm/flow-bootstrap/candidate-trial/recovery "450 passed | 1 skipped", "5120 passed";
+  t502 Core flow-bootstrap "138 passed | 1 skipped", "1983 passed", domain "# pass 1303 / # fail 0"; every typecheck
+  exit 0; audits exit 0; Core merges gated by `pnpm check`. Pushed Core `ac17274c`, downstream `023c526f`.
+- Outcome: Accepted. Next: round 17 confirming builds for B, C and D on this pair.
+
 ### 2026-10-13 - C qualified; all four lanes qualified
 
 - Agent: Claude senior supervisor; debug worker.
