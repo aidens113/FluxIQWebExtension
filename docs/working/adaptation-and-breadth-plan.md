@@ -385,6 +385,41 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
 
 ## Work Ledger
 
+### 2026-10-13 - Gate round 1 debugged; gate site changed; t512-t516 dispatched
+
+- Agent: Claude senior supervisor; debug and task workers.
+- Findings (debugs in the lane trees):
+  - bigbox `run-mv6v2g3l`: the drift was armed and met, but the redesigned button still reads "Add to cart", so the
+    extension's scorer found it on the first attempt (0.535 against 0.058); Buy now was never pressed. A good product
+    outcome; not an adaptation proof. The repair lane wrote `no_proposal` only in the instance bundle.
+  - everything-store `run-mv6v2hx5`: the deal-wheel appeared and the extension's popup defence closed it ("absorbing
+    blocking_dialog"), so Core saw no failure and learned no handler; the 15/16 came from a judge-driven
+    `name not contains "Ear Tips"` exclusion the request never stated, which both judges then accepted. Side finding: every
+    results-page landing is read as a robot check that cleared after about 9 s.
+  - social `run-mv6v2jh4`: the site's Post button posts on its second press (by design); t511 withholds a second press of a
+    lasting act and the repeat guard refused the model's own; the build ended on `state: absent` turned into a fake handle
+    and a bare `handle_unresolved` naming no key.
+  - job-board rerun `run-mv6v2kzn`: rows, values and order right, but an unrequested `posted` column; Core read "newest
+    posting first" as a column and hid the sort reading when `process.columns` dropped the key, so judges rejected the
+    exact answer (revision 5); the result check looped to 8192 tokens and counted as refuted.
+- Decisions (supervisor):
+  - The target-override gate slot moves from bigbox `redesigned-buy-box` to crossborder
+    `crossborder-marketplace-hub-to-cart-basket-redesign-after-creation` (the button is renamed, as in R4b). bigbox stays
+    as a non-gating "Buy now is never pressed" check.
+  - Before paying for a gate run, a model-free replay of a Flow built on the unchanged site, run against the armed
+    variant, must fail at the drift step (t512 adds `--variant` to `lab replay`).
+  - A press of a lasting control that certainly changed nothing (no change after the settle wait, control present and
+    enabled, form still open) gets one more press. This applies the user's rule that only an uncertain lasting act is
+    held back.
+  - A sort over a column `process.columns` hides stays allowed.
+- Follow-up: t512 gate classification (`no_proposal` or absorbed means not counted; repair lane written even when the
+  oracle fails; central copies; replay `--variant`). t513 certain-no-effect re-press and content-editable text in the
+  page view. t514 words are not handles; unresolved refusals name the key. t515 a yes over a condition-alone left-out row
+  quotes the request; the column list ends at its clause; `sortRead` survives hiding; a cut-off check is asked again.
+  t516 a defence-closed popup becomes a guarded handler; the false robot check.
+- Validation: not validated (findings and dispatch only); evidence quoted from each run's debug note.
+- Outcome: Revised.
+
 ### 2026-10-13 - Gate round 1: no counted pass; job-board rerun got further
 
 - Agent: Claude senior supervisor; debug workers.
