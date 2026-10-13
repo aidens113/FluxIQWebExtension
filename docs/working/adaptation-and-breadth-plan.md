@@ -1,7 +1,7 @@
 # Adaptation Gate And Breadth Sample Plan
 
 Status: Active
-Status detail: Planned 2026-10-13; nothing run yet. Gap G1 (repair persistence evidence) blocks the gate's counted runs; breadth wave 1 needs no new facility.
+Status detail: Gate round 1 and breadth wave 1 ran on 2026-10-13 with no counted pass; fixes t506-t515 merged; t516 and t517 in flight at the handoff to Codex.
 Created: 2026-10-13
 Last updated: 2026-10-13
 Owner: Senior supervisor agent (planned by a lane lead)
@@ -11,14 +11,31 @@ Related: Core work, if any, is briefed through Core's mvp-final-month-plan.md; [
 
 ## Current State
 
-**Nothing has run under this plan yet.** The plan was written on 2026-10-13 from the round-18 pair
-(Core fbd06c77 / downstream 15458401), on which B, C and D passed with zero-call replays.
+**Handoff, 2026-10-13 (Claude to Codex).** Gate round 1 and breadth wave 1 ran; nothing counted yet (ledger has
+every run and debug). Fixes t506-t515 are merged and pushed. Two tasks are still open:
+
+- **t516** (a popup closed by the extension's defence becomes a guarded `add_handler` proposal, plus the false robot
+  check on results pages): worktrees `fxwork/t516/!FluxIQWebExtension` and `fxwork/t516/!FluxIQ`, branch
+  `task/t516-defence-closed-popup-handler`. Uncommitted worker edits; report under
+  `docs/working/adaptation-and-breadth-plan/reports/` in that tree. Unverified by the supervisor.
+- **t517** (playback re-presses a lasting control that certainly changed nothing, through the extension's click watch;
+  a transient spinner is not an effect): `fxwork/t517/...`, branch `task/t517-playback-certain-no-effect-repress`.
+  Same state as t516.
+- Verify each against its brief (run the tests beside the change, tsc, audit), then `pnpm task finish` downstream
+  first, detach the Core worktree, and finish in Core.
+
+**Not yet investigated (start here after t516/t517).** The model-free crossborder control failed on the unchanged
+site: `lab run crossborder-marketplace --flow` (run `run-mv6xaosc-1c145c22`, t262 slot 3) built a Flow from its own
+recording and playback ended `web.target.not_found` after four ~4.2 s retries of one click. Find the node and why the
+element was not found on the second pass (the user's "elements not detected the second time" report); suspects are
+a one-time step (store coupon claim, `claim-again`) whose control is gone once used, or the recording's target
+identity.
 
 **Adaptation gate (Milestone 1).** It runs on three sites, each with a different kind of drift:
 
 | Site | Task (`--instruction-task`) | Drift (variant) | Repair class |
 | --- | --- | --- | --- |
-| bigbox-retail | `bigbox-retail-pickup-cart-redesigned-after-creation` | `redesigned-buy-box` | target override |
+| crossborder-marketplace | `crossborder-marketplace-hub-to-cart-basket-redesign-after-creation` | `basket-redesign` | target override |
 | everything-store | `everything-store-first-page-plus-earbuds-deal-wheel` | `deal-wheel` | interruption handler |
 | social-network-feed | `social-network-feed-group-post-regrouped-after-creation` | `regrouped` | re-author |
 
@@ -28,14 +45,12 @@ Related: Core work, if any, is briefed through Core's mvp-final-month-plan.md; [
 - A separate model-free `lab replay` then proves the repair was kept and is reused with zero calls in a new session.
 - Commands are in Phase 2, and pass criteria P1-P7 in "Gate oracle".
 
-**Gaps.**
+bigbox `redesigned-buy-box` stays as a non-gating check that Buy now is never pressed (its button keeps the text
+"Add to cart", so the extension re-finds it without a repair).
 
-- G1 blocks counting a gate run. Today nothing records that the applied repair changed the saved Flow:
-  - R4b's evaluation left `adaptationPersistence` and `adaptationReuse` null.
-  - The in-run replay counts missing accounting as 0 (`replay-repair.ts:203`).
-- G5 must pass before social's runs. It is a free probe: does a saved post Flow replay without a model and without
-  stalling at its permission point?
-- G3, G4 and G6 are follow-ups and do not block the gate.
+**Gaps.** G1 merged as t506 (the repair lane hashes the saved Flow before and after apply); t512 adds the
+`adaptationGate` classification, so an absorbed drift or `no_proposal` is never counted. G5 is closed (a saved
+post Flow replayed model-free with no permission stall). G3, G4 and G6 are follow-ups and do not block the gate.
 
 **Breadth sample (Milestone 2).** The task list has **68** tasks, not 67: 57 original tasks plus 11 additions,
 asserted in `apps/scenario-lab/src/scenarios/tests/realistic-site-live-tasks.test.ts:87`. Every task has an
@@ -60,12 +75,19 @@ Replays, dry runs, the recovery matrix and the G5 probe make no model calls.
 
 **Next steps.**
 
-1. Phase 0: brief G1 (one worker, test-runner only). Run the G5 probe, the recovery matrix and every dry run on the
-   pair the gate will use.
-2. Launch gate round 1 on slots 1-3 (bigbox, everything-store, social) together with breadth task 1 on slot 4.
-   Debug every run fully.
-3. After two counted passes per site on one frozen pair, record the gate in the MVP plan. If it is not green by
+1. Verify and merge t516 and t517 (above). Investigate the crossborder control failure.
+2. Sync the five lane trees (t262, t275, t342, t451, t418) to both `dev` branches and rebuild Core in each
+   (`pnpm --filter fluxiq --filter @fluxiq/contracts build`); run the recovery matrix and every dry run.
+3. Gate round 2: crossborder `basket-redesign` (slot 3), everything-store `deal-wheel` (needs t516), social
+   `regrouped` (needs t513, t514 and t517). Each lane tree must hold a debug note for its slot's previous run at
+   `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` or the Lab refuses the launch.
+4. With them, the three wave-1 breadth reruns not yet rerun (local-classifieds, auction, company-website), one per
+   free slot, each after its slot's debug.
+5. After two counted passes per site on one frozen pair, record the gate in the MVP plan. If it is not green by
    2026-10-23, bring a scope proposal rather than relaxing P1-P7.
+
+Open user decision: should a lasting press on rows the build's read did not select be refused? (Lane D's over-acts
+were hidden by the Lab reset; t504 fixed their cause.)
 
 Rules are AGENTS.md's testing rules and the audit's launch settings:
 
@@ -384,6 +406,30 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
   line. A worker's claim is not validation.
 
 ## Work Ledger
+
+### 2026-10-13 - t515 merged; crossborder pre-flight read; handoff to Codex
+
+- Agent: Claude senior supervisor; t515 workers A and B.
+- Changed: t515 merged (Core `234851b3`, its `pnpm check` gate passed; downstream `df891974`). A split's no whose advice adds an exclusion the request never states
+  is marked with the quoted words and re-asked once; judges read the request's wording; process columns carry
+  their evidence; instruction columns are answered from the request. The supervisor changed one fixture in
+  `result-verification/build-test/tests/judge.test.ts`: the murwcmx2 no's advice tripped the new check under a
+  request that names no accessories, and that test's subject is yes-then-no, not exclusion.
+- Crossborder pre-flight (t262 slot 3, $0): the model-free control `run-mv6xaosc-1c145c22` failed on the unchanged
+  site (`web.target.not_found`), so its replay `replay-mv6xdxax-2dc0cad9` under `basket-redesign` (also
+  `target_not_found`) proves nothing by itself. The variant is still accepted for the gate: under it, Add to cart
+  loses its test id, is renamed Add to basket, and gets re-seeded classes, while Buy now takes its place.
+  `crossborder-marketplace/tests/browser-paths.test.ts:200` asserts that the recorded path fails under it. The
+  control's own failure is open (Current State).
+- Earlier the same day: matrix `{"passed":14}`; the dry runs for social, bigbox, store and job were all `ready` with
+  zero provider calls. Model-free replays of B (13/13), C and D (4/4) passed on t510 with hashes equal and all five
+  counters zero.
+- Validation: in `fxwork/t515/!FluxIQ/packages/fluxiq` after merging Core dev, `npx tsc --noEmit -p .` exited 0 and
+  `npx vitest run` over the runtime's `result-verification`, `flow-bootstrap`, `llm` and `service/candidate-trial`
+  folders gave "Tests 4635 passed | 2 skipped". Contracts `vitest run src/record-sets/process`: "107 passed". Core
+  `node scripts/structure-audit.mjs` passed. Downstream `pnpm task finish t515` reported structure audit
+  `"passed":true`.
+- Outcome: Revised. Handed off to Codex with t516 and t517 in flight (Current State).
 
 ### 2026-10-13 - Gate round 1 debugged; gate site changed; t512-t516 dispatched
 
