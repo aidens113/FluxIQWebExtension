@@ -143,6 +143,16 @@ Codex supervisor has dispatched these independent briefs. Worker claims remain u
 - Definition of done: fail-first real-producer unit checks for known-empty versus failed/unknown evidence, positive evidence unaffected; extension source/test typechecks and owning tests pass. Report any required source path expansion.
 - Report to: t518 downstream `docs/working/adaptation-and-breadth-plan/reports/codex-t518-capture.md`.
 
+### Brief: codex-t518-live-debug
+- Repository: paired t518 trees; read-only investigation of fresh provider-free failures.
+- Task: identify the exact shared facility.contract rejection after successful fixture recording and before Flow replay; propose the smallest source fix and owning regression.
+- Required reads: Current State; run-mv70bldo-0be720fd in test-runs/instances/codex-t518-slot-3 and run-mv70cdt5-f129f5ab in codex-t518-slot-1; recording stop/proposal/approval orchestration and corresponding Core contract only as needed.
+- Owns (may edit): own report only, docs/working/adaptation-and-breadth-plan/reports/codex-t518-live-debug.md in t518 downstream.
+- Must not touch: source, shared documents, fixtures/oracles, generated/runtime data; no commits/pushes/browser runs/full suites.
+- Safety: inspect private artifacts locally; never return raw page data, credentials, tokens, raw logs or response bodies. Report static contract fields, source locations and sanitized failure metadata only.
+- Definition of done: exact rejecting endpoint/code path, caller/callee mismatch, relation to t518 changes, bounded fix paths and regression command. Both final fixture checkpoints succeeded; evaluations say facility.contract/unclassified and zero model calls; flow-lane snapshot absent.
+- Report to: own report above and supervisor.
+
 ## Inventory (2026-10-13)
 
 ### Drift variants
@@ -452,6 +462,14 @@ cost is $0.03-0.10 a build, with a ceiling of $0.25.
   line. A worker's claim is not validation.
 
 ## Work Ledger
+
+### 2026-10-13 - t518 combined verification passed; fresh controls rejected before replay
+
+- Agent: Codex supervisor; codex-t518 and capture workers; live-debug worker assigned.
+- Changed: paired t518 source committed and current dev integrated; rebuilt Core contracts/fluxiq/client gateway. Historical capture provenance, strict control-set matching, explicit empty layer scans and live/historical identity parity are present.
+- Validation: supervisor observed 196 Core tests in 23 owning files, 138 domain tests, 14 extension capture tests; Core/domain/extension source and relevant test typechecks exit 0; both structure audits exit 0. The strengthened lasting-failure regression passes against integrated t517. No full suites.
+- Browser: headed Chromium provider-free persistent-isolated runs run-mv70bldo-0be720fd (crossborder, slot 3) and run-mv70cdt5-f129f5ab (store first-page-earbuds, slot 1) completed their scripted fixture checkpoints but failed facility.contract before Flow construction/replay. Both report zero model calls, finalized-bundle/scenario.execute/unclassified; no flow-lane snapshot. No unchanged rerun.
+- Outcome: Unit/type/audit verification accepted; live replay remains unverified. Read-only worker traces the shared Core control rejection; source fix and fresh controls required before integration/publishing.
 
 ### 2026-10-13 - t516 independently verified; text-only dismissal fixed live
 
