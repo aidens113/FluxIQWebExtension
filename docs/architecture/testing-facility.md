@@ -1283,7 +1283,7 @@ instructions or supplemental recording descriptions.
 
 **Authoring mode (t338).** Whether this lane can build at all is Core's one
 authoring-mode setting, `FLUXIQ_AUTHORING_MODE` (Core `model/authoring-mode/`):
-`legacy` (the default) or `candidate`. The Lab gives every Core it starts the
+`legacy` (the Lab's default), `candidate` or `project`. The Lab gives every Core it starts the
 run's `--authoring-mode`, or `legacy` when the run names none
 (`packages/test-runner/src/live-llm/authoring-mode-env.ts`, used by
 `buildFluxIQEnvironment`); a value inherited from whoever launched the Lab is
@@ -1338,6 +1338,46 @@ before any provider call with `lab.candidate_start_hook_set`. The dry run's and
 the lane's `candidateTrial.fixtureResetBetweenTrials` says which the run does.
 Provider-free paths, replays, the fixture's initial seed and the lane's reset
 before playback are unchanged.
+
+**Project mode (automation-project-agents-plan, W4).** In `project` mode
+(`--authoring-mode project`, Core's opt-in mode beside `candidate`) a project
+supervisor breaks the task into parts, dispatches a bounded builder per
+subflow, assembles their proposals into one candidate and tests that exact
+revision; promotion is the candidate's, through the same trial runner and
+promotion owner. The Lab therefore treats it as a candidate build:
+
+- **Readiness.** `createdFlowTrialsCandidates` (`flow-lane/creation/readiness.ts`)
+  is the one test of a mode whose builds are tested candidates, `candidate` or
+  `project`. A project build is admitted on exactly the candidate terms -- the
+  trial runner and the start hook, or under `--model-reset-only` a Core with no
+  hook -- and refused before any provider call with the same codes
+  (`lab.candidate_verification_unavailable`, `lab.candidate_start_hook_unset`,
+  `lab.candidate_start_hook_set`), worded for a project build and carrying
+  `authoringMode: "project"`.
+- **Outcome.** A project build's promoted proposal, draft (direct or chat) and
+  failed build are read by the same readers as a candidate's
+  (`flow-lane/creation/candidate-outcome.ts`), each given the run's mode, so
+  `candidateOutcome.authoringMode` says `project`. Only the assembled
+  candidate's trials are its trials: a builder's partial subflow trial runs
+  under a candidate of its own and is not listed.
+- **`--model-reset-only`** applies to a project build's trials as to a
+  candidate's (`assertLabModelResetOnlyApplies`), and is refused for `legacy`.
+- **Start hook and lane.** A Lab-started project Core gets the candidate start
+  hook exactly as a candidate Core does (`labCandidateStartHookEnvironment`,
+  `environment.ts`), and the lane reads the running Core's readiness first and
+  refuses a proposal that names no tested candidate
+  (`lab.candidate_proposal_unattributed`), as in candidate mode.
+- **Chat only.** A project build starts from the extension chat. The
+  test-only direct build (`--direct-api-build`) stays a candidate or legacy
+  build, since a direct build is never a pass; in a project run it is refused
+  before any provider call with `lab.direct_build_project_mode`, never sent to
+  Core as another mode.
+- **Per-role spend** is read from the step log's `role` and `briefId` (below)
+  and written into `snapshots/live-llm.json` as `runSpend.stepLog.byRole` and
+  `runSpend.stepLog.largestInputTokens`.
+
+Until the Lab comparison (A8) passes, `project` is never the default of Core
+or of the Lab.
 
 The hook is Core deployment configuration: `FLUXIQ_CANDIDATE_START_URL`, an
 http(s) address Core POSTs an empty JSON object to before each trial, with the
@@ -1881,6 +1921,16 @@ records leave out, from the run's own step log (`steps/*/meta.json`,
 `chat` phase, and the calls of a re-author Core recorded a cost for and no
 count. Anything else the log saw is added as `unattributed`, never subtracted
 (`run-muqk713g-d08ad3dc`: 17 counted of 35 calls before this).
+
+The same reading also gives, for every run, `largestInputTokens`: the largest
+input, in tokens, of any one provider call, from each step's `meta.usage` --
+how big a single decision's context grew. A project build's steps name the
+agent that made them (`role`: `supervisor`, `builder`, `repair`; `briefId` for
+a builder's work), and the reading tallies them as `byRole`: per role, its
+calls, cost and largest single input, and the same per brief, so a debug can
+read one builder's cost on its own and A8 can set a project build beside a
+candidate build, whose steps name no agent and whose `byRole` is empty. A role
+or brief that is not an identifier is not tallied under it.
 
 The same log gives `live-llm.json` its per-call rows: `observed.observedCalls`
 is one row per provider call in `steps/`, each with the request id, task kind,

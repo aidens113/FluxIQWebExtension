@@ -167,3 +167,32 @@ test("without the evidence-loop audit, a proposal is refused unless candidate mo
   await refusedAt({ candidateTrial: { ...ROUND_6_PROMOTION, trial: { ...ROUND_6_PROMOTION.trial, calls: 0 } } }, "candidate", "a promotion no judge was called for");
   await refusedAt({ candidateTrial: { ...ROUND_6_PROMOTION, trial: { verdict: "yes", calls: 2 } } }, "candidate", "a promotion that names no trial run");
 });
+
+// W4 (automation-project-agents-plan): a project build's assembled Flow is one candidate, tested and promoted the same way,
+// so the lane reads its readiness, its promotion and its refusals as a candidate build's and records the mode.
+test("project mode: the lane reads readiness first, refuses without the hook, and a promoted project candidate the chat applied reaches playback recorded as the project's", async () => {
+  const unhooked = fakeCreationCore({ candidateReadiness: { startReset: false } });
+  const refused = await runLane(unhooked, { authoringMode: "project" });
+  await assert.rejects(refused.run, (error: unknown) => error instanceof RunnerFailure && error.details?.code === "lab.candidate_start_hook_unset" && error.details?.authoringMode === "project");
+  assert.deepEqual(unhooked.calls, ["get-flow-bootstrap-generation-readiness"], "no Flow, no authorizer, no build");
+
+  const { core, entry } = round6Core();
+  const { run, evidence } = await runLane(core, { authoringMode: "project", entry });
+  const outcome = await run;
+  assert.equal(core.calls[0], "get-flow-bootstrap-generation-readiness");
+  assert.ok(["reset:/__control/reset", "run", "oracle", "publish"].every((step) => core.calls.includes(step)), `played and checked: ${JSON.stringify(core.calls)}`);
+  assert.equal(outcome.build.candidateOutcome?.authoringMode, "project");
+  assert.equal(outcome.build.candidateOutcome?.outcome, "promoted");
+  assert.equal(createdFlowLaneSnapshot(evidence[0]!).authoringMode, "project");
+});
+
+test("project mode: a proposal naming no tested candidate is never applied, and the test-only direct build refuses before any build", async () => {
+  const { core: unattributedCore, entry } = chatCore({ candidateReadiness: { startReset: true }, runtimeSessions: SESSIONS });
+  const unattributed = await runLane(unattributedCore, { authoringMode: "project", entry });
+  await assert.rejects(unattributed.run, (error: unknown) => error instanceof RunnerFailure && error.details?.code === "lab.candidate_proposal_unattributed" && error.details?.authoringMode === "project");
+
+  const direct = candidateCore();
+  const { run } = await runLane(direct, { authoringMode: "project" });
+  await assert.rejects(run, (error: unknown) => error instanceof RunnerFailure && error.category === "facility.contract" && error.details?.code === "lab.direct_build_project_mode" && error.details?.stage === "before_provider");
+  assert.equal(direct.generationRequests.length, 0, "Core is never asked to build");
+});

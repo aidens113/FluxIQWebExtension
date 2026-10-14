@@ -1,4 +1,4 @@
-import { assertCreatedFlowVerificationReady, type CreatedFlowCandidateTrialReadiness } from "./readiness.js";
+import { assertCreatedFlowVerificationReady, createdFlowTrialsCandidates, type CreatedFlowCandidateTrialReadiness } from "./readiness.js";
 import { createdFlowCandidateDraft } from "./candidate-draft.js";
 import { createdFlowCandidateDraftOutcome, createdFlowFailedCandidateOutcome, readCreatedFlowCandidatePromotion, type CreatedFlowCandidateOutcome } from "./candidate-outcome.js";
 import type { AutomationStudioAuthoringMode, AutomationStudioCandidateAuthoringResult } from "fluxiq/automation-studio";
@@ -360,6 +360,10 @@ export type CreatedFlowPermissionRequest = Readonly<{
  * `legacy` builds as at the baseline, and `candidate` builds only with the
  * Core's `candidateTrial` readiness admitted (`./readiness.ts`), asks Core for
  * a tested candidate, and records what came of it (`candidateOutcome`).
+ * `project` is refused: this test-only direct build never asks Core for a
+ * project build (live builds start from the extension chat, and a direct build
+ * is never a pass), so a project run builds through the chat or not at all
+ * (`lab.direct_build_project_mode`), never silently as another mode.
  */
 export async function buildCreatedFlowProposal(
   control: CreatedFlowBuildControl,
@@ -368,6 +372,9 @@ export async function buildCreatedFlowProposal(
   wait: CreatedFlowBuildWait = {},
 ): Promise<CreatedFlowBuild> {
   assertCreatedFlowVerificationReady(input.authoringMode, input.candidateTrial);
+  if (input.authoringMode === "project") {
+    throw new RunnerFailure("facility.contract", "A project-mode build starts from the extension chat; the test-only direct build asks Core for a candidate or legacy build only.", { details: { code: "lab.direct_build_project_mode", stage: "before_provider", authoringMode: "project", providerInvocation: "not_attempted_by_this_entry" } });
+  }
   const now = wait.now ?? Date.now;
   const saved = record(await control.automationStudioCall("save-flow-generation-instruction", { projectId: input.projectId, flowId: input.flowId, instruction: input.instruction }, bounds));
   if (record(saved.instruction).status !== "active") throw new RunnerFailure("runtime.behavior", "Core did not make the task's instruction the Flow's active instruction");
@@ -456,7 +463,7 @@ export type CreatedFlowBuildRead = Readonly<{ build: CreatedFlowBuild; status: s
  *
  * What the build was paid for is shown one of two ways. A legacy build's
  * proposal carries its evidence loop's audit: the provider calls it counted and
- * the page evidence it read. In candidate mode (`authoringMode: "candidate"`) a
+ * the page evidence it read. In candidate and project mode (`createdFlowTrialsCandidates`) a
  * promoted candidate's proposal carries, instead, the `candidateTrial` audit
  * Core's promotion records (`service/candidate-trial/promotion.ts`): the
  * candidate, its revision and digest, and the trial whose judged yes promoted
@@ -496,7 +503,7 @@ export async function readCreatedFlowBuild(
     judged: await createdFlowBuildJudged(control, input, adaptationId),
   };
   // A promoted candidate's record, read from the same audit event; kept on every ending, a refused one too.
-  const candidateOutcome = read.authoringMode === "candidate" ? await readCreatedFlowCandidatePromotion(control, input, adaptationId) : null;
+  const candidateOutcome = createdFlowTrialsCandidates(read.authoringMode) ? await readCreatedFlowCandidatePromotion(control, input, adaptationId, read.authoringMode) : null;
   const kept = candidateOutcome ? { ...base, candidateOutcome } : base;
   const problem = !read.statuses.includes(detail.status) || detail.adaptationKind !== "flow_bootstrap" ? "lab.proposal_not_pending_bootstrap"
     : !loop ? (isWholeCandidatePromotion(candidateOutcome) ? undefined : "lab.proposal_without_evidence_audit")

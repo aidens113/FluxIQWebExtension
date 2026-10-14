@@ -24,9 +24,17 @@
 // trial sessions say how each run went. Lane A round 4
 // (`run-muyrpbnk-fef374e7`) recorded `candidate: null` for a chat build that
 // had been test-run twice.
+//
+// A project build (authoring mode `project`, automation-project-agents-plan W4)
+// is read the same way: its supervisor assembles the builders' subflows into one
+// candidate, which Core submits, test-runs and promotes through the same trial
+// runner and promotion owner, and keeps as the same draft when it does not
+// stand. Each reader takes the run's mode and records it on the outcome, so a
+// debug and the Lab comparison (A8) can tell the two apart; nothing else differs.
 
 import { automationStudioConversationCandidateDraftSaid, type AutomationStudioCandidateAuthoringResult, type AutomationStudioCandidateTrialOutcomeVerdict, type AutomationStudioFlowBootstrapCandidateKept } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../../failure.js";
+import type { CreatedFlowTrialAuthoringMode } from "./readiness.js";
 
 /** One trial Core ran of the candidate, from its runtime session. */
 export type CreatedFlowCandidateTrialRun = Readonly<{
@@ -63,7 +71,8 @@ export type CreatedFlowCandidateTrialRun = Readonly<{
  *   not (`none`); `draft` is `null` on the other outcomes.
  */
 export type CreatedFlowCandidateOutcome = Readonly<{
-  authoringMode: "candidate";
+  /** The mode whose build this was: `candidate`, or `project` for an assembled project candidate. */
+  authoringMode: CreatedFlowTrialAuthoringMode;
   outcome: "promoted" | "draft" | "failed";
   draft: "saved" | "none" | null;
   candidateId: string;
@@ -87,9 +96,10 @@ const ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/u;
 /**
  * The candidate behind a promoted proposal, read from the `candidateTrial`
  * detail Core recorded on its `created` audit event. `null` for a proposal
- * that carries none -- a legacy build's.
+ * that carries none -- a legacy build's. `authoringMode` is the run's
+ * (`candidate` when absent); a project build's proposal carries the same detail.
  */
-export async function readCreatedFlowCandidatePromotion(control: CandidateControl, subject: { projectId: string; flowId: string }, adaptationId: string): Promise<CreatedFlowCandidateOutcome | null> {
+export async function readCreatedFlowCandidatePromotion(control: CandidateControl, subject: { projectId: string; flowId: string }, adaptationId: string, authoringMode: CreatedFlowTrialAuthoringMode = "candidate"): Promise<CreatedFlowCandidateOutcome | null> {
   const answer = await control.automationStudioCall("get-flow-adaptation", { ...subject, adaptationId });
   const adaptation = field(answer, "adaptation"), phase9 = field(field(adaptation, "metadata"), "phase9");
   const events = field(phase9, "auditEvents");
@@ -102,7 +112,7 @@ export async function readCreatedFlowCandidatePromotion(control: CandidateContro
   const sessions = await readCandidateTrials(control, subject, candidateId);
   const trials = sessions === null || verdict !== "yes" || trialRunId === null ? sessions : Object.freeze(sessions.map((run) => Object.freeze(run.runId === trialRunId ? { ...run, verdict } : notPromoted(run))));
   return Object.freeze({
-    authoringMode: "candidate", outcome: "promoted", draft: null, candidateId,
+    authoringMode, outcome: "promoted", draft: null, candidateId,
     revision: whole(field(detail, "revision")), digest: identifier(field(detail, "digest")),
     verdict, trialRunId, codes: Object.freeze([]),
     judgeCalls: whole(field(trial, "calls")), trialCount: whole(field(detail, "trials")),
@@ -112,9 +122,9 @@ export async function readCreatedFlowCandidatePromotion(control: CandidateContro
 }
 
 /** A draft the direct build endpoint answered with: its own trial block names the verdict, run and codes. */
-export async function createdFlowCandidateDraftOutcome(control: CandidateControl, candidate: AutomationStudioCandidateAuthoringResult): Promise<CreatedFlowCandidateOutcome> {
+export async function createdFlowCandidateDraftOutcome(control: CandidateControl, candidate: AutomationStudioCandidateAuthoringResult, authoringMode: CreatedFlowTrialAuthoringMode = "candidate"): Promise<CreatedFlowCandidateOutcome> {
   return Object.freeze({
-    authoringMode: "candidate", outcome: "draft", draft: null, candidateId: candidate.candidateId,
+    authoringMode, outcome: "draft", draft: null, candidateId: candidate.candidateId,
     revision: candidate.revision, digest: candidate.digest,
     verdict: candidate.trial?.verdict ?? "unknown",
     trialRunId: candidate.trial?.runId ?? null, codes: Object.freeze((candidate.trial?.codes ?? []).filter((code) => CODE.test(code))),
@@ -131,12 +141,12 @@ export async function createdFlowCandidateDraftOutcome(control: CandidateControl
  * against those same words for each verdict; the trials come from Core's
  * trial sessions, and the last of them is the one that decided.
  */
-export async function createdFlowChatCandidateDraftOutcome(control: CandidateControl, subject: { projectId: string; flowId: string }, candidateId: string, said: string | null): Promise<CreatedFlowCandidateOutcome> {
+export async function createdFlowChatCandidateDraftOutcome(control: CandidateControl, subject: { projectId: string; flowId: string }, candidateId: string, said: string | null, authoringMode: CreatedFlowTrialAuthoringMode = "candidate"): Promise<CreatedFlowCandidateOutcome> {
   const read = chatDraftVerdict(said);
   const trials = await readCandidateTrials(control, subject, candidateId);
   const last = trials?.at(-1);
   return Object.freeze({
-    authoringMode: "candidate", outcome: "draft", draft: null, candidateId,
+    authoringMode, outcome: "draft", draft: null, candidateId,
     revision: last?.revision ?? null, digest: last?.digest ?? null,
     verdict: read.verdict, trialRunId: last?.runId ?? null, codes: Object.freeze(read.codes),
     judgeCalls: null, trialCount: trials?.length ?? null, trials,
@@ -151,7 +161,7 @@ export async function createdFlowChatCandidateDraftOutcome(control: CandidateCon
  * the last trial's verdict as the one that stood (`not_tested` for none).
  * Trials Core named that left no session are kept from the diagnostic alone.
  */
-export async function createdFlowFailedCandidateOutcome(control: CandidateControl, subject: { projectId: string; flowId: string }, candidate: AutomationStudioFlowBootstrapCandidateKept): Promise<CreatedFlowCandidateOutcome> {
+export async function createdFlowFailedCandidateOutcome(control: CandidateControl, subject: { projectId: string; flowId: string }, candidate: AutomationStudioFlowBootstrapCandidateKept, authoringMode: CreatedFlowTrialAuthoringMode = "candidate"): Promise<CreatedFlowCandidateOutcome> {
   const sessions = await readCandidateTrials(control, subject, candidate.candidateId);
   const named = candidate.trials.flatMap((trial) => trial.trialRunId ? [{ ...trial, runId: trial.trialRunId }] : []);
   const verdictOf = new Map(named.map((trial) => [trial.runId, trial.verdict] as const));
@@ -162,7 +172,7 @@ export async function createdFlowFailedCandidateOutcome(control: CandidateContro
   ]);
   const last = candidate.trials.at(-1);
   return Object.freeze({
-    authoringMode: "candidate", outcome: "failed", draft: candidate.draft, candidateId: candidate.candidateId,
+    authoringMode, outcome: "failed", draft: candidate.draft, candidateId: candidate.candidateId,
     revision: candidate.revision ?? null, digest: candidate.digest ?? null,
     verdict: last?.verdict ?? (candidate.trialCount === 0 ? "not_tested" : "unknown"),
     trialRunId: last?.trialRunId ?? null, codes: Object.freeze(last?.code && CODE.test(last.code) ? [last.code] : []),
@@ -174,9 +184,10 @@ export async function createdFlowFailedCandidateOutcome(control: CandidateContro
 /** The lane's failure for a candidate that stayed a draft: a product outcome, with the candidate and its verdicts. */
 export function createdFlowCandidateDraftFailure(outcome: CreatedFlowCandidateOutcome, said: string | null): RunnerFailure {
   const codes = outcome.codes.length ? `; ${outcome.codes.join(", ")}` : "";
-  return new RunnerFailure("runtime.behavior", `FluxIQ kept its candidate as a draft and built no Flow: the candidate's test run was judged ${outcome.verdict} (candidate ${outcome.candidateId}${codes})${said ? `; it said: ${JSON.stringify(said)}` : ""}`, {
+  const whose = outcome.authoringMode === "project" ? "its assembled project candidate" : "its candidate";
+  return new RunnerFailure("runtime.behavior", `FluxIQ kept ${whose} as a draft and built no Flow: the candidate's test run was judged ${outcome.verdict} (candidate ${outcome.candidateId}${codes})${said ? `; it said: ${JSON.stringify(said)}` : ""}`, {
     details: {
-      code: "lab.candidate_not_promoted", stage: "verification", authoringMode: "candidate",
+      code: "lab.candidate_not_promoted", stage: "verification", authoringMode: outcome.authoringMode,
       candidateId: outcome.candidateId, revision: outcome.revision, verdict: outcome.verdict, codes: [...outcome.codes], trialRunId: outcome.trialRunId,
       trials: outcome.trials === null ? null : outcome.trials.map((trial) => ({ runId: trial.runId, revision: trial.revision, start: trial.start, execution: trial.execution, code: trial.code })),
     },

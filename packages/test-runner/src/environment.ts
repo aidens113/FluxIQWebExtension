@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUTOMATION_STUDIO_CANDIDATE_START_HOOK_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_ENV, AUTOMATION_STUDIO_LLM_BUILD_CALL_LIMIT_SCOPE_ENV } from "fluxiq/automation-studio";
 import type { RunAllocation } from "./allocation.js";
+import { createdFlowTrialsCandidates } from "./flow-lane/index.js";
 import { LAB_AUTHORING_MODE_ENV, LAB_COST_CEILING_ENV, LAB_COST_CEILING_SCOPE_ENV, LAB_DEFAULT_MODEL_ENV, labAuthoringModeValue, labBuildCallLimitEnvironment, labCostCeilingValue, labDefaultModelValue } from "./live-llm/index.js";
 
 /**
@@ -154,12 +155,13 @@ export function buildFluxIQEnvironment(allocation: RunAllocation, paths: Topolog
 
 /**
  * The candidate start hook (decision D1) a Lab-started Core gets in candidate
- * mode: this run's Scenario Lab reset and the controller token it requires.
+ * and project mode (a project build's assembled Flow is one candidate, tried
+ * the same way): this run's Scenario Lab reset and the controller token it requires.
  * Nothing in any other mode, and nothing when the run keeps the fixture as the
  * model's reset leaves it between trials (`fixtureReset` false, t470).
  */
 export function labCandidateStartHookEnvironment(allocation: Pick<RunAllocation, "scenarioPort" | "controllerToken">, authoringMode: string, fixtureReset = true): Record<string, string> {
-  if (authoringMode !== "candidate" || !fixtureReset) return {};
+  if (!createdFlowTrialsCandidates(authoringMode) || !fixtureReset) return {};
   return {
     [AUTOMATION_STUDIO_CANDIDATE_START_HOOK_ENV.endpoint]: `http://127.0.0.1:${allocation.scenarioPort}/__control/reset`,
     [AUTOMATION_STUDIO_CANDIDATE_START_HOOK_ENV.token]: allocation.controllerToken,
