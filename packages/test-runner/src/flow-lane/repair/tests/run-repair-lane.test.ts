@@ -84,7 +84,9 @@ function lane(options: { recovery?: RunHarnessRecovery; replays?: number; applyR
       // The lane's own run created the repair and spent on it; a replay created nothing and Core states it spent nothing.
       const own = payload.runId === "run.lane";
       const spent = own ? { calls: 3, inputTokens: 30, outputTokens: 6, totalTokens: 36, estimatedCostUsd: 0.002 } : { calls: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCostUsd: 0 };
-      return { runDetail: { summary: { runId: own ? "run.lane" : "run.replay", projectId: "project-1", status: "succeeded" }, actionAttempts: [attempt], interventions: [], adaptationIds: own ? ["adaptation-1"] : [], metadata: { llmGate: { costAccounting: spent } }, ...(rows ? { datasets: [{ datasetId: "products", nodeIds: ["node.one"], recordCount: rows.length, truncated: false, invalidCount: 0 }] } : {}) } };
+      // A replay is read once Core has saved its verdict (`replay-repair.ts`), as Core saves it for a run with no model to ask.
+      const verdict = own ? {} : { resultVerification: { status: "unverified", performed: false, code: "core.result.no_model_available" } };
+      return { runDetail: { summary: { runId: own ? "run.lane" : "run.replay", projectId: "project-1", status: "succeeded" }, actionAttempts: [attempt], interventions: [], adaptationIds: own ? ["adaptation-1"] : [], metadata: { llmGate: { costAccounting: spent }, ...verdict }, ...(rows ? { datasets: [{ datasetId: "products", nodeIds: ["node.one"], recordCount: rows.length, truncated: false, invalidCount: 0 }] } : {}) } };
     },
   } as unknown as ProveLiveRepairControl;
   const input: LiveRepairLaneInput = {

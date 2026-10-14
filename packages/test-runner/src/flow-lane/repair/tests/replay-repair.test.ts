@@ -23,6 +23,19 @@ function runDetail(overrides: Partial<ExistingRunDetail> = {}): ExistingRunDetai
   };
 }
 
+/**
+ * The verdict Core writes on every succeeded run once its steps have finished,
+ * as it writes it for a run that had no model to ask (Core
+ * `result-verification/run-outcome.ts`). A succeeded run is not finished until
+ * it is there, and a replay waits for it.
+ */
+const NO_MODEL_VERDICT = { status: "unverified", performed: false, code: "core.result.no_model_available" };
+
+/** Core's run detail as `get-flow-run-detail` answers it: the verdict is on a succeeded run, never on a failed one. */
+function wireDetail(status: string, attempts: Record<string, unknown>[], extra: Record<string, unknown> = {}) {
+  return { runDetail: { summary: { runId: "run.replay", status }, actionAttempts: attempts, interventions: [], ...(status === "succeeded" ? { metadata: { resultVerification: NO_MODEL_VERDICT } } : {}), ...extra } };
+}
+
 function core(options: { detail?: () => ExistingRunDetail; status?: string; attempts?: Record<string, unknown>[]; failRun?: boolean } = {}) {
   const prepared: number[] = [];
   const goals: number[] = [];
@@ -35,7 +48,7 @@ function core(options: { detail?: () => ExistingRunDetail; status?: string; atte
       runs.push(input.llmExecution ? "live" : "deterministic");
       return { session: { runId: "run.replay", status: options.status ?? "succeeded" } };
     },
-    automationStudioCall: async () => ({ runDetail: { summary: { runId: "run.replay", status: options.status ?? "succeeded" }, actionAttempts: options.attempts ?? [attempt()], interventions: [] } }),
+    automationStudioCall: async () => wireDetail(options.status ?? "succeeded", options.attempts ?? [attempt()]),
     getRunDetail: async () => options.detail?.() ?? runDetail(),
   } as unknown as RepairReplayControl;
   return {
@@ -80,7 +93,7 @@ test("a provider Core counted is reported however Core counted it", async () => 
   const byIntervention = core({ attempts: [attempt()] });
   const withIntervention = {
     ...byIntervention,
-    control: { ...byIntervention.control, automationStudioCall: async () => ({ runDetail: { summary: { runId: "run.replay", status: "succeeded" }, actionAttempts: [attempt()], interventions: [{ interventionId: "i-1", kind: "diagnosis" }] } }) } as unknown as RepairReplayControl,
+    control: { ...byIntervention.control, automationStudioCall: async () => wireDetail("succeeded", [attempt()], { interventions: [{ interventionId: "i-1", kind: "diagnosis" }] }) } as unknown as RepairReplayControl,
   };
   assert.equal((await replayRepairedFlow(withIntervention.control, { ...withIntervention.input, replays: 1 }))[0]?.modelCalled, true);
 });
@@ -216,4 +229,55 @@ test("itemized provider calls with no count are a model call, and still an unkno
 test("a known zero passes the accounting check", () => {
   const known: RepairReplay = { index: 1, outcome: "ran", runId: "run.replay", status: "succeeded", providerCalls: 0, harnessActivations: 0, modelCalled: false, goalPassed: true, flowSucceeded: true, datasetsReproduced: null };
   assert.doesNotThrow(() => assertReplaysAccounted([known]));
+});
+
+/**
+ * Core saving a replay the way it saves every run: the status its steps earned
+ * first, then -- `verdictLagMs` later -- its verdict, with the zero accounting a
+ * model-free run earns in that same save and in no earlier one (Core
+ * `result-verification/run-record.ts`). `outlived` is a replay that ran past the
+ * request's bound, so the runner reads it back instead of being answered.
+ */
+function stagedCore(options: { verdictLagMs: number; outlived: boolean }) {
+  let statusSavedAt: number | undefined;
+  const saved = () => statusSavedAt !== undefined && Date.now() - statusSavedAt >= options.verdictLagMs;
+  const control = {
+    selectExistingContext: async () => undefined,
+    startPersistedFlow: async () => ({ runId: "run.replay" }),
+    runPersistedFlow: async () => {
+      statusSavedAt = Date.now();
+      if (options.outlived) throw new RunnerFailure("environment.missing", "FluxIQ HTTP operation timed out", { details: { bounded: "timeout", operationStage: "request", timeoutMs: 30_000 } });
+      return { session: { runId: "run.replay", status: "succeeded" } };
+    },
+    automationStudioCall: async () => {
+      const verdict = saved() ? { metadata: { resultVerification: NO_MODEL_VERDICT } } : {};
+      return { runDetail: { summary: { runId: "run.replay", status: "succeeded" }, actionAttempts: [attempt()], interventions: [], ...verdict } };
+    },
+    getRunDetail: async () => (saved() ? runDetail() : unaccounted()),
+  } as unknown as RepairReplayControl;
+  return { control, input: { projectId: "project-1", flowId: "flow-1", facilityRunId: "run-lab", prepare: async () => undefined, checkGoal: async () => true } };
+}
+
+/**
+ * run-mv8k9k2e-1f1065a8: the replay ran about 48 s, outlived its 30 s request,
+ * and the read-back took the first read that showed a finished, succeeded run.
+ * That read landed in the 0.4 s before Core's verdict save, so the accounting
+ * was read from a run Core had not finished writing and was failed as unknown.
+ */
+test("a replay that outlived its request is read once Core has saved its verdict, and its zero accounting with it", async () => {
+  const fake = stagedCore({ verdictLagMs: 400, outlived: true });
+  const replays = await replayRepairedFlow(fake.control, { ...fake.input, replays: 1 });
+  assert.equal(replays[0]?.outcome, "ran");
+  assert.equal(replays[0]?.status, "succeeded");
+  assert.equal(replays[0]?.providerCalls, 0, "the accounting was read before Core saved it");
+  assert.equal(replays[0]?.modelCalled, false);
+  assert.doesNotThrow(() => assertReplaysAccounted(replays));
+});
+
+test("a replay Core answered before its verdict save is read again until the verdict is in", async () => {
+  // Core answers a run only once it is written whole; this is a Core that did not, read back the same way.
+  const fake = stagedCore({ verdictLagMs: 200, outlived: false });
+  const [replay] = await replayRepairedFlow(fake.control, { ...fake.input, replays: 1 });
+  assert.equal(replay?.providerCalls, 0);
+  assert.doesNotThrow(() => assertReplaysAccounted([replay!]));
 });
