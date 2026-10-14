@@ -5,9 +5,9 @@ import path from "node:path";
 import test, { type TestContext } from "node:test";
 import { flowLaneEvidenceSizes, type FlowLaneEvidence } from "../flow-lane-evidence-sizes.js";
 
-// The one reader both Flow-lane producers share: the bench's `evaluateFlowRun`
-// and a single `lab run`'s `singleRunEvaluation`. These rows replace the ones
-// that evaluated a bundle through both copies and required them to agree.
+// The reader a single `lab run`'s `singleRunEvaluation` uses for a Flow-lane
+// run's evidence sizes. The bench evaluates the recording lane only (t559), so
+// it is the one Flow-lane producer left.
 
 /** A bundle directory with an empty `snapshots/` inside it. */
 function bundleDirectory(t: TestContext): string {

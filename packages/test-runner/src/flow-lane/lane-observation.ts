@@ -14,10 +14,10 @@ export type RunLaneObservation = Pick<
 > & {
   /**
    * Core's recovery record for the Flow that ran, `null` when none ran. Both
-   * lane builders below state it. It is optional only because the bench's Flow
-   * lane (`bench/evaluate-run.ts`, `evaluateFlowRun`) rebuilds its observation
-   * member by member and does not yet copy this one; absent, the evaluation
-   * records `null` -- not measured -- and never "no recovery".
+   * lane builders below state it. It is optional because the bench's Flow-lane
+   * evaluation that once rebuilt an observation without it is retired (t559);
+   * absent, the evaluation records `null` -- not measured -- and never "no
+   * recovery".
    */
   harnessRecovery?: RunEvaluation["harnessRecovery"];
 };
@@ -133,11 +133,9 @@ export function flowLaneObservation(input: {
  * on the Flow lane that never reached the publish -- a short proposal, a
  * refused approval, a rig fault before the Flow ran -- is still a Flow-lane
  * run: no Flow was created, so `flowCreated` is false and FluxIQ reported no
- * verdict. That is exactly how the bench scores such a run
- * (`bench/evaluate-run.ts`, `evaluateFlowRun`), so one run read on its own and
- * the same run read as a corpus row agree. Substituting the recording lane's
- * observation here filed a Flow run as `lane: "recording"`, and the category
- * Core reported never reached `evaluation.json`.
+ * verdict. Substituting the recording lane's observation here filed a Flow run
+ * as `lane: "recording"`, and the category Core reported never reached
+ * `evaluation.json`.
  *
  * `evaluated` is false on the existing and clone targets, which run a
  * pre-existing Flow on no evaluation lane and publish nothing. The recording

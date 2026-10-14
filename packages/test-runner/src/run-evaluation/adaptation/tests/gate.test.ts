@@ -34,9 +34,8 @@ test("a failed oracle does not count, whatever else the run did", () => {
   assert.deepEqual(classifyAdaptationGate({ ...counted, laneFailed: true, application: null, replays: [] }), { counted: false, reason: "oracle_failed" });
 });
 
-test("a repair that was not kept, not judged the declared one, not applied, or did not move the steps does not count", () => {
+test("a repair that was not kept, not applied, or did not move the steps does not count", () => {
   assert.equal(classifyAdaptationGate({ ...counted, unkeptReauthor: true, application: null }).reason, "reauthor_not_kept");
-  assert.equal(classifyAdaptationGate({ ...counted, declaredRepair: "wrong_target", application: null }).reason, "declared_repair_not_made");
   assert.equal(classifyAdaptationGate({ ...counted, application: { outcome: "not_applied" }, replays: [] }).reason, "not_applied");
   assert.equal(classifyAdaptationGate({ ...counted, application: { outcome: "applied", flow: { change: "unchanged" } } }).reason, "steps_unchanged");
   assert.equal(classifyAdaptationGate({ ...counted, application: { outcome: "applied", flow: { change: "unseen_in_run" } } }).reason, "steps_unchanged");

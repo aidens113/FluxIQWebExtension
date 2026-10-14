@@ -7,8 +7,7 @@ import { EVERYTHING_STORE_PERSON_CHECKS } from "./everything-store/index.js";
 /**
  * Every fixture's person-only checks, gathered for the corpus tests. The Lab's
  * runner does not read this list: it loads `scenarios/<scenarioId>/person-check.js`
- * for the one scenario it runs, as it loads a scenario's `repair.js`
- * (`packages/test-runner/src/person-simulation/check-module.ts`).
+ * for the one scenario it runs (`packages/test-runner/src/person-simulation/check-module.ts`).
  */
 export const SCENARIO_PERSON_CHECKS: readonly ScenarioPersonChecks[] = Object.freeze([
   EVERYTHING_STORE_PERSON_CHECKS,

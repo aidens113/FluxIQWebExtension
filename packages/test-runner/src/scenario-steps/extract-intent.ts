@@ -25,7 +25,7 @@
 // before anything is sent (`pagedExtractExclusion`): sending it without its
 // paging would record and measure a one-page read of a list the workflow reads
 // whole, and the domain refuses the retired `paginate` anyway. The bench skips
-// such a workflow on the recording and Flow lanes with the same reason.
+// such a workflow on the recording lane with the same reason.
 //
 // **No timeout is sent.** `confirmExtraction` bounds the read with
 // `webAutomationExtractListTimeoutMs(request)`, the product's own budget. A

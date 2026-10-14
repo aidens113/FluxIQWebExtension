@@ -59,10 +59,8 @@ export type SingleRunInput = {
  * lane the persisted Core run's.
  *
  * A Flow-lane run's evidence sizes come from the `snapshots/flow-lane.json` in
- * its bundle, read by `flowLaneEvidenceSizes`, the reader the bench's Flow lane
- * also uses (`bench/evaluate-run.ts`, `evaluateFlowRun`), so one run and its
- * bench row record the same packets. A recording-lane run contributes none, as
- * on the bench.
+ * its bundle, read by `flowLaneEvidenceSizes`. A recording-lane run
+ * contributes none.
  *
  * Its Week 2 adaptation measurements come from the same bundle's
  * `snapshots/adaptation.json` (`flowLaneAdaptationMeasurements`), which the

@@ -1,6 +1,5 @@
 // A scenario's person-only checks, loaded from the scenario lab build the run
-// uses, the way a scenario's declared repair is (`flow-lane/repair/declared-repair.ts`):
-// the module sits beside its fixture (`apps/scenario-lab/src/scenarios/<id>/person-check.ts`)
+// uses: the module sits beside its fixture (`apps/scenario-lab/src/scenarios/<id>/person-check.ts`)
 // and exports `PERSON_CHECKS`. This package does not depend on the scenario
 // lab's source, so the shape is checked here before anything is played.
 

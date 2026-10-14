@@ -34,11 +34,10 @@ const PACKET_POINTS = { beforeAction: true, afterAction: true } satisfies Record
  * `PersistedEvidencePacket`). The same packets, located, are returned as
  * `packets`.
  *
- * Both Flow-lane producers of a `RunEvaluation` read through this one function,
- * so a run and its bench row record the same packets: the bench from the
- * finalized bundle (`bench/evaluate-run.ts`, `evaluateFlowRun`), and a single
- * `lab run` from the staging directory before `finalize` renames it
- * (`single-run-evaluation.ts`).
+ * The one Flow-lane producer of a `RunEvaluation` reads through this function:
+ * a single `lab run`, from the staging directory before `finalize` renames it
+ * (`single-run-evaluation.ts`). The bench evaluates the recording lane only
+ * (t559), so it has no Flow-lane packets to read.
  *
  * An absent file is a run in which no Flow ran, and yields none. So does a file
  * that cannot be read or parsed, and so does an entry that is not a packet the
