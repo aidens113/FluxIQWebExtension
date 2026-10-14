@@ -668,6 +668,13 @@ build does today until A5 lands and the mode is chosen.
 - Validation: t589: test-contracts `pnpm run test` -> pass 170, fail 0; test-runner facility-failure + run-evaluation -> pass 86, fail 0; lab scripts row, lab-run, live-guards -> pass 98, fail 0; test-runner check -> 0 errors; audit passed. t583 pin: live-llm-plan tests -> pass 26, fail 0. t585 domain: node-run -> pass 356; domain tsc exit 0. Merged `bad7ade1` (t589), `6400924e` (t583), `5e9ec9c2` (t585)
 - Outcome: Accepted
 
+### 2026-10-14 — The Lab waits Core's project build bound (t592); domain handle identity (t596)
+- Agent: workers t592-project-build-deadline (downstream side), t596-domain-handle-identity; supervisor verified and integrated
+- Changed: `packages/test-runner/src/flow-lane/creation/chat/build-deadline.ts`: a project-mode chat build waits Core's `AUTOMATION_STUDIO_PROJECT_BUILD_MAX_DURATION_MS` plus the chat's steps (1_995_000 ms), candidate and legacy unchanged (795_000 ms), pinned to Core's export; `domain/src/runtime/llm-evidence/plan-resolution/element-identity.ts`: where views of one control disagree, the newest view fills the gap one signal group at a time, the floor of two unchanged
+- Why: A8 launch 7 lost three project builds to the 795 s deadline; a builder's submission was refused `web.handle.unidentifiable` after an earlier brief's press changed a control
+- Validation: t592: test-runner check -> 0 errors; chat tests + live-llm-plan -> pass 51, fail 0; audit passed; merged `60d4629e`. t596: domain llm-evidence -> tests 1105, pass 1105; element-fingerprint -> pass 13; domain tsc exit 0; audit passed; merged `889effd2`
+- Outcome: Accepted
+
 ## Open Questions
 
 Owned by the user; listed in full, with recommendations, in the Core paired
