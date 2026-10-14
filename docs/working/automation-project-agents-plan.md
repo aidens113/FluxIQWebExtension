@@ -646,6 +646,13 @@ build does today until A5 lands and the mode is chosen.
 - Outcome: Accepted. Core t574 fixes the judge's evidence before round one relaunches
 - Follow-up: the builder's accessory exclusion dropped three real items in revisions 1 and 3 (a builder-reasoning miss, not mirrored into guidance)
 
+### 2026-10-14 — Lab call backstop at Core's 250 (t576); A8 launch five
+- Agent: supervisor (t576, launch, debugs); bigbox debug by worker a8-bigbox-run-mv8186yr-debug (read-only)
+- Changed: `packages/test-contracts/src/llm.ts` `LLM_LAB_MAX_CALLS_PER_RUN` 64 -> 250 (Core's own backstop), tests that meant "one past the cap" now say so by the constant, `testing-facility.md`; launch 5 debugs (4) and `reports/a8-bigbox-run-mv8186yr-debug.md`
+- Why: the first launch-5 try declared 120 calls and the Lab refused it before any call ($0); a 64-call cap ended project builds at a third of their dollars
+- Validation: test-contracts `pnpm run test` -> pass 169, fail 0; test-runner `node --test dist/tests/*.test.js dist/live-llm/tests/*.test.js` -> pass 508, fail 0; existing-fluxiq-control tests -> pass 32, fail 0; test-runner check -> 0 errors; audit passed; merged `06142697`. Launch 5 spend -> $0.104 over four runs (ledger)
+- Outcome: Accepted; launch 5 failed on Core defects fixed by t577 and t578-t582
+
 ## Open Questions
 
 Owned by the user; listed in full, with recommendations, in the Core paired
