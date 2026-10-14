@@ -656,6 +656,13 @@ build does today until A5 lands and the mode is chosen.
 - Validation: test-contracts `pnpm run test` -> pass 169, fail 0; test-runner `node --test dist/tests/*.test.js dist/live-llm/tests/*.test.js` -> pass 508, fail 0; existing-fluxiq-control tests -> pass 32, fail 0; test-runner check -> 0 errors; audit passed; merged `06142697`. Launch 5 spend -> $0.104 over four runs (ledger)
 - Outcome: Accepted; launch 5 failed on Core defects fixed by t577 and t578-t582
 
+### 2026-10-14 — The Lab names Core's refusals (t589); downstream side of t583 and t585
+- Agent: worker t589-lab-core-refusal-reason (two rounds); supervisor (t583 pin test); t585's domain arrival rule; supervisor verified and integrated
+- Changed: a 4xx from Core on a Lab control request is the closed reason `core.refused` with endpoint, HTTP status and Core's sentence (kept only if it passes redaction and `isScreenedFacilityRefusal`), printed by the campaign row, attempt and run-outcome lines; the Lab's call cap is pinned to Core's backstop by a plan test; the domain counts an opening on a prepared entry as arriving (`domain/src/runtime/llm-evidence/node-run/{run,arrival}.ts`)
+- Why: launch 6 reported a passing build's Core refusal as `unclassified`; three 64s had drifted from Core's 250; a prepared builder was never "arrived"
+- Validation: t589: test-contracts `pnpm run test` -> pass 170, fail 0; test-runner facility-failure + run-evaluation -> pass 86, fail 0; lab scripts row, lab-run, live-guards -> pass 98, fail 0; test-runner check -> 0 errors; audit passed. t583 pin: live-llm-plan tests -> pass 26, fail 0. t585 domain: node-run -> pass 356; domain tsc exit 0. Merged `bad7ade1` (t589), `6400924e` (t583), `5e9ec9c2` (t585)
+- Outcome: Accepted
+
 ## Open Questions
 
 Owned by the user; listed in full, with recommendations, in the Core paired
