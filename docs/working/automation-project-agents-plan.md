@@ -386,6 +386,25 @@ build does today until A5 lands and the mode is chosen.
   `node scripts/check-extension.mjs`. Say what live browser behaviour was not exercised.
 - Report to: `docs/working/automation-project-agents-plan/reports/t539-w2-chat-attribution.md`
 
+### Brief: domain-sweep-fixtures
+- Repository: this repository, the paired worktree the dispatch prompt names.
+- Task: fix forward the 17 domain tests the 2026-10-13 downstream sweep found failing on dev `7a93c624` (with Core
+  `1f747263`; `pnpm -r test` stopped at the domain package: "# tests 2019, # pass 2002, # fail 17"). Files (source
+  paths of the built tests): `domain/src/io/tests/gateway-output-dispatcher-durable-reconcile.test.ts` (4),
+  `domain/src/io/tests/gateway-output-dispatcher.test.ts` (1), `domain/src/runtime/tests/adapter.test.ts` (1),
+  `domain/src/tests/core-gateway-recording-order.test.ts` (1), `domain/src/tests/web-panel-host.test.ts` (10).
+  Errors are Core's t519 refusals (`AutomationInstructionError`: a recording started without a description; a Flow
+  with no active written instructions, then "Unknown Automation Studio Flow"). Fix the fixtures the way Core's t543
+  did (Core `docs/working/automation-project-agents-plan/reports/t543-wiring-tests.md`): save the Flow's
+  instructions through the product's own call and describe each recording; never relax a product gate. A failure
+  that is not this cause: stop on it and report it with the evidence.
+- Required reads: the five files and their helpers; the t543 report.
+- Owns: the five files and test-only helpers under `domain/src/**/tests/` that only they use;
+  `docs/working/automation-project-agents-plan/reports/<your label>.md`.
+- Must not touch: any file outside a `tests/` directory; Core files.
+- Definition of done: `cd domain && DOMAIN_TEST_BUILD_LABEL=<label> node scripts/test-domain.mjs io/tests/gateway-output-dispatcher runtime/tests/adapter tests/core-gateway-recording-order tests/web-panel-host`
+  passes in full; `pnpm --filter @fluxiq-web-extension/domain check`; `pnpm structure:check`.
+
 ## Work Ledger
 
 ### 2026-10-13 — Plan written from three discovery reports
