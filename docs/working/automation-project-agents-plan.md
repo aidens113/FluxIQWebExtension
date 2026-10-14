@@ -333,6 +333,12 @@ launch 8 above; round two runs `candidate` on the same lanes before any further 
 | social-network-feed-confirm-requests | failed, $0.034: whole test passed; the rate-limit repair was refused (t603) | passed, $0.025 |
 | everything-store-plus-earbuds-under-50 | built and applied, whole test passed; the Lab's session listing crashed Core (t604) | passed, $0.034 |
 
+**Wave 3 and round three** (downstream `4d885223`, Core `8d6239a8`, after t603 and t604): `project` social passed
+($0.044, its first `project` pass); `project` everything-store failed ($0.128: the whole test held what the subflow
+trial accepted; debug in flight); round three `bigbox-retail-pickup-towels` failed in both modes (`project` $0.074,
+`candidate` $0.066) on one web-domain defect: the page view drops filter-group legends, so the seller filter was never
+recognised (t605, t606 in flight).
+
 **Reading of pair 2 (supervisor, 2026-10-14):** `candidate` passed all four, each for less than `project`; `project`
 passed two and built correct Flows for the other two, each lost to a defect of its own machinery (t603) or of a listing
 it made too large (t604). `project` still does not beat `candidate`; the default stays `candidate`.
