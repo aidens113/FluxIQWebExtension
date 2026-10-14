@@ -99,3 +99,17 @@ test("only the diagnostic's closed codes are kept: an endpoint outside Core's AP
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// A Core refusal before any provider call keeps Core's 4xx and its screened sentence on the finish.
+test("a Core refusal before any provider call records its status and screened sentence", async () => {
+  const refused = { boundary: "finalized-bundle", stage: "scenario.execute", reason: "core.refused", endpoint: "/api/programs/automation-studio/update-flow-settings", httpStatus: 400 };
+  for (const [refusal, expected] of [["LLM execution limit is invalid.", { refusal: "LLM execution limit is invalid." }], ["Bearer RAW_SENTINEL", {}]]) {
+    const { root, files, runsDirectory } = await machine({ facilityFailure: { ...refused, refusal } });
+    try {
+      const [outcome] = await readRunOutcomes(runsDirectory, { sinceMs: T, knownRunIds: new Set(), labRunsDirectory: files.labRuns });
+      assert.deepEqual(outcome.facilityFailureBeforeProvider, { stage: "scenario.execute", reason: "core.refused", endpoint: refused.endpoint, httpStatus: 400, ...expected }, refusal);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});

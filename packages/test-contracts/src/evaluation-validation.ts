@@ -5,6 +5,7 @@ import {
 } from "./evaluation.js";
 import { validateRunAdaptationCost, validateRunAdaptationPersistence, validateRunAdaptationReuse, validateRunAdaptationValidation } from "./adaptation-reuse-validation.js";
 import { AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES } from "./failure-category.js";
+import { isScreenedFacilityRefusal } from "./facility-failure-refusal.js";
 import { validateRunHarnessRecovery } from "./harness-recovery-validation.js";
 import { ContractValidationError, type ValidationIssue, type ValidationResult } from "./validation.js";
 import { add, array, enumeration, finite, isObject, keys, object, optionalText, parseJson, result, text, type JsonObject } from "./runtime-validation.js";
@@ -297,7 +298,7 @@ function checkExtractionUnjudged(input: unknown, path: string, issues: Validatio
 function checkFacilityFailure(input: unknown, path: string, issues: ValidationIssue[]): void {
   if (input === null || input === undefined) return;
   const value = object(input, path, issues); if (!value) return;
-  keys(value, ["boundary", "stage", "reason", "operationStage", "causeCode", "timeoutMs", "endpoint"], path, issues);
+  keys(value, ["boundary", "stage", "reason", "operationStage", "causeCode", "timeoutMs", "endpoint", "httpStatus", "refusal"], path, issues);
   enumeration(value.boundary, facilityFailureBoundaries, `${path}.boundary`, issues);
   enumeration(value.stage, facilityFailureStages, `${path}.stage`, issues);
   enumeration(value.reason, facilityFailureReasons, `${path}.reason`, issues);
@@ -320,11 +321,31 @@ function checkFacilityReasonDetails(value: JsonObject, path: string, issues: Val
   if (value.reason === "http.abort" && (!httpStage || hasTimeout || causeCode !== undefined)) add(issues, path, "http.abort requires only an HTTP operationStage");
   if (value.reason === "http.transport" && (!httpStage || hasTimeout || !transportCode)) add(issues, path, "http.transport requires an HTTP operationStage and optional transport causeCode");
   if (value.endpoint !== undefined && (typeof value.endpoint !== "string" || !FACILITY_FAILURE_ENDPOINT_PATTERN.test(value.endpoint))) add(issues, `${path}.endpoint`, "must be a Core API route");
-  if (value.endpoint !== undefined && !(value.reason === "http.timeout" || value.reason === "http.abort" || value.reason === "http.transport")) add(issues, `${path}.endpoint`, "is only for an http.* failure");
+  if (value.endpoint !== undefined && !(value.reason === "http.timeout" || value.reason === "http.abort" || value.reason === "http.transport" || value.reason === "core.refused")) add(issues, `${path}.endpoint`, "is only for an http.* or core.refused failure");
+  checkCoreRefusal(value, path, issues);
   if (value.reason === "module.missing" && (!moduleCode || operationStage !== undefined || hasTimeout)) add(issues, path, "module.missing requires only an allowlisted module causeCode");
   if (value.reason === "path.missing" && (causeCode !== "ENOENT" || operationStage !== undefined || hasTimeout)) add(issues, path, "path.missing requires only causeCode ENOENT");
   if (value.reason === "path.denied" && (causeCode !== "EACCES" && causeCode !== "EPERM" || operationStage !== undefined || hasTimeout)) add(issues, path, "path.denied requires only causeCode EACCES or EPERM");
   if (value.reason === "unclassified" && (operationStage !== undefined || causeCode !== undefined || hasTimeout)) add(issues, path, "unclassified cannot carry optional diagnostic fields");
+}
+
+/**
+ * `core.refused`: Core answered a Lab control request with a 4xx. It names the
+ * route and the status, and Core's sentence only when it passed screening;
+ * `httpStatus` and `refusal` belong to this reason alone.
+ */
+function checkCoreRefusal(value: JsonObject, path: string, issues: ValidationIssue[]): void {
+  const status = value.httpStatus;
+  const validStatus = typeof status === "number" && Number.isSafeInteger(status) && status >= 400 && status <= 499;
+  if (status !== undefined && !validStatus) add(issues, `${path}.httpStatus`, "must be an integer 4xx status");
+  if (value.refusal !== undefined && !isScreenedFacilityRefusal(value.refusal)) add(issues, `${path}.refusal`, "must be a short, single-line, screened refusal sentence");
+  if (value.reason !== "core.refused") {
+    if (status !== undefined || value.refusal !== undefined) add(issues, path, "httpStatus and refusal are only for core.refused");
+    return;
+  }
+  if (value.endpoint === undefined || status === undefined || value.operationStage !== undefined || value.causeCode !== undefined || value.timeoutMs !== undefined) {
+    add(issues, path, "core.refused requires endpoint and httpStatus, with an optional refusal only");
+  }
 }
 
 function checkFacilityFailurePairing(value: JsonObject, issues: ValidationIssue[]): void {

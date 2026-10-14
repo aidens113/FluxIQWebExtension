@@ -1524,6 +1524,25 @@ sentence (`existing-fluxiq-control.ts`). It was filed as `environment.missing`,
 so a campaign read the run's "LLM estimated-cost limit is invalid." on its own
 Flow settings as an installation fault (`run-musq0b1m-0472cfa0`).
 
+The evaluation's closed `facilityFailure` names such a refusal too. Any Lab
+control request Core answered with a 4xx on a Core API route projects as
+`reason: "core.refused"` with `endpoint` (the route), `httpStatus`, and
+`refusal`, Core's own sentence
+(`packages/test-runner/src/facility-failure/core-refusal-failure.ts`). The
+sentence is collapsed to one line and kept only when the evidence redaction
+(`redactText`) leaves it unchanged and the contract's screening
+(`isScreenedFacilityRefusal` in `packages/test-contracts`: no control
+characters, no `Bearer`, password, token, cookie or key assignment, no
+`[REDACTED]`, no 32-plus character token mixing letters and digits) passes on
+the whole sentence; then it is cut to 240 characters. A sentence that fails is
+dropped whole, never cut around, and the route and status still say what
+happened. The validator accepts `httpStatus` and `refusal` only on
+`core.refused`, which requires `endpoint` and `httpStatus`. Until t589 this fell
+to `unclassified`, so A8's `run-mv85un8j-beb734f5` built and passed its judged
+run and then read only `finalized-bundle / scenario.execute / unclassified`,
+though its `events.ndjson` held Core's "LLM execution limit is invalid." on
+`update-flow-settings`.
+
 #### The build is started from the extension's chat window
 
 User order, 2026-10-01: live runs prompt the model building the Flow through
