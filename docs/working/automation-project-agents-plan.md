@@ -40,7 +40,7 @@ document owns the roles and contracts.
 
 **Done (2026-10-13, supervisor-verified, pushed):** discovery and this plan with its Core pair; W1 web host-resource port at capacity 1 with lease enforcement and the leased tab (t536, with Core A3b); W2 chat attribution and W3 Lab index columns (t539, with Core A6). Core A1-A4 and the shared contracts are delivered (Core document's ledger). Nothing is wired into a build yet, so builds behave as before.
 
-**Next, in order:** Core A5a supervisor loop and A5b dispatcher (in progress), Core A5c wiring with authoring mode `project`, then A8 Lab comparison (paid: a live supervisor and a frozen pair). Follow-ups recorded here: merge W1's copy of the session-picking rule with `domain/src/runtime/llm-evidence/tools.ts` `eligibleWebSessionIds`; the chat's fold modules (card-repeats, retried, done-again) group by unit, not brief, which only matters above capacity 1; a stand-in-gateway e2e spec for a stale holder's command (the content harness has no background worker); live side panel and popup rendering of the new cards.
+**Next, in order:** Core A5a supervisor loop and A5b dispatcher (in progress), Core A5c wiring with authoring mode `project`, then W4 (Lab support for mode `project`), then A8 Lab comparison (paid: a live supervisor and a frozen pair). Follow-ups recorded here: merge W1's copy of the session-picking rule with `domain/src/runtime/llm-evidence/tools.ts` `eligibleWebSessionIds`; the chat's fold modules (card-repeats, retried, done-again) group by unit, not brief, which only matters above capacity 1; a stand-in-gateway e2e spec for a stale holder's command (the content harness has no background worker); live side panel and popup rendering of the new cards.
 
 **Blocked:** nothing. Three decisions are the user's (Open Questions); each
 has a recommendation the plan already follows.
@@ -287,6 +287,12 @@ Partitioned by file; Core units A1-A7 are in the Core paired document.
   updated. Chrome side panel and Firefox popup aligned.
 - **W3 Lab step logs by role.** `scripts/lab/` step-log writer and
   `steps/index.md` gain `role` and `briefId`; `docs/architecture/testing-facility.md`.
+- **W4 Lab support for mode `project`** (after Core A5c). `--authoring-mode project`
+  already parses through Core's resolver, but `packages/test-runner/src/flow-lane/creation/readiness.ts:68-87`
+  admits only `legacy` and `candidate`, so a project build would be refused as an unrecognised mode. Admit
+  `project` on the same terms as `candidate` (a trial runner and the start reset), read a project build's
+  outcome and draft the way `candidate-outcome.ts` reads a candidate's, and record spend, calls and the
+  largest decision input per role and brief (`live-llm/step-log-spend.ts`) for A8. Tests beside each file.
 - **A8 Lab comparison.** The qualification in `Lab Qualification` above,
   on a frozen source pair after A5, W1 and W2. Paid: one attempt per launch,
   a live supervisor, a full debug before any rerun.
