@@ -108,7 +108,7 @@ const proposalService = new AutomationStudioService({ dataDir: proposalDataDir }
 try {
   proposalService.registerRecordingDomain(webAutomationRecordingDomain);
   const { id: projectId } = await proposalService.createProject({ name: "D1b", domainId: WEB_AUTOMATION_DOMAIN_ID });
-  const { recordingId } = await proposalService.createRecording({ projectId, recordingId: "recording.d1b", domainId: WEB_AUTOMATION_DOMAIN_ID, initialState: { timestamp: 1, namespaces: {} } });
+  const { recordingId } = await proposalService.createRecording({ projectId, recordingId: "recording.d1b", domainId: WEB_AUTOMATION_DOMAIN_ID, description: "Open the item page and add it to the list.", initialState: { timestamp: 1, namespaces: {} } });
   const recorder = new AutomationStudioIoRecorder({ automationStudio: proposalService, io: proposalIo, domainId: WEB_AUTOMATION_DOMAIN_ID, projectId });
   const recordClick = (wire: typeof signInClick, sequence: number) => recorder.recordInput(recordingId, WEB_AUTOMATION_INPUT_IDS.elementClicked, { id: `envelope.${sequence}`, ioId: WEB_AUTOMATION_INPUT_IDS.elementClicked, sequence, timestampMs: wire.timestamp ?? 0, payload: wire.payload ?? {}, metadata: { sourceId: "tab:7:frame:0", clientGatewayMessageId: `message.${sequence}`, ...(wire.metadata ?? {}), inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked, eventId: wire.eventId ?? "" } });
   await recordClick(signInClick, 1);
