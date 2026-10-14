@@ -311,6 +311,48 @@ Partitioned by file; Core units A1-A7 are in the Core paired document.
 Mode `project` stays off by default throughout; nothing here changes what a
 build does today until A5 lands and the mode is chosen.
 
+## Worker Briefs
+
+### Brief: t536-w1-web-lease
+- Repository: this repository, worktree `fxwork/t536/!FluxIQWebExtension`, branch `task/t536-host-lease-wire`; it builds
+  against the paired Core worktree `fxwork/t536/!FluxIQ`, where Core's half (t536-a3b-lease-core) runs at the same time.
+- Task: unit W1, the web side of the host lease (user, 2026-10-13: concurrent agents possible in Core, the extension
+  sets one at a time). Core's types are fixed on the branch: `ClientGatewayHostLease`, `lease?` on
+  `ClientGatewayActionCommand` and `CLIENT_GATEWAY_HOST_LEASE_REFUSAL_CODES` in `packages/contracts/src/client-gateway.ts`;
+  the port `AutomationStudioHostResourcePort` published from Core's runtime barrel. (1) New
+  `domain/src/runtime/host-resources/`: the web port, `capacity: 1` (a test pins it), resource key
+  `web.automation:<clientId>` (client id, not session id, so a worker restart keeps the key), epochs strictly rising
+  even across a Core restart (seed from the clock), `acquire` answers `at_capacity` unless exactly one session
+  qualifies by the build-path rule (`domain/src/runtime/llm-evidence/tools.ts:713-724`); expose it as `hostResources`
+  from `createWebAutomationHostRuntime` (`domain/src/runtime/host-runtime.ts:136-233`). (2) New
+  `domain/src/client/host-lease.ts`: validate a wire lease, build the refusal record (`client.action_result`,
+  `status: "failed"`, failure `{category: "blocked_by_capability_or_policy", code: host_lease.stale |
+  host_lease.holder_mismatch, retryable: false, stage: "dispatch", effect: "unacted"}`). (3) Extension: carry `lease`
+  on `ServerCommandPayload` (`apps/extension/src/shared/protocol.ts:624-634`) through `gateway-session.ts:335-358`
+  (the mapping drops unknown fields); in `server-command-channel.ts` check it after `answerRepeat` and before
+  `reconciliation.begin` (and in the `evaluate_facts` branch): per resource key keep the highest `{epoch, holder}`
+  seen in `chrome.storage.session` (new `background/connection/host-lease/`); lower epoch is stale, same epoch with
+  another holder is a mismatch, higher is adopted; send the refusal directly (as `gateway-session.ts:351-355` does,
+  no runtime status or recorded event) and mark it settled in reconciliation so a repeated id gets the refusal, never
+  `not_seen`. (4) A leased command with no named tab runs on the automation tab (`latestOpenAutomationTab()`), not the
+  tab in front; an explicit `browserTabId` still wins (`runtime/command-router.ts:38-55`, `action-runner.ts:35-62,191-214`).
+- Required reads: this document's `Host Actions` and `Extension And Domain Wiring`; the files named above;
+  `docs/architecture/web-capabilities.md` (command channel and reconciliation sections).
+- Owns: the new directories and files above with their tests; the named lines of `host-runtime.ts`, `protocol.ts`,
+  `gateway-session.ts`, `server-command-channel.ts`, `command-router.ts`, `action-runner.ts` (and `automation-tab.ts`
+  only if needed); the client barrel export; `docs/architecture/web-capabilities.md` and `extension-client.md`
+  sections on the lease; `docs/working/automation-project-agents-plan/reports/t536-w1-web-lease.md`.
+- Must not touch: every Core file; `domain/src/runtime/llm-evidence/**`; `domain/src/io/gateway-output-dispatcher.ts`;
+  `domain/src/runtime/adapter.ts`; `apps/extension/src/panel/**`; `apps/extension/src/background/activity/**`; `scripts/lab/**`.
+- Definition of done: tests: capacity pinned at 1; epochs rise across a restarted port; zero or two sessions answer
+  `at_capacity`; a stale or mismatched lease gets the exact record, the router is never called and nothing is
+  recorded; a repeated id is answered with the refusal; a higher epoch is adopted; a lease-less command with no lease
+  ever seen runs as today; the ledger survives a worker restart; a leased click and a leased navigation use the
+  automation tab while another tab is in front. Checks: the tests beside each changed file, the domain and extension
+  typechecks, `pnpm structure:check`. A Chromium content-harness check that a stale holder's command is refused if
+  the harness can drive it; say so if not.
+- Report to: `docs/working/automation-project-agents-plan/reports/t536-w1-web-lease.md`
+
 ## Work Ledger
 
 ### 2026-10-13 — Plan written from three discovery reports
