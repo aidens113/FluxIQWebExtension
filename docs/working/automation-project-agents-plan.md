@@ -49,7 +49,7 @@ launch, so every A8 round runs on one frozen pair: Core t570 (builders had no bu
 Core-sized briefs, permitted acts from parts, exact interface lines), t574 (the judge now sees a called part's read
 with its wording and tested values; an audit found 3 of 5 everything-store verdicts wrong without them), t575 (an
 acting brief may make any act the task asks for, so two models' class labels need not agree), A21 (t571), A10b
-(t572), and W8 here (t573). After A8: A7 and A14 in Core; audit point 5 (re-ask a refuted no).
+(t572), W8 here (t573), and the Lab's call backstop raised to Core's 250 (t576). After A8: A7 and A14 in Core; audit point 5 (re-ask a refuted no).
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -283,7 +283,7 @@ dev and rebuilt, at most four lanes at once (one `lab-slots/slot-N` each). Commo
 gate uses, `mvp-final-month-plan/reports/codex-continuation-live-readiness.md`):
 
 ```powershell
-pnpm.cmd lab run <scenario> --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode <candidate|project> --llm-task create-flow --instruction-task <task> --target persistent-isolated --workspace a8-<mode>-<site> --llm-max-cost-usd 0.25 --llm-max-calls 120 --llm-max-run-tokens 48000000
+pnpm.cmd lab run <scenario> --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode <candidate|project> --llm-task create-flow --instruction-task <task> --target persistent-isolated --workspace a8-<mode>-<site> --llm-max-cost-usd 0.25 --llm-max-calls 250 --llm-max-run-tokens 48000000
 ```
 
 | Site | Task | Modes |
@@ -299,10 +299,11 @@ the largest single decision input (W4 `runSpend.stepLog.largestInputTokens`), pe
 paid the judged run, and a UI review of the chat's plan, brief, return and receipt cards. A pass for `project` is
 P1-P7 conduct plus the oracle, and the flip of the default needs two consecutive passes per site on one frozen pair.
 
-**Call cap (supervisor, 2026-10-14):** 120 for both modes from the relaunch after t570, up from 64. The dollar
-ceiling is the user's limit; the call cap is a Lab safeguard, and at 64 it ended three `project` builds at about a
-third of their dollars, because a supervisor and its builders make many small calls. Both modes get the same cap,
-so the comparison stays fair.
+**Call cap (supervisor, 2026-10-14):** 250 for both modes from launch 5, up from 64: the Lab's backstop, raised
+to Core's own by t576 (a first try at 120 was refused by the old 64-call Lab contract before any call, $0). The
+dollar ceiling is the user's limit; the call cap only stops a runaway loop, and at 64 it ended three `project`
+builds at about a third of their dollars, because a supervisor and its builders make many small calls. Both modes
+get the same cap, so the comparison stays fair.
 
 **Attempts** (each debugged in `language-driven-flow-loop-plan/debugs/<runId>.md` before the next launch):
 
