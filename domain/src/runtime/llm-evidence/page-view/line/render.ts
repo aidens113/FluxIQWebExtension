@@ -1,13 +1,14 @@
 // The chosen lines written out, with the markers between them (t223):
 //
-//   <handle> [<heading tag>] [<kind>] ["<words>"] [<state tokens>...]
+//   <handle> [<heading tag>] [<kind>] ["<words>"] [<state tokens>...] [group="<legend>"]
 //
 // A line whose element sits under a heading that has no line of its own takes
 // that heading's tag before its kind, `t246 h2 link "..."`, so a card's title
-// link still reads as the card's heading.
+// link still reads as the card's heading. A control in a fieldset ends with
+// its legend, `group="Size"` (t605), which is what a bare option filters by.
 
 import type { WebLlmEvidenceViewport } from "../../page-evidence";
-import { quotedWords, webLlmStateTokens } from "../element";
+import { quotedWords, webLlmGroupToken, webLlmStateTokens } from "../element";
 import { webLlmLineKind } from "./kind";
 import { webLlmLinkRepeats } from "../link-repeats";
 import type { WebLlmLinkWriter } from "../link-writer";
@@ -32,7 +33,8 @@ export function renderedWebLlmLines(lines: readonly WebLlmViewLine[], tree: WebL
       : tree.ancestors(element).find((ancestor) => HEADING_TAG.test(ancestor.tag));
     const prefix = heading !== undefined && !lined.has(heading) ? heading.tag : undefined;
     const target = kind === "link" && element.href !== undefined ? linkTarget(element.target, element.href) : undefined;
-    const parts = [element.target, prefix, kind, line.words === undefined ? undefined : quotedWords(line.words), ...webLlmStateTokens(element, kind, target, line.words)];
+    const group = line.role === "control" ? webLlmGroupToken(element) : undefined;
+    const parts = [element.target, prefix, kind, line.words === undefined ? undefined : quotedWords(line.words), ...webLlmStateTokens(element, kind, target, line.words), group];
     written.push(parts.filter((part): part is string => part !== undefined && part !== "").join(" "));
   }
   return written;

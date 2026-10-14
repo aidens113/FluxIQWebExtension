@@ -22,7 +22,7 @@ test("written instructions outrank optional untrusted demonstrations without fix
 
 test("the version is one Core's seam accepts, and names the text with loops and written steps", () => {
   assert.match(version, /^[a-z0-9][a-z0-9._-]{0,63}$/u);
-  assert.equal(version, "web-8");
+  assert.equal(version, "web-9");
 });
 
 test("the text holds no control character but a newline, and stays under 3,600 characters", () => {
@@ -36,7 +36,7 @@ test("it says the model operates a website on the person's behalf", () => {
 });
 
 test("it reads the page view's header lines and the terms the renderer prints", () => {
-  for (const term of ["PAGE", "URL", "VIEW", "COVERING", "DIALOG", "field[search]", "covered-by", "placeholder", "marked", "selected", "pressed", "current", "- i/n", "--- below the fold ---"]) {
+  for (const term of ["PAGE", "URL", "VIEW", "COVERING", "DIALOG", "field[search]", "covered-by", "group=", "placeholder", "marked", "selected", "pressed", "current", "- i/n", "--- below the fold ---"]) {
     assert.ok(text.includes(term), `missing ${term}`);
   }
 });

@@ -135,3 +135,32 @@ test("the record an element sits in is handed back beside the selector, never in
     assert.doesNotMatch(serialized, /pst_7d3c9d|data-post-id|harbour loop|"record"/u);
   }
 });
+
+// t605: the extension sends the legend of the fieldset a control sits in
+// (`context.fieldsetLegend`); the packet carries it as `group`, which is what a
+// bare option filters by. A legend sits in its own fieldset, so its group
+// would only repeat its words, and is left out as `heading` is.
+test("the fieldset a control sits in reaches the packet as `group`, and a legend has none of its own", () => {
+  const option = sanitizedEvidenceElement({ tagName: "input", selector: "#large", inputType: "checkbox", accessibleName: "Large (4)", context: { fieldsetLegend: "Size", heading: "Filters" } }, CONTEXT);
+  assert.equal(option?.element.group, "Size");
+  assert.equal(option?.element.heading, "Filters");
+  const legend = sanitizedEvidenceElement({ tagName: "legend", selector: "#size > legend", accessibleName: "Size", visibleText: "Size", context: { fieldsetLegend: "Size" } }, CONTEXT);
+  assert.equal(legend?.element.group, undefined);
+  const outside = sanitizedEvidenceElement({ tagName: "input", selector: "#q", accessibleName: "Search" }, CONTEXT);
+  assert.equal(outside?.element.group, undefined);
+});
+
+// t605: `text` equal to the name was dropped from every element, but the page
+// view reads the words of an element that is neither a control nor a semantic
+// text element from `text` alone, so a legend, a caption or a label naming no
+// control had no line. Such an element keeps its text; a control, which the
+// view reads by name, still does not repeat it.
+test("a legend, caption, label or role heading keeps text equal to its name, and a control does not", () => {
+  const kept = (raw: Record<string, unknown>): string | undefined => sanitizedEvidenceElement({ selector: "#x", accessibleName: "Size", visibleText: "Size", ...raw }, CONTEXT)?.element.text;
+  for (const tagName of ["legend", "caption", "label", "option"]) assert.equal(kept({ tagName }), "Size", tagName);
+  assert.equal(kept({ tagName: "div", role: "heading" }), "Size");
+  assert.equal(kept({ tagName: "a" }), "Size", "an <a> with no address is plain text");
+  assert.equal(kept({ tagName: "a", href: "https://fixture.test/size" }), undefined, "a link is read by its name");
+  assert.equal(kept({ tagName: "button" }), undefined);
+  assert.equal(kept({ tagName: "h2" }), undefined, "a heading falls back on its name in the view");
+});

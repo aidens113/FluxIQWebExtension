@@ -38,7 +38,14 @@ export type WebLlmEvidenceElement = {
   name?: string;
   /** The text of the `<label>` naming the control, where it differs from `name`. */
   label?: string;
-  /** The element's text, where it differs from `name`: its own words, or all of them for a control or a semantic text element. */
+  /**
+   * The element's text, where it differs from `name`: its own words, or all of
+   * them for a control or a semantic text element. Kept even where it is the
+   * name on an element the page names from its own words but the view does
+   * not read by name -- a `<legend>`, a `<caption>`, a `<label>`, an element
+   * whose role is `heading` (t605). Dropped there, the view had no words for
+   * it, and a filter group's heading never reached the model.
+   */
   text?: string;
   /**
    * The element's own visible words, where `text` is all of its descendants'
@@ -121,6 +128,12 @@ export type WebLlmEvidenceElement = {
   landmark?: string;
   /** The nearest preceding heading, when it says something the name does not. */
   heading?: string;
+  /**
+   * The group it sits in: the `<legend>` of its nearest `<fieldset>`, where it
+   * says something the element's name and text do not (t605). It is what a
+   * bare option filters by: `checkbox "Large (4)"` is a size only under "Size".
+   */
+  group?: string;
   /** Position inside a repeating list, which is also how many items there are. */
   item?: { index: number; total: number };
   /** Position inside a table. */
@@ -202,7 +215,7 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
   const name = screenedPageText(raw.accessibleName ?? raw.name);
   const rawLabel = screenedPageText(raw.label);
   const rawText = screenedPageText(raw.visibleText ?? raw.text);
-  const text = rawText === name ? undefined : rawText;
+  const text = rawText === name && !wordsOnlyInText(tag, role, raw.href !== undefined || byName.href !== undefined) ? undefined : rawText;
   const rawInputType = pageText(raw.inputType)?.toLowerCase();
   const inputType = rawInputType === "text" ? undefined : rawInputType;
   const rawControlType = pageText(byName.type)?.toLowerCase();
@@ -258,6 +271,7 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     form: placement.form,
     landmark: placement.landmark,
     heading: placement.heading,
+    group: placement.group,
     item: placement.item,
     cell: placement.cell,
     // One is not a run: a count of one says nothing the element does not.
@@ -284,7 +298,31 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
   };
 }
 
-/** A form whose action names a search: `/search`, `/search.php`, `/searchresults`. */
+/**
+ * Tags and roles the extension names from their content
+ * (`apps/extension/src/content/identity/accessible-name.ts`) that are neither
+ * a control nor a semantic text element, so the view reads their words from
+ * `text` alone (`page-view/element/traits.ts`). Their `text` is their own
+ * words only -- `describeElement` reads such an element by its own text nodes
+ * -- so keeping it beside an equal name repeats nothing a child says.
+ */
+const WORDS_ONLY_IN_TEXT_TAGS: ReadonlySet<string> = new Set(["legend", "caption", "label", "option"]);
+const WORDS_ONLY_IN_TEXT_ROLES: ReadonlySet<string> = new Set(["heading", "tooltip", "cell", "gridcell", "columnheader", "rowheader", "row", "listitem"]);
+
+/**
+ * Whether the element's words would be lost were its `text` dropped for
+ * equalling its name: it is named from its content, and the view does not
+ * read it by name. A link with an address is a control and is read by name;
+ * an `<a>` without one is plain text.
+ */
+function wordsOnlyInText(tag: string, role: string | undefined, linked: boolean): boolean {
+  if (WORDS_ONLY_IN_TEXT_TAGS.has(tag)) return true;
+  if (tag === "a" && !linked) return true;
+  const pageRole = role?.trim().split(/\s+/u)[0]?.toLowerCase();
+  return pageRole !== undefined && WORDS_ONLY_IN_TEXT_ROLES.has(pageRole);
+}
+
+/** A form whose action names a search:`/search`, `/search.php`, `/searchresults`. */
 const SEARCH_ACTION = /(?:^|[/._-])search/iu;
 
 /** Whether the element's form's action is a search, read from the address's path alone. */
@@ -446,7 +484,7 @@ function stampedFrameId(raw: Record<string, unknown>): number | undefined {
 }
 
 /**
- * The five placement fields, every one of them named, `undefined` where the
+ * The six placement fields, every one of them named, `undefined` where the
  * page said nothing.
  *
  * Written as a projection of the element type rather than as its own shape, so
@@ -455,26 +493,30 @@ function stampedFrameId(raw: Record<string, unknown>): number | undefined {
  * field simply stops arriving, which is the whole defect this directory is
  * being closed against.
  */
-type EvidenceElementPlacement = { [K in "form" | "landmark" | "heading" | "item" | "cell"]: WebLlmEvidenceElement[K] };
+type EvidenceElementPlacement = { [K in "form" | "landmark" | "heading" | "group" | "item" | "cell"]: WebLlmEvidenceElement[K] };
 
 /**
- * Where the element sits: the form, landmark, heading, list or table position
- * `describeElement` already derives. This is how the packet carries regions,
- * forms and repeating structure without a second page-level list -- the
- * placement rides on the element it describes.
+ * Where the element sits: the form, landmark, heading, fieldset legend, list or
+ * table position `describeElement` already derives. This is how the packet
+ * carries regions, forms and repeating structure without a second page-level
+ * list -- the placement rides on the element it describes.
  */
 function elementPlacement(input: unknown, named: { name?: string | undefined; text?: string | undefined }): EvidenceElementPlacement {
   // A missing or malformed context reads as an empty record rather than an
-  // early return, so every one of the five fields is still named below.
+  // early return, so every one of the six fields is still named below.
   const described: Record<string, unknown> = isJsonRecord(input) ? input : {};
   const form = screenedPageText(described.formId ?? described.formName);
   const landmark = screenedPageText(described.landmark);
   const rawHeading = screenedPageText(described.heading);
   const heading = rawHeading === named.name || rawHeading === named.text ? undefined : rawHeading;
+  // A legend sits in its own fieldset: there the group is its own words and says nothing.
+  const rawGroup = screenedPageText(described.fieldsetLegend);
+  const group = rawGroup === named.name || rawGroup === named.text ? undefined : rawGroup;
   return {
     form,
     landmark,
     heading,
+    group,
     item: listPlacement(described.listPosition),
     cell: tablePlacement(described.tablePosition)
   };

@@ -36,7 +36,7 @@ test("false, 0 and the empty string are values and survive", () => {
     selectedValue: "", href: undefined, hasClickHandler: undefined, cursor: undefined, marked: undefined, searchForm: undefined,
     placeholderName: undefined, box: undefined, onViewport: false,
     options: undefined, revealKind: undefined, expanded: false, focused: undefined, recent: undefined,
-    changed: undefined, form: undefined, landmark: undefined, heading: undefined, item: undefined, cell: undefined,
+    changed: undefined, form: undefined, landmark: undefined, heading: undefined, group: undefined, item: undefined, cell: undefined,
     repeats: undefined, dialog: undefined, within: undefined, alike: undefined,
     isDialog: undefined, inDialog: undefined, covers: undefined, coversCount: undefined, kind: undefined, coveredBy: undefined,
     frontLayer: undefined, statement: undefined
