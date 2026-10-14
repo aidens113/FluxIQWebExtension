@@ -50,6 +50,9 @@ Core-sized briefs, permitted acts from parts, exact interface lines), t574 (the 
 with its wording and tested values; an audit found 3 of 5 everything-store verdicts wrong without them), t575 (an
 acting brief may make any act the task asks for, so two models' class labels need not agree), A21 (t571), A10b
 (t572), W8 here (t573), and the Lab's call backstop raised to Core's 250 (t576). After A8: A7 and A14 in Core; audit point 5 (re-ask a refuted no).
+Launch 5 (`048a1d91`, 250 calls) found two more: briefs sized past the builder loop's 64 turns (t577, merged), and,
+where bigbox's builders did run, subflow trials that could never pass (the bigbox debug,
+`reports/a8-bigbox-run-mv8186yr-debug.md`): Core t578-t582 are in flight, and round one relaunches when they merge.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -313,7 +316,7 @@ get the same cap, so the comparison stays fair.
 | 2, `project` | after A18 | three runs (run-mv7rvqfz, -rx3mk, -ryk3v), own trees | none started, $0: the Lab chat was unavailable | t568 SQLite long-path open |
 | 3, `project` | after t568 | run-mv7t07hx (crossborder $0.006), run-mv7t19hg (bigbox), run-mv7t2xxc (social $0.024), run-mv7t4ozn (everything-store $0.005) | the supervisor searched like a builder, then every raw plan was refused | t569 planning format, look budget |
 | 4, `project` | `e56fec59` | run-mv7vk3ol (crossborder $0.072), run-mv7vl89u (bigbox $0.078), run-mv7vmvhd (social $0.078), run-mv7vor5f (everything-store $0.171) | plans and dispatches work; three ran out of calls, everything-store's subflow trials judged no 4x, unsure 1x (judge reliability, cross-mode) | t570 call shares and brief defaults; the call cap above |
-| 5, `project` | `048a1d91`, 250 calls | run-mv816jbn (crossborder $0.003), run-mv8186yr (bigbox $0.094), run-mv819so1 (social $0.003), run-mv81b25e (everything-store $0.003) | first try refused before any call (the Lab took at most 64 calls; t576); then three builds' briefs were sized 77-117 turns and every builder refused its own configuration (loop takes 64); bigbox's builders ran (debug pending) | t577 turns capped at the loop's 64 |
+| 5, `project` | `048a1d91`, 250 calls | run-mv816jbn (crossborder $0.003), run-mv8186yr (bigbox $0.094), run-mv819so1 (social $0.003), run-mv81b25e (everything-store $0.003) | first try refused before any call (the Lab took at most 64 calls; t576); then three builds' briefs were sized 77-117 turns and every builder refused its own configuration (loop takes 64); bigbox's builders ran, but no subflow trial could pass (stale trial tab, dependents started early, no honest builder ending) | t577 turns capped at the loop's 64; Core t578-t582 from the bigbox debug |
 
 ## Units (this repository)
 
