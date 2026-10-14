@@ -198,14 +198,14 @@ test("a replay whose goal did not hold fails the run, naming the replays that mi
 
 /**
  * A Flow FluxIQ built from an instruction: its playback ran under the
- * model taking part, so its repair is the same kind of proposal, and
- * its own lane judged no declared repair, so this lane judges it first.
+ * model taking part, so its repair is the same kind of proposal. A scenario's
+ * declared repair, which once held such a proposal to a named control, is
+ * retired (t559), so the proposal is applied and replayed like any other.
  */
-const DECLARED = { patchKind: "temporary_target_override", target: { tagName: "button", accessibleName: "Apply changes", controlType: "submit" } } as const;
 function createdLane(options: Parameters<typeof lane>[0] = {}) {
   const fake = lane(options);
   const input: LiveRepairLaneInput = {
-    ...fake.input, expectation: DECLARED,
+    ...fake.input,
     // The created lane's own rule, as the runner hands it in.
     rebuildInputs: (nodes) => createdFlowSecretInputs({ scenarioId: fake.input.scenarioId, secrets: fake.input.secrets, workflow: { recordingScript: [] }, nodes }),
     live: { repairsFlow: true, describeRepair: () => ({ task: "create-flow", purpose: "diagnose_and_adapt" }) },
@@ -213,35 +213,14 @@ function createdLane(options: Parameters<typeof lane>[0] = {}) {
   return { ...fake, input };
 }
 
-test("a created Flow's proposal is judged against the declared repair, then applied and replayed under the intent that made it", async (t) => {
+test("a created Flow's proposal is applied and replayed under the intent that made it, with no declared repair judged", async (t) => {
   const fake = createdLane({ replays: 1 });
   t.after(fake.restore);
   const proof = await runLiveRepairLane(fake.control, fake.input);
   assert.deepEqual([proof?.task, proof?.purpose, proof?.application.outcome], ["create-flow", "diagnose_and_adapt", "applied"]);
   assert.deepEqual(proof?.replays.map((replay) => [replay.outcome, replay.providerCalls, replay.goalPassed]), [["ran", 0, true]]);
-  assert.equal(fake.written[0]?.value.declaredRepair.verdict, "repaired");
-  assert.equal(fake.published[0]?.declaredRepair, "repaired");
-  // Judged before the review: the adaptation is read, then approved, then applied.
-  assert.ok(fake.endpoints.indexOf("get-flow-adaptation") < fake.endpoints.indexOf("review-flow-adaptation:approve"));
-});
-
-test("a created Flow's proposal naming another control, or no proposal, is never applied or replayed", async (t) => {
-  const wrong = createdLane({ replays: 1, target: { tagName: "button", accessibleName: "Discard changes", metadata: { controlType: "button" } } });
-  t.after(wrong.restore);
-  await assert.rejects(
-    runLiveRepairLane(wrong.control, wrong.input),
-    (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && /not the declared one: its proposal named a different control \(accessibleName, controlType differ\)/u.test(error.message),
-  );
-  assert.equal(wrong.endpoints.some((endpoint) => endpoint.startsWith("review-flow-adaptation")), false, "a wrong proposal must not be approved onto the Flow");
-  assert.deepEqual(wrong.reset, []);
-  assert.deepEqual([wrong.written[0]?.value.declaredRepair.verdict, wrong.written[0]?.value.application, wrong.written[0]?.value.replays], ["wrong_target", null, []], "the judgement is written before the run fails");
-  assert.deepEqual(wrong.published[0], { declaredRepair: "wrong_target", application: null, adaptationGate: { counted: false, reason: "declared_repair_not_made" } });
-
-  // A refusal is not the declared repair either: a created Flow that failed and proposed nothing does not pass as repaired.
-  const none = createdLane({ replays: 1, recovery: REFUSED });
-  t.after(none.restore);
-  await assert.rejects(runLiveRepairLane(none.control, none.input), /not the declared one: no temporary_target_override was proposed/u);
-  assert.equal(none.endpoints.some((endpoint) => endpoint.startsWith("review-flow-adaptation")), false);
+  assert.equal("declaredRepair" in (fake.written[0]?.value ?? {}), false);
+  assert.equal("declaredRepair" in (fake.published[0] ?? {}), false);
 });
 
 test("a created Flow's run inputs are rebuilt by the rule its caller hands in, here the created lane's, which refuses a Flow asking for files before anything is applied", async (t) => {
@@ -262,14 +241,13 @@ test("a created Flow's run inputs are rebuilt by the rule its caller hands in, h
 test("a wrong-answer repair applied in the run is replayed without the model, and each replay must return the judged rows", async (t) => {
   const fake = lane({ replays: 2, recovery: RESULT_REPAIRED, replayRows: () => JUDGED_ROWS });
   t.after(fake.restore);
-  const proof = await runLiveRepairLane(fake.control, { ...fake.input, expectation: DECLARED, lane: { flowId: "flow-1", run: { harnessRecovery: RESULT_REPAIRED, extracted: JUDGED } } });
+  const proof = await runLiveRepairLane(fake.control, { ...fake.input, lane: { flowId: "flow-1", run: { harnessRecovery: RESULT_REPAIRED, extracted: JUDGED } } });
   assert.ok(proof);
   assert.deepEqual(proof.adaptationIds, [REAUTHORED]);
   assert.equal(proof.application.outcome, "applied");
   assert.deepEqual(proof.replays.map((replay) => [replay.outcome, replay.providerCalls, replay.datasetsReproduced]), [["ran", 0, true], ["ran", 0, true]]);
-  // Nothing was approved or applied again, and the step repair it declares was not judged against an answer.
+  // Nothing was approved or applied again.
   assert.equal(fake.endpoints.filter((endpoint) => endpoint.startsWith("review-flow-adaptation")).length, 0);
-  assert.equal(fake.written[0]?.value.declaredRepair, undefined);
   assert.equal(fake.published[0]?.repair, "result_reauthor");
 });
 
@@ -333,7 +311,7 @@ for (const [label, fields, reason, message] of [
     const fake = lane({ replays: 2, recovery });
     t.after(fake.restore);
     await assert.rejects(
-      runLiveRepairLane(fake.control, { ...fake.input, expectation: DECLARED, lane: { flowId: "flow-1", run: { harnessRecovery: recovery, extracted: JUDGED } } }),
+      runLiveRepairLane(fake.control, { ...fake.input, lane: { flowId: "flow-1", run: { harnessRecovery: recovery, extracted: JUDGED } } }),
       (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && message.test(error.message),
     );
     assert.deepEqual(fake.written.map((entry) => entry.path), ["snapshots/repair-lane.json"], "the record is written before the run fails");

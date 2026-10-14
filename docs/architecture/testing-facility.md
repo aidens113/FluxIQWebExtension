@@ -1086,20 +1086,17 @@ recording, and never the clicks the read makes. A paged step would yield the
 same two types, but no lane records one any more (below). A script with no
 steps is a playback goal and is not checked.
 
-`flowLaneExclusion` (`packages/test-contracts/src/lane-exclusion/flow-lane-exclusion.ts`)
-excluded a workflow from the retired Flow lane for two reasons; since t553 the
-bench planner skips every Flow-lane result as retired and no longer consults it. A script that records no
-action at all can yield no Flow; before an `extract` was recordable that was
-W04 and W08, whose scripts only extract, and no `week1` workflow is such a
-script now. A script with a paged `extract` step is excluded too, by
-`pagedExtractExclusion` (`lane-exclusion/paged-extract-exclusion.ts`): FluxIQ's
-read reads one page and a recording cannot hold the Next page loop a Flow pages
-with, so a Flow built from the recording would read the first page of a list
-the workflow reads whole. The recording lane skips the same workflows for the
-same reason, and its extraction intent refuses a paged step as
-`fixture.invalid` rather than record a one-page read. In `week1` that is W05
-and W07. Their paging is judged on the created-Flow lane, where the model builds
-the loop from the task's words.
+A script with a paged `extract` step is excluded from the recording lane by
+`pagedExtractExclusion` (`packages/test-contracts/src/lane-exclusion/paged-extract-exclusion.ts`):
+FluxIQ's read reads one page and a recording cannot hold the Next page loop a
+Flow pages with, so a recording would store a one-page read of a list the
+workflow reads whole. The bench plans such a workflow skipped with that reason,
+and its extraction intent refuses a paged step as `fixture.invalid` rather than
+record a one-page read. In `week1` that is W05 and W07. Their paging is judged
+on the created-Flow lane, where the model builds the loop from the task's words.
+`flowLaneExclusion`, which excluded the same workflows, and a script that
+records no action, from the retired recorded-Flow lane, had no consumer after
+t553 and was removed (t559).
 
 The runner reports every contract rejection as `fixture.invalid`, whether the
 registry threw it while building a manifest or the runner's own validation
@@ -1348,6 +1345,20 @@ the recording a Flow was built from, the run secrets' recorded-lane branch,
 `settleUnfinished`) with `live-llm/lane-settlement.ts`, and the discard audit's
 upper bound. A created Flow's build and playback settle as before
 (`settleBuild`, `settleRepair`).
+
+**What t553 left unreachable is gone too (t559).** The bench's Flow-lane
+evaluation (`evaluateFlowRun`, `FLOW_LANE_SOURCES`, `runs.json`'s
+`flowSources`, `assertRunnableLane` and the Flow branch of a campaign's
+reconciliation), the `week2` corpus, which now refuses with why, and
+`flowLaneExclusion`. So is the scenario's declared repair
+(`flow-lane/repair/declared-repair.ts` and `judge-repair.ts`): it held a run
+whose intent only proposes a repair (`diagnose_and_adapt`, the retired
+`--llm-task adapt`) to a declared outcome and judged its proposal against a
+declared control, and a launchable `create-flow` run's playback always runs
+with `explore_and_adapt`, so `LiveLlmRun.proposesRepairOnly` was always false
+and no run reached it. The repair lane (`--replays`) applies and replays a
+created Flow's proposal as it does any other, and its record and publish no
+longer carry `declaredRepair`.
 
 ### The instruction-created Flow lane and its authored artifact
 
@@ -1887,7 +1898,7 @@ every other ask is left for its own answer. For each person-needed ask it:
 What a person does at each check is data beside the fixture, in
 `apps/scenario-lab/src/scenarios/<scenario>/person-check.ts`, exported as
 `PERSON_CHECKS` through the scenario's barrel and loaded from the scenario lab
-build the run uses, as a scenario's `repair.js` is. The scenario lab carries no
+build the run uses. The scenario lab carries no
 browser library, so a module says what the check shows and what the person
 does (`click`, `press-and-hold`, `type-answer`, `press`), and the runner does it
 with Playwright. The typed shape is `ScenarioPersonChecks` in
@@ -2613,10 +2624,13 @@ and the cell gets a new deterministic attempt id. A lease refuses a concurrent
 live owner and archives/reclaims only an owner proven stale by machine-boot and
 process-start identities, so a reboot or PID reuse needs no lock-file edit.
 
-Reconstructing a finalized Flow evaluation preserves its failed
-`stopped-for-permission` invariant and evidence references. A permission stop
-therefore remains `stopped_for_permission` through reconciliation and repeated
-resumes, and can never become a passing benchmark row.
+Every executable cell is on the recording lane, so reconciling a finalized
+bundle rebuilds a recording-lane evaluation (`reconstructBenchEvaluation`).
+The bench's Flow-lane evaluation (`evaluateFlowRun`, its measurement sources
+`FLOW_LANE_SOURCES` and `runs.json`'s `flowSources`), which carried a created
+build's `stopped-for-permission` stop into a benchmark row, was removed with the
+recorded-Flow lane (t559). A permission stop is judged where a Flow is built
+now, in a `lab run`'s own evaluation (`run-evaluation/permission-stop/`).
 
 After every child is terminal, the parent validates their exact partition and
 authenticated evaluations, then publishes parent-ordered `runs.json`,
@@ -2649,15 +2663,16 @@ resumed.
   `extract` step is skipped on the recording lane (`pagedExtractExclusion`):
   W05 and W07. That leaves `week1` 21 runnable results per repeat, all on the
   recording lane, with 44 resolved Flow-lane results skipped as retired.
-  W19 to W23 and W29 are variants only. `week2` is A01 to A06 on the Flow lane
-  alone: identity-drift's `renamed-redesign` with its unarmed baseline (the
-  Week 2 exit chain's drift), W04's and W08's extraction drifts, W13 and W24,
-  and member-directory's `restyled` with its baseline -- 8 results per repeat,
-  every one skipped as retired, so it runs nothing. A campaign created before
-  t553 planned its Flow-lane cells as runnable, so its resume is refused: its
-  saved plan no longer matches the current one. `run-bench.ts` still holds a
-  refusal of a runnable Flow-lane cell (`assertRunnableLane`) and the Flow
-  lane's evaluation, which no plan reaches now.
+  W19 to W23 and W29 are variants only. A campaign created before t553
+  planned its Flow-lane cells as runnable, so its resume is refused ("Campaign
+  plan does not match the current corpus and manifests"): its saved plan no
+  longer matches the current one. **`week2` is retired** (t559): it measured
+  A01 to A06 (identity-drift's `renamed-redesign`, W04's and W08's extraction
+  drifts, W13, W24 and member-directory's `restyled`) on the Flow lane alone,
+  so from t553 it ran nothing. `lab bench --corpus week2`, and the resume of a
+  campaign saved with it, are refused as `fixture.invalid` with why and the
+  instruction-led command that adapts a drift now
+  (`bench/corpus/retired-bench-corpora.ts`).
 - **Week 2 adaptation metrics.** A Flow-lane run's evaluation carries
   `adaptationReuse`, `adaptationValidation`, `adaptationPersistence` and
   `adaptationCost`, read from the bundle's `snapshots/adaptation.json`

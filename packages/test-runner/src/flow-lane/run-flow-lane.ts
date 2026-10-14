@@ -13,7 +13,6 @@ import { approveRecordingFlowProposal, assertProposalCoversRecording, createReco
 import { refuseRecordingOnlyFlow } from "./recording-only/index.js";
 import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "./persisted-flow-run.js";
 import { absorbedEveryFailure, assertRecoveryAsDeclared, recoveryAttribution, recoveryAttributionSnapshot, type RunRecoveryAttribution } from "./recovery-attribution.js";
-import { assertFlowRepair, judgeFlowRepair, type FlowRepairExpectation, type FlowRepairJudgement } from "./repair/index.js";
 import { resetScenarioLab } from "./reset-scenario-lab.js";
 import type { RecordingProposalControl } from "./recording-flow-proposal.js";
 
@@ -88,12 +87,6 @@ export type FlowLaneInput = {
    * lane then ends.
    */
   flowRunIdentified?: (runId: string) => void;
-  /**
-   * What a correct repair of this run looks like, where the workflow declares
-   * one, judged against the proposal Core saved only when the run was
-   * authorized to propose one (`judgeFlowRepair`). Absent, no repair is judged.
-   */
-  repairExpectation?: FlowRepairExpectation;
   bounds?: FluxIQHttpOptions;
 };
 
@@ -104,7 +97,7 @@ export type FlowLaneInput = {
  * `extraction` says whether the workflow's extraction expectation applied to
  * this Flow, and so whether it is judged.
  */
-export type FlowLaneEvidence = { recording: FinalizedRecording; proposal: RecordingFlowProposal; flowId: string; run: PersistedFlowRunOutcome; observation: RunLaneObservation; extraction: FlowExtractionJudgement; startCandidateIndex: number | null; repair?: FlowRepairJudgement };
+export type FlowLaneEvidence = { recording: FinalizedRecording; proposal: RecordingFlowProposal; flowId: string; run: PersistedFlowRunOutcome; observation: RunLaneObservation; extraction: FlowExtractionJudgement; startCandidateIndex: number | null };
 
 /**
  * `startCandidateIndex` is where the run started in the recording's candidate
@@ -121,7 +114,6 @@ export type FlowLaneOutcome = {
   /** Which recovery answered for each node, and at what cost. */
   recovery: RunRecoveryAttribution;
   startCandidateIndex: number | null;
-  repair?: FlowRepairJudgement;
 };
 
 /**
@@ -329,8 +321,6 @@ export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
     // provider count, it is the whole adversarial measurement: the rung that
     // absorbed the condition, and the number of model calls it took to do it.
     recovery: recoveryAttributionSnapshot(recoveryAttribution(evidence.run.actions)),
-    // The declared repair's judgement: a verdict, field names and codes, never the proposal's target. Null when none was judged.
-    repair: evidence.repair ?? null,
     actions: flowActionsSnapshot(evidence.run),
   };
 }

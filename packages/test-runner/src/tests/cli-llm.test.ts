@@ -289,13 +289,18 @@ test("matrix refuses a scenario list holding one outside the ten, and bench refu
   assert.match(matrix.stderr, RULE);
   assert.deepEqual(matrix.written, []);
   // Every bench corpus today is built on the basic fixture scenarios, so a bench is refused outright.
-  for (const corpus of ["smoke", "week1", "week2"]) {
+  for (const corpus of ["smoke", "week1"]) {
     const bench = await refusedCli(["bench", "--corpus", corpus]);
     assert.equal(bench.code, 1, corpus);
     assert.match(bench.stderr, new RegExp(`lab bench --corpus ${corpus} refused `, "u"));
     assert.match(bench.stderr, RULE);
     assert.deepEqual(bench.written, []);
   }
+  // week2 is retired (t559): it is refused for that, before its scenarios are looked at.
+  const retired = await refusedCli(["bench", "--corpus", "week2"]);
+  assert.equal(retired.code, 1);
+  assert.match(retired.stderr, /Bench corpus week2 is retired: /u);
+  assert.deepEqual(retired.written, []);
 });
 
 test("a realistic scenario passes the guard and reaches the runner's own checks", async () => {

@@ -26,7 +26,7 @@ export type NetworkPolicy = "loopback-only" | "allowlisted-real-site";
  * or to `web.dom.extract` for a single-element read. A step with `pagination`
  * is not recorded: FluxIQ's read reads one page, a Flow pages with a read, a
  * Next page step and a repeat, and no recording can produce that loop yet, so
- * the recording and Flow lanes exclude such a workflow
+ * the recording lane excludes such a workflow
  * (`lane-exclusion/paged-extract-exclusion.ts`) and its paging is judged on the
  * created-Flow lane.
  */

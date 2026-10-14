@@ -13,12 +13,11 @@
 //
 // A Flow FluxIQ built from an instruction takes the same lane. Its playback ran
 // with the model taking part, so what it leaves is the same kind of
-// proposal; two things differ. Its nodes ask for values the way the created
-// lane answered them, so its caller hands in that lane's rule to rebuild its
-// inputs, which keeps this lane free of the creation module. And its
-// lane judged no declared repair, so this one judges it before anything is
-// applied, as `runFlowLane` does for a recorded Flow: a proposal that is
-// missing or names the wrong control is never approved onto the Flow.
+// proposal. Its nodes ask for values the way the created lane answered them,
+// so its caller hands in that lane's rule to rebuild its inputs, which keeps
+// this lane free of the creation module. (A scenario's declared repair, which
+// held a proposal-only run to its proposal, is retired with the proposal-only
+// `--llm-task adapt` it served: a launchable run's repair is always tried.)
 //
 // A re-author Core made and applied inside the run takes it too. Core reaches
 // one by two routes -- a wrong answer, and a failed step the patch ladder could
@@ -63,8 +62,6 @@ import { declaredUploadInputs, flowUploadRequests } from "../declared-uploads.js
 import { readFlowNodes, type FlowNodeRecord } from "../flow-action-types.js";
 import type { PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 import { resetScenarioLab } from "../reset-scenario-lab.js";
-import type { FlowRepairExpectation } from "./declared-repair.js";
-import { assertFlowRepair, judgeFlowRepair } from "./judge-repair.js";
 import { assertRepairPersisted } from "./apply-repair.js";
 import { assertLiveRepairProof, proveLiveRepair, type LiveRepairProof, type ProveLiveRepairControl } from "./prove-repair.js";
 import { assertReplaysAccounted } from "./replay-repair.js";
@@ -104,13 +101,6 @@ export type LiveRepairLaneInput = {
    */
   rebuildInputs?: (nodes: readonly FlowNodeRecord[]) => Record<string, unknown>;
   /**
-   * The repair the scenario declares for this variant, for a Flow whose own
-   * lane judged none: judged before anything is applied, and anything but
-   * `repaired` fails the run with nothing applied. Absent, nothing is judged
-   * here, as for a recorded Flow, whose lane already judged it.
-   */
-  expectation?: FlowRepairExpectation;
-  /**
    * The created Flow ran and its own judgement then failed (its oracle, or a
    * judgement before it). The lane records the run beside it and applies
    * nothing; the caller rethrows its failure. Absent for a run that passed.
@@ -137,9 +127,7 @@ export type LiveRepairLaneInput = {
  * Applies and replays the repair, writes `snapshots/repair-lane.json`, and then
  * fails the run if the repair was not reusable. Returns the proof, or
  * `undefined` when the run asked for no replays or produced no repairable
- * proposal. With an `expectation`, a proposal judged anything but `repaired` is
- * recorded with `application: null` and fails the run before it is applied.
- * A re-author the run made and did not keep is recorded the same way, with
+ * proposal. A re-author the run made and did not keep is recorded the same way, with
  * its closed reason, and fails the run before anything is judged or applied.
  */
 export async function runLiveRepairLane(
@@ -153,12 +141,11 @@ export async function runLiveRepairLane(
     await recordFailedLane(control, { ...input, replays: input.replays, laneFailure: input.laneFailure }, described);
     return undefined;
   }
-  const gate = (facts: Pick<AdaptationGateInput, "application" | "replays"> & { unkeptReauthor?: boolean; declaredRepair?: string }) =>
+  const gate = (facts: Pick<AdaptationGateInput, "application" | "replays"> & { unkeptReauthor?: boolean }) =>
     classifyAdaptationGate({ laneFailed: false, recovery: input.lane.run.harnessRecovery, unkeptReauthor: false, ...facts });
   const unkept = unkeptReauthorOf(input.lane.run);
   if (unkept) {
-    // Checked before anything else: a declared repair, a proposal or an
-    // approval beside it would be judged against a Flow the run's own repair
+    // Checked before anything else: a proposal or an approval beside it would be judged against a Flow the run's own repair
     // did not change. The record is written and published first, as below.
     const stated = { kept: false, held: unkept.held ?? null, notAppliedReason: unkept.notAppliedReason ?? null };
     const adaptationGate = gate({ unkeptReauthor: true, application: null, replays: [] });
@@ -169,20 +156,6 @@ export async function runLiveRepairLane(
     });
   }
   const resultRepair = resultRepairOf(input.lane.run);
-  // A declared repair describes a runtime patch -- the control a target
-  // override should land on -- and says nothing about an answer the re-author
-  // rewrote, so it is judged only where the run repaired a step.
-  const declaredRepair = input.expectation && !resultRepair
-    ? await judgeFlowRepair(control, { projectId: input.projectId, flowId: input.lane.flowId, run: input.lane.run, expectation: input.expectation }, bounds)
-    : undefined;
-  if (declaredRepair && declaredRepair.verdict !== "repaired") {
-    // `application: null`: nothing was approved or applied, because the proposal was not the one to apply.
-    const adaptationGate = gate({ declaredRepair: declaredRepair.verdict, application: null, replays: [] });
-    await input.bundle.writeStructured("snapshots/repair-lane.json", { task: described.task, purpose: described.purpose, declaredRepair, application: null, replaysRequested: input.replays, replays: [], adaptationGate });
-    await input.publish({ declaredRepair: declaredRepair.verdict, application: null, adaptationGate });
-    assertFlowRepair(declaredRepair);
-    return undefined;
-  }
   // Everything the Flow lane's own run was given, rebuilt here because the lane
   // returns its Flow but not the inputs it resolved for it: the same secret
   // bindings and the same uploaded files, keyed by the paths this Flow's nodes
@@ -209,15 +182,14 @@ export async function runLiveRepairLane(
     prepare: async () => { await resetScenarioLab(input.scenarioOrigin, input.runToken); await input.prepare(); },
     checkGoal: input.checkGoal,
   }, bounds);
-  const adaptationGate = gate({ ...(declaredRepair ? { declaredRepair: declaredRepair.verdict } : {}), application: proof.application, replays: proof.replays });
-  await input.bundle.writeStructured("snapshots/repair-lane.json", { ...proof, ...(declaredRepair ? { declaredRepair } : {}), adaptationGate });
+  const adaptationGate = gate({ application: proof.application, replays: proof.replays });
+  await input.bundle.writeStructured("snapshots/repair-lane.json", { ...proof, adaptationGate });
   const laneRunId = input.lane.run.runId;
   if (laneRunId) {
     // Best effort, like every lane's snapshot: a failed read writes nothing, which reads as unmeasured.
     await writeFlowLaneAdaptationSnapshot({ bundle: input.bundle, path: RUN_ADAPTATION_SNAPSHOT, measure: () => measureRepairLane(control, { projectId: input.projectId, flowId: input.lane.flowId, laneRunId, proof }) });
   }
   await input.publish({
-    ...(declaredRepair ? { declaredRepair: declaredRepair.verdict } : {}),
     application: proof.application.outcome,
     adaptations: proof.adaptationIds.length,
     ...(proof.application.flow ? { flowChange: proof.application.flow.change } : {}),

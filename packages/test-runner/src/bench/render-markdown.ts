@@ -64,7 +64,6 @@ export function renderBenchMarkdown(runs: BenchRunsFile, report: BenchReport | u
     "## Measurement sources",
     "",
     ...sourceLines("Recording lane", runs.sources),
-    ...(runs.flowSources ? sourceLines("Flow lane", runs.flowSources) : []),
   ].join("\n");
 }
 

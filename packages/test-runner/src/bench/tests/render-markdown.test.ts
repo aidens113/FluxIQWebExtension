@@ -44,7 +44,7 @@ test("report.md labels every distribution and the truncation count all lanes, an
   const coverage: BenchMarkdownCoverage = { total: benchExecutionCoverage(results), byLane: Object.fromEntries(benchResultsByLane(results).map(([lane, onLane]) => [lane, benchExecutionCoverage(onLane)])) };
   const runs: BenchRunsFile = {
     schemaVersion: "0.1", benchId: "bench-unit", corpusId: "week1", repeatCount: 1, target: "isolated", lanes,
-    startedAt: "2026-09-13T09:00:00.000Z", finishedAt: "2026-09-13T10:00:00.000Z", sources: {}, flowSources: {},
+    startedAt: "2026-09-13T09:00:00.000Z", finishedAt: "2026-09-13T10:00:00.000Z", sources: {},
     runs: lanes.map((lane) => ({ corpusRowId: "W01", scenarioId: "basic-form", workflowId: null, variantId: null, repeatIndex: 0, lane, status: "evaluated", runId: `run-${lane}`, verdict: "passed", actionsExecuted: 1 })),
   };
   const markdown = renderBenchMarkdown(runs, report, coverage);
@@ -91,7 +91,7 @@ test("report.md states each extraction rate with the steps it stands on, and pri
   const coverage: BenchMarkdownCoverage = { total: benchExecutionCoverage(results), byLane: Object.fromEntries(benchResultsByLane(results).map(([lane, onLane]) => [lane, benchExecutionCoverage(onLane)])) };
   const runs: BenchRunsFile = {
     schemaVersion: "0.1", benchId: "bench-extraction", corpusId: "week1", repeatCount: 1, target: "isolated", lanes: ["flow"],
-    startedAt: "2026-09-15T09:00:00.000Z", finishedAt: "2026-09-15T10:00:00.000Z", sources: {}, flowSources: {},
+    startedAt: "2026-09-15T09:00:00.000Z", finishedAt: "2026-09-15T10:00:00.000Z", sources: {},
     runs: [{ corpusRowId: "W04", scenarioId: "basic-form", workflowId: null, variantId: null, repeatIndex: 0, lane: "flow", status: "evaluated", runId: "run-flow", verdict: "passed", actionsExecuted: 1 }],
   };
   const extraction = section(renderBenchMarkdown(runs, report, coverage), "## Extraction");
