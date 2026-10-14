@@ -28,7 +28,7 @@ export type LiveLlmPurpose = keyof typeof PURPOSE_ITERATES;
 /** The per-request ceiling: the configured models' own context window (Core's `AUTOMATION_STUDIO_DEEPSEEK_MODEL_LIMITS`), not a budget, so no limit hides page information from the model. Derived: a tenth copy of this number is how the previous nine happened. */
 const CORE_MAX_TOKENS = LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST;
 const CORE_MAX_TIMEOUT_MS = 25_000;
-/** Core's runaway backstop on a run's calls; the Lab contract carries the same number. */
+/** Core's runaway backstop on a run's calls (`AUTOMATION_STUDIO_LLM_RUN_CALL_BACKSTOP`, 250); the Lab contract carries the same number. */
 const CORE_MAX_CALLS = LLM_LAB_MAX_CALLS_PER_RUN;
 
 export type LiveLlmPlan = {

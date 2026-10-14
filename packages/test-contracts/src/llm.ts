@@ -35,8 +35,12 @@ export function isLlmModel(value: unknown): value is LlmModel {
  */
 export const LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST = 1_000_000 as const;
 /**
- * The most provider calls any Lab run may declare: the Lab's own backstop
- * against a runaway loop. Core enforces no call ceiling of its own.
+ * The most provider calls any Lab run may declare: a backstop against a
+ * runaway loop, equal to Core's own (`AUTOMATION_STUDIO_LLM_RUN_CALL_BACKSTOP`).
+ * It was 64 until 2026-10-14 (t576): a project build's supervisor and
+ * builders make many small calls, and A8's first project builds ended on 64
+ * calls with two thirds of their dollars unspent. What bounds a run is its
+ * dollar ceiling, so the call count must not bind before it does.
  *
  * It is deliberately far above what an adaptation needs and is not a per-task
  * count. An adaptation iterates for as many calls as it needs; what is meant to
@@ -44,7 +48,7 @@ export const LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST = 1_000_000 as const;
  * two-call ceiling used to live here, and it made every real recovery that
  * asked for evidence unreachable.
  */
-export const LLM_LAB_MAX_CALLS_PER_RUN = 64 as const;
+export const LLM_LAB_MAX_CALLS_PER_RUN = 250 as const;
 /**
  * The most `--llm-max-cost-usd` may declare: Core's largest configurable
  * per-build ceiling (`AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD`), not the
