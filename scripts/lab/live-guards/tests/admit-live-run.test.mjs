@@ -122,6 +122,50 @@ test("after the stop is cleared, a debug is written and the source changes, the 
   }
 });
 
+test("start and finish entries carry the launch's authoring mode, and a failed project build does not stop a candidate build of the same task and source", async () => {
+  const lab = await fixture();
+  try {
+    const project = [...ARGS, "--authoring-mode", "project"];
+    const admission = await lab.admit({ args: project });
+    assert.equal(admission.launch.authoringMode, "project");
+    const start = await recordLiveRunStart(admission, { now: lab.now(), pid: 4245 });
+    assert.equal(start.authoringMode, "project");
+    lab.advance(10_000);
+    const runId = runIdAt(lab.now(), "000000a8");
+    await lab.writeRun(runId, { startedAt: new Date(lab.now()).toISOString(), cost: 0.05 });
+    const { finishes } = await recordLiveRunFinish(admission, start, { exitCode: 1, now: lab.now() });
+    assert.equal(finishes[0].authoringMode, "project");
+    assert.deepEqual((await lab.ledger()).map((entry) => [entry.event, entry.authoringMode]), [["start", "project"], ["finish", "project"]]);
+    await writeFile(path.join(lab.root, DEBUG_DIRECTORY, `${runId}.md`), "# debug\n", "utf8");
+    lab.advance(MINUTE);
+
+    // Same source, same task: another mode is another experiment; the same mode is a rerun.
+    assert.deepEqual((await lab.admit({ args: [...ARGS, "--authoring-mode", "candidate"] })).refusals, []);
+    assert.deepEqual((await lab.admit({ args: project })).refusals.map((refusal) => refusal.rule), ["unchanged"]);
+    // No flag is the Lab's default, legacy, which has no run of this task yet.
+    const unnamed = await lab.admit();
+    assert.equal(unnamed.launch.authoringMode, "legacy");
+    assert.deepEqual(unnamed.refusals, []);
+  } finally {
+    await lab.cleanup();
+  }
+});
+
+test("the debug rule stays per instance whatever the mode: a candidate launch still waits for the project run's debug", async () => {
+  const lab = await fixture();
+  try {
+    const admission = await lab.admit({ args: [...ARGS, "--authoring-mode", "project"] });
+    const start = await recordLiveRunStart(admission, { now: lab.now(), pid: 4246 });
+    lab.advance(10_000);
+    await lab.writeRun(runIdAt(lab.now(), "000000a9"), { startedAt: new Date(lab.now()).toISOString(), cost: 0.05 });
+    await recordLiveRunFinish(admission, start, { exitCode: 1, now: lab.now() });
+    lab.advance(MINUTE);
+    assert.deepEqual((await lab.admit({ args: [...ARGS, "--authoring-mode", "candidate"] })).refusals.map((refusal) => refusal.rule), ["debug"]);
+  } finally {
+    await lab.cleanup();
+  }
+});
+
 test("the ledger records each run's Flow against its ceiling, beside the run's total", async () => {
   const lab = await fixture();
   try {

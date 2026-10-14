@@ -30,7 +30,7 @@ export const DEBUG_DIRECTORY = path.join("docs", "working", "language-driven-flo
  *   devAncestry?: (root: string) => Promise<import("./dev-ancestry.mjs").DevAncestry>,
  * }} options
  * @returns {Promise<null | {
- *   launch: { instance: string, scenarioId: string, task: string, fingerprint: string, repositoryRoot: string, runsDirectory: string },
+ *   launch: { instance: string, scenarioId: string, task: string, authoringMode: string, fingerprint: string, repositoryRoot: string, runsDirectory: string },
  *   files: ReturnType<typeof guardFiles>,
  *   refusals: import("./rules/guard-state.mjs").Refusal[],
  *   overridden: string[],

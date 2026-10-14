@@ -35,12 +35,12 @@ async function machine({ facilityFailure = TIMED_OUT, calls = 0, liveLlm = null,
     await mkdir(folder, { recursive: true });
     await writeFile(path.join(folder, "meta.json"), JSON.stringify(stepMeta));
   }
-  const start = { event: "start", launchId: "launch-8", at: new Date(T).toISOString(), pid: 1, instance: INSTANCE, scenarioId: "crossborder-marketplace", task: TASK, fingerprint: FINGERPRINT, repositoryRoot: root, runsDirectory, overridden: [] };
+  const start = { event: "start", launchId: "launch-8", at: new Date(T).toISOString(), pid: 1, instance: INSTANCE, scenarioId: "crossborder-marketplace", task: TASK, authoringMode: "candidate", fingerprint: FINGERPRINT, repositoryRoot: root, runsDirectory, overridden: [] };
   return { root, files, runsDirectory, start };
 }
 
-const state = (files, entries) => ({ launch: { instance: INSTANCE, task: TASK }, entries, fingerprint: FINGERPRINT, files, hasDebug: () => true, debugPath: (runId) => `debugs/${runId}.md` });
-const earlierFinish = (verdict) => ({ event: "finish", launchId: "launch-7", at: new Date(T - 3_600_000).toISOString(), runId: "run-earlier-00000000", instance: INSTANCE, task: TASK, verdict, totalEstimatedCostUsd: 0.03, balanceFailure: null, fingerprint: FINGERPRINT, exitCode: 1 });
+const state = (files, entries) => ({ launch: { instance: INSTANCE, task: TASK, authoringMode: "candidate" }, entries, fingerprint: FINGERPRINT, files, hasDebug: () => true, debugPath: (runId) => `debugs/${runId}.md` });
+const earlierFinish = (verdict) => ({ event: "finish", launchId: "launch-7", at: new Date(T - 3_600_000).toISOString(), runId: "run-earlier-00000000", instance: INSTANCE, task: TASK, authoringMode: "candidate", verdict, totalEstimatedCostUsd: 0.03, balanceFailure: null, fingerprint: FINGERPRINT, exitCode: 1 });
 
 test("a facility failure before any provider call is recorded on the finish and is not an unchanged failure", async () => {
   const { root, files, runsDirectory, start } = await machine();

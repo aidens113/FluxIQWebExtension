@@ -21,6 +21,7 @@ export async function recordLiveRunStart(admission, { now = Date.now(), pid = pr
     instance: launch.instance,
     scenarioId: launch.scenarioId,
     task: launch.task,
+    authoringMode: launch.authoringMode,
     fingerprint: launch.fingerprint,
     repositoryRoot: launch.repositoryRoot,
     runsDirectory: launch.runsDirectory,

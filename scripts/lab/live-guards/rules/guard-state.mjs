@@ -4,7 +4,7 @@
 /**
  * @typedef {{
  *   now: number,
- *   launch: { instance: string, task: string },
+ *   launch: { instance: string, task: string, authoringMode: string },
  *   stopBalance: string | null,
  *   entries: import("../ledger.mjs").LedgerEntry[],
  *   fingerprint: string,
