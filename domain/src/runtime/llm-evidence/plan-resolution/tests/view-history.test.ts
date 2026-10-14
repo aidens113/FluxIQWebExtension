@@ -125,7 +125,7 @@ test("a handle no view ever showed is refused by name under the view history, an
   if (add.status === "resolved") assert.deepEqual(add.handleViews, [{ handle: "t5", view: 4, location: item }]);
 });
 
-test("a control that left the page after its own act keeps only what its views agreed on, never the label the act gave it", () => {
+test("a control that left the page keeps what its views agreed on, and the newest label where the agreement alone would name it by its tag", () => {
   const { targets, capture } = explored();
   // The item page again, the coupon gone from it.
   targets.remember(SCOPE, capture(ITEM, [ADD]));
@@ -134,7 +134,8 @@ test("a control that left the page after its own act keeps only what its views a
   assert.equal(coupon.ok, true, JSON.stringify(coupon));
   if (!coupon.ok) return;
   assert.equal(coupon.selector, "#store-coupon");
-  assert.equal(coupon.element.visibleText, undefined, "neither \"Get coupons\" nor \"Collected\"");
+  // Nothing this Flow acted on recorded the view before (`acted`), so the newest view the builder was shown names it (t596).
+  assert.equal(coupon.element.visibleText, "Collected");
   assert.equal(coupon.element.tagName, "button");
 });
 
