@@ -46,8 +46,9 @@ shared lane tree (a setup error), the Lab chat unavailable on long paths (t568),
 raw plan (t569). After t569 the supervisor plans and dispatches and builders act, but three of four builds ran out
 of calls at $0.07-0.08 of $0.25 and the fourth's subflow trials were judged no; t570 (Core: per-brief call shares,
 Core-sized allowances, permitted acts from parts, interface lines in the brief) is in flight, and round one
-relaunches once it merges and the lanes are synced. In flight beside it, so every A8 round runs on one frozen
-pair: W8 here (t573), A21 (t571) and A10b (t572) in Core. After A8: A7 and A14 in Core.
+relaunches once it merges and the lanes are synced. Merged beside it, so every A8 round runs on one frozen pair:
+W8 here (t573), A21 (t571) and A10b (t572) in Core. Still in flight: Core t574, the judge's evidence in subflow
+trials (an audit found 3 of 5 everything-store verdicts wrong). After A8: A7 and A14 in Core.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -630,6 +631,14 @@ build does today until A5 lands and the mode is chosen.
 - Validation: `C:/Users/osrs_/FluxStuff/lab-slots/spend-ledger.jsonl`, today's sum -> $0.4502 billed, every run under its $0.25 ceiling; launch 4's results read from `lab-runs/2026-10-14/<runId>/steps/` (crossborder, bigbox, social ended `flow_bootstrap.run_budget_calls_exhausted`; everything-store `flow_bootstrap.post_provider_validation_failed`)
 - Outcome: Partial. Round one relaunches after t570 merges and the four lanes are synced
 - Follow-up: judge reliability on filtered list reads (everything-store, both modes)
+
+### 2026-10-14 — W8 orphaned Lab repair code (t573); everything-store judge audit
+- Agent: workers t573-w8-lab-orphaned-repair-code and a8-everything-store-judge-audit (read-only); supervisor verified and integrated
+- Changed: W8 removed identity-drift's callerless `repair.ts`, the adaptation gate's dead `declaredRepair` input and its `declared_repair_not_made` reason, six stale comments; the audit `reports/a8-everything-store-judge-audit.md`
+- Why: W8 was left open by t559; the audit settles whether run-mv7vor5f-ea4d08b4's "no" verdicts were right
+- Validation: in the t573 worktree: `node --test` gate and flow-lane-evidence-sizes tests -> pass 10, fail 0; identity-drift scenario tests -> pass 14, fail 0; test-runner and scenario-lab checks -> reuse (no errors); `pnpm structure:check` -> passed (194 warnings, 639 baselined); merged `ebde456e`. Audit: 3 of 5 subflow-trial verdicts wrong (two on exactly the oracle's 13 rows); cause in Core `result-verification/read-account/accounts.ts:108`
+- Outcome: Accepted. Core t574 fixes the judge's evidence before round one relaunches
+- Follow-up: the builder's accessory exclusion dropped three real items in revisions 1 and 3 (a builder-reasoning miss, not mirrored into guidance)
 
 ## Open Questions
 
