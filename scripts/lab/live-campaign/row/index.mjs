@@ -6,5 +6,6 @@
 export { EMPTY_BUNDLE, readRunBundle } from "./bundle.mjs";
 export { perBuildSpend } from "./build-spend.mjs";
 export { consequenceSummary } from "./consequences.mjs";
+export { coreRefusalOf } from "./facility-failure.mjs";
 export { summarizeTask } from "./summarize-task.mjs";
 export * from "./rung-attribution.mjs";

@@ -12,6 +12,7 @@ import {
   facilityFailureOperationStages,
   facilityFailureReasons,
   facilityFailureStages,
+  isScreenedFacilityRefusal,
   llmUsageModes,
   parseRunEvaluationJson,
   validateLlmUsage,
@@ -193,6 +194,7 @@ test("facility failures use only the closed diagnostic vocabulary", () => {
     "module.missing": { causeCode: "ERR_MODULE_NOT_FOUND" },
     "path.missing": { causeCode: "ENOENT" },
     "path.denied": { causeCode: "EACCES" },
+    "core.refused": { endpoint: "/api/programs/automation-studio/update-flow-settings", httpStatus: 400 },
     unclassified: {},
   };
   for (const reason of facilityFailureReasons) assert.equal(validateRunEvaluation(facilityRun({ boundary: "no-final-bundle", stage: "scenario.load", reason, ...reasonExamples[reason] })).valid, true, reason);
@@ -223,6 +225,30 @@ test("an http failure may name its Core route, and only a route, and only for ht
     rejects(facilityRun({ ...timeout, endpoint }), `endpoint ${String(endpoint)}`);
   }
   rejects(facilityRun({ boundary: "no-final-bundle", stage: "scenario.load", reason: "path.missing", causeCode: "ENOENT", endpoint: "/api/programs/automation-studio/get-flow" }), "endpoint on a non-http failure");
+});
+
+// A8 run run-mv85un8j-beb734f5 passed its judged run and was failed as
+// `unclassified`, though Core had said why. A Core refusal now names the route,
+// the 4xx status, and Core's sentence when it passes screening.
+test("a Core refusal carries its route, 4xx status and a screened sentence, and nothing else", () => {
+  const refused = { boundary: "finalized-bundle", stage: "scenario.execute", reason: "core.refused", endpoint: "/api/programs/automation-studio/update-flow-settings", httpStatus: 400 };
+  assert.equal(validateRunEvaluation(facilityRun(refused)).valid, true);
+  assert.equal(validateRunEvaluation(facilityRun({ ...refused, refusal: "LLM execution limit is invalid." })).valid, true);
+  assert.equal(validateRunEvaluation(facilityRun({ ...refused, httpStatus: 499, refusal: "x".repeat(240) })).valid, true);
+  for (const [mutation, label] of [
+    [{ endpoint: undefined }, "no endpoint"], [{ httpStatus: undefined }, "no status"],
+    [{ httpStatus: 500 }, "5xx"], [{ httpStatus: 399 }, "3xx"], [{ httpStatus: 400.5 }, "fractional status"], [{ httpStatus: "400" }, "string status"],
+    [{ operationStage: "control.request" }, "operation stage"], [{ causeCode: "ECONNRESET" }, "cause code"], [{ timeoutMs: 1 }, "timeout"],
+    [{ refusal: "x".repeat(241) }, "over-long refusal"], [{ refusal: "" }, "empty refusal"], [{ refusal: " padded" }, "untrimmed refusal"],
+    [{ refusal: `two${String.fromCharCode(10)}lines` }, "multi-line refusal"], [{ refusal: "Bearer RAW_SENTINEL" }, "bearer token"],
+    [{ refusal: "password=RAW_SENTINEL" }, "password assignment"], [{ refusal: "Session 9f2c4e1a7b3d5f6e8a0c2e4f6a8b0d1c3e5f7a9b is unknown" }, "long mixed token"],
+    [{ refusal: "was [REDACTED] upstream" }, "redaction marker"], [{ refusal: 42 }, "non-string refusal"],
+  ]) rejects(facilityRun({ ...refused, ...mutation }), label);
+  // Status and refusal belong to a Core refusal alone.
+  rejects(facilityRun({ boundary: "no-final-bundle", stage: "scenario.load", reason: "unclassified", httpStatus: 400 }), "status on unclassified");
+  rejects(facilityRun({ boundary: "finalized-bundle", stage: "scenario.execute", reason: "http.abort", operationStage: "project.select", refusal: "refused" }), "refusal on http.abort");
+  // A long identifier with no digit is a name, not a secret.
+  assert.equal(isScreenedFacilityRefusal("FLUXIQ_TEST_SECRET_STOREFRONT_CHECKOUT_BILLING_CARD must be set"), true);
 });
 
 test("facility diagnostics reject raw shapes, unknown values, and invalid pairings", () => {

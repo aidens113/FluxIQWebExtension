@@ -39,7 +39,7 @@ export type FacilityFailureStage = (typeof facilityFailureStages)[number];
 
 export const facilityFailureReasons = [
   "readiness.timeout", "http.timeout", "http.abort", "http.transport",
-  "module.missing", "path.missing", "path.denied", "unclassified",
+  "module.missing", "path.missing", "path.denied", "core.refused", "unclassified",
 ] as const;
 export type FacilityFailureReason = (typeof facilityFailureReasons)[number];
 
@@ -73,10 +73,27 @@ export type FacilityFailureDiagnostic = {
    * created Flow's playback failed that way twice before anyone could say which.
    */
   endpoint?: string;
+  /**
+   * `core.refused` only: the 4xx status Core answered a Lab control request
+   * with. Run `run-mv85un8j-beb734f5` built and passed its judged run and was
+   * then failed as `unclassified`, although Core had said exactly why
+   * ("LLM execution limit is invalid.") on its Flow-settings route.
+   */
+  httpStatus?: number;
+  /**
+   * `core.refused` only: Core's own refusal sentence, at most
+   * `FACILITY_FAILURE_REFUSAL_MAX_LENGTH` characters, on one line, and only
+   * when it passed secret screening (`isScreenedFacilityRefusal`); a sentence
+   * that fails is left out, never truncated into the record.
+   */
+  refusal?: string;
 };
 
 /** What a facility failure's `endpoint` may be: a Core API route and nothing else. */
 export const FACILITY_FAILURE_ENDPOINT_PATTERN = /^\/api\/[a-z0-9][a-z0-9/_-]{0,119}$/u;
+
+/** The longest refusal sentence a `core.refused` facility failure may carry. */
+export const FACILITY_FAILURE_REFUSAL_MAX_LENGTH = 240;
 
 /**
  * Lanes a run evaluation comes from. `recording`: the Testing Lab drives the

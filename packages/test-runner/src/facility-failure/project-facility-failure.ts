@@ -11,6 +11,7 @@ import { finalizedRecordingWaitFailureDetails } from "../flow-lane/index.js";
 import { boundedRunnerCause, RunnerFailure } from "../failure.js";
 import { httpTransportFailureDetails, topologyReadinessFailureDetails } from "../http-control/index.js";
 import { pairingStatusWaitFailureDetails } from "../run-lifecycle/index.js";
+import { coreRefusalFailure } from "./core-refusal-failure.js";
 import { ProjectedFacilityError } from "./projected-facility-error.js";
 
 const CAUSE_CODES = new Set<string>(facilityFailureCauseCodes);
@@ -41,6 +42,11 @@ export function projectFacilityFailure(
 
   const boundedHttp = boundedHttpFailure(error);
   if (boundedHttp) return frozen({ boundary, stage, ...boundedHttp });
+
+  // Core answered a Lab control request with a 4xx and said why; until t589
+  // that fell to `unclassified` and the verdict line could not say it.
+  const refused = safeProjection(() => coreRefusalFailure(error)) as ReturnType<typeof coreRefusalFailure>;
+  if (refused) return frozen({ boundary, stage, ...refused });
 
   // These established projectors are intentionally consulted, but their ids,
   // status snapshots and recording counts are outside the evaluation contract.

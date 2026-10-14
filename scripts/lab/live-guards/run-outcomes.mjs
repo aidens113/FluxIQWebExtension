@@ -44,7 +44,7 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { perBuildSpend } from "../live-campaign/row/index.mjs";
+import { coreRefusalOf, perBuildSpend } from "../live-campaign/row/index.mjs";
 import { detectBalanceFailure } from "./balance-failure.mjs";
 import { readStepLogOutcome } from "./step-log-outcome.mjs";
 
@@ -56,7 +56,7 @@ const KILLED_VERDICT = "killed";
 const SKEW_MS = 5_000;
 
 /**
- * @typedef {{ stage: string, reason: string, endpoint?: string }} FacilityFailureBeforeProvider
+ * @typedef {{ stage: string, reason: string, endpoint?: string, httpStatus?: number, refusal?: string }} FacilityFailureBeforeProvider
  * @typedef {{ runId: string, startedAt: string | null, verdict: string | null, totalEstimatedCostUsd: number | null, buildCeilingUsd: number | null, maxBuildCostUsd: number | null, buildsOverCeiling: number | null, balanceFailure: ReturnType<typeof detectBalanceFailure>, facilityFailureBeforeProvider: FacilityFailureBeforeProvider | null, killed?: true, unpublished?: true }} RunOutcome
  */
 
@@ -182,6 +182,9 @@ async function facilityFailureBeforeProvider(directory, runId, liveLlm, labRunsD
   const logged = labRunsDirectory === null ? null : await readStepLogOutcome(labRunsDirectory, runId);
   if (logged !== null && logged.calls !== 0) return null;
   if (typeof facility.stage !== "string" || !CODE.test(facility.stage) || typeof facility.reason !== "string" || !CODE.test(facility.reason)) return null;
+  // A Core refusal keeps its 4xx and Core's sentence, re-screened (`coreRefusalOf`).
+  const refused = coreRefusalOf(facility);
+  if (refused) return { stage: facility.stage, reason: facility.reason, ...refused };
   return {
     stage: facility.stage,
     reason: facility.reason,
