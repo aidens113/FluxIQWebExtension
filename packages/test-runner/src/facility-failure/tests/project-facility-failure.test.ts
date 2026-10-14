@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   facilityFailureBoundaries,
   facilityFailureStages,
+  isScreenedFacilityRefusal,
   type FacilityFailureBoundary,
   type FacilityFailureStage,
 } from "@fluxiq-web-extension/test-contracts";
@@ -102,4 +103,55 @@ test("foreign operation stages, codes and raw-shaped details never widen the pro
     details: { bounded: "timeout", operationStage: SENTINEL, timeoutMs: 999_999, transportCategory: "network", transportCode: SENTINEL, password: SENTINEL },
   }), boundary, stage);
   assert.deepEqual(project("finalized-bundle", "scenario.execute"), { boundary: "finalized-bundle", stage: "scenario.execute", reason: "unclassified" });
+});
+
+// A8 run run-mv85un8j-beb734f5 built and passed its judged run, then was failed
+// as `unclassified` although Core had said why on its Flow-settings route.
+const SETTINGS = "/api/programs/automation-studio/update-flow-settings";
+const coreRefused = (reason?: string, status = 400, path = SETTINGS) => {
+  const details = { path, status, ...(reason === undefined ? {} : { reason }) };
+  const refused = new RunnerFailure("recording.persistence", `FluxIQ control request failed: ${path} (${status})${reason ? `: ${reason}` : ""}`, { details });
+  return new RunnerFailure("facility.contract", `Core refused a value the Lab sent: ${refused.message}`, { cause: refused, details });
+};
+
+test("a control request Core refused names the route, the status and Core's screened sentence", () => {
+  assert.deepEqual(projectFacilityFailure(coreRefused("LLM execution limit is invalid."), "finalized-bundle", "scenario.execute"), {
+    boundary: "finalized-bundle", stage: "scenario.execute", reason: "core.refused", endpoint: SETTINGS, httpStatus: 400, refusal: "LLM execution limit is invalid.",
+  });
+  // Without a sentence, or wrapped once more, the route and status still say what happened.
+  assert.deepEqual(projectFacilityFailure(coreRefused(undefined, 404), "finalized-bundle", "scenario.execute"), {
+    boundary: "finalized-bundle", stage: "scenario.execute", reason: "core.refused", endpoint: SETTINGS, httpStatus: 404,
+  });
+  const wrapped = new RunnerFailure("facility.contract", "Flow settings could not be applied", { cause: coreRefused("LLM execution limit is invalid.") });
+  assert.equal(projectFacilityFailure(wrapped, "finalized-bundle", "scenario.execute").refusal, "LLM execution limit is invalid.");
+  // A long sentence is bounded, and the bounded record passes the contract's screening.
+  const long = projectFacilityFailure(coreRefused(`The Flow settings are invalid: ${"limit ".repeat(80)}`), "finalized-bundle", "scenario.execute");
+  assert.equal(long.refusal?.length, 240);
+  assert.equal(long.refusal?.endsWith("…"), true);
+  assert.equal(isScreenedFacilityRefusal(long.refusal), true);
+});
+
+test("a refusal sentence carrying a secret-shaped value is dropped whole, never cut around", () => {
+  for (const reason of [
+    `Unknown session token Bearer ${SENTINEL}`,
+    `password=${SENTINEL} is not accepted`,
+    "Session 9f2c4e1a7b3d5f6e8a0c2e4f6a8b0d1c3e5f7a9b is unknown",
+    `pairing_token: ${SENTINEL}`,
+    `Already [REDACTED] upstream ${SENTINEL}`,
+    `${"ok ".repeat(100)} Bearer ${SENTINEL}`,
+  ]) {
+    const projected = projectFacilityFailure(coreRefused(reason), "finalized-bundle", "scenario.execute");
+    assert.deepEqual(projected, { boundary: "finalized-bundle", stage: "scenario.execute", reason: "core.refused", endpoint: SETTINGS, httpStatus: 400 }, reason);
+    assert.equal(JSON.stringify(projected).includes(SENTINEL), false, reason);
+  }
+});
+
+test("only a 4xx on a Core API route is a Core refusal", () => {
+  for (const error of [coreRefused("boom", 500), coreRefused("not found", 399), coreRefused("refused", 400, `/private/${SENTINEL}`), coreRefused("refused", 400.5)]) {
+    const projected = projectFacilityFailure(error, "finalized-bundle", "scenario.execute");
+    assert.deepEqual(projected, { boundary: "finalized-bundle", stage: "scenario.execute", reason: "unclassified" });
+  }
+  // A details record whose getters throw fails closed to `unclassified`.
+  const hostile = new RunnerFailure("facility.contract", SENTINEL, { details: new Proxy({}, { get: () => { throw new Error(SENTINEL); } }) });
+  assert.deepEqual(projectFacilityFailure(hostile, "finalized-bundle", "scenario.execute"), { boundary: "finalized-bundle", stage: "scenario.execute", reason: "unclassified" });
 });

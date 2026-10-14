@@ -32,3 +32,21 @@ test("a bare crash carries nothing to compare, so it is not fingerprinted", asyn
   assert.equal(await describeAttemptFailure({ code: 3221225477, signal: null, stdout: "", stderr: "" }), null);
   assert.equal(await describeAttemptFailure({ code: 139, signal: null, stdout: "", stderr: "Segmentation fault" }), null);
 });
+
+const refused = (refusal) => ({
+  code: 1, signal: null, stderr: "",
+  stdout: `${JSON.stringify({ runId: "run-r", verdict: "failed", path: "F:/runs/run-r", failureCategory: "facility.contract", evaluation: { failureCategory: "facility.contract", facilityFailure: { boundary: "finalized-bundle", stage: "scenario.execute", reason: "core.refused", endpoint: "/api/programs/automation-studio/update-flow-settings", httpStatus: 400, ...(refusal === undefined ? {} : { refusal }) } } })}\n`,
+});
+
+// A8 run run-mv85un8j-beb734f5 failed as `unclassified` though Core had said why.
+test("a Core refusal is described by Core's status and sentence", async () => {
+  const failure = await describeAttemptFailure(refused("LLM execution limit is invalid."), { readFirstFailure: async () => "something the bundle wrote" });
+  assert.equal(failure.description, 'facility.contract: core.refused 400 /api/programs/automation-studio/update-flow-settings: "LLM execution limit is invalid."');
+  assert.equal(failure.fingerprint, 'facility.contract | finalized-bundle/scenario.execute/core.refused 400 /api/programs/automation-studio/update-flow-settings: "LLM execution limit is invalid." | something the bundle wrote | exit 1');
+});
+
+test("a Core refusal sentence that fails screening is not printed", async () => {
+  const failure = await describeAttemptFailure(refused("Bearer RAW_SENTINEL"), { readFirstFailure: async () => null });
+  assert.equal(failure.description, "facility.contract: core.refused 400 /api/programs/automation-studio/update-flow-settings");
+  assert.equal(failure.fingerprint.includes("RAW_SENTINEL"), false);
+});
