@@ -29,6 +29,20 @@
 // is its arrival, as a replayed one is (`./run.ts`): every step of a Flow ran
 // after it had arrived.
 //
+// **And a builder that opens on its prepared entry** (t585, A8 launch 6). A
+// project build's dependent builder starts where its predecessors leave the
+// site: before its first look Core ran their passing proposals, from the
+// build's start location, in a session of its own (Core
+// `service/project-build/entry-preparation.ts`). Its opening is therefore a
+// look in place, never the arrival, which would walk away from the entry. On
+// `run-mv85vjqo-4c022aec` that look re-armed this memory, and every typed
+// search the builder made on its entry was refused `not_at_start_location`.
+// Core now marks that opening look `arrived: true` (`webNodePreparedEntry`):
+// it re-arms everything a fresh build re-arms, then counts as arrival, since
+// the steps that reached the entry began at the start location. Only Core's
+// own opening id carries it, as with `held`; anywhere else it is an unexpected
+// key and refused as one, so no call the model writes can claim arrival.
+//
 // **What it holds back.** Every node that acts or reads for the Flow. A look
 // (the observation node) is not held: it reads the page as it stands, because
 // it runs nothing and is never a step of the Flow (`./run.ts`).
@@ -90,6 +104,23 @@ export function webNodeHeldFlow(request: { callId: string; toolId: string; value
   });
   // The calls themselves, for what the Flow holds that the model never wrote (`./held-literals/`, t432).
   return { look, addresses, calls: held as JsonValue[] };
+}
+
+/**
+ * The key Core sets on the opening look of a builder that starts on its
+ * prepared entry (Core `service/project-build/brief-ports.ts`, t585).
+ */
+const ARRIVED_KEY = "arrived";
+
+/**
+ * When this call is Core's opening look of a builder on its prepared entry:
+ * the look without the mark (header). Otherwise nothing. Read only on Core's
+ * own opening id, `initial.<this tool>`, as `webNodeHeldFlow` is.
+ */
+export function webNodePreparedEntry(request: { callId: string; toolId: string; value: JsonObject }): { look: JsonObject } | undefined {
+  if (request.callId !== `${OPENING_CALL_PREFIX}${request.toolId}` || request.value[ARRIVED_KEY] !== true) return undefined;
+  const { [ARRIVED_KEY]: _arrived, ...look } = request.value;
+  return { look };
 }
 
 /** The build a call belongs to, as this memory keys it. */

@@ -22,6 +22,7 @@ const START = "http://127.0.0.1:41873/scenarios/bigbox-retail/";
 const NAVIGATE = "web.output.browser-navigate";
 const SNAPSHOT = "web.output.dom-capture_snapshot";
 const CLICK = "web.output.dom-click";
+const TYPE = "web.output.dom-type";
 const PERMITTED = async () => ({ permitted: true as const });
 const NOT_THERE = { reason: "start_location_not_reached", startLocation: START };
 
@@ -147,6 +148,46 @@ test("a held Flow with no navigation in it is not an arrival", async () => {
   assert.equal((await press(runtime, "call.press")).resultCode, "web.action.rejected.not_at_start_location");
 });
 
+// A8 launch 6 (`run-mv85vjqo-4c022aec`, t585): a dependent builder opened with
+// a look on the entry Core had prepared by running its predecessors from the
+// start location, and every typed search it made there was refused
+// `not_at_start_location`. Core now marks that opening look `arrived`.
+test("a builder whose opening look is on its prepared entry has arrived: a typed action runs without navigating", async () => {
+  const stubbed = openTab();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+
+  const looked = await prepared(runtime, "initial.core.run_node");
+  assert.equal(looked.resultCode, "web.inspect.succeeded", JSON.stringify(looked.evidence));
+  assert.equal(looked.draft?.proposes, false);
+
+  const typed = await type(runtime, fieldHandle(looked));
+  assert.equal(typed.resultCode, "web.action.succeeded", JSON.stringify(typed.evidence));
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.type"), true);
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.browser.navigate"), false);
+});
+
+test("a builder that never arrived is still refused its typed action", async () => {
+  const stubbed = openTab();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+
+  const looked = await opening(runtime);
+  const typed = await type(runtime, fieldHandle(looked));
+  assert.equal(typed.resultCode, "web.action.rejected.not_at_start_location");
+  assert.deepEqual(((typed.evidence as JsonObject).detail as JsonObject).reason, NOT_THERE.reason);
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.type"), false);
+});
+
+test("the arrival mark on any call but Core's opening look is refused as an unexpected key, and arrives nothing", async () => {
+  const stubbed = openTab();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const looked = await opening(runtime);
+
+  const claimed = await prepared(runtime, "call.claim");
+  assert.equal(claimed.resultCode, "web.action.rejected.invalid_input");
+  const typed = await type(runtime, fieldHandle(looked));
+  assert.equal(typed.resultCode, "web.action.rejected.not_at_start_location");
+});
+
 test("a build told no start location is unchanged: the open page is read and pressed on", async () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(openTab().gateway);
 
@@ -262,6 +303,28 @@ async function continuing(runtime: Runtime, held: JsonObject[]) {
   });
 }
 
+/** Core's opening look of a builder that starts on its prepared entry, marked so (Core `service/project-build/brief-ports.ts`). */
+async function prepared(runtime: Runtime, callId: string) {
+  return await runtime.executeTool({
+    ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
+    value: { node: SNAPSHOT, parameters: {}, consequences: [], arrived: true }
+  });
+}
+
+async function type(runtime: Runtime, handle: string) {
+  return await runtime.executeTool({
+    ...PROJECT, callId: "call.type", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START, permission: PERMITTED,
+    value: { node: TYPE, parameters: { target: { handle }, text: "paper towels" }, consequences: [] }
+  });
+}
+
+/** The search field's handle, as the look showed it. */
+function fieldHandle(looked: { evidence: unknown }): string {
+  const handle = /\b(t\d+) [a-z]+ "Search"/u.exec(String((looked.evidence as JsonObject).page))?.[1];
+  assert.ok(handle, JSON.stringify((looked.evidence as JsonObject).page));
+  return handle;
+}
+
 async function press(runtime: Runtime, callId: string) {
   return await runtime.executeTool({
     ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
@@ -321,6 +384,9 @@ function page(url: string, presses = 0): JsonObject {
     url,
     title: "Bigbox",
     viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
-    interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Set as my store" }, { tagName: "span", selector: "#status", visibleText: presses === 0 ? "No store chosen" : "Store chosen" }]
+    interactiveElements: [
+      { tagName: "button", selector: "#go", visibleText: "Set as my store" }, { tagName: "span", selector: "#status", visibleText: presses === 0 ? "No store chosen" : "Store chosen" },
+      { tagName: "input", selector: "#q", type: "search", accessibleName: "Search", placeholder: "Search" }
+    ]
   };
 }
