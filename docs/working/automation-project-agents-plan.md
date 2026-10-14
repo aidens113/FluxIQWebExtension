@@ -46,7 +46,8 @@ shared lane tree (a setup error), the Lab chat unavailable on long paths (t568),
 raw plan (t569). After t569 the supervisor plans and dispatches and builders act, but three of four builds ran out
 of calls at $0.07-0.08 of $0.25 and the fourth's subflow trials were judged no; t570 (Core: per-brief call shares,
 Core-sized allowances, permitted acts from parts, interface lines in the brief) is in flight, and round one
-relaunches once it merges and the lanes are synced. Held until A8 ends: W8 here; A21, A10b, A7, A14 in Core.
+relaunches once it merges and the lanes are synced. In flight beside it, so every A8 round runs on one frozen
+pair: W8 here (t573), A21 (t571) and A10b (t572) in Core. After A8: A7 and A14 in Core.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
