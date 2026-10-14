@@ -21,6 +21,9 @@
 //             its sentence ("Asking the AI model again"), which is status
 //   action    an action with no decision before it (a Core that does not
 //             explain its steps yet): its card
+//   project   a card of the project supervisor's work on a `note` row: its
+//             plan, a brief, a builder's return, a validator's receipt
+//             (`project-message.ts`)
 //
 // Not a message: a pure status change, a decision still being made
 // ("Deciding the next step", no text: the live line says it), a build's
@@ -67,24 +70,33 @@
 // done again before a retry, already shown as done, are one card that holds
 // them (`done-again.ts`).
 //
+// A build with several agents keeps each agent's decisions apart: what a
+// unit of work remembers (the decision its next actions belong to, the run
+// step still open, its asks) is kept per brief, `activityId#briefId`, so a
+// builder's action is a card of that builder's own decision, never of the
+// supervisor's or another builder's. Each message keeps its author, and names
+// its lane where the lane changes (`withAgents`, `project-message.ts`).
+//
 // Keys come from the event that opened a message (`step:activityId#sequence`)
 // or a card (`action:activityId#sequence`), so each keeps its element for as
 // long as it is on screen and never moves. Every word comes from `stepWords`
 // or Core's shared reading of the action, never a raw id.
 
 import { activityActionKey, activityActionSkipped } from "fluxiq/ui";
-import { isInternalStep, isModelThought, stepRecovery, stepSkip, type ClientGatewayActivity } from "../../../../shared/activity/index";
+import { activityAgent, isInternalStep, isModelThought, projectCard, stepRecovery, stepSkip, type ActivityAgent, type ClientGatewayActivity } from "../../../../shared/activity/index";
 import { actionCard, type ActionCard } from "./action-card";
 import { foldRepeatedCards } from "./card-repeats";
 import { foldRetriedCards } from "./retried";
 import { foldDoneAgain } from "./done-again";
+import { projectMessages, withAgents } from "./project-message";
+import type { ProjectWords } from "./project-words";
 import { recoveryMessage } from "./recovery-message";
 import { stepWords } from "./words";
 
 type ActivityDetail = NonNullable<ClientGatewayActivity["detail"]>;
 
 /** What a message is. */
-export type StepMessageKind = "decision" | "repair" | "check" | "step" | "recovery" | "ask" | "note" | "action";
+export type StepMessageKind = "decision" | "repair" | "check" | "step" | "recovery" | "ask" | "note" | "action" | "project";
 
 /** One of FluxIQ's step messages. */
 export type StepMessage = {
@@ -105,6 +117,12 @@ export type StepMessage = {
   sequence: number;
   /** True for the newest message of its unit of work. */
   latest: boolean;
+  /** Which of a build's agents it comes from; absent on a build with one agent. */
+  agent?: ActivityAgent;
+  /** Its agent's lane in words ("Builder · Search"), where the message before it in its unit was in another lane. */
+  lane?: string;
+  /** On a `project` message: the card of the supervisor's work, in words. */
+  project?: ProjectWords;
 };
 
 /** Where a card lives: its message and its place among the message's cards. */
@@ -188,6 +206,7 @@ function skippedStep(event: ClientGatewayActivity, node: string | undefined): st
 export function stepMessages(events: readonly ClientGatewayActivity[], limit: number): StepMessage[] {
   const drafts: StepMessage[] = [];
   const units = new Map<string, Unit>();
+  const project = projectMessages();
   let lastAt = Number.NEGATIVE_INFINITY;
 
   const add = (event: ClientGatewayActivity, detail: ActivityDetail, kind: StepMessageKind, at: number, card: ActionCard | null): number => {
@@ -224,10 +243,12 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
     const parsed = Date.parse(event.at);
     const at = Number.isFinite(parsed) ? parsed : lastAt;
     lastAt = at;
-    let unit = units.get(event.activityId);
+    const briefId = activityAgent(event)?.briefId;
+    const unitKey = briefId === undefined ? event.activityId : `${event.activityId}#${briefId}`;
+    let unit = units.get(unitKey);
     if (unit === undefined) {
       unit = { decision: undefined, open: new Map(), step: undefined, stepNode: undefined, asks: new Map(), check: undefined, labels: new Map() };
-      units.set(event.activityId, unit);
+      units.set(unitKey, unit);
     }
     const recovery = stepRecovery(event);
     // A recovery is done around a step, not its end: a step it ran before or
@@ -258,6 +279,12 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
     }
     const detail = event.detail;
     if (detail === undefined || isInternalStep(detail) || settlesStep(event)) continue;
+    const supervised = projectCard(event);
+    if (supervised !== undefined) {
+      unit.decision = undefined;
+      drafts.push(project.message(event, supervised, at));
+      continue;
+    }
     if (recovery !== undefined) {
       unit.decision = undefined;
       const keys = { message: `step:${event.activityId}#${event.sequence}`, card: cardKey(event) };
@@ -405,5 +432,5 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
   const kept = limit > 0 ? folded.slice(-limit) : [];
   const newest = new Map<string, StepMessage>();
   for (const draft of kept) newest.set(draft.activityId, draft);
-  return kept.map((message) => ({ ...message, actions: [...message.actions], latest: newest.get(message.activityId) === message }));
+  return withAgents(kept.map((message) => ({ ...message, actions: [...message.actions], latest: newest.get(message.activityId) === message })), events);
 }

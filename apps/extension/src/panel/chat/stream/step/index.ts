@@ -2,10 +2,13 @@
 // what each says (`stepMessages`), each action FluxIQ took as a card
 // (`actionCard`, read by Core's shared `activityActionOf`) and that card in
 // words (`cardWords`), and any step, tool or check in a person's words rather
-// than an id (`stepWords`). No DOM.
+// than an id (`stepWords`), and a build with several agents: the project
+// supervisor's cards and each agent's lane in words (`projectWords`,
+// `laneWords`). No DOM.
 export { actionCard, type ActionCard } from "./action-card";
 export { isAlreadyDoneStep } from "./already-done";
 export { cardWords, type CardWords } from "./card-words";
 export { doneAgainWords } from "./done-again";
 export { stepMessages, type StepMessage, type StepMessageKind } from "./messages";
+export { laneWords, projectWords, type ProjectCardWords, type ProjectNames, type ProjectWords } from "./project-words";
 export { stepWords, type StepWords } from "./words";

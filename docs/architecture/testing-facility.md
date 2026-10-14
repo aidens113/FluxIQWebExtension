@@ -3420,6 +3420,17 @@ even for a reply Core refused (`llm.provider_output_invalid`, truncated
 output), because the call was paid for either way. The index's Cost is the run's whole
 total across both ceilings, not one purse.
 
+A build with a project supervisor (automation-project-agents-plan) also says
+which of its agents made each step: `meta.json` carries `role` (`supervisor`,
+`builder`, `repair` or `validator`) and `briefId`, both `null` for a step
+outside every agent's scope. A run any agent wrote a step to then lists
+`Role` and `Brief` after `Kind` in `steps/index.md`
+(`| Step | Kind | Role | Brief | Tool | Summary | Cost |`, `-` where a step
+names none); one no agent wrote to keeps the five columns of a build with one
+agent. Core's listing and the Lab's rewrite after playback
+(`lab-runs/rewrite-steps-index.ts`) write the same table word for word, so a
+reader meets one format.
+
 How a run fills it:
 
 1. Before Core starts, the Lab creates the folder and `steps/`, writes
