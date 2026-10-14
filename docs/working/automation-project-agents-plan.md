@@ -319,8 +319,8 @@ launch 8 above; round two runs `candidate` on the same lanes before any further 
 
 | Task | `project` (launch 8) | `candidate` (round two) |
 | --- | --- | --- |
-| crossborder-marketplace-hub-to-cart | passed, $0.029 | running |
-| bigbox-retail-pickup-cart | passed, $0.037 | running |
+| crossborder-marketplace-hub-to-cart | passed, $0.029 | passed, $0.015 |
+| bigbox-retail-pickup-cart | passed, $0.037 | passed, $0.033 |
 | social-network-feed-confirm-requests | failed, $0.103 | after its debug |
 | everything-store-plus-earbuds-under-50 | failed, $0.130 | after its debug |
 
