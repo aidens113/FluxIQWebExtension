@@ -15,12 +15,24 @@
 // "no call" and "nobody counted" are different facts. `lab replay` refuses a
 // replay with no accounting (`saved-flow-replay/provider/free-accounting.ts`),
 // and `assertReplaysAccounted` refuses the in-run replay on the same rule.
+//
+// So the accounting is read only once Core has written it. Core saves a run in
+// stages: the status its steps earned first, then its verdict on the result --
+// and a run that asked no model anything gets its zero accounting in that same
+// verdict save (Core `result-verification/run-record.ts`), never earlier. A
+// replay read between the two saves finds a finished, succeeded run with no
+// accounting on it. That is how run-mv8k9k2e-1f1065a8 failed: its replay ran
+// about 48 s, outlived the 30 s request, and the read-back took the first
+// terminal read, which landed in the 0.4 s before Core's verdict save. Each
+// replay therefore runs through the one rule every replay shares, which waits
+// for the verdict (`../replay/provider-free-replay-run.ts`), as `lab replay` does.
 
 import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { classifyRunnerFailure, RunnerFailure, type RunnerFailureCategory } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
 import { everyNodeEndedSucceeded } from "../node-recovery.js";
-import { executeRecordedFlowRun, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "../persisted-flow-run.js";
+import type { PersistedFlowRunControl, PersistedFlowRunOutcome } from "../persisted-flow-run.js";
+import { executeProviderFreeReplayRun } from "../replay/index.js";
 import type { FlowRunDataset } from "../run-datasets.js";
 
 /** One replay of the applied Flow. */
@@ -128,7 +140,7 @@ async function replayOnce(control: RepairReplayControl, input: RepairReplayInput
   let runId: string | null = null;
   try {
     await input.prepare();
-    const run = await executeRecordedFlowRun(control, {
+    const run = await executeProviderFreeReplayRun(control, {
       projectId: input.projectId,
       flowId: input.flowId,
       facilityRunId: input.facilityRunId,
@@ -138,7 +150,8 @@ async function replayOnce(control: RepairReplayControl, input: RepairReplayInput
       onRunIdentified: (identified) => { runId = identified; },
     }, bounds);
     runId = run.runId;
-    // Read from Core's own accounting, not from the absence of a `runIntent`.
+    // Read from Core's own accounting, not from the absence of a `runIntent`,
+    // and only after the verdict save that carries it (`executeProviderFreeReplayRun`).
     const detail = await control.getRunDetail(input.projectId, run.runId, bounds);
     const providerCalls = countedProviderCalls(detail);
     const itemizedCalls = (detail.providerCalls?.length ?? 0) + (detail.providerCallsOmitted ?? 0);
