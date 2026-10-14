@@ -278,6 +278,35 @@ records in worker memory: a repeated id is still answered, but a worker that
 stops takes its records with it. The client declares the behaviour as
 `web.actions.reconcile` version 1 (`domain/src/runtime/capabilities.ts`).
 
+**A command under a host lease** (automation-project-agents plan). Core grants
+one builder at a time the browser through the web domain's host-resource port
+(capacity 1, `domain/src/runtime/host-resources/`), and its gateway stamps each
+command the builder issues with `lease: { resourceKey, epoch, holder }`. The
+action mapping keeps only the fields it knows, so `gateway-session.ts` carries
+the lease beside the mapped action or fact check on `ServerCommandPayload`.
+`ServerCommandChannel` judges it after a repeated id is answered and before the
+in-flight record is begun (`background/connection/host-lease/`), against the
+highest lease kept per resource key in `chrome.storage.session`
+(`fluxiq.hostLease.<resourceKey>`, so a restarted worker still knows it):
+
+- a higher epoch is adopted, and the same epoch and holder is current: the
+  command runs;
+- a lower epoch is refused as `host_lease.stale`, the same epoch with another
+  holder as `host_lease.holder_mismatch`, and a lease that cannot be read as
+  `host_lease.missing`.
+
+A refusal is a `client.action_result` with status `failed` and failure
+`{ category: "blocked_by_capability_or_policy", code, retryable: false, stage:
+"dispatch", effect: "unacted" }` (`domain/src/client/host-lease.ts`). It is sent
+directly, opening no runtime status and recording no event, and settled in
+reconciliation, so a repeat of the id is answered with the refusal and Core
+asking about it hears `landed` with it, never `not_seen`. A command with no
+lease runs as it always has: a saved Flow's playback and a candidate build
+issue none. A leased command that names no tab runs on the automation tab
+(`latestOpenAutomationTab`), not the tab in front; a named `browserTabId` still
+wins, and with no automation tab open yet it runs where an unleased one would
+(`runtime/action-runner.ts`).
+
 **Saved state of the wrong shape** is repaired, not thrown. Settings, the
 session, the client id and the offline queue are read through
 `background/saved-state.ts`: each well-formed field is kept, each malformed one

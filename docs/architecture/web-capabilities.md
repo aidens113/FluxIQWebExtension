@@ -906,6 +906,37 @@ so nothing new is executable.
   uncertain and not repeated, as before. The evaluator waits within each
   claim's window, so a slow page is not read as an act that did not happen.
 
+### Host Leases
+
+Core runs a project's builders through a host-resource scheduler that asks the
+domain how many may hold the host at once (automation-project-agents plan,
+`Host Actions`). The web domain answers **one**
+(`domain/src/runtime/host-resources/capacity.ts`, pinned by its test): two tabs
+of one profile share cookies, the session and the cart, so a second builder
+would see and undo the first one's acts. Raising it needs a browser context per
+lease first.
+
+- **The port** (`domain/src/runtime/host-resources/port.ts`, exposed as
+  `hostResources` on the host runtime) grants the resource
+  `web.automation:<clientId>` -- the client id survives a service-worker restart
+  where the session id does not -- and names that session in the grant's
+  `sessionId`, so Core scopes its strict lease checks to it. It grants only
+  when exactly one session qualifies by
+  the build path's rule (ready, an extension, not recording, offering web
+  actions); with none, two, or a lease still held it answers `at_capacity`.
+  Each epoch is the later of one above the last and the clock in milliseconds,
+  so epochs rise across releases and across a Core restart.
+- **The browser** checks every leased command again before it acts
+  ([extension client](extension-client.md#staying-connected)): a lower epoch
+  than the highest it has seen for the resource is `host_lease.stale`, the same
+  epoch under another holder `host_lease.holder_mismatch`, an unreadable lease
+  `host_lease.missing` -- each `blocked_by_capability_or_policy`, not
+  retryable, stage `dispatch`, effect `unacted`. Serialization is Core's; this
+  check stops a late command from a builder whose lease has moved.
+- **The leased tab.** A leased command that names no tab runs on the automation
+  tab rather than the tab in front, so a person's own tab is never driven by a
+  build; a command without a lease is unchanged.
+
 ### Browser landing verification and tab repeats
 
 Tab output nodes are mutating for repeat classification: another open creates

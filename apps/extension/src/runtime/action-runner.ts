@@ -59,6 +59,13 @@ export type BrowserActionRunRequest = {
    * loses was going (`background/connection/in-flight/`, plan B3).
    */
   noteDispatch?(tabId: number, frameId: number): Promise<void>;
+  /**
+   * The command came under a host lease (automation-project-agents plan). The
+   * lease grants the automation tab, so a command that names no tab runs there,
+   * not on the tab in front, which may be a person's own; with no automation
+   * tab open yet it runs where an unleased command would. A named tab still wins.
+   */
+  leased?: boolean;
 };
 
 export type BrowserActionRunResult = {
@@ -203,14 +210,19 @@ async function tabRequestFor(
     if (opensNewTab(action)) tabRequest.forceNew = true;
     else if (namedTabId !== undefined) tabRequest.requestedTabId = namedTabId;
     else {
-      const inFront = await navigationTargetTab(request.activeTabId, request.ownOrigins ?? []);
-      if (inFront !== undefined) tabRequest.requestedTabId = inFront;
+      const target = await leasedTab(request) ?? await navigationTargetTab(request.activeTabId, request.ownOrigins ?? []);
+      if (target !== undefined) tabRequest.requestedTabId = target;
     }
     return tabRequest;
   }
-  if (namedTabId !== undefined) tabRequest.requestedTabId = namedTabId;
-  else if (request.activeTabId !== undefined) tabRequest.requestedTabId = request.activeTabId;
+  const target = namedTabId ?? await leasedTab(request) ?? request.activeTabId;
+  if (target !== undefined) tabRequest.requestedTabId = target;
   return tabRequest;
+}
+
+/** The automation tab a leased command runs on, when one is open; nothing for an unleased command. */
+async function leasedTab(request: BrowserActionRunRequest): Promise<number | undefined> {
+  return request.leased === true ? await latestOpenAutomationTab() : undefined;
 }
 
 /**
@@ -243,7 +255,11 @@ async function unsupportedPageReasonFor(
   isNavigation: boolean
 ): Promise<string | undefined> {
   if (isNavigation) return unsupportedAutomationPageReason(action.url);
-  return unsupportedAutomationPageReason(await readTabUrl(tabId)) ?? request.unsupportedPageReason;
+  const ownReason = unsupportedAutomationPageReason(await readTabUrl(tabId));
+  // The connection's reason is about the tab in front; a leased command that
+  // runs on another tab is judged by that tab alone.
+  if (request.leased === true && tabId !== request.activeTabId) return ownReason;
+  return ownReason ?? request.unsupportedPageReason;
 }
 
 /** Where the tab ended up and what putting it there did: everything the navigate's post-condition is judged on. */

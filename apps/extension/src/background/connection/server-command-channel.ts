@@ -17,6 +17,7 @@ import type {
   ActivityEntry,
   BrowserActionCommand,
   BrowserActionResult,
+  ClientGatewayActionResult,
   ClientGatewayServerMessage,
   DomSnapshot,
   FluxIQSession,
@@ -35,6 +36,7 @@ import type { ContentAttachment } from "./content-attachment";
 import { captureMergedTabSnapshot, type DomSnapshotPayload } from "./dom-snapshot";
 import type { EventSequence } from "./event-sequence";
 import type { GatewayMessageSender, GatewaySession } from "./gateway-session";
+import { HostLeaseLedger } from "./host-lease/index";
 import { CommandReconciliation, frameDocumentId, inFlightRecordArea, InFlightRecordStore, SeenCommandStore } from "./in-flight/index";
 import type { RecordingEvidenceReporter } from "./recording-evidence";
 import { classifyRecordingStartRefusal } from "./recording-start/index";
@@ -78,13 +80,21 @@ export type ServerCommandChannelDeps = {
    * Absent, the channel keeps its own in the browser's session storage.
    */
   readonly reconciliation?: CommandReconciliation;
+  /**
+   * The highest host lease seen per resource, which a leased command is judged
+   * against (automation-project-agents plan). Absent, the channel keeps its own
+   * in the browser's session storage.
+   */
+  readonly hostLeases?: HostLeaseLedger;
 };
 
 export class ServerCommandChannel {
   private readonly reconciliation: CommandReconciliation;
+  private readonly hostLeases: HostLeaseLedger;
 
   constructor(private readonly deps: ServerCommandChannelDeps) {
     this.reconciliation = deps.reconciliation ?? ownReconciliation(deps);
+    this.hostLeases = deps.hostLeases ?? new HostLeaseLedger(inFlightRecordArea());
   }
 
   async handleMessage(message: ClientGatewayServerMessage): Promise<void> {
@@ -203,6 +213,12 @@ export class ServerCommandChannel {
       // A fact check is a read of the page as it stands, not a step: no
       // runtime status opens, no evidence boundary is captured, nothing is
       // recorded, and its answer goes straight back as the gateway result.
+      // A check under a lease that moved is refused like any leased command.
+      const refusal = await this.leaseRefusal(payload.check.commandId, payload.lease);
+      if (refusal !== undefined) {
+        await this.deps.send("client.action_result", refusal);
+        return;
+      }
       await this.runtimeRouter().evaluateFacts(payload.check);
       return;
     }
@@ -212,6 +228,19 @@ export class ServerCommandChannel {
       // just answered, queued, or lost by an earlier worker -- is answered with
       // it and never acted on twice (`in-flight/command-reconciliation.ts`).
       if (await this.reconciliation.answerRepeat(commandId) !== undefined) return;
+      // A command under a lease that moved is answered with the refusal alone
+      // -- no runtime status, no recorded event -- and settled, so a repeat of
+      // its id gets the refusal and Core asking about it never hears `not_seen`.
+      const refusal = await this.leaseRefusal(commandId, payload.lease);
+      if (refusal !== undefined) {
+        try {
+          await this.deps.send("client.action_result", refusal);
+          await this.reconciliation.settled(refusal).catch((error: unknown) => this.inFlightRecordFailed(error));
+        } finally {
+          this.reconciliation.release(commandId);
+        }
+        return;
+      }
       await this.reconciliation.begin(payload.action, this.deps.page.tabId()).catch((error: unknown) => this.inFlightRecordFailed(error));
       try {
         this.applyStart(this.deps.runtimeStatus.startAction(payload.action));
@@ -220,11 +249,20 @@ export class ServerCommandChannel {
         // authoritative active tab after that asynchronous boundary so a delayed
         // tabs.onActivated callback cannot leave runtime dispatch on a stale tab.
         await this.deps.page.refresh();
-        await this.runtimeRouter().executeAction(payload.action);
+        // A leased command that names no tab runs on the automation tab, the
+        // resource its lease grants, never on whichever tab is in front.
+        await this.runtimeRouter().executeAction(payload.action, { leased: payload.lease !== undefined });
       } finally {
         this.reconciliation.release(commandId);
       }
     }
+  }
+
+  /** The refusal a command's host lease earns (`host-lease/`), or `undefined` when it may run. */
+  private async leaseRefusal(commandId: string, lease: unknown): Promise<ClientGatewayActionResult | undefined> {
+    const { refusal, fault } = await this.hostLeases.verdict(commandId, lease);
+    if (fault !== undefined) this.deps.onActivity("runtime", "Could not keep the browser's host lease", fault instanceof Error ? fault.message : String(fault), "warning");
+    return refusal;
   }
 
   private async answerReconcile(commandId: string): Promise<void> {

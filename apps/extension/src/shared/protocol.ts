@@ -18,6 +18,7 @@ import {
   type WebAutomationActionType,
   type WebAutomationActionVisualTarget,
   type WebAutomationFactCheckCommand,
+  type WebAutomationHostLease,
   type WebAutomationRecordedExtraction,
   type WebAutomationRecordedTab
 } from "@fluxiq-web-extension/domain/client";
@@ -625,10 +626,14 @@ export type ServerCommandPayload =
   | { command: "start_recording"; recordingId: string; projectId?: string | null | undefined; taskId?: string | undefined }
   | { command: "stop_recording"; recordingId?: string | undefined }
   | { command: "capture_snapshot"; kind?: string | undefined; metadata?: JsonObject | undefined }
-  | { command: "execute_action"; action: BrowserActionCommand }
+  // `lease` is the host lease Core issued the command under, as it came off
+  // the wire (automation-project-agents plan); the action mapping drops every
+  // field it does not know, so it rides beside the action rather than in it.
+  // Absent, no lease is in force and the command runs as it always has.
+  | { command: "execute_action"; action: BrowserActionCommand; lease?: WebAutomationHostLease | undefined }
   // A fact check (plan B1) arrives as an `execute_action` under its own action
   // type and is split off before the action path, which would refuse it.
-  | { command: "evaluate_facts"; check: WebAutomationFactCheckCommand }
+  | { command: "evaluate_facts"; check: WebAutomationFactCheckCommand; lease?: WebAutomationHostLease | undefined }
   | { command: "set_active_tab"; tabId: string }
   | { command: "disconnect"; reason?: string | undefined }
   | { command: "ping"; nonce?: string | undefined };
