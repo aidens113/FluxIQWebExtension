@@ -118,6 +118,8 @@ test("--replays applies and replays the repair, and only for the tasks whose Flo
  const created = parseLabCommand(["run", "everything-store", ...create, "--instruction-task", "everything-store-first-page-plus-earbuds-deal-wheel", "--replays", "1"]);
  assert.equal(created.command === "run" ? created.replays : undefined, 1);
  for (const task of ["repair", "adapt", "diagnose", "create-flow"]) assert.throws(() => parseLabCommand(["run", "everything-store", "--flow", "--llm-task", task, "--replays", "1"]), /Recording-only Flow creation is retired/);
+ // repair and adapt repaired the retired recording-built lane's Flow; only a created Flow's playback has a repair to replay now.
+ for (const task of ["repair", "adapt", "diagnose"]) assert.throws(() => parseLabCommand(["run", "everything-store", ...create.map((value) => (value === "create-flow" ? task : value)), "--replays", "1"]), /--replays requires --live-llm --llm-task create-flow/);
 });
 
 test("live LLM CLI fails closed without opt-in or required non-secret identity", () => {
@@ -211,8 +213,8 @@ test("--flow with no value selects the Flow lane; with a value it still names a 
 
 test("the Flow lane refuses targets that run a pre-existing Flow", () => { for (const target of ["existing", "clone"]) assert.throws(() => parseLabCommand(["run", "everything-store", "--flow", "--target", target]), /Recording-only Flow creation is retired/); });
 
-test("--variant arms one variant and requires the Flow lane", () => { assert.throws(() => parseLabCommand(["run", "everything-store", "--flow", "--variant", "deal-wheel"]), /Recording-only Flow creation is retired/);
- assert.throws(() => parseLabCommand(["run", "everything-store", "--variant", "deal-wheel"]), /--variant requires --flow/);
+test("--variant arms one variant and requires a created Flow", () => { assert.throws(() => parseLabCommand(["run", "everything-store", "--flow", "--variant", "deal-wheel"]), /Recording-only Flow creation is retired/);
+ assert.throws(() => parseLabCommand(["run", "everything-store", "--variant", "deal-wheel"]), /--variant requires --live-llm --llm-task create-flow/);
  assert.throws(() => parseLabCommand(["matrix", "--all", "--variant", "deal-wheel"]), /Unknown option/);
 });
 
@@ -237,11 +239,11 @@ test("create-flow runs one instruction task without the recorded Flow lane, with
   assert.throws(() => parseLabCommand(["run", "product-catalog", "--flow", ...live]), instructionLedRefusal);
   assert.throws(() => parseLabCommand(["run", "product-catalog", ...live, "--instruction-task", "Not Kebab"]), /--instruction-task must be a lowercase kebab-case task ID/u);
   assert.throws(() => parseLabCommand(["run", "product-catalog", ...live, "--dry-run", "--dry-run"]), /--dry-run may only be specified once/u);
-  // The creation options belong to create-flow alone, and a variant still needs a Flow lane.
+  // The creation options belong to create-flow alone, and so does a variant.
   const adapt = live.map((value) => (value === "create-flow" ? "adapt" : value));
   assert.throws(() => parseLabCommand(["run", "product-catalog", "--flow", ...adapt, "--instruction-task", "product-catalog-first-page"]), instructionLedRefusal);
   assert.throws(() => parseLabCommand(["run", "product-catalog", "--dry-run"]), /require --live-llm --llm-task create-flow/u);
-  assert.throws(() => parseLabCommand(["run", "product-catalog", "--variant", "short-catalog", ...adapt]), /--variant requires --flow/u);
+  assert.throws(() => parseLabCommand(["run", "product-catalog", "--variant", "short-catalog", ...adapt]), /--variant requires --live-llm --llm-task create-flow/u);
   assert.throws(() => parseLabCommand(["matrix", "--scenarios-json", '["product-catalog"]', ...live]), /create-flow builds one instruction task per run: use lab run/u);
 });
 

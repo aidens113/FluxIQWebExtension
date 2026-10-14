@@ -7,7 +7,8 @@ import path from "node:path";
 import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, AUTOMATION_STUDIO_LLM_TEST_RUN_COST_CEILING_DEFAULT_USD, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_SCOPE_ENV, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_ENV, AUTOMATION_STUDIO_LLM_RUN_COST_CEILING_MAX_USD, resolveAutomationStudioLlmRunCostCeilingUsd } from "fluxiq/automation-studio";
 import { liveLlmBuildCostCeilingUsd } from "../build-cost-ceiling.js";
 import type { PersistedFlowLlmExecution } from "../../flow-lane/index.js";
-import { planLiveLlmExecution, type LiveLlmPurpose } from "../live-llm-plan.js";
+import { assertLiveLlmLaunchable, planLiveLlmExecution, type LiveLlmPurpose } from "../live-llm-plan.js";
+import { RunnerFailure } from "../../failure.js";
 import { LAB_CEILING_USD, planAtLabCeiling } from "./lab-ceiling.js";
 
 /** Core's per-build ceiling as the Lab resolves it (`FLUXIQ_LLM_RUN_COST_CEILING_USD`, default $0.10). */
@@ -256,7 +257,7 @@ test("an unsupported provider, model, task or retry count is refused", () => {
   // The retired alias is refused by name rather than sent on and answered with
   // an opaque provider 400.
   assert.throws(() => planAtLabCeiling(profile({ model: "deepseek-chat" })), /--llm-model deepseek-chat is unsupported; Core is configured for deepseek-flash, deepseek-v4-pro/u);
-  assert.throws(() => planAtLabCeiling(profile({ task: "refine-recording" })), /--llm-task refine-recording has no live runner; use diagnose, adapt, repair or create-flow/u);
+  assert.throws(() => planAtLabCeiling(profile({ task: "refine-recording" })), /--llm-task refine-recording has no live runner; a live Lab run builds with create-flow/u);
   assert.throws(() => planAtLabCeiling(profile({ task: "edit-flow" })), /--llm-task edit-flow has no live runner/u);
   assert.throws(() => planAtLabCeiling(profile({}, { maxRetries: 1 })), /--llm-max-retries 1 is unsupported/u);
 });
@@ -300,4 +301,28 @@ test("an unknown or repeated class, or a permit on a diagnosis, is refused befor
   assert.throws(() => planAtLabCeiling(profile({ task: "create-flow", permittedConsequences: unknown })), /--llm-permit purchase names a consequence class Core does not recognise/u);
   assert.throws(() => planAtLabCeiling(profile({ task: "create-flow", permittedConsequences: ["delete", "delete"] })), /more than once/u);
   assert.throws(() => planAtLabCeiling(profile({ task: "diagnose", permittedConsequences: ["delete"] })), /a diagnose run takes none/u);
+});
+
+// `diagnose`, `adapt` and `repair` ran only on the recording-built Flow lane
+// t519 retired. Each is refused by name, as that lane's own refusal is, with the
+// instruction-led command that replaced it; `create-flow` passes, and asking for
+// the lane itself is refused whatever the task.
+test("diagnose, adapt and repair are refused with the instruction-led path; create-flow launches, and never on the recording-built lane", () => {
+  for (const task of ["diagnose", "adapt", "repair"] as const) {
+    assert.throws(() => assertLiveLlmLaunchable({ task }, false), (error: unknown) => {
+      assert.ok(error instanceof RunnerFailure);
+      assert.equal(error.category, "recording.contract");
+      assert.deepEqual(error.details, { code: "automation.instruction_led_authoring_required", retiredTask: task });
+      assert.match(error.message, new RegExp(`^--llm-task ${task} ran against a Flow built from the run's recording`, "u"));
+      // The supported path, and never the retired `--flow` it used to ask for.
+      assert.match(error.message, /pnpm lab run <scenario> --live-llm .*--llm-task create-flow --instruction-task <task> --target persistent-isolated --workspace <name> --replays 1/u);
+      assert.match(error.message, /pnpm lab replay <scenario> --workspace <name> --project <project-id> --flow <flow-id> --instruction-task <task>/u);
+      assert.doesNotMatch(error.message, /pass --flow|drop --flow/u);
+      return true;
+    }, task);
+  }
+  assert.doesNotThrow(() => assertLiveLlmLaunchable({ task: "create-flow" }, false));
+  for (const task of ["create-flow", "diagnose"] as const) {
+    assert.throws(() => assertLiveLlmLaunchable({ task }, true), (error: unknown) => error instanceof RunnerFailure && error.category === "recording.contract" && /^Recording-only Flow creation is retired/u.test(error.message), task);
+  }
 });

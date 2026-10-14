@@ -12,6 +12,7 @@ import type { AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
 import { DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, isLlmModel, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../failure.js";
+import { refuseRecordingOnlyFlow } from "../flow-lane/recording-only/index.js";
 
 /**
  * The intents the Lab can plan -- Core's runtime-session LLM intents -- and
@@ -205,12 +206,14 @@ function runTokenBudget(declared: number | undefined, perCall: number, calls: nu
 // own evidence from the live page before it proposes, and whose patch Core may
 // execute rather than only propose. `create-flow` is the web panel's "Explore
 // and create proposal": an iterating `build_and_adapt` for one Flow build.
+// A Lab run launches only `create-flow` (`assertLiveLlmLaunchable` below); the
+// other three still plan, so every intent's bounds come from this one function.
 function purposeOf(task: LlmTaskKind): LiveLlmPurpose {
   if (task === "diagnose") return "diagnosis_only";
   if (task === "adapt") return "diagnose_and_adapt";
   if (task === "repair") return "explore_and_adapt";
   if (task === "create-flow") return "build_and_adapt";
-  throw refusal(`--llm-task ${task} has no live runner; use diagnose, adapt, repair or create-flow`);
+  throw refusal(`--llm-task ${task} has no live runner; a live Lab run builds with create-flow`);
 }
 
 function bounded(value: number, option: string, maximum: number): number {
@@ -227,15 +230,20 @@ function refusal(detail: string): RunnerFailure {
 }
 
 /**
- * Refuses a `--flow` that does not fit the plan's task, before anything starts:
- * a created Flow is built from an instruction task, never from the run's
- * recording, and every other live task needs the Flow lane, which builds the
- * Flow the provider is authorized against.
+ * Refuses, before a credential is read or anything starts, a live run that
+ * asks for what t519 retired: the recording-built Flow lane (bare `--flow`),
+ * refused as every recording-only Flow is, and the three tasks that ran only
+ * on it. `diagnose`, `adapt` and `repair` each authorized a provider against
+ * the Flow that lane made from the run's recording, so they are refused by
+ * name, as `recording.contract` with the same code, with the path that
+ * replaced them rather than a `--flow` that is itself refused. That path is one
+ * run: `create-flow` builds the Flow from the task's written instructions on
+ * the unchanged site, arms the task's drift for the Flow's playback, and
+ * repairs the failure inside that same run; `--replays` applies and replays
+ * the repair with no model, and `lab replay` proves it is reused later.
  */
-export function assertLiveLlmLaneFlag(plan: Pick<LiveLlmPlan, "task">, flowLane: boolean): void {
-  if (plan.task === "create-flow") {
-    if (flowLane) throw new RunnerFailure("fixture.invalid", "--llm-task create-flow builds its Flow from an instruction task, not from the run's recording: drop --flow");
-    return;
-  }
-  if (!flowLane) throw new RunnerFailure("fixture.invalid", "A live LLM run needs the Flow lane: pass --flow, which is what builds the Flow the provider is authorized against");
+export function assertLiveLlmLaunchable(plan: Pick<LiveLlmPlan, "task">, flowLane: boolean): void {
+  if (flowLane) refuseRecordingOnlyFlow();
+  if (plan.task !== "diagnose" && plan.task !== "adapt" && plan.task !== "repair") return;
+  throw new RunnerFailure("recording.contract", `--llm-task ${plan.task} ran against a Flow built from the run's recording, and recording-only Flow creation is retired. A live run now builds its Flow from written instructions and diagnoses, repairs and adapts it inside that same run: pnpm lab run <scenario> --live-llm --llm-profile <profile> --llm-provider deepseek --llm-task create-flow --instruction-task <task> --target persistent-isolated --workspace <name> --replays 1, with a task whose variant drifts after creation. Then pnpm lab replay <scenario> --workspace <name> --project <project-id> --flow <flow-id> --instruction-task <task> reuses the repair with no model.`, { details: { code: "automation.instruction_led_authoring_required", retiredTask: plan.task } });
 }

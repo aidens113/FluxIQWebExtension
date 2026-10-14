@@ -34,7 +34,7 @@ import { refuseRecordingOnlyFlow } from "./flow-lane/recording-only/index.js";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { BrowserContext, Page } from "@playwright/test";
-import { assertRunManifest, flowLaneExclusion, resolveScenarioWorkflow, scenarioPageFactSchedule, type FacilityFailureStage, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type RunEvaluation, type WebScenario, type ExpectedFact } from "@fluxiq-web-extension/test-contracts";
+import { assertRunManifest, resolveScenarioWorkflow, scenarioPageFactSchedule, type FacilityFailureStage, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type RunEvaluation, type WebScenario, type ExpectedFact } from "@fluxiq-web-extension/test-contracts";
 import { EvidenceBundle, EvidenceBundlePublicationError, EvidenceCaptureController } from "@fluxiq-web-extension/test-evidence";
 import type { EvidenceMode } from "./commands.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "./coordinator.js";
@@ -209,13 +209,12 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   // step whose records did not match is measured rather than lost with the
   // failure.
   let extractionRead: Map<string, ExtractionStepRead> | undefined;
-  // The first read of Core's discard audit, which `finally` reads again, in the same scope closed at the Flow lane's dispatch, and unions with it before the topology closes.
+  // The first read of Core's discard audit, which `finally` reads again, in the same scope, and unions with it before the topology closes.
   let firstDiscardRead: { scope: RecordingDiscardScope; discards: RecordingDiscard[] } | undefined;
   // The window in which a discard Core audits is this recording's loss: from just before the extension is asked to start
-  // recording, whose Core action probe's runtime confirmations reach Core with no recording open, until the Flow lane
-  // dispatches its Flow, whose runtime confirmations Core audits against the finalized recording.
+  // recording, whose Core action probe's runtime confirmations reach Core with no recording open. It has no upper bound:
+  // the recording-built Flow lane, whose dispatch once closed it, is retired, and no Flow runs on the recording lane.
   let discardWindowFrom: number | undefined;
-  let discardWindowUntil: number | undefined;
   // The fixture oracle's own verdict, published rather than inferred: a failure
   // category cannot tell "the fixture disagreed" from "the rig broke first".
   let oracleVerdict: "passed" | "failed" | null = null;
@@ -610,7 +609,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       let snapshotFetches = 0;
       do {
         snapshotFetches += 1;
-        secondRead = readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), { ...firstDiscardRead.scope, until: discardWindowUntil }, earlier);
+        secondRead = readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), firstDiscardRead.scope, earlier);
       } while (secondRead.window.excluded === null && snapshotFetches < 2);
       await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "Core's discard audit was read again before the topology closed"), details: { recordingDiscards: secondRead.discards, recordingDiscardWindow: secondRead.window, discardsAfterFirstRead: secondRead.discards.length - earlier.length, snapshotFetches } }).catch(() => undefined);
       const failure = secondRead.failure;
@@ -770,9 +769,6 @@ function resolveWorkflow(scenario: WebScenario, options: RunScenarioOptions, tar
   try { workflow = resolveScenarioWorkflow(scenario, { ...(options.workflowId === undefined ? {} : { workflowId: options.workflowId }), ...(options.variantId === undefined ? {} : { variantId: options.variantId }) }); }
   catch (cause) { throw new RunnerFailure("fixture.invalid", cause instanceof Error ? cause.message : String(cause), { cause }); }
   if (workflow.variant && !options.flow && !options.creation && target.mode !== "existing" && target.mode !== "clone") throw new RunnerFailure("fixture.invalid", "A variant is armed only before a Flow run; the recording lane always records the workflow unarmed");
-  // A script that records no action yields no Flow on any product: refused before the bundle, Core or a browser exists, with the reason the bench skips it for.
-  const noFlowLane = options.flow ? flowLaneExclusion(workflow.recordingScript) : undefined;
-  if (noFlowLane !== undefined) throw new RunnerFailure("fixture.invalid", `A Flow run was refused: ${noFlowLane}`);
   return workflow;
 }
 

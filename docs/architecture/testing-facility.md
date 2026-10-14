@@ -1279,6 +1279,27 @@ for deterministic reuse. Both obey production instruction gates. Dataset,
 action and page oracles remain external scoring data, never synthesized task
 instructions or supplemental recording descriptions.
 
+**Live `diagnose`, `adapt` and `repair` are retired with it (t552).** Each one
+authorized a provider against the Flow this lane built from the run's
+recording, so once the lane was refused, they had no reachable launch on
+`lab run`. They used to ask for `--flow`, which is itself refused. Now
+`beginLiveLlmRun` refuses them by name before a credential is read, as
+`recording.contract` with `details.code =
+automation.instruction_led_authoring_required`
+(`assertLiveLlmLaunchable`, `packages/test-runner/src/live-llm/live-llm-plan.ts`). The refusal
+names the supported path. A live `lab matrix` ran only on this lane, so it is
+refused the same way. What replaced the three tasks is one instruction-created
+run. `--llm-task create-flow` with a task whose variant drifts after creation
+builds the Flow on the unchanged site, then arms the drift for the Flow's
+playback. Core diagnoses and repairs the failure inside that same run, with
+`explore_and_adapt` ([How the created Flow's playback adapts](#how-the-created-flows-playback-adapts)).
+`--replays N` applies the repair and replays it with no model, and a later
+`lab replay` proves it is reused. That is the adaptation gate's counted run, so
+no separate diagnose, repair or adapt launch is needed. The Lab's plan still
+plans the three intents (`live-llm-plan.ts`), so every intent's bounds come
+from one function. The panel demos (`demo:llm:diagnose`, `demo:llm:adapt`)
+drive Core's own UI and are unaffected.
+
 ### The instruction-created Flow lane and its authored artifact
 
 **Authoring mode (t338).** Whether this lane can build at all is Core's one
@@ -1661,10 +1682,12 @@ One rule decides both (`liveFlowAdaptationModeOf`). Core reads a stored
 alone would hold every repair as a proposal: no automatic promotion, no resume
 from the trial, no apply after a judged whole run. Until t267 both said
 `manual_approval`, so no Lab run before it could show a repair continuing the
-run or persisting itself. Every other intent and purpose (`--llm-task adapt`
-or `diagnose`, a result check, a build) keeps `manual_approval`, which keeps a
-diagnosis or a build from applying itself. A recorded Flow's `--llm-task
-repair` is `explore_and_adapt` too, and runs under the same rule.
+run or persisting itself. Every other intent and purpose (a result check, a
+build, and the `diagnose_and_adapt` and `diagnosis_only` intents the panel
+demos use) keeps `manual_approval`, which keeps a diagnosis or a build from
+applying itself. The Lab's own `--llm-task adapt`, `diagnose` and `repair`
+are retired with the recording-built Flow lane they ran on
+([The retired recording-derived Flow lane](#the-retired-recording-derived-flow-lane)).
 
 `--replays N` then proves whatever the run left. An adaptation Core already
 applied counts as applied and is not reviewed again. A re-author Core built
@@ -2566,15 +2589,21 @@ resumed.
 - **Corpora** (`bench/corpus/`). `smoke` is W01 (`basic-form`) and W28
   (`iframe-checkout`) on the recording lane only. `week1` is W01 to W29 on both
   lanes: every unarmed workflow runs on the recording lane and on the Flow lane,
-  and every variant runs on the Flow lane alone. A workflow whose script
+  and every variant runs on the Flow lane alone. **That Flow lane built its
+  Flow from the run's own recording, which t519 retired.** The bench still
+  plans it, but `run-bench.ts` refuses each Flow-lane result before the runner
+  is asked, as `recording.contract`, and records the refused attempt as
+  `inconclusive`. Only the recording lane runs. The counts below are the plan's.
+  A workflow whose script
   performs no action has no Flow lane, because no recording of it can become a
-  Flow, and a `lab run --flow` of one is refused as `fixture.invalid` before
-  anything starts — but no `week1` workflow is such a workflow any more. W04 and
+  Flow. The bench planner skips it with `flowLaneExclusion`, and a bare
+  `lab run --flow` of any workflow is refused as `recording.contract` before
+  anything starts. No `week1` workflow is such a workflow any more. W04 and
   W08 were, their scripts doing nothing but extract; an `extract` now records a
   `web.dom.extract_list`, so their four Flow-lane entries run again and their
   extraction is judged on the Flow lane. A workflow with a paged `extract` step
-  is skipped on both lanes (`pagedExtractExclusion`, in `bench/expand-corpus.ts`
-  and the runner's `--flow` refusal): W05 and W07. That leaves 62 runnable
+  is skipped on both lanes (`pagedExtractExclusion`, in `bench/expand-corpus.ts`):
+  W05 and W07. That leaves 62 runnable
   results per repeat and 5 skipped: 21 on the recording lane, and 41 on the
   Flow lane (21 unarmed and 20 variants).
   W19 to W23 and W29 are variants only. Because `week1` runs
@@ -3053,7 +3082,6 @@ commands:
 
 ```powershell
 pnpm lab run basic-form --seed 1 --evidence events
-pnpm lab run basic-form --flow
 pnpm lab matrix --all --repeat 1 --evidence failure
 pnpm lab inspect <run-id>
 pnpm lab bench --corpus smoke --repeat 2 --target isolated
@@ -3197,7 +3225,7 @@ Live-provider testing is an explicit opt-in lane and is not part of ordinary det
 
 The default Lab allowance is the model's whole context window: 992,000 input tokens, 8,000 output tokens and 1,000,000 total tokens per request (`DEFAULT_LLM_LAB_BUDGET`), with a 30-second timeout and Core's per-build estimated-cost ceiling (`FLUXIQ_LLM_RUN_COST_CEILING_USD`, default $0.10; see "Live-run waste guards"), which a run's options may only lower (each call inherits that ceiling). Validation rejects any request total above 1,000,000 tokens (`LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST`, mirroring Core's DeepSeek model limits). That number is what the model can read, not a budget: on 2026-09-30 the user ordered that no limit hide page information from the model, and a request over the window fails loudly rather than being trimmed. The allowance used to be 8,000/2,000/10,000 under a 50,000-token ceiling, then 48,000/8,000/56,000 under Core's 64,000-token ceiling, and each made a real page impossible to describe. A live run permits no retries.
 
-Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core run intent `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The live campaign (`scripts/lab/live-campaign`) passes no `--llm-max-run-tokens`: with whole-page requests a build may use more than a million tokens across its calls, and a run budget it outgrew would fail the run as `performance.budget` only after the money was spent, so what bounds a campaign run is its Flow's spend ceiling, its call count and Core's stall guard. The spend ceiling is one purse per Flow, whatever the call count -- the user's words (2026-10-01): "bring the ceiling down to $0.1 per flow max" -- and it has one definition: Core's scoped ceiling resolver, activated by `FLUXIQ_LLM_RUN_COST_CEILING_SCOPE=test` and resolved from the Lab's `FLUXIQ_LLM_RUN_COST_CEILING_USD` (Lab default $0.10; ordinary user UI remains $0.25 and ignores the test variable), which the Lab resolves for each run with `liveLlmBuildCostCeilingUsd` (`packages/test-runner/src/live-llm/build-cost-ceiling.ts`): the same sources it passes Core, through Core's own resolver, so the plan and Core hold a Flow to one number. `--llm-max-cost-usd` is the whole build's ceiling, not a per-call figure: it may only lower Core's ceiling, is never multiplied by the call count, and the live campaign passes none. The ceiling is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings. Because the Lab's Core runs with the ceiling Lab-scoped, Core holds the whole Flow to it as one purse (t438): the build and its judge, the chat's reading of the message that asked for the build or the run, the run's in-run repairs, its recovery after the run, its result check, its re-authors and their re-runs all draw on the Flow's one record (`creation-spend.json`), each call held against what the Flow has left and added to the record as it settles, whether the run succeeds or fails (Core `docs/architecture/automation-studio/llm-flow-bootstrap.md`, "One purse per Flow creation"). The record outlives the creation, so a later build of the same Flow in the Lab -- an extend after it was proposed -- carries everything the Flow has spent and may be refused on cost at once. The Lab's post-run check holds each settled phase to the ceiling again, and every live run reports its Flow's whole spend against it, every phase and every call its step log saw: `snapshots/live-llm.json` `observed.perBuild` (one `flow` entry, with its `parts` beside it), the campaign row's `perBuildSpend` with the summary's `buildsOverCeiling` (Flows over the ceiling), and the spend ledger's `buildCeilingUsd`, `maxBuildCostUsd` (the Flow's spend) and `buildsOverCeiling` (1 when the Flow passed the ceiling). The field names are kept for the ledger's readers. There is no spend budget across runs. The model is the Flow's `llmModel` setting.
+Calls per run follow Core's model, not a fixed count. A diagnosis (Core run intent `diagnosis_only`) makes exactly one call. An adaptation (Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The live campaign (`scripts/lab/live-campaign`) passes no `--llm-max-run-tokens`: with whole-page requests a build may use more than a million tokens across its calls, and a run budget it outgrew would fail the run as `performance.budget` only after the money was spent, so what bounds a campaign run is its Flow's spend ceiling, its call count and Core's stall guard. The spend ceiling is one purse per Flow, whatever the call count -- the user's words (2026-10-01): "bring the ceiling down to $0.1 per flow max" -- and it has one definition: Core's scoped ceiling resolver, activated by `FLUXIQ_LLM_RUN_COST_CEILING_SCOPE=test` and resolved from the Lab's `FLUXIQ_LLM_RUN_COST_CEILING_USD` (Lab default $0.10; ordinary user UI remains $0.25 and ignores the test variable), which the Lab resolves for each run with `liveLlmBuildCostCeilingUsd` (`packages/test-runner/src/live-llm/build-cost-ceiling.ts`): the same sources it passes Core, through Core's own resolver, so the plan and Core hold a Flow to one number. `--llm-max-cost-usd` is the whole build's ceiling, not a per-call figure: it may only lower Core's ceiling, is never multiplied by the call count, and the live campaign passes none. The ceiling is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings. Because the Lab's Core runs with the ceiling Lab-scoped, Core holds the whole Flow to it as one purse (t438): the build and its judge, the chat's reading of the message that asked for the build or the run, the run's in-run repairs, its recovery after the run, its result check, its re-authors and their re-runs all draw on the Flow's one record (`creation-spend.json`), each call held against what the Flow has left and added to the record as it settles, whether the run succeeds or fails (Core `docs/architecture/automation-studio/llm-flow-bootstrap.md`, "One purse per Flow creation"). The record outlives the creation, so a later build of the same Flow in the Lab -- an extend after it was proposed -- carries everything the Flow has spent and may be refused on cost at once. The Lab's post-run check holds each settled phase to the ceiling again, and every live run reports its Flow's whole spend against it, every phase and every call its step log saw: `snapshots/live-llm.json` `observed.perBuild` (one `flow` entry, with its `parts` beside it), the campaign row's `perBuildSpend` with the summary's `buildsOverCeiling` (Flows over the ceiling), and the spend ledger's `buildCeilingUsd`, `maxBuildCostUsd` (the Flow's spend) and `buildsOverCeiling` (1 when the Flow passed the ceiling). The field names are kept for the ledger's readers. There is no spend budget across runs. The model is the Flow's `llmModel` setting.
 
 **Model calls need no grant.** Core resolves the provider from the caller's own unlocked Secret Keys session. The Lab installs the key, saves the Flow's LLM settings and spend ceiling, and then sends its build (`generate-flow-bootstrap-adaptation`) or run (`run-runtime-session` with a `runIntent`). The one thing the operator still allows is a consequence: `--llm-permit` names the classes (`move_money`, `delete`, `send_or_publish`, `modify_existing`, `create_new`) the run's actions may cause, and the Lab sends them as `permittedConsequences` on the build and the run only when it names any. Absent, a consequential act stops and asks a person (`permission_required`). A created-Flow build started from the extension's chat carries no permit at all, so `--llm-permit` is refused for it, and the Lab's person answers the question in the chat instead ("The build is started from the extension's chat window" above). `snapshots/live-llm.json` records the plan's `authorized` bounds and its `permittedConsequences`.
 
@@ -3205,7 +3233,7 @@ The panel-driven adaptation demos type no call count: the panel sends Core none 
 
 Scenario/browser traffic remains loopback-only and external side effects remain disabled. Provider control-plane traffic is separately restricted to a trusted Core-owned provider adapter; a Flow, scenario, extension, or CLI caller cannot choose an arbitrary endpoint. Raw prompts and responses are excluded from Lab artifacts. Successful invocations must record sanitized usage, while locally rejected, failed, or cancelled invocations may explicitly record usage as unavailable instead of fabricating counts. A passing evaluation requires a completed, passing zero-LLM replay and cannot attest more invocations than its declared allowance.
 
-The general Lab CLI reaches the real provider when `pnpm lab run ... --flow --live-llm` is given with the `--llm-*` options above. Panel-driven paid certification uses the narrower `pnpm demo:llm:diagnose` command after `demo:llm:setup` and `demo:llm:prepare`. The command drives the real panel UI in the persistent isolated workspace. It selects the stored opaque Testing Lab key summary and saves stricter first-live limits: 2,000 input tokens, 512 output tokens, 3,000 total tokens, exactly one call, zero retries, 20 seconds, and at most $0.25.
+The general Lab CLI reaches the real provider when `pnpm lab run <scenario> --live-llm --llm-task create-flow --instruction-task <task>` is given with the `--llm-*` options above. That is the only live task `lab run` launches. `--llm-task diagnose`, `adapt` and `repair` ran on the retired recording-built Flow lane and are refused with that path ([The retired recording-derived Flow lane](#the-retired-recording-derived-flow-lane)). Panel-driven paid certification uses the narrower `pnpm demo:llm:diagnose` command after `demo:llm:setup` and `demo:llm:prepare`. The command drives the real panel UI in the persistent isolated workspace. It selects the stored opaque Testing Lab key summary and saves stricter first-live limits: 2,000 input tokens, 512 output tokens, 3,000 total tokens, exactly one call, zero retries, 20 seconds, and at most $0.25.
 
 The diagnosis command waits for Core's Flow readiness check and requires the
 real Runtime Debug Run control to be enabled before and after selecting

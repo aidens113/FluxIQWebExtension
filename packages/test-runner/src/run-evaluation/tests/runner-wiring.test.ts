@@ -196,7 +196,8 @@ test("Core's audit of discarded recording messages is read after the round trip,
 });
 
 // Since t519 the recording lane runs no Flow, so the second read follows the browser's close alone and nothing closes
-// its window early: `discardWindowUntil` was set only by the retired lane's `flowDispatchStarting`, and stays undefined.
+// its window early: the upper bound the retired lane's `flowDispatchStarting` set is gone (t552), and the second read
+// takes the first read's scope unchanged.
 test("Core's discard audit is read a second time, after the browser closes and before the topology closes, and unioned with the first", async () => {
   const source = await runnerSource();
   const at = {
@@ -204,7 +205,7 @@ test("Core's discard audit is read a second time, after the browser closes and b
     kept: source.indexOf("firstDiscardRead = { scope: discardScope, discards: discardAudit.discards };"),
     firstFailed: source.indexOf("if (discardAudit.failure) throw discardAudit.failure;"),
     browserClosed: source.indexOf("await context?.close();"),
-    secondRead: source.indexOf("readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), { ...firstDiscardRead.scope, until: discardWindowUntil }, earlier)"),
+    secondRead: source.indexOf("readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), firstDiscardRead.scope, earlier)"),
     published: source.indexOf("\"Core's discard audit was read again before the topology closed\"), details: { recordingDiscards: secondRead.discards, recordingDiscardWindow: secondRead.window, discardsAfterFirstRead: "),
     topologyClosed: source.indexOf("await topology?.close();"),
   };
@@ -217,10 +218,11 @@ test("Core's discard audit is read a second time, after the browser closes and b
     "an action either read finds discarded fails the run as recording.persistence; an audit the second read cannot get fails only a run that had passed",
   );
   assert.equal(source.includes("flowDispatchStarting:"), false, "no Flow dispatches on the recording lane, so no Flow's runtime confirmations can fall inside the second read's window");
+  assert.equal(source.includes("discardWindowUntil"), false, "nothing closes the window before the second read, so the runner keeps no upper bound to pass it");
   // Lab Stage 2, W19 run 1: one failed snapshot fetch failed a run whose Flow had met its expectations.
   assert.match(
     source,
-    /do \{\s*snapshotFetches \+= 1;\s*secondRead = readRecordingDiscards\(await topology\.control\.gatewaySnapshot\(\)\.catch\(\(\) => undefined\), \{ \.\.\.firstDiscardRead\.scope, until: discardWindowUntil \}, earlier\);\s*\} while \(secondRead\.window\.excluded === null && snapshotFetches < 2\);/u,
+    /do \{\s*snapshotFetches \+= 1;\s*secondRead = readRecordingDiscards\(await topology\.control\.gatewaySnapshot\(\)\.catch\(\(\) => undefined\), firstDiscardRead\.scope, earlier\);\s*\} while \(secondRead\.window\.excluded === null && snapshotFetches < 2\);/u,
     "a snapshot the second read could not fetch or read is fetched once more, and no more, before the read fails closed",
   );
   assert.ok(source.includes("discardsAfterFirstRead: secondRead.discards.length - earlier.length, snapshotFetches }"), "the number of fetches is published beside the read");
@@ -306,16 +308,16 @@ test("the evaluation reaches the caller, so lab run reports it without a bench",
  * it by. t519 (4ee4e65c) retired that lane outright: a recording is evidence
  * beside required instructions, never a Flow's authority, so every
  * recording-built Flow-lane run on an isolated target is now refused as
- * `recording.contract` before its workflow is even resolved -- the no-action
- * exclusion below it is no longer reached on that lane. What still holds, and
- * is pinned here, is that the refusal happens before a bundle, Core or a
- * browser exists.
+ * `recording.contract` before its workflow is even resolved, and the runner's
+ * no-action exclusion, which nothing reached any more, is gone (t552). What
+ * still holds, and is pinned here, is that the refusal happens before a
+ * bundle, Core or a browser exists.
  *
  * This used to run W04, `product-catalog`'s primary workflow, which only reads
  * the page. Since X5.1 an extract step records a `web.dom.extract_list`, so W04
  * and W08 reach the Flow lane and **no Lab fixture is a no-action workflow any
  * more** — every one of the registry's workflows records something. The rule is
- * still live contract (`flowLaneExclusion` refuses a script of only
+ * still the bench planner's (`flowLaneExclusion` refuses a script of only
  * `waitForState`, `checkpoint` and `waitForDownload`), so the case is
  * constructed here rather than borrowed from a fixture that changed underneath
  * it: a scenario registry of this test's own, loaded through the same
@@ -353,9 +355,7 @@ async function noActionScenarioLab(): Promise<string> {
 
 test("a recording-built Flow-lane run is refused as recording.contract before its workflow is resolved and before a bundle, Core or a browser exists", async () => {
   const source = await runnerSource();
-  assert.match(source, /import \{[^}]*\bflowLaneExclusion\b[^}]*\} from "@fluxiq-web-extension\/test-contracts";/u, "the runner reads the check the bench plans with");
-  assert.equal(source.match(/flowLaneExclusion\(/gu)?.length, 1, "one refusal, in one place");
-  assert.ok(source.includes("const noFlowLane = options.flow ? flowLaneExclusion(workflow.recordingScript) : undefined;"), "only a Flow-lane run is refused: the recording lane still runs the workflow");
+  assert.equal(source.includes("flowLaneExclusion"), false, "the retirement refuses every recording-built Flow-lane run first, so the runner keeps no Flow-lane exclusion it could never reach");
   assert.equal(source.match(/refuseRecordingOnlyFlow\(\)/gu)?.length, 1, "one retirement refusal in the runner");
   const at = {
     retired: source.indexOf('if (options.flow === true && options.creation === undefined && target.mode !== "existing" && target.mode !== "clone") refuseRecordingOnlyFlow();'),
