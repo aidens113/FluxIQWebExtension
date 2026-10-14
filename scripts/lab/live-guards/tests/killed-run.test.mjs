@@ -81,7 +81,7 @@ test("reconciling a killed launch records its run and cost, stops on its empty b
     await access(files.stopBalance);
 
     const entries = await readLedger(files.ledger);
-    const state = { launch: { instance: start.instance, task: start.task }, entries, fingerprint: "sha256:same", files, hasDebug: () => false, debugPath: (runId) => `debugs/${runId}.md` };
+    const state = { launch: { instance: start.instance, task: start.task, authoringMode: "candidate" }, entries, fingerprint: "sha256:same", files, hasDebug: () => false, debugPath: (runId) => `debugs/${runId}.md` };
     assert.match(checkPreviousDebug(state)?.why ?? "", new RegExp(RUN));
     assert.equal(checkUnchangedRerun(state), null);
   } finally {
@@ -150,13 +150,13 @@ test("a sealed but unpublished product failure counts against the unchanged sour
   const { root, files, runsDirectory } = await machine();
   try {
     await seal(path.join(runsDirectory, `.staging-${RUN}`));
-    const start = { event: "start", launchId: "launch-1", at: new Date(T).toISOString(), pid: 20060, instance: "t418-proofs", scenarioId: "crossborder-marketplace", task: "crossborder-marketplace/flash-deal", fingerprint: "sha256:same", repositoryRoot: root, runsDirectory, overridden: [] };
+    const start = { event: "start", launchId: "launch-1", at: new Date(T).toISOString(), pid: 20060, instance: "t418-proofs", scenarioId: "crossborder-marketplace", task: "crossborder-marketplace/flash-deal", authoringMode: "candidate", fingerprint: "sha256:same", repositoryRoot: root, runsDirectory, overridden: [] };
     await appendLedgerEntry(files.ledger, start);
     await reconcileLedger(files, { now: T + 60_000, isAlive: () => false });
     const entries = await readLedger(files.ledger);
     const finish = entries.find((entry) => entry.event === "finish" && entry.launchId === "launch-1");
     assert.deepEqual([finish.runId, finish.verdict, finish.killed, finish.totalEstimatedCostUsd], [RUN, "failed", undefined, 0.120331128]);
-    const state = { launch: { instance: start.instance, task: start.task }, entries, fingerprint: "sha256:same", files, hasDebug: () => false, debugPath: (runId) => `debugs/${runId}.md` };
+    const state = { launch: { instance: start.instance, task: start.task, authoringMode: "candidate" }, entries, fingerprint: "sha256:same", files, hasDebug: () => false, debugPath: (runId) => `debugs/${runId}.md` };
     assert.match(checkUnchangedRerun(state)?.why ?? "", new RegExp(`${RUN}, which ended failed`));
   } finally {
     await rm(root, { recursive: true, force: true });

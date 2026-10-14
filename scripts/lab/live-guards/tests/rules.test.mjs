@@ -18,7 +18,7 @@ const level = (root) => ({ root, head: "a".repeat(40), dev: "a".repeat(40), cont
 function state(overrides = {}) {
   return {
     now: NOW,
-    launch: { instance: "slot-1", task: "bigbox-retail/bigbox-retail-pickup-cart" },
+    launch: { instance: "slot-1", task: "bigbox-retail/bigbox-retail-pickup-cart", authoringMode: "candidate" },
     stopBalance: null,
     entries: [],
     fingerprint: "sha256:current",
@@ -30,7 +30,7 @@ function state(overrides = {}) {
   };
 }
 
-const finish = (fields) => ({ event: "finish", launchId: "launch-x", at: at(60 * MINUTE), instance: "slot-1", task: "bigbox-retail/bigbox-retail-pickup-cart", runId: "run-a", verdict: "failed", totalEstimatedCostUsd: 0.1, balanceFailure: null, fingerprint: "sha256:current", exitCode: 1, ...fields });
+const finish = (fields) => ({ event: "finish", launchId: "launch-x", at: at(60 * MINUTE), instance: "slot-1", task: "bigbox-retail/bigbox-retail-pickup-cart", authoringMode: "candidate", runId: "run-a", verdict: "failed", totalEstimatedCostUsd: 0.1, balanceFailure: null, fingerprint: "sha256:current", exitCode: 1, ...fields });
 const start = (msAgo, instance = "slot-1") => ({ event: "start", launchId: `launch-${msAgo}`, at: at(msAgo), pid: 1, instance, scenarioId: "bigbox-retail", task: "t", fingerprint: "f", repositoryRoot: "/r", runsDirectory: "/runs", overridden: [] });
 
 test("balance: a STOP-balance file refuses every run, whatever override files exist", () => {
@@ -55,6 +55,24 @@ test("unchanged: a failed task is not rerun on the same source, but is after a c
   // Only the latest run of the task counts: a later pass clears an earlier failure.
   assert.equal(checkUnchangedRerun(state({ entries: [finish({ runId: "run-old" }), finish({ runId: "run-new", verdict: "passed", at: at(MINUTE) })] })), null);
   assert.deepEqual(evaluateLiveGuards(state({ entries: failed }), new Set(["unchanged"])).overridden, ["unchanged"]);
+});
+
+test("unchanged: only a run in the same authoring mode is compared, and an entry with no mode matches no launch", () => {
+  // The A8 refusal: a failed project build does not stop a candidate build of the same task on the same source.
+  const project = [finish({ authoringMode: "project" })];
+  assert.equal(checkUnchangedRerun(state({ entries: project })), null);
+  // The same mode on the same source still refuses, and says which mode.
+  const refusal = checkUnchangedRerun(state({ entries: project, launch: { instance: "slot-1", task: "bigbox-retail/bigbox-retail-pickup-cart", authoringMode: "project" } }));
+  assert.equal(refusal?.rule, "unchanged");
+  assert.match(refusal.why, /in project mode as run-a, which ended failed/u);
+  // A later run in another mode does not hide the last run in this one.
+  const both = [finish({ runId: "run-candidate" }), finish({ runId: "run-project", authoringMode: "project", verdict: "passed", at: at(MINUTE) })];
+  assert.match(checkUnchangedRerun(state({ entries: both }))?.why ?? "", /run-candidate, which ended failed/u);
+  // History written before the mode was recorded carries none and matches nothing, in any mode.
+  const { authoringMode: _mode, ...modeless } = finish({});
+  for (const authoringMode of ["legacy", "candidate", "project"]) {
+    assert.equal(checkUnchangedRerun(state({ entries: [modeless], launch: { instance: "slot-1", task: "bigbox-retail/bigbox-retail-pickup-cart", authoringMode } })), null, authoringMode);
+  }
 });
 
 test("debug: the next live run waits for the previous run's debug file, in any task", () => {
