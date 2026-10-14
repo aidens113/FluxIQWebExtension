@@ -45,20 +45,19 @@ type LiveLlmPublish = (details: Record<string, unknown>) => Promise<unknown>;
 
 /**
  * Plans and credentials a live run, or refuses. Every refusal fails closed: a
- * profile Core could not execute inside its own stated bounds, a lane the task
- * does not run on, a target this runner does not own, and an absent
+ * profile Core could not execute inside its own stated bounds, a task that ran
+ * only on a retired lane, a target this runner does not own, and an absent
  * credential, are refusals before a topology starts -- never a quiet fall back
  * to a deterministic run that would then report a green result no model saw.
  *
  * A live run launches `create-flow` only, which builds its Flow from an
- * instruction task; the retired recording-built lane and the tasks that ran
- * on it are refused with the path that replaced them (`assertLiveLlmLaunchable`).
+ * instruction task; the tasks that ran on the retired recording-built lane are
+ * refused with the path that replaced them (`assertLiveLlmLaunchable`).
  */
 export async function beginLiveLlmRun(input: {
   profile: LlmExecutionProfile;
   repositoryRoot: string;
   environment: NodeJS.ProcessEnv;
-  flowLane: boolean;
   targetMode: string;
   /**
    * Where the per-build cost ceiling and Core's default model are read: what
@@ -69,7 +68,7 @@ export async function beginLiveLlmRun(input: {
 }): Promise<LiveLlmRun> {
   const sources = input.costCeilingSources ?? { args: process.argv, environment: process.env };
   const plan = planLiveLlmExecution(input.profile, liveLlmBuildCostCeilingUsd(input.repositoryRoot, sources.args, sources.environment), liveLlmCoreDefaultModel(sources.args), labAuthoringModeValue(sources.args));
-  assertLiveLlmLaunchable(plan, input.flowLane);
+  assertLiveLlmLaunchable(plan);
   if (input.targetMode !== "isolated" && input.targetMode !== "persistent-isolated") {
     throw new RunnerFailure("fixture.invalid", `A live LLM run needs a Core this runner owns, and the ${input.targetMode} target's is not; use --target isolated or persistent-isolated`);
   }
@@ -140,8 +139,6 @@ const NO_VERIFICATION: LiveLlmVerificationRecord = { source: "absent", status: n
 
 export class LiveLlmRun {
   private observed: LiveLlmObservedUsage | undefined;
-  /** Whether the plan's own Flow (or build) was readied for the model; a run never readied spent nothing to settle. */
-  private prepared = false;
   /** What the bounded exploration did, read at settlement; `undefined` before that. */
   private exploration: LiveLlmExplorationRecord | undefined;
   /** What Core's result verification did on the settled run; `undefined` before that. */
@@ -237,7 +234,6 @@ export class LiveLlmRun {
       this.assertChatBuildable();
       if (!core.authorizationPassword) throw new RunnerFailure("environment.missing", "A live LLM run needs the account password its Core was bootstrapped with, and this topology published none");
       await installLiveLlmSessionKey(control, { plan: this.plan, credentialValue: this.credential.value, authorizationPassword: core.authorizationPassword, ...(core.authorizationPin ? { authorizationPin: core.authorizationPin } : {}) });
-      this.prepared = true;
     };
   }
 
@@ -317,10 +313,9 @@ export class LiveLlmRun {
   }
 
   /**
-   * Every call the run made, by phase. A created Flow's `observed` is its
-   * build, and its playback is the run phase; any other run's `observed` is
-   * the run itself. The phases are each budgeted where they settle; this only
-   * adds them up.
+   * Every call the run made, by phase. `observed` is the created Flow's build,
+   * and its playback is the run phase. The phases are each budgeted where they
+   * settle; this only adds them up.
    */
   private spend(repairObserved: LiveLlmObservedUsage | undefined = this.repairObserved): LiveLlmRunSpend {
     const created = this.buildRecord !== undefined;
@@ -337,12 +332,12 @@ export class LiveLlmRun {
   }
 
   /**
-   * Refuses a scenario run whose lanes do not fit this task: a live run is a
-   * `create-flow` run, which needs an instruction task and never the retired
-   * recording-built Flow lane (`assertLiveLlmLaunchable`).
+   * Refuses a scenario run that does not fit this task: a live run is a
+   * `create-flow` run (`assertLiveLlmLaunchable`), which needs an instruction
+   * task to build from.
    */
-  assertLane(lane: { flowLane: boolean; creation: boolean }): void {
-    assertLiveLlmLaunchable(this.plan, lane.flowLane);
+  assertLane(lane: { creation: boolean }): void {
+    assertLiveLlmLaunchable(this.plan);
     if (!lane.creation) throw new RunnerFailure("fixture.invalid", "--llm-task create-flow needs an instruction task to build from, and this run carries none");
   }
 
@@ -385,21 +380,6 @@ export class LiveLlmRun {
   }
 
   /**
-   * The Flow lane's hook: installs the key and saves the Flow's LLM settings
-   * and spend ceiling, after the Flow exists and before it runs, and answers
-   * with the run's intent and the consequences the operator permitted.
-   */
-  authorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): (flowId: string) => Promise<PersistedFlowLlmExecution> {
-    return async (flowId: string) => {
-      const { purpose } = this.plan;
-      if (purpose === "build_and_adapt") throw new RunnerFailure("fixture.invalid", "A build_and_adapt run builds a Flow; it never runs one");
-      await this.authorize(control, core, flowId, this.plan);
-      this.prepared = true;
-      return { intent: purpose, permittedConsequences: this.plan.permittedConsequences };
-    };
-  }
-
-  /**
    * The created-Flow lane's build hook. Called once the blank Flow exists and
    * its instruction is saved, just before the build, and answers with the
    * consequences the operator permitted the build.
@@ -408,7 +388,6 @@ export class LiveLlmRun {
     return async (flowId: string) => {
       if (this.plan.purpose !== "build_and_adapt") throw new RunnerFailure("fixture.invalid", `A ${this.plan.purpose} run cannot build a Flow`);
       await this.authorize(control, core, flowId, this.plan);
-      this.prepared = true;
       return { permittedConsequences: this.plan.permittedConsequences };
     };
   }
@@ -422,7 +401,6 @@ export class LiveLlmRun {
    */
   repairAuthorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): (flowId: string) => Promise<PersistedFlowLlmExecution> {
     return async (flowId: string) => {
-      if (!this.createsFlow) throw new RunnerFailure("fixture.invalid", `Only a create-flow run repairs the Flow it built; a ${this.plan.task} run readies its Flow through the Flow lane`);
       await this.authorize(control, core, flowId, this.repairPlan);
       this.repairPrepared = true;
       return { intent: CREATED_FLOW_REPAIR_PURPOSE, permittedConsequences: this.plan.permittedConsequences };
@@ -430,24 +408,10 @@ export class LiveLlmRun {
   }
 
   /**
-   * Reads what the run spent, publishes it, and holds it to its caps.
-   *
-   * The accounting is written before either check, so a run that overspent or
-   * reached no provider still leaves the evidence that says so. Both checks run
-   * before the lane's own expectations are judged: a live run that failed at
-   * being a live run must not be masked by whatever the automation then did.
-   */
-  async settle(control: LiveLlmRunDetailReader, input: { projectId: string; runId: string }, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<void> {
-    const detail = await control.getRunDetail(input.projectId, input.runId);
-    // Read before the snapshot is written, and never allowed to fail the
-    // settlement: it says what exploring did, not whether the run was legal.
-    await this.readRunRecords(control, input);
-    await this.settleObserved(liveLlmObservedUsage(detail), bundle, publish, {}, this.declaredCalls, true);
-  }
-
-  /**
-   * The same settlement for a Flow build, from the build's own record. The
-   * snapshot carries that record as `build`: the proposal's outcome, Core's
+   * Reads what the build spent, publishes it, and holds it to its caps, from
+   * the build's own record. The accounting is written before either check, so
+   * a build that overspent or reached no provider still leaves the evidence
+   * that says so. The snapshot carries that record as `build`: the proposal's outcome, Core's
    * call count and totals, the evidence loop's counts, and any refusal code.
    * A build Core says ran on another provider or model fails here too.
    *
@@ -468,7 +432,7 @@ export class LiveLlmRun {
     try {
       // The step log counts a build Core gave no call count for (a candidate-mode build, t466).
       const stepLog = this.stepLogDirectory ? await readLiveLlmStepLogSpend(this.stepLogDirectory) : null;
-      await this.settleObserved(liveLlmBuildUsage(build, stepLog), bundle, publish, { build }, null, false);
+      await this.settleObserved(liveLlmBuildUsage(build, stepLog), bundle, publish, { build });
     } catch (error) {
       // The breach is thrown before the lane sees the build, so a build that
       // ended without a Flow is carried on it, or the run reads as the facility's.
@@ -581,51 +545,6 @@ export class LiveLlmRun {
   }
 
   /**
-   * The settlement for a run whose lane failed before `settle` was reached.
-   *
-   * A lane that throws after Core ran the Flow -- an unexpected failure, a
-   * failed expectation, a read that broke -- used to leave no
-   * `snapshots/live-llm.json` at all, so the calls a provider was paid for
-   * were never itemized (`run-mu4rpka7-845d919a`). This writes the same
-   * snapshot from the same run detail, whenever the Flow was readied, and
-   * publishes the same summary.
-   *
-   * It raises nothing itself. A budget breach is returned for the caller to
-   * raise in place of the lane's failure, because a run that overspent failed
-   * at being a live run whatever else went wrong; a run that reached no
-   * provider is not, because the lane's own failure is the better
-   * explanation. A run with no run id, or whose detail cannot be read, still
-   * gets a snapshot, which says so and carries no usage. A run already
-   * settled, or never readied, is left alone.
-   */
-  async settleUnfinished(control: LiveLlmRunDetailReader, input: { projectId: string; runId: string | undefined }, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<RunnerFailure | undefined> {
-    if (this.observed || !this.prepared) return undefined;
-    let observed: LiveLlmObservedUsage | undefined;
-    try {
-      if (input.runId) observed = liveLlmObservedUsage(await control.getRunDetail(input.projectId, input.runId));
-    } catch {
-      observed = undefined;
-    }
-    // A lane that failed after exploring is exactly the run whose exploration
-    // record is worth having, so it is read here too, on the same run id.
-    if (input.runId) await this.readRunRecords(control, { projectId: input.projectId, runId: input.runId });
-    if (!observed) {
-      await this.writeSnapshot(bundle, null, { settlement: input.runId ? "run_detail_unreadable" : "run_not_identified" });
-      return undefined;
-    }
-    this.observed = observed;
-    await this.writeSnapshot(bundle, observed, { settlement: "lane_failed" });
-    await publish({ ...usageSummary(observed), runTotal: spendSummary(this.spend()), settledAfterLaneFailure: true });
-    try {
-      assertLiveLlmBudgetHeld(this.plan, observed);
-    } catch (breach) {
-      if (breach instanceof RunnerFailure) return breach;
-      throw breach;
-    }
-    return undefined;
-  }
-
-  /**
    * The exploration and verification records, from one read of the raw run
    * detail: both live in it, and a settlement reads it once.
    */
@@ -641,12 +560,17 @@ export class LiveLlmRun {
     this.reauthor = await readLiveLlmReauthor(once, scope);
   }
 
-  private async settleObserved(observed: LiveLlmObservedUsage, bundle: LiveLlmRunBundle, publish: LiveLlmPublish, extra: Record<string, unknown>, declared: DeclaredProviderCalls | null, withRunTotal: boolean): Promise<void> {
+  /**
+   * The build's settlement, held to the plan's caps and to having reached a
+   * provider. The scenario's declaration is deliberately not applied: it holds
+   * a Flow run to spending nothing, and never reaches the build.
+   */
+  private async settleObserved(observed: LiveLlmObservedUsage, bundle: LiveLlmRunBundle, publish: LiveLlmPublish, extra: Record<string, unknown>): Promise<void> {
     this.observed = observed;
     await this.writeSnapshot(bundle, observed, extra);
-    await publish({ ...usageSummary(observed), ...(withRunTotal ? { runTotal: spendSummary(this.spend()) } : {}), ...(declared ? { declaredProviderCalls: declared.count } : {}) });
+    await publish(usageSummary(observed));
     assertLiveLlmBudgetHeld(this.plan, observed);
-    assertProviderCallsAsDeclared(this.plan, observed, declared);
+    assertProviderCallsAsDeclared(this.plan, observed, null);
   }
 
   /**

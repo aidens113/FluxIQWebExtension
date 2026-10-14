@@ -21,7 +21,7 @@ export type RecordingDiscard = {
 
 /**
  * What makes a discard this run's: the recordings it produced, the session it
- * paired, and the window in which this recording could lose a message.
+ * paired, and when this recording could start losing a message.
  * `sessionId` and `from` are required and may be `undefined`, so that no read
  * can leave either out by omission.
  *
@@ -29,13 +29,14 @@ export type RecordingDiscard = {
  *   extension to start recording. Before it, a Core-dispatched action's runtime
  *   confirmation reaches Core with no recording open, and Core audits it as a
  *   discarded action that names no recording.
- * - `until` is the time just before the Flow lane dispatches its Flow, whose own
- *   runtime confirmations Core audits against the finalized recording. It is
- *   absent when no Flow was dispatched, and the window is then open-ended.
- * - A bound that is `undefined`, or any other value that is not a finite number,
- *   excludes nothing.
+ * - A `from` that is `undefined`, or any other value that is not a finite
+ *   number, excludes nothing.
+ * - The window is open-ended. It once closed just before the recording-built
+ *   Flow lane dispatched its Flow, whose own runtime confirmations Core audited
+ *   against the finalized recording; that lane is retired (t519), and nothing
+ *   is dispatched against a recording after it is finalized.
  */
-export type RecordingDiscardScope = { recordingIds: Iterable<string>; sessionId: string | undefined; from: number | undefined; until?: number | undefined };
+export type RecordingDiscardScope = { recordingIds: Iterable<string>; sessionId: string | undefined; from: number | undefined };
 
 /**
  * How many discard entries one read of Core's audit log left out because Core
@@ -51,10 +52,10 @@ export type RecordingDiscardExclusions = Record<RecordingDiscard["type"], Record
  * The window a read judged Core's audit entries against, published beside its
  * discards so a run shows what the window left out and not only what it kept:
  * `from` in epoch milliseconds, or `null` when the read had no lower bound;
- * `until` only when the read had an upper bound; and what the window excluded,
- * or `null` when the response carried no audit log to read.
+ * and what the window excluded, or `null` when the response carried no audit
+ * log to read.
  */
-export type RecordingDiscardWindow = { from: number | null; until?: number; excluded: RecordingDiscardExclusions | null };
+export type RecordingDiscardWindow = { from: number | null; excluded: RecordingDiscardExclusions | null };
 
 /** The discards Core audited for this run, the window this read judged them in, and the failure they amount to, if any. */
 export type RecordingDiscardAudit = { discards: RecordingDiscard[]; window: RecordingDiscardWindow; failure: RunnerFailure | undefined };
@@ -70,12 +71,12 @@ export type RecordingDiscardAudit = { discards: RecordingDiscard[]; window: Reco
  * So this audit is the only place a recording that reached Core short can be
  * seen, and a run that lost an action there must not exit 0.
  *
- * - Only an entry Core audited inside `scope`'s window, `from` to `until`
- *   inclusive, is read, whether it names a recording or only the session. Core
- *   stamps each entry with its own `Date.now()` (`ClientGatewayAuditLog.record`),
- *   the same machine's clock the runner takes both bounds from. An entry with no
- *   readable timestamp is read, so the window fails closed.
- * - The result's `window` publishes the bounds this read applied and a count of
+ * - Only an entry Core audited at or after `scope`'s `from` is read, whether it
+ *   names a recording or only the session. Core stamps each entry with its own
+ *   `Date.now()` (`ClientGatewayAuditLog.record`), the same machine's clock the
+ *   runner takes the bound from. An entry with no readable timestamp is read,
+ *   so the window fails closed.
+ * - The result's `window` publishes the bound this read applied and a count of
  *   the discard entries it excluded, so a run's bundle can show that a
  *   confirmation outside the window was left out rather than never audited.
  * - An entry whose `metadata.recordingId` is one of `scope.recordingIds` counts.
@@ -118,8 +119,7 @@ export function readRecordingDiscards(snapshot: unknown, scope: RecordingDiscard
     seen.add(key);
     discards.push(discard);
   }
-  const until = windowBound(scope.until);
-  const window: RecordingDiscardWindow = { from: windowBound(scope.from) ?? null, ...(until === undefined ? {} : { until }), excluded: read?.excluded ?? null };
+  const window: RecordingDiscardWindow = { from: windowBound(scope.from) ?? null, excluded: read?.excluded ?? null };
   const lost = lostActions(discards);
   if (lost) return { discards, window, failure: new RunnerFailure("recording.persistence", `Core discarded recorded actions inside this run's recording window (${lost})`, { details: { recordingDiscards: discards } }) };
   if (!read) return { discards, window, failure: new RunnerFailure("gateway.connection", "Core's gateway snapshot carried no audit log, so a recorded action it discarded cannot be ruled out") };
@@ -149,7 +149,7 @@ function entryKey(discard: RecordingDiscard): string {
 /** A discard-typed audit entry, with the recording its metadata names. */
 type DiscardEntry = { type: RecordingDiscard["type"]; id: unknown; timestamp: unknown; sessionId: unknown; recordingId: string | undefined; fields: Record<string, unknown> };
 
-/** One pass over Core's audit log: this run's discards inside the window, and a count of the discard entries Core stamped outside it. */
+/** One pass over Core's audit log: this run's discards inside the window, and a count of the discard entries Core stamped before it. */
 function readAuditLog(auditLog: readonly unknown[], scope: RecordingDiscardScope): { discards: RecordingDiscard[]; excluded: RecordingDiscardExclusions } {
   const wanted = new Set(scope.recordingIds);
   const excluded: RecordingDiscardExclusions = { "recording.action_discarded": noExclusions(), "recording.event_discarded": noExclusions() };
@@ -193,15 +193,14 @@ function discardOf({ type, id, recordingId, fields }: DiscardEntry): RecordingDi
   };
 }
 
-/** Whether Core stamped an entry outside the scope's window. An unreadable timestamp is inside it. */
+/** Whether Core stamped an entry before the scope's window opened. An unreadable timestamp is inside it. */
 function outsideWindow(timestamp: unknown, scope: RecordingDiscardScope): boolean {
   if (typeof timestamp !== "number" || !Number.isFinite(timestamp)) return false;
   const from = windowBound(scope.from);
-  const until = windowBound(scope.until);
-  return (from !== undefined && timestamp < from) || (until !== undefined && timestamp > until);
+  return from !== undefined && timestamp < from;
 }
 
-/** A window bound as it is applied and published: a finite number, or undefined for no bound. */
+/** The window's bound as it is applied and published: a finite number, or undefined for no bound. */
 function windowBound(bound: unknown): number | undefined {
   return typeof bound === "number" && Number.isFinite(bound) ? bound : undefined;
 }

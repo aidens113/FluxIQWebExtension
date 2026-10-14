@@ -12,9 +12,10 @@ import { planLiveLlmExecution } from "../live-llm-plan.js";
 import { beginLiveLlmRun, LiveLlmRun } from "../live-llm-run.js";
 
 /**
- * One live run end to end against a fake Core: ready the Flow, settle, and
- * read back `snapshots/live-llm.json`. The fake answers only the endpoints a
- * live run uses; any other request fails the test.
+ * One live run end to end against a fake Core: ready the build and the created
+ * Flow's playback, settle each, and read back `snapshots/live-llm.json`. The
+ * fake answers only the endpoints a live run uses; any other request fails the
+ * test.
  */
 
 const PER_REQUEST = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
@@ -79,47 +80,11 @@ const detail: ExistingRunDetail = {
   llmGate: { invoked: true },
 };
 
-async function runOnce(budget: Partial<LlmExecutionProfile["budget"]>) {
+test("a run's --llm-permit travels with its build and is recorded, and a typed token budget is kept", async () => {
   const core = fakeCore();
-  const run = new LiveLlmRun(planAtLabCeiling(profile(budget)), CREDENTIAL);
-  const execution = await run.authorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
-  const written: Array<{ path: string; value: unknown }> = [];
-  await run.settle(
-    // No recovery trace on this run detail: the snapshot must then say the
-    // exploration record is absent rather than inventing an empty one.
-    { getRunDetail: async () => detail, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) },
-    { projectId: "project-1", runId: "run-1" },
-    { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } },
-    async () => undefined,
-  );
-  const snapshot = written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any> | undefined;
-  assert.ok(snapshot, "the run wrote no live-LLM snapshot");
-  assert.equal(JSON.stringify(snapshot).includes(CREDENTIAL.value), false, "the snapshot carries the credential");
-  return { core, run, execution, snapshot };
-}
-
-test("an adapt run readies its Flow with its spend ceiling, carries its intent and permitted consequences, and records what it spent", async () => {
-  const { core, run, execution, snapshot } = await runOnce({});
-  assert.deepEqual(execution, { intent: "diagnose_and_adapt", permittedConsequences: [] });
-  // The run's spend ceiling is a Flow setting now, saved with the rest.
-  const saved = core.settingsRequests[0]?.flow.metadata;
-  assert.deepEqual(saved.adaptationPolicySettings, { maxEstimatedCostUsdPerRun: LAB_CEILING_USD });
-  assert.equal(saved.llmModel, DEFAULT_LLM_MODEL);
-  assert.equal(snapshot.authorized.maxCalls, 26);
-  assert.equal(snapshot.authorized.maxTotalTokensPerRun, PER_REQUEST * 26);
-  assert.equal(snapshot.authorized.maxTotalEstimatedCostUsd, LAB_CEILING_USD);
-  assert.deepEqual(snapshot.permittedConsequences, []);
-  assert.equal(snapshot.exploration.source, "absent");
-  assert.equal(snapshot.exploration.counts.actions, null, "an unexplored run must not read as an exploration that did nothing");
-  assert.deepEqual(snapshot.verification, { source: "absent", status: null, basis: null, code: null, verdicts: [], recordedCalls: null, calls: 0, interventions: [], totalEstimatedCostUsd: 0 });
-  assert.equal(run.usage.calls, 3);
-});
-
-test("a run's --llm-permit travels with its intent and is recorded, and a typed token budget is kept", async () => {
-  const core = fakeCore();
-  const run = new LiveLlmRun(planAtLabCeiling({ ...profile({ maxTotalTokensPerRun: PER_REQUEST * 3 }), task: "repair", permittedConsequences: ["create_new", "send_or_publish"] }), CREDENTIAL);
-  const execution = await run.authorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
-  assert.deepEqual(execution, { intent: "explore_and_adapt", permittedConsequences: ["send_or_publish", "create_new"] });
+  const run = new LiveLlmRun(planAtLabCeiling({ ...profile({ maxTotalTokensPerRun: PER_REQUEST * 3 }), task: "create-flow", permittedConsequences: ["create_new", "send_or_publish"] }), CREDENTIAL);
+  const prepared = await run.buildAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
+  assert.deepEqual(prepared, { permittedConsequences: ["send_or_publish", "create_new"] });
   assert.deepEqual(run.describe().permittedConsequences, ["send_or_publish", "create_new"]);
   assert.equal(run.describe().authorized.maxTotalTokensPerRun, PER_REQUEST * 3);
 });
@@ -130,32 +95,30 @@ async function noKeyRepository(t: test.TestContext): Promise<string> {
   return root;
 }
 
-test("a live run refuses before a credential is read when its lane, task or target does not fit", async (t) => {
+test("a live run refuses before a credential is read when its task or target does not fit", async (t) => {
   const repositoryRoot = await noKeyRepository(t);
-  const begin = (task: LlmExecutionProfile["task"], flowLane: boolean, targetMode: string) => beginLiveLlmRun({ profile: { ...profile({}), task }, repositoryRoot, environment: {}, flowLane, targetMode });
+  const begin = (task: LlmExecutionProfile["task"], targetMode: string) => beginLiveLlmRun({ profile: { ...profile({}), task }, repositoryRoot, environment: {}, targetMode });
   const retired = (error: unknown) => error instanceof RunnerFailure && error.category === "recording.contract" && error.details?.code === "automation.instruction_led_authoring_required";
-  // The recording-built Flow lane is retired for every task, and the tasks that ran only on it are refused by name with the path that replaced them.
-  await assert.rejects(begin("create-flow", true, "isolated"), (error: unknown) => retired(error) && /Recording-only Flow creation is retired/u.test((error as Error).message));
+  // The tasks that ran only on the retired recording-built Flow lane are refused by name with the path that replaced them.
   for (const task of ["diagnose", "adapt", "repair"] as const) {
-    for (const flowLane of [false, true]) await assert.rejects(begin(task, flowLane, "isolated"), retired, `${task}, flowLane ${flowLane}`);
-    await assert.rejects(begin(task, false, "isolated"), new RegExp(`--llm-task ${task} ran against a Flow built from the run's recording[^]*--llm-task create-flow --instruction-task <task>[^]*pnpm lab replay`, "u"));
+    await assert.rejects(begin(task, "isolated"), retired, task);
+    await assert.rejects(begin(task, "isolated"), new RegExp(`--llm-task ${task} ran against a Flow built from the run's recording[^]*--llm-task create-flow --instruction-task <task>[^]*pnpm lab replay`, "u"));
   }
   for (const targetMode of ["existing", "clone"]) {
-    await assert.rejects(begin("create-flow", false, targetMode), new RegExp(`the ${targetMode} target's is not; use --target isolated or persistent-isolated`, "u"));
+    await assert.rejects(begin("create-flow", targetMode), new RegExp(`the ${targetMode} target's is not; use --target isolated or persistent-isolated`, "u"));
   }
-  // Only once the lane and the target fit does the missing credential refuse.
-  await assert.rejects(begin("create-flow", false, "isolated"), (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing" && /DEEPSEEK_API_KEY is not set/u.test(error.message));
+  // Only once the task and the target fit does the missing credential refuse.
+  await assert.rejects(begin("create-flow", "isolated"), (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing" && /DEEPSEEK_API_KEY is not set/u.test(error.message));
 });
 
-test("a create-flow run fits only a scenario run that carries an instruction task and no recorded Flow lane, and no other task fits any", () => {
+test("a create-flow run fits only a scenario run that carries an instruction task, and no other task fits any", () => {
   const create = new LiveLlmRun(planAtLabCeiling({ ...profile({}), task: "create-flow" }), CREDENTIAL);
   assert.equal(create.createsFlow, true);
-  create.assertLane({ flowLane: false, creation: true });
-  assert.throws(() => create.assertLane({ flowLane: false, creation: false }), /needs an instruction task to build from/u);
-  assert.throws(() => create.assertLane({ flowLane: true, creation: true }), /Recording-only Flow creation is retired/u);
+  create.assertLane({ creation: true });
+  assert.throws(() => create.assertLane({ creation: false }), /needs an instruction task to build from/u);
   const adapt = new LiveLlmRun(planAtLabCeiling(profile({})), CREDENTIAL);
   assert.equal(adapt.createsFlow, false);
-  for (const lane of [{ flowLane: false, creation: false }, { flowLane: false, creation: true }]) assert.throws(() => adapt.assertLane(lane), /--llm-task adapt ran against a Flow built from the run's recording/u);
+  for (const lane of [{ creation: false }, { creation: true }]) assert.throws(() => adapt.assertLane(lane), /--llm-task adapt ran against a Flow built from the run's recording/u);
   // A dry run's description names where the key was found, never the key.
   const described = create.describe();
   assert.equal(described.purpose, "build_and_adapt");
@@ -206,9 +169,7 @@ test("a create-flow run's Flow repairs with the exploring intent, so its repair 
   assert.deepEqual([diagnose.repairsFlow, diagnose.proposesRepairOnly], [false, false]);
 });
 
-test("a build run readies only a build, and a Flow run only a run", async () => {
-  const create = new LiveLlmRun(planAtLabCeiling({ ...profile({}), task: "create-flow" }), CREDENTIAL);
-  await assert.rejects(create.authorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /A build_and_adapt run builds a Flow; it never runs one/u);
+test("only a build run readies a build", async () => {
   const adapt = new LiveLlmRun(planAtLabCeiling(profile({})), CREDENTIAL);
   await assert.rejects(adapt.buildAuthorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /A diagnose_and_adapt run cannot build a Flow/u);
 });
@@ -248,6 +209,9 @@ test("a create-flow run readies its build with its permitted consequences and re
   await settle();
   assert.deepEqual(prepared, { permittedConsequences: [] });
   assert.equal(core.settingsRequests[0]?.flow.metadata.llmExecutionSettings.maxCalls, 26);
+  // The run's spend ceiling is a Flow setting, saved with the rest.
+  assert.deepEqual(core.settingsRequests[0]?.flow.metadata.adaptationPolicySettings, { maxEstimatedCostUsdPerRun: LAB_CEILING_USD });
+  assert.equal(core.settingsRequests[0]?.flow.metadata.llmModel, DEFAULT_LLM_MODEL);
   const snapshot = written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
   assert.equal(snapshot.purpose, "build_and_adapt");
   assert.deepEqual(snapshot.build, proposedBuild);
@@ -391,6 +355,10 @@ test("a create-flow run repairs the Flow it built with explore_and_adapt, and se
   assert.deepEqual(published.at(-1), { repair: { calls: 3, interventions: 3, totalEstimatedCostUsd: 0.003, llmGate: { invoked: true } }, runTotal: { calls: 8, totalEstimatedCostUsd: 0.023 } });
   assert.equal(run.usage.calls, 5 + 3, "the evaluation counts every call the run paid for");
   assert.equal(JSON.stringify(snapshot).includes(CREDENTIAL.value), false);
+  // No recovery trace on this run detail: the snapshot then says the exploration and verification records are absent rather than inventing empty ones.
+  assert.equal(snapshot.exploration.source, "absent");
+  assert.equal(snapshot.exploration.counts.actions, null, "an unexplored run must not read as an exploration that did nothing");
+  assert.deepEqual(snapshot.verification, { source: "absent", status: null, basis: null, code: null, verdicts: [], recordedCalls: null, calls: 0, interventions: [], totalEstimatedCostUsd: 0 });
 });
 
 /**
@@ -506,10 +474,7 @@ test("a verification record that cannot be read says so, and settles the run all
   assert.equal(snapshot.repair.observed.calls, 3);
 });
 
-test("only a create-flow run readies a repair of the Flow it built, and a repair that cannot be read back is recorded, not raised", async () => {
-  const adapt = new LiveLlmRun(planAtLabCeiling(profile({})), CREDENTIAL);
-  await assert.rejects(adapt.repairAuthorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /Only a create-flow run repairs the Flow it built/u);
-
+test("a repair that cannot be read back is recorded, not raised", async () => {
   const { core, run, written, settle } = await settleBuildOnce(proposedBuild);
   await settle();
   await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");

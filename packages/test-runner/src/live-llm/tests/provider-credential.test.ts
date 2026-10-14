@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
+import { RunnerFailure } from "../../failure.js";
+import { loadTestEnvironment } from "../../target-config.js";
 import { resolveLiveLlmProviderCredential } from "../provider-credential.js";
 
 /**
@@ -53,4 +55,59 @@ test("an empty key is refused rather than sent to a provider", async (context: T
   const root = repository(context, "DEEPSEEK_API_KEY=\n");
   await assert.rejects(() => resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: {}, provider: "deepseek" }), /is set but empty/u);
   await assert.rejects(() => resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: { DEEPSEEK_API_KEY: "   " }, provider: "deepseek" }), /is set but empty/u);
+});
+
+/**
+ * `FLUXIQ_TEST_ENV_FILES=none` keeps the key, on purpose (above). These pin the
+ * explicit way to say otherwise, `FLUXIQ_PROVIDER_KEY_FILES=none`, and the
+ * fence that keeps any real key out of a test whatever the switches say.
+ */
+test("FLUXIQ_PROVIDER_KEY_FILES=none reads no key from any env file, and names itself in the refusal", async (context: TestContext) => {
+  const root = repository(context, "DEEPSEEK_API_KEY=sk-from-file-0123456789\n");
+  writeFileSync(path.join(root, ".env"), "DEEPSEEK_API_KEY=sk-from-dotenv-0123456789\n", "utf8");
+  await assert.rejects(
+    () => resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: { FLUXIQ_TEST_ENV_FILES: "none", FLUXIQ_PROVIDER_KEY_FILES: "none" }, provider: "deepseek" }),
+    (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing"
+      && /DEEPSEEK_API_KEY is not set in the environment, and FLUXIQ_PROVIDER_KEY_FILES=none keeps it from being read from \.env or \.env\.local/u.test(error.message)
+      && !error.message.includes("sk-from"),
+  );
+  const fromProcess = await resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: { FLUXIQ_PROVIDER_KEY_FILES: "none", DEEPSEEK_API_KEY: "sk-from-process-0123456789" }, provider: "deepseek" });
+  assert.equal(fromProcess.source, "the process environment");
+});
+
+test("a key loadTestEnvironment folded in from a file is named by that file, and dropped under FLUXIQ_PROVIDER_KEY_FILES=none", async (context: TestContext) => {
+  const root = repository(context, "DEEPSEEK_API_KEY=sk-from-file-0123456789\n");
+  const folded = await loadTestEnvironment(root, {});
+  const credential = await resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: folded, provider: "deepseek" });
+  assert.equal(credential.source, ".env.local", "the file, never \"the process environment\"");
+  const switchedOff = await loadTestEnvironment(root, { FLUXIQ_PROVIDER_KEY_FILES: "none" });
+  assert.equal(switchedOff.DEEPSEEK_API_KEY, "sk-from-file-0123456789", "the target configuration reader still folds it in");
+  await assert.rejects(() => resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: switchedOff, provider: "deepseek" }), /FLUXIQ_PROVIDER_KEY_FILES=none keeps it from being read/u);
+});
+
+test("FLUXIQ_PROVIDER_KEY_FILES takes only none", async (context: TestContext) => {
+  const root = repository(context, "DEEPSEEK_API_KEY=sk-from-file-0123456789\n");
+  await assert.rejects(() => resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: { FLUXIQ_PROVIDER_KEY_FILES: "local" }, provider: "deepseek" }), /FLUXIQ_PROVIDER_KEY_FILES must be none when set/u);
+});
+
+test("a test cannot read the key from a checkout's env files, even with every switch left on", async () => {
+  // This package's own directory: a real checkout, never a temporary one. Refused before any file is opened.
+  const checkout = path.resolve(import.meta.dirname, "..", "..", "..");
+  await assert.rejects(
+    () => resolveLiveLlmProviderCredential({ repositoryRoot: checkout, environment: {}, provider: "deepseek" }),
+    /A test may read \.env only from a temporary directory it made/u,
+  );
+});
+
+test("a test cannot use a key it inherited from the shell that started it", async (context: TestContext) => {
+  const root = repository(context, "");
+  const previous = process.env.DEEPSEEK_API_KEY;
+  process.env.DEEPSEEK_API_KEY = "sk-inherited-0123456789";
+  context.after(() => { if (previous === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = previous; });
+  await assert.rejects(
+    () => resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: { ...process.env }, provider: "deepseek" }),
+    /came from the environment of the process running the tests/u,
+  );
+  const standIn = await resolveLiveLlmProviderCredential({ repositoryRoot: root, environment: { DEEPSEEK_API_KEY: "sk-stand-in-0123456789" }, provider: "deepseek" });
+  assert.equal(standIn.value, "sk-stand-in-0123456789");
 });

@@ -44,7 +44,7 @@ async function checkout(t: test.TestContext): Promise<string> {
 /** What Core is started with, and the chat-buildable run the Lab plans, for one run's arguments. */
 async function bothSides(repositoryRoot: string, model: string, args: readonly string[], base: NodeJS.ProcessEnv = {}) {
   const core = buildFluxIQEnvironment(allocation, { repositoryRoot, fluxiqRepositoryRoot: "C:/core", hostModulePath: "C:/host.js" }, base, args);
-  const run = await beginLiveLlmRun({ profile: createFlow(model), repositoryRoot, environment: CREDENTIAL, flowLane: false, targetMode: "isolated", costCeilingSources: { args, environment: {} } });
+  const run = await beginLiveLlmRun({ profile: createFlow(model), repositoryRoot, environment: CREDENTIAL, targetMode: "isolated", costCeilingSources: { args, environment: {} } });
   return { core, run };
 }
 
@@ -81,7 +81,7 @@ test("an unknown --llm-model is refused before Core's environment is built or a 
   assert.throws(() => buildFluxIQEnvironment(allocation, { repositoryRoot: root, fluxiqRepositoryRoot: "C:/core", hostModulePath: "C:/host.js" }, {}, args), /--llm-model gpt-9 cannot be the default model of the run's Core: FLUXIQ_LLM_DEFAULT_MODEL must name a DeepSeek model/u);
   // No key anywhere: the model is refused first, so the refusal is never the missing credential.
   await assert.rejects(
-    beginLiveLlmRun({ profile: createFlow("gpt-9"), repositoryRoot: root, environment: {}, flowLane: false, targetMode: "isolated", costCeilingSources: { args, environment: {} } }),
+    beginLiveLlmRun({ profile: createFlow("gpt-9"), repositoryRoot: root, environment: {}, targetMode: "isolated", costCeilingSources: { args, environment: {} } }),
     /--llm-model gpt-9 cannot be the default model of the run's Core/u,
   );
   assert.throws(() => labDefaultModelValue(["node", "lab", LAB_DEFAULT_MODEL_FLAG]), /--llm-model needs a model id/u);

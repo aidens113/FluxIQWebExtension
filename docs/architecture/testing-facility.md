@@ -574,6 +574,43 @@ installation. Any other value of that variable is rejected.
 | `FLUXIQ_DEMO_FLOW_NAME` | Optional stable Flow name; defaults to `Web Extension Demo Flow`. |
 | `FLUXIQ_DEMO_HEADLESS` | Optional `true`/`false`; defaults to `true`. Set `false` only for visible browser debugging. |
 
+**The provider key is not configuration, and `FLUXIQ_TEST_ENV_FILES=none` does
+not cover it.** A live run reads `DEEPSEEK_API_KEY`, and only that name, from
+the process environment, then `.env`, then `.env.local`, whatever
+`FLUXIQ_TEST_ENV_FILES` says (`live-llm/provider-credential.ts`). That is by
+design: the Lab's isolated live runs set `FLUXIQ_TEST_ENV_FILES=none` to drop an
+existing installation's configuration and still need the key
+(`scripts/lab/live-isolated.mjs`, `scripts/lab/pair/campaign-environment.mjs`).
+So a command line run with `FLUXIQ_TEST_ENV_FILES=none` alone, and a valid
+live create-flow command, still finds a real key in `.env.local` and can start a
+paid run. To say "no key from any env file", set
+`FLUXIQ_PROVIDER_KEY_FILES=none` as well: the key then comes from the process
+environment or not at all, a value `.env.local` folded into the run's
+environment is ignored, and the refusal names the switch. Any other value is
+rejected. A provider-free probe of a live command line sets both, with no
+`DEEPSEEK_API_KEY` in the shell:
+
+```powershell
+$env:FLUXIQ_TEST_ENV_FILES = "none"; $env:FLUXIQ_PROVIDER_KEY_FILES = "none"; Remove-Item Env:DEEPSEEK_API_KEY -ErrorAction SilentlyContinue
+```
+
+`lab:pair`'s key report (`scripts/lab/pair/provider-key.mjs`) follows the same
+rule. A key that `.env.local` folded into the run's environment (a run without
+`FLUXIQ_TEST_ENV_FILES=none`) is now credited to that file in a dry run's
+`credentialSource` and in `snapshots/live-llm.json`, where it was credited to
+"the process environment" before.
+
+**No test can obtain a real key (t553).** Inside a process Node's test runner
+started, or a test file run on its own, every env-file reader -- the target
+configuration's (`loadTestEnvironment`, `loadAllowlistedTestEnvironment`) and the
+provider credential's -- refuses a directory outside the temporary directory
+before it opens a file, so the only env files a test reads are ones it wrote
+(`packages/test-runner/src/env-files/`). A key the test process inherited from
+the shell that started it is refused too: a test hands the runner a stand-in key
+in the environment object it passes. `env-files/tests/test-read-guard.test.ts`
+fails if Node ever stops marking a test process, so the fence cannot quietly
+fall.
+
 The runner preflights authenticated project access, an exact uniquely listed
 Flow, the complete Flow document, its stable SHA-256 content hash, and an
 enabled/listening gateway. It starts the disposable Scenario Lab, launches the
@@ -1050,7 +1087,8 @@ same two types, but no lane records one any more (below). A script with no
 steps is a playback goal and is not checked.
 
 `flowLaneExclusion` (`packages/test-contracts/src/lane-exclusion/flow-lane-exclusion.ts`)
-excludes a workflow from the Flow lane for two reasons. A script that records no
+excluded a workflow from the retired Flow lane for two reasons; since t553 the
+bench planner skips every Flow-lane result as retired and no longer consults it. A script that records no
 action at all can yield no Flow; before an `extract` was recordable that was
 W04 and W08, whose scripts only extract, and no `week1` workflow is such a
 script now. A script with a paged `extract` step is excluded too, by
@@ -1288,7 +1326,7 @@ recording, so once the lane was refused, they had no reachable launch on
 automation.instruction_led_authoring_required`
 (`assertLiveLlmLaunchable`, `packages/test-runner/src/live-llm/live-llm-plan.ts`). The refusal
 names the supported path. A live `lab matrix` ran only on this lane, so it is
-refused the same way. What replaced the three tasks is one instruction-created
+refused the same way, while the command is parsed. What replaced the three tasks is one instruction-created
 run. `--llm-task create-flow` with a task whose variant drifts after creation
 builds the Flow on the unchanged site, then arms the drift for the Flow's
 playback. Core diagnoses and repairs the failure inside that same run, with
@@ -1299,6 +1337,17 @@ no separate diagnose, repair or adapt launch is needed. The Lab's plan still
 plans the three intents (`live-llm-plan.ts`), so every intent's bounds come
 from one function. The panel demos (`demo:llm:diagnose`, `demo:llm:adapt`)
 drive Core's own UI and are unaffected.
+
+**Nothing reaches the runner with the lane (t553).** Bare `lab run --flow` and
+every live `lab matrix` are refused while the command is parsed, and the bench
+plans each Flow-lane result as skipped (Corpora, below). So `runScenario` keeps
+no `flow` option, and the code that served only this lane is gone: the
+runner's own retirement refusal, its unarmed copy of a variant's workflow for
+the recording a Flow was built from, the run secrets' recorded-lane branch,
+`LiveLlmRun`'s recorded-Flow hook and settlement (`authorizer`, `settle`,
+`settleUnfinished`) with `live-llm/lane-settlement.ts`, and the discard audit's
+upper bound. A created Flow's build and playback settle as before
+(`settleBuild`, `settleRepair`).
 
 ### The instruction-created Flow lane and its authored artifact
 
@@ -2403,10 +2452,11 @@ extension made:
   it names one of this run's recordings, or names none and came from this run's
   session, and only when Core stamped it inside the recording's window. The
   window runs from just before the runner asks the extension to start
-  recording until just before the Flow lane dispatches its Flow, or without an
-  end when no Flow ran, so it excludes the confirmations of the Core action
-  probe and of the Flow's own actions. An entry with no readable timestamp
-  counts. Any discarded action inside the window fails as
+  recording, with no end, so it excludes the confirmations of the Core action
+  probe. It once closed just before the recording-built Flow lane dispatched
+  its Flow, whose confirmations Core audited against the finalized recording;
+  that lane is retired, and nothing is dispatched against a finalized recording.
+  An entry with no readable timestamp counts. Any discarded action inside the window fails as
   `recording.persistence`. Discarded evidence alone does not, because a page
   unloading after Stop emits some. A snapshot with no audit log fails closed as
   `gateway.connection`.
@@ -2588,30 +2638,26 @@ resumed.
 
 - **Corpora** (`bench/corpus/`). `smoke` is W01 (`basic-form`) and W28
   (`iframe-checkout`) on the recording lane only. `week1` is W01 to W29 on both
-  lanes: every unarmed workflow runs on the recording lane and on the Flow lane,
-  and every variant runs on the Flow lane alone. **That Flow lane built its
-  Flow from the run's own recording, which t519 retired.** The bench still
-  plans it, but `run-bench.ts` refuses each Flow-lane result before the runner
-  is asked, as `recording.contract`, and records the refused attempt as
-  `inconclusive`. Only the recording lane runs. The counts below are the plan's.
-  A workflow whose script
-  performs no action has no Flow lane, because no recording of it can become a
-  Flow. The bench planner skips it with `flowLaneExclusion`, and a bare
-  `lab run --flow` of any workflow is refused as `recording.contract` before
-  anything starts. No `week1` workflow is such a workflow any more. W04 and
-  W08 were, their scripts doing nothing but extract; an `extract` now records a
-  `web.dom.extract_list`, so their four Flow-lane entries run again and their
-  extraction is judged on the Flow lane. A workflow with a paged `extract` step
-  is skipped on both lanes (`pagedExtractExclusion`, in `bench/expand-corpus.ts`):
-  W05 and W07. That leaves 62 runnable
-  results per repeat and 5 skipped: 21 on the recording lane, and 41 on the
-  Flow lane (21 unarmed and 20 variants).
-  W19 to W23 and W29 are variants only. Because `week1` runs
-  `auth-gate` on the Flow lane, it needs `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD`.
-  `week2` is A01 to A06 on the Flow lane alone: identity-drift's
-  `renamed-redesign` with its unarmed baseline (the Week 2 exit chain's drift),
-  W04's and W08's extraction drifts, W13 and W24, and member-directory's
-  `restyled` with its baseline -- 8 results per repeat, 0 skipped.
+  lanes: every unarmed workflow is planned on the recording lane and on the Flow
+  lane, and every variant on the Flow lane alone. **That Flow lane built its
+  Flow from the run's own recording, which t519 retired.** The planner
+  (`bench/expand-corpus.ts`) still plans each Flow-lane result, so a corpus that
+  names one says what happened to it, but skips it with `FLOW_LANE_RETIRED`, a
+  reason that names the instruction-led command that builds a Flow now (t553).
+  Only the recording lane runs, and a corpus's variants, which only the Flow
+  lane armed, are skipped with that reason too. A workflow with a paged
+  `extract` step is skipped on the recording lane (`pagedExtractExclusion`):
+  W05 and W07. That leaves `week1` 21 runnable results per repeat, all on the
+  recording lane, with 44 resolved Flow-lane results skipped as retired.
+  W19 to W23 and W29 are variants only. `week2` is A01 to A06 on the Flow lane
+  alone: identity-drift's `renamed-redesign` with its unarmed baseline (the
+  Week 2 exit chain's drift), W04's and W08's extraction drifts, W13 and W24,
+  and member-directory's `restyled` with its baseline -- 8 results per repeat,
+  every one skipped as retired, so it runs nothing. A campaign created before
+  t553 planned its Flow-lane cells as runnable, so its resume is refused: its
+  saved plan no longer matches the current one. `run-bench.ts` still holds a
+  refusal of a runnable Flow-lane cell (`assertRunnableLane`) and the Flow
+  lane's evaluation, which no plan reaches now.
 - **Week 2 adaptation metrics.** A Flow-lane run's evaluation carries
   `adaptationReuse`, `adaptationValidation`, `adaptationPersistence` and
   `adaptationCost`, read from the bundle's `snapshots/adaptation.json`
@@ -3106,7 +3152,9 @@ compared. A metric one report did not measure, including an extraction rate
 whose population was empty, is disclosed rather than compared. On a machine whose
 `.env.local` configures an existing installation, prefix an isolated command
 with `FLUXIQ_TEST_ENV_FILES=none` (in PowerShell,
-`$env:FLUXIQ_TEST_ENV_FILES = "none"`).
+`$env:FLUXIQ_TEST_ENV_FILES = "none"`). That keeps the configuration out, not
+the provider key; a probe that must reach no provider adds
+`FLUXIQ_PROVIDER_KEY_FILES=none` ([Existing FluxIQ target](#existing-fluxiq-target)).
 
 Core-requiring isolated scenarios create a random test identity through the
 public Core API by default. To attach to an existing installation and execute

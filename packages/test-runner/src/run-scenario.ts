@@ -30,7 +30,6 @@
 // the bundle.
 import { presentFlowTab, verifyRunningCoreIdentity, verifyRunningHostIdentity, verifyRunningServerAdapterIdentity, requiresCoreRuntimeIdentity } from "./run-scenario/browser-session/index.js";
 import { randomBytes } from "node:crypto";
-import { refuseRecordingOnlyFlow } from "./flow-lane/recording-only/index.js";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { BrowserContext, Page } from "@playwright/test";
@@ -54,7 +53,7 @@ import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant } from "./lab-control/index.js";
 import { LAB_PROJECT_DOMAIN_ID, judgeEveryFact, withholdObservedFactValues, type JudgedFact, type JudgedFinalState, type CreatedFlowLaneEvidence, type FlowLaneEvidence, createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, recordFailedJudgement, repairLaneSummary, withDeclaredFlowRepair, runCreatedFlowLane, selectLaneObservation, labCandidateTrialFixtureReset, type CreatedFlowRequest, type LiveRepairLaneInput, type LiveRepairLaneFailure, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, chromiumExtensionStorageDirs, runRedactionScopes, type RunRedactionAttestation } from "./redaction-attestation/index.js";
-import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
+import { declaredProviderCalls, type LiveLlmRun } from "./live-llm/index.js";
 import { LabRunRecord, writePlaybackSteps, type PlaybackSkippedStep, type PlaybackStateRoutingStep } from "./lab-runs/index.js";
 import { runProviderFailureLog, writeProviderFailureSidecar } from "./provider-failure/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
@@ -67,7 +66,7 @@ import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioS
 import { recordingStartMessage, cleanupFailureOutcome, describeRecordingStartDiagnostic, pairingStatusWaitFailureDetails, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
-import { createdFlowChatEntry, verifyRunningBuildIdentity, ExtensionStartTrace, writeExtensionStartSidecar, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, configuredCredentials, evidenceEvent, exportRunClonePackage, keepsRunState, launchExtensionSession, sessionObservers, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter, importCloneDestination, pairRunExtension, startPerturbationLifecycle, type PerturbationLifecycle } from "./run-scenario/index.js";
+import { createdFlowChatEntry, verifyRunningBuildIdentity, ExtensionStartTrace, writeExtensionStartSidecar, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, configuredCredentials, evidenceEvent, exportRunClonePackage, keepsRunState, launchExtensionSession, sessionObservers, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter, importCloneDestination, pairRunExtension, startPerturbationLifecycle, type PerturbationLifecycle } from "./run-scenario/index.js";
 import { prepareIndependentCreationProject, writeCreationContext, type CreationContext } from "./run-scenario/chat-build/index.js";
 import type { RunPerturbation } from "./perturbations/index.js";
 
@@ -81,7 +80,7 @@ import type { RunPerturbation } from "./perturbations/index.js";
 const BLANK_TAB_URL = "about:blank";
 
 /** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves, and a `creation` run passes its request's own. `livePanel: false` (`--no-live-panel`) keeps the extension panel from being shown beside a headed run's page. `perturbation` is a fault the run suffers on purpose (`perturbations/`), armed where the extension is connected and opened; `snapshots/perturbation.json` records when it fired and what the extension and Core reported after. Absent, the run is unchanged. `modelResetOnly` (`--model-reset-only`, t472): a live candidate build's Core gets no fixture reset between trials, so they start from the model's own reset; absent, the Lab resets the fixture between them. */
-export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; creation?: CreatedFlowRequest; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun; replays?: number; livePanel?: boolean;
+export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; creation?: CreatedFlowRequest; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun; replays?: number; livePanel?: boolean;
   /** How a `creation` run starts its build: `chat`, the default and the only way it can pass, types the task's instruction into the extension's chat window; `direct-api` (`--direct-api-build`, test-only) has the Lab call Core's build endpoint itself, and is never counted as a pass. */
   buildEntry?: "chat" | "direct-api";
   modelResetOnly?: boolean; perturbation?: RunPerturbation };
@@ -119,18 +118,12 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   const labPaths = resolveLabPaths(options.repositoryRoot, options.environment);
   const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);
   const target = options.target ?? { mode: "isolated" as const };
-  if (options.flow === true && options.creation === undefined && target.mode !== "existing" && target.mode !== "clone") refuseRecordingOnlyFlow();
-  // A Flow-lane run whose intent only proposes a repair is held to what the scenario declares such a run ends with, and judged on the proposal: a recorded
-  // Flow always, and a created one when `--replays` has its repair applied, whose proposal the repair lane then judges (`proveRepair` below).
+  // A created Flow whose `--replays` has its repair applied, under an intent that only proposes a repair, is held to what the scenario declares such a run
+  // ends with, and judged on the proposal, which the repair lane then judges (`proveRepair` below).
   const workflow = resolveWorkflow(scenario, options, target);
-  const { workflow: flowWorkflow, repair } = await withDeclaredFlowRepair(workflow, { scenario, scenarioLabDist: labPaths.scenarioLabDist, flowLane: options.flow === true || (options.creation !== undefined && options.replays !== undefined), proposalOnly: options.live?.proposesRepairOnly === true });
-  // A variant never changes the recording: on the Flow lane the script runs
-  // unarmed, so the recording lane checks the workflow's own expectations while
-  // the variant's govern the Flow run alone. Judging the unarmed recording by
-  // the armed expectation fails every negative variant before its Flow exists.
-  const recordingWorkflow = options.flow && workflow.variant ? unarmedWorkflow(scenario, options) : workflow;
+  const { workflow: flowWorkflow, repair } = await withDeclaredFlowRepair(workflow, { scenario, scenarioLabDist: labPaths.scenarioLabDist, flowLane: options.creation !== undefined && options.replays !== undefined, proposalOnly: options.live?.proposesRepairOnly === true });
   // Validate authored demonstration context before any topology/browser starts.
-  const startRecording = options.creation === undefined ? recordingStartMessage(recordingWorkflow.recordingDescription) : undefined;
+  const startRecording = options.creation === undefined ? recordingStartMessage(workflow.recordingDescription) : undefined;
   // Page facts are phase-specific -- a workflow's describe its unarmed
   // rendering, a variant's the armed one -- and the contract owns that rule so
   // that no lane decides it again. Both checks below read this schedule and
@@ -141,8 +134,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   const seed = options.seed ?? scenario.seed;
   const environment = options.environment ?? process.env;
   // A live provider run is planned and credentialed before this is reached (`beginLiveLlmRun`), so that an unexecutable profile or an absent key refuses at the command line rather than inside a run.
-  const live = options.live; const creation = options.creation; const flowLane = options.flow === true || creation !== undefined; const buildEntry = options.buildEntry ?? "chat";
-  if (live) live.assertLane({ flowLane: options.flow === true, creation: creation !== undefined }); else if (creation) throw new RunnerFailure("fixture.invalid", "An instruction task is built only by a live run: pass --live-llm --llm-task create-flow");
+  const live = options.live; const creation = options.creation; const flowLane = creation !== undefined; const buildEntry = options.buildEntry ?? "chat";
+  if (live) live.assertLane({ creation: creation !== undefined }); else if (creation) throw new RunnerFailure("fixture.invalid", "An instruction task is built only by a live run: pass --live-llm --llm-task create-flow");
   // What this run's scenario declares about provider calls, read from the same
   // resolved expectations the lane is judged by, so a variant's declaration
   // replaces the workflow's exactly as every other field of `expected` does.
@@ -150,7 +143,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   // What this run must replay, scrub, and afterwards attest was not left behind,
   // resolved before the bundle exists so a declaration the environment cannot
   // satisfy fails the run before anything is written (`run-scenario/resolve-run-secrets.ts`).
-  const { declaredSecrets, secrets, redactionLiterals } = resolveRunSecrets({ scenario, workflow, environment, target, recordedFlowLane: options.flow === true, createdFlowLane: creation !== undefined, ...(live ? { live } : {}) });
+  const { declaredSecrets, secrets, redactionLiterals } = resolveRunSecrets({ scenario, workflow, environment, target, createdFlowLane: creation !== undefined, ...(live ? { live } : {}) });
   let redaction: RunRedactionAttestation | undefined;
   const providerFailures = runProviderFailureLog({ secrets, live }); const startTrace = new ExtensionStartTrace({ secrets }); const uiReview = new UiReviewRecorder({ runsDirectory: options.runsDirectory, runId, secrets }); // Screenshots and the overlay's state, for <runId>.ui-review.local.json (`run-scenario/ui-review/`). The run's second tier of evidence: what a refused provider call said, kept locally and never published (`provider-failure/`).
   const evidence = effectiveEvidencePolicy(scenario.evidencePolicy, options.evidence);
@@ -244,7 +237,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       ? options.runsDirectory
       : path.join(options.runsDirectory, ".work");
     const ownsIsolatedCore = topologyTarget.mode === "isolated" || topologyTarget.mode === "persistent-isolated";
-    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, ...(live ? { buildCallLimit: live.authorizedBuildCallLimit, candidateTrialFixtureReset: labCandidateTrialFixtureReset({ modelResetOnly: options.modelResetOnly === true }) } : {}), scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath, copyStartupFailureLogs: logsDirectory => copyProcessLogs(bundle, logsDirectory), ...(labRun?.stepsDirectory ? { stepLogDirectory: labRun.stepsDirectory } : {}), ...(ownsIsolatedCore && labPaths.hostPrebuilt ? { prepareHost: false } : {}), ...(ownsIsolatedCore ? { bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
+    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, ...(live ? { buildCallLimit: live.authorizedBuildCallLimit, candidateTrialFixtureReset: labCandidateTrialFixtureReset({ modelResetOnly: options.modelResetOnly === true }) } : {}), scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath, copyStartupFailureLogs: logsDirectory => copyProcessLogs(bundle, logsDirectory), ...(labRun?.stepsDirectory ? { stepLogDirectory: labRun.stepsDirectory } : {}), ...(ownsIsolatedCore && labPaths.hostPrebuilt ? { prepareHost: false } : {}), ...(ownsIsolatedCore ? { bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: workflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
     let existingControl: ExistingFluxIQControlClient | undefined;
     if (target.mode === "existing") {
       existingControl = await openExistingFluxIQControl(target, options.runsDirectory);
@@ -284,9 +277,9 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     await perturbation.arm({ context, controlPage: extensionControl, scenarioOrigins: [...scenarioOrigins] });
     browserVersion = await browserVersionFromCdp(context, extensionPage);
     // The existing and clone lanes replay a pre-existing Flow, so their variant
-    // is armed before the page opens. The two Flow lanes must not arm here: each
+    // is armed before the page opens. The created-Flow lane must not arm here: it
     // presents the unarmed rendering first and arms when it prepares the page it
-    // explores or runs, or the drift would break the recording it builds a Flow from.
+    // explores or runs.
     if (workflow.variant && !flowLane) await armScenarioVariant(topology.scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
     const page = scenarioPage = await context.newPage();
     await openScenarioStart(page, topology.scenarioOrigin, scenario);
@@ -296,7 +289,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     const livePanel = await openLivePanel(extensionControl, { enabled: options.livePanel !== false, headless: launched.headless, scenarioOrigin: topology.scenarioOrigin, log: line => process.stderr.write(`${line}\n`) });
     await bundle.writeStructured("snapshots/live-panel.json", livePanel);
     await assertExpectedFacts(pageFacts.atLoad, playwrightScenarioFactProbe(page));
-    // What either Flow lane is handed: present the page, publish what the Flow did, and consult the fixture oracle.
+    // What the created-Flow lane is handed: present the page, publish what the Flow did, and consult the fixture oracle.
     const flowRunHooks = <E extends { observation: RunLaneObservation; run: PersistedFlowRunOutcome }>(activeTopology: RunningTopology, publish: (evidence: E) => Promise<void>) => ({
       prepareFlowPage: async (moment?: "build" | "playback") => {
         if (moment === "playback") playbackWindow = { since: Date.now() };
@@ -483,7 +476,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       const extractionIntent = paired ? { extractionIntent: createExtractionIntentDriver(extensionControl) } : {};
       const runner = stepRunner = new ScenarioStepRunner({ context, page, origin: topology.scenarioOrigin, isScenarioUrl, uploadDirectory: path.join(topology.allocation.runRoot, "scenario-uploads"), scriptedNavigation: createScriptedNavigationDriver(extensionControl), ...extractionIntent });
       const reads = extractionRead = new Map<string, ExtractionStepRead>();
-      for (const step of recordingWorkflow.recordingScript) {
+      for (const step of workflow.recordingScript) {
         await stepCapture.trigger(evidenceEvent(runId, scenario.id, step.id, "step.start", `Start ${step.operation}`));
         const { extraction } = await runner.run(step);
         if (extraction) {
@@ -493,15 +486,15 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
           // naming `pages` or `truncated` that nothing reported is refused as
           // unjudgeable rather than passed on the rest of it.
           reads.set(step.id, extraction);
-          assertExtraction(recordingWorkflow.expected.extracted, step.id, extraction.records, extraction.observed);
+          assertExtraction(workflow.expected.extracted, step.id, extraction.records, extraction.observed);
         }
         await stepCapture.trigger({ ...evidenceEvent(runId, scenario.id, step.id, step.operation === "checkpoint" ? "checkpoint" : "step.complete", `Complete ${step.operation}`), ...(extraction ? { details: { recordCount: extraction.records.length } } : {}) });
       }
       // Read while still recording: the extension's log is what it recorded.
-      recordedEvents = await assertRecordedEvents(() => readExtensionRecordingLog(message => runtimeMessage(extensionControl, message)), recordingWorkflow.expected.recordingEvents ?? []);
+      recordedEvents = await assertRecordedEvents(() => readExtensionRecordingLog(message => runtimeMessage(extensionControl, message)), workflow.expected.recordingEvents ?? []);
       extensionActionCount = await runtimeMessage(extensionControl, { type: "fluxiq.getStatus" }).then((response: any) => response.status?.eventCount, () => undefined);
       scenarioPage = runner.activePage();
-      try { await assertFinalState(scenarioPage, scenario, recordingWorkflow); oracleVerdict = "passed"; }
+      try { await assertFinalState(scenarioPage, scenario, workflow); oracleVerdict = "passed"; }
       catch (error) { oracleVerdict = "failed"; throw error; }
     }
     if (topology.control && !creation && (target.mode === "isolated" || target.mode === "persistent-isolated")) {
@@ -708,7 +701,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         oracleVerdict, actions, automationFailure: facilityFailure ? undefined : automationFailure,
         automationFailureExpected: workflow.expected.failure ?? null,
         // The run knows which steps ran: one measurement per `extract` step of the script it executed, or `null` when it executed none.
-        extraction: extractionRead ? runExtractionMeasurements({ script: recordingWorkflow.recordingScript, expected: recordingWorkflow.expected.extracted, read: extractionRead }) : null,
+        extraction: extractionRead ? runExtractionMeasurements({ script: workflow.recordingScript, expected: workflow.expected.extracted, read: extractionRead }) : null,
       }),
     });
     // The run's own `RunEvaluation`, built from the observation the lane just
@@ -768,7 +761,7 @@ function resolveWorkflow(scenario: WebScenario, options: RunScenarioOptions, tar
   let workflow: ResolvedScenarioWorkflow;
   try { workflow = resolveScenarioWorkflow(scenario, { ...(options.workflowId === undefined ? {} : { workflowId: options.workflowId }), ...(options.variantId === undefined ? {} : { variantId: options.variantId }) }); }
   catch (cause) { throw new RunnerFailure("fixture.invalid", cause instanceof Error ? cause.message : String(cause), { cause }); }
-  if (workflow.variant && !options.flow && !options.creation && target.mode !== "existing" && target.mode !== "clone") throw new RunnerFailure("fixture.invalid", "A variant is armed only before a Flow run; the recording lane always records the workflow unarmed");
+  if (workflow.variant && !options.creation && target.mode !== "existing" && target.mode !== "clone") throw new RunnerFailure("fixture.invalid", "A variant is armed only before a Flow run; the recording lane always records the workflow unarmed");
   return workflow;
 }
 

@@ -39,7 +39,7 @@ async function checkout(t: test.TestContext, envLocal?: string): Promise<string>
 async function bothSides(repositoryRoot: string, args: readonly string[], environment: NodeJS.ProcessEnv) {
   const core = buildFluxIQEnvironment(allocation, { repositoryRoot, fluxiqRepositoryRoot: "C:/core", hostModulePath: "C:/host.js" }, environment, args);
   const run = await beginLiveLlmRun({
-    profile, repositoryRoot, environment: { DEEPSEEK_API_KEY: "test-provider-credential-value" }, flowLane: false, targetMode: "isolated",
+    profile, repositoryRoot, environment: { DEEPSEEK_API_KEY: "test-provider-credential-value" }, targetMode: "isolated",
     costCeilingSources: { args, environment },
   });
   assert.equal(core[LAB_COST_CEILING_SCOPE_ENV], "test");

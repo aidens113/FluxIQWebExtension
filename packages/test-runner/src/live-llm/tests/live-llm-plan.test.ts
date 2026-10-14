@@ -305,11 +305,12 @@ test("an unknown or repeated class, or a permit on a diagnosis, is refused befor
 
 // `diagnose`, `adapt` and `repair` ran only on the recording-built Flow lane
 // t519 retired. Each is refused by name, as that lane's own refusal is, with the
-// instruction-led command that replaced it; `create-flow` passes, and asking for
-// the lane itself is refused whatever the task.
-test("diagnose, adapt and repair are refused with the instruction-led path; create-flow launches, and never on the recording-built lane", () => {
+// instruction-led command that replaced it; `create-flow` passes. The lane
+// itself, bare `--flow` and the live matrix, is refused while the command is
+// parsed (`tests/commands.test.ts`).
+test("diagnose, adapt and repair are refused with the instruction-led path; create-flow launches", () => {
   for (const task of ["diagnose", "adapt", "repair"] as const) {
-    assert.throws(() => assertLiveLlmLaunchable({ task }, false), (error: unknown) => {
+    assert.throws(() => assertLiveLlmLaunchable({ task }), (error: unknown) => {
       assert.ok(error instanceof RunnerFailure);
       assert.equal(error.category, "recording.contract");
       assert.deepEqual(error.details, { code: "automation.instruction_led_authoring_required", retiredTask: task });
@@ -321,8 +322,5 @@ test("diagnose, adapt and repair are refused with the instruction-led path; crea
       return true;
     }, task);
   }
-  assert.doesNotThrow(() => assertLiveLlmLaunchable({ task: "create-flow" }, false));
-  for (const task of ["create-flow", "diagnose"] as const) {
-    assert.throws(() => assertLiveLlmLaunchable({ task }, true), (error: unknown) => error instanceof RunnerFailure && error.category === "recording.contract" && /^Recording-only Flow creation is retired/u.test(error.message), task);
-  }
+  assert.doesNotThrow(() => assertLiveLlmLaunchable({ task: "create-flow" }));
 });

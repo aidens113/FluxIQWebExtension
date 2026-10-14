@@ -3,7 +3,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { loadScenarioManifests } from "../../scenarios.js";
 import { benchCorpora, findBenchCorpus, smokeCorpus, week1Corpus } from "../corpus/index.js";
-import { expandCorpus, type BenchPlanEntry } from "../expand-corpus.js";
+import { expandCorpus, FLOW_LANE_RETIRED, type BenchPlanEntry } from "../expand-corpus.js";
 
 // dist/bench/tests -> repository root, independent of the working directory.
 const repositoryRoot = fileURLToPath(new URL("../../../../../", import.meta.url));
@@ -75,53 +75,35 @@ test("every smoke result resolves and runs on the recording lane", async () => {
 });
 
 /**
- * The corpus runs both lanes, and every unarmed workflow runs on both. Before
- * the Flow lane ran the variants, every variant carried
- * `VARIANT_NEEDS_FLOW_LANE`, which left drift recovery, fuzzy recovery and
- * failure classification with a provably empty population. Before it ran the
- * unarmed workflows too, FluxIQ executed W01-W18 on no lane at all: the
- * recording lane executes at most a two-action Core probe.
+ * The corpus declares both lanes, and every unarmed workflow is planned on
+ * both. The Flow lane ran a Flow built from the run's own recording, which t519
+ * retired, so every resolved Flow-lane result, unarmed or a variant, is planned
+ * skipped as retired (`FLOW_LANE_RETIRED`) and only the recording lane runs.
  *
- * W04 and W08 were the exception until X5.1. Their scripts only extract, an
- * extract recorded no action, so no recording of either could yield a Flow and
- * their four Flow-lane results were planned and skipped. An extract now records
- * a `web.dom.extract_list` (`recordableActionTypes`), so those four results
- * run again, and W04's and W08's extraction is judged on the Flow lane (D7, D14).
- *
- * W05 and W07 leave both lanes with read-list S6. Their extract steps page, and
- * FluxIQ's read now reads one page: a Flow pages with a read, a Next page step
- * and a repeat, which no recording can produce yet, so recording either would
- * store a one-page read of a three-page list (`pagedExtractExclusion`). Their
- * paging is judged on the created-Flow lane instead, where the model builds the
- * loop (`product-catalog-all-pages`, `product-catalog-in-stock`).
+ * W05 and W07 leave the recording lane with read-list S6. Their extract steps
+ * page, and FluxIQ's read now reads one page: a Flow pages with a read, a Next
+ * page step and a repeat, which no recording can produce, so recording either
+ * would store a one-page read of a three-page list (`pagedExtractExclusion`).
+ * Their paging is judged on the created-Flow lane instead, where the model
+ * builds the loop (`product-catalog-all-pages`, `product-catalog-in-stock`).
  */
-test("week1 plans 62 runnable results per repeat: every unarmed workflow on both lanes and every resolved variant on the Flow lane, except the paged W05 and W07", async (t) => {
+test("week1 plans 21 runnable results per repeat: every unarmed workflow on the recording lane but the paged W05 and W07, and every Flow-lane result skipped as retired", async (t) => {
   const plan = expandCorpus(week1Corpus, await loadScenarioManifests(repositoryRoot));
   const runnable = plan.filter((entry) => entry.skipReason === undefined);
-  const byLane = (lane: string) => runnable.filter((entry) => entry.lane === lane);
-  const unarmedOn = (lane: string) => byLane(lane).filter((entry) => entry.variantId === null);
-  const variantsOn = (lane: string) => byLane(lane).filter((entry) => entry.variantId !== null);
-  t.diagnostic(`runnable: ${runnable.length} (${byLane("recording").length} recording; ${byLane("flow").length} flow, ${unarmedOn("flow").length} unarmed and ${variantsOn("flow").length} variants); skipped: ${plan.length - runnable.length}`);
+  const retired = plan.filter((entry) => entry.resolved && entry.lane === "flow");
+  t.diagnostic(`runnable: ${runnable.length}; Flow-lane results skipped as retired: ${retired.length}; skipped in all: ${plan.length - runnable.length}`);
   assert.deepEqual(week1Corpus.lanes, ["recording", "flow"]);
-  // The count a week1 bench's run time is estimated from. A new corpus row changes it: W29's variant made it 67, skipping W04's and W08's four Flow-lane results made it 63, X5.1 restored those four (D7), and S6's paged-step exclusion of W05 and W07 made it 62.
-  assert.deepEqual([runnable.length, unarmedOn("recording").length, variantsOn("recording").length, unarmedOn("flow").length, variantsOn("flow").length], [62, 21, 0, 21, 20]);
-  // The Flow lane runs every unarmed workflow the recording lane runs: W01-W18 for criterion 1 but the paged W05 and W07, and W24-W28.
-  assert.deepEqual(unarmedOn("flow").map(label), unarmedOn("recording").map(label));
+  // The count a week1 bench's run time is estimated from. It was 62 with the Flow lane's 41 results; the lane's retirement leaves the recording lane's 21.
+  assert.equal(runnable.length, 21);
+  assert.equal(runnable.every((entry) => entry.lane === "recording" && entry.variantId === null), true, "only the recording lane runs, and it runs every workflow unarmed");
   const criterionOne = Array.from({ length: 18 }, (_, index) => `W${String(index + 1).padStart(2, "0")}`).filter((row) => row !== "W05" && row !== "W07");
-  assert.deepEqual(unarmedOn("flow").map((entry) => entry.corpusRowId), [...criterionOne, "W24", "W25", "W26", "W27", "W28"]);
-  assert.deepEqual(unarmedOn("flow").filter((entry) => ["W04", "W08"].includes(entry.corpusRowId)).map(label), ["W04 product-catalog/primary/unarmed", "W08 data-table/primary/unarmed"], "W04 and W08 reach the Flow lane, where their extraction is judged");
-  // Every other resolved result runs: no week1 workflow's script records nothing, and only W05's and W07's extract steps page.
-  const skipped = plan.filter((entry) => entry.resolved && entry.skipReason !== undefined);
-  assert.deepEqual(skipped.map((entry) => `${label(entry)} on ${entry.lane}`), [
-    "W05 product-catalog/paginated-extraction/unarmed on recording",
-    "W05 product-catalog/paginated-extraction/unarmed on flow",
-    "W05 product-catalog/paginated-extraction/short-catalog on flow",
-    "W07 product-catalog/in-stock-only/unarmed on recording",
-    "W07 product-catalog/in-stock-only/unarmed on flow",
-  ]);
+  assert.deepEqual(runnable.map((entry) => entry.corpusRowId), [...criterionOne, "W24", "W25", "W26", "W27", "W28"]);
+  // Every resolved Flow-lane result is still planned, so the plan says what happened to it: 21 unarmed, 20 variants and the three paged ones.
+  assert.equal(retired.length, 44);
+  for (const entry of retired) assert.equal(entry.skipReason, FLOW_LANE_RETIRED, label(entry));
+  // On the recording lane only W05's and W07's extract steps keep a result from running.
+  const skipped = plan.filter((entry) => entry.resolved && entry.lane === "recording" && entry.skipReason !== undefined);
+  assert.deepEqual(skipped.map(label), ["W05 product-catalog/paginated-extraction/unarmed", "W07 product-catalog/in-stock-only/unarmed"]);
   for (const entry of skipped) assert.match(entry.skipReason ?? "", /extract step \S+ pages through its list, and FluxIQ's read reads one page/u, label(entry));
   assert.deepEqual(plan.filter((entry) => !entry.resolved).map(label), UNRESOLVED_TODAY);
-  const negatives = byLane("flow").filter((entry) => entry.expectedFailure !== null);
-  t.diagnostic(`flow-lane results with an expected failure: ${negatives.length} (${negatives.map((entry) => `${label(entry)}=${entry.expectedFailure?.category ?? ""}`).join(", ")})`);
-  assert.ok(negatives.length > 0, "failure classification accuracy has a population only because negative variants now run");
 });

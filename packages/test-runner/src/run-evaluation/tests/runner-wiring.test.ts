@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import type { WebScenario } from "@fluxiq-web-extension/test-contracts";
-import { RunnerFailure } from "../../failure.js";
 import { ProjectedFacilityError } from "../../facility-failure/index.js";
 import { runScenario } from "../../run-scenario.js";
 
@@ -97,7 +96,7 @@ test("scripted navigation is bound only after recording is confirmed and each st
   const source = await runnerSource();
   const confirmed = source.indexOf('await pollStatus(extensionControl, value => value.recordingState === "recording")');
   const bound = source.indexOf("scriptedNavigation: createScriptedNavigationDriver(extensionControl)");
-  const loop = source.indexOf("for (const step of recordingWorkflow.recordingScript)", bound);
+  const loop = source.indexOf("for (const step of workflow.recordingScript)", bound);
   const run = source.indexOf("await runner.run(step)", loop);
   const complete = source.indexOf('"step.complete"', run);
   const stop = source.indexOf('type: "fluxiq.stopRecording"', loop);
@@ -241,8 +240,8 @@ test("the runner consults the lane rules: a Core identity and a built Flow on th
   assert.match(source, /import \{ proveCoreActionRoundTrip \} from "\.\/core-action-probe\/index\.js";/u);
   assert.equal(/web\.dom\.type|waitForEvent\("page"|coreProbeTargetUsable|selectCoreProbeStep/u.test(source), false, "L1: the runner neither types, opens a tab, nor picks a step for the probe");
   // A Flow built from a live instruction task is the Flow lane here (the one built from the run's recording was retired by t519).
-  assert.ok(source.includes("const flowLane = options.flow === true || creation !== undefined;"), "H2: a created-Flow run is a Flow-lane run");
-  assert.ok(source.includes('bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected })'), "H2: every Flow-lane run bootstraps a Core identity");
+  assert.ok(source.includes("const flowLane = creation !== undefined;"), "H2: a created-Flow run is a Flow-lane run");
+  assert.ok(source.includes('bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: workflow.expected })'), "H2: every Flow-lane run bootstraps a Core identity");
   // Since t519 the created lane is the only Flow lane: the Flow is built from a live instruction task, never the recording.
   const at = {
     flowLane: source.indexOf("runCreatedFlowLane({"),
@@ -263,7 +262,7 @@ test("the runner consults the lane rules: a Core identity and a built Flow on th
   assert.ok(source.includes("oracleVerdict, actions, automationFailure: facilityFailure ? undefined : automationFailure,"), "a facility failure publishes no probe verdict beside it");
   assert.ok(source.includes("await assertExpectedFacts(finalStateFacts(scenario, workflow), playwrightScenarioFactProbe(page));"), "H5: the final state is judged on the facts the rule chooses");
   assert.equal(/successFacts/u.test(source), false, "H5: the runner holds no second playback-goal rule");
-  assert.ok(source.includes("assertExtraction(recordingWorkflow.expected.extracted, step.id, extraction.records, extraction.observed);"), "H1: the recording lane asserts every extract step, against what the read itself reported");
+  assert.ok(source.includes("assertExtraction(workflow.expected.extracted, step.id, extraction.records, extraction.observed);"), "H1: the recording lane asserts every extract step, against what the read itself reported");
 });
 
 /**
@@ -283,8 +282,8 @@ test("the recording lane reads through FluxIQ's own extraction and publishes wha
   const at = {
     bound: source.indexOf("const extractionIntent = paired ?"),
     kept: source.indexOf("reads.set(step.id, extraction);"),
-    asserted: source.indexOf("assertExtraction(recordingWorkflow.expected.extracted, step.id, extraction.records, extraction.observed);"),
-    measured: source.indexOf("? runExtractionMeasurements({ script: recordingWorkflow.recordingScript, expected: recordingWorkflow.expected.extracted, read: extractionRead })"),
+    asserted: source.indexOf("assertExtraction(workflow.expected.extracted, step.id, extraction.records, extraction.observed);"),
+    measured: source.indexOf("? runExtractionMeasurements({ script: workflow.recordingScript, expected: workflow.expected.extracted, read: extractionRead })"),
     evaluated: source.indexOf("? singleRunEvaluation({"),
   };
   for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
@@ -307,18 +306,19 @@ test("the evaluation reaches the caller, so lab run reports it without a bench",
  * refused such a run as `fixture.invalid` with the shared check the bench skips
  * it by. t519 (4ee4e65c) retired that lane outright: a recording is evidence
  * beside required instructions, never a Flow's authority, so every
- * recording-built Flow-lane run on an isolated target is now refused as
- * `recording.contract` before its workflow is even resolved, and the runner's
- * no-action exclusion, which nothing reached any more, is gone (t552). What
- * still holds, and is pinned here, is that the refusal happens before a
- * bundle, Core or a browser exists.
+ * recording-built Flow-lane run was refused as `recording.contract`, and the
+ * runner's no-action exclusion, which nothing reached any more, went (t552).
+ * Nothing can ask the runner for that lane now: `lab run --flow` and a live
+ * `lab matrix` are refused while the command is parsed (`tests/commands.test.ts`)
+ * and the bench plans every Flow-lane result as skipped
+ * (`bench/expand-corpus.ts`), so the runner keeps no `flow` option and no
+ * refusal of its own (t553). What is pinned here is that it stays that way, and
+ * that the recording lane still runs a workflow that records no action.
  *
  * This used to run W04, `product-catalog`'s primary workflow, which only reads
  * the page. Since X5.1 an extract step records a `web.dom.extract_list`, so W04
  * and W08 reach the Flow lane and **no Lab fixture is a no-action workflow any
  * more** — every one of the registry's workflows records something. The rule is
- * still the bench planner's (`flowLaneExclusion` refuses a script of only
- * `waitForState`, `checkpoint` and `waitForDownload`), so the case is
  * constructed here rather than borrowed from a fixture that changed underneath
  * it: a scenario registry of this test's own, loaded through the same
  * `FLUXIQ_LAB_SCENARIO_ENTRYPOINT` an instanced Lab is built with. The run is
@@ -353,48 +353,19 @@ async function noActionScenarioLab(): Promise<string> {
   return dist;
 }
 
-test("a recording-built Flow-lane run is refused as recording.contract before its workflow is resolved and before a bundle, Core or a browser exists", async () => {
+test("the runner has no recording-built Flow lane to be asked for: no flow option, no exclusion and no refusal of its own", async () => {
   const source = await runnerSource();
-  assert.equal(source.includes("flowLaneExclusion"), false, "the retirement refuses every recording-built Flow-lane run first, so the runner keeps no Flow-lane exclusion it could never reach");
-  assert.equal(source.match(/refuseRecordingOnlyFlow\(\)/gu)?.length, 1, "one retirement refusal in the runner");
-  const at = {
-    retired: source.indexOf('if (options.flow === true && options.creation === undefined && target.mode !== "existing" && target.mode !== "clone") refuseRecordingOnlyFlow();'),
-    resolved: source.indexOf("const workflow = resolveWorkflow(scenario, options, target);"),
-    bundle: source.indexOf("await bundle.initialize();"),
-    extension: source.indexOf("await requireExtension(extensionPath);"),
-    topology: source.indexOf("topology = await startTopology({"),
-  };
-  for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
-  assert.ok(at.retired < at.resolved && at.resolved < at.bundle && at.bundle < at.extension && at.extension < at.topology, "the lane is refused, and the workflow resolved, before anything is created or started");
-
-  const scenarioLab = await noActionScenarioLab();
-  const runsDirectory = await mkdtemp(path.join(os.tmpdir(), "fluxiq-no-flow-lane-"));
-  try {
-    // The extension path does not exist, so a run the refusal missed stops at `requireExtension`, before Core or a browser.
-    const outcome: unknown = await runScenario({ repositoryRoot: root, fluxiqRepositoryRoot: path.join(runsDirectory, "no-core"), runsDirectory, scenarioId: NO_ACTION_SCENARIO.id, flow: true, environment: { FLUXIQ_LAB_SCENARIO_ENTRYPOINT: path.join(scenarioLab, "server.js"), FLUXIQ_LAB_EXTENSION_PATH: path.join(runsDirectory, "no-extension") } }).then((result) => result, (error: unknown) => error);
-    assert.ok(outcome instanceof ProjectedFacilityError, `the run is refused, not run: ${outcome instanceof Error ? outcome.message : JSON.stringify(outcome)}`);
-    assert.equal(outcome.category, "recording.contract");
-    // What the command line prints: the generic sentence, then the runner's own reason.
-    assert.match(outcome.message, /^Scenario attempt failed outside a finalized bundle: Recording-only Flow creation is retired\. /u);
-    assert.deepEqual(outcome.facilityFailure, { boundary: "no-final-bundle", stage: "scenario.load", reason: "unclassified" });
-    // The reason is the retirement, with the instruction-led lane to use instead, so a refusal for a
-    // fixture defect -- an unknown scenario, or a manifest this test built wrong -- cannot pass as this case.
-    assert.ok(outcome.cause instanceof RunnerFailure, "the runner's own refusal is the cause");
-    assert.match(outcome.cause.message, /^Recording-only Flow creation is retired\. .*--llm-task create-flow --instruction-task <task>/u, "the refusal names the instruction-led lane");
-    assert.deepEqual(outcome.cause.details, { code: "automation.instruction_led_authoring_required" });
-    assert.deepEqual(await readdir(runsDirectory), [], "no evidence bundle was created");
-  } finally {
-    // Retried: a run the refusal missed may still be closing bundle files, and a cleanup error must not hide the assertion.
-    await rm(runsDirectory, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
-    await rm(scenarioLab, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
-  }
+  assert.equal(source.includes("flowLaneExclusion"), false, "no Flow-lane exclusion");
+  assert.equal(source.includes("refuseRecordingOnlyFlow"), false, "no refusal: nothing reaches the runner with the lane");
+  assert.equal(/options\.flow\b/u.test(source), false, "no options.flow branch");
+  assert.equal(source.includes("flow?: boolean"), false, "RunScenarioOptions carries no flow option");
+  assert.equal(source.includes("unarmedWorkflow"), false, "no unarmed copy of the workflow for a recording a Flow is built from");
 });
 
 /**
  * The other half of the same rule, which only the runner's source shape pinned
  * before: the recording lane records the workflow, so it is never refused. The
- * same fixture run without `--flow` passes the exclusion and stops only where
- * any run without a built extension stops.
+ * fixture stops only where any run without a built extension stops.
  */
 test("the same workflow is not refused on the recording lane, which records it", async () => {
   const scenarioLab = await noActionScenarioLab();

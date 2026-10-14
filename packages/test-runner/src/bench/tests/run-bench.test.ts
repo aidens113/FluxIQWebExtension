@@ -7,11 +7,10 @@ import test from "node:test";
 import { parseBenchReportJson, parseRunEvaluationJson, type RunEvaluation, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
 import { ProjectedFacilityError } from "../../facility-failure/index.js";
-import type { RunLaneObservation } from "../../flow-lane/index.js";
 import type { RunScenarioOptions, RunScenarioResult } from "../../run-scenario.js";
 import type { BenchCorpus } from "../corpus/index.js";
 import { acquireCampaignLease, BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION, CAMPAIGN_SHARD_ALGORITHM, campaignPlanSha256, canonicalJson, createCampaignPlan, createCampaignPlanShards, loadCampaignCheckpointChain, sha256Canonical, writeCampaignManifest, type CampaignCompatibility, type CampaignManifest } from "../campaign/index.js";
-import { expandCorpus, VARIANT_NEEDS_FLOW_LANE } from "../expand-corpus.js";
+import { expandCorpus, FLOW_LANE_RETIRED } from "../expand-corpus.js";
 import type { BenchRunsFile } from "../report-store.js";
 import { createResumableBench, executePrecreatedBenchCampaign, publishPrecreatedBenchParentProjections, resumeBench, runBench, type AuthenticatedBenchCampaignEvaluation, type BenchCampaignCrashPoint, type PrecreatedBenchCampaignOptions, type ResumableRunBenchOptions, type RunBenchOptions } from "../run-bench.js";
 
@@ -33,7 +32,7 @@ const corpus: BenchCorpus = {
   ],
 };
 
-/** The same corpus run on both lanes: every unarmed row runs on the Flow lane too, and the `drift` variant of W28 becomes a Flow-lane result instead of a skip. */
+/** The same corpus declaring both lanes: every unarmed row is planned on the Flow lane too, and the `drift` variant of W28 on the Flow lane alone, where each is skipped as retired. */
 const bothLanes: BenchCorpus = { ...corpus, lanes: ["recording", "flow"] };
 const oneCellCorpus: BenchCorpus = { ...corpus, rows: [corpus.rows[0]!] };
 
@@ -50,14 +49,6 @@ function runManifest(runId: string, scenarioId: string, verdict: "passed" | "fai
   };
 }
 
-/** The observation a Flow-lane run publishes when the Flow was built, ran, and reported success. */
-const flowObservation = (): RunLaneObservation => ({
-  lane: "flow", flowCreated: true, oracleVerdict: "passed", reportedVerdict: "passed",
-  automationFailureReported: null, automationFailureExpected: null, harnessActivations: 0,
-  actions: [{ actionType: "web.dom.click", durationMs: 210 }, { actionType: "web.dom.type", durationMs: 340 }],
-  extraction: null,
-});
-
 /** A runner that writes a minimal finalized bundle for each run and records what it was asked to run. */
 function fakeRunner(calls: string[], verdictFor: (options: RunScenarioOptions) => "passed" | "failed" = () => "passed") {
   return async (options: RunScenarioOptions): Promise<RunScenarioResult> => {
@@ -69,7 +60,7 @@ function fakeRunner(calls: string[], verdictFor: (options: RunScenarioOptions) =
     await writeFile(path.join(runPath, "run.json"), JSON.stringify(runManifest(runId, options.scenarioId, verdict)));
     await writeFile(path.join(runPath, "summary.json"), JSON.stringify({ verdict, metrics: { steps: 3 } }));
     await writeFile(path.join(runPath, "events.ndjson"), `${JSON.stringify({ sequence: 1, trigger: "step.start" })}\n${JSON.stringify({ sequence: 2, trigger: verdict === "passed" ? "final" : "error" })}\n`);
-    return { runId, verdict, path: runPath, ...(options.flow ? { observation: flowObservation() } : {}), ...(verdict === "failed" ? { failureCategory: "runtime.behavior" } : {}) };
+    return { runId, verdict, path: runPath, ...(verdict === "failed" ? { failureCategory: "runtime.behavior" } : {}) };
   };
 }
 
@@ -98,14 +89,14 @@ const campaignCompatibility: CampaignCompatibility = {
   environment: { platform: "win32", architecture: "x64", browserName: "chromium", browserVersion: "Chrome/134", locale: "en-US", timezone: "UTC", viewport: { width: 1280, height: 720 } },
 };
 
+/** A recording-lane run's evaluation: the only lane a bench still runs. */
 function campaignEvaluation(runId: string, options: RunScenarioOptions): RunEvaluation {
-  const observation = options.flow ? flowObservation() : undefined;
   return {
     schemaVersion: "0.3", runId, verdict: "passed", facilityFailure: null, invariants: [], metrics: { steps: 3 }, scenarioId: options.scenarioId,
-    workflowId: options.workflowId ?? null, variantId: options.variantId ?? null, repeatIndex: options.benchReceipt?.cellIdentity.repeatIndex ?? 0, lane: options.flow ? "flow" : "recording",
-    flowCreated: observation?.flowCreated ?? null, oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null,
-    automationFailureExpected: null, harnessActivations: observation?.harnessActivations ?? 0, durationMs: 40_000,
-    actions: observation?.actions ?? [{ actionType: "web.dom.type", durationMs: 1_500 }], evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
+    workflowId: options.workflowId ?? null, variantId: options.variantId ?? null, repeatIndex: options.benchReceipt?.cellIdentity.repeatIndex ?? 0, lane: "recording",
+    flowCreated: null, oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null,
+    automationFailureExpected: null, harnessActivations: 0, durationMs: 40_000,
+    actions: [{ actionType: "web.dom.type", durationMs: 1_500 }], evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
     llm: { mode: "disabled", profileId: null, calls: 0 }, extraction: null, harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
   };
 }
@@ -122,7 +113,7 @@ function campaignRunner(calls: string[]) {
     await writeFile(path.join(runPath, "events.ndjson"), `${JSON.stringify({ sequence: 2, trigger: "final" })}\n`);
     await writeFile(path.join(runPath, "evaluation.json"), JSON.stringify(evaluation));
     await writeFile(path.join(runPath, "bench-receipt.json"), JSON.stringify({ schemaVersion: "0.1", ...options.benchReceipt, runId: options.runId }));
-    return { runId: options.runId, verdict: "passed", path: runPath, evaluation, ...(options.flow ? { observation: flowObservation() } : {}) };
+    return { runId: options.runId, verdict: "passed", path: runPath, evaluation };
   };
 }
 
@@ -196,7 +187,7 @@ test("runs each runnable result once per repeat, one pass over the corpus at a t
     const runs = await readRuns(outcome.directory);
     const skipped = runs.runs.filter((run) => run.status === "skipped");
     assert.deepEqual(skipped.map((run) => [run.corpusRowId, run.variantId, run.repeatIndex]), [["W28", "drift", 0], ["W28", "drift", 1], ["W99", null, 0], ["W99", null, 1]]);
-    assert.equal(skipped[0]?.skipReason, VARIANT_NEEDS_FLOW_LANE);
+    assert.equal(skipped[0]?.skipReason, FLOW_LANE_RETIRED);
     assert.match(skipped[2]?.skipReason ?? "", /^unresolved: .*no workflow missing/);
     const evaluated = runs.runs.filter((run) => run.status === "evaluated");
     assert.equal(evaluated.length, 6);
@@ -206,7 +197,7 @@ test("runs each runnable result once per repeat, one pass over the corpus at a t
     }
     const markdown = await readFile(outcome.markdown, "utf8");
     assert.match(markdown, /## Skipped/);
-    assert.ok(markdown.includes(VARIANT_NEEDS_FLOW_LANE));
+    assert.ok(markdown.includes(FLOW_LANE_RETIRED));
     assert.match(markdown, /harnessActivations: 0: the recording lane runs no Flow/);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -246,18 +237,18 @@ test("a resumable campaign recovers all five persistence crash boundaries withou
   });
 });
 
-// A permission stop is a build's, and only the Flow lane built in a bench. That lane built its Flow from the run's recording,
-// which is retired (t519), so a campaign's Flow-lane cell is refused before the runner is asked, on creation and on resume.
-test("a campaign's Flow-lane cell is refused as the retired lane before the runner is asked, and a resume neither reruns nor relabels it", async (t) => {
+// The Flow lane built its Flow from the run's recording, which is retired (t519), so a campaign plans its Flow-lane cell as
+// skipped with that reason: the runner is never asked, on creation or on resume, and nothing is evaluated for it.
+test("a campaign's Flow-lane cell is planned skipped as the retired lane, and a resume neither runs nor relabels it", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-retired-flow-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const benchId = "bench-retired-0123abcd", calls: string[] = [];
   const configured = { ...resumableOptions(root, benchId, calls), benchId, corpus: { ...oneCellCorpus, lanes: ["flow"] as const }, repeatCount: 1 };
   const created = await createResumableBench(configured);
   for (const outcome of [created, await resumeBench(configured)]) {
-    const [record] = (await readRuns(outcome.directory)).runs;
-    const evaluation = parseRunEvaluationJson(await readFile(path.join(outcome.directory, record?.evaluation ?? "missing"), "utf8"));
-    assert.deepEqual([outcome.status, record?.lane, evaluation.verdict, evaluation.failureCategory, evaluation.flowCreated, calls.length], ["failed", "flow", "inconclusive", "recording.contract", false, 0]);
+    const runs = (await readRuns(outcome.directory)).runs;
+    assert.deepEqual(runs.map((record) => [record.corpusRowId, record.lane, record.status, record.skipReason]), [["W01", "flow", "skipped", FLOW_LANE_RETIRED]]);
+    assert.deepEqual([outcome.status, outcome.runs, outcome.skipped, calls.length], ["failed", 0, 1, 0]);
   }
 });
 
@@ -545,32 +536,30 @@ test("a failing run fails the bench; a runner that throws is an inconclusive run
 
 /**
  * The Flow lane built its Flow from the run's own recording, which t519
- * retired. A corpus that still plans it runs its recording lane as before, and
- * each Flow-lane result is refused before the runner is asked, recorded as that
- * refusal: never run as a recording and then judged as a Flow, and never a pass.
+ * retired. A corpus that still declares it runs its recording lane as before,
+ * and each Flow-lane result is planned skipped with the retirement as its
+ * reason: never run as a recording and then judged as a Flow, and never a pass.
  */
-test("a corpus that plans the Flow lane runs only its recording lane, and records every Flow-lane result as the retired lane's refusal", async () => {
+test("a corpus that declares the Flow lane runs only its recording lane, and lists every Flow-lane result as skipped for the retired lane", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-run-"));
   try {
     const lanes: string[] = [];
     const runner = fakeRunner([]);
     const outcome = await runBench(options(root, {
       corpus: bothLanes, repeatCount: 1,
-      runScenario: async (run) => { lanes.push(`${run.scenarioId}/${run.workflowId ?? "primary"}/${run.variantId ?? "unarmed"}/${run.flow ? "flow" : "recording"}`); return runner(run); },
+      runScenario: async (run) => { lanes.push(`${run.scenarioId}/${run.workflowId ?? "primary"}/${run.variantId ?? "unarmed"}`); return runner(run); },
     }));
-    // The runner is asked for the recording lane alone, and never given a variant or the retired lane flag.
-    assert.deepEqual(lanes, ["basic-form/primary/unarmed/recording", "basic-form/combo/unarmed/recording", "iframe-checkout/primary/unarmed/recording"]);
-    // W99 does not resolve, and is skipped on both of its lanes; the four Flow-lane results are attempts the bench refused.
-    assert.deepEqual([outcome.status, outcome.results, outcome.runs, outcome.skipped, outcome.passed], ["failed", 7, 7, 2, 3]);
+    // The runner is asked for the recording lane alone, and never given a variant.
+    assert.deepEqual(lanes, ["basic-form/primary/unarmed", "basic-form/combo/unarmed", "iframe-checkout/primary/unarmed"]);
+    // W99 does not resolve, and is skipped on both of its lanes; the four resolved Flow-lane results are skipped as retired.
+    assert.deepEqual([outcome.status, outcome.results, outcome.runs, outcome.skipped, outcome.passed], ["passed", 3, 3, 6, 3]);
     const runs = await readRuns(outcome.directory);
     assert.deepEqual(runs.lanes, ["recording", "flow"]);
-    assert.deepEqual(runs.runs.filter((run) => run.status === "skipped").map((run) => [run.corpusRowId, run.lane]), [["W99", "recording"], ["W99", "flow"]]);
-    const refused = runs.runs.filter((run) => run.status === "evaluated" && run.lane === "flow");
-    assert.deepEqual(refused.map((run) => [run.corpusRowId, run.variantId]), [["W01", null], ["W02", null], ["W28", null], ["W28", "drift"]]);
-    for (const run of refused) {
-      const evaluation = parseRunEvaluationJson(await readFile(path.join(outcome.directory, run.evaluation ?? "missing"), "utf8"));
-      assert.deepEqual([evaluation.lane, evaluation.verdict, evaluation.failureCategory, evaluation.flowCreated, evaluation.actions.length], ["flow", "inconclusive", "recording.contract", false, 0], `${run.corpusRowId}/${run.variantId ?? "unarmed"}`);
-    }
+    assert.equal(runs.flowSources, undefined, "no Flow-lane run is planned, so no Flow-lane sources are claimed");
+    assert.deepEqual(runs.runs.filter((run) => run.status === "skipped").map((run) => [run.corpusRowId, run.lane, run.variantId, run.skipReason === FLOW_LANE_RETIRED ? "retired" : run.skipReason?.slice(0, 11)]), [
+      ["W01", "flow", null, "retired"], ["W02", "flow", null, "retired"], ["W28", "flow", null, "retired"], ["W28", "flow", "drift", "retired"], ["W99", "recording", null, "unresolved:"], ["W99", "flow", null, "unresolved:"],
+    ]);
+    assert.deepEqual(runs.runs.filter((run) => run.status === "evaluated").map((run) => run.lane), ["recording", "recording", "recording"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -583,14 +572,14 @@ test("the same corpus without the Flow lane skips its variants, and smoke's plan
     const runner = fakeRunner([]);
     const outcome = await runBench(options(root, {
       repeatCount: 1,
-      runScenario: async (run) => { lanes.push(`${run.scenarioId}/${run.variantId ?? "unarmed"}/${run.flow ? "flow" : "recording"}`); return runner(run); },
+      runScenario: async (run) => { lanes.push(`${run.scenarioId}/${run.variantId ?? "unarmed"}`); return runner(run); },
     }));
-    assert.equal(lanes.every((call) => call.endsWith("/recording")), true);
+    assert.equal(lanes.every((call) => call.endsWith("/unarmed")), true);
     assert.deepEqual([outcome.results, outcome.runs, outcome.skipped], [3, 3, 2]);
     const runs = await readRuns(outcome.directory);
     assert.deepEqual(runs.lanes, ["recording"]);
     assert.equal(runs.flowSources, undefined);
-    assert.equal(runs.runs.find((run) => run.variantId === "drift")?.skipReason, VARIANT_NEEDS_FLOW_LANE);
+    assert.equal(runs.runs.find((run) => run.variantId === "drift")?.skipReason, FLOW_LANE_RETIRED);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

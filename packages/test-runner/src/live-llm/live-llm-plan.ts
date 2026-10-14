@@ -12,7 +12,6 @@ import type { AutomationStudioAuthoringMode } from "fluxiq/automation-studio";
 import { DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, isLlmModel, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../failure.js";
-import { refuseRecordingOnlyFlow } from "../flow-lane/recording-only/index.js";
 
 /**
  * The intents the Lab can plan -- Core's runtime-session LLM intents -- and
@@ -230,10 +229,10 @@ function refusal(detail: string): RunnerFailure {
 }
 
 /**
- * Refuses, before a credential is read or anything starts, a live run that
- * asks for what t519 retired: the recording-built Flow lane (bare `--flow`),
- * refused as every recording-only Flow is, and the three tasks that ran only
- * on it. `diagnose`, `adapt` and `repair` each authorized a provider against
+ * Refuses, before a credential is read or anything starts, a live run of a
+ * task that ran only on what t519 retired, the recording-built Flow lane (whose
+ * bare `--flow`, and the live matrix that ran it, are refused while the command
+ * is parsed). `diagnose`, `adapt` and `repair` each authorized a provider against
  * the Flow that lane made from the run's recording, so they are refused by
  * name, as `recording.contract` with the same code, with the path that
  * replaced them rather than a `--flow` that is itself refused. That path is one
@@ -242,8 +241,7 @@ function refusal(detail: string): RunnerFailure {
  * repairs the failure inside that same run; `--replays` applies and replays
  * the repair with no model, and `lab replay` proves it is reused later.
  */
-export function assertLiveLlmLaunchable(plan: Pick<LiveLlmPlan, "task">, flowLane: boolean): void {
-  if (flowLane) refuseRecordingOnlyFlow();
+export function assertLiveLlmLaunchable(plan: Pick<LiveLlmPlan, "task">): void {
   if (plan.task !== "diagnose" && plan.task !== "adapt" && plan.task !== "repair") return;
   throw new RunnerFailure("recording.contract", `--llm-task ${plan.task} ran against a Flow built from the run's recording, and recording-only Flow creation is retired. A live run now builds its Flow from written instructions and diagnoses, repairs and adapts it inside that same run: pnpm lab run <scenario> --live-llm --llm-profile <profile> --llm-provider deepseek --llm-task create-flow --instruction-task <task> --target persistent-isolated --workspace <name> --replays 1, with a task whose variant drifts after creation. Then pnpm lab replay <scenario> --workspace <name> --project <project-id> --flow <flow-id> --instruction-task <task> reuses the repair with no model.`, { details: { code: "automation.instruction_led_authoring_required", retiredTask: plan.task } });
 }
