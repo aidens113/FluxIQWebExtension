@@ -36,6 +36,9 @@ export async function exerciseRequiredWebDispatch(mode: "io" | "runtime"): Promi
     const pairing = gateway.snapshot().pairings.find(item => item.requestedBySessionId === client.sessionId)!;
     await gateway.approvePairing(pairing.pairingCode, { approvedByUserId: "synthetic.user" });
     const program = fluxiq.programs.automationStudio, project = await program.createProject({ name: "Synthetic required web", domainId: WEB_AUTOMATION_DOMAIN_ID });
+    // A Flow runs only under its written task (Core t519), saved the way a person writes one.
+    await program.createFlow({ projectId: project.id, flowId: "flow.synthetic.web", name: "Synthetic" });
+    await program.saveFlowGenerationInstruction({ projectId: project.id, flowId: "flow.synthetic.web", instruction: "Press the two buttons in order." });
     const flow = { schemaVersion: "0.1" as const, flowId: "flow.synthetic.web", ownerKind: "routine" as const, ownerId: "routine.synthetic", name: "Synthetic", createdAt: 1, updatedAt: 1,
       nodes: ["first", "second"].map(id => ({ id, definitionId: "builtin.policy.action", parameterValues: { outputId: "web.dom.click", parameters: { selector: "#synthetic" }, timeoutMs: 1000 } })),
       edges: [{ id: "next", sourceNodeId: "first", sourcePortId: "success", targetNodeId: "second", targetPortId: "in" }] };
