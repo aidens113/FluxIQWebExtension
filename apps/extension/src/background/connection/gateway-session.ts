@@ -343,7 +343,7 @@ export class GatewaySession {
           });
           return;
         }
-        handlers.onCommand({ command: "evaluate_facts", check: facts }, message.id);
+        handlers.onCommand(withLease({ command: "evaluate_facts", check: facts }, message.payload.lease), message.id);
         return;
       }
       const action = browserActionFromGatewayCommand(message.payload);
@@ -354,7 +354,8 @@ export class GatewaySession {
         });
         return;
       }
-      handlers.onCommand({ command: "execute_action", action }, message.id);
+      // The lease rides beside the mapped action, which keeps only the fields it knows.
+      handlers.onCommand(withLease({ command: "execute_action", action }, message.payload.lease), message.id);
     });
   }
 
@@ -382,6 +383,11 @@ export class GatewaySession {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = undefined;
   }
+}
+
+/** The command with the host lease it came under, when it came under one; the channel checks it (`server-command-channel.ts`). */
+function withLease<TCommand extends Extract<ServerCommandPayload, { command: "execute_action" | "evaluate_facts" }>>(command: TCommand, lease: TCommand["lease"]): TCommand {
+  return lease === undefined ? command : { ...command, lease };
 }
 
 // What a person, and the Lab, read in `lastError` when a socket never opened:

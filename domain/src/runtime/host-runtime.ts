@@ -54,7 +54,9 @@
 //    `inspectStateDiff`, so the diff reads the summaries it was given. A cache
 //    keyed by `stateRef` would be a second copy of state Core already holds.
 
+import type { ClientGatewaySession } from "@fluxiq/client-gateway-websocket";
 import type { FluxIQ } from "fluxiq";
+import type { AutomationStudioHostResourcePort } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
@@ -63,6 +65,7 @@ import { webAutomationOutputNodeId } from "../output-nodes";
 import { webAutomationActLanded } from "./act-landing";
 import { createWebAutomationExpectationEvaluator, type WebAutomationExpectationDispatch } from "./expectation";
 import { createWebAutomationFactEvaluator, type WebAutomationFactEvaluator } from "./facts";
+import { createWebAutomationHostResourcePort } from "./host-resources";
 import { publishedWebLlmPage, sanitizeWebLlmSnapshot, screenedEvidenceUrl } from "./llm-evidence";
 import {
   compareWebAutomationRouteSignatures,
@@ -89,7 +92,15 @@ export type WebAutomationHostRuntimeBoundary = Parameters<FluxIQ["programs"]["au
  * the method to its boundary type; until then a caller holding this type can
  * call it, and Core ignores what it does not know.
  */
-export type WebAutomationHostRuntime = WebAutomationHostRuntimeBoundary & { factEvaluator: WebAutomationFactEvaluator };
+export type WebAutomationHostRuntime = WebAutomationHostRuntimeBoundary & {
+  factEvaluator: WebAutomationFactEvaluator;
+  /**
+   * The browser lease Core's host-resource scheduler grants builders through:
+   * capacity 1, the paired extension's automation tab (`./host-resources/`,
+   * automation-project-agents plan). Core reads it off the boundary it binds.
+   */
+  hostResources: AutomationStudioHostResourcePort;
+};
 
 /**
  * How the boundary reaches the paired browser; the expectation evaluator
@@ -133,12 +144,18 @@ const POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
  */
 const HOST_RUNTIME_CAPABILITIES = Object.freeze(["action-dispatch", "state-snapshot", "state-diff", "expectation-evaluation", "fact-evaluation", "route-state"] as const);
 
-export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntimeGateway): WebAutomationHostRuntime {
+/**
+ * `sessions` is the client gateway's sessions now, which the host-resource
+ * port grants a lease from; absent, there is no browser to lend and every
+ * acquisition answers `at_capacity`.
+ */
+export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntimeGateway, sessions: () => readonly ClientGatewaySession[] = () => []): WebAutomationHostRuntime {
   const evaluate = createWebAutomationExpectationEvaluator(gateway.dispatch);
   const factEvaluator = createWebAutomationFactEvaluator(gateway.dispatch);
   let captures = 0;
   return {
     capabilities: HOST_RUNTIME_CAPABILITIES,
+    hostResources: createWebAutomationHostResourcePort({ sessions }),
     async captureStateSnapshot(input) {
       if (!actsOnPage(input.node)) {
         throw new Error(`Node ${input.node.definitionId} does not act on a page, so no web state was captured.`);
@@ -229,7 +246,7 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
 export function bindWebAutomationHostRuntime(fluxiq: FluxIQ): void {
   fluxiq.programs.automationStudio.bindHostRuntime(createWebAutomationHostRuntime({
     dispatch: (request) => dispatchWebAutomationOutput(fluxiq, { domainId: WEB_AUTOMATION_DOMAIN_ID, ...request })
-  }));
+  }, () => fluxiq.programs.clientGateway.snapshot().sessions));
 }
 
 /** The DOM snapshot inside a dispatched action's wrapped result payload. */
