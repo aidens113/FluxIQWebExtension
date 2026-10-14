@@ -330,8 +330,12 @@ launch 8 above; round two runs `candidate` on the same lanes before any further 
 | --- | --- | --- |
 | crossborder-marketplace-hub-to-cart | passed, $0.029 | passed, $0.015 |
 | bigbox-retail-pickup-cart | passed, $0.044 | passed, $0.033 |
-| social-network-feed-confirm-requests | failed, $0.034: whole test passed; the rate-limit repair was refused (t603) | running |
-| everything-store-plus-earbuds-under-50 | built and applied, whole test passed; the Lab's session listing crashed Core (t604) | running |
+| social-network-feed-confirm-requests | failed, $0.034: whole test passed; the rate-limit repair was refused (t603) | passed, $0.025 |
+| everything-store-plus-earbuds-under-50 | built and applied, whole test passed; the Lab's session listing crashed Core (t604) | passed, $0.034 |
+
+**Reading of pair 2 (supervisor, 2026-10-14):** `candidate` passed all four, each for less than `project`; `project`
+passed two and built correct Flows for the other two, each lost to a defect of its own machinery (t603) or of a listing
+it made too large (t604). `project` still does not beat `candidate`; the default stays `candidate`.
 
 **Reading of rounds one and two (supervisor, 2026-10-14):** on this pair `project` matches `candidate` where both
 work (crossborder, bigbox) at a higher cost (about 1.1-1.9x), fails social where `candidate` built a correct Flow, and
