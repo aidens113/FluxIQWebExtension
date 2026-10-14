@@ -264,6 +264,30 @@ at most $0.25 per Flow, every run fully debugged before any rerun.
 - **Logs.** `steps/NNNN-*/meta.json` and `steps/index.md` gain `role` and
   `briefId` so a debug can read one builder's steps on their own.
 
+## A8 Run Plan (drafted 2026-10-13; launch needs the user's go-ahead)
+
+On one frozen source pair after A5c and W4 merge, every run started from the extension chat, headed, under
+`--llm-max-cost-usd 0.25`, one attempt per launch, each run fully debugged before any rerun, lane trees synced to
+dev and rebuilt, at most four lanes at once (one `lab-slots/slot-N` each). Common shape (as the instruction-created
+gate uses, `mvp-final-month-plan/reports/codex-continuation-live-readiness.md`):
+
+```powershell
+pnpm.cmd lab run <scenario> --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode <candidate|project> --llm-task create-flow --instruction-task <task> --target persistent-isolated --workspace a8-<mode>-<site> --llm-max-cost-usd 0.25 --llm-max-calls 64 --llm-max-run-tokens 48000000
+```
+
+| Site | Task | Modes |
+| --- | --- | --- |
+| crossborder-marketplace | `crossborder-marketplace-hub-to-cart` | candidate, project |
+| bigbox-retail | `bigbox-retail-pickup-cart` | candidate, project |
+| social-network-feed | `social-network-feed-confirm-requests` | candidate, project |
+| everything-store | `everything-store-plus-earbuds-under-50` | candidate, project |
+| bigbox-retail | `bigbox-retail-pickup-towels` (single part) | project |
+
+Nine paid runs, at most $2.25 in billed dollars. Recorded per run: the exact oracle result, billed cost, calls,
+the largest single decision input (W4 `runSpend.stepLog.largestInputTokens`), per-role spend, whether the reserve
+paid the judged run, and a UI review of the chat's plan, brief, return and receipt cards. A pass for `project` is
+P1-P7 conduct plus the oracle, and the flip of the default needs two consecutive passes per site on one frozen pair.
+
 ## Units (this repository)
 
 Partitioned by file; Core units A1-A7 are in the Core paired document.
