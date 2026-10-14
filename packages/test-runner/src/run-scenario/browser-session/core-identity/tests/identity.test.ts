@@ -101,5 +101,7 @@ test("Core gate precedes project setup, browser, chat and direct provider dispat
   const source = await readFile(fileURLToPath(new URL("../../../../../src/run-scenario.ts", import.meta.url)), "utf8");
   const check = source.indexOf("await verifyRunningCoreIdentity(");
   assert.ok(check > source.indexOf("topology.control?.recordProviderFailuresTo"));
-  for (const token of ["await prepareIndependentCreationProject(", "await launchExtensionSession(", "const chat = buildEntry", 'type: "fluxiq.startRecording"']) assert.ok(check < source.indexOf(token));
+  // Since t519 (4ee4e65c) every recording start dispatches the message `recordingStartMessage` built from the fixture's
+  // description, `startRecording!`, so the first such dispatch is the earliest recording dispatch; a missing token fails.
+  for (const token of ["await prepareIndependentCreationProject(", "await launchExtensionSession(", "const chat = buildEntry", "startRecording!)"]) assert.ok(check < source.indexOf(token), token);
 });
