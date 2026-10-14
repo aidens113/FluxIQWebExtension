@@ -24,6 +24,11 @@ const ACTIVE_RUN_SCAN_LIMIT = 25;
 
 /** A run in one of these states is over; anything else is still going, or waiting to. */
 const ENDED_RUN_STATES = new Set(["succeeded", "failed", "cancelled"]);
+/**
+ * The states Stop asks Core for. The listing is one page, newest queued first (t604), so an older run still going
+ * could fall off it unless the page holds only runs that are not over; the check above still guards what comes back.
+ */
+const ACTIVE_RUN_STATES = ["queued", "running", "waiting", "interrupted"];
 
 const STOP_REASON = "Stopped from the browser extension.";
 
@@ -36,7 +41,7 @@ export async function stopRun(message: Partial<PanelStopRunRequest>, context: Pa
   if (flowId) return context.call("cancel-flow-bootstrap", { projectId, flowId });
   if (runId) return context.call("cancel-runtime-session", { projectId, runId, reason: STOP_REASON });
 
-  const listed = await context.call("list-runtime-sessions", { projectId, summaries: true, limit: ACTIVE_RUN_SCAN_LIMIT });
+  const listed = await context.call("list-runtime-sessions", { projectId, summaries: true, statuses: ACTIVE_RUN_STATES, limit: ACTIVE_RUN_SCAN_LIMIT });
   if (!listed.ok) return listed;
   const runs = (listed.payload as { runtimeSessions?: unknown } | null)?.runtimeSessions;
   const active = (Array.isArray(runs) ? runs : [])

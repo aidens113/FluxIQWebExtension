@@ -21,7 +21,7 @@ function candidateCore(answers: { adaptation?: unknown; sessions?: unknown }) {
     throw new Error(`unexpected ${endpoint}`);
   } } };
 }
-const session = (runId: string, queuedAt: number, trial: Record<string, unknown>) => ({ runId, flowId: "flow", queuedAt, metadata: { candidateTrial: { candidateId: "candidate", ...trial } } });
+const session = (runId: string, queuedAt: number, trial: Record<string, unknown>) => ({ runId, flowId: "flow", queuedAt, candidateTrial: { candidateId: "candidate", ...trial } });
 
 test("a direct build's draft carries its own verdict, run and codes, and the trials Core ran (t348)", async () => {
   const draft = createdFlowCandidateDraft({ candidate: { ...candidate, trial: { verdict: "unsure", runId: "trial.two", codes: ["candidate.trial_unsure", "not a code"] } } }, { projectId: "project", flowId: "flow" })!;
@@ -68,9 +68,9 @@ function projectCore(answers: { adaptation?: unknown; sessions?: unknown }) {
 
 // The assembled candidate's whole trials, and one builder's partial subflow trial of another candidate, which is not this one's.
 const sessions = { runtimeSessions: [
-  { runId: "trial.whole.2", flowId: "flow", queuedAt: 30, metadata: { candidateTrial: { candidateId: "project.candidate", revision: 2, digest: "d2", start: "reset", execution: "succeeded" } } },
-  { runId: "trial.whole.1", flowId: "flow", queuedAt: 20, metadata: { candidateTrial: { candidateId: "project.candidate", revision: 1, digest: "d1", start: "reset", execution: "failed", code: "web.action.timeout" } } },
-  { runId: "trial.subflow.brief-1", flowId: "flow", queuedAt: 10, metadata: { candidateTrial: { candidateId: "builder.brief-1", revision: 1, start: "reset", execution: "succeeded" } } },
+  { runId: "trial.whole.2", flowId: "flow", queuedAt: 30, candidateTrial: { candidateId: "project.candidate", revision: 2, digest: "d2", start: "reset", execution: "succeeded" } },
+  { runId: "trial.whole.1", flowId: "flow", queuedAt: 20, candidateTrial: { candidateId: "project.candidate", revision: 1, digest: "d1", start: "reset", execution: "failed", code: "web.action.timeout" } },
+  { runId: "trial.subflow.brief-1", flowId: "flow", queuedAt: 10, candidateTrial: { candidateId: "builder.brief-1", revision: 1, start: "reset", execution: "succeeded" } },
   { runId: "playback", flowId: "flow", queuedAt: 40, metadata: {} },
 ] };
 
@@ -121,4 +121,29 @@ test("a project draft, from the direct build, the chat or a failed build, is rea
   assert.match(failure.message, /kept its assembled project candidate as a draft/u);
   assert.equal(failure.details?.code, "lab.candidate_not_promoted");
   assert.equal(failure.details?.authoringMode, "project");
+});
+
+// t604: listing a whole project's sessions once outgrew what Core could send (A8 `run-mv8mf0x5-95071c06`). The Lab asks
+// only for its own build's trials -- this Flow, this candidate -- follows Core's cursor, and still drops a summary that is
+// not its candidate's, in case a Core ignored a filter.
+test("a build's trials are read from a listing asked for its Flow and candidate, page by page", async () => {
+  const asked: Array<Record<string, unknown>> = [];
+  const pages: Record<string, unknown> = {
+    first: { runtimeSessions: [session("trial.three", 3, { revision: 3, execution: "failed" }), { runId: "other.flow", flowId: "flow.other", queuedAt: 2, candidateTrial: { candidateId: "candidate" } }], page: { nextCursor: "cursor.two" } },
+    "cursor.two": { runtimeSessions: [session("trial.two", 2, { revision: 2 }), { runId: "other.candidate", flowId: "flow", queuedAt: 1, candidateTrial: { candidateId: "candidate.other" } }], page: { nextCursor: "cursor.three" } },
+    "cursor.three": { runtimeSessions: [session("trial.one", 1, { revision: 1 })], page: { nextCursor: null } },
+  };
+  const control = { automationStudioCall: async (endpoint: string, payload: Record<string, unknown>) => {
+    assert.equal(endpoint, "list-runtime-sessions");
+    asked.push(payload);
+    return pages[typeof payload.cursor === "string" ? payload.cursor : "first"];
+  } };
+  const outcome = await createdFlowChatCandidateDraftOutcome(control, { projectId: "project", flowId: "flow" }, "candidate", null);
+  assert.deepEqual(asked, [
+    { projectId: "project", flowId: "flow", candidateId: "candidate", limit: 100 },
+    { projectId: "project", flowId: "flow", candidateId: "candidate", limit: 100, cursor: "cursor.two" },
+    { projectId: "project", flowId: "flow", candidateId: "candidate", limit: 100, cursor: "cursor.three" },
+  ]);
+  assert.deepEqual(outcome.trials?.map((trial) => [trial.runId, trial.revision]), [["trial.one", 1], ["trial.two", 2], ["trial.three", 3]]);
+  assert.equal(outcome.trialRunId, "trial.three");
 });
