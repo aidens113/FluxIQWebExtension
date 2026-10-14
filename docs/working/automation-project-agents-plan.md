@@ -264,6 +264,30 @@ at most $0.25 per Flow, every run fully debugged before any rerun.
 - **Logs.** `steps/NNNN-*/meta.json` and `steps/index.md` gain `role` and
   `briefId` so a debug can read one builder's steps on their own.
 
+## A8 Run Plan (drafted 2026-10-13; launch needs the user's go-ahead)
+
+On one frozen source pair after A5c and W4 merge, every run started from the extension chat, headed, under
+`--llm-max-cost-usd 0.25`, one attempt per launch, each run fully debugged before any rerun, lane trees synced to
+dev and rebuilt, at most four lanes at once (one `lab-slots/slot-N` each). Common shape (as the instruction-created
+gate uses, `mvp-final-month-plan/reports/codex-continuation-live-readiness.md`):
+
+```powershell
+pnpm.cmd lab run <scenario> --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --authoring-mode <candidate|project> --llm-task create-flow --instruction-task <task> --target persistent-isolated --workspace a8-<mode>-<site> --llm-max-cost-usd 0.25 --llm-max-calls 64 --llm-max-run-tokens 48000000
+```
+
+| Site | Task | Modes |
+| --- | --- | --- |
+| crossborder-marketplace | `crossborder-marketplace-hub-to-cart` | candidate, project |
+| bigbox-retail | `bigbox-retail-pickup-cart` | candidate, project |
+| social-network-feed | `social-network-feed-confirm-requests` | candidate, project |
+| everything-store | `everything-store-plus-earbuds-under-50` | candidate, project |
+| bigbox-retail | `bigbox-retail-pickup-towels` (single part) | project |
+
+Nine paid runs, at most $2.25 in billed dollars. Recorded per run: the exact oracle result, billed cost, calls,
+the largest single decision input (W4 `runSpend.stepLog.largestInputTokens`), per-role spend, whether the reserve
+paid the judged run, and a UI review of the chat's plan, brief, return and receipt cards. A pass for `project` is
+P1-P7 conduct plus the oracle, and the flip of the default needs two consecutive passes per site on one frozen pair.
+
 ## Units (this repository)
 
 Partitioned by file; Core units A1-A7 are in the Core paired document.
@@ -293,6 +317,12 @@ Partitioned by file; Core units A1-A7 are in the Core paired document.
   `project` on the same terms as `candidate` (a trial runner and the start reset), read a project build's
   outcome and draft the way `candidate-outcome.ts` reads a candidate's, and record spend, calls and the
   largest decision input per role and brief (`live-llm/step-log-spend.ts`) for A8. Tests beside each file.
+- **W5 Live diagnose, repair and adapt reachable again** (found by the 2026-10-13 sweep, t548; after W4,
+  which shares `cli.ts`). t519 (`4ee4e65c`) retired bare `--flow`, but `packages/test-runner/src/live-llm/live-llm-plan.ts:240`
+  still tells a live `diagnose`, `repair` or `adapt` run to pass it, so those runs have no reachable launch on `lab run`;
+  the adaptation gate depends on them. Give them an instruction-led launch, remove the dead "drop --flow" checks
+  (`commands.ts:274`, `live-llm-plan.ts:237`), `flowLaneExclusion` and the never-assigned `discardWindowUntil`, stop
+  `bench/run-bench.ts:505,591` passing `flow: true`, and correct `docs/architecture/testing-facility.md:2521`.
 - **A8 Lab comparison.** The qualification in `Lab Qualification` above,
   on a frozen source pair after A5, W1 and W2. Paid: one attempt per launch,
   a live supervisor, a full debug before any rerun.
@@ -405,6 +435,51 @@ build does today until A5 lands and the mode is chosen.
 - Definition of done: `cd domain && DOMAIN_TEST_BUILD_LABEL=<label> node scripts/test-domain.mjs io/tests/gateway-output-dispatcher runtime/tests/adapter tests/core-gateway-recording-order tests/web-panel-host`
   passes in full; `pnpm --filter @fluxiq-web-extension/domain check`; `pnpm structure:check`.
 
+### Brief: test-runner-sweep-failures
+- Repository: this repository, the paired worktree the dispatch prompt names.
+- Task: find the cause of, and fix forward, the downstream sweep's 14 failures (2026-10-13, dev `7a93c624` with Core
+  `1f747263`, from `fxwork/sweep-1010/!FluxIQWebExtension`: `pnpm -r --no-bail --filter '!@fluxiq-web-extension/domain' test`
+  -> `packages/test-runner` "# fail 13", `apps/scenario-lab` "# fail 1"; the 2026-10-10 sweep had 1 test-runner
+  failure, `compile-flow-script.test.ts`). Failing: `run-evaluation/tests/runner-wiring.test.ts` (5: "flowLane is
+  in the runner", "snapshot is in the runner"), `run-evaluation/tests/single-run-evaluation.test.ts` (1),
+  `run-scenario/browser-session/{core-identity,build-identity}/tests/identity.test.ts` (1 each), `tests/cli-llm.test.ts`
+  (5: refusals before a credential is read, e.g. "the next refusal is the live run's missing credential"), and
+  `apps/scenario-lab/src/scenarios/crossborder-marketplace/tests/browser-paths.test.ts` (1, a browser test the
+  2026-10-10 sweep listed as slow). For each: reproduce in your worktree, find the commit that broke it, and say
+  whether it is a stale test (source-scanning tests after a move, an expectation older than a product change), an
+  environment dependence (credentials or variables a test must not read from the machine), or a product defect.
+  Fix stale tests and environment leaks in the tests; never relax a product check; stop on a product defect and
+  report it with the evidence.
+- Required reads: the failing tests and the code they exercise; `docs/architecture/testing-facility.md` where a test
+  names a contract.
+- Owns: the failing test files and test-only helpers under `tests/` directories they use;
+  `docs/working/automation-project-agents-plan/reports/<your label>.md`.
+- Must not touch: any file outside a `tests/` directory; Core files.
+- Definition of done: each listed test passes in your worktree (`pnpm --filter @fluxiq-web-extension/test-runner build`
+  then `node --test` on the built files; scenario-lab by its own test script), `pnpm --filter @fluxiq-web-extension/test-runner check`,
+  `pnpm structure:check`; the report names each failure's cause and the breaking commit.
+
+### Brief: W4-lab-project-mode
+- Repository: this repository, the paired worktree the dispatch prompt names (its Core worktree carries A5c, which
+  adds authoring mode `project`).
+- Task: unit W4, let the Lab run and read a build in mode `project`, so A8 can compare it with `candidate`.
+  (1) `packages/test-runner/src/flow-lane/creation/readiness.ts:68-87` admits `project` on the same terms as
+  `candidate` (a trial runner and the start reset), with its own refusal wording. (2) Read a project build's
+  outcome and draft as `flow-lane/creation/candidate-outcome.ts` reads a candidate's (a project build proposes
+  through the same promotion owner and stores the same draft). (3) `live-llm/step-log-spend.ts`: spend, calls and
+  the largest single decision input in tokens, per role and brief, from the step log's new `role`/`briefId`
+  fields; written into the run's report so a debug and A8 can read them. (4) `cli.ts:123`: `--model-reset-only`
+  applies to `project` builds too. (5) `docs/architecture/testing-facility.md`: the mode, its readiness and the
+  per-role spend.
+- Required reads: the Core paired plan's Current State; this document's `Lab Qualification`; the files above;
+  `live-llm/authoring-mode-env.ts`.
+- Owns: the files named above and their tests; the report.
+- Must not touch: Core files, `apps/extension/**`, `domain/**`, `scripts/lab/**` (unless the launch path itself
+  refuses the mode; then report it before editing).
+- Definition of done: tests for readiness (admitted, refused without trial runner or start reset), outcome reading
+  of a project build fixture, per-role spend from a step-log fixture with two briefs, the CLI flag; test-runner
+  check and the tests beside each file; `pnpm structure:check`. No live run.
+
 ## Work Ledger
 
 ### 2026-10-13 — Plan written from three discovery reports
@@ -430,6 +505,14 @@ build does today until A5 lands and the mode is chosen.
 - Validation: see the Core entries; downstream observed domain tests 29 passed, extension 79 passed (W1), extension 536 passed and Lab index 2 passed (W2), all package checks and the structure audit passed
 - Outcome: Accepted
 - Follow-up: the Next list above
+
+### 2026-10-13 — Downstream sweep fix-forward (t547, t548)
+- Agent: workers t547-domain-sweep, t548-test-runner-sweep; supervisor verified and integrated
+- Changed: four domain test files (fixtures for Core t519); six test-runner and scenario-lab test files
+- Why: downstream sweep on `7a93c624`: domain 17 failed of 2019, test-runner 13, scenario-lab 1; extension 3004 of 3004 passed
+- Validation: domain group -> 100 passed; test-runner group -> 83 passed; crossborder browser paths -> 17 passed; domain and test-runner checks and the structure audit passed; merged `775d685e`, `f7acb9cf` (full entry in the Core document's ledger)
+- Outcome: Accepted
+- Follow-up: W5
 
 ## Open Questions
 

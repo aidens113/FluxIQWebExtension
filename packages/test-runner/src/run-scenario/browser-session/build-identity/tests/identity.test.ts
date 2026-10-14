@@ -23,5 +23,6 @@ test("scenario runner verifies loaded content before any chat or recording dispa
   const check = source.indexOf("await verifyRunningBuildIdentity(");
   assert.ok(check > source.indexOf("await openScenarioStart(page, topology.scenarioOrigin, scenario)"));
   assert.ok(check < source.indexOf("const chat = buildEntry"));
-  assert.ok(check < source.indexOf('type: "fluxiq.startRecording"'));
+  // Since t519 (4ee4e65c) every recording start dispatches the message built from the fixture's description, `startRecording!`.
+  assert.ok(check < source.indexOf("startRecording!)"), "before the first recording dispatch");
 });
