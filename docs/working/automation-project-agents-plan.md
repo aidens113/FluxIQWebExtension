@@ -405,6 +405,51 @@ build does today until A5 lands and the mode is chosen.
 - Definition of done: `cd domain && DOMAIN_TEST_BUILD_LABEL=<label> node scripts/test-domain.mjs io/tests/gateway-output-dispatcher runtime/tests/adapter tests/core-gateway-recording-order tests/web-panel-host`
   passes in full; `pnpm --filter @fluxiq-web-extension/domain check`; `pnpm structure:check`.
 
+### Brief: test-runner-sweep-failures
+- Repository: this repository, the paired worktree the dispatch prompt names.
+- Task: find the cause of, and fix forward, the downstream sweep's 14 failures (2026-10-13, dev `7a93c624` with Core
+  `1f747263`, from `fxwork/sweep-1010/!FluxIQWebExtension`: `pnpm -r --no-bail --filter '!@fluxiq-web-extension/domain' test`
+  -> `packages/test-runner` "# fail 13", `apps/scenario-lab` "# fail 1"; the 2026-10-10 sweep had 1 test-runner
+  failure, `compile-flow-script.test.ts`). Failing: `run-evaluation/tests/runner-wiring.test.ts` (5: "flowLane is
+  in the runner", "snapshot is in the runner"), `run-evaluation/tests/single-run-evaluation.test.ts` (1),
+  `run-scenario/browser-session/{core-identity,build-identity}/tests/identity.test.ts` (1 each), `tests/cli-llm.test.ts`
+  (5: refusals before a credential is read, e.g. "the next refusal is the live run's missing credential"), and
+  `apps/scenario-lab/src/scenarios/crossborder-marketplace/tests/browser-paths.test.ts` (1, a browser test the
+  2026-10-10 sweep listed as slow). For each: reproduce in your worktree, find the commit that broke it, and say
+  whether it is a stale test (source-scanning tests after a move, an expectation older than a product change), an
+  environment dependence (credentials or variables a test must not read from the machine), or a product defect.
+  Fix stale tests and environment leaks in the tests; never relax a product check; stop on a product defect and
+  report it with the evidence.
+- Required reads: the failing tests and the code they exercise; `docs/architecture/testing-facility.md` where a test
+  names a contract.
+- Owns: the failing test files and test-only helpers under `tests/` directories they use;
+  `docs/working/automation-project-agents-plan/reports/<your label>.md`.
+- Must not touch: any file outside a `tests/` directory; Core files.
+- Definition of done: each listed test passes in your worktree (`pnpm --filter @fluxiq-web-extension/test-runner build`
+  then `node --test` on the built files; scenario-lab by its own test script), `pnpm --filter @fluxiq-web-extension/test-runner check`,
+  `pnpm structure:check`; the report names each failure's cause and the breaking commit.
+
+### Brief: W4-lab-project-mode
+- Repository: this repository, the paired worktree the dispatch prompt names (its Core worktree carries A5c, which
+  adds authoring mode `project`).
+- Task: unit W4, let the Lab run and read a build in mode `project`, so A8 can compare it with `candidate`.
+  (1) `packages/test-runner/src/flow-lane/creation/readiness.ts:68-87` admits `project` on the same terms as
+  `candidate` (a trial runner and the start reset), with its own refusal wording. (2) Read a project build's
+  outcome and draft as `flow-lane/creation/candidate-outcome.ts` reads a candidate's (a project build proposes
+  through the same promotion owner and stores the same draft). (3) `live-llm/step-log-spend.ts`: spend, calls and
+  the largest single decision input in tokens, per role and brief, from the step log's new `role`/`briefId`
+  fields; written into the run's report so a debug and A8 can read them. (4) `cli.ts:123`: `--model-reset-only`
+  applies to `project` builds too. (5) `docs/architecture/testing-facility.md`: the mode, its readiness and the
+  per-role spend.
+- Required reads: the Core paired plan's Current State; this document's `Lab Qualification`; the files above;
+  `live-llm/authoring-mode-env.ts`.
+- Owns: the files named above and their tests; the report.
+- Must not touch: Core files, `apps/extension/**`, `domain/**`, `scripts/lab/**` (unless the launch path itself
+  refuses the mode; then report it before editing).
+- Definition of done: tests for readiness (admitted, refused without trial runner or start reset), outcome reading
+  of a project build fixture, per-role spend from a step-log fixture with two briefs, the CLI flag; test-runner
+  check and the tests beside each file; `pnpm structure:check`. No live run.
+
 ## Work Ledger
 
 ### 2026-10-13 — Plan written from three discovery reports
