@@ -131,7 +131,7 @@ test("live LLM CLI fails closed without opt-in or required non-secret identity",
   ]), /--llm-task is invalid/);
 });
 
-test("live LLM CLI rejects unsafe budgets and multi-run matrices", () => {
+test("live LLM CLI rejects unsafe budgets, and every live matrix", () => {
   const base = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "diagnose"];
   // One token past the absolute per-request ceiling, and an input limit the
   // default output limit can no longer fit beside it inside the total. Both
@@ -143,10 +143,10 @@ test("live LLM CLI rejects unsafe budgets and multi-run matrices", () => {
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-cost-usd", String(LLM_LAB_MAX_ESTIMATED_COST_USD + 0.01)]), new RegExp(`maxEstimatedCostUsd: must be a finite number from 0 to ${LLM_LAB_MAX_ESTIMATED_COST_USD}`, "u"));
   const lowerCost = parseLabCommand(["run", "basic-form", ...base, "--llm-max-cost-usd", "0.10"]);
   assert.equal(lowerCost.command === "run" ? lowerCost.llm?.budget.maxEstimatedCostUsd : undefined, 0.1);
-  assert.throws(() => parseLabCommand(["matrix", "--all", ...base]), /exactly one explicit scenario/);
-  assert.throws(() => parseLabCommand(["matrix", "--scenarios-json", '["basic-form"]', "--repeat", "2", ...base]), /--repeat 1/);
-  const one = parseLabCommand(["matrix", "--scenarios-json", '["basic-form"]', ...base]);
-  assert.equal(one.command, "matrix");
+  // A live matrix ran the retired recording-built Flow lane, so any live matrix is refused as that lane is, however many scenarios or repeats it names.
+  assert.throws(() => parseLabCommand(["matrix", "--all", ...base]), instructionLedRefusal);
+  assert.throws(() => parseLabCommand(["matrix", "--scenarios-json", '["basic-form"]', "--repeat", "2", ...base]), instructionLedRefusal);
+  assert.throws(() => parseLabCommand(["matrix", "--scenarios-json", '["basic-form"]', ...base]), instructionLedRefusal);
 });
 
 test("run accepts one --workflow ID and leaves it absent otherwise", () => {
@@ -228,7 +228,7 @@ test("create-flow runs one instruction task without the recorded Flow lane, with
   assert.ok(campaign.command === "run");
   assert.equal(campaign.variantId, "short-catalog");
   assert.equal(campaign.instructionTaskId, "product-catalog-all-pages-short-catalog");
-  assert.equal(campaign.flowLane, undefined);
+  assert.equal("flowLane" in campaign, false);
   // --dry-run takes no value, wherever it stands.
   const dry = parseLabCommand(["run", "--dry-run", "product-catalog", ...live, "--workflow", "paginated-extraction"]);
   assert.ok(dry.command === "run");
@@ -245,6 +245,11 @@ test("create-flow runs one instruction task without the recorded Flow lane, with
   assert.throws(() => parseLabCommand(["run", "product-catalog", "--dry-run"]), /require --live-llm --llm-task create-flow/u);
   assert.throws(() => parseLabCommand(["run", "product-catalog", "--variant", "short-catalog", ...adapt]), /--variant requires --live-llm --llm-task create-flow/u);
   assert.throws(() => parseLabCommand(["matrix", "--scenarios-json", '["product-catalog"]', ...live]), /create-flow builds one instruction task per run: use lab run/u);
+  // Every other live matrix ran the retired recording-built Flow lane, so it is refused as that lane is, with the path that replaced it, before anything starts.
+  for (const scenarios of [["--scenarios-json", '["product-catalog"]'], ["--all"], ["--scenarios-json", '["product-catalog","job-board"]', "--repeat", "2"]]) {
+    assert.throws(() => parseLabCommand(["matrix", ...scenarios, ...adapt]), instructionLedRefusal, scenarios.join(" "));
+  }
+  assert.deepEqual(parseLabCommand(["matrix", "--scenarios-json", '["product-catalog"]']), { command: "matrix", all: false, repeat: 1, scenarioIds: ["product-catalog"] }, "a provider-free matrix is unchanged");
 });
 
 test("create-flow starts its build from the extension's chat unless the test-only --direct-api-build is given, and the chat needs the panel on screen", () => {

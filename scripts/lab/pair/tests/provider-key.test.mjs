@@ -46,3 +46,10 @@ test("an empty, blank, commented or absent assignment is not a key", async () =>
     assert.equal((await providerKeySource({ env: {}, extRoot: root })).found, false);
   });
 });
+
+test("FLUXIQ_PROVIDER_KEY_FILES=none searches the process environment only, as the runner does", async () => {
+  await withCheckout({ ".env.local": `DEEPSEEK_API_KEY=${FAKE}\n` }, async (root) => {
+    const found = await providerKeySource({ env: { FLUXIQ_PROVIDER_KEY_FILES: "none" }, extRoot: root });
+    assert.deepEqual(found, { name: "DEEPSEEK_API_KEY", found: false, searched: ["the process environment"] });
+  });
+});

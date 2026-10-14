@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { assertTestMayReadEnvFile } from "./env-files/index.js";
 
 export type FluxIQTargetMode = "isolated" | "persistent-isolated" | "existing" | "clone";
 
@@ -166,6 +167,12 @@ export function resolveCloneCacheScopeConfiguration(env: NodeJS.ProcessEnv): Clo
  * a machine's saved configuration — for example an isolated run on a machine
  * whose `.env.local` configures an existing installation. The files themselves
  * are never edited.
+ *
+ * `none` governs the run's configuration, not its provider key: a live run
+ * still reads `DEEPSEEK_API_KEY`, and only that name, from these files
+ * (`live-llm/provider-credential.ts`). `FLUXIQ_PROVIDER_KEY_FILES=none` is what
+ * keeps the key out of them too. Inside a test neither is needed: no reader
+ * opens an env file outside the temporary directory (`env-files/`).
  */
 function environmentFileNames(processEnvironment: NodeJS.ProcessEnv): readonly string[] {
   const choice = processEnvironment.FLUXIQ_TEST_ENV_FILES;
@@ -199,6 +206,7 @@ export async function loadTestEnvironment(repositoryRoot: string, processEnviron
   const fromFile: NodeJS.ProcessEnv = {};
   const source = new Map<string, string>();
   for (const name of environmentFileNames(processEnvironment)) {
+    assertTestMayReadEnvFile(repositoryRoot, name);
     const values = await readEnvironmentFile(path.join(repositoryRoot, name));
     for (const key of Object.keys(values)) source.set(key, name);
     Object.assign(fromFile, values);
@@ -215,7 +223,10 @@ export async function loadTestEnvironment(repositoryRoot: string, processEnviron
 export async function loadAllowlistedTestEnvironment(repositoryRoot: string, processEnvironment: NodeJS.ProcessEnv, allowedNames: readonly string[]): Promise<NodeJS.ProcessEnv> {
   const allowed = new Set(allowedNames);
   const fromFile: NodeJS.ProcessEnv = {};
-  for (const name of environmentFileNames(processEnvironment)) Object.assign(fromFile, await readAllowlistedEnvironmentFile(path.join(repositoryRoot, name), allowed));
+  for (const name of environmentFileNames(processEnvironment)) {
+    assertTestMayReadEnvFile(repositoryRoot, name);
+    Object.assign(fromFile, await readAllowlistedEnvironmentFile(path.join(repositoryRoot, name), allowed));
+  }
   for (const name of allowed) if (processEnvironment[name] !== undefined) fromFile[name] = processEnvironment[name];
   return fromFile;
 }

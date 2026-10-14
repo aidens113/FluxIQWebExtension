@@ -4,7 +4,8 @@
 // environment wins, then `.env`, then `.env.local` in the checkout the run
 // starts from -- here the pair's extension worktree, which has neither unless
 // someone put one there. Only whether the name is assigned is read; the value
-// never leaves this function.
+// never leaves this function. `FLUXIQ_PROVIDER_KEY_FILES=none` keeps the
+// runner out of both files, so it keeps this out of them too.
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -19,6 +20,7 @@ const ASSIGNED = new RegExp(`^\\s*(?:export\\s+)?${NAME}\\s*=\\s*["']?[^\\s"'#]`
  */
 export async function providerKeySource({ env, extRoot }) {
   if ((env[NAME] ?? "").trim() !== "") return { name: NAME, found: true, source: "the process environment" };
+  if (env.FLUXIQ_PROVIDER_KEY_FILES === "none") return { name: NAME, found: false, searched: ["the process environment"] };
   for (const file of FILES) {
     const contents = await readIfPresent(path.join(extRoot, file));
     if (contents !== null && ASSIGNED.test(contents)) return { name: NAME, found: true, source: path.join(extRoot, file) };

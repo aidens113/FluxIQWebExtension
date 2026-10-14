@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { loadTestEnvironment, parseEnvironmentFile, testEnvironmentValueSource, resolveAuthScopeConfiguration, resolveCloneCacheScopeConfiguration, resolveInteractiveTargetConfiguration, resolveTargetConfiguration } from "../target-config.js";
+import { loadAllowlistedTestEnvironment, loadTestEnvironment, parseEnvironmentFile, testEnvironmentValueSource, resolveAuthScopeConfiguration, resolveCloneCacheScopeConfiguration, resolveInteractiveTargetConfiguration, resolveTargetConfiguration } from "../target-config.js";
 
 const existingEnvironment: NodeJS.ProcessEnv = {
   FLUXIQ_TEST_TARGET: "existing",
@@ -205,4 +205,13 @@ test("dotenv parser rejects malformed assignments and supports quoted values", (
   assert.deepEqual(parseEnvironmentFile("export A=plain # comment\nB=\"two words\"\nC='literal'\n"), { A: "plain", B: "two words", C: "literal" });
   assert.throws(() => parseEnvironmentFile("not an assignment"), /line 1/);
   assert.throws(() => parseEnvironmentFile("A=\"unterminated"), /Unterminated/);
+});
+
+test("a test never reads a checkout's env files, which hold this machine's real provider key", async () => {
+  // This package's own directory: a real checkout, never a temporary one.
+  const checkout = path.resolve(import.meta.dirname, "..", "..");
+  await assert.rejects(loadTestEnvironment(checkout, {}), /A test may read \.env only from a temporary directory it made/u);
+  await assert.rejects(loadAllowlistedTestEnvironment(checkout, {}, ["FLUXIQ_TEST_USERNAME"]), /A test may read \.env only from a temporary directory it made/u);
+  // Reading no file reads nothing to refuse.
+  assert.deepEqual(await loadTestEnvironment(checkout, { FLUXIQ_TEST_ENV_FILES: "none", FLUXIQ_TEST_FLOW_ID: "from-process" }), { FLUXIQ_TEST_ENV_FILES: "none", FLUXIQ_TEST_FLOW_ID: "from-process" });
 });

@@ -19,11 +19,10 @@ function judged({ discards, failure }: RecordingDiscardAudit) {
  * The run's window on Core's clock, in epoch milliseconds, from Lab Stage 2's
  * instrumented run (`reports/l-stage2.md`, "Blocker diagnosis"): the runner
  * asked the extension to start recording at `from`, a recorded action landed at
- * `inside`, Core finalized the recording at `finalized`, and the Flow lane began
- * dispatching no later than `until`, its first action's start. Every entry below
+ * `inside`, and Core finalized the recording at `finalized`. Every entry below
  * is stamped `inside` unless a test says otherwise.
  */
-const clock = { from: 1_789_292_715_339, inside: 1_789_292_717_045, finalized: 1_789_292_717_333, until: 1_789_292_729_664 };
+const clock = { from: 1_789_292_715_339, inside: 1_789_292_717_045, finalized: 1_789_292_717_333 };
 /** `recordAuditEvent` puts the session in the metadata, and `ClientGatewayAuditLog.record` copies it onto the entry and stamps it with Core's `Date.now()`. */
 function discard(type: string, metadata: Record<string, unknown>, id = `audit.${type}`, sessionId = "session.one", timestamp: unknown = clock.inside) {
   return { id, timestamp, sessionId, type, message: "A recording event arrived 12 ms after its recording was finalized", metadata: { sessionId, source: "automation-studio", clientId: "client.one", clientName: "Chromium", projectId: "project.web", eventType: "client.recording_event", inputId: "element-pressed", executable: type === "recording.action_discarded", ...metadata } };
@@ -139,7 +138,7 @@ const probeConfirmations = [
   discard("recording.action_discarded", { eventType: "web.page.navigated", inputId: "web.user.navigation_requested", domainId: "web-automation", discardedEvents: 1, discardedActions: 1 }, "audit.probe.navigate", "session.one", 1_789_292_713_188),
   discard("recording.action_discarded", { eventType: "web.element.input_changed", inputId: "web.user.text_entered", domainId: "web-automation", discardedEvents: 2, discardedActions: 2 }, "audit.probe.type", "session.one", 1_789_292_714_619),
 ];
-/** Discards 3 to 6: the Flow lane's four actions, each audited as it finished, against the recording Core had finalized 11 to 15 s earlier. `firstCount` is Core's running count on the first. */
+/** Discards 3 to 6: the retired recording-built Flow lane's four actions, each audited as it finished, against the recording Core had finalized 11 to 15 s earlier. `firstCount` is Core's running count on the first. */
 function flowConfirmations(firstCount = 1) {
   const actions: [eventType: string, inputId: string, timestamp: number, sinceFinalizedMs: number][] = [
     ["web.element.input_changed", "web.user.text_entered", 1_789_292_730_686, 11_165],
@@ -170,103 +169,89 @@ test("a discard Core audited inside the window counts, from the moment the exten
   assert.equal(audit.failure?.message, `${lostInWindow} (3 with no recording id, 1 for recording.run)`);
 });
 
-test("once the Flow lane began dispatching, a discard naming the recording is ignored, and a late one Core audited before that counts", () => {
-  const flowRun = { ...run, until: clock.until };
-  // Both reads of the instrumented run, as the runner makes them: the first bounded below only, the second closed at the Flow's dispatch. All six discards, and no loss.
+test("the window is open-ended: a discard naming the recording counts however long after finalization Core audited it", () => {
+  // Nothing is dispatched against a finalized recording now that the recording-built Flow lane is retired, so nothing closes the window.
+  assert.equal(readRecordingDiscards(snapshot(flowConfirmations()), run).failure?.message, `${lostInWindow} (4 for recording.run after finalization)`);
   const first = readRecordingDiscards(snapshot([pairing, ...probeConfirmations]), run);
-  assert.deepEqual(judged(readRecordingDiscards(snapshot([pairing, ...probeConfirmations, ...flowConfirmations()]), flowRun, first.discards)), { discards: [], failure: undefined });
-  // An entry naming only the session is judged against the same window.
-  const sessionOnlyAfter = discard("recording.action_discarded", { discardedEvents: 5, discardedActions: 5 }, "audit.session-after", "session.one", clock.until + 5);
-  assert.deepEqual(judged(readRecordingDiscards(snapshot([sessionOnlyAfter]), flowRun)), { discards: [], failure: undefined });
-
-  // A real late loss before the dispatch still fails the run, and the Flow's confirmations then carry Core's running count on from it.
-  const audit = readRecordingDiscards(snapshot([pairing, ...probeConfirmations, genuineLateAction, ...flowConfirmations(2)]), flowRun, first.discards);
+  const audit = readRecordingDiscards(snapshot([pairing, ...probeConfirmations, genuineLateAction]), run, first.discards);
   assert.deepEqual(audit.discards, [{ type: "recording.action_discarded", entryId: "audit.late", recordingId: "recording.run", discardedActions: 1, discardedEvents: 1, sinceFinalizedMs: 40 }]);
   assert.equal(audit.failure?.message, `${lostInWindow} (1 for recording.run after finalization)`);
-
-  // With no `until`, as when no Flow was dispatched, the window is open-ended and the Flow's confirmations count.
-  assert.equal(readRecordingDiscards(snapshot(flowConfirmations()), run).failure?.message, `${lostInWindow} (4 for recording.run after finalization)`);
 });
 
 test("an entry with no readable timestamp counts, so the window fails closed", () => {
-  const flowRun = { ...run, until: clock.until };
-  // Shaped like a Flow confirmation, but with no time to place it after the dispatch, so it is read as a loss.
-  const confirmation = flowConfirmations()[0]!;
-  for (const entry of [unstamped(confirmation), { ...confirmation, timestamp: null }, { ...confirmation, timestamp: String(clock.until + 1) }, { ...confirmation, timestamp: Number.NaN }]) {
-    const audit = readRecordingDiscards(snapshot([entry]), flowRun);
-    assert.deepEqual(audit.discards.map(item => item.entryId), ["audit.flow.1"], `timestamp ${String(entry.timestamp)}`);
-    assert.equal(audit.failure?.category, "recording.persistence");
+  // Shaped like a probe confirmation, stamped before `from`, but with no time to place it there, so it is read as a loss.
+  const confirmation = probeConfirmations[0]!;
+  for (const entry of [unstamped(confirmation), { ...confirmation, timestamp: null }, { ...confirmation, timestamp: String(clock.from - 1) }, { ...confirmation, timestamp: Number.NaN }]) {
+    const audit = readRecordingDiscards(snapshot([entry]), run);
+    assert.equal(audit.discards.length, 1, `timestamp ${String(entry.timestamp)}`);
+    assert.equal(audit.failure?.message, `${lostInWindow} (1 with no recording id)`, `timestamp ${String(entry.timestamp)}`);
   }
-  // And one shaped like a probe confirmation, naming no recording.
-  assert.equal(readRecordingDiscards(snapshot([unstamped(probeConfirmations[0]!)]), flowRun).failure?.message, `${lostInWindow} (1 with no recording id)`);
 });
 
 // -- What each read publishes ---------------------------------------------------
 // The runner publishes each read's window beside its discards, so a Lab run can
-// show that the probe's and the Flow's confirmations were excluded, not merely
+// show that the probe's confirmations were excluded, not merely
 // absent. Only the bounds and counts travel.
 
 /** What a window that excluded nothing of one audit type counts. */
 const noneExcluded = { thisRunsRecording: 0, noRecording: 0, anotherRecording: 0 };
 
-test("each read publishes its bounds, until only when set, and counts what the window excluded by audit type and by the recording each entry names", () => {
+test("each read publishes its bound, and counts what the window excluded by audit type and by the recording each entry names", () => {
   // The instrumented run's first read: the probe's two confirmations, stamped before `from` and naming no recording.
   const first = readRecordingDiscards(snapshot([pairing, ...probeConfirmations]), run);
   assert.deepEqual(first.window, { from: clock.from, excluded: { "recording.action_discarded": { ...noneExcluded, noRecording: 2 }, "recording.event_discarded": noneExcluded } });
-  assert.equal("until" in first.window, false, "a read with no upper bound publishes none");
-  // Its second read, closed at the Flow's dispatch: the Flow's four confirmations after `until` as well.
-  const second = readRecordingDiscards(snapshot([pairing, ...probeConfirmations, ...flowConfirmations()]), { ...run, until: clock.until }, first.discards);
-  assert.deepEqual(second.window, { from: clock.from, until: clock.until, excluded: { "recording.action_discarded": { thisRunsRecording: 4, noRecording: 2, anotherRecording: 0 }, "recording.event_discarded": noneExcluded } });
 
-  // Every group, each side of the window; entries inside it, unstamped, or of another audit type are not counted as excluded.
+  // Every group before the window; entries inside it, unstamped, or of another audit type are not counted as excluded.
   const earlierEvidence = discard("recording.event_discarded", { recordingId: "recording.earlier", discardedEvents: 7, discardedActions: 0 }, "audit.earlier-evidence", "session.other", clock.from - 1);
   const earlierAction = discard("recording.action_discarded", { recordingId: "recording.earlier", discardedEvents: 8, discardedActions: 1 }, "audit.earlier-action", "session.one", clock.from - 10_000);
-  const unloadEvidence = discard("recording.event_discarded", { recordingId: "recording.run", discardedEvents: 2, discardedActions: 0, sinceFinalizedMs: 20_000 }, "audit.unload", "session.one", clock.until + 1);
-  // Named by no recording and sent by another session: the window judges it before the session does, so it is counted.
-  const otherSessionAfter = discard("recording.action_discarded", { recordingId: "", discardedEvents: 1, discardedActions: 1 }, "audit.other-session", "session.other", clock.until + 2);
-  const inside = discard("recording.event_discarded", { recordingId: "recording.run", discardedEvents: 1, discardedActions: 0 }, "audit.inside");
+  const earlierOwn = discard("recording.event_discarded", { recordingId: "recording.run", discardedEvents: 1, discardedActions: 0 }, "audit.earlier-own", "session.one", clock.from - 2);
+  const unloadEvidence = discard("recording.event_discarded", { recordingId: "recording.run", discardedEvents: 2, discardedActions: 0, sinceFinalizedMs: 20_000 }, "audit.unload", "session.one", clock.finalized + 20_000);
+  // Named by no recording and sent by another session, inside the window: neither this run's discard nor excluded.
+  const otherSessionAfter = discard("recording.action_discarded", { recordingId: "", discardedEvents: 1, discardedActions: 1 }, "audit.other-session", "session.other", clock.finalized + 2);
+  const inside = discard("recording.event_discarded", { recordingId: "recording.run", discardedEvents: 3, discardedActions: 0 }, "audit.inside");
   const noTime = unstamped(discard("recording.event_discarded", { recordingId: "recording.run", discardedEvents: 9, discardedActions: 0 }, "audit.unstamped"));
-  // Exactly at `until` is inside; it names another recording, so it is neither this run's discard nor excluded.
-  const atUntil = discard("recording.event_discarded", { recordingId: "recording.earlier", discardedEvents: 10, discardedActions: 0 }, "audit.at-until", "session.one", clock.until);
-  const mixed = readRecordingDiscards(snapshot([pairing, earlierEvidence, earlierAction, ...probeConfirmations, inside, noTime, atUntil, ...flowConfirmations(), unloadEvidence, otherSessionAfter]), { ...run, until: clock.until });
+  // Exactly at `from` is inside; it names another recording, so it is neither this run's discard nor excluded.
+  const atFrom = discard("recording.event_discarded", { recordingId: "recording.earlier", discardedEvents: 10, discardedActions: 0 }, "audit.at-from", "session.one", clock.from);
+  const mixed = readRecordingDiscards(snapshot([pairing, earlierEvidence, earlierAction, earlierOwn, ...probeConfirmations, atFrom, inside, noTime, unloadEvidence, otherSessionAfter]), run);
   assert.deepEqual(mixed.window.excluded, {
-    "recording.action_discarded": { thisRunsRecording: 4, noRecording: 3, anotherRecording: 1 },
+    "recording.action_discarded": { thisRunsRecording: 0, noRecording: 2, anotherRecording: 1 },
     "recording.event_discarded": { thisRunsRecording: 1, noRecording: 0, anotherRecording: 1 },
   });
   assert.deepEqual(judged(mixed), { discards: [
-    { type: "recording.event_discarded", entryId: "audit.inside", recordingId: "recording.run", discardedActions: 0, discardedEvents: 1 },
+    { type: "recording.event_discarded", entryId: "audit.inside", recordingId: "recording.run", discardedActions: 0, discardedEvents: 3 },
     { type: "recording.event_discarded", entryId: "audit.unstamped", recordingId: "recording.run", discardedActions: 0, discardedEvents: 9 },
+    { type: "recording.event_discarded", entryId: "audit.unload", recordingId: "recording.run", discardedActions: 0, discardedEvents: 2, sinceFinalizedMs: 20_000 },
   ], failure: undefined });
 
   // Nothing an entry or a page supplied travels: no id, message, session, client, recording id, label or input id.
-  const published = JSON.stringify([first.window, second.window, mixed.window]);
+  const published = JSON.stringify([first.window, mixed.window]);
   for (const withheld of ["audit.", "session.", "client.one", "Chromium", "automation-studio", "project.web", "arrived 12 ms", "element-pressed", "web.user.", "web.element.", "web.page.", "web-automation", "recording.run", "recording.earlier"]) assert.equal(published.includes(withheld), false, withheld);
 });
 
-test("a read with no bound publishes from as null and no until, a bound that is not a finite number is no bound, and a response with no audit log publishes no exclusion count", () => {
-  const unbounded = readRecordingDiscards(snapshot([pairing, ...probeConfirmations]), { ...run, from: undefined, until: undefined });
+test("a read with no bound publishes from as null, a bound that is not a finite number is no bound, and a response with no audit log publishes no exclusion count", () => {
+  const unbounded = readRecordingDiscards(snapshot([pairing, ...probeConfirmations]), { ...run, from: undefined });
   assert.deepEqual(unbounded.window, { from: null, excluded: { "recording.action_discarded": noneExcluded, "recording.event_discarded": noneExcluded } });
-  assert.equal("until" in unbounded.window, false);
+  assert.deepEqual(Object.keys(unbounded.window), ["from", "excluded"], "the window publishes its lower bound and its exclusions, and nothing else");
 
   // Published as none, and applied as none: every entry is read.
   for (const bound of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-    const audit = readRecordingDiscards(snapshot([...probeConfirmations, ...flowConfirmations(3)]), { ...run, from: bound, until: bound });
+    const audit = readRecordingDiscards(snapshot([...probeConfirmations, ...flowConfirmations(3)]), { ...run, from: bound });
     assert.deepEqual(audit.window, { from: null, excluded: { "recording.action_discarded": noneExcluded, "recording.event_discarded": noneExcluded } }, String(bound));
     assert.equal(audit.discards.length, 6, String(bound));
   }
 
-  // Nothing was read, so nothing is claimed excluded; the bounds are still the read's.
+  // Nothing was read, so nothing is claimed excluded; the bound is still the read's.
   for (const response of [{ ok: true, payload: { sessions: [] } }, { ok: true }, undefined]) {
-    assert.deepEqual(readRecordingDiscards(response, { ...run, until: clock.until }).window, { from: clock.from, until: clock.until, excluded: null });
+    assert.deepEqual(readRecordingDiscards(response, run).window, { from: clock.from, excluded: null });
   }
 
   // What is published survives the bundle's JSON unchanged.
-  const second = readRecordingDiscards(snapshot([...probeConfirmations, ...flowConfirmations()]), { ...run, until: clock.until });
+  const second = readRecordingDiscards(snapshot([...probeConfirmations, ...flowConfirmations()]), run);
   assert.deepEqual(JSON.parse(JSON.stringify(second.window)), second.window);
 });
 
 test("the failure names lost actions inside this run's recording window, says `with no recording id` when an entry names none, and says `after finalization` only when Core's sinceFinalizedMs says so", () => {
-  const message = (...entries: unknown[]) => readRecordingDiscards(snapshot(entries), { ...run, until: clock.until }).failure?.message;
+  const message = (...entries: unknown[]) => readRecordingDiscards(snapshot(entries), run).failure?.message;
   const noRecording = discard("recording.action_discarded", { discardedEvents: 1, discardedActions: 1 }, "audit.none");
   const whileOpen = discard("recording.action_discarded", { recordingId: "recording.run", discardedEvents: 1, discardedActions: 1 }, "audit.open");
   const lateAgain = discard("recording.action_discarded", { recordingId: "recording.run", discardedEvents: 2, discardedActions: 2, sinceFinalizedMs: 60 }, "audit.late-again", "session.one", clock.finalized + 60);

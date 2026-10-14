@@ -16,9 +16,10 @@ export type LabCommand =
   // `directApiBuild` (`--direct-api-build`) exists only with it too: the test-only build through Core's endpoint instead of the extension's chat, never counted as a pass.
   // `modelResetOnly` (`--model-reset-only`) exists only with it too: a candidate build whose trials start from the model's own reset, with no Lab fixture reset between them (t472).
   // `replays` exists only with `llm.task` `create-flow`: present, the run approves and applies the repair its Flow's playback produced and replays the applied Flow that many times.
-  // `flowLane` is never set: bare `--flow` asked for the recording-built Flow lane, which t519 retired, and is refused while the command is parsed.
-  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true; directApiBuild?: true; modelResetOnly?: true; replays?: number; livePanel?: false }
-  | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence?: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; livePanel?: false }
+  // Bare `--flow` asked for the recording-built Flow lane, which t519 retired; it is refused while the command is parsed.
+  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true; directApiBuild?: true; modelResetOnly?: true; replays?: number; livePanel?: false }
+  // A live matrix ran the retired recording-built Flow lane, and `--live-llm` with it is refused while the command is parsed.
+  | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence?: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; livePanel?: false }
   | { command: "bench"; resumeBenchId: string }
   | { command: "bench"; corpusId: string; repeat: number; evidence?: EvidenceMode; target?: BenchTargetMode; workspace?: string; shards?: number; jobs?: number }
   | { command: "auth"; operation: "status" | "clear" }
@@ -81,9 +82,9 @@ export function parseLabCommand(argv: string[]): LabCommand {
     }
     const llm = llmOptions(args);
     if (llm?.task === "create-flow") throw new Error("--llm-task create-flow builds one instruction task per run: use lab run <scenario> --instruction-task ID");
-    if (llm && (all || scenarioIds?.length !== 1)) throw new Error("live LLM matrix mode requires exactly one explicit scenario");
-    if (llm && repeat !== 1) throw new Error("live LLM matrix mode requires --repeat 1");
-    return { command, all, repeat, ...optionalEvidence(args), ...targetOptions(args), ...(scenarioIds ? { scenarioIds } : {}), ...(llm ? { llm } : {}), ...livePanel };
+    // Every other live matrix ran the Flow built from each run's recording, the lane t519 retired.
+    if (llm) refuseRecordingOnlyFlow();
+    return { command, all, repeat, ...optionalEvidence(args), ...targetOptions(args), ...(scenarioIds ? { scenarioIds } : {}), ...livePanel };
   }
   if (command === "auth") {
     if (args.length !== 1 || (args[0] !== "status" && args[0] !== "clear")) throw new Error("Usage: lab auth status | auth clear");

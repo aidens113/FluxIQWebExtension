@@ -28,7 +28,7 @@ const workflow = { workflowId: "primary", recordingScript: scenario.recordingScr
 const isolated = { mode: "isolated" as const };
 const environment = { FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD: "replayed-password", FLUXIQ_TEST_PASSWORD: "account-password", FLUXIQ_TEST_PIN: "123456" };
 const input = (overrides: Partial<Parameters<typeof resolveRunSecrets>[0]> = {}) =>
-  ({ scenario, workflow, environment, target: isolated, recordedFlowLane: false, createdFlowLane: false, ...overrides }) as Parameters<typeof resolveRunSecrets>[0];
+  ({ scenario, workflow, environment, target: isolated, createdFlowLane: false, ...overrides }) as Parameters<typeof resolveRunSecrets>[0];
 
 test("the recording lane needs no declared secret configured, and still scrubs the run's own credentials", () => {
   const resolved = resolveRunSecrets(input());
@@ -37,13 +37,10 @@ test("the recording lane needs no declared secret configured, and still scrubs t
   assert.deepEqual(resolved.redactionLiterals, [TYPED], "the attestation still hunts for the value the recorder was meant to withhold");
 });
 
-test("the recording-built Flow lane resolves the scenario's declarations, and their values join what the bundle scrubs", () => {
-  const resolved = resolveRunSecrets(input({ recordedFlowLane: true }));
+test("the instruction-built lane narrows the declarations to the steps its resolved workflow holds, and their values join what the bundle scrubs", () => {
+  const resolved = resolveRunSecrets(input({ createdFlowLane: true }));
   assert.deepEqual(resolved.declaredSecrets.map(secret => [secret.id, secret.value]), [["auth-gate-password", "replayed-password"]]);
   assert.deepEqual(resolved.secrets, ["account-password", "123456", "replayed-password"]);
-});
-
-test("the instruction-built lane narrows the declarations to the steps its resolved workflow holds", () => {
   const otherWorkflow = { workflowId: "other", recordingScript: [{ id: "username", operation: "type", target: "[data-testid=username]", value: "lab@example.test" }], expected: {} } as unknown as ResolvedScenarioWorkflow;
   assert.deepEqual(resolveRunSecrets(input({ createdFlowLane: true })).declaredSecrets.map(secret => secret.id), ["auth-gate-password"]);
   assert.deepEqual(resolveRunSecrets(input({ createdFlowLane: true, workflow: otherWorkflow })).declaredSecrets, [], "a workflow that never types the password asks for none");
@@ -56,7 +53,7 @@ test("the instruction-built lane narrows the declarations to the steps its resol
  * for.
  */
 test("a declared literal is never added to what the bundle scrubs", () => {
-  const resolved = resolveRunSecrets(input({ recordedFlowLane: true }));
+  const resolved = resolveRunSecrets(input({ createdFlowLane: true }));
   assert.equal(resolved.secrets.includes(TYPED), false);
   assert.equal(resolved.redactionLiterals?.includes(TYPED), true);
 });
@@ -78,7 +75,7 @@ test("a scenario declaring literals against a remote FluxIQ stays unattested rat
 
 test("a declared secret the environment does not supply fails the run closed, before a bundle exists", () => {
   assert.throws(
-    () => resolveRunSecrets(input({ recordedFlowLane: true, environment: {} })),
+    () => resolveRunSecrets(input({ createdFlowLane: true, environment: {} })),
     (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing" && /FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD must be set/u.test(error.message),
   );
 });

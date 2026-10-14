@@ -1,5 +1,5 @@
 import type { ResolvedScenarioWorkflow, WebScenario } from "@fluxiq-web-extension/test-contracts";
-import { declaredSecretValues, resolveCreatedFlowSecrets, resolveDeclaredSecrets, type DeclaredSecret } from "../flow-lane/index.js";
+import { declaredSecretValues, resolveCreatedFlowSecrets, type DeclaredSecret } from "../flow-lane/index.js";
 import { scenarioRedactionLiterals } from "../redaction-attestation/index.js";
 import type { FluxIQTargetConfiguration } from "../target-config.js";
 
@@ -21,8 +21,6 @@ export type RunSecretsInput = {
   workflow: ResolvedScenarioWorkflow;
   environment: NodeJS.ProcessEnv;
   target: FluxIQTargetConfiguration;
-  /** The recording-built Flow lane (`--flow`), whose declared secrets come from the scenario's own script. */
-  recordedFlowLane: boolean;
   /** The instruction-built Flow lane, whose secrets are narrowed to the steps the resolved workflow holds. */
   createdFlowLane: boolean;
   live?: { redactionLiterals: readonly string[] };
@@ -35,9 +33,9 @@ export type RunSecretsInput = {
  * The ordering is the point. Declared replay secrets resolve first so their
  * values can join the redaction list the bundle is constructed with; a
  * declaration the environment cannot satisfy therefore fails the run before a
- * bundle has been written rather than in the middle of a Flow. Only the two Flow
- * lanes supply them, so a recording-lane run of the same scenario does not
- * require them to be configured.
+ * bundle has been written rather than in the middle of a Flow. Only the
+ * instruction-built Flow lane supplies them, so a recording-lane run of the
+ * same scenario does not require them to be configured.
  *
  * `redactionLiterals` is deliberately *not* added to `secrets`. The bundle's
  * redactor would scrub them as it wrote, and the attestation's whole job is to
@@ -48,9 +46,7 @@ export type RunSecretsInput = {
  */
 export function resolveRunSecrets(input: RunSecretsInput): RunSecrets {
   const { scenario, workflow, environment, target } = input;
-  const declaredSecrets: DeclaredSecret[] = input.recordedFlowLane
-    ? resolveDeclaredSecrets(scenario, environment)
-    : input.createdFlowLane ? resolveCreatedFlowSecrets(scenario, workflow, environment) : [];
+  const declaredSecrets: DeclaredSecret[] = input.createdFlowLane ? resolveCreatedFlowSecrets(scenario, workflow, environment) : [];
   const secrets = [environment.FLUXIQ_TEST_PASSWORD, environment.FLUXIQ_TEST_PIN, environment.FLUXIQ_TEST_TOTP, ...declaredSecretValues(declaredSecrets)].filter((value): value is string => Boolean(value));
   const redactionLiterals = target.mode === "existing" && scenario.secrets?.length
     ? undefined
