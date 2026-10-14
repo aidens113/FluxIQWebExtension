@@ -143,7 +143,7 @@ async function receiveAsTheWebSocketHostDoes() {
     const pairingCode = gateway.snapshot().pairings[0]?.pairingCode;
     assert.ok(pairingCode, "the client's hello opens a pairing");
     await gateway.approvePairing(pairingCode, { approvedByUserId: "user.w25" });
-    const { recordingId } = await bridge.startRecording({ sessionId, projectId, domainId: WEB_AUTOMATION_DOMAIN_ID });
+    const { recordingId } = await bridge.startRecording({ sessionId, projectId, description: "Shows the steps the automation repeats.", domainId: WEB_AUTOMATION_DOMAIN_ID });
     await Promise.all(liveRecording(recordingId).map((message) => gateway.receive(sessionId, message)));
     await bridge.stopRecording(sessionId);
     const { timeline } = await service.getRecordingSession(recordingId, projectId);

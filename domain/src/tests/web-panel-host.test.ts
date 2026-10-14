@@ -77,7 +77,7 @@ async function recordThroughCore(sent: readonly Sent[]) {
   try {
     service.registerRecordingDomain(webAutomationRecordingDomain);
     const { id: projectId } = await service.createProject({ name: "Stored events", domainId: WEB_AUTOMATION_DOMAIN_ID });
-    const { recordingId } = await service.createRecording({ projectId, recordingId: "recording.stored-events", domainId: WEB_AUTOMATION_DOMAIN_ID, initialState: { timestamp: 1, namespaces: {} } });
+    const { recordingId } = await service.createRecording({ projectId, recordingId: "recording.stored-events", description: "Shows the steps the automation repeats.", domainId: WEB_AUTOMATION_DOMAIN_ID, initialState: { timestamp: 1, namespaces: {} } });
     const recorder = new AutomationStudioIoRecorder({ automationStudio: service, io, domainId: WEB_AUTOMATION_DOMAIN_ID, projectId });
     for (const [index, item] of sent.entries()) {
       const clientGatewayMessageId = `message.${index + 1}`;
