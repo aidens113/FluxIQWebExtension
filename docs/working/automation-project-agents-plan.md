@@ -40,7 +40,7 @@ document owns the roles and contracts.
 
 **Done (2026-10-13, supervisor-verified, pushed):** discovery and this plan with its Core pair; W1 web host-resource port at capacity 1 with lease enforcement and the leased tab (t536, with Core A3b); W2 chat attribution and W3 Lab index columns (t539, with Core A6). Core A1-A4 and the shared contracts are delivered (Core document's ledger). Nothing is wired into a build yet, so builds behave as before.
 
-**Next, in order:** Core A5a supervisor loop and A5b dispatcher (in progress), Core A5c wiring with authoring mode `project`, then W4 (Lab support for mode `project`), then A8 Lab comparison (paid: a live supervisor and a frozen pair). Follow-ups recorded here: merge W1's copy of the session-picking rule with `domain/src/runtime/llm-evidence/tools.ts` `eligibleWebSessionIds`; the chat's fold modules (card-repeats, retried, done-again) group by unit, not brief, which only matters above capacity 1; a stand-in-gateway e2e spec for a stale holder's command (the content harness has no background worker); live side panel and popup rendering of the new cards.
+**Next, in order:** A8 Lab comparison is ready (the A8 Run Plan below; nine paid runs, at most $2.25) and waits for the user's go-ahead. Delivered since: W4 Lab support for mode `project`, W5 live diagnose/repair/adapt retired, W6 key scope (`FLUXIQ_PROVIDER_KEY_FILES=none`, a test fence on env files), W7 the bench's recorded-Flow code; Core A5, the pre-A8 hardening, A9 and A12. Still open here: W8 (orphaned identity-drift repair, dead `declaredRepair`, stale comments), the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a stale holder, and live rendering of the new chat cards (A8 reviews them).
 
 **Blocked:** nothing. Three decisions are the user's (Open Questions); each
 has a recommendation the plan already follows.
@@ -582,6 +582,14 @@ build does today until A5 lands and the mode is chosen.
 - Validation: test-runner check passed; live-llm plan/run/ceiling, commands, cli-llm, runner-wiring, run-bench tests -> 154 passed; structure audit passed; merged `06daa2c9`
 - Outcome: Accepted
 - Follow-up: W6 (a probe read the real key from `.env.local` under `FLUXIQ_TEST_ENV_FILES=none`; dead recorded-Flow code outside W5's files)
+
+### 2026-10-13 — W7 bench dead recorded-Flow code (t559)
+- Agent: worker t559-w7-bench; supervisor verified and integrated
+- Changed: `packages/test-runner/src/bench/**`, corpus (`week2` retired with a refusal), `packages/test-contracts` (`flowLaneExclusion` removed), declared-repair modules removed; `docs/architecture/testing-facility.md`
+- Why: code t553 left unreachable
+- Validation: test-runner -> 1182 passed; test-contracts -> 169 passed; checks passed; structure audit passed (three baseline entries removed); merged `148262f1`
+- Outcome: Accepted
+- Follow-up: W8
 
 ## Open Questions
 
