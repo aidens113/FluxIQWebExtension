@@ -54,7 +54,11 @@ Launch 5 (`048a1d91`, 250 calls) found two more: briefs sized past the builder l
 where bigbox's builders did run, subflow trials that could never pass (the bigbox debug,
 `reports/a8-bigbox-run-mv8186yr-debug.md`): Core t578-t582 fixed it and are merged (Core ledger); launch 6 then produced the first `project` Flow
 to pass its judged whole run (crossborder, $0.028) and four new defects: t583 and t584 are merged, t585-t589 in
-flight; round one relaunches as launch 7 when they merge.
+merged; launch 7 then
+lost three builds to the Lab's chat deadline (sized for one candidate loop) and showed the start-state class of failure
+a fifth time, so t593 builds one shared phase start for every phase; t592 (a Core-owned 30-minute project build bound,
+the Lab's deadline derived from it), t594 (builder scope and the subflow judge), t595 (repairs carry their failure;
+no repair loop on nothing), t596 (domain handle identity across briefs) are in flight; launch 8 follows them.
 Still open here: the merge of W1's session-picking rule with `eligibleWebSessionIds`, a stand-in-gateway e2e for a
 stale holder, and live rendering of the new chat cards (A8 reviews them).
 
@@ -320,6 +324,7 @@ get the same cap, so the comparison stays fair.
 | 4, `project` | `e56fec59` | run-mv7vk3ol (crossborder $0.072), run-mv7vl89u (bigbox $0.078), run-mv7vmvhd (social $0.078), run-mv7vor5f (everything-store $0.171) | plans and dispatches work; three ran out of calls, everything-store's subflow trials judged no 4x, unsure 1x (judge reliability, cross-mode) | t570 call shares and brief defaults; the call cap above |
 | 5, `project` | `048a1d91`, 250 calls | run-mv816jbn (crossborder $0.003), run-mv8186yr (bigbox $0.094), run-mv819so1 (social $0.003), run-mv81b25e (everything-store $0.003) | first try refused before any call (the Lab took at most 64 calls; t576); then three builds' briefs were sized 77-117 turns and every builder refused its own configuration (loop takes 64); bigbox's builders ran, but no subflow trial could pass (stale trial tab, dependents started early, no honest builder ending) | t577 turns capped at the loop's 64; Core t578-t582 from the bigbox debug |
 | 6, `project` | `2db229e9`, 250 calls | run-mv85un8j (crossborder $0.028), run-mv85vjqo (bigbox $0.031), run-mv85xmgq (social $0.040), run-mv85zf4i (everything-store $0.004) | crossborder built a Flow that passed its judged whole run (the first in mode `project`), then Core refused its settings (a 64-call cap); bigbox passed two of three subflows (prepared entry not "arrived"); social could not reset a confirmed request (whole test skips the start hook); everything-store's submit tool description overran its limit | t583, t584 merged; t585-t589 |
+| 7, `project` | `6a81a391`, 250 calls | run-mv8c76i3 (crossborder $0.036), run-mv8c7unr (bigbox $0.112), run-mv8cam5t (social $0.056), run-mv8cbm4y (everything-store $0.074) | social's whole test passed and it was adding the rate-limit branch when the Lab's 795 s chat deadline ended it, as it ended bigbox and everything-store; bigbox's whole test ran on a stale page (no shared phase start) and eight repairs changed nothing; crossborder's first builder did the second part's act unrecorded | t592-t596 |
 
 ## Units (this repository)
 
