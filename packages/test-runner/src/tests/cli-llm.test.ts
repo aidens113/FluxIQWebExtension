@@ -21,36 +21,44 @@ const source = (relative: string) => readFile(path.join(sourceRoot, relative), "
  * The second one deliberately names `DEEPSEEK_API_KEY`. Naming the variable is
  * how an operator learns what to set; the refusal carries no value, because at
  * that point there is none to carry.
+ *
+ * Since t519 (4ee4e65c) bare `--flow`, the Flow built from the run's own
+ * recording, is retired and refused while the command is parsed, so the live
+ * lane these refusals guard is the instruction-led one, `--llm-task
+ * create-flow --instruction-task <task>`; the credential and budget refusals
+ * still come before the task is resolved, so no scenario lab is needed here.
  */
+const DIAGNOSE_TASK = ["--llm-profile", "deepseek-lab", "--llm-task", "diagnose"] as const;
+const CREATE_FLOW_TASK = ["--llm-profile", "lab-create-flow", "--llm-task", "create-flow", "--instruction-task", "catalog-first-page"] as const;
+
 test("runCli refuses a live LLM run that did not ask for the Flow lane, before anything starts", async () => {
-  const result = await liveRun(["run", "company-website"]);
+  const result = await liveRun(["run", "company-website"], DIAGNOSE_TASK);
   assert.equal(result.code, 1);
   assert.match(result.stderr, /A live LLM run needs the Flow lane: pass --flow/u);
   assert.equal(result.stderr.includes("DEEPSEEK_API_KEY"), false);
 });
 
 test("runCli refuses a live Flow-lane run with no provider credential, naming what is missing", async () => {
-  const result = await liveRun(["run", "company-website", "--flow"]);
+  const result = await liveRun(["run", "company-website"]);
   assert.equal(result.code, 1);
   assert.match(result.stderr, /Live LLM execution needs a provider credential: DEEPSEEK_API_KEY is not set in the environment/u);
 });
 
 test("runCli refuses a live run whose budget could not authorize a call, before a credential is read", async () => {
-  const result = await liveRun(["run", "company-website", "--flow", "--llm-max-cost-usd", "0"]);
+  const result = await liveRun(["run", "company-website", "--llm-max-cost-usd", "0"]);
   assert.equal(result.code, 1);
   assert.match(result.stderr, /Live LLM execution refused: --llm-max-cost-usd 0 cannot authorize a live provider call/u);
   assert.equal(result.stderr.includes("DEEPSEEK_API_KEY"), false);
 });
 
-async function liveRun(argv: readonly string[]): Promise<{ code: number; stderr: string }> {
+async function liveRun(argv: readonly string[], task: readonly string[] = CREATE_FLOW_TASK): Promise<{ code: number; stderr: string }> {
   const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "fluxiq-live-cli-gate-"));
   const stderr: string[] = [];
   const originalWrite = process.stderr.write;
   process.stderr.write = ((chunk: string | Uint8Array) => { stderr.push(String(chunk)); return true; }) as typeof process.stderr.write;
   try {
     const code = await runCli([
-      ...argv, "--live-llm", "--llm-profile", "deepseek-lab",
-      "--llm-provider", "deepseek", "--llm-model", DEFAULT_LLM_MODEL, "--llm-task", "diagnose",
+      ...argv, "--live-llm", "--llm-provider", "deepseek", "--llm-model", DEFAULT_LLM_MODEL, ...task,
     ], { FLUXIQ_WEB_EXTENSION_ROOT: repositoryRoot, FLUXIQ_TEST_ENV_FILES: "none" });
     return { code, stderr: stderr.join("") };
   } finally {
@@ -127,7 +135,8 @@ test("a create-flow run fails closed before anything starts: no credential, or a
   assert.equal(noKey.stdout, "");
   const withFlow = await captureCli(["run", "everything-store", "--flow", ...CREATE_FLOW], { ...lab.env, DEEPSEEK_API_KEY: DUMMY_KEY });
   assert.equal(withFlow.code, 1);
-  assert.match(withFlow.stderr, /drop --flow/u);
+  // t519 (4ee4e65c): `--flow` is refused as retired while the command is parsed, before the create-flow plan's own "drop --flow".
+  assert.match(withFlow.stderr, /"category":"recording\.contract".*Recording-only Flow creation is retired\./u);
   // Neither refusal reached a run: nothing was written where runs go.
   await assert.rejects(access(path.join(lab.root, "test-runs")));
 });
@@ -249,9 +258,10 @@ async function refusedCli(argv: readonly string[]): Promise<{ code: number; stdo
 }
 
 test("run, interactive and replay refuse basic-form and product-catalog before anything starts", async () => {
+  // Bare `--flow` is no longer among them: since t519 it is refused as retired while the command is parsed, before this guard.
   const commands = (scenario: string): string[][] => [
-    ["run", scenario, "--flow"],
-    ["run", scenario, "--flow", "--live-llm", "--llm-profile", "deepseek-lab", "--llm-provider", "deepseek", "--llm-task", "diagnose"],
+    ["run", scenario],
+    ["run", scenario, "--live-llm", "--llm-profile", "lab-create-flow", "--llm-provider", "deepseek", "--llm-task", "create-flow", "--instruction-task", "catalog-first-page"],
     ["run", scenario, "--live-llm", "--llm-profile", "lab-create-flow", "--llm-provider", "deepseek", "--llm-task", "create-flow", "--instruction-task", "catalog-first-page", "--dry-run"],
     ["interactive", scenario],
     ["replay", scenario, "--workspace", "lane-a", "--flow", "flow.saved"],
@@ -287,7 +297,7 @@ test("matrix refuses a scenario list holding one outside the ten, and bench refu
 
 test("a realistic scenario passes the guard and reaches the runner's own checks", async () => {
   for (const scenario of ["everything-store", "professional-network"]) {
-    const result = await refusedCli(["run", scenario, "--flow", "--live-llm", "--llm-profile", "deepseek-lab", "--llm-provider", "deepseek", "--llm-task", "diagnose"]);
+    const result = await refusedCli(["run", scenario, "--live-llm", "--llm-profile", "lab-create-flow", "--llm-provider", "deepseek", "--llm-task", "create-flow", "--instruction-task", "catalog-first-page"]);
     assert.equal(result.code, 1);
     assert.doesNotMatch(result.stderr, RULE);
     assert.match(result.stderr, /DEEPSEEK_API_KEY is not set/u, "the next refusal is the live run's missing credential");

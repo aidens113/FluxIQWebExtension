@@ -198,7 +198,8 @@ test("lab run hands its evaluation the bundle the Flow lane wrote its snapshot i
   const root = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
   const source = await readFile(path.join(root, "packages", "test-runner", "src", "run-scenario.ts"), "utf8");
   const at = {
-    snapshot: source.indexOf('await bundle.writeStructured("snapshots/flow-lane.json", flowLaneSnapshot(evidence));'),
+    // The created Flow lane's write: t519 (4ee4e65c) retired the recording-built lane and its `flowLaneSnapshot` write.
+    snapshot: source.indexOf('await bundle.writeStructured("snapshots/flow-lane.json", createdFlowLaneSnapshot('),
     evaluated: source.indexOf("? singleRunEvaluation({"),
     finalized: source.indexOf("await bundle.finalize("),
   };

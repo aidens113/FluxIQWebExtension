@@ -173,7 +173,9 @@ test("the redaction attestation scans once Core has stopped and its logs are in 
   );
 });
 
-test("Core's audit of discarded recording messages is read after the round trip, published, and fails the run before the Flow lane", async () => {
+// t519 (4ee4e65c) retired the Flow lane built from the run's own recording: `runFlowLane` is no longer called, so the
+// recording lane ends at this audit, and a recording that reached Core short never becomes a Flow because none is built.
+test("Core's audit of discarded recording messages is read after the round trip, published, and fails the run", async () => {
   const source = await runnerSource();
   assert.equal(source.match(/readRecordingDiscards\(/gu)?.length, 2, "once after the round trip, and once more before the topology closes");
   const at = {
@@ -182,25 +184,25 @@ test("Core's audit of discarded recording messages is read after the round trip,
     connection: source.indexOf("const connectionAfterStop = await runtimeMessage(extensionControl, { type: \"fluxiq.getStatus\" })"),
     settled: source.indexOf('"Core persisted the completed recording"'),
     failed: source.indexOf("if (discardAudit.failure) throw discardAudit.failure;"),
-    flowLane: source.indexOf("await runFlowLane({"),
   };
   for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
   assert.ok(at.roundTrip < at.audited && at.roundTrip < at.connection, "read once Core has finalized the recording");
   assert.ok(at.audited < at.settled && at.connection < at.settled, "both are read before the settle event that publishes them");
   assert.ok(at.settled < at.failed, "the discards are in the bundle before the run fails on them");
-  assert.ok(at.failed < at.flowLane, "a recording that reached Core short never becomes a Flow");
+  assert.equal(source.includes("await runFlowLane({"), false, "no Flow is built from the run's recording (t519), so a recording that reached Core short never becomes a Flow");
   assert.match(source, /"Core persisted the completed recording"\), details: \{[^}]*recordingDiscards: discardAudit\.discards, recordingDiscardWindow: discardAudit\.window, extensionConnectionAfterStop: connectionAfterStop/u, "the first read's discards are published with the window it judged them in");
-  assert.match(source, /discardWindowFrom = Date\.now\(\);\s*const startResponse = await runtimeMessage\(extensionControl, \{ type: "fluxiq\.startRecording" \}\)/u, "the window opens just before the extension is asked to start recording, after the Core action probe");
+  assert.match(source, /discardWindowFrom = Date\.now\(\);\s*const startResponse = await runtimeMessage\(extensionControl, startRecording!\)/u, "the window opens just before the extension is asked to start recording, after the Core action probe");
   assert.ok(source.includes("const discardScope: RecordingDiscardScope = { recordingIds: outcome.newRecordingIds, sessionId: paired?.sessionId, from: discardWindowFrom };"), "both reads are bounded by that window");
 });
 
-test("Core's discard audit is read a second time, after the Flow lane and the browser close and before the topology closes, and unioned with the first", async () => {
+// Since t519 the recording lane runs no Flow, so the second read follows the browser's close alone and nothing closes
+// its window early: `discardWindowUntil` was set only by the retired lane's `flowDispatchStarting`, and stays undefined.
+test("Core's discard audit is read a second time, after the browser closes and before the topology closes, and unioned with the first", async () => {
   const source = await runnerSource();
   const at = {
     firstRead: source.indexOf("const discardAudit = readRecordingDiscards(await topology.control.gatewaySnapshot(), discardScope);"),
     kept: source.indexOf("firstDiscardRead = { scope: discardScope, discards: discardAudit.discards };"),
     firstFailed: source.indexOf("if (discardAudit.failure) throw discardAudit.failure;"),
-    flowLane: source.indexOf("await runFlowLane({"),
     browserClosed: source.indexOf("await context?.close();"),
     secondRead: source.indexOf("readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), { ...firstDiscardRead.scope, until: discardWindowUntil }, earlier)"),
     published: source.indexOf("\"Core's discard audit was read again before the topology closed\"), details: { recordingDiscards: secondRead.discards, recordingDiscardWindow: secondRead.window, discardsAfterFirstRead: "),
@@ -208,14 +210,13 @@ test("Core's discard audit is read a second time, after the Flow lane and the br
   };
   for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
   assert.ok(at.firstRead < at.kept && at.kept < at.firstFailed, "the first read is kept before it can throw, so a run it fails is still read again");
-  assert.ok(at.flowLane < at.secondRead, "after the Flow lane finishes");
   assert.ok(at.browserClosed < at.secondRead, "once the browser has closed, so no message is still to come");
   assert.ok(at.secondRead < at.published && at.published < at.topologyClosed, "read and published while Core, whose audit is in memory, is still running");
   assert.ok(
     source.includes('failure.category === "recording.persistence" ? failureCategory !== "recording.persistence" : verdict === "passed"'),
     "an action either read finds discarded fails the run as recording.persistence; an audit the second read cannot get fails only a run that had passed",
   );
-  assert.ok(source.includes("flowDispatchStarting: at => { discardWindowUntil = at; },"), "the second read's window closes when the Flow lane reports it is dispatching the Flow, whose runtime confirmations Core audits against the finalized recording");
+  assert.equal(source.includes("flowDispatchStarting:"), false, "no Flow dispatches on the recording lane, so no Flow's runtime confirmations can fall inside the second read's window");
   // Lab Stage 2, W19 run 1: one failed snapshot fetch failed a run whose Flow had met its expectations.
   assert.match(
     source,
@@ -237,11 +238,12 @@ test("the runner consults the lane rules: a Core identity and a built Flow on th
   // field in a fresh tab that restarted the site's load-timed overlays. It lives in its own module and is tested there.
   assert.match(source, /import \{ proveCoreActionRoundTrip \} from "\.\/core-action-probe\/index\.js";/u);
   assert.equal(/web\.dom\.type|waitForEvent\("page"|coreProbeTargetUsable|selectCoreProbeStep/u.test(source), false, "L1: the runner neither types, opens a tab, nor picks a step for the probe");
-  // Both Flow lanes -- the one built from the run's recording and the one built from a live instruction task -- are the Flow lane here.
+  // A Flow built from a live instruction task is the Flow lane here (the one built from the run's recording was retired by t519).
   assert.ok(source.includes("const flowLane = options.flow === true || creation !== undefined;"), "H2: a created-Flow run is a Flow-lane run");
   assert.ok(source.includes('bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected })'), "H2: every Flow-lane run bootstraps a Core identity");
+  // Since t519 the created lane is the only Flow lane: the Flow is built from a live instruction task, never the recording.
   const at = {
-    flowLane: source.indexOf("await runFlowLane({"),
+    flowLane: source.indexOf("runCreatedFlowLane({"),
     built: source.indexOf('assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, permissionStop });'),
     passed: source.indexOf('verdict = "passed";'),
   };
@@ -250,7 +252,7 @@ test("the runner consults the lane rules: a Core identity and a built Flow on th
   const probe = {
     call: source.indexOf("await proveCoreActionRoundTrip({ page, control: topology.control!, sessionId: paired.sessionId, authorizationPin: topology.authorizationPin,"),
     reset: source.indexOf("await resetScenarioLab(topology.scenarioOrigin, topology.allocation.controllerToken);"),
-    recording: source.indexOf('const startResponse = await runtimeMessage(extensionControl, { type: "fluxiq.startRecording" })'),
+    recording: source.indexOf("const startResponse = await runtimeMessage(extensionControl, startRecording!);"),
   };
   const reload = source.indexOf("await openScenarioStart(page, topology.scenarioOrigin, scenario);", probe.reset);
   for (const [name, index] of Object.entries({ ...probe, reload })) assert.ok(index > 0, `probe ${name} is in the runner`);
@@ -298,9 +300,15 @@ test("the evaluation reaches the caller, so lab run reports it without a bench",
 });
 
 /**
- * `lab run --flow` builds its Flow from the run's own recording, so a workflow
- * whose script records no action can never pass it. The runner refuses such a
- * run with the shared check the bench skips it by, before a bundle, Core or a
+ * `lab run --flow` used to build its Flow from the run's own recording, so a
+ * workflow whose script records no action could never pass it, and the runner
+ * refused such a run as `fixture.invalid` with the shared check the bench skips
+ * it by. t519 (4ee4e65c) retired that lane outright: a recording is evidence
+ * beside required instructions, never a Flow's authority, so every
+ * recording-built Flow-lane run on an isolated target is now refused as
+ * `recording.contract` before its workflow is even resolved -- the no-action
+ * exclusion below it is no longer reached on that lane. What still holds, and
+ * is pinned here, is that the refusal happens before a bundle, Core or a
  * browser exists.
  *
  * This used to run W04, `product-catalog`'s primary workflow, which only reads
@@ -322,6 +330,9 @@ const NO_ACTION_SCENARIO: WebScenario = {
   tags: ["fixture-defect"],
   seed: 1,
   startPath: "/",
+  // Since t519 a recording-lane run refuses a workflow without a fixture-authored description of what it demonstrates
+  // (`run-lifecycle/recording-description.ts`), as `fixture.invalid` -- the very category the case below must not be refused as.
+  recordingDescription: "Waits for the page to be ready and confirms it, demonstrating no action.",
   capabilities: [],
   networkPolicy: "loopback-only",
   // Only the runner's own waits and checks, which record nothing.
@@ -340,19 +351,21 @@ async function noActionScenarioLab(): Promise<string> {
   return dist;
 }
 
-test("a Flow-lane run of a workflow whose script records no action is refused as fixture.invalid before a bundle, Core or a browser exists", async () => {
+test("a recording-built Flow-lane run is refused as recording.contract before its workflow is resolved and before a bundle, Core or a browser exists", async () => {
   const source = await runnerSource();
   assert.match(source, /import \{[^}]*\bflowLaneExclusion\b[^}]*\} from "@fluxiq-web-extension\/test-contracts";/u, "the runner reads the check the bench plans with");
   assert.equal(source.match(/flowLaneExclusion\(/gu)?.length, 1, "one refusal, in one place");
   assert.ok(source.includes("const noFlowLane = options.flow ? flowLaneExclusion(workflow.recordingScript) : undefined;"), "only a Flow-lane run is refused: the recording lane still runs the workflow");
+  assert.equal(source.match(/refuseRecordingOnlyFlow\(\)/gu)?.length, 1, "one retirement refusal in the runner");
   const at = {
+    retired: source.indexOf('if (options.flow === true && options.creation === undefined && target.mode !== "existing" && target.mode !== "clone") refuseRecordingOnlyFlow();'),
     resolved: source.indexOf("const workflow = resolveWorkflow(scenario, options, target);"),
     bundle: source.indexOf("await bundle.initialize();"),
     extension: source.indexOf("await requireExtension(extensionPath);"),
     topology: source.indexOf("topology = await startTopology({"),
   };
   for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
-  assert.ok(at.resolved < at.bundle && at.bundle < at.extension && at.extension < at.topology, "the workflow is resolved, and refused, before anything is created or started");
+  assert.ok(at.retired < at.resolved && at.resolved < at.bundle && at.bundle < at.extension && at.extension < at.topology, "the lane is refused, and the workflow resolved, before anything is created or started");
 
   const scenarioLab = await noActionScenarioLab();
   const runsDirectory = await mkdtemp(path.join(os.tmpdir(), "fluxiq-no-flow-lane-"));
@@ -360,17 +373,15 @@ test("a Flow-lane run of a workflow whose script records no action is refused as
     // The extension path does not exist, so a run the refusal missed stops at `requireExtension`, before Core or a browser.
     const outcome: unknown = await runScenario({ repositoryRoot: root, fluxiqRepositoryRoot: path.join(runsDirectory, "no-core"), runsDirectory, scenarioId: NO_ACTION_SCENARIO.id, flow: true, environment: { FLUXIQ_LAB_SCENARIO_ENTRYPOINT: path.join(scenarioLab, "server.js"), FLUXIQ_LAB_EXTENSION_PATH: path.join(runsDirectory, "no-extension") } }).then((result) => result, (error: unknown) => error);
     assert.ok(outcome instanceof ProjectedFacilityError, `the run is refused, not run: ${outcome instanceof Error ? outcome.message : JSON.stringify(outcome)}`);
-    assert.equal(outcome.category, "fixture.invalid");
+    assert.equal(outcome.category, "recording.contract");
     // What the command line prints: the generic sentence, then the runner's own reason.
-    assert.match(outcome.message, /^Scenario attempt failed outside a finalized bundle: A Flow run was refused: /u);
+    assert.match(outcome.message, /^Scenario attempt failed outside a finalized bundle: Recording-only Flow creation is retired\. /u);
     assert.deepEqual(outcome.facilityFailure, { boundary: "no-final-bundle", stage: "scenario.load", reason: "unclassified" });
-    // The reason is the no-action one, so a refusal for any other fixture defect -- an
-    // unknown scenario, or a manifest this test built wrong -- cannot pass as this case.
-    assert.match(
-      outcome.cause instanceof Error ? outcome.cause.message : "",
-      /^A Flow run was refused: .*no step of the workflow's recordingScript records an action \(operations: waitForState, checkpoint\)/u,
-      "the refusal is the Flow-lane exclusion, naming the operations of the script it read",
-    );
+    // The reason is the retirement, with the instruction-led lane to use instead, so a refusal for a
+    // fixture defect -- an unknown scenario, or a manifest this test built wrong -- cannot pass as this case.
+    assert.ok(outcome.cause instanceof RunnerFailure, "the runner's own refusal is the cause");
+    assert.match(outcome.cause.message, /^Recording-only Flow creation is retired\. .*--llm-task create-flow --instruction-task <task>/u, "the refusal names the instruction-led lane");
+    assert.deepEqual(outcome.cause.details, { code: "automation.instruction_led_authoring_required" });
     assert.deepEqual(await readdir(runsDirectory), [], "no evidence bundle was created");
   } finally {
     // Retried: a run the refusal missed may still be closing bundle files, and a cleanup error must not hide the assertion.

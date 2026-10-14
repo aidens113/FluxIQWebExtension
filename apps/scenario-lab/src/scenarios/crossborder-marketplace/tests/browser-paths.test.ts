@@ -245,7 +245,13 @@ describe("crossborder-marketplace in a browser", { concurrency: true }, () => {
       await locate(session.page, FLASH).waitFor({ state: "visible", timeout: 1000 });
       assert.equal(await session.page.locator('text="Welcome back, Mara!"').count(), 0, "it is there before the welcome coupons, the first thing the recorded path waits for");
       assert.equal(await hitAt(session, await centreOf(session, 'text="Accept all"')), "scrim", "the consent banner, the first thing pressed, is under it");
-      await session.run([{ id: "close-flash", operation: "click", target: '[title="Close"]' }, ...CART_SCRIPT]);
+      // The welcome coupons land on top of the promotion two seconds after load, the site's own timer. Closing the
+      // promotion first raced that timer: on a loaded machine the click came later and the welcome's scrim took it
+      // (2026-10-13 sweep, `close-flash` timed out). Answered once the welcome is dismissed, the promotion is the
+      // topmost overlay at any speed, and it still stands over the consent banner the recorded path presses next.
+      const at = CART_SCRIPT.findIndex((step) => step.id === "dismiss-welcome") + 1;
+      assert.ok(at > 0, "the recorded path dismisses the welcome");
+      await session.run([...CART_SCRIPT.slice(0, at), { id: "close-flash", operation: "click", target: '[title="Close"]' }, ...CART_SCRIPT.slice(at)]);
       assert.deepEqual(await session.failingFacts(GOAL), []);
       assert.deepEqual(unexpectedErrors(session), []);
     });
