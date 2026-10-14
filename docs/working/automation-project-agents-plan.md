@@ -353,6 +353,40 @@ build does today until A5 lands and the mode is chosen.
   the harness can drive it; say so if not.
 - Report to: `docs/working/automation-project-agents-plan/reports/t536-w1-web-lease.md`
 
+### Brief: t539-w2-chat-attribution
+- Repository: this repository, worktree `fxwork/t539/!FluxIQWebExtension`, branch `task/t539-agent-attribution-chat`;
+  it builds against the paired Core worktree `fxwork/t539/!FluxIQ`, where Core's half (t539-a6-attribution-core)
+  runs at the same time. W3 (Lab step-log columns) is folded in.
+- Task: unit W2. The chat shows a build with several agents. Wire types are fixed on the Core branch:
+  `agent?: ClientGatewayActivityAgent` on an activity and `project?: ClientGatewayActivityProjectCard` on a
+  `note` row (plan, brief, return, receipt). (1) New `apps/extension/src/shared/activity/{agent,project-card}.ts`
+  readers (that directory is at its file-count warning: put them in a subfolder if the audit asks).
+  (2) `background/activity/unit-history.ts` and `shared/activity/history-limits.ts`: keep every event of the
+  build in progress and pin project rows; a 1,500-event build keeps its plan card; ten other units never evict
+  the current build. (3) `panel/chat/stream/step/messages.ts`: key per-unit decision state by
+  `activityId#briefId` so a tool card attaches to its own agent's decision (one branch plus keying only; the
+  file is past its size warning, so new logic goes in new `project-message.ts` and `project-words.ts`).
+  Show: the plan card; "Building <subflow>: <purpose>" (or "Surveying", "Repairing", "Resetting the site") at
+  a brief; that builder's steps under a subflow header; the return card; receipt cards; validator rows; the
+  ending. Every step stays its own message with its reasoning and an icon card (standing rule). (4) View:
+  `panel/chat/view/{step-message-view,thread-view}.ts`, `panel/chat/chat.css`, `panel/icons/lucide-nodes.ts`
+  (icons must match the ones Core pins; parity test). Chrome side panel and Firefox popup share `mountPanel`.
+  (5) W3: `packages/test-runner/src/lab-runs/rewrite-steps-index.ts` gains Role and Brief columns matching
+  Core's `listing.ts` header word for word; `docs/architecture/testing-facility.md` step-log section.
+- Required reads: this document's `Chat Presentation`; the files named above;
+  `docs/architecture/extension-client.md:389-419,486-540,749-790`.
+- Owns: the files named above, their tests, `shared/activity/index.ts`, `panel/chat/stream/step/index.ts`;
+  `docs/architecture/extension-client.md` and `testing-facility.md` sections;
+  `docs/working/automation-project-agents-plan/reports/t539-w2-chat-attribution.md`.
+- Must not touch: every Core file; `background/connection/**` and `background/connection.ts` (W1, t536);
+  `domain/**`; `background/activity/pacer.ts`; `packages/test-runner/src/live-llm/`; `scripts/lab/**`.
+- Definition of done: tests: agent and card readers; unit history keeps the build and its plan card; messages
+  for a multi-agent fixture (plan, dispatch header, builder steps under it, interleaved lanes keyed apart,
+  return, receipt, validator rows, ending); view tests and the icon parity test; the Lab index columns. Checks:
+  the tests beside each changed file, the extension and domain typechecks, `pnpm structure:check`,
+  `node scripts/check-extension.mjs`. Say what live browser behaviour was not exercised.
+- Report to: `docs/working/automation-project-agents-plan/reports/t539-w2-chat-attribution.md`
+
 ## Work Ledger
 
 ### 2026-10-13 — Plan written from three discovery reports
